@@ -1,0 +1,195 @@
+// Baglib — Library Domain Schema (DBML)
+// Mirrors baglib-library-domain-erd.mermaid. Decisions documented in ADR-001 and ADR-002.
+// Every column below carries a note explaining its purpose and relationships —
+// see data-dictionary.md for the full prose version, including open questions.
+
+Table work_type {
+  id uuid [pk, note: 'Surrogate primary key.']
+  name varchar(255) [not null, note: 'The type label shown in the UI (book, research_paper, video, podcast, lecture...). A lookup table rather than a hardcoded enum so new types are a row insert, not a migration.']
+  icon varchar(255) [note: 'Icon identifier/path used in list and card views. Nullable.']
+}
+
+Table work {
+  id uuid [pk, note: 'Surrogate primary key.']
+  work_type_id uuid [ref: > work_type.id, note: 'Which kind of Work this is. Conceptually required — should be tightened to not null before migrations are written.']
+  title varchar(255) [not null, note: 'The Work title, in its original or primary form.']
+  original_language varchar(100) [note: 'Language the Work was originally created in — independent of any Edition translation language. Nullable.']
+  description text [note: 'Free-text synopsis or summary. Nullable.']
+  external_ref varchar(255) [note: 'External identifier for cross-referencing (OpenLibrary ID, DOI, etc). Not every Work has one. Nullable.']
+  created_at timestamp [note: 'When this record was created in Baglib — not when the Work itself was authored.']
+}
+
+Table author {
+  id uuid [pk, note: 'Surrogate primary key.']
+  name varchar(255) [not null, note: 'The person credited — author, translator, editor, or narrator on one or more Works (see work_author for the role).']
+  birth_year varchar(10) [note: 'Stored as text, not int/date, to accommodate approximate or era-based dates (e.g. "c. 850 CE") common for historical and classical authors. Nullable.']
+  death_year varchar(10) [note: 'Same rationale as birth_year. Null for living authors.']
+  bio text [note: 'Free-text biography. Nullable.']
+}
+
+Table work_author {
+  work_id uuid [ref: > work.id, note: 'The Work being credited.']
+  author_id uuid [ref: > author.id, note: 'The person being credited.']
+  role varchar(50) [note: 'Nature of the contribution — author, translator, editor, narrator, etc. Part of the composite key so the same person can be credited in more than one role on the same Work (e.g. translator and commentator).']
+  indexes {
+    (work_id, author_id, role) [pk]
+  }
+}
+
+Table edition {
+  id uuid [pk, note: 'Surrogate primary key.']
+  work_id uuid [ref: > work.id, note: 'The Work this is an edition of. Conceptually required — every Edition belongs to exactly one Work.']
+  label varchar(255) [note: 'Human-readable identifier, e.g. "Dar Tawq al-Najah, 2nd ed." Free text, since editions are described inconsistently across sources.']
+  publisher varchar(255) [note: 'Publisher name, currently free text rather than normalized into its own table — see data-dictionary.md Open Questions.']
+  publication_year int [note: 'Year this edition was published.']
+  language varchar(100) [note: 'This edition language — may differ from work.original_language when this is a translation.']
+  isbn varchar(20) [note: 'ISBN, where one exists. Many editions (older, physical, non-Western prints) will not have one.']
+}
+
+Table source {
+  id uuid [pk, note: 'Surrogate primary key.']
+  edition_id uuid [ref: > edition.id, note: 'Which Edition this Source provides access to. Conceptually required.']
+  source_type varchar(50) [note: 'linked_file, managed_file, physical, or wishlist. Determines which _detail table has the matching row.']
+  status varchar(50) [note: 'active, missing, or wishlist. Whether this copy is currently available, independent of source_type.']
+  added_at timestamp [note: 'When this Source was added to the library.']
+}
+
+Table file_source_detail {
+  source_id uuid [pk, ref: > source.id, note: 'Shared primary key with source — one row per Source where source_type is linked_file or managed_file.']
+  file_path varchar(255) [note: 'Filesystem path to the file, local to the device — local-first, so no cloud path is assumed.']
+  file_hash varchar(255) [note: 'Content hash, used to detect duplicate imports and verify the file has not moved or changed unexpectedly.']
+  file_format varchar(20) [note: 'pdf, epub, mobi, azw3, etc.']
+  is_managed boolean [note: 'Whether Baglib copied the file into its own managed storage (true, managed_file) or only links to a file kept elsewhere (false, linked_file).']
+}
+
+Table physical_source_detail {
+  source_id uuid [pk, ref: > source.id, note: 'Shared primary key with source — one row per Source where source_type is physical.']
+  shelf varchar(100) [note: 'Shelf label/identifier.']
+  room varchar(100) [note: 'Room, for personal libraries spanning more than one.']
+  condition varchar(100) [note: 'Free-text condition note, e.g. "worn spine", "like new".']
+  lending_status varchar(50) [note: 'Whether this copy is currently lent out. Single free-text field rather than a structured loan record.']
+  purchase_date date [note: 'When this copy was acquired.']
+  price decimal(10,2) [note: 'What was paid for it.']
+}
+
+Table wishlist_source_detail {
+  source_id uuid [pk, ref: > source.id, note: 'Shared primary key with source — one row per Source where source_type is wishlist.']
+  priority int [note: 'How badly this is wanted, for sorting a wishlist view.']
+  target_format varchar(50) [note: 'The format/edition the reader hopes to eventually acquire.']
+  notes text [note: 'Free-text notes — where to find it, why it is wanted, etc.']
+}
+
+Table knowledge {
+  id uuid [pk, note: 'Surrogate primary key.']
+  work_id uuid [ref: > work.id, note: 'The Work this item is about. Conceptually required — every Knowledge item belongs to exactly one Work, even when also scoped to an Edition or Source.']
+  edition_id uuid [ref: > edition.id, note: 'Optional — which specific Edition this refers to, relevant when page numbers or translation-specific wording matter.']
+  source_id uuid [ref: > source.id, note: 'Optional — which specific Source (file or physical copy) this was captured from.']
+  knowledge_type varchar(50) [note: 'note, highlight, quote, bookmark, or question. Determines which _detail table applies.']
+  location varchar(255) [note: 'Where in the Work this is anchored — page, chapter, or reader position. Free text, since "position" differs across PDF, EPUB, and physical books.']
+  created_at timestamp [note: 'When this item was created.']
+  updated_at timestamp [note: 'Last-modified time. Full version history, if built, lives in event_log rather than as extra columns here (see ADR-001, Event-Driven History).']
+}
+
+Table note_detail {
+  knowledge_id uuid [pk, ref: > knowledge.id, note: 'Shared primary key with knowledge — one row per Knowledge item where knowledge_type is note.']
+  content text [note: 'The note body text.']
+}
+
+Table highlight_detail {
+  knowledge_id uuid [pk, ref: > knowledge.id, note: 'Shared primary key with knowledge — one row per Knowledge item where knowledge_type is highlight.']
+  quoted_text text [note: 'The exact passage that was highlighted.']
+  color varchar(50) [note: 'Highlight color, for readers who use color to mean different things (e.g. yellow = important, red = disagree).']
+}
+
+Table quote_detail {
+  knowledge_id uuid [pk, ref: > knowledge.id, note: 'Shared primary key with knowledge — one row per Knowledge item where knowledge_type is quote.']
+  quoted_text text [note: 'The excerpt being saved. Distinct in intent from highlight_detail.quoted_text — a Quote is a deliberately saved excerpt (can be typed in by hand from a physical book with no source file), while a Highlight is captured while reading digitally.']
+  context_note text [note: 'Why this quote was saved, or context needed to make sense of it out of place.']
+}
+
+Table bookmark_detail {
+  knowledge_id uuid [pk, ref: > knowledge.id, note: 'Shared primary key with knowledge — one row per Knowledge item where knowledge_type is bookmark.']
+  label varchar(255) [note: 'Optional label (e.g. "start of chapter 3 argument"). A bookmark is otherwise just a saved location with no content.']
+}
+
+Table question_detail {
+  knowledge_id uuid [pk, ref: > knowledge.id, note: 'Shared primary key with knowledge — one row per Knowledge item where knowledge_type is question.']
+  question_text text [note: 'The question itself. No answered/open status or answer field yet — see data-dictionary.md Open Questions.']
+}
+
+Table comment {
+  id uuid [pk, note: 'Surrogate primary key.']
+  knowledge_id uuid [ref: > knowledge.id, not null, note: 'The Knowledge item this comment is attached to. Any Knowledge type can carry comments, not only Highlight.']
+  parent_comment_id uuid [ref: > comment.id, note: 'Nullable — set when this comment is a reply to another comment on the same Knowledge item, enabling threaded discussion (Adobe Acrobat-style). Null for a top-level comment.']
+  content text [not null, note: 'The comment body text.']
+  actor varchar(100) [note: 'Who wrote it, e.g. Ammar or Monzer. Free text — there is no formal User table yet in this schema.']
+  created_at timestamp [note: 'When this comment was posted.']
+  updated_at timestamp [note: 'Last-edited time.']
+}
+
+Table reading_session {
+  id uuid [pk, note: 'Surrogate primary key.']
+  work_id uuid [ref: > work.id, note: 'The Work being read.']
+  edition_id uuid [ref: > edition.id, note: 'The specific Edition being read — page counts and pagination differ by edition.']
+  started_at timestamp [note: 'When this session began.']
+  ended_at timestamp [note: 'When this session ended.']
+  pages_read int [note: 'Pages covered in this session, for reading-progress and streak tracking.']
+  mood varchar(100) [note: 'Free-text reflection on how the session felt, supporting the reading-journal side of Baglib rather than pure tracking.']
+}
+
+Table tag {
+  id uuid [pk, note: 'Surrogate primary key.']
+  name varchar(100) [unique, note: 'The tag display text. Unique so the same tag cannot accidentally be duplicated under a near-identical row.']
+  origin varchar(20) [not null, default: 'manual', note: 'automatic (system-derived, e.g. from imported metadata or future enrichment) or manual (self-made by the reader).']
+  category varchar(50) [note: 'Optional grouping — subject, period, genre, etc. — so tags of fundamentally different kinds are not flattened into one undifferentiated list.']
+}
+
+Table collection {
+  id uuid [pk, note: 'Surrogate primary key.']
+  name varchar(255) [note: 'Display name.']
+  description text [note: 'Free-text description of the collection purpose.']
+  collection_type varchar(20) [not null, default: 'manual', note: 'manual (explicit membership via work_collection/knowledge_collection) or smart (membership computed from filter_rules at query time).']
+  filter_rules json [note: 'The rule set defining membership when collection_type is smart, e.g. {"tags": ["science"], "work_type": "book"}. Unused for manual collections. No fixed schema of its own yet — validated in application code, not the database.']
+}
+
+Table work_tag {
+  work_id uuid [ref: > work.id, note: 'The tagged Work.']
+  tag_id uuid [ref: > tag.id, note: 'The tag applied.']
+  indexes {
+    (work_id, tag_id) [pk]
+  }
+}
+
+Table knowledge_tag {
+  knowledge_id uuid [ref: > knowledge.id, note: 'The tagged Knowledge item — independent of, and in addition to, its parent Work tags.']
+  tag_id uuid [ref: > tag.id, note: 'The tag applied.']
+  indexes {
+    (knowledge_id, tag_id) [pk]
+  }
+}
+
+Table work_collection {
+  work_id uuid [ref: > work.id, note: 'A Work belonging to this manual collection.']
+  collection_id uuid [ref: > collection.id, note: 'The collection. Only meaningful when collection.collection_type is manual — smart collections compute membership from filter_rules instead.']
+  indexes {
+    (work_id, collection_id) [pk]
+  }
+}
+
+Table knowledge_collection {
+  knowledge_id uuid [ref: > knowledge.id, note: 'A Knowledge item (note, quote, question, etc.) belonging to this manual collection, alongside or instead of Works. Not restricted at the schema level to particular knowledge_types.']
+  collection_id uuid [ref: > collection.id, note: 'The collection. Only meaningful when collection.collection_type is manual.']
+  indexes {
+    (knowledge_id, collection_id) [pk]
+  }
+}
+
+Table event_log {
+  id uuid [pk, note: 'Surrogate primary key.']
+  entity_type varchar(50) [note: 'Which kind of entity this happened to — Work, Edition, Source, Knowledge, Comment, etc. Polymorphic by design (paired with entity_id) rather than a foreign key, since one history table needs to reference every entity type uniformly.']
+  entity_id uuid [note: 'The id of the specific record, interpreted according to entity_type. Not a formal foreign key — it can point to any table.']
+  event_type varchar(50) [note: 'Created, Updated, Deleted, Restored, etc.']
+  payload json [note: 'The event details — what changed, or a full snapshot, depending on what undo/version history needs.']
+  actor varchar(100) [note: 'Who performed the action, e.g. Ammar or Monzer.']
+  occurred_at timestamp [note: 'When the event happened.']
+}
