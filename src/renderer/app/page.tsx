@@ -40,6 +40,11 @@ export default function Home() {
           تطبيق بغلب للقراءة وإدارة الكتب (Baghlib Desktop)
         </div>
 
+        {/* Logo Image */}
+        <div className="w-24 h-24 mx-auto mb-6 rounded-2xl p-1 bg-gradient-to-br from-[#4691b9] via-[#57a877] to-[#d97706] shadow-xl overflow-hidden">
+          <img src="/logo.png" alt="Baglib Logo" className="w-full h-full object-cover rounded-xl" />
+        </div>
+
         {/* Title */}
         <h1 className="text-4xl sm:text-5xl font-bold font-display tracking-tight text-[#0a141a] dark:text-[#edf4f8] mb-4">
           بغلب <span className="text-[#387494] dark:text-[#6ba7c7]">Baghlib</span>

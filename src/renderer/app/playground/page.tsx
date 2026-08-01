@@ -77,8 +77,8 @@ export default function DesignSystemPlayground() {
       <header className="sticky top-0 z-50 border-b backdrop-blur-md bg-[var(--bg-surface)]/85 border-[var(--border-subtle)] px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#4691b9] to-[#d97706] flex items-center justify-center text-white font-display text-2xl shadow-md">
-              ب
+            <div className="w-10 h-10 rounded-xl border border-[var(--border-subtle)] shadow-md overflow-hidden bg-[var(--bg-canvas)]">
+              <img src="/logo.png" alt="Baglib Logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <h1 className="text-2xl font-bold font-display text-transparent bg-clip-text bg-gradient-to-r from-[#2a576f] via-[#387494] to-[#57a877] dark:from-[#6ba7c7] dark:to-[#57a877]">
