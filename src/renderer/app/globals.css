@@ -1,33 +1,82 @@
 @import "tailwindcss";
 
-:root {
-  --background: #efece4;
-  --foreground: #4a1d25;
-  --brand-burgundy: #853a47;
-  --brand-burgundy-light: #9c4857;
-  --brand-burgundy-dark: #5c242d;
-  --brand-cream: #efece4;
-  --brand-cream-card: #f8f6f0;
-  --brand-cream-border: #dcd4c3;
-  --brand-muted: #736366;
-  --font-sans: var(--font-cairo), system-ui, -apple-system, sans-serif;
+@theme {
+  --color-pale-sky-50: #edf4f8;
+  --color-pale-sky-100: #dae9f1;
+  --color-pale-sky-200: #b5d3e3;
+  --color-pale-sky-300: #90bdd5;
+  --color-pale-sky-400: #6ba7c7;
+  --color-pale-sky-500: #4691b9;
+  --color-pale-sky-600: #387494;
+  --color-pale-sky-700: #2a576f;
+  --color-pale-sky-800: #1c3a4a;
+  --color-pale-sky-900: #0e1d25;
+  --color-pale-sky-950: #0a141a;
+
+  --color-evergreen-50: #eef6f1;
+  --color-evergreen-100: #ddeee4;
+  --color-evergreen-200: #bcdcc9;
+  --color-evergreen-300: #9acbae;
+  --color-evergreen-400: #78ba92;
+  --color-evergreen-500: #57a877;
+  --color-evergreen-600: #45875f;
+  --color-evergreen-700: #346548;
+  --color-evergreen-800: #234330;
+  --color-evergreen-900: #112218;
+  --color-evergreen-950: #0c1811;
+
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #d97706;
+  --color-amber-600: #b45309;
+  --color-amber-700: #92400e;
+  --color-amber-800: #78350f;
+  --color-amber-900: #451a03;
+
+  --font-display: var(--font-reem-kufi), serif;
+  --font-sans: var(--font-tajawal), sans-serif;
+  --font-serif: var(--font-amiri), serif;
+  --font-reading: var(--font-amiri), serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-brand-burgundy: var(--brand-burgundy);
-  --color-brand-burgundy-light: var(--brand-burgundy-light);
-  --color-brand-burgundy-dark: var(--brand-burgundy-dark);
-  --color-brand-cream: var(--brand-cream);
-  --color-brand-cream-card: var(--brand-cream-card);
-  --color-brand-cream-border: var(--brand-cream-border);
-  --color-brand-muted: var(--brand-muted);
-  --font-sans: var(--font-cairo), system-ui, -apple-system, sans-serif;
+@layer base {
+  :root {
+    --bg-canvas: #edf4f8;
+    --bg-surface: #ffffff;
+    --bg-sidebar: #dae9f1;
+    --border-subtle: #b5d3e3;
+    --text-main: #0a141a;
+    --text-muted: #2a576f;
+  }
+
+  .dark {
+    --bg-canvas: #0a141a;
+    --bg-surface: #0e1d25;
+    --bg-sidebar: #0e1d25;
+    --border-subtle: #1c3a4a;
+    --text-main: #edf4f8;
+    --text-muted: #90bdd5;
+  }
+
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-main);
+    font-family: var(--font-tajawal), sans-serif;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-cairo), system-ui, -apple-system, sans-serif;
+.font-display {
+  font-family: var(--font-reem-kufi), serif;
+}
+
+.font-sans {
+  font-family: var(--font-tajawal), sans-serif;
+}
+
+.font-reading, .font-serif {
+  font-family: var(--font-amiri), serif;
 }
