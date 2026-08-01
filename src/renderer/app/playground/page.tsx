@@ -71,19 +71,19 @@ export default function DesignSystemPlayground() {
   ];
 
   return (
-    <div className="min-h-screen transition-colors duration-300 bg-[var(--bg-canvas)] text-[var(--text-main)] font-sans">
+    <div className="min-h-screen transition-colors duration-300 bg-canvas text-main font-sans">
       {/* Top Header */}
-      <header className="sticky top-0 z-50 border-b backdrop-blur-md bg-[var(--bg-surface)]/85 border-[var(--border-subtle)] px-6 py-4">
+      <header className="sticky top-0 z-50 border-b backdrop-blur-md bg-surface/85 border-subtle px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl border border-[var(--border-subtle)] shadow-md overflow-hidden bg-[var(--bg-canvas)]">
+            <div className="w-10 h-10 rounded-xl border border-subtle shadow-md overflow-hidden bg-canvas">
               <img src="/logo.png" alt="Baglib Logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <h1 className="text-2xl font-bold font-display text-transparent bg-clip-text bg-gradient-to-r from-pale-sky-700 via-pale-sky-600 to-evergreen-500 dark:from-pale-sky-400 dark:to-evergreen-500">
                 نظام تصميم مكتبة بغداد (`baglib`)
               </h1>
-              <p className="text-xs text-[var(--text-muted)] font-sans">
+              <p className="text-xs text-muted font-sans">
                 Design System Playground & Component Showcase
               </p>
             </div>
@@ -91,13 +91,13 @@ export default function DesignSystemPlayground() {
 
           {/* Controls: Navigation & Theme Toggle */}
           <div className="flex items-center gap-3">
-            <nav className="flex items-center gap-1 bg-[var(--bg-canvas)] p-1 rounded-xl border border-[var(--border-subtle)] text-xs font-semibold">
+            <nav className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle text-xs font-semibold">
               <button
                 onClick={() => setActiveTab('overview')}
                 className={`px-3 py-1.5 rounded-lg transition-all ${
                   activeTab === 'overview'
                     ? 'bg-pale-sky-600 text-white dark:bg-pale-sky-500 shadow-sm'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                    : 'text-muted hover:text-main'
                 }`}
               >
                 نظرة عامة
@@ -107,7 +107,7 @@ export default function DesignSystemPlayground() {
                 className={`px-3 py-1.5 rounded-lg transition-all ${
                   activeTab === 'colors'
                     ? 'bg-pale-sky-600 text-white dark:bg-pale-sky-500 shadow-sm'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                    : 'text-muted hover:text-main'
                 }`}
               >
                 الألوان (Palette)
@@ -117,7 +117,7 @@ export default function DesignSystemPlayground() {
                 className={`px-3 py-1.5 rounded-lg transition-all ${
                   activeTab === 'typography'
                     ? 'bg-pale-sky-600 text-white dark:bg-pale-sky-500 shadow-sm'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                    : 'text-muted hover:text-main'
                 }`}
               >
                 الخطوط (Typography)
@@ -127,7 +127,7 @@ export default function DesignSystemPlayground() {
                 className={`px-3 py-1.5 rounded-lg transition-all ${
                   activeTab === 'components'
                     ? 'bg-pale-sky-600 text-white dark:bg-pale-sky-500 shadow-sm'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                    : 'text-muted hover:text-main'
                 }`}
               >
                 المكونات (Components)
@@ -147,7 +147,7 @@ export default function DesignSystemPlayground() {
             {/* Dark Mode Switcher */}
             <button
               onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-pale-sky-500 text-xs font-medium transition-all shadow-sm"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-subtle bg-surface hover:border-pale-sky-500 text-xs font-medium transition-all shadow-sm"
               title="تبديل المظهر"
             >
               {theme === 'light' ? (
@@ -178,7 +178,7 @@ export default function DesignSystemPlayground() {
         {activeTab === 'overview' && (
           <section className="space-y-8">
             {/* Vision Hero Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-pale-sky-100 via-pale-sky-50 to-evergreen-100 dark:from-pale-sky-900 dark:via-pale-sky-950 dark:to-evergreen-900 border border-[var(--border-subtle)] p-8 shadow-sm">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-pale-sky-100 via-pale-sky-50 to-evergreen-100 dark:from-pale-sky-900 dark:via-pale-sky-950 dark:to-evergreen-900 border border-subtle p-8 shadow-sm">
               <div className="relative z-10 max-w-3xl space-y-4">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
                   <span>🏛️ بيت الحكمة الرقمي</span>
@@ -188,7 +188,7 @@ export default function DesignSystemPlayground() {
                 <h2 className="text-4xl font-bold font-display leading-tight text-pale-sky-950 dark:text-pale-sky-50">
                   رؤية التصميم: هدوء معرفي، رصانة أكاديمية، وتوازن بصري
                 </h2>
-                <p className="text-base text-[var(--text-muted)] font-sans leading-relaxed">
+                <p className="text-base text-muted font-sans leading-relaxed">
                   يجمع مشروع <strong className="text-pale-sky-600 dark:text-pale-sky-400">بغلب (baglib)</strong> بين التراث العلمي الإسلامي الأصيل وأحدث معايير التفاعلية في برمجيات البحث الشخصي (مثل Obsidian وZotero). تم تصميم نظام الألوان والخطوط والمكونات ليوفر تجربة قراءة ودراسة مريحة وممتازة للعين.
                 </p>
                 <div className="flex flex-wrap gap-4 pt-2">
@@ -200,7 +200,7 @@ export default function DesignSystemPlayground() {
                   </button>
                   <button
                     onClick={() => setActiveTab('sandbox')}
-                    className="px-5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-amber-500 text-amber-500 font-semibold text-sm transition-all shadow-sm"
+                    className="px-5 py-2.5 rounded-xl bg-surface border border-subtle hover:border-amber-500 text-amber-500 font-semibold text-sm transition-all shadow-sm"
                   >
                     تجربة مختبر النص القرآني والأكاديمي
                   </button>
@@ -210,32 +210,32 @@ export default function DesignSystemPlayground() {
 
             {/* Quick Cards grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3 shadow-sm hover:border-pale-sky-500 transition-all">
+              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3 shadow-sm hover:border-pale-sky-500 transition-all">
                 <div className="w-10 h-10 rounded-xl bg-pale-sky-100 dark:bg-pale-sky-800 text-pale-sky-600 dark:text-pale-sky-400 flex items-center justify-center font-bold text-xl">
                   🎨
                 </div>
                 <h3 className="font-bold text-lg font-display">Pale Sky (اللون الرئيسي)</h3>
-                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                <p className="text-xs text-muted leading-relaxed">
                   درجات الأزرق الهادئ التي ترمز للوضوح الفكري والهدوء الأكاديمي، وتُستخدم في عناصر الواجهة الرئيسية والأزرار والنوافذ.
                 </p>
               </div>
 
-              <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3 shadow-sm hover:border-evergreen-500 transition-all">
+              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3 shadow-sm hover:border-evergreen-500 transition-all">
                 <div className="w-10 h-10 rounded-xl bg-evergreen-100 dark:bg-evergreen-900 text-evergreen-600 dark:text-evergreen-400 flex items-center justify-center font-bold text-xl">
                   🌿
                 </div>
                 <h3 className="font-bold text-lg font-display">Evergreen (اللون الثانوي)</h3>
-                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                <p className="text-xs text-muted leading-relaxed">
                   الأخضر المستوحى من التراث الإسلامي والطبيعة، مخصص لشارات الحفظ ومراجعة بطاقات التكرار المتباعد (SRS) ومزامنة Zotero.
                 </p>
               </div>
 
-              <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3 shadow-sm hover:border-amber-500 transition-all">
+              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3 shadow-sm hover:border-amber-500 transition-all">
                 <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900 text-amber-500 dark:text-amber-400 flex items-center justify-center font-bold text-xl">
                   📜
                 </div>
                 <h3 className="font-bold text-lg font-display">Baghdad Amber (اللون التمييزي)</h3>
-                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                <p className="text-xs text-muted leading-relaxed">
                   لون العمبر والمخطوطات الذهبية، مخصص للإشارات المرجعية (Bookmarks)، أرقام الآيات، نتائج البحث، والتظليلات الهامة.
                 </p>
               </div>
@@ -246,9 +246,9 @@ export default function DesignSystemPlayground() {
         {/* TAB 2: COLOR PALETTE */}
         {activeTab === 'colors' && (
           <section className="space-y-8">
-            <div className="border-b border-[var(--border-subtle)] pb-4">
+            <div className="border-b border-subtle pb-4">
               <h2 className="text-2xl font-bold font-display">نظام الألوان والرموز (Color Tokens)</h2>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
+              <p className="text-xs text-muted mt-1">
                 اضغط على أي مربع لون لنسخ رمز الـ Hex الخاص به مباشرة.
               </p>
             </div>
@@ -259,21 +259,21 @@ export default function DesignSystemPlayground() {
                 <h3 className="font-bold font-display text-lg text-parchment-700 dark:text-parchment-200">
                   1. Warm Parchment Palette (لون الورق والمخطوطات العتيقة)
                 </h3>
-                <span className="text-xs text-[var(--text-muted)]">Background & Surface Base</span>
+                <span className="text-xs text-muted">Background & Surface Base</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3">
                 {parchmentSwatches.map((s) => (
                   <button
                     key={s.name}
                     onClick={() => copyToClipboard(s.hex)}
-                    className="p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
+                    className="p-3 rounded-xl border border-subtle bg-surface hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
                   >
                     <div
                       className="w-full h-12 rounded-lg mb-2 shadow-inner border border-black/10"
                       style={{ backgroundColor: s.hex }}
                     />
                     <div className="font-mono text-xs font-semibold">{s.name}</div>
-                    <div className="text-[10px] text-[var(--text-muted)]">{s.hex}</div>
+                    <div className="text-[10px] text-muted">{s.hex}</div>
                     <div className="text-[10px] text-parchment-700 dark:text-parchment-200 font-medium truncate mt-1">
                       {s.role}
                     </div>
@@ -288,7 +288,7 @@ export default function DesignSystemPlayground() {
                 <h3 className="font-bold font-display text-lg text-pale-sky-600 dark:text-pale-sky-400">
                   2. Pale Sky Palette (اللون الأكاديمي للواجهة والأزرار)
                 </h3>
-                <span className="text-xs text-[var(--text-muted)]">Primary UI & Accents</span>
+                <span className="text-xs text-muted">Primary UI & Accents</span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -296,14 +296,14 @@ export default function DesignSystemPlayground() {
                   <button
                     key={s.name}
                     onClick={() => copyToClipboard(s.hex)}
-                    className="p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
+                    className="p-3 rounded-xl border border-subtle bg-surface hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
                   >
                     <div
                       className="w-full h-12 rounded-lg mb-2 shadow-inner border border-black/5"
                       style={{ backgroundColor: s.hex }}
                     />
                     <div className="font-mono text-xs font-semibold">{s.name}</div>
-                    <div className="text-[10px] text-[var(--text-muted)]">{s.hex}</div>
+                    <div className="text-[10px] text-muted">{s.hex}</div>
                     <div className="text-[10px] text-pale-sky-600 dark:text-pale-sky-400 font-medium truncate mt-1">
                       {s.role}
                     </div>
@@ -318,21 +318,21 @@ export default function DesignSystemPlayground() {
                 <h3 className="font-bold font-display text-lg text-evergreen-600 dark:text-evergreen-400">
                   3. Evergreen Palette (الشارات والتأكيد والـ SRS)
                 </h3>
-                <span className="text-xs text-[var(--text-muted)]">Secondary / Verification</span>
+                <span className="text-xs text-muted">Secondary / Verification</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
                 {evergreenSwatches.map((s) => (
                   <button
                     key={s.name}
                     onClick={() => copyToClipboard(s.hex)}
-                    className="p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
+                    className="p-3 rounded-xl border border-subtle bg-surface hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
                   >
                     <div
                       className="w-full h-12 rounded-lg mb-2 shadow-inner border border-black/5"
                       style={{ backgroundColor: s.hex }}
                     />
                     <div className="font-mono text-xs font-semibold">{s.name}</div>
-                    <div className="text-[10px] text-[var(--text-muted)]">{s.hex}</div>
+                    <div className="text-[10px] text-muted">{s.hex}</div>
                     <div className="text-[10px] text-evergreen-600 dark:text-evergreen-400 font-medium truncate mt-1">
                       {s.role}
                     </div>
@@ -347,21 +347,21 @@ export default function DesignSystemPlayground() {
                 <h3 className="font-bold font-display text-lg text-amber-600 dark:text-amber-400">
                   4. Baghdad Amber Palette (العلامات والإشارات القرآانية)
                 </h3>
-                <span className="text-xs text-[var(--text-muted)]">Accent / Bookmarks / Verses</span>
+                <span className="text-xs text-muted">Accent / Bookmarks / Verses</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                 {amberSwatches.map((s) => (
                   <button
                     key={s.name}
                     onClick={() => copyToClipboard(s.hex)}
-                    className="p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
+                    className="p-3 rounded-xl border border-subtle bg-surface hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
                   >
                     <div
                       className="w-full h-12 rounded-lg mb-2 shadow-inner border border-black/5"
                       style={{ backgroundColor: s.hex }}
                     />
                     <div className="font-mono text-xs font-semibold">{s.name}</div>
-                    <div className="text-[10px] text-[var(--text-muted)]">{s.hex}</div>
+                    <div className="text-[10px] text-muted">{s.hex}</div>
                     <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium truncate mt-1">
                       {s.role}
                     </div>
@@ -375,29 +375,29 @@ export default function DesignSystemPlayground() {
         {/* TAB 3: TYPOGRAPHY */}
         {activeTab === 'typography' && (
           <section className="space-y-8">
-            <div className="border-b border-[var(--border-subtle)] pb-4">
+            <div className="border-b border-subtle pb-4">
               <h2 className="text-2xl font-bold font-display">إستراتيجية الخطوط الثلاثية (Three-Tier Typography)</h2>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
+              <p className="text-xs text-muted mt-1">
                 توزيع وظيفي محدد بين العناوين (`Reem Kufi`)، عناصر التحكم (`Tajawal`)، ونصوص القراءة والتراث (`Amiri`).
               </p>
             </div>
 
             <div className="space-y-6">
               {/* Tier 1: Reem Kufi */}
-              <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3">
+                <div className="flex items-center justify-between border-b border-subtle pb-3">
                   <div>
                     <span className="text-xs px-2.5 py-0.5 rounded-full bg-pale-sky-100 dark:bg-pale-sky-800 text-pale-sky-700 dark:text-pale-sky-400 font-bold">
                       1. Display Font
                     </span>
                     <h3 className="text-xl font-bold font-display mt-1">ريم كوفي (Reem Kufi)</h3>
                   </div>
-                  <span className="text-xs font-mono text-[var(--text-muted)]">`font-display`</span>
+                  <span className="text-xs font-mono text-muted">`font-display`</span>
                 </div>
-                <p className="text-xs text-[var(--text-muted)]">
+                <p className="text-xs text-muted">
                   تُستخدم فقط للعناوين الرئيسية للملفات، أسماء الكتب، عناوين اللوحات المفتوحة، وعلامة المشروع.
                 </p>
-                <div className="p-4 rounded-xl bg-[var(--bg-canvas)] space-y-2">
+                <div className="p-4 rounded-xl bg-canvas space-y-2">
                   <div className="font-display text-3xl font-bold text-pale-sky-600 dark:text-pale-sky-400">
                     مكتبة بغداد الرقمية - بيت الحكمة للبحث العلمي
                   </div>
@@ -408,49 +408,49 @@ export default function DesignSystemPlayground() {
               </div>
 
               {/* Tier 2: Tajawal */}
-              <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3">
+                <div className="flex items-center justify-between border-b border-subtle pb-3">
                   <div>
                     <span className="text-xs px-2.5 py-0.5 rounded-full bg-evergreen-100 dark:bg-evergreen-900 text-evergreen-600 dark:text-evergreen-400 font-bold">
                       2. UI & Controls Font
                     </span>
                     <h3 className="text-xl font-bold font-sans">تجول (Tajawal)</h3>
                   </div>
-                  <span className="text-xs font-mono text-[var(--text-muted)]">`font-sans`</span>
+                  <span className="text-xs font-mono text-muted">`font-sans`</span>
                 </div>
-                <p className="text-xs text-[var(--text-muted)]">
+                <p className="text-xs text-muted">
                   تُستخدم لجميع عناصر الواجهة الرسومية (الأزرار، القوائم الجانبية، حقول البحث، الوسوم، وأسماء المجلدات).
                 </p>
-                <div className="p-4 rounded-xl bg-[var(--bg-canvas)] space-y-3 font-sans">
+                <div className="p-4 rounded-xl bg-canvas space-y-3 font-sans">
                   <div className="flex items-center gap-2 text-sm">
                     <span className="font-bold">القائمة الجانبية:</span>
                     <span className="px-2 py-1 rounded bg-pale-sky-600 text-white text-xs">المستندات الأخيرة</span>
-                    <span className="px-2 py-1 rounded bg-[var(--bg-surface)] border text-xs">بطاقات SRS</span>
-                    <span className="px-2 py-1 rounded bg-[var(--bg-surface)] border text-xs">إعدادات المزامنة</span>
+                    <span className="px-2 py-1 rounded bg-surface border text-xs">بطاقات SRS</span>
+                    <span className="px-2 py-1 rounded bg-surface border text-xs">إعدادات المزامنة</span>
                   </div>
-                  <div className="text-xs text-[var(--text-muted)]">
+                  <div className="text-xs text-muted">
                     مثال على نموذج إدخال: "أدخل الكلمة المفتاحية للبحث في المخطوطات..."
                   </div>
                 </div>
               </div>
 
               {/* Tier 3: Amiri */}
-              <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3">
+                <div className="flex items-center justify-between border-b border-subtle pb-3">
                   <div>
                     <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900 text-amber-600 dark:text-amber-400 font-bold">
                       3. Reading & Academic Body Font
                     </span>
                     <h3 className="text-xl font-bold font-serif">أميري (Amiri)</h3>
                   </div>
-                  <span className="text-xs font-mono text-[var(--text-muted)]">`font-serif` / `font-reading`</span>
+                  <span className="text-xs font-mono text-muted">`font-serif` / `font-reading`</span>
                 </div>
-                <p className="text-xs text-[var(--text-muted)]">
+                <p className="text-xs text-muted">
                   الخط الأساسي لقراءة النصوص الطويلة، الآيات القرآانية، متون الحديث، والشروح والتفاسير.
                 </p>
-                <div className="p-5 rounded-xl bg-[var(--bg-canvas)] space-y-3 font-serif text-lg leading-relaxed border-r-4 border-amber-500">
+                <div className="p-5 rounded-xl bg-canvas space-y-3 font-serif text-lg leading-relaxed border-r-4 border-amber-500">
                   <p className="text-amber-600 dark:text-amber-300 font-bold">
-                    ﴿إِنَّمَا يَخْشَى اللَّهَ مِنْ عِبَادِهِ الْعُلَمَاءُ﴾ <span className="text-xs font-sans text-[var(--text-muted)]">[فاطر: 28]</span>
+                    ﴿إِنَّمَا يَخْشَى اللَّهَ مِنْ عِبَادِهِ الْعُلَمَاءُ﴾ <span className="text-xs font-sans text-muted">[فاطر: 28]</span>
                   </p>
                   <p className="text-pale-sky-950 dark:text-pale-sky-50 text-base">
                     قال الإمام ابن كثير في تفسيره: "أي إنما يخشاه حق خشيته العلماء العارفون به، لأنه كلما كانت المعرفة برب العالمين أتم والعلم به أكمل، كانت الخشية له أعظم وأكثر."
@@ -464,15 +464,15 @@ export default function DesignSystemPlayground() {
         {/* TAB 4: COMPONENTS */}
         {activeTab === 'components' && (
           <section className="space-y-8">
-            <div className="border-b border-[var(--border-subtle)] pb-4">
+            <div className="border-b border-subtle pb-4">
               <h2 className="text-2xl font-bold font-display">معرض المكونات التفاعلية (UI Components)</h2>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
+              <p className="text-xs text-muted mt-1">
                 عناصر مجهزة للاستخدام في تطبيق سطح المكتب بتنسيقات Pale Sky وEvergreen وBaghdad Amber.
               </p>
             </div>
 
             {/* Buttons Showcase */}
-            <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-4">
+            <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-4">
               <h3 className="font-bold text-lg font-display text-pale-sky-600 dark:text-pale-sky-400">
                 1. الأزرار وعناصر التفاعل (Buttons)
               </h3>
@@ -486,7 +486,7 @@ export default function DesignSystemPlayground() {
                 <button className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-all shadow-sm">
                   زر تمييز (Baghdad Amber)
                 </button>
-                <button className="px-4 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] hover:border-pale-sky-600 text-xs font-semibold transition-all">
+                <button className="px-4 py-2 rounded-xl border border-subtle bg-canvas hover:border-pale-sky-600 text-xs font-semibold transition-all">
                   زر إطار (Outline)
                 </button>
                 <button className="px-4 py-2 rounded-xl bg-pale-sky-50 dark:bg-pale-sky-800 text-pale-sky-700 dark:text-pale-sky-400 text-xs font-semibold transition-all">
@@ -499,14 +499,14 @@ export default function DesignSystemPlayground() {
             </div>
 
             {/* Knowledge & Verses Cards */}
-            <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-4">
+            <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-4">
               <h3 className="font-bold text-lg font-display text-pale-sky-600 dark:text-pale-sky-400">
                 2. بطاقات المعرفة والآيات والملاحظات (Knowledge Cards)
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Quran Ayah Card */}
-                <div className="p-5 rounded-2xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] hover:border-amber-500 transition-all space-y-3 relative group">
+                <div className="p-5 rounded-2xl bg-canvas border border-subtle hover:border-amber-500 transition-all space-y-3 relative group">
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-900 text-amber-600 dark:text-amber-400 border border-amber-300">
                       <span>آية قرآانية</span>
@@ -526,14 +526,14 @@ export default function DesignSystemPlayground() {
                     اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ لَّهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ ﴿<span className="font-sans text-xs text-amber-500 font-bold">٢٥٥</span>﴾
                   </p>
 
-                  <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border-subtle)] font-sans">
+                  <div className="flex items-center justify-between text-xs text-muted pt-2 border-t border-subtle font-sans">
                     <span>مصدر التفسير: ابن كثير</span>
                     <span className="text-evergreen-700 dark:text-evergreen-400 font-semibold">✓ تم التوثيق في Zotero</span>
                   </div>
                 </div>
 
                 {/* SRS Flashcard Mastery */}
-                <div className="p-5 rounded-2xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] hover:border-evergreen-500 transition-all space-y-3">
+                <div className="p-5 rounded-2xl bg-canvas border border-subtle hover:border-evergreen-500 transition-all space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-evergreen-100 dark:bg-evergreen-900 text-evergreen-700 dark:text-evergreen-400 border border-evergreen-200">
                       <span>بطاقة تكرار متباعد (SRS)</span>
@@ -545,13 +545,13 @@ export default function DesignSystemPlayground() {
                     <h4 className="font-bold text-sm text-pale-sky-600 dark:text-pale-sky-400">
                       سؤال المراجعة: ما الفرق بين المحكم والمتشابه عند الأصوليين؟
                     </h4>
-                    <p className="text-xs text-[var(--text-muted)] line-clamp-2">
+                    <p className="text-xs text-muted line-clamp-2">
                       المحكم ما اتضح معناه ولم يحتمل إلا تأويلاً واحداً، والمتشابه ما استأثر الله بعلمه أو احتمل وجوهاً متعددة...
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
-                    <span className="text-[11px] text-[var(--text-muted)]">المراجعة القادمة: غداً 09:00 ص</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-subtle">
+                    <span className="text-[11px] text-muted">المراجعة القادمة: غداً 09:00 ص</span>
                     <div className="flex items-center gap-1">
                       <button className="px-2.5 py-1 rounded-lg bg-evergreen-500 text-white text-[10px] font-bold">سهل (+3 أيام)</button>
                       <button className="px-2.5 py-1 rounded-lg bg-pale-sky-600 text-white text-[10px] font-bold">جيد (+1 يوم)</button>
@@ -562,7 +562,7 @@ export default function DesignSystemPlayground() {
             </div>
 
             {/* Badges and Search Bar Inputs */}
-            <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-4">
+            <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-4">
               <h3 className="font-bold text-lg font-display text-pale-sky-600 dark:text-pale-sky-400">
                 3. عناصر الإدخال والشارات (Form Inputs & Badges)
               </h3>
@@ -574,7 +574,7 @@ export default function DesignSystemPlayground() {
                     type="text"
                     placeholder="ابحث في المتون، الآيات، وشروح المخطوطات..."
                     defaultValue="العلماء ورثة الأنبياء"
-                    className="w-full px-4 py-3 pr-10 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] focus:border-pale-sky-500 focus:outline-none text-sm transition-all shadow-inner"
+                    className="w-full px-4 py-3 pr-10 rounded-xl bg-canvas border border-subtle focus:border-pale-sky-500 focus:outline-none text-sm transition-all shadow-inner"
                   />
                   <span className="absolute left-3 top-3.5 text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-600 dark:bg-amber-900 dark:text-amber-400 font-mono font-bold">
                     3 نتائج (Amber Highlight)
@@ -601,24 +601,24 @@ export default function DesignSystemPlayground() {
         {/* TAB 5: INTERACTIVE SANDBOX */}
         {activeTab === 'sandbox' && (
           <section className="space-y-6">
-            <div className="border-b border-[var(--border-subtle)] pb-4">
+            <div className="border-b border-subtle pb-4">
               <h2 className="text-2xl font-bold font-display">مختبر قراءة الملاحظات (Interactive Reading Sandbox)</h2>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
+              <p className="text-xs text-muted mt-1">
                 جرب تغيير نوع الخط وحجمه والسمة لرؤية وتجربة النص الأكاديمي مباشرة.
               </p>
             </div>
 
             {/* Sandbox Controls Bar */}
-            <div className="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-4">
+            <div className="p-4 rounded-2xl bg-surface border border-subtle flex flex-wrap items-center justify-between gap-4">
               {/* Font Selector */}
               <div className="flex items-center gap-2 text-xs">
-                <span className="font-bold text-[var(--text-muted)]">نوع الخط:</span>
+                <span className="font-bold text-muted">نوع الخط:</span>
                 <button
                   onClick={() => setSelectedFont('amiri')}
                   className={`px-3 py-1.5 rounded-lg border ${
                     selectedFont === 'amiri'
                       ? 'bg-pale-sky-600 text-white border-pale-sky-600'
-                      : 'bg-[var(--bg-canvas)] border-[var(--border-subtle)]'
+                      : 'bg-canvas border-subtle'
                   }`}
                 >
                   أميري (Amiri - Serif)
@@ -628,7 +628,7 @@ export default function DesignSystemPlayground() {
                   className={`px-3 py-1.5 rounded-lg border ${
                     selectedFont === 'tajawal'
                       ? 'bg-pale-sky-600 text-white border-pale-sky-600'
-                      : 'bg-[var(--bg-canvas)] border-[var(--border-subtle)]'
+                      : 'bg-canvas border-subtle'
                   }`}
                 >
                   تجول (Tajawal - Sans)
@@ -638,7 +638,7 @@ export default function DesignSystemPlayground() {
                   className={`px-3 py-1.5 rounded-lg border ${
                     selectedFont === 'reem-kufi'
                       ? 'bg-pale-sky-600 text-white border-pale-sky-600'
-                      : 'bg-[var(--bg-canvas)] border-[var(--border-subtle)]'
+                      : 'bg-canvas border-subtle'
                   }`}
                 >
                   ريم كوفي (Reem Kufi - Display)
@@ -647,7 +647,7 @@ export default function DesignSystemPlayground() {
 
               {/* Font Size Slider */}
               <div className="flex items-center gap-3 text-xs">
-                <span className="font-bold text-[var(--text-muted)]">حجم الخط: ({readerFontSize}px)</span>
+                <span className="font-bold text-muted">حجم الخط: ({readerFontSize}px)</span>
                 <input
                   type="range"
                   min={14}
@@ -660,8 +660,8 @@ export default function DesignSystemPlayground() {
             </div>
 
             {/* Sandbox Canvas */}
-            <div className="p-8 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-sm space-y-6">
-              <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4">
+            <div className="p-8 rounded-3xl bg-surface border border-subtle shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-subtle pb-4">
                 <div>
                   <span className="text-xs text-evergreen-500 font-bold font-sans">مخطوطة رقم: #4092 • مكتبة بغداد</span>
                   <h3 className="text-2xl font-bold font-display text-pale-sky-600 dark:text-pale-sky-400 mt-1">
@@ -702,7 +702,7 @@ export default function DesignSystemPlayground() {
                 </p>
               </div>
 
-              <div className="pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between text-xs text-[var(--text-muted)] font-sans">
+              <div className="pt-4 border-t border-subtle flex items-center justify-between text-xs text-muted font-sans">
                 <span>تاريخ التعديل: اليوم 14:30</span>
                 <span>الحالة: متزامن محلياً (Local-First Sync Clean)</span>
               </div>

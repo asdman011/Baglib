@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
 @theme {
+  /* Dynamic Surface & Semantic Design System Tokens */
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-sidebar: var(--bg-sidebar);
+  --color-subtle: var(--border-subtle);
+  --color-main: var(--text-main);
+  --color-muted: var(--text-muted);
+
   /* Warm Beige Parchment Palette (ورقي عتيق) */
   --color-parchment-50: #fbf9f4;
   --color-parchment-100: #f8f6f0;
