@@ -82,6 +82,19 @@
     font-family: var(--font-tajawal), sans-serif;
     transition: background-color 0.25s ease, color 0.25s ease;
   }
+
+  /* Global Cursor Pointer Rules */
+  button,
+  a,
+  [role="button"] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  button[disabled],
+  [aria-disabled="true"] {
+    cursor: not-allowed !important;
+  }
 }
 
 .font-display {
