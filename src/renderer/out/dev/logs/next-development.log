@@ -1,0 +1,9 @@
+{"timestamp":"00:00:00.891","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:00.891","source":"Server","level":"LOG","message":"  We detected TypeScript in your project and reconfigured your tsconfig.json file for you. Strict-mode is set to false by default."}
+{"timestamp":"00:00:00.892","source":"Server","level":"LOG","message":"  The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:\n"}
+{"timestamp":"00:00:00.892","source":"Server","level":"LOG","message":"  \t- include was updated to add 'out/types/**/*.ts'"}
+{"timestamp":"00:00:00.892","source":"Server","level":"LOG","message":"  \t- include was updated to add 'out/dev/types/**/*.ts'"}
+{"timestamp":"00:00:00.892","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:01.051","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:23.828","source":"Server","level":"LOG","message":"✓ Compiled in 468ms"}
+{"timestamp":"00:00:28.306","source":"Server","level":"LOG","message":"✓ Compiled in 94ms"}

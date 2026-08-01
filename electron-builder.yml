@@ -1,0 +1,17 @@
+appId: com.baghlib.app
+productName: Baghlib
+directories:
+  output: release
+files:
+  - dist/**/*
+  - out/**/*
+  - package.json
+mac:
+  category: public.app-category.utilities
+  target:
+    - dmg
+    - zip
+win:
+  target:
+    - nsis
+    - zip

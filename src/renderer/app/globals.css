@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+:root {
+  --background: #efece4;
+  --foreground: #4a1d25;
+  --brand-burgundy: #853a47;
+  --brand-burgundy-light: #9c4857;
+  --brand-burgundy-dark: #5c242d;
+  --brand-cream: #efece4;
+  --brand-cream-card: #f8f6f0;
+  --brand-cream-border: #dcd4c3;
+  --brand-muted: #736366;
+  --font-sans: var(--font-cairo), system-ui, -apple-system, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand-burgundy: var(--brand-burgundy);
+  --color-brand-burgundy-light: var(--brand-burgundy-light);
+  --color-brand-burgundy-dark: var(--brand-burgundy-dark);
+  --color-brand-cream: var(--brand-cream);
+  --color-brand-cream-card: var(--brand-cream-card);
+  --color-brand-cream-border: var(--brand-cream-border);
+  --color-brand-muted: var(--brand-muted);
+  --font-sans: var(--font-cairo), system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-cairo), system-ui, -apple-system, sans-serif;
+}
