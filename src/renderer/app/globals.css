@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
 @theme {
+  /* Warm Beige Parchment Palette (ورقي عتيق) */
+  --color-parchment-50: #fbf9f4;
+  --color-parchment-100: #f8f6f0;
+  --color-parchment-200: #efece4;
+  --color-parchment-300: #e5dfd0;
+  --color-parchment-400: #dcd4c3;
+  --color-parchment-500: #c9bda5;
+  --color-parchment-600: #ab9e84;
+  --color-parchment-700: #7d6e57;
+  --color-parchment-800: #4e4233;
+  --color-parchment-900: #2c221a;
+
+  /* Pale Sky Primary Accent */
   --color-pale-sky-50: #edf4f8;
   --color-pale-sky-100: #dae9f1;
   --color-pale-sky-200: #b5d3e3;
@@ -13,6 +26,7 @@
   --color-pale-sky-900: #0e1d25;
   --color-pale-sky-950: #0a141a;
 
+  /* Evergreen Secondary / Verification */
   --color-evergreen-50: #eef6f1;
   --color-evergreen-100: #ddeee4;
   --color-evergreen-200: #bcdcc9;
@@ -25,6 +39,7 @@
   --color-evergreen-900: #112218;
   --color-evergreen-950: #0c1811;
 
+  /* Baghdad Amber Accent */
   --color-amber-50: #fffbeb;
   --color-amber-100: #fef3c7;
   --color-amber-200: #fde68a;
@@ -44,21 +59,21 @@
 
 @layer base {
   :root {
-    --bg-canvas: #edf4f8;
-    --bg-surface: #ffffff;
-    --bg-sidebar: #dae9f1;
-    --border-subtle: #b5d3e3;
-    --text-main: #0a141a;
-    --text-muted: #2a576f;
+    --bg-canvas: #efece4;      /* Warm Beige Parchment (ورق عتيق) */
+    --bg-surface: #f8f6f0;     /* Cream Manuscript Card */
+    --bg-sidebar: #e5dfd0;     /* Soft Parchment Sidebar */
+    --border-subtle: #dcd4c3;  /* Antique Parchment Border */
+    --text-main: #2c221a;      /* Deep Warm Manuscript Ink */
+    --text-muted: #6e5e4f;     /* Muted Manuscript Ink */
   }
 
   .dark {
-    --bg-canvas: #0a141a;
-    --bg-surface: #0e1d25;
-    --bg-sidebar: #0e1d25;
-    --border-subtle: #1c3a4a;
-    --text-main: #edf4f8;
-    --text-muted: #90bdd5;
+    --bg-canvas: #0e161b;      /* Deep Night Scholar Blue-Black */
+    --bg-surface: #141f26;     /* Dark Card Surface */
+    --bg-sidebar: #141f26;
+    --border-subtle: #223440;
+    --text-main: #efece4;      /* Warm Parchment Light Text */
+    --text-muted: #95a8b5;
   }
 
   body {

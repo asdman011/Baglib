@@ -26,10 +26,21 @@ export default function DesignSystemPlayground() {
     setTimeout(() => setCopiedToken(null), 2000);
   };
 
+  const parchmentSwatches = [
+    { name: 'parchment-50', hex: '#fbf9f4', role: 'Bright Paper Base' },
+    { name: 'parchment-100', hex: '#f8f6f0', role: 'Cream Card Surface' },
+    { name: 'parchment-200', hex: '#efece4', role: 'Warm Beige Canvas Base' },
+    { name: 'parchment-300', hex: '#e5dfd0', role: 'Soft Parchment Sidebar' },
+    { name: 'parchment-400', hex: '#dcd4c3', role: 'Antique Parchment Border' },
+    { name: 'parchment-500', hex: '#c9bda5', role: 'Muted Parchment Accent' },
+    { name: 'parchment-700', hex: '#7d6e57', role: 'Muted Ink Text' },
+    { name: 'parchment-900', hex: '#2c221a', role: 'Deep Manuscript Ink' },
+  ];
+
   const paleSkySwatches = [
-    { name: 'pale-sky-50', hex: '#edf4f8', role: 'Light Canvas Base' },
-    { name: 'pale-sky-100', hex: '#dae9f1', role: 'Sidebar / Light Card' },
-    { name: 'pale-sky-200', hex: '#b5d3e3', role: 'Light Border' },
+    { name: 'pale-sky-50', hex: '#edf4f8', role: 'Light Accent Tint' },
+    { name: 'pale-sky-100', hex: '#dae9f1', role: 'Sidebar Accent' },
+    { name: 'pale-sky-200', hex: '#b5d3e3', role: 'Border Accent' },
     { name: 'pale-sky-300', hex: '#90bdd5', role: 'Dark Muted Text' },
     { name: 'pale-sky-400', hex: '#6ba7c7', role: 'Subtle Highlight' },
     { name: 'pale-sky-500', hex: '#4691b9', role: 'Primary Accent' },
@@ -37,7 +48,7 @@ export default function DesignSystemPlayground() {
     { name: 'pale-sky-700', hex: '#2a576f', role: 'Light Muted Text' },
     { name: 'pale-sky-800', hex: '#1c3a4a', role: 'Dark Border' },
     { name: 'pale-sky-900', hex: '#0e1d25', role: 'Dark Surface' },
-    { name: 'pale-sky-950', hex: '#0a141a', role: 'Dark Canvas / Light Text' },
+    { name: 'pale-sky-950', hex: '#0a141a', role: 'Dark Canvas Base' },
   ];
 
   const evergreenSwatches = [
@@ -58,6 +69,7 @@ export default function DesignSystemPlayground() {
     { name: 'amber-600', hex: '#b45309', role: 'Ayah Marker / Search' },
     { name: 'amber-800', hex: '#78350f', role: 'Warning Text' },
   ];
+
 
   return (
     <div className="min-h-screen transition-colors duration-300 bg-[var(--bg-canvas)] text-[var(--text-main)] font-sans">
@@ -242,14 +254,44 @@ export default function DesignSystemPlayground() {
               </p>
             </div>
 
-            {/* Pale Sky */}
+            {/* Parchment Beige */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold font-display text-lg text-[#387494] dark:text-[#6ba7c7]">
-                  1. Pale Sky Palette (اللون الأساسي للواجهة)
+                <h3 className="font-bold font-display text-lg text-[#7d6e57] dark:text-[#efece4]">
+                  1. Warm Parchment Palette (لون الورق والمخطوطات العتيقة)
                 </h3>
-                <span className="text-xs text-[var(--text-muted)]">Primary UI & Surfaces</span>
+                <span className="text-xs text-[var(--text-muted)]">Background & Surface Base</span>
               </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                {parchmentSwatches.map((s) => (
+                  <button
+                    key={s.name}
+                    onClick={() => copyToClipboard(s.hex)}
+                    className="p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:scale-105 transition-all text-right group shadow-sm"
+                  >
+                    <div
+                      className="w-full h-12 rounded-lg mb-2 shadow-inner border border-black/10"
+                      style={{ backgroundColor: s.hex }}
+                    />
+                    <div className="font-mono text-xs font-semibold">{s.name}</div>
+                    <div className="text-[10px] text-[var(--text-muted)]">{s.hex}</div>
+                    <div className="text-[10px] text-[#7d6e57] dark:text-[#efece4] font-medium truncate mt-1">
+                      {s.role}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Pale Sky */}
+            <div className="space-y-3 pt-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold font-display text-lg text-[#387494] dark:text-[#6ba7c7]">
+                  2. Pale Sky Palette (اللون الأكاديمي للواجهة والأزرار)
+                </h3>
+                <span className="text-xs text-[var(--text-muted)]">Primary UI & Accents</span>
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                 {paleSkySwatches.map((s) => (
                   <button

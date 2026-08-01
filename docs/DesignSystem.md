@@ -28,23 +28,24 @@ To complete the color theory model, we introduce **Baghdad Amber (Accent)**—a 
 To ensure high contrast and WCAG AAA/AA readability across dense scholarly text, map your background and foreground roles as follows:
 
 ```
-LIGHT MODE
+LIGHT MODE (Warm Parchment / ورق عتيق)
 ┌─────────────────────────────────────────────────────────┐
-│ Canvas Base        : Pale Sky 50  (#edf4f8)             │
-│ Surface / Cards    : White (#ffffff) or Pale Sky 100    │
-│ Border / Dividers  : Pale Sky 200 (#b5d3e3)             │
-│ Foreground Text    : Pale Sky 950 (#0a141a) [Contrast 16:1]│
-│ Muted Text         : Pale Sky 700 (#2a576f)             │
+│ Canvas Base        : Parchment Beige (#efece4)          │
+│ Surface / Cards    : Cream Paper (#f8f6f0)              │
+│ Border / Dividers  : Antique Parchment Border (#dcd4c3) │
+│ Foreground Text    : Deep Warm Ink (#2c221e)            │
+│ Muted Text         : Muted Manuscript Ink (#6e5e4f)     │
 └─────────────────────────────────────────────────────────┘
 
-DARK MODE
+DARK MODE (Scholar Night / ليلي أكاديمي)
 ┌─────────────────────────────────────────────────────────┐
-│ Canvas Base        : Pale Sky 950 (#0a141a)             │
-│ Surface / Cards    : Pale Sky 900 (#0e1d25)             │
-│ Border / Dividers  : Pale Sky 800 (#1c3a4a)             │
-│ Foreground Text    : Pale Sky 50  (#edf4f8) [Contrast 16:1]│
-│ Muted Text         : Pale Sky 300 (#90bdd5)             │
+│ Canvas Base        : Deep Night Blue (#0e161b)          │
+│ Surface / Cards    : Scholar Dark (#141f26)             │
+│ Border / Dividers  : Slate Border (#223440)             │
+│ Foreground Text    : Parchment Light (#efece4)          │
+│ Muted Text         : Muted Sky (#95a8b5)                │
 └─────────────────────────────────────────────────────────┘
+
 
 ```
 
