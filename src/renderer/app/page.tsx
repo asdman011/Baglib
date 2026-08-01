@@ -28,26 +28,16 @@ export default function Home() {
 
   return (
     <main className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 text-center bg-canvas text-main relative overflow-hidden font-sans">
-      {/* Decorative ambient background blur using Pale Sky and Amber tints */}
-      <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-pale-sky-500/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-
       <div className="max-w-3xl w-full p-8 sm:p-12 rounded-3xl bg-surface border border-subtle shadow-xl relative z-10">
 
-        {/* Top Badge */}
-        <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-pale-sky-100 dark:bg-pale-sky-800 border border-pale-sky-200 dark:border-pale-sky-800 text-pale-sky-600 dark:text-pale-sky-400 text-sm font-semibold mb-6">
-          <span className="w-2.5 h-2.5 rounded-full bg-pale-sky-600 dark:bg-pale-sky-500 animate-pulse" />
-          تطبيق بغلب للقراءة وإدارة الكتب (Baghlib Desktop)
-        </div>
-
         {/* Logo Image */}
-        <div className="w-24 h-24 mx-auto mb-6 rounded-2xl p-1 bg-gradient-to-br from-pale-sky-500 via-evergreen-500 to-amber-500 shadow-xl overflow-hidden">
+        <div className="w-24 h-24 mx-auto mb-6 rounded-2xl p-1 bg-surface border border-subtle shadow-md overflow-hidden">
           <img src="/logo.png" alt="Baglib Logo" className="w-full h-full object-cover rounded-xl" />
         </div>
 
         {/* Title */}
-        <h1 className="text-4xl sm:text-5xl font-bold font-display tracking-tight text-pale-sky-950 dark:text-pale-sky-50 mb-4">
-          بغلب <span className="text-pale-sky-600 dark:text-pale-sky-400">Baghlib</span>
+        <h1 className="text-4xl sm:text-5xl font-bold font-display tracking-tight text-main mb-4">
+          بغلب Baghlib
         </h1>
         <p className="text-muted text-base sm:text-lg mb-8 leading-relaxed max-w-xl mx-auto font-sans">
           منصة سطح المكتب الشاملة لإدارة المكتبات الشخصية ومتابعة القراءة والبحث العلمي.

@@ -80,7 +80,7 @@ export default function DesignSystemPlayground() {
               <img src="/logo.png" alt="Baglib Logo" className="w-full h-full object-cover" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold font-display text-transparent bg-clip-text bg-gradient-to-r from-pale-sky-700 via-pale-sky-600 to-evergreen-500 dark:from-pale-sky-400 dark:to-evergreen-500">
+              <h1 className="text-2xl font-bold font-display text-main">
                 نظام تصميم مكتبة بغداد (`baglib`)
               </h1>
               <p className="text-xs text-muted font-sans">
@@ -178,63 +178,47 @@ export default function DesignSystemPlayground() {
         {activeTab === 'overview' && (
           <section className="space-y-8">
             {/* Vision Hero Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-pale-sky-100 via-pale-sky-50 to-evergreen-100 dark:from-pale-sky-900 dark:via-pale-sky-950 dark:to-evergreen-900 border border-subtle p-8 shadow-sm">
-              <div className="relative z-10 max-w-3xl space-y-4">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
-                  <span>🏛️ بيت الحكمة الرقمي</span>
-                  <span>•</span>
-                  <span>Local-First Academic Workspace</span>
-                </div>
-                <h2 className="text-4xl font-bold font-display leading-tight text-pale-sky-950 dark:text-pale-sky-50">
-                  رؤية التصميم: هدوء معرفي، رصانة أكاديمية، وتوازن بصري
-                </h2>
-                <p className="text-base text-muted font-sans leading-relaxed">
-                  يجمع مشروع <strong className="text-pale-sky-600 dark:text-pale-sky-400">بغلب (baglib)</strong> بين التراث العلمي الإسلامي الأصيل وأحدث معايير التفاعلية في برمجيات البحث الشخصي (مثل Obsidian وZotero). تم تصميم نظام الألوان والخطوط والمكونات ليوفر تجربة قراءة ودراسة مريحة وممتازة للعين.
-                </p>
-                <div className="flex flex-wrap gap-4 pt-2">
-                  <button
-                    onClick={() => setActiveTab('components')}
-                    className="px-5 py-2.5 rounded-xl bg-pale-sky-600 hover:bg-pale-sky-700 text-white font-medium text-sm transition-all shadow-md hover:shadow-lg"
-                  >
-                    استعراض المكونات التفاعلية
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('sandbox')}
-                    className="px-5 py-2.5 rounded-xl bg-surface border border-subtle hover:border-amber-500 text-amber-500 font-semibold text-sm transition-all shadow-sm"
-                  >
-                    تجربة مختبر النص القرآني والأكاديمي
-                  </button>
-                </div>
+            <div className="rounded-3xl bg-surface border border-subtle p-8 shadow-sm space-y-4">
+              <h2 className="text-3xl font-bold font-display leading-tight text-main">
+                رؤية التصميم: هدوء معرفي، رصانة أكاديمية، وتوازن بصري
+              </h2>
+              <p className="text-base text-muted font-sans leading-relaxed max-w-3xl">
+                يجمع مشروع <strong className="text-pale-sky-600 dark:text-pale-sky-400">بغلب (baglib)</strong> بين التراث العلمي الإسلامي الأصيل وأحدث معايير التفاعلية في برمجيات البحث الشخصي (مثل Obsidian وZotero). تم تصميم نظام الألوان والخطوط والمكونات ليوفر تجربة قراءة ودراسة مريحة وممتازة للعين.
+              </p>
+              <div className="flex flex-wrap gap-4 pt-2">
+                <button
+                  onClick={() => setActiveTab('components')}
+                  className="px-5 py-2.5 rounded-xl bg-pale-sky-600 hover:bg-pale-sky-700 text-white font-medium text-sm transition-all shadow-md"
+                >
+                  استعراض المكونات التفاعلية
+                </button>
+                <button
+                  onClick={() => setActiveTab('sandbox')}
+                  className="px-5 py-2.5 rounded-xl bg-surface border border-subtle hover:border-amber-500 text-amber-500 font-semibold text-sm transition-all shadow-sm"
+                >
+                  تجربة مختبر النص القرآني والأكاديمي
+                </button>
               </div>
             </div>
 
             {/* Quick Cards grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3 shadow-sm hover:border-pale-sky-500 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-pale-sky-100 dark:bg-pale-sky-800 text-pale-sky-600 dark:text-pale-sky-400 flex items-center justify-center font-bold text-xl">
-                  🎨
-                </div>
-                <h3 className="font-bold text-lg font-display">Pale Sky (اللون الرئيسي)</h3>
+                <h3 className="font-bold text-lg font-display text-pale-sky-600 dark:text-pale-sky-400">Pale Sky (اللون الرئيسي)</h3>
                 <p className="text-xs text-muted leading-relaxed">
                   درجات الأزرق الهادئ التي ترمز للوضوح الفكري والهدوء الأكاديمي، وتُستخدم في عناصر الواجهة الرئيسية والأزرار والنوافذ.
                 </p>
               </div>
 
               <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3 shadow-sm hover:border-evergreen-500 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-evergreen-100 dark:bg-evergreen-900 text-evergreen-600 dark:text-evergreen-400 flex items-center justify-center font-bold text-xl">
-                  🌿
-                </div>
-                <h3 className="font-bold text-lg font-display">Evergreen (اللون الثانوي)</h3>
+                <h3 className="font-bold text-lg font-display text-evergreen-600 dark:text-evergreen-400">Evergreen (اللون الثانوي)</h3>
                 <p className="text-xs text-muted leading-relaxed">
                   الأخضر المستوحى من التراث الإسلامي والطبيعة، مخصص لشارات الحفظ ومراجعة بطاقات التكرار المتباعد (SRS) ومزامنة Zotero.
                 </p>
               </div>
 
               <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3 shadow-sm hover:border-amber-500 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900 text-amber-500 dark:text-amber-400 flex items-center justify-center font-bold text-xl">
-                  📜
-                </div>
-                <h3 className="font-bold text-lg font-display">Baghdad Amber (اللون التمييزي)</h3>
+                <h3 className="font-bold text-lg font-display text-amber-600 dark:text-amber-400">Baghdad Amber (اللون التمييزي)</h3>
                 <p className="text-xs text-muted leading-relaxed">
                   لون العمبر والمخطوطات الذهبية، مخصص للإشارات المرجعية (Bookmarks)، أرقام الآيات، نتائج البحث، والتظليلات الهامة.
                 </p>
@@ -247,7 +231,7 @@ export default function DesignSystemPlayground() {
         {activeTab === 'colors' && (
           <section className="space-y-8">
             <div className="border-b border-subtle pb-4">
-              <h2 className="text-2xl font-bold font-display">نظام الألوان والرموز (Color Tokens)</h2>
+              <h2 className="text-2xl font-bold font-display text-main">نظام الألوان والرموز (Color Tokens)</h2>
               <p className="text-xs text-muted mt-1">
                 اضغط على أي مربع لون لنسخ رمز الـ Hex الخاص به مباشرة.
               </p>
@@ -376,7 +360,7 @@ export default function DesignSystemPlayground() {
         {activeTab === 'typography' && (
           <section className="space-y-8">
             <div className="border-b border-subtle pb-4">
-              <h2 className="text-2xl font-bold font-display">إستراتيجية الخطوط الثلاثية (Three-Tier Typography)</h2>
+              <h2 className="text-2xl font-bold font-display text-main">إستراتيجية الخطوط الثلاثية (Three-Tier Typography)</h2>
               <p className="text-xs text-muted mt-1">
                 توزيع وظيفي محدد بين العناوين (`Reem Kufi`)، عناصر التحكم (`Tajawal`)، ونصوص القراءة والتراث (`Amiri`).
               </p>
@@ -386,12 +370,7 @@ export default function DesignSystemPlayground() {
               {/* Tier 1: Reem Kufi */}
               <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3">
                 <div className="flex items-center justify-between border-b border-subtle pb-3">
-                  <div>
-                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-pale-sky-100 dark:bg-pale-sky-800 text-pale-sky-700 dark:text-pale-sky-400 font-bold">
-                      1. Display Font
-                    </span>
-                    <h3 className="text-xl font-bold font-display mt-1">ريم كوفي (Reem Kufi)</h3>
-                  </div>
+                  <h3 className="text-xl font-bold font-display text-main">1. خط العناوين: ريم كوفي (Reem Kufi)</h3>
                   <span className="text-xs font-mono text-muted">`font-display`</span>
                 </div>
                 <p className="text-xs text-muted">
@@ -410,12 +389,7 @@ export default function DesignSystemPlayground() {
               {/* Tier 2: Tajawal */}
               <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3">
                 <div className="flex items-center justify-between border-b border-subtle pb-3">
-                  <div>
-                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-evergreen-100 dark:bg-evergreen-900 text-evergreen-600 dark:text-evergreen-400 font-bold">
-                      2. UI & Controls Font
-                    </span>
-                    <h3 className="text-xl font-bold font-sans">تجول (Tajawal)</h3>
-                  </div>
+                  <h3 className="text-xl font-bold font-sans text-main">2. خط الواجهة: تجول (Tajawal)</h3>
                   <span className="text-xs font-mono text-muted">`font-sans`</span>
                 </div>
                 <p className="text-xs text-muted">
@@ -437,12 +411,7 @@ export default function DesignSystemPlayground() {
               {/* Tier 3: Amiri */}
               <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3">
                 <div className="flex items-center justify-between border-b border-subtle pb-3">
-                  <div>
-                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900 text-amber-600 dark:text-amber-400 font-bold">
-                      3. Reading & Academic Body Font
-                    </span>
-                    <h3 className="text-xl font-bold font-serif">أميري (Amiri)</h3>
-                  </div>
+                  <h3 className="text-xl font-bold font-serif text-main">3. خط القراءة والنصوص: أميري (Amiri)</h3>
                   <span className="text-xs font-mono text-muted">`font-serif` / `font-reading`</span>
                 </div>
                 <p className="text-xs text-muted">
@@ -465,7 +434,7 @@ export default function DesignSystemPlayground() {
         {activeTab === 'components' && (
           <section className="space-y-8">
             <div className="border-b border-subtle pb-4">
-              <h2 className="text-2xl font-bold font-display">معرض المكونات التفاعلية (UI Components)</h2>
+              <h2 className="text-2xl font-bold font-display text-main">معرض المكونات التفاعلية (UI Components)</h2>
               <p className="text-xs text-muted mt-1">
                 عناصر مجهزة للاستخدام في تطبيق سطح المكتب بتنسيقات Pale Sky وEvergreen وBaghdad Amber.
               </p>
@@ -507,12 +476,8 @@ export default function DesignSystemPlayground() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Quran Ayah Card */}
                 <div className="p-5 rounded-2xl bg-canvas border border-subtle hover:border-amber-500 transition-all space-y-3 relative group">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-900 text-amber-600 dark:text-amber-400 border border-amber-300">
-                      <span>آية قرآانية</span>
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                      <span>سورة البقرة: 255</span>
-                    </span>
+                  <div className="flex items-center justify-between text-xs text-muted">
+                    <span>سورة البقرة: 255</span>
                     <button
                       onClick={() => setIsBookmarked(!isBookmarked)}
                       className={`text-lg transition-transform ${isBookmarked ? 'scale-110' : 'opacity-40 hover:opacity-100'}`}
@@ -534,11 +499,9 @@ export default function DesignSystemPlayground() {
 
                 {/* SRS Flashcard Mastery */}
                 <div className="p-5 rounded-2xl bg-canvas border border-subtle hover:border-evergreen-500 transition-all space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-evergreen-100 dark:bg-evergreen-900 text-evergreen-700 dark:text-evergreen-400 border border-evergreen-200">
-                      <span>بطاقة تكرار متباعد (SRS)</span>
-                    </span>
-                    <span className="text-xs font-mono text-evergreen-500 font-bold">إتقان: 92%</span>
+                  <div className="flex items-center justify-between text-xs text-muted">
+                    <span>تكرار متباعد (SRS)</span>
+                    <span className="font-mono text-evergreen-500 font-bold">إتقان: 92%</span>
                   </div>
 
                   <div className="space-y-1 font-sans">
@@ -561,14 +524,13 @@ export default function DesignSystemPlayground() {
               </div>
             </div>
 
-            {/* Badges and Search Bar Inputs */}
+            {/* Search Bar Inputs */}
             <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-4">
               <h3 className="font-bold text-lg font-display text-pale-sky-600 dark:text-pale-sky-400">
-                3. عناصر الإدخال والشارات (Form Inputs & Badges)
+                3. عناصر الإدخال والبحث (Form Inputs & Search)
               </h3>
 
               <div className="space-y-4">
-                {/* Search Bar */}
                 <div className="relative">
                   <input
                     type="text"
@@ -576,22 +538,6 @@ export default function DesignSystemPlayground() {
                     defaultValue="العلماء ورثة الأنبياء"
                     className="w-full px-4 py-3 pr-10 rounded-xl bg-canvas border border-subtle focus:border-pale-sky-500 focus:outline-none text-sm transition-all shadow-inner"
                   />
-                  <span className="absolute left-3 top-3.5 text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-600 dark:bg-amber-900 dark:text-amber-400 font-mono font-bold">
-                    3 نتائج (Amber Highlight)
-                  </span>
-                </div>
-
-                {/* Badges preview */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-pale-sky-50 dark:bg-pale-sky-800 text-pale-sky-700 dark:text-pale-sky-400 border border-pale-sky-200 dark:border-pale-sky-800">
-                    #علوم_القرآن
-                  </span>
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-evergreen-100 dark:bg-evergreen-900 text-evergreen-700 dark:text-evergreen-400 border border-evergreen-200">
-                    #مزامنة_Zotero
-                  </span>
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-900 text-amber-600 dark:text-amber-400 border border-amber-300">
-                    #إشارة_مرجعية
-                  </span>
                 </div>
               </div>
             </div>
@@ -602,7 +548,7 @@ export default function DesignSystemPlayground() {
         {activeTab === 'sandbox' && (
           <section className="space-y-6">
             <div className="border-b border-subtle pb-4">
-              <h2 className="text-2xl font-bold font-display">مختبر قراءة الملاحظات (Interactive Reading Sandbox)</h2>
+              <h2 className="text-2xl font-bold font-display text-main">مختبر قراءة الملاحظات (Interactive Reading Sandbox)</h2>
               <p className="text-xs text-muted mt-1">
                 جرب تغيير نوع الخط وحجمه والسمة لرؤية وتجربة النص الأكاديمي مباشرة.
               </p>
@@ -663,14 +609,11 @@ export default function DesignSystemPlayground() {
             <div className="p-8 rounded-3xl bg-surface border border-subtle shadow-sm space-y-6">
               <div className="flex items-center justify-between border-b border-subtle pb-4">
                 <div>
-                  <span className="text-xs text-evergreen-500 font-bold font-sans">مخطوطة رقم: #4092 • مكتبة بغداد</span>
+                  <span className="text-xs text-muted font-sans">مخطوطة رقم: #4092 • مكتبة بغداد</span>
                   <h3 className="text-2xl font-bold font-display text-pale-sky-600 dark:text-pale-sky-400 mt-1">
                     دراسة في مناهج المحدثين والأصوليين في قبول الأخبار
                   </h3>
                 </div>
-                <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-600 dark:bg-amber-900 dark:text-amber-400 text-xs font-bold border border-amber-300">
-                  محفوظ في المفضلة
-                </span>
               </div>
 
               {/* Text Container with Dynamic Styling */}
@@ -690,7 +633,7 @@ export default function DesignSystemPlayground() {
 
                 <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/50 border-r-4 border-amber-500 text-amber-900 dark:text-amber-100 my-4">
                   <p className="font-bold text-sm mb-1 font-sans text-amber-600 dark:text-amber-400">
-                    💡 فائدة منهجية (تظليل العمبر):
+                    فائدة منهجية:
                   </p>
                   <p>
                     «الإسناد من الدين، ولولا الإسناد لقال من شاء ما شاء» — الإمام عبدالله بن المبارك رحمه الله.
