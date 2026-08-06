@@ -26,6 +26,9 @@ module.exports = __toCommonJS(preload_exports);
 var import_electron = require("electron");
 var API = {
   getSystemInfo: () => import_electron.ipcRenderer.invoke("system:get-info"),
+  openFileDialog: () => import_electron.ipcRenderer.invoke("system:open-file-dialog"),
+  readPdfBase64: (filePath) => import_electron.ipcRenderer.invoke("system:read-pdf-base64", filePath),
+  extractPdfText: (filePath) => import_electron.ipcRenderer.invoke("system:extract-pdf-text", filePath),
   onNotification: (callback) => {
     const subscription = (_, value) => callback(value);
     import_electron.ipcRenderer.on("system:notification", subscription);

@@ -116,3 +116,12 @@
 .font-reading, .font-serif {
   font-family: var(--font-amiri), serif;
 }
+
+/* Arabesque subtle manuscript pattern overlay */
+.bg-arabesque-pattern {
+  background-image: radial-gradient(var(--border-subtle) 0.75px, transparent 0.75px), radial-gradient(var(--color-pale-sky-500) 0.75px, transparent 0.75px);
+  background-size: 32px 32px;
+  background-position: 0 0, 16px 16px;
+  opacity: 0.2;
+}
+
