@@ -11,11 +11,12 @@
 # testing
 /coverage
 
-# next.js build outputs
+# build and release outputs
 .next/
 src/renderer/.next/
 out/
 dist/
+release/
 
 # production
 /build
