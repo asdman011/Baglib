@@ -5,9 +5,6 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
-};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -25,62 +22,13 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/electron/index.js
-var require_electron = __commonJS({
-  "node_modules/electron/index.js"(exports2, module2) {
-    "use strict";
-    var { spawnSync } = require("child_process");
-    var fs = require("fs");
-    var path2 = require("path");
-    var pathFile = path2.join(__dirname, "path.txt");
-    function downloadElectron() {
-      console.log("Downloading Electron binary...");
-      const result = spawnSync(process.execPath, [path2.join(__dirname, "install.js")], {
-        stdio: "inherit"
-      });
-      if (result.status !== 0) {
-        throw new Error(
-          'Electron failed to install correctly. Please delete `node_modules/electron` and run "npx install-electron --no" manually.'
-        );
-      }
-    }
-    function getElectronPath() {
-      let executablePath;
-      if (fs.existsSync(pathFile)) {
-        executablePath = fs.readFileSync(pathFile, "utf-8");
-      }
-      if (process.env.ELECTRON_OVERRIDE_DIST_PATH) {
-        return path2.join(process.env.ELECTRON_OVERRIDE_DIST_PATH, executablePath || "electron");
-      }
-      if (executablePath) {
-        const fullPath = path2.join(__dirname, "dist", executablePath);
-        if (!fs.existsSync(fullPath)) {
-          downloadElectron();
-        }
-        return fullPath;
-      } else {
-        try {
-          downloadElectron();
-        } catch {
-          throw new Error(
-            'Electron failed to install correctly. Please delete `node_modules/electron` and run "npx install-electron --no" manually.'
-          );
-        }
-        executablePath = fs.readFileSync(pathFile, "utf-8");
-        return path2.join(__dirname, "dist", executablePath);
-      }
-    }
-    module2.exports = getElectronPath();
-  }
-});
-
 // src/main/index.ts
-var import_electron2 = __toESM(require_electron());
+var import_electron2 = require("electron");
 var import_path = __toESM(require("path"));
 var import_electron_serve = __toESM(require("electron-serve"));
 
 // src/main/ipc/system.ts
-var import_electron = __toESM(require_electron());
+var import_electron = require("electron");
 function setupSystemIPC() {
   import_electron.ipcMain.handle("system:get-info", () => {
     return {

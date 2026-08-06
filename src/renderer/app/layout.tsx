@@ -24,8 +24,8 @@ const reemKufi = Reem_Kufi({
 });
 
 export const metadata: Metadata = {
-  title: 'بغلب - Design System Playground',
-  description: 'Playground for Baghdad Library Design System',
+  title: 'بغلب',
+  description: 'تطبيق سطح المكتب للقراءة وادارة الكتب',
 };
 
 export default function RootLayout({
