@@ -4,6 +4,8 @@ import serve from "electron-serve";
 import { pathToFileURL } from "url";
 import fs from "fs";
 import { setupSystemIPC } from "./ipc/system";
+import { setupDatabaseIPC } from "./ipc/database";
+import { initializeDatabase, closeDatabase } from "./database";
 
 const isDev = !app.isPackaged;
 const loadApp = serve({ directory: path.join(__dirname, "../../out") });
@@ -32,8 +34,17 @@ async function createWindow() {
 
 // Setup IPC Handlers
 setupSystemIPC();
+setupDatabaseIPC();
 
 app.whenReady().then(() => {
+  // Initialize SQLite database and run pending migrations
+  try {
+    initializeDatabase();
+    console.log("[baglib] Database initialized successfully.");
+  } catch (e) {
+    console.error("[baglib] Database initialization failed:", e);
+  }
+
   // Register custom protocol for local PDFs
   try {
     protocol.handle('local-pdf', (request) => {

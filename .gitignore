@@ -11,12 +11,11 @@
 # testing
 /coverage
 
-# build and release outputs
+# next.js build outputs
 .next/
 src/renderer/.next/
 out/
 dist/
-release/
 
 # production
 /build
@@ -40,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# build outputs
+release/

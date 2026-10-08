@@ -1,13 +1,13 @@
 {
-  "name": "baghlib",
+  "name": "baglib",
   "version": "0.1.0",
   "private": true,
   "main": "dist/main/index.js",
   "scripts": {
     "dev:next": "next dev -p 3000 src/renderer",
-    "dev:electron": "tsup src/main/index.ts src/preload/index.ts --out-dir dist --external electron --watch --onSuccess \"electron .\"",
+    "dev:electron": "tsup --watch --onSuccess \"electron .\"",
     "dev": "concurrently -k \"npm run dev:next\" \"wait-on http://localhost:3000 && npm run dev:electron\"",
-    "build:main": "tsup src/main/index.ts src/preload/index.ts --out-dir dist --external electron",
+    "build:main": "tsup",
     "build:renderer": "next build src/renderer",
     "build": "npm run build:main && npm run build:renderer",
     "package": "npm run build && electron-builder",
@@ -15,6 +15,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "better-sqlite3": "^11.5.0",
     "electron-serve": "^3.0.1",
     "lucide-react": "^1.28.0",
     "next": "16.2.12",
@@ -24,12 +25,13 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
     "concurrently": "^10.0.4",
-    "electron": "^34.5.8",
+    "electron": "^32.2.0",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
@@ -37,5 +39,8 @@
     "tsup": "^8.5.1",
     "typescript": "^5",
     "wait-on": "^9.1.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
   }
 }

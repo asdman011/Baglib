@@ -102,23 +102,71 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   };
 
-  // Add or Update book in library (deduplicating by ID or path)
-  const addBook = (newBook: BookItem) => {
+  // Load books and notes from SQLite database on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (window.electronAPI?.getAllBooks) {
+        window.electronAPI
+          .getAllBooks()
+          .then((fetchedBooks: BookItem[]) => {
+            if (Array.isArray(fetchedBooks)) {
+              setBooks(fetchedBooks);
+            }
+          })
+          .catch((err: any) => {
+            console.error('[baglib/ui] Failed to load books from database:', err);
+          });
+      }
+
+      if ((window.electronAPI as any)?.getAllNotes) {
+        (window.electronAPI as any)
+          .getAllNotes()
+          .then((fetchedNotes: PageNote[]) => {
+            if (Array.isArray(fetchedNotes)) {
+              setBookNotes(fetchedNotes);
+            }
+          })
+          .catch((err: any) => {
+            console.error('[baglib/ui] Failed to load notes from database:', err);
+          });
+      }
+    }
+  }, []);
+
+  // Add or Update book in library with SQLite persistence
+  const addBook = async (newBook: BookItem) => {
+    let savedBook = newBook;
+    if (typeof window !== 'undefined' && window.electronAPI?.addBook) {
+      try {
+        savedBook = await window.electronAPI.addBook(newBook);
+      } catch (err) {
+        console.error('[baglib/ui] Failed to persist book to SQLite:', err);
+      }
+    }
+
     setBooks((prev) => {
       const existingIdx = prev.findIndex(
-        (b) => b.id === newBook.id || (newBook.filePath && b.filePath === newBook.filePath)
+        (b) => b.id === savedBook.id || (savedBook.filePath && b.filePath === savedBook.filePath)
       );
 
       if (existingIdx >= 0) {
         const updated = [...prev];
-        updated[existingIdx] = { ...updated[existingIdx], ...newBook };
+        updated[existingIdx] = { ...updated[existingIdx], ...savedBook };
         return updated;
       }
-      return [newBook, ...prev];
+      return [savedBook, ...prev];
     });
   };
 
-  const deleteBook = (bookId: string) => {
+  const deleteBook = async (bookId: string) => {
+    if (typeof window !== 'undefined' && window.electronAPI?.deleteBook) {
+      try {
+        await window.electronAPI.deleteBook(bookId);
+      } catch (err) {
+        console.error('[baglib/ui] Failed to delete book from SQLite:', err);
+      }
+    }
+
     setBooks((prev) => prev.filter((b) => b.id !== bookId));
     if (activeBook?.id === bookId) {
       setActiveBook(null);
@@ -136,7 +184,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setViewMode('library');
   };
 
-  const addPageNote = ({ pageNumber, highlightedText, content }: { pageNumber: number; highlightedText?: string; content: string }) => {
+  const addPageNote = async ({ pageNumber, highlightedText, content }: { pageNumber: number; highlightedText?: string; content: string }) => {
     if (!content.trim() || !activeBook) return;
     const newNote: PageNote = {
       id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -144,12 +192,28 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       pageNumber,
       highlightedText,
       content,
-      createdAt: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      createdAt: new Date().toISOString(),
     };
+
+    if (typeof window !== 'undefined' && (window.electronAPI as any)?.addNote) {
+      try {
+        await (window.electronAPI as any).addNote(newNote);
+      } catch (err) {
+        console.error('[baglib/ui] Failed to persist note to SQLite:', err);
+      }
+    }
+
     setBookNotes((prev) => [newNote, ...prev]);
   };
 
-  const deletePageNote = (noteId: string) => {
+  const deletePageNote = async (noteId: string) => {
+    if (typeof window !== 'undefined' && (window.electronAPI as any)?.deleteNote) {
+      try {
+        await (window.electronAPI as any).deleteNote(noteId);
+      } catch (err) {
+        console.error('[baglib/ui] Failed to delete note from SQLite:', err);
+      }
+    }
     setBookNotes((prev) => prev.filter((n) => n.id !== noteId));
   };
 
@@ -172,6 +236,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
