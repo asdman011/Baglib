@@ -1,0 +1,8 @@
+[
+  { "name": "التاريخ", "description": "كتب تاريخية" },
+  { "name": "الاجتماع", "description": "علم الاجتماع والعمران البشري" },
+  { "name": "اللغة العربية", "description": "علوم اللغة العربية" },
+  { "name": "معاجم", "description": "القواميس والمعاجم" },
+  { "name": "History", "description": "Historical Books" },
+  { "name": "Sociology", "description": "Sociology Books" }
+]

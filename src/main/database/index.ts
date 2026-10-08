@@ -13,13 +13,20 @@ import { getDatabase, closeDatabase } from './connection';
 import { runMigrations } from './migrator';
 import { migrations } from './migrations';
 
+import { SeedService } from './seed.service';
+
 /**
  * Opens the database, runs any pending migrations, and returns the instance.
  * Safe to call multiple times — connection is a singleton, migrations are idempotent.
  */
-export function initializeDatabase() {
+export async function initializeDatabase() {
   const db = getDatabase();
   runMigrations(db, migrations);
+  
+  // Seed the database if it's empty
+  const seeder = new SeedService(db);
+  await seeder.seedIfEmpty();
+
   return db;
 }
 

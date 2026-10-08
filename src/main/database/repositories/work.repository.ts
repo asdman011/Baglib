@@ -50,7 +50,8 @@ export class WorkRepository {
         psd.room as room,
         psd.condition as condition,
         s.source_type as sourceType,
-        GROUP_CONCAT(a.name, ', ') as author
+        GROUP_CONCAT(DISTINCT a.name) as author,
+        GROUP_CONCAT(DISTINCT t.name) as categories
       FROM work w
       LEFT JOIN edition e ON e.work_id = w.id
       LEFT JOIN source s ON s.edition_id = e.id
@@ -58,6 +59,8 @@ export class WorkRepository {
       LEFT JOIN physical_source_detail psd ON psd.source_id = s.id
       LEFT JOIN work_author wa ON wa.work_id = w.id
       LEFT JOIN author a ON a.id = wa.author_id
+      LEFT JOIN work_tag wt ON wt.work_id = w.id
+      LEFT JOIN tag t ON t.id = wt.tag_id
       GROUP BY w.id
       ORDER BY w.created_at DESC
     `).all() as any[];
@@ -73,7 +76,7 @@ export class WorkRepository {
       shelf: r.shelf || undefined,
       room: r.room || undefined,
       language: r.language || 'العربية',
-      categories: [],
+      categories: r.categories ? r.categories.split(',') : [],
       tags: [],
       lendingHistory: [],
       condition: r.condition || undefined,
@@ -142,6 +145,23 @@ export class WorkRepository {
           INSERT INTO physical_source_detail (source_id, shelf, room, condition)
           VALUES (?, ?, ?, ?)
         `).run(sourceId, data.shelf || null, data.room || null, data.condition || null);
+      }
+
+      // 7. Insert Categories
+      if (data.categories && data.categories.length > 0) {
+        const insertTag = this.db.prepare('INSERT OR IGNORE INTO tag (id, name, category, origin) VALUES (?, ?, ?, ?)');
+        const getTag = this.db.prepare('SELECT id FROM tag WHERE name = ? AND category = ?');
+        const insertWorkTag = this.db.prepare('INSERT OR IGNORE INTO work_tag (work_id, tag_id) VALUES (?, ?)');
+        
+        for (const catName of data.categories) {
+          // Try to insert (ignores if name already exists)
+          insertTag.run(crypto.randomUUID(), catName, 'subject', 'manual');
+          // Retrieve the tag id (whether it just inserted or already existed)
+          const tagRow = getTag.get(catName, 'subject') as { id: string } | undefined;
+          if (tagRow) {
+            insertWorkTag.run(workId, tagRow.id);
+          }
+        }
       }
 
       return {

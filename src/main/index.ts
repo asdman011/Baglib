@@ -36,10 +36,10 @@ async function createWindow() {
 setupSystemIPC();
 setupDatabaseIPC();
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Initialize SQLite database and run pending migrations
   try {
-    initializeDatabase();
+    await initializeDatabase();
     console.log("[baglib] Database initialized successfully.");
   } catch (e) {
     console.error("[baglib] Database initialization failed:", e);

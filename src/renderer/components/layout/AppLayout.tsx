@@ -8,6 +8,7 @@ import { NavigationRail } from './NavigationRail';
 import { LibraryGridView } from '../library/LibraryGridView';
 import { FullPageBookReader } from '../reader/FullPageBookReader';
 import { NotesOverviewView } from '../notes/NotesOverviewView';
+import { CategoriesOverviewView } from '../categories/CategoriesOverviewView';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Settings } from 'lucide-react';
 import { BotanicalVineLeft, BotanicalVineRight } from '../decorations/BotanicalIllustrations';
@@ -35,6 +36,7 @@ export const AppLayout: React.FC = () => {
           <BotanicalVineRight />
 
           {viewMode === 'library' && <LibraryGridView />}
+          {viewMode === 'categories' && <CategoriesOverviewView />}
           {viewMode === 'reader' && <FullPageBookReader />}
           {viewMode === 'notes' && <NotesOverviewView />}
           {viewMode === 'settings' && (

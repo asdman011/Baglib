@@ -7,7 +7,8 @@ import {
   FileText,
   Settings,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Layers
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 
@@ -28,6 +29,13 @@ export const NavigationRail: React.FC = () => {
       label: 'المكتبة',
       icon: Library,
       count: books.length,
+      disabled: false,
+    },
+    {
+      id: 'categories',
+      label: 'التصنيفات',
+      icon: Layers,
+      count: new Set(books.flatMap(b => b.categories)).size,
       disabled: false,
     },
     {

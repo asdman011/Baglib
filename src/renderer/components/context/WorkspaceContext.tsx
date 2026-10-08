@@ -35,7 +35,7 @@ export interface WorkspaceState {
   highlights: { id: string; pageNumber: number; text: string; color: string }[];
 
   // App Main View Mode
-  viewMode: 'library' | 'reader' | 'notes' | 'settings';
+  viewMode: 'library' | 'categories' | 'reader' | 'notes' | 'settings';
 }
 
 interface WorkspaceContextType extends WorkspaceState {
@@ -44,7 +44,7 @@ interface WorkspaceContextType extends WorkspaceState {
   toggleZenMode: () => void;
   toggleSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
-  setViewMode: (mode: 'library' | 'reader' | 'notes' | 'settings') => void;
+  setViewMode: (mode: 'library' | 'categories' | 'reader' | 'notes' | 'settings') => void;
   
   // Book Library Management
   addBook: (book: BookItem) => void;
@@ -72,7 +72,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   // Navigation & View Mode
-  const [viewMode, setViewMode] = useState<'library' | 'reader' | 'notes' | 'settings'>('library');
+  const [viewMode, setViewMode] = useState<'library' | 'categories' | 'reader' | 'notes' | 'settings'>('library');
   
   // Pure Real Data (Zero Mock Items)
   const [books, setBooks] = useState<BookItem[]>([]);

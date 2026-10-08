@@ -1,0 +1,50 @@
+[
+  {
+    "title": "المقدمة",
+    "author": "ابن خلدون",
+    "edition": "الطبعة الأولى",
+    "publisher": "دار القلم",
+    "publicationYear": 2005,
+    "language": "العربية",
+    "isbn": "978-9933-475-00-1",
+    "bookType": "physical",
+    "shelf": "A1",
+    "room": "المكتبة الرئيسية",
+    "categories": ["التاريخ", "الاجتماع"]
+  },
+  {
+    "title": "لسان العرب",
+    "author": "ابن منظور",
+    "edition": "طبعة دار المعارف",
+    "publisher": "دار المعارف",
+    "publicationYear": 1981,
+    "language": "العربية",
+    "bookType": "physical",
+    "shelf": "B2",
+    "room": "المكتبة الرئيسية",
+    "categories": ["اللغة العربية", "معاجم"]
+  },
+  {
+    "title": "تاريخ الرسل والملوك",
+    "author": "الطبري",
+    "edition": "طبعة الاستقامة",
+    "publisher": "مطبعة الاستقامة",
+    "publicationYear": 1939,
+    "language": "العربية",
+    "bookType": "physical",
+    "shelf": "A2",
+    "room": "المكتبة الرئيسية",
+    "categories": ["التاريخ"]
+  },
+  {
+    "title": "The Muqaddimah: An Introduction to History",
+    "author": "Ibn Khaldun",
+    "edition": "Princeton Classics",
+    "publisher": "Princeton University Press",
+    "publicationYear": 2004,
+    "language": "English",
+    "bookType": "digital",
+    "digitalFormat": "PDF",
+    "categories": ["History", "Sociology"]
+  }
+]
