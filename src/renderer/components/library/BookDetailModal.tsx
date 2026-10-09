@@ -34,9 +34,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onDelete,
 }) => {
   const { lang } = useWorkspace();
-  if (!isOpen || !book) return null;
 
-  const [formData, setFormData] = useState<BookItem>({ ...book });
+  const [formData, setFormData] = useState<BookItem>(book || ({} as BookItem));
   const [activeTab, setActiveTab] = useState<'info' | 'physical' | 'lending'>('info');
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
@@ -46,6 +45,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [newBorrower, setNewBorrower] = useState('');
   const [newBorrowDate, setNewBorrowDate] = useState(new Date().toISOString().split('T')[0]);
   const [newReturnDate, setNewReturnDate] = useState('');
+
+  // Sync state when book changes (e.g. reopening with a different book)
+  React.useEffect(() => {
+    if (book) {
+      setFormData({ ...book });
+      setActiveTab('info');
+    }
+  }, [book]);
 
   const handleInputChange = (field: keyof BookItem, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -151,6 +158,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       setIsAutoFilling(false);
     }
   };
+
+  if (!isOpen || !book) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
