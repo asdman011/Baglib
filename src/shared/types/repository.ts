@@ -44,6 +44,11 @@ export interface IWorkRepository {
    * Deletes a work by its ID.
    */
   deleteBook(workId: string): Promise<boolean> | boolean;
+
+  /**
+   * Updates reading status and progress for a work.
+   */
+  updateReadingStatus?(workId: string, status: import('./work').ReadingStatus, progress?: number): Promise<boolean> | boolean;
 }
 
 /**

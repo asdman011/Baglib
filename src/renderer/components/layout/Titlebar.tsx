@@ -11,7 +11,6 @@ import {
   Eye
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { HeaderBotanicalAccent } from '../decorations/BotanicalIllustrations';
 
 export const Titlebar: React.FC = () => {
   const {
@@ -34,7 +33,6 @@ export const Titlebar: React.FC = () => {
           <div className="w-7 h-7 rounded-lg bg-pale-sky-500/10 border border-pale-sky-500/30 flex items-center justify-center text-pale-sky-500">
             <BookOpen className="w-4 h-4" />
           </div>
-          <HeaderBotanicalAccent />
           <span className="font-display text-base font-bold text-main tracking-wide">{t('brand')}</span>
         </div>
       </div>

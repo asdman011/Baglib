@@ -208,5 +208,32 @@ describe('SqliteWorkRepository', () => {
       assert.strictEqual(works.length, 0);
       assert.strictEqual(editions.length, 0);
     });
+
+    it('persists and updates reading status and progress', () => {
+      const book = repo.addBook({
+        id: 'book-status-1',
+        title: 'كتاب القراءة',
+        author: 'المؤلف',
+        readingStatus: 'reading',
+        readingProgress: 45,
+      });
+
+      assert.strictEqual(book.readingStatus, 'reading');
+      assert.strictEqual(book.readingProgress, 45);
+
+      const retrieved = repo.getById('book-status-1');
+      assert.ok(retrieved);
+      assert.strictEqual(retrieved.readingStatus, 'reading');
+      assert.strictEqual(retrieved.readingProgress, 45);
+
+      // Test updateReadingStatus method
+      const updated = repo.updateReadingStatus('book-status-1', 'completed', 100);
+      assert.strictEqual(updated, true);
+
+      const retrievedAfter = repo.getById('book-status-1');
+      assert.ok(retrievedAfter);
+      assert.strictEqual(retrievedAfter.readingStatus, 'completed');
+      assert.strictEqual(retrievedAfter.readingProgress, 100);
+    });
   });
 });

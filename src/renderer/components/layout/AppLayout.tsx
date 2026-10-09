@@ -11,7 +11,6 @@ import { NotesOverviewView } from '../notes/NotesOverviewView';
 import { CategoriesOverviewView } from '../categories/CategoriesOverviewView';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Settings } from 'lucide-react';
-import { BotanicalVineLeft, BotanicalVineRight } from '../decorations/BotanicalIllustrations';
 
 export const AppLayout: React.FC = () => {
   const { dir, viewMode, t } = useWorkspace();
@@ -31,10 +30,6 @@ export const AppLayout: React.FC = () => {
 
         {/* Dynamic App Views */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          {/* Botanical Side Vine Illustrations (Oranges & Pomegranates) */}
-          <BotanicalVineLeft />
-          <BotanicalVineRight />
-
           {viewMode === 'library' && <LibraryGridView />}
           {viewMode === 'categories' && <CategoriesOverviewView />}
           {viewMode === 'reader' && <FullPageBookReader />}

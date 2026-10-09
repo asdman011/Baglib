@@ -372,6 +372,38 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   />
                 </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-main">حالة القراءة (Reading Status):</label>
+                  <select
+                    value={formData.readingStatus || 'unread'}
+                    onChange={(e) => handleInputChange('readingStatus', e.target.value as any)}
+                    className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500 font-sans"
+                  >
+                    <option value="unread">لم يُقرأ (Unread)</option>
+                    <option value="reading">قيد القراءة (Currently Reading)</option>
+                    <option value="completed">مكتمل (Completed)</option>
+                  </select>
+                </div>
+
+                {formData.readingStatus === 'reading' && (
+                  <div className="space-y-1 sm:col-span-2 p-3 rounded-xl bg-canvas/60 border border-subtle">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <label className="font-bold text-main">نسبة إنجاز القراءة (Reading Progress):</label>
+                      <span className="font-mono font-bold text-pale-sky-600 dark:text-pale-sky-400">
+                        {formData.readingProgress || 0}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={formData.readingProgress || 0}
+                      onChange={(e) => handleInputChange('readingProgress', Number(e.target.value))}
+                      className="w-full accent-pale-sky-500 cursor-pointer"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}

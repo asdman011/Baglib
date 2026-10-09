@@ -23,6 +23,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         nameEn: r.pcNameEn || '',
       } : null,
       tags: [],
+      readingStatus: (r.readingStatus as any) || 'unread',
+      readingProgress: typeof r.readingProgress === 'number' ? r.readingProgress : (r.readingProgress ? parseInt(r.readingProgress, 10) : 0),
       lendingHistory: [],
       condition: r.condition || undefined,
       bookType: (r.sourceType as any) || (r.filePath ? 'digital' : 'physical'),
@@ -41,6 +43,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         w.id as id,
         w.title as title,
         w.original_language as language,
+        w.reading_status as readingStatus,
+        w.reading_progress as readingProgress,
         e.id as editionId,
         e.label as edition,
         e.publisher as publisher,
@@ -83,6 +87,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         w.id as id,
         w.title as title,
         w.original_language as language,
+        w.reading_status as readingStatus,
+        w.reading_progress as readingProgress,
         e.id as editionId,
         e.label as edition,
         e.publisher as publisher,
@@ -139,12 +145,14 @@ export class SqliteWorkRepository implements IWorkRepository {
       const sourceId = crypto.randomUUID();
       const now = new Date().toISOString();
       const primaryCategoryId = data.primaryCategory?.id || data.primaryCategoryId || null;
+      const readingStatus = data.readingStatus || 'unread';
+      const readingProgress = typeof data.readingProgress === 'number' ? data.readingProgress : 0;
 
       // 1. Insert Work
       this.db.prepare(`
-        INSERT INTO work (id, work_type_id, title, original_language, primary_category_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(workId, 'wt-book', data.title || 'بدون عنوان', data.language || 'العربية', primaryCategoryId, now);
+        INSERT INTO work (id, work_type_id, title, original_language, primary_category_id, reading_status, reading_progress, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(workId, 'wt-book', data.title || 'بدون عنوان', data.language || 'العربية', primaryCategoryId, readingStatus, readingProgress, now);
 
       // 2. Insert Author (or reuse existing if same name)
       const existingAuthor = this.db.prepare('SELECT id FROM author WHERE name = ?').get(data.author || 'مؤلف مجهول') as { id: string } | undefined;
@@ -223,6 +231,8 @@ export class SqliteWorkRepository implements IWorkRepository {
           nameEn: data.primaryCategory.nameEn || '',
         } : null,
         tags: data.tags || [],
+        readingStatus: readingStatus as any,
+        readingProgress,
         lendingHistory: [],
         condition: data.condition as any,
         bookType: bookType as any,
@@ -237,13 +247,15 @@ export class SqliteWorkRepository implements IWorkRepository {
   updateBook(data: BookItemInput): BookItemInput {
     const updateTransaction = this.db.transaction(() => {
       const primaryCategoryId = data.primaryCategory?.id || data.primaryCategoryId || null;
+      const readingStatus = data.readingStatus || 'unread';
+      const readingProgress = typeof data.readingProgress === 'number' ? data.readingProgress : 0;
 
       // 1. Update Work
       this.db.prepare(`
         UPDATE work 
-        SET title = ?, original_language = ?, primary_category_id = ?
+        SET title = ?, original_language = ?, primary_category_id = ?, reading_status = ?, reading_progress = ?
         WHERE id = ?
-      `).run(data.title || 'بدون عنوان', data.language || 'العربية', primaryCategoryId, data.id);
+      `).run(data.title || 'بدون عنوان', data.language || 'العربية', primaryCategoryId, readingStatus, readingProgress, data.id);
 
       // 2. Author
       this.db.prepare('DELETE FROM work_author WHERE work_id = ?').run(data.id);
@@ -287,6 +299,19 @@ export class SqliteWorkRepository implements IWorkRepository {
     });
 
     return updateTransaction();
+  }
+
+  /**
+   * Updates reading status and progress directly for a book.
+   */
+  updateReadingStatus(workId: string, status: import('../../../shared/types/work').ReadingStatus, progress?: number): boolean {
+    const calcProgress = typeof progress === 'number'
+      ? progress
+      : (status === 'completed' ? 100 : (status === 'unread' ? 0 : 50));
+
+    const stmt = this.db.prepare('UPDATE work SET reading_status = ?, reading_progress = ? WHERE id = ?');
+    const result = stmt.run(status, calcProgress, workId);
+    return result.changes > 0;
   }
 
   /**

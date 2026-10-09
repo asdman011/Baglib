@@ -56,6 +56,7 @@ interface WorkspaceContextType extends WorkspaceState {
   // Book Library Management
   addBook: (book: BookItem) => void;
   deleteBook: (bookId: string) => void;
+  updateBookReadingStatus: (bookId: string, status: import('../../types/library').ReadingStatus, progress?: number) => Promise<void>;
   
   // Reader Flow
   openBookForReading: (book: BookItem) => void;
@@ -156,27 +157,82 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Add or Update book in library with SQLite persistence
   const addBook = async (newBook: BookItem) => {
-    let savedBook = newBook;
-    if (typeof window !== 'undefined' && window.electronAPI?.addBook) {
-      try {
-        savedBook = await window.electronAPI.addBook(newBook);
-      } catch (err) {
-        console.error('[baglib/ui] Failed to persist book to SQLite:', err);
-      }
-    }
-
+    // 1. Optimistic state update so UI changes immediately
     setBooks((prev) => {
       const existingIdx = prev.findIndex(
-        (b) => b.id === savedBook.id || (savedBook.filePath && b.filePath === savedBook.filePath)
+        (b) => b.id === newBook.id || (newBook.filePath && b.filePath === newBook.filePath)
       );
 
       if (existingIdx >= 0) {
         const updated = [...prev];
-        updated[existingIdx] = { ...updated[existingIdx], ...savedBook };
+        updated[existingIdx] = { ...updated[existingIdx], ...newBook };
         return updated;
       }
-      return [savedBook, ...prev];
+      return [newBook, ...prev];
     });
+
+    // 2. Persist to SQLite
+    if (typeof window !== 'undefined' && window.electronAPI?.addBook) {
+      try {
+        const savedBook = await window.electronAPI.addBook(newBook);
+        if (savedBook && savedBook.id) {
+          setBooks((prev) => {
+            const idx = prev.findIndex((b) => b.id === savedBook.id);
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = { ...newBook, ...savedBook };
+              return updated;
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.error('[baglib/ui] Failed to persist book to SQLite:', err);
+      }
+    }
+  };
+
+  // Direct fast reading status updater
+  const updateBookReadingStatus = async (
+    bookId: string,
+    status: import('../../types/library').ReadingStatus,
+    progress?: number
+  ) => {
+    const calcProgress = typeof progress === 'number'
+      ? progress
+      : (status === 'completed' ? 100 : (status === 'unread' ? 0 : undefined));
+
+    // Optimistic UI update
+    setBooks((prev) =>
+      prev.map((b) => {
+        if (b.id !== bookId) return b;
+        return {
+          ...b,
+          readingStatus: status,
+          readingProgress: calcProgress !== undefined ? calcProgress : (b.readingProgress || 0),
+        };
+      })
+    );
+
+    if (typeof window !== 'undefined') {
+      const api = window.electronAPI as any;
+      if (api?.updateReadingStatus) {
+        try {
+          await api.updateReadingStatus(bookId, status, calcProgress);
+        } catch (err) {
+          console.error('[baglib/ui] Failed to update reading status in SQLite:', err);
+        }
+      } else if (api?.addBook) {
+        const current = books.find((b) => b.id === bookId);
+        if (current) {
+          api.addBook({
+            ...current,
+            readingStatus: status,
+            readingProgress: calcProgress !== undefined ? calcProgress : (current.readingProgress || 0),
+          }).catch(console.error);
+        }
+      }
+    }
   };
 
   const deleteBook = async (bookId: string) => {
@@ -295,6 +351,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setActiveLibraryCategory,
         addBook,
         deleteBook,
+        updateBookReadingStatus,
         openBookForReading,
         closeReaderToLibrary,
         setReadingPage,

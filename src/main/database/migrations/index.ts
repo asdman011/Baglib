@@ -12,9 +12,12 @@
 import type { Migration } from '../migrator';
 import migration001 from './001_initial_schema';
 import migration002 from './002_add_categories';
+import migration003 from './003_add_reading_status';
 
 /** All migrations in chronological order. */
 export const migrations: Migration[] = [
   migration001,
   migration002,
+  migration003,
 ];
+

@@ -84,6 +84,20 @@ export function setupDatabaseIPC() {
       throw err;
     }
   });
+
+  /**
+   * Update reading status and progress for a book
+   */
+  ipcMain.handle('library:update-reading-status', (_, workId: string, status: any, progress?: number) => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.updateReadingStatus(workId, status, progress);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to update reading status:', err);
+      throw err;
+    }
+  });
   /**
    * Fetch all notes
    */

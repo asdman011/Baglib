@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, BookOpen, FileText, Hash, Bookmark, ArrowRight, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { SAMPLE_COMMAND_RESULTS } from '../../data/mockData';
+import { matchesSearchQuery } from '../../utils/search';
 
 export const CommandPalette: React.FC = () => {
-  const { isCommandPaletteOpen, setCommandPaletteOpen, openBookForReading } = useWorkspace();
+  const { isCommandPaletteOpen, setCommandPaletteOpen, openBookForReading, books, bookNotes } = useWorkspace();
   const [query, setQuery] = useState('');
 
   // Close on Escape
@@ -20,26 +20,62 @@ export const CommandPalette: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isCommandPaletteOpen, setCommandPaletteOpen]);
 
+  // Combine real books and notes with quick actions
+  const allResults = useMemo(() => {
+    const results: {
+      id: string;
+      title: string;
+      subtitle: string;
+      tag: string;
+      type: 'book' | 'note' | 'command';
+      icon: any;
+      action: () => void;
+    }[] = [];
+
+    // Real Books from library
+    books.forEach((b) => {
+      results.push({
+        id: b.id,
+        title: b.title,
+        subtitle: `${b.author} • ${b.digitalFormat || (b.bookType === 'digital' ? 'رقمي' : 'ورقي')}`,
+        tag: b.primaryCategory?.nameAr || 'كتاب',
+        type: 'book',
+        icon: Bookmark,
+        action: () => {
+          openBookForReading(b);
+          setCommandPaletteOpen(false);
+        },
+      });
+    });
+
+    // Real Notes
+    bookNotes.forEach((n) => {
+      const parentBook = books.find((b) => b.id === n.bookId);
+      results.push({
+        id: n.id,
+        title: n.content.substring(0, 45) + (n.content.length > 45 ? '...' : ''),
+        subtitle: `${parentBook?.title || 'كتاب'} • صفحة ${n.pageNumber}`,
+        tag: 'ملاحظة',
+        type: 'note',
+        icon: FileText,
+        action: () => {
+          if (parentBook) openBookForReading(parentBook);
+          setCommandPaletteOpen(false);
+        },
+      });
+    });
+
+    return results;
+  }, [books, bookNotes, openBookForReading, setCommandPaletteOpen]);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return allResults.slice(0, 8);
+    return allResults.filter((item) =>
+      matchesSearchQuery(`${item.title} ${item.subtitle} ${item.tag}`, query)
+    );
+  }, [allResults, query]);
+
   if (!isCommandPaletteOpen) return null;
-
-  const quickResults = SAMPLE_COMMAND_RESULTS.map((item) => {
-    let icon = BookOpen;
-    if (item.type === 'hadith') icon = Hash;
-    if (item.type === 'note') icon = FileText;
-    if (item.type === 'book') icon = Bookmark;
-
-    return {
-      ...item,
-      icon,
-      action: () => {
-        setCommandPaletteOpen(false);
-      },
-    };
-  });
-
-  const filtered = quickResults.filter(
-    (item) => item.title.includes(query) || item.subtitle.includes(query) || item.tag.includes(query)
-  );
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 p-4">

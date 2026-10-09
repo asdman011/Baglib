@@ -1,6 +1,7 @@
 export type DigitalFormat = 'PDF' | 'EPUB' | 'MOBI' | 'AZW3' | 'HTML' | 'TXT';
 export type BookCondition = 'جديدة' | 'ممتازة' | 'جيدة' | 'مستعملة' | 'أثرية/قديمة';
 export type BookType = 'digital' | 'physical' | 'hybrid';
+export type ReadingStatus = 'unread' | 'reading' | 'completed' | 'paused' | 'abandoned';
 
 export interface LendingRecord {
   id: string;
@@ -22,6 +23,8 @@ export interface BookItem {
   isbn?: string;
   coverImage?: string;
   pagesCount?: number;
+  readingStatus?: ReadingStatus;
+  readingProgress?: number;
   
   // Physical Location
   shelf?: string;       // e.g. "رف أ1 - العلوم الشرعية"

@@ -11,6 +11,8 @@ export const API = {
   getAllBooks: () => ipcRenderer.invoke('library:get-all-books'),
   addBook: (bookData: any) => ipcRenderer.invoke('library:add-book', bookData),
   deleteBook: (bookId: string) => ipcRenderer.invoke('library:delete-book', bookId),
+  updateReadingStatus: (bookId: string, status: string, progress?: number) =>
+    ipcRenderer.invoke('library:update-reading-status', bookId, status, progress),
 
   // Categories
   getCategoryTree: () => ipcRenderer.invoke('library:get-category-tree'),
