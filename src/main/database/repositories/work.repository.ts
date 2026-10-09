@@ -1,39 +1,41 @@
 import type { Database } from 'better-sqlite3';
+import type { IWorkRepository, BookItem, BookItemInput } from '../../../shared/types/repository';
 
-export interface BookItemInput {
-  id?: string;
-  title: string;
-  author: string;
-  edition?: string;
-  publisher?: string;
-  publicationYear?: number | string;
-  isbn?: string;
-  coverImage?: string;
-  pagesCount?: number;
-  shelf?: string;
-  room?: string;
-  language?: string;
-  categories?: string[];
-  tags?: string[];
-  purchaseDate?: string;
-  price?: string;
-  condition?: string;
-  bookType?: 'digital' | 'physical' | 'hybrid';
-  digitalFormat?: string;
-  filePath?: string;
-  fileSize?: string;
-  onlineSource?: string;
-  sourceUrl?: string;
-}
-
-export class WorkRepository {
+export class SqliteWorkRepository implements IWorkRepository {
   constructor(private db: Database) {}
+
+  private mapRowToBookItem(r: any): BookItem {
+    return {
+      id: r.id,
+      title: r.title || 'بدون عنوان',
+      author: r.author || 'مؤلف مجهول',
+      edition: r.edition || undefined,
+      publisher: r.publisher || undefined,
+      publicationYear: r.publicationYear || undefined,
+      isbn: r.isbn || undefined,
+      shelf: r.shelf || undefined,
+      room: r.room || undefined,
+      language: r.language || 'العربية',
+      categories: r.categories ? r.categories.split(',') : [],
+      primaryCategory: r.primaryCategoryId ? {
+        id: r.primaryCategoryId,
+        nameAr: r.pcNameAr || '',
+        nameEn: r.pcNameEn || '',
+      } : null,
+      tags: [],
+      lendingHistory: [],
+      condition: r.condition || undefined,
+      bookType: (r.sourceType as any) || (r.filePath ? 'digital' : 'physical'),
+      digitalFormat: r.digitalFormat || (r.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : undefined),
+      filePath: r.filePath || undefined,
+    };
+  }
 
   /**
    * Fetch all works with their primary edition and digital/physical sources.
    * Bridges the normalized DB schema to the flat UI BookItem interface.
    */
-  getAllWorks() {
+  getAllWorks(): BookItem[] {
     const rows = this.db.prepare(`
       SELECT 
         w.id as id,
@@ -69,40 +71,64 @@ export class WorkRepository {
       ORDER BY w.created_at DESC
     `).all() as any[];
 
-    return rows.map((r) => ({
-      id: r.id,
-      title: r.title || 'بدون عنوان',
-      author: r.author || 'مؤلف مجهول',
-      edition: r.edition || undefined,
-      publisher: r.publisher || undefined,
-      publicationYear: r.publicationYear || undefined,
-      isbn: r.isbn || undefined,
-      shelf: r.shelf || undefined,
-      room: r.room || undefined,
-      language: r.language || 'العربية',
-      categories: r.categories ? r.categories.split(',') : [],
-      primaryCategory: r.primaryCategoryId ? {
-        id: r.primaryCategoryId,
-        nameAr: r.pcNameAr,
-        nameEn: r.pcNameEn
-      } : null,
-      tags: [],
-      lendingHistory: [],
-      condition: r.condition || undefined,
-      bookType: (r.sourceType as any) || (r.filePath ? 'digital' : 'physical'),
-      digitalFormat: r.digitalFormat || (r.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : undefined),
-      filePath: r.filePath || undefined,
-    }));
+    return rows.map((r) => this.mapRowToBookItem(r));
+  }
+
+  /**
+   * Fetch a single work by ID.
+   */
+  getById(workId: string): BookItem | null {
+    const row = this.db.prepare(`
+      SELECT 
+        w.id as id,
+        w.title as title,
+        w.original_language as language,
+        e.id as editionId,
+        e.label as edition,
+        e.publisher as publisher,
+        e.publication_year as publicationYear,
+        e.isbn as isbn,
+        fsd.file_path as filePath,
+        fsd.file_format as digitalFormat,
+        psd.shelf as shelf,
+        psd.room as room,
+        psd.condition as condition,
+        s.source_type as sourceType,
+        GROUP_CONCAT(DISTINCT a.name) as author,
+        GROUP_CONCAT(DISTINCT t.name) as categories,
+        w.primary_category_id as primaryCategoryId,
+        cat.name_ar as pcNameAr,
+        cat.name_en as pcNameEn
+      FROM work w
+      LEFT JOIN edition e ON e.work_id = w.id
+      LEFT JOIN source s ON s.edition_id = e.id
+      LEFT JOIN file_source_detail fsd ON fsd.source_id = s.id
+      LEFT JOIN physical_source_detail psd ON psd.source_id = s.id
+      LEFT JOIN work_author wa ON wa.work_id = w.id
+      LEFT JOIN author a ON a.id = wa.author_id
+      LEFT JOIN work_tag wt ON wt.work_id = w.id
+      LEFT JOIN tag t ON t.id = wt.tag_id
+      LEFT JOIN category cat ON cat.id = w.primary_category_id
+      WHERE w.id = ?
+      GROUP BY w.id
+    `).get(workId) as any;
+
+    if (!row) {
+      return null;
+    }
+
+    return this.mapRowToBookItem(row);
   }
 
   /**
    * Adds a new Work, Author, Edition, Source, and File/Physical Details in a single transaction.
    */
-  addBook(data: BookItemInput) {
+  addBook(data: BookItemInput): BookItem {
     if (data.id) {
       const existing = this.db.prepare('SELECT id FROM work WHERE id = ?').get(data.id);
       if (existing) {
-        return this.updateBook(data);
+        this.updateBook(data);
+        return this.getById(data.id) as BookItem;
       }
     }
 
@@ -112,15 +138,16 @@ export class WorkRepository {
       const editionId = crypto.randomUUID();
       const sourceId = crypto.randomUUID();
       const now = new Date().toISOString();
+      const primaryCategoryId = data.primaryCategory?.id || data.primaryCategoryId || null;
 
       // 1. Insert Work
       this.db.prepare(`
         INSERT INTO work (id, work_type_id, title, original_language, primary_category_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(workId, 'wt-book', data.title, data.language || 'العربية', data.primaryCategory?.id || null, now);
+      `).run(workId, 'wt-book', data.title || 'بدون عنوان', data.language || 'العربية', primaryCategoryId, now);
 
       // 2. Insert Author (or reuse existing if same name)
-      const existingAuthor = this.db.prepare('SELECT id FROM author WHERE name = ?').get(data.author) as { id: string } | undefined;
+      const existingAuthor = this.db.prepare('SELECT id FROM author WHERE name = ?').get(data.author || 'مؤلف مجهول') as { id: string } | undefined;
       const finalAuthorId = existingAuthor ? existingAuthor.id : authorId;
 
       if (!existingAuthor) {
@@ -170,9 +197,7 @@ export class WorkRepository {
         const insertWorkTag = this.db.prepare('INSERT OR IGNORE INTO work_tag (work_id, tag_id) VALUES (?, ?)');
         
         for (const catName of data.categories) {
-          // Try to insert (ignores if name already exists)
           insertTag.run(crypto.randomUUID(), catName, 'subject', 'manual');
-          // Retrieve the tag id (whether it just inserted or already existed)
           const tagRow = getTag.get(catName, 'subject') as { id: string } | undefined;
           if (tagRow) {
             insertWorkTag.run(workId, tagRow.id);
@@ -182,8 +207,8 @@ export class WorkRepository {
 
       return {
         id: workId,
-        title: data.title,
-        author: data.author,
+        title: data.title || 'بدون عنوان',
+        author: data.author || 'مؤلف مجهول',
         edition: data.edition,
         publisher: data.publisher,
         publicationYear: data.publicationYear,
@@ -192,6 +217,11 @@ export class WorkRepository {
         room: data.room,
         language: data.language || 'العربية',
         categories: data.categories || [],
+        primaryCategory: data.primaryCategory ? {
+          id: data.primaryCategory.id,
+          nameAr: data.primaryCategory.nameAr || '',
+          nameEn: data.primaryCategory.nameEn || '',
+        } : null,
         tags: data.tags || [],
         lendingHistory: [],
         condition: data.condition as any,
@@ -204,19 +234,21 @@ export class WorkRepository {
     return insertTransaction();
   }
 
-  updateBook(data: BookItemInput) {
+  updateBook(data: BookItemInput): BookItemInput {
     const updateTransaction = this.db.transaction(() => {
+      const primaryCategoryId = data.primaryCategory?.id || data.primaryCategoryId || null;
+
       // 1. Update Work
       this.db.prepare(`
         UPDATE work 
         SET title = ?, original_language = ?, primary_category_id = ?
         WHERE id = ?
-      `).run(data.title, data.language || 'العربية', data.primaryCategory?.id || null, data.id);
+      `).run(data.title || 'بدون عنوان', data.language || 'العربية', primaryCategoryId, data.id);
 
       // 2. Author
       this.db.prepare('DELETE FROM work_author WHERE work_id = ?').run(data.id);
       
-      const existingAuthor = this.db.prepare('SELECT id FROM author WHERE name = ?').get(data.author) as { id: string } | undefined;
+      const existingAuthor = this.db.prepare('SELECT id FROM author WHERE name = ?').get(data.author || 'مؤلف مجهول') as { id: string } | undefined;
       const finalAuthorId = existingAuthor ? existingAuthor.id : crypto.randomUUID();
       if (!existingAuthor) {
         this.db.prepare('INSERT INTO author (id, name) VALUES (?, ?)').run(finalAuthorId, data.author || 'مؤلف مجهول');
@@ -238,31 +270,35 @@ export class WorkRepository {
 
         const source = this.db.prepare('SELECT id FROM source WHERE edition_id = ? LIMIT 1').get(edition.id) as { id: string } | undefined;
         if (source) {
-           const bookType = data.bookType || (data.filePath ? 'digital' : 'physical');
-           this.db.prepare('UPDATE source SET source_type = ? WHERE id = ?').run(bookType, source.id);
-           
-           if (data.filePath || bookType === 'digital') {
-              const fmt = data.digitalFormat || (data.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'PDF');
-              this.db.prepare('UPDATE file_source_detail SET file_path = ?, file_format = ? WHERE source_id = ?').run(data.filePath || null, fmt, source.id);
-           }
-           if (bookType === 'physical' || data.shelf || data.room) {
-              this.db.prepare('UPDATE physical_source_detail SET shelf = ?, room = ?, condition = ? WHERE source_id = ?').run(data.shelf || null, data.room || null, data.condition || null, source.id);
-           }
+          const bookType = data.bookType || (data.filePath ? 'digital' : 'physical');
+          this.db.prepare('UPDATE source SET source_type = ? WHERE id = ?').run(bookType, source.id);
+          
+          if (data.filePath || bookType === 'digital') {
+            const fmt = data.digitalFormat || (data.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'PDF');
+            this.db.prepare('UPDATE file_source_detail SET file_path = ?, file_format = ? WHERE source_id = ?').run(data.filePath || null, fmt, source.id);
+          }
+          if (bookType === 'physical' || data.shelf || data.room) {
+            this.db.prepare('UPDATE physical_source_detail SET shelf = ?, room = ?, condition = ? WHERE source_id = ?').run(data.shelf || null, data.room || null, data.condition || null, source.id);
+          }
         }
       }
 
       return data;
     });
+
     return updateTransaction();
   }
 
   /**
    * Deletes a Work by ID (cascades to edition, source, details, etc.).
    */
-  deleteBook(workId: string) {
+  deleteBook(workId: string): boolean {
     const stmt = this.db.prepare('DELETE FROM work WHERE id = ?');
     const result = stmt.run(workId);
     return result.changes > 0;
   }
 }
 
+// Backwards-compatible aliases and type exports
+export { SqliteWorkRepository as WorkRepository };
+export type { BookItemInput };

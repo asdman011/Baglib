@@ -1,9 +1,17 @@
+import type { Database } from 'better-sqlite3';
 import { getDatabase } from '../connection';
 import type { Category, CategoryNode, CategoryBreadcrumb } from '../../../shared/types/category';
+import type { ICategoryRepository } from '../../../shared/types/repository';
 
-export class CategoryRepository {
+export class SqliteCategoryRepository implements ICategoryRepository {
+  constructor(private db?: Database) {}
+
+  private getDb(): Database {
+    return this.db ?? getDatabase();
+  }
+
   public async getSubtreeWorkIds(categoryId: string): Promise<string[]> {
-    const db = getDatabase();
+    const db = this.getDb();
     const query = `
       WITH RECURSIVE subcategories AS (
         SELECT id FROM category WHERE id = ?
@@ -19,7 +27,7 @@ export class CategoryRepository {
   }
 
   public async getBreadcrumbs(categoryId: string): Promise<CategoryBreadcrumb[]> {
-    const db = getDatabase();
+    const db = this.getDb();
     const query = `
       WITH RECURSIVE breadcrumbs AS (
         SELECT id, parent_id, name_ar, name_en, 0 as depth
@@ -37,7 +45,7 @@ export class CategoryRepository {
   }
 
   public async getCategoryTree(): Promise<CategoryNode[]> {
-    const db = getDatabase();
+    const db = this.getDb();
     const categories = db.prepare(`
       SELECT id, parent_id as parentId, name_ar as nameAr, name_en as nameEn, display_order as displayOrder, created_at as createdAt
       FROM category
@@ -66,4 +74,5 @@ export class CategoryRepository {
   }
 }
 
-export const categoryRepository = new CategoryRepository();
+export { SqliteCategoryRepository as CategoryRepository };
+export const categoryRepository = new SqliteCategoryRepository();

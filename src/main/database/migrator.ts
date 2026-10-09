@@ -24,6 +24,8 @@ export interface Migration {
   name: string;
   /** Runs the migration SQL against the database instance. */
   up: (db: Database.Database) => void;
+  /** Optional rollback function. */
+  down?: (db: Database.Database) => void;
 }
 
 /**

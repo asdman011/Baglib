@@ -1,17 +1,10 @@
-import { Database } from 'better-sqlite3';
+import type { Database } from 'better-sqlite3';
+import type { IKnowledgeRepository, PageNotePayload, PageNoteDTO } from '../../../shared/types/repository';
 
-export interface PageNotePayload {
-  id: string;
-  bookId: string;
-  pageNumber: number;
-  content: string;
-  createdAt?: string;
-}
-
-export class KnowledgeRepository {
+export class SqliteKnowledgeRepository implements IKnowledgeRepository {
   constructor(private db: Database) {}
 
-  getAllNotes(): any[] {
+  getAllNotes(): PageNoteDTO[] {
     const rows = this.db.prepare(`
       SELECT k.id, k.work_id as bookId, k.location as pageNumber, k.created_at as createdAt, n.content
       FROM knowledge k
@@ -25,11 +18,11 @@ export class KnowledgeRepository {
       bookId: row.bookId,
       pageNumber: Number(row.pageNumber),
       content: row.content,
-      createdAt: row.createdAt
+      createdAt: row.createdAt,
     }));
   }
 
-  addNote(note: PageNotePayload) {
+  addNote(note: PageNotePayload): PageNotePayload {
     const insertKnowledge = this.db.prepare(`
       INSERT INTO knowledge (id, work_id, knowledge_type, location, created_at, updated_at)
       VALUES (?, ?, 'note', ?, ?, ?)
@@ -51,8 +44,11 @@ export class KnowledgeRepository {
     return note;
   }
 
-  deleteNote(noteId: string) {
+  deleteNote(noteId: string): void {
     const stmt = this.db.prepare(`DELETE FROM knowledge WHERE id = ? AND knowledge_type = 'note'`);
     stmt.run(noteId);
   }
 }
+
+export { SqliteKnowledgeRepository as KnowledgeRepository };
+export type { PageNotePayload, PageNoteDTO };
