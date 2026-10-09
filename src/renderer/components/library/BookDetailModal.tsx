@@ -279,7 +279,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   <label className="font-bold text-main">عنوان الكتاب (Title):</label>
                   <input
                     type="text"
-                    value={formData.title}
+                    value={formData.title || ''}
                     onChange={(e) => handleInputChange('title', e.target.value)}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   />
@@ -289,7 +289,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   <label className="font-bold text-main">اسم المؤلف (Author):</label>
                   <input
                     type="text"
-                    value={formData.author}
+                    value={formData.author || ''}
                     onChange={(e) => handleInputChange('author', e.target.value)}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   />
@@ -337,6 +337,30 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     placeholder="978-XXXXX"
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500 font-mono"
                   />
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="font-bold text-main">التصنيف الأساسي (Primary Category):</label>
+                  <select
+                    value={formData.primaryCategory?.id || ''}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      if (!selectedId) {
+                        handleInputChange('primaryCategory', null);
+                      } else {
+                        const cat = allCategories.find((c) => c.id === selectedId);
+                        if (cat) handleInputChange('primaryCategory', cat);
+                      }
+                    }}
+                    className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
+                  >
+                    <option value="">-- بدون تصنيف (No Category) --</option>
+                    {allCategories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {lang === 'ar' ? cat.nameAr : cat.nameEn}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-1">
