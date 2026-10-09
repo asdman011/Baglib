@@ -105,7 +105,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     };
     setFormData((prev) => ({
       ...prev,
-      lendingHistory: [newRecord, ...prev.lendingHistory],
+      lendingHistory: [newRecord, ...(prev.lendingHistory || [])],
     }));
     setNewBorrower('');
   };
@@ -113,7 +113,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const handleToggleReturn = (lendId: string) => {
     setFormData((prev) => ({
       ...prev,
-      lendingHistory: prev.lendingHistory.map((rec) =>
+      lendingHistory: (prev.lendingHistory || []).map((rec) =>
         rec.id === lendId
           ? {
               ...rec,
@@ -145,7 +145,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           publisher: volumeInfo.publisher || prev.publisher || 'دار النشر الأكاديمية',
           publicationYear: volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.substring(0, 4)) : (prev.publicationYear || 2023),
           isbn: prev.isbn || (volumeInfo.industryIdentifiers ? volumeInfo.industryIdentifiers[0]?.identifier : '978-9953-0-1234-5'),
-          categories: Array.from(new Set([...prev.categories, ...(volumeInfo.categories || ['تحقيق أكاديمي'])])),
+          categories: Array.from(new Set([...(prev.categories || []), ...(volumeInfo.categories || ['تحقيق أكاديمي'])])),
           coverImage: volumeInfo.imageLinks?.thumbnail || prev.coverImage,
         }));
       }
@@ -243,7 +243,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 : 'border-transparent text-muted hover:text-main'
             }`}
           >
-            سجل الإعارة ({formData.lendingHistory.length})
+            سجل الإعارة ({(formData.lendingHistory || []).length})
           </button>
         </div>
 
@@ -441,8 +441,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
               {/* Lending List */}
               <div className="space-y-2">
-                {formData.lendingHistory.length > 0 ? (
-                  formData.lendingHistory.map((rec) => (
+                {(formData.lendingHistory?.length || 0) > 0 ? (
+                  (formData.lendingHistory || []).map((rec) => (
                     <div
                       key={rec.id}
                       className="p-3 rounded-xl bg-surface border border-subtle flex items-center justify-between"
