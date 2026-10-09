@@ -51,7 +51,10 @@ export class WorkRepository {
         psd.condition as condition,
         s.source_type as sourceType,
         GROUP_CONCAT(DISTINCT a.name) as author,
-        GROUP_CONCAT(DISTINCT t.name) as categories
+        GROUP_CONCAT(DISTINCT t.name) as categories,
+        w.primary_category_id as primaryCategoryId,
+        cat.name_ar as pcNameAr,
+        cat.name_en as pcNameEn
       FROM work w
       LEFT JOIN edition e ON e.work_id = w.id
       LEFT JOIN source s ON s.edition_id = e.id
@@ -61,6 +64,7 @@ export class WorkRepository {
       LEFT JOIN author a ON a.id = wa.author_id
       LEFT JOIN work_tag wt ON wt.work_id = w.id
       LEFT JOIN tag t ON t.id = wt.tag_id
+      LEFT JOIN category cat ON cat.id = w.primary_category_id
       GROUP BY w.id
       ORDER BY w.created_at DESC
     `).all() as any[];
@@ -77,6 +81,11 @@ export class WorkRepository {
       room: r.room || undefined,
       language: r.language || 'العربية',
       categories: r.categories ? r.categories.split(',') : [],
+      primaryCategory: r.primaryCategoryId ? {
+        id: r.primaryCategoryId,
+        nameAr: r.pcNameAr,
+        nameEn: r.pcNameEn
+      } : null,
       tags: [],
       lendingHistory: [],
       condition: r.condition || undefined,
@@ -90,6 +99,13 @@ export class WorkRepository {
    * Adds a new Work, Author, Edition, Source, and File/Physical Details in a single transaction.
    */
   addBook(data: BookItemInput) {
+    if (data.id) {
+      const existing = this.db.prepare('SELECT id FROM work WHERE id = ?').get(data.id);
+      if (existing) {
+        return this.updateBook(data);
+      }
+    }
+
     const insertTransaction = this.db.transaction(() => {
       const workId = data.id || crypto.randomUUID();
       const authorId = crypto.randomUUID();
@@ -99,9 +115,9 @@ export class WorkRepository {
 
       // 1. Insert Work
       this.db.prepare(`
-        INSERT INTO work (id, work_type_id, title, original_language, created_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(workId, 'wt-book', data.title, data.language || 'العربية', now);
+        INSERT INTO work (id, work_type_id, title, original_language, primary_category_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(workId, 'wt-book', data.title, data.language || 'العربية', data.primaryCategory?.id || null, now);
 
       // 2. Insert Author (or reuse existing if same name)
       const existingAuthor = this.db.prepare('SELECT id FROM author WHERE name = ?').get(data.author) as { id: string } | undefined;
@@ -186,6 +202,58 @@ export class WorkRepository {
     });
 
     return insertTransaction();
+  }
+
+  updateBook(data: BookItemInput) {
+    const updateTransaction = this.db.transaction(() => {
+      // 1. Update Work
+      this.db.prepare(`
+        UPDATE work 
+        SET title = ?, original_language = ?, primary_category_id = ?
+        WHERE id = ?
+      `).run(data.title, data.language || 'العربية', data.primaryCategory?.id || null, data.id);
+
+      // 2. Author
+      this.db.prepare('DELETE FROM work_author WHERE work_id = ?').run(data.id);
+      
+      const existingAuthor = this.db.prepare('SELECT id FROM author WHERE name = ?').get(data.author) as { id: string } | undefined;
+      const finalAuthorId = existingAuthor ? existingAuthor.id : crypto.randomUUID();
+      if (!existingAuthor) {
+        this.db.prepare('INSERT INTO author (id, name) VALUES (?, ?)').run(finalAuthorId, data.author || 'مؤلف مجهول');
+      }
+      this.db.prepare('INSERT INTO work_author (work_id, author_id, role) VALUES (?, ?, ?)').run(data.id, finalAuthorId, 'author');
+
+      // 3. Edition
+      const pubYear = typeof data.publicationYear === 'number' 
+        ? data.publicationYear 
+        : data.publicationYear ? parseInt(String(data.publicationYear), 10) || null : null;
+
+      const edition = this.db.prepare('SELECT id FROM edition WHERE work_id = ? LIMIT 1').get(data.id) as { id: string } | undefined;
+      if (edition) {
+        this.db.prepare(`
+          UPDATE edition 
+          SET label = ?, publisher = ?, publication_year = ?, language = ?, isbn = ?
+          WHERE id = ?
+        `).run(data.edition || null, data.publisher || null, pubYear, data.language || 'العربية', data.isbn || null, edition.id);
+
+        const source = this.db.prepare('SELECT id FROM source WHERE edition_id = ? LIMIT 1').get(edition.id) as { id: string } | undefined;
+        if (source) {
+           const bookType = data.bookType || (data.filePath ? 'digital' : 'physical');
+           this.db.prepare('UPDATE source SET source_type = ? WHERE id = ?').run(bookType, source.id);
+           
+           if (data.filePath || bookType === 'digital') {
+              const fmt = data.digitalFormat || (data.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'PDF');
+              this.db.prepare('UPDATE file_source_detail SET file_path = ?, file_format = ? WHERE source_id = ?').run(data.filePath || null, fmt, source.id);
+           }
+           if (bookType === 'physical' || data.shelf || data.room) {
+              this.db.prepare('UPDATE physical_source_detail SET shelf = ?, room = ?, condition = ? WHERE source_id = ?').run(data.shelf || null, data.room || null, data.condition || null, source.id);
+           }
+        }
+      }
+
+      return data;
+    });
+    return updateTransaction();
   }
 
   /**

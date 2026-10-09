@@ -125,5 +125,45 @@ export function setupDatabaseIPC() {
       throw err;
     }
   });
+
+  /**
+   * Fetch category tree
+   */
+  ipcMain.handle('library:get-category-tree', async () => {
+    try {
+      const repo = require('../database/repositories/category.repository').categoryRepository;
+      return await repo.getCategoryTree();
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to fetch category tree:', err);
+      return [];
+    }
+  });
+
+  /**
+   * Fetch category breadcrumbs
+   */
+  ipcMain.handle('library:get-category-breadcrumbs', async (_, categoryId: string) => {
+    try {
+      const repo = require('../database/repositories/category.repository').categoryRepository;
+      return await repo.getBreadcrumbs(categoryId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to fetch category breadcrumbs:', err);
+      return [];
+    }
+  });
+
+  /**
+   * Fetch subtree work ids
+   */
+  ipcMain.handle('library:get-subtree-work-ids', async (_, categoryId: string) => {
+    try {
+      const repo = require('../database/repositories/category.repository').categoryRepository;
+      return await repo.getSubtreeWorkIds(categoryId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to fetch subtree work ids:', err);
+      return [];
+    }
+  });
 }
+
 

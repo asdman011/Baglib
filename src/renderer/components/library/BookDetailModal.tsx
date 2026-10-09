@@ -14,10 +14,12 @@ import {
   FileCheck
 } from 'lucide-react';
 import { BookItem, LendingRecord } from '../../types/library';
+import { useWorkspace } from '../context/WorkspaceContext';
 
 interface BookDetailModalProps {
   book: BookItem | null;
   isOpen: boolean;
+  allCategories?: { id: string, nameAr: string, nameEn: string }[];
   onClose: () => void;
   onSave: (updatedBook: BookItem) => void;
   onDelete: (id: string) => void;
@@ -26,10 +28,12 @@ interface BookDetailModalProps {
 export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   book,
   isOpen,
+  allCategories = [],
   onClose,
   onSave,
   onDelete,
 }) => {
+  const { lang } = useWorkspace();
   if (!isOpen || !book) return null;
 
   const [formData, setFormData] = useState<BookItem>({ ...book });

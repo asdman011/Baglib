@@ -20,41 +20,42 @@ export const NavigationRail: React.FC = () => {
     toggleSidebar,
     activeBook,
     books,
-    bookNotes
+    bookNotes,
+    t
   } = useWorkspace();
 
   const navItems = [
     {
       id: 'library',
-      label: 'المكتبة',
+      label: t('navLibrary'),
       icon: Library,
       count: books.length,
       disabled: false,
     },
     {
       id: 'categories',
-      label: 'التصنيفات',
+      label: t('navCategories'),
       icon: Layers,
       count: new Set(books.flatMap(b => b.categories)).size,
       disabled: false,
     },
     {
       id: 'reader',
-      label: 'القارئ الإشعاعي',
+      label: t('navReader'),
       icon: BookOpen,
       count: activeBook ? 1 : 0,
       disabled: !activeBook,
     },
     {
       id: 'notes',
-      label: 'سجل الملاحظات',
+      label: t('navNotes'),
       icon: FileText,
       count: bookNotes.length,
       disabled: false,
     },
     {
       id: 'settings',
-      label: 'الإعدادات',
+      label: t('navSettings'),
       icon: Settings,
       count: 0,
       disabled: false,
@@ -66,19 +67,18 @@ export const NavigationRail: React.FC = () => {
       className={`h-full bg-surface border-l border-subtle flex flex-col justify-between transition-all duration-300 z-30 shrink-0 select-none ${
         isSidebarCollapsed ? 'w-16' : 'w-56 sm:w-64'
       }`}
-      dir="rtl"
     >
       {/* Top Header: Single Collapse/Expand Control (No Duplicate Logo) */}
       <div className="p-3 border-b border-subtle/60 flex items-center justify-between">
         {!isSidebarCollapsed && (
           <span className="text-xs font-bold text-muted font-sans px-2">
-            التنقل العام
+            {t('navGlobal')}
           </span>
         )}
 
         <button
           onClick={toggleSidebar}
-          title={isSidebarCollapsed ? 'توسيع القائمة' : 'طَي القائمة'}
+          title={isSidebarCollapsed ? t('expandMenu') : t('collapseMenu')}
           className={`p-2 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer ${
             isSidebarCollapsed ? 'mx-auto' : ''
           }`}
@@ -139,7 +139,7 @@ export const NavigationRail: React.FC = () => {
         <div className="p-3 border-t border-subtle/60 bg-canvas/40">
           <div className="p-2.5 rounded-xl bg-surface border border-subtle space-y-1">
             <span className="text-[10px] font-bold text-pale-sky-600 dark:text-pale-sky-300 uppercase tracking-wider block">
-              الكتاب الحالي
+              {t('currentBook')}
             </span>
             <p className="text-xs font-bold text-main truncate">{activeBook.title}</p>
             <p className="text-[10px] text-muted truncate">{activeBook.author}</p>

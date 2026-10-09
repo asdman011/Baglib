@@ -5,10 +5,10 @@ import { FileText, BookOpen, Trash2, Highlighter, Calendar } from 'lucide-react'
 import { useWorkspace } from '../context/WorkspaceContext';
 
 export const NotesOverviewView: React.FC = () => {
-  const { bookNotes, deletePageNote, openBookForReading, books, setViewMode } = useWorkspace();
+  const { bookNotes, deletePageNote, openBookForReading, books, setViewMode, t } = useWorkspace();
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-canvas text-main overflow-hidden p-6 font-sans select-none" dir="rtl">
+    <div className="flex-1 flex flex-col h-full bg-canvas text-main overflow-hidden p-6 font-sans select-none">
       {/* Header */}
       <div className="flex items-center justify-between pb-6 border-b border-subtle mb-6">
         <div className="flex items-center gap-3">
@@ -16,8 +16,8 @@ export const NotesOverviewView: React.FC = () => {
             <FileText className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="font-bold text-lg sm:text-xl text-main font-display">سجل الملاحظات الهامشية والتظليلات</h2>
-            <p className="text-xs text-muted">تدويناتك العلمية والتفكرية عبر كتب ومصادر المكتبة ({bookNotes.length})</p>
+            <h2 className="font-bold text-lg sm:text-xl text-main font-display">{t('myNotesTitle')}</h2>
+            <p className="text-xs text-muted">{t('myNotesDesc')} ({bookNotes.length})</p>
           </div>
         </div>
       </div>
@@ -37,12 +37,12 @@ export const NotesOverviewView: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/20">
-                        الصفحة {note.pageNumber}
+                        {t('page')} {note.pageNumber}
                       </span>
                       <button
                         onClick={() => deletePageNote(note.id)}
                         className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-canvas p-1.5 rounded-lg transition-all cursor-pointer"
-                        title="حذف الملاحظة"
+                        title={t('deleteNote')}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -60,7 +60,7 @@ export const NotesOverviewView: React.FC = () => {
                   <div className="pt-3 border-t border-subtle/50 flex items-center justify-between text-xs text-muted">
                     <div className="flex items-center gap-1.5 font-bold text-main truncate max-w-[200px]">
                       <BookOpen className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
-                      <span className="truncate">{matchedBook?.title || 'كتاب محلي'}</span>
+                      <span className="truncate">{matchedBook?.title || t('localBook')}</span>
                     </div>
 
                     {matchedBook && (
@@ -68,7 +68,7 @@ export const NotesOverviewView: React.FC = () => {
                         onClick={() => openBookForReading(matchedBook)}
                         className="px-2.5 py-1 rounded-lg bg-canvas hover:bg-surface border border-subtle text-[11px] font-bold text-amber-600 dark:text-amber-400 cursor-pointer"
                       >
-                        فتح القارئ
+                        {t('openReader')}
                       </button>
                     )}
                   </div>
@@ -82,16 +82,16 @@ export const NotesOverviewView: React.FC = () => {
               <Highlighter className="w-8 h-8 text-amber-500" />
             </div>
             <div className="space-y-1">
-              <h3 className="font-bold text-base text-main font-display">لا توجد ملاحظات مدونة بعد</h3>
+              <h3 className="font-bold text-base text-main font-display">{t('noNotes')}</h3>
               <p className="text-xs text-muted max-w-sm">
-                افتح أي كتاب من المكتبة واستخدم القارئ لتدوين حواشيك وملاحظاتك على صفحات الكتاب.
+                {t('noNotesYetDesc')}
               </p>
             </div>
             <button
               onClick={() => setViewMode('library')}
               className="px-4 py-2 rounded-xl bg-amber-500 text-white font-bold text-xs hover:bg-amber-600 transition-all cursor-pointer shadow-md"
             >
-              الانتقال إلى المكتبة
+              {t('goToLibrary')}
             </button>
           </div>
         )}

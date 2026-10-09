@@ -11,8 +11,10 @@
 
 import type { Migration } from '../migrator';
 import migration001 from './001_initial_schema';
+import migration002 from './002_add_categories';
 
 /** All migrations in chronological order. */
 export const migrations: Migration[] = [
   migration001,
+  migration002,
 ];

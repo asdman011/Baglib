@@ -5,7 +5,7 @@ import { Database, FileText } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 export const StatusBar: React.FC = () => {
-  const { dir, bookNotes } = useWorkspace();
+  const { dir, bookNotes, t } = useWorkspace();
 
   const isRtl = dir === 'rtl';
 
@@ -16,15 +16,15 @@ export const StatusBar: React.FC = () => {
         {/* Total Book Notes Count */}
         <div className="flex items-center gap-1">
           <FileText className="w-3 h-3 text-pale-sky-500" />
-          <span>{bookNotes.length} ملاحظات مدوّنة</span>
+          <span>{bookNotes.length} {t('recordedNotes')}</span>
         </div>
 
         <span className="text-subtle">•</span>
 
         {/* Local Indexing Status */}
-        <div className="flex items-center gap-1.5" title="المكتبة الرقمية والفيزيائية المحلية">
+        <div className="flex items-center gap-1.5" title={t('localLibraryReady')}>
           <Database className="w-3 h-3 text-evergreen-500" />
-          <span>مكتبتك المحلية: جاهزة ومفهرسة</span>
+          <span>{t('localLibraryReady')}</span>
         </div>
       </div>
 
@@ -34,12 +34,12 @@ export const StatusBar: React.FC = () => {
         <div className="hidden md:flex items-center gap-2 text-[10px] text-muted">
           <span className="flex items-center gap-0.5">
             <kbd className="px-1 py-0.2 rounded bg-canvas border border-subtle font-mono">Ctrl+K</kbd>{' '}
-            البحث الشامل
+            {t('globalSearch')}
           </span>
           <span>•</span>
           <span className="flex items-center gap-0.5">
             <kbd className="px-1 py-0.2 rounded bg-canvas border border-subtle font-mono">F11</kbd>{' '}
-            وضع الصفاء والتركيز
+            {t('zenModeShort')}
           </span>
         </div>
       </div>

@@ -17,11 +17,13 @@ export const Titlebar: React.FC = () => {
   const {
     dir,
     theme,
+    lang,
     isZenMode,
     toggleZenMode,
-    toggleDirection,
+    toggleLanguage,
     toggleTheme,
     setCommandPaletteOpen,
+    t,
   } = useWorkspace();
 
   return (
@@ -33,10 +35,7 @@ export const Titlebar: React.FC = () => {
             <BookOpen className="w-4 h-4" />
           </div>
           <HeaderBotanicalAccent />
-          <span className="font-display text-base font-bold text-main tracking-wide">بغلب</span>
-          {/* <div className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 border border-pale-sky-500/20">
-            <span>v0.1.0 Academic</span>
-          </div> */}
+          <span className="font-display text-base font-bold text-main tracking-wide">{t('brand')}</span>
         </div>
       </div>
 
@@ -49,7 +48,7 @@ export const Titlebar: React.FC = () => {
           <div className="flex items-center gap-2">
             <Search className="w-3.5 h-3.5 text-muted group-hover:text-pale-sky-500 transition-colors" />
             <span className="font-sans">
-              البحث الشامل في الكتب والملاحظات والصفحات...
+              {t('searchPlaceholder')}
             </span>
           </div>
           <div className="flex items-center gap-1 text-[10px] font-mono bg-surface border border-subtle px-1.5 py-0.5 rounded text-muted">
@@ -64,7 +63,7 @@ export const Titlebar: React.FC = () => {
         {/* Zen Mode Button */}
         <button
           onClick={toggleZenMode}
-          title="وضع التركيز والصفاء (F11)"
+          title={t('toggleZenMode')}
           className={`p-1.5 rounded-lg transition-all ${isZenMode
             ? 'bg-pale-sky-500 text-white shadow-md shadow-pale-sky-500/20'
             : 'text-muted hover:text-main hover:bg-canvas'
@@ -73,20 +72,20 @@ export const Titlebar: React.FC = () => {
           <Eye className="w-4 h-4" />
         </button>
 
-        {/* Direction Switcher (RTL / LTR) */}
+        {/* Language Switcher (AR / EN) */}
         <button
-          onClick={toggleDirection}
-          title="تغيير الاتجاه (RTL / LTR)"
+          onClick={toggleLanguage}
+          title={t('toggleLanguage')}
           className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-canvas transition-colors flex items-center gap-1 text-xs font-bold font-sans"
         >
           <Globe className="w-4 h-4" />
-          <span className="uppercase text-[10px]">{dir}</span>
+          <span className="uppercase text-[10px]">{lang === 'ar' ? 'EN' : 'AR'}</span>
         </button>
 
         {/* Theme Switcher */}
         <button
           onClick={toggleTheme}
-          title="تغيير المظهر (داكن/فاتح)"
+          title={t('toggleTheme')}
           className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-canvas transition-colors"
         >
           {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-pale-sky-700" />}

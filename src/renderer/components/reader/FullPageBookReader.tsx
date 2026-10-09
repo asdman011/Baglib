@@ -36,6 +36,7 @@ export const FullPageBookReader: React.FC = () => {
     addPageNote,
     deletePageNote,
     addHighlight,
+    t,
   } = useWorkspace();
 
   const [selectedText, setSelectedText] = useState('');
@@ -165,19 +166,19 @@ export const FullPageBookReader: React.FC = () => {
 
   if (!activeBook) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-canvas text-main font-sans text-center space-y-4" dir="rtl">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-canvas text-main font-sans text-center space-y-4">
         <div className="w-16 h-16 rounded-3xl bg-surface border border-subtle flex items-center justify-center text-muted">
           <BookOpen className="w-8 h-8 text-pale-sky-500" />
         </div>
         <div className="space-y-1">
-          <h2 className="font-bold text-lg text-main font-display">لم يتم تحديد أي كتاب للقراءة</h2>
-          <p className="text-xs text-muted max-w-sm">اختر كتاباً من مكتبتك الخاصة للبدء في قراءته وتدوين الملاحظات.</p>
+          <h2 className="font-bold text-lg text-main font-display">{t('noBookSelected')}</h2>
+          <p className="text-xs text-muted max-w-sm">{t('noBookSelectedDesc')}</p>
         </div>
         <button
           onClick={closeReaderToLibrary}
           className="px-4 py-2 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-md transition-all cursor-pointer"
         >
-          الانتقال إلى المكتبة
+          {t('goToLibrary')}
         </button>
       </div>
     );
@@ -205,7 +206,7 @@ export const FullPageBookReader: React.FC = () => {
     addPageNote({
       pageNumber: safePage,
       highlightedText: selectedText,
-      content: `تظليل نص: "${selectedText}"`,
+      content: `${t('selectedQuote').replace('"{text}"', `"${selectedText}"`)}`,
     });
     setSelectedText('');
   };
@@ -216,7 +217,7 @@ export const FullPageBookReader: React.FC = () => {
     addPageNote({
       pageNumber: safePage,
       highlightedText: selectedText,
-      content: `تعليق على النص: "${selectedText}"`,
+      content: `${t('selectedQuote').replace('"{text}"', `"${selectedText}"`)}`,
     });
     setSelectedText('');
   };
@@ -248,12 +249,12 @@ export const FullPageBookReader: React.FC = () => {
       <div className="p-3.5 border-b border-subtle flex items-center justify-between bg-canvas/40">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-pale-sky-500" />
-          <h3 className="font-bold text-main text-xs">ملاحظات «{activeBook.title}»</h3>
+          <h3 className="font-bold text-main text-xs">{t('notesForBook').replace('{title}', activeBook.title)}</h3>
         </div>
         <button
           onClick={() => setSplitOrientation('none')}
           className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main cursor-pointer"
-          title="إغلاق لوحة الملاحظات"
+          title={t('closeNotesPanel')}
         >
           <X className="w-4 h-4" />
         </button>
@@ -269,7 +270,7 @@ export const FullPageBookReader: React.FC = () => {
               : 'text-muted hover:text-main'
           }`}
         >
-          الصفحة {noteTargetPage} ({currentPageNotes.length})
+          {t('pageFilter').replace('{page}', noteTargetPage.toString()).replace('{count}', currentPageNotes.length.toString())}
         </button>
         <button
           onClick={() => setFilterMode('all_pages')}
@@ -279,7 +280,7 @@ export const FullPageBookReader: React.FC = () => {
               : 'text-muted hover:text-main'
           }`}
         >
-          كل الملاحظات ({bookNotes.length})
+          {t('allNotesFilter').replace('{count}', bookNotes.length.toString())}
         </button>
       </div>
 
@@ -287,7 +288,7 @@ export const FullPageBookReader: React.FC = () => {
       <div className="p-3 border-b border-subtle space-y-2.5 bg-canvas/30">
         {selectedText && (
           <div className="p-2 rounded-xl bg-pale-sky-500/10 border border-pale-sky-500/20 text-[11px] text-pale-sky-700 dark:text-pale-sky-300 font-serif">
-            الاقتباس المحدد: "{selectedText}"
+            {t('selectedQuote').replace('{text}', selectedText)}
           </div>
         )}
 
@@ -295,7 +296,7 @@ export const FullPageBookReader: React.FC = () => {
         <div className="flex items-center justify-between text-xs bg-surface p-1.5 rounded-xl border border-subtle">
           <span className="font-bold text-muted text-[11px] flex items-center gap-1">
             <Hash className="w-3.5 h-3.5 text-pale-sky-500" />
-            رقم الصفحة (من 1 إلى {maxBookPages}):
+            {t('pageNumber').replace('{max}', maxBookPages.toString())}
           </span>
 
           <div className="flex items-center gap-1">
@@ -334,7 +335,7 @@ export const FullPageBookReader: React.FC = () => {
         <textarea
           value={newNoteText}
           onChange={(e) => setNewNoteText(e.target.value)}
-          placeholder={`أضف ملاحظتك على صفحة ${noteTargetPage}...`}
+          placeholder={t('addNotePlaceholder').replace('{page}', noteTargetPage.toString())}
           className="w-full h-16 p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-pale-sky-500 font-sans resize-none"
         />
 
@@ -343,7 +344,7 @@ export const FullPageBookReader: React.FC = () => {
           className="w-full py-2 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>حفظ الملاحظة على صفحة {noteTargetPage}</span>
+          <span>{t('saveNote').replace('{page}', noteTargetPage.toString())}</span>
         </button>
       </div>
 
@@ -365,7 +366,7 @@ export const FullPageBookReader: React.FC = () => {
                   className="text-[10px] px-2.5 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-700 dark:text-pale-sky-300 font-bold border border-pale-sky-500/20 hover:bg-pale-sky-500/20 transition-all cursor-pointer flex items-center gap-1"
                 >
                   <Hash className="w-3 h-3" />
-                  <span>الصفحة {note.pageNumber}</span>
+                  <span>{t('page')} {note.pageNumber}</span>
                 </button>
                 <button
                   onClick={() => deletePageNote(note.id)}
@@ -390,7 +391,7 @@ export const FullPageBookReader: React.FC = () => {
           ))
         ) : (
           <div className="p-8 text-center text-muted text-xs">
-            لا توجد ملاحظات مدونة بعد على هذا الكتاب.
+            {t('noNotesYet')}
           </div>
         )}
       </div>
@@ -398,7 +399,7 @@ export const FullPageBookReader: React.FC = () => {
   );
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-canvas text-main overflow-hidden font-sans select-none" dir="rtl">
+    <div className="flex-1 flex flex-col h-full bg-canvas text-main overflow-hidden font-sans select-none">
       {/* Top Header Bar */}
       <header className="h-14 bg-surface border-b border-subtle flex items-center justify-between px-4 z-20 shrink-0 gap-2">
         {/* Left Actions: Back to Library */}
@@ -408,7 +409,7 @@ export const FullPageBookReader: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-bold transition-all cursor-pointer"
           >
             <ArrowRight className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
-            <span>العودة للمكتبة</span>
+            <span>{t('backToLibrary')}</span>
           </button>
 
           <div className="h-4 w-px bg-subtle hidden sm:block" />
@@ -436,7 +437,7 @@ export const FullPageBookReader: React.FC = () => {
             }`}
           >
             <Eye className="w-3.5 h-3.5" />
-            <span>عرض النص والتظليل (ترافيقي)</span>
+            <span>{t('readerViewText')}</span>
           </button>
 
           <button
@@ -448,7 +449,7 @@ export const FullPageBookReader: React.FC = () => {
             }`}
           >
             <FileCode className="w-3.5 h-3.5" />
-            <span>معاينة PDF الخام</span>
+            <span>{t('readerViewPdf')}</span>
           </button>
         </div>
 
@@ -456,7 +457,7 @@ export const FullPageBookReader: React.FC = () => {
         <div className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle text-xs">
           <button
             onClick={() => setSplitOrientation('none')}
-            title="قارئ كامل (بدون ملاحظات)"
+            title={t('splitFullReader')}
             className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
               splitOrientation === 'none'
                 ? 'bg-pale-sky-500 text-white shadow-sm'
@@ -464,12 +465,12 @@ export const FullPageBookReader: React.FC = () => {
             }`}
           >
             <Maximize2 className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">قارئ كامل</span>
+            <span className="hidden lg:inline">{t('splitFullReader')}</span>
           </button>
 
           <button
             onClick={() => setSplitOrientation('vertical')}
-            title="انقسام عمودي (الكتاب بجانب الملاحظات)"
+            title={t('splitVertical')}
             className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
               splitOrientation === 'vertical'
                 ? 'bg-pale-sky-500 text-white shadow-sm'
@@ -477,12 +478,12 @@ export const FullPageBookReader: React.FC = () => {
             }`}
           >
             <Columns2 className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">انقسام عمودي</span>
+            <span className="hidden lg:inline">{t('splitVertical')}</span>
           </button>
 
           <button
             onClick={() => setSplitOrientation('horizontal')}
-            title="انقسام أفقي (الكتاب فوق الملاحظات)"
+            title={t('splitHorizontal')}
             className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
               splitOrientation === 'horizontal'
                 ? 'bg-pale-sky-500 text-white shadow-sm'
@@ -490,7 +491,7 @@ export const FullPageBookReader: React.FC = () => {
             }`}
           >
             <Rows2 className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">انقسام أفقي</span>
+            <span className="hidden lg:inline">{t('splitHorizontal')}</span>
           </button>
         </div>
       </header>
@@ -522,7 +523,7 @@ export const FullPageBookReader: React.FC = () => {
                     </button>
 
                     <span className="font-bold text-main font-sans">
-                      صفحة {readingPage} من {maxBookPages}
+                      {t('page')} {readingPage} / {maxBookPages}
                     </span>
 
                     <button
@@ -547,7 +548,7 @@ export const FullPageBookReader: React.FC = () => {
                       className="px-2.5 py-1 rounded-xl bg-pale-sky-500 text-white font-bold hover:bg-pale-sky-600 transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       <Highlighter className="w-3.5 h-3.5" />
-                      <span>تظليل النص</span>
+                      <span>{t('highlightTextBtn')}</span>
                     </button>
 
                     <button
@@ -555,7 +556,7 @@ export const FullPageBookReader: React.FC = () => {
                       className="px-2.5 py-1 rounded-xl bg-evergreen-500 text-white font-bold hover:bg-evergreen-600 transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
-                      <span>ربط بالملاحظات</span>
+                      <span>{t('linkToNotesBtn')}</span>
                     </button>
 
                     <button
@@ -572,7 +573,7 @@ export const FullPageBookReader: React.FC = () => {
                   {isExtractingText ? (
                     <div className="h-64 flex flex-col items-center justify-center text-muted gap-3">
                       <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
-                      <span className="text-xs font-bold font-sans">جاري فحص واستخراج نص الكتاب...</span>
+                      <span className="text-xs font-bold font-sans">{t('extractingText')}</span>
                     </div>
                   ) : extractionFailed || !activePageText ? (
                     <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
@@ -580,12 +581,12 @@ export const FullPageBookReader: React.FC = () => {
                         <AlertCircle className="w-8 h-8" />
                       </div>
                       <div className="space-y-2 max-w-md">
-                        <h3 className="font-bold text-base text-main font-display">تم اكتشاف كتاب مصور ضوئياً (Scanned PDF)</h3>
+                        <h3 className="font-bold text-base text-main font-display">{t('scannedPdfDetected')}</h3>
                         <p className="text-xs text-muted leading-relaxed font-sans">
-                          تم فحص هذا الكتاب ({scannedInfo ? `${scannedInfo.numPages} صفحة` : 'الملف المحدد'}) وتبين أنه يتكون من صور صفحات ممسوخة ضوئياً مع علامات مائية فقط ({scannedInfo?.totalChars || 0} حرف إجمالي).
+                          {t('scannedPdfDesc1').replace('{pages}', scannedInfo ? scannedInfo.numPages.toString() : '1').replace('{chars}', (scannedInfo?.totalChars || 0).toString())}
                         </p>
                         <p className="text-xs text-muted leading-relaxed font-sans">
-                          تم توجيهك تلقائياً لمعاينة PDF الخام لقراءة كافة الصفحات بالكامل وتدوين الملاحظات.
+                          {t('scannedPdfDesc2')}
                         </p>
                       </div>
                       <button
@@ -593,7 +594,7 @@ export const FullPageBookReader: React.FC = () => {
                         className="px-5 py-2.5 rounded-2xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-md transition-all flex items-center gap-2 cursor-pointer"
                       >
                         <FileCode className="w-4 h-4" />
-                        <span>الانتقال لمعاينة PDF الخام</span>
+                        <span>{t('goToNativePdf')}</span>
                       </button>
                     </div>
                   ) : (
@@ -611,9 +612,9 @@ export const FullPageBookReader: React.FC = () => {
                 <div className="pt-4 border-t border-subtle/50 flex items-center justify-between text-xs text-muted font-serif shrink-0">
                   <span className="flex items-center gap-1 text-[11px] text-pale-sky-600 dark:text-pale-sky-300 font-sans">
                     <Sparkles className="w-3 h-3" />
-                    حدد أي نص بالسحب للتظليل وإضافة ملاحظة
+                    {t('highlightHint')}
                   </span>
-                  <span>- الصفحة {readingPage} -</span>
+                  <span>{t('pageText').replace('{page}', readingPage.toString())}</span>
                 </div>
               </div>
             ) : (
@@ -622,7 +623,7 @@ export const FullPageBookReader: React.FC = () => {
                 {isLoadingPdf ? (
                   <div className="w-full h-full bg-surface flex flex-col items-center justify-center text-muted gap-2">
                     <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
-                    <span className="text-xs font-bold">جاري تحميل ملف PDF الأصلي...</span>
+                    <span className="text-xs font-bold">{t('loadingNativePdf')}</span>
                   </div>
                 ) : pdfBlobUrl ? (
                   <iframe
@@ -633,7 +634,7 @@ export const FullPageBookReader: React.FC = () => {
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-muted text-xs p-6 space-y-3">
                     <FileText className="w-10 h-10 text-subtle" />
-                    <p className="font-bold text-main">لم يتم العثور على مسار PDF محلي لهذا الكتاب.</p>
+                    <p className="font-bold text-main">{t('noLocalPdf')}</p>
                   </div>
                 )}
               </div>

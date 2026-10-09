@@ -30,6 +30,7 @@ export interface BookItem {
   // Categorization
   language: 'العربية' | 'English' | string;
   categories: string[];
+  primaryCategory?: { id: string; nameAr: string; nameEn: string; } | null;
   tags: string[];
   
   // Physical Metadata

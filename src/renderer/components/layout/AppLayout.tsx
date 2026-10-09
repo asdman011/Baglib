@@ -14,7 +14,7 @@ import { Settings } from 'lucide-react';
 import { BotanicalVineLeft, BotanicalVineRight } from '../decorations/BotanicalIllustrations';
 
 export const AppLayout: React.FC = () => {
-  const { dir, viewMode } = useWorkspace();
+  const { dir, viewMode, t } = useWorkspace();
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-main select-none font-sans relative" dir={dir}>
@@ -40,10 +40,10 @@ export const AppLayout: React.FC = () => {
           {viewMode === 'reader' && <FullPageBookReader />}
           {viewMode === 'notes' && <NotesOverviewView />}
           {viewMode === 'settings' && (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted font-sans space-y-3" dir="rtl">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted font-sans space-y-3">
               <Settings className="w-10 h-10 text-pale-sky-500" />
-              <h2 className="font-bold text-lg text-main font-display">إعدادات المنصة والتفضيلات</h2>
-              <p className="text-xs text-muted max-w-sm">هذا القسم مهيأ لإدارة الخطوط الحرة، أنماط العرض، والمزامنة في التحديثات القادمة.</p>
+              <h2 className="font-bold text-lg text-main font-display">{t('settingsTitle')}</h2>
+              <p className="text-xs text-muted max-w-sm">{t('settingsDesc')}</p>
             </div>
           )}
         </main>

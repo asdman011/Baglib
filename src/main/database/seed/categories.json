@@ -1,8 +1,191 @@
 [
-  { "name": "التاريخ", "description": "كتب تاريخية" },
-  { "name": "الاجتماع", "description": "علم الاجتماع والعمران البشري" },
-  { "name": "اللغة العربية", "description": "علوم اللغة العربية" },
-  { "name": "معاجم", "description": "القواميس والمعاجم" },
-  { "name": "History", "description": "Historical Books" },
-  { "name": "Sociology", "description": "Sociology Books" }
+  {
+    "id": "islamic-sciences",
+    "parent_id": null,
+    "name_ar": "العلوم الشرعية والتراث الإسلامي",
+    "name_en": "Islamic Sciences & Heritage",
+    "display_order": 10
+  },
+  {
+    "id": "islamic-quran",
+    "parent_id": "islamic-sciences",
+    "name_ar": "القرآن الكريم وعلومه",
+    "name_en": "The Holy Quran & Its Sciences",
+    "display_order": 11
+  },
+  {
+    "id": "islamic-tafsir",
+    "parent_id": "islamic-sciences",
+    "name_ar": "التفسير وعلوم التأويل",
+    "name_en": "Quranic Exegesis / Tafsir",
+    "display_order": 12
+  },
+  {
+    "id": "islamic-tajweed",
+    "parent_id": "islamic-sciences",
+    "name_ar": "القراءات والتجويد",
+    "name_en": "Recitations & Tajweed",
+    "display_order": 13
+  },
+  {
+    "id": "islamic-hadith",
+    "parent_id": "islamic-sciences",
+    "name_ar": "الحديث الشريف وعلومه",
+    "name_en": "Hadith & Prophetic Tradition",
+    "display_order": 20
+  },
+  {
+    "id": "islamic-hadith-mutun",
+    "parent_id": "islamic-hadith",
+    "name_ar": "متون الحديث والمصنفات",
+    "name_en": "Hadith Compilations",
+    "display_order": 21
+  },
+  {
+    "id": "islamic-hadith-shuruh",
+    "parent_id": "islamic-hadith",
+    "name_ar": "شروح الحديث",
+    "name_en": "Hadith Commentaries",
+    "display_order": 22
+  },
+  {
+    "id": "islamic-mustalah",
+    "parent_id": "islamic-hadith",
+    "name_ar": "مصطلح الحديث ورجاله",
+    "name_en": "Hadith Methodology & Rijal",
+    "display_order": 23
+  },
+  {
+    "id": "islamic-aqeedah",
+    "parent_id": "islamic-sciences",
+    "name_ar": "العقيدة والفرق",
+    "name_en": "Theology & Creeds / Aqeedah",
+    "display_order": 30
+  },
+  {
+    "id": "islamic-fiqh",
+    "parent_id": "islamic-sciences",
+    "name_ar": "الفقه الإسلامي",
+    "name_en": "Islamic Jurisprudence / Fiqh",
+    "display_order": 40
+  },
+  {
+    "id": "islamic-fiqh-hanafi",
+    "parent_id": "islamic-fiqh",
+    "name_ar": "الفقه الحنفي",
+    "name_en": "Hanafi Fiqh",
+    "display_order": 41
+  },
+  {
+    "id": "islamic-fiqh-maliki",
+    "parent_id": "islamic-fiqh",
+    "name_ar": "الفقه المالكي",
+    "name_en": "Maliki Fiqh",
+    "display_order": 42
+  },
+  {
+    "id": "islamic-fiqh-shafii",
+    "parent_id": "islamic-fiqh",
+    "name_ar": "الفقه الشافعي",
+    "name_en": "Shafi'i Fiqh",
+    "display_order": 43
+  },
+  {
+    "id": "islamic-fiqh-hanbali",
+    "parent_id": "islamic-fiqh",
+    "name_ar": "الفقه الحنبلي",
+    "name_en": "Hanbali Fiqh",
+    "display_order": 44
+  },
+  {
+    "id": "islamic-muamalat",
+    "parent_id": "islamic-sciences",
+    "name_ar": "فقه المعاملات والمالية",
+    "name_en": "Islamic Commercial Law",
+    "display_order": 50
+  },
+  {
+    "id": "islamic-usul",
+    "parent_id": "islamic-sciences",
+    "name_ar": "أصول الفقه والقواعد الفقهية",
+    "name_en": "Legal Principles & Maxims",
+    "display_order": 60
+  },
+  {
+    "id": "islamic-sirah",
+    "parent_id": "islamic-sciences",
+    "name_ar": "السيرة والتاريخ الإسلامي",
+    "name_en": "Prophetic Sirah & History",
+    "display_order": 70
+  },
+  {
+    "id": "islamic-arabic",
+    "parent_id": "islamic-sciences",
+    "name_ar": "اللغة العربية وآدابها",
+    "name_en": "Arabic Language & Literature",
+    "display_order": 80
+  },
+  {
+    "id": "academic-general",
+    "parent_id": null,
+    "name_ar": "العلوم العامة والأكاديمية",
+    "name_en": "General Academic Disciplines",
+    "display_order": 100
+  },
+  {
+    "id": "academic-social",
+    "parent_id": "academic-general",
+    "name_ar": "العلوم الاجتماعية والإنسانية",
+    "name_en": "Social Sciences & Humanities",
+    "display_order": 110
+  },
+  {
+    "id": "academic-sociology",
+    "parent_id": "academic-social",
+    "name_ar": "علم الاجتماع والأنثروبولوجيا",
+    "name_en": "Sociology & Anthropology",
+    "display_order": 111
+  },
+  {
+    "id": "academic-economics",
+    "parent_id": "academic-social",
+    "name_ar": "الاقتصاد والعلوم المالية",
+    "name_en": "Economics & Finance",
+    "display_order": 112
+  },
+  {
+    "id": "academic-history",
+    "parent_id": "academic-social",
+    "name_ar": "التاريخ العام والحضارة",
+    "name_en": "World History",
+    "display_order": 113
+  },
+  {
+    "id": "academic-stem",
+    "parent_id": "academic-general",
+    "name_ar": "العلوم الطبيعية والتقنية",
+    "name_en": "Natural Sciences & Technology",
+    "display_order": 120
+  },
+  {
+    "id": "academic-cs",
+    "parent_id": "academic-stem",
+    "name_ar": "علوم الحاسوب وهندسة البرمجيات",
+    "name_en": "Computer Science & Software",
+    "display_order": 121
+  },
+  {
+    "id": "academic-math",
+    "parent_id": "academic-stem",
+    "name_ar": "الرياضيات والإحصاء",
+    "name_en": "Mathematics & Statistics",
+    "display_order": 122
+  },
+  {
+    "id": "academic-medicine",
+    "parent_id": "academic-general",
+    "name_ar": "الطب والعلوم الصحية",
+    "name_en": "Medicine & Health Sciences",
+    "display_order": 130
+  }
 ]

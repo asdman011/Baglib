@@ -2,9 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BookItem } from '../../types/library';
+import { translations, TranslationKey } from '../../translations';
 
 export type LayoutDirection = 'rtl' | 'ltr';
 export type ThemeMode = 'dark' | 'light';
+export type LanguageMode = 'ar' | 'en';
 export type SplitOrientationMode = 'vertical' | 'horizontal' | 'none' | 'full_notes';
 
 export interface PageNote {
@@ -19,6 +21,7 @@ export interface PageNote {
 export interface WorkspaceState {
   dir: LayoutDirection;
   theme: ThemeMode;
+  lang: LanguageMode;
   isCommandPaletteOpen: boolean;
   isZenMode: boolean;
   isSidebarCollapsed: boolean;
@@ -41,10 +44,12 @@ export interface WorkspaceState {
 interface WorkspaceContextType extends WorkspaceState {
   toggleDirection: () => void;
   toggleTheme: () => void;
+  toggleLanguage: () => void;
   toggleZenMode: () => void;
   toggleSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setViewMode: (mode: 'library' | 'categories' | 'reader' | 'notes' | 'settings') => void;
+  t: (key: TranslationKey) => string;
   
   // Book Library Management
   addBook: (book: BookItem) => void;
@@ -65,6 +70,7 @@ interface WorkspaceContextType extends WorkspaceState {
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [lang, setLang] = useState<LanguageMode>('ar');
   const [dir, setDir] = useState<LayoutDirection>('rtl');
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -83,6 +89,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const [bookNotes, setBookNotes] = useState<PageNote[]>([]);
   const [highlights, setHighlights] = useState<{ id: string; pageNumber: number; text: string; color: string }[]>([]);
+
+  const toggleLanguage = () => {
+    setLang((prev) => {
+      const nextLang = prev === 'ar' ? 'en' : 'ar';
+      setDir(nextLang === 'ar' ? 'rtl' : 'ltr');
+      return nextLang;
+    });
+  };
+
+  const t = (key: TranslationKey): string => {
+    return translations[lang][key] || key;
+  };
 
   const toggleDirection = () => setDir((prev) => (prev === 'rtl' ? 'ltr' : 'rtl'));
   const toggleZenMode = () => setIsZenMode((prev) => !prev);
@@ -250,6 +268,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       value={{
         dir,
         theme,
+        lang,
         isCommandPaletteOpen,
         isZenMode,
         isSidebarCollapsed,
@@ -263,6 +282,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         viewMode,
         toggleDirection,
         toggleTheme,
+        toggleLanguage,
+        t,
         toggleZenMode,
         toggleSidebar,
         setCommandPaletteOpen: setIsCommandPaletteOpen,

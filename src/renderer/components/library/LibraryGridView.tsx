@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   BookOpen,
   Search,
@@ -27,7 +27,7 @@ import { StorageManagerModal } from './StorageManagerModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 export const LibraryGridView: React.FC = () => {
-  const { books, addBook, deleteBook, openBookForReading } = useWorkspace();
+  const { books, addBook, deleteBook, openBookForReading, t, lang } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Scalable Filter States
@@ -46,12 +46,29 @@ export const LibraryGridView: React.FC = () => {
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
 
-  // Dynamically extract categories & tags from user's actual library books
-  const uniqueCategories = useMemo(() => {
-    const set = new Set<string>();
-    books.forEach((b) => b.categories?.forEach((c) => set.add(c)));
-    return Array.from(set);
-  }, [books]);
+  // Fetch all categories for filter and modal
+  const [allCategories, setAllCategories] = useState<{ id: string, nameAr: string, nameEn: string }[]>([]);
+  useEffect(() => {
+    async function fetchCats() {
+      if (typeof window !== 'undefined' && window.electronAPI) {
+        try {
+          const tree = await window.electronAPI.getCategoryTree() as any[];
+          const flat: { id: string, nameAr: string, nameEn: string }[] = [];
+          const flatten = (nodes: any[]) => {
+            for (const n of nodes) {
+              flat.push({ id: n.id, nameAr: n.nameAr, nameEn: n.nameEn });
+              if (n.children && n.children.length > 0) flatten(n.children);
+            }
+          };
+          flatten(tree);
+          setAllCategories(flat);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    fetchCats();
+  }, []);
 
   const uniqueTags = useMemo(() => {
     const set = new Set<string>();
@@ -72,7 +89,10 @@ export const LibraryGridView: React.FC = () => {
           (b.room && b.room.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (b.isbn && b.isbn.includes(searchQuery)) ||
           b.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          b.categories.some((c) => c.toLowerCase().includes(searchQuery.toLowerCase()));
+          (b.primaryCategory && (
+            b.primaryCategory.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            b.primaryCategory.nameEn.toLowerCase().includes(searchQuery.toLowerCase())
+          ));
 
         if (!matchesSearch) return false;
 
@@ -85,7 +105,7 @@ export const LibraryGridView: React.FC = () => {
         if (selectedFormat !== 'ALL' && b.digitalFormat !== selectedFormat) return false;
 
         // 4. Category filter
-        if (selectedCategory !== 'ALL' && !b.categories.includes(selectedCategory)) return false;
+        if (selectedCategory !== 'ALL' && b.primaryCategory?.id !== selectedCategory) return false;
 
         // 5. Tag filter
         if (selectedTag !== 'ALL' && !b.tags.includes(selectedTag)) return false;
@@ -169,7 +189,7 @@ export const LibraryGridView: React.FC = () => {
       const newDigitalBook: BookItem = {
         id: `book-local-${Date.now()}`,
         title: fileName,
-        author: 'مؤلف غير محدد',
+        author: t('noAuthor'),
         digitalFormat: ext as any,
         bookType: 'digital',
         filePath: fullPath,
@@ -200,7 +220,7 @@ export const LibraryGridView: React.FC = () => {
     const newDigitalBook: BookItem = {
       id: `book-local-${Date.now()}`,
       title: fileName,
-      author: 'مؤلف غير محدد',
+      author: t('noAuthor'),
       digitalFormat: ext as any,
       bookType: 'digital',
       filePath,
@@ -219,7 +239,7 @@ export const LibraryGridView: React.FC = () => {
     const imported: BookItem = {
       id: `book-${Date.now()}`,
       title: partialBook.title || 'كتاب مستورد',
-      author: partialBook.author || 'غير معروف',
+      author: partialBook.author || t('noAuthor'),
       publisher: partialBook.publisher,
       digitalFormat: partialBook.digitalFormat || 'PDF',
       bookType: 'digital',
@@ -233,7 +253,7 @@ export const LibraryGridView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-canvas overflow-hidden font-sans select-none" dir="rtl">
+    <div className="flex-1 flex flex-col h-full bg-canvas overflow-hidden font-sans select-none">
       {/* Hidden Native Fallback File Input */}
       <input
         type="file"
@@ -251,8 +271,8 @@ export const LibraryGridView: React.FC = () => {
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-bold text-main text-base font-display">المكتبة العلمية والشخصية</h2>
-              <p className="text-xs text-muted">إدارة وتقسيم كتبك الفيزيائية والدراسات الرقمية بمرونة كاملة</p>
+              <h2 className="font-bold text-main text-base font-display">{t('libraryTitle')}</h2>
+              <p className="text-xs text-muted">{t('libraryDesc')}</p>
             </div>
           </div>
 
@@ -292,7 +312,7 @@ export const LibraryGridView: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle text-main text-xs font-bold hover:bg-surface transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>إضافة كتاب يدوي</span>
+              <span>{t('addBook')}</span>
             </button>
           </div>
         </div>
@@ -359,10 +379,10 @@ export const LibraryGridView: React.FC = () => {
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs truncate"
                 >
-                  <option value="ALL">التصنيفات: الكل</option>
-                  {uniqueCategories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
+                  <option value="ALL">{t('allCategories')}</option>
+                  {allCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {lang === 'ar' ? cat.nameAr : cat.nameEn}
                     </option>
                   ))}
                 </select>
@@ -449,9 +469,9 @@ export const LibraryGridView: React.FC = () => {
               <FolderOpen className="w-12 h-12" />
             </div>
             <div className="space-y-2">
-              <h3 className="font-bold text-xl text-main font-display">مرحباً بك في مكتبتك البحثية</h3>
+              <h3 className="font-bold text-xl text-main font-display">{t('emptyLibraryTitle')}</h3>
               <p className="text-xs text-muted leading-relaxed">
-                لم تقم بإضافة كتب حتى الآن. يمكنك اختيار ملف كتاب (PDF, EPUB, MOBI, TXT) من حاسوبك لقراءته فوراً وتدوين الملاحظات والتظليلات، أو إضافة سجلات كتبك الفيزيائية.
+                {t('emptyLibraryDesc')}
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -467,7 +487,7 @@ export const LibraryGridView: React.FC = () => {
                 className="px-5 py-3 rounded-2xl bg-surface border border-subtle text-main font-bold text-xs hover:bg-canvas transition-all flex items-center gap-2 cursor-pointer"
               >
                 <PlusCircle className="w-4 h-4" />
-                <span>إضافة كتاب يدوي</span>
+                <span>{t('addBook')}</span>
               </button>
             </div>
           </div>
@@ -485,7 +505,7 @@ export const LibraryGridView: React.FC = () => {
                   {/* Format / Lending Badges Top */}
                   <div className="flex items-center justify-between z-10">
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 font-bold border border-pale-sky-500/20 font-mono">
-                      {book.digitalFormat || 'فيزيائي'}
+                      {book.digitalFormat || t('physicalBook')}
                     </span>
 
                     {activeLend ? (
@@ -529,11 +549,11 @@ export const LibraryGridView: React.FC = () => {
 
                     {/* Categories & Tags Preview */}
                     <div className="flex flex-wrap items-center gap-1 pt-1">
-                      {book.categories.slice(0, 2).map((cat) => (
-                        <span key={cat} className="text-[10px] px-1.5 py-0.5 rounded bg-canvas border border-subtle text-muted">
-                          {cat}
+                      {book.primaryCategory && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-canvas border border-subtle text-muted">
+                          {lang === 'ar' ? book.primaryCategory.nameAr : book.primaryCategory.nameEn}
                         </span>
-                      ))}
+                      )}
                       {book.tags.slice(0, 2).map((tag) => (
                         <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
                           {tag}
@@ -551,14 +571,13 @@ export const LibraryGridView: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Action Buttons */}
                     <div className="flex items-center gap-2 pt-1">
                       <button
                         onClick={() => openBookForReading(book)}
                         className="flex-1 py-1.5 rounded-xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer"
                       >
                         <BookOpen className="w-3.5 h-3.5" />
-                        <span>قراءة الكتاب</span>
+                        <span>{t('readBook')}</span>
                       </button>
 
                       <button
@@ -584,9 +603,9 @@ export const LibraryGridView: React.FC = () => {
               <Search className="w-10 h-10" />
             </div>
             <div className="space-y-1">
-              <h3 className="font-bold text-lg text-main font-display">لم يتم العثور على كتب تطابق الفلاتر</h3>
+              <h3 className="font-bold text-lg text-main font-display">{t('emptySearchTitle')}</h3>
               <p className="text-xs text-muted max-w-md">
-                جرّب تعديل مصطلحات البحث أو إعادة ضبط الفلاتر المحددة للوصول إلى كتب ومخطوطات مكتبتك.
+                {t('emptySearchDesc')}
               </p>
             </div>
             {hasActiveFilters && (
@@ -606,6 +625,7 @@ export const LibraryGridView: React.FC = () => {
       <BookDetailModal
         book={selectedBook}
         isOpen={isDetailModalOpen}
+        allCategories={allCategories}
         onClose={() => setIsDetailModalOpen(false)}
         onSave={handleSaveBook}
         onDelete={handleDeleteBook}

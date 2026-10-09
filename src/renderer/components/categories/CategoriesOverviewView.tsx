@@ -1,76 +1,119 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { Layers, Book } from 'lucide-react';
+import { Layers, ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react';
+import type { CategoryNode } from '../../../shared/types/category';
 
-export const CategoriesOverviewView: React.FC = () => {
-  const { books, setViewMode } = useWorkspace();
+const CategoryNodeItem: React.FC<{ node: CategoryNode, depth?: number }> = ({ node, depth = 0 }) => {
+  const { books, lang, dir } = useWorkspace();
+  const [isExpanded, setIsExpanded] = useState(depth === 0);
 
-  const categories = useMemo(() => {
-    const map = new Map<string, typeof books>();
-    books.forEach(b => {
-      if (!b.categories || b.categories.length === 0) return;
-      b.categories.forEach(c => {
-        if (!map.has(c)) map.set(c, []);
-        map.get(c)!.push(b);
-      });
-    });
-    return Array.from(map.entries()).sort((a, b) => b[1].length - a[1].length);
-  }, [books]);
+  const name = lang === 'ar' ? node.nameAr : node.nameEn;
+  
+  const catBooks = useMemo(() => {
+    return books.filter(b => b.primaryCategory?.id === node.id);
+  }, [books, node.id]);
+
+  const hasChildren = node.children && node.children.length > 0;
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-canvas/30 overflow-y-auto p-6 space-y-6" dir="rtl">
+    <div className="flex flex-col">
+      <div 
+        className={`flex items-center gap-3 py-2.5 px-4 rounded-xl transition-all cursor-pointer select-none group 
+          ${depth === 0 ? 'mt-3 bg-surface border border-subtle shadow-sm hover:border-pale-sky-500/50' : 'hover:bg-subtle/40'}`}
+        style={{ marginInlineStart: depth > 0 ? `${depth * 12}px` : '0px' }}
+        onClick={() => {
+          if (hasChildren) setIsExpanded(!isExpanded);
+        }}
+      >
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+          depth === 0 
+            ? 'bg-pale-sky-500/10 text-pale-sky-500' 
+            : 'bg-subtle/50 text-muted group-hover:bg-pale-sky-500/20 group-hover:text-pale-sky-500'
+        }`}>
+          {hasChildren ? (
+            isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />
+          ) : (
+            <Layers className="w-4 h-4" />
+          )}
+        </div>
+        
+        <div className="flex-1 flex flex-col justify-center">
+          <span className={`font-display font-bold ${depth === 0 ? 'text-[15px]' : 'text-sm'} text-main`}>{name}</span>
+          {catBooks.length > 0 && (
+            <span className="text-[11px] text-muted font-sans mt-0.5">
+              {catBooks.length} {catBooks.length === 1 ? 'Book' : 'Books'}
+            </span>
+          )}
+        </div>
+
+        {hasChildren && (
+          <div className="text-muted opacity-40 group-hover:opacity-100 transition-opacity p-1">
+            {isExpanded ? (
+              <ChevronDown className="w-4 h-4" />
+            ) : (
+              dir === 'rtl' ? <ChevronDown className="w-4 h-4 -rotate-90" /> : <ChevronRight className="w-4 h-4" />
+            )}
+          </div>
+        )}
+      </div>
+
+      {isExpanded && hasChildren && (
+        <div className={`flex flex-col mt-1 gap-1 border-s-2 border-subtle/30 ms-8 ps-2`}>
+          {node.children.map(child => (
+            <CategoryNodeItem key={child.id} node={child} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+export const CategoriesOverviewView: React.FC = () => {
+  const { t } = useWorkspace();
+  const [tree, setTree] = useState<CategoryNode[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchTree() {
+      try {
+        const data = await window.electronAPI.getCategoryTree() as CategoryNode[];
+        setTree(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTree();
+  }, []);
+
+  return (
+    <div className="flex-1 flex flex-col h-full bg-canvas/30 overflow-y-auto p-6 space-y-6">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-pale-sky-500/10 text-pale-sky-500 flex items-center justify-center shrink-0">
           <Layers className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="text-xl font-bold font-display text-main">إدارة التصنيفات</h1>
-          <p className="text-xs text-muted font-sans mt-1">تصفح الكتب والمواد حسب تصنيفاتها الرئيسية</p>
+          <h1 className="text-xl font-bold font-display text-main">{t('manageCategories')}</h1>
+          <p className="text-xs text-muted font-sans mt-1">{t('manageCategoriesDesc')}</p>
         </div>
       </div>
 
-      {categories.length === 0 ? (
+      {loading ? (
         <div className="flex-1 flex items-center justify-center text-muted text-sm font-sans">
-          لا توجد تصنيفات حالياً
+          Loading Categories...
+        </div>
+      ) : tree.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-muted text-sm font-sans">
+          {t('noCategories')}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {categories.map(([category, catBooks]) => (
-            <div 
-              key={category} 
-              className="bg-surface border border-subtle hover:border-pale-sky-500/50 transition-colors rounded-2xl p-4 flex flex-col gap-3 group cursor-pointer"
-              onClick={() => {
-                // In a future update this could filter the library to this specific category
-                setViewMode('library');
-              }}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h3 className="font-bold text-main font-display text-sm line-clamp-1">{category}</h3>
-                  <p className="text-xs text-muted font-sans mt-1">
-                    {catBooks.length} {catBooks.length === 1 ? 'كتاب' : 'كتب'}
-                  </p>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-subtle/30 text-muted group-hover:bg-pale-sky-500/10 group-hover:text-pale-sky-500 transition-colors flex items-center justify-center shrink-0">
-                  <Layers className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="pt-3 border-t border-subtle/50 flex flex-col gap-1.5">
-                {catBooks.slice(0, 3).map(b => (
-                  <div key={b.id} className="flex items-center gap-2 text-xs text-muted truncate">
-                    <Book className="w-3 h-3 shrink-0 opacity-50" />
-                    <span className="truncate">{b.title}</span>
-                  </div>
-                ))}
-                {catBooks.length > 3 && (
-                  <span className="text-[10px] text-pale-sky-500 font-bold mt-1 px-1">
-                    +{catBooks.length - 3} إضافي...
-                  </span>
-                )}
-              </div>
-            </div>
+        <div className="flex flex-col pb-10 max-w-5xl">
+          {tree.map((node) => (
+            <CategoryNodeItem key={node.id} node={node} />
           ))}
         </div>
       )}

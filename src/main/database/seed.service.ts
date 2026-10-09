@@ -14,14 +14,26 @@ export class SeedService {
    */
   public async seedIfEmpty() {
     try {
+      // Seed Categories
+      const catCount = this.db.prepare('SELECT COUNT(*) as count FROM category').get() as { count: number };
+      if (catCount.count === 0 && categoriesData && categoriesData.length > 0) {
+        const insertCategory = this.db.prepare('INSERT INTO category (id, parent_id, name_ar, name_en, display_order) VALUES (?, ?, ?, ?, ?)');
+        this.db.transaction(() => {
+          for (const cat of categoriesData) {
+            insertCategory.run(cat.id, cat.parent_id, cat.name_ar, cat.name_en, cat.display_order);
+          }
+        })();
+        console.log(`[baglib/seed] Seeded ${categoriesData.length} hierarchical categories.`);
+      }
+
       // Check if there are any works in the database
       const countResult = this.db.prepare('SELECT COUNT(*) as count FROM work').get() as { count: number };
       if (countResult.count > 0) {
-        console.log('[baglib/seed] Database already has data. Skipping seed.');
+        console.log('[baglib/seed] Database already has works. Skipping works seed.');
         return;
       }
 
-      console.log('[baglib/seed] Database is empty. Seeding initial data...');
+      console.log('[baglib/seed] Database works are empty. Seeding initial data...');
       
       // Seed Authors
       if (authorsData && authorsData.length > 0) {
@@ -34,16 +46,6 @@ export class SeedService {
         console.log(`[baglib/seed] Seeded ${authorsData.length} authors.`);
       }
 
-      // Seed Categories (Tags)
-      if (categoriesData && categoriesData.length > 0) {
-        const insertTag = this.db.prepare('INSERT INTO tag (id, name, category, origin) VALUES (?, ?, ?, ?)');
-        this.db.transaction(() => {
-          for (const cat of categoriesData) {
-            insertTag.run(crypto.randomUUID(), cat.name, 'subject', 'system');
-          }
-        })();
-        console.log(`[baglib/seed] Seeded ${categoriesData.length} categories.`);
-      }
 
       // Seed Publishers (just simple console log for now, as edition handles publisher string)
       if (publishersData && publishersData.length > 0) {

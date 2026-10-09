@@ -12,6 +12,11 @@ export const API = {
   addBook: (bookData: any) => ipcRenderer.invoke('library:add-book', bookData),
   deleteBook: (bookId: string) => ipcRenderer.invoke('library:delete-book', bookId),
 
+  // Categories
+  getCategoryTree: () => ipcRenderer.invoke('library:get-category-tree'),
+  getCategoryBreadcrumbs: (categoryId: string) => ipcRenderer.invoke('library:get-category-breadcrumbs', categoryId),
+  getSubtreeWorkIds: (categoryId: string) => ipcRenderer.invoke('library:get-subtree-work-ids', categoryId),
+
   // Knowledge Layer
   getAllNotes: () => ipcRenderer.invoke('library:get-all-notes'),
   addNote: (noteData: any) => ipcRenderer.invoke('library:add-note', noteData),
