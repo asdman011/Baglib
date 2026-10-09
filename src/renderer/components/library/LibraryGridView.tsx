@@ -27,13 +27,12 @@ import { StorageManagerModal } from './StorageManagerModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 export const LibraryGridView: React.FC = () => {
-  const { books, addBook, deleteBook, openBookForReading, t, lang } = useWorkspace();
+  const { books, addBook, deleteBook, openBookForReading, t, lang, activeLibraryCategory, setActiveLibraryCategory } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Scalable Filter States
   const [selectedBookType, setSelectedBookType] = useState<string>('ALL');
   const [selectedFormat, setSelectedFormat] = useState<string>('ALL');
-  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedTag, setSelectedTag] = useState<string>('ALL');
   const [lendingStatus, setLendingStatus] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'newest' | 'title' | 'author' | 'year'>('newest');
@@ -105,7 +104,7 @@ export const LibraryGridView: React.FC = () => {
         if (selectedFormat !== 'ALL' && b.digitalFormat !== selectedFormat) return false;
 
         // 4. Category filter
-        if (selectedCategory !== 'ALL' && b.primaryCategory?.id !== selectedCategory) return false;
+        if (activeLibraryCategory !== 'ALL' && b.primaryCategory?.id !== activeLibraryCategory) return false;
 
         // 5. Tag filter
         if (selectedTag !== 'ALL' && !b.tags.includes(selectedTag)) return false;
@@ -127,13 +126,13 @@ export const LibraryGridView: React.FC = () => {
         }
         return b.id.localeCompare(a.id);
       });
-  }, [books, searchQuery, selectedBookType, selectedFormat, selectedCategory, selectedTag, lendingStatus, sortBy]);
+  }, [books, searchQuery, selectedBookType, selectedFormat, activeLibraryCategory, selectedTag, lendingStatus, sortBy]);
 
   const hasActiveFilters =
     searchQuery.trim() !== '' ||
     selectedBookType !== 'ALL' ||
     selectedFormat !== 'ALL' ||
-    selectedCategory !== 'ALL' ||
+    activeLibraryCategory !== 'ALL' ||
     selectedTag !== 'ALL' ||
     lendingStatus !== 'ALL';
 
@@ -141,7 +140,7 @@ export const LibraryGridView: React.FC = () => {
     setSearchQuery('');
     setSelectedBookType('ALL');
     setSelectedFormat('ALL');
-    setSelectedCategory('ALL');
+    setActiveLibraryCategory('ALL');
     setSelectedTag('ALL');
     setLendingStatus('ALL');
     setSortBy('newest');
@@ -375,8 +374,8 @@ export const LibraryGridView: React.FC = () => {
               <div className="lg:col-span-2 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-canvas border border-subtle">
                 <Layers className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                 <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  value={activeLibraryCategory}
+                  onChange={(e) => setActiveLibraryCategory(e.target.value)}
                   className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs truncate"
                 >
                   <option value="ALL">{t('allCategories')}</option>

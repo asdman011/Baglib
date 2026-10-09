@@ -6,7 +6,7 @@ import { Layers, ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-re
 import type { CategoryNode } from '../../../shared/types/category';
 
 const CategoryNodeItem: React.FC<{ node: CategoryNode, depth?: number }> = ({ node, depth = 0 }) => {
-  const { books, lang, dir } = useWorkspace();
+  const { books, lang, dir, setViewMode, setActiveLibraryCategory } = useWorkspace();
   const [isExpanded, setIsExpanded] = useState(depth === 0);
 
   const name = lang === 'ar' ? node.nameAr : node.nameEn;
@@ -24,14 +24,23 @@ const CategoryNodeItem: React.FC<{ node: CategoryNode, depth?: number }> = ({ no
           ${depth === 0 ? 'mt-3 bg-surface border border-subtle shadow-sm hover:border-pale-sky-500/50' : 'hover:bg-subtle/40'}`}
         style={{ marginInlineStart: depth > 0 ? `${depth * 12}px` : '0px' }}
         onClick={() => {
-          if (hasChildren) setIsExpanded(!isExpanded);
+          setActiveLibraryCategory(node.id);
+          setViewMode('library');
         }}
       >
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-          depth === 0 
-            ? 'bg-pale-sky-500/10 text-pale-sky-500' 
-            : 'bg-subtle/50 text-muted group-hover:bg-pale-sky-500/20 group-hover:text-pale-sky-500'
-        }`}>
+        <div 
+          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+            depth === 0 
+              ? 'bg-pale-sky-500/10 text-pale-sky-500 hover:bg-pale-sky-500/20' 
+              : 'bg-subtle/50 text-muted group-hover:bg-pale-sky-500/20 group-hover:text-pale-sky-500'
+          }`}
+          onClick={(e) => {
+            if (hasChildren) {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }
+          }}
+        >
           {hasChildren ? (
             isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />
           ) : (
@@ -49,7 +58,13 @@ const CategoryNodeItem: React.FC<{ node: CategoryNode, depth?: number }> = ({ no
         </div>
 
         {hasChildren && (
-          <div className="text-muted opacity-40 group-hover:opacity-100 transition-opacity p-1">
+          <div 
+            className="text-muted opacity-40 group-hover:opacity-100 transition-opacity p-1 cursor-pointer hover:bg-subtle rounded-md"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+          >
             {isExpanded ? (
               <ChevronDown className="w-4 h-4" />
             ) : (

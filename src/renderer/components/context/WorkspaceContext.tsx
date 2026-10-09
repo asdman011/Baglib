@@ -39,6 +39,7 @@ export interface WorkspaceState {
 
   // App Main View Mode
   viewMode: 'library' | 'categories' | 'reader' | 'notes' | 'settings';
+  activeLibraryCategory: string;
 }
 
 interface WorkspaceContextType extends WorkspaceState {
@@ -49,6 +50,7 @@ interface WorkspaceContextType extends WorkspaceState {
   toggleSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setViewMode: (mode: 'library' | 'categories' | 'reader' | 'notes' | 'settings') => void;
+  setActiveLibraryCategory: (catId: string) => void;
   t: (key: TranslationKey) => string;
   
   // Book Library Management
@@ -79,6 +81,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   
   // Navigation & View Mode
   const [viewMode, setViewMode] = useState<'library' | 'categories' | 'reader' | 'notes' | 'settings'>('library');
+  const [activeLibraryCategory, setActiveLibraryCategory] = useState<string>('ALL');
   
   // Pure Real Data (Zero Mock Items)
   const [books, setBooks] = useState<BookItem[]>([]);
@@ -288,6 +291,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         toggleSidebar,
         setCommandPaletteOpen: setIsCommandPaletteOpen,
         setViewMode,
+        activeLibraryCategory,
+        setActiveLibraryCategory,
         addBook,
         deleteBook,
         openBookForReading,
