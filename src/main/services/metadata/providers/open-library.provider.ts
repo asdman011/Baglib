@@ -1,20 +1,53 @@
-import { MetadataProvider } from './provider.interface';
+import { MetadataProvider, SearchQuery } from './provider.interface';
 import { BibliographicWork, BibliographicEdition, BibliographicSource } from '../../../../shared/types/bibliographic';
 import { openLibraryClient } from '../http-client';
+import { isPlaceholderAuthor } from '../../../../shared/validators/metadata-validator';
 
 export class OpenLibraryProvider implements MetadataProvider {
   get name(): string {
     return 'Open Library';
   }
 
-  async search(query: string, maxResults = 10): Promise<BibliographicWork[]> {
+  async search(query: string | SearchQuery, maxResults = 10): Promise<BibliographicWork[]> {
     if (!query) return [];
 
     try {
-      const url = `/search.json?q=${encodeURIComponent(query)}&limit=${maxResults}`;
-      const data = await openLibraryClient.getJson<any>(url);
+      let queryParam = '';
+      let hasAuthor = false;
+      let hasTitle = false;
 
-      if (!data || !data.docs) return [];
+      if (typeof query === 'string') {
+        if (!query.trim()) return [];
+        queryParam = `q=${encodeURIComponent(query.trim())}`;
+      } else {
+        const parts: string[] = [];
+        if (query.title?.trim()) {
+          parts.push(`title=${encodeURIComponent(query.title.trim())}`);
+          hasTitle = true;
+        }
+        if (query.author?.trim() && !isPlaceholderAuthor(query.author)) {
+          parts.push(`author=${encodeURIComponent(query.author.trim())}`);
+          hasAuthor = true;
+        }
+        if (query.general?.trim() && !query.title) parts.push(`q=${encodeURIComponent(query.general.trim())}`);
+        if (parts.length === 0) return [];
+        queryParam = parts.join('&');
+      }
+
+      const url = `/search.json?${queryParam}&limit=${maxResults}`;
+      const data = await openLibraryClient.getJson<any>(url);
+      let docs = data?.docs;
+
+      // Fallback: If title + author returned 0 docs, retry with title only
+      if ((!docs || !Array.isArray(docs) || docs.length === 0) && hasAuthor && hasTitle && typeof query !== 'string' && query.title?.trim()) {
+        const fallbackUrl = `/search.json?title=${encodeURIComponent(query.title.trim())}&limit=${maxResults}`;
+        const fallbackData = await openLibraryClient.getJson<any>(fallbackUrl);
+        if (fallbackData?.docs && Array.isArray(fallbackData.docs)) {
+          docs = fallbackData.docs;
+        }
+      }
+
+      if (!docs || !Array.isArray(docs)) return [];
 
       return data.docs.map((doc: any): BibliographicWork => {
         // Extract editions from search results
