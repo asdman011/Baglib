@@ -320,3 +320,38 @@ export function validateWorkMetadata(input: Partial<BookItemInput>): ValidationR
     warnings,
   };
 }
+
+/**
+ * Checks if a title string is a default placeholder or empty.
+ */
+export function isPlaceholderTitle(title?: string | null): boolean {
+  if (!title) return true;
+  const t = title.trim().toLowerCase();
+  return (
+    t === '' ||
+    t === 'مادة جديدة في المكتبة' ||
+    t === 'new library material' ||
+    t === 'كتاب جديد' ||
+    t === 'new book' ||
+    t === 'untitled' ||
+    t === 'بلا عنوان'
+  );
+}
+
+/**
+ * Checks if an author string is a default placeholder or unknown indicator.
+ */
+export function isPlaceholderAuthor(author?: string | null): boolean {
+  if (!author) return true;
+  const a = author.trim().toLowerCase();
+  return (
+    a === '' ||
+    a === 'مؤلف جديد' ||
+    a === 'new author' ||
+    a === 'مؤلف مجهول' ||
+    a === 'unknown author' ||
+    a === 'غير معروف' ||
+    a === 'unknown' ||
+    a === 'مجهول'
+  );
+}
