@@ -28,7 +28,8 @@ import {
   Users,
   ShieldCheck,
   Clock,
-  Compass
+  Compass,
+  Image as ImageIcon
 } from 'lucide-react';
 import {
   BookItem,
@@ -545,6 +546,52 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   <FolderOpen className="w-4 h-4 text-amber-500" />
                   <span>{formData.filePath ? (lang === 'ar' ? 'تغيير الملف' : 'Change File') : (lang === 'ar' ? 'اختيار ملف' : 'Select File')}</span>
                 </button>
+              </div>
+
+              {/* Cover Image Section */}
+              <div className="p-3.5 rounded-2xl bg-canvas border border-subtle flex flex-col sm:flex-row items-start sm:items-center gap-3.5">
+                <div className="w-16 h-22 rounded-xl bg-surface border border-subtle overflow-hidden shrink-0 flex items-center justify-center relative shadow-sm">
+                  {formData.coverImage ? (
+                    <img
+                      src={formData.coverImage}
+                      alt={formData.title || 'Cover'}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-muted p-1 text-center">
+                      <BookOpen className="w-6 h-6 opacity-40 mb-1" />
+                      <span className="text-[9px] font-medium leading-tight">{t('noCoverImage')}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 space-y-1.5 w-full min-w-0">
+                  <label className="font-bold text-main flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-pale-sky-500" />
+                    <span>{t('coverImageUrl')}</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={formData.coverImage || ''}
+                      onChange={(e) => handleInputChange('coverImage', e.target.value)}
+                      placeholder={t('coverImagePlaceholder')}
+                      className="flex-1 p-2 rounded-xl bg-surface border border-subtle text-main outline-none focus:border-pale-sky-500 text-xs font-mono"
+                    />
+                    {formData.coverImage && (
+                      <button
+                        type="button"
+                        onClick={() => handleInputChange('coverImage', '')}
+                        className="px-2.5 py-2 rounded-xl border border-subtle text-muted hover:text-red-500 hover:bg-canvas text-xs font-bold transition-all cursor-pointer shrink-0"
+                      >
+                        {lang === 'ar' ? 'إزالة' : 'Clear'}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Shared Primary Fields */}

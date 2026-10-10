@@ -144,7 +144,7 @@ export interface BookItem {
 export interface BookItemInput {
   id?: string;
   title: string;
-  author: string;
+  author?: string;
   edition?: string;
   publisher?: string;
   publicationYear?: number | string;

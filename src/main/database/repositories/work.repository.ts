@@ -67,6 +67,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         ? r.publicationYear
         : (meta.publicationYear || undefined),
       isbn: r.isbn || meta.isbn || undefined,
+      coverImage: meta.coverImage || undefined,
       shelf,
       room,
       bookcase,
@@ -90,6 +91,9 @@ export class SqliteWorkRepository implements IWorkRepository {
       bookType: (r.sourceType as any) || (r.filePath ? 'digital' : 'physical'),
       digitalFormat: r.digitalFormat || (r.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : undefined),
       filePath: r.filePath || undefined,
+      fileSize: meta.fileSize || undefined,
+      onlineSource: meta.onlineSource || undefined,
+      sourceUrl: meta.sourceUrl || undefined,
 
       // Work classification
       workTypeId,
@@ -339,6 +343,10 @@ export class SqliteWorkRepository implements IWorkRepository {
       const metadataPayload: Record<string, any> = {
         workType: workTypeInfo.key,
         workTypeId,
+        coverImage: data.coverImage,
+        fileSize: data.fileSize,
+        onlineSource: data.onlineSource,
+        sourceUrl: data.sourceUrl,
         doi: data.doi,
         journalName: data.journalName,
         conferenceName: data.conferenceName,
@@ -534,6 +542,10 @@ export class SqliteWorkRepository implements IWorkRepository {
       const updatePayload: Record<string, any> = {
         workType: workTypeKey,
         workTypeId,
+        coverImage: data.coverImage,
+        fileSize: data.fileSize,
+        onlineSource: data.onlineSource,
+        sourceUrl: data.sourceUrl,
         doi: data.doi,
         journalName: data.journalName,
         conferenceName: data.conferenceName,

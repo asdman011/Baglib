@@ -359,4 +359,49 @@ describe('Metadata Persistence Repository Tests (Task 4.2)', () => {
       assert.strictEqual(updated.shelfSection, 'أعلى');
     });
   });
+
+  describe('Cover Image and Online Source Metadata Persistence', () => {
+    it('persists and restores coverImage, fileSize, onlineSource, and sourceUrl on add and update', () => {
+      const book: BookItemInput = {
+        id: 'book-imported-libgen-1',
+        title: 'Clean Code: A Handbook of Agile Software Craftsmanship',
+        author: 'Robert C. Martin',
+        publicationYear: 2008,
+        isbn: '9780132350884',
+        coverImage: 'https://libgen.li/covers/12345/clean_code.jpg',
+        fileSize: '12.4 MB',
+        onlineSource: 'LibGen',
+        sourceUrl: 'https://libgen.is/book/index.php?md5=abc123def456',
+        bookType: 'digital',
+        digitalFormat: 'PDF',
+        filePath: 'C:/Downloads/Clean_Code.pdf',
+        categories: ['مستورد من الإنترنت', 'LibGen'],
+      };
+
+      const added = repo.addBook(book);
+      assert.strictEqual(added.coverImage, 'https://libgen.li/covers/12345/clean_code.jpg');
+      assert.strictEqual(added.fileSize, '12.4 MB');
+      assert.strictEqual(added.onlineSource, 'LibGen');
+      assert.strictEqual(added.sourceUrl, 'https://libgen.is/book/index.php?md5=abc123def456');
+
+      const retrieved = repo.getById('book-imported-libgen-1');
+      assert.ok(retrieved);
+      assert.strictEqual(retrieved.coverImage, 'https://libgen.li/covers/12345/clean_code.jpg');
+      assert.strictEqual(retrieved.fileSize, '12.4 MB');
+      assert.strictEqual(retrieved.onlineSource, 'LibGen');
+
+      // Update cover image
+      repo.updateBook({
+        id: 'book-imported-libgen-1',
+        title: 'Clean Code: A Handbook of Agile Software Craftsmanship',
+        author: 'Robert C. Martin',
+        coverImage: 'https://cdn.annas.org/covers/updated.jpg',
+      });
+
+      const updated = repo.getById('book-imported-libgen-1');
+      assert.ok(updated);
+      assert.strictEqual(updated.coverImage, 'https://cdn.annas.org/covers/updated.jpg');
+      assert.strictEqual(updated.fileSize, '12.4 MB');
+    });
+  });
 });

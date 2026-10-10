@@ -344,20 +344,32 @@ export const LibraryGridView: React.FC = () => {
 
   const handleImportOnlineBook = (partialBook: Partial<BookItem>) => {
     const imported: BookItem = {
-      id: `book-${Date.now()}`,
+      id: partialBook.id || `book-${Date.now()}`,
       title: partialBook.title || 'كتاب مستورد',
       author: partialBook.author || t('noAuthor'),
       publisher: partialBook.publisher,
       digitalFormat: partialBook.digitalFormat || 'PDF',
       bookType: 'digital',
       readingStatus: 'unread',
+      readingProgress: 0,
       language: partialBook.language || 'العربية',
       categories: partialBook.categories || ['مستورد من الإنترنت'],
-      tags: ['#مستورد_رقمي'],
+      tags: partialBook.tags || ['#مستورد_رقمي'],
       lendingHistory: [],
       onlineSource: partialBook.onlineSource as any,
+      filePath: partialBook.filePath,
+      fileSize: partialBook.fileSize,
+      coverImage: partialBook.coverImage,
+      isbn: partialBook.isbn,
+      publicationYear: partialBook.publicationYear,
     };
     addBook(imported);
+    setSaveToast(
+      lang === 'ar'
+        ? `تمت إضافة "${imported.title}" إلى مكتبتك بنجاح!`
+        : `"${imported.title}" added to your library successfully!`
+    );
+    setTimeout(() => setSaveToast(null), 3500);
   };
 
   return (
@@ -708,6 +720,9 @@ export const LibraryGridView: React.FC = () => {
                             src={book.coverImage}
                             alt={book.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
                           />
                           <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <span className="px-3 py-1.5 rounded-xl bg-pale-sky-500 text-white font-bold text-xs flex items-center gap-1 shadow-lg">
@@ -875,6 +890,9 @@ export const LibraryGridView: React.FC = () => {
                                   src={book.coverImage}
                                   alt={book.title}
                                   className="w-10 h-14 object-cover rounded-lg border border-subtle shrink-0"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
                                 />
                               ) : (
                                 <div className="w-10 h-14 rounded-lg bg-canvas border border-subtle flex items-center justify-center text-muted shrink-0">

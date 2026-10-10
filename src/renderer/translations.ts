@@ -85,6 +85,56 @@ export const translations = {
     newMaterialDefaultTitle: "مادة جديدة",
     newMaterialDefaultAuthor: "مؤلف جديد",
 
+    // Online Hub & LibGen Provider
+    onlineHubTitle: "المكتبات والمصادر المفتوحة عبر الإنترنت",
+    onlineHubDesc: "البحث وجلب الكتب والمستندات من الشاملة، مكتبة نور، LibGen، أرشيف آنا وخلاصات RSS",
+    onlineHubClose: "إغلاق",
+    libgenTabLabel: "LibGen (Library Genesis)",
+    libgenTabDesc: "الأوراق والأبحاث الأكاديمية والكتب العالمية",
+    libgenSearchPlaceholder: "ابحث في Library Genesis (يدعم العنوان، المؤلف، ISBN، أو ext:epub)...",
+    searchBtn: "بحث",
+    searchingLibgen: "جاري البحث في Library Genesis...",
+    noLibgenResults: "لم يتم العثور على نتائج في Library Genesis",
+    noLibgenResultsHint: "تأكد من كتابة الكلمات بشكل صحيح أو جرب استخدام كلمات مفتاحية بالإنجليزية",
+    libgenInitialPrompt: "اكتب كلمة البحث واضغط Enter للبحث المباشر في ملايين الأوراق والكتب الأكاديمية عبر LibGen",
+    addToMyLibrary: "إضافة لمكتبتي الخاصة",
+    addedToLibrary: "تمت الإضافة للمكتبة!",
+    downloadLink: "تحميل مباشر",
+    detailsLink: "صفحة المصنف",
+    libgenAdvancedTip: "نصيحة: يمكنك استخدام خيارات متقدمة مثل: title ext:epub أو year:2023",
+
+    // Sorting & Filters
+    sortRelevance: "الصلة (تلقائي)",
+    sortYearDesc: "السنة: الأحدث",
+    sortYearAsc: "السنة: الأقدم",
+    sortTitleAZ: "العنوان: أ-ي",
+    sortSizeDesc: "الحجم: الأكبر",
+    sortFormatPriority: "الصيغة: PDF و EPUB أولاً",
+    sortByLabel: "الترتيب حسب:",
+
+    // Anna's Archive Provider
+    annasTabLabel: "Anna's Archive (أرشيف آنّا)",
+    annasTabDesc: "المكتبة الرقمية العالمية للكتب والأوراق والبحوث المفتوحة",
+    annasSearchPlaceholder: "ابحث في أرشيف آنّا (العنوان، المؤلف، المعرّف، أو الموضوع)...",
+    searchingAnnas: "جاري البحث في أرشيف آنّا...",
+    noAnnasResults: "لم يتم العثور على نتائج في أرشيف آنّا",
+    noAnnasResultsHint: "جرب البحث بالاسم الكامل أو كلمات مفتاحية أخرى",
+    annasInitialPrompt: "اكتب كلمة البحث واضغط Enter للبحث في أرشيف آنّا المفتوح",
+    annasAdvancedTip: "أرشيف آنّا يحتوي على ملايين المصنفات والكتب الممسوحة ضوئياً والمصادر الرقمية",
+
+    // Shield & Safe Download
+    shieldDownloadBtn: "تحميل مباشر آمن",
+    shieldingDownload: "جاري التحميل بأمان...",
+    downloadComplete: "تم حفظ الملف بنجاح في مجلد التنزيلات",
+    downloadAndImportSuccess: "تم تحميل الكتاب وحفظه وإضافته لمكتبتك بنجاح!",
+    showInFolder: "عرض في المجلد",
+    openDownloadedFile: "فتح الملف",
+    downloadFailed: "فشل التحميل، يرجى المحاولة لاحقاً",
+    coverImageUrl: "رابط صورة الغلاف",
+    coverImagePlaceholder: "https://... أو مسار صورة محلي",
+    coverImagePreview: "معاينة الغلاف",
+    noCoverImage: "لا يوجد غلاف",
+
     // Categories
     "تطوير الذات": "تطوير الذات",
     "إدارة الأعمال": "إدارة الأعمال",
@@ -236,6 +286,56 @@ export const translations = {
     workTypeLabel: "Work Type:",
     newMaterialDefaultTitle: "New Material",
     newMaterialDefaultAuthor: "New Author",
+
+    // Online Hub & LibGen Provider
+    onlineHubTitle: "Online Libraries & Open Knowledge Repositories",
+    onlineHubDesc: "Search and fetch books and materials from Shamela, Noor Book, LibGen, Anna's Archive, and RSS feeds",
+    onlineHubClose: "Close",
+    libgenTabLabel: "LibGen (Library Genesis)",
+    libgenTabDesc: "Global academic papers, books, and scientific journals",
+    libgenSearchPlaceholder: "Search Library Genesis (supports title, author, ISBN, or ext:epub)...",
+    searchBtn: "Search",
+    searchingLibgen: "Searching Library Genesis...",
+    noLibgenResults: "No results found on Library Genesis",
+    noLibgenResultsHint: "Check the spelling or try searching with English keywords or ISBN",
+    libgenInitialPrompt: "Type a query and press Enter to search millions of papers and books across LibGen",
+    addToMyLibrary: "Add to My Library",
+    addedToLibrary: "Added to Library!",
+    downloadLink: "Direct Download",
+    detailsLink: "View Details",
+    libgenAdvancedTip: "Tip: You can use advanced filters such as: title ext:epub or year:2023",
+
+    // Sorting & Filters
+    sortRelevance: "Relevance (Auto)",
+    sortYearDesc: "Year: Newest",
+    sortYearAsc: "Year: Oldest",
+    sortTitleAZ: "Title: A-Z",
+    sortSizeDesc: "Size: Largest",
+    sortFormatPriority: "Format: PDF & EPUB first",
+    sortByLabel: "Sort by:",
+
+    // Anna's Archive Provider
+    annasTabLabel: "Anna's Archive",
+    annasTabDesc: "Universal shadow library for books, papers, and open repositories",
+    annasSearchPlaceholder: "Search Anna's Archive by title, author, topic, or DOI...",
+    searchingAnnas: "Searching Anna's Archive...",
+    noAnnasResults: "No results found on Anna's Archive",
+    noAnnasResultsHint: "Try different keywords or check spelling",
+    annasInitialPrompt: "Type your query and press Enter to search millions of books and papers across Anna's Archive",
+    annasAdvancedTip: "Anna's Archive indexes multiple shadow libraries with extensive metadata",
+
+    // Shield & Safe Download
+    shieldDownloadBtn: "Shielded Download",
+    shieldingDownload: "Downloading safely...",
+    downloadComplete: "File saved successfully in your Downloads folder",
+    downloadAndImportSuccess: "Book downloaded & added to your library successfully!",
+    showInFolder: "Show in Folder",
+    openDownloadedFile: "Open File",
+    downloadFailed: "Download failed, please try again",
+    coverImageUrl: "Cover Image URL",
+    coverImagePlaceholder: "https://... or local image path",
+    coverImagePreview: "Cover Preview",
+    noCoverImage: "No cover image",
 
     // Categories
     "تطوير الذات": "Self Development",
