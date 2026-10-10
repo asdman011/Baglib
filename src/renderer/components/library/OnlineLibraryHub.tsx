@@ -541,9 +541,9 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                     {(activeSource === 'LibGen'
                       ? sortedLibgenResults
                       : sortedAnnasResults
-                    ).map((item) => (
+                    ).map((item, idx) => (
                       <div
-                        key={item.id}
+                        key={item.id ? `${item.id}-${idx}` : `item-${idx}`}
                         className="p-4 rounded-2xl bg-canvas border border-subtle flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-pale-sky-500/40 transition-all group"
                       >
                         <div className="flex items-start gap-3 min-w-0">

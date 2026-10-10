@@ -26,7 +26,8 @@ import {
   CheckCircle2,
   Clock,
   Trash2,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react';
 import { BookItem, ReadingStatus } from '../../types/library';
 import { BookDetailModal } from './BookDetailModal';
@@ -72,6 +73,8 @@ export const LibraryGridView: React.FC = () => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isNewBook, setIsNewBook] = useState(false);
   const [saveToast, setSaveToast] = useState<string | null>(null);
+  const [isImportingBook, setIsImportingBook] = useState(false);
+  const [importMessage, setImportMessage] = useState<string>('');
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
 
@@ -276,7 +279,7 @@ export const LibraryGridView: React.FC = () => {
   };
 
 
-  // Open Native Electron File Dialog
+  // Open Native Electron File Dialog with Progressive Metadata & Cover Discovery
   const handleOpenBookFromDevice = async () => {
     const windowAPI = (window as any).electronAPI;
 
@@ -289,31 +292,83 @@ export const LibraryGridView: React.FC = () => {
       const fileName = fileNameWithExt.replace(/\.[^/.]+$/, "");
       const ext = fileNameWithExt.split('.').pop()?.toUpperCase() || 'PDF';
 
-      const newDigitalBook: BookItem = {
-        id: `book-local-${Date.now()}`,
-        title: fileName,
-        author: t('noAuthor'),
-        digitalFormat: ext as any,
-        bookType: 'digital',
-        readingStatus: 'reading',
-        readingProgress: 0,
-        filePath: fullPath,
-        fileSize: '1.5 MB',
-        language: 'العربية',
-        categories: ['ملفات رقمية محددة'],
-        tags: [`#${ext}`],
-        lendingHistory: [],
-      };
+      let discoveredTitle = fileName;
+      let discoveredAuthor = t('noAuthor');
+      let discoveredPublisher: string | undefined;
+      let discoveredYear: number | string | undefined;
+      let discoveredIsbn: string | undefined;
+      let discoveredCover: string | undefined;
+      let discoveredEdition: string | undefined;
 
-      addBook(newDigitalBook);
-      openBookForReading(newDigitalBook);
+      setIsImportingBook(true);
+      setImportMessage(
+        lang === 'ar'
+          ? 'جاري استخراج بيانات الكتاب والبحث عن الغلاف...'
+          : 'Extracting book metadata & searching for cover...'
+      );
+
+      try {
+        if (windowAPI?.discoverMetadata) {
+          try {
+            const discovery = await windowAPI.discoverMetadata({
+              filePath: fullPath,
+              filename: fileNameWithExt,
+            });
+            if (discovery) {
+              if (discovery.title) discoveredTitle = discovery.title;
+              if (discovery.authors && discovery.authors.length > 0) {
+                discoveredAuthor = discovery.authors.join('، ');
+              }
+              if (discovery.publisher) discoveredPublisher = discovery.publisher;
+              if (discovery.publicationYear) discoveredYear = discovery.publicationYear;
+              if (discovery.isbn) discoveredIsbn = discovery.isbn;
+              if (discovery.coverUrl) discoveredCover = discovery.coverUrl;
+              if (discovery.edition) discoveredEdition = discovery.edition;
+            }
+          } catch (err) {
+            console.warn('[LibraryGridView] Metadata discovery failed, falling back to local file name:', err);
+          }
+        }
+
+        const newDigitalBook: BookItem = {
+          id: `book-local-${Date.now()}`,
+          title: discoveredTitle,
+          author: discoveredAuthor,
+          publisher: discoveredPublisher,
+          publicationYear: discoveredYear,
+          isbn: discoveredIsbn,
+          coverImage: discoveredCover,
+          edition: discoveredEdition,
+          digitalFormat: ext as any,
+          bookType: 'digital',
+          readingStatus: 'reading',
+          readingProgress: 0,
+          filePath: fullPath,
+          fileSize: '1.5 MB',
+          language: 'العربية',
+          categories: ['ملفات رقمية محددة'],
+          tags: [`#${ext}`],
+          lendingHistory: [],
+        };
+
+        addBook(newDigitalBook);
+        openBookForReading(newDigitalBook);
+        setSaveToast(
+          lang === 'ar'
+            ? 'تم استيراد الكتاب واكتشاف بياناته بنجاح!'
+            : 'Book imported and metadata discovered successfully!'
+        );
+        setTimeout(() => setSaveToast(null), 3500);
+      } finally {
+        setIsImportingBook(false);
+      }
     } else {
       fileInputRef.current?.click();
     }
   };
 
-  // Handle HTML fallback selection
-  const handleFileSelectFallback = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle HTML fallback selection with Progressive Metadata Discovery
+  const handleFileSelectFallback = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -322,24 +377,76 @@ export const LibraryGridView: React.FC = () => {
     const ext = file.name.split('.').pop()?.toUpperCase() || 'PDF';
     const filePath = (file as any).path || file.name;
 
-    const newDigitalBook: BookItem = {
-      id: `book-local-${Date.now()}`,
-      title: fileName,
-      author: t('noAuthor'),
-      digitalFormat: ext as any,
-      bookType: 'digital',
-      readingStatus: 'reading',
-      readingProgress: 0,
-      filePath,
-      fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-      language: 'العربية',
-      categories: ['ملفات رقمية محددة'],
-      tags: [`#${ext}`],
-      lendingHistory: [],
-    };
+    let discoveredTitle = fileName;
+    let discoveredAuthor = t('noAuthor');
+    let discoveredPublisher: string | undefined;
+    let discoveredYear: number | string | undefined;
+    let discoveredIsbn: string | undefined;
+    let discoveredCover: string | undefined;
+    let discoveredEdition: string | undefined;
 
-    addBook(newDigitalBook);
-    openBookForReading(newDigitalBook);
+    setIsImportingBook(true);
+    setImportMessage(
+      lang === 'ar'
+        ? 'جاري استخراج بيانات الكتاب والبحث عن الغلاف...'
+        : 'Extracting book metadata & searching for cover...'
+    );
+
+    try {
+      const windowAPI = (window as any).electronAPI;
+      if (windowAPI?.discoverMetadata) {
+        try {
+          const discovery = await windowAPI.discoverMetadata({
+            filename: file.name,
+          });
+          if (discovery) {
+            if (discovery.title) discoveredTitle = discovery.title;
+            if (discovery.authors && discovery.authors.length > 0) {
+              discoveredAuthor = discovery.authors.join('، ');
+            }
+            if (discovery.publisher) discoveredPublisher = discovery.publisher;
+            if (discovery.publicationYear) discoveredYear = discovery.publicationYear;
+            if (discovery.isbn) discoveredIsbn = discovery.isbn;
+            if (discovery.coverUrl) discoveredCover = discovery.coverUrl;
+            if (discovery.edition) discoveredEdition = discovery.edition;
+          }
+        } catch (err) {
+          console.warn('[LibraryGridView] Fallback metadata discovery error:', err);
+        }
+      }
+
+      const newDigitalBook: BookItem = {
+        id: `book-local-${Date.now()}`,
+        title: discoveredTitle,
+        author: discoveredAuthor,
+        publisher: discoveredPublisher,
+        publicationYear: discoveredYear,
+        isbn: discoveredIsbn,
+        coverImage: discoveredCover,
+        edition: discoveredEdition,
+        digitalFormat: ext as any,
+        bookType: 'digital',
+        readingStatus: 'reading',
+        readingProgress: 0,
+        filePath,
+        fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        language: 'العربية',
+        categories: ['ملفات رقمية محددة'],
+        tags: [`#${ext}`],
+        lendingHistory: [],
+      };
+
+      addBook(newDigitalBook);
+      openBookForReading(newDigitalBook);
+      setSaveToast(
+        lang === 'ar'
+          ? 'تم استيراد الكتاب واكتشاف بياناته بنجاح!'
+          : 'Book imported and metadata discovered successfully!'
+      );
+      setTimeout(() => setSaveToast(null), 3500);
+    } finally {
+      setIsImportingBook(false);
+    }
   };
 
   const handleImportOnlineBook = (partialBook: Partial<BookItem>) => {
@@ -1075,6 +1182,14 @@ export const LibraryGridView: React.FC = () => {
         books={books}
         onRemoveDuplicate={deleteBook}
       />
+
+      {/* Book Import & Discovery Progress Floating Pill */}
+      {isImportingBook && (
+        <div className="fixed bottom-6 end-6 z-50 bg-surface/95 dark:bg-canvas/95 border border-pale-sky-500/40 text-main px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <RefreshCw className="w-4 h-4 text-pale-sky-500 animate-spin shrink-0" />
+          <span>{importMessage}</span>
+        </div>
+      )}
 
       {/* Save Success Toast */}
       {saveToast && (

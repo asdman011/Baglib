@@ -29,7 +29,8 @@ import {
   ShieldCheck,
   Clock,
   Compass,
-  Image as ImageIcon
+  Image as ImageIcon,
+  RefreshCw
 } from 'lucide-react';
 import {
   BookItem,
@@ -47,6 +48,9 @@ import {
   isValidIssn
 } from '../../../shared/validators/metadata-validator';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useMetadataLookup } from '../../hooks/useMetadataLookup';
+import { MetadataDiffModal } from './MetadataDiffModal';
+import { BibliographicWork } from '../../../shared/types/bibliographic';
 
 interface BookDetailModalProps {
   book: BookItem | null;
@@ -75,9 +79,36 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [initialSnapshot, setInitialSnapshot] = useState<string>('');
   const [showConfirmDiscard, setShowConfirmDiscard] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'info' | 'physical' | 'classification' | 'lending'>('info');
-  const [isAutoFilling, setIsAutoFilling] = useState(false);
+  const lookupHook = useMetadataLookup();
+  const [isDiscoveringFile, setIsDiscoveringFile] = useState<boolean>(false);
+  const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
+  const [fetchedWork, setFetchedWork] = useState<BibliographicWork | null>(null);
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isPlaceholderTitle = (val?: string) => {
+    if (!val) return true;
+    const trimmed = val.trim();
+    return (
+      trimmed === 'مادة جديدة في المكتبة' ||
+      trimmed === 'New Library Material' ||
+      trimmed === t('newMaterialDefaultTitle') ||
+      trimmed === ''
+    );
+  };
+
+  const isPlaceholderAuthor = (val?: string) => {
+    if (!val) return true;
+    const trimmed = val.trim();
+    return (
+      trimmed === 'مؤلف جديد' ||
+      trimmed === 'New Author' ||
+      trimmed === 'مؤلف مجهول' ||
+      trimmed === 'Unknown Author' ||
+      trimmed === t('noAuthor') ||
+      trimmed === ''
+    );
+  };
 
   // Contributor form state
   const [newContribName, setNewContribName] = useState('');
@@ -173,24 +204,78 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         digitalFormat: ext as any,
         bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
       }));
+
+      // Trigger automatic progressive metadata and cover discovery
+      if (windowAPI?.discoverMetadata) {
+        setIsDiscoveringFile(true);
+        try {
+          const discovery = await windowAPI.discoverMetadata({
+            filePath: fullPath,
+            filename: fileNameWithExt,
+          });
+          if (discovery) {
+            setFormData((prev) => ({
+              ...prev,
+              title: isPlaceholderTitle(prev.title) ? (discovery.title || prev.title) : prev.title,
+              author: isPlaceholderAuthor(prev.author) ? (discovery.authors?.join('، ') || prev.author) : prev.author,
+              publisher: discovery.publisher || prev.publisher || '',
+              publicationYear: discovery.publicationYear || prev.publicationYear || '',
+              isbn: discovery.isbn || prev.isbn || '',
+              coverImage: discovery.coverUrl || prev.coverImage || '',
+              edition: discovery.edition || prev.edition || '',
+            }));
+          }
+        } catch (err) {
+          console.warn('[BookDetailModal] discoverMetadata failed:', err);
+        } finally {
+          setIsDiscoveringFile(false);
+        }
+      }
     } else {
       fileInputRef.current?.click();
     }
   };
 
-  const handleFileChangeFallback = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChangeFallback = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const file = files[0];
     const ext = file.name.split('.').pop()?.toUpperCase() || 'PDF';
+    const filePath = (file as any).path || file.name;
 
     setFormData((prev) => ({
       ...prev,
-      filePath: (file as any).path || file.name,
+      filePath,
       digitalFormat: ext as any,
       fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
       bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
     }));
+
+    const windowAPI = (window as any).electronAPI;
+    if (windowAPI?.discoverMetadata) {
+      setIsDiscoveringFile(true);
+      try {
+        const discovery = await windowAPI.discoverMetadata({
+          filename: file.name,
+        });
+        if (discovery) {
+          setFormData((prev) => ({
+            ...prev,
+            title: isPlaceholderTitle(prev.title) ? (discovery.title || prev.title) : prev.title,
+            author: isPlaceholderAuthor(prev.author) ? (discovery.authors?.join('، ') || prev.author) : prev.author,
+            publisher: discovery.publisher || prev.publisher || '',
+            publicationYear: discovery.publicationYear || prev.publicationYear || '',
+            isbn: discovery.isbn || prev.isbn || '',
+            coverImage: discovery.coverUrl || prev.coverImage || '',
+            edition: discovery.edition || prev.edition || '',
+          }));
+        }
+      } catch (err) {
+        console.warn('[BookDetailModal] Fallback discoverMetadata failed:', err);
+      } finally {
+        setIsDiscoveringFile(false);
+      }
+    }
   };
 
   // Contributor Management
@@ -251,38 +336,43 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     }));
   };
 
-  // OpenLibrary / Google Books Auto-Fill
-  const fetchMetadataAutoFill = async () => {
-    setIsAutoFilling(true);
-    try {
-      const cleanIsbn = formData.isbn?.replace(/-/g, '').trim();
-      const query = cleanIsbn || encodeURIComponent(formData.title);
+  // Bibliographic Online Metadata Lookup & Diff Preview (Story 5)
+  const handleTriggerAutoFill = async (overrideIsbn?: string) => {
+    const cleanIsbn = (overrideIsbn || formData.isbn || '').replace(/[-\s]/g, '').trim();
+    const rawTitle = formData.title?.trim() || '';
+    const title = isPlaceholderTitle(rawTitle) ? '' : rawTitle;
+    const rawAuthor = formData.author?.trim() || '';
+    const author = isPlaceholderAuthor(rawAuthor) ? '' : rawAuthor;
 
-      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}`);
-      const data = await res.json();
-
-      if (data.items && data.items.length > 0) {
-        const volumeInfo = data.items[0].volumeInfo;
-
-        setFormData((prev) => ({
-          ...prev,
-          title: prev.title || volumeInfo.title,
-          author: prev.author !== 'مؤلف مجهول' ? prev.author : (volumeInfo.authors ? volumeInfo.authors.join(', ') : prev.author),
-          publisher: volumeInfo.publisher || prev.publisher,
-          publicationYear: volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.substring(0, 4)) : prev.publicationYear,
-          isbn: prev.isbn || (volumeInfo.industryIdentifiers ? volumeInfo.industryIdentifiers[0]?.identifier : prev.isbn),
-          categories: Array.from(new Set([...(prev.categories || []), ...(volumeInfo.categories || [])])),
-          coverImage: volumeInfo.imageLinks?.thumbnail || prev.coverImage,
-        }));
-      }
-
-      setIsAutoFilling(false);
-      setAutoFillSuccess(true);
-      setTimeout(() => setAutoFillSuccess(false), 2500);
-    } catch (err) {
-      console.warn('Auto-fill API fallback:', err);
-      setIsAutoFilling(false);
+    if (!cleanIsbn && !title && !formData.filePath) {
+      alert(
+        lang === 'ar'
+          ? 'يرجى إدخال عنوان العمل أو الرقم المعياري (ISBN) أو اختيار ملف للبحث.'
+          : 'Please enter a work title, ISBN, or select a file first.'
+      );
+      return;
     }
+
+    const match = await lookupHook.lookup({
+      isbn: cleanIsbn || undefined,
+      title: title || undefined,
+      author: author || undefined,
+      filePath: formData.filePath || undefined,
+    });
+
+    if (match) {
+      setFetchedWork(match);
+      setShowDiffModal(true);
+    }
+  };
+
+  const handleApplyDiffUpdates = (updates: Partial<BookItem>) => {
+    setFormData((prev) => ({
+      ...prev,
+      ...updates,
+    }));
+    setAutoFillSuccess(true);
+    setTimeout(() => setAutoFillSuccess(false), 3000);
   };
 
   if (!isOpen || !book) return null;
@@ -392,14 +482,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={fetchMetadataAutoFill}
-              disabled={isAutoFilling}
+              onClick={() => handleTriggerAutoFill()}
+              disabled={lookupHook.status === 'searching'}
               title={t('autoFillTooltip')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
             >
-              <Sparkles className={`w-3.5 h-3.5 ${isAutoFilling ? 'animate-spin' : ''}`} />
+              <Sparkles className={`w-3.5 h-3.5 ${lookupHook.status === 'searching' ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">
-                {isAutoFilling
+                {lookupHook.status === 'searching'
                   ? t('autoFillingWeb')
                   : t('autoFillWeb')}
               </span>
@@ -414,11 +504,71 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           </div>
         </div>
 
+        {/* Searching Status Banner */}
+        {lookupHook.status === 'searching' && (
+          <div className="bg-pale-sky-500/10 border-b border-pale-sky-500/20 px-4 py-2.5 text-xs text-pale-sky-600 dark:text-pale-sky-400 font-semibold flex items-center justify-between gap-2 animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+              <span>{t('lookupSearching')}</span>
+            </div>
+            <button
+              type="button"
+              onClick={lookupHook.cancel}
+              className="text-xs text-muted hover:text-main underline cursor-pointer"
+            >
+              {t('cancel')}
+            </button>
+          </div>
+        )}
+
+        {/* No Results Status Banner */}
+        {lookupHook.status === 'no_results' && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 text-xs text-amber-600 dark:text-amber-400 font-semibold flex items-center justify-between gap-2 animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{t('lookupNotFound')}</span>
+            </div>
+            <button
+              type="button"
+              onClick={lookupHook.reset}
+              className="p-1 hover:bg-amber-500/20 rounded cursor-pointer text-amber-600 dark:text-amber-400"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Network Error Status Banner */}
+        {lookupHook.status === 'error' && (
+          <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-2.5 text-xs text-red-600 dark:text-red-400 font-semibold flex items-center justify-between gap-2 animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{t('lookupError')}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={lookupHook.retry}
+                className="px-2.5 py-1 rounded bg-red-500/20 text-red-600 dark:text-red-300 font-bold hover:bg-red-500/30 text-xs cursor-pointer"
+              >
+                {t('lookupRetry')}
+              </button>
+              <button
+                type="button"
+                onClick={lookupHook.reset}
+                className="p-1 hover:bg-red-500/20 rounded cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Success Banner */}
         {autoFillSuccess && (
           <div className="bg-evergreen-500/10 border-b border-evergreen-500/20 px-4 py-2 text-xs text-evergreen-600 dark:text-evergreen-400 font-semibold flex items-center gap-2">
             <Check className="w-4 h-4 shrink-0" />
-            <span>{lang === 'ar' ? 'تم جلب البيانات بنجاح من المراجع المفتوحة!' : 'Metadata fetched successfully!'}</span>
+            <span>{t('metadataAutoFillSuccess')}</span>
           </div>
         )}
 
@@ -536,12 +686,23 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <span className="text-[11px] text-muted font-mono truncate max-w-md block">
                       {formData.filePath || (lang === 'ar' ? 'اختر ملف من الجهاز لربطه بهذا العمل' : 'Select local PDF/EPUB to associate')}
                     </span>
+                    {isDiscoveringFile && (
+                      <span className="text-[11px] text-pale-sky-500 font-bold flex items-center gap-1.5 mt-1 animate-pulse">
+                        <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
+                        <span>
+                          {lang === 'ar'
+                            ? 'جاري استخراج بيانات الكتاب والبحث عن الغلاف...'
+                            : 'Extracting metadata & discovering cover...'}
+                        </span>
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 <button
                   onClick={handlePickFileNative}
-                  className="px-3 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm"
+                  disabled={isDiscoveringFile}
+                  className="px-3 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm disabled:opacity-50"
                 >
                   <FolderOpen className="w-4 h-4 text-amber-500" />
                   <span>{formData.filePath ? (lang === 'ar' ? 'تغيير الملف' : 'Change File') : (lang === 'ar' ? 'اختيار ملف' : 'Select File')}</span>
@@ -551,7 +712,12 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               {/* Cover Image Section */}
               <div className="p-3.5 rounded-2xl bg-canvas border border-subtle flex flex-col sm:flex-row items-start sm:items-center gap-3.5">
                 <div className="w-16 h-22 rounded-xl bg-surface border border-subtle overflow-hidden shrink-0 flex items-center justify-center relative shadow-sm">
-                  {formData.coverImage ? (
+                  {isDiscoveringFile ? (
+                    <div className="flex flex-col items-center justify-center text-pale-sky-500 p-1 text-center animate-pulse">
+                      <RefreshCw className="w-5 h-5 animate-spin mb-1" />
+                      <span className="text-[9px] font-bold">{lang === 'ar' ? 'جاري البحث...' : 'Searching...'}</span>
+                    </div>
+                  ) : formData.coverImage ? (
                     <img
                       src={formData.coverImage}
                       alt={formData.title || 'Cover'}
@@ -686,11 +852,23 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <label className="font-bold text-main">{lang === 'ar' ? 'الرقم المعياري (ISBN):' : 'ISBN:'}</label>
-                        {formData.isbn && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isValidIsbn(formData.isbn) ? 'bg-evergreen-500/10 text-evergreen-600' : 'bg-red-500/10 text-red-600'}`}>
-                            {isValidIsbn(formData.isbn) ? '✓ ISBN صالح' : '✗ غير صالح'}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {formData.isbn && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isValidIsbn(formData.isbn) ? 'bg-evergreen-500/10 text-evergreen-600' : 'bg-red-500/10 text-red-600'}`}>
+                              {isValidIsbn(formData.isbn) ? '✓ ISBN صالح' : '✗ غير صالح'}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleTriggerAutoFill(formData.isbn)}
+                            disabled={!formData.isbn?.trim() || lookupHook.status === 'searching'}
+                            className="text-[10px] font-bold text-pale-sky-600 dark:text-pale-sky-400 hover:underline flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+                            title={t('lookupByIsbnBtn')}
+                          >
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>{t('lookupByIsbnBtn')}</span>
+                          </button>
+                        </div>
                       </div>
                       <input
                         type="text"
@@ -1484,6 +1662,20 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Side-by-side metadata diff modal */}
+        {showDiffModal && fetchedWork && (
+          <MetadataDiffModal
+            isOpen={showDiffModal}
+            currentBook={formData}
+            incomingWork={fetchedWork}
+            onClose={() => {
+              setShowDiffModal(false);
+              setFetchedWork(null);
+            }}
+            onApply={handleApplyDiffUpdates}
+          />
+        )}
       </div>
     </div>
   );
