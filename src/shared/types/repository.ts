@@ -10,6 +10,7 @@ import type { CategoryBreadcrumb, CategoryNode } from './category';
 import type { PageNoteDTO, PageNotePayload } from './knowledge';
 
 export * from './work';
+export type { ContributorRole } from './work';
 export * from './category';
 export * from './knowledge';
 
@@ -49,7 +50,28 @@ export interface IWorkRepository {
    * Updates reading status and progress for a work.
    */
   updateReadingStatus?(workId: string, status: import('./work').ReadingStatus, progress?: number): Promise<boolean> | boolean;
+
+  /**
+   * Records a new borrower loan for a work.
+   */
+  recordLoan?(workId: string, loanData: Partial<import('./metadata').LendingRecord>): Promise<import('./metadata').LendingRecord> | import('./metadata').LendingRecord;
+
+  /**
+   * Marks a loan as returned with optional return date and condition.
+   */
+  returnLoan?(loanId: string, returnDate?: string, conditionOnReturn?: string): Promise<import('./metadata').LendingRecord> | import('./metadata').LendingRecord;
+
+  /**
+   * Retrieves all lending records for a specific work.
+   */
+  getLendingHistory?(workId: string): Promise<import('./metadata').LendingRecord[]> | import('./metadata').LendingRecord[];
+
+  /**
+   * Retrieves all active or overdue loans across the entire library.
+   */
+  getActiveLoans?(): Promise<Array<import('./metadata').LendingRecord & { workTitle: string }>> | Array<import('./metadata').LendingRecord & { workTitle: string }>;
 }
+
 
 /**
  * Interface for Category repository operations.

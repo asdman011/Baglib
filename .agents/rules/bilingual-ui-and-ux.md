@@ -10,3 +10,4 @@ Typography: Use readable Arabic and Latin fonts appropriate to the content. Prev
 Localized data: Preserve original titles and names. Do not add bilingual database columns or duplicate fields unless the approved schema or an explicit architectural decision requires them.
 Arabic search: Normalize Arabic text in search queries and indexes, not in canonical stored content. Handle tashkeel and orthographic variants consistently, and apply potentially ambiguous substitutions—such as ة/ه—carefully to avoid false positives.
 Verification: Test affected features in both Arabic RTL and English LTR, including mixed Arabic/Latin text and representative Arabic search queries.
+Tell in what way that you did exactly changed the user experiance or the layout after you finish with the task.

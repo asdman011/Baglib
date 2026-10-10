@@ -1,9 +1,17 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   X,
   BookOpen,
+  FileText,
+  Newspaper,
+  Presentation,
+  Layers,
+  GraduationCap,
+  Scroll,
+  Headphones,
+  Video,
   MapPin,
   Tag,
   Sparkles,
@@ -11,15 +19,38 @@ import {
   Trash2,
   Plus,
   FolderOpen,
-  FileCheck
+  FileCheck,
+  AlertCircle,
+  CheckCircle2,
+  Calendar,
+  DollarSign,
+  UserCheck,
+  Users,
+  ShieldCheck,
+  Clock,
+  Compass
 } from 'lucide-react';
-import { BookItem, LendingRecord } from '../../types/library';
+import {
+  BookItem,
+  LendingRecord,
+  WorkTypeKey,
+  WORK_TYPES,
+  getWorkTypeInfo,
+  Contributor,
+  ContributorRole
+} from '../../types/library';
+import {
+  validateWorkMetadata,
+  isValidIsbn,
+  isValidDoi,
+  isValidIssn
+} from '../../../shared/validators/metadata-validator';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 interface BookDetailModalProps {
   book: BookItem | null;
   isOpen: boolean;
-  allCategories?: { id: string, nameAr: string, nameEn: string }[];
+  allCategories?: { id: string; nameAr: string; nameEn: string }[];
   onClose: () => void;
   onSave: (updatedBook: BookItem) => void;
   onDelete: (id: string) => void;
@@ -33,29 +64,55 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onSave,
   onDelete,
 }) => {
-  const { lang } = useWorkspace();
+  const { lang, dir } = useWorkspace();
 
   const [formData, setFormData] = useState<BookItem>(book || ({} as BookItem));
-  const [activeTab, setActiveTab] = useState<'info' | 'physical' | 'lending'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'physical' | 'classification' | 'lending'>('info');
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // New Lending state
+  // Contributor form state
+  const [newContribName, setNewContribName] = useState('');
+  const [newContribRole, setNewContribRole] = useState<ContributorRole>('author');
+
+  // Lending form state
   const [newBorrower, setNewBorrower] = useState('');
+  const [newBorrowerContact, setNewBorrowerContact] = useState('');
   const [newBorrowDate, setNewBorrowDate] = useState(new Date().toISOString().split('T')[0]);
   const [newReturnDate, setNewReturnDate] = useState('');
+  const [newLendingNotes, setNewLendingNotes] = useState('');
 
-  // Sync state when book changes (e.g. reopening with a different book)
+  // Sync state when book changes
   React.useEffect(() => {
     if (book) {
-      setFormData({ ...book });
+      setFormData({
+        ...book,
+        workType: book.workType || 'book',
+        workTypeId: book.workTypeId || 'wt-book',
+        contributors: book.contributors || [],
+        lendingHistory: book.lendingHistory || [],
+      });
       setActiveTab('info');
     }
   }, [book]);
 
+  // Real-time type-aware validation
+  const validation = useMemo(() => {
+    return validateWorkMetadata(formData);
+  }, [formData]);
+
   const handleInputChange = (field: keyof BookItem, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleWorkTypeChange = (key: WorkTypeKey) => {
+    const info = WORK_TYPES[key];
+    setFormData((prev) => ({
+      ...prev,
+      workType: key,
+      workTypeId: info.id,
+    }));
   };
 
   const handlePickFileNative = async () => {
@@ -94,20 +151,46 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     }));
   };
 
+  // Contributor Management
+  const handleAddContributor = () => {
+    if (!newContribName.trim()) return;
+    const newContrib: Contributor = {
+      name: newContribName.trim(),
+      role: newContribRole,
+    };
+    setFormData((prev) => ({
+      ...prev,
+      contributors: [...(prev.contributors || []), newContrib],
+    }));
+    setNewContribName('');
+  };
+
+  const handleRemoveContributor = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      contributors: (prev.contributors || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  // Lending Management
   const handleAddLending = () => {
     if (!newBorrower.trim()) return;
     const newRecord: LendingRecord = {
       id: `lend-${Date.now()}`,
-      borrowerName: newBorrower,
+      borrowerName: newBorrower.trim(),
+      borrowerContact: newBorrowerContact.trim() || undefined,
       borrowDate: newBorrowDate,
       expectedReturnDate: newReturnDate || 'غير محدد',
       isReturned: false,
+      notes: newLendingNotes.trim() || undefined,
     };
     setFormData((prev) => ({
       ...prev,
       lendingHistory: [newRecord, ...(prev.lendingHistory || [])],
     }));
     setNewBorrower('');
+    setNewBorrowerContact('');
+    setNewLendingNotes('');
   };
 
   const handleToggleReturn = (lendId: string) => {
@@ -119,13 +202,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               ...rec,
               isReturned: !rec.isReturned,
               actualReturnDate: !rec.isReturned ? new Date().toISOString().split('T')[0] : undefined,
+              conditionOnReturn: !rec.isReturned ? 'سليمة' : undefined,
             }
           : rec
       ),
     }));
   };
 
-  // Real OpenLibrary / Google Books API Auto-Fill Engine
+  // OpenLibrary / Google Books Auto-Fill
   const fetchMetadataAutoFill = async () => {
     setIsAutoFilling(true);
     try {
@@ -141,11 +225,11 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         setFormData((prev) => ({
           ...prev,
           title: prev.title || volumeInfo.title,
-          author: prev.author !== 'مؤلف غير محدد' ? prev.author : (volumeInfo.authors ? volumeInfo.authors.join(', ') : prev.author),
-          publisher: volumeInfo.publisher || prev.publisher || 'دار النشر الأكاديمية',
-          publicationYear: volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.substring(0, 4)) : (prev.publicationYear || 2023),
-          isbn: prev.isbn || (volumeInfo.industryIdentifiers ? volumeInfo.industryIdentifiers[0]?.identifier : '978-9953-0-1234-5'),
-          categories: Array.from(new Set([...(prev.categories || []), ...(volumeInfo.categories || ['تحقيق أكاديمي'])])),
+          author: prev.author !== 'مؤلف مجهول' ? prev.author : (volumeInfo.authors ? volumeInfo.authors.join(', ') : prev.author),
+          publisher: volumeInfo.publisher || prev.publisher,
+          publicationYear: volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.substring(0, 4)) : prev.publicationYear,
+          isbn: prev.isbn || (volumeInfo.industryIdentifiers ? volumeInfo.industryIdentifiers[0]?.identifier : prev.isbn),
+          categories: Array.from(new Set([...(prev.categories || []), ...(volumeInfo.categories || [])])),
           coverImage: volumeInfo.imageLinks?.thumbnail || prev.coverImage,
         }));
       }
@@ -161,9 +245,22 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
   if (!isOpen || !book) return null;
 
+  const currentTypeInfo = getWorkTypeInfo(formData.workType || formData.workTypeId);
+
+  const roleLabelMap: Record<ContributorRole, { ar: string; en: string }> = {
+    author: { ar: 'مؤلف', en: 'Author' },
+    co_author: { ar: 'مؤلف مشارك', en: 'Co-Author' },
+    translator: { ar: 'مترجم', en: 'Translator' },
+    editor: { ar: 'محقق / محرر', en: 'Editor' },
+    speaker: { ar: 'محاضر / متحدث', en: 'Speaker' },
+    narrator: { ar: 'راوٍ / قارئ', en: 'Narrator' },
+    commentator: { ar: 'شارح / معلق', en: 'Commentator' },
+    advisor: { ar: 'مشرف علمي', en: 'Advisor' },
+    scribe: { ar: 'ناسخ', en: 'Scribe' },
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
-      {/* Native File Input for book linking */}
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
       <input
         type="file"
         ref={fileInputRef}
@@ -172,396 +269,1060 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         className="hidden"
       />
 
-      <div className="w-full max-w-3xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] font-sans" dir="rtl">
-        {/* Modal Header */}
-        <div className="p-4 bg-canvas/80 border-b border-subtle flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-pale-sky-500/10 border border-pale-sky-500/20 flex items-center justify-center text-pale-sky-500 font-bold">
-              <BookOpen className="w-5 h-5" />
+      <div
+        className="w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] font-sans"
+        dir={dir}
+      >
+        {/* ================================================================= */}
+        {/* MODAL HEADER: Title, Type Indicator & Action Buttons              */}
+        {/* ================================================================= */}
+        <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-2xl bg-pale-sky-500/15 border border-pale-sky-500/30 flex items-center justify-center text-pale-sky-500 shrink-0 shadow-sm">
+              <BookOpen className="w-6 h-6" />
             </div>
-            <div>
-              <h3 className="font-bold text-main text-base line-clamp-1">{formData.title}</h3>
-              <p className="text-xs text-muted">{formData.author || 'مؤلف غير محدد'}</p>
+            <div className="min-w-0">
+              <h3 className="font-bold text-main text-base sm:text-lg truncate">
+                {formData.title || (lang === 'ar' ? 'عمل جديد' : 'New Catalog Item')}
+              </h3>
+              <p className="text-xs text-muted truncate">
+                {formData.author || currentTypeInfo.nameAr} • {currentTypeInfo[lang === 'ar' ? 'nameAr' : 'nameEn']}
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Auto-fill Button */}
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={fetchMetadataAutoFill}
               disabled={isAutoFilling}
-              title="تعبئة بيانات الكتاب تلقائياً من الإنترنت عبر (OpenLibrary / Google Books API)"
+              title={lang === 'ar' ? 'جلب البيانات تلقائياً من الإنترنت' : 'Auto-fill metadata from web'}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer"
             >
               <Sparkles className={`w-3.5 h-3.5 ${isAutoFilling ? 'animate-spin' : ''}`} />
-              <span>{isAutoFilling ? 'جاري الجلب...' : 'جلب البيانات تلقائياً'}</span>
+              <span className="hidden sm:inline">
+                {isAutoFilling
+                  ? (lang === 'ar' ? 'جاري الجلب...' : 'Fetching...')
+                  : (lang === 'ar' ? 'جلب تلقائي' : 'Auto-Fill')}
+              </span>
             </button>
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors"
+              className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
+        {/* Success Banner */}
         {autoFillSuccess && (
           <div className="bg-evergreen-500/10 border-b border-evergreen-500/20 px-4 py-2 text-xs text-evergreen-600 dark:text-evergreen-400 font-semibold flex items-center gap-2">
-            <Check className="w-4 h-4" />
-            <span>تم استكمال بيانات الكتاب والغلاف بنجاح من المراجع المفتوحة!</span>
+            <Check className="w-4 h-4 shrink-0" />
+            <span>{lang === 'ar' ? 'تم جلب البيانات بنجاح من المراجع المفتوحة!' : 'Metadata fetched successfully!'}</span>
           </div>
         )}
 
-        {/* Modal Navigation Tabs (Streamlined: Info, Physical, Lending) */}
-        <div className="flex items-center gap-2 px-4 pt-3 bg-canvas/30 border-b border-subtle text-xs font-semibold">
+        {/* Live Validation Alert Banner */}
+        {!validation.isValid && (
+          <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-2 text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span className="font-semibold">
+              {lang === 'ar' ? validation.errors[0]?.messageAr : validation.errors[0]?.messageEn}
+            </span>
+          </div>
+        )}
+
+        {/* ================================================================= */}
+        {/* WORK TYPE SELECTOR BAR (9 Polymorphic Types)                      */}
+        {/* ================================================================= */}
+        <div className="px-4 py-2.5 bg-canvas/50 border-b border-subtle overflow-x-auto scrollbar-none flex items-center gap-1.5">
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider shrink-0 me-1">
+            {lang === 'ar' ? 'نوع المصنف:' : 'Work Type:'}
+          </span>
+          {(Object.keys(WORK_TYPES) as WorkTypeKey[]).map((key) => {
+            const info = WORK_TYPES[key];
+            const isSelected = formData.workType === key || formData.workTypeId === info.id;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleWorkTypeChange(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  isSelected
+                    ? 'bg-pale-sky-500 text-white shadow-sm ring-1 ring-pale-sky-400'
+                    : 'bg-surface hover:bg-canvas text-muted hover:text-main border border-subtle'
+                }`}
+              >
+                {key === 'book' && <BookOpen className="w-3.5 h-3.5" />}
+                {key === 'research_paper' && <FileText className="w-3.5 h-3.5" />}
+                {key === 'article' && <Newspaper className="w-3.5 h-3.5" />}
+                {key === 'lecture' && <Presentation className="w-3.5 h-3.5" />}
+                {key === 'periodical' && <Layers className="w-3.5 h-3.5" />}
+                {key === 'thesis' && <GraduationCap className="w-3.5 h-3.5" />}
+                {key === 'manuscript' && <Scroll className="w-3.5 h-3.5" />}
+                {key === 'podcast' && <Headphones className="w-3.5 h-3.5" />}
+                {key === 'video' && <Video className="w-3.5 h-3.5" />}
+                <span>{lang === 'ar' ? info.nameAr : info.nameEn}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ================================================================= */}
+        {/* NAVIGATION TABS: Info, Physical Location, Classification, Lending */}
+        {/* ================================================================= */}
+        <div className="flex items-center gap-1 sm:gap-3 px-4 pt-3 bg-canvas/30 border-b border-subtle text-xs font-semibold overflow-x-auto">
           <button
             onClick={() => setActiveTab('info')}
-            className={`pb-2 px-3 border-b-2 transition-all ${
+            className={`pb-2.5 px-3 border-b-2 transition-all cursor-pointer shrink-0 ${
               activeTab === 'info'
                 ? 'border-pale-sky-500 text-pale-sky-500 font-bold'
                 : 'border-transparent text-muted hover:text-main'
             }`}
           >
-            معلومات الكتاب الأساسية
+            {lang === 'ar' ? 'البيانات الأساسية والتخصصية' : 'Primary & Type Details'}
           </button>
           <button
             onClick={() => setActiveTab('physical')}
-            className={`pb-2 px-3 border-b-2 transition-all ${
+            className={`pb-2.5 px-3 border-b-2 transition-all cursor-pointer shrink-0 ${
               activeTab === 'physical'
                 ? 'border-pale-sky-500 text-pale-sky-500 font-bold'
                 : 'border-transparent text-muted hover:text-main'
             }`}
           >
-            الموقع الفيزيائي (الرف والغرفة)
+            {lang === 'ar' ? 'الموقع الفيزيائي والاقتناء' : 'Location & Holdings'}
+          </button>
+          <button
+            onClick={() => setActiveTab('classification')}
+            className={`pb-2.5 px-3 border-b-2 transition-all cursor-pointer shrink-0 ${
+              activeTab === 'classification'
+                ? 'border-pale-sky-500 text-pale-sky-500 font-bold'
+                : 'border-transparent text-muted hover:text-main'
+            }`}
+          >
+            {lang === 'ar' ? 'المساهمون والتصنيف' : 'Contributors & Tags'}
           </button>
           <button
             onClick={() => setActiveTab('lending')}
-            className={`pb-2 px-3 border-b-2 transition-all ${
+            className={`pb-2.5 px-3 border-b-2 transition-all cursor-pointer shrink-0 ${
               activeTab === 'lending'
                 ? 'border-pale-sky-500 text-pale-sky-500 font-bold'
                 : 'border-transparent text-muted hover:text-main'
             }`}
           >
-            سجل الإعارة ({(formData.lendingHistory || []).length})
+            {lang === 'ar'
+              ? `سجل الإعارة (${(formData.lendingHistory || []).length})`
+              : `Lending (${(formData.lendingHistory || []).length})`}
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {/* ================================================================= */}
+        {/* MODAL BODY                                                        */}
+        {/* ================================================================= */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+          {/* TAB 1: INFO & TYPE-SPECIFIC FIELDS */}
           {activeTab === 'info' && (
-            <div className="space-y-4 text-xs">
-              {/* Connected File Card */}
-              <div className="p-3.5 rounded-2xl bg-canvas border border-subtle flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
+            <div className="space-y-4">
+              {/* Linked File Card */}
+              <div className="p-3.5 rounded-2xl bg-canvas border border-subtle flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <FileCheck className="w-5 h-5 text-amber-500 shrink-0" />
-                  <div>
-                    <span className="font-bold text-main block">
-                      {formData.filePath ? 'الملف الرقمي المربوط بالجهاز' : 'لم يتم ربط ملف كتاب بعد'}
+                  <div className="min-w-0">
+                    <span className="font-bold text-main block truncate">
+                      {formData.filePath
+                        ? (lang === 'ar' ? 'الملف الرقمي المربوط بالجهاز' : 'Linked Digital File')
+                        : (lang === 'ar' ? 'لم يتم ربط ملف رقمي' : 'No Digital File Linked')}
                     </span>
                     <span className="text-[11px] text-muted font-mono truncate max-w-md block">
-                      {formData.filePath || 'اضغط الزر لتحديد ملف الكتاب من جهازك مباشرة'}
+                      {formData.filePath || (lang === 'ar' ? 'اختر ملف من الجهاز لربطه بهذا العمل' : 'Select local PDF/EPUB to associate')}
                     </span>
                   </div>
                 </div>
 
                 <button
                   onClick={handlePickFileNative}
-                  className="px-3 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                  className="px-3 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm"
                 >
                   <FolderOpen className="w-4 h-4 text-amber-500" />
-                  <span>{formData.filePath ? 'تغيير الملف' : 'اختيار كتاب من الجهاز'}</span>
+                  <span>{formData.filePath ? (lang === 'ar' ? 'تغيير الملف' : 'Change File') : (lang === 'ar' ? 'اختيار ملف' : 'Select File')}</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Shared Primary Fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="sm:col-span-2 space-y-1">
-                  <label className="font-bold text-main">عنوان الكتاب (Title):</label>
+                  <label className="font-bold text-main flex items-center gap-1">
+                    <span>{lang === 'ar' ? 'العنوان الرئيسي' : 'Title'}</span>
+                    <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={formData.title || ''}
                     onChange={(e) => handleInputChange('title', e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
+                    placeholder={lang === 'ar' ? 'أدخل عنوان العمل...' : 'Enter work title...'}
+                    className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500 text-sm font-semibold"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-main">اسم المؤلف (Author):</label>
+                  <label className="font-bold text-main">
+                    {formData.workType === 'lecture'
+                      ? (lang === 'ar' ? 'المحاضر / المتحدث الرئيسي' : 'Speaker')
+                      : formData.workType === 'manuscript'
+                      ? (lang === 'ar' ? 'المؤلف / المنسوب إليه' : 'Author')
+                      : (lang === 'ar' ? 'المؤلف الرئيسي' : 'Primary Author')}
+                  </label>
                   <input
                     type="text"
                     value={formData.author || ''}
                     onChange={(e) => handleInputChange('author', e.target.value)}
+                    placeholder={lang === 'ar' ? 'اسم المؤلف أو المحاضر...' : 'Author or speaker name...'}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-main">الطبعة (Edition):</label>
-                  <input
-                    type="text"
-                    value={formData.edition || ''}
-                    onChange={(e) => handleInputChange('edition', e.target.value)}
-                    placeholder="مثال: الطبعة الثانية المحققة"
+                  <label className="font-bold text-main">{lang === 'ar' ? 'لغة العمل' : 'Language'}</label>
+                  <select
+                    value={formData.language || 'العربية'}
+                    onChange={(e) => handleInputChange('language', e.target.value)}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
-                  />
+                  >
+                    <option value="العربية">العربية (Arabic)</option>
+                    <option value="English">English</option>
+                    <option value="الفرنسية">الفرنسية (French)</option>
+                    <option value="الفارسية">الفارسية (Persian)</option>
+                    <option value="التركية">التركية (Turkish)</option>
+                  </select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-main">دار النشر (Publisher):</label>
+                  <label className="font-bold text-main">{lang === 'ar' ? 'سنة النشر أو الإنتاج' : 'Publication Year'}</label>
                   <input
-                    type="text"
-                    value={formData.publisher || ''}
-                    onChange={(e) => handleInputChange('publisher', e.target.value)}
-                    placeholder="مثال: دار المعارف"
-                    className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-main">سنة النشر (Publication Year):</label>
-                  <input
-                    type="text"
+                    type="number"
                     value={formData.publicationYear || ''}
-                    onChange={(e) => handleInputChange('publicationYear', e.target.value)}
-                    placeholder="مثال: 1999 م"
+                    onChange={(e) => handleInputChange('publicationYear', e.target.value ? parseInt(e.target.value) : undefined)}
+                    placeholder="2026"
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-main">المعرف الدولي ISBN:</label>
-                  <input
-                    type="text"
-                    value={formData.isbn || ''}
-                    onChange={(e) => handleInputChange('isbn', e.target.value)}
-                    placeholder="978-XXXXX"
-                    className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500 font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="font-bold text-main">التصنيف الأساسي (Primary Category):</label>
+                  <label className="font-bold text-main">{lang === 'ar' ? 'نوع الحيازة' : 'Holding Type'}</label>
                   <select
-                    value={formData.primaryCategory?.id || ''}
-                    onChange={(e) => {
-                      const selectedId = e.target.value;
-                      if (!selectedId) {
-                        handleInputChange('primaryCategory', null);
-                      } else {
-                        const cat = allCategories.find((c) => c.id === selectedId);
-                        if (cat) handleInputChange('primaryCategory', cat);
-                      }
-                    }}
+                    value={formData.bookType || 'physical'}
+                    onChange={(e) => handleInputChange('bookType', e.target.value)}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   >
-                    <option value="">-- بدون تصنيف (No Category) --</option>
-                    {allCategories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {lang === 'ar' ? cat.nameAr : cat.nameEn}
-                      </option>
-                    ))}
+                    <option value="physical">{lang === 'ar' ? 'نسخة ورقية / فيزيائية' : 'Physical Copy'}</option>
+                    <option value="digital">{lang === 'ar' ? 'نسخة رقمية (ملف إلكتروني)' : 'Digital File'}</option>
+                    <option value="hybrid">{lang === 'ar' ? 'مزدوج (ورقي ورقمي معا)' : 'Hybrid (Both)'}</option>
                   </select>
                 </div>
+              </div>
 
-                <div className="space-y-1">
-                  <label className="font-bold text-main">رابط صورة الغلاف (Cover Image):</label>
-                  <input
-                    type="text"
-                    value={formData.coverImage || ''}
-                    onChange={(e) => handleInputChange('coverImage', e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
-                  />
+              {/* ------------------------------------------------------------- */}
+              {/* DYNAMIC CONTEXT-SENSITIVE TYPE-SPECIFIC CARD                  */}
+              {/* ------------------------------------------------------------- */}
+              <div className="p-4 rounded-2xl bg-canvas/60 border border-subtle space-y-3 mt-4">
+                <div className="flex items-center gap-2 text-pale-sky-600 dark:text-pale-sky-400 font-bold border-b border-subtle pb-2">
+                  <Compass className="w-4 h-4" />
+                  <span>
+                    {lang === 'ar'
+                      ? `حقول مخصصة لـ: ${currentTypeInfo.nameAr}`
+                      : `Specific Fields for: ${currentTypeInfo.nameEn}`}
+                  </span>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-bold text-main">حالة القراءة (Reading Status):</label>
-                  <select
-                    value={formData.readingStatus || 'unread'}
-                    onChange={(e) => handleInputChange('readingStatus', e.target.value as any)}
-                    className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500 font-sans"
-                  >
-                    <option value="unread">لم يُقرأ (Unread)</option>
-                    <option value="reading">قيد القراءة (Currently Reading)</option>
-                    <option value="completed">مكتمل (Completed)</option>
-                  </select>
-                </div>
-
-                {formData.readingStatus === 'reading' && (
-                  <div className="space-y-1 sm:col-span-2 p-3 rounded-xl bg-canvas/60 border border-subtle">
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <label className="font-bold text-main">نسبة إنجاز القراءة (Reading Progress):</label>
-                      <span className="font-mono font-bold text-pale-sky-600 dark:text-pale-sky-400">
-                        {formData.readingProgress || 0}%
-                      </span>
+                {/* 1. BOOK FIELDS */}
+                {formData.workType === 'book' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-main">{lang === 'ar' ? 'الرقم المعياري (ISBN):' : 'ISBN:'}</label>
+                        {formData.isbn && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isValidIsbn(formData.isbn) ? 'bg-evergreen-500/10 text-evergreen-600' : 'bg-red-500/10 text-red-600'}`}>
+                            {isValidIsbn(formData.isbn) ? '✓ ISBN صالح' : '✗ غير صالح'}
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={formData.isbn || ''}
+                        onChange={(e) => handleInputChange('isbn', e.target.value)}
+                        placeholder="978-9953-0-1234-5"
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={formData.readingProgress || 0}
-                      onChange={(e) => handleInputChange('readingProgress', Number(e.target.value))}
-                      className="w-full accent-pale-sky-500 cursor-pointer"
-                    />
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'دار النشر (Publisher):' : 'Publisher:'}</label>
+                      <input
+                        type="text"
+                        value={formData.publisher || ''}
+                        onChange={(e) => handleInputChange('publisher', e.target.value)}
+                        placeholder={lang === 'ar' ? 'دار النشر...' : 'Publisher name...'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'الطبعة (Edition):' : 'Edition:'}</label>
+                      <input
+                        type="text"
+                        value={formData.edition || ''}
+                        onChange={(e) => handleInputChange('edition', e.target.value)}
+                        placeholder={lang === 'ar' ? 'مثال: الطبعة الثالثة' : 'e.g. 3rd Edition'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'عدد الصفحات (Pages):' : 'Pages Count:'}</label>
+                      <input
+                        type="number"
+                        value={formData.pagesCount || ''}
+                        onChange={(e) => handleInputChange('pagesCount', e.target.value ? parseInt(e.target.value) : undefined)}
+                        placeholder="350"
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. RESEARCH PAPER FIELDS */}
+                {formData.workType === 'research_paper' && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="font-bold text-main">{lang === 'ar' ? 'المعرف الرقمي (DOI):' : 'DOI:'}</label>
+                          {formData.doi && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isValidDoi(formData.doi) ? 'bg-evergreen-500/10 text-evergreen-600' : 'bg-red-500/10 text-red-600'}`}>
+                              {isValidDoi(formData.doi) ? '✓ DOI صالح' : '✗ غير صالح'}
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={formData.doi || ''}
+                          onChange={(e) => handleInputChange('doi', e.target.value)}
+                          placeholder="10.1000/182"
+                          className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none font-mono text-[11px]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="font-bold text-main">{lang === 'ar' ? 'اسم المجلة العلمية (Journal):' : 'Journal Name:'}</label>
+                        <input
+                          type="text"
+                          value={formData.journalName || ''}
+                          onChange={(e) => handleInputChange('journalName', e.target.value)}
+                          placeholder="Journal of Arabic Studies"
+                          className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="font-bold text-main">{lang === 'ar' ? 'اسم المؤتمر (Conference):' : 'Conference Name:'}</label>
+                        <input
+                          type="text"
+                          value={formData.conferenceName || ''}
+                          onChange={(e) => handleInputChange('conferenceName', e.target.value)}
+                          placeholder="ACL 2026"
+                          className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="font-bold text-main">{lang === 'ar' ? 'نطاق الصفحات (Pages Range):' : 'Pages Range:'}</label>
+                        <input
+                          type="text"
+                          value={formData.pagesRange || ''}
+                          onChange={(e) => handleInputChange('pagesRange', e.target.value)}
+                          placeholder="120-145"
+                          className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="font-bold text-main">{lang === 'ar' ? 'معرف ArXiv ID:' : 'ArXiv ID:'}</label>
+                        <input
+                          type="text"
+                          value={formData.arxivId || ''}
+                          onChange={(e) => handleInputChange('arxivId', e.target.value)}
+                          placeholder="2601.12345"
+                          className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 pt-6">
+                        <input
+                          type="checkbox"
+                          id="peerReviewedCheck"
+                          checked={formData.peerReviewed || false}
+                          onChange={(e) => handleInputChange('peerReviewed', e.target.checked)}
+                          className="w-4 h-4 accent-pale-sky-500 rounded cursor-pointer"
+                        />
+                        <label htmlFor="peerReviewedCheck" className="font-bold text-main cursor-pointer">
+                          {lang === 'ar' ? 'ورقة علمية محكمة (Peer-Reviewed)' : 'Peer-Reviewed Paper'}
+                        </label>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'المستخلص العلمي (Abstract):' : 'Abstract:'}</label>
+                      <textarea
+                        rows={3}
+                        value={formData.abstract || ''}
+                        onChange={(e) => handleInputChange('abstract', e.target.value)}
+                        placeholder={lang === 'ar' ? 'ملخص البحث...' : 'Abstract of the paper...'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none resize-none leading-relaxed"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. LECTURE & TALK FIELDS */}
+                {formData.workType === 'lecture' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'المحاضر (Speaker):' : 'Speaker:'}</label>
+                      <input
+                        type="text"
+                        value={formData.speaker || ''}
+                        onChange={(e) => handleInputChange('speaker', e.target.value)}
+                        placeholder={lang === 'ar' ? 'اسم المتحدث...' : 'Speaker name...'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'المؤسسة المستضيفة (Host Institution):' : 'Host Institution:'}</label>
+                      <input
+                        type="text"
+                        value={formData.hostInstitution || ''}
+                        onChange={(e) => handleInputChange('hostInstitution', e.target.value)}
+                        placeholder={lang === 'ar' ? 'الجامعة أو المعهد...' : 'Host university / institute...'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'عنوان الدورة أو الحدث:' : 'Course / Event Title:'}</label>
+                      <input
+                        type="text"
+                        value={formData.courseOrEventTitle || ''}
+                        onChange={(e) => handleInputChange('courseOrEventTitle', e.target.value)}
+                        placeholder={lang === 'ar' ? 'اسم السلسلة أو المؤتمر...' : 'Series / course title...'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'المدة بالدقائق (Duration Minutes):' : 'Duration (Minutes):'}</label>
+                      <input
+                        type="number"
+                        value={formData.durationMinutes || ''}
+                        onChange={(e) => handleInputChange('durationMinutes', e.target.value ? parseInt(e.target.value) : undefined)}
+                        placeholder="90"
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-2 space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'رابط التسجيل أو البث (Recording URL):' : 'Recording URL:'}</label>
+                      <input
+                        type="url"
+                        value={formData.recordingUrl || ''}
+                        onChange={(e) => handleInputChange('recordingUrl', e.target.value)}
+                        placeholder="https://youtube.com/... or https://archive.org/..."
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. PERIODICAL / MAGAZINE FIELDS */}
+                {formData.workType === 'periodical' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'اسم الدورية / المجلة:' : 'Periodical Title:'}</label>
+                      <input
+                        type="text"
+                        value={formData.periodicalTitle || ''}
+                        onChange={(e) => handleInputChange('periodicalTitle', e.target.value)}
+                        placeholder={lang === 'ar' ? 'مجلة مجمع اللغة العربية' : 'Magazine / Journal Title'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-main">{lang === 'ar' ? 'الرقم المعياري للدوريات (ISSN):' : 'ISSN:'}</label>
+                        {formData.issn && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isValidIssn(formData.issn) ? 'bg-evergreen-500/10 text-evergreen-600' : 'bg-red-500/10 text-red-600'}`}>
+                            {isValidIssn(formData.issn) ? '✓ ISSN صالح' : '✗ غير صالح'}
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={formData.issn || ''}
+                        onChange={(e) => handleInputChange('issn', e.target.value)}
+                        placeholder="2049-3630"
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'رقم العدد (Issue Number):' : 'Issue Number:'}</label>
+                      <input
+                        type="text"
+                        value={formData.issueNumber || ''}
+                        onChange={(e) => handleInputChange('issueNumber', e.target.value)}
+                        placeholder="120"
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'رقم المجلد (Volume Number):' : 'Volume Number:'}</label>
+                      <input
+                        type="text"
+                        value={formData.volumeNumber || ''}
+                        onChange={(e) => handleInputChange('volumeNumber', e.target.value)}
+                        placeholder="45"
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-2 space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'فصل أو شهر الصدور:' : 'Season / Month:'}</label>
+                      <input
+                        type="text"
+                        value={formData.publicationSeasonOrMonth || ''}
+                        onChange={(e) => handleInputChange('publicationSeasonOrMonth', e.target.value)}
+                        placeholder={lang === 'ar' ? 'ربيع 2024' : 'Spring 2024'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. THESIS FIELDS */}
+                {formData.workType === 'thesis' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'الدرجة العلمية:' : 'Degree Level:'}</label>
+                      <select
+                        value={formData.degreeLevel || 'master'}
+                        onChange={(e) => handleInputChange('degreeLevel', e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      >
+                        <option value="master">{lang === 'ar' ? 'ماجستير (Master’s)' : 'Master’s'}</option>
+                        <option value="phd">{lang === 'ar' ? 'دكتوراه (PhD)' : 'Doctorate / PhD'}</option>
+                        <option value="bachelor">{lang === 'ar' ? 'بحث تخرج بكالوريوس' : 'Bachelor’s'}</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'المشرف العلمي (Advisor):' : 'Advisor:'}</label>
+                      <input
+                        type="text"
+                        value={formData.advisor || ''}
+                        onChange={(e) => handleInputChange('advisor', e.target.value)}
+                        placeholder={lang === 'ar' ? 'أ.د. فاروق السامرائي' : 'Prof. Advisor Name'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'الكلية / القسم:' : 'Faculty / Department:'}</label>
+                      <input
+                        type="text"
+                        value={formData.facultyOrDepartment || ''}
+                        onChange={(e) => handleInputChange('facultyOrDepartment', e.target.value)}
+                        placeholder={lang === 'ar' ? 'كلية الآداب - قسم التاريخ' : 'Faculty of Arts'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'تاريخ المناقشة الدفاع:' : 'Defense Date:'}</label>
+                      <input
+                        type="date"
+                        value={formData.defenseDate || ''}
+                        onChange={(e) => handleInputChange('defenseDate', e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 6. MANUSCRIPT FIELDS */}
+                {formData.workType === 'manuscript' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'جهة الحفظ / الخزانة:' : 'Holding Institution:'}</label>
+                      <input
+                        type="text"
+                        value={formData.holdingInstitution || ''}
+                        onChange={(e) => handleInputChange('holdingInstitution', e.target.value)}
+                        placeholder={lang === 'ar' ? 'دار الكتب والوثائق القومية' : 'National Library / Archive'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'رقم الحفظ / Codex:' : 'Codex / Shelfmark:'}</label>
+                      <input
+                        type="text"
+                        value={formData.codexOrShelfmark || ''}
+                        onChange={(e) => handleInputChange('codexOrShelfmark', e.target.value)}
+                        placeholder={lang === 'ar' ? 'مخطوط رقم 458 حديث' : 'MS 458 Hadith'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'اسم الناسخ (Scribe):' : 'Scribe:'}</label>
+                      <input
+                        type="text"
+                        value={formData.scribe || ''}
+                        onChange={(e) => handleInputChange('scribe', e.target.value)}
+                        placeholder={lang === 'ar' ? 'علي بن الحسين البغدادي' : 'Scribe Name'}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'نوع الخط (Script):' : 'Script Type:'}</label>
+                      <select
+                        value={formData.scriptType || 'نسخ'}
+                        onChange={(e) => handleInputChange('scriptType', e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      >
+                        <option value="نسخ">{lang === 'ar' ? 'خط النسخ' : 'Naskh'}</option>
+                        <option value="ثلث">{lang === 'ar' ? 'خط الثلث' : 'Thuluth'}</option>
+                        <option value="كوفي">{lang === 'ar' ? 'الخط الكوفي' : 'Kufic'}</option>
+                        <option value="رقعة">{lang === 'ar' ? 'خط الرقعة' : 'Ruq\'ah'}</option>
+                        <option value="مغربي">{lang === 'ar' ? 'الخط المغربي' : 'Maghrebi'}</option>
+                        <option value="ديواني">{lang === 'ar' ? 'الخط الديواني' : 'Diwani'}</option>
+                        <option value="تعليق">{lang === 'ar' ? 'خط التعليق / الفارسي' : 'Nasta\'liq'}</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'عدد الأوراق (Folios):' : 'Folio Count:'}</label>
+                      <input
+                        type="text"
+                        value={formData.folioCount || ''}
+                        onChange={(e) => handleInputChange('folioCount', e.target.value)}
+                        placeholder="284 ورقة"
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 7. ARTICLE FIELDS */}
+                {formData.workType === 'article' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'اسم الصحيفة / الموقع:' : 'Publication Name:'}</label>
+                      <input
+                        type="text"
+                        value={formData.publicationName || ''}
+                        onChange={(e) => handleInputChange('publicationName', e.target.value)}
+                        placeholder="Al-Jazeera / The Guardian"
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-main">{lang === 'ar' ? 'تاريخ النشر:' : 'Issue Date:'}</label>
+                      <input
+                        type="date"
+                        value={formData.issueDate || ''}
+                        onChange={(e) => handleInputChange('issueDate', e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           )}
 
+          {/* TAB 2: PHYSICAL LOCATION & ACQUISITION */}
           {activeTab === 'physical' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-main flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-amber-500" />
-                  <span>الغرفة / القاعة (Room):</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.room || ''}
-                  onChange={(e) => handleInputChange('room', e.target.value)}
-                  placeholder="مثال: المكتبة الرئيسية (الغرفة الشمالية)"
-                  className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
-                />
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
+                <h4 className="font-bold text-main flex items-center gap-1.5 text-xs text-pale-sky-600 dark:text-pale-sky-400">
+                  <MapPin className="w-4 h-4" />
+                  <span>{lang === 'ar' ? 'التسلسل الهرمي للموقع في المكتبة' : 'Physical Location Hierarchy'}</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-main">{lang === 'ar' ? '1. الغرفة أو القاعة (Room):' : '1. Room:'}</label>
+                    <input
+                      type="text"
+                      value={formData.room || ''}
+                      onChange={(e) => handleInputChange('room', e.target.value)}
+                      placeholder={lang === 'ar' ? 'المكتبة الرئيسية / غرفة المكتب' : 'Main Study'}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-main">{lang === 'ar' ? '2. الخزانة أو الدولاب (Bookcase):' : '2. Bookcase:'}</label>
+                    <input
+                      type="text"
+                      value={formData.bookcase || ''}
+                      onChange={(e) => handleInputChange('bookcase', e.target.value)}
+                      placeholder={lang === 'ar' ? 'خزانة رقم 3 - كتب التراث' : 'Bookcase #3'}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-main">{lang === 'ar' ? '3. الرف (Shelf):' : '3. Shelf:'}</label>
+                    <input
+                      type="text"
+                      value={formData.shelf || ''}
+                      onChange={(e) => handleInputChange('shelf', e.target.value)}
+                      placeholder={lang === 'ar' ? 'رف رقم 2' : 'Shelf 2'}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-main">{lang === 'ar' ? '4. قسم الرف (Shelf Section):' : '4. Shelf Section:'}</label>
+                    <input
+                      type="text"
+                      value={formData.shelfSection || ''}
+                      onChange={(e) => handleInputChange('shelfSection', e.target.value)}
+                      placeholder={lang === 'ar' ? 'القسم الأوسط / الجزء الأيمن' : 'Middle Section'}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-main flex items-center gap-1">
-                  <Tag className="w-3.5 h-3.5 text-pale-sky-500" />
-                  <span>الرف والتصنيف الفيزيائي (Shelf):</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.shelf || ''}
-                  onChange={(e) => handleInputChange('shelf', e.target.value)}
-                  placeholder="مثال: رف أ1 - العلوم الشرعية"
-                  className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
-                />
-              </div>
+              <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
+                <h4 className="font-bold text-main flex items-center gap-1.5 text-xs text-pale-sky-600 dark:text-pale-sky-400">
+                  <DollarSign className="w-4 h-4" />
+                  <span>{lang === 'ar' ? 'معلومات الاقتناء والحالة الفيزيائية' : 'Acquisition & Physical Condition'}</span>
+                </h4>
 
-              <div className="space-y-1">
-                <label className="font-bold text-main">حالة الكتاب الفيزيائي (Condition):</label>
-                <select
-                  value={formData.condition || 'ممتازة'}
-                  onChange={(e) => handleInputChange('condition', e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
-                >
-                  <option value="جديدة">جديدة (New)</option>
-                  <option value="ممتازة">ممتازة (Excellent)</option>
-                  <option value="جيدة">جيدة (Good)</option>
-                  <option value="مستعملة">مستعملة (Used)</option>
-                  <option value="أثرية/قديمة">أثرية/قديمة (Rare/Antique)</option>
-                </select>
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-main">{lang === 'ar' ? 'حالة النسخة:' : 'Condition:'}</label>
+                    <select
+                      value={formData.condition || 'ممتازة'}
+                      onChange={(e) => handleInputChange('condition', e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    >
+                      <option value="جديدة">{lang === 'ar' ? 'جديدة (New)' : 'New'}</option>
+                      <option value="ممتازة">{lang === 'ar' ? 'ممتازة (Like New)' : 'Like New'}</option>
+                      <option value="جيدة">{lang === 'ar' ? 'جيدة (Good)' : 'Good'}</option>
+                      <option value="مستعملة">{lang === 'ar' ? 'مستعملة (Used)' : 'Used'}</option>
+                      <option value="أثرية/قديمة">{lang === 'ar' ? 'أثرية/قديمة (Rare/Antique)' : 'Antique'}</option>
+                    </select>
+                  </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-main">سعر الشراء (Price):</label>
-                <input
-                  type="text"
-                  value={formData.price || ''}
-                  onChange={(e) => handleInputChange('price', e.target.value)}
-                  placeholder="مثال: 150 ر.س"
-                  className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
-                />
+                  <div className="space-y-1">
+                    <label className="font-bold text-main">{lang === 'ar' ? 'تاريخ الشراء:' : 'Purchase Date:'}</label>
+                    <input
+                      type="date"
+                      value={formData.purchaseDate || ''}
+                      onChange={(e) => handleInputChange('purchaseDate', e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-main">{lang === 'ar' ? 'سعر الشراء:' : 'Price:'}</label>
+                    <input
+                      type="text"
+                      value={formData.price || ''}
+                      onChange={(e) => handleInputChange('price', e.target.value)}
+                      placeholder="150 IQD / SAR"
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {activeTab === 'lending' && (
-            <div className="space-y-4 text-xs">
-              {/* Add Lending Form */}
-              <div className="p-3.5 rounded-2xl bg-canvas border border-subtle space-y-3">
-                <h4 className="font-bold text-main text-xs">إضافة تسجيل إعارة جديد</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {/* TAB 3: CONTRIBUTORS & CLASSIFICATION */}
+          {activeTab === 'classification' && (
+            <div className="space-y-4">
+              {/* Contributors Breakdown */}
+              <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
+                <h4 className="font-bold text-main flex items-center gap-1.5 text-xs text-pale-sky-600 dark:text-pale-sky-400">
+                  <Users className="w-4 h-4" />
+                  <span>{lang === 'ar' ? 'المساهمون في العمل وأدوارهم' : 'Contributors & Roles'}</span>
+                </h4>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
                     type="text"
-                    placeholder="اسم المستعير..."
-                    value={newBorrower}
-                    onChange={(e) => setNewBorrower(e.target.value)}
-                    className="p-2 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    placeholder={lang === 'ar' ? 'اسم المساهم (مؤلف، مترجم، محقق، إلخ)...' : 'Contributor name...'}
+                    value={newContribName}
+                    onChange={(e) => setNewContribName(e.target.value)}
+                    className="flex-1 p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                   />
-                  <input
-                    type="date"
-                    value={newBorrowDate}
-                    onChange={(e) => setNewBorrowDate(e.target.value)}
-                    className="p-2 rounded-xl bg-surface border border-subtle text-main outline-none font-sans"
-                  />
+                  <select
+                    value={newContribRole}
+                    onChange={(e) => setNewContribRole(e.target.value as ContributorRole)}
+                    className="p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                  >
+                    <option value="author">{roleLabelMap.author[lang === 'ar' ? 'ar' : 'en']}</option>
+                    <option value="co_author">{roleLabelMap.co_author[lang === 'ar' ? 'ar' : 'en']}</option>
+                    <option value="translator">{roleLabelMap.translator[lang === 'ar' ? 'ar' : 'en']}</option>
+                    <option value="editor">{roleLabelMap.editor[lang === 'ar' ? 'ar' : 'en']}</option>
+                    <option value="commentator">{roleLabelMap.commentator[lang === 'ar' ? 'ar' : 'en']}</option>
+                    <option value="advisor">{roleLabelMap.advisor[lang === 'ar' ? 'ar' : 'en']}</option>
+                    <option value="scribe">{roleLabelMap.scribe[lang === 'ar' ? 'ar' : 'en']}</option>
+                    <option value="speaker">{roleLabelMap.speaker[lang === 'ar' ? 'ar' : 'en']}</option>
+                    <option value="narrator">{roleLabelMap.narrator[lang === 'ar' ? 'ar' : 'en']}</option>
+                  </select>
                   <button
-                    onClick={handleAddLending}
-                    className="px-3 py-2 rounded-xl bg-pale-sky-500 text-white font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    type="button"
+                    onClick={handleAddContributor}
+                    className="px-4 py-2.5 rounded-xl bg-pale-sky-500 text-white font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1 cursor-pointer shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>سجل الإعارة</span>
+                    <span>{lang === 'ar' ? 'إضافة' : 'Add'}</span>
                   </button>
+                </div>
+
+                {/* Contributor List */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {(formData.contributors || []).map((contrib, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface border border-subtle text-main"
+                    >
+                      <span className="font-bold">{contrib.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-400 font-semibold">
+                        {roleLabelMap[contrib.role]?.[lang === 'ar' ? 'ar' : 'en'] || contrib.role}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveContributor(idx)}
+                        className="text-muted hover:text-red-500 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {(!formData.contributors || formData.contributors.length === 0) && (
+                    <p className="text-[11px] text-muted py-1">
+                      {lang === 'ar' ? 'لم يُضف أي مساهم إضافي حتى الآن.' : 'No additional contributors added yet.'}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Lending List */}
+              {/* Categories & Tags */}
+              <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
+                <h4 className="font-bold text-main flex items-center gap-1.5 text-xs text-pale-sky-600 dark:text-pale-sky-400">
+                  <Tag className="w-4 h-4" />
+                  <span>{lang === 'ar' ? 'التصنيف الهرمي والوسوم' : 'Category & Tags'}</span>
+                </h4>
+
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-main">{lang === 'ar' ? 'التصنيف الرئيسي:' : 'Primary Category:'}</label>
+                    <select
+                      value={formData.primaryCategory?.id || ''}
+                      onChange={(e) => {
+                        const selected = allCategories.find((c) => c.id === e.target.value);
+                        setFormData((prev) => ({
+                          ...prev,
+                          primaryCategory: selected || null,
+                        }));
+                      }}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    >
+                      <option value="">{lang === 'ar' ? '-- بدون تصنيف رئيسي --' : '-- No Category --'}</option>
+                      {allCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {lang === 'ar' ? c.nameAr : c.nameEn}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-main">{lang === 'ar' ? 'التصنيفات الإضافية (مفصولة بفواصل):' : 'Additional Categories (comma-separated):'}</label>
+                    <input
+                      type="text"
+                      value={(formData.categories || []).join(', ')}
+                      onChange={(e) =>
+                        handleInputChange(
+                          'categories',
+                          e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
+                        )
+                      }
+                      placeholder={lang === 'ar' ? 'عقيدة, فقه, تراث...' : 'Theology, History, Linguistics...'}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: LENDING HISTORY */}
+          {activeTab === 'lending' && (
+            <div className="space-y-4">
+              {/* Add Loan Card */}
+              <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
+                <h4 className="font-bold text-main text-xs flex items-center gap-1.5 text-pale-sky-600 dark:text-pale-sky-400">
+                  <UserCheck className="w-4 h-4" />
+                  <span>{lang === 'ar' ? 'تسجيل إعارة جديدة' : 'Record New Loan'}</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <input
+                    type="text"
+                    placeholder={lang === 'ar' ? 'اسم المستعير...' : 'Borrower name...'}
+                    value={newBorrower}
+                    onChange={(e) => setNewBorrower(e.target.value)}
+                    className="p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder={lang === 'ar' ? 'رقم الهاتف أو البريد...' : 'Contact info (phone/email)...'}
+                    value={newBorrowerContact}
+                    onChange={(e) => setNewBorrowerContact(e.target.value)}
+                    className="p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                  />
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-muted">{lang === 'ar' ? 'تاريخ الاستعارة:' : 'Borrow Date:'}</span>
+                    <input
+                      type="date"
+                      value={newBorrowDate}
+                      onChange={(e) => setNewBorrowDate(e.target.value)}
+                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-muted">{lang === 'ar' ? 'التاريخ المتوقع للإرجاع:' : 'Expected Return:'}</span>
+                    <input
+                      type="date"
+                      value={newReturnDate}
+                      onChange={(e) => setNewReturnDate(e.target.value)}
+                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <input
+                      type="text"
+                      placeholder={lang === 'ar' ? 'ملاحظات الإعارة (اختياري)...' : 'Loan notes (optional)...'}
+                      value={newLendingNotes}
+                      onChange={(e) => setNewLendingNotes(e.target.value)}
+                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main outline-none"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddLending}
+                  className="px-4 py-2 rounded-xl bg-pale-sky-500 text-white font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{lang === 'ar' ? 'حفظ تسجيل الإعارة' : 'Record Loan'}</span>
+                </button>
+              </div>
+
+              {/* Loans List */}
               <div className="space-y-2">
                 {(formData.lendingHistory?.length || 0) > 0 ? (
-                  (formData.lendingHistory || []).map((rec) => (
-                    <div
-                      key={rec.id}
-                      className="p-3 rounded-xl bg-surface border border-subtle flex items-center justify-between"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-main">{rec.borrowerName}</span>
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                              rec.isReturned
-                                ? 'bg-evergreen-500/10 text-evergreen-600'
-                                : 'bg-amber-500/10 text-amber-600'
-                            }`}
-                          >
-                            {rec.isReturned ? 'تمت الإعادة' : 'قيد الإعارة حالياً'}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-muted font-sans">
-                          تاريخ الإعارة: {rec.borrowDate} • المتوقع: {rec.expectedReturnDate}
-                        </p>
-                      </div>
+                  (formData.lendingHistory || []).map((rec) => {
+                    const today = new Date().toISOString().split('T')[0];
+                    const isOverdue = !rec.isReturned && rec.expectedReturnDate && rec.expectedReturnDate < today;
 
-                      <button
-                        onClick={() => handleToggleReturn(rec.id)}
-                        className="px-2.5 py-1 rounded-lg border border-subtle hover:bg-canvas text-[11px] font-semibold text-main transition-colors"
+                    return (
+                      <div
+                        key={rec.id}
+                        className="p-3.5 rounded-2xl bg-canvas border border-subtle flex items-center justify-between gap-3"
                       >
-                        {rec.isReturned ? 'إلغاء الإرجاع' : 'تسجيل الإرجاع'}
-                      </button>
-                    </div>
-                  ))
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-main">{rec.borrowerName}</span>
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                rec.isReturned
+                                  ? 'bg-evergreen-500/10 text-evergreen-600 dark:text-evergreen-400'
+                                  : isOverdue
+                                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                              }`}
+                            >
+                              {rec.isReturned
+                                ? (lang === 'ar' ? 'تمت الإعادة' : 'Returned')
+                                : isOverdue
+                                ? (lang === 'ar' ? 'متأخرة عن الموعد!' : 'Overdue!')
+                                : (lang === 'ar' ? 'قيد الإعارة حالياً' : 'Active Loan')}
+                            </span>
+                            {rec.borrowerContact && (
+                              <span className="text-[11px] text-muted font-mono">{rec.borrowerContact}</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted">
+                            {lang === 'ar' ? 'تاريخ الإعارة:' : 'Borrow:'} {rec.borrowDate} • {lang === 'ar' ? 'المتوقع:' : 'Due:'} {rec.expectedReturnDate}
+                            {rec.actualReturnDate && ` • ${lang === 'ar' ? 'أُعيد بتاريخ:' : 'Returned on:'} ${rec.actualReturnDate}`}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleReturn(rec.id)}
+                          className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
+                            rec.isReturned
+                              ? 'border-subtle hover:bg-surface text-muted'
+                              : 'bg-evergreen-500/15 border-evergreen-500/30 text-evergreen-600 dark:text-evergreen-400 hover:bg-evergreen-500/25'
+                          }`}
+                        >
+                          {rec.isReturned
+                            ? (lang === 'ar' ? 'إلغاء الإرجاع' : 'Undo Return')
+                            : (lang === 'ar' ? 'تسجيل الإرجاع ✓' : 'Mark Returned ✓')}
+                        </button>
+                      </div>
+                    );
+                  })
                 ) : (
-                  <p className="text-center text-muted py-6">لا توجد إعارات مسجلة لهذا الكتاب حتى الآن.</p>
+                  <p className="text-center text-muted py-6">
+                    {lang === 'ar' ? 'لا توجد إعارات مسجلة لهذا العمل حتى الآن.' : 'No lending records logged for this item yet.'}
+                  </p>
                 )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="p-4 bg-canvas border-t border-subtle flex items-center justify-between">
+        {/* ================================================================= */}
+        {/* MODAL FOOTER                                                      */}
+        {/* ================================================================= */}
+        <div className="p-4 sm:p-5 bg-canvas border-t border-subtle flex items-center justify-between gap-3">
           <button
+            type="button"
             onClick={() => onDelete(formData.id)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-red-500 hover:bg-red-500/10 text-xs font-bold transition-all cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
-            <span>حذف الكتاب من المكتبة</span>
+            <span className="hidden sm:inline">{lang === 'ar' ? 'حذف من المكتبة' : 'Delete'}</span>
           </button>
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-subtle text-muted hover:text-main hover:bg-surface text-xs font-semibold transition-all"
+              className="px-4 py-2 rounded-xl border border-subtle text-muted hover:text-main hover:bg-surface text-xs font-semibold transition-all cursor-pointer"
             >
-              إلغاء
+              {lang === 'ar' ? 'إلغاء' : 'Cancel'}
             </button>
             <button
+              type="button"
+              disabled={!validation.isValid}
               onClick={() => {
-                onSave(formData);
-                onClose();
+                if (validation.isValid) {
+                  onSave(formData);
+                  onClose();
+                }
               }}
-              className="px-5 py-2 rounded-xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 transition-all shadow-md cursor-pointer"
+              className={`px-5 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer ${
+                validation.isValid
+                  ? 'bg-pale-sky-500 text-white hover:bg-pale-sky-600'
+                  : 'bg-muted/40 text-muted cursor-not-allowed'
+              }`}
             >
-              حفظ التغييرات
+              <Check className="w-4 h-4" />
+              <span>{lang === 'ar' ? 'حفظ التغييرات' : 'Save Changes'}</span>
             </button>
           </div>
         </div>

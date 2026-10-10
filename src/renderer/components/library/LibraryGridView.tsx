@@ -246,21 +246,24 @@ export const LibraryGridView: React.FC = () => {
 
   const handleAddNewBook = () => {
     const newBook: BookItem = {
-      id: `book-${Date.now()}`,
-      title: 'كتاب جديد في المكتبة',
-      author: 'مؤلف جديد',
-      language: 'العربية',
-      categories: ['مؤلفات حديثة'],
+      id: `work-${Date.now()}`,
+      title: lang === 'ar' ? 'مادة جديدة في المكتبة' : 'New Library Material',
+      author: lang === 'ar' ? 'مؤلف جديد' : 'New Author',
+      language: lang === 'ar' ? 'العربية' : 'English',
+      categories: [],
       tags: ['#جديد'],
+      workType: 'book',
+      workTypeId: 'wt-book',
       bookType: 'physical',
       readingStatus: 'unread',
       lendingHistory: [],
-      shelf: 'رف المكتبة الرئيسية',
-      room: 'المكتبة الرئيسية',
+      shelf: '',
+      room: '',
     };
     setSelectedBook(newBook);
     setIsDetailModalOpen(true);
   };
+
 
   // Open Native Electron File Dialog
   const handleOpenBookFromDevice = async () => {

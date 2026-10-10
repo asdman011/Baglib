@@ -34,12 +34,13 @@ export const translations = {
     // LibraryGridView
     libraryTitle: "مكتبة الكتب",
     libraryDesc: "استعرض كتبك وإصداراتك الرقمية والفيزيائية المتاحة.",
-    addBook: "إضافة كتاب +",
+    addBook: "إضافة مادة +",
     allCategories: "التصنيفات: الكل",
     emptySearchTitle: "لا توجد نتائج مطابقة",
     emptySearchDesc: "جرب البحث بكلمات مختلفة أو إزالة الفلاتر الحالية",
     emptyLibraryTitle: "المكتبة فارغة",
-    emptyLibraryDesc: "قم بإضافة أول كتاب لبدء بناء مكتبتك المعرفية",
+    emptyLibraryDesc: "قم بإضافة أول مادة لبدء بناء مكتبتك المعرفية",
+
     readBook: "قراءة",
     physicalBook: "نسخة ورقية",
     noAuthor: "مؤلف مجهول",
@@ -73,6 +74,18 @@ export const translations = {
     "فلسفة": "فلسفة",
     "تاريخ": "تاريخ",
     "علوم": "علوم",
+
+    // Work Types
+    wt_book: "كتاب",
+    wt_research_paper: "بحث أكاديمي",
+    wt_article: "مقالة",
+    wt_lecture: "محاضرة / درس",
+    wt_periodical: "مجلة / دورية",
+    wt_thesis: "رسالة علمية",
+    wt_manuscript: "مخطوطة أثرية",
+    wt_podcast: "بودكاست",
+    wt_video: "مرئيات وفيديو",
+
 
     // Reader
     backToLibrary: "العودة للمكتبة",
@@ -152,12 +165,13 @@ export const translations = {
     // LibraryGridView
     libraryTitle: "Library",
     libraryDesc: "Browse your digital and physical books.",
-    addBook: "Add Book +",
+    addBook: "Add Material +",
     allCategories: "Categories: All",
     emptySearchTitle: "No matching results",
     emptySearchDesc: "Try different search terms or remove current filters",
     emptyLibraryTitle: "Library is empty",
-    emptyLibraryDesc: "Add your first book to start building your knowledge base",
+    emptyLibraryDesc: "Add your first material to start building your knowledge base",
+
     readBook: "Read",
     physicalBook: "Physical",
     noAuthor: "Unknown Author",
@@ -191,6 +205,18 @@ export const translations = {
     "فلسفة": "Philosophy",
     "تاريخ": "History",
     "علوم": "Science",
+
+    // Work Types
+    wt_book: "Book",
+    wt_research_paper: "Research Paper",
+    wt_article: "Article",
+    wt_lecture: "Lecture / Talk",
+    wt_periodical: "Periodical / Magazine",
+    wt_thesis: "Thesis / Dissertation",
+    wt_manuscript: "Historical Manuscript",
+    wt_podcast: "Podcast",
+    wt_video: "Video / Recording",
+
 
     // Reader
     backToLibrary: "Back to Library",
