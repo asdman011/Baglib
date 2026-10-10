@@ -258,7 +258,7 @@ export class LibgenProvider {
 
       if (title && title.length > 1) {
         results.push({
-          id: md5 ? `libgen-${md5}` : `libgen-${i}-${Date.now()}`,
+          id: md5 ? `libgen-${md5}-${i}` : `libgen-${i}-${Date.now()}`,
           title,
           author,
           publisher,

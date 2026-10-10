@@ -27,6 +27,20 @@ export const API = {
     ipcRenderer.invoke('library:search-libgen', query, maxResults),
   searchAnnasArchive: (query: string, maxResults?: number) =>
     ipcRenderer.invoke('library:search-annas', query, maxResults),
+  searchBibliographic: (query: any, maxResults?: number) =>
+    ipcRenderer.invoke('library:search-bibliographic', query, maxResults),
+  getBibliographicDetails: (workId: string) =>
+    ipcRenderer.invoke('library:get-bibliographic-details', workId),
+  searchBibliographicByIsbn: (isbn: string) =>
+    ipcRenderer.invoke('library:search-bibliographic-isbn', isbn),
+  lookupMetadata: (params: { isbn?: string; title?: string; author?: string; query?: string; filePath?: string; filename?: string }) =>
+    ipcRenderer.invoke('library:lookup-metadata', params),
+  parseFilename: (filename: string) =>
+    ipcRenderer.invoke('library:parse-filename', filename),
+  resolveCover: (options: any) =>
+    ipcRenderer.invoke('library:resolve-cover', options),
+  discoverMetadata: (params: { filePath?: string; filename?: string; title?: string; author?: string; isbn?: string }) =>
+    ipcRenderer.invoke('library:discover-metadata', params),
   safeDownload: (url: string, filename: string) =>
     ipcRenderer.invoke('library:safe-download', url, filename),
   showItemInFolder: (filePath: string) =>
