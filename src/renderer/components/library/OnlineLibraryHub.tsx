@@ -281,8 +281,20 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
         const res = await windowAPI.safeDownload(targetUrl, filename);
         if (res.success && res.path) {
           const isEpub = (item.format || '').toUpperCase() === 'EPUB';
+          let coverImage = item.coverUrl;
+          if (!coverImage && res.path.toLowerCase().endsWith('.pdf') && windowAPI?.extractPdfCover) {
+            try {
+              const pdfCoverRes = await windowAPI.extractPdfCover(res.path);
+              if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
+                coverImage = pdfCoverRes.coverUrl;
+              }
+            } catch (err) {
+              console.warn('[OnlineLibraryHub] extractPdfCover error:', err);
+            }
+          }
+
           onImportBook({
-            id: item.id || `download-${Date.now()}`,
+            id: item.id || `download-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
             title: item.title,
             author: item.author,
             publisher: item.publisher,
@@ -292,7 +304,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
             bookType: 'digital',
             onlineSource: (activeSource === 'AnnasArchive' ? "Anna Archive" : activeSource) as any,
             categories: ['مستورد من الإنترنت', activeSource],
-            coverImage: item.coverUrl,
+            coverImage: coverImage,
             isbn: item.isbn,
             filePath: res.path,
             fileSize: item.fileSize,

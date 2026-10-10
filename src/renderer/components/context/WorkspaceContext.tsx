@@ -133,7 +133,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           .getAllBooks()
           .then((fetchedBooks: BookItem[]) => {
             if (Array.isArray(fetchedBooks)) {
-              setBooks(fetchedBooks);
+              // Deduplicate fetchedBooks by unique ID and unique filePath
+              const seenIds = new Set<string>();
+              const seenPaths = new Set<string>();
+              const uniqueBooks: BookItem[] = [];
+              for (const book of fetchedBooks) {
+                if (!book || !book.id || seenIds.has(book.id)) continue;
+                if (book.filePath && seenPaths.has(book.filePath)) continue;
+                seenIds.add(book.id);
+                if (book.filePath) seenPaths.add(book.filePath);
+                uniqueBooks.push(book);
+              }
+              setBooks(uniqueBooks);
             }
           })
           .catch((err: any) => {
@@ -161,15 +172,20 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // 1. Optimistic state update so UI changes immediately
     setBooks((prev) => {
       const existingIdx = prev.findIndex(
-        (b) => b.id === newBook.id || (newBook.filePath && b.filePath === newBook.filePath)
+        (b) => (b.id && b.id === newBook.id) || (newBook.filePath && b.filePath === newBook.filePath)
       );
 
       if (existingIdx >= 0) {
         const updated = [...prev];
         updated[existingIdx] = { ...updated[existingIdx], ...newBook };
-        return updated;
+        return updated.filter(
+          (b, i) => i === existingIdx || (b.id !== newBook.id && (!newBook.filePath || b.filePath !== newBook.filePath))
+        );
       }
-      return [newBook, ...prev];
+      const filtered = prev.filter(
+        (b) => b.id !== newBook.id && (!newBook.filePath || b.filePath !== newBook.filePath)
+      );
+      return [newBook, ...filtered];
     });
 
     // Sync activeBook if currently open in reader
@@ -181,15 +197,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const savedBook = await window.electronAPI.addBook(newBook);
         if (savedBook && savedBook.id) {
           setBooks((prev) => {
-            const idx = prev.findIndex((b) => b.id === savedBook.id);
+            const idx = prev.findIndex((b) => b.id === savedBook.id || (newBook.id && b.id === newBook.id));
             if (idx >= 0) {
               const updated = [...prev];
               updated[idx] = { ...newBook, ...savedBook };
-              return updated;
+              return updated.filter((b, i) => i === idx || b.id !== savedBook.id);
             }
-            return prev;
+            const filtered = prev.filter((b) => b.id !== savedBook.id);
+            return [{ ...newBook, ...savedBook }, ...filtered];
           });
-          setActiveBook((prev) => (prev && prev.id === savedBook.id ? { ...prev, ...savedBook } : prev));
+          setActiveBook((prev) => (prev && (prev.id === savedBook.id || prev.id === newBook.id) ? { ...prev, ...savedBook } : prev));
         }
       } catch (err) {
         console.error('[baglib/ui] Failed to persist book to SQLite:', err);
@@ -201,15 +218,20 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // 1. Optimistic state update so UI changes immediately
     setBooks((prev) => {
       const existingIdx = prev.findIndex(
-        (b) => b.id === updatedBook.id || (updatedBook.filePath && b.filePath === updatedBook.filePath)
+        (b) => (b.id && b.id === updatedBook.id) || (updatedBook.filePath && b.filePath === updatedBook.filePath)
       );
 
       if (existingIdx >= 0) {
         const updated = [...prev];
         updated[existingIdx] = { ...updated[existingIdx], ...updatedBook };
-        return updated;
+        return updated.filter(
+          (b, i) => i === existingIdx || (b.id !== updatedBook.id && (!updatedBook.filePath || b.filePath !== updatedBook.filePath))
+        );
       }
-      return [updatedBook, ...prev];
+      const filtered = prev.filter(
+        (b) => b.id !== updatedBook.id && (!updatedBook.filePath || b.filePath !== updatedBook.filePath)
+      );
+      return [updatedBook, ...filtered];
     });
 
     // Sync activeBook if currently open in reader
@@ -223,29 +245,29 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           const res = await api.updateBook(updatedBook);
           if (res && res.id) {
             setBooks((prev) => {
-              const idx = prev.findIndex((b) => b.id === res.id);
+              const idx = prev.findIndex((b) => b.id === res.id || (updatedBook.id && b.id === updatedBook.id));
               if (idx >= 0) {
                 const next = [...prev];
                 next[idx] = { ...updatedBook, ...res };
-                return next;
+                return next.filter((b, i) => i === idx || b.id !== res.id);
               }
               return prev;
             });
-            setActiveBook((prev) => (prev && prev.id === res.id ? { ...prev, ...res } : prev));
+            setActiveBook((prev) => (prev && (prev.id === res.id || prev.id === updatedBook.id) ? { ...prev, ...res } : prev));
           }
         } else if (api?.addBook) {
           const savedBook = await api.addBook(updatedBook);
           if (savedBook && savedBook.id) {
             setBooks((prev) => {
-              const idx = prev.findIndex((b) => b.id === savedBook.id);
+              const idx = prev.findIndex((b) => b.id === savedBook.id || (updatedBook.id && b.id === savedBook.id));
               if (idx >= 0) {
                 const next = [...prev];
                 next[idx] = { ...updatedBook, ...savedBook };
-                return next;
+                return next.filter((b, i) => i === idx || b.id !== savedBook.id);
               }
               return prev;
             });
-            setActiveBook((prev) => (prev && prev.id === savedBook.id ? { ...prev, ...savedBook } : prev));
+            setActiveBook((prev) => (prev && (prev.id === savedBook.id || prev.id === updatedBook.id) ? { ...prev, ...savedBook } : prev));
           }
         }
       } catch (err) {

@@ -9,6 +9,7 @@
 import { ipcMain } from 'electron';
 import { getDatabase, getDatabasePath } from '../database/connection';
 import { WorkRepository } from '../database/repositories/work.repository';
+import { coverResolverService } from '../services/metadata/cover-resolver.service';
 
 export function setupDatabaseIPC() {
   /**
@@ -59,9 +60,25 @@ export function setupDatabaseIPC() {
 
   /**
    * Add a new book (work, edition, author, source) into SQLite database
+   * Automatically extracts the first PDF image as the cover if a PDF file is linked and no cover exists.
    */
-  ipcMain.handle('library:add-book', (_, bookData) => {
+  ipcMain.handle('library:add-book', async (_, bookData) => {
     try {
+      if (
+        !bookData.coverImage &&
+        bookData.filePath &&
+        typeof bookData.filePath === 'string' &&
+        bookData.filePath.toLowerCase().endsWith('.pdf')
+      ) {
+        try {
+          const pdfRes = await coverResolverService.extractPdfCover(bookData.filePath);
+          if (pdfRes?.coverUrl) {
+            bookData.coverImage = pdfRes.coverUrl;
+          }
+        } catch (pdfErr) {
+          console.warn('[baglib/db-ipc] Auto PDF cover extraction fallback error:', pdfErr);
+        }
+      }
       const db = getDatabase();
       const repo = new WorkRepository(db);
       return repo.addBook(bookData);
@@ -73,9 +90,25 @@ export function setupDatabaseIPC() {
 
   /**
    * Update an existing book (work, edition, metadata) in SQLite database
+   * Automatically extracts the first PDF image as the cover if a PDF file is linked and no cover exists.
    */
-  ipcMain.handle('library:update-book', (_, bookData) => {
+  ipcMain.handle('library:update-book', async (_, bookData) => {
     try {
+      if (
+        !bookData.coverImage &&
+        bookData.filePath &&
+        typeof bookData.filePath === 'string' &&
+        bookData.filePath.toLowerCase().endsWith('.pdf')
+      ) {
+        try {
+          const pdfRes = await coverResolverService.extractPdfCover(bookData.filePath);
+          if (pdfRes?.coverUrl) {
+            bookData.coverImage = pdfRes.coverUrl;
+          }
+        } catch (pdfErr) {
+          console.warn('[baglib/db-ipc] Auto PDF cover extraction fallback error:', pdfErr);
+        }
+      }
       const db = getDatabase();
       const repo = new WorkRepository(db);
       return repo.updateBook(bookData);
