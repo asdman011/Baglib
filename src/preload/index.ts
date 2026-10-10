@@ -22,6 +22,18 @@ export const API = {
   getLendingHistory: (workId: string) => ipcRenderer.invoke('library:get-lending-history', workId),
   getActiveLoans: () => ipcRenderer.invoke('library:get-active-loans'),
 
+  // Online Metadata & External Repositories (Story 5)
+  searchLibgen: (query: string, maxResults?: number) =>
+    ipcRenderer.invoke('library:search-libgen', query, maxResults),
+  searchAnnasArchive: (query: string, maxResults?: number) =>
+    ipcRenderer.invoke('library:search-annas', query, maxResults),
+  safeDownload: (url: string, filename: string) =>
+    ipcRenderer.invoke('library:safe-download', url, filename),
+  showItemInFolder: (filePath: string) =>
+    ipcRenderer.invoke('library:show-item-in-folder', filePath),
+  openFile: (filePath: string) =>
+    ipcRenderer.invoke('library:open-file', filePath),
+
 
   // Categories
   getCategoryTree: () => ipcRenderer.invoke('library:get-category-tree'),

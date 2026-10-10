@@ -5,7 +5,9 @@ import { pathToFileURL } from "url";
 import fs from "fs";
 import { setupSystemIPC } from "./ipc/system";
 import { setupDatabaseIPC } from "./ipc/database";
+import { setupMetadataIPC } from "./ipc/metadata";
 import { initializeDatabase, closeDatabase } from "./database";
+import { ContentShieldService } from "./services/shield/content-shield.service";
 
 const isDev = !app.isPackaged;
 const loadApp = serve({ directory: path.join(__dirname, "../../out") });
@@ -35,8 +37,12 @@ async function createWindow() {
 // Setup IPC Handlers
 setupSystemIPC();
 setupDatabaseIPC();
+setupMetadataIPC();
 
 app.whenReady().then(async () => {
+  // Initialize Content Shield for ad & redirect protection
+  ContentShieldService.getInstance().initialize();
+
   // Initialize SQLite database and run pending migrations
   try {
     await initializeDatabase();
