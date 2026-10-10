@@ -7,6 +7,7 @@ import path from 'path';
 import { libgenProvider } from '../services/metadata/libgen.provider';
 import { annasProvider } from '../services/metadata/annas.provider';
 import { ContentShieldService } from '../services/shield/content-shield.service';
+import { bibliographicMetadataService } from '../services/metadata/bibliographic-metadata.service';
 
 export function setupMetadataIPC() {
   /**
@@ -32,6 +33,39 @@ export function setupMetadataIPC() {
     } catch (err) {
       console.error('[baglib/metadata-ipc] Failed to search Anna\'s Archive:', err);
       return [];
+    }
+  });
+
+  /**
+   * Bibliographic Metadata Endpoints
+   */
+  ipcMain.handle('library:search-bibliographic', async (_, query: string, maxResults?: number) => {
+    try {
+      if (!query || typeof query !== 'string') return [];
+      return await bibliographicMetadataService.search(query, maxResults || 10);
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] Failed to search bibliographic metadata:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('library:get-bibliographic-details', async (_, workId: string) => {
+    try {
+      if (!workId) return null;
+      return await bibliographicMetadataService.getWorkDetails(workId);
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] Failed to get bibliographic details:', err);
+      return null;
+    }
+  });
+
+  ipcMain.handle('library:search-bibliographic-isbn', async (_, isbn: string) => {
+    try {
+      if (!isbn) return null;
+      return await bibliographicMetadataService.searchByIsbn(isbn);
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] Failed to search bibliographic metadata by ISBN:', err);
+      return null;
     }
   });
 
