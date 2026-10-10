@@ -10,9 +10,18 @@ export const API = {
   getDatabaseStatus: () => ipcRenderer.invoke('database:get-status'),
   getAllBooks: () => ipcRenderer.invoke('library:get-all-books'),
   addBook: (bookData: any) => ipcRenderer.invoke('library:add-book', bookData),
+  updateBook: (bookData: any) => ipcRenderer.invoke('library:update-book', bookData),
   deleteBook: (bookId: string) => ipcRenderer.invoke('library:delete-book', bookId),
   updateReadingStatus: (bookId: string, status: string, progress?: number) =>
     ipcRenderer.invoke('library:update-reading-status', bookId, status, progress),
+
+  // Lending Management
+  recordLoan: (workId: string, loanData: any) => ipcRenderer.invoke('library:record-loan', workId, loanData),
+  returnLoan: (loanId: string, returnDate?: string, condition?: string) =>
+    ipcRenderer.invoke('library:return-loan', loanId, returnDate, condition),
+  getLendingHistory: (workId: string) => ipcRenderer.invoke('library:get-lending-history', workId),
+  getActiveLoans: () => ipcRenderer.invoke('library:get-active-loans'),
+
 
   // Categories
   getCategoryTree: () => ipcRenderer.invoke('library:get-category-tree'),

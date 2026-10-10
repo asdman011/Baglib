@@ -55,6 +55,7 @@ interface WorkspaceContextType extends WorkspaceState {
   
   // Book Library Management
   addBook: (book: BookItem) => void;
+  updateBook: (book: BookItem) => void;
   deleteBook: (bookId: string) => void;
   updateBookReadingStatus: (bookId: string, status: import('../../types/library').ReadingStatus, progress?: number) => Promise<void>;
   
@@ -171,6 +172,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return [newBook, ...prev];
     });
 
+    // Sync activeBook if currently open in reader
+    setActiveBook((prev) => (prev && prev.id === newBook.id ? { ...prev, ...newBook } : prev));
+
     // 2. Persist to SQLite
     if (typeof window !== 'undefined' && window.electronAPI?.addBook) {
       try {
@@ -185,12 +189,71 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             }
             return prev;
           });
+          setActiveBook((prev) => (prev && prev.id === savedBook.id ? { ...prev, ...savedBook } : prev));
         }
       } catch (err) {
         console.error('[baglib/ui] Failed to persist book to SQLite:', err);
       }
     }
   };
+
+  const updateBook = async (updatedBook: BookItem) => {
+    // 1. Optimistic state update so UI changes immediately
+    setBooks((prev) => {
+      const existingIdx = prev.findIndex(
+        (b) => b.id === updatedBook.id || (updatedBook.filePath && b.filePath === updatedBook.filePath)
+      );
+
+      if (existingIdx >= 0) {
+        const updated = [...prev];
+        updated[existingIdx] = { ...updated[existingIdx], ...updatedBook };
+        return updated;
+      }
+      return [updatedBook, ...prev];
+    });
+
+    // Sync activeBook if currently open in reader
+    setActiveBook((prev) => (prev && prev.id === updatedBook.id ? { ...prev, ...updatedBook } : prev));
+
+    // 2. Persist to SQLite
+    if (typeof window !== 'undefined') {
+      const api = window.electronAPI as any;
+      try {
+        if (api?.updateBook) {
+          const res = await api.updateBook(updatedBook);
+          if (res && res.id) {
+            setBooks((prev) => {
+              const idx = prev.findIndex((b) => b.id === res.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = { ...updatedBook, ...res };
+                return next;
+              }
+              return prev;
+            });
+            setActiveBook((prev) => (prev && prev.id === res.id ? { ...prev, ...res } : prev));
+          }
+        } else if (api?.addBook) {
+          const savedBook = await api.addBook(updatedBook);
+          if (savedBook && savedBook.id) {
+            setBooks((prev) => {
+              const idx = prev.findIndex((b) => b.id === savedBook.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = { ...updatedBook, ...savedBook };
+                return next;
+              }
+              return prev;
+            });
+            setActiveBook((prev) => (prev && prev.id === savedBook.id ? { ...prev, ...savedBook } : prev));
+          }
+        }
+      } catch (err) {
+        console.error('[baglib/ui] Failed to update book in SQLite:', err);
+      }
+    }
+  };
+
 
   // Direct fast reading status updater
   const updateBookReadingStatus = async (
@@ -350,7 +413,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         activeLibraryCategory,
         setActiveLibraryCategory,
         addBook,
+        updateBook,
         deleteBook,
+
         updateBookReadingStatus,
         openBookForReading,
         closeReaderToLibrary,

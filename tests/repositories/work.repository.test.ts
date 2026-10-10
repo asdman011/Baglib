@@ -235,5 +235,36 @@ describe('SqliteWorkRepository', () => {
       assert.strictEqual(retrievedAfter.readingStatus, 'completed');
       assert.strictEqual(retrievedAfter.readingProgress, 100);
     });
+
+    it('updates an existing work metadata and classification atomically via updateBook', () => {
+      const initial = repo.addBook({
+        id: 'work-edit-1',
+        title: 'العنوان القديم',
+        author: 'المؤلف القديم',
+        workType: 'book',
+        shelf: 'رف قديم',
+      });
+      assert.strictEqual(initial.title, 'العنوان القديم');
+      assert.strictEqual(initial.workType, 'book');
+
+      // Update via updateBook
+      repo.updateBook({
+        id: 'work-edit-1',
+        title: 'العنوان الجديد المعدل',
+        author: 'المؤلف المعدل',
+        workType: 'research_paper',
+        doi: '10.1234/updated-doi',
+        shelf: 'رف جديد 2',
+      });
+
+      const updated = repo.getById('work-edit-1');
+      assert.ok(updated);
+      assert.strictEqual(updated.title, 'العنوان الجديد المعدل');
+      assert.strictEqual(updated.author, 'المؤلف المعدل');
+      assert.strictEqual(updated.workType, 'research_paper');
+      assert.strictEqual(updated.workTypeId, 'wt-research-paper');
+      assert.strictEqual(updated.doi, '10.1234/updated-doi');
+      assert.strictEqual(updated.shelf, 'رف جديد 2');
+    });
   });
 });

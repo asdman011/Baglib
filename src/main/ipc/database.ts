@@ -72,6 +72,20 @@ export function setupDatabaseIPC() {
   });
 
   /**
+   * Update an existing book (work, edition, metadata) in SQLite database
+   */
+  ipcMain.handle('library:update-book', (_, bookData) => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.updateBook(bookData);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to update book:', err);
+      throw err;
+    }
+  });
+
+  /**
    * Delete a book from SQLite database by workId
    */
   ipcMain.handle('library:delete-book', (_, bookId: string) => {
@@ -98,6 +112,54 @@ export function setupDatabaseIPC() {
       throw err;
     }
   });
+
+  /**
+   * Lending Operations (Task 4.4 / 4.6)
+   */
+  ipcMain.handle('library:record-loan', (_, workId: string, loanData: any) => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.recordLoan(workId, loanData);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to record loan:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('library:return-loan', (_, loanId: string, returnDate?: string, conditionOnReturn?: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.returnLoan(loanId, returnDate, conditionOnReturn);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to return loan:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('library:get-lending-history', (_, workId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.getLendingHistory(workId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to fetch lending history:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('library:get-active-loans', () => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.getActiveLoans();
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to fetch active loans:', err);
+      return [];
+    }
+  });
+
   /**
    * Fetch all notes
    */

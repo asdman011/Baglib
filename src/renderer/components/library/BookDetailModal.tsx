@@ -50,6 +50,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 interface BookDetailModalProps {
   book: BookItem | null;
   isOpen: boolean;
+  isNew?: boolean;
   allCategories?: { id: string; nameAr: string; nameEn: string }[];
   onClose: () => void;
   onSave: (updatedBook: BookItem) => void;
@@ -59,14 +60,19 @@ interface BookDetailModalProps {
 export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   book,
   isOpen,
+  isNew,
   allCategories = [],
   onClose,
   onSave,
   onDelete,
 }) => {
-  const { lang, dir } = useWorkspace();
+  const { lang, dir, t, books } = useWorkspace();
+
+  const isCreateMode = isNew ?? (book ? !books.some((b) => b.id === book.id) : true);
 
   const [formData, setFormData] = useState<BookItem>(book || ({} as BookItem));
+  const [initialSnapshot, setInitialSnapshot] = useState<string>('');
+  const [showConfirmDiscard, setShowConfirmDiscard] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'info' | 'physical' | 'classification' | 'lending'>('info');
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
@@ -86,16 +92,51 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   // Sync state when book changes
   React.useEffect(() => {
     if (book) {
-      setFormData({
+      const initial: BookItem = {
         ...book,
         workType: book.workType || 'book',
         workTypeId: book.workTypeId || 'wt-book',
         contributors: book.contributors || [],
         lendingHistory: book.lendingHistory || [],
-      });
+      };
+      setFormData(initial);
+      setInitialSnapshot(JSON.stringify(initial));
+      setShowConfirmDiscard(false);
       setActiveTab('info');
     }
-  }, [book]);
+  }, [book, isOpen]);
+
+  // Dirty state tracking comparing formData with initial snapshot
+  const isDirty = useMemo(() => {
+    if (!initialSnapshot) return false;
+    return JSON.stringify(formData) !== initialSnapshot;
+  }, [formData, initialSnapshot]);
+
+  // Close attempt handler with dirty check
+  const handleAttemptClose = () => {
+    if (isDirty) {
+      setShowConfirmDiscard(true);
+    } else {
+      onClose();
+    }
+  };
+
+  // Keyboard shortcut (Escape)
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showConfirmDiscard) {
+          setShowConfirmDiscard(false);
+        } else {
+          handleAttemptClose();
+        }
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isDirty, showConfirmDiscard]);
 
   // Real-time type-aware validation
   const validation = useMemo(() => {
@@ -260,7 +301,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleAttemptClose();
+        }
+      }}
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-5"
+    >
       <input
         type="file"
         ref={fileInputRef}
@@ -270,9 +318,50 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       />
 
       <div
-        className="w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] font-sans"
+        className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] font-sans"
         dir={dir}
       >
+        {/* Unsaved Changes Confirmation Dialog Overlay */}
+        {showConfirmDiscard && (
+          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-surface border border-subtle rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-main text-sm sm:text-base">
+                    {t('unsavedChangesTitle')}
+                  </h4>
+                  <p className="text-xs text-muted mt-1 leading-relaxed">
+                    {t('unsavedChangesPrompt')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmDiscard(false)}
+                  className="px-3.5 py-1.5 rounded-xl border border-subtle text-muted hover:text-main hover:bg-canvas text-xs font-semibold transition-all cursor-pointer"
+                >
+                  {t('keepEditing')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConfirmDiscard(false);
+                    onClose();
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-red-500 text-white hover:bg-red-600 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  {t('discardAndClose')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ================================================================= */}
         {/* MODAL HEADER: Title, Type Indicator & Action Buttons              */}
         {/* ================================================================= */}
@@ -282,11 +371,20 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <BookOpen className="w-6 h-6" />
             </div>
             <div className="min-w-0">
-              <h3 className="font-bold text-main text-base sm:text-lg truncate">
-                {formData.title || (lang === 'ar' ? 'عمل جديد' : 'New Catalog Item')}
-              </h3>
-              <p className="text-xs text-muted truncate">
-                {formData.author || currentTypeInfo.nameAr} • {currentTypeInfo[lang === 'ar' ? 'nameAr' : 'nameEn']}
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-main text-base sm:text-lg truncate">
+                  {isCreateMode ? t('addMaterialTitle') : (formData.title || t('editMaterialTitle'))}
+                </h3>
+                {isDirty && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold shrink-0">
+                    {lang === 'ar' ? 'تعديلات غير محفوظة' : 'Unsaved changes'}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted truncate mt-0.5">
+                {isCreateMode
+                  ? `${formData.title || t('newMaterialDefaultTitle')} • ${currentTypeInfo[lang === 'ar' ? 'nameAr' : 'nameEn']}`
+                  : `${formData.author || currentTypeInfo.nameAr} • ${currentTypeInfo[lang === 'ar' ? 'nameAr' : 'nameEn']}`}
               </p>
             </div>
           </div>
@@ -295,19 +393,19 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             <button
               onClick={fetchMetadataAutoFill}
               disabled={isAutoFilling}
-              title={lang === 'ar' ? 'جلب البيانات تلقائياً من الإنترنت' : 'Auto-fill metadata from web'}
+              title={t('autoFillTooltip')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer"
             >
               <Sparkles className={`w-3.5 h-3.5 ${isAutoFilling ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">
                 {isAutoFilling
-                  ? (lang === 'ar' ? 'جاري الجلب...' : 'Fetching...')
-                  : (lang === 'ar' ? 'جلب تلقائي' : 'Auto-Fill')}
+                  ? t('autoFillingWeb')
+                  : t('autoFillWeb')}
               </span>
             </button>
 
             <button
-              onClick={onClose}
+              onClick={handleAttemptClose}
               className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -1289,22 +1387,26 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* MODAL FOOTER                                                      */}
         {/* ================================================================= */}
         <div className="p-4 sm:p-5 bg-canvas border-t border-subtle flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => onDelete(formData.id)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-red-500 hover:bg-red-500/10 text-xs font-bold transition-all cursor-pointer"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span className="hidden sm:inline">{lang === 'ar' ? 'حذف من المكتبة' : 'Delete'}</span>
-          </button>
+          <div>
+            {!isCreateMode && (
+              <button
+                type="button"
+                onClick={() => onDelete(formData.id)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-red-500 hover:bg-red-500/10 text-xs font-bold transition-all cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="hidden sm:inline">{t('deleteFromLibrary')}</span>
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleAttemptClose}
               className="px-4 py-2 rounded-xl border border-subtle text-muted hover:text-main hover:bg-surface text-xs font-semibold transition-all cursor-pointer"
             >
-              {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+              {t('cancel')}
             </button>
             <button
               type="button"
@@ -1321,8 +1423,17 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   : 'bg-muted/40 text-muted cursor-not-allowed'
               }`}
             >
-              <Check className="w-4 h-4" />
-              <span>{lang === 'ar' ? 'حفظ التغييرات' : 'Save Changes'}</span>
+              {isCreateMode ? (
+                <>
+                  <Plus className="w-4 h-4" />
+                  <span>{t('addToLibrary')}</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>{t('saveChanges')}</span>
+                </>
+              )}
             </button>
           </div>
         </div>

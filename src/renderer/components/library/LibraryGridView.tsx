@@ -42,6 +42,7 @@ export const LibraryGridView: React.FC = () => {
   const {
     books,
     addBook,
+    updateBook,
     deleteBook,
     updateBookReadingStatus,
     openBookForReading,
@@ -69,6 +70,8 @@ export const LibraryGridView: React.FC = () => {
   // Modal States
   const [selectedBook, setSelectedBook] = useState<BookItem | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isNewBook, setIsNewBook] = useState(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
 
@@ -236,12 +239,19 @@ export const LibraryGridView: React.FC = () => {
   };
 
   const handleSaveBook = (updatedBook: BookItem) => {
-    addBook(updatedBook);
+    if (isNewBook) {
+      addBook(updatedBook);
+    } else {
+      updateBook(updatedBook);
+    }
+    setSaveToast(lang === 'ar' ? 'تم حفظ التعديلات بنجاح!' : 'Changes saved successfully!');
+    setTimeout(() => setSaveToast(null), 3000);
   };
 
   const handleDeleteBook = (id: string) => {
     deleteBook(id);
     setIsDetailModalOpen(false);
+    setIsNewBook(false);
   };
 
   const handleAddNewBook = () => {
@@ -261,6 +271,7 @@ export const LibraryGridView: React.FC = () => {
       room: '',
     };
     setSelectedBook(newBook);
+    setIsNewBook(true);
     setIsDetailModalOpen(true);
   };
 
@@ -765,6 +776,7 @@ export const LibraryGridView: React.FC = () => {
                         <button
                           onClick={() => {
                             setSelectedBook(book);
+                            setIsNewBook(false);
                             setIsDetailModalOpen(true);
                           }}
                           title="تعديل بيانات الكتاب والرف والسجل"
@@ -970,6 +982,7 @@ export const LibraryGridView: React.FC = () => {
                               <button
                                 onClick={() => {
                                   setSelectedBook(book);
+                                  setIsNewBook(false);
                                   setIsDetailModalOpen(true);
                                 }}
                                 title="تعديل"
@@ -1020,8 +1033,12 @@ export const LibraryGridView: React.FC = () => {
       <BookDetailModal
         book={selectedBook}
         isOpen={isDetailModalOpen}
+        isNew={isNewBook}
         allCategories={allCategories}
-        onClose={() => setIsDetailModalOpen(false)}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setIsNewBook(false);
+        }}
         onSave={handleSaveBook}
         onDelete={handleDeleteBook}
       />
@@ -1040,6 +1057,14 @@ export const LibraryGridView: React.FC = () => {
         books={books}
         onRemoveDuplicate={deleteBook}
       />
+
+      {/* Save Success Toast */}
+      {saveToast && (
+        <div className="fixed bottom-6 end-6 z-50 bg-evergreen-600 text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{saveToast}</span>
+        </div>
+      )}
     </div>
   );
 };
