@@ -42,3 +42,4 @@ next-env.d.ts
 
 # build outputs
 release/
+libgen-calibre-store-plugin-main.zip
