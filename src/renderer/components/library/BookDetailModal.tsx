@@ -30,7 +30,9 @@ import {
   Clock,
   Compass,
   Image as ImageIcon,
-  RefreshCw
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import {
   BookItem,
@@ -51,6 +53,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { useMetadataLookup } from '../../hooks/useMetadataLookup';
 import { MetadataDiffModal } from './MetadataDiffModal';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
+import { renderPdfPage } from '../../utils/pdf-page-renderer';
 
 interface BookDetailModalProps {
   book: BookItem | null;
@@ -81,6 +84,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<'info' | 'physical' | 'classification' | 'lending'>('info');
   const lookupHook = useMetadataLookup();
   const [isDiscoveringFile, setIsDiscoveringFile] = useState<boolean>(false);
+  const [isExtractingPdfCover, setIsExtractingPdfCover] = useState<boolean>(false);
+  const [currentPdfPage, setCurrentPdfPage] = useState<number>(1);
+  const [totalPdfPages, setTotalPdfPages] = useState<number>(1);
+  const [pdfCoverMessage, setPdfCoverMessage] = useState<string | null>(null);
   const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
   const [fetchedWork, setFetchedWork] = useState<BibliographicWork | null>(null);
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
@@ -135,6 +142,21 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       setInitialSnapshot(JSON.stringify(initial));
       setShowConfirmDiscard(false);
       setActiveTab('info');
+      setCurrentPdfPage(1);
+      setTotalPdfPages(1);
+
+      if (initial.filePath && initial.filePath.toLowerCase().endsWith('.pdf')) {
+        renderPdfPage(initial.filePath, 1)
+          .then((res) => {
+            if (res?.success) {
+              if (res.totalPages) setTotalPdfPages(res.totalPages);
+              if (!initial.coverImage && res.coverUrl) {
+                setFormData((prev) => ({ ...prev, coverImage: res.coverUrl }));
+              }
+            }
+          })
+          .catch(() => {});
+      }
     }
   }, [book, isOpen]);
 
@@ -231,9 +253,74 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           setIsDiscoveringFile(false);
         }
       }
+
+      // Automatically extract page 1 of the imported PDF as cover if not found via discovery
+      if (ext === 'PDF') {
+        try {
+          const pdfPageRes = await renderPdfPage(fullPath, 1);
+          if (pdfPageRes?.success && pdfPageRes.coverUrl) {
+            setFormData((prev) => ({
+              ...prev,
+              coverImage: prev.coverImage || pdfPageRes.coverUrl,
+            }));
+            setCurrentPdfPage(pdfPageRes.currentPage || 1);
+            if (pdfPageRes.totalPages) setTotalPdfPages(pdfPageRes.totalPages);
+          }
+        } catch (pdfErr) {
+          console.warn('[BookDetailModal] renderPdfPage error:', pdfErr);
+        }
+      }
     } else {
       fileInputRef.current?.click();
     }
+  };
+
+  const handleExtractPdfCover = async (page: number = 1) => {
+    if (!formData.filePath) return;
+
+    setIsExtractingPdfCover(true);
+    setPdfCoverMessage(null);
+    try {
+      const res = await renderPdfPage(formData.filePath, page);
+      if (res?.success && res.coverUrl) {
+        handleInputChange('coverImage', res.coverUrl);
+        setCurrentPdfPage(res.currentPage || page);
+        if (res.totalPages) setTotalPdfPages(res.totalPages);
+        setPdfCoverMessage(
+          page === 1
+            ? (t('pdfCoverExtracted') ||
+                (lang === 'ar'
+                  ? 'تم استخراج الغلاف من الصفحة 1 وتعيينه كغلاف بنجاح!'
+                  : 'Cover extracted from page 1 and set as book cover successfully!'))
+            : (lang === 'ar'
+                ? `تم استخراج الغلاف من الصفحة ${res.currentPage || page} بنجاح!`
+                : `Cover extracted from page ${res.currentPage || page} successfully!`)
+        );
+        setTimeout(() => setPdfCoverMessage(null), 3500);
+      } else {
+        setPdfCoverMessage(
+          t('noPdfImagesFound') ||
+            (lang === 'ar'
+              ? 'تعذر استخراج صفحات ملف PDF.'
+              : 'Failed to render PDF page.')
+        );
+        setTimeout(() => setPdfCoverMessage(null), 3500);
+      }
+    } catch (err) {
+      console.warn('[BookDetailModal] renderPdfPage error:', err);
+      setPdfCoverMessage(
+        lang === 'ar' ? 'تعذر استخراج الغلاف من ملف PDF.' : 'Failed to extract cover from PDF.'
+      );
+      setTimeout(() => setPdfCoverMessage(null), 3500);
+    } finally {
+      setIsExtractingPdfCover(false);
+    }
+  };
+
+  const handleSwitchPdfPage = (targetPage: number) => {
+    if (targetPage < 1) return;
+    if (totalPdfPages > 0 && targetPage > totalPdfPages) return;
+    handleExtractPdfCover(targetPage);
   };
 
   const handleFileChangeFallback = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -270,10 +357,41 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             edition: discovery.edition || prev.edition || '',
           }));
         }
+
+        // Automatically extract page 1 of the PDF as cover if not found via discovery
+        if (ext === 'PDF' && (file as any).path) {
+          try {
+            const pdfCoverRes = await renderPdfPage((file as any).path, 1);
+            if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
+              setFormData((prev) => ({
+                ...prev,
+                coverImage: prev.coverImage || pdfCoverRes.coverUrl,
+              }));
+              setCurrentPdfPage(pdfCoverRes.currentPage || 1);
+              if (pdfCoverRes.totalPages) setTotalPdfPages(pdfCoverRes.totalPages);
+            }
+          } catch (pdfErr) {
+            console.warn('[BookDetailModal] Fallback renderPdfPage error:', pdfErr);
+          }
+        }
       } catch (err) {
         console.warn('[BookDetailModal] Fallback discoverMetadata failed:', err);
       } finally {
         setIsDiscoveringFile(false);
+      }
+    } else if (ext === 'PDF' && (file as any).path) {
+      try {
+        const pdfCoverRes = await renderPdfPage((file as any).path, 1);
+        if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
+          setFormData((prev) => ({
+            ...prev,
+            coverImage: prev.coverImage || pdfCoverRes.coverUrl,
+          }));
+          setCurrentPdfPage(pdfCoverRes.currentPage || 1);
+          if (pdfCoverRes.totalPages) setTotalPdfPages(pdfCoverRes.totalPages);
+        }
+      } catch (pdfErr) {
+        console.warn('[BookDetailModal] Fallback direct renderPdfPage error:', pdfErr);
       }
     }
   };
@@ -303,7 +421,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const handleAddLending = () => {
     if (!newBorrower.trim()) return;
     const newRecord: LendingRecord = {
-      id: `lend-${Date.now()}`,
+      id: `lend-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       borrowerName: newBorrower.trim(),
       borrowerContact: newBorrowerContact.trim() || undefined,
       borrowDate: newBorrowDate,
@@ -739,14 +857,30 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <ImageIcon className="w-3.5 h-3.5 text-pale-sky-500" />
                     <span>{t('coverImageUrl')}</span>
                   </label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="text"
                       value={formData.coverImage || ''}
                       onChange={(e) => handleInputChange('coverImage', e.target.value)}
                       placeholder={t('coverImagePlaceholder')}
-                      className="flex-1 p-2 rounded-xl bg-surface border border-subtle text-main outline-none focus:border-pale-sky-500 text-xs font-mono"
+                      className="flex-1 min-w-[140px] p-2 rounded-xl bg-surface border border-subtle text-main outline-none focus:border-pale-sky-500 text-xs font-mono"
                     />
+                    {formData.filePath && formData.filePath.toLowerCase().endsWith('.pdf') && (
+                      <button
+                        type="button"
+                        onClick={() => handleExtractPdfCover(currentPdfPage)}
+                        disabled={isExtractingPdfCover}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-pale-sky-500/30 bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-400 hover:bg-pale-sky-500/20 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                        title={t('extractPdfCoverBtn')}
+                      >
+                        {isExtractingPdfCover ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isExtractingPdfCover ? t('extractingPdfCover') : t('extractPdfCoverBtn')}</span>
+                      </button>
+                    )}
                     {formData.coverImage && (
                       <button
                         type="button"
@@ -757,6 +891,62 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       </button>
                     )}
                   </div>
+
+                  {/* Controls shown under the button (above title field) */}
+                  {formData.filePath && formData.filePath.toLowerCase().endsWith('.pdf') && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="text-[11px] font-semibold text-pale-sky-600 dark:text-pale-sky-400 min-h-[16px]">
+                        {pdfCoverMessage || ''}
+                      </div>
+
+                      {/* Two small arrows to switch next / previous page under the button */}
+                      <div className="inline-flex items-center gap-1.5 bg-surface border border-subtle rounded-xl px-2 py-1 shadow-xs shrink-0 ms-auto">
+                        <span className="text-[11px] text-muted font-medium">
+                          {t('coverPageLabel') || (lang === 'ar' ? 'صفحة الغلاف:' : 'Cover Page:')}
+                        </span>
+
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleSwitchPdfPage(currentPdfPage - 1)}
+                            disabled={isExtractingPdfCover || currentPdfPage <= 1}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-canvas text-muted hover:text-main disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer border border-transparent hover:border-subtle"
+                            title={t('previousCoverPage') || (lang === 'ar' ? 'الصفحة السابقة' : 'Previous page')}
+                          >
+                            {dir === 'rtl' ? (
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            ) : (
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
+                          <span className="text-[11px] font-bold text-main px-1.5 font-mono min-w-[42px] text-center select-none">
+                            {totalPdfPages > 1 ? `${currentPdfPage} / ${totalPdfPages}` : `${currentPdfPage}`}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSwitchPdfPage(currentPdfPage + 1)}
+                            disabled={isExtractingPdfCover || (totalPdfPages > 1 && currentPdfPage >= totalPdfPages)}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-canvas text-muted hover:text-main disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer border border-transparent hover:border-subtle"
+                            title={t('nextCoverPage') || (lang === 'ar' ? 'الصفحة التالية' : 'Next page')}
+                          >
+                            {dir === 'rtl' ? (
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            ) : (
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!formData.filePath && pdfCoverMessage && (
+                    <div className="text-[11px] font-semibold text-pale-sky-600 dark:text-pale-sky-400">
+                      {pdfCoverMessage}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1636,9 +1826,25 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             <button
               type="button"
               disabled={!validation.isValid}
-              onClick={() => {
+              onClick={async () => {
                 if (validation.isValid) {
-                  onSave(formData);
+                  let toSave = { ...formData };
+                  if (
+                    !toSave.coverImage &&
+                    toSave.filePath &&
+                    toSave.filePath.toLowerCase().endsWith('.pdf') &&
+                    (window as any).electronAPI?.extractPdfCover
+                  ) {
+                    try {
+                      const pdfCoverRes = await (window as any).electronAPI.extractPdfCover(toSave.filePath);
+                      if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
+                        toSave.coverImage = pdfCoverRes.coverUrl;
+                      }
+                    } catch (err) {
+                      console.warn('[BookDetailModal] Auto PDF cover extraction on save error:', err);
+                    }
+                  }
+                  onSave(toSave);
                   onClose();
                 }
               }}

@@ -289,6 +289,21 @@ export class BibliographicMetadataService {
       console.warn('[BibliographicMetadataService] Cover resolution failure:', coverErr);
     }
 
+    if (!coverResolution.coverUrl && params.filePath && params.filePath.toLowerCase().endsWith('.pdf')) {
+      try {
+        const directPdfCover = await coverResolverService.extractPdfCover(params.filePath);
+        if (directPdfCover && directPdfCover.coverUrl) {
+          coverResolution = {
+            coverUrl: directPdfCover.coverUrl,
+            source: 'embedded',
+            verified: true,
+          };
+        }
+      } catch (directErr) {
+        console.warn('[BibliographicMetadataService] Direct PDF cover fallback failed:', directErr);
+      }
+    }
+
     const confidence = bestEvaluation
       ? bestEvaluation.confidence
       : parsedFilename?.overallConfidence || (embeddedMeta ? 0.7 : 0.4);
@@ -319,6 +334,31 @@ export class BibliographicMetadataService {
         providerUsed,
         isbnDiscovered: !!discoveredIsbn && !targetIsbn,
       },
+    };
+  }
+
+  /**
+   * Directly extracts an image of a PDF file to make it the book's cover image.
+   * Supports pageIndex (1-based) to switch pages.
+   */
+  async extractPdfCover(filePath: string, pageIndex: number = 1): Promise<string | null> {
+    const res = await coverResolverService.extractPdfCover(filePath, pageIndex);
+    return res.coverUrl || null;
+  }
+
+  /**
+   * Directly extracts an image with full pagination metadata.
+   */
+  async extractPdfCoverDetails(
+    filePath: string,
+    pageIndex: number = 1
+  ): Promise<{ coverUrl: string | null; currentPage: number; totalPages: number; pageNumber?: number }> {
+    const res = await coverResolverService.extractPdfCover(filePath, pageIndex);
+    return {
+      coverUrl: res.coverUrl || null,
+      currentPage: res.currentPage || pageIndex,
+      totalPages: res.totalPages || 0,
+      pageNumber: res.pageNumber,
     };
   }
 }

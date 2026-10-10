@@ -173,6 +173,32 @@ export function setupMetadataIPC() {
     }
   });
 
+  /**
+   * Extract image from a local PDF to make it the book's cover image.
+   * Supports pageIndex (1-based) to cycle between pages and candidate images.
+   */
+  ipcMain.handle('library:extract-pdf-cover', async (_, filePath: string, pageIndex?: number) => {
+    try {
+      if (!filePath || typeof filePath !== 'string') {
+        return { success: false, error: 'NO_FILE_PATH' };
+      }
+      const res = await bibliographicMetadataService.extractPdfCoverDetails(filePath, pageIndex || 1);
+      if (res && res.coverUrl) {
+        return {
+          success: true,
+          coverUrl: res.coverUrl,
+          currentPage: res.currentPage,
+          totalPages: res.totalPages,
+          pageNumber: res.pageNumber,
+        };
+      }
+      return { success: false, error: 'NO_IMAGE_FOUND' };
+    } catch (err: any) {
+      console.error('[baglib/metadata-ipc] extract-pdf-cover error:', err);
+      return { success: false, error: err?.message || 'EXTRACTION_FAILED' };
+    }
+  });
+
 
   /**
    * Safe download through content shield

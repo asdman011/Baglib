@@ -41,6 +41,8 @@ export const API = {
     ipcRenderer.invoke('library:resolve-cover', options),
   discoverMetadata: (params: { filePath?: string; filename?: string; title?: string; author?: string; isbn?: string }) =>
     ipcRenderer.invoke('library:discover-metadata', params),
+  extractPdfCover: (filePath: string, pageIndex?: number) =>
+    ipcRenderer.invoke('library:extract-pdf-cover', filePath, pageIndex),
   safeDownload: (url: string, filename: string) =>
     ipcRenderer.invoke('library:safe-download', url, filename),
   showItemInFolder: (filePath: string) =>

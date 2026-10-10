@@ -17,6 +17,7 @@
 
 import { BAGLIB_USER_AGENT } from './http-client';
 import { isValidIsbn } from '../../../shared/validators/metadata-validator';
+import { EmbeddedMetadataExtractor } from './embedded-metadata.extractor';
 
 export interface CoverResolutionOptions {
   isbn?: string;
@@ -85,7 +86,7 @@ export class CoverResolverService {
     }
 
     // 1. Stage 1: Local Embedded Cover (EPUB / PDF)
-    if (options.embeddedCoverBuffer && options.embeddedCoverBuffer.length >= 1000) {
+    if (options.embeddedCoverBuffer && options.embeddedCoverBuffer.length >= 100) {
       const mime = options.embeddedCoverMime || 'image/jpeg';
       const base64Data = options.embeddedCoverBuffer.toString('base64');
       const dataUrl = `data:${mime};base64,${base64Data}`;
@@ -497,6 +498,40 @@ export class CoverResolverService {
       timestamp: Date.now(),
       isNegative,
     });
+  }
+
+  /**
+   * Directly extracts an image from a local PDF as cover art.
+   * Allows specifying pageIndex (1-based) to switch to next or previous pages.
+   */
+  async extractPdfCover(
+    filePath: string,
+    pageIndex: number = 1
+  ): Promise<CoverResolutionResult & { currentPage?: number; totalPages?: number; pageNumber?: number }> {
+    try {
+      const extracted = EmbeddedMetadataExtractor.extractPdfImage(filePath, pageIndex);
+      if (extracted) {
+        return {
+          coverUrl: extracted.dataUrl,
+          source: 'embedded',
+          verified: true,
+          contentLength: extracted.coverBuffer.length,
+          contentType: extracted.coverMimeType,
+          currentPage: extracted.pageIndex,
+          totalPages: extracted.totalPages,
+          pageNumber: extracted.pageNumber,
+        };
+      }
+    } catch (err) {
+      console.warn(`[CoverResolverService] Failed to extract PDF cover from ${filePath}:`, err);
+    }
+    return {
+      coverUrl: undefined,
+      source: 'none',
+      verified: false,
+      currentPage: 1,
+      totalPages: 0,
+    };
   }
 
   public clearCache(): void {

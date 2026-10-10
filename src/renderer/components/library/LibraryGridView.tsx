@@ -35,6 +35,7 @@ import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { StorageManagerModal } from './StorageManagerModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { matchesSearchQuery } from '../../utils/search';
+import { renderPdfPage } from '../../utils/pdf-page-renderer';
 
 export type SortField = 'newest' | 'title' | 'author' | 'year' | 'category' | 'format' | 'status' | 'location';
 export type SortDirection = 'asc' | 'desc';
@@ -131,8 +132,12 @@ export const LibraryGridView: React.FC = () => {
 
   // Scalable Multi-dimensional Filter & Search Engine
   const filteredAndSortedBooks = useMemo(() => {
+    const seenIds = new Set<string>();
     return books
       .filter((b) => {
+        if (!b || !b.id) return false;
+        if (seenIds.has(b.id)) return false;
+        seenIds.add(b.id);
         // 1. Full text search across all metadata fields with robust Arabic & multilingual normalization
         const searchableContent = [
           b.title,
@@ -259,7 +264,7 @@ export const LibraryGridView: React.FC = () => {
 
   const handleAddNewBook = () => {
     const newBook: BookItem = {
-      id: `work-${Date.now()}`,
+      id: `work-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       title: lang === 'ar' ? 'مادة جديدة في المكتبة' : 'New Library Material',
       author: lang === 'ar' ? 'مؤلف جديد' : 'New Author',
       language: lang === 'ar' ? 'العربية' : 'English',
@@ -330,8 +335,20 @@ export const LibraryGridView: React.FC = () => {
           }
         }
 
+        // Render page 1 of the imported PDF as cover image of the book if not already found
+        if (!discoveredCover && ext === 'PDF') {
+          try {
+            const pdfCoverRes = await renderPdfPage(fullPath, 1);
+            if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
+              discoveredCover = pdfCoverRes.coverUrl;
+            }
+          } catch (err) {
+            console.warn('[LibraryGridView] renderPdfPage cover fallback error:', err);
+          }
+        }
+
         const newDigitalBook: BookItem = {
-          id: `book-local-${Date.now()}`,
+          id: `book-local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           title: discoveredTitle,
           author: discoveredAuthor,
           publisher: discoveredPublisher,
@@ -415,8 +432,20 @@ export const LibraryGridView: React.FC = () => {
         }
       }
 
+      // Fallback direct PDF cover extraction if available
+      if (!discoveredCover && ext === 'PDF' && windowAPI?.extractPdfCover && (file as any).path) {
+        try {
+          const pdfCoverRes = await windowAPI.extractPdfCover((file as any).path);
+          if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
+            discoveredCover = pdfCoverRes.coverUrl;
+          }
+        } catch (err) {
+          console.warn('[LibraryGridView] Direct PDF cover extraction fallback error:', err);
+        }
+      }
+
       const newDigitalBook: BookItem = {
-        id: `book-local-${Date.now()}`,
+        id: `book-local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         title: discoveredTitle,
         author: discoveredAuthor,
         publisher: discoveredPublisher,
@@ -451,7 +480,7 @@ export const LibraryGridView: React.FC = () => {
 
   const handleImportOnlineBook = (partialBook: Partial<BookItem>) => {
     const imported: BookItem = {
-      id: partialBook.id || `book-${Date.now()}`,
+      id: partialBook.id || `book-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       title: partialBook.title || 'كتاب مستورد',
       author: partialBook.author || t('noAuthor'),
       publisher: partialBook.publisher,
@@ -770,13 +799,13 @@ export const LibraryGridView: React.FC = () => {
           viewMode === 'grid' ? (
             /* STATE B1: Books matching filter — GRID VIEW */
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-              {filteredAndSortedBooks.map((book) => {
+              {filteredAndSortedBooks.map((book, idx) => {
                 const activeLend = book.lendingHistory.find((l) => !l.isReturned);
                 const readingStatus = book.readingStatus || 'unread';
 
                 return (
                   <div
-                    key={book.id}
+                    key={`${book.id || 'book'}-${idx}`}
                     className="group relative bg-surface border border-subtle hover:border-pale-sky-500/50 rounded-2xl p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-xl overflow-hidden space-y-3"
                   >
                     {/* Format / Reading / Lending Badges Top */}
@@ -869,8 +898,8 @@ export const LibraryGridView: React.FC = () => {
                             {lang === 'ar' ? book.primaryCategory.nameAr : book.primaryCategory.nameEn}
                           </span>
                         )}
-                        {book.tags.slice(0, 2).map((tag) => (
-                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+                        {book.tags.slice(0, 2).map((tag, tagIdx) => (
+                          <span key={`${tag}-${tagIdx}`} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
                             {tag}
                           </span>
                         ))}
@@ -981,12 +1010,12 @@ export const LibraryGridView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-subtle/60">
-                    {filteredAndSortedBooks.map((book) => {
+                    {filteredAndSortedBooks.map((book, idx) => {
                       const readingStatus = book.readingStatus || 'unread';
 
                       return (
                         <tr
-                          key={book.id}
+                          key={`${book.id || 'book'}-${idx}`}
                           className="hover:bg-canvas/40 transition-colors group"
                         >
                           {/* Title & Author */}
