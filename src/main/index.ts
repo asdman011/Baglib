@@ -6,6 +6,7 @@ import fs from "fs";
 import { setupSystemIPC } from "./ipc/system";
 import { setupDatabaseIPC } from "./ipc/database";
 import { setupMetadataIPC } from "./ipc/metadata";
+import { setupDigitalIPC } from "./ipc/digital";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 
@@ -38,6 +39,7 @@ async function createWindow() {
 setupSystemIPC();
 setupDatabaseIPC();
 setupMetadataIPC();
+setupDigitalIPC();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection

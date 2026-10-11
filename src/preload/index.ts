@@ -50,6 +50,14 @@ export const API = {
   openFile: (filePath: string) =>
     ipcRenderer.invoke('library:open-file', filePath),
 
+  // Digital E-Book File Validation & Ingestion (Story 6)
+  validateDigitalFile: (filePath: string) =>
+    ipcRenderer.invoke('digital:validate-file', filePath),
+  validateDigitalFiles: (filePaths: string[]) =>
+    ipcRenderer.invoke('digital:validate-files', filePaths),
+  getSupportedDigitalFormats: () =>
+    ipcRenderer.invoke('digital:get-supported-formats'),
+
 
   // Categories
   getCategoryTree: () => ipcRenderer.invoke('library:get-category-tree'),
