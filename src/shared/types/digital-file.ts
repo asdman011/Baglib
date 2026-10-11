@@ -75,3 +75,64 @@ export interface BatchValidationSummary {
   invalidFiles: number;
   results: DigitalFileValidationResult[];
 }
+
+export interface ExtractedEbookMetadata {
+  title?: string;
+  authors: string[];
+  publisher?: string;
+  publicationYear?: number;
+  isbn?: string;
+  description?: string;
+  language?: string;
+  tags: string[];
+  coverBuffer?: Buffer;
+  coverMimeType?: string;
+  coverDataUrl?: string;
+  identifiers: Record<string, string>;
+  format: DigitalFormat;
+}
+
+export interface DigitalImportOptions {
+  filePath: string;
+  targetFormat?: DigitalFormat;
+  customTitle?: string;
+  customAuthor?: string;
+  readingStatus?: 'unread' | 'reading' | 'completed' | 'paused' | 'abandoned';
+  primaryCategoryId?: string | null;
+  tags?: string[];
+}
+
+export interface DigitalImportResult {
+  success: boolean;
+  filePath: string;
+  fileName: string;
+  format?: DigitalFormat;
+  workId?: string;
+  editionId?: string;
+  sourceId?: string;
+  fileHash?: string;
+  fileSizeBytes: number;
+  extractedMetadata?: {
+    title: string;
+    author: string;
+    publisher?: string;
+    publicationYear?: number;
+    isbn?: string;
+    description?: string;
+    language?: string;
+    tags?: string[];
+    hasCover: boolean;
+    coverDataUrl?: string;
+    identifiers?: Record<string, string>;
+  };
+  error?: string;
+  errorCode?: DigitalFileErrorCode | 'IMPORT_ERROR' | 'DB_ERROR';
+}
+
+export interface BatchImportSummary {
+  totalFiles: number;
+  successfulImports: number;
+  failedImports: number;
+  results: DigitalImportResult[];
+}
+

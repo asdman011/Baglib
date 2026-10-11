@@ -134,6 +134,7 @@ export interface BookItem {
   digitalFormat?: DigitalFormat;
   filePath?: string;
   fileSize?: string;
+  fileHash?: string;
   isDuplicate?: boolean;
 
   // Online / Auto-fill Info
@@ -210,6 +211,7 @@ export interface BookItemInput {
   digitalFormat?: string;
   filePath?: string;
   fileSize?: string;
+  fileHash?: string;
   lendingHistory?: LendingRecord[];
   onlineSource?: string;
   sourceUrl?: string;

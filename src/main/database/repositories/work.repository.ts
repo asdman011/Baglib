@@ -92,6 +92,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       digitalFormat: r.digitalFormat || (r.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : undefined),
       filePath: r.filePath || undefined,
       fileSize: meta.fileSize || undefined,
+      fileHash: r.fileHash || undefined,
       onlineSource: meta.onlineSource || undefined,
       sourceUrl: meta.sourceUrl || undefined,
 
@@ -163,6 +164,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         e.publication_year as publicationYear,
         e.isbn as isbn,
         fsd.file_path as filePath,
+        fsd.file_hash as fileHash,
         fsd.file_format as digitalFormat,
         psd.shelf as shelf,
         psd.room as room,
@@ -267,6 +269,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         e.publication_year as publicationYear,
         e.isbn as isbn,
         fsd.file_path as filePath,
+        fsd.file_hash as fileHash,
         fsd.file_format as digitalFormat,
         psd.shelf as shelf,
         psd.room as room,
@@ -345,6 +348,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         workTypeId,
         coverImage: data.coverImage,
         fileSize: data.fileSize,
+        tags: data.tags,
+        categories: data.categories,
         onlineSource: data.onlineSource,
         sourceUrl: data.sourceUrl,
         doi: data.doi,
@@ -463,9 +468,9 @@ export class SqliteWorkRepository implements IWorkRepository {
       if (data.filePath || bookType === 'digital') {
         const fmt = data.digitalFormat || (data.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'PDF');
         this.db.prepare(`
-          INSERT INTO file_source_detail (source_id, file_path, file_format, is_managed)
-          VALUES (?, ?, ?, ?)
-        `).run(sourceId, data.filePath || null, fmt, 0);
+          INSERT INTO file_source_detail (source_id, file_path, file_hash, file_format, is_managed)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(sourceId, data.filePath || null, data.fileHash || null, fmt, 0);
       }
 
       if (bookType === 'physical' || data.shelf || data.room || data.bookcase || data.shelfSection || data.condition || data.purchaseDate || data.price) {
@@ -544,6 +549,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         workTypeId,
         coverImage: data.coverImage,
         fileSize: data.fileSize,
+        tags: data.tags,
+        categories: data.categories,
         onlineSource: data.onlineSource,
         sourceUrl: data.sourceUrl,
         doi: data.doi,
@@ -662,9 +669,9 @@ export class SqliteWorkRepository implements IWorkRepository {
             const fmt = data.digitalFormat || (data.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'PDF');
             const fsd = this.db.prepare('SELECT source_id FROM file_source_detail WHERE source_id = ?').get(source.id);
             if (fsd) {
-              this.db.prepare('UPDATE file_source_detail SET file_path = ?, file_format = ? WHERE source_id = ?').run(data.filePath || null, fmt, source.id);
+              this.db.prepare('UPDATE file_source_detail SET file_path = ?, file_hash = COALESCE(?, file_hash), file_format = ? WHERE source_id = ?').run(data.filePath || null, data.fileHash || null, fmt, source.id);
             } else {
-              this.db.prepare('INSERT INTO file_source_detail (source_id, file_path, file_format, is_managed) VALUES (?, ?, ?, ?)').run(source.id, data.filePath || null, fmt, 0);
+              this.db.prepare('INSERT INTO file_source_detail (source_id, file_path, file_hash, file_format, is_managed) VALUES (?, ?, ?, ?, ?)').run(source.id, data.filePath || null, data.fileHash || null, fmt, 0);
             }
           }
 

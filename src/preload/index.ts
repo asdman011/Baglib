@@ -57,6 +57,12 @@ export const API = {
     ipcRenderer.invoke('digital:validate-files', filePaths),
   getSupportedDigitalFormats: () =>
     ipcRenderer.invoke('digital:get-supported-formats'),
+  importDigitalFile: (options: any) =>
+    ipcRenderer.invoke('digital:import-file', options),
+  importDigitalFiles: (optionsList: any[]) =>
+    ipcRenderer.invoke('digital:import-files', optionsList),
+  extractDigitalMetadata: (filePath: string, formatHint?: string) =>
+    ipcRenderer.invoke('digital:extract-metadata', filePath, formatHint),
 
 
   // Categories
