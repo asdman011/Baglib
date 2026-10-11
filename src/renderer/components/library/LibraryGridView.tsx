@@ -5,7 +5,6 @@ import {
   BookOpen,
   Search,
   Plus,
-  Globe,
   HardDrive,
   MapPin,
   Edit3,
@@ -559,16 +558,6 @@ export const LibraryGridView: React.FC = () => {
               </button>
             </div>
 
-            {/* Import Book Button */}
-            <button
-              onClick={handleOpenBookFromDevice}
-              title="استيراد كتاب من جهازك (PDF, EPUB, MOBI, AZW3, TXT, HTML)"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-md shadow-pale-sky-500/20 transition-all cursor-pointer"
-            >
-              <FolderOpen className="w-4 h-4" />
-              <span>{t('importBook') || 'استيراد كتاب'}</span>
-            </button>
-
             {/* Storage Cleaner */}
             <button
               onClick={() => setIsStorageModalOpen(true)}
@@ -579,21 +568,13 @@ export const LibraryGridView: React.FC = () => {
               <span className="hidden sm:inline">تنظيف المكررات</span>
             </button>
 
-            {/* Online Hub Connector */}
-            <button
-              onClick={() => setIsOnlineHubOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pale-sky-500/10 border border-pale-sky-500/30 text-pale-sky-600 dark:text-pale-sky-300 text-xs font-bold hover:bg-pale-sky-500/20 transition-all cursor-pointer"
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>المكتبات المفتوحة & RSS</span>
-            </button>
-
-            {/* Add Book Details */}
+            {/* Add Material (Unified Entry Point) */}
             <button
               onClick={handleAddNewBook}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle text-main text-xs font-bold hover:bg-surface transition-all cursor-pointer"
+              title={lang === 'ar' ? 'إضافة مادة جديدة (رقمية، فيزيائية، أو عبر الإنترنت)' : 'Add new material (digital, physical, or online)'}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-md shadow-pale-sky-500/20 transition-all cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <BookOpen className="w-4 h-4" />
               <span>{t('addBook')}</span>
             </button>
           </div>
@@ -780,17 +761,10 @@ export const LibraryGridView: React.FC = () => {
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button
-                onClick={handleOpenBookFromDevice}
+                onClick={handleAddNewBook}
                 className="px-6 py-3 rounded-2xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-lg shadow-pale-sky-500/20 transition-all flex items-center gap-2 cursor-pointer"
               >
-                <FolderOpen className="w-4 h-4" />
-                <span>{t('importBook') || 'اختيار كتاب من الجهاز'}</span>
-              </button>
-              <button
-                onClick={handleAddNewBook}
-                className="px-5 py-3 rounded-2xl bg-surface border border-subtle text-main font-bold text-xs hover:bg-canvas transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <PlusCircle className="w-4 h-4" />
+                <BookOpen className="w-4 h-4" />
                 <span>{t('addBook')}</span>
               </button>
             </div>

@@ -34,7 +34,10 @@ export const translations = {
     // LibraryGridView
     libraryTitle: "مكتبة الكتب",
     libraryDesc: "استعرض كتبك وإصداراتك الرقمية والفيزيائية المتاحة.",
-    addBook: "إضافة مادة +",
+    addBook: "إضافة مادة",
+    openLibraryHubBtn: "المكتبات المفتوحة & RSS",
+    openLibraryHubTooltip: "البحث والاستيراد من المكتبات المفتوحة وخلاصات RSS",
+    removeLinkedFile: "إزالة الملف المربوط",
     allCategories: "التصنيفات: الكل",
     emptySearchTitle: "لا توجد نتائج مطابقة",
     emptySearchDesc: "جرب البحث بكلمات مختلفة أو إزالة الفلاتر الحالية",
@@ -273,7 +276,10 @@ export const translations = {
     // LibraryGridView
     libraryTitle: "Library",
     libraryDesc: "Browse your digital and physical books.",
-    addBook: "Add Material +",
+    addBook: "Add Material",
+    openLibraryHubBtn: "Open Library & RSS",
+    openLibraryHubTooltip: "Search and import from open libraries and RSS feeds",
+    removeLinkedFile: "Remove Linked File",
     allCategories: "Categories: All",
     emptySearchTitle: "No matching results",
     emptySearchDesc: "Try different search terms or remove current filters",

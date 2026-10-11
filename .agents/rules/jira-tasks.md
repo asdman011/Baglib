@@ -3,19 +3,36 @@ trigger: model_decision
 description: When the agent completes a task and after it has permission to commit and push changes to GitHub
 ---
 
-After completing an implementation task, and only when the user has explicitly authorized committing and pushing changes to GitHub, manage the corresponding Jira task as follows:
+# Rule: Reverse-Engineering Documentation and Jira Management
 
-1. **Identify the Jira issue:** Find the relevant Jira task using the issue key or available project context. If the issue cannot be identified confidently, ask the user rather than updating the wrong task.
-2. **Verify completion:** Review the implementation, run relevant tests and checks, and confirm that the task's acceptance criteria have been met. Do not mark the task complete if significant requirements remain unmet.
-3. **Commit and push:** Review the changes, ensure unrelated changes are not included, create a descriptive commit message referencing the Jira issue key when appropriate, and push to the intended remote branch. Never commit or push without explicit authorization.
-4. **Update Jira:** Add a concise comment summarizing the work completed, important implementation details, tests and their results, the useful websites or apps used in this, the APIs, any thing we reverse engineered, any projects or repos proved useful. and the Git commit hash or pull request link when available.
-5. **Update the status:** Transition the Jira issue to the appropriate workflow status based on the actual completion state and available transitions. Mark it as Done only when the task's requirements are satisfied and the workflow permits it.
-6. **Report the outcome:** Summarize the implementation, test results, Git commit and push status, and Jira updates. Clearly disclose any failed operations or remaining work.
+## 1. Document Reverse-Engineering Findings
 
-**Safety rules:**
+Store documentation in `docs\features\`.
 
-- Do not fabricate Jira updates, commit hashes, test results, or push success.
-- Do not expose secrets, credentials, or sensitive environment details in Jira comments.
-- If Jira or GitHub access is unavailable, or an operation fails, explain what happened and what remains to be done.
-- Do not create duplicate Jira issues when an existing issue is appropriate.
-- Keep Jira comments factual, concise, and useful to the team.
+- Create a Markdown file for each investigated tool, application, website, or project. Update existing files rather than creating duplicates.
+- Record implementation details, source paths, functions, APIs, evidence, limitations, and lessons for Baglib. Distinguish verified facts from assumptions.
+- For features investigated across multiple tools, create or update `feature: <Feature Name>.md`, comparing approaches, trade-offs, and the best fit for Baglib.
+- Keep documentation updated as findings evolve. Correct outdated information and cross-reference related documents.
+- Record only work actually performed. Check Baglib’s schema, data dictionary, ADRs, and architecture before applying findings. Do not introduce unapproved entities, fields, relationships, or dependencies.
+
+## 2. Jira Task Management
+
+**Only manage Jira tasks after a feature has been implemented, verified, committed, and successfully pushed to GitHub—and only when I have explicitly authorized the commit and push.** Never assume that authorization.
+
+### Identify and manage tasks at your discretion
+
+- Search Jira using the issue key, feature name, project context, acceptance criteria, and related documentation.
+- **You have the freedom to decide whether to create new tasks or update existing ones whenever appropriate** to accurately track the completed work. Avoid duplicates and unrelated changes.
+- If the correct existing task cannot be identified confidently, ask me before modifying it.
+- For existing tasks, you may refine titles and descriptions, update acceptance criteria and implementation notes to reflect actual results, add links to documentation/commits/PRs, and change status according to the actual completion state and available workflow transitions.
+- Create new tasks when they are the appropriate way to track the work, including distinct deliverables that deserve separate tracking.
+
+### Record and report completion
+
+- Verify implementation, tests, and acceptance criteria. Do not mark work Done if significant requirements remain unmet.
+- Comment on the relevant task with a concise summary of implementation, tests, useful websites/apps/APIs, reverse-engineered techniques, relevant projects/repos, documentation, and commit hash or PR link when applicable.
+- Report tasks created or updated, status changes, and any failed actions.
+
+## 3. Safety and Accuracy
+
+Never fabricate results, claim unmet requirements are complete, expose secrets, or modify unrelated tasks. Report access failures and incomplete actions honestly. A successful push alone does not prove the feature is complete or verified.

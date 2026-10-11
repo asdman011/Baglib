@@ -32,7 +32,8 @@ import {
   Image as ImageIcon,
   RefreshCw,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Globe
 } from 'lucide-react';
 import {
   BookItem,
@@ -52,6 +53,7 @@ import {
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useMetadataLookup } from '../../hooks/useMetadataLookup';
 import { MetadataDiffModal } from './MetadataDiffModal';
+import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
 
@@ -91,6 +93,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
   const [fetchedWork, setFetchedWork] = useState<BibliographicWork | null>(null);
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
+  const [isOnlineHubOpen, setIsOnlineHubOpen] = useState<boolean>(false);
+  const [isFileImported, setIsFileImported] = useState<boolean>(
+    Boolean(book?.filePath && book.filePath.trim().length > 0)
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isPlaceholderTitle = (val?: string) => {
@@ -144,6 +150,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       setActiveTab('info');
       setCurrentPdfPage(1);
       setTotalPdfPages(1);
+      setIsFileImported(Boolean(initial.filePath && initial.filePath.trim().length > 0));
 
       if (initial.filePath && initial.filePath.toLowerCase().endsWith('.pdf')) {
         renderPdfPage(initial.filePath, 1)
@@ -220,6 +227,27 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       const fileNameWithExt = pathSegments[pathSegments.length - 1];
       const ext = fileNameWithExt.split('.').pop()?.toUpperCase() || 'PDF';
 
+      setIsDiscoveringFile(true);
+
+      // Validate digital file if validation service is available
+      if (windowAPI?.validateDigitalFile) {
+        try {
+          const valRes = await windowAPI.validateDigitalFile(fullPath);
+          if (valRes && !valRes.isValid) {
+            setPdfCoverMessage(
+              lang === 'ar'
+                ? `الملف المحدد غير صالح: ${valRes.error || 'صيغة غير مدعومة'}`
+                : `Selected file is invalid: ${valRes.error || 'unsupported format'}`
+            );
+            setTimeout(() => setPdfCoverMessage(null), 4000);
+            setIsDiscoveringFile(false);
+            return;
+          }
+        } catch (vErr) {
+          console.warn('[BookDetailModal] validateDigitalFile error:', vErr);
+        }
+      }
+
       setFormData((prev) => ({
         ...prev,
         filePath: fullPath,
@@ -229,7 +257,6 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
       // Trigger automatic progressive metadata and cover discovery
       if (windowAPI?.discoverMetadata) {
-        setIsDiscoveringFile(true);
         try {
           const discovery = await windowAPI.discoverMetadata({
             filePath: fullPath,
@@ -249,8 +276,6 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           }
         } catch (err) {
           console.warn('[BookDetailModal] discoverMetadata failed:', err);
-        } finally {
-          setIsDiscoveringFile(false);
         }
       }
 
@@ -270,9 +295,50 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           console.warn('[BookDetailModal] renderPdfPage error:', pdfErr);
         }
       }
+
+      setIsDiscoveringFile(false);
+      setIsFileImported(true);
     } else {
       fileInputRef.current?.click();
     }
+  };
+
+  const handleRemoveFile = () => {
+    setFormData((prev) => ({
+      ...prev,
+      filePath: undefined,
+      digitalFormat: undefined,
+      fileSize: undefined,
+      bookType: prev.bookType === 'hybrid' ? 'physical' : prev.bookType,
+    }));
+    setIsFileImported(false);
+  };
+
+  const handleImportFromOnlineHub = (imported: Partial<BookItem>) => {
+    setFormData((prev) => ({
+      ...prev,
+      title: imported.title || prev.title,
+      author: imported.author || prev.author,
+      publisher: imported.publisher || prev.publisher,
+      publicationYear: imported.publicationYear || prev.publicationYear,
+      isbn: imported.isbn || prev.isbn,
+      coverImage: imported.coverImage || prev.coverImage,
+      digitalFormat: imported.digitalFormat || prev.digitalFormat,
+      filePath: imported.filePath || prev.filePath,
+      fileSize: imported.fileSize || prev.fileSize,
+      language: imported.language || prev.language,
+      onlineSource: (imported.onlineSource as any) || prev.onlineSource,
+      bookType: imported.filePath ? (prev.bookType === 'physical' ? 'hybrid' : 'digital') : prev.bookType,
+      categories: imported.categories ? Array.from(new Set([...(prev.categories || []), ...imported.categories])) : prev.categories,
+      tags: imported.tags ? Array.from(new Set([...(prev.tags || []), ...imported.tags])) : prev.tags,
+    }));
+
+    if (imported.filePath && imported.filePath.trim().length > 0) {
+      setIsFileImported(true);
+    }
+    setIsOnlineHubOpen(false);
+    setAutoFillSuccess(true);
+    setTimeout(() => setAutoFillSuccess(false), 3000);
   };
 
   const handleExtractPdfCover = async (page: number = 1) => {
@@ -394,6 +460,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         console.warn('[BookDetailModal] Fallback direct renderPdfPage error:', pdfErr);
       }
     }
+    setIsFileImported(true);
   };
 
   // Contributor Management
@@ -600,16 +667,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => handleTriggerAutoFill()}
-              disabled={lookupHook.status === 'searching'}
-              title={t('autoFillTooltip')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
+              type="button"
+              onClick={() => setIsOnlineHubOpen(true)}
+              title={t('openLibraryHubTooltip') || (lang === 'ar' ? 'البحث والاستيراد من المكتبات المفتوحة وخلاصات RSS' : 'Search and import from open libraries and RSS feeds')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pale-sky-500/10 border border-pale-sky-500/30 text-pale-sky-600 dark:text-pale-sky-300 text-xs font-bold hover:bg-pale-sky-500/20 transition-all cursor-pointer"
             >
-              <Sparkles className={`w-3.5 h-3.5 ${lookupHook.status === 'searching' ? 'animate-spin' : ''}`} />
+              <Globe className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">
-                {lookupHook.status === 'searching'
-                  ? t('autoFillingWeb')
-                  : t('autoFillWeb')}
+                {t('openLibraryHubBtn') || (lang === 'ar' ? 'المكتبات المفتوحة & RSS' : 'Open Library & RSS')}
               </span>
             </button>
 
@@ -817,14 +882,29 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   </div>
                 </div>
 
-                <button
-                  onClick={handlePickFileNative}
-                  disabled={isDiscoveringFile}
-                  className="px-3 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm disabled:opacity-50"
-                >
-                  <FolderOpen className="w-4 h-4 text-amber-500" />
-                  <span>{formData.filePath ? (lang === 'ar' ? 'تغيير الملف' : 'Change File') : (lang === 'ar' ? 'اختيار ملف' : 'Select File')}</span>
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {formData.filePath && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveFile}
+                      disabled={isDiscoveringFile}
+                      title={t('removeLinkedFile') || (lang === 'ar' ? 'إزالة الملف المربوط' : 'Remove Linked File')}
+                      className="px-2.5 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-red-500/10 hover:border-red-500/30 text-muted hover:text-red-500 font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                      <span className="hidden sm:inline">{t('removeLinkedFile') || (lang === 'ar' ? 'إزالة' : 'Remove')}</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handlePickFileNative}
+                    disabled={isDiscoveringFile}
+                    className="px-3 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm disabled:opacity-50"
+                  >
+                    <FolderOpen className="w-4 h-4 text-amber-500" />
+                    <span>{formData.filePath ? (lang === 'ar' ? 'تغيير الملف' : 'Change File') : (lang === 'ar' ? 'اختيار ملف' : 'Select File')}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Cover Image Section */}
@@ -953,10 +1033,30 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               {/* Shared Primary Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="sm:col-span-2 space-y-1">
-                  <label className="font-bold text-main flex items-center gap-1">
-                    <span>{lang === 'ar' ? 'العنوان الرئيسي' : 'Title'}</span>
-                    <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-main flex items-center gap-1">
+                      <span>{lang === 'ar' ? 'العنوان الرئيسي' : 'Title'}</span>
+                      <span className="text-red-500">*</span>
+                    </label>
+
+                    {/* Contextual Auto-fill Action: Shown strictly when a file has been successfully imported */}
+                    {isFileImported && (
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerAutoFill()}
+                        disabled={lookupHook.status === 'searching'}
+                        title={t('autoFillTooltip')}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer disabled:opacity-50 animate-in fade-in duration-200"
+                      >
+                        <Sparkles className={`w-3.5 h-3.5 ${lookupHook.status === 'searching' ? 'animate-spin' : ''}`} />
+                        <span>
+                          {lookupHook.status === 'searching'
+                            ? t('autoFillingWeb')
+                            : t('autoFillWeb')}
+                        </span>
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={formData.title || ''}
@@ -1882,6 +1982,13 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             onApply={handleApplyDiffUpdates}
           />
         )}
+
+        {/* Online Library Hub Modal for direct search & import */}
+        <OnlineLibraryHub
+          isOpen={isOnlineHubOpen}
+          onClose={() => setIsOnlineHubOpen(false)}
+          onImportBook={handleImportFromOnlineHub}
+        />
       </div>
     </div>
   );
