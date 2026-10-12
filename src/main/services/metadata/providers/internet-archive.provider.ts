@@ -154,7 +154,8 @@ export class InternetArchiveProvider implements MetadataProvider {
       if (terms.length <= 1) return [];
 
       const qParam = encodeURIComponent(terms.join(' AND '));
-      const url = `/advancedsearch.php?q=${qParam}&fl[]=identifier,title,creator,publisher,year,date,isbn,language,description&rows=${maxResults}&output=json`;
+      const pageParam = typeof query === 'object' && query.page && query.page > 1 ? `&page=${query.page}` : '';
+      const url = `/advancedsearch.php?q=${qParam}&fl[]=identifier,title,creator,publisher,year,date,isbn,language,description&rows=${maxResults}${pageParam}&output=json`;
 
       const data = await internetArchiveClient.getJson<any>(url);
       let docs = data?.response?.docs;

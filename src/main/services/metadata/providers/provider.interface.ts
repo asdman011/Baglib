@@ -4,6 +4,9 @@ export interface SearchQuery {
   title?: string;
   author?: string;
   general?: string;
+  page?: number;
+  startIndex?: number;
+  deeper?: boolean;
 }
 
 export interface MetadataProvider {

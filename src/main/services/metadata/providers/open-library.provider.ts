@@ -34,13 +34,14 @@ export class OpenLibraryProvider implements MetadataProvider {
         queryParam = parts.join('&');
       }
 
-      const url = `/search.json?${queryParam}&limit=${maxResults}`;
+      const pageParam = typeof query === 'object' && query.page && query.page > 1 ? `&page=${query.page}` : '';
+      const url = `/search.json?${queryParam}&limit=${maxResults}${pageParam}`;
       const data = await openLibraryClient.getJson<any>(url);
       let docs = data?.docs;
 
       // Fallback: If title + author returned 0 docs, retry with title only
       if ((!docs || !Array.isArray(docs) || docs.length === 0) && hasAuthor && hasTitle && typeof query !== 'string' && query.title?.trim()) {
-        const fallbackUrl = `/search.json?title=${encodeURIComponent(query.title.trim())}&limit=${maxResults}`;
+        const fallbackUrl = `/search.json?title=${encodeURIComponent(query.title.trim())}&limit=${maxResults}${pageParam}`;
         const fallbackData = await openLibraryClient.getJson<any>(fallbackUrl);
         if (fallbackData?.docs && Array.isArray(fallbackData.docs)) {
           docs = fallbackData.docs;
