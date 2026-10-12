@@ -9,6 +9,7 @@ import { LibraryGridView } from '../library/LibraryGridView';
 import { FullPageBookReader } from '../reader/FullPageBookReader';
 import { NotesOverviewView } from '../notes/NotesOverviewView';
 import { CategoriesOverviewView } from '../categories/CategoriesOverviewView';
+import { QuotaWarningBanner } from './QuotaWarningBanner';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Settings } from 'lucide-react';
 
@@ -30,6 +31,9 @@ export const AppLayout: React.FC = () => {
 
         {/* Dynamic App Views */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+          {/* Quota-Saver & Search Limit Banner */}
+          <QuotaWarningBanner />
+
           {viewMode === 'library' && <LibraryGridView />}
           {viewMode === 'categories' && <CategoriesOverviewView />}
           {viewMode === 'reader' && <FullPageBookReader />}

@@ -15,6 +15,8 @@ import migration002 from './002_add_categories';
 import migration003 from './003_add_reading_status';
 import migration004 from './004_extended_metadata';
 import migration005 from './005_lending_records';
+import migration006 from './006_api_quota_logs';
+import migration007 from './007_app_settings';
 
 /** All migrations in chronological order. */
 export const migrations: Migration[] = [
@@ -23,6 +25,8 @@ export const migrations: Migration[] = [
   migration003,
   migration004,
   migration005,
+  migration006,
+  migration007,
 ];
 
 
