@@ -51,13 +51,16 @@ export class HttpClient {
     let lastError: any;
 
     while (attempt <= this.maxRetries) {
+      let timeoutId: NodeJS.Timeout | undefined;
+      const controller = new AbortController();
+      const abortHandler = () => controller.abort();
+
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+        timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
         // Chain with user abort signal if provided
         if (options.signal) {
-          options.signal.addEventListener('abort', () => controller.abort());
+          options.signal.addEventListener('abort', abortHandler, { once: true });
         }
 
         const response = await fetch(fullUrl, {
@@ -65,8 +68,6 @@ export class HttpClient {
           headers,
           signal: controller.signal,
         });
-
-        clearTimeout(timeoutId);
 
         // If rate limited (429), respect Retry-After header unless it's Google Books (which needs fast failover)
         if (response.status === 429) {
@@ -100,6 +101,13 @@ export class HttpClient {
           attempt++;
         } else {
           throw err;
+        }
+      } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        if (options.signal) {
+          options.signal.removeEventListener('abort', abortHandler);
         }
       }
     }
@@ -137,6 +145,7 @@ export const internetArchiveClient = new HttpClient({
     Accept: 'application/json',
   },
   requestsPerSecond: 3,
+  timeoutMs: 20000, // Internet Archive advanced search queries take longer than lightweight REST APIs
 });
 
 export const googleBooksClient = new HttpClient({
@@ -145,5 +154,6 @@ export const googleBooksClient = new HttpClient({
     'User-Agent': BAGLIB_USER_AGENT,
   },
   requestsPerSecond: 5,
+  timeoutMs: 12000,
 });
 

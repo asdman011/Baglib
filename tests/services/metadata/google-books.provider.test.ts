@@ -12,7 +12,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
   });
 
   afterEach(() => {
-    googleBooksClient.getJson = originalGetJson;
+    (googleBooksClient as any).getJson = originalGetJson;
   });
 
   it('has provider name "Google Books"', () => {
@@ -26,7 +26,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
     });
 
     it('searches by query string and normalizes Volume into Work/Edition', async () => {
-      googleBooksClient.getJson = async (url: string) => {
+      (googleBooksClient as any).getJson = async (url: string) => {
         assert.ok(url.includes('/volumes?q=Clean%20Code'));
         return {
           totalItems: 1,
@@ -89,7 +89,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
     });
 
     it('searches by structured title and author SearchQuery', async () => {
-      googleBooksClient.getJson = async (url: string) => {
+      (googleBooksClient as any).getJson = async (url: string) => {
         const decoded = decodeURIComponent(url);
         assert.ok(decoded.includes('intitle:Clean Code'));
         assert.ok(decoded.includes('inauthor:Robert C. Martin'));
@@ -112,8 +112,96 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
       assert.strictEqual(results[0].title, 'Clean Code');
     });
 
+    it('falls back to broad title search when intitle structured search returns zero items', async () => {
+      let callCount = 0;
+      (googleBooksClient as any).getJson = async (url: string) => {
+        callCount++;
+        const decoded = decodeURIComponent(url);
+        if (decoded.includes('intitle:The Rare Manuscript')) {
+          // First attempt with intitle returns 0 items
+          return { totalItems: 0, items: [] };
+        }
+        if (decoded.includes('/volumes?q=The%20Rare%20Manuscript') || decoded.includes('The Rare Manuscript')) {
+          // Fallback title search returns volume
+          return {
+            totalItems: 1,
+            items: [
+              {
+                id: 'rare-vol-1',
+                volumeInfo: {
+                  title: 'The Rare Manuscript',
+                  authors: ['Al-Kindi']
+                }
+              }
+            ]
+          };
+        }
+        return { totalItems: 0, items: [] };
+      };
+
+      const results = await provider.search({ title: 'The Rare Manuscript', author: 'Al-Kindi' });
+      assert.strictEqual(callCount, 2);
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0].title, 'The Rare Manuscript');
+      assert.deepStrictEqual(results[0].authors, ['Al-Kindi']);
+    });
+
+    it('extracts higher resolution cover images (medium / large) over small thumbnails', async () => {
+      (googleBooksClient as any).getJson = async () => ({
+        totalItems: 1,
+        items: [
+          {
+            id: 'cover-vol-1',
+            volumeInfo: {
+              title: 'Art of Cover Design',
+              imageLinks: {
+                smallThumbnail: 'http://example.com/small.jpg',
+                thumbnail: 'http://example.com/thumb.jpg',
+                medium: 'http://example.com/medium.jpg',
+                large: 'http://example.com/large.jpg'
+              }
+            }
+          }
+        ]
+      });
+
+      const results = await provider.search('Art of Cover Design');
+      assert.strictEqual(results.length, 1);
+      // Large takes precedence and upgrades to https
+      assert.strictEqual(results[0].editions[0].coverUrl, 'https://example.com/large.jpg');
+    });
+
+    it('supports searching by Arabic book title and retrieves Arabic metadata', async () => {
+      (googleBooksClient as any).getJson = async (url: string) => {
+        const decoded = decodeURIComponent(url);
+        assert.ok(decoded.includes('مقدمة ابن خلدون'));
+        return {
+          totalItems: 1,
+          items: [
+            {
+              id: 'ar-vol-1',
+              volumeInfo: {
+                title: 'مقدمة ابن خلدون',
+                authors: ['ابن خلدون'],
+                publisher: 'دار الفكر',
+                language: 'ar',
+                pageCount: 650
+              }
+            }
+          ]
+        };
+      };
+
+      const results = await provider.search('مقدمة ابن خلدون');
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0].title, 'مقدمة ابن خلدون');
+      assert.deepStrictEqual(results[0].authors, ['ابن خلدون']);
+      assert.strictEqual(results[0].editions[0].language, 'ar');
+      assert.strictEqual(results[0].editions[0].pages, 650);
+    });
+
     it('recovers gracefully from network failure returning empty array', async () => {
-      googleBooksClient.getJson = async () => {
+      (googleBooksClient as any).getJson = async () => {
         throw new Error('Google API Quota Exceeded (429)');
       };
       const results = await provider.search('test');
@@ -123,7 +211,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
 
   describe('Search by ISBN', () => {
     it('queries Google Books with isbn: parameter', async () => {
-      googleBooksClient.getJson = async (url: string) => {
+      (googleBooksClient as any).getJson = async (url: string) => {
         assert.ok(url.includes('q=isbn:9780132350884'));
         return {
           totalItems: 1,
@@ -147,13 +235,13 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
     });
 
     it('returns null when no items are returned', async () => {
-      googleBooksClient.getJson = async () => ({ totalItems: 0, items: [] });
+      (googleBooksClient as any).getJson = async () => ({ totalItems: 0, items: [] });
       const result = await provider.searchByIsbn('0000000000');
       assert.strictEqual(result, null);
     });
 
     it('returns null on network error', async () => {
-      googleBooksClient.getJson = async () => {
+      (googleBooksClient as any).getJson = async () => {
         throw new Error('Connection reset');
       };
       const result = await provider.searchByIsbn('9780132350884');
@@ -163,8 +251,9 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
 
   describe('Get Work Details', () => {
     it('retrieves volume details by stripping gb- prefix', async () => {
-      googleBooksClient.getJson = async (url: string) => {
-        assert.strictEqual(url, '/volumes/kacTBQAAQBAJ');
+      (googleBooksClient as any).getJson = async (url: string) => {
+        assert.ok(url.startsWith('/volumes/kacTBQAAQBAJ'));
+        assert.ok(url.includes('key=AIzaSyDLDKUVqab2CqPBN3QjuzGnE0phS0063UU'));
         return {
           id: 'kacTBQAAQBAJ',
           volumeInfo: {

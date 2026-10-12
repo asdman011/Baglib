@@ -6990,10 +6990,12 @@ var SVGGraphics = function SVGGraphics() {
       }
       try {
         var input;
-        if (parseInt(process.versions.node) >= 8) {
+        if (typeof process !== 'undefined' && process.versions && parseInt(process.versions.node) >= 8) {
           input = literals;
+        } else if (typeof Buffer !== 'undefined' && typeof Buffer.from === 'function') {
+          input = Buffer.from(literals);
         } else {
-          input = new Buffer(literals);
+          input = literals;
         }
         var output = require('zlib').deflateSync(input, { level: 9 });
         return output instanceof Uint8Array ? output : new Uint8Array(output);

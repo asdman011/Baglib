@@ -10,6 +10,17 @@ import { setupDigitalIPC } from "./ipc/digital";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 
+// Global process error boundary to intercept uncaught exceptions and unhandled promise rejections,
+// preventing abrupt Node process exits or terminal crash artifacts during transient network failures.
+process.on('unhandledRejection', (reason: any) => {
+  const message = reason?.message || String(reason);
+  console.warn('[baglib:process] Intercepted unhandled async rejection:', message);
+});
+
+process.on('uncaughtException', (error: Error) => {
+  console.error('[baglib:process] Intercepted uncaught exception:', error?.message || error);
+});
+
 const isDev = !app.isPackaged;
 const loadApp = serve({ directory: path.join(__dirname, "../../out") });
 
