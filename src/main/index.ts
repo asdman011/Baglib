@@ -40,7 +40,18 @@ async function createWindow() {
   });
 
   if (isDev) {
-    await mainWindow.loadURL("http://localhost:3000");
+    try {
+      await mainWindow.loadURL("http://localhost:3000");
+    } catch (err) {
+      console.warn("[baglib] Failed to connect to dev server on first attempt, retrying in 1s...", err);
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.loadURL("http://localhost:3000").catch((retryErr) => {
+            console.error("[baglib] Secondary dev server loadURL error:", retryErr);
+          });
+        }
+      }, 1000);
+    }
   } else {
     await loadApp(mainWindow);
   }

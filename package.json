@@ -6,7 +6,7 @@
   "scripts": {
     "dev:next": "next dev -p 3000 src/renderer",
     "dev:electron": "tsup --watch --onSuccess \"electron .\"",
-    "dev": "concurrently -k \"npm run dev:next\" \"wait-on http://localhost:3000 && npm run dev:electron\"",
+    "dev": "concurrently -k -s first \"npm run dev:next\" \"wait-on http://localhost:3000 && npm run dev:electron\"",
     "build:main": "tsup",
     "build:renderer": "next build src/renderer",
     "build": "npm run build:main && npm run build:renderer",
