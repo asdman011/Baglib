@@ -134,5 +134,6 @@ export interface BatchImportSummary {
   successfulImports: number;
   failedImports: number;
   results: DigitalImportResult[];
+  bulkAutoFillSuppressed?: boolean;
 }
 

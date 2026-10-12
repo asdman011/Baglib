@@ -10,6 +10,8 @@ import { ContentShieldService } from '../services/shield/content-shield.service'
 import { bibliographicMetadataService } from '../services/metadata/bibliographic-metadata.service';
 import { FilenameParser } from '../services/metadata/filename-parser';
 import { coverResolverService } from '../services/metadata/cover-resolver.service';
+import { quotaTracker } from '../services/metadata/quotaTracker';
+import { providerConfigService } from '../services/metadata/provider-config.service';
 
 export function setupMetadataIPC() {
   /**
@@ -125,6 +127,7 @@ export function setupMetadataIPC() {
         discovery,
         match,
         candidates: discovery.candidates && discovery.candidates.length > 0 ? discovery.candidates : [match],
+        evaluations: discovery.rankedEvaluations || [],
         coverUrl: discovery.coverUrl,
         source: discovery.provenance.providerUsed || (discovery.provenance.embeddedFound ? 'embedded' : 'local'),
       };
@@ -161,9 +164,23 @@ export function setupMetadataIPC() {
   });
 
   /**
+   * Phase 1: Strictly offline local metadata extraction from file (EPUB/PDF embedded or filename)
+   * Guaranteed not to contact external providers (Google Books, Open Library, Internet Archive).
+   */
+  ipcMain.handle('library:extract-offline-metadata', async (_, params: { filePath?: string; filename?: string }) => {
+    try {
+      if (!params) return null;
+      return await bibliographicMetadataService.extractOfflineMetadata(params);
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] extract-offline-metadata error:', err);
+      return null;
+    }
+  });
+
+  /**
    * Full progressive book metadata discovery pipeline
    */
-  ipcMain.handle('library:discover-metadata', async (_, params: { filePath?: string; filename?: string; title?: string; author?: string; isbn?: string }) => {
+  ipcMain.handle('library:discover-metadata', async (_, params: { filePath?: string; filename?: string; title?: string; author?: string; isbn?: string; page?: number; deeper?: boolean; offlineOnly?: boolean }) => {
     try {
       if (!params) return null;
       return await bibliographicMetadataService.discoverBook(params);
@@ -241,6 +258,49 @@ export function setupMetadataIPC() {
     } catch (err) {
       console.error('[baglib/metadata-ipc] openFile error:', err);
       return false;
+    }
+  });
+
+  /**
+   * Quota Tracker Endpoints
+   */
+  ipcMain.handle('metadata:get-quota-status', async () => {
+    try {
+      return quotaTracker.getQuotaStatus();
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] getQuotaStatus error:', err);
+      return null;
+    }
+  });
+
+  ipcMain.handle('metadata:set-quota-count-test', async (_, count: number, date?: string) => {
+    try {
+      quotaTracker.setCountForTesting(count, date);
+      return quotaTracker.getQuotaStatus();
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] setQuotaCountTest error:', err);
+      return null;
+    }
+  });
+
+  /**
+   * Provider Configuration & Priority Endpoints
+   */
+  ipcMain.handle('metadata:get-provider-config', async () => {
+    try {
+      return providerConfigService.getProviderConfigs();
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] getProviderConfig error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('metadata:update-provider-config', async (_, configs: any) => {
+    try {
+      return providerConfigService.updateProviderConfigs(configs);
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] updateProviderConfig error:', err);
+      return [];
     }
   });
 }

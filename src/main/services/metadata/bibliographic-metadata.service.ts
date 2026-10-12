@@ -8,6 +8,20 @@ import { CandidateMatcher, CandidateEvaluation, TargetBookEvidence } from './can
 import { EmbeddedMetadataExtractor, EmbeddedBookMetadata } from './embedded-metadata.extractor';
 import { coverResolverService, CoverResolutionResult } from './cover-resolver.service';
 import { isValidIsbn, isPlaceholderTitle, isPlaceholderAuthor } from '../../../shared/validators/metadata-validator';
+import { QuotaTracker, quotaTracker as defaultQuotaTracker } from './quotaTracker';
+import { ProviderConfigService, providerConfigService as defaultProviderConfigService } from './provider-config.service';
+
+export interface DiscoveredCandidateItem {
+  work: BibliographicWork;
+  score: number;
+  confidence: number;
+  isCertainMatch: boolean;
+  isSuggestion: boolean;
+  matchType: 'exact' | 'high' | 'alternative';
+  matchedEdition?: BibliographicEdition;
+  discoveredIsbn?: string;
+  providerName?: string;
+}
 
 export interface DiscoveredBookResult {
   title: string;
@@ -28,6 +42,7 @@ export interface DiscoveredBookResult {
   matchedWork?: BibliographicWork;
   matchedEdition?: BibliographicEdition;
   candidates: BibliographicWork[];
+  rankedEvaluations?: DiscoveredCandidateItem[];
   parsedFilename?: ParsedFilenameMetadata;
   provenance: {
     localParsed: boolean;
@@ -39,22 +54,72 @@ export interface DiscoveredBookResult {
 
 export class BibliographicMetadataService {
   private providers: MetadataProvider[];
+  private quotaTracker: QuotaTracker;
+  private providerConfigService: ProviderConfigService;
 
-  constructor(customProviders?: MetadataProvider[]) {
+  constructor(
+    customProviders?: MetadataProvider[],
+    quotaTracker: QuotaTracker = defaultQuotaTracker,
+    configService: ProviderConfigService = defaultProviderConfigService
+  ) {
+    this.quotaTracker = quotaTracker;
+    this.providerConfigService = configService;
     this.providers = customProviders || [
       new OpenLibraryProvider(),
       new InternetArchiveProvider(),
-      new GoogleBooksProvider(),
+      new GoogleBooksProvider(this.quotaTracker),
     ];
   }
 
   /**
-   * Search across all providers using a waterfall fallback approach.
-   * If the primary provider returns results, they are returned.
-   * If it fails or returns empty, it falls back to the next provider.
+   * Returns active/enabled providers in user priority order.
+   */
+  getOrderedActiveProviders(): MetadataProvider[] {
+    const configs = this.providerConfigService.getProviderConfigs();
+    const enabledConfigs = configs.filter((c) => c.enabled);
+    const ordered: MetadataProvider[] = [];
+
+    for (const conf of enabledConfigs) {
+      const match = this.providers.find((p) => {
+        if (conf.id === 'google-books') return p.name === 'Google Books';
+        if (conf.id === 'open-library') return p.name === 'Open Library';
+        if (conf.id === 'internet-archive') return p.name === 'Internet Archive';
+        return p.name.toLowerCase() === conf.name.toLowerCase();
+      });
+      if (match) ordered.push(match);
+    }
+
+    // Include custom providers that might be registered directly
+    for (const p of this.providers) {
+      if (!ordered.includes(p)) {
+        const conf = configs.find((c) => {
+          if (c.id === 'google-books' && p.name === 'Google Books') return true;
+          if (c.id === 'open-library' && p.name === 'Open Library') return true;
+          if (c.id === 'internet-archive' && p.name === 'Internet Archive') return true;
+          return c.name.toLowerCase() === p.name.toLowerCase();
+        });
+        if (!conf || conf.enabled) {
+          ordered.push(p);
+        }
+      }
+    }
+
+    return ordered;
+  }
+
+  /**
+   * Search across all active providers respecting user priority order.
+   * Aggregates and deduplicates results into a unified candidate pool.
    */
   async search(query: string | SearchQuery, maxResults = 10): Promise<BibliographicWork[]> {
-    for (const provider of this.providers) {
+    const isDepleted = this.quotaTracker.isDepleted();
+    const orderedProviders = this.getOrderedActiveProviders();
+
+    for (const provider of orderedProviders) {
+      if (isDepleted && provider.name === 'Google Books') {
+        continue;
+      }
+
       try {
         const results = await provider.search(query, maxResults);
         if (results && results.length > 0) {
@@ -77,11 +142,13 @@ export class BibliographicMetadataService {
     }
 
     if (workId.startsWith('gb-')) {
+      if (this.quotaTracker.isDepleted()) return null;
       const gbProvider = this.providers.find((p) => p.name === 'Google Books');
       if (gbProvider) return gbProvider.getWorkDetails(workId);
     }
 
     for (const provider of this.providers) {
+      if (this.quotaTracker.isDepleted() && provider.name === 'Google Books') continue;
       try {
         const details = await provider.getWorkDetails(workId);
         if (details) return details;
@@ -93,11 +160,16 @@ export class BibliographicMetadataService {
   }
 
   /**
-   * Search by ISBN with fallback logic across providers.
+   * Search by ISBN with prioritized fallback across active providers.
+   * Merges matching editions if multiple providers succeed.
    */
   async searchByIsbn(isbn: string): Promise<BibliographicWork | null> {
     const cleanIsbn = isbn.replace(/[-\s]/g, '');
-    for (const provider of this.providers) {
+    const isDepleted = this.quotaTracker.isDepleted();
+    const orderedProviders = this.getOrderedActiveProviders();
+
+    for (const provider of orderedProviders) {
+      if (isDepleted && provider.name === 'Google Books') continue;
       try {
         const result = await provider.searchByIsbn(cleanIsbn);
         if (result) return result;
@@ -109,10 +181,26 @@ export class BibliographicMetadataService {
   }
 
   /**
+   * Phase 1: Extracts strictly local/offline metadata from the uploaded file (EPUB/PDF embedded or filename)
+   * without contacting any online metadata providers.
+   */
+  async extractOfflineMetadata(params: {
+    filePath?: string;
+    filename?: string;
+  }): Promise<DiscoveredBookResult> {
+    return this.discoverBook({
+      ...params,
+      offlineOnly: true,
+    });
+  }
+
+  /**
    * Progressive Discovery & Enrichment Pipeline:
    * 1. Extract local filename information and embedded metadata (EPUB/PDF).
-   * 2. Formulate search queries and query providers progressively.
-   * 3. Evaluate and rank candidates using trustworthy evidence.
+   * 2. Query enabled providers according to user priority order.
+   *    Google Books is NOT short-circuited when Open Library returns results,
+   *    allowing rich metadata aggregation across both sources.
+   * 3. Evaluate, merge, and rank candidates using deterministic multi-factor scoring.
    * 4. Discover ISBN when missing.
    * 5. Resolve matching cover across multi-source waterfall.
    * 6. Function completely offline if network is unavailable.
@@ -123,6 +211,9 @@ export class BibliographicMetadataService {
     title?: string;
     author?: string;
     isbn?: string;
+    page?: number;
+    deeper?: boolean;
+    offlineOnly?: boolean;
   }): Promise<DiscoveredBookResult> {
     const identifierPath = params.filePath || params.filename || '';
 
@@ -169,6 +260,58 @@ export class BibliographicMetadataService {
       if (!isValidIsbn(targetIsbn)) targetIsbn = undefined;
     }
 
+    // Phase 1 (Local Upload / Offline Mode):
+    // If offlineOnly is requested, return purely local evidence and extracted covers without contacting external APIs
+    if (params.offlineOnly) {
+      let localCoverUrl: string | undefined;
+      let localCoverSource: CoverResolutionResult['source'] = 'none';
+
+      if (embeddedMeta?.coverBuffer) {
+        const mime = embeddedMeta.coverMimeType || 'image/jpeg';
+        localCoverUrl = `data:${mime};base64,${embeddedMeta.coverBuffer.toString('base64')}`;
+        localCoverSource = 'embedded';
+      } else if (params.filePath && params.filePath.toLowerCase().endsWith('.pdf')) {
+        try {
+          const directPdfCover = await coverResolverService.extractPdfCover(params.filePath);
+          if (directPdfCover?.coverUrl) {
+            localCoverUrl = directPdfCover.coverUrl;
+            localCoverSource = 'embedded';
+          }
+        } catch (pdfErr) {
+          console.warn('[BibliographicMetadataService] Direct PDF cover fallback failed in offline mode:', pdfErr);
+        }
+      }
+
+      const finalTitle = targetTitle || (identifierPath ? identifierPath.replace(/\.[^.]+$/, '') : 'Untitled');
+
+      return {
+        title: finalTitle,
+        authors: targetAuthors,
+        translators: targetTranslators,
+        publisher: targetPublisher,
+        publicationYear: targetYear,
+        edition: targetEdition,
+        isbn: targetIsbn,
+        isbn10: parsedFilename?.isbn10,
+        isbn13: parsedFilename?.isbn13,
+        language: targetLanguage || 'العربية',
+        description: embeddedMeta?.description,
+        coverUrl: localCoverUrl,
+        coverSource: localCoverSource,
+        confidence: embeddedMeta ? 0.85 : (parsedFilename?.overallConfidence || 0.5),
+        isVerifiedMatch: false,
+        candidates: [],
+        rankedEvaluations: [],
+        parsedFilename,
+        provenance: {
+          localParsed: !!parsedFilename,
+          embeddedFound: !!embeddedMeta,
+          providerUsed: undefined,
+          isbnDiscovered: false,
+        },
+      };
+    }
+
     const evidence: TargetBookEvidence = {
       title: targetTitle,
       authors: targetAuthors,
@@ -179,40 +322,51 @@ export class BibliographicMetadataService {
       language: targetLanguage,
     };
 
-    // Stage B: Progressive Online Provider Search
+    // Stage B: Multi-Provider Online Search respecting user priority order
     let candidates: BibliographicWork[] = [];
     let providerUsed: string | undefined;
 
+    const activeProviders = this.getOrderedActiveProviders();
+    const isDepleted = this.quotaTracker.isDepleted();
+
     try {
-      // 1. If ISBN is known, search by ISBN first
+      // 1. If ISBN is known, search by ISBN across active providers
       if (targetIsbn) {
-        for (const provider of this.providers) {
+        for (const provider of activeProviders) {
+          if (isDepleted && provider.name === 'Google Books') continue;
+
           try {
             const work = await provider.searchByIsbn(targetIsbn);
             if (work) {
               candidates.push(work);
-              providerUsed = provider.name;
-              break;
+              if (!providerUsed) providerUsed = provider.name;
             }
-          } catch {
-            // continue
+          } catch (err) {
+            console.warn(`[BibliographicMetadataService] Provider ${provider.name} failed during searchByIsbn:`, err);
           }
         }
       }
 
-      // 2. If no ISBN or ISBN yielded no results, search by Title and Author
-      if (candidates.length === 0 && targetTitle) {
+      // 2. Search by Title and Author across all active providers (no Google Books short-circuiting)
+      if (targetTitle) {
         const primaryAuthor = targetAuthors.length > 0 ? targetAuthors[0] : undefined;
+        const page = params.page || 1;
+        const deeper = params.deeper || false;
+        const maxPerProvider = deeper ? 8 : 5;
 
-        for (const provider of this.providers) {
+        for (const provider of activeProviders) {
+          if (isDepleted && provider.name === 'Google Books') continue;
+
           try {
             let results = await provider.search(
               {
                 title: targetTitle,
                 author: primaryAuthor,
                 general: targetTitle,
+                page,
+                deeper,
               },
-              5
+              maxPerProvider
             );
             // If search with author returned 0 results, retry with title only
             if ((!results || results.length === 0) && primaryAuthor) {
@@ -220,17 +374,18 @@ export class BibliographicMetadataService {
                 {
                   title: targetTitle,
                   general: targetTitle,
+                  page,
+                  deeper,
                 },
-                5
+                maxPerProvider
               );
             }
             if (results && results.length > 0) {
-              candidates = results;
-              providerUsed = provider.name;
-              break;
+              candidates.push(...results);
+              if (!providerUsed) providerUsed = provider.name;
             }
-          } catch {
-            // continue
+          } catch (err) {
+            console.warn(`[BibliographicMetadataService] Provider ${provider.name} failed during search:`, err);
           }
         }
       }
@@ -239,6 +394,8 @@ export class BibliographicMetadataService {
     }
 
     // Stage C: Candidate Evaluation & Ranking
+    let rankedCandidates: BibliographicWork[] = [];
+    let rankedEvaluations: DiscoveredCandidateItem[] = [];
     let bestEvaluation: CandidateEvaluation | undefined;
     let matchedWork: BibliographicWork | undefined;
     let matchedEdition: BibliographicEdition | undefined;
@@ -248,7 +405,20 @@ export class BibliographicMetadataService {
       const ranked = CandidateMatcher.rankCandidates(evidence, candidates);
       if (ranked.length > 0) {
         bestEvaluation = ranked[0];
-        if (bestEvaluation.isCertainMatch || bestEvaluation.score >= 25) {
+        rankedCandidates = ranked.map((r) => r.candidate);
+        rankedEvaluations = ranked.map((r) => ({
+          work: r.candidate,
+          score: r.score,
+          confidence: r.confidence,
+          isCertainMatch: r.isCertainMatch,
+          isSuggestion: r.isSuggestion,
+          matchType: r.matchType,
+          matchedEdition: r.matchedEdition,
+          discoveredIsbn: r.discoveredIsbn,
+          providerName: r.providerName,
+        }));
+
+        if (bestEvaluation.isCertainMatch || bestEvaluation.score >= 20) {
           matchedWork = bestEvaluation.candidate;
           matchedEdition = bestEvaluation.matchedEdition;
           discoveredIsbn = bestEvaluation.discoveredIsbn;
@@ -325,8 +495,8 @@ export class BibliographicMetadataService {
       confidence,
       isVerifiedMatch: !!bestEvaluation?.isCertainMatch,
       matchedWork,
-      matchedEdition,
-      candidates,
+      candidates: rankedCandidates.length > 0 ? rankedCandidates : candidates,
+      rankedEvaluations,
       parsedFilename,
       provenance: {
         localParsed: !!parsedFilename,
@@ -335,6 +505,32 @@ export class BibliographicMetadataService {
         isbnDiscovered: !!discoveredIsbn && !targetIsbn,
       },
     };
+  }
+
+  private deduplicateCandidates(candidates: BibliographicWork[]): BibliographicWork[] {
+    const seen = new Set<string>();
+    const result: BibliographicWork[] = [];
+
+    for (const cand of candidates) {
+      if (!cand) continue;
+      const primaryIsbn = (cand.editions?.[0]?.isbn13 || cand.editions?.[0]?.isbn || cand.editions?.[0]?.isbn10 || '')
+        .replace(/[-\s]/g, '')
+        .toUpperCase();
+      const normTitle = (cand.title || '').toLowerCase().replace(/[^\w\u0600-\u06FF]/g, '');
+      const normAuthor = (cand.authors?.[0] || '').toLowerCase().replace(/[^\w\u0600-\u06FF]/g, '');
+
+      const key = primaryIsbn
+        ? `isbn:${primaryIsbn}`
+        : cand.workId
+        ? `id:${cand.workId}`
+        : `ta:${normTitle}::${normAuthor}`;
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(cand);
+      }
+    }
+    return result;
   }
 
   /**

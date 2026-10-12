@@ -12,25 +12,30 @@ import type {
 } from '../../../shared/types/digital-file';
 import type { BookItemInput } from '../../../shared/types/work';
 
+import { QuotaTracker, quotaTracker as defaultQuotaTracker } from '../metadata/quotaTracker';
+
 export class DigitalImportPipelineService {
   private static instance: DigitalImportPipelineService;
   private validator: DigitalFileValidatorService;
   private extractor: EbookMetadataExtractorService;
   private workRepository?: WorkRepository;
+  private quotaTracker: QuotaTracker;
 
   constructor(
     workRepository?: WorkRepository,
     validator?: DigitalFileValidatorService,
-    extractor?: EbookMetadataExtractorService
+    extractor?: EbookMetadataExtractorService,
+    quotaTracker: QuotaTracker = defaultQuotaTracker
   ) {
     this.validator = validator || DigitalFileValidatorService.getInstance();
     this.extractor = extractor || EbookMetadataExtractorService.getInstance();
     this.workRepository = workRepository;
+    this.quotaTracker = quotaTracker;
   }
 
-  public static getInstance(workRepository?: WorkRepository): DigitalImportPipelineService {
-    if (!this.instance || workRepository) {
-      this.instance = new DigitalImportPipelineService(workRepository);
+  public static getInstance(workRepository?: WorkRepository, quotaTracker?: QuotaTracker): DigitalImportPipelineService {
+    if (!this.instance || workRepository || quotaTracker) {
+      this.instance = new DigitalImportPipelineService(workRepository, undefined, undefined, quotaTracker);
     }
     return this.instance;
   }
@@ -157,9 +162,19 @@ export class DigitalImportPipelineService {
 
   /**
    * Batch imports multiple files, collecting results without aborting on individual failures.
+   * If in Quota-Saver mode (>= 750 requests), automated background Google Books queries are suppressed.
+   * Books are imported with local/embedded metadata, requiring explicit single-item auto-fill.
    */
   public async importFiles(optionsList: DigitalImportOptions[]): Promise<BatchImportSummary> {
     const results: DigitalImportResult[] = [];
+    const isBatch = optionsList.length > 1;
+    const isConservation = this.quotaTracker.isConservationMode();
+
+    if (isBatch && isConservation) {
+      console.info(
+        '[DigitalImportPipeline] Quota-Saver Mode active: Automated background Google Books queries disabled during bulk import. Materials imported with local file metadata; individual auto-fill available upon explicit user request.'
+      );
+    }
 
     for (const opt of optionsList) {
       try {
@@ -184,6 +199,7 @@ export class DigitalImportPipelineService {
       successfulImports,
       failedImports: results.length - successfulImports,
       results,
+      bulkAutoFillSuppressed: isBatch && isConservation,
     };
   }
 

@@ -51,7 +51,7 @@ interface WorkspaceContextType extends WorkspaceState {
   setCommandPaletteOpen: (open: boolean) => void;
   setViewMode: (mode: 'library' | 'categories' | 'reader' | 'notes' | 'settings') => void;
   setActiveLibraryCategory: (catId: string) => void;
-  t: (key: TranslationKey) => string;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   
   // Book Library Management
   addBook: (book: BookItem) => void;
@@ -103,8 +103,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   };
 
-  const t = (key: TranslationKey): string => {
-    return translations[lang][key] || key;
+  const t = (key: TranslationKey, params?: Record<string, string | number>): string => {
+    let text = translations[lang][key] || key;
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+      }
+    }
+    return text;
   };
 
   const toggleDirection = () => setDir((prev) => (prev === 'rtl' ? 'ltr' : 'rtl'));

@@ -39,7 +39,9 @@ export const API = {
     ipcRenderer.invoke('library:parse-filename', filename),
   resolveCover: (options: any) =>
     ipcRenderer.invoke('library:resolve-cover', options),
-  discoverMetadata: (params: { filePath?: string; filename?: string; title?: string; author?: string; isbn?: string }) =>
+  extractOfflineMetadata: (params: { filePath?: string; filename?: string }) =>
+    ipcRenderer.invoke('library:extract-offline-metadata', params),
+  discoverMetadata: (params: { filePath?: string; filename?: string; title?: string; author?: string; isbn?: string; page?: number; deeper?: boolean; offlineOnly?: boolean }) =>
     ipcRenderer.invoke('library:discover-metadata', params),
   extractPdfCover: (filePath: string, pageIndex?: number) =>
     ipcRenderer.invoke('library:extract-pdf-cover', filePath, pageIndex),
@@ -74,6 +76,22 @@ export const API = {
   getAllNotes: () => ipcRenderer.invoke('library:get-all-notes'),
   addNote: (noteData: any) => ipcRenderer.invoke('library:add-note', noteData),
   deleteNote: (noteId: string) => ipcRenderer.invoke('library:delete-note', noteId),
+
+  // Quota & Rate-Limiter Tracking
+  getQuotaStatus: () => ipcRenderer.invoke('metadata:get-quota-status'),
+  setQuotaCountTest: (count: number, date?: string) =>
+    ipcRenderer.invoke('metadata:set-quota-count-test', count, date),
+  onQuotaWarning: (callback: (payload: any) => void) => {
+    const subscription = (_: any, value: any) => callback(value);
+    ipcRenderer.on('metadata:quota-warning', subscription);
+    return () => ipcRenderer.removeListener('metadata:quota-warning', subscription);
+  },
+
+  // Provider Priority & Configuration
+  getProviderConfig: () =>
+    ipcRenderer.invoke('metadata:get-provider-config'),
+  updateProviderConfig: (configs: any) =>
+    ipcRenderer.invoke('metadata:update-provider-config', configs),
 
   onNotification: (callback: (message: string) => void) => {
     const subscription = (_: any, value: string) => callback(value);

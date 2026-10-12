@@ -312,11 +312,13 @@ export const LibraryGridView: React.FC = () => {
       );
 
       try {
-        if (windowAPI?.discoverMetadata) {
+        const extractor = windowAPI?.extractOfflineMetadata || windowAPI?.discoverMetadata;
+        if (extractor) {
           try {
-            const discovery = await windowAPI.discoverMetadata({
+            const discovery = await extractor({
               filePath: fullPath,
               filename: fileNameWithExt,
+              offlineOnly: true,
             });
             if (discovery) {
               if (discovery.title) discoveredTitle = discovery.title;
@@ -330,7 +332,7 @@ export const LibraryGridView: React.FC = () => {
               if (discovery.edition) discoveredEdition = discovery.edition;
             }
           } catch (err) {
-            console.warn('[LibraryGridView] Metadata discovery failed, falling back to local file name:', err);
+            console.warn('[LibraryGridView] Offline metadata extraction failed, falling back to local file name:', err);
           }
         }
 
@@ -410,10 +412,13 @@ export const LibraryGridView: React.FC = () => {
 
     try {
       const windowAPI = (window as any).electronAPI;
-      if (windowAPI?.discoverMetadata) {
+      const extractor = windowAPI?.extractOfflineMetadata || windowAPI?.discoverMetadata;
+      if (extractor) {
         try {
-          const discovery = await windowAPI.discoverMetadata({
+          const discovery = await extractor({
             filename: file.name,
+            filePath: (file as any).path,
+            offlineOnly: true,
           });
           if (discovery) {
             if (discovery.title) discoveredTitle = discovery.title;
@@ -427,7 +432,7 @@ export const LibraryGridView: React.FC = () => {
             if (discovery.edition) discoveredEdition = discovery.edition;
           }
         } catch (err) {
-          console.warn('[LibraryGridView] Fallback metadata discovery error:', err);
+          console.warn('[LibraryGridView] Fallback offline metadata extraction error:', err);
         }
       }
 

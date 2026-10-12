@@ -33,7 +33,8 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
-  Globe
+  Globe,
+  Sliders
 } from 'lucide-react';
 import {
   BookItem,
@@ -53,6 +54,8 @@ import {
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useMetadataLookup } from '../../hooks/useMetadataLookup';
 import { MetadataDiffModal } from './MetadataDiffModal';
+import { MetadataCandidatesModal } from './MetadataCandidatesModal';
+import { ProviderSettingsModal } from './ProviderSettingsModal';
 import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
@@ -91,6 +94,9 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [totalPdfPages, setTotalPdfPages] = useState<number>(1);
   const [pdfCoverMessage, setPdfCoverMessage] = useState<string | null>(null);
   const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
+  const [showCandidatesModal, setShowCandidatesModal] = useState<boolean>(false);
+  const [showProviderSettingsModal, setShowProviderSettingsModal] = useState<boolean>(false);
+  const [selectedCandidateWork, setSelectedCandidateWork] = useState<BibliographicWork | null>(null);
   const [fetchedWork, setFetchedWork] = useState<BibliographicWork | null>(null);
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState<boolean>(false);
@@ -255,12 +261,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
       }));
 
-      // Trigger automatic progressive metadata and cover discovery
-      if (windowAPI?.discoverMetadata) {
+      // Phase 1: Extract strictly offline metadata attached to the file (EPUB/PDF embedded or filename)
+      const extractor = windowAPI?.extractOfflineMetadata || windowAPI?.discoverMetadata;
+      if (extractor) {
         try {
-          const discovery = await windowAPI.discoverMetadata({
+          const discovery = await extractor({
             filePath: fullPath,
             filename: fileNameWithExt,
+            offlineOnly: true,
           });
           if (discovery) {
             setFormData((prev) => ({
@@ -272,10 +280,12 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               isbn: discovery.isbn || prev.isbn || '',
               coverImage: discovery.coverUrl || prev.coverImage || '',
               edition: discovery.edition || prev.edition || '',
+              language: discovery.language || prev.language || 'العربية',
+              abstract: discovery.description || prev.abstract || '',
             }));
           }
         } catch (err) {
-          console.warn('[BookDetailModal] discoverMetadata failed:', err);
+          console.warn('[BookDetailModal] extractOfflineMetadata failed:', err);
         }
       }
 
@@ -405,11 +415,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     }));
 
     const windowAPI = (window as any).electronAPI;
-    if (windowAPI?.discoverMetadata) {
+    const extractor = windowAPI?.extractOfflineMetadata || windowAPI?.discoverMetadata;
+    if (extractor) {
       setIsDiscoveringFile(true);
       try {
-        const discovery = await windowAPI.discoverMetadata({
+        const discovery = await extractor({
           filename: file.name,
+          filePath: (file as any).path,
+          offlineOnly: true,
         });
         if (discovery) {
           setFormData((prev) => ({
@@ -421,6 +434,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             isbn: discovery.isbn || prev.isbn || '',
             coverImage: discovery.coverUrl || prev.coverImage || '',
             edition: discovery.edition || prev.edition || '',
+            language: discovery.language || prev.language || 'العربية',
+            abstract: discovery.description || prev.abstract || '',
           }));
         }
 
@@ -538,17 +553,44 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       return;
     }
 
-    const match = await lookupHook.lookup({
+    const res = await lookupHook.lookupWithCandidates({
       isbn: cleanIsbn || undefined,
       title: title || undefined,
       author: author || undefined,
       filePath: formData.filePath || undefined,
     });
 
-    if (match) {
-      setFetchedWork(match);
-      setShowDiffModal(true);
+    if (res && res.candidates && res.candidates.length > 0) {
+      const topMatch = res.match || res.candidates[0];
+      setSelectedCandidateWork(topMatch);
+
+      if (res.candidates.length > 1) {
+        // Multiple candidates found: show selectable candidate modal
+        setShowCandidatesModal(true);
+      } else {
+        // Single candidate found: proceed directly to review diff
+        setFetchedWork(topMatch);
+        setShowDiffModal(true);
+      }
+    } else {
+      alert(
+        lang === 'ar'
+          ? t('candidateNoResults')
+          : t('candidateNoResults')
+      );
     }
+  };
+
+  const handleProceedFromCandidates = (work: BibliographicWork) => {
+    setSelectedCandidateWork(work);
+    setFetchedWork(work);
+    setShowCandidatesModal(false);
+    setShowDiffModal(true);
+  };
+
+  const handleBackToCandidatesFromDiff = () => {
+    setShowDiffModal(false);
+    setShowCandidatesModal(true);
   };
 
   const handleApplyDiffUpdates = (updates: Partial<BookItem>) => {
@@ -1041,20 +1083,31 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
                     {/* Contextual Auto-fill Action: Shown strictly when a file has been successfully imported */}
                     {isFileImported && (
-                      <button
-                        type="button"
-                        onClick={() => handleTriggerAutoFill()}
-                        disabled={lookupHook.status === 'searching'}
-                        title={t('autoFillTooltip')}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer disabled:opacity-50 animate-in fade-in duration-200"
-                      >
-                        <Sparkles className={`w-3.5 h-3.5 ${lookupHook.status === 'searching' ? 'animate-spin' : ''}`} />
-                        <span>
-                          {lookupHook.status === 'searching'
-                            ? t('autoFillingWeb')
-                            : t('autoFillWeb')}
-                        </span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleTriggerAutoFill()}
+                          disabled={lookupHook.status === 'searching'}
+                          title={t('autoFillTooltip')}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer disabled:opacity-50 animate-in fade-in duration-200"
+                        >
+                          <Sparkles className={`w-3.5 h-3.5 ${lookupHook.status === 'searching' ? 'animate-spin' : ''}`} />
+                          <span>
+                            {lookupHook.status === 'searching'
+                              ? t('autoFillingWeb')
+                              : t('autoFillWeb')}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowProviderSettingsModal(true)}
+                          title={t('providerSettingsTooltip')}
+                          aria-label={t('providerSettingsBtn')}
+                          className="p-1.5 rounded-lg bg-canvas border border-subtle text-muted hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/30 transition-all cursor-pointer"
+                        >
+                          <Sliders className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </div>
                   <input
@@ -1969,12 +2022,32 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           </div>
         </div>
 
+        {/* Ranked metadata candidates selection modal */}
+        {showCandidatesModal && (
+          <MetadataCandidatesModal
+            isOpen={showCandidatesModal}
+            searchTitle={formData.title}
+            searchAuthor={formData.author}
+            searchIsbn={formData.isbn}
+            candidates={lookupHook.candidates}
+            evaluations={lookupHook.evaluations}
+            selectedWork={selectedCandidateWork}
+            onSelectWork={(work) => setSelectedCandidateWork(work)}
+            onProceed={handleProceedFromCandidates}
+            onClose={() => setShowCandidatesModal(false)}
+            onSearchDeeper={lookupHook.searchDeeper}
+            isSearchingDeeper={lookupHook.isSearchingDeeper}
+          />
+        )}
+
         {/* Side-by-side metadata diff modal */}
         {showDiffModal && fetchedWork && (
           <MetadataDiffModal
             isOpen={showDiffModal}
             currentBook={formData}
             incomingWork={fetchedWork}
+            candidateCount={lookupHook.candidates.length}
+            onBackToCandidates={lookupHook.candidates.length > 1 ? handleBackToCandidatesFromDiff : undefined}
             onClose={() => {
               setShowDiffModal(false);
               setFetchedWork(null);
@@ -1982,6 +2055,12 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             onApply={handleApplyDiffUpdates}
           />
         )}
+
+        {/* Provider configuration and priority modal */}
+        <ProviderSettingsModal
+          isOpen={showProviderSettingsModal}
+          onClose={() => setShowProviderSettingsModal(false)}
+        />
 
         {/* Online Library Hub Modal for direct search & import */}
         <OnlineLibraryHub

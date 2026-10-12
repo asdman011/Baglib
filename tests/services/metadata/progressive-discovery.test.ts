@@ -82,4 +82,62 @@ describe('Progressive Metadata Discovery & Offline Import Tests', () => {
     assert.strictEqual(result.isVerifiedMatch, false);
     assert.strictEqual(result.candidates.length, 0);
   });
+
+  it('Phase 1: extractOfflineMetadata extracts local file/filename metadata and NEVER queries online providers', async () => {
+    let providerCalls = 0;
+    const trackedProvider: MetadataProvider = {
+      name: 'Tracked Provider',
+      search: async () => {
+        providerCalls++;
+        return [mockWork];
+      },
+      searchByIsbn: async () => {
+        providerCalls++;
+        return mockWork;
+      },
+      getWorkDetails: async () => mockWork,
+    };
+
+    const service = new BibliographicMetadataService([trackedProvider]);
+
+    // Phase 1 call (triggered on local upload)
+    const result = await service.extractOfflineMetadata({
+      filename: 'Refactoring - Martin Fowler.pdf',
+    });
+
+    assert.strictEqual(providerCalls, 0, 'Online providers must NEVER be called in Phase 1 offline extraction');
+    assert.strictEqual(result.title, 'Refactoring');
+    assert.deepStrictEqual(result.authors, ['Martin Fowler']);
+    assert.strictEqual(result.candidates.length, 0);
+    assert.strictEqual(result.provenance.providerUsed, undefined);
+  });
+
+  it('Phase 2: explicit auto-fill queries online metadata providers to enrich work details and find candidates', async () => {
+    let providerCalls = 0;
+    const trackedProvider: MetadataProvider = {
+      name: 'Tracked Provider',
+      search: async () => {
+        providerCalls++;
+        return [mockWork];
+      },
+      searchByIsbn: async () => {
+        providerCalls++;
+        return mockWork;
+      },
+      getWorkDetails: async () => mockWork,
+    };
+
+    const service = new BibliographicMetadataService([trackedProvider]);
+
+    // Phase 2 call (triggered when user clicks Auto-fill)
+    const result = await service.discoverBook({
+      title: 'Clean Code',
+      author: 'Robert C. Martin',
+      offlineOnly: false,
+    });
+
+    assert.strictEqual(providerCalls >= 1, true, 'Online providers must be queried in Phase 2 explicit auto-fill');
+    assert.strictEqual(result.candidates.length, 1);
+    assert.strictEqual(result.candidates[0].workId, 'OL12345W');
+  });
 });

@@ -155,6 +155,7 @@ export const translations = {
     nextCoverPage: "الصفحة التالية",
     diffModalTitle: "مقارنة واعتماد بيانات الكتاب المستوردة",
     diffModalSubtitle: "حدد الحقول التي ترغب في تطبيقها على بطاقة الكتاب لحماية التعديلات اليدوية السابقة.",
+    diffModalSource: "المصدر",
     diffField: "الحقل",
     diffCurrent: "القيمة الحالية (المحلية)",
     diffIncoming: "القيمة المجلوبة (الإنترنت)",
@@ -174,6 +175,54 @@ export const translations = {
     diffFieldCategories: "التصنيفات والموضوعات",
     diffFieldDescription: "النبذة والوصف",
     diffFieldCover: "صورة الغلاف",
+
+    // Candidate Selection & Auto-fill Improvements
+    candidatesModalTitle: "نتائج واقتراحات الفهارس المفتوحة",
+    candidatesModalSubtitle: "تم العثور على {count} مرشحين للبيانات. اختر الكتاب أو الطبعة المناسبة لمعاينة تفاصيلها وتطبيقها.",
+    candidatesSearchSummary: "نتائج البحث عن:",
+    candidatesCountBadge: "{count} مرشح",
+    candidateMatchExact: "مطابقة مؤكدة",
+    candidateMatchHigh: "ثقة عالية",
+    candidateMatchAlternative: "مرشح بديل",
+    candidateScore: "نسبة المطابقة: {score}%",
+    candidateSelectBtn: "اختيار هذا المرشح",
+    candidateSelectedBadge: "تم الاختيار",
+    candidateProceedToDiff: "متابعة لمراجعة الفروق والتطبيق",
+    candidateChangeCandidate: "تغيير المرشح ({count})",
+    candidateBackToPicker: "العودة للمرشحين ({count})",
+    candidateNoResults: "لم يتم العثور على نتائج في Google Books أو الفهارس المفتوحة.",
+    candidateNoResultsHint: "يرجى التحقق من صحة العنوان أو اسم المؤلف، أو إدخال الرقم المعياري الدولي (ISBN).",
+    candidateProviderGoogleBooks: "Google Books",
+    candidateProviderOpenLibrary: "Open Library",
+    candidateProviderInternetArchive: "Internet Archive",
+    candidateEditionsCount: "{count} طبعات",
+    candidatePages: "{count} صفحة",
+    candidateYear: "سنة {year}",
+    candidateNoYear: "سنة النشر غير محددة",
+    candidatePublisher: "دار النشر:",
+    candidateIsbn: "ISBN:",
+    candidateSelectPrompt: "حدد المرشح الأنسب ثم اضغط على زر المتابعة لمراجعة الفروق قبل التطبيق.",
+
+    // Provider Settings Modal & Quick Settings
+    providerSettingsBtn: "إعدادات مصادر البيانات",
+    providerSettingsTooltip: "تخصيص مصادر البيانات وترتيب الأولويات",
+    providerSettingsModalTitle: "مصادر البيانات وترتيب الأولويات",
+    providerSettingsModalSubtitle: "حدد مصادر البحث المفعلة وحدد ترتيب أولوياتها في جلب البيانات.",
+    providerSettingsEnabled: "مفعل",
+    providerSettingsPriority: "الأولوية:",
+    providerPriority1: "1 (الأولوية القصوى)",
+    providerPriority2: "2 (أولوية ثانية)",
+    providerPriority3: "3 (أولوية ثالثة)",
+    providerSettingsSave: "حفظ الإعدادات",
+    providerSettingsSavedToast: "تم حفظ إعدادات مصادر البيانات بنجاح",
+
+    // Progressive Candidate Controls
+    candidateSearchDeeperBtn: "بحث أعمق",
+    candidateSearchingDeeper: "جارٍ البحث الأعمق في الفهارس...",
+    candidateShowPlausibleBtn: "عناوين مشابهة / طبعات بديلة ({count})",
+    candidateHidePlausibleBtn: "إخفاء العناوين المشابهة",
+    candidateTopMatchesHeader: "أفضل النتائج المتطابقة",
+    candidatePlausibleMatchesHeader: "عناوين مشابهة وبدائل محتملة",
 
     // Categories
     "تطوير الذات": "تطوير الذات",
@@ -239,7 +288,16 @@ export const translations = {
     deleteNote: "حذف الملاحظة",
     localBook: "كتاب محلي",
     openReader: "فتح القارئ",
-    noNotesYetDesc: "افتح أي كتاب من المكتبة واستخدم القارئ لتدوين حواشيك وملاحظاتك على صفحات الكتاب."
+    noNotesYetDesc: "افتح أي كتاب من المكتبة واستخدم القارئ لتدوين حواشيك وملاحظاتك على صفحات الكتاب.",
+
+    // Quota Saver & Limit Warnings
+    quotaSaverTitle: "وضع تنظيم البحث اليومي",
+    quotaDepletedTitle: "اكتمل الحد اليومي للبحث",
+    quotaWarningDefault: "قارب الحد اليومي للبحث السريع عن الكتب على الانتهاء. قد يستغرق البحث لحظات إضافية لتنظيم الاستخدام والاعتماد على فهارس بديلة، وسيتجدد الحد بالكامل غدًا.",
+    quotaDepletedDefault: "اكتمل الحد اليومي للبحث لهذا اليوم. سنعتمد على مصادر الكتب البديلة حتى يوم غد.",
+    quotaRemainingBadge: "متبقي {percent}%",
+    quotaResetsTomorrow: "يتجدد تلقائيًا غدًا",
+    quotaDismiss: "إخفاء التنبيه",
   },
   en: {
     // Titlebar
@@ -397,6 +455,7 @@ export const translations = {
     nextCoverPage: "Next Page",
     diffModalTitle: "Review & Apply Book Metadata",
     diffModalSubtitle: "Select the fields you wish to import to protect any existing manual edits.",
+    diffModalSource: "Source",
     diffField: "Field",
     diffCurrent: "Current Value (Local)",
     diffIncoming: "Fetched Value (Online)",
@@ -416,6 +475,54 @@ export const translations = {
     diffFieldCategories: "Categories & Subjects",
     diffFieldDescription: "Description",
     diffFieldCover: "Cover Image",
+
+    // Candidate Selection & Auto-fill Improvements
+    candidatesModalTitle: "Metadata Candidates from Open Catalogs",
+    candidatesModalSubtitle: "Found {count} metadata candidates. Choose the right book or edition to inspect and apply its metadata.",
+    candidatesSearchSummary: "Search results for:",
+    candidatesCountBadge: "{count} candidates",
+    candidateMatchExact: "Exact Match",
+    candidateMatchHigh: "High Confidence",
+    candidateMatchAlternative: "Plausible Alternative",
+    candidateScore: "Match score: {score}%",
+    candidateSelectBtn: "Select Candidate",
+    candidateSelectedBadge: "Selected",
+    candidateProceedToDiff: "Proceed to Review Differences",
+    candidateChangeCandidate: "Change Candidate ({count})",
+    candidateBackToPicker: "Back to Candidates ({count})",
+    candidateNoResults: "No metadata candidates found on Google Books or open catalogs.",
+    candidateNoResultsHint: "Please verify the book title or author, or enter an ISBN.",
+    candidateProviderGoogleBooks: "Google Books",
+    candidateProviderOpenLibrary: "Open Library",
+    candidateProviderInternetArchive: "Internet Archive",
+    candidateEditionsCount: "{count} editions",
+    candidatePages: "{count} pages",
+    candidateYear: "Year {year}",
+    candidateNoYear: "Year unspecified",
+    candidatePublisher: "Publisher:",
+    candidateIsbn: "ISBN:",
+    candidateSelectPrompt: "Select the most accurate candidate, then proceed to review differences before applying.",
+
+    // Provider Settings Modal & Quick Settings
+    providerSettingsBtn: "Provider Settings",
+    providerSettingsTooltip: "Configure metadata providers and priority",
+    providerSettingsModalTitle: "Metadata Providers & Search Priority",
+    providerSettingsModalSubtitle: "Select enabled providers and customize their execution priority.",
+    providerSettingsEnabled: "Enabled",
+    providerSettingsPriority: "Priority:",
+    providerPriority1: "1 (Highest)",
+    providerPriority2: "2 (Second)",
+    providerPriority3: "3 (Third)",
+    providerSettingsSave: "Save Settings",
+    providerSettingsSavedToast: "Provider configuration saved successfully",
+
+    // Progressive Candidate Controls
+    candidateSearchDeeperBtn: "Search Deeper",
+    candidateSearchingDeeper: "Searching deeper in catalogs...",
+    candidateShowPlausibleBtn: "Similar Titles / Plausible Matches ({count})",
+    candidateHidePlausibleBtn: "Hide Plausible Matches",
+    candidateTopMatchesHeader: "Top Matches",
+    candidatePlausibleMatchesHeader: "Similar Titles & Plausible Matches",
 
     // Categories
     "تطوير الذات": "Self Development",
@@ -480,7 +587,16 @@ export const translations = {
     deleteNote: "Delete Note",
     localBook: "Local Book",
     openReader: "Open Reader",
-    noNotesYetDesc: "Open any book from the library and use the reader to add notes and highlights to its pages."
+    noNotesYetDesc: "Open any book from the library and use the reader to add notes and highlights to its pages.",
+
+    // Quota Saver & Limit Warnings
+    quotaSaverTitle: "Daily Search Saver Mode",
+    quotaDepletedTitle: "Daily Search Limit Reached",
+    quotaWarningDefault: "Daily search limit is running low. Lookups may take a brief moment longer as Baglib spaces out requests and checks secondary catalogs. Full speed will refresh tomorrow.",
+    quotaDepletedDefault: "Daily search limit reached. We'll use alternative book sources until tomorrow.",
+    quotaRemainingBadge: "{percent}% remaining",
+    quotaResetsTomorrow: "Refreshes tomorrow",
+    quotaDismiss: "Dismiss",
   }
 };
 
