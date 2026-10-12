@@ -146,4 +146,76 @@ describe('CandidateMatcher & Ranking Engine Unit Tests', () => {
     assert.strictEqual(evalResult.isCertainMatch, false);
     assert.strictEqual(evalResult.isSuggestion, false);
   });
+
+  it('ranks candidates in descending order and breaks ties by cover presence and description richness', () => {
+    const candidateWithCover: BibliographicWork = {
+      workId: 'cand-cover',
+      title: 'Design Patterns: Elements of Reusable Object-Oriented Software',
+      authors: ['Erich Gamma', 'Richard Helm'],
+      firstPublishYear: 1994,
+      description: 'Captures a wealth of experience about the design of object-oriented software.',
+      editions: [
+        {
+          editionId: 'ed-cover',
+          title: 'Design Patterns',
+          coverUrl: 'https://example.com/dp-cover.jpg',
+          sources: [],
+        },
+      ],
+    };
+
+    const candidateWithoutCover: BibliographicWork = {
+      workId: 'cand-nocover',
+      title: 'Design Patterns: Elements of Reusable Object-Oriented Software',
+      authors: ['Erich Gamma', 'Richard Helm'],
+      firstPublishYear: 1994,
+      description: 'Short synopsis',
+      editions: [
+        {
+          editionId: 'ed-nocover',
+          title: 'Design Patterns',
+          sources: [],
+        },
+      ],
+    };
+
+    const evidence: TargetBookEvidence = {
+      title: 'Design Patterns',
+      authors: ['Erich Gamma'],
+    };
+
+    const ranked = CandidateMatcher.rankCandidates(evidence, [candidateWithoutCover, candidateWithCover]);
+    assert.strictEqual(ranked.length, 2);
+    // Candidate with cover ranks higher or breaks tie first
+    assert.strictEqual(ranked[0].candidate.workId, 'cand-cover');
+    assert.strictEqual(ranked[0].matchType, 'exact');
+    assert.strictEqual(ranked[0].breakdown.coverBonus, 5);
+    assert.strictEqual(ranked[0].score > ranked[1].score, true);
+  });
+
+  it('retains plausible alternatives when results are similar rather than identical', () => {
+    const similarEditionWork: BibliographicWork = {
+      workId: 'cand-similar',
+      title: 'Clean Architecture: A Craftsman\'s Guide to Software Structure',
+      authors: ['Robert C. Martin'],
+      firstPublishYear: 2017,
+      editions: [{ editionId: 'ed-arch', title: 'Clean Architecture', sources: [] }],
+    };
+
+    const evidence: TargetBookEvidence = {
+      title: 'Clean Code',
+      authors: ['Robert C. Martin'],
+    };
+
+    const evaluations = CandidateMatcher.rankCandidates(evidence, [cleanCodeWork, similarEditionWork]);
+    assert.strictEqual(evaluations.length, 2);
+    // Clean code is the top exact match
+    assert.strictEqual(evaluations[0].candidate.workId, cleanCodeWork.workId);
+    assert.strictEqual(evaluations[0].matchType, 'exact');
+    // Similar book by the same author is retained as a plausible alternative
+    assert.strictEqual(evaluations[1].candidate.workId, similarEditionWork.workId);
+    assert.strictEqual(evaluations[1].breakdown.authorScore >= 15, true);
+    assert.strictEqual(evaluations[1].score >= 20, true);
+    assert.strictEqual(evaluations[1].matchType, 'alternative');
+  });
 });

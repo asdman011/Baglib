@@ -18,7 +18,8 @@ import {
   Barcode,
   Layers,
   FileText,
-  Hash
+  Hash,
+  Globe
 } from 'lucide-react';
 import { BookItem } from '../../types/library';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
@@ -40,6 +41,8 @@ interface MetadataDiffModalProps {
   isOpen: boolean;
   currentBook: BookItem;
   incomingWork: BibliographicWork;
+  candidateCount?: number;
+  onBackToCandidates?: () => void;
   onClose: () => void;
   onApply: (selectedUpdates: Partial<BookItem>) => void;
 }
@@ -48,6 +51,8 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
   isOpen,
   currentBook,
   incomingWork,
+  candidateCount,
+  onBackToCandidates,
   onClose,
   onApply,
 }) => {
@@ -67,6 +72,36 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
   const incomingCover = primaryEdition?.coverUrl || incomingWork.editions?.find((e) => Boolean(e.coverUrl))?.coverUrl;
   const incomingCategories = incomingWork.subjects && incomingWork.subjects.length > 0 ? incomingWork.subjects : undefined;
   const incomingDescription = incomingWork.description;
+
+  // Resolve which server / provider fetched this candidate
+  const providerName = useMemo(() => {
+    const srcProvider =
+      primaryEdition?.sources?.[0]?.provider ||
+      incomingWork.editions?.find((e) => e.sources && e.sources.length > 0)?.sources?.[0]?.provider;
+    if (srcProvider) return srcProvider;
+    if (incomingWork.workId.startsWith('gb-')) return 'Google Books';
+    if (incomingWork.workId.startsWith('ia-')) return 'Internet Archive';
+    return 'Open Library';
+  }, [incomingWork, primaryEdition]);
+
+  const providerBadgeInfo = useMemo(() => {
+    if (providerName.includes('Google')) {
+      return {
+        label: 'Google Books',
+        classes: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
+      };
+    }
+    if (providerName.includes('Archive')) {
+      return {
+        label: 'Internet Archive',
+        classes: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30',
+      };
+    }
+    return {
+      label: 'Open Library',
+      classes: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+    };
+  }, [providerName]);
 
   const diffFields = useMemo<DiffFieldItem[]>(() => {
     const list: DiffFieldItem[] = [
@@ -195,14 +230,13 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
   }, [currentBook, incomingWork, lang]);
 
   // Default selection state:
-  // If field is missing in current, auto-check it!
-  // If field already exists in current and differs, auto-check if current is generic/empty, otherwise user decides.
+  // Preserves existing data by default!
+  // If field is missing or empty in current book, auto-check it.
+  // If field already exists with a value, DO NOT auto-check: user must explicitly choose to overwrite it.
   const [selectedFieldIds, setSelectedFieldIds] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const f of diffFields) {
       if (!f.hasCurrent) {
-        initial[f.id] = true;
-      } else if (f.isDifferent) {
         initial[f.id] = true;
       } else {
         initial[f.id] = false;
@@ -269,9 +303,15 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
               <Sparkles className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h3 className="font-bold text-main text-base sm:text-lg truncate">
-                {t('diffModalTitle')}
-              </h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-main text-base sm:text-lg truncate">
+                  {t('diffModalTitle')}
+                </h3>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${providerBadgeInfo.classes}`}>
+                  <Globe className="w-3.5 h-3.5 shrink-0" />
+                  <span>{t('diffModalSource')}: {providerBadgeInfo.label}</span>
+                </span>
+              </div>
               <p className="text-xs text-muted truncate mt-0.5">
                 {t('diffModalSubtitle')}
               </p>
@@ -306,12 +346,25 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
             </button>
           </div>
 
-          {anyOverwritingExisting && (
-            <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 text-[11px] font-semibold bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              <span>{t('diffWarningOverwrite')}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {onBackToCandidates && candidateCount && candidateCount > 1 && (
+              <button
+                type="button"
+                onClick={onBackToCandidates}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <ArrowIcon className="w-3.5 h-3.5" />
+                <span>{t('candidateBackToPicker', { count: candidateCount })}</span>
+              </button>
+            )}
+
+            {anyOverwritingExisting && (
+              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 text-[11px] font-semibold bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('diffWarningOverwrite')}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Diff List */}
@@ -379,9 +432,14 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
 
                   {/* Incoming Remote Value */}
                   <div className="p-2.5 rounded-xl bg-pale-sky-500/10 border border-pale-sky-500/20">
-                    <span className="text-[10px] font-bold text-pale-sky-600 dark:text-pale-sky-400 block mb-1">
-                      {t('diffIncoming')}
-                    </span>
+                    <div className="flex items-center justify-between gap-1.5 mb-1">
+                      <span className="text-[10px] font-bold text-pale-sky-600 dark:text-pale-sky-400 block truncate">
+                        {t('diffIncoming')}
+                      </span>
+                      <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-md border shrink-0 ${providerBadgeInfo.classes}`}>
+                        {providerBadgeInfo.label}
+                      </span>
+                    </div>
                     <div className="text-main leading-relaxed font-semibold">
                       {field.renderValue ? (
                         field.renderValue(field.incomingValue)
