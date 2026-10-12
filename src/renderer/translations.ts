@@ -298,6 +298,13 @@ export const translations = {
     quotaRemainingBadge: "متبقي {percent}%",
     quotaResetsTomorrow: "يتجدد تلقائيًا غدًا",
     quotaDismiss: "إخفاء التنبيه",
+
+    // Drag & Drop
+    dropBookHere: "أفلت ملف الكتاب هنا لإضافته إلى المكتبة",
+    dropBookSubtitle: "استخراج فوري للبيانات والغلاف من الملف بدون اتصال",
+    dropInvalidFile: "يرجى إفلات ملف كتاب مدعوم (PDF، EPUB، MOBI، AZW3، TXT، HTML)",
+    bookAddedFromDrop: 'تمت إضافة الكتاب "{title}" إلى المكتبة بنجاح!',
+    metadataUpdatedFromNewFile: "تم تحديث بيانات الكتاب والغلاف بناءً على الملف الجديد بنجاح!",
   },
   en: {
     // Titlebar
@@ -597,6 +604,13 @@ export const translations = {
     quotaRemainingBadge: "{percent}% remaining",
     quotaResetsTomorrow: "Refreshes tomorrow",
     quotaDismiss: "Dismiss",
+
+    // Drag & Drop
+    dropBookHere: "Drop book file here to add to library",
+    dropBookSubtitle: "Instant offline metadata & cover extraction",
+    dropInvalidFile: "Please drop a supported book file (PDF, EPUB, MOBI, AZW3, TXT, HTML)",
+    bookAddedFromDrop: 'Book "{title}" added to your library successfully!',
+    metadataUpdatedFromNewFile: "Metadata and cover updated from the new file successfully!",
   }
 };
 

@@ -77,6 +77,8 @@ export const LibraryGridView: React.FC = () => {
   const [importMessage, setImportMessage] = useState<string>('');
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const dragCounterRef = useRef(0);
 
   // Fetch all categories for filter and modal
   const [allCategories, setAllCategories] = useState<{ id: string, nameAr: string, nameEn: string }[]>([]);
@@ -283,117 +285,10 @@ export const LibraryGridView: React.FC = () => {
   };
 
 
-  // Open Native Electron File Dialog with Progressive Metadata & Cover Discovery
-  const handleOpenBookFromDevice = async () => {
-    const windowAPI = (window as any).electronAPI;
-
-    if (windowAPI?.openFileDialog) {
-      const fullPath: string | null = await windowAPI.openFileDialog();
-      if (!fullPath) return;
-
-      const pathSegments = fullPath.split(/[/\\]/);
-      const fileNameWithExt = pathSegments[pathSegments.length - 1];
-      const fileName = fileNameWithExt.replace(/\.[^/.]+$/, "");
-      const ext = fileNameWithExt.split('.').pop()?.toUpperCase() || 'PDF';
-
-      let discoveredTitle = fileName;
-      let discoveredAuthor = t('noAuthor');
-      let discoveredPublisher: string | undefined;
-      let discoveredYear: number | string | undefined;
-      let discoveredIsbn: string | undefined;
-      let discoveredCover: string | undefined;
-      let discoveredEdition: string | undefined;
-
-      setIsImportingBook(true);
-      setImportMessage(
-        lang === 'ar'
-          ? 'جاري استخراج بيانات الكتاب والبحث عن الغلاف...'
-          : 'Extracting book metadata & searching for cover...'
-      );
-
-      try {
-        const extractor = windowAPI?.extractOfflineMetadata || windowAPI?.discoverMetadata;
-        if (extractor) {
-          try {
-            const discovery = await extractor({
-              filePath: fullPath,
-              filename: fileNameWithExt,
-              offlineOnly: true,
-            });
-            if (discovery) {
-              if (discovery.title) discoveredTitle = discovery.title;
-              if (discovery.authors && discovery.authors.length > 0) {
-                discoveredAuthor = discovery.authors.join('، ');
-              }
-              if (discovery.publisher) discoveredPublisher = discovery.publisher;
-              if (discovery.publicationYear) discoveredYear = discovery.publicationYear;
-              if (discovery.isbn) discoveredIsbn = discovery.isbn;
-              if (discovery.coverUrl) discoveredCover = discovery.coverUrl;
-              if (discovery.edition) discoveredEdition = discovery.edition;
-            }
-          } catch (err) {
-            console.warn('[LibraryGridView] Offline metadata extraction failed, falling back to local file name:', err);
-          }
-        }
-
-        // Render page 1 of the imported PDF as cover image of the book if not already found
-        if (!discoveredCover && ext === 'PDF') {
-          try {
-            const pdfCoverRes = await renderPdfPage(fullPath, 1);
-            if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
-              discoveredCover = pdfCoverRes.coverUrl;
-            }
-          } catch (err) {
-            console.warn('[LibraryGridView] renderPdfPage cover fallback error:', err);
-          }
-        }
-
-        const newDigitalBook: BookItem = {
-          id: `book-local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-          title: discoveredTitle,
-          author: discoveredAuthor,
-          publisher: discoveredPublisher,
-          publicationYear: discoveredYear,
-          isbn: discoveredIsbn,
-          coverImage: discoveredCover,
-          edition: discoveredEdition,
-          digitalFormat: ext as any,
-          bookType: 'digital',
-          readingStatus: 'reading',
-          readingProgress: 0,
-          filePath: fullPath,
-          fileSize: '1.5 MB',
-          language: 'العربية',
-          categories: ['ملفات رقمية محددة'],
-          tags: [`#${ext}`],
-          lendingHistory: [],
-        };
-
-        addBook(newDigitalBook);
-        openBookForReading(newDigitalBook);
-        setSaveToast(
-          lang === 'ar'
-            ? 'تم استيراد الكتاب واكتشاف بياناته بنجاح!'
-            : 'Book imported and metadata discovered successfully!'
-        );
-        setTimeout(() => setSaveToast(null), 3500);
-      } finally {
-        setIsImportingBook(false);
-      }
-    } else {
-      fileInputRef.current?.click();
-    }
-  };
-
-  // Handle HTML fallback selection with Progressive Metadata Discovery
-  const handleFileSelectFallback = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-    const fileName = file.name.replace(/\.[^/.]+$/, "");
-    const ext = file.name.split('.').pop()?.toUpperCase() || 'PDF';
-    const filePath = (file as any).path || file.name;
+  // Reusable Digital File Ingestion with Offline Metadata Discovery
+  const importDigitalBookFromFile = async (fullPath: string, fileNameWithExt: string, fileSize?: number): Promise<BookItem | null> => {
+    const ext = fileNameWithExt.split('.').pop()?.toUpperCase() || 'PDF';
+    const fileName = fileNameWithExt.replace(/\.[^/.]+$/, "");
 
     let discoveredTitle = fileName;
     let discoveredAuthor = t('noAuthor');
@@ -402,12 +297,13 @@ export const LibraryGridView: React.FC = () => {
     let discoveredIsbn: string | undefined;
     let discoveredCover: string | undefined;
     let discoveredEdition: string | undefined;
+    let discoveredDescription: string | undefined;
 
     setIsImportingBook(true);
     setImportMessage(
       lang === 'ar'
-        ? 'جاري استخراج بيانات الكتاب والبحث عن الغلاف...'
-        : 'Extracting book metadata & searching for cover...'
+        ? 'جاري استيراد الكتاب واكتشاف بياناته بدون إنترنت...'
+        : 'Importing book & discovering offline metadata...'
     );
 
     try {
@@ -416,8 +312,8 @@ export const LibraryGridView: React.FC = () => {
       if (extractor) {
         try {
           const discovery = await extractor({
-            filename: file.name,
-            filePath: (file as any).path,
+            filePath: fullPath,
+            filename: fileNameWithExt,
             offlineOnly: true,
           });
           if (discovery) {
@@ -430,23 +326,26 @@ export const LibraryGridView: React.FC = () => {
             if (discovery.isbn) discoveredIsbn = discovery.isbn;
             if (discovery.coverUrl) discoveredCover = discovery.coverUrl;
             if (discovery.edition) discoveredEdition = discovery.edition;
+            if (discovery.description) discoveredDescription = discovery.description;
           }
         } catch (err) {
-          console.warn('[LibraryGridView] Fallback offline metadata extraction error:', err);
+          console.warn('[LibraryGridView] Offline metadata extraction failed:', err);
         }
       }
 
-      // Fallback direct PDF cover extraction if available
-      if (!discoveredCover && ext === 'PDF' && windowAPI?.extractPdfCover && (file as any).path) {
+      // Render page 1 of the imported PDF as cover image of the book if not already found
+      if (!discoveredCover && ext === 'PDF') {
         try {
-          const pdfCoverRes = await windowAPI.extractPdfCover((file as any).path);
+          const pdfCoverRes = await renderPdfPage(fullPath, 1);
           if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
             discoveredCover = pdfCoverRes.coverUrl;
           }
         } catch (err) {
-          console.warn('[LibraryGridView] Direct PDF cover extraction fallback error:', err);
+          console.warn('[LibraryGridView] renderPdfPage cover fallback error:', err);
         }
       }
+
+      const formattedSize = fileSize ? `${(fileSize / (1024 * 1024)).toFixed(1)} MB` : '1.5 MB';
 
       const newDigitalBook: BookItem = {
         id: `book-local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -457,12 +356,13 @@ export const LibraryGridView: React.FC = () => {
         isbn: discoveredIsbn,
         coverImage: discoveredCover,
         edition: discoveredEdition,
+        abstract: discoveredDescription,
         digitalFormat: ext as any,
         bookType: 'digital',
         readingStatus: 'reading',
         readingProgress: 0,
-        filePath,
-        fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        filePath: fullPath,
+        fileSize: formattedSize,
         language: 'العربية',
         categories: ['ملفات رقمية محددة'],
         tags: [`#${ext}`],
@@ -470,15 +370,97 @@ export const LibraryGridView: React.FC = () => {
       };
 
       addBook(newDigitalBook);
-      openBookForReading(newDigitalBook);
       setSaveToast(
-        lang === 'ar'
-          ? 'تم استيراد الكتاب واكتشاف بياناته بنجاح!'
-          : 'Book imported and metadata discovered successfully!'
+        t('bookAddedFromDrop', { title: newDigitalBook.title }) ||
+        (lang === 'ar'
+          ? `تمت إضافة الكتاب "${newDigitalBook.title}" إلى المكتبة بنجاح!`
+          : `Book "${newDigitalBook.title}" added to your library successfully!`)
       );
       setTimeout(() => setSaveToast(null), 3500);
+      return newDigitalBook;
     } finally {
       setIsImportingBook(false);
+    }
+  };
+
+  // Open Native Electron File Dialog with Progressive Metadata & Cover Discovery
+  const handleOpenBookFromDevice = async () => {
+    const windowAPI = (window as any).electronAPI;
+
+    if (windowAPI?.openFileDialog) {
+      const fullPath: string | null = await windowAPI.openFileDialog();
+      if (!fullPath) return;
+
+      const pathSegments = fullPath.split(/[/\\]/);
+      const fileNameWithExt = pathSegments[pathSegments.length - 1];
+      const importedBook = await importDigitalBookFromFile(fullPath, fileNameWithExt);
+      if (importedBook) {
+        openBookForReading(importedBook);
+      }
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  // Handle HTML fallback selection with Progressive Metadata Discovery
+  const handleFileSelectFallback = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    const fullPath = (file as any).path || file.name;
+    const importedBook = await importDigitalBookFromFile(fullPath, file.name, file.size);
+    if (importedBook) {
+      openBookForReading(importedBook);
+    }
+  };
+
+  // Drag & Drop Handlers for Library View
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragActive(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragActive(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragActive(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const supportedExts = new Set(['PDF', 'EPUB', 'MOBI', 'AZW3', 'TXT', 'HTML', 'DJVU']);
+    let addedCount = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const ext = file.name.split('.').pop()?.toUpperCase() || '';
+      if (!supportedExts.has(ext)) continue;
+
+      const fullPath = (file as any).path || file.name;
+      await importDigitalBookFromFile(fullPath, file.name, file.size);
+      addedCount += 1;
+    }
+
+    if (addedCount === 0) {
+      setSaveToast(t('dropInvalidFile'));
+      setTimeout(() => setSaveToast(null), 3500);
     }
   };
 
@@ -513,7 +495,35 @@ export const LibraryGridView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-canvas overflow-hidden font-sans select-none">
+    <div
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      className="flex-1 flex flex-col h-full bg-canvas overflow-hidden font-sans select-none relative"
+    >
+      {/* Drag & Drop Visual Overlay */}
+      {isDragActive && (
+        <div className="absolute inset-0 z-50 bg-canvas/85 backdrop-blur-md flex flex-col items-center justify-center p-8 border-2 border-dashed border-pale-sky-500 rounded-2xl animate-in fade-in duration-200 pointer-events-none">
+          <div className="w-20 h-20 rounded-2xl bg-pale-sky-500/10 border border-pale-sky-500/30 flex items-center justify-center mb-4 text-pale-sky-500 shadow-xl shadow-pale-sky-500/10">
+            <BookOpen className="w-10 h-10 animate-bounce" />
+          </div>
+          <h3 className="text-xl font-bold font-display text-main mb-2 text-center">
+            {t('dropBookHere')}
+          </h3>
+          <p className="text-sm text-muted mb-4 text-center max-w-md">
+            {t('dropBookSubtitle')}
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {['PDF', 'EPUB', 'MOBI', 'AZW3', 'TXT', 'HTML'].map((fmt) => (
+              <span key={fmt} className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-surface border border-subtle text-pale-sky-500 shadow-sm">
+                .{fmt.toLowerCase()}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Hidden Native Fallback File Input */}
       <input
         type="file"

@@ -104,6 +104,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     Boolean(book?.filePath && book.filePath.trim().length > 0)
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isModalDragOver, setIsModalDragOver] = useState(false);
+  const modalDragCounterRef = useRef(0);
 
   const isPlaceholderTitle = (val?: string) => {
     if (!val) return true;
@@ -223,6 +225,115 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     }));
   };
 
+  const applyFileMetadata = async (fullPath: string, fileNameWithExt: string, fileSizeStr?: string) => {
+    const ext = fileNameWithExt.split('.').pop()?.toUpperCase() || 'PDF';
+    const fileNameWithoutExt = fileNameWithExt.replace(/\.[^/.]+$/, '');
+
+    setIsDiscoveringFile(true);
+
+    const windowAPI = (window as any).electronAPI;
+
+    // Validate digital file if validation service is available
+    if (windowAPI?.validateDigitalFile) {
+      try {
+        const valRes = await windowAPI.validateDigitalFile(fullPath);
+        if (valRes && !valRes.isValid) {
+          setPdfCoverMessage(
+            lang === 'ar'
+              ? `الملف المحدد غير صالح: ${valRes.error || 'صيغة غير مدعومة'}`
+              : `Selected file is invalid: ${valRes.error || 'unsupported format'}`
+          );
+          setTimeout(() => setPdfCoverMessage(null), 4000);
+          setIsDiscoveringFile(false);
+          return;
+        }
+      } catch (vErr) {
+        console.warn('[BookDetailModal] validateDigitalFile error:', vErr);
+      }
+    }
+
+    let discoveredTitle = fileNameWithoutExt;
+    let discoveredAuthor = '';
+    let discoveredPublisher = '';
+    let discoveredYear: string | number = '';
+    let discoveredIsbn = '';
+    let discoveredCover = '';
+    let discoveredEdition = '';
+    let discoveredLanguage = 'العربية';
+    let discoveredAbstract = '';
+
+    // Phase 1: Extract strictly offline metadata attached to the file (EPUB/PDF embedded or filename)
+    const extractor = windowAPI?.extractOfflineMetadata || windowAPI?.discoverMetadata;
+    if (extractor) {
+      try {
+        const discovery = await extractor({
+          filePath: fullPath,
+          filename: fileNameWithExt,
+          offlineOnly: true,
+        });
+        if (discovery) {
+          if (discovery.title) discoveredTitle = discovery.title;
+          if (discovery.authors && discovery.authors.length > 0) {
+            discoveredAuthor = discovery.authors.join('، ');
+          }
+          if (discovery.publisher) discoveredPublisher = discovery.publisher;
+          if (discovery.publicationYear) discoveredYear = discovery.publicationYear;
+          if (discovery.isbn) discoveredIsbn = discovery.isbn;
+          if (discovery.coverUrl) discoveredCover = discovery.coverUrl;
+          if (discovery.edition) discoveredEdition = discovery.edition;
+          if (discovery.language) discoveredLanguage = discovery.language;
+          if (discovery.description) discoveredAbstract = discovery.description;
+        }
+      } catch (err) {
+        console.warn('[BookDetailModal] extractOfflineMetadata failed:', err);
+      }
+    }
+
+    // Automatically extract page 1 of the imported PDF as cover if not found via discovery
+    if (ext === 'PDF') {
+      try {
+        const pdfPageRes = await renderPdfPage(fullPath, 1);
+        if (pdfPageRes?.success && pdfPageRes.coverUrl) {
+          if (!discoveredCover) {
+            discoveredCover = pdfPageRes.coverUrl;
+          }
+          setCurrentPdfPage(pdfPageRes.currentPage || 1);
+          if (pdfPageRes.totalPages) setTotalPdfPages(pdfPageRes.totalPages);
+        }
+      } catch (pdfErr) {
+        console.warn('[BookDetailModal] renderPdfPage error:', pdfErr);
+      }
+    }
+
+    // Update the form fields with the newly selected file's metadata
+    setFormData((prev) => ({
+      ...prev,
+      filePath: fullPath,
+      digitalFormat: ext as any,
+      fileSize: fileSizeStr || prev.fileSize || '1.5 MB',
+      bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
+      title: discoveredTitle,
+      author: discoveredAuthor || (lang === 'ar' ? 'مؤلف جديد' : 'New Author'),
+      publisher: discoveredPublisher,
+      publicationYear: discoveredYear,
+      isbn: discoveredIsbn,
+      coverImage: discoveredCover,
+      edition: discoveredEdition,
+      language: discoveredLanguage,
+      abstract: discoveredAbstract,
+    }));
+
+    setIsDiscoveringFile(false);
+    setIsFileImported(true);
+    setPdfCoverMessage(
+      t('metadataUpdatedFromNewFile') ||
+        (lang === 'ar'
+          ? 'تم تحديث بيانات الكتاب والغلاف بناءً على الملف الجديد بنجاح!'
+          : 'Metadata and cover updated from the new file successfully!')
+    );
+    setTimeout(() => setPdfCoverMessage(null), 3500);
+  };
+
   const handlePickFileNative = async () => {
     const windowAPI = (window as any).electronAPI;
     if (windowAPI?.openFileDialog) {
@@ -231,86 +342,48 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
       const pathSegments = fullPath.split(/[/\\]/);
       const fileNameWithExt = pathSegments[pathSegments.length - 1];
-      const ext = fileNameWithExt.split('.').pop()?.toUpperCase() || 'PDF';
-
-      setIsDiscoveringFile(true);
-
-      // Validate digital file if validation service is available
-      if (windowAPI?.validateDigitalFile) {
-        try {
-          const valRes = await windowAPI.validateDigitalFile(fullPath);
-          if (valRes && !valRes.isValid) {
-            setPdfCoverMessage(
-              lang === 'ar'
-                ? `الملف المحدد غير صالح: ${valRes.error || 'صيغة غير مدعومة'}`
-                : `Selected file is invalid: ${valRes.error || 'unsupported format'}`
-            );
-            setTimeout(() => setPdfCoverMessage(null), 4000);
-            setIsDiscoveringFile(false);
-            return;
-          }
-        } catch (vErr) {
-          console.warn('[BookDetailModal] validateDigitalFile error:', vErr);
-        }
-      }
-
-      setFormData((prev) => ({
-        ...prev,
-        filePath: fullPath,
-        digitalFormat: ext as any,
-        bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
-      }));
-
-      // Phase 1: Extract strictly offline metadata attached to the file (EPUB/PDF embedded or filename)
-      const extractor = windowAPI?.extractOfflineMetadata || windowAPI?.discoverMetadata;
-      if (extractor) {
-        try {
-          const discovery = await extractor({
-            filePath: fullPath,
-            filename: fileNameWithExt,
-            offlineOnly: true,
-          });
-          if (discovery) {
-            setFormData((prev) => ({
-              ...prev,
-              title: isPlaceholderTitle(prev.title) ? (discovery.title || prev.title) : prev.title,
-              author: isPlaceholderAuthor(prev.author) ? (discovery.authors?.join('، ') || prev.author) : prev.author,
-              publisher: discovery.publisher || prev.publisher || '',
-              publicationYear: discovery.publicationYear || prev.publicationYear || '',
-              isbn: discovery.isbn || prev.isbn || '',
-              coverImage: discovery.coverUrl || prev.coverImage || '',
-              edition: discovery.edition || prev.edition || '',
-              language: discovery.language || prev.language || 'العربية',
-              abstract: discovery.description || prev.abstract || '',
-            }));
-          }
-        } catch (err) {
-          console.warn('[BookDetailModal] extractOfflineMetadata failed:', err);
-        }
-      }
-
-      // Automatically extract page 1 of the imported PDF as cover if not found via discovery
-      if (ext === 'PDF') {
-        try {
-          const pdfPageRes = await renderPdfPage(fullPath, 1);
-          if (pdfPageRes?.success && pdfPageRes.coverUrl) {
-            setFormData((prev) => ({
-              ...prev,
-              coverImage: prev.coverImage || pdfPageRes.coverUrl,
-            }));
-            setCurrentPdfPage(pdfPageRes.currentPage || 1);
-            if (pdfPageRes.totalPages) setTotalPdfPages(pdfPageRes.totalPages);
-          }
-        } catch (pdfErr) {
-          console.warn('[BookDetailModal] renderPdfPage error:', pdfErr);
-        }
-      }
-
-      setIsDiscoveringFile(false);
-      setIsFileImported(true);
+      await applyFileMetadata(fullPath, fileNameWithExt);
     } else {
       fileInputRef.current?.click();
     }
+  };
+
+  const handleModalDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    modalDragCounterRef.current += 1;
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsModalDragOver(true);
+    }
+  };
+
+  const handleModalDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    modalDragCounterRef.current -= 1;
+    if (modalDragCounterRef.current <= 0) {
+      modalDragCounterRef.current = 0;
+      setIsModalDragOver(false);
+    }
+  };
+
+  const handleModalDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleModalDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    modalDragCounterRef.current = 0;
+    setIsModalDragOver(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    const fullPath = (file as any).path || file.name;
+    const sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+    await applyFileMetadata(fullPath, file.name, sizeStr);
   };
 
   const handleRemoveFile = () => {
@@ -403,79 +476,9 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const file = files[0];
-    const ext = file.name.split('.').pop()?.toUpperCase() || 'PDF';
     const filePath = (file as any).path || file.name;
-
-    setFormData((prev) => ({
-      ...prev,
-      filePath,
-      digitalFormat: ext as any,
-      fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-      bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
-    }));
-
-    const windowAPI = (window as any).electronAPI;
-    const extractor = windowAPI?.extractOfflineMetadata || windowAPI?.discoverMetadata;
-    if (extractor) {
-      setIsDiscoveringFile(true);
-      try {
-        const discovery = await extractor({
-          filename: file.name,
-          filePath: (file as any).path,
-          offlineOnly: true,
-        });
-        if (discovery) {
-          setFormData((prev) => ({
-            ...prev,
-            title: isPlaceholderTitle(prev.title) ? (discovery.title || prev.title) : prev.title,
-            author: isPlaceholderAuthor(prev.author) ? (discovery.authors?.join('، ') || prev.author) : prev.author,
-            publisher: discovery.publisher || prev.publisher || '',
-            publicationYear: discovery.publicationYear || prev.publicationYear || '',
-            isbn: discovery.isbn || prev.isbn || '',
-            coverImage: discovery.coverUrl || prev.coverImage || '',
-            edition: discovery.edition || prev.edition || '',
-            language: discovery.language || prev.language || 'العربية',
-            abstract: discovery.description || prev.abstract || '',
-          }));
-        }
-
-        // Automatically extract page 1 of the PDF as cover if not found via discovery
-        if (ext === 'PDF' && (file as any).path) {
-          try {
-            const pdfCoverRes = await renderPdfPage((file as any).path, 1);
-            if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
-              setFormData((prev) => ({
-                ...prev,
-                coverImage: prev.coverImage || pdfCoverRes.coverUrl,
-              }));
-              setCurrentPdfPage(pdfCoverRes.currentPage || 1);
-              if (pdfCoverRes.totalPages) setTotalPdfPages(pdfCoverRes.totalPages);
-            }
-          } catch (pdfErr) {
-            console.warn('[BookDetailModal] Fallback renderPdfPage error:', pdfErr);
-          }
-        }
-      } catch (err) {
-        console.warn('[BookDetailModal] Fallback discoverMetadata failed:', err);
-      } finally {
-        setIsDiscoveringFile(false);
-      }
-    } else if (ext === 'PDF' && (file as any).path) {
-      try {
-        const pdfCoverRes = await renderPdfPage((file as any).path, 1);
-        if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
-          setFormData((prev) => ({
-            ...prev,
-            coverImage: prev.coverImage || pdfCoverRes.coverUrl,
-          }));
-          setCurrentPdfPage(pdfCoverRes.currentPage || 1);
-          if (pdfCoverRes.totalPages) setTotalPdfPages(pdfCoverRes.totalPages);
-        }
-      } catch (pdfErr) {
-        console.warn('[BookDetailModal] Fallback direct renderPdfPage error:', pdfErr);
-      }
-    }
-    setIsFileImported(true);
+    const sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+    await applyFileMetadata(filePath, file.name, sizeStr);
   };
 
   // Contributor Management
@@ -636,9 +639,27 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       />
 
       <div
+        onDragEnter={handleModalDragEnter}
+        onDragLeave={handleModalDragLeave}
+        onDragOver={handleModalDragOver}
+        onDrop={handleModalDrop}
         className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] font-sans"
         dir={dir}
       >
+        {/* Drag & Drop File Update Overlay */}
+        {isModalDragOver && (
+          <div className="absolute inset-0 z-50 bg-canvas/90 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center p-8 border-2 border-dashed border-pale-sky-500 animate-in fade-in duration-200 pointer-events-none">
+            <div className="w-16 h-16 rounded-2xl bg-pale-sky-500/15 border border-pale-sky-500/30 flex items-center justify-center mb-3 text-pale-sky-500 shadow-lg">
+              <FolderOpen className="w-8 h-8 animate-bounce" />
+            </div>
+            <h3 className="text-lg font-bold font-display text-main mb-1 text-center">
+              {lang === 'ar' ? 'أفلت الملف هنا لتحديث بيانات وغلاف الكتاب' : 'Drop file here to update book metadata & cover'}
+            </h3>
+            <p className="text-xs text-muted text-center max-w-sm">
+              {t('dropBookSubtitle')}
+            </p>
+          </div>
+        )}
         {/* Unsaved Changes Confirmation Dialog Overlay */}
         {showConfirmDiscard && (
           <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">

@@ -16,6 +16,21 @@ import { Settings } from 'lucide-react';
 export const AppLayout: React.FC = () => {
   const { dir, viewMode, t } = useWorkspace();
 
+  React.useEffect(() => {
+    const handleWindowDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    const handleWindowDrop = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('dragover', handleWindowDragOver);
+    window.addEventListener('drop', handleWindowDrop);
+    return () => {
+      window.removeEventListener('dragover', handleWindowDragOver);
+      window.removeEventListener('drop', handleWindowDrop);
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-main select-none font-sans relative" dir={dir}>
       {/* Subtle Arabesque Pattern Texture Overlay */}
