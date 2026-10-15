@@ -525,4 +525,94 @@ Baglib adopts this decoupled two-phase workflow across its digital import and ca
    - The user can review and edit all fields manually in the modal.
    - Alternatively, clicking the "Auto-Fill" (`جلب تلقائي`) button triggers Phase 2 (`lookupWithCandidates`). Only then does Baglib orchestrate multi-provider search, score candidates using deterministic similarity weights, and display [`MetadataCandidatesModal`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/MetadataCandidatesModal.tsx) and [`MetadataDiffModal`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/MetadataDiffModal.tsx) for user-approved merging.
 
+---
 
+## 9. Phase 1 Reverse-Engineering: Filename Parsing & Author Fallbacks (`smart_update`)
+
+### 9.1 The Reproduction Scenario
+- **Observed Behavior**: When importing a book whose internal PDF metadata lacks an author or contains a placeholder/software generator string (e.g. `User`, `Admin`, `Adobe InDesign CS6`, `Unknown`), but the author's name is clearly present in the filename (e.g. `Clean Code - Robert C. Martin.pdf`, `Crime_and_Punishment_-_Fyodor_Dostoevsky.pdf`, `[George Orwell] 1984.pdf`), Baglib previously returned `"Unknown Author"` / `"مؤلف مجهول"`. In contrast, Calibre correctly identified the author from the filename.
+- **Goal**: Reverse-engineer Calibre's filename parsing and metadata fallback merge behavior, identify the differences in Baglib, and adapt suitable techniques into Baglib's Phase 1 offline ingestion pipeline.
+
+---
+
+### 9.2 Calibre Source Inspection
+
+#### A. Filename Metadata Extraction (`calibre.ebooks.metadata.meta.metadata_from_filename`)
+- **Source File**: `src/calibre/ebooks/metadata/meta.py` (lines 148–220).
+- **Core Techniques**:
+  1. **Underscore Normalization**:
+     ```python
+     name = name.replace('_', ' ')
+     ```
+     Calibre unconditionally converts all underscores to spaces before applying regular expressions. Filenames like `Author_Name_-_Book_Title.pdf` are converted to `Author Name - Book Title.pdf`.
+  2. **Configurable Regex Matching**:
+     Matches filename against standard patterns such as `(?P<title>.+) - (?P<author>[^_]+)` or `(?P<author>[^_]+) - (?P<title>.+)`.
+  3. **Author Name Inversion Handling**:
+     If an author name is matched in `"Last, First"` order, Calibre normalizes it to `"First Last"`.
+  4. **Extension Stripping**:
+     Strips standard file extension suffixes matching `\.[a-zA-Z0-9]{1,5}$`.
+
+#### B. Priority Merge & Smart Fallbacks (`calibre.ebooks.metadata.book.base.smart_update`)
+- **Source File**: `src/calibre/ebooks/metadata/book/base.py` (lines 520–570).
+- **Merge Logic**:
+  1. When a book is added, Calibre creates an initial `Metadata` record from the filename:
+     ```python
+     mi = metadata_from_filename(path)
+     ```
+  2. Format-specific extractors (`pdf.py`, `epub.py`, `mobi.py`) then inspect internal file metadata (`other`).
+  3. Calibre invokes `mi.smart_update(other)` with strict author validation:
+     ```python
+     unknown = _('Unknown')
+     if other.authors and other.authors[0] != unknown:
+         self.authors = other.authors
+     ```
+  4. If `other.authors` is empty or equals the localized `'Unknown'`, the existing author extracted from the filename (`self.authors`) is **preserved**.
+  5. Internal titles override filename titles only when `other.title` is present and valid.
+
+---
+
+### 9.3 Root Causes in Baglib
+
+1. **Premature Array Check in `BibliographicMetadataService.discoverBook`**:
+   - Baglib checked:
+     ```typescript
+     if (embeddedMeta?.authors && embeddedMeta.authors.length > 0) {
+       rawAuthors = embeddedMeta.authors;
+     } else if (parsedFilename?.authors && parsedFilename.authors.length > 0) {
+       rawAuthors = parsedFilename.authors;
+     }
+     ```
+   - When a PDF's embedded metadata contained a generic placeholder (such as `["Unknown"]`, `["User"]`, or `["Adobe InDesign CS6"]`), `embeddedMeta.authors.length > 0` was `true`. Baglib selected `rawAuthors = embeddedMeta.authors` and completely ignored `parsedFilename.authors`. Subsequent placeholder filtering emptied `rawAuthors`, falling back to `"Unknown Author"`.
+2. **Missing Placeholder Checks in `EbookMetadataExtractorService.applyFallbacks`**:
+   - `meta.authors` took precedence over `filenameAuthors` without validating whether `meta.authors` consisted entirely of generic placeholders.
+3. **Filename Parser Rigidity**:
+   - `FilenameParser` required spaces around underscores (`\s+_\s+`), failing on standard underscore-separated names (`Title_-_Author.pdf`).
+   - Lacked handling for leading track/index numbers (`01 - Title - Author.pdf`), leading bracketed authors (`[Author] Title.pdf`), and explicit connectors (`Title by Author` / `العنوان بقلم الكاتب`).
+4. **Node.js Buffer Pool Slab Contamination**:
+   - In Node.js, `fs.readFileSync` and `Buffer.from` for small files (<8 KB) allocate memory from a shared 8 KB `ArrayBuffer` slab.
+   - When `pdf-parse` (wrapping Mozilla `pdf.js` 1.10.100) received a Node `Buffer`, internal `cloneValue` and `Stream` operations referenced the shared slab at offset 0, causing subsequent small PDF parses in the same process to retain the previous document's Info dictionary.
+   - Wrapping buffers in `new Uint8Array(dataBuffer)` creates a standalone typed array view with isolated memory bounds, resolving cross-file metadata leakage.
+
+---
+
+### 9.4 Baglib Implementation & Verification
+
+1. **Expanded Placeholder Dictionary ([`metadata-validator.ts`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/shared/validators/metadata-validator.ts))**:
+   - Added multilingual placeholders: `Unknown`, `Unknown Author`, `مؤلف مجهول`, `مؤلف جديد`, `غير معروف`, `بدون مؤلف`, `مجهول الاسم`, `Anonymous`, `Various`.
+   - Added system account names: `Admin`, `Administrator`, `User`, `Owner`, `Guest`.
+   - Added software generator names: `Adobe InDesign`, `Microsoft Word`, `ScanSnap`, `ABBYY FineReader`, `PDFCreator`, `Nitro Pro`, `Acrobat Distiller`, `Foxit`, `Ghostscript`.
+2. **Enhanced Filename Parser ([`filename-parser.ts`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/metadata/filename-parser.ts))**:
+   - Pre-normalizes all underscores: `workingString = workingString.replace(/_/g, ' ')`.
+   - Strips leading chapter/index/volume prefixes (`^\s*(?:\d{1,4}|\[\d{1,4}\]|vol\.?\s*\d+)\s*[-_–—\.]\s*`).
+   - Extracts leading bracket authors (`^\[([^\]]+)\]\s*(.+)$` and `^\(([^\)]+)\)\s*(.+)$`).
+   - Extracts explicit connector patterns (`Title by Author` and Arabic `العنوان بقلم الكاتب`).
+   - Detects inverted surname-first author names (`Martin, Robert C. - Clean Code`).
+3. **Calibre `smart_update` Priority Fallback**:
+   - Implemented in [`BibliographicMetadataService`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/metadata/bibliographic-metadata.service.ts) and [`EbookMetadataExtractorService`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/digital/ebook-metadata-extractor.service.ts):
+     `validUserAuthors > validEmbeddedAuthors > validFilenameAuthors > ['Unknown Author']`.
+4. **Buffer Isolation**:
+   - Passed `new Uint8Array(dataBuffer)` into `pdf-parse` across `embedded-metadata.extractor.ts`, `ebook-metadata-extractor.service.ts`, and `system.ts`.
+5. **Automated Verification**:
+   - All 6 reproduction and fallback unit tests pass in [`calibre-smart-update.test.ts`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/tests/services/metadata/calibre-smart-update.test.ts).
+   - All 20 filename parser unit tests pass in [`filename-parser.test.ts`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/tests/services/metadata/filename-parser.test.ts).
+   - Full test suite passes: 243/243 tests green.
