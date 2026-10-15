@@ -62,6 +62,9 @@ import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { ReturnBookModal } from './ReturnBookModal';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
+import { CategoryCascader } from '../categories/CategoryCascader';
+import { TagEditor } from '../tags/TagEditor';
+
 
 interface BookDetailModalProps {
   book: BookItem | null;
@@ -2097,42 +2100,38 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   <span>{lang === 'ar' ? 'التصنيف الهرمي والوسوم' : 'Category & Tags'}</span>
                 </h4>
 
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <label className="font-bold text-main">{lang === 'ar' ? 'التصنيف الرئيسي:' : 'Primary Category:'}</label>
-                    <select
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-main text-xs">
+                      {lang === 'ar' ? 'التصنيف الرئيسي:' : 'Primary Category:'}
+                    </label>
+                    <CategoryCascader
                       value={formData.primaryCategory?.id || ''}
-                      onChange={(e) => {
-                        const selected = allCategories.find((c) => c.id === e.target.value);
+                      onChange={(catId, catObj) => {
                         setFormData((prev) => ({
                           ...prev,
-                          primaryCategory: selected || null,
+                          primaryCategory: catId && catObj ? { id: catId, nameAr: catObj.nameAr, nameEn: catObj.nameEn || '' } : undefined,
                         }));
                       }}
-                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
-                    >
-                      <option value="">{lang === 'ar' ? '-- بدون تصنيف رئيسي --' : '-- No Category --'}</option>
-                      {allCategories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {lang === 'ar' ? c.nameAr : c.nameEn}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder={lang === 'ar' ? '-- بدون تصنيف رئيسي --' : '-- No Category --'}
+                      allowClear={true}
+                    />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="font-bold text-main">{lang === 'ar' ? 'التصنيفات الإضافية (مفصولة بفواصل):' : 'Additional Categories (comma-separated):'}</label>
-                    <input
-                      type="text"
-                      value={(formData.categories || []).join(', ')}
-                      onChange={(e) =>
-                        handleInputChange(
-                          'categories',
-                          e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
-                        )
-                      }
-                      placeholder={lang === 'ar' ? 'عقيدة, فقه, تراث...' : 'Theology, History, Linguistics...'}
-                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-main text-xs">
+                      {t('tagEditorLabel')}
+                    </label>
+                    <TagEditor
+                      value={formData.tags || formData.categories || []}
+                      onChange={(newTags) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          tags: newTags,
+                          categories: newTags,
+                        }));
+                      }}
+                      placeholder={t('addTagPlaceholder')}
                     />
                   </div>
                 </div>

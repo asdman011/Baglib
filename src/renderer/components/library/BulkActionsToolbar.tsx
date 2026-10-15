@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { BookItem, ReadingStatus } from '../../types/library';
+import { CategoryCascader } from '../categories/CategoryCascader';
+import { TagEditor } from '../tags/TagEditor';
+
 
 interface BulkActionsToolbarProps {
   selectedBookIds: string[];
@@ -37,7 +40,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
 
   // Form states
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [tagsInput, setTagsInput] = useState<string>('');
+  const [bulkTags, setBulkTags] = useState<string[]>([]);
   const [targetStatus, setTargetStatus] = useState<ReadingStatus>('reading');
 
   if (selectedBookIds.length === 0) return null;
@@ -67,22 +70,18 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
 
   // 2. Bulk Tags Addition
   const handleApplyTags = async () => {
-    const rawTags = tagsInput
-      .split(/[,،]/)
-      .map((t) => t.trim())
-      .filter(Boolean);
-    if (rawTags.length === 0) return;
+    if (bulkTags.length === 0) return;
 
     setIsLoading(true);
     try {
       if (typeof window !== 'undefined' && window.electronAPI?.bulkAddTags) {
         await window.electronAPI.bulkAddTags({
           workIds: selectedBookIds,
-          tags: rawTags,
+          tags: bulkTags,
         });
       }
       setActiveModal(null);
-      setTagsInput('');
+      setBulkTags([]);
       onOperationComplete(t('bulkSuccessToast', { count }));
     } catch (err) {
       console.error('Failed to bulk add tags:', err);
@@ -232,18 +231,12 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               <label className="block text-xs font-medium text-muted mb-1.5">
                 {t('bulkCategorySelectLabel')}
               </label>
-              <select
-                value={selectedCategoryId}
-                onChange={(e) => setSelectedCategoryId(e.target.value)}
-                className="w-full bg-surface border border-border/80 text-foreground rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-pale-sky-500 outline-none"
-              >
-                <option value="">-- {t('bulkCategorySelectLabel')} --</option>
-                {allCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {lang === 'ar' ? c.nameAr : c.nameEn}
-                  </option>
-                ))}
-              </select>
+              <CategoryCascader
+                value={selectedCategoryId || null}
+                onChange={(catId) => setSelectedCategoryId(catId || '')}
+                placeholder={t('selectCategory')}
+                allowClear={false}
+              />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -281,12 +274,10 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               <label className="block text-xs font-medium text-muted mb-1.5">
                 {t('bulkTagsInputLabel')}
               </label>
-              <input
-                type="text"
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
-                placeholder={t('bulkTagsPlaceholder')}
-                className="w-full bg-surface border border-border/80 text-foreground rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-pale-sky-500 outline-none"
+              <TagEditor
+                value={bulkTags}
+                onChange={setBulkTags}
+                placeholder={t('addTagPlaceholder')}
               />
             </div>
 
@@ -300,7 +291,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               </button>
               <button
                 type="button"
-                disabled={!tagsInput.trim() || isLoading}
+                disabled={bulkTags.length === 0 || isLoading}
                 onClick={handleApplyTags}
                 className="flex items-center gap-2 px-4 py-2 bg-pale-sky-500 hover:bg-pale-sky-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
               >
