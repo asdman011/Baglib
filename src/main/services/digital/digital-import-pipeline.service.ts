@@ -5,10 +5,12 @@ import { DigitalFileValidatorService } from './digital-file-validator.service';
 import { EbookMetadataExtractorService } from './ebook-metadata-extractor.service';
 import { getDatabase } from '../../database/connection';
 import { WorkRepository } from '../../database/repositories/work.repository';
+import { DuplicateDetectorService } from './duplicate-detector.service';
 import type {
   DigitalImportOptions,
   DigitalImportResult,
   BatchImportSummary,
+  ImportProgressEvent,
 } from '../../../shared/types/digital-file';
 import type { BookItemInput } from '../../../shared/types/work';
 
@@ -19,18 +21,21 @@ export class DigitalImportPipelineService {
   private validator: DigitalFileValidatorService;
   private extractor: EbookMetadataExtractorService;
   private workRepository?: WorkRepository;
+  private duplicateDetector?: DuplicateDetectorService;
   private quotaTracker: QuotaTracker;
 
   constructor(
     workRepository?: WorkRepository,
     validator?: DigitalFileValidatorService,
     extractor?: EbookMetadataExtractorService,
-    quotaTracker: QuotaTracker = defaultQuotaTracker
+    quotaTracker: QuotaTracker = defaultQuotaTracker,
+    duplicateDetector?: DuplicateDetectorService
   ) {
     this.validator = validator || DigitalFileValidatorService.getInstance();
     this.extractor = extractor || EbookMetadataExtractorService.getInstance();
     this.workRepository = workRepository;
     this.quotaTracker = quotaTracker;
+    this.duplicateDetector = duplicateDetector;
   }
 
   public static getInstance(workRepository?: WorkRepository, quotaTracker?: QuotaTracker): DigitalImportPipelineService {
@@ -38,6 +43,11 @@ export class DigitalImportPipelineService {
       this.instance = new DigitalImportPipelineService(workRepository, undefined, undefined, quotaTracker);
     }
     return this.instance;
+  }
+
+  private getDuplicateDetector(): DuplicateDetectorService {
+    if (this.duplicateDetector) return this.duplicateDetector;
+    return new DuplicateDetectorService(this.getRepository(), this.extractor);
   }
 
   private getRepository(): WorkRepository {
@@ -76,6 +86,123 @@ export class DigitalImportPipelineService {
       // 2. Read file buffer & compute SHA-256 hash for deduplication
       const fileBuffer = await fs.promises.readFile(filePath);
       const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+      // Check duplicates if requested
+      if (options.duplicateAction === 'skip') {
+        const dup = await this.getDuplicateDetector().checkDuplicate({
+          filePath,
+          fileHash,
+          fileSizeBytes: validation.fileSizeBytes,
+        });
+
+        if (dup.matchType !== 'none') {
+          return {
+            success: true,
+            skipped: true,
+            filePath,
+            fileName,
+            format: validation.format || options.targetFormat || 'PDF',
+            fileHash,
+            fileSizeBytes: validation.fileSizeBytes,
+            workId: dup.existingWork?.id,
+            duplicateMatchType: dup.matchType,
+            duplicateReason: dup.reason,
+            extractedMetadata: dup.existingWork
+              ? {
+                  title: dup.existingWork.title,
+                  author: dup.existingWork.author,
+                  publisher: dup.existingWork.publisher,
+                  publicationYear:
+                    typeof dup.existingWork.publicationYear === 'number'
+                      ? dup.existingWork.publicationYear
+                      : parseInt(String(dup.existingWork.publicationYear), 10) || undefined,
+                  isbn: dup.existingWork.isbn,
+                  hasCover: Boolean(dup.existingWork.coverImage),
+                }
+              : undefined,
+          };
+        }
+      } else if (options.duplicateAction === 'replace') {
+        const dup = await this.getDuplicateDetector().checkDuplicate({
+          filePath,
+          fileHash,
+          fileSizeBytes: validation.fileSizeBytes,
+        });
+        const targetId = options.existingWorkId || dup.existingWork?.id;
+        if (targetId) {
+          const format = validation.format || options.targetFormat || 'PDF';
+          const extracted = await this.extractor.extract(filePath, format);
+          this.getRepository().updateBook({
+            id: targetId,
+            title: extracted.title || fileName,
+            filePath: path.resolve(filePath),
+            fileHash,
+            fileSize: this.formatBytes(validation.fileSizeBytes),
+            digitalFormat: format,
+            coverImage: extracted.coverDataUrl,
+          });
+
+          return {
+            success: true,
+            filePath,
+            fileName,
+            format,
+            workId: targetId,
+            fileHash,
+            fileSizeBytes: validation.fileSizeBytes,
+            extractedMetadata: {
+              title: extracted.title || fileName,
+              author: extracted.authors?.[0] || 'Unknown Author',
+              publisher: extracted.publisher,
+              publicationYear: extracted.publicationYear,
+              isbn: extracted.isbn,
+              hasCover: Boolean(extracted.coverDataUrl),
+              coverDataUrl: extracted.coverDataUrl,
+            },
+          };
+        }
+      } else if (options.duplicateAction === 'add_new_edition') {
+        const dup = await this.getDuplicateDetector().checkDuplicate({
+          filePath,
+          fileHash,
+          fileSizeBytes: validation.fileSizeBytes,
+        });
+        const targetId = options.existingWorkId || dup.existingWork?.id;
+        if (targetId && this.getRepository().addEditionToWork) {
+          const format = validation.format || options.targetFormat || 'PDF';
+          const extracted = await this.extractor.extract(filePath, format);
+          this.getRepository().addEditionToWork(targetId, {
+            edition: options.customTitle ? undefined : extracted.title,
+            publisher: extracted.publisher,
+            publicationYear: extracted.publicationYear,
+            isbn: extracted.isbn,
+            language: extracted.language || undefined,
+            filePath: path.resolve(filePath),
+            fileHash,
+            digitalFormat: format,
+            fileSize: this.formatBytes(validation.fileSizeBytes),
+          });
+
+          return {
+            success: true,
+            filePath,
+            fileName,
+            format,
+            workId: targetId,
+            fileHash,
+            fileSizeBytes: validation.fileSizeBytes,
+            extractedMetadata: {
+              title: extracted.title || fileName,
+              author: extracted.authors?.[0] || 'Unknown Author',
+              publisher: extracted.publisher,
+              publicationYear: extracted.publicationYear,
+              isbn: extracted.isbn,
+              hasCover: Boolean(extracted.coverDataUrl),
+              coverDataUrl: extracted.coverDataUrl,
+            },
+          };
+        }
+      }
 
       // 3. Extract Embedded Metadata & Cover
       const format = validation.format || options.targetFormat || 'PDF';
@@ -171,9 +298,13 @@ export class DigitalImportPipelineService {
    * If in Quota-Saver mode (>= 750 requests), automated background Google Books queries are suppressed.
    * Books are imported with local/embedded metadata, requiring explicit single-item auto-fill.
    */
-  public async importFiles(optionsList: DigitalImportOptions[]): Promise<BatchImportSummary> {
+  public async importFiles(
+    optionsList: DigitalImportOptions[],
+    onProgress?: (progress: ImportProgressEvent) => void
+  ): Promise<BatchImportSummary> {
     const results: DigitalImportResult[] = [];
-    const isBatch = optionsList.length > 1;
+    const totalFiles = optionsList.length;
+    const isBatch = totalFiles > 1;
     const isConservation = this.quotaTracker.isConservationMode();
 
     if (isBatch && isConservation) {
@@ -182,28 +313,70 @@ export class DigitalImportPipelineService {
       );
     }
 
-    for (const opt of optionsList) {
+    for (let i = 0; i < totalFiles; i++) {
+      const opt = optionsList[i];
+      const fileName = path.basename(opt.filePath);
+
+      onProgress?.({
+        currentFileIndex: i + 1,
+        totalFiles,
+        currentFilename: fileName,
+        status: 'validating',
+        progressPercentage: Math.round(((i + 0.1) / totalFiles) * 100),
+      });
+
       try {
+        onProgress?.({
+          currentFileIndex: i + 1,
+          totalFiles,
+          currentFilename: fileName,
+          status: 'extracting',
+          progressPercentage: Math.round(((i + 0.5) / totalFiles) * 100),
+        });
+
         const result = await this.importFile(opt);
         results.push(result);
+
+        const status = result.skipped ? 'skipped' : (result.success ? 'completed' : 'failed');
+        onProgress?.({
+          currentFileIndex: i + 1,
+          totalFiles,
+          currentFilename: fileName,
+          status,
+          progressPercentage: Math.round(((i + 1) / totalFiles) * 100),
+          error: result.error,
+        });
       } catch (err: any) {
-        results.push({
+        const errResult: DigitalImportResult = {
           success: false,
           filePath: opt.filePath,
-          fileName: path.basename(opt.filePath),
+          fileName,
           fileSizeBytes: 0,
           errorCode: 'IMPORT_ERROR',
           error: err?.message || 'خطأ غير متوقع أثناء الاستيراد / Unexpected error during import',
+        };
+        results.push(errResult);
+
+        onProgress?.({
+          currentFileIndex: i + 1,
+          totalFiles,
+          currentFilename: fileName,
+          status: 'failed',
+          progressPercentage: Math.round(((i + 1) / totalFiles) * 100),
+          error: errResult.error,
         });
       }
     }
 
-    const successfulImports = results.filter((r) => r.success).length;
+    const successfulImports = results.filter((r) => r.success && !r.skipped).length;
+    const skippedImports = results.filter((r) => r.skipped).length;
+    const failedImports = results.filter((r) => !r.success).length;
 
     return {
-      totalFiles: results.length,
+      totalFiles,
       successfulImports,
-      failedImports: results.length - successfulImports,
+      skippedImports,
+      failedImports,
       results,
       bulkAutoFillSuppressed: isBatch && isConservation,
     };
