@@ -64,6 +64,7 @@ import { BibliographicWork } from '../../../shared/types/bibliographic';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
 import { CategoryCascader } from '../categories/CategoryCascader';
 import { TagEditor } from '../tags/TagEditor';
+import { EditionComparisonModal } from './EditionComparisonModal';
 
 
 interface BookDetailModalProps {
@@ -106,6 +107,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [fetchedWork, setFetchedWork] = useState<BibliographicWork | null>(null);
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState<boolean>(false);
+  const [isFindOnlineModalOpen, setIsFindOnlineModalOpen] = useState<boolean>(false);
+  const [isFetchingOnlineCover, setIsFetchingOnlineCover] = useState<boolean>(false);
   const [isFileImported, setIsFileImported] = useState<boolean>(
     Boolean(book?.filePath && book.filePath.trim().length > 0)
   );
@@ -564,6 +567,38 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     handleExtractPdfCover(targetPage);
   };
 
+  const handleFetchOnlineCover = async () => {
+    setIsFetchingOnlineCover(true);
+    try {
+      const windowAPI = (window as any).electronAPI;
+      if (windowAPI?.enrichment?.fetchAndCacheCover) {
+        const res = await windowAPI.enrichment.fetchAndCacheCover({
+          workId: formData.id,
+          isbn: formData.isbn,
+          title: formData.title,
+          author: formData.author,
+        });
+        if (res?.success && res.coverUrl) {
+          handleInputChange('coverImage', res.coverUrl);
+        }
+      }
+    } catch (err) {
+      console.warn('[BookDetailModal] fetch cover failed:', err);
+    } finally {
+      setIsFetchingOnlineCover(false);
+    }
+  };
+
+  const handleEnrichmentApplied = (updatedBook: BookItem) => {
+    setFormData((prev) => ({
+      ...prev,
+      ...updatedBook,
+    }));
+    if (onSave) {
+      onSave(updatedBook);
+    }
+  };
+
   const handleFileChangeFallback = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -865,6 +900,18 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {!isCreateMode && (
+              <button
+                type="button"
+                onClick={() => setIsFindOnlineModalOpen(true)}
+                title={t('findOnlineDesc')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all cursor-pointer shadow-sm"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t('findOnline')}</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setIsOnlineHubOpen(true)}
@@ -1225,6 +1272,20 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         <span>{isExtractingPdfCover ? t('extractingPdfCover') : t('extractPdfCoverBtn')}</span>
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={handleFetchOnlineCover}
+                      disabled={isFetchingOnlineCover}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0 shadow-xs"
+                      title={t('fetchCover')}
+                    >
+                      {isFetchingOnlineCover ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Compass className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isFetchingOnlineCover ? t('fetchingCover') : t('fetchCover')}</span>
+                    </button>
                     {formData.coverImage && (
                       <button
                         type="button"
@@ -2470,6 +2531,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           activeLoan={selectedLoanForReturn}
           onClose={() => setSelectedLoanForReturn(null)}
           onSuccess={handleReturnSuccess}
+        />
+
+        {/* Story 12: Contextual Online Edition Comparison & Safe Merging */}
+        <EditionComparisonModal
+          isOpen={isFindOnlineModalOpen}
+          book={formData}
+          onClose={() => setIsFindOnlineModalOpen(false)}
+          onEnrichmentApplied={handleEnrichmentApplied}
         />
       </div>
     </div>
