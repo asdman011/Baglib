@@ -140,6 +140,35 @@ When auto-filling metadata from online providers:
    - Direct download and ingestion via [`search:import-result`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/ipc/search.ts) and [`ContentShieldService`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/shield/content-shield.service.ts).
    - Automatically generates Work, Edition, Author, and Source in SQLite and broadcasts real-time updates to the UI.
 
+### 3.8 Online Metadata Enrichment & Non-Destructive Field Merging (Story 12 / KEY-3)
+1. **Context & Motivation**:
+   - In cataloging workflows, books often start with sparse or incomplete metadata (e.g. imported from a filename or a bare PDF).
+   - Users need a dependable, non-destructive way to discover alternative online editions and selectively merge high-quality metadata fields (publishers, publication dates, descriptions, categories, page counts) without accidentally overwriting their own manual corrections.
+2. **Online Metadata Enrichment Service ([`MetadataEnrichmentService`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/metadata/metadata-enrichment.service.ts))**:
+   - **Candidate Discovery**: Automatically queries registered open providers (Open Library, Google Books, Internet Archive, Gutenberg) using verified ISBNs or title/author combinations.
+   - **Match Confidence Scoring**:
+     - `1.0 (100%)`: Exact normalized ISBN match.
+     - `0.95 (95%)`: Combined title and author match.
+     - `0.75 (75%)`: Title match with differing or unverified author.
+     - `0.50 (50%)`: Distinct author match with divergent title.
+   - **Candidate Deduplication**: Unifies duplicate editions across providers using canonical ISBN-10/13 normalization and title/author hashing.
+3. **Non-Destructive Merge Engine & Overwrite Protection**:
+   - **Field-by-Field Diffing (`computeFieldDiffs`)**: Compares existing library attributes against candidate edition fields across `title`, `author`, `publisher`, `publicationYear`, `isbn`, `language`, `description`, `coverImage`, `categories`, and `pagesCount`.
+   - **Status Classification**: Categorizes each field as:
+     - `new`: Current value is blank/empty and candidate provides data.
+     - `overwrite`: Current value is populated and candidate provides a different value.
+     - `identical`: Current and incoming values match.
+   - **Selective User Control**: The user selects exactly which fields to accept via individual checkboxes, with quick actions for "Select All New Fields" and "Select All Fields".
+   - **Overwrite Guard (`overwritePopulatedFields`)**: Prevents overwriting already populated user fields unless the user explicitly checks the overwrite protection override toggle.
+4. **High-Resolution Cover Fetcher & Local Cache ([`CoverFetchService`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/metadata/cover-fetch.service.ts))**:
+   - **Local Disk Cache**: Downloads and caches cover images into the user data directory (`userData/covers/{workId}-{hash}.{ext}`) to enable instantaneous offline display and eliminate broken external CDN links.
+   - **Artifact & Placeholder Defense**: Rejects tracking pixels and blank placeholder images by enforcing a minimum size threshold (`>= 250 bytes`).
+   - **Inline Base64 Optimization**: Automatically decodes base64 data URLs directly to disk without superfluous HTTP requests.
+5. **Interactive UI Modals & Digital Source Attachment**:
+   - **Header Action**: A "Find Online" (`البحث عبر الإنترنت`) button in [`BookDetailModal`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/BookDetailModal.tsx) opens the side-by-side [`EditionComparisonModal`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/EditionComparisonModal.tsx).
+   - **Cover Section Action**: A dedicated "Fetch Cover" (`جلب الغلاف`) button in the cover thumbnail section initiates high-resolution image discovery.
+   - **Digital Attachment**: Users can attach free digital copies (EPUB/PDF) directly from public archives via [`ContentShieldService.downloadFileDirectly`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/shield/content-shield.service.ts), transitioning physical books to hybrid works.
+
 ---
 
 ## 4. Preservation of Baglib Architecture
