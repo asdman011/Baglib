@@ -89,6 +89,10 @@ export class EbookMetadataExtractorService {
    */
   private async extractFromPdf(filePath: string): Promise<Partial<ExtractedEbookMetadata>> {
     const fileBuffer = await fs.promises.readFile(filePath);
+    if (fileBuffer.length < 10 || !fileBuffer.slice(0, 1024).toString('latin1').includes('%PDF-')) {
+      return {};
+    }
+
     const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
 
     let title: string | undefined;

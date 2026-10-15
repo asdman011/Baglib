@@ -144,6 +144,10 @@ export class GoogleBooksSearchProvider implements ISearchProvider {
       return results;
     } catch (err: any) {
       if (signal?.aborted) return [];
+      if (String(err?.message || err).includes('503') || String(err?.message || err).includes('429')) {
+        console.warn('[baglib:googlebooks-search] Google Books is temporarily rate-limited or unavailable (503/429), failing over to other providers');
+        return [];
+      }
       console.warn('[baglib:googlebooks-search] Provider search error:', err?.message || err);
       return [];
     }

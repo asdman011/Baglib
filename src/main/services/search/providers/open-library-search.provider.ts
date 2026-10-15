@@ -48,15 +48,26 @@ export class OpenLibrarySearchProvider implements ISearchProvider {
     try {
       const params = new URLSearchParams();
       if (isbn) {
-        params.append('isbn', isbn);
+        const cleanIsbn = isbn.replace(/[^0-9X]/gi, '');
+        if (cleanIsbn.length >= 10) {
+          params.append('isbn', cleanIsbn);
+        } else if (rawTerm) {
+          params.append('q', rawTerm);
+        }
       } else {
         if (title) params.append('title', title);
         if (author) params.append('author', author);
         if (rawTerm && !title) params.append('q', rawTerm);
       }
 
+      // If no searchable parameter was added, do not call Open Library (avoids HTTP 422 Unprocessable Content)
+      if (!params.has('isbn') && !params.has('title') && !params.has('author') && !params.has('q')) {
+        return [];
+      }
+
       const limit = Math.min(query.limit || 20, 50);
       params.append('limit', String(limit));
+      params.append('fields', 'key,title,author_name,first_publish_year,cover_i,isbn,publisher,language');
       if (query.page && query.page > 1) {
         params.append('page', String(query.page));
       }
@@ -118,6 +129,9 @@ export class OpenLibrarySearchProvider implements ISearchProvider {
       return results;
     } catch (err: any) {
       if (signal?.aborted) return [];
+      if (String(err?.message || err).includes('422')) {
+        return [];
+      }
       console.warn('[baglib:openlibrary-search] Provider search error:', err?.message || err);
       return [];
     }

@@ -93,7 +93,7 @@ export class EmbeddedMetadataExtractor {
         return null;
       }
 
-      if (!pdfBuffer || pdfBuffer.length < 50) return null;
+      if (!pdfBuffer || pdfBuffer.length < 50 || !pdfBuffer.slice(0, 1024).toString('latin1').includes('%PDF-')) return null;
 
       const pdfStr = pdfBuffer.toString('latin1');
       const pageMap = this.findAllPagesXObjectMap(pdfStr);
@@ -420,6 +420,10 @@ export class EmbeddedMetadataExtractor {
    */
   private static async extractFromPdf(filePath: string): Promise<EmbeddedBookMetadata | null> {
     const dataBuffer = fs.readFileSync(filePath);
+    if (!dataBuffer || dataBuffer.length < 50 || !dataBuffer.slice(0, 1024).toString('latin1').includes('%PDF-')) {
+      return null;
+    }
+
     const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
 
     let title: string | undefined;

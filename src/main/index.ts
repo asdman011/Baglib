@@ -15,6 +15,19 @@ import { setupEnrichmentIPC } from "./ipc/enrichment";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 
+// Suppress verbose internal pdf.js font warnings and indexing noise that flood dev terminal
+const originalConsoleWarn = console.warn;
+console.warn = (...args: any[]) => {
+  const msg = typeof args[0] === 'string' ? args[0] : '';
+  if (
+    msg.includes('Ran out of space in font private use area') ||
+    msg.includes('Indexing all PDF objects')
+  ) {
+    return;
+  }
+  originalConsoleWarn.apply(console, args);
+};
+
 // Global process error boundary to intercept uncaught exceptions and unhandled promise rejections,
 // preventing abrupt Node process exits or terminal crash artifacts during transient network failures.
 process.on('unhandledRejection', (reason: any) => {

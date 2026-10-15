@@ -135,10 +135,31 @@ export function setupSystemIPC() {
 
       if (resolvedPath && fs.existsSync(resolvedPath)) {
         const dataBuffer = fs.readFileSync(resolvedPath);
+        if (dataBuffer.length < 10 || !dataBuffer.slice(0, 1024).toString('latin1').includes('%PDF-')) {
+          console.warn('[baglib:pdf-text] Skipped non-PDF or corrupt file:', path.basename(resolvedPath));
+          return null;
+        }
+
         const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
         
         if (typeof pdfFn === 'function') {
-          const pdfData = await pdfFn(new Uint8Array(dataBuffer), { pagerender: renderPageText });
+          // Suppress verbose internal pdf.js font warnings that flood dev terminal
+          const origWarn = console.warn;
+          console.warn = (...args: any[]) => {
+            const first = args[0];
+            if (typeof first === 'string' && first.includes('Ran out of space in font private use area')) {
+              return;
+            }
+            origWarn.apply(console, args);
+          };
+
+          let pdfData: any;
+          try {
+            pdfData = await pdfFn(new Uint8Array(dataBuffer), { pagerender: renderPageText });
+          } finally {
+            console.warn = origWarn;
+          }
+
           const rawText = pdfData.text || '';
           const cleanText = rawText.replace(/---PAGE_SPLIT_MARKER---/g, '').trim();
           const numPages = pdfData.numpages || 1;
@@ -158,8 +179,8 @@ export function setupSystemIPC() {
         }
       }
       return null;
-    } catch (err) {
-      console.error('Error extracting PDF text:', err);
+    } catch (err: any) {
+      console.warn('[baglib:pdf-text] Could not extract text from PDF:', err?.message || err);
       return null;
     }
   });

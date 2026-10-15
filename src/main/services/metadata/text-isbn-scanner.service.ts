@@ -177,6 +177,10 @@ export class TextIsbnScannerService {
         return null;
       }
 
+      if (buffer.length < 10 || !buffer.slice(0, 1024).toString('latin1').includes('%PDF-')) {
+        return null;
+      }
+
       const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
       if (typeof pdfFn !== 'function') return null;
 
@@ -226,8 +230,8 @@ export class TextIsbnScannerService {
       }
 
       return null;
-    } catch (err) {
-      console.warn('[TextIsbnScannerService] scanPdf error:', err);
+    } catch (err: any) {
+      console.warn('[TextIsbnScannerService] scanPdf skipped or failed:', err?.message || err);
       return null;
     }
   }
