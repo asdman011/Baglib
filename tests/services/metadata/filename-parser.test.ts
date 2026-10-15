@@ -110,4 +110,63 @@ describe('FilenameParser Unit Tests', () => {
     assert.strictEqual(res.publicationYear, 1997);
     assert.strictEqual(res.language, 'mixed');
   });
+
+  // Calibre Reverse-Engineered Parsing Features
+  it('parses underscore-separated filenames like "Clean_Code_-_Robert_C._Martin.pdf"', () => {
+    const res = FilenameParser.parse('Clean_Code_-_Robert_C._Martin.pdf');
+    assert.strictEqual(res.title, 'Clean Code');
+    assert.deepStrictEqual(res.authors, ['Robert C. Martin']);
+    assert.strictEqual(res.authorConfidence >= 0.7, true);
+  });
+
+  it('parses filenames with leading index/track numbers like "01 - The Hobbit - J.R.R. Tolkien.pdf"', () => {
+    const res = FilenameParser.parse('01 - The Hobbit - J.R.R. Tolkien.pdf');
+    assert.strictEqual(res.title, 'The Hobbit');
+    assert.deepStrictEqual(res.authors, ['J.R.R. Tolkien']);
+    assert.strictEqual(res.authorConfidence >= 0.7, true);
+  });
+
+  it('parses filenames with leading bracketed authors like "[Robert C. Martin] Clean Code.pdf"', () => {
+    const res = FilenameParser.parse('[Robert C. Martin] Clean Code.pdf');
+    assert.strictEqual(res.title, 'Clean Code');
+    assert.deepStrictEqual(res.authors, ['Robert C. Martin']);
+    assert.strictEqual(res.authorConfidence >= 0.8, true);
+  });
+
+  it('parses Arabic filenames with leading bracketed author like "[نجيب محفوظ] الثلاثية.pdf"', () => {
+    const res = FilenameParser.parse('[نجيب محفوظ] الثلاثية.pdf');
+    assert.strictEqual(res.title, 'الثلاثية');
+    assert.deepStrictEqual(res.authors, ['نجيب محفوظ']);
+    assert.strictEqual(res.authorConfidence >= 0.8, true);
+    assert.strictEqual(res.language, 'ar');
+  });
+
+  it('parses filenames with explicit "by" connector like "Clean Code by Robert C. Martin.pdf"', () => {
+    const res = FilenameParser.parse('Clean Code by Robert C. Martin.pdf');
+    assert.strictEqual(res.title, 'Clean Code');
+    assert.deepStrictEqual(res.authors, ['Robert C. Martin']);
+    assert.strictEqual(res.authorConfidence >= 0.85, true);
+  });
+
+  it('parses Arabic filenames with explicit "بقلم" connector like "عبقرية الصديق بقلم عباس محمود العقاد.pdf"', () => {
+    const res = FilenameParser.parse('عبقرية الصديق بقلم عباس محمود العقاد.pdf');
+    assert.strictEqual(res.title, 'عبقرية الصديق');
+    assert.deepStrictEqual(res.authors, ['عباس محمود العقاد']);
+    assert.strictEqual(res.authorConfidence >= 0.85, true);
+  });
+
+  it('parses inverted author filenames like "Martin, Robert C. - Clean Code.pdf"', () => {
+    const res = FilenameParser.parse('Martin, Robert C. - Clean Code.pdf');
+    assert.strictEqual(res.title, 'Clean Code');
+    assert.deepStrictEqual(res.authors, ['Robert C. Martin']);
+    assert.strictEqual(res.authorConfidence >= 0.75, true);
+  });
+
+  it('parses Arabic filenames with personal honorifics like "د. مصطفى محمود - حوار مع صديقي الملحد.pdf"', () => {
+    const res = FilenameParser.parse('د. مصطفى محمود - حوار مع صديقي الملحد.pdf');
+    assert.strictEqual(res.title, 'حوار مع صديقي الملحد');
+    assert.deepStrictEqual(res.authors, ['د. مصطفى محمود']);
+    assert.strictEqual(res.authorConfidence >= 0.75, true);
+  });
 });
+
