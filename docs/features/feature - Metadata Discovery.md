@@ -121,11 +121,31 @@ When auto-filling metadata from online providers:
    - In **Phase 1 (Offline)**: Automatically populates `formData.isbn` with validated ISBN-10/ISBN-13 and sets `provenance.isbnDiscovered = true`.
    - In **Phase 2 (Auto-fill)**: The discovered ISBN immediately powers exact-match provider lookups (`searchByIsbn`), achieving verified matches with zero ambiguity.
 
+### 3.7 Unified Multi-Provider Search & Discovery Hub (Story 11)
+1. **Background & Architecture**:
+   - Implements simultaneous multi-source book discovery across the local catalog and online public databases.
+   - Built on a modular provider contract ([`ISearchProvider`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/shared/types/search.ts)) coordinated by [`SearchOrchestratorService`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/search/search-orchestrator.service.ts).
+   - Core Providers:
+     - **Local Catalog ([`LocalSearchProvider`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/search/providers/local-search.provider.ts))**: Searches SQLite works, physical shelf locations, and categories with diacritic and alef invariance.
+     - **Open Library ([`OpenLibrarySearchProvider`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/search/providers/open-library-search.provider.ts))**: World open catalog of public book records and cover art.
+     - **Google Books ([`GoogleBooksSearchProvider`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/search/providers/google-books-search.provider.ts))**: Rich volumes, industry identifiers, and publication metadata respecting daily quota ceilings.
+     - **Internet Archive ([`InternetArchiveSearchProvider`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/search/providers/internet-archive-search.provider.ts))**: Free public texts, historical codices, and direct EPUB/PDF download links.
+     - **Project Gutenberg ([`GutenbergSearchProvider`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/search/providers/gutenberg-search.provider.ts))**: Over 70,000 public domain classics with guaranteed direct EPUB/PDF downloads.
+2. **Duplicate Detection & Enrichment ([`DuplicateDetector`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/search/duplicate-detector.ts))**:
+   - Performs dual-layer verification:
+     - **Strict ISBN**: Canonical ISBN-10 to ISBN-13 conversion.
+     - **Fuzzy Title & Author**: Strips parenthetical edition notes (e.g. `(طبعة دار الفكر)`), tests prefix containment, normalizes Arabic patronymic variants (`\bبن\b` vs `ابن`), and compares distinctive surnames.
+   - Automatically annotates online results with `inLibrary: true` and links to the local `workId`.
+3. **One-Click Ingestion & Content Shield Streaming**:
+   - Direct download and ingestion via [`search:import-result`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/ipc/search.ts) and [`ContentShieldService`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/shield/content-shield.service.ts).
+   - Automatically generates Work, Edition, Author, and Source in SQLite and broadcasts real-time updates to the UI.
+
 ---
 
 ## 4. Preservation of Baglib Architecture
 - Adheres strictly to the **Work → Edition → Source** polymorphic data model.
 - No unapproved schema alterations: uses existing `author.bio` and `work.description` columns.
 - Maintains bilingual RTL/LTR layout consistency using CSS logical properties and centralized translation keys.
+
 
 

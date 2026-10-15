@@ -22,6 +22,7 @@ export const Titlebar: React.FC = () => {
     toggleLanguage,
     toggleTheme,
     setCommandPaletteOpen,
+    setSearchHubOpen,
     t,
   } = useWorkspace();
 
@@ -39,9 +40,9 @@ export const Titlebar: React.FC = () => {
 
       {/* Center Group: Global Search & Command Center (Cmd + K) */}
       <div className="flex-1 max-w-lg mx-4">
-        <button
-          onClick={() => setCommandPaletteOpen(true)}
-          className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:border-pale-sky-500/50 hover:text-main transition-all group shadow-inner text-xs"
+        <div
+          onClick={() => setSearchHubOpen(true)}
+          className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:border-pale-sky-500/50 hover:text-main transition-all group shadow-inner text-xs cursor-pointer"
         >
           <div className="flex items-center gap-2">
             <Search className="w-3.5 h-3.5 text-muted group-hover:text-pale-sky-500 transition-colors" />
@@ -49,11 +50,18 @@ export const Titlebar: React.FC = () => {
               {t('searchPlaceholder')}
             </span>
           </div>
-          <div className="flex items-center gap-1 text-[10px] font-mono bg-surface border border-subtle px-1.5 py-0.5 rounded text-muted">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setCommandPaletteOpen(true);
+            }}
+            title="Command Palette (Cmd + K)"
+            className="flex items-center gap-1 text-[10px] font-mono bg-surface hover:bg-canvas border border-subtle px-1.5 py-0.5 rounded text-muted hover:text-main transition-colors"
+          >
             <Command className="w-3 h-3" />
             <span>K</span>
-          </div>
-        </button>
+          </button>
+        </div>
       </div>
 
       {/* Right Group: Action Controls & Theme */}

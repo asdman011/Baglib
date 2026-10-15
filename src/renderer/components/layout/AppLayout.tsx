@@ -10,6 +10,7 @@ import { FullPageBookReader } from '../reader/FullPageBookReader';
 import { NotesOverviewView } from '../notes/NotesOverviewView';
 import { CategoriesOverviewView } from '../categories/CategoriesOverviewView';
 import { QuotaWarningBanner } from './QuotaWarningBanner';
+import { SearchHubModal } from '../search/SearchHubModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Settings } from 'lucide-react';
 
@@ -68,6 +69,9 @@ export const AppLayout: React.FC = () => {
 
       {/* Global Search Command Palette (Cmd + K) */}
       <CommandPalette />
+
+      {/* Global Book Discovery & Search Hub (Story 11) */}
+      <SearchHubModal />
     </div>
   );
 };

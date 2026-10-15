@@ -4,6 +4,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BookItem } from '../../types/library';
 import { translations, TranslationKey } from '../../translations';
 
+import type { CategoryNode } from '../../../shared/types/category';
+import type { TagWithCount } from '../../../shared/types/tag';
+
 export type LayoutDirection = 'rtl' | 'ltr';
 export type ThemeMode = 'dark' | 'light';
 export type LanguageMode = 'ar' | 'en';
@@ -23,12 +26,17 @@ export interface WorkspaceState {
   theme: ThemeMode;
   lang: LanguageMode;
   isCommandPaletteOpen: boolean;
+  isSearchHubOpen: boolean;
   isZenMode: boolean;
   isSidebarCollapsed: boolean;
   
   // Real Books Library State
   books: BookItem[];
   
+  // Categories & Tags State (Story 10)
+  categoryTree: CategoryNode[];
+  allTags: TagWithCount[];
+
   // Single Book Reading Flow State
   activeBook: BookItem | null;
   readingPage: number;
@@ -49,13 +57,17 @@ interface WorkspaceContextType extends WorkspaceState {
   toggleZenMode: () => void;
   toggleSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  setSearchHubOpen: (open: boolean) => void;
   setViewMode: (mode: 'library' | 'categories' | 'reader' | 'notes' | 'settings') => void;
   setActiveLibraryCategory: (catId: string) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   
   // Book Library Management
   refreshBooks: () => Promise<void>;
+  refreshCategoryTree: () => Promise<void>;
+  refreshTags: () => Promise<void>;
   addBook: (book: BookItem) => void;
+
   updateBook: (book: BookItem) => void;
   deleteBook: (bookId: string) => void;
   updateBookReadingStatus: (bookId: string, status: import('../../types/library').ReadingStatus, progress?: number) => Promise<void>;
@@ -79,6 +91,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [dir, setDir] = useState<LayoutDirection>('rtl');
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isSearchHubOpen, setIsSearchHubOpen] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
@@ -88,6 +101,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   
   // Pure Real Data (Zero Mock Items)
   const [books, setBooks] = useState<BookItem[]>([]);
+  const [categoryTree, setCategoryTree] = useState<CategoryNode[]>([]);
+  const [allTags, setAllTags] = useState<TagWithCount[]>([]);
   const [activeBook, setActiveBook] = useState<BookItem | null>(null);
   const [readingPage, setReadingPage] = useState<number>(1);
   const [totalPages] = useState<number>(100);
@@ -157,9 +172,41 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
-  // Load books and notes from SQLite database on mount
+  // Refresh category tree with direct and recursive counts
+  const refreshCategoryTree = async () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const api = window.electronAPI as any;
+        if (api?.categories?.getTree) {
+          const tree = await api.categories.getTree({ includeCounts: true });
+          setCategoryTree(tree || []);
+        } else if (api?.getCategoryTree) {
+          const tree = await api.getCategoryTree({ includeCounts: true });
+          setCategoryTree(tree || []);
+        }
+      } catch (err: any) {
+        console.error('[baglib/ui] Failed to refresh category tree:', err);
+      }
+    }
+  };
+
+  // Refresh tags with work counts
+  const refreshTags = async () => {
+    if (typeof window !== 'undefined' && (window.electronAPI as any)?.tags?.getAll) {
+      try {
+        const tags = await (window.electronAPI as any).tags.getAll();
+        setAllTags(tags || []);
+      } catch (err: any) {
+        console.error('[baglib/ui] Failed to refresh tags:', err);
+      }
+    }
+  };
+
+  // Load books, categories, tags, and notes from SQLite database on mount
   useEffect(() => {
     refreshBooks();
+    refreshCategoryTree();
+    refreshTags();
 
     if (typeof window !== 'undefined' && (window.electronAPI as any)?.getAllNotes) {
       (window.electronAPI as any)
@@ -425,6 +472,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isZenMode,
         isSidebarCollapsed,
         books,
+        categoryTree,
+        allTags,
         activeBook,
         readingPage,
         totalPages,
@@ -439,10 +488,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         toggleZenMode,
         toggleSidebar,
         setCommandPaletteOpen: setIsCommandPaletteOpen,
+        isSearchHubOpen,
+        setSearchHubOpen: setIsSearchHubOpen,
         setViewMode,
         activeLibraryCategory,
         setActiveLibraryCategory,
         refreshBooks,
+        refreshCategoryTree,
+        refreshTags,
         addBook,
         updateBook,
         deleteBook,

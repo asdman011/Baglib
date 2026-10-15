@@ -9,6 +9,8 @@ import { setupMetadataIPC } from "./ipc/metadata";
 import { setupDigitalIPC } from "./ipc/digital";
 import { setupPhysicalIPC } from "./ipc/physical";
 import { setupLibraryViewsIPC } from "./ipc/library-views";
+import { setupCategoriesIPC } from "./ipc/categories";
+import { setupSearchIPC } from "./ipc/search";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 
@@ -66,6 +68,9 @@ setupMetadataIPC();
 setupDigitalIPC();
 setupPhysicalIPC();
 setupLibraryViewsIPC();
+setupCategoriesIPC();
+setupSearchIPC();
+
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection

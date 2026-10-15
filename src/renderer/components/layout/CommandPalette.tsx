@@ -1,12 +1,22 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, BookOpen, FileText, Hash, Bookmark, ArrowRight, X } from 'lucide-react';
+import { Search, BookOpen, FileText, Hash, Bookmark, ArrowRight, X, Globe } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { matchesSearchQuery } from '../../utils/search';
 
 export const CommandPalette: React.FC = () => {
-  const { isCommandPaletteOpen, setCommandPaletteOpen, openBookForReading, books, bookNotes } = useWorkspace();
+  const {
+    isCommandPaletteOpen,
+    setCommandPaletteOpen,
+    setSearchHubOpen,
+    openBookForReading,
+    books,
+    bookNotes,
+    t,
+    lang,
+    dir,
+  } = useWorkspace();
   const [query, setQuery] = useState('');
 
   // Close on Escape
@@ -70,10 +80,26 @@ export const CommandPalette: React.FC = () => {
 
   const filtered = useMemo(() => {
     if (!query.trim()) return allResults.slice(0, 8);
-    return allResults.filter((item) =>
+    const matches = allResults.filter((item) =>
       matchesSearchQuery(`${item.title} ${item.subtitle} ${item.tag}`, query)
     );
-  }, [allResults, query]);
+
+    return [
+      {
+        id: 'action-search-hub',
+        title: lang === 'ar' ? `البحث عن "${query}" في الفهارس المفتوحة والإنترنت` : `Search for "${query}" in Online Discovery Hub`,
+        subtitle: lang === 'ar' ? 'البحث عبر Open Library، Google Books، أرشيف الإنترنت، ومكتبة غوتنبرغ' : 'Search across Open Library, Google Books, Internet Archive, and Gutenberg',
+        tag: t('navSearch'),
+        type: 'command' as const,
+        icon: Globe,
+        action: () => {
+          setCommandPaletteOpen(false);
+          setSearchHubOpen(true);
+        },
+      },
+      ...matches,
+    ];
+  }, [allResults, query, lang, t, setCommandPaletteOpen, setSearchHubOpen]);
 
   if (!isCommandPaletteOpen) return null;
 
@@ -81,7 +107,7 @@ export const CommandPalette: React.FC = () => {
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
       <div
         className="w-full max-w-2xl bg-surface border border-subtle rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all"
-        dir="rtl"
+        dir={dir}
       >
         {/* Search Header Input */}
         <div className="p-4 border-b border-subtle flex items-center gap-3 bg-canvas/50">

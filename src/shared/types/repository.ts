@@ -15,6 +15,8 @@ export * from './category';
 export * from './knowledge';
 export * from './physical-library';
 export * from './library-views';
+export * from './tag';
+export * from './search';
 
 // Re-export sprint 1 domain interfaces & DTOs
 export * from '../../../baglib_library_repository_interfaces_sprint_1';
@@ -158,9 +160,74 @@ export interface ICategoryRepository {
   getBreadcrumbs(categoryId: string): Promise<CategoryBreadcrumb[]>;
 
   /**
-   * Fetches the complete hierarchical tree of categories.
+   * Fetches the complete hierarchical tree of categories with optional book counts.
    */
-  getCategoryTree(): Promise<CategoryNode[]>;
+  getCategoryTree(options?: { includeCounts?: boolean }): Promise<CategoryNode[]>;
+
+  /**
+   * Creates a new category.
+   */
+  createCategory?(input: import('./category').CategoryCreateInput): Promise<import('./category').Category> | import('./category').Category;
+
+  /**
+   * Updates an existing category.
+   */
+  updateCategory?(id: string, input: import('./category').CategoryUpdateInput): Promise<import('./category').Category> | import('./category').Category;
+
+  /**
+   * Deletes a category with orphan handling or work reassignment.
+   */
+  deleteCategory?(id: string, strategy?: import('./category').CategoryDeleteStrategy, reassignToId?: string): Promise<boolean> | boolean;
+
+  /**
+   * Reorders categories by displayOrder.
+   */
+  reorderCategories?(orderedIds: string[]): Promise<boolean> | boolean;
+
+  /**
+   * Retrieves a category by its ID.
+   */
+  getCategoryById?(id: string): Promise<import('./category').Category | null> | import('./category').Category | null;
+
+  /**
+   * Retrieves all flat categories.
+   */
+  getAllCategories?(): Promise<import('./category').Category[]> | import('./category').Category[];
+}
+
+/**
+ * Interface for Tag repository operations.
+ */
+export interface ITagRepository {
+  /**
+   * Creates a new tag if not already existing.
+   */
+  createTag(name: string, category?: string): Promise<import('./tag').Tag> | import('./tag').Tag;
+
+  /**
+   * Retrieves all tags with their book association count.
+   */
+  getAllTags(): Promise<import('./tag').TagWithCount[]> | import('./tag').TagWithCount[];
+
+  /**
+   * Retrieves most popular tags sorted by work count descending.
+   */
+  getPopularTags(limit?: number): Promise<import('./tag').TagWithCount[]> | import('./tag').TagWithCount[];
+
+  /**
+   * Renames a tag.
+   */
+  updateTag(id: string, name: string): Promise<import('./tag').Tag> | import('./tag').Tag;
+
+  /**
+   * Deletes a tag and removes its associations.
+   */
+  deleteTag(id: string): Promise<boolean> | boolean;
+
+  /**
+   * Merges source tag into target tag, re-pointing all work_tag associations and updating metadata.
+   */
+  mergeTags(sourceTagId: string, targetTagId: string): Promise<number> | number;
 }
 
 /**

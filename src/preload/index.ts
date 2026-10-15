@@ -126,10 +126,43 @@ export const API = {
   },
 
 
-  // Categories
-  getCategoryTree: () => ipcRenderer.invoke('library:get-category-tree'),
-  getCategoryBreadcrumbs: (categoryId: string) => ipcRenderer.invoke('library:get-category-breadcrumbs', categoryId),
+  // Categories & Tags (Story 10 / KEY-10)
+  categories: {
+    getTree: (options?: { includeCounts?: boolean }) =>
+      ipcRenderer.invoke('categories:get-tree', options),
+    getAll: () =>
+      ipcRenderer.invoke('categories:get-all'),
+    getBreadcrumbs: (categoryId: string) =>
+      ipcRenderer.invoke('categories:get-breadcrumbs', categoryId),
+    create: (input: import('../shared/types/category').CategoryCreateInput) =>
+      ipcRenderer.invoke('categories:create', input),
+    update: (id: string, input: import('../shared/types/category').CategoryUpdateInput) =>
+      ipcRenderer.invoke('categories:update', id, input),
+    delete: (id: string, strategy?: import('../shared/types/category').CategoryDeleteStrategy, reassignToId?: string) =>
+      ipcRenderer.invoke('categories:delete', id, strategy, reassignToId),
+    reorder: (orderedIds: string[]) =>
+      ipcRenderer.invoke('categories:reorder', orderedIds),
+  },
+  tags: {
+    getAll: () =>
+      ipcRenderer.invoke('tags:get-all'),
+    getPopular: (limit?: number) =>
+      ipcRenderer.invoke('tags:get-popular', limit),
+    create: (name: string, category?: string) =>
+      ipcRenderer.invoke('tags:create', name, category),
+    update: (id: string, name: string) =>
+      ipcRenderer.invoke('tags:update', id, name),
+    delete: (id: string) =>
+      ipcRenderer.invoke('tags:delete', id),
+    merge: (sourceTagId: string, targetTagId: string) =>
+      ipcRenderer.invoke('tags:merge', sourceTagId, targetTagId),
+  },
+
+  // Legacy Category Helpers
+  getCategoryTree: (options?: { includeCounts?: boolean }) => ipcRenderer.invoke('categories:get-tree', options),
+  getCategoryBreadcrumbs: (categoryId: string) => ipcRenderer.invoke('categories:get-breadcrumbs', categoryId),
   getSubtreeWorkIds: (categoryId: string) => ipcRenderer.invoke('library:get-subtree-work-ids', categoryId),
+
 
   // Knowledge Layer
   getAllNotes: () => ipcRenderer.invoke('library:get-all-notes'),
@@ -162,6 +195,25 @@ export const API = {
   updateProviderConfig: (configs: any) =>
     ipcRenderer.invoke('metadata:update-provider-config', configs),
 
+  // Unified Multi-Provider Search & Discovery (Story 11)
+  search: {
+    query: (query: any, options?: { timeoutMs?: number; searchId?: string }) =>
+      ipcRenderer.invoke('search:query', query, options),
+    cancel: (searchId?: string) =>
+      ipcRenderer.invoke('search:cancel', searchId),
+    getProviders: () =>
+      ipcRenderer.invoke('search:get-providers'),
+    setProviderEnabled: (providerId: string, enabled: boolean) =>
+      ipcRenderer.invoke('search:set-provider-enabled', providerId, enabled),
+    importResult: (input: any) =>
+      ipcRenderer.invoke('search:import-result', input),
+    onProgress: (callback: (update: any) => void) => {
+      const subscription = (_: any, value: any) => callback(value);
+      ipcRenderer.on('search:progress', subscription);
+      return () => ipcRenderer.removeListener('search:progress', subscription);
+    },
+  },
+
   onNotification: (callback: (message: string) => void) => {
     const subscription = (_: any, value: string) => callback(value);
     ipcRenderer.on('system:notification', subscription);
@@ -169,7 +221,10 @@ export const API = {
   },
 };
 
-contextBridge.exposeInMainWorld('electronAPI', API);
+if (typeof contextBridge !== 'undefined' && contextBridge?.exposeInMainWorld) {
+  contextBridge.exposeInMainWorld('electronAPI', API);
+}
 
 export type ElectronAPI = typeof API;
+
 

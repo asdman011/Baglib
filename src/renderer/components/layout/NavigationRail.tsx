@@ -8,7 +8,8 @@ import {
   Settings,
   ChevronRight,
   ChevronLeft,
-  Layers
+  Layers,
+  Globe,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 
@@ -18,6 +19,7 @@ export const NavigationRail: React.FC = () => {
     setViewMode,
     isSidebarCollapsed,
     toggleSidebar,
+    setSearchHubOpen,
     activeBook,
     books,
     bookNotes,
@@ -31,6 +33,14 @@ export const NavigationRail: React.FC = () => {
       icon: Library,
       count: books.length,
       disabled: false,
+    },
+    {
+      id: 'search',
+      label: t('navSearch'),
+      icon: Globe,
+      count: 0,
+      disabled: false,
+      onClick: () => setSearchHubOpen(true),
     },
     {
       id: 'categories',
@@ -101,7 +111,13 @@ export const NavigationRail: React.FC = () => {
             <button
               key={item.id}
               disabled={item.disabled}
-              onClick={() => setViewMode(item.id as any)}
+              onClick={() => {
+                if ((item as any).onClick) {
+                  (item as any).onClick();
+                } else {
+                  setViewMode(item.id as any);
+                }
+              }}
               title={isSidebarCollapsed ? item.label : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 item.disabled
