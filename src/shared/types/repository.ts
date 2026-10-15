@@ -13,6 +13,8 @@ export * from './work';
 export type { ContributorRole } from './work';
 export * from './category';
 export * from './knowledge';
+export * from './physical-library';
+export * from './library-views';
 
 // Re-export sprint 1 domain interfaces & DTOs
 export * from '../../../baglib_library_repository_interfaces_sprint_1';
@@ -113,6 +115,31 @@ export interface IWorkRepository {
       fileSize?: string;
     }
   ): Promise<BookItem | null> | BookItem | null;
+
+  /**
+   * Retrieves paginated works using multi-criteria filtering and SQL sorting.
+   */
+  getPaginatedWorks?(options: import('./library-views').WorkQueryOptions): Promise<import('./library-views').PaginatedWorksResult> | import('./library-views').PaginatedWorksResult;
+
+  /**
+   * Bulk updates category assignment for multiple works.
+   */
+  bulkUpdateCategory?(workIds: string[], categoryId: string): Promise<number> | number;
+
+  /**
+   * Bulk updates reading status and progress for multiple works.
+   */
+  bulkUpdateReadingStatus?(workIds: string[], status: import('./work').ReadingStatus, progress?: number): Promise<number> | number;
+
+  /**
+   * Bulk adds tags to multiple works.
+   */
+  bulkAddTags?(workIds: string[], tags: string[]): Promise<number> | number;
+
+  /**
+   * Bulk deletes multiple works atomically.
+   */
+  bulkDelete?(workIds: string[]): Promise<number> | number;
 }
 
 

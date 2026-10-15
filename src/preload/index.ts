@@ -17,6 +17,18 @@ export const API = {
   updateReadingStatus: (bookId: string, status: string, progress?: number) =>
     ipcRenderer.invoke('library:update-reading-status', bookId, status, progress),
 
+  // Story 9 Pagination & Bulk Operations
+  getPaginatedWorks: (options: any) =>
+    ipcRenderer.invoke('library:get-paginated-works', options),
+  bulkUpdateCategory: (input: { workIds: string[]; categoryId: string }) =>
+    ipcRenderer.invoke('library:bulk-update-category', input),
+  bulkUpdateReadingStatus: (input: { workIds: string[]; readingStatus: string; readingProgress?: number }) =>
+    ipcRenderer.invoke('library:bulk-update-reading-status', input),
+  bulkAddTags: (input: { workIds: string[]; tags: string[] }) =>
+    ipcRenderer.invoke('library:bulk-add-tags', input),
+  bulkDelete: (input: { workIds: string[] }) =>
+    ipcRenderer.invoke('library:bulk-delete', input),
+
   // Lending Management
   recordLoan: (workId: string, loanData: any) => ipcRenderer.invoke('library:record-loan', workId, loanData),
   returnLoan: (loanId: string, returnDate?: string, condition?: string) =>
@@ -95,6 +107,24 @@ export const API = {
       ipcRenderer.invoke('storage:prune-duplicate', options),
   },
 
+  // Physical Library & Shelving (Story 8 / KEY-5)
+  physical: {
+    getLocations: () => ipcRenderer.invoke('physical:get-locations'),
+    getLocationTree: () => ipcRenderer.invoke('physical:get-location-tree'),
+    getInventoryStats: () => ipcRenderer.invoke('physical:get-inventory-stats'),
+    updateLocation: (input: any) => ipcRenderer.invoke('physical:update-location', input),
+  },
+
+  // Lending Lifecycle & Borrowers (Story 8 / KEY-5)
+  lending: {
+    borrowBook: (input: any) => ipcRenderer.invoke('lending:borrow-book', input),
+    returnBook: (input: any) => ipcRenderer.invoke('lending:return-book', input),
+    checkOverdue: () => ipcRenderer.invoke('lending:check-overdue'),
+    getHistory: (workId: string) => ipcRenderer.invoke('lending:get-history', workId),
+    getAllLoans: (filter?: any) => ipcRenderer.invoke('lending:get-all-loans', filter),
+    getBorrowers: () => ipcRenderer.invoke('lending:get-borrowers'),
+  },
+
 
   // Categories
   getCategoryTree: () => ipcRenderer.invoke('library:get-category-tree'),
@@ -105,6 +135,16 @@ export const API = {
   getAllNotes: () => ipcRenderer.invoke('library:get-all-notes'),
   addNote: (noteData: any) => ipcRenderer.invoke('library:add-note', noteData),
   deleteNote: (noteId: string) => ipcRenderer.invoke('library:delete-note', noteId),
+
+  // Application Settings & View Preferences (Story 9)
+  settings: {
+    get: (key: string, defaultValue?: any) => ipcRenderer.invoke('settings:get', key, defaultValue),
+    set: (key: string, value: any) => ipcRenderer.invoke('settings:set', key, value),
+    getAll: () => ipcRenderer.invoke('settings:get-all'),
+    delete: (key: string) => ipcRenderer.invoke('settings:delete', key),
+    getViewPreferences: () => ipcRenderer.invoke('settings:get-view-preferences'),
+    saveViewPreferences: (prefs: any) => ipcRenderer.invoke('settings:save-view-preferences', prefs),
+  },
 
   // Quota & Rate-Limiter Tracking
   getQuotaStatus: () => ipcRenderer.invoke('metadata:get-quota-status'),

@@ -1,0 +1,183 @@
+/**
+ * Baglib — Library Views & Bulk Operations IPC Handlers
+ *
+ * Implements IPC endpoints for paginated querying, multi-criteria sorting,
+ * batch bulk updates, and view settings persistence.
+ */
+
+import { ipcMain } from 'electron';
+import { getDatabase } from '../database/connection';
+import { SqliteWorkRepository } from '../database/repositories/work.repository';
+import { settingsRepository } from '../database/repositories/settings.repository';
+import type {
+  WorkQueryOptions,
+  ViewPreferences,
+  BulkUpdateCategoryInput,
+  BulkUpdateStatusInput,
+  BulkAddTagsInput,
+  BulkDeleteInput,
+} from '../../shared/types/library-views';
+
+const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
+  viewMode: 'grid',
+  cardDensity: 'comfortable',
+  listDensity: 'normal',
+  visibleColumns: ['cover', 'title', 'author', 'category', 'format', 'location', 'status', 'actions'],
+  sortBy: 'newest',
+  sortDirection: 'desc',
+  pageSize: 24,
+};
+
+export function setupLibraryViewsIPC() {
+  /**
+   * Retrieves paginated works using multi-criteria filtering and SQL sorting.
+   */
+  ipcMain.handle('library:get-paginated-works', (_, options: WorkQueryOptions) => {
+    try {
+      const db = getDatabase();
+      const repo = new SqliteWorkRepository(db);
+      return repo.getPaginatedWorks(options);
+    } catch (err) {
+      console.error('[baglib/library-views-ipc] Failed to get paginated works:', err);
+      return {
+        items: [],
+        totalCount: 0,
+        page: options?.page || 1,
+        pageSize: options?.pageSize || 24,
+        totalPages: 1,
+      };
+    }
+  });
+
+  /**
+   * Bulk updates category assignment for multiple works.
+   */
+  ipcMain.handle('library:bulk-update-category', (_, input: BulkUpdateCategoryInput) => {
+    try {
+      const db = getDatabase();
+      const repo = new SqliteWorkRepository(db);
+      const affected = repo.bulkUpdateCategory(input.workIds, input.categoryId);
+      return { success: true, affectedCount: affected };
+    } catch (err: any) {
+      console.error('[baglib/library-views-ipc] Failed to bulk update category:', err);
+      return { success: false, affectedCount: 0, error: err?.message || String(err) };
+    }
+  });
+
+  /**
+   * Bulk updates reading status and progress for multiple works.
+   */
+  ipcMain.handle('library:bulk-update-reading-status', (_, input: BulkUpdateStatusInput) => {
+    try {
+      const db = getDatabase();
+      const repo = new SqliteWorkRepository(db);
+      const affected = repo.bulkUpdateReadingStatus(input.workIds, input.readingStatus, input.readingProgress);
+      return { success: true, affectedCount: affected };
+    } catch (err: any) {
+      console.error('[baglib/library-views-ipc] Failed to bulk update reading status:', err);
+      return { success: false, affectedCount: 0, error: err?.message || String(err) };
+    }
+  });
+
+  /**
+   * Bulk adds tags to multiple works.
+   */
+  ipcMain.handle('library:bulk-add-tags', (_, input: BulkAddTagsInput) => {
+    try {
+      const db = getDatabase();
+      const repo = new SqliteWorkRepository(db);
+      const affected = repo.bulkAddTags(input.workIds, input.tags);
+      return { success: true, affectedCount: affected };
+    } catch (err: any) {
+      console.error('[baglib/library-views-ipc] Failed to bulk add tags:', err);
+      return { success: false, affectedCount: 0, error: err?.message || String(err) };
+    }
+  });
+
+  /**
+   * Bulk deletes multiple works.
+   */
+  ipcMain.handle('library:bulk-delete', (_, input: BulkDeleteInput) => {
+    try {
+      const db = getDatabase();
+      const repo = new SqliteWorkRepository(db);
+      const affected = repo.bulkDelete(input.workIds);
+      return { success: true, affectedCount: affected };
+    } catch (err: any) {
+      console.error('[baglib/library-views-ipc] Failed to bulk delete works:', err);
+      return { success: false, affectedCount: 0, error: err?.message || String(err) };
+    }
+  });
+
+  /**
+   * Settings IPC Handlers
+   */
+  ipcMain.handle('settings:get', (_, key: string, defaultValue?: any) => {
+    try {
+      return settingsRepository.get(key, defaultValue);
+    } catch (err) {
+      console.error('[baglib/settings-ipc] Failed to get setting:', key, err);
+      return defaultValue;
+    }
+  });
+
+  ipcMain.handle('settings:set', (_, key: string, value: any) => {
+    try {
+      settingsRepository.set(key, value);
+      return true;
+    } catch (err) {
+      console.error('[baglib/settings-ipc] Failed to set setting:', key, err);
+      return false;
+    }
+  });
+
+  ipcMain.handle('settings:get-all', () => {
+    try {
+      return settingsRepository.getAll();
+    } catch (err) {
+      console.error('[baglib/settings-ipc] Failed to get all settings:', err);
+      return {};
+    }
+  });
+
+  ipcMain.handle('settings:delete', (_, key: string) => {
+    try {
+      return settingsRepository.delete(key);
+    } catch (err) {
+      console.error('[baglib/settings-ipc] Failed to delete setting:', key, err);
+      return false;
+    }
+  });
+
+  /**
+   * View Preferences helper endpoints
+   */
+  ipcMain.handle('settings:get-view-preferences', () => {
+    try {
+      const saved = settingsRepository.get<Partial<ViewPreferences>>('library_view_preferences', {});
+      return {
+        ...DEFAULT_VIEW_PREFERENCES,
+        ...saved,
+      };
+    } catch (err) {
+      console.error('[baglib/settings-ipc] Failed to get view preferences:', err);
+      return DEFAULT_VIEW_PREFERENCES;
+    }
+  });
+
+  ipcMain.handle('settings:save-view-preferences', (_, prefs: Partial<ViewPreferences>) => {
+    try {
+      const current = settingsRepository.get<Partial<ViewPreferences>>('library_view_preferences', DEFAULT_VIEW_PREFERENCES);
+      const updated: ViewPreferences = {
+        ...DEFAULT_VIEW_PREFERENCES,
+        ...current,
+        ...prefs,
+      };
+      settingsRepository.set('library_view_preferences', updated);
+      return updated;
+    } catch (err) {
+      console.error('[baglib/settings-ipc] Failed to save view preferences:', err);
+      return DEFAULT_VIEW_PREFERENCES;
+    }
+  });
+}

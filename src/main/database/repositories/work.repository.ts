@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { Database } from 'better-sqlite3';
-import type { IWorkRepository, BookItem, BookItemInput } from '../../../shared/types/repository';
+import type { IWorkRepository, BookItem, BookItemInput, WorkQueryOptions, PaginatedWorksResult, ReadingStatus } from '../../../shared/types/repository';
 import {
   WORK_TYPES,
   WORK_TYPE_ID_MAP,
@@ -96,7 +96,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         nameAr: r.pcNameAr || '',
         nameEn: r.pcNameEn || '',
       } : null,
-      tags: meta.tags || [],
+      tags: r.dbTags ? Array.from(new Set([...(meta.tags || []), ...r.dbTags.split(',')])) : (meta.tags || []),
       readingStatus: (r.readingStatus as any) || 'unread',
       readingProgress: typeof r.readingProgress === 'number' ? r.readingProgress : (r.readingProgress ? parseInt(r.readingProgress, 10) : 0),
       lendingHistory: meta.lendingHistory || [],
@@ -1228,6 +1228,434 @@ export class SqliteWorkRepository implements IWorkRepository {
 
     insertTx();
     return this.getById(workId);
+  }
+
+  /**
+   * Retrieves paginated works using multi-criteria filtering and SQL sorting.
+   */
+  getPaginatedWorks(options: WorkQueryOptions = {}): PaginatedWorksResult {
+    const page = Math.max(1, Number(options.page) || 1);
+    const pageSize = Math.min(1000, Math.max(1, Number(options.pageSize) || 24));
+    const offset = (page - 1) * pageSize;
+
+    const whereClauses: string[] = [];
+    const params: any[] = [];
+
+    // 1. Text Search across Title, Description, Author, Publisher, and ISBN
+    if (options.search && options.search.trim()) {
+      const term = `%${options.search.trim()}%`;
+      whereClauses.push(`(
+        w.title LIKE ?
+        OR w.description LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM work_author wa_s
+          JOIN author a_s ON a_s.id = wa_s.author_id
+          WHERE wa_s.work_id = w.id AND a_s.name LIKE ?
+        )
+        OR EXISTS (
+          SELECT 1 FROM edition e_s
+          WHERE e_s.work_id = w.id AND (e_s.publisher LIKE ? OR e_s.isbn LIKE ?)
+        )
+      )`);
+      params.push(term, term, term, term, term);
+    }
+
+    // 2. Book Type filter (digital, physical, hybrid)
+    if (options.bookType && options.bookType !== 'ALL') {
+      if (options.bookType === 'digital') {
+        whereClauses.push(`EXISTS (
+          SELECT 1 FROM edition e_bt
+          JOIN source s_bt ON s_bt.edition_id = e_bt.id
+          LEFT JOIN file_source_detail fsd_bt ON fsd_bt.source_id = s_bt.id
+          WHERE e_bt.work_id = w.id AND (s_bt.source_type = 'digital' OR fsd_bt.file_path IS NOT NULL)
+        )`);
+      } else if (options.bookType === 'physical') {
+        whereClauses.push(`EXISTS (
+          SELECT 1 FROM edition e_bt
+          JOIN source s_bt ON s_bt.edition_id = e_bt.id
+          LEFT JOIN physical_source_detail psd_bt ON psd_bt.source_id = s_bt.id
+          WHERE e_bt.work_id = w.id AND (s_bt.source_type IN ('physical', 'hybrid') OR psd_bt.shelf IS NOT NULL OR psd_bt.room IS NOT NULL)
+        )`);
+      } else if (options.bookType === 'hybrid') {
+        whereClauses.push(`EXISTS (
+          SELECT 1 FROM edition e_bt
+          JOIN source s_bt ON s_bt.edition_id = e_bt.id
+          WHERE e_bt.work_id = w.id AND s_bt.source_type = 'hybrid'
+        )`);
+      }
+    }
+
+    // 3. Reading Status filter
+    if (options.readingStatus && options.readingStatus !== 'ALL') {
+      whereClauses.push('w.reading_status = ?');
+      params.push(options.readingStatus);
+    }
+
+    // 4. Digital Format filter
+    if (options.digitalFormat && options.digitalFormat !== 'ALL') {
+      whereClauses.push(`EXISTS (
+        SELECT 1 FROM edition e_df
+        JOIN source s_df ON s_df.edition_id = e_df.id
+        JOIN file_source_detail fsd_df ON fsd_df.source_id = s_df.id
+        WHERE e_df.work_id = w.id AND fsd_df.file_format = ?
+      )`);
+      params.push(options.digitalFormat);
+    }
+
+    // 5. Category filter (primary category and recursive subcategories)
+    if (options.categoryId && options.categoryId !== 'ALL') {
+      whereClauses.push(`(
+        w.primary_category_id = ?
+        OR w.primary_category_id IN (
+          WITH RECURSIVE subcats AS (
+            SELECT id FROM category WHERE id = ?
+            UNION ALL
+            SELECT c.id FROM category c JOIN subcats sc ON c.parent_id = sc.id
+          )
+          SELECT id FROM subcats
+        )
+      )`);
+      params.push(options.categoryId, options.categoryId);
+    }
+
+    // 6. Tag filter
+    if (options.tag && options.tag !== 'ALL') {
+      whereClauses.push(`EXISTS (
+        SELECT 1 FROM work_tag wt_t
+        JOIN tag t_t ON t_t.id = wt_t.tag_id
+        WHERE wt_t.work_id = w.id AND t_t.name = ?
+      )`);
+      params.push(options.tag);
+    }
+
+    // 7. Lending Status filter
+    if (options.lendingStatus && options.lendingStatus !== 'ALL') {
+      if (options.lendingStatus === 'AVAILABLE') {
+        whereClauses.push(`NOT EXISTS (
+          SELECT 1 FROM lending_record lr_a
+          WHERE lr_a.work_id = w.id AND lr_a.is_returned = 0
+        )`);
+      } else if (options.lendingStatus === 'LENT') {
+        whereClauses.push(`EXISTS (
+          SELECT 1 FROM lending_record lr_l
+          WHERE lr_l.work_id = w.id AND lr_l.is_returned = 0
+        )`);
+      } else if (options.lendingStatus === 'OVERDUE') {
+        whereClauses.push(`EXISTS (
+          SELECT 1 FROM lending_record lr_o
+          WHERE lr_o.work_id = w.id AND lr_o.is_returned = 0 AND lr_o.expected_return_date IS NOT NULL AND lr_o.expected_return_date < date('now')
+        )`);
+      }
+    }
+
+    // 8. Physical Location filter
+    if (options.location && options.location !== 'ALL') {
+      whereClauses.push(`EXISTS (
+        SELECT 1 FROM edition e_loc
+        JOIN source s_loc ON s_loc.edition_id = e_loc.id
+        JOIN physical_source_detail psd_loc ON psd_loc.source_id = s_loc.id
+        WHERE e_loc.work_id = w.id AND (
+          psd_loc.room = ? OR psd_loc.shelf = ? OR psd_loc.bookcase = ? OR psd_loc.shelf_section = ?
+        )
+      )`);
+      params.push(options.location, options.location, options.location, options.location);
+    }
+
+    // 9. Storage Health filter
+    if (options.storageFilter && options.storageFilter !== 'ALL') {
+      if (options.storageFilter === 'HEALTHY') {
+        whereClauses.push(`NOT EXISTS (
+          SELECT 1 FROM edition e_sf
+          JOIN source s_sf ON s_sf.edition_id = e_sf.id
+          JOIN file_source_detail fsd_sf ON fsd_sf.source_id = s_sf.id
+          WHERE e_sf.work_id = w.id AND fsd_sf.storage_state IN ('missing', 'unmounted', 'corrupted', 'duplicate')
+        )`);
+      } else if (options.storageFilter === 'ATTENTION') {
+        whereClauses.push(`EXISTS (
+          SELECT 1 FROM edition e_sf
+          JOIN source s_sf ON s_sf.edition_id = e_sf.id
+          JOIN file_source_detail fsd_sf ON fsd_sf.source_id = s_sf.id
+          WHERE e_sf.work_id = w.id AND fsd_sf.storage_state IN ('missing', 'unmounted', 'corrupted')
+        )`);
+      } else if (options.storageFilter === 'DUPLICATES') {
+        whereClauses.push(`EXISTS (
+          SELECT 1 FROM edition e_sf
+          JOIN source s_sf ON s_sf.edition_id = e_sf.id
+          JOIN file_source_detail fsd_sf ON fsd_sf.source_id = s_sf.id
+          WHERE e_sf.work_id = w.id AND fsd_sf.storage_state = 'duplicate'
+        )`);
+      }
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Fast count query
+    const countRow = this.db.prepare(`
+      SELECT COUNT(DISTINCT w.id) as total
+      FROM work w
+      ${whereSql}
+    `).get(...params) as { total: number } | undefined;
+
+    const totalCount = countRow?.total || 0;
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+    // Sorting
+    const sortField = options.sortBy || 'newest';
+    const sortDir = (options.sortDirection?.toLowerCase() === 'asc') ? 'ASC' : 'DESC';
+
+    let orderClause = `w.created_at ${sortDir}`;
+    switch (sortField) {
+      case 'title':
+        orderClause = `w.title COLLATE NOCASE ${sortDir}`;
+        break;
+      case 'author':
+        orderClause = `author COLLATE NOCASE ${sortDir}`;
+        break;
+      case 'year':
+        orderClause = `CASE WHEN e.publication_year IS NULL THEN 1 ELSE 0 END, e.publication_year ${sortDir}`;
+        break;
+      case 'category':
+        orderClause = `cat.name_ar COLLATE NOCASE ${sortDir}`;
+        break;
+      case 'format':
+        orderClause = `fsd.file_format COLLATE NOCASE ${sortDir}`;
+        break;
+      case 'status':
+        orderClause = `CASE w.reading_status WHEN 'reading' THEN 1 WHEN 'unread' THEN 2 WHEN 'completed' THEN 3 WHEN 'paused' THEN 4 WHEN 'abandoned' THEN 5 ELSE 99 END ${sortDir}`;
+        break;
+      case 'location':
+        orderClause = `COALESCE(psd.room, psd.shelf, '') COLLATE NOCASE ${sortDir}`;
+        break;
+      case 'rating':
+      case 'progress':
+        orderClause = `w.reading_progress ${sortDir}`;
+        break;
+      case 'newest':
+      default:
+        orderClause = `w.created_at ${sortDir}`;
+        break;
+    }
+
+    const selectSql = `
+      SELECT 
+        w.id as id,
+        w.work_type_id as workTypeId,
+        wtype.name as workTypeName,
+        w.title as title,
+        w.description as description,
+        w.original_language as language,
+        w.reading_status as readingStatus,
+        w.reading_progress as readingProgress,
+        w.metadata_json as metadataJson,
+        e.id as editionId,
+        e.label as edition,
+        e.publisher as publisher,
+        e.publication_year as publicationYear,
+        e.isbn as isbn,
+        fsd.file_path as filePath,
+        fsd.file_hash as fileHash,
+        fsd.file_format as digitalFormat,
+        fsd.file_size_bytes as fileSizeBytes,
+        fsd.storage_state as storageState,
+        fsd.last_verified_at as lastVerifiedAt,
+        s.id as sourceId,
+        psd.shelf as shelf,
+        psd.room as room,
+        psd.bookcase as bookcase,
+        psd.shelf_section as shelfSection,
+        psd.condition as condition,
+        psd.purchase_date as purchaseDate,
+        psd.price as price,
+        s.source_type as sourceType,
+        GROUP_CONCAT(DISTINCT a.name) as author,
+        GROUP_CONCAT(DISTINCT a.bio) as authorBio,
+        GROUP_CONCAT(DISTINCT t.name) as categories,
+        w.primary_category_id as primaryCategoryId,
+        cat.name_ar as pcNameAr,
+        cat.name_en as pcNameEn
+      FROM work w
+      LEFT JOIN work_type wtype ON wtype.id = w.work_type_id
+      LEFT JOIN edition e ON e.work_id = w.id
+      LEFT JOIN source s ON s.edition_id = e.id
+      LEFT JOIN file_source_detail fsd ON fsd.source_id = s.id
+      LEFT JOIN physical_source_detail psd ON psd.source_id = s.id
+      LEFT JOIN work_author wa ON wa.work_id = w.id
+      LEFT JOIN author a ON a.id = wa.author_id
+      LEFT JOIN work_tag wt ON wt.work_id = w.id
+      LEFT JOIN tag t ON t.id = wt.tag_id
+      LEFT JOIN category cat ON cat.id = w.primary_category_id
+      ${whereSql}
+      GROUP BY w.id
+      ORDER BY ${orderClause}
+      LIMIT ? OFFSET ?
+    `;
+
+    const rows = this.db.prepare(selectSql).all(...params, pageSize, offset) as any[];
+    const items = rows.map((r) => this.mapRowToBookItem(r));
+
+    // Batch load lending history for paged books
+    if (items.length > 0) {
+      try {
+        const workIds = items.map((i) => i.id);
+        const placeholders = workIds.map(() => '?').join(',');
+        const loans = this.db.prepare(`
+          SELECT 
+            id,
+            work_id as workId,
+            borrower_name as borrowerName,
+            borrower_contact as borrowerContact,
+            borrow_date as borrowDate,
+            expected_return_date as expectedReturnDate,
+            actual_return_date as actualReturnDate,
+            is_returned as isReturned,
+            status,
+            condition_return as conditionOnReturn,
+            notes
+          FROM lending_record
+          WHERE work_id IN (${placeholders})
+          ORDER BY borrow_date DESC, created_at DESC
+        `).all(...workIds) as any[];
+
+        const loansByWork = new Map<string, LendingRecord[]>();
+        for (const r of loans) {
+          const record: LendingRecord = {
+            id: r.id,
+            borrowerName: r.borrowerName,
+            borrowerContact: r.borrowerContact || undefined,
+            borrowDate: r.borrowDate,
+            expectedReturnDate: r.expectedReturnDate || 'غير محدد',
+            actualReturnDate: r.actualReturnDate || undefined,
+            isReturned: Boolean(r.isReturned),
+            conditionOnReturn: r.conditionOnReturn || undefined,
+            notes: r.notes || undefined,
+          };
+          const list = loansByWork.get(r.workId) || [];
+          list.push(record);
+          loansByWork.set(r.workId, list);
+        }
+
+        for (const item of items) {
+          const itemLoans = loansByWork.get(item.id);
+          if (itemLoans && itemLoans.length > 0) {
+            item.lendingHistory = itemLoans;
+          }
+        }
+      } catch {
+        // graceful fallback if lending_record table does not exist
+      }
+    }
+
+    return {
+      items,
+      totalCount,
+      page,
+      pageSize,
+      totalPages,
+    };
+  }
+
+  /**
+   * Bulk updates category assignment for multiple works.
+   */
+  bulkUpdateCategory(workIds: string[], categoryId: string): number {
+    if (!workIds || workIds.length === 0) return 0;
+    const stmt = this.db.prepare('UPDATE work SET primary_category_id = ? WHERE id = ?');
+    const tx = this.db.transaction(() => {
+      let count = 0;
+      for (const id of workIds) {
+        const res = stmt.run(categoryId || null, id);
+        count += res.changes;
+      }
+      return count;
+    });
+    return tx();
+  }
+
+  /**
+   * Bulk updates reading status and progress for multiple works.
+   */
+  bulkUpdateReadingStatus(workIds: string[], status: ReadingStatus, progress?: number): number {
+    if (!workIds || workIds.length === 0) return 0;
+    const calcProgress = typeof progress === 'number'
+      ? progress
+      : (status === 'completed' ? 100 : (status === 'unread' ? 0 : 50));
+    const stmt = this.db.prepare('UPDATE work SET reading_status = ?, reading_progress = ? WHERE id = ?');
+    const tx = this.db.transaction(() => {
+      let count = 0;
+      for (const id of workIds) {
+        const res = stmt.run(status, calcProgress, id);
+        count += res.changes;
+      }
+      return count;
+    });
+    return tx();
+  }
+
+  /**
+   * Bulk adds tags to multiple works.
+   */
+  bulkAddTags(workIds: string[], tags: string[]): number {
+    if (!workIds || workIds.length === 0 || !tags || tags.length === 0) return 0;
+    const insertTag = this.db.prepare('INSERT OR IGNORE INTO tag (id, name, category, origin) VALUES (?, ?, ?, ?)');
+    const getTag = this.db.prepare('SELECT id FROM tag WHERE name = ?');
+    const insertWorkTag = this.db.prepare('INSERT OR IGNORE INTO work_tag (work_id, tag_id) VALUES (?, ?)');
+    const tx = this.db.transaction(() => {
+      let added = 0;
+      for (const tag of tags) {
+        const trimmed = tag.trim();
+        if (!trimmed) continue;
+        insertTag.run(crypto.randomUUID(), trimmed, 'subject', 'manual');
+        const tagRow = getTag.get(trimmed) as { id: string } | undefined;
+        if (tagRow) {
+          for (const workId of workIds) {
+            const res = insertWorkTag.run(workId, tagRow.id);
+            added += res.changes;
+          }
+        }
+      }
+
+      // Also sync tags in metadata_json so both representations stay consistent
+      const selectWork = this.db.prepare('SELECT metadata_json FROM work WHERE id = ?');
+      const updateWork = this.db.prepare('UPDATE work SET metadata_json = ? WHERE id = ?');
+      for (const workId of workIds) {
+        const row = selectWork.get(workId) as { metadata_json?: string } | undefined;
+        let meta: Record<string, any> = {};
+        if (row?.metadata_json) {
+          try {
+            meta = JSON.parse(row.metadata_json);
+          } catch {}
+        }
+        const currentTags: string[] = Array.isArray(meta.tags) ? meta.tags : [];
+        for (const tag of tags) {
+          const trimmed = tag.trim();
+          if (trimmed && !currentTags.includes(trimmed)) {
+            currentTags.push(trimmed);
+          }
+        }
+        meta.tags = currentTags;
+        updateWork.run(JSON.stringify(meta), workId);
+      }
+
+      return added;
+    });
+    return tx();
+  }
+
+  /**
+   * Bulk deletes multiple works atomically.
+   */
+  bulkDelete(workIds: string[]): number {
+    if (!workIds || workIds.length === 0) return 0;
+    const stmt = this.db.prepare('DELETE FROM work WHERE id = ?');
+    const tx = this.db.transaction(() => {
+      let deleted = 0;
+      for (const id of workIds) {
+        const res = stmt.run(id);
+        deleted += res.changes;
+      }
+      return deleted;
+    });
+    return tx();
   }
 }
 

@@ -29,18 +29,30 @@ import {
   FileText,
   RefreshCw,
   UploadCloud,
-  AlertTriangle
+  AlertTriangle,
+  UserCheck
 } from 'lucide-react';
 import { BookItem, ReadingStatus } from '../../types/library';
 import { BookDetailModal } from './BookDetailModal';
 import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { StorageManagerModal } from './StorageManagerModal';
 import { ImportWizardModal } from './ImportWizardModal';
+import { LendBookModal } from './LendBookModal';
+import { ReturnBookModal } from './ReturnBookModal';
+import { PaginationBar } from './PaginationBar';
+import { ColumnSelectorDropdown } from './ColumnSelectorDropdown';
+import { BulkActionsToolbar } from './BulkActionsToolbar';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { matchesSearchQuery } from '../../utils/search';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
+import type {
+  CardDensity,
+  ListDensity,
+  ListColumnKey,
+  LibrarySortField,
+} from '../../../shared/types/library-views';
 
-export type SortField = 'newest' | 'title' | 'author' | 'year' | 'category' | 'format' | 'status' | 'location';
+export type SortField = LibrarySortField;
 export type SortDirection = 'asc' | 'desc';
 
 export const LibraryGridView: React.FC = () => {
@@ -59,8 +71,26 @@ export const LibraryGridView: React.FC = () => {
   } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // View Mode: Grid or List
+  // View Mode & Densities (Story 9: 9.4, 9.5)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [cardDensity, setCardDensity] = useState<CardDensity>('comfortable');
+  const [listDensity, setListDensity] = useState<ListDensity>('normal');
+  const [visibleColumns, setVisibleColumns] = useState<ListColumnKey[]>([
+    'cover',
+    'title',
+    'category',
+    'format',
+    'location',
+    'status',
+    'actions',
+  ]);
+
+  // Pagination State (Story 9: 9.1, 9.2)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(24);
+
+  // Batch Multi-Select State (Story 9: 9.6)
+  const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
 
   // Scalable Filter States
   const [selectedBookType, setSelectedBookType] = useState<string>('ALL');
@@ -69,8 +99,76 @@ export const LibraryGridView: React.FC = () => {
   const [selectedStorageFilter, setSelectedStorageFilter] = useState<'ALL' | 'HEALTHY' | 'ATTENTION' | 'DUPLICATES'>('ALL');
   const [selectedTag, setSelectedTag] = useState<string>('ALL');
   const [lendingStatus, setLendingStatus] = useState<string>('ALL');
+  const [selectedLocation, setSelectedLocation] = useState<string>('ALL');
   const [sortField, setSortField] = useState<SortField>('newest');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Load View Preferences from SQLite app_settings on mount (Story 9: 9.7)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.settings?.getViewPreferences) {
+      (window as any).electronAPI.settings.getViewPreferences().then((prefs: any) => {
+        if (prefs) {
+          if (prefs.viewMode) setViewMode(prefs.viewMode);
+          if (prefs.cardDensity) setCardDensity(prefs.cardDensity);
+          if (prefs.listDensity) setListDensity(prefs.listDensity);
+          if (Array.isArray(prefs.visibleColumns) && prefs.visibleColumns.length > 0) {
+            setVisibleColumns(prefs.visibleColumns);
+          }
+          if (prefs.sortBy) setSortField(prefs.sortBy);
+          if (prefs.sortDirection) setSortDirection(prefs.sortDirection);
+          if (prefs.pageSize) setPageSize(prefs.pageSize);
+        }
+      }).catch((e: any) => console.warn('[LibraryGridView] Failed to load view preferences:', e));
+    }
+  }, []);
+
+  // Persist View Preferences helper (Story 9: 9.7)
+  const persistPreferences = (updates: Partial<{
+    viewMode: 'grid' | 'list';
+    cardDensity: CardDensity;
+    listDensity: ListDensity;
+    visibleColumns: ListColumnKey[];
+    sortBy: SortField;
+    sortDirection: SortDirection;
+    pageSize: number;
+  }>) => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.settings?.saveViewPreferences) {
+      (window as any).electronAPI.settings.saveViewPreferences(updates).catch((e: any) =>
+        console.warn('[LibraryGridView] Failed to save view preferences:', e)
+      );
+    }
+  };
+
+  // Reset to first page whenever any filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchQuery,
+    selectedBookType,
+    selectedReadingStatus,
+    selectedFormat,
+    selectedStorageFilter,
+    activeLibraryCategory,
+    selectedTag,
+    lendingStatus,
+    selectedLocation,
+    sortField,
+    sortDirection,
+  ]);
+
+  // Quick Lending / Return modals for cards and table rows
+  const [quickLendBook, setQuickLendBook] = useState<BookItem | null>(null);
+  const [quickReturnBook, setQuickReturnBook] = useState<BookItem | null>(null);
+
+  // Collect unique rooms and shelves for the location filter
+  const availableLocations = useMemo(() => {
+    const locSet = new Set<string>();
+    for (const b of books) {
+      if (b.room && b.room.trim()) locSet.add(b.room.trim());
+      if (b.shelf && b.shelf.trim()) locSet.add(b.shelf.trim());
+    }
+    return Array.from(locSet).sort();
+  }, [books]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -203,8 +301,21 @@ export const LibraryGridView: React.FC = () => {
 
         // 7. Lending Status filter
         const isCurrentlyLent = (b.lendingHistory || []).some((l) => !l.isReturned);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const isOverdue = (b.lendingHistory || []).some(
+          (l) => !l.isReturned && l.expectedReturnDate && l.expectedReturnDate < todayStr
+        );
+
         if (lendingStatus === 'AVAILABLE' && isCurrentlyLent) return false;
         if (lendingStatus === 'LENT' && !isCurrentlyLent) return false;
+        if (lendingStatus === 'OVERDUE' && !isOverdue) return false;
+
+        // 8. Physical Location filter
+        if (selectedLocation !== 'ALL') {
+          if (b.room !== selectedLocation && b.shelf !== selectedLocation) {
+            return false;
+          }
+        }
 
         // 8. Storage Health filter
         if (selectedStorageFilter === 'HEALTHY') {
@@ -251,6 +362,8 @@ export const LibraryGridView: React.FC = () => {
           const stA = order[a.readingStatus || 'unread'] || 99;
           const stB = order[b.readingStatus || 'unread'] || 99;
           comparison = stA - stB;
+        } else if (sortField === 'progress' || sortField === 'rating') {
+          comparison = (a.readingProgress || 0) - (b.readingProgress || 0);
         } else if (sortField === 'location') {
           const locA = a.shelf || a.room || a.filePath || '';
           const locB = b.shelf || b.room || b.filePath || '';
@@ -262,7 +375,52 @@ export const LibraryGridView: React.FC = () => {
 
         return sortDirection === 'asc' ? comparison : -comparison;
       });
-  }, [books, searchQuery, selectedBookType, selectedReadingStatus, selectedFormat, selectedStorageFilter, activeLibraryCategory, selectedTag, lendingStatus, sortField, sortDirection, lang]);
+  }, [books, searchQuery, selectedBookType, selectedReadingStatus, selectedFormat, selectedStorageFilter, activeLibraryCategory, selectedTag, lendingStatus, selectedLocation, sortField, sortDirection, lang]);
+
+  // Pagination Calculations (Story 9: 9.1, 9.2)
+  const totalCount = filteredAndSortedBooks.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedBooks = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredAndSortedBooks.slice(start, start + pageSize);
+  }, [filteredAndSortedBooks, safeCurrentPage, pageSize]);
+
+  // Batch Selection Helpers (Story 9: 9.6)
+  const handleToggleSelectBook = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedBookIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const isAllPageSelected = useMemo(() => {
+    if (paginatedBooks.length === 0) return false;
+    return paginatedBooks.every((b) => selectedBookIds.has(b.id));
+  }, [paginatedBooks, selectedBookIds]);
+
+  const handleToggleSelectAllOnPage = () => {
+    setSelectedBookIds((prev) => {
+      const next = new Set(prev);
+      if (isAllPageSelected) {
+        paginatedBooks.forEach((b) => next.delete(b.id));
+      } else {
+        paginatedBooks.forEach((b) => next.add(b.id));
+      }
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedBookIds(new Set());
+  };
 
   const hasActiveFilters =
     searchQuery.trim() !== '' ||
@@ -273,6 +431,7 @@ export const LibraryGridView: React.FC = () => {
     activeLibraryCategory !== 'ALL' ||
     selectedTag !== 'ALL' ||
     lendingStatus !== 'ALL' ||
+    selectedLocation !== 'ALL' ||
     sortField !== 'newest';
 
   const resetAllFilters = () => {
@@ -284,6 +443,7 @@ export const LibraryGridView: React.FC = () => {
     setActiveLibraryCategory('ALL');
     setSelectedTag('ALL');
     setLendingStatus('ALL');
+    setSelectedLocation('ALL');
     setSortField('newest');
     setSortDirection('desc');
   };
@@ -621,7 +781,10 @@ export const LibraryGridView: React.FC = () => {
             {/* View Mode Toggle (Grid / List) */}
             <div className="flex items-center bg-canvas border border-subtle rounded-xl p-0.5">
               <button
-                onClick={() => setViewMode('grid')}
+                onClick={() => {
+                  setViewMode('grid');
+                  persistPreferences({ viewMode: 'grid' });
+                }}
                 title={t('viewGrid') || 'عرض الشبكة'}
                 className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                   viewMode === 'grid'
@@ -632,7 +795,10 @@ export const LibraryGridView: React.FC = () => {
                 <LayoutGrid className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setViewMode('list')}
+                onClick={() => {
+                  setViewMode('list');
+                  persistPreferences({ viewMode: 'list' });
+                }}
                 title={t('viewList') || 'عرض القائمة'}
                 className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                   viewMode === 'list'
@@ -643,6 +809,101 @@ export const LibraryGridView: React.FC = () => {
                 <List className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Card Density Controls (Grid Mode) */}
+            {viewMode === 'grid' && (
+              <div className="flex items-center bg-canvas border border-subtle rounded-xl p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCardDensity('compact');
+                    persistPreferences({ cardDensity: 'compact' });
+                  }}
+                  title={t('densityCompact')}
+                  className={`px-2 py-1 rounded-lg transition-all font-medium cursor-pointer ${
+                    cardDensity === 'compact'
+                      ? 'bg-pale-sky-500/20 text-pale-sky-500 font-bold'
+                      : 'text-muted hover:text-main'
+                  }`}
+                >
+                  {t('densityCompact').split(' ')[0]}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCardDensity('comfortable');
+                    persistPreferences({ cardDensity: 'comfortable' });
+                  }}
+                  title={t('densityComfortable')}
+                  className={`px-2 py-1 rounded-lg transition-all font-medium cursor-pointer ${
+                    cardDensity === 'comfortable'
+                      ? 'bg-pale-sky-500/20 text-pale-sky-500 font-bold'
+                      : 'text-muted hover:text-main'
+                  }`}
+                >
+                  {t('densityComfortable').split(' ')[0]}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCardDensity('spacious');
+                    persistPreferences({ cardDensity: 'spacious' });
+                  }}
+                  title={t('densitySpacious')}
+                  className={`px-2 py-1 rounded-lg transition-all font-medium cursor-pointer ${
+                    cardDensity === 'spacious'
+                      ? 'bg-pale-sky-500/20 text-pale-sky-500 font-bold'
+                      : 'text-muted hover:text-main'
+                  }`}
+                >
+                  {t('densitySpacious').split(' ')[0]}
+                </button>
+              </div>
+            )}
+
+            {/* List Mode Controls: Column Customizer & Row Density */}
+            {viewMode === 'list' && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = listDensity === 'compact' ? 'normal' : 'compact';
+                    setListDensity(next);
+                    persistPreferences({ listDensity: next });
+                  }}
+                  title={listDensity === 'compact' ? t('densityNormal') : t('densityRowCompact')}
+                  className="px-2.5 py-1.5 rounded-xl border border-subtle bg-canvas hover:bg-surface text-xs font-medium text-muted hover:text-main transition-colors"
+                >
+                  {listDensity === 'compact' ? t('densityNormal') : t('densityRowCompact')}
+                </button>
+
+                <ColumnSelectorDropdown
+                  visibleColumns={visibleColumns}
+                  onToggleColumn={(col) => {
+                    setVisibleColumns((prev) => {
+                      const next = prev.includes(col)
+                        ? prev.filter((k) => k !== col)
+                        : [...prev, col];
+                      persistPreferences({ visibleColumns: next });
+                      return next;
+                    });
+                  }}
+                  onResetColumns={() => {
+                    const defaults: ListColumnKey[] = [
+                      'cover',
+                      'title',
+                      'category',
+                      'format',
+                      'location',
+                      'status',
+                      'actions',
+                    ];
+                    setVisibleColumns(defaults);
+                    persistPreferences({ visibleColumns: defaults });
+                  }}
+                />
+              </div>
+            )}
 
             {/* Storage Cleaner & Health */}
             <button
@@ -782,32 +1043,104 @@ export const LibraryGridView: React.FC = () => {
                 </select>
               </div>
 
-              {/* Filter 6: Sort Selector */}
-              <div className="lg:col-span-1 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-canvas border border-subtle">
+              {/* Filter: Lending Status Dropdown */}
+              <div className="lg:col-span-2 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-canvas border border-subtle">
+                <UserCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <select
+                  value={lendingStatus}
+                  onChange={(e) => setLendingStatus(e.target.value)}
+                  className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs truncate"
+                >
+                  <option value="ALL">{t('filterLendingAll')}</option>
+                  <option value="AVAILABLE">{t('filterLendingAvailable')}</option>
+                  <option value="LENT">{t('filterLendingLoaned')}</option>
+                  <option value="OVERDUE">{t('filterLendingOverdue')}</option>
+                </select>
+              </div>
+
+              {/* Filter: Physical Location Dropdown */}
+              {availableLocations.length > 0 && (
+                <div className="lg:col-span-2 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-canvas border border-subtle">
+                  <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <select
+                    value={selectedLocation}
+                    onChange={(e) => setSelectedLocation(e.target.value)}
+                    className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs truncate"
+                  >
+                    <option value="ALL">{t('filterLocationAll')}</option>
+                    {availableLocations.map((loc) => (
+                      <option key={loc} value={loc}>
+                        {loc}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Filter 6: Multi-criteria Sort Selector & Direction Toggle (Story 9: 9.3) */}
+              <div className="lg:col-span-2 flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-canvas border border-subtle">
                 <ArrowUpDown className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
                 <select
                   value={sortField}
                   onChange={(e) => {
                     const f = e.target.value as SortField;
                     setSortField(f);
-                    setSortDirection(f === 'newest' || f === 'year' ? 'desc' : 'asc');
+                    const defaultDir = f === 'newest' || f === 'year' || f === 'progress' ? 'desc' : 'asc';
+                    setSortDirection(defaultDir);
+                    persistPreferences({ sortBy: f, sortDirection: defaultDir });
                   }}
-                  className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs"
+                  className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs truncate"
                 >
                   <option value="newest">{t('sortNewest') || 'الأحدث أضيفت'}</option>
                   <option value="title">{t('sortTitle') || 'العنوان (أ-ي)'}</option>
                   <option value="author">{t('sortAuthor') || 'اسم المؤلف'}</option>
                   <option value="year">{t('sortYear') || 'سنة النشر'}</option>
+                  <option value="progress">{t('sortReadingProgress') || 'نسبة الإنجاز'}</option>
+                  <option value="location">{t('sortLocation') || 'الموقع والرف'}</option>
                   <option value="category">{t('sortCategory') || 'التصنيف'}</option>
                   <option value="status">{t('colStatus') || 'حالة القراءة'}</option>
                   <option value="format">{t('sortFormat') || 'الصيغة والنوع'}</option>
                 </select>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextDir = sortDirection === 'asc' ? 'desc' : 'asc';
+                    setSortDirection(nextDir);
+                    persistPreferences({ sortDirection: nextDir });
+                  }}
+                  title={sortDirection === 'asc' ? t('sortDirectionAsc') : t('sortDirectionDesc')}
+                  className="p-1 rounded-lg bg-surface border border-subtle hover:bg-surface-raised text-pale-sky-500 transition-colors shrink-0 cursor-pointer"
+                >
+                  {sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+                </button>
               </div>
             </div>
 
-            {/* Dynamic Tags & Status Bar */}
+            {/* Dynamic Tags & Status Bar with Batch Selection (Story 9: 9.6) */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+                {/* Select All on Page Checkbox Button */}
+                {paginatedBooks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleToggleSelectAllOnPage}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
+                      isAllPageSelected || selectedBookIds.size > 0
+                        ? 'bg-pale-sky-500/10 border-pale-sky-500/40 text-pale-sky-500'
+                        : 'bg-canvas border-subtle text-muted hover:text-main'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isAllPageSelected}
+                      onChange={handleToggleSelectAllOnPage}
+                      className="w-3.5 h-3.5 accent-pale-sky-500 rounded cursor-pointer pointer-events-none"
+                    />
+                    <span>{isAllPageSelected ? t('batchDeselectAll') : t('batchSelectAllPage')}</span>
+                  </button>
+                )}
+
                 <span className="text-[11px] text-muted font-bold flex items-center gap-1 shrink-0">
                   <TagIcon className="w-3 h-3 text-pale-sky-500" />
                   <span>الوسوم:</span>
@@ -842,8 +1175,12 @@ export const LibraryGridView: React.FC = () => {
               {/* Results Count & Reset Button */}
               <div className="flex items-center gap-3 text-xs shrink-0">
                 <span className="text-muted text-[11px]">
-                  عرض <strong className="text-main">{filteredAndSortedBooks.length}</strong> من أصل{' '}
-                  <strong className="text-main">{books.length}</strong> كتاب
+                  عرض <strong className="text-main">{totalCount}</strong> كتاب
+                  {selectedBookIds.size > 0 && (
+                    <span className="text-pale-sky-500 font-bold ms-1">
+                      ({t('batchSelectedCount', { count: selectedBookIds.size })})
+                    </span>
+                  )}
                 </span>
 
                 {hasActiveFilters && (
@@ -881,428 +1218,173 @@ export const LibraryGridView: React.FC = () => {
                 className="px-5 py-3 rounded-2xl bg-canvas border border-subtle text-main font-bold text-xs hover:bg-surface shadow-md transition-all flex items-center gap-2 cursor-pointer"
               >
                 <UploadCloud className="w-4 h-4 text-pale-sky-500" />
-                <span>{t('openImportWizard')}</span>
+                <span>{t('importWizardTitle')}</span>
               </button>
               <button
                 onClick={handleAddNewBook}
-                className="px-6 py-3 rounded-2xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-lg shadow-pale-sky-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                className="px-5 py-3 rounded-2xl bg-pale-sky-500 hover:bg-pale-sky-600 text-white font-bold text-xs shadow-lg shadow-pale-sky-500/20 transition-all flex items-center gap-2 cursor-pointer"
               >
-                <BookOpen className="w-4 h-4" />
+                <Plus className="w-4 h-4" />
                 <span>{t('addBook')}</span>
               </button>
             </div>
           </div>
         ) : filteredAndSortedBooks.length > 0 ? (
           viewMode === 'grid' ? (
-            /* STATE B1: Books matching filter — GRID VIEW */
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-              {filteredAndSortedBooks.map((book, idx) => {
-                const activeLend = book.lendingHistory.find((l) => !l.isReturned);
-                const readingStatus = book.readingStatus || 'unread';
+            /* STATE B1: Books matching filter — ENHANCED GRID VIEW (Story 9: 9.4) */
+            <div className="space-y-4">
+              <div
+                className={
+                  cardDensity === 'compact'
+                    ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3'
+                    : cardDensity === 'spacious'
+                    ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5'
+                    : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'
+                }
+              >
+                {paginatedBooks.map((book, idx) => {
+                  const activeLend = book.lendingHistory.find((l) => !l.isReturned);
+                  const readingStatus = book.readingStatus || 'unread';
+                  const isSelected = selectedBookIds.has(book.id);
 
-                return (
-                  <div
-                    key={`${book.id || 'book'}-${idx}`}
-                    className="group relative bg-surface border border-subtle hover:border-pale-sky-500/50 rounded-2xl p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-xl overflow-hidden space-y-3"
-                  >
-                    {/* Format / Reading / Lending Badges Top */}
-                    <div className="flex items-center justify-between gap-1 z-10 flex-wrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 font-bold border border-pale-sky-500/20 font-mono">
-                          {book.digitalFormat || t('physicalBook')}
-                        </span>
-
-                        {/* Reading Status Selector */}
-                        <div className="relative" onClick={(e) => e.stopPropagation()}>
-                          <select
-                            value={readingStatus}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              updateBookReadingStatus(book.id, e.target.value as any);
-                            }}
-                            className={`text-[10px] font-bold rounded-full px-2 py-0.5 border cursor-pointer outline-none transition-all ${
-                              readingStatus === 'completed'
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                                : readingStatus === 'reading'
-                                ? 'bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 border-pale-sky-500/30'
-                                : 'bg-canvas text-muted border-subtle'
-                            }`}
-                          >
-                            <option value="unread">{t('statusUnread') || 'لم يُقرأ'}</option>
-                            <option value="reading">{t('statusReading') || 'قيد القراءة'}</option>
-                            <option value="completed">{t('statusCompleted') || 'مكتمل'}</option>
-                          </select>
+                  // Density 1: COMPACT CARD
+                  if (cardDensity === 'compact') {
+                    return (
+                      <div
+                        key={`${book.id || 'book'}-${idx}`}
+                        className={`group relative bg-surface border rounded-xl p-2 flex flex-col justify-between transition-all duration-200 hover:shadow-lg overflow-hidden space-y-1.5 ${
+                          isSelected ? 'border-pale-sky-500 ring-1 ring-pale-sky-500 bg-pale-sky-500/5' : 'border-subtle hover:border-pale-sky-500/50'
+                        }`}
+                      >
+                        {/* Top corner selection checkbox */}
+                        <div
+                          onClick={(e) => handleToggleSelectBook(book.id, e)}
+                          className={`absolute top-2 start-2 z-20 w-4 h-4 rounded border flex items-center justify-center transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-pale-sky-500 border-pale-sky-500 text-white'
+                              : 'border-border/60 bg-surface/90 opacity-0 group-hover:opacity-100 hover:border-pale-sky-500'
+                          }`}
+                          title={isSelected ? 'إلغاء التحديد' : 'تحديد'}
+                        >
+                          {isSelected && <CheckCircle2 className="w-3 h-3 stroke-[3]" />}
                         </div>
 
-                        {/* Info 'i' Button directly next to book status */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedBook(book);
-                            setIsNewBook(false);
-                            setIsDetailModalOpen(true);
-                          }}
-                          title={t('bookDetailsBtn')}
-                          aria-label={t('bookDetailsBtn')}
-                          className="w-5 h-5 rounded-full bg-canvas border border-subtle text-muted hover:text-pale-sky-600 dark:hover:text-pale-sky-300 hover:border-pale-sky-500/40 hover:bg-pale-sky-500/10 flex items-center justify-center transition-all shadow-xs cursor-pointer"
-                        >
-                          <Info className="w-3 h-3" />
-                        </button>
-                      </div>
-
-                      {activeLend && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 font-bold">
-                          مستعار ({activeLend.borrowerName})
-                        </span>
-                      )}
-
-                      {/* Storage Health Badges */}
-                      {book.storageState === 'missing' && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedBook(book);
-                            setIsStorageModalOpen(true);
-                          }}
-                          className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold border border-red-500/20 flex items-center gap-1 cursor-pointer hover:bg-red-500/20 transition-all"
-                          title={t('storageMissingWarning')}
-                        >
-                          <AlertTriangle className="w-2.5 h-2.5" />
-                          <span>{t('storageHealthMissingBadge')}</span>
-                        </button>
-                      )}
-                      {book.storageState === 'unmounted' && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedBook(book);
-                            setIsStorageModalOpen(true);
-                          }}
-                          className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20 flex items-center gap-1 cursor-pointer hover:bg-amber-500/20 transition-all"
-                          title={t('storageMissingWarning')}
-                        >
-                          <HardDrive className="w-2.5 h-2.5" />
-                          <span>{t('storageHealthUnmountedBadge')}</span>
-                        </button>
-                      )}
-                      {book.storageState === 'corrupted' && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedBook(book);
-                            setIsStorageModalOpen(true);
-                          }}
-                          className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold border border-red-500/20 flex items-center gap-1 cursor-pointer hover:bg-red-500/20 transition-all"
-                          title={t('storageCorruptedWarning')}
-                        >
-                          <AlertTriangle className="w-2.5 h-2.5" />
-                          <span>{t('storageHealthCorruptedBadge')}</span>
-                        </button>
-                      )}
-                      {book.storageState === 'duplicate' && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedBook(book);
-                            setIsStorageModalOpen(true);
-                          }}
-                          className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20 flex items-center gap-1 cursor-pointer hover:bg-purple-500/20 transition-all"
-                          title={t('storageStatusDuplicate')}
-                        >
-                          <Layers className="w-2.5 h-2.5" />
-                          <span>{t('storageHealthDuplicateBadge')}</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Cover & Title */}
-                    <div
-                      onClick={() => handleSafeOpenBook(book)}
-                      className="space-y-3 flex-1 cursor-pointer"
-                    >
-                      {book.coverImage ? (
-                        <div className="w-full h-44 rounded-xl overflow-hidden bg-canvas border border-subtle shadow-inner relative group-hover:opacity-95 transition-opacity">
-                          <img
-                            src={book.coverImage}
-                            alt={book.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
+                        {/* Top Format & Status Dot */}
+                        <div className="flex items-center justify-between z-10 text-[9px] px-0.5">
+                          <span className="font-mono text-muted truncate max-w-[60px]">
+                            {book.digitalFormat || t('physicalBook')}
+                          </span>
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              readingStatus === 'completed'
+                                ? 'bg-emerald-500'
+                                : readingStatus === 'reading'
+                                ? 'bg-pale-sky-500'
+                                : 'bg-muted/40'
+                            }`}
+                            title={t(`status${readingStatus.charAt(0).toUpperCase() + readingStatus.slice(1)}` as any)}
                           />
-                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <span className="px-3 py-1.5 rounded-xl bg-pale-sky-500 text-white font-bold text-xs flex items-center gap-1 shadow-lg">
-                              <BookMarked className="w-4 h-4" />
-                              <span>فتح القراءة الكاملة</span>
-                            </span>
+                        </div>
+
+                        {/* Cover Image */}
+                        <div
+                          onClick={() => handleSafeOpenBook(book)}
+                          className="relative aspect-[2/3] w-full rounded-lg overflow-hidden bg-canvas border border-subtle shadow-inner cursor-pointer"
+                        >
+                          {book.coverImage ? (
+                            <img
+                              src={book.coverImage}
+                              alt={book.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center text-muted">
+                              <BookOpen className="w-6 h-6 opacity-30" />
+                            </div>
+                          )}
+
+                          {/* Hover action overlay */}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSafeOpenBook(book);
+                              }}
+                              className="p-1 rounded-lg bg-pale-sky-500 text-white hover:bg-pale-sky-600 transition-colors shadow-sm"
+                              title={t('readBook')}
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedBook(book);
+                                setIsNewBook(false);
+                                setIsDetailModalOpen(true);
+                              }}
+                              className="p-1 rounded-lg bg-surface text-foreground hover:bg-surface-raised transition-colors shadow-sm"
+                              title={t('bookDetailsBtn')}
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
-                      ) : (
-                        <div className="w-full h-44 rounded-xl bg-canvas border border-subtle flex flex-col items-center justify-center text-muted group-hover:text-pale-sky-500 transition-colors">
-                          <BookOpen className="w-10 h-10 mb-1 opacity-40" />
-                          <span className="text-[11px] font-mono">بدون غلاف</span>
-                        </div>
-                      )}
 
-                      {/* Micro Reading Progress Bar */}
-                      {readingStatus === 'reading' && typeof book.readingProgress === 'number' && (
-                        <div className="w-full bg-canvas rounded-full h-1 overflow-hidden border border-subtle">
-                          <div
-                            className="bg-pale-sky-500 h-full rounded-full transition-all duration-300"
-                            style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
-                          />
+                        {/* Title & Author snippet */}
+                        <div className="space-y-0.5 pt-0.5">
+                          <h4
+                            onClick={() => handleSafeOpenBook(book)}
+                            className="font-bold text-main text-xs truncate hover:text-pale-sky-500 cursor-pointer"
+                            title={book.title}
+                          >
+                            {book.title}
+                          </h4>
+                          <p className="text-[10px] text-muted truncate">{book.author}</p>
                         </div>
-                      )}
-
-                      <div className="space-y-1">
-                        <h3 className="font-bold text-main text-sm leading-snug line-clamp-2 group-hover:text-pale-sky-500 transition-colors">
-                          {book.title}
-                        </h3>
-                        <p className="text-xs text-muted font-serif line-clamp-1">{book.author}</p>
                       </div>
+                    );
+                  }
 
-                      {/* Categories & Tags Preview */}
-                      <div className="flex flex-wrap items-center gap-1 pt-1">
-                        {book.primaryCategory && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-canvas border border-subtle text-muted">
-                            {lang === 'ar' ? book.primaryCategory.nameAr : book.primaryCategory.nameEn}
-                          </span>
-                        )}
-                        {book.tags.slice(0, 2).map((tag, tagIdx) => (
-                          <span key={`${tag}-${tagIdx}`} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Physical Location Badge & Actions */}
-                    <div className="pt-2 border-t border-subtle/60 space-y-2 text-[11px]">
-                      {book.shelf && (
-                        <div className="flex items-center gap-1.5 text-muted truncate">
-                          <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                          <span className="truncate">{book.shelf}</span>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          onClick={() => handleSafeOpenBook(book)}
-                          className="flex-1 py-1.5 rounded-xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer"
+                  // Density 3: SPACIOUS EXPANDED CARD
+                  if (cardDensity === 'spacious') {
+                    return (
+                      <div
+                        key={`${book.id || 'book'}-${idx}`}
+                        className={`group relative bg-surface border rounded-2xl p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-2xl overflow-hidden space-y-4 ${
+                          isSelected ? 'border-pale-sky-500 ring-1 ring-pale-sky-500 bg-pale-sky-500/5' : 'border-subtle hover:border-pale-sky-500/50'
+                        }`}
+                      >
+                        {/* Top corner selection checkbox */}
+                        <div
+                          onClick={(e) => handleToggleSelectBook(book.id, e)}
+                          className={`absolute top-3 start-3 z-20 w-5 h-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-pale-sky-500 border-pale-sky-500 text-white shadow-sm'
+                              : 'border-border/60 bg-surface/90 opacity-0 group-hover:opacity-100 hover:border-pale-sky-500'
+                          }`}
+                          title={isSelected ? 'إلغاء التحديد' : 'تحديد'}
                         >
-                          <BookOpen className="w-3.5 h-3.5" />
-                          <span>{t('readBook')}</span>
-                        </button>
+                          {isSelected && <CheckCircle2 className="w-3.5 h-3.5 stroke-[3]" />}
+                        </div>
 
-                        <button
-                          onClick={() => handleDeleteBook(book.id)}
-                          title="حذف الكتاب"
-                          className="p-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            /* STATE B2: Books matching filter — LIST VIEW */
-            <div className="bg-surface border border-subtle rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-start text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-subtle bg-canvas/60 text-muted font-bold text-[11px]">
-                      <th
-                        onClick={() => handleHeaderSort('title')}
-                        className="py-3 px-4 text-start cursor-pointer hover:bg-canvas transition-colors select-none group"
-                        title="ترتيب حسب العنوان والمؤلف"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span>{t('colCoverTitle') || 'الكتاب والمؤلف'}</span>
-                          {renderSortIcon('title')}
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleHeaderSort('category')}
-                        className="py-3 px-4 text-start hidden sm:table-cell cursor-pointer hover:bg-canvas transition-colors select-none group"
-                        title="ترتيب حسب التصنيف"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span>{t('colCategory') || 'التصنيف'}</span>
-                          {renderSortIcon('category')}
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleHeaderSort('format')}
-                        className="py-3 px-4 text-start hidden md:table-cell cursor-pointer hover:bg-canvas transition-colors select-none group"
-                        title="ترتيب حسب الصيغة والنوع"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span>{t('colFormat') || 'الصيغة والنوع'}</span>
-                          {renderSortIcon('format')}
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleHeaderSort('status')}
-                        className="py-3 px-4 text-start cursor-pointer hover:bg-canvas transition-colors select-none group"
-                        title="ترتيب حسب حالة القراءة"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span>{t('colStatus') || 'حالة القراءة'}</span>
-                          {renderSortIcon('status')}
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleHeaderSort('location')}
-                        className="py-3 px-4 text-start hidden lg:table-cell cursor-pointer hover:bg-canvas transition-colors select-none group"
-                        title="ترتيب حسب الرف والمسار"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span>{t('colLocation') || 'الرف / المسار'}</span>
-                          {renderSortIcon('location')}
-                        </div>
-                      </th>
-                      <th className="py-3 px-4 text-end">{t('colActions') || 'الإجراءات'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-subtle/60">
-                    {filteredAndSortedBooks.map((book, idx) => {
-                      const readingStatus = book.readingStatus || 'unread';
-
-                      return (
-                        <tr
-                          key={`${book.id || 'book'}-${idx}`}
-                          className="hover:bg-canvas/40 transition-colors group"
-                        >
-                          {/* Title & Author */}
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-3">
-                              {book.coverImage ? (
-                                <img
-                                  src={book.coverImage}
-                                  alt={book.title}
-                                  className="w-10 h-14 object-cover rounded-lg border border-subtle shrink-0"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = 'none';
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-10 h-14 rounded-lg bg-canvas border border-subtle flex items-center justify-center text-muted shrink-0">
-                                  <BookOpen className="w-5 h-5 opacity-40" />
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <div
-                                  onClick={() => handleSafeOpenBook(book)}
-                                  className="font-bold text-main hover:text-pale-sky-500 cursor-pointer truncate text-sm"
-                                  title={book.title}
-                                >
-                                  {book.title}
-                                </div>
-                                <div className="text-muted text-[11px] truncate">{book.author}</div>
-                                {book.publicationYear && (
-                                  <div className="text-[10px] text-muted/80">{book.publicationYear}</div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Category */}
-                          <td className="py-3 px-4 hidden sm:table-cell">
-                            <div className="space-y-1">
-                              {book.primaryCategory && (
-                                <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-canvas border border-subtle text-muted">
-                                  {lang === 'ar' ? book.primaryCategory.nameAr : book.primaryCategory.nameEn}
-                                </span>
-                              )}
-                              {book.tags.length > 0 && (
-                                <div className="text-[10px] text-amber-600 dark:text-amber-400 font-mono truncate max-w-[150px]">
-                                  {book.tags.slice(0, 2).join(' ')}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Format & Type */}
-                          <td className="py-3 px-4 hidden md:table-cell">
+                        {/* Top Badges */}
+                        <div className="flex items-center justify-between gap-1 z-10 flex-wrap ps-6">
+                          <div className="flex items-center gap-1.5">
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 font-bold border border-pale-sky-500/20 font-mono">
                               {book.digitalFormat || t('physicalBook')}
                             </span>
-                            {book.storageState === 'missing' && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedBook(book);
-                                  setIsStorageModalOpen(true);
-                                }}
-                                className="text-[10px] text-red-500 font-bold flex items-center gap-1 mt-0.5 cursor-pointer hover:underline"
-                                title={t('storageMissingWarning')}
-                              >
-                                <AlertTriangle className="w-3 h-3" />
-                                <span>{t('storageHealthMissingBadge')}</span>
-                              </button>
-                            )}
-                            {book.storageState === 'unmounted' && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedBook(book);
-                                  setIsStorageModalOpen(true);
-                                }}
-                                className="text-[10px] text-amber-500 font-bold flex items-center gap-1 mt-0.5 cursor-pointer hover:underline"
-                                title={t('storageMissingWarning')}
-                              >
-                                <HardDrive className="w-3 h-3" />
-                                <span>{t('storageHealthUnmountedBadge')}</span>
-                              </button>
-                            )}
-                            {book.storageState === 'corrupted' && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedBook(book);
-                                  setIsStorageModalOpen(true);
-                                }}
-                                className="text-[10px] text-red-500 font-bold flex items-center gap-1 mt-0.5 cursor-pointer hover:underline"
-                                title={t('storageCorruptedWarning')}
-                              >
-                                <AlertTriangle className="w-3 h-3" />
-                                <span>{t('storageHealthCorruptedBadge')}</span>
-                              </button>
-                            )}
-                            {book.storageState === 'duplicate' && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedBook(book);
-                                  setIsStorageModalOpen(true);
-                                }}
-                                className="text-[10px] text-purple-500 font-bold flex items-center gap-1 mt-0.5 cursor-pointer hover:underline"
-                                title={t('storageStatusDuplicate')}
-                              >
-                                <Layers className="w-3 h-3" />
-                                <span>{t('storageHealthDuplicateBadge')}</span>
-                              </button>
-                            )}
-                          </td>
-
-                          {/* Reading Status Selector & Progress */}
-                          <td className="py-3 px-4">
-                            <div className="space-y-1.5 max-w-[140px]">
+                            <div className="relative" onClick={(e) => e.stopPropagation()}>
                               <select
                                 value={readingStatus}
-                                onChange={(e) => updateBookReadingStatus(book.id, e.target.value as any)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  updateBookReadingStatus(book.id, e.target.value as any);
+                                }}
                                 className={`text-[10px] font-bold rounded-full px-2 py-0.5 border cursor-pointer outline-none transition-all ${
                                   readingStatus === 'completed'
                                     ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
@@ -1315,75 +1397,815 @@ export const LibraryGridView: React.FC = () => {
                                 <option value="reading">{t('statusReading') || 'قيد القراءة'}</option>
                                 <option value="completed">{t('statusCompleted') || 'مكتمل'}</option>
                               </select>
-
-                              {readingStatus === 'reading' && typeof book.readingProgress === 'number' && (
-                                <div className="w-full bg-canvas rounded-full h-1 overflow-hidden border border-subtle">
-                                  <div
-                                    className="bg-pale-sky-500 h-full rounded-full transition-all duration-300"
-                                    style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
-                                  />
-                                </div>
-                              )}
                             </div>
-                          </td>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedBook(book);
+                                setIsNewBook(false);
+                                setIsDetailModalOpen(true);
+                              }}
+                              className="w-5 h-5 rounded-full bg-canvas border border-subtle text-muted hover:text-pale-sky-500 flex items-center justify-center transition-all cursor-pointer"
+                              title={t('bookDetailsBtn')}
+                            >
+                              <Info className="w-3 h-3" />
+                            </button>
+                          </div>
 
-                          {/* Location / Shelf */}
-                          <td className="py-3 px-4 hidden lg:table-cell text-muted text-[11px]">
-                            {book.shelf ? (
-                              <div className="flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                <span className="truncate max-w-[140px]">{book.shelf}</span>
-                              </div>
-                            ) : book.filePath ? (
-                              <div className="flex items-center gap-1">
-                                <FileText className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
-                                <span className="truncate max-w-[140px] font-mono text-[10px]">{book.fileSize || 'ملف رقمي'}</span>
-                              </div>
-                            ) : (
-                              <span>—</span>
-                            )}
-                          </td>
+                          {activeLend && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 font-bold">
+                              مستعار ({activeLend.borrowerName})
+                            </span>
+                          )}
+                        </div>
 
-                          {/* Actions */}
-                          <td className="py-3 px-4 text-end">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleSafeOpenBook(book)}
-                                title="قراءة الكتاب"
-                                className="px-2.5 py-1 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 transition-all flex items-center gap-1 cursor-pointer"
-                              >
-                                <BookOpen className="w-3.5 h-3.5" />
-                                <span>{t('readBook')}</span>
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setSelectedBook(book);
-                                  setIsNewBook(false);
-                                  setIsDetailModalOpen(true);
+                        {/* Large Cover & Content */}
+                        <div className="flex gap-4 cursor-pointer" onClick={() => handleSafeOpenBook(book)}>
+                          <div className="w-28 h-40 shrink-0 rounded-xl overflow-hidden bg-canvas border border-subtle shadow-inner relative group-hover:opacity-95 transition-opacity">
+                            {book.coverImage ? (
+                              <img
+                                src={book.coverImage}
+                                alt={book.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
                                 }}
-                                title={t('bookDetailsBtn')}
-                                aria-label={t('bookDetailsBtn')}
-                                className="p-1 rounded-xl bg-canvas border border-subtle text-muted hover:text-pale-sky-600 dark:hover:text-pale-sky-400 hover:bg-surface transition-colors cursor-pointer"
-                              >
-                                <Info className="w-3.5 h-3.5" />
-                              </button>
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center text-muted">
+                                <BookOpen className="w-8 h-8 opacity-40" />
+                              </div>
+                            )}
+                          </div>
 
-                              <button
-                                onClick={() => handleDeleteBook(book.id)}
-                                title="حذف"
-                                className="p-1 rounded-xl bg-canvas border border-subtle text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div>
+                              <h3 className="font-bold text-main text-base leading-snug line-clamp-2 group-hover:text-pale-sky-500 transition-colors">
+                                {book.title}
+                              </h3>
+                              <p className="text-xs text-muted font-serif line-clamp-1">{book.author}</p>
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+
+                            {/* Description snippet */}
+                            {book.description && (
+                              <p className="text-xs text-muted/80 line-clamp-2 leading-relaxed">
+                                {book.description}
+                              </p>
+                            )}
+
+                            {/* Metadata Specs (Publisher, Year, ISBN) */}
+                            <div className="text-[11px] text-muted space-y-0.5">
+                              {book.publisher && <div className="truncate">الناشر: {book.publisher}</div>}
+                              {book.publicationYear && <div>سنة النشر: {book.publicationYear}</div>}
+                              {book.isbn && <div className="font-mono text-[10px]">ISBN: {book.isbn}</div>}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Micro Progress Bar */}
+                        {readingStatus === 'reading' && typeof book.readingProgress === 'number' && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] text-muted">
+                              <span>{t('sortReadingProgress')}</span>
+                              <span className="font-bold">{book.readingProgress}%</span>
+                            </div>
+                            <div className="w-full bg-canvas rounded-full h-1.5 overflow-hidden border border-subtle">
+                              <div
+                                className="bg-pale-sky-500 h-full rounded-full transition-all duration-300"
+                                style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Location Breadcrumb & Actions */}
+                        <div className="pt-2 border-t border-subtle/60 space-y-2 text-xs">
+                          {(book.room || book.shelf) && (
+                            <div
+                              className="flex items-center gap-1.5 text-muted text-xs font-mono truncate"
+                              title={[book.room, book.bookcase, book.shelf, book.shelfSection].filter(Boolean).join(' › ')}
+                            >
+                              <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                              <span className="truncate">
+                                {[book.room, book.bookcase, book.shelf, book.shelfSection].filter(Boolean).join(' › ')}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              onClick={() => handleSafeOpenBook(book)}
+                              className="flex-1 py-1.5 rounded-xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer"
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span>{t('readBook')}</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBook(book.id)}
+                              title="حذف الكتاب"
+                              className="p-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Density 2: COMFORTABLE CARD (Standard)
+                  return (
+                    <div
+                      key={`${book.id || 'book'}-${idx}`}
+                      className={`group relative bg-surface border rounded-2xl p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-xl overflow-hidden space-y-3 ${
+                        isSelected ? 'border-pale-sky-500 ring-1 ring-pale-sky-500 bg-pale-sky-500/5' : 'border-subtle hover:border-pale-sky-500/50'
+                      }`}
+                    >
+                      {/* Top Selection Checkbox */}
+                      <div
+                        onClick={(e) => handleToggleSelectBook(book.id, e)}
+                        className={`absolute top-2.5 start-2.5 z-20 w-5 h-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-pale-sky-500 border-pale-sky-500 text-white shadow-sm'
+                            : 'border-border/60 bg-surface/90 opacity-0 group-hover:opacity-100 hover:border-pale-sky-500'
+                        }`}
+                        title={isSelected ? 'إلغاء التحديد' : 'تحديد'}
+                      >
+                        {isSelected && <CheckCircle2 className="w-3.5 h-3.5 stroke-[3]" />}
+                      </div>
+
+                      {/* Format / Reading / Lending Badges Top */}
+                      <div className="flex items-center justify-between gap-1 z-10 flex-wrap ps-6">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 font-bold border border-pale-sky-500/20 font-mono">
+                            {book.digitalFormat || t('physicalBook')}
+                          </span>
+
+                          {/* Reading Status Selector */}
+                          <div className="relative" onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value={readingStatus}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                updateBookReadingStatus(book.id, e.target.value as any);
+                              }}
+                              className={`text-[10px] font-bold rounded-full px-2 py-0.5 border cursor-pointer outline-none transition-all ${
+                                readingStatus === 'completed'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                  : readingStatus === 'reading'
+                                  ? 'bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 border-pale-sky-500/30'
+                                  : 'bg-canvas text-muted border-subtle'
+                              }`}
+                            >
+                              <option value="unread">{t('statusUnread') || 'لم يُقرأ'}</option>
+                              <option value="reading">{t('statusReading') || 'قيد القراءة'}</option>
+                              <option value="completed">{t('statusCompleted') || 'مكتمل'}</option>
+                            </select>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBook(book);
+                              setIsNewBook(false);
+                              setIsDetailModalOpen(true);
+                            }}
+                            title={t('bookDetailsBtn')}
+                            className="w-5 h-5 rounded-full bg-canvas border border-subtle text-muted hover:text-pale-sky-600 dark:hover:text-pale-sky-300 flex items-center justify-center transition-all cursor-pointer"
+                          >
+                            <Info className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {activeLend && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 font-bold">
+                            مستعار ({activeLend.borrowerName})
+                          </span>
+                        )}
+
+                        {/* Storage Health Badges */}
+                        {book.storageState === 'missing' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBook(book);
+                              setIsStorageModalOpen(true);
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold border border-red-500/20 flex items-center gap-1 cursor-pointer"
+                            title={t('storageMissingWarning')}
+                          >
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            <span>{t('storageHealthMissingBadge')}</span>
+                          </button>
+                        )}
+                        {book.storageState === 'unmounted' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBook(book);
+                              setIsStorageModalOpen(true);
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20 flex items-center gap-1 cursor-pointer"
+                            title={t('storageMissingWarning')}
+                          >
+                            <HardDrive className="w-2.5 h-2.5" />
+                            <span>{t('storageHealthUnmountedBadge')}</span>
+                          </button>
+                        )}
+                        {book.storageState === 'corrupted' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBook(book);
+                              setIsStorageModalOpen(true);
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold border border-red-500/20 flex items-center gap-1 cursor-pointer"
+                            title={t('storageCorruptedWarning')}
+                          >
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            <span>{t('storageHealthCorruptedBadge')}</span>
+                          </button>
+                        )}
+                        {book.storageState === 'duplicate' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBook(book);
+                              setIsStorageModalOpen(true);
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20 flex items-center gap-1 cursor-pointer"
+                            title={t('storageStatusDuplicate')}
+                          >
+                            <Layers className="w-2.5 h-2.5" />
+                            <span>{t('storageHealthDuplicateBadge')}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Cover & Title */}
+                      <div onClick={() => handleSafeOpenBook(book)} className="space-y-3 flex-1 cursor-pointer">
+                        {book.coverImage ? (
+                          <div className="w-full h-44 rounded-xl overflow-hidden bg-canvas border border-subtle shadow-inner relative group-hover:opacity-95 transition-opacity">
+                            <img
+                              src={book.coverImage}
+                              alt={book.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="px-3 py-1.5 rounded-xl bg-pale-sky-500 text-white font-bold text-xs flex items-center gap-1 shadow-lg">
+                                <BookMarked className="w-4 h-4" />
+                                <span>فتح القراءة الكاملة</span>
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full h-44 rounded-xl bg-canvas border border-subtle flex flex-col items-center justify-center text-muted group-hover:text-pale-sky-500 transition-colors">
+                            <BookOpen className="w-10 h-10 mb-1 opacity-40" />
+                            <span className="text-[11px] font-mono">بدون غلاف</span>
+                          </div>
+                        )}
+
+                        {/* Micro Reading Progress Bar */}
+                        {readingStatus === 'reading' && typeof book.readingProgress === 'number' && (
+                          <div className="w-full bg-canvas rounded-full h-1 overflow-hidden border border-subtle">
+                            <div
+                              className="bg-pale-sky-500 h-full rounded-full transition-all duration-300"
+                              style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
+                            />
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <h3 className="font-bold text-main text-sm leading-snug line-clamp-2 group-hover:text-pale-sky-500 transition-colors">
+                            {book.title}
+                          </h3>
+                          <p className="text-xs text-muted font-serif line-clamp-1">{book.author}</p>
+                        </div>
+
+                        {/* Categories & Tags Preview */}
+                        <div className="flex flex-wrap items-center gap-1 pt-1">
+                          {book.primaryCategory && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-canvas border border-subtle text-muted">
+                              {lang === 'ar' ? book.primaryCategory.nameAr : book.primaryCategory.nameEn}
+                            </span>
+                          )}
+                          {book.tags.slice(0, 2).map((tag, tagIdx) => (
+                            <span key={`${tag}-${tagIdx}`} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Physical Location Badge, Lending Badge & Actions */}
+                      <div className="pt-2 border-t border-subtle/60 space-y-1.5 text-[11px]">
+                        {(book.room || book.shelf) && (
+                          <div
+                            className="flex items-center gap-1.5 text-muted text-[10px] font-mono truncate"
+                            title={[book.room, book.bookcase, book.shelf, book.shelfSection].filter(Boolean).join(' › ')}
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span className="truncate">
+                              {[book.room, book.shelf].filter(Boolean).join(' › ')}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Lending Status Badge & Action */}
+                        {(() => {
+                          const activeLoan = (book.lendingHistory || []).find((l) => !l.isReturned);
+                          if (activeLoan) {
+                            const today = new Date().toISOString().split('T')[0];
+                            const isOverdue = activeLoan.expectedReturnDate && activeLoan.expectedReturnDate < today;
+                            const daysOverdue = isOverdue
+                              ? Math.max(
+                                  1,
+                                  Math.round(
+                                    (new Date(today).getTime() - new Date(activeLoan.expectedReturnDate).getTime()) /
+                                      (1000 * 3600 * 24)
+                                  )
+                                )
+                              : 0;
+
+                            return (
+                              <div className="flex items-center justify-between gap-1 pt-0.5">
+                                <span
+                                  className={`text-[10px] px-2 py-0.5 rounded-full font-bold truncate flex items-center gap-1 ${
+                                    isOverdue
+                                      ? 'bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/20 animate-pulse'
+                                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/20'
+                                  }`}
+                                  title={t('loanedToBadge', { name: activeLoan.borrowerName })}
+                                >
+                                  <UserCheck className="w-3 h-3 shrink-0" />
+                                  <span className="truncate">
+                                    {isOverdue
+                                      ? t('daysOverdueBadge', { days: daysOverdue })
+                                      : t('loanedToBadge', { name: activeLoan.borrowerName })}
+                                  </span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setQuickReturnBook(book)}
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-evergreen-500/15 text-evergreen-600 dark:text-evergreen-400 hover:bg-evergreen-500/25 transition-colors cursor-pointer shrink-0"
+                                >
+                                  {t('returnBookBtn')}
+                                </button>
+                              </div>
+                            );
+                          } else if (book.bookType === 'physical' || book.shelf || book.room) {
+                            return (
+                              <div className="flex items-center justify-between gap-1 pt-0.5">
+                                <span className="text-[10px] text-muted flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-evergreen-500 shrink-0" />
+                                  <span>{t('lendingStatusAvailable')}</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setQuickLendBook(book)}
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer shrink-0"
+                                >
+                                  {t('lendBookBtn')}
+                                </button>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={() => handleSafeOpenBook(book)}
+                            className="flex-1 py-1.5 rounded-xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>{t('readBook')}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteBook(book.id)}
+                            title="حذف الكتاب"
+                            className="p-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* Pagination Bar for Grid View (Story 9: 9.2) */}
+              <PaginationBar
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                pageSizeOptions={[12, 24, 48, 96]}
+                onPageChange={(p) => {
+                  setCurrentPage(p);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onPageSizeChange={(sz) => {
+                  setPageSize(sz);
+                  setCurrentPage(1);
+                  persistPreferences({ pageSize: sz });
+                }}
+              />
+            </div>
+          ) : (
+            /* STATE B2: Books matching filter — ENHANCED LIST VIEW (Story 9: 9.5) */
+            <div className="space-y-4">
+              <div className="bg-surface border border-subtle rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-start text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-subtle bg-canvas/60 text-muted font-bold text-[11px]">
+                        {/* Checkbox column */}
+                        <th className="w-10 py-3 px-3 text-start">
+                          <input
+                            type="checkbox"
+                            checked={isAllPageSelected}
+                            onChange={handleToggleSelectAllOnPage}
+                            className="w-3.5 h-3.5 accent-pale-sky-500 rounded cursor-pointer"
+                            title={isAllPageSelected ? t('batchDeselectAll') : t('batchSelectAllPage')}
+                          />
+                        </th>
+
+                        {/* Optional Cover Column */}
+                        {visibleColumns.includes('cover') && (
+                          <th className="w-12 py-3 px-2 text-start">{t('columnCover')}</th>
+                        )}
+
+                        {/* Title Column (Mandatory, Sortable) */}
+                        <th
+                          onClick={() => handleHeaderSort('title')}
+                          className="py-3 px-4 text-start cursor-pointer hover:bg-canvas transition-colors select-none group"
+                          title="ترتيب حسب العنوان والمؤلف"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span>{t('colCoverTitle') || 'الكتاب والمؤلف'}</span>
+                            {renderSortIcon('title')}
+                          </div>
+                        </th>
+
+                        {/* Category Column */}
+                        {visibleColumns.includes('category') && (
+                          <th
+                            onClick={() => handleHeaderSort('category')}
+                            className="py-3 px-4 text-start hidden sm:table-cell cursor-pointer hover:bg-canvas transition-colors select-none group"
+                            title="ترتيب حسب التصنيف"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>{t('colCategory') || 'التصنيف'}</span>
+                              {renderSortIcon('category')}
+                            </div>
+                          </th>
+                        )}
+
+                        {/* Format Column */}
+                        {visibleColumns.includes('format') && (
+                          <th
+                            onClick={() => handleHeaderSort('format')}
+                            className="py-3 px-4 text-start hidden md:table-cell cursor-pointer hover:bg-canvas transition-colors select-none group"
+                            title="ترتيب حسب الصيغة والنوع"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>{t('colFormat') || 'الصيغة والنوع'}</span>
+                              {renderSortIcon('format')}
+                            </div>
+                          </th>
+                        )}
+
+                        {/* Status Column */}
+                        {visibleColumns.includes('status') && (
+                          <th
+                            onClick={() => handleHeaderSort('status')}
+                            className="py-3 px-4 text-start cursor-pointer hover:bg-canvas transition-colors select-none group"
+                            title="ترتيب حسب حالة القراءة"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>{t('colStatus') || 'حالة القراءة'}</span>
+                              {renderSortIcon('status')}
+                            </div>
+                          </th>
+                        )}
+
+                        {/* Location Column */}
+                        {visibleColumns.includes('location') && (
+                          <th
+                            onClick={() => handleHeaderSort('location')}
+                            className="py-3 px-4 text-start hidden lg:table-cell cursor-pointer hover:bg-canvas transition-colors select-none group"
+                            title="ترتيب حسب الرف والمسار"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>{t('colLocation') || 'الرف / المسار'}</span>
+                              {renderSortIcon('location')}
+                            </div>
+                          </th>
+                        )}
+
+                        {/* Publication Year Column */}
+                        {visibleColumns.includes('year') && (
+                          <th
+                            onClick={() => handleHeaderSort('year')}
+                            className="py-3 px-4 text-start cursor-pointer hover:bg-canvas transition-colors select-none group"
+                            title="ترتيب حسب سنة النشر"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>{t('columnYear')}</span>
+                              {renderSortIcon('year')}
+                            </div>
+                          </th>
+                        )}
+
+                        {/* Publisher Column */}
+                        {visibleColumns.includes('publisher') && (
+                          <th className="py-3 px-4 text-start">{t('columnPublisher')}</th>
+                        )}
+
+                        {/* ISBN Column */}
+                        {visibleColumns.includes('isbn') && (
+                          <th className="py-3 px-4 text-start font-mono text-[10px]">{t('columnIsbn')}</th>
+                        )}
+
+                        {/* Tags Column */}
+                        {visibleColumns.includes('tags') && (
+                          <th className="py-3 px-4 text-start">{t('columnTags')}</th>
+                        )}
+
+                        {/* Actions Column */}
+                        {visibleColumns.includes('actions') && (
+                          <th className="py-3 px-4 text-end">{t('colActions') || 'الإجراءات'}</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-subtle/60">
+                      {paginatedBooks.map((book, idx) => {
+                        const readingStatus = book.readingStatus || 'unread';
+                        const isSelected = selectedBookIds.has(book.id);
+                        const cellPad = listDensity === 'compact' ? 'py-1.5 px-3' : 'py-3 px-4';
+
+                        return (
+                          <tr
+                            key={`${book.id || 'book'}-${idx}`}
+                            className={`transition-colors group ${
+                              isSelected ? 'bg-pale-sky-500/10' : 'hover:bg-canvas/40'
+                            }`}
+                          >
+                            {/* Checkbox cell */}
+                            <td className="w-10 px-3 py-2 text-start">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => handleToggleSelectBook(book.id, e as any)}
+                                className="w-3.5 h-3.5 accent-pale-sky-500 rounded cursor-pointer"
+                              />
+                            </td>
+
+                            {/* Cover Cell */}
+                            {visibleColumns.includes('cover') && (
+                              <td className="w-12 py-2 px-2">
+                                {book.coverImage ? (
+                                  <img
+                                    src={book.coverImage}
+                                    alt={book.title}
+                                    className={`${listDensity === 'compact' ? 'w-8 h-10' : 'w-10 h-14'} object-cover rounded-lg border border-subtle shrink-0`}
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  <div className={`${listDensity === 'compact' ? 'w-8 h-10' : 'w-10 h-14'} rounded-lg bg-canvas border border-subtle flex items-center justify-center text-muted shrink-0`}>
+                                    <BookOpen className="w-4 h-4 opacity-40" />
+                                  </div>
+                                )}
+                              </td>
+                            )}
+
+                            {/* Title & Author */}
+                            <td className={cellPad}>
+                              <div className="min-w-0">
+                                <div
+                                  onClick={() => handleSafeOpenBook(book)}
+                                  className="font-bold text-main hover:text-pale-sky-500 cursor-pointer truncate text-sm"
+                                  title={book.title}
+                                >
+                                  {book.title}
+                                </div>
+                                <div className="text-muted text-[11px] truncate">{book.author}</div>
+                              </div>
+                            </td>
+
+                            {/* Category */}
+                            {visibleColumns.includes('category') && (
+                              <td className={`${cellPad} hidden sm:table-cell`}>
+                                <div className="space-y-1">
+                                  {book.primaryCategory && (
+                                    <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-canvas border border-subtle text-muted">
+                                      {lang === 'ar' ? book.primaryCategory.nameAr : book.primaryCategory.nameEn}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+
+                            {/* Format & Type */}
+                            {visibleColumns.includes('format') && (
+                              <td className={`${cellPad} hidden md:table-cell`}>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 font-bold border border-pale-sky-500/20 font-mono">
+                                  {book.digitalFormat || t('physicalBook')}
+                                </span>
+                              </td>
+                            )}
+
+                            {/* Reading Status Selector & Progress */}
+                            {visibleColumns.includes('status') && (
+                              <td className={cellPad}>
+                                <div className="space-y-1 max-w-[140px]">
+                                  <select
+                                    value={readingStatus}
+                                    onChange={(e) => updateBookReadingStatus(book.id, e.target.value as any)}
+                                    className={`text-[10px] font-bold rounded-full px-2 py-0.5 border cursor-pointer outline-none transition-all ${
+                                      readingStatus === 'completed'
+                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                        : readingStatus === 'reading'
+                                        ? 'bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 border-pale-sky-500/30'
+                                        : 'bg-canvas text-muted border-subtle'
+                                    }`}
+                                  >
+                                    <option value="unread">{t('statusUnread') || 'لم يُقرأ'}</option>
+                                    <option value="reading">{t('statusReading') || 'قيد القراءة'}</option>
+                                    <option value="completed">{t('statusCompleted') || 'مكتمل'}</option>
+                                  </select>
+                                  {readingStatus === 'reading' && typeof book.readingProgress === 'number' && (
+                                    <div className="w-full bg-canvas rounded-full h-1 overflow-hidden border border-subtle">
+                                      <div
+                                        className="bg-pale-sky-500 h-full rounded-full transition-all duration-300"
+                                        style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+
+                            {/* Location / Shelf */}
+                            {visibleColumns.includes('location') && (
+                              <td className={`${cellPad} hidden lg:table-cell text-muted text-[11px]`}>
+                                {book.room || book.shelf ? (
+                                  <div
+                                    className="flex items-center gap-1 font-mono text-[10px]"
+                                    title={[book.room, book.bookcase, book.shelf, book.shelfSection].filter(Boolean).join(' › ')}
+                                  >
+                                    <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                    <span className="truncate max-w-[140px]">
+                                      {[book.room, book.shelf].filter(Boolean).join(' › ')}
+                                    </span>
+                                  </div>
+                                ) : book.filePath ? (
+                                  <div className="flex items-center gap-1">
+                                    <FileText className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
+                                    <span className="truncate max-w-[140px] font-mono text-[10px]">{book.fileSize || 'ملف رقمي'}</span>
+                                  </div>
+                                ) : (
+                                  <span>—</span>
+                                )}
+                              </td>
+                            )}
+
+                            {/* Year */}
+                            {visibleColumns.includes('year') && (
+                              <td className={`${cellPad} text-muted text-[11px]`}>
+                                {book.publicationYear || '—'}
+                              </td>
+                            )}
+
+                            {/* Publisher */}
+                            {visibleColumns.includes('publisher') && (
+                              <td className={`${cellPad} text-muted text-[11px] truncate max-w-[120px]`}>
+                                {book.publisher || '—'}
+                              </td>
+                            )}
+
+                            {/* ISBN */}
+                            {visibleColumns.includes('isbn') && (
+                              <td className={`${cellPad} text-muted font-mono text-[10px] truncate max-w-[110px]`}>
+                                {book.isbn || '—'}
+                              </td>
+                            )}
+
+                            {/* Tags */}
+                            {visibleColumns.includes('tags') && (
+                              <td className={`${cellPad} text-[10px]`}>
+                                <div className="flex flex-wrap gap-1 max-w-[150px]">
+                                  {book.tags.slice(0, 2).map((tg, tIdx) => (
+                                    <span key={`${tg}-${tIdx}`} className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+                                      {tg}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                            )}
+
+                            {/* Actions */}
+                            {visibleColumns.includes('actions') && (
+                              <td className={`${cellPad} text-end`}>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {(() => {
+                                    const activeLoan = (book.lendingHistory || []).find((l) => !l.isReturned);
+                                    if (activeLoan) {
+                                      return (
+                                        <button
+                                          type="button"
+                                          onClick={() => setQuickReturnBook(book)}
+                                          title={t('returnBookBtn')}
+                                          className="px-2 py-1 rounded-xl bg-evergreen-500/15 text-evergreen-600 dark:text-evergreen-400 text-[10px] font-bold hover:bg-evergreen-500/25 transition-colors cursor-pointer"
+                                        >
+                                          {t('returnBookBtn')}
+                                        </button>
+                                      );
+                                    } else if (book.bookType === 'physical' || book.shelf || book.room) {
+                                      return (
+                                        <button
+                                          type="button"
+                                          onClick={() => setQuickLendBook(book)}
+                                          title={t('lendBookBtn')}
+                                          className="px-2 py-1 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold hover:bg-amber-500/20 transition-colors cursor-pointer"
+                                        >
+                                          {t('lendBookBtn')}
+                                        </button>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+
+                                  <button
+                                    onClick={() => handleSafeOpenBook(book)}
+                                    title="قراءة الكتاب"
+                                    className="px-2.5 py-1 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 transition-all flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <BookOpen className="w-3.5 h-3.5" />
+                                    <span>{t('readBook')}</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => {
+                                      setSelectedBook(book);
+                                      setIsNewBook(false);
+                                      setIsDetailModalOpen(true);
+                                    }}
+                                    title={t('bookDetailsBtn')}
+                                    className="p-1 rounded-xl bg-canvas border border-subtle text-muted hover:text-pale-sky-600 dark:hover:text-pale-sky-400 hover:bg-surface transition-colors cursor-pointer"
+                                  >
+                                    <Info className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleDeleteBook(book.id)}
+                                    title="حذف"
+                                    className="p-1 rounded-xl bg-canvas border border-subtle text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Pagination Bar for List View (Story 9: 9.2) */}
+              <PaginationBar
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={(p) => {
+                  setCurrentPage(p);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onPageSizeChange={(sz) => {
+                  setPageSize(sz);
+                  setCurrentPage(1);
+                  persistPreferences({ pageSize: sz });
+                }}
+              />
             </div>
           )
         ) : (
@@ -1406,6 +2228,19 @@ export const LibraryGridView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Floating Bulk Actions Toolbar (Story 9: 9.6) */}
+      <BulkActionsToolbar
+        selectedBookIds={Array.from(selectedBookIds)}
+        selectedBooks={books.filter((b) => selectedBookIds.has(b.id))}
+        allCategories={allCategories}
+        onClearSelection={handleClearSelection}
+        onOperationComplete={(msg) => {
+          setSaveToast(msg);
+          setTimeout(() => setSaveToast(null), 4000);
+          refreshBooks();
+        }}
+      />
 
       {/* Book Detail & Edit Modal */}
       <BookDetailModal
@@ -1441,6 +2276,30 @@ export const LibraryGridView: React.FC = () => {
         isOpen={isImportWizardOpen}
         onClose={() => setIsImportWizardOpen(false)}
         onImportComplete={() => refreshBooks()}
+      />
+
+      {/* Quick Lend Book Modal (Story 8) */}
+      <LendBookModal
+        isOpen={!!quickLendBook}
+        book={quickLendBook}
+        onClose={() => setQuickLendBook(null)}
+        onSuccess={() => {
+          setSaveToast(t('lendSuccess'));
+          setTimeout(() => setSaveToast(null), 4000);
+          refreshBooks();
+        }}
+      />
+
+      {/* Quick Return Book Modal (Story 8) */}
+      <ReturnBookModal
+        isOpen={!!quickReturnBook}
+        book={quickReturnBook}
+        onClose={() => setQuickReturnBook(null)}
+        onSuccess={() => {
+          setSaveToast(t('returnSuccess'));
+          setTimeout(() => setSaveToast(null), 4000);
+          refreshBooks();
+        }}
       />
 
       {/* Book Import & Discovery Progress Floating Pill */}

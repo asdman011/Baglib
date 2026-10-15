@@ -7,6 +7,8 @@ import { setupSystemIPC } from "./ipc/system";
 import { setupDatabaseIPC } from "./ipc/database";
 import { setupMetadataIPC } from "./ipc/metadata";
 import { setupDigitalIPC } from "./ipc/digital";
+import { setupPhysicalIPC } from "./ipc/physical";
+import { setupLibraryViewsIPC } from "./ipc/library-views";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 
@@ -62,6 +64,8 @@ setupSystemIPC();
 setupDatabaseIPC();
 setupMetadataIPC();
 setupDigitalIPC();
+setupPhysicalIPC();
+setupLibraryViewsIPC();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection

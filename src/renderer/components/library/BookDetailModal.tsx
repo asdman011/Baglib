@@ -59,6 +59,7 @@ import { MetadataDiffModal } from './MetadataDiffModal';
 import { MetadataCandidatesModal } from './MetadataCandidatesModal';
 import { ProviderSettingsModal } from './ProviderSettingsModal';
 import { OnlineLibraryHub } from './OnlineLibraryHub';
+import { ReturnBookModal } from './ReturnBookModal';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
 
@@ -81,7 +82,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onSave,
   onDelete,
 }) => {
-  const { lang, dir, t, books } = useWorkspace();
+  const { lang, dir, t, books, refreshBooks } = useWorkspace();
 
   const isCreateMode = isNew ?? (book ? !books.some((b) => b.id === book.id) : true);
 
@@ -144,6 +145,38 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [newBorrowDate, setNewBorrowDate] = useState(new Date().toISOString().split('T')[0]);
   const [newReturnDate, setNewReturnDate] = useState('');
   const [newLendingNotes, setNewLendingNotes] = useState('');
+  const [newLendingConditionOut, setNewLendingConditionOut] = useState('good');
+  const [selectedLoanForReturn, setSelectedLoanForReturn] = useState<LendingRecord | null>(null);
+
+  // Physical locations & borrowers suggestions state
+  const [existingLocations, setExistingLocations] = useState<{
+    rooms: string[];
+    bookcases: string[];
+    shelves: string[];
+    shelfSections: string[];
+  }>({ rooms: [], bookcases: [], shelves: [], shelfSections: [] });
+  const [pastBorrowers, setPastBorrowers] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (isOpen && typeof window !== 'undefined') {
+      if (window.electronAPI?.physical?.getLocations) {
+        window.electronAPI.physical
+          .getLocations()
+          .then((res: any) => {
+            if (res) setExistingLocations(res);
+          })
+          .catch((err: any) => console.warn('[baglib/physical] Failed to load locations:', err));
+      }
+      if (window.electronAPI?.lending?.getBorrowers) {
+        window.electronAPI.lending
+          .getBorrowers()
+          .then((res: any) => {
+            if (Array.isArray(res)) setPastBorrowers(res);
+          })
+          .catch((err: any) => console.warn('[baglib/lending] Failed to load borrowers:', err));
+      }
+    }
+  }, [isOpen]);
 
   // Sync state when book changes
   React.useEffect(() => {
@@ -559,40 +592,81 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   };
 
   // Lending Management
-  const handleAddLending = () => {
+  const handleAddLending = async () => {
     if (!newBorrower.trim()) return;
-    const newRecord: LendingRecord = {
-      id: `lend-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      borrowerName: newBorrower.trim(),
-      borrowerContact: newBorrowerContact.trim() || undefined,
-      borrowDate: newBorrowDate,
-      expectedReturnDate: newReturnDate || 'غير محدد',
-      isReturned: false,
-      notes: newLendingNotes.trim() || undefined,
-    };
-    setFormData((prev) => ({
-      ...prev,
-      lendingHistory: [newRecord, ...(prev.lendingHistory || [])],
-    }));
+
+    if (formData.id && typeof window !== 'undefined' && window.electronAPI?.lending?.borrowBook) {
+      try {
+        await window.electronAPI.lending.borrowBook({
+          workId: formData.id,
+          borrowerName: newBorrower.trim(),
+          borrowerContact: newBorrowerContact.trim() || undefined,
+          borrowDate: newBorrowDate || undefined,
+          expectedReturnDate: newReturnDate || undefined,
+          conditionOut: newLendingConditionOut || (formData.condition ? String(formData.condition) : undefined),
+          notes: newLendingNotes.trim() || undefined,
+        });
+
+        if (window.electronAPI.lending.getHistory) {
+          const updated = await window.electronAPI.lending.getHistory(formData.id);
+          setFormData((prev) => ({ ...prev, lendingHistory: updated }));
+        }
+        await refreshBooks();
+      } catch (err: any) {
+        console.error('[baglib/lending] Failed to record loan via IPC:', err);
+      }
+    } else {
+      const newRecord: LendingRecord = {
+        id: `lend-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        borrowerName: newBorrower.trim(),
+        borrowerContact: newBorrowerContact.trim() || undefined,
+        borrowDate: newBorrowDate,
+        expectedReturnDate: newReturnDate || 'غير محدد',
+        isReturned: false,
+        notes: newLendingNotes.trim() || undefined,
+      };
+      setFormData((prev) => ({
+        ...prev,
+        lendingHistory: [newRecord, ...(prev.lendingHistory || [])],
+      }));
+    }
+
     setNewBorrower('');
     setNewBorrowerContact('');
     setNewLendingNotes('');
   };
 
-  const handleToggleReturn = (lendId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      lendingHistory: (prev.lendingHistory || []).map((rec) =>
-        rec.id === lendId
-          ? {
-              ...rec,
-              isReturned: !rec.isReturned,
-              actualReturnDate: !rec.isReturned ? new Date().toISOString().split('T')[0] : undefined,
-              conditionOnReturn: !rec.isReturned ? 'سليمة' : undefined,
-            }
-          : rec
-      ),
-    }));
+  const handleReturnSuccess = async () => {
+    if (formData.id && typeof window !== 'undefined' && window.electronAPI?.lending?.getHistory) {
+      try {
+        const updated = await window.electronAPI.lending.getHistory(formData.id);
+        setFormData((prev) => ({ ...prev, lendingHistory: updated }));
+      } catch (err) {
+        console.warn('[baglib/lending] Failed to refresh history after return:', err);
+      }
+    }
+    await refreshBooks();
+  };
+
+  const handleToggleReturn = (rec: LendingRecord) => {
+    if (!rec.isReturned) {
+      setSelectedLoanForReturn(rec);
+    } else {
+      // Toggle back in memory if needed
+      setFormData((prev) => ({
+        ...prev,
+        lendingHistory: (prev.lendingHistory || []).map((r) =>
+          r.id === rec.id
+            ? {
+                ...r,
+                isReturned: false,
+                actualReturnDate: undefined,
+                conditionOnReturn: undefined,
+              }
+            : r
+        ),
+      }));
+    }
   };
 
   // Bibliographic Online Metadata Lookup & Diff Preview (Story 5)
@@ -1803,55 +1877,97 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           {/* TAB 2: PHYSICAL LOCATION & ACQUISITION */}
           {activeTab === 'physical' && (
             <div className="space-y-4">
+              {/* Location Breadcrumb / Summary */}
+              {[formData.room, formData.bookcase, formData.shelf, formData.shelfSection].some(Boolean) ? (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                  <MapPin className="w-4 h-4 shrink-0" />
+                  <span className="font-bold">{t('locationBreadcrumb')}</span>
+                  <span className="font-mono font-bold">
+                    {[formData.room, formData.bookcase, formData.shelf, formData.shelfSection]
+                      .filter(Boolean)
+                      .join(' › ')}
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3 rounded-2xl bg-canvas border border-subtle flex items-center gap-2 text-xs text-muted">
+                  <MapPin className="w-4 h-4 shrink-0" />
+                  <span>{t('noLocationAssigned')}</span>
+                </div>
+              )}
+
               <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
                 <h4 className="font-bold text-main flex items-center gap-1.5 text-xs text-pale-sky-600 dark:text-pale-sky-400">
                   <MapPin className="w-4 h-4" />
-                  <span>{lang === 'ar' ? 'التسلسل الهرمي للموقع في المكتبة' : 'Physical Location Hierarchy'}</span>
+                  <span>{t('physicalCopyTitle')}</span>
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="font-bold text-main">{lang === 'ar' ? '1. الغرفة أو القاعة (Room):' : '1. Room:'}</label>
+                    <label className="font-bold text-main text-xs">{t('locationRoom')}</label>
                     <input
                       type="text"
+                      list="room-suggestions"
                       value={formData.room || ''}
                       onChange={(e) => handleInputChange('room', e.target.value)}
-                      placeholder={lang === 'ar' ? 'المكتبة الرئيسية / غرفة المكتب' : 'Main Study'}
-                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      placeholder={t('locationRoomPlaceholder')}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
                     />
+                    <datalist id="room-suggestions">
+                      {existingLocations.rooms.map((r) => (
+                        <option key={r} value={r} />
+                      ))}
+                    </datalist>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="font-bold text-main">{lang === 'ar' ? '2. الخزانة أو الدولاب (Bookcase):' : '2. Bookcase:'}</label>
+                    <label className="font-bold text-main text-xs">{t('locationBookcase')}</label>
                     <input
                       type="text"
+                      list="bookcase-suggestions"
                       value={formData.bookcase || ''}
                       onChange={(e) => handleInputChange('bookcase', e.target.value)}
-                      placeholder={lang === 'ar' ? 'خزانة رقم 3 - كتب التراث' : 'Bookcase #3'}
-                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      placeholder={t('locationBookcasePlaceholder')}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
                     />
+                    <datalist id="bookcase-suggestions">
+                      {existingLocations.bookcases.map((b) => (
+                        <option key={b} value={b} />
+                      ))}
+                    </datalist>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="font-bold text-main">{lang === 'ar' ? '3. الرف (Shelf):' : '3. Shelf:'}</label>
+                    <label className="font-bold text-main text-xs">{t('locationShelf')}</label>
                     <input
                       type="text"
+                      list="shelf-suggestions"
                       value={formData.shelf || ''}
                       onChange={(e) => handleInputChange('shelf', e.target.value)}
-                      placeholder={lang === 'ar' ? 'رف رقم 2' : 'Shelf 2'}
-                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      placeholder={t('locationShelfPlaceholder')}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
                     />
+                    <datalist id="shelf-suggestions">
+                      {existingLocations.shelves.map((s) => (
+                        <option key={s} value={s} />
+                      ))}
+                    </datalist>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="font-bold text-main">{lang === 'ar' ? '4. قسم الرف (Shelf Section):' : '4. Shelf Section:'}</label>
+                    <label className="font-bold text-main text-xs">{t('locationShelfSection')}</label>
                     <input
                       type="text"
+                      list="shelf-section-suggestions"
                       value={formData.shelfSection || ''}
                       onChange={(e) => handleInputChange('shelfSection', e.target.value)}
-                      placeholder={lang === 'ar' ? 'القسم الأوسط / الجزء الأيمن' : 'Middle Section'}
-                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      placeholder={t('locationSectionPlaceholder')}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
                     />
+                    <datalist id="shelf-section-suggestions">
+                      {existingLocations.shelfSections.map((sec) => (
+                        <option key={sec} value={sec} />
+                      ))}
+                    </datalist>
                   </div>
                 </div>
               </div>
@@ -1859,43 +1975,43 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
                 <h4 className="font-bold text-main flex items-center gap-1.5 text-xs text-pale-sky-600 dark:text-pale-sky-400">
                   <DollarSign className="w-4 h-4" />
-                  <span>{lang === 'ar' ? 'معلومات الاقتناء والحالة الفيزيائية' : 'Acquisition & Physical Condition'}</span>
+                  <span>{t('acquisitionPrice')}</span>
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <label className="font-bold text-main">{lang === 'ar' ? 'حالة النسخة:' : 'Condition:'}</label>
+                    <label className="font-bold text-main text-xs">{t('physicalCondition')}</label>
                     <select
-                      value={formData.condition || 'ممتازة'}
+                      value={formData.condition || 'good'}
                       onChange={(e) => handleInputChange('condition', e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors cursor-pointer"
                     >
-                      <option value="جديدة">{lang === 'ar' ? 'جديدة (New)' : 'New'}</option>
-                      <option value="ممتازة">{lang === 'ar' ? 'ممتازة (Like New)' : 'Like New'}</option>
-                      <option value="جيدة">{lang === 'ar' ? 'جيدة (Good)' : 'Good'}</option>
-                      <option value="مستعملة">{lang === 'ar' ? 'مستعملة (Used)' : 'Used'}</option>
-                      <option value="أثرية/قديمة">{lang === 'ar' ? 'أثرية/قديمة (Rare/Antique)' : 'Antique'}</option>
+                      <option value="mint">{t('conditionMint')}</option>
+                      <option value="good">{t('conditionGood')}</option>
+                      <option value="fair">{t('conditionFair')}</option>
+                      <option value="poor">{t('conditionPoor')}</option>
+                      <option value="antique">{t('conditionAntique')}</option>
                     </select>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="font-bold text-main">{lang === 'ar' ? 'تاريخ الشراء:' : 'Purchase Date:'}</label>
+                    <label className="font-bold text-main text-xs">{t('acquisitionDate')}</label>
                     <input
                       type="date"
                       value={formData.purchaseDate || ''}
                       onChange={(e) => handleInputChange('purchaseDate', e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="font-bold text-main">{lang === 'ar' ? 'سعر الشراء:' : 'Price:'}</label>
+                    <label className="font-bold text-main text-xs">{t('acquisitionPrice')}</label>
                     <input
                       type="text"
                       value={formData.price || ''}
                       onChange={(e) => handleInputChange('price', e.target.value)}
-                      placeholder="150 IQD / SAR"
-                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      placeholder={t('pricePlaceholder')}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -2031,49 +2147,106 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
                 <h4 className="font-bold text-main text-xs flex items-center gap-1.5 text-pale-sky-600 dark:text-pale-sky-400">
                   <UserCheck className="w-4 h-4" />
-                  <span>{lang === 'ar' ? 'تسجيل إعارة جديدة' : 'Record New Loan'}</span>
+                  <span>{t('lendModalTitle')}</span>
                 </h4>
 
+                {/* Quick borrower chips */}
+                {pastBorrowers.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-muted font-bold flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      <span>{t('knownBorrowersLabel')}</span>
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-h-16 overflow-y-auto">
+                      {pastBorrowers.slice(0, 6).map((b) => (
+                        <button
+                          key={b.borrowerName}
+                          type="button"
+                          onClick={() => {
+                            setNewBorrower(b.borrowerName);
+                            if (b.borrowerContact) setNewBorrowerContact(b.borrowerContact);
+                          }}
+                          className="text-[10px] px-2 py-0.5 rounded-lg bg-surface border border-subtle hover:border-amber-500/50 text-main transition-colors cursor-pointer"
+                        >
+                          {b.borrowerName}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <input
-                    type="text"
-                    placeholder={lang === 'ar' ? 'اسم المستعير...' : 'Borrower name...'}
-                    value={newBorrower}
-                    onChange={(e) => setNewBorrower(e.target.value)}
-                    className="p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
-                  />
-                  <input
-                    type="text"
-                    placeholder={lang === 'ar' ? 'رقم الهاتف أو البريد...' : 'Contact info (phone/email)...'}
-                    value={newBorrowerContact}
-                    onChange={(e) => setNewBorrowerContact(e.target.value)}
-                    className="p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
-                  />
                   <div className="space-y-0.5">
-                    <span className="text-[10px] text-muted">{lang === 'ar' ? 'تاريخ الاستعارة:' : 'Borrow Date:'}</span>
+                    <span className="text-[10px] text-muted font-bold">{t('borrowerName')}</span>
+                    <input
+                      type="text"
+                      list="past-borrower-names"
+                      placeholder={t('borrowerNamePlaceholder')}
+                      value={newBorrower}
+                      onChange={(e) => setNewBorrower(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
+                    />
+                    <datalist id="past-borrower-names">
+                      {pastBorrowers.map((b) => (
+                        <option key={b.borrowerName} value={b.borrowerName} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-muted font-bold">{t('borrowerContact')}</span>
+                    <input
+                      type="text"
+                      placeholder={t('borrowerContactPlaceholder')}
+                      value={newBorrowerContact}
+                      onChange={(e) => setNewBorrowerContact(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-muted">{t('borrowDate')}</span>
                     <input
                       type="date"
                       value={newBorrowDate}
                       onChange={(e) => setNewBorrowDate(e.target.value)}
-                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
                     />
                   </div>
+
                   <div className="space-y-0.5">
-                    <span className="text-[10px] text-muted">{lang === 'ar' ? 'التاريخ المتوقع للإرجاع:' : 'Expected Return:'}</span>
+                    <span className="text-[10px] text-muted">{t('expectedReturnDate')}</span>
                     <input
                       type="date"
                       value={newReturnDate}
                       onChange={(e) => setNewReturnDate(e.target.value)}
-                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
                     />
                   </div>
-                  <div className="sm:col-span-2">
+
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-muted">{t('loanConditionOut')}</span>
+                    <select
+                      value={newLendingConditionOut}
+                      onChange={(e) => setNewLendingConditionOut(e.target.value)}
+                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors cursor-pointer"
+                    >
+                      <option value="mint">{t('conditionMint')}</option>
+                      <option value="good">{t('conditionGood')}</option>
+                      <option value="fair">{t('conditionFair')}</option>
+                      <option value="poor">{t('conditionPoor')}</option>
+                      <option value="antique">{t('conditionAntique')}</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-0.5 sm:col-span-2">
+                    <span className="text-[10px] text-muted">{t('notesOptional')}</span>
                     <input
                       type="text"
-                      placeholder={lang === 'ar' ? 'ملاحظات الإعارة (اختياري)...' : 'Loan notes (optional)...'}
+                      placeholder={t('notesPlaceholder')}
                       value={newLendingNotes}
                       onChange={(e) => setNewLendingNotes(e.target.value)}
-                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main outline-none"
+                      className="w-full p-2 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -2081,15 +2254,17 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={handleAddLending}
-                  className="px-4 py-2 rounded-xl bg-pale-sky-500 text-white font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  disabled={!newBorrower.trim()}
+                  className="px-4 py-2 rounded-xl bg-amber-500 text-white font-bold hover:bg-amber-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm text-xs disabled:opacity-50"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>{lang === 'ar' ? 'حفظ تسجيل الإعارة' : 'Record Loan'}</span>
+                  <span>{t('confirmLend')}</span>
                 </button>
               </div>
 
               {/* Loans List */}
               <div className="space-y-2">
+                <h5 className="font-bold text-main text-xs">{t('lendingHistoryTitle')}</h5>
                 {(formData.lendingHistory?.length || 0) > 0 ? (
                   (formData.lendingHistory || []).map((rec) => {
                     const today = new Date().toISOString().split('T')[0];
@@ -2098,55 +2273,72 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     return (
                       <div
                         key={rec.id}
-                        className="p-3.5 rounded-2xl bg-canvas border border-subtle flex items-center justify-between gap-3"
+                        className="p-3.5 rounded-2xl bg-canvas border border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                       >
                         <div className="space-y-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-main">{rec.borrowerName}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-main text-xs">{rec.borrowerName}</span>
                             <span
                               className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                                 rec.isReturned
                                   ? 'bg-evergreen-500/10 text-evergreen-600 dark:text-evergreen-400'
                                   : isOverdue
-                                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                                  ? 'bg-red-500/10 text-red-600 dark:text-red-400 animate-pulse'
                                   : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                               }`}
                             >
                               {rec.isReturned
-                                ? (lang === 'ar' ? 'تمت الإعادة' : 'Returned')
+                                ? t('returnedBadge')
                                 : isOverdue
-                                ? (lang === 'ar' ? 'متأخرة عن الموعد!' : 'Overdue!')
-                                : (lang === 'ar' ? 'قيد الإعارة حالياً' : 'Active Loan')}
+                                ? t('lendingStatusOverdue')
+                                : t('activeLoanBadge')}
                             </span>
                             {rec.borrowerContact && (
                               <span className="text-[11px] text-muted font-mono">{rec.borrowerContact}</span>
                             )}
                           </div>
                           <p className="text-[11px] text-muted">
-                            {lang === 'ar' ? 'تاريخ الإعارة:' : 'Borrow:'} {rec.borrowDate} • {lang === 'ar' ? 'المتوقع:' : 'Due:'} {rec.expectedReturnDate}
-                            {rec.actualReturnDate && ` • ${lang === 'ar' ? 'أُعيد بتاريخ:' : 'Returned on:'} ${rec.actualReturnDate}`}
+                            {t('borrowDate')}: <span className="font-mono text-main">{rec.borrowDate}</span> •{' '}
+                            {t('expectedReturnDate')}:{' '}
+                            <span className={`font-mono ${isOverdue ? 'text-red-500 font-bold' : 'text-main'}`}>
+                              {rec.expectedReturnDate}
+                            </span>
+                            {rec.actualReturnDate && (
+                              <span>
+                                {' '}
+                                • {t('actualReturnDate')}:{' '}
+                                <span className="font-mono text-evergreen-600 dark:text-evergreen-400">
+                                  {rec.actualReturnDate}
+                                </span>
+                              </span>
+                            )}
                           </p>
+                          {rec.conditionOnReturn && (
+                            <p className="text-[10px] text-muted">
+                              {t('conditionOnReturn')}:{' '}
+                              <strong className="text-main">{rec.conditionOnReturn}</strong>
+                            </p>
+                          )}
+                          {rec.notes && <p className="text-[11px] text-muted italic">"{rec.notes}"</p>}
                         </div>
 
                         <button
                           type="button"
-                          onClick={() => handleToggleReturn(rec.id)}
+                          onClick={() => handleToggleReturn(rec)}
                           className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
                             rec.isReturned
                               ? 'border-subtle hover:bg-surface text-muted'
                               : 'bg-evergreen-500/15 border-evergreen-500/30 text-evergreen-600 dark:text-evergreen-400 hover:bg-evergreen-500/25'
                           }`}
                         >
-                          {rec.isReturned
-                            ? (lang === 'ar' ? 'إلغاء الإرجاع' : 'Undo Return')
-                            : (lang === 'ar' ? 'تسجيل الإرجاع ✓' : 'Mark Returned ✓')}
+                          {rec.isReturned ? t('undoReturnBtn') : t('markReturnedBtn')}
                         </button>
                       </div>
                     );
                   })
                 ) : (
-                  <p className="text-center text-muted py-6">
-                    {lang === 'ar' ? 'لا توجد إعارات مسجلة لهذا العمل حتى الآن.' : 'No lending records logged for this item yet.'}
+                  <p className="text-center text-muted py-6 text-xs">
+                    {t('noLendingHistory')}
                   </p>
                 )}
               </div>
@@ -2270,6 +2462,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           isOpen={isOnlineHubOpen}
           onClose={() => setIsOnlineHubOpen(false)}
           onImportBook={handleImportFromOnlineHub}
+        />
+
+        {/* Return Book Modal with condition audit */}
+        <ReturnBookModal
+          isOpen={!!selectedLoanForReturn}
+          book={formData}
+          activeLoan={selectedLoanForReturn}
+          onClose={() => setSelectedLoanForReturn(null)}
+          onSuccess={handleReturnSuccess}
         />
       </div>
     </div>
