@@ -54,6 +54,7 @@ interface WorkspaceContextType extends WorkspaceState {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   
   // Book Library Management
+  refreshBooks: () => Promise<void>;
   addBook: (book: BookItem) => void;
   updateBook: (book: BookItem) => void;
   deleteBook: (bookId: string) => void;
@@ -131,45 +132,46 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   };
 
+  // Refresh books from SQLite database
+  const refreshBooks = async () => {
+    if (typeof window !== 'undefined' && window.electronAPI?.getAllBooks) {
+      try {
+        const fetchedBooks: BookItem[] = await window.electronAPI.getAllBooks();
+        if (Array.isArray(fetchedBooks)) {
+          // Deduplicate fetchedBooks by unique ID and unique filePath
+          const seenIds = new Set<string>();
+          const seenPaths = new Set<string>();
+          const uniqueBooks: BookItem[] = [];
+          for (const book of fetchedBooks) {
+            if (!book || !book.id || seenIds.has(book.id)) continue;
+            if (book.filePath && seenPaths.has(book.filePath)) continue;
+            seenIds.add(book.id);
+            if (book.filePath) seenPaths.add(book.filePath);
+            uniqueBooks.push(book);
+          }
+          setBooks(uniqueBooks);
+        }
+      } catch (err: any) {
+        console.error('[baglib/ui] Failed to refresh books from database:', err);
+      }
+    }
+  };
+
   // Load books and notes from SQLite database on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (window.electronAPI?.getAllBooks) {
-        window.electronAPI
-          .getAllBooks()
-          .then((fetchedBooks: BookItem[]) => {
-            if (Array.isArray(fetchedBooks)) {
-              // Deduplicate fetchedBooks by unique ID and unique filePath
-              const seenIds = new Set<string>();
-              const seenPaths = new Set<string>();
-              const uniqueBooks: BookItem[] = [];
-              for (const book of fetchedBooks) {
-                if (!book || !book.id || seenIds.has(book.id)) continue;
-                if (book.filePath && seenPaths.has(book.filePath)) continue;
-                seenIds.add(book.id);
-                if (book.filePath) seenPaths.add(book.filePath);
-                uniqueBooks.push(book);
-              }
-              setBooks(uniqueBooks);
-            }
-          })
-          .catch((err: any) => {
-            console.error('[baglib/ui] Failed to load books from database:', err);
-          });
-      }
+    refreshBooks();
 
-      if ((window.electronAPI as any)?.getAllNotes) {
-        (window.electronAPI as any)
-          .getAllNotes()
-          .then((fetchedNotes: PageNote[]) => {
-            if (Array.isArray(fetchedNotes)) {
-              setBookNotes(fetchedNotes);
-            }
-          })
-          .catch((err: any) => {
-            console.error('[baglib/ui] Failed to load notes from database:', err);
-          });
-      }
+    if (typeof window !== 'undefined' && (window.electronAPI as any)?.getAllNotes) {
+      (window.electronAPI as any)
+        .getAllNotes()
+        .then((fetchedNotes: PageNote[]) => {
+          if (Array.isArray(fetchedNotes)) {
+            setBookNotes(fetchedNotes);
+          }
+        })
+        .catch((err: any) => {
+          console.error('[baglib/ui] Failed to load notes from database:', err);
+        });
     }
   }, []);
 
@@ -440,6 +442,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setViewMode,
         activeLibraryCategory,
         setActiveLibraryCategory,
+        refreshBooks,
         addBook,
         updateBook,
         deleteBook,

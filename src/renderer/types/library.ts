@@ -1,4 +1,5 @@
 export * from '../../shared/types/work';
+export * from '../../shared/types/digital-file';
 
 export interface RssFeedItem {
   id: string;

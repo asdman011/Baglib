@@ -27,12 +27,15 @@ import {
   Clock,
   Trash2,
   FileText,
-  RefreshCw
+  RefreshCw,
+  UploadCloud,
+  AlertTriangle
 } from 'lucide-react';
 import { BookItem, ReadingStatus } from '../../types/library';
 import { BookDetailModal } from './BookDetailModal';
 import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { StorageManagerModal } from './StorageManagerModal';
+import { ImportWizardModal } from './ImportWizardModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { matchesSearchQuery } from '../../utils/search';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
@@ -43,6 +46,7 @@ export type SortDirection = 'asc' | 'desc';
 export const LibraryGridView: React.FC = () => {
   const {
     books,
+    refreshBooks,
     addBook,
     updateBook,
     deleteBook,
@@ -62,6 +66,7 @@ export const LibraryGridView: React.FC = () => {
   const [selectedBookType, setSelectedBookType] = useState<string>('ALL');
   const [selectedReadingStatus, setSelectedReadingStatus] = useState<string>('ALL');
   const [selectedFormat, setSelectedFormat] = useState<string>('ALL');
+  const [selectedStorageFilter, setSelectedStorageFilter] = useState<'ALL' | 'HEALTHY' | 'ATTENTION' | 'DUPLICATES'>('ALL');
   const [selectedTag, setSelectedTag] = useState<string>('ALL');
   const [lendingStatus, setLendingStatus] = useState<string>('ALL');
   const [sortField, setSortField] = useState<SortField>('newest');
@@ -78,8 +83,21 @@ export const LibraryGridView: React.FC = () => {
   const [importMessage, setImportMessage] = useState<string>('');
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
+  const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const dragCounterRef = useRef(0);
+
+  // Compute digital books with storage issues (missing, unmounted, corrupted, duplicate)
+  const storageIssueCount = useMemo(() => {
+    return books.filter(
+      (b) =>
+        b.bookType === 'digital' &&
+        (b.storageState === 'missing' ||
+          b.storageState === 'unmounted' ||
+          b.storageState === 'corrupted' ||
+          b.storageState === 'duplicate')
+    ).length;
+  }, [books]);
 
   // Fetch all categories for filter and modal
   const [allCategories, setAllCategories] = useState<{ id: string, nameAr: string, nameEn: string }[]>([]);
@@ -188,6 +206,26 @@ export const LibraryGridView: React.FC = () => {
         if (lendingStatus === 'AVAILABLE' && isCurrentlyLent) return false;
         if (lendingStatus === 'LENT' && !isCurrentlyLent) return false;
 
+        // 8. Storage Health filter
+        if (selectedStorageFilter === 'HEALTHY') {
+          if (b.bookType === 'digital' && b.storageState && b.storageState !== 'available') {
+            return false;
+          }
+        } else if (selectedStorageFilter === 'ATTENTION') {
+          if (
+            !b.storageState ||
+            (b.storageState !== 'missing' &&
+              b.storageState !== 'unmounted' &&
+              b.storageState !== 'corrupted')
+          ) {
+            return false;
+          }
+        } else if (selectedStorageFilter === 'DUPLICATES') {
+          if (b.storageState !== 'duplicate') {
+            return false;
+          }
+        }
+
         return true;
       })
       .sort((a, b) => {
@@ -224,13 +262,14 @@ export const LibraryGridView: React.FC = () => {
 
         return sortDirection === 'asc' ? comparison : -comparison;
       });
-  }, [books, searchQuery, selectedBookType, selectedReadingStatus, selectedFormat, activeLibraryCategory, selectedTag, lendingStatus, sortField, sortDirection, lang]);
+  }, [books, searchQuery, selectedBookType, selectedReadingStatus, selectedFormat, selectedStorageFilter, activeLibraryCategory, selectedTag, lendingStatus, sortField, sortDirection, lang]);
 
   const hasActiveFilters =
     searchQuery.trim() !== '' ||
     selectedBookType !== 'ALL' ||
     selectedReadingStatus !== 'ALL' ||
     selectedFormat !== 'ALL' ||
+    selectedStorageFilter !== 'ALL' ||
     activeLibraryCategory !== 'ALL' ||
     selectedTag !== 'ALL' ||
     lendingStatus !== 'ALL' ||
@@ -241,11 +280,33 @@ export const LibraryGridView: React.FC = () => {
     setSelectedBookType('ALL');
     setSelectedReadingStatus('ALL');
     setSelectedFormat('ALL');
+    setSelectedStorageFilter('ALL');
     setActiveLibraryCategory('ALL');
     setSelectedTag('ALL');
     setLendingStatus('ALL');
     setSortField('newest');
     setSortDirection('desc');
+  };
+
+  // Safe book opener that intercepts missing, unmounted, or corrupted files
+  const handleSafeOpenBook = (book: BookItem) => {
+    if (
+      book.bookType === 'digital' &&
+      (book.storageState === 'missing' ||
+        book.storageState === 'unmounted' ||
+        book.storageState === 'corrupted')
+    ) {
+      setSelectedBook(book);
+      setIsStorageModalOpen(true);
+      setSaveToast(
+        book.storageState === 'corrupted'
+          ? t('storageCorruptedWarning')
+          : t('storageMissingWarning')
+      );
+      setTimeout(() => setSaveToast(null), 4000);
+      return;
+    }
+    openBookForReading(book);
   };
 
   const handleSaveBook = (updatedBook: BookItem) => {
@@ -583,14 +644,29 @@ export const LibraryGridView: React.FC = () => {
               </button>
             </div>
 
-            {/* Storage Cleaner */}
+            {/* Storage Cleaner & Health */}
             <button
               onClick={() => setIsStorageModalOpen(true)}
-              title="إدارة القرص وتنظيف الملفات المكررة"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
+              title={t('storageManagerTitle')}
+              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
             >
               <HardDrive className="w-3.5 h-3.5 text-pale-sky-500" />
-              <span className="hidden sm:inline">تنظيف المكررات</span>
+              <span className="hidden sm:inline">{t('storageManagerTitle')}</span>
+              {storageIssueCount > 0 && (
+                <span className="inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white animate-pulse">
+                  {storageIssueCount}
+                </span>
+              )}
+            </button>
+
+            {/* Import Wizard (Story 6) */}
+            <button
+              onClick={() => setIsImportWizardOpen(true)}
+              title={t('openImportWizard')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
+            >
+              <UploadCloud className="w-3.5 h-3.5 text-pale-sky-500" />
+              <span className="hidden sm:inline">{t('openImportWizard')}</span>
             </button>
 
             {/* Add Material (Unified Entry Point) */}
@@ -610,7 +686,7 @@ export const LibraryGridView: React.FC = () => {
           <div className="space-y-2 pt-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-2 text-xs">
               {/* Search Input */}
-              <div className="lg:col-span-3 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-canvas border border-subtle">
+              <div className="lg:col-span-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-canvas border border-subtle">
                 <Search className="w-4 h-4 text-pale-sky-500 shrink-0" />
                 <input
                   type="text"
@@ -674,7 +750,22 @@ export const LibraryGridView: React.FC = () => {
                 </select>
               </div>
 
-              {/* Filter 4: Category Dropdown */}
+              {/* Filter 4: Storage Health Dropdown */}
+              <div className="lg:col-span-2 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-canvas border border-subtle">
+                <HardDrive className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
+                <select
+                  value={selectedStorageFilter}
+                  onChange={(e) => setSelectedStorageFilter(e.target.value as any)}
+                  className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs truncate"
+                >
+                  <option value="ALL">{t('storageFilterAll')}</option>
+                  <option value="HEALTHY">{t('storageFilterHealthy')}</option>
+                  <option value="ATTENTION">{t('storageFilterAttention')}</option>
+                  <option value="DUPLICATES">{t('storageFilterDuplicates')}</option>
+                </select>
+              </div>
+
+              {/* Filter 5: Category Dropdown */}
               <div className="lg:col-span-2 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-canvas border border-subtle">
                 <Layers className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                 <select
@@ -691,8 +782,8 @@ export const LibraryGridView: React.FC = () => {
                 </select>
               </div>
 
-              {/* Filter 5: Sort Selector */}
-              <div className="lg:col-span-2 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-canvas border border-subtle">
+              {/* Filter 6: Sort Selector */}
+              <div className="lg:col-span-1 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-canvas border border-subtle">
                 <ArrowUpDown className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
                 <select
                   value={sortField}
@@ -786,6 +877,13 @@ export const LibraryGridView: React.FC = () => {
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button
+                onClick={() => setIsImportWizardOpen(true)}
+                className="px-5 py-3 rounded-2xl bg-canvas border border-subtle text-main font-bold text-xs hover:bg-surface shadow-md transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <UploadCloud className="w-4 h-4 text-pale-sky-500" />
+                <span>{t('openImportWizard')}</span>
+              </button>
+              <button
                 onClick={handleAddNewBook}
                 className="px-6 py-3 rounded-2xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-lg shadow-pale-sky-500/20 transition-all flex items-center gap-2 cursor-pointer"
               >
@@ -858,11 +956,73 @@ export const LibraryGridView: React.FC = () => {
                           مستعار ({activeLend.borrowerName})
                         </span>
                       )}
+
+                      {/* Storage Health Badges */}
+                      {book.storageState === 'missing' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBook(book);
+                            setIsStorageModalOpen(true);
+                          }}
+                          className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold border border-red-500/20 flex items-center gap-1 cursor-pointer hover:bg-red-500/20 transition-all"
+                          title={t('storageMissingWarning')}
+                        >
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          <span>{t('storageHealthMissingBadge')}</span>
+                        </button>
+                      )}
+                      {book.storageState === 'unmounted' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBook(book);
+                            setIsStorageModalOpen(true);
+                          }}
+                          className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20 flex items-center gap-1 cursor-pointer hover:bg-amber-500/20 transition-all"
+                          title={t('storageMissingWarning')}
+                        >
+                          <HardDrive className="w-2.5 h-2.5" />
+                          <span>{t('storageHealthUnmountedBadge')}</span>
+                        </button>
+                      )}
+                      {book.storageState === 'corrupted' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBook(book);
+                            setIsStorageModalOpen(true);
+                          }}
+                          className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold border border-red-500/20 flex items-center gap-1 cursor-pointer hover:bg-red-500/20 transition-all"
+                          title={t('storageCorruptedWarning')}
+                        >
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          <span>{t('storageHealthCorruptedBadge')}</span>
+                        </button>
+                      )}
+                      {book.storageState === 'duplicate' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBook(book);
+                            setIsStorageModalOpen(true);
+                          }}
+                          className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20 flex items-center gap-1 cursor-pointer hover:bg-purple-500/20 transition-all"
+                          title={t('storageStatusDuplicate')}
+                        >
+                          <Layers className="w-2.5 h-2.5" />
+                          <span>{t('storageHealthDuplicateBadge')}</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Cover & Title */}
                     <div
-                      onClick={() => openBookForReading(book)}
+                      onClick={() => handleSafeOpenBook(book)}
                       className="space-y-3 flex-1 cursor-pointer"
                     >
                       {book.coverImage ? (
@@ -932,7 +1092,7 @@ export const LibraryGridView: React.FC = () => {
 
                       <div className="flex items-center gap-2 pt-1">
                         <button
-                          onClick={() => openBookForReading(book)}
+                          onClick={() => handleSafeOpenBook(book)}
                           className="flex-1 py-1.5 rounded-xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer"
                         >
                           <BookOpen className="w-3.5 h-3.5" />
@@ -1040,7 +1200,7 @@ export const LibraryGridView: React.FC = () => {
                               )}
                               <div className="min-w-0">
                                 <div
-                                  onClick={() => openBookForReading(book)}
+                                  onClick={() => handleSafeOpenBook(book)}
                                   className="font-bold text-main hover:text-pale-sky-500 cursor-pointer truncate text-sm"
                                   title={book.title}
                                 >
@@ -1075,6 +1235,66 @@ export const LibraryGridView: React.FC = () => {
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 font-bold border border-pale-sky-500/20 font-mono">
                               {book.digitalFormat || t('physicalBook')}
                             </span>
+                            {book.storageState === 'missing' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBook(book);
+                                  setIsStorageModalOpen(true);
+                                }}
+                                className="text-[10px] text-red-500 font-bold flex items-center gap-1 mt-0.5 cursor-pointer hover:underline"
+                                title={t('storageMissingWarning')}
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>{t('storageHealthMissingBadge')}</span>
+                              </button>
+                            )}
+                            {book.storageState === 'unmounted' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBook(book);
+                                  setIsStorageModalOpen(true);
+                                }}
+                                className="text-[10px] text-amber-500 font-bold flex items-center gap-1 mt-0.5 cursor-pointer hover:underline"
+                                title={t('storageMissingWarning')}
+                              >
+                                <HardDrive className="w-3 h-3" />
+                                <span>{t('storageHealthUnmountedBadge')}</span>
+                              </button>
+                            )}
+                            {book.storageState === 'corrupted' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBook(book);
+                                  setIsStorageModalOpen(true);
+                                }}
+                                className="text-[10px] text-red-500 font-bold flex items-center gap-1 mt-0.5 cursor-pointer hover:underline"
+                                title={t('storageCorruptedWarning')}
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>{t('storageHealthCorruptedBadge')}</span>
+                              </button>
+                            )}
+                            {book.storageState === 'duplicate' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBook(book);
+                                  setIsStorageModalOpen(true);
+                                }}
+                                className="text-[10px] text-purple-500 font-bold flex items-center gap-1 mt-0.5 cursor-pointer hover:underline"
+                                title={t('storageStatusDuplicate')}
+                              >
+                                <Layers className="w-3 h-3" />
+                                <span>{t('storageHealthDuplicateBadge')}</span>
+                              </button>
+                            )}
                           </td>
 
                           {/* Reading Status Selector & Progress */}
@@ -1128,7 +1348,7 @@ export const LibraryGridView: React.FC = () => {
                           <td className="py-3 px-4 text-end">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
-                                onClick={() => openBookForReading(book)}
+                                onClick={() => handleSafeOpenBook(book)}
                                 title="قراءة الكتاب"
                                 className="px-2.5 py-1 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 transition-all flex items-center gap-1 cursor-pointer"
                               >
@@ -1214,6 +1434,13 @@ export const LibraryGridView: React.FC = () => {
         onClose={() => setIsStorageModalOpen(false)}
         books={books}
         onRemoveDuplicate={deleteBook}
+      />
+
+      {/* Import Wizard Modal (Story 6) */}
+      <ImportWizardModal
+        isOpen={isImportWizardOpen}
+        onClose={() => setIsImportWizardOpen(false)}
+        onImportComplete={() => refreshBooks()}
       />
 
       {/* Book Import & Discovery Progress Floating Pill */}
