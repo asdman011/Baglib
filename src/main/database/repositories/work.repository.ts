@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import type { Database } from 'better-sqlite3';
 import type { IWorkRepository, BookItem, BookItemInput } from '../../../shared/types/repository';
 import {
@@ -8,9 +10,23 @@ import {
   type Contributor,
   type LendingRecord
 } from '../../../shared/types/metadata';
+import type {
+  FileHealthInfo,
+  StorageHealthSummary,
+  FileStorageStatus,
+} from '../../../shared/types/digital-file';
+import type { DigitalFormat } from '../../../shared/types/work';
 
 export class SqliteWorkRepository implements IWorkRepository {
   constructor(private db: Database) {}
+
+  private formatFileSize(bytes: number): string {
+    if (!bytes || bytes <= 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  }
 
   private mapRowToBookItem(r: any): BookItem {
     let meta: Record<string, any> = {};
@@ -91,8 +107,10 @@ export class SqliteWorkRepository implements IWorkRepository {
       bookType: (r.sourceType as any) || (r.filePath ? 'digital' : 'physical'),
       digitalFormat: r.digitalFormat || (r.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : undefined),
       filePath: r.filePath || undefined,
-      fileSize: meta.fileSize || undefined,
+      fileSize: meta.fileSize || (r.fileSizeBytes ? this.formatFileSize(r.fileSizeBytes) : undefined),
       fileHash: r.fileHash || undefined,
+      storageState: r.storageState || (r.filePath ? 'available' : undefined),
+      lastVerifiedAt: r.lastVerifiedAt || undefined,
       onlineSource: meta.onlineSource || undefined,
       sourceUrl: meta.sourceUrl || undefined,
       description: r.description || meta.description || meta.abstract || undefined,
@@ -168,6 +186,10 @@ export class SqliteWorkRepository implements IWorkRepository {
         fsd.file_path as filePath,
         fsd.file_hash as fileHash,
         fsd.file_format as digitalFormat,
+        fsd.file_size_bytes as fileSizeBytes,
+        fsd.storage_state as storageState,
+        fsd.last_verified_at as lastVerifiedAt,
+        s.id as sourceId,
         psd.shelf as shelf,
         psd.room as room,
         psd.bookcase as bookcase,
@@ -274,6 +296,10 @@ export class SqliteWorkRepository implements IWorkRepository {
         fsd.file_path as filePath,
         fsd.file_hash as fileHash,
         fsd.file_format as digitalFormat,
+        fsd.file_size_bytes as fileSizeBytes,
+        fsd.storage_state as storageState,
+        fsd.last_verified_at as lastVerifiedAt,
+        s.id as sourceId,
         psd.shelf as shelf,
         psd.room as room,
         psd.bookcase as bookcase,
@@ -975,6 +1001,233 @@ export class SqliteWorkRepository implements IWorkRepository {
       notes: r.notes || undefined,
       status: (r.expectedReturnDate && r.expectedReturnDate < today) ? 'overdue' : 'active',
     }));
+  }
+
+  /**
+   * Finds a work by its digital file SHA-256 content hash.
+   */
+  findWorkByFileHash(fileHash: string): BookItem | null {
+    if (!fileHash) return null;
+    const row = this.db.prepare(`
+      SELECT w.id FROM work w
+      JOIN edition e ON e.work_id = w.id
+      JOIN source s ON s.edition_id = e.id
+      JOIN file_source_detail fsd ON fsd.source_id = s.id
+      WHERE fsd.file_hash = ?
+      LIMIT 1
+    `).get(fileHash) as { id: string } | undefined;
+
+    return row ? this.getById(row.id) : null;
+  }
+
+  /**
+   * Finds a work by its digital file path on disk.
+   */
+  findWorkByFilePath(filePath: string): BookItem | null {
+    if (!filePath) return null;
+    const normalized = path.resolve(filePath);
+    const row = this.db.prepare(`
+      SELECT w.id FROM work w
+      JOIN edition e ON e.work_id = w.id
+      JOIN source s ON s.edition_id = e.id
+      JOIN file_source_detail fsd ON fsd.source_id = s.id
+      WHERE fsd.file_path = ? OR fsd.file_path = ?
+      LIMIT 1
+    `).get(filePath, normalized) as { id: string } | undefined;
+
+    return row ? this.getById(row.id) : null;
+  }
+
+  /**
+   * Finds a work by normalized ISBN (ISBN-10 or ISBN-13).
+   */
+  findWorkByIsbn(isbn: string): BookItem | null {
+    if (!isbn) return null;
+    const cleanIsbn = isbn.replace(/[^0-9xX]/g, '').toUpperCase();
+    if (!cleanIsbn) return null;
+
+    const row = this.db.prepare(`
+      SELECT w.id FROM work w
+      JOIN edition e ON e.work_id = w.id
+      WHERE REPLACE(REPLACE(UPPER(e.isbn), '-', ''), ' ', '') = ?
+      LIMIT 1
+    `).get(cleanIsbn) as { id: string } | undefined;
+
+    return row ? this.getById(row.id) : null;
+  }
+
+  /**
+   * Verifies the storage health of a digital file associated with a work.
+   */
+  verifyFileHealth(workId: string): FileHealthInfo | null {
+    const work = this.getById(workId);
+    if (!work || work.bookType !== 'digital' || !work.filePath) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    let exists = false;
+    let fileSizeBytes: number | undefined;
+    let status: FileStorageStatus = 'missing';
+
+    try {
+      if (fs.existsSync(work.filePath)) {
+        exists = true;
+        const stat = fs.statSync(work.filePath);
+        fileSizeBytes = stat.size;
+        status = stat.size === 0 ? 'corrupted' : 'available';
+      } else {
+        exists = false;
+        const parsed = path.parse(work.filePath);
+        const driveExists = parsed.root ? fs.existsSync(parsed.root) : true;
+        status = driveExists ? 'missing' : 'unmounted';
+      }
+    } catch {
+      status = 'missing';
+      exists = false;
+    }
+
+    try {
+      this.db.prepare(`
+        UPDATE file_source_detail
+        SET storage_state = ?, last_verified_at = ?, file_size_bytes = COALESCE(?, file_size_bytes)
+        WHERE source_id IN (
+          SELECT s.id FROM source s
+          JOIN edition e ON e.id = s.edition_id
+          WHERE e.work_id = ?
+        )
+      `).run(status, now, fileSizeBytes || null, workId);
+    } catch {
+      // Table column may not exist in legacy schema
+    }
+
+    return {
+      workId,
+      title: work.title,
+      filePath: work.filePath,
+      format: work.digitalFormat,
+      status,
+      fileSizeBytes,
+      exists,
+      lastVerified: now,
+    };
+  }
+
+  /**
+   * Verifies all digital works in the library, returning an aggregated storage health report.
+   */
+  verifyAllDigitalFiles(): StorageHealthSummary {
+    const rows = this.db.prepare(`
+      SELECT DISTINCT
+        w.id as workId,
+        w.title as title,
+        fsd.file_path as filePath,
+        fsd.file_format as format
+      FROM work w
+      JOIN edition e ON e.work_id = w.id
+      JOIN source s ON s.edition_id = e.id
+      JOIN file_source_detail fsd ON fsd.source_id = s.id
+      WHERE fsd.file_path IS NOT NULL
+    `).all() as Array<{ workId: string; title: string; filePath: string; format?: DigitalFormat }>;
+
+    const items: FileHealthInfo[] = [];
+    let availableFiles = 0;
+    let missingFiles = 0;
+    let unmountedFiles = 0;
+    let corruptedFiles = 0;
+    let duplicateFiles = 0;
+    let totalSizeBytes = 0;
+    const formatBreakdown: Record<string, { count: number; totalBytes: number }> = {};
+
+    for (const r of rows) {
+      const health = this.verifyFileHealth(r.workId);
+      if (health) {
+        items.push(health);
+        if (health.status === 'available') availableFiles++;
+        else if (health.status === 'unmounted') unmountedFiles++;
+        else if (health.status === 'corrupted') corruptedFiles++;
+        else missingFiles++;
+
+        const size = health.fileSizeBytes || 0;
+        if (health.exists) {
+          totalSizeBytes += size;
+        }
+
+        const fmt = health.format || 'OTHER';
+        if (!formatBreakdown[fmt]) {
+          formatBreakdown[fmt] = { count: 0, totalBytes: 0 };
+        }
+        formatBreakdown[fmt].count++;
+        if (health.exists) {
+          formatBreakdown[fmt].totalBytes += size;
+        }
+      }
+    }
+
+    return {
+      totalDigitalWorks: rows.length,
+      totalFiles: items.length,
+      availableFiles,
+      missingFiles,
+      unmountedFiles,
+      corruptedFiles,
+      duplicateFiles,
+      totalSizeBytes,
+      reclaimableSizeBytes: 0,
+      formatBreakdown,
+      items,
+    };
+  }
+
+  /**
+   * Adds a new edition and digital file source to an existing work.
+   */
+  addEditionToWork(
+    workId: string,
+    data: {
+      edition?: string;
+      publisher?: string;
+      publicationYear?: number | string;
+      isbn?: string;
+      language?: string;
+      filePath?: string;
+      fileHash?: string;
+      digitalFormat?: DigitalFormat;
+      fileSize?: string;
+    }
+  ): BookItem | null {
+    const existing = this.getById(workId);
+    if (!existing) return null;
+
+    const editionId = crypto.randomUUID();
+    const sourceId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const pubYear = typeof data.publicationYear === 'number'
+      ? data.publicationYear
+      : data.publicationYear ? parseInt(String(data.publicationYear), 10) || null : null;
+
+    const insertTx = this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO edition (id, work_id, label, publisher, publication_year, language, isbn)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(editionId, workId, data.edition || null, data.publisher || null, pubYear, data.language || 'العربية', data.isbn || null);
+
+      this.db.prepare(`
+        INSERT INTO source (id, edition_id, source_type, status, added_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(sourceId, editionId, 'digital', 'available', now);
+
+      if (data.filePath) {
+        const fmt = data.digitalFormat || 'PDF';
+        this.db.prepare(`
+          INSERT INTO file_source_detail (source_id, file_path, file_hash, file_format, is_managed, storage_state, last_verified_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(sourceId, path.resolve(data.filePath), data.fileHash || null, fmt, 0, 'available', now);
+      }
+    });
+
+    insertTx();
+    return this.getById(workId);
   }
 }
 

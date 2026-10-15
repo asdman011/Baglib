@@ -17,6 +17,8 @@ import migration004 from './004_extended_metadata';
 import migration005 from './005_lending_records';
 import migration006 from './006_api_quota_logs';
 import migration007 from './007_app_settings';
+import migration008 from './008_file_path_index_and_storage';
+import migration009 from './009_storage_management';
 
 /** All migrations in chronological order. */
 export const migrations: Migration[] = [
@@ -27,6 +29,8 @@ export const migrations: Migration[] = [
   migration005,
   migration006,
   migration007,
+  migration008,
+  migration009,
 ];
 
 

@@ -140,6 +140,8 @@ export interface BookItem {
   fileSize?: string;
   fileHash?: string;
   isDuplicate?: boolean;
+  storageState?: 'healthy' | 'available' | 'missing' | 'corrupted' | 'unmounted' | 'duplicate';
+  lastVerifiedAt?: string;
 
   // Online / Auto-fill Info
   onlineSource?: 'Shamela' | 'Noor Library' | 'LibGen' | 'Anna Archive' | 'Inoreader' | 'Manual';

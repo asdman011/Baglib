@@ -70,6 +70,49 @@ export interface IWorkRepository {
    * Retrieves all active or overdue loans across the entire library.
    */
   getActiveLoans?(): Promise<Array<import('./metadata').LendingRecord & { workTitle: string }>> | Array<import('./metadata').LendingRecord & { workTitle: string }>;
+
+  /**
+   * Finds a work by its digital file content hash.
+   */
+  findWorkByFileHash?(fileHash: string): Promise<BookItem | null> | BookItem | null;
+
+  /**
+   * Finds a work by its digital file path on disk.
+   */
+  findWorkByFilePath?(filePath: string): Promise<BookItem | null> | BookItem | null;
+
+  /**
+   * Finds a work by its ISBN-10 or ISBN-13.
+   */
+  findWorkByIsbn?(isbn: string): Promise<BookItem | null> | BookItem | null;
+
+  /**
+   * Verifies file accessibility and health on disk.
+   */
+  verifyFileHealth?(workId: string): Promise<import('./digital-file').FileHealthInfo | null> | import('./digital-file').FileHealthInfo | null;
+
+  /**
+   * Verifies all digital files across the library.
+   */
+  verifyAllDigitalFiles?(): Promise<import('./digital-file').StorageHealthSummary> | import('./digital-file').StorageHealthSummary;
+
+  /**
+   * Adds an edition and digital source to an existing work.
+   */
+  addEditionToWork?(
+    workId: string,
+    editionData: {
+      edition?: string;
+      publisher?: string;
+      publicationYear?: number | string;
+      isbn?: string;
+      language?: string;
+      filePath?: string;
+      fileHash?: string;
+      digitalFormat?: import('./work').DigitalFormat;
+      fileSize?: string;
+    }
+  ): Promise<BookItem | null> | BookItem | null;
 }
 
 

@@ -5,8 +5,8 @@ const fs = require('fs');
 
 const tsxCli = path.resolve(__dirname, '../node_modules/tsx/dist/cli.mjs');
 const userArgs = process.argv.slice(2);
-
-let testFiles = userArgs;
+const flags = userArgs.filter((arg) => arg.startsWith('-'));
+let testFiles = userArgs.filter((arg) => !arg.startsWith('-'));
 if (testFiles.length === 0) {
   const testsDir = path.resolve(__dirname, '../tests');
   if (fs.existsSync(testsDir)) {
@@ -16,7 +16,7 @@ if (testFiles.length === 0) {
   }
 }
 
-const args = [tsxCli, '--test', ...testFiles];
+const args = [tsxCli, '--test', ...flags, ...testFiles];
 
 const result = spawnSync(electron, args, {
   stdio: 'inherit',
