@@ -8,6 +8,7 @@ import {
   HardDrive,
   MapPin,
   Edit3,
+  Info,
   BookMarked,
   FolderOpen,
   PlusCircle,
@@ -298,6 +299,7 @@ export const LibraryGridView: React.FC = () => {
     let discoveredCover: string | undefined;
     let discoveredEdition: string | undefined;
     let discoveredDescription: string | undefined;
+    let discoveredLanguage: string | undefined;
 
     setIsImportingBook(true);
     setImportMessage(
@@ -320,6 +322,13 @@ export const LibraryGridView: React.FC = () => {
             if (discovery.title) discoveredTitle = discovery.title;
             if (discovery.authors && discovery.authors.length > 0) {
               discoveredAuthor = discovery.authors.join('، ');
+            } else {
+              const isArabic =
+                discovery.language?.toLowerCase().startsWith('ar') ||
+                discovery.language === 'العربية' ||
+                /[\u0600-\u06FF]/.test(discoveredTitle) ||
+                lang === 'ar';
+              discoveredAuthor = isArabic ? 'غير معروف' : 'Unknown Author';
             }
             if (discovery.publisher) discoveredPublisher = discovery.publisher;
             if (discovery.publicationYear) discoveredYear = discovery.publicationYear;
@@ -327,6 +336,7 @@ export const LibraryGridView: React.FC = () => {
             if (discovery.coverUrl) discoveredCover = discovery.coverUrl;
             if (discovery.edition) discoveredEdition = discovery.edition;
             if (discovery.description) discoveredDescription = discovery.description;
+            if (discovery.language) discoveredLanguage = discovery.language;
           }
         } catch (err) {
           console.warn('[LibraryGridView] Offline metadata extraction failed:', err);
@@ -363,7 +373,7 @@ export const LibraryGridView: React.FC = () => {
         readingProgress: 0,
         filePath: fullPath,
         fileSize: formattedSize,
-        language: 'العربية',
+        language: discoveredLanguage,
         categories: ['ملفات رقمية محددة'],
         tags: [`#${ext}`],
         lendingHistory: [],
@@ -474,7 +484,7 @@ export const LibraryGridView: React.FC = () => {
       bookType: 'digital',
       readingStatus: 'unread',
       readingProgress: 0,
-      language: partialBook.language || 'العربية',
+      language: partialBook.language,
       categories: partialBook.categories || ['مستورد من الإنترنت'],
       tags: partialBook.tags || ['#مستورد_رقمي'],
       lendingHistory: [],
@@ -825,6 +835,22 @@ export const LibraryGridView: React.FC = () => {
                             <option value="completed">{t('statusCompleted') || 'مكتمل'}</option>
                           </select>
                         </div>
+
+                        {/* Info 'i' Button directly next to book status */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBook(book);
+                            setIsNewBook(false);
+                            setIsDetailModalOpen(true);
+                          }}
+                          title={t('bookDetailsBtn')}
+                          aria-label={t('bookDetailsBtn')}
+                          className="w-5 h-5 rounded-full bg-canvas border border-subtle text-muted hover:text-pale-sky-600 dark:hover:text-pale-sky-300 hover:border-pale-sky-500/40 hover:bg-pale-sky-500/10 flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                        >
+                          <Info className="w-3 h-3" />
+                        </button>
                       </div>
 
                       {activeLend && (
@@ -911,18 +937,6 @@ export const LibraryGridView: React.FC = () => {
                         >
                           <BookOpen className="w-3.5 h-3.5" />
                           <span>{t('readBook')}</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setSelectedBook(book);
-                            setIsNewBook(false);
-                            setIsDetailModalOpen(true);
-                          }}
-                          title="تعديل بيانات الكتاب والرف والسجل"
-                          className="p-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:text-main hover:bg-surface transition-colors cursor-pointer"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
                         </button>
 
                         <button
@@ -1128,10 +1142,11 @@ export const LibraryGridView: React.FC = () => {
                                   setIsNewBook(false);
                                   setIsDetailModalOpen(true);
                                 }}
-                                title="تعديل"
-                                className="p-1 rounded-xl bg-canvas border border-subtle text-muted hover:text-main hover:bg-surface transition-colors cursor-pointer"
+                                title={t('bookDetailsBtn')}
+                                aria-label={t('bookDetailsBtn')}
+                                className="p-1 rounded-xl bg-canvas border border-subtle text-muted hover:text-pale-sky-600 dark:hover:text-pale-sky-400 hover:bg-surface transition-colors cursor-pointer"
                               >
-                                <Edit3 className="w-3.5 h-3.5" />
+                                <Info className="w-3.5 h-3.5" />
                               </button>
 
                               <button

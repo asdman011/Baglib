@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { BookItem } from '../../types/library';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
+import { isPlaceholderAuthor } from '../../../shared/validators/metadata-validator';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 export interface DiffFieldItem {
@@ -64,7 +65,9 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
 
   // Prepare normalized field candidates
   const incomingTitle = incomingWork.title || primaryEdition?.title;
-  const incomingAuthor = incomingWork.authors?.[0] || 'مؤلف مجهول';
+  const incomingLanguage = primaryEdition?.language;
+  const isArabicIncoming = incomingLanguage?.toLowerCase().startsWith('ar') || /[\u0600-\u06FF]/.test(incomingTitle || '');
+  const incomingAuthor = incomingWork.authors?.[0] || (isArabicIncoming ? 'غير معروف' : 'Unknown Author');
   const incomingPublisher = primaryEdition?.publisher;
   const incomingYear = incomingWork.firstPublishYear || (primaryEdition?.publishDate ? parseInt(primaryEdition.publishDate.substring(0, 4)) : undefined);
   const incomingIsbn = primaryEdition?.isbn13 || primaryEdition?.isbn || primaryEdition?.isbn10;
@@ -72,6 +75,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
   const incomingCover = primaryEdition?.coverUrl || incomingWork.editions?.find((e) => Boolean(e.coverUrl))?.coverUrl;
   const incomingCategories = incomingWork.subjects && incomingWork.subjects.length > 0 ? incomingWork.subjects : undefined;
   const incomingDescription = incomingWork.description;
+  const incomingAuthorBio = incomingWork.authorBio;
 
   // Resolve which server / provider fetched this candidate
   const providerName = useMemo(() => {
@@ -121,8 +125,8 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
         icon: User,
         currentValue: currentBook.author || '',
         incomingValue: incomingAuthor || '',
-        hasCurrent: Boolean(currentBook.author && currentBook.author !== 'مؤلف مجهول' && currentBook.author !== 'Unknown Author'),
-        hasIncoming: Boolean(incomingAuthor && incomingAuthor !== 'مؤلف مجهول'),
+        hasCurrent: Boolean(currentBook.author && !isPlaceholderAuthor(currentBook.author)),
+        hasIncoming: Boolean(incomingAuthor && !isPlaceholderAuthor(incomingAuthor)),
         isDifferent: (currentBook.author || '').trim() !== (incomingAuthor || '').trim(),
       },
       {
@@ -195,11 +199,21 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
         id: 'description',
         labelKey: 'diffFieldDescription',
         icon: FileText,
-        currentValue: (currentBook as any).description || '',
+        currentValue: currentBook.description || '',
         incomingValue: incomingDescription || '',
-        hasCurrent: Boolean((currentBook as any).description?.trim()),
+        hasCurrent: Boolean(currentBook.description?.trim()),
         hasIncoming: Boolean(incomingDescription?.trim()),
-        isDifferent: ((currentBook as any).description || '').trim() !== (incomingDescription || '').trim(),
+        isDifferent: (currentBook.description || '').trim() !== (incomingDescription || '').trim(),
+      },
+      {
+        id: 'authorBio',
+        labelKey: 'diffFieldAuthorBio',
+        icon: User,
+        currentValue: currentBook.authorBio || '',
+        incomingValue: incomingAuthorBio || '',
+        hasCurrent: Boolean(currentBook.authorBio?.trim()),
+        hasIncoming: Boolean(incomingAuthorBio?.trim()),
+        isDifferent: (currentBook.authorBio || '').trim() !== (incomingAuthorBio || '').trim(),
       },
       {
         id: 'coverImage',
@@ -280,7 +294,10 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
       updates.categories = Array.from(new Set([...(currentBook.categories || []), ...incomingCategories]));
     }
     if (selectedFieldIds.description && incomingDescription) {
-      (updates as any).description = incomingDescription;
+      updates.description = incomingDescription;
+    }
+    if (selectedFieldIds.authorBio && incomingAuthorBio) {
+      updates.authorBio = incomingAuthorBio;
     }
 
     onApply(updates);

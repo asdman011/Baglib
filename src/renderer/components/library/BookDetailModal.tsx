@@ -147,6 +147,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     if (book) {
       const initial: BookItem = {
         ...book,
+        description: book.description || book.abstract || '',
+        authorBio: book.authorBio || '',
         workType: book.workType || 'book',
         workTypeId: book.workTypeId || 'wt-book',
         contributors: book.contributors || [],
@@ -259,7 +261,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     let discoveredIsbn = '';
     let discoveredCover = '';
     let discoveredEdition = '';
-    let discoveredLanguage = 'العربية';
+    let discoveredLanguage = '';
     let discoveredAbstract = '';
 
     // Phase 1: Extract strictly offline metadata attached to the file (EPUB/PDF embedded or filename)
@@ -313,14 +315,22 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       fileSize: fileSizeStr || prev.fileSize || '1.5 MB',
       bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
       title: discoveredTitle,
-      author: discoveredAuthor || (lang === 'ar' ? 'مؤلف جديد' : 'New Author'),
+      author:
+        discoveredAuthor ||
+        (discoveredLanguage?.toLowerCase().startsWith('ar') ||
+        discoveredLanguage === 'العربية' ||
+        /[\u0600-\u06FF]/.test(discoveredTitle) ||
+        lang === 'ar'
+          ? 'غير معروف'
+          : 'Unknown Author'),
       publisher: discoveredPublisher,
       publicationYear: discoveredYear,
       isbn: discoveredIsbn,
       coverImage: discoveredCover,
       edition: discoveredEdition,
       language: discoveredLanguage,
-      abstract: discoveredAbstract,
+      description: discoveredAbstract || prev.description,
+      abstract: discoveredAbstract || prev.abstract,
     }));
 
     setIsDiscoveringFile(false);
@@ -402,6 +412,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       ...prev,
       title: imported.title || prev.title,
       author: imported.author || prev.author,
+      authorBio: imported.authorBio || prev.authorBio,
       publisher: imported.publisher || prev.publisher,
       publicationYear: imported.publicationYear || prev.publicationYear,
       isbn: imported.isbn || prev.isbn,
@@ -410,6 +421,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       filePath: imported.filePath || prev.filePath,
       fileSize: imported.fileSize || prev.fileSize,
       language: imported.language || prev.language,
+      description: imported.description || prev.description,
+      abstract: imported.description || imported.abstract || prev.abstract,
       onlineSource: (imported.onlineSource as any) || prev.onlineSource,
       bookType: imported.filePath ? (prev.bookType === 'physical' ? 'hybrid' : 'digital') : prev.bookType,
       categories: imported.categories ? Array.from(new Set([...(prev.categories || []), ...imported.categories])) : prev.categories,
@@ -600,6 +613,9 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     setFormData((prev) => ({
       ...prev,
       ...updates,
+      description: updates.description !== undefined ? updates.description : (updates.abstract !== undefined ? updates.abstract : prev.description),
+      abstract: updates.description !== undefined ? updates.description : (updates.abstract !== undefined ? updates.abstract : prev.abstract),
+      authorBio: updates.authorBio !== undefined ? updates.authorBio : prev.authorBio,
     }));
     setAutoFillSuccess(true);
     setTimeout(() => setAutoFillSuccess(false), 3000);
@@ -1158,18 +1174,51 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-main">{lang === 'ar' ? 'لغة العمل' : 'Language'}</label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-main">{t('workLanguage')}</label>
+                    {formData.language && (
+                      <span className="text-[10px] text-pale-sky-500 font-medium px-1.5 py-0.5 rounded bg-pale-sky-500/10 border border-pale-sky-500/20">
+                        {t('langAutoDetected')}
+                      </span>
+                    )}
+                  </div>
                   <select
-                    value={formData.language || 'العربية'}
+                    value={formData.language || ''}
                     onChange={(e) => handleInputChange('language', e.target.value)}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   >
-                    <option value="العربية">العربية (Arabic)</option>
-                    <option value="English">English</option>
-                    <option value="الفرنسية">الفرنسية (French)</option>
-                    <option value="الفارسية">الفارسية (Persian)</option>
-                    <option value="التركية">التركية (Turkish)</option>
+                    <option value="">{t('langUnspecified')}</option>
+                    <option value="العربية">{t('langArabic')}</option>
+                    <option value="English">{t('langEnglish')}</option>
+                    <option value="الفرنسية">{t('langFrench')}</option>
+                    <option value="الفارسية">{t('langPersian')}</option>
+                    <option value="التركية">{t('langTurkish')}</option>
+                    <option value="الألمانية">{t('langGerman')}</option>
+                    <option value="الإسبانية">{t('langSpanish')}</option>
+                    <option value="الروسية">{t('langRussian')}</option>
+                    <option value="الأردية">{t('langUrdu')}</option>
+                    <option value="الإيطالية">{t('langItalian')}</option>
                   </select>
+                </div>
+
+                <div className="sm:col-span-2 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-main flex items-center gap-1.5 text-xs">
+                      <span>{t('authorBio')}</span>
+                    </label>
+                    {formData.authorBio && (
+                      <span className="text-[10px] text-muted font-normal">
+                        {formData.authorBio.length} {lang === 'ar' ? 'حرف' : 'chars'}
+                      </span>
+                    )}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={formData.authorBio || ''}
+                    onChange={(e) => handleInputChange('authorBio', e.target.value)}
+                    placeholder={t('authorBioPlaceholder')}
+                    className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500 text-xs resize-y leading-relaxed font-sans"
+                  />
                 </div>
 
                 <div className="space-y-1">
@@ -1614,6 +1663,31 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* BOOK / WORK DESCRIPTION & SYNOPSIS */}
+              <div className="p-4 rounded-2xl bg-canvas/60 border border-subtle space-y-2 mt-4">
+                <div className="flex items-center justify-between border-b border-subtle pb-2">
+                  <label className="font-bold text-main flex items-center gap-2 text-xs text-pale-sky-600 dark:text-pale-sky-400">
+                    <FileText className="w-4 h-4" />
+                    <span>{t('bookDescription')}</span>
+                  </label>
+                  {formData.description && (
+                    <span className="text-[10px] text-muted font-mono">
+                      {formData.description.length} {lang === 'ar' ? 'حرف' : 'chars'}
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  rows={4}
+                  value={formData.description || formData.abstract || ''}
+                  onChange={(e) => {
+                    handleInputChange('description', e.target.value);
+                    handleInputChange('abstract', e.target.value);
+                  }}
+                  placeholder={t('bookDescriptionPlaceholder')}
+                  className="w-full p-3 rounded-xl bg-surface border border-subtle text-main outline-none focus:border-pale-sky-500 text-xs leading-relaxed resize-y font-sans"
+                />
               </div>
             </div>
           )}

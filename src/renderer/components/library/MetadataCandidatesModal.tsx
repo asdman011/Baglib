@@ -319,6 +319,13 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
               {work.description}
             </p>
           )}
+
+          {/* Author Bio Excerpt */}
+          {work.authorBio && (
+            <p className="mt-1.5 text-[11px] text-pale-sky-600 dark:text-pale-sky-400 line-clamp-1 italic">
+              «{work.authorBio}»
+            </p>
+          )}
         </div>
       </div>
     );

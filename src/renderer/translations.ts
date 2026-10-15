@@ -46,7 +46,7 @@ export const translations = {
 
     readBook: "قراءة",
     physicalBook: "نسخة ورقية",
-    noAuthor: "مؤلف مجهول",
+    noAuthor: "غير معروف",
     viewGrid: "عرض الشبكة",
     viewList: "عرض القائمة",
     readingStatus: "حالة القراءة",
@@ -87,6 +87,21 @@ export const translations = {
     workTypeLabel: "نوع المصنف:",
     newMaterialDefaultTitle: "مادة جديدة",
     newMaterialDefaultAuthor: "مؤلف جديد",
+
+    // Material Language Detection
+    workLanguage: "لغة العمل",
+    langUnspecified: "— غير محددة (اختر لغة العمل) —",
+    langAutoDetected: "تم التعرف تلقائياً",
+    langArabic: "العربية (Arabic)",
+    langEnglish: "الإنجليزية (English)",
+    langFrench: "الفرنسية (French)",
+    langPersian: "الفارسية (Persian)",
+    langTurkish: "التركية (Turkish)",
+    langGerman: "الألمانية (German)",
+    langSpanish: "الإسبانية (Spanish)",
+    langRussian: "الروسية (Russian)",
+    langUrdu: "الأردية (Urdu)",
+    langItalian: "الإيطالية (Italian)",
 
     // Online Hub & LibGen Provider
     onlineHubTitle: "المكتبات والمصادر المفتوحة عبر الإنترنت",
@@ -174,6 +189,8 @@ export const translations = {
     diffFieldPages: "عدد الصفحات",
     diffFieldCategories: "التصنيفات والموضوعات",
     diffFieldDescription: "النبذة والوصف",
+    diffFieldAuthorBio: "نبذة عن المؤلف",
+    diffFieldLanguage: "لغة العمل",
     diffFieldCover: "صورة الغلاف",
 
     // Candidate Selection & Auto-fill Improvements
@@ -305,6 +322,11 @@ export const translations = {
     dropInvalidFile: "يرجى إفلات ملف كتاب مدعوم (PDF، EPUB، MOBI، AZW3، TXT، HTML)",
     bookAddedFromDrop: 'تمت إضافة الكتاب "{title}" إلى المكتبة بنجاح!',
     metadataUpdatedFromNewFile: "تم تحديث بيانات الكتاب والغلاف بناءً على الملف الجديد بنجاح!",
+    bookDescription: "وصف الكتاب والنبذة العامة",
+    bookDescriptionPlaceholder: "اكتب أو اقرأ وصف الكتاب والملخص العام للمحتوى هنا...",
+    authorBio: "نبذة عن المؤلف (سيرة موجزة)",
+    authorBioPlaceholder: "نبذة موجزة عن حياة المؤلف وسيرته العلمية...",
+    bookDetailsBtn: "تفاصيل ومعلومات الكتاب",
   },
   en: {
     // Titlebar
@@ -395,6 +417,21 @@ export const translations = {
     newMaterialDefaultTitle: "New Material",
     newMaterialDefaultAuthor: "New Author",
 
+    // Material Language Detection
+    workLanguage: "Language",
+    langUnspecified: "— Unspecified (Choose Language) —",
+    langAutoDetected: "Auto-detected",
+    langArabic: "Arabic (العربية)",
+    langEnglish: "English",
+    langFrench: "French (Français)",
+    langPersian: "Persian (فارسی)",
+    langTurkish: "Turkish (Türkçe)",
+    langGerman: "German (Deutsch)",
+    langSpanish: "Spanish (Español)",
+    langRussian: "Russian (Русский)",
+    langUrdu: "Urdu (اردو)",
+    langItalian: "Italian (Italiano)",
+
     // Online Hub & LibGen Provider
     onlineHubTitle: "Online Libraries & Open Knowledge Repositories",
     onlineHubDesc: "Search and fetch books and materials from Shamela, Noor Book, LibGen, Anna's Archive, and RSS feeds",
@@ -481,6 +518,8 @@ export const translations = {
     diffFieldPages: "Pages Count",
     diffFieldCategories: "Categories & Subjects",
     diffFieldDescription: "Description",
+    diffFieldAuthorBio: "Author Biography",
+    diffFieldLanguage: "Language",
     diffFieldCover: "Cover Image",
 
     // Candidate Selection & Auto-fill Improvements
@@ -611,6 +650,11 @@ export const translations = {
     dropInvalidFile: "Please drop a supported book file (PDF, EPUB, MOBI, AZW3, TXT, HTML)",
     bookAddedFromDrop: 'Book "{title}" added to your library successfully!',
     metadataUpdatedFromNewFile: "Metadata and cover updated from the new file successfully!",
+    bookDescription: "Book Description & Summary",
+    bookDescriptionPlaceholder: "Read or enter the book description and content summary here...",
+    authorBio: "Author's Brief / Biography",
+    authorBioPlaceholder: "Brief author biography, background, or life summary...",
+    bookDetailsBtn: "Book Details & Info",
   }
 };
 
