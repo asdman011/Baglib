@@ -57,6 +57,10 @@ export interface BookItem {
   readingStatus?: ReadingStatus;
   readingProgress?: number;
 
+  // General Description & Author Bio
+  description?: string;
+  authorBio?: string;
+
   // Work Type Classification
   workTypeId?: string;                  // e.g. 'wt-book', 'wt-research-paper'
   workType?: WorkTypeKey | string;      // e.g. 'book', 'research_paper', 'lecture'
@@ -113,7 +117,7 @@ export interface BookItem {
   physicalLocation?: PhysicalLocation;
 
   // Categorization
-  language: 'العربية' | 'English' | string;
+  language?: 'العربية' | 'English' | string;
   categories: string[];
   primaryCategory?: {
     id: string;
@@ -154,6 +158,10 @@ export interface BookItemInput {
   pagesCount?: number;
   readingStatus?: ReadingStatus;
   readingProgress?: number;
+
+  // General Description & Author Bio
+  description?: string;
+  authorBio?: string;
 
   // Work Type Classification
   workTypeId?: string;

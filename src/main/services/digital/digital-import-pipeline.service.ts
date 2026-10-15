@@ -83,9 +83,15 @@ export class DigitalImportPipelineService {
 
       // 4. Resolve Final Bibliographic Fields (User override > Extracted > Fallback)
       const title = (options.customTitle || extracted.title || fileName).trim();
+      const isArabic =
+        extracted.language?.toLowerCase().startsWith('ar') ||
+        extracted.language === 'العربية' ||
+        /[\u0600-\u06FF]/.test(title);
+      const defaultUnknownAuthor = isArabic ? 'غير معروف' : 'Unknown Author';
+
       const authorList = options.customAuthor
         ? [options.customAuthor.trim()]
-        : (extracted.authors && extracted.authors.length > 0 ? extracted.authors : ['مؤلف مجهول']);
+        : (extracted.authors && extracted.authors.length > 0 ? extracted.authors : [defaultUnknownAuthor]);
 
       const primaryAuthor = authorList[0];
       const contributors = authorList.map((name) => ({
@@ -105,7 +111,7 @@ export class DigitalImportPipelineService {
         publicationYear: extracted.publicationYear,
         isbn: extracted.isbn,
         abstract: extracted.description,
-        language: extracted.language || 'العربية',
+        language: extracted.language || undefined,
         categories: mergedTags,
         tags: mergedTags,
         primaryCategoryId: options.primaryCategoryId || null,

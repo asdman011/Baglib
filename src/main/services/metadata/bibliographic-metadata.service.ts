@@ -7,9 +7,12 @@ import { FilenameParser, ParsedFilenameMetadata } from './filename-parser';
 import { CandidateMatcher, CandidateEvaluation, TargetBookEvidence } from './candidate-matcher';
 import { EmbeddedMetadataExtractor, EmbeddedBookMetadata } from './embedded-metadata.extractor';
 import { coverResolverService, CoverResolutionResult } from './cover-resolver.service';
-import { isValidIsbn, isPlaceholderTitle, isPlaceholderAuthor } from '../../../shared/validators/metadata-validator';
+import { isValidIsbn, isPlaceholderTitle, isPlaceholderAuthor, isbn10ToIsbn13 } from '../../../shared/validators/metadata-validator';
 import { QuotaTracker, quotaTracker as defaultQuotaTracker } from './quotaTracker';
 import { ProviderConfigService, providerConfigService as defaultProviderConfigService } from './provider-config.service';
+import { authorBioService } from './author-bio.service';
+import { languageDetectorService } from './language-detector.service';
+import { textIsbnScannerService } from './text-isbn-scanner.service';
 
 export interface DiscoveredCandidateItem {
   work: BibliographicWork;
@@ -35,6 +38,7 @@ export interface DiscoveredBookResult {
   isbn13?: string;
   language?: string;
   description?: string;
+  authorBio?: string;
   coverUrl?: string;
   coverSource?: string;
   confidence: number;
@@ -231,33 +235,95 @@ export class BibliographicMetadataService {
     // Assemble local target evidence (user input > embedded > filename)
     let rawTitle = params.title?.trim() || '';
     if (isPlaceholderTitle(rawTitle)) {
-      rawTitle = embeddedMeta?.title || parsedFilename?.title || '';
-    } else if (!rawTitle) {
-      rawTitle = embeddedMeta?.title || parsedFilename?.title || '';
+      rawTitle = '';
+    }
+    if (!rawTitle) {
+      const embeddedTitle = embeddedMeta?.title?.trim();
+      const filenameTitle = parsedFilename?.title?.trim();
+      if (embeddedTitle && !isPlaceholderTitle(embeddedTitle)) {
+        rawTitle = embeddedTitle;
+      } else if (filenameTitle && !isPlaceholderTitle(filenameTitle)) {
+        rawTitle = filenameTitle;
+      }
     }
     const targetTitle = rawTitle;
 
-    let rawAuthors: string[] = [];
-    if (params.author?.trim()) {
-      rawAuthors = FilenameParser.splitMultiAuthors(params.author.trim());
-    } else if (embeddedMeta?.authors && embeddedMeta.authors.length > 0) {
-      rawAuthors = embeddedMeta.authors;
-    } else if (parsedFilename?.authors && parsedFilename.authors.length > 0) {
-      rawAuthors = parsedFilename.authors;
-    }
+    // Calibre smart_update resolution for authors:
+    // User override (if non-placeholder) > Valid embedded file metadata > Valid filename parsed metadata
+    const validUserAuthors: string[] = params.author?.trim()
+      ? FilenameParser.splitMultiAuthors(params.author.trim()).filter((a) => !isPlaceholderAuthor(a))
+      : [];
 
-    const targetAuthors: string[] = rawAuthors.filter((a) => !isPlaceholderAuthor(a));
+    const validEmbeddedAuthors: string[] = (embeddedMeta?.authors || []).filter(
+      (a) => !isPlaceholderAuthor(a)
+    );
+
+    const validFilenameAuthors: string[] = (parsedFilename?.authors || []).filter(
+      (a) => !isPlaceholderAuthor(a)
+    );
+
+    let targetAuthors: string[] = [];
+    if (validUserAuthors.length > 0) {
+      targetAuthors = validUserAuthors;
+    } else if (validEmbeddedAuthors.length > 0) {
+      targetAuthors = validEmbeddedAuthors;
+    } else if (validFilenameAuthors.length > 0) {
+      targetAuthors = validFilenameAuthors;
+    }
 
     const targetTranslators: string[] = parsedFilename?.translators || [];
     const targetPublisher = embeddedMeta?.publisher || parsedFilename?.publisher;
     const targetYear = embeddedMeta?.publicationYear || parsedFilename?.publicationYear;
     const targetEdition = parsedFilename?.edition;
-    const targetLanguage = embeddedMeta?.language || parsedFilename?.language;
+
+    // Resolve language reliably without assigning arbitrary defaults
+    let targetLanguage: string | undefined = embeddedMeta?.language;
+    if (!targetLanguage && parsedFilename?.language) {
+      const norm = languageDetectorService.normalizeLanguageCode(parsedFilename.language);
+      if (norm) {
+        targetLanguage = norm.name;
+      }
+    }
+    if (!targetLanguage && (targetTitle || embeddedMeta?.description)) {
+      const detectResult = languageDetectorService.detectLanguage({
+        title: targetTitle,
+        description: embeddedMeta?.description,
+        author: targetAuthors[0],
+      });
+      if (detectResult.isReliable) {
+        targetLanguage = detectResult.language;
+      }
+    }
 
     let targetIsbn = params.isbn?.trim() || embeddedMeta?.isbn || parsedFilename?.isbn;
+    let targetIsbn10 = parsedFilename?.isbn10 || embeddedMeta?.isbn10;
+    let targetIsbn13 = parsedFilename?.isbn13 || embeddedMeta?.isbn13;
+
+    // Auto-acquire ISBN from file content (PDF/EPUB/TXT/HTML) if not already found in headers/filename
+    if (!targetIsbn && params.filePath) {
+      try {
+        const scanned = await textIsbnScannerService.scanFile(params.filePath);
+        if (scanned?.isbn) {
+          targetIsbn = scanned.isbn;
+          targetIsbn10 = scanned.isbn10;
+          targetIsbn13 = scanned.isbn13;
+        }
+      } catch (scanErr) {
+        console.warn('[BibliographicMetadataService] Text ISBN scanning failed:', scanErr);
+      }
+    }
+
     if (targetIsbn) {
       targetIsbn = targetIsbn.replace(/[-\s]/g, '').toUpperCase();
-      if (!isValidIsbn(targetIsbn)) targetIsbn = undefined;
+      if (!isValidIsbn(targetIsbn)) {
+        targetIsbn = undefined;
+      } else {
+        if (!targetIsbn13 && targetIsbn.length === 13) targetIsbn13 = targetIsbn;
+        if (!targetIsbn10 && targetIsbn.length === 10) targetIsbn10 = targetIsbn;
+        if (targetIsbn.length === 10 && !targetIsbn13) {
+          targetIsbn13 = isbn10ToIsbn13(targetIsbn) || undefined;
+        }
+      }
     }
 
     // Phase 1 (Local Upload / Offline Mode):
@@ -283,22 +349,28 @@ export class BibliographicMetadataService {
       }
 
       const finalTitle = targetTitle || (identifierPath ? identifierPath.replace(/\.[^.]+$/, '') : 'Untitled');
+      const isArabic =
+        targetLanguage?.toLowerCase().startsWith('ar') ||
+        targetLanguage === 'العربية' ||
+        /[\u0600-\u06FF]/.test(finalTitle);
+      const defaultUnknownAuthor = isArabic ? 'غير معروف' : 'Unknown Author';
+      const resolvedAuthors = targetAuthors.length > 0 ? targetAuthors : [defaultUnknownAuthor];
 
       return {
         title: finalTitle,
-        authors: targetAuthors,
+        authors: resolvedAuthors,
         translators: targetTranslators,
         publisher: targetPublisher,
         publicationYear: targetYear,
         edition: targetEdition,
         isbn: targetIsbn,
-        isbn10: parsedFilename?.isbn10,
-        isbn13: parsedFilename?.isbn13,
-        language: targetLanguage || 'العربية',
+        isbn10: targetIsbn10,
+        isbn13: targetIsbn13,
+        language: targetLanguage,
         description: embeddedMeta?.description,
         coverUrl: localCoverUrl,
         coverSource: localCoverSource,
-        confidence: embeddedMeta ? 0.85 : (parsedFilename?.overallConfidence || 0.5),
+        confidence: targetIsbn ? 0.95 : (embeddedMeta ? 0.85 : (parsedFilename?.overallConfidence || 0.5)),
         isVerifiedMatch: false,
         candidates: [],
         rankedEvaluations: [],
@@ -307,7 +379,7 @@ export class BibliographicMetadataService {
           localParsed: !!parsedFilename,
           embeddedFound: !!embeddedMeta,
           providerUsed: undefined,
-          isbnDiscovered: false,
+          isbnDiscovered: !!targetIsbn && !params.isbn,
         },
       };
     }
@@ -435,8 +507,44 @@ export class BibliographicMetadataService {
         : targetAuthors;
     const finalPublisher = matchedEdition?.publisher || targetPublisher;
     const finalYear = matchedWork?.firstPublishYear || targetYear;
-    const finalLanguage = matchedEdition?.language || targetLanguage;
     const finalDescription = matchedWork?.description || embeddedMeta?.description;
+
+    let finalLanguage = matchedEdition?.language || targetLanguage;
+    if (finalLanguage) {
+      const norm = languageDetectorService.normalizeLanguageCode(finalLanguage);
+      if (norm) {
+        finalLanguage = norm.name;
+      }
+    } else if (finalTitle || finalDescription) {
+      const detectResult = languageDetectorService.detectLanguage({
+        title: finalTitle,
+        description: finalDescription,
+        author: finalAuthors[0],
+      });
+      if (detectResult.isReliable) {
+        finalLanguage = detectResult.language;
+      }
+    }
+
+    let finalAuthorBio: string | undefined = matchedWork?.authorBio;
+    if (!finalAuthorBio && finalAuthors.length > 0 && !isPlaceholderAuthor(finalAuthors[0])) {
+      try {
+        finalAuthorBio = await authorBioService.resolveAuthorBio(finalAuthors[0], finalLanguage);
+      } catch (bioErr) {
+        console.warn('[BibliographicMetadataService] Author bio resolution error:', bioErr);
+      }
+    }
+
+    if (matchedWork && finalAuthorBio && !matchedWork.authorBio) {
+      matchedWork.authorBio = finalAuthorBio;
+    }
+
+    const outputCandidates = rankedCandidates.length > 0 ? rankedCandidates : candidates;
+    for (const cand of outputCandidates) {
+      if (finalAuthorBio && !cand.authorBio) {
+        cand.authorBio = finalAuthorBio;
+      }
+    }
 
     // Stage D: Multi-Source Cover Resolution
     let coverResolution: CoverResolutionResult = {
@@ -478,31 +586,39 @@ export class BibliographicMetadataService {
       ? bestEvaluation.confidence
       : parsedFilename?.overallConfidence || (embeddedMeta ? 0.7 : 0.4);
 
+    const isArabic =
+      finalLanguage?.toLowerCase().startsWith('ar') ||
+      finalLanguage === 'العربية' ||
+      /[\u0600-\u06FF]/.test(finalTitle);
+    const defaultUnknownAuthor = isArabic ? 'غير معروف' : 'Unknown Author';
+    const resolvedFinalAuthors = finalAuthors.length > 0 ? finalAuthors : [defaultUnknownAuthor];
+
     return {
       title: finalTitle,
-      authors: finalAuthors,
+      authors: resolvedFinalAuthors,
       translators: targetTranslators,
       publisher: finalPublisher,
       publicationYear: finalYear,
       edition: targetEdition,
       isbn: finalIsbn,
-      isbn10: matchedEdition?.isbn10 || parsedFilename?.isbn10,
-      isbn13: matchedEdition?.isbn13 || parsedFilename?.isbn13,
+      isbn10: matchedEdition?.isbn10 || targetIsbn10 || parsedFilename?.isbn10,
+      isbn13: matchedEdition?.isbn13 || targetIsbn13 || parsedFilename?.isbn13,
       language: finalLanguage,
       description: finalDescription,
+      authorBio: finalAuthorBio,
       coverUrl: coverResolution.coverUrl,
       coverSource: coverResolution.source,
       confidence,
       isVerifiedMatch: !!bestEvaluation?.isCertainMatch,
       matchedWork,
-      candidates: rankedCandidates.length > 0 ? rankedCandidates : candidates,
+      candidates: outputCandidates,
       rankedEvaluations,
       parsedFilename,
       provenance: {
         localParsed: !!parsedFilename,
         embeddedFound: !!embeddedMeta,
         providerUsed,
-        isbnDiscovered: !!discoveredIsbn && !targetIsbn,
+        isbnDiscovered: !!(discoveredIsbn || (targetIsbn && !params.isbn)),
       },
     };
   }

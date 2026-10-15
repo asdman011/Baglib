@@ -8,7 +8,10 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
-import { isValidIsbn } from '../../../shared/validators/metadata-validator';
+import { isValidIsbn, isPlaceholderAuthor, isPlaceholderTitle, isbn10ToIsbn13 } from '../../../shared/validators/metadata-validator';
+import { languageDetectorService } from './language-detector.service';
+import { FilenameParser } from './filename-parser';
+import { textIsbnScannerService } from './text-isbn-scanner.service';
 
 // Use require for pdf-parse and yauzl
 const pdfParse = require('pdf-parse');
@@ -20,6 +23,8 @@ export interface EmbeddedBookMetadata {
   publisher?: string;
   publicationYear?: number;
   isbn?: string;
+  isbn10?: string;
+  isbn13?: string;
   language?: string;
   description?: string;
   coverBuffer?: Buffer;
@@ -421,22 +426,27 @@ export class EmbeddedMetadataExtractor {
     const authors: string[] = [];
     let publicationYear: number | undefined;
     let description: string | undefined;
+    let language: string | undefined;
+    let isbn: string | undefined;
+    let isbn10: string | undefined;
+    let isbn13: string | undefined;
 
     if (typeof pdfFn === 'function') {
       try {
-        const pdfData = await pdfFn(dataBuffer, { max: 1 }); // only parse first page for fast header info
+        const pdfData = await pdfFn(new Uint8Array(dataBuffer), { max: 1 }); // only parse first page for fast header info
         const info = pdfData.info || {};
 
         if (typeof info.Title === 'string' && info.Title.trim()) {
           title = info.Title.trim();
         }
-        // Discard generic printer/generator titles like "untitled", "Microsoft Word - ..."
-        if (title && /^(untitled|microsoft word|export|document\d*)$/i.test(title)) {
+        if (title && isPlaceholderTitle(title)) {
           title = undefined;
         }
 
         if (typeof info.Author === 'string' && info.Author.trim()) {
-          authors.push(info.Author.trim());
+          const split = FilenameParser.splitMultiAuthors(info.Author.trim());
+          const valid = split.filter((a) => !isPlaceholderAuthor(a));
+          authors.push(...valid);
         }
 
         if (info.CreationDate) {
@@ -450,8 +460,51 @@ export class EmbeddedMetadataExtractor {
         if (typeof info.Subject === 'string') {
           description = info.Subject.trim();
         }
+
+        if (typeof info.Keywords === 'string' && info.Keywords.trim()) {
+          const kwList = info.Keywords.split(/[,;]/).map((k: string) => k.trim()).filter(Boolean);
+          for (const kw of kwList) {
+            const cleanKw = kw.replace(/[-\s]/g, '');
+            if (isValidIsbn(cleanKw)) {
+              isbn = cleanKw;
+              if (cleanKw.length === 10) {
+                isbn10 = cleanKw;
+                isbn13 = isbn10ToIsbn13(cleanKw) || undefined;
+              } else if (cleanKw.length === 13) {
+                isbn13 = cleanKw;
+              }
+              break;
+            }
+          }
+        }
+
+        if (pdfData.text) {
+          const langDetect = languageDetectorService.detectLanguage({
+            contentSample: pdfData.text,
+            title,
+            description,
+            author: authors[0],
+          });
+          if (langDetect.isReliable) {
+            language = langDetect.language;
+          }
+        }
       } catch (err) {
         console.warn(`[EmbeddedMetadataExtractor] pdf-parse warning for ${filePath}:`, err);
+      }
+    }
+
+    // Calibre Extract ISBN adaptation: Scan PDF text with page budgeting (first 10, then last 5)
+    if (!isbn) {
+      try {
+        const scanned = await textIsbnScannerService.scanPdf(dataBuffer);
+        if (scanned?.isbn) {
+          isbn = scanned.isbn;
+          isbn10 = scanned.isbn10;
+          isbn13 = scanned.isbn13;
+        }
+      } catch (scanErr) {
+        console.warn(`[EmbeddedMetadataExtractor] PDF text ISBN scan warning for ${filePath}:`, scanErr);
       }
     }
 
@@ -463,6 +516,10 @@ export class EmbeddedMetadataExtractor {
       authors,
       publicationYear,
       description,
+      language,
+      isbn,
+      isbn10,
+      isbn13,
       coverBuffer: pdfCover?.coverBuffer,
       coverMimeType: pdfCover?.coverMimeType,
     };
@@ -531,7 +588,8 @@ export class EmbeddedMetadataExtractor {
             const title = titleMatch ? titleMatch[1].trim() : undefined;
 
             const authorMatches = [...opfXml.matchAll(/<dc:creator[^>]*>([^<]+)<\/dc:creator>/gi)];
-            const authors = authorMatches.map((m) => m[1].trim()).filter(Boolean);
+            const rawAuthors = authorMatches.map((m) => m[1].trim()).filter(Boolean);
+            const authors = rawAuthors.flatMap((a) => FilenameParser.splitMultiAuthors(a)).filter((a) => !isPlaceholderAuthor(a));
 
             const publisherMatch = opfXml.match(/<dc:publisher[^>]*>([^<]+)<\/dc:publisher>/i);
             const publisher = publisherMatch ? publisherMatch[1].trim() : undefined;
@@ -548,11 +606,33 @@ export class EmbeddedMetadataExtractor {
             // Find ISBN in dc:identifier
             const idMatches = [...opfXml.matchAll(/<dc:identifier[^>]*>([^<]+)<\/dc:identifier>/gi)];
             let isbn: string | undefined;
+            let isbn10: string | undefined;
+            let isbn13: string | undefined;
             for (const idm of idMatches) {
               const clean = idm[1].replace(/urn:isbn:/i, '').replace(/[-\s]/g, '').trim();
               if (isValidIsbn(clean)) {
                 isbn = clean;
+                if (clean.length === 10) {
+                  isbn10 = clean;
+                  isbn13 = isbn10ToIsbn13(clean) || undefined;
+                } else if (clean.length === 13) {
+                  isbn13 = clean;
+                }
                 break;
+              }
+            }
+
+            // Calibre Extract ISBN adaptation: If not found in dc:identifier, scan EPUB spine files
+            if (!isbn) {
+              try {
+                const scanned = await textIsbnScannerService.scanEpub(filePath);
+                if (scanned?.isbn) {
+                  isbn = scanned.isbn;
+                  isbn10 = scanned.isbn10;
+                  isbn13 = scanned.isbn13;
+                }
+              } catch (scanErr) {
+                console.warn(`[EmbeddedMetadataExtractor] EPUB spine text ISBN scan warning for ${filePath}:`, scanErr);
               }
             }
 
@@ -590,13 +670,35 @@ export class EmbeddedMetadataExtractor {
               }
             }
 
+            // Extract sample text from first XHTML/HTML document for content-based language detection
+            let chapterText = '';
+            const htmlEntry = Object.keys(entries).find((k) => k.endsWith('.xhtml') || k.endsWith('.html') || k.endsWith('.htm'));
+            if (htmlEntry && entries[htmlEntry]) {
+              try {
+                const chapBuf = await this.readZipEntry(zipfile, entries[htmlEntry]);
+                chapterText = chapBuf.toString('utf8').replace(/<[^>]+>/g, ' ').slice(0, 4000);
+              } catch {}
+            }
+
+            const rawLang = langMatch ? langMatch[1].trim() : undefined;
+            const langDetect = languageDetectorService.detectLanguage({
+              contentSample: chapterText,
+              embeddedLanguage: rawLang,
+              title,
+              description,
+              author: authors[0],
+            });
+            const detectedLanguage = langDetect.isReliable ? langDetect.language : undefined;
+
             resolve({
               title,
               authors,
               publisher,
               publicationYear,
               isbn,
-              language,
+              isbn10,
+              isbn13,
+              language: detectedLanguage,
               description,
               coverBuffer,
               coverMimeType,

@@ -60,7 +60,7 @@ export class SqliteWorkRepository implements IWorkRepository {
     return {
       id: r.id,
       title: r.title || 'بدون عنوان',
-      author: r.author || meta.speaker || meta.scribe || meta.advisor || 'مؤلف مجهول',
+      author: r.author || meta.speaker || meta.scribe || meta.advisor || (/[\u0600-\u06FF]/.test(r.title || '') ? 'غير معروف' : 'Unknown Author'),
       edition: r.edition || meta.edition || undefined,
       publisher: r.publisher || meta.publisher || undefined,
       publicationYear: r.publicationYear !== undefined && r.publicationYear !== null
@@ -95,6 +95,8 @@ export class SqliteWorkRepository implements IWorkRepository {
       fileHash: r.fileHash || undefined,
       onlineSource: meta.onlineSource || undefined,
       sourceUrl: meta.sourceUrl || undefined,
+      description: r.description || meta.description || meta.abstract || undefined,
+      authorBio: r.authorBio || meta.authorBio || undefined,
 
       // Work classification
       workTypeId,
@@ -175,6 +177,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         psd.price as price,
         s.source_type as sourceType,
         GROUP_CONCAT(DISTINCT a.name) as author,
+        GROUP_CONCAT(DISTINCT a.bio) as authorBio,
         GROUP_CONCAT(DISTINCT t.name) as categories,
         w.primary_category_id as primaryCategoryId,
         cat.name_ar as pcNameAr,
@@ -280,6 +283,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         psd.price as price,
         s.source_type as sourceType,
         GROUP_CONCAT(DISTINCT a.name) as author,
+        GROUP_CONCAT(DISTINCT a.bio) as authorBio,
         GROUP_CONCAT(DISTINCT t.name) as categories,
         w.primary_category_id as primaryCategoryId,
         cat.name_ar as pcNameAr,
@@ -347,6 +351,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         workType: workTypeInfo.key,
         workTypeId,
         coverImage: data.coverImage,
+        description: data.description,
+        authorBio: data.authorBio,
         fileSize: data.fileSize,
         tags: data.tags,
         categories: data.categories,
@@ -395,7 +401,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         }
       }
       const metadataJson = Object.keys(cleanMetadata).length > 0 ? JSON.stringify(cleanMetadata) : null;
-      const description = data.abstract || (data as any).description || null;
+      const description = data.description || data.abstract || (data as any).description || null;
 
       // 1. Insert Work
       this.db.prepare(`
@@ -415,12 +421,15 @@ export class SqliteWorkRepository implements IWorkRepository {
       );
 
       // 2. Main Author & Contributors
-      const defaultAuthorName = data.author || data.speaker || data.scribe || data.advisor || 'مؤلف مجهول';
+      const isArabic = /[\u0600-\u06FF]/.test(data.title || '');
+      const defaultAuthorName = data.author || data.speaker || data.scribe || data.advisor || (isArabic ? 'غير معروف' : 'Unknown Author');
       const existingAuthor = this.db.prepare('SELECT id FROM author WHERE name = ?').get(defaultAuthorName) as { id: string } | undefined;
       const finalAuthorId = existingAuthor ? existingAuthor.id : authorId;
 
       if (!existingAuthor) {
-        this.db.prepare('INSERT INTO author (id, name) VALUES (?, ?)').run(finalAuthorId, defaultAuthorName);
+        this.db.prepare('INSERT INTO author (id, name, bio) VALUES (?, ?, ?)').run(finalAuthorId, defaultAuthorName, data.authorBio || null);
+      } else if (data.authorBio) {
+        this.db.prepare('UPDATE author SET bio = ? WHERE id = ?').run(data.authorBio, finalAuthorId);
       }
 
       const defaultRole = data.speaker ? 'speaker' : (data.scribe ? 'scribe' : 'author');
@@ -548,6 +557,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         workType: workTypeKey,
         workTypeId,
         coverImage: data.coverImage,
+        description: data.description,
+        authorBio: data.authorBio,
         fileSize: data.fileSize,
         tags: data.tags,
         categories: data.categories,
@@ -595,7 +606,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       }
 
       const metadataJson = Object.keys(existingMeta).length > 0 ? JSON.stringify(existingMeta) : null;
-      const description = data.abstract || (data as any).description || existingWork?.description || null;
+      const description = data.description !== undefined ? data.description : (data.abstract || (data as any).description || existingWork?.description || null);
 
       // 1. Update Work
       this.db.prepare(`
@@ -618,11 +629,14 @@ export class SqliteWorkRepository implements IWorkRepository {
       if (data.author || data.speaker || data.scribe || data.contributors) {
         this.db.prepare('DELETE FROM work_author WHERE work_id = ?').run(data.id);
         
-        const mainAuthorName = data.author || data.speaker || data.scribe || 'مؤلف مجهول';
+        const isArabic = /[\u0600-\u06FF]/.test(data.title || '');
+        const mainAuthorName = data.author || data.speaker || data.scribe || (isArabic ? 'غير معروف' : 'Unknown Author');
         const existingAuthor = this.db.prepare('SELECT id FROM author WHERE name = ?').get(mainAuthorName) as { id: string } | undefined;
         const finalAuthorId = existingAuthor ? existingAuthor.id : crypto.randomUUID();
         if (!existingAuthor) {
-          this.db.prepare('INSERT INTO author (id, name) VALUES (?, ?)').run(finalAuthorId, mainAuthorName);
+          this.db.prepare('INSERT INTO author (id, name, bio) VALUES (?, ?, ?)').run(finalAuthorId, mainAuthorName, data.authorBio || null);
+        } else if (data.authorBio) {
+          this.db.prepare('UPDATE author SET bio = ? WHERE id = ?').run(data.authorBio, finalAuthorId);
         }
         this.db.prepare('INSERT OR IGNORE INTO work_author (work_id, author_id, role) VALUES (?, ?, ?)').run(
           data.id,
@@ -644,6 +658,11 @@ export class SqliteWorkRepository implements IWorkRepository {
               }
             }
           }
+        }
+      } else if (data.authorBio) {
+        const workAuthorRow = this.db.prepare('SELECT author_id FROM work_author WHERE work_id = ? LIMIT 1').get(data.id) as { author_id: string } | undefined;
+        if (workAuthorRow?.author_id) {
+          this.db.prepare('UPDATE author SET bio = ? WHERE id = ?').run(data.authorBio, workAuthorRow.author_id);
         }
       }
 

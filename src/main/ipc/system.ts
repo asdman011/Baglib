@@ -95,7 +95,7 @@ export function setupSystemIPC() {
         const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
         
         if (typeof pdfFn === 'function') {
-          const pdfData = await pdfFn(dataBuffer, { pagerender: renderPageText });
+          const pdfData = await pdfFn(new Uint8Array(dataBuffer), { pagerender: renderPageText });
           const rawText = pdfData.text || '';
           const cleanText = rawText.replace(/---PAGE_SPLIT_MARKER---/g, '').trim();
           const numPages = pdfData.numpages || 1;

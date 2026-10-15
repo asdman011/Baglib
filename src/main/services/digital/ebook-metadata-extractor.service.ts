@@ -5,7 +5,9 @@ import type { DigitalFormat } from '../../../shared/types/work';
 import type { ExtractedEbookMetadata } from '../../../shared/types/digital-file';
 import { FilenameParser } from '../metadata/filename-parser';
 import { EmbeddedMetadataExtractor } from '../metadata/embedded-metadata.extractor';
-import { isValidIsbn } from '../../../shared/validators/metadata-validator';
+import { isValidIsbn, isPlaceholderAuthor, isPlaceholderTitle } from '../../../shared/validators/metadata-validator';
+import { languageDetectorService } from '../metadata/language-detector.service';
+import { textIsbnScannerService } from '../metadata/text-isbn-scanner.service';
 
 const pdfParse = require('pdf-parse');
 const yauzl = require('yauzl');
@@ -100,16 +102,19 @@ export class EbookMetadataExtractorService {
     const identifiers: Record<string, string> = {};
 
     // Step A: Parse basic Info dictionary via pdf-parse
+    let parsedText = '';
     if (typeof pdfFn === 'function') {
       try {
-        const parsed = await pdfFn(fileBuffer, { max: 1 });
+        const parsed = await pdfFn(new Uint8Array(fileBuffer), { max: 1 });
+        if (parsed.text) parsedText = parsed.text;
         const info = parsed.info || {};
 
         if (typeof info.Title === 'string' && info.Title.trim()) {
           title = info.Title.trim();
         }
         if (typeof info.Author === 'string' && info.Author.trim()) {
-          authors = FilenameParser.splitMultiAuthors(info.Author.trim());
+          const split = FilenameParser.splitMultiAuthors(info.Author.trim());
+          authors = split.filter((a) => !isPlaceholderAuthor(a));
         }
         if (info.CreationDate) {
           const yearMatch = String(info.CreationDate).match(/(?:D:)?(18\d{2}|19\d{2}|20\d{2})/);
@@ -149,7 +154,11 @@ export class EbookMetadataExtractorService {
         // dc:creator
         const dcCreators = this.extractXmlTags(xmpXml, 'dc:creator');
         if (dcCreators.length > 0) {
-          authors = dcCreators.flatMap((c) => FilenameParser.splitMultiAuthors(c));
+          const split = dcCreators.flatMap((c) => FilenameParser.splitMultiAuthors(c));
+          const valid = split.filter((c) => !isPlaceholderAuthor(c));
+          if (valid.length > 0) {
+            authors = valid;
+          }
         }
 
         // dc:publisher
@@ -204,6 +213,21 @@ export class EbookMetadataExtractorService {
       // Continue to cover extraction
     }
 
+    // Step B2: Text ISBN Scan (Calibre Extract ISBN page budgeting)
+    if (!isbn) {
+      try {
+        const scanned = await textIsbnScannerService.scanPdf(fileBuffer);
+        if (scanned?.isbn) {
+          isbn = scanned.isbn;
+          identifiers['isbn'] = scanned.isbn;
+          if (scanned.isbn10) identifiers['isbn10'] = scanned.isbn10;
+          if (scanned.isbn13) identifiers['isbn13'] = scanned.isbn13;
+        }
+      } catch (scanErr) {
+        console.warn(`[EbookMetadataExtractor] PDF ISBN scan warning for ${filePath}:`, scanErr);
+      }
+    }
+
     // Step C: Cover Image Extraction
     let coverBuffer: Buffer | undefined;
     let coverMimeType: string | undefined;
@@ -217,13 +241,27 @@ export class EbookMetadataExtractorService {
       // fallback
     }
 
+    // Step D: Reliable Content & Metadata Language Detection
+    let detectedLanguage: string | undefined;
+    const langDetect = languageDetectorService.detectLanguage({
+      contentSample: parsedText,
+      embeddedLanguage: language,
+      title,
+      description,
+      author: authors[0],
+      tags,
+    });
+    if (langDetect.isReliable) {
+      detectedLanguage = langDetect.language;
+    }
+
     return {
       title,
       authors,
       publisher,
       publicationYear,
       description,
-      language,
+      language: language || detectedLanguage,
       isbn,
       tags,
       coverBuffer,
@@ -371,6 +409,21 @@ export class EbookMetadataExtractorService {
               }
             }
 
+            // Calibre Extract ISBN adaptation: If not found in dc:identifier, scan EPUB spine files
+            if (!isbn) {
+              try {
+                const scanned = await textIsbnScannerService.scanEpub(filePath);
+                if (scanned?.isbn) {
+                  isbn = scanned.isbn;
+                  identifiers['isbn'] = scanned.isbn;
+                  if (scanned.isbn10) identifiers['isbn10'] = scanned.isbn10;
+                  if (scanned.isbn13) identifiers['isbn13'] = scanned.isbn13;
+                }
+              } catch (scanErr) {
+                console.warn(`[EbookMetadataExtractor] EPUB ISBN scan warning for ${filePath}:`, scanErr);
+              }
+            }
+
             // Cover Image resolution
             let coverBuffer: Buffer | undefined;
             let coverMimeType: string | undefined;
@@ -407,13 +460,34 @@ export class EbookMetadataExtractorService {
               }
             }
 
+            // Extract sample text from first XHTML/HTML document for content-based language detection
+            let chapterText = '';
+            const htmlEntry = Object.keys(entries).find((k) => k.endsWith('.xhtml') || k.endsWith('.html') || k.endsWith('.htm'));
+            if (htmlEntry && entries[htmlEntry]) {
+              try {
+                const chapBuf = await this.readZipEntryBuffer(zipfile, entries[htmlEntry]);
+                chapterText = chapBuf.toString('utf8').replace(/<[^>]+>/g, ' ').slice(0, 4000);
+              } catch {}
+            }
+
+            const rawLang = language;
+            const langDetect = languageDetectorService.detectLanguage({
+              contentSample: chapterText,
+              embeddedLanguage: rawLang,
+              title,
+              description,
+              author: authors[0],
+              tags,
+            });
+            const detectedLanguage = langDetect.isReliable ? langDetect.language : undefined;
+
             resolve({
               title,
               authors,
               publisher,
               publicationYear,
               description,
-              language,
+              language: rawLang || detectedLanguage,
               isbn,
               tags,
               coverBuffer,
@@ -541,11 +615,45 @@ export class EbookMetadataExtractorService {
     const kwMatch = text.match(/<meta\s+name=["']keywords["']\s+content=["']([^"']+)["']/i);
     const tags = kwMatch ? kwMatch[1].split(/[,;]/).map((k) => k.trim()).filter(Boolean) : [];
 
+    // Check html lang attribute or meta content-language
+    const langAttrMatch =
+      text.match(/<html[^>]*\blang=["']([^"']+)["']/i) ||
+      text.match(/<meta\s+http-equiv=["']content-language["']\s+content=["']([^"']+)["']/i);
+    const embeddedLang = langAttrMatch ? langAttrMatch[1].trim() : undefined;
+
+    // Extract text content sample (strip HTML tags)
+    const textSample = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 4000);
+
+    const langDetect = languageDetectorService.detectLanguage({
+      contentSample: textSample,
+      embeddedLanguage: embeddedLang,
+      title,
+      description,
+      author: authors[0],
+      tags,
+    });
+    const detectedLanguage = langDetect.isReliable ? langDetect.language : undefined;
+
+    let isbn: string | undefined;
+    const identifiers: Record<string, string> = {};
+    try {
+      const scanned = await textIsbnScannerService.scanFile(filePath);
+      if (scanned?.isbn) {
+        isbn = scanned.isbn;
+        identifiers['isbn'] = scanned.isbn;
+        if (scanned.isbn10) identifiers['isbn10'] = scanned.isbn10;
+        if (scanned.isbn13) identifiers['isbn13'] = scanned.isbn13;
+      }
+    } catch {}
+
     return {
       title,
       authors,
       description,
+      language: detectedLanguage,
       tags,
+      isbn,
+      identifiers,
       format: 'HTML',
     };
   }
@@ -554,7 +662,39 @@ export class EbookMetadataExtractorService {
    * 5. Plain Text (.txt)
    */
   private async extractFromTxt(filePath: string): Promise<Partial<ExtractedEbookMetadata>> {
+    let contentSample = '';
+    try {
+      const buffer = Buffer.alloc(4096);
+      const fd = await fs.promises.open(filePath, 'r');
+      const { bytesRead } = await fd.read(buffer, 0, 4096, 0);
+      await fd.close();
+      contentSample = buffer.slice(0, bytesRead).toString('utf8');
+    } catch {
+      try {
+        contentSample = await fs.promises.readFile(filePath, 'utf8');
+      } catch {}
+    }
+
+    const langDetect = languageDetectorService.detectLanguage({
+      contentSample,
+    });
+
+    let isbn: string | undefined;
+    const identifiers: Record<string, string> = {};
+    try {
+      const scanned = await textIsbnScannerService.scanFile(filePath);
+      if (scanned?.isbn) {
+        isbn = scanned.isbn;
+        identifiers['isbn'] = scanned.isbn;
+        if (scanned.isbn10) identifiers['isbn10'] = scanned.isbn10;
+        if (scanned.isbn13) identifiers['isbn13'] = scanned.isbn13;
+      }
+    } catch {}
+
     return {
+      language: langDetect.isReliable ? langDetect.language : undefined,
+      isbn,
+      identifiers,
       format: 'TXT',
     };
   }
@@ -578,10 +718,24 @@ export class EbookMetadataExtractorService {
       finalTitle = parsedFilename.cleanedFilename || path.basename(filePath, path.extname(filePath));
     }
 
-    // Authors Resolution: Embedded > FilenameParser > 'مؤلف مجهول'
-    let finalAuthors = meta.authors && meta.authors.length > 0 ? meta.authors : parsedFilename.authors;
-    if (!finalAuthors || finalAuthors.length === 0) {
-      finalAuthors = ['مؤلف مجهول'];
+    // Authors Resolution: Valid Embedded > Valid FilenameParser > Localized Fallback ('غير معروف' for Arabic, 'Unknown Author' for English)
+    const validMetaAuthors = (meta.authors || []).filter((a) => !isPlaceholderAuthor(a));
+    const validFilenameAuthors = (parsedFilename.authors || []).filter((a) => !isPlaceholderAuthor(a));
+
+    const isArabic =
+      (meta.language && (meta.language.toLowerCase().startsWith('ar') || meta.language === 'العربية')) ||
+      parsedFilename.language === 'ar' ||
+      /[\u0600-\u06FF]/.test(finalTitle);
+
+    const defaultUnknownAuthor = isArabic ? 'غير معروف' : 'Unknown Author';
+
+    let finalAuthors: string[];
+    if (validMetaAuthors.length > 0) {
+      finalAuthors = validMetaAuthors;
+    } else if (validFilenameAuthors.length > 0) {
+      finalAuthors = validFilenameAuthors;
+    } else {
+      finalAuthors = [defaultUnknownAuthor];
     }
 
     // Supplementary bibliographic attributes
@@ -589,7 +743,26 @@ export class EbookMetadataExtractorService {
     const finalYear = meta.publicationYear || parsedFilename.publicationYear;
     const finalIsbn = meta.isbn || parsedFilename.isbn;
     const finalDescription = meta.description || undefined;
-    const finalLanguage = meta.language || (parsedFilename.language === 'ar' ? 'العربية' : 'English');
+
+    // Language Resolution: Content/Embedded > Reliable Filename/Metadata Detection > Undefined
+    let finalLanguage: string | undefined = meta.language;
+    if (!finalLanguage && parsedFilename.language) {
+      const norm = languageDetectorService.normalizeLanguageCode(parsedFilename.language);
+      if (norm) {
+        finalLanguage = norm.name;
+      }
+    }
+    if (!finalLanguage) {
+      const detectResult = languageDetectorService.detectLanguage({
+        title: finalTitle,
+        description: finalDescription,
+        author: finalAuthors[0],
+        tags: meta.tags,
+      });
+      if (detectResult.isReliable) {
+        finalLanguage = detectResult.language;
+      }
+    }
 
     // Generate Cover Data URL if cover buffer is present
     let coverDataUrl: string | undefined;
@@ -619,7 +792,7 @@ export class EbookMetadataExtractorService {
    * Helper to detect generic/placeholder titles
    */
   private isPlaceholderTitle(title: string): boolean {
-    return /^(untitled|microsoft word|export|document\d*|بدون عنوان)$/i.test(title.trim());
+    return isPlaceholderTitle(title);
   }
 
   /**

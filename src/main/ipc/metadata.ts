@@ -108,6 +108,13 @@ export function setupMetadataIPC() {
         } else if (!match.editions[0].coverUrl) {
           match.editions[0].coverUrl = discovery.coverUrl;
         }
+
+        if (discovery.description && !match.description) {
+          match.description = discovery.description;
+        }
+        if (discovery.authorBio && !match.authorBio) {
+          match.authorBio = discovery.authorBio;
+        }
       }
 
       if (!match) {

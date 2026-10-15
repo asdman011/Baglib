@@ -24,6 +24,7 @@ export interface BibliographicWork {
   authors: string[];
   firstPublishYear?: number;
   description?: string;
+  authorBio?: string;
   subjects?: string[];
   editions: BibliographicEdition[];
 }
