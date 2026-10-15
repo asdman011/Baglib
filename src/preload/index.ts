@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 export const API = {
   getSystemInfo: () => ipcRenderer.invoke('system:get-info'),
   openFileDialog: () => ipcRenderer.invoke('system:open-file-dialog'),
+  openFilesDialog: () => ipcRenderer.invoke('system:open-files-dialog'),
+  openDirectoryDialog: () => ipcRenderer.invoke('system:open-directory-dialog'),
   readPdfBase64: (filePath: string) => ipcRenderer.invoke('system:read-pdf-base64', filePath),
   extractPdfText: (filePath: string) => ipcRenderer.invoke('system:extract-pdf-text', filePath),
 
@@ -65,6 +67,33 @@ export const API = {
     ipcRenderer.invoke('digital:import-files', optionsList),
   extractDigitalMetadata: (filePath: string, formatHint?: string) =>
     ipcRenderer.invoke('digital:extract-metadata', filePath, formatHint),
+  checkDigitalDuplicates: (inputs: any[]) =>
+    ipcRenderer.invoke('digital:check-duplicates', inputs),
+  verifyFileStorage: (workId: string) =>
+    ipcRenderer.invoke('digital:verify-file', workId),
+  verifyAllFilesStorage: () =>
+    ipcRenderer.invoke('digital:verify-files'),
+  onDigitalImportProgress: (callback: (progress: any) => void) => {
+    const listener = (_e: any, progress: any) => callback(progress);
+    ipcRenderer.on('digital:import-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('digital:import-progress', listener);
+    };
+  },
+
+  // Storage Management (Story 7 / KEY-7)
+  storage: {
+    getHealthSummary: () => ipcRenderer.invoke('storage:get-health-summary'),
+    verifyAll: () => ipcRenderer.invoke('storage:verify-all'),
+    verifyFile: (workId: string) => ipcRenderer.invoke('storage:verify-file', workId),
+    relinkFile: (workId: string, newFilePath: string) =>
+      ipcRenderer.invoke('storage:relink-file', workId, newFilePath),
+    batchAutoRebind: (searchDirectory: string) =>
+      ipcRenderer.invoke('storage:batch-auto-rebind', searchDirectory),
+    getAnalytics: () => ipcRenderer.invoke('storage:get-analytics'),
+    pruneDuplicate: (options: any) =>
+      ipcRenderer.invoke('storage:prune-duplicate', options),
+  },
 
 
   // Categories

@@ -55,6 +55,49 @@ export function setupSystemIPC() {
     }
   });
 
+  // Native Electron OS Multi-File Picker Dialog
+  ipcMain.handle('system:open-files-dialog', async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile', 'multiSelections'],
+        title: 'اختر كتباً أو ملفات رقمية من حاسوبك',
+        filters: [
+          { name: 'جميع كتب وملفات المكتبة الرقمية', extensions: ['pdf', 'epub', 'mobi', 'azw3', 'txt', 'html', 'djvu', 'docx'] },
+          { name: 'ملفات PDF', extensions: ['pdf'] },
+          { name: 'كتب EPUB و MOBI', extensions: ['epub', 'mobi', 'azw3'] },
+          { name: 'ملفات نصوص HTML / TXT', extensions: ['txt', 'html', 'docx'] },
+          { name: 'جميع الملفات (*.*)', extensions: ['*'] }
+        ]
+      });
+
+      if (!result.canceled && result.filePaths.length > 0) {
+        return result.filePaths;
+      }
+      return [];
+    } catch (err) {
+      console.error('Error in open-files-dialog:', err);
+      return [];
+    }
+  });
+
+  // Native Electron OS Directory Picker Dialog
+  ipcMain.handle('system:open-directory-dialog', async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: ['openDirectory'],
+        title: 'اختر مجلداً للبحث عن الملفات المفقودة / Select Folder to Scan for Missing Files',
+      });
+
+      if (!result.canceled && result.filePaths.length > 0) {
+        return result.filePaths[0];
+      }
+      return null;
+    } catch (err) {
+      console.error('Error in open-directory-dialog:', err);
+      return null;
+    }
+  });
+
   // Safe PDF Base64 Streamer
   ipcMain.handle('system:read-pdf-base64', async (_, filePath: string) => {
     try {

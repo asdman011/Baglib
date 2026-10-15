@@ -2,6 +2,10 @@ import { ipcMain } from 'electron';
 import { DigitalFileValidatorService } from '../services/digital/digital-file-validator.service';
 import { DigitalImportPipelineService } from '../services/digital/digital-import-pipeline.service';
 import { EbookMetadataExtractorService } from '../services/digital/ebook-metadata-extractor.service';
+import { DuplicateDetectorService } from '../services/digital/duplicate-detector.service';
+import { StorageManagerService } from '../services/storage/storage-manager.service';
+import { WorkRepository } from '../database/repositories/work.repository';
+import { getDatabase } from '../database/connection';
 import type { DigitalImportOptions } from '../../shared/types/digital-file';
 import type { DigitalFormat } from '../../shared/types/work';
 
@@ -9,6 +13,7 @@ export function setupDigitalIPC(): void {
   const validator = DigitalFileValidatorService.getInstance();
   const pipeline = DigitalImportPipelineService.getInstance();
   const extractor = EbookMetadataExtractorService.getInstance();
+  const duplicateDetector = DuplicateDetectorService.getInstance();
 
   /**
    * Validate a single digital file on disk by path
@@ -90,17 +95,145 @@ export function setupDigitalIPC(): void {
   });
 
   /**
-   * Batch import multiple digital files
+   * Batch import multiple digital files with streaming progress reporting
    */
-  ipcMain.handle('digital:import-files', async (_event, optionsList: DigitalImportOptions[]) => {
+  ipcMain.handle('digital:import-files', async (event, optionsList: DigitalImportOptions[]) => {
     try {
       if (!Array.isArray(optionsList)) {
-        return { totalFiles: 0, successfulImports: 0, failedImports: 0, results: [] };
+        return { totalFiles: 0, successfulImports: 0, failedImports: 0, skippedImports: 0, results: [] };
       }
-      return await pipeline.importFiles(optionsList);
+      return await pipeline.importFiles(optionsList, (progress) => {
+        try {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('digital:import-progress', progress);
+          }
+        } catch {
+          // ignore if sender window closed
+        }
+      });
     } catch (err: any) {
       console.error('[DigitalIPC] Error batch importing digital files:', err);
-      return { totalFiles: 0, successfulImports: 0, failedImports: 0, results: [] };
+      return { totalFiles: 0, successfulImports: 0, failedImports: 0, skippedImports: 0, results: [] };
+    }
+  });
+
+  /**
+   * Check files or candidate metadata for potential duplicates in library
+   */
+  ipcMain.handle('digital:check-duplicates', async (_event, inputs: any[]) => {
+    try {
+      if (!Array.isArray(inputs)) return [];
+      return await duplicateDetector.batchCheckDuplicates(inputs);
+    } catch (err: any) {
+      console.error('[DigitalIPC] Error checking duplicates:', err);
+      return [];
+    }
+  });
+
+  /**
+   * Verify digital file accessibility and storage health on disk for a work
+   */
+  ipcMain.handle('digital:verify-file', async (_event, workId: string) => {
+    try {
+      const storageManager = StorageManagerService.getInstance();
+      return await storageManager.verifyWorkStorage(workId, true);
+    } catch (err: any) {
+      console.error('[DigitalIPC] Error verifying file health:', err);
+      return null;
+    }
+  });
+
+  /**
+   * Verify all digital library files across disk
+   */
+  ipcMain.handle('digital:verify-files', async () => {
+    try {
+      const storageManager = StorageManagerService.getInstance();
+      return await storageManager.verifyAllStorage(false);
+    } catch (err: any) {
+      console.error('[DigitalIPC] Error verifying all files:', err);
+      return { totalDigitalWorks: 0, totalFiles: 0, availableFiles: 0, missingFiles: 0, unmountedFiles: 0, corruptedFiles: 0, duplicateFiles: 0, totalSizeBytes: 0, reclaimableSizeBytes: 0, formatBreakdown: {}, items: [] };
+    }
+  });
+
+  /**
+   * Storage Management IPC Channels (Story 7 / KEY-7)
+   */
+  ipcMain.handle('storage:get-health-summary', async () => {
+    try {
+      const storageManager = StorageManagerService.getInstance();
+      return await storageManager.verifyAllStorage(false);
+    } catch (err: any) {
+      console.error('[StorageIPC] Error getting health summary:', err);
+      return { totalDigitalWorks: 0, totalFiles: 0, availableFiles: 0, missingFiles: 0, unmountedFiles: 0, corruptedFiles: 0, duplicateFiles: 0, totalSizeBytes: 0, reclaimableSizeBytes: 0, formatBreakdown: {}, items: [] };
+    }
+  });
+
+  ipcMain.handle('storage:verify-all', async () => {
+    try {
+      const storageManager = StorageManagerService.getInstance();
+      return await storageManager.verifyAllStorage(true);
+    } catch (err: any) {
+      console.error('[StorageIPC] Error in verify-all:', err);
+      return { totalDigitalWorks: 0, totalFiles: 0, availableFiles: 0, missingFiles: 0, unmountedFiles: 0, corruptedFiles: 0, duplicateFiles: 0, totalSizeBytes: 0, reclaimableSizeBytes: 0, formatBreakdown: {}, items: [] };
+    }
+  });
+
+  ipcMain.handle('storage:verify-file', async (_event, workId: string) => {
+    try {
+      const storageManager = StorageManagerService.getInstance();
+      return await storageManager.verifyWorkStorage(workId, true);
+    } catch (err: any) {
+      console.error('[StorageIPC] Error in verify-file:', err);
+      return null;
+    }
+  });
+
+  ipcMain.handle('storage:relink-file', async (_event, workId: string, newFilePath: string) => {
+    try {
+      const storageManager = StorageManagerService.getInstance();
+      return await storageManager.relinkFile(workId, newFilePath);
+    } catch (err: any) {
+      console.error('[StorageIPC] Error in relink-file:', err);
+      return { success: false, workId, newFilePath, error: err?.message || 'Error relinking file' };
+    }
+  });
+
+  ipcMain.handle('storage:batch-auto-rebind', async (_event, searchDirectory: string) => {
+    try {
+      const storageManager = StorageManagerService.getInstance();
+      return await storageManager.batchAutoRebind(searchDirectory);
+    } catch (err: any) {
+      console.error('[StorageIPC] Error in batch-auto-rebind:', err);
+      return { scannedFilesCount: 0, resolvedCount: 0, unresolvedCount: 0, matches: [], errors: [err?.message || 'Error during batch scan'] };
+    }
+  });
+
+  ipcMain.handle('storage:get-analytics', async () => {
+    try {
+      const storageManager = StorageManagerService.getInstance();
+      return await storageManager.getStorageAnalytics();
+    } catch (err: any) {
+      console.error('[StorageIPC] Error in get-analytics:', err);
+      return {
+        totalDigitalWorks: 0,
+        totalFiles: 0,
+        totalSizeBytes: 0,
+        reclaimableBytes: 0,
+        healthCounts: { available: 0, missing: 0, unmounted: 0, corrupted: 0, duplicate: 0 },
+        formatDistribution: {},
+        duplicateGroups: [],
+      };
+    }
+  });
+
+  ipcMain.handle('storage:prune-duplicate', async (_event, options: any) => {
+    try {
+      const storageManager = StorageManagerService.getInstance();
+      return await storageManager.pruneDuplicate(options);
+    } catch (err: any) {
+      console.error('[StorageIPC] Error in prune-duplicate:', err);
+      return { success: false, freedBytes: 0, fileDeletedFromDisk: false, error: err?.message || 'Error pruning duplicate' };
     }
   });
 
