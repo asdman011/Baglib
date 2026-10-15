@@ -86,6 +86,42 @@ export function isValidIsbn(isbn: string): boolean {
 }
 
 /**
+ * Converts a valid ISBN-10 to an ISBN-13 (prepending '978' and recalculating Modulo 10 check digit).
+ */
+export function isbn10ToIsbn13(isbn10: string): string | null {
+  const clean = isbn10.replace(/[-\s]/g, '').toUpperCase();
+  if (!isValidIsbn10(clean)) return null;
+
+  const core = '978' + clean.slice(0, 9);
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const digit = parseInt(core[i], 10);
+    sum += digit * (i % 2 === 0 ? 1 : 3);
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return core + checkDigit;
+}
+
+/**
+ * Validates if an ISBN-13 has a recognized bookland prefix ('978', '979', or serial '977').
+ */
+export function isValidIsbn13Prefix(isbn13: string): boolean {
+  const clean = isbn13.replace(/[-\s]/g, '');
+  if (clean.length < 3) return false;
+  const prefix = clean.slice(0, 3);
+  return prefix === '978' || prefix === '979' || prefix === '977';
+}
+
+/**
+ * Checks if a candidate digit string consists solely of repeating identical digits
+ * (e.g. '0000000000', '1111111111111') which are false-positive dummy numbers.
+ */
+export function isRepeatedDummyDigits(text: string): boolean {
+  const clean = text.replace(/[^0-9]/g, '');
+  return /^(\d)\1{9,12}$/.test(clean);
+}
+
+/**
  * Validates DOI (Digital Object Identifier) syntax according to the DOI Handbook:
  * Starts with "10." followed by 4 or more digits, a slash, and the registrant suffix.
  */
@@ -322,36 +358,78 @@ export function validateWorkMetadata(input: Partial<BookItemInput>): ValidationR
 }
 
 /**
+ * Known placeholder / default author strings in English and Arabic.
+ */
+const PLACEHOLDER_AUTHORS_EXACT = new Set([
+  '',
+  'مؤلف جديد',
+  'new author',
+  'مؤلف مجهول',
+  'unknown author',
+  'غير معروف',
+  'unknown',
+  'مجهول',
+  'بدون مؤلف',
+  'لا يوجد مؤلف',
+  'مجهول المؤلف',
+  'مؤلف غير معروف',
+  'مجهول الاسم',
+  'anonymous',
+  'none',
+  'n/a',
+  'na',
+  'null',
+  'undefined',
+  'author',
+  'various',
+  'various authors',
+  'admin',
+  'administrator',
+  'user',
+  'owner',
+  'root',
+  'guest',
+  'pc',
+  'laptop',
+  'desktop',
+  'writer',
+]);
+
+/**
+ * Common PDF generator / printer / scanner software strings frequently mistaken for authors.
+ */
+const GENERATOR_SOFTWARE_REGEX = /^(?:microsoft\s+(?:word|office)|adobe\s+(?:indesign|acrobat|distiller|illustrator|photoshop)|acrobat\s+distiller|indesign|scansnap|fujitsu|abbyy\s+finereader|abbyy|canon|epson|hp\s+(?:scan|laserjet|deskjet)|pdfcreator|pdf24|latex\s+with\s+hyperref|canva|calibre|nitro\s+pro|foxit|quarkxpress|coreldraw|camscanner|distiller)(?:\s+.*)?$/i;
+
+/**
  * Checks if a title string is a default placeholder or empty.
  */
 export function isPlaceholderTitle(title?: string | null): boolean {
   if (!title) return true;
   const t = title.trim().toLowerCase();
-  return (
+  if (
     t === '' ||
     t === 'مادة جديدة في المكتبة' ||
     t === 'new library material' ||
     t === 'كتاب جديد' ||
     t === 'new book' ||
     t === 'untitled' ||
-    t === 'بلا عنوان'
-  );
+    t === 'بلا عنوان' ||
+    t === 'بدون عنوان'
+  ) {
+    return true;
+  }
+  return /^(?:untitled|microsoft\s+word|export|document\d*|scan\d*|pdf\s*document)$/i.test(t);
 }
 
 /**
- * Checks if an author string is a default placeholder or unknown indicator.
+ * Checks if an author string is a default placeholder, software generator, or unknown indicator.
  */
 export function isPlaceholderAuthor(author?: string | null): boolean {
   if (!author) return true;
   const a = author.trim().toLowerCase();
-  return (
-    a === '' ||
-    a === 'مؤلف جديد' ||
-    a === 'new author' ||
-    a === 'مؤلف مجهول' ||
-    a === 'unknown author' ||
-    a === 'غير معروف' ||
-    a === 'unknown' ||
-    a === 'مجهول'
-  );
+  if (PLACEHOLDER_AUTHORS_EXACT.has(a)) {
+    return true;
+  }
+  return GENERATOR_SOFTWARE_REGEX.test(a);
 }
+
