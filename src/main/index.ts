@@ -11,6 +11,7 @@ import { setupPhysicalIPC } from "./ipc/physical";
 import { setupLibraryViewsIPC } from "./ipc/library-views";
 import { setupCategoriesIPC } from "./ipc/categories";
 import { setupSearchIPC } from "./ipc/search";
+import { setupEnrichmentIPC } from "./ipc/enrichment";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 
@@ -70,6 +71,7 @@ setupPhysicalIPC();
 setupLibraryViewsIPC();
 setupCategoriesIPC();
 setupSearchIPC();
+setupEnrichmentIPC();
 
 
 app.whenReady().then(async () => {

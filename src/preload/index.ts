@@ -214,6 +214,20 @@ export const API = {
     },
   },
 
+  // Online Metadata Enrichment & Safe Merge (Story 12 / KEY-3)
+  enrichment: {
+    findOnlineEditions: (input: { workId?: string; book?: any }) =>
+      ipcRenderer.invoke('enrichment:find-online-editions', input),
+    computeDiffs: (input: { workId?: string; book?: any; candidate: any }) =>
+      ipcRenderer.invoke('enrichment:compute-diffs', input),
+    applyMerge: (request: any) =>
+      ipcRenderer.invoke('enrichment:apply-merge', request),
+    fetchAndCacheCover: (request: any) =>
+      ipcRenderer.invoke('enrichment:fetch-and-cache-cover', request),
+    attachDigitalCopy: (input: { workId: string; downloadUrl: string; format: string; title?: string }) =>
+      ipcRenderer.invoke('enrichment:attach-digital-copy', input),
+  },
+
   onNotification: (callback: (message: string) => void) => {
     const subscription = (_: any, value: string) => callback(value);
     ipcRenderer.on('system:notification', subscription);

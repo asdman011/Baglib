@@ -17,6 +17,7 @@ export * from './physical-library';
 export * from './library-views';
 export * from './tag';
 export * from './search';
+export * from './enrichment';
 
 // Re-export sprint 1 domain interfaces & DTOs
 export * from '../../../baglib_library_repository_interfaces_sprint_1';
