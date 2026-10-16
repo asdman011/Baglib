@@ -15,7 +15,6 @@ asarUnpack:
   - "**/*.node"
 mac:
   category: public.app-category.utilities
-
   target:
     - dmg
     - zip
@@ -23,3 +22,57 @@ win:
   target:
     - nsis
     - zip
+
+fileAssociations:
+  - ext: epub
+    name: Electronic Publication
+    description: EPUB E-Book
+    role: Viewer
+  - ext: pdf
+    name: Portable Document Format
+    description: PDF Document
+    role: Viewer
+  - ext: mobi
+    name: Mobipocket E-Book
+    description: MOBI E-Book
+    role: Viewer
+  - ext: azw3
+    name: Kindle Format 8
+    description: Amazon Kindle Book
+    role: Viewer
+  - ext: azw
+    name: Amazon Kindle E-Book
+    description: Amazon Kindle Book
+    role: Viewer
+  - ext: fb2
+    name: FictionBook 2.0
+    description: FB2 E-Book
+    role: Viewer
+  - ext: cbz
+    name: Comic Book Zip
+    description: Comic Book Archive
+    role: Viewer
+  - ext: cbr
+    name: Comic Book RAR
+    description: Comic Book Archive
+    role: Viewer
+  - ext: cbt
+    name: Comic Book Tar
+    description: Comic Book Archive
+    role: Viewer
+  - ext: cb7
+    name: Comic Book 7z
+    description: Comic Book Archive
+    role: Viewer
+  - ext: txt
+    name: Plain Text Document
+    description: Text Document
+    role: Viewer
+  - ext: md
+    name: Markdown Document
+    description: Markdown Document
+    role: Viewer
+  - ext: docx
+    name: Microsoft Word Document
+    description: Word Document
+    role: Viewer

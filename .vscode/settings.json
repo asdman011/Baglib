@@ -1,0 +1,18 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "css.customData": [
+    ".vscode/tailwind-v4.css-data.json"
+  ],
+  "[typescript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[css]": {
+    "editor.defaultFormatter": "vscode.css-language-features"
+  }
+}

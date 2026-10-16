@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vscode-css-languageservice/main/docs/customData.schema.json",
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS v4 theme configuration block."
+    },
+    {
+      "name": "@utility",
+      "description": "Tailwind CSS v4 custom utility definition."
+    },
+    {
+      "name": "@variant",
+      "description": "Tailwind CSS v4 custom variant definition."
+    },
+    {
+      "name": "@custom-variant",
+      "description": "Tailwind CSS v4 custom variant definition."
+    },
+    {
+      "name": "@source",
+      "description": "Tailwind CSS v4 source directive to scan files for classes."
+    },
+    {
+      "name": "@plugin",
+      "description": "Tailwind CSS v4 plugin directive."
+    },
+    {
+      "name": "@import",
+      "description": "Tailwind CSS v4 import directive."
+    }
+  ],
+  "pseudoElements": [
+    {
+      "name": "::highlight()",
+      "description": "Represents the text in a document that has been highlighted by a script via the CSS Custom Highlight API."
+    }
+  ],
+  "properties": []
+}
