@@ -19,7 +19,22 @@ import type {
 
 export * from './metadata';
 
-export type DigitalFormat = 'PDF' | 'EPUB' | 'MOBI' | 'AZW3' | 'HTML' | 'TXT';
+export type DigitalFormat =
+  | 'PDF'
+  | 'EPUB'
+  | 'MOBI'
+  | 'AZW3'
+  | 'AZW'
+  | 'FB2'
+  | 'FBZ'
+  | 'CBZ'
+  | 'CBR'
+  | 'CBT'
+  | 'CB7'
+  | 'HTML'
+  | 'TXT'
+  | 'MD'
+  | 'DOCX';
 export type BookCondition = 'جديدة' | 'ممتازة' | 'جيدة' | 'مستعملة' | 'أثرية/قديمة';
 export type BookType = 'digital' | 'physical' | 'hybrid';
 export type ReadingStatus = 'unread' | 'reading' | 'completed' | 'paused' | 'abandoned';

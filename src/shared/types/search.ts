@@ -12,7 +12,7 @@ export type SearchProviderId =
   | 'internetarchive'
   | 'gutenberg';
 
-export type SearchScope = 'all' | 'local' | 'online';
+export type SearchScope = 'all' | 'local' | 'online' | 'fulltext';
 
 export type SearchFormat = 'EPUB' | 'PDF' | 'MOBI' | 'TXT' | 'AUDIO';
 
