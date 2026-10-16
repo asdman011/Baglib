@@ -17,6 +17,45 @@ export const API = {
   updateReadingStatus: (bookId: string, status: string, progress?: number) =>
     ipcRenderer.invoke('library:update-reading-status', bookId, status, progress),
 
+  // Annotations, Highlights, Margin Notes & Freehand Ink (Story 2.1 / KEY-137)
+  getAnnotations: (bookId: string) => ipcRenderer.invoke('library:get-annotations', bookId),
+  getAllAnnotations: () => ipcRenderer.invoke('library:get-all-annotations'),
+  saveAnnotation: (payload: any) => ipcRenderer.invoke('library:save-annotation', payload),
+  deleteAnnotation: (annotationId: string) => ipcRenderer.invoke('library:delete-annotation', annotationId),
+  getFilteredAnnotations: (filter: any) => ipcRenderer.invoke('library:get-filtered-annotations', filter),
+
+  // Full-Text Search Engine (KEY-140)
+  indexBookContent: (bookId: string, pages: any[]) => ipcRenderer.invoke('search:index-book-content', bookId, pages),
+  deleteBookContentIndex: (bookId: string) => ipcRenderer.invoke('search:delete-book-content', bookId),
+  isBookIndexed: (bookId: string) => ipcRenderer.invoke('search:is-book-indexed', bookId),
+  searchLibraryFullText: (query: string, options?: any) => ipcRenderer.invoke('search:library-full-text', query, options),
+  getFtsStats: () => ipcRenderer.invoke('search:get-fts-stats'),
+
+  // Local OCR Engine for Scanned Documents & Manuscripts (Story 3.2 / KEY-141)
+  ocrIsSupported: () => ipcRenderer.invoke('ocr:is-supported'),
+  ocrGetAvailableLanguages: () => ipcRenderer.invoke('ocr:get-available-languages'),
+  ocrRecognizePage: (params: import('../shared/types/ocr').OcrRecognizePageParams) =>
+    ipcRenderer.invoke('ocr:recognize-page', params),
+  ocrRecognizeDocument: (params: import('../shared/types/ocr').OcrRecognizeDocumentParams) =>
+    ipcRenderer.invoke('ocr:recognize-document', params),
+  onOcrProgress: (callback: (payload: import('../shared/types/ocr').OcrProgressPayload) => void) => {
+    const subscription = (_: any, value: any) => callback(value);
+    ipcRenderer.on('ocr:progress', subscription);
+    return () => ipcRenderer.removeListener('ocr:progress', subscription);
+  },
+
+  // Pluggable Offline Dictionary & Encyclopedia Lookup (Story 3.3 / KEY-142)
+  dictionaryLookup: (word: string, options?: { lang?: string; includeWikipedia?: boolean }) =>
+    ipcRenderer.invoke('dictionary:lookup', word, options),
+  dictionaryWikipedia: (word: string, lang?: string) =>
+    ipcRenderer.invoke('dictionary:wikipedia', word, lang),
+  dictionaryList: () => ipcRenderer.invoke('dictionary:list'),
+  dictionaryImport: (options: import('../shared/types/dictionary').ImportDictionaryOptions) =>
+    ipcRenderer.invoke('dictionary:import', options),
+  dictionaryDelete: (id: string) => ipcRenderer.invoke('dictionary:delete', id),
+  dictionaryToggle: (id: string, isEnabled: boolean) =>
+    ipcRenderer.invoke('dictionary:toggle', id, isEnabled),
+
   // Story 9 Pagination & Bulk Operations
   getPaginatedWorks: (options: any) =>
     ipcRenderer.invoke('library:get-paginated-works', options),
@@ -232,6 +271,126 @@ export const API = {
     const subscription = (_: any, value: string) => callback(value);
     ipcRenderer.on('system:notification', subscription);
     return () => ipcRenderer.removeListener('system:notification', subscription);
+  },
+
+  onReaderOpenFile: (callback: (filePath: string) => void) => {
+    const subscription = (_: any, filePath: string) => callback(filePath);
+    ipcRenderer.on('reader:open-file', subscription);
+    return () => ipcRenderer.removeListener('reader:open-file', subscription);
+  },
+
+  // BYOK AI Research Assistant & Translation (KEY-143)
+  ai: {
+    getSettings: () =>
+      ipcRenderer.invoke('ai:get-settings'),
+    saveSettings: (settings: any) =>
+      ipcRenderer.invoke('ai:save-settings', settings),
+    testConnection: (customSettings?: any) =>
+      ipcRenderer.invoke('ai:test-connection', customSettings),
+    executeTool: (payload: any) =>
+      ipcRenderer.invoke('ai:execute-tool', payload),
+    translate: (options: any) =>
+      ipcRenderer.invoke('ai:translate', options),
+  },
+
+  // Text-to-Speech (TTS), Audiobook Playback & SMIL Overlays (KEY-145)
+  audio: {
+    getPairing: (bookId: string) => ipcRenderer.invoke('audio:get-pairing', bookId),
+    savePairing: (payload: any) => ipcRenderer.invoke('audio:save-pairing', payload),
+    deletePairing: (bookId: string) => ipcRenderer.invoke('audio:delete-pairing', bookId),
+    getProgress: (bookId: string) => ipcRenderer.invoke('audio:get-progress', bookId),
+    saveProgress: (progress: any) => ipcRenderer.invoke('audio:save-progress', progress),
+    parseSmil: (smilXml: string, smilHref?: string) => ipcRenderer.invoke('audio:parse-smil', smilXml, smilHref),
+    scanLocalAudioFiles: (folderPath: string) => ipcRenderer.invoke('audio:scan-local-files', folderPath),
+    queryAudiobookshelf: (serverUrl: string, apiKey: string, query?: string) =>
+      ipcRenderer.invoke('audio:query-abs', serverUrl, apiKey, query),
+  },
+
+  // Cloud Backup, KOReader Progress Sync & Version Snapshots (KEY-147)
+  cloudSync: {
+    getKoSyncConfig: () => ipcRenderer.invoke('sync:koreader-get-config'),
+    saveKoSyncConfig: (config: any) => ipcRenderer.invoke('sync:koreader-save-config', config),
+    testKoSync: (customConfig?: any) => ipcRenderer.invoke('sync:koreader-test', customConfig),
+    pullKoSyncProgress: (bookId: string, customDigest?: string) =>
+      ipcRenderer.invoke('sync:koreader-pull', bookId, customDigest),
+    pushKoSyncProgress: (bookId: string, progress: string, percentage: number, customDigest?: string) =>
+      ipcRenderer.invoke('sync:koreader-push', bookId, progress, percentage, customDigest),
+
+    getCloudConfig: () => ipcRenderer.invoke('sync:cloud-get-config'),
+    saveCloudConfig: (config: any) => ipcRenderer.invoke('sync:cloud-save-config', config),
+    testCloudConnection: (customConfig?: any) => ipcRenderer.invoke('sync:cloud-test', customConfig),
+    listCloudFiles: (remotePath?: string) => ipcRenderer.invoke('sync:cloud-list-files', remotePath),
+    backupToCloud: (targetFileName?: string) => ipcRenderer.invoke('sync:cloud-backup', targetFileName),
+    restoreFromCloud: (remoteFileName: string) => ipcRenderer.invoke('sync:cloud-restore', remoteFileName),
+    importBookFromCloud: (remotePath: string) => ipcRenderer.invoke('sync:cloud-import-book', remotePath),
+
+    createSnapshot: (description?: string) => ipcRenderer.invoke('sync:snapshot-create', description),
+    listSnapshots: () => ipcRenderer.invoke('sync:snapshot-list'),
+    restoreSnapshot: (snapshotFileName: string) => ipcRenderer.invoke('sync:snapshot-restore', snapshotFileName),
+    deleteSnapshot: (snapshotFileName: string) => ipcRenderer.invoke('sync:snapshot-delete', snapshotFileName),
+    exportSnapshot: (snapshotFileName: string, destinationDir: string) =>
+      ipcRenderer.invoke('sync:snapshot-export', snapshotFileName, destinationDir),
+  },
+
+  // OPDS 1.2 / 2.0 Catalog & Local Feed Server (KEY-148)
+  opds: {
+    getPresets: () => ipcRenderer.invoke('opds:get-presets'),
+    browseCatalog: (url: string, catalog?: any) => ipcRenderer.invoke('opds:browse-catalog', url, catalog),
+    searchCatalog: (searchTemplate: string, query: string, catalog?: any) =>
+      ipcRenderer.invoke('opds:search-catalog', searchTemplate, query, catalog),
+    downloadBook: (downloadUrl: string, catalog?: any, suggestedFileName?: string) =>
+      ipcRenderer.invoke('opds:download-book', downloadUrl, catalog, suggestedFileName),
+    startServer: (port?: number) => ipcRenderer.invoke('opds:server-start', port),
+    stopServer: () => ipcRenderer.invoke('opds:server-stop'),
+    getServerStatus: () => ipcRenderer.invoke('opds:server-status'),
+    setServerConfig: (config: any) => ipcRenderer.invoke('opds:server-set-config', config),
+  },
+
+  // Web Clipper & Serialized Novel Ingestion (KEY-148)
+  clipper: {
+    clipUrl: (options: any) => ipcRenderer.invoke('clipper:clip-url', options),
+    clipHtml: (options: any) => ipcRenderer.invoke('clipper:clip-html', options),
+    scrapeNovel: (options: any) => ipcRenderer.invoke('clipper:scrape-novel', options),
+    openBrowser: (initialUrl?: string) => ipcRenderer.invoke('clipper:open-browser', initialUrl),
+    clipBrowser: () => ipcRenderer.invoke('clipper:clip-browser'),
+  },
+
+  // Reading Statistics & Analytics Dashboard (KEY-149)
+  statistics: {
+    startSession: (payload: any) => ipcRenderer.invoke('statistics:start-session', payload),
+    turnPage: (page: number, totalPages?: number) => ipcRenderer.invoke('statistics:turn-page', page, totalPages),
+    heartbeat: () => ipcRenderer.invoke('statistics:heartbeat'),
+    endSession: () => ipcRenderer.invoke('statistics:end-session'),
+    recordProgress: (payload: any) => ipcRenderer.invoke('statistics:record-progress', payload),
+    getBookStats: (bookId: string) => ipcRenderer.invoke('statistics:get-book-stats', bookId),
+    getAllBookStats: () => ipcRenderer.invoke('statistics:get-all-book-stats'),
+    getDailyHeatmap: (days?: number) => ipcRenderer.invoke('statistics:get-daily-heatmap', days),
+    getStreakStats: () => ipcRenderer.invoke('statistics:get-streak-stats'),
+    getMedianPageDuration: (bookId: string) => ipcRenderer.invoke('statistics:get-median-page-duration', bookId),
+  },
+
+  // App Lock Security & Native Biometrics (KEY-149)
+  appLock: {
+    getBiometricCapability: () => ipcRenderer.invoke('security:get-biometric-capability'),
+    promptBiometricAuth: (promptMessage?: string) => ipcRenderer.invoke('security:prompt-biometric-auth', promptMessage),
+    verifyMasterPin: (pin: string) => ipcRenderer.invoke('security:verify-master-pin', pin),
+    setMasterPin: (pin: string) => ipcRenderer.invoke('security:set-master-pin', pin),
+    clearMasterPin: () => ipcRenderer.invoke('security:clear-master-pin'),
+    getLockConfig: () => ipcRenderer.invoke('security:get-lock-config'),
+    setLockConfig: (config: any) => ipcRenderer.invoke('security:set-lock-config', config),
+    getLockState: () => ipcRenderer.invoke('security:get-lock-state'),
+    lock: (reason?: string) => ipcRenderer.invoke('security:lock', reason),
+    unlock: () => ipcRenderer.invoke('security:unlock'),
+    checkIdleTimeout: () => ipcRenderer.invoke('security:check-idle-timeout'),
+  },
+
+  // Reader Plugins & Extensibility (KEY-149)
+  plugins: {
+    list: () => ipcRenderer.invoke('plugins:list'),
+    enable: (id: string, enabled: boolean) => ipcRenderer.invoke('plugins:enable', id, enabled),
+    getStyles: () => ipcRenderer.invoke('plugins:get-styles'),
+    lookupWord: (word: string, lang?: string) => ipcRenderer.invoke('plugins:lookup-word', word, lang),
+    getTtsVoices: () => ipcRenderer.invoke('plugins:get-tts-voices'),
   },
 };
 

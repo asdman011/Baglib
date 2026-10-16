@@ -12,8 +12,45 @@ import { setupLibraryViewsIPC } from "./ipc/library-views";
 import { setupCategoriesIPC } from "./ipc/categories";
 import { setupSearchIPC } from "./ipc/search";
 import { setupEnrichmentIPC } from "./ipc/enrichment";
+import { registerOcrIpc } from "./ipc/ocr";
+import { registerDictionaryIpc } from "./ipc/dictionary";
+import { registerAIIpc } from "./ipc/ai";
+import { registerAudioIpc } from "./ipc/audio";
+import { registerCloudSyncIpc } from "./ipc/cloud-sync";
+import { registerOpdsIpcHandlers } from "./ipc/opds";
+import { registerWebClipperIpcHandlers } from "./ipc/web-clipper";
+import { registerReadingStatisticsIpc } from "./ipc/reading-statistics";
+import { registerSecurityIpc } from "./ipc/security";
+import { registerReaderPluginsIpc } from "./ipc/reader-plugins";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
+
+// Register privileged custom schemes before app.whenReady()
+// Grants standard, secure, fetch, streaming, CORS, and CSP privileges to reader assets.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'baglib-asset',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      corsEnabled: true,
+      bypassCSP: true,
+    },
+  },
+  {
+    scheme: 'local-pdf',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      corsEnabled: true,
+      bypassCSP: true,
+    },
+  },
+]);
 
 // Suppress verbose internal pdf.js font warnings and indexing noise that flood dev terminal
 const originalConsoleWarn = console.warn;
@@ -43,6 +80,111 @@ const isDev = !app.isPackaged;
 const loadApp = serve({ directory: path.join(__dirname, "../../out") });
 
 let mainWindow: BrowserWindow | null = null;
+
+// MIME type map for streaming digital book formats and internal asset files
+const MIME_BY_EXT: Record<string, string> = {
+  '.epub': 'application/epub+zip',
+  '.pdf': 'application/pdf',
+  '.mobi': 'application/x-mobipocket-ebook',
+  '.azw3': 'application/vnd.amazon.mobi8-ebook',
+  '.azw': 'application/vnd.amazon.ebook',
+  '.fb2': 'application/x-fictionbook+xml',
+  '.fbz': 'application/x-zip-compressed-fb2',
+  '.cbz': 'application/vnd.comicbook+zip',
+  '.cbr': 'application/vnd.comicbook-rar',
+  '.cbt': 'application/x-tar',
+  '.cb7': 'application/x-7z-compressed',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+  '.xhtml': 'application/xhtml+xml; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.css': 'text/css; charset=utf-8',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.mp3': 'audio/mpeg',
+  '.m4b': 'audio/mp4',
+};
+
+function resolveLocalFilePath(rawUrlPath: string): string | null {
+  let decodedPath = decodeURIComponent(rawUrlPath);
+  // Strip leading slash if followed by Windows drive letter, e.g. "/C:/..." -> "C:/..."
+  if (/^\/[a-zA-Z]:[\\/]/.test(decodedPath)) {
+    decodedPath = decodedPath.slice(1);
+  }
+  decodedPath = path.normalize(decodedPath);
+
+  if (fs.existsSync(decodedPath)) {
+    return decodedPath;
+  }
+  const candidate1 = path.resolve(process.cwd(), '..', decodedPath);
+  if (fs.existsSync(candidate1)) return candidate1;
+  const candidate2 = path.resolve(process.cwd(), decodedPath);
+  if (fs.existsSync(candidate2)) return candidate2;
+  return null;
+}
+
+async function handleAssetProtocolRequest(request: Request): Promise<Response> {
+  try {
+    let rawPath = request.url.replace(/^(baglib-asset|local-pdf):\/\//, '');
+    const questionIndex = rawPath.indexOf('?');
+    if (questionIndex !== -1) rawPath = rawPath.slice(0, questionIndex);
+    const hashIndex = rawPath.indexOf('#');
+    if (hashIndex !== -1) rawPath = rawPath.slice(0, hashIndex);
+
+    const filePath = resolveLocalFilePath(rawPath);
+    if (!filePath) {
+      return new Response("File not found on disk", { status: 404 });
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeType = MIME_BY_EXT[ext] || 'application/octet-stream';
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+
+    const rangeHeader = request.headers.get('range');
+    if (rangeHeader) {
+      const parts = rangeHeader.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (start >= fileSize || end >= fileSize) {
+        return new Response('Requested range not satisfiable', {
+          status: 416,
+          headers: { 'Content-Range': `bytes */${fileSize}` },
+        });
+      }
+
+      const chunksize = end - start + 1;
+      const stream = fs.createReadStream(filePath, { start, end });
+
+      return new Response(stream as any, {
+        status: 206,
+        headers: {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunksize.toString(),
+          'Content-Type': mimeType,
+        },
+      });
+    }
+
+    return net.fetch(pathToFileURL(filePath).toString());
+  } catch (err: any) {
+    console.error('[baglib:protocol] Error streaming asset:', err);
+    return new Response('Internal asset streaming error', { status: 500 });
+  }
+}
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
@@ -75,6 +217,34 @@ async function createWindow() {
   }
 }
 
+// Single-instance lock and OS file association / protocol routing
+app.setAsDefaultProtocolClient('baglib');
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      const openArg = argv.find(
+        (arg) => !arg.startsWith('--') && !arg.endsWith('.exe') && fs.existsSync(arg)
+      );
+      if (openArg) {
+        mainWindow.webContents.send('reader:open-file', openArg);
+      }
+    }
+  });
+}
+
+app.on('open-file', (event, filePath) => {
+  event.preventDefault();
+  if (mainWindow) {
+    mainWindow.webContents.send('reader:open-file', filePath);
+  }
+});
+
 // Setup IPC Handlers
 setupSystemIPC();
 setupDatabaseIPC();
@@ -85,7 +255,16 @@ setupLibraryViewsIPC();
 setupCategoriesIPC();
 setupSearchIPC();
 setupEnrichmentIPC();
-
+registerOcrIpc();
+registerDictionaryIpc();
+registerAIIpc();
+registerAudioIpc();
+registerCloudSyncIpc();
+registerOpdsIpcHandlers();
+registerWebClipperIpcHandlers();
+registerReadingStatisticsIpc();
+registerSecurityIpc();
+registerReaderPluginsIpc();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection
@@ -99,25 +278,10 @@ app.whenReady().then(async () => {
     console.error("[baglib] Database initialization failed:", e);
   }
 
-  // Register custom protocol for local PDFs
+  // Register privileged custom streaming protocols
   try {
-    protocol.handle('local-pdf', (request) => {
-      const rawPath = request.url.replace('local-pdf://', '');
-      let decodedPath = decodeURIComponent(rawPath);
-
-      if (!fs.existsSync(decodedPath)) {
-        // Try searching parent workspace or app directory if path is relative
-        const candidate1 = path.resolve(process.cwd(), '..', decodedPath);
-        const candidate2 = path.resolve(process.cwd(), decodedPath);
-        if (fs.existsSync(candidate1)) decodedPath = candidate1;
-        else if (fs.existsSync(candidate2)) decodedPath = candidate2;
-      }
-
-      if (fs.existsSync(decodedPath)) {
-        return net.fetch(pathToFileURL(decodedPath).toString());
-      }
-      return new Response("File not found on disk", { status: 404 });
-    });
+    protocol.handle('baglib-asset', handleAssetProtocolRequest);
+    protocol.handle('local-pdf', handleAssetProtocolRequest);
   } catch (e) {
     console.error("Protocol registration error:", e);
   }
