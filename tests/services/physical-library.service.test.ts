@@ -216,8 +216,8 @@ describe('Physical Library & Lending Service (Story 8 / KEY-5)', () => {
         workId: 'w-loan-1',
         borrowerName: 'أحمد الفاروق',
         borrowerContact: '+9647701234567',
-        borrowDate: '2026-10-01',
-        expectedReturnDate: '2026-10-15',
+        borrowDate: new Date().toISOString().split('T')[0],
+        expectedReturnDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         notes: 'إعارة للأبحاث الأكاديمية',
       });
 
