@@ -44,5 +44,6 @@ next-env.d.ts
 release/
 # Git sRepos
 repos/
+.baglib-data/
 docs/*
 !docs/features/
