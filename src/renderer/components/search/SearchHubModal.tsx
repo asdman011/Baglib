@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Download,
   Filter,
+  FileText,
 } from 'lucide-react';
 import {
   UnifiedSearchResult,
@@ -23,6 +24,7 @@ import {
   SearchProviderInfo,
   SearchProgressUpdate,
 } from '../../../shared/types/search';
+import type { LibraryFtsResult } from '../../../shared/types/full-text-search';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { SearchResultCard } from './SearchResultCard';
 
@@ -32,6 +34,9 @@ export const SearchHubModal: React.FC = () => {
     setSearchHubOpen,
     refreshBooks,
     setViewMode,
+    books,
+    openBookForReading,
+    setReadingPage,
     dir,
     lang,
     t,
@@ -39,6 +44,7 @@ export const SearchHubModal: React.FC = () => {
 
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<SearchScope>('all');
+  const [ftsResults, setFtsResults] = useState<LibraryFtsResult[]>([]);
   const [selectedProviders, setSelectedProviders] = useState<SearchProviderId[]>([
     'local',
     'openlibrary',
@@ -130,6 +136,7 @@ export const SearchHubModal: React.FC = () => {
       const trimmed = searchTerm.trim();
       if (!trimmed) {
         setResults([]);
+        setFtsResults([]);
         setIsSearching(false);
         setSearchTimeMs(null);
         return;
@@ -146,6 +153,29 @@ export const SearchHubModal: React.FC = () => {
       setIsSearching(true);
       setProviderStatuses({});
       const startTime = Date.now();
+
+      // SQLite FTS5 Full-Text Search Branch (KEY-140)
+      if (targetScope === 'fulltext') {
+        const windowAPI = typeof window !== 'undefined' ? (window as any).api : null;
+        if (windowAPI?.searchLibraryFullText) {
+          try {
+            const ftsRes = await windowAPI.searchLibraryFullText(trimmed);
+            if (activeSearchIdRef.current === searchId) {
+              setFtsResults(ftsRes || []);
+              setSearchTimeMs(Date.now() - startTime);
+            }
+          } catch (e) {
+            console.error('[baglib:search-hub] FTS search error:', e);
+          } finally {
+            if (activeSearchIdRef.current === searchId) {
+              setIsSearching(false);
+            }
+          }
+        } else {
+          setIsSearching(false);
+        }
+        return;
+      }
 
       try {
         if (typeof window !== 'undefined' && window.electronAPI?.search?.query) {
@@ -244,6 +274,15 @@ export const SearchHubModal: React.FC = () => {
     if (filterMode === 'downloadable') return Boolean(item.downloadUrl);
     return true;
   });
+
+  const handleOpenFtsResult = (r: LibraryFtsResult) => {
+    const book = books.find((b) => b.id === r.bookId);
+    if (book) {
+      setSearchHubOpen(false);
+      openBookForReading(book);
+      setReadingPage(r.pageNumber);
+    }
+  };
 
   if (!isSearchHubOpen) return null;
 
@@ -349,10 +388,22 @@ export const SearchHubModal: React.FC = () => {
               >
                 {t('searchScopeOnline')}
               </button>
+              <button
+                onClick={() => handleScopeChange('fulltext')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  scope === 'fulltext'
+                    ? 'bg-pale-sky-500 text-white shadow-xs'
+                    : 'text-muted hover:text-main'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>{t('libraryFtsTitle')}</span>
+              </button>
             </div>
 
             {/* Provider Filter Badges */}
-            <div className="flex items-center gap-1.5 flex-wrap">
+            {scope !== 'fulltext' && (
+              <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[11px] text-muted font-bold px-1 hidden md:inline">
                 {t('providersHeader')}:
               </span>
@@ -440,6 +491,7 @@ export const SearchHubModal: React.FC = () => {
                 </>
               )}
             </div>
+            )}
           </div>
         </div>
 
@@ -504,7 +556,69 @@ export const SearchHubModal: React.FC = () => {
 
         {/* 4. Results List Zone */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 relative z-10">
-          {displayedResults.length > 0 ? (
+          {scope === 'fulltext' ? (
+            ftsResults.length > 0 ? (
+              <div className="space-y-3">
+                {ftsResults.map((r, idx) => (
+                  <div
+                    key={`${r.bookId}-${r.pageNumber}-${idx}`}
+                    onClick={() => handleOpenFtsResult(r)}
+                    className="p-4 rounded-2xl border border-subtle bg-canvas/40 hover:bg-canvas hover:border-pale-sky-500/50 transition-all cursor-pointer shadow-xs hover:shadow-md space-y-2 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-pale-sky-500 shrink-0" />
+                        <h4 className="font-bold text-xs text-main font-display group-hover:text-pale-sky-600 dark:group-hover:text-pale-sky-400 transition-colors">
+                          {r.bookTitle}
+                        </h4>
+                        {r.bookAuthor && (
+                          <span className="text-[11px] text-muted hidden sm:inline">
+                            • {r.bookAuthor}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {r.chapterTitle && (
+                          <span className="px-2 py-0.5 rounded-lg bg-surface border border-subtle text-[10px] text-muted truncate max-w-[150px]">
+                            {r.chapterTitle}
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded-lg bg-pale-sky-500/10 border border-pale-sky-500/30 text-pale-sky-600 dark:text-pale-sky-400 text-[10px] font-mono font-bold">
+                          {t('page')} {r.pageNumber}
+                        </span>
+                      </div>
+                    </div>
+                    <p
+                      className="text-xs text-muted leading-relaxed select-none"
+                      dangerouslySetInnerHTML={{
+                        __html: r.snippet.replace(
+                          /<mark>/g,
+                          '<mark class="bg-amber-400/30 text-amber-900 dark:text-amber-200 font-bold px-1 py-0.5 rounded">'
+                        ),
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : isSearching ? (
+              <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">
+                <Loader2 className="w-8 h-8 text-pale-sky-500 animate-spin" />
+                <p className="text-sm font-medium">{t('searchingInBook')}</p>
+              </div>
+            ) : query.trim() ? (
+              <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">
+                <AlertCircle className="w-10 h-10 text-muted/60" />
+                <h3 className="text-base font-bold text-main font-display">{t('noSearchResults')}</h3>
+                <p className="text-xs text-muted max-w-md">{t('noMatchesHint')}</p>
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">
+                <FileText className="w-12 h-12 text-pale-sky-500/40" />
+                <h3 className="text-base font-bold text-main font-display">{t('libraryFtsTitle')}</h3>
+                <p className="text-xs text-muted max-w-md">{t('libraryFtsDesc')}</p>
+              </div>
+            )
+          ) : displayedResults.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {displayedResults.map((item) => (
                 <SearchResultCard

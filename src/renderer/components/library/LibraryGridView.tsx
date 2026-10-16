@@ -30,13 +30,23 @@ import {
   RefreshCw,
   UploadCloud,
   AlertTriangle,
-  UserCheck
+  UserCheck,
+  Cloud,
+  Globe,
+  Scissors,
+  BarChart2,
+  ShieldCheck,
 } from 'lucide-react';
 import { BookItem, ReadingStatus } from '../../types/library';
 import { BookDetailModal } from './BookDetailModal';
 import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { StorageManagerModal } from './StorageManagerModal';
 import { ImportWizardModal } from './ImportWizardModal';
+import { CloudSyncModal } from '../sync/CloudSyncModal';
+import { OPDSHubModal } from '../opds/OPDSHubModal';
+import { WebClipperModal } from '../clipper/WebClipperModal';
+import { ReadingStatisticsModal } from '../statistics/ReadingStatisticsModal';
+import { AppLockModal } from '../security/AppLockModal';
 import { LendBookModal } from './LendBookModal';
 import { ReturnBookModal } from './ReturnBookModal';
 import { PaginationBar } from './PaginationBar';
@@ -182,8 +192,35 @@ export const LibraryGridView: React.FC = () => {
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
+  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
+  const [isOpdsHubOpen, setIsOpdsHubOpen] = useState(false);
+  const [isWebClipperOpen, setIsWebClipperOpen] = useState(false);
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [isLockScreenActive, setIsLockScreenActive] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const dragCounterRef = useRef(0);
+
+  // App Lock Security check on mount and periodic idle monitoring
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.appLock) {
+      (window as any).electronAPI.appLock.getLockState().then((state: any) => {
+        if (state && state.enabled && state.isLocked) {
+          setIsLockScreenActive(true);
+        }
+      }).catch((e: any) => console.warn('[LibraryGridView] App lock initial check error:', e));
+
+      const interval = setInterval(() => {
+        (window as any).electronAPI.appLock.checkIdleTimeout().then((timedOut: boolean) => {
+          if (timedOut) {
+            setIsLockScreenActive(true);
+          }
+        }).catch((e: any) => console.warn('[LibraryGridView] Idle timeout check error:', e));
+      }, 30000);
+
+      return () => clearInterval(interval);
+    }
+  }, []);
 
   // Compute digital books with storage issues (missing, unmounted, corrupted, duplicate)
   const storageIssueCount = useMemo(() => {
@@ -928,6 +965,56 @@ export const LibraryGridView: React.FC = () => {
             >
               <UploadCloud className="w-3.5 h-3.5 text-pale-sky-500" />
               <span className="hidden sm:inline">{t('openImportWizard')}</span>
+            </button>
+
+            {/* Cloud Sync & Snapshots (KEY-147) */}
+            <button
+              onClick={() => setIsCloudSyncModalOpen(true)}
+              title={t('cloudSyncModalTitle')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
+            >
+              <Cloud className="w-3.5 h-3.5 text-amber-500" />
+              <span className="hidden sm:inline">{t('tabCloudStorage')}</span>
+            </button>
+
+            {/* OPDS Catalogs & Feed Server (KEY-148) */}
+            <button
+              onClick={() => setIsOpdsHubOpen(true)}
+              title={t('opdsHubTitle')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
+            >
+              <Globe className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden sm:inline">{t('tabOpdsCatalogs')}</span>
+            </button>
+
+            {/* Web Article & Novel Clipper (KEY-148) */}
+            <button
+              onClick={() => setIsWebClipperOpen(true)}
+              title={t('webClipperTitle')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
+            >
+              <Scissors className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">{t('webClipperTitle').split(' ')[0]}</span>
+            </button>
+
+            {/* Reading Statistics Dashboard (KEY-149) */}
+            <button
+              onClick={() => setIsStatsModalOpen(true)}
+              title={t('statsDashboardTitle')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
+            >
+              <BarChart2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="hidden sm:inline">{t('statsDashboardTitle').split(' ')[0]}</span>
+            </button>
+
+            {/* App Lock & Security (KEY-149) */}
+            <button
+              onClick={() => setIsSecurityModalOpen(true)}
+              title={t('securityModalTitle')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+              <span className="hidden sm:inline">{t('securityModalTitle').split(' ')[0]}</span>
             </button>
 
             {/* Add Material (Unified Entry Point) */}
@@ -2276,6 +2363,50 @@ export const LibraryGridView: React.FC = () => {
         isOpen={isImportWizardOpen}
         onClose={() => setIsImportWizardOpen(false)}
         onImportComplete={() => refreshBooks()}
+      />
+
+      {/* Cloud Backup & KOReader Sync Modal (KEY-147) */}
+      <CloudSyncModal
+        isOpen={isCloudSyncModalOpen}
+        onClose={() => setIsCloudSyncModalOpen(false)}
+      />
+
+      {/* OPDS Hub & Wireless Feed Server Modal (KEY-148) */}
+      <OPDSHubModal
+        isOpen={isOpdsHubOpen}
+        onClose={() => setIsOpdsHubOpen(false)}
+        onBookImported={() => refreshBooks()}
+      />
+
+      {/* Web Clipper & Serialized Novel Ingestion Modal (KEY-148) */}
+      <WebClipperModal
+        isOpen={isWebClipperOpen}
+        onClose={() => setIsWebClipperOpen(false)}
+        onBookClipped={() => refreshBooks()}
+      />
+
+      {/* Reading Statistics Dashboard Modal (KEY-149) */}
+      <ReadingStatisticsModal
+        isOpen={isStatsModalOpen}
+        onClose={() => setIsStatsModalOpen(false)}
+        lang={lang}
+      />
+
+      {/* App Lock & Security Settings Modal (KEY-149) */}
+      <AppLockModal
+        isOpen={isSecurityModalOpen}
+        isLockScreen={false}
+        onClose={() => setIsSecurityModalOpen(false)}
+        lang={lang}
+      />
+
+      {/* App Lock Screen Active Shield (KEY-149) */}
+      <AppLockModal
+        isOpen={isLockScreenActive}
+        isLockScreen={true}
+        onClose={() => setIsLockScreenActive(false)}
+        onUnlocked={() => setIsLockScreenActive(false)}
+        lang={lang}
       />
 
       {/* Quick Lend Book Modal (Story 8) */}
