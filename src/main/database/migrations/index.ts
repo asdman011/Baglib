@@ -19,6 +19,11 @@ import migration006 from './006_api_quota_logs';
 import migration007 from './007_app_settings';
 import migration008 from './008_file_path_index_and_storage';
 import migration009 from './009_storage_management';
+import migration010 from './010_annotations';
+import migration011 from './011_book_content_fts';
+import migration012 from './012_dictionaries_and_headwords';
+import migration013 from './013_audiobook_pairing';
+import migration014 from './014_reading_statistics';
 
 /** All migrations in chronological order. */
 export const migrations: Migration[] = [
@@ -31,6 +36,11 @@ export const migrations: Migration[] = [
   migration007,
   migration008,
   migration009,
+  migration010,
+  migration011,
+  migration012,
+  migration013,
+  migration014,
 ];
 
 

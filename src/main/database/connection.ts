@@ -23,7 +23,16 @@ let db: Database.Database | null = null;
  * Creates the parent directory if it doesn't exist.
  */
 export function getDatabasePath(): string {
-  const userDataDir = app.getPath('userData');
+  let userDataDir = '';
+  try {
+    if (app && typeof app.getPath === 'function') {
+      userDataDir = app.getPath('userData');
+    }
+  } catch {}
+  if (!userDataDir) {
+    userDataDir = process.env.BAGLIB_DATA_DIR || path.join(process.cwd(), '.baglib-data');
+  }
+
   const dbDir = path.join(userDataDir, 'data');
 
   if (!fs.existsSync(dbDir)) {

@@ -214,6 +214,23 @@ export function setupDatabaseIPC() {
     try {
       const db = getDatabase();
       const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const annotRepo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+
+      // Save to annotations table as well
+      try {
+        annotRepo.save({
+          id: noteData.id,
+          bookId: noteData.bookId,
+          type: 'note',
+          locationCfiOrPage: String(noteData.pageNumber || 1),
+          selectedText: noteData.highlightedText || null,
+          noteContent: noteData.content,
+          createdAt: noteData.createdAt,
+        });
+      } catch (e) {
+        console.warn('[baglib/db-ipc] Auto-sync to annotations table failed:', e);
+      }
+
       return repo.addNote(noteData);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to add note:', err);
@@ -228,10 +245,74 @@ export function setupDatabaseIPC() {
     try {
       const db = getDatabase();
       const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const annotRepo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+
+      try {
+        annotRepo.delete(noteId);
+      } catch {}
+
       return repo.deleteNote(noteId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to delete note:', err);
       throw err;
+    }
+  });
+
+  /**
+   * Annotations & Freehand Ink Management (KEY-137)
+   */
+  ipcMain.handle('library:get-annotations', (_, bookId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      return repo.getByBookId(bookId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get annotations:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('library:get-all-annotations', () => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      return repo.getAll();
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get all annotations:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('library:save-annotation', (_, payload) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      return repo.save(payload);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to save annotation:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('library:delete-annotation', (_, annotationId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      return repo.delete(annotationId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to delete annotation:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('library:get-filtered-annotations', (_, filter) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      return repo.getFiltered(filter);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to filter annotations:', err);
+      return [];
     }
   });
 
@@ -271,6 +352,69 @@ export function setupDatabaseIPC() {
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to fetch subtree work ids:', err);
       return [];
+    }
+  });
+
+  /**
+   * Full-Text Search Engine IPC Handlers (KEY-140)
+   */
+  ipcMain.handle('search:index-book-content', (_, bookId: string, pages: any[]) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      repo.indexBook(bookId, pages);
+      return { success: true, count: pages.length };
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to index book content:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('search:delete-book-content', (_, bookId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      repo.deleteBookIndex(bookId);
+      return { success: true };
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to delete book content index:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('search:is-book-indexed', (_, bookId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      return repo.isBookIndexed(bookId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to check book index status:', err);
+      return false;
+    }
+  });
+
+  ipcMain.handle('search:library-full-text', (_, query: string, options?: any) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      return repo.searchLibrary(query, options);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Full-text search error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('search:get-fts-stats', () => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      return {
+        booksCount: repo.getIndexedBooksCount(),
+        pagesCount: repo.getIndexedPagesCount(),
+      };
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get FTS stats:', err);
+      return { booksCount: 0, pagesCount: 0 };
     }
   });
 }
