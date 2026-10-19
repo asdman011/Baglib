@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Globe,
   Search,
@@ -21,6 +21,7 @@ import {
 import { INITIAL_RSS_FEEDS } from '../../data/libraryMockData';
 import { BookItem } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { formatCoverUrl } from '../../utils/file-path-helper';
 
 interface OnlineLibraryHubProps {
   isOpen: boolean;
@@ -51,6 +52,19 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
   const [isSearchingLibgen, setIsSearchingLibgen] = useState(false);
   const [hasSearchedLibgen, setHasSearchedLibgen] = useState(false);
   const [libgenError, setLibgenError] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const windowAPI = (window as any).electronAPI;
+    if (windowAPI?.onLibgenDownloadProgress) {
+      const unsub = windowAPI.onLibgenDownloadProgress((p: any) => {
+        if (p?.md5 && typeof p.percent === 'number') {
+          setDownloadProgress((prev) => ({ ...prev, [p.md5]: p.percent }));
+        }
+      });
+      return () => unsub();
+    }
+  }, []);
 
   // Anna's Archive Live Search States
   const [annasResults, setAnnasResults] = useState<any[]>([]);
@@ -269,7 +283,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
 
   const handleShieldedDownload = async (item: any) => {
     const targetUrl = item.downloadUrl || item.detailUrl;
-    if (!targetUrl) return;
+    if (!targetUrl && !item.md5) return;
 
     setDownloadingId(item.id);
     const windowAPI = (window as any).electronAPI;
@@ -277,9 +291,21 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
     const filename = `${item.title.slice(0, 50)}.${format}`;
 
     try {
-      if (windowAPI?.safeDownload) {
-        const res = await windowAPI.safeDownload(targetUrl, filename);
-        if (res.success && res.path) {
+      let res: any;
+      if (item.md5 && windowAPI?.downloadLibgen) {
+        res = await windowAPI.downloadLibgen({
+          md5: item.md5,
+          ipfsCid: item.ipfsCid,
+          filename,
+          expectedFormat: format,
+        });
+      } else if (windowAPI?.safeDownload) {
+        res = await windowAPI.safeDownload(targetUrl, filename);
+      }
+      if (res && res.success && res.filePath) {
+        res.path = res.filePath;
+      }
+      if (res && res.success && res.path) {
           const isEpub = (item.format || '').toUpperCase() === 'EPUB';
           let coverImage = item.coverUrl;
           if (!coverImage && res.path.toLowerCase().endsWith('.pdf') && windowAPI?.extractPdfCover) {
@@ -290,6 +316,15 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
               }
             } catch (err) {
               console.warn('[OnlineLibraryHub] extractPdfCover error:', err);
+            }
+          } else if (!coverImage && res.path.toLowerCase().endsWith('.epub') && windowAPI?.extractEpubCover) {
+            try {
+              const epubCoverRes = await windowAPI.extractEpubCover(res.path);
+              if (epubCoverRes?.success && epubCoverRes.coverUrl) {
+                coverImage = epubCoverRes.coverUrl;
+              }
+            } catch (err) {
+              console.warn('[OnlineLibraryHub] extractEpubCover error:', err);
             }
           }
 
@@ -317,17 +352,16 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
             isError: false,
           });
         } else {
+          const failMsg = res?.error || t('downloadFailed') || (lang === 'ar' ? 'فشل تحميل الكتاب من الخوادم' : 'Failed to download book from mirror servers');
           setDownloadToast({
-            message: t('downloadFailed') || 'Download failed',
+            message: failMsg,
             isError: true,
           });
         }
-      } else {
-        window.open(targetUrl, '_blank');
-      }
-    } catch {
+    } catch (err: any) {
+      const errDetail = err?.message || t('downloadFailed') || (lang === 'ar' ? 'فشل تحميل الكتاب' : 'Download failed');
       setDownloadToast({
-        message: t('downloadFailed') || 'Download failed',
+        message: errDetail,
         isError: true,
       });
     } finally {
@@ -561,7 +595,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                         <div className="flex items-start gap-3 min-w-0">
                           {item.coverUrl ? (
                             <img
-                              src={item.coverUrl}
+                              src={formatCoverUrl(item.coverUrl)}
                               alt={item.title}
                               className="w-12 h-16 object-cover rounded-lg border border-subtle shrink-0 bg-surface"
                               onError={(e) => {
@@ -615,25 +649,38 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                             onClick={() => handleShieldedDownload(item)}
                             disabled={downloadingId === item.id}
                             title={t('shieldDownloadBtn')}
-                            className="p-2 rounded-xl bg-evergreen-500/10 border border-evergreen-500/20 text-evergreen-600 dark:text-evergreen-400 hover:bg-evergreen-500 hover:text-white text-xs flex items-center gap-1 cursor-pointer transition-all"
+                            className="p-2 rounded-xl bg-evergreen-500/10 border border-evergreen-500/20 text-evergreen-600 dark:text-evergreen-400 hover:bg-evergreen-500 hover:text-white text-xs flex items-center gap-1.5 cursor-pointer transition-all"
                           >
                             {downloadingId === item.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                {item.md5 && typeof downloadProgress[item.md5] === 'number' && downloadProgress[item.md5] > 0 && (
+                                  <span className="text-[10px] font-mono font-bold">
+                                    {downloadProgress[item.md5]}%
+                                  </span>
+                                )}
+                              </>
                             ) : (
                               <ShieldCheck className="w-3.5 h-3.5" />
                             )}
                           </button>
 
-                          {/* External Link */}
-                          <a
-                            href={item.detailUrl}
-                            target="_blank"
-                            rel="noreferrer"
+                          {/* External Link (opens in OS default browser) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const api = (window as any).electronAPI;
+                              if (api?.openExternal && item.detailUrl) {
+                                api.openExternal(item.detailUrl);
+                              } else if (item.detailUrl) {
+                                window.open(item.detailUrl, '_blank');
+                              }
+                            }}
                             title={t('detailsLink')}
                             className="p-2 rounded-xl bg-surface border border-subtle text-muted hover:text-main text-xs flex items-center gap-1 cursor-pointer transition-colors"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
+                          </button>
 
                           {/* Add to Library */}
                           <button

@@ -1,10 +1,25 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 export const API = {
   getSystemInfo: () => ipcRenderer.invoke('system:get-info'),
   openFileDialog: () => ipcRenderer.invoke('system:open-file-dialog'),
   openFilesDialog: () => ipcRenderer.invoke('system:open-files-dialog'),
   openDirectoryDialog: () => ipcRenderer.invoke('system:open-directory-dialog'),
+  getPathForFile: (file: any): string => {
+    try {
+      if (webUtils && typeof webUtils.getPathForFile === 'function') {
+        const p = webUtils.getPathForFile(file);
+        if (p && typeof p === 'string' && p.trim().length > 0) {
+          return p;
+        }
+      }
+    } catch (e) {
+      console.warn('[preload] webUtils.getPathForFile error:', e);
+    }
+    return file?.path || '';
+  },
+  saveDroppedFileBuffer: (name: string, buffer: Uint8Array) =>
+    ipcRenderer.invoke('system:save-file-buffer', { name, buffer }),
   readPdfBase64: (filePath: string) => ipcRenderer.invoke('system:read-pdf-base64', filePath),
   extractPdfText: (filePath: string) => ipcRenderer.invoke('system:extract-pdf-text', filePath),
 
@@ -78,6 +93,22 @@ export const API = {
   // Online Metadata & External Repositories (Story 5)
   searchLibgen: (query: string, maxResults?: number) =>
     ipcRenderer.invoke('library:search-libgen', query, maxResults),
+  lookupLibgenHash: (hash: string, hashType?: 'md5' | 'sha1' | 'sha256') =>
+    ipcRenderer.invoke('library:lookup-libgen-hash', hash, hashType),
+  lookupLibgenIdentifier: (identifier: string, type?: 'isbn' | 'doi') =>
+    ipcRenderer.invoke('library:lookup-libgen-identifier', identifier, type),
+  downloadLibgen: (options: {
+    md5: string;
+    ipfsCid?: string;
+    filename: string;
+    expectedFormat?: string;
+    expectedFilesize?: number;
+  }) => ipcRenderer.invoke('library:download-libgen', options),
+  onLibgenDownloadProgress: (callback: (progress: { md5: string; bytesTransferred: number; totalBytes: number; percent: number }) => void) => {
+    const sub = (_: any, data: any) => callback(data);
+    ipcRenderer.on('libgen:download-progress', sub);
+    return () => ipcRenderer.removeListener('libgen:download-progress', sub);
+  },
   searchAnnasArchive: (query: string, maxResults?: number) =>
     ipcRenderer.invoke('library:search-annas', query, maxResults),
   searchBibliographic: (query: any, maxResults?: number) =>
@@ -98,12 +129,18 @@ export const API = {
     ipcRenderer.invoke('library:discover-metadata', params),
   extractPdfCover: (filePath: string, pageIndex?: number) =>
     ipcRenderer.invoke('library:extract-pdf-cover', filePath, pageIndex),
+  extractEpubCover: (filePath: string) =>
+    ipcRenderer.invoke('library:extract-epub-cover', filePath),
   safeDownload: (url: string, filename: string) =>
     ipcRenderer.invoke('library:safe-download', url, filename),
   showItemInFolder: (filePath: string) =>
     ipcRenderer.invoke('library:show-item-in-folder', filePath),
   openFile: (filePath: string) =>
     ipcRenderer.invoke('library:open-file', filePath),
+  openExternal: (url: string) =>
+    ipcRenderer.invoke('system:open-external', url),
+  getContentShieldStatus: () =>
+    ipcRenderer.invoke('system:get-shield-status'),
 
   // Digital E-Book File Validation & Ingestion (Story 6)
   validateDigitalFile: (filePath: string) =>
@@ -265,6 +302,17 @@ export const API = {
       ipcRenderer.invoke('enrichment:fetch-and-cache-cover', request),
     attachDigitalCopy: (input: { workId: string; downloadUrl: string; format: string; title?: string }) =>
       ipcRenderer.invoke('enrichment:attach-digital-copy', input),
+    bulkEnrichWorks: (input: { workIds: string[] }) =>
+      ipcRenderer.invoke('enrichment:bulk-enrich-works', input),
+    refreshWork: (input: { workId: string; autoApply?: boolean }) =>
+      ipcRenderer.invoke('enrichment:refresh-work', input),
+    onBulkProgress: (callback: (progress: any) => void) => {
+      const listener = (_e: any, progress: any) => callback(progress);
+      ipcRenderer.on('enrichment:bulk-progress', listener);
+      return () => {
+        ipcRenderer.removeListener('enrichment:bulk-progress', listener);
+      };
+    },
   },
 
   onNotification: (callback: (message: string) => void) => {

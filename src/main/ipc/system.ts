@@ -98,6 +98,21 @@ export function setupSystemIPC() {
     }
   });
 
+  // Save dropped in-memory file buffer to persistent local imports folder
+  ipcMain.handle('system:save-file-buffer', async (_, { name, buffer }: { name: string; buffer: Uint8Array | number[] }) => {
+    try {
+      const importDir = path.join(app.getPath('userData'), 'imports');
+      await fs.promises.mkdir(importDir, { recursive: true });
+      const safeName = path.basename(name).replace(/[^a-zA-Z0-9.\-_ \u0600-\u06FF]/g, '_');
+      const targetPath = path.join(importDir, `${Date.now()}-${safeName}`);
+      await fs.promises.writeFile(targetPath, Buffer.from(buffer));
+      return targetPath;
+    } catch (err) {
+      console.error('[baglib/system-ipc] save-file-buffer error:', err);
+      return null;
+    }
+  });
+
   // Safe PDF Base64 Streamer
   ipcMain.handle('system:read-pdf-base64', async (_, filePath: string) => {
     try {
@@ -106,8 +121,10 @@ export function setupSystemIPC() {
       if (!fs.existsSync(resolvedPath)) {
         const candidate1 = path.resolve(process.cwd(), '..', filePath);
         const candidate2 = path.resolve(process.cwd(), filePath);
+        const candidate3 = path.join(app.getPath('userData'), 'imports', path.basename(filePath));
         if (fs.existsSync(candidate1)) resolvedPath = candidate1;
         else if (fs.existsSync(candidate2)) resolvedPath = candidate2;
+        else if (fs.existsSync(candidate3)) resolvedPath = candidate3;
       }
 
       if (resolvedPath && fs.existsSync(resolvedPath)) {
@@ -129,8 +146,10 @@ export function setupSystemIPC() {
       if (!fs.existsSync(resolvedPath)) {
         const candidate1 = path.resolve(process.cwd(), '..', filePath);
         const candidate2 = path.resolve(process.cwd(), filePath);
+        const candidate3 = path.join(app.getPath('userData'), 'imports', path.basename(filePath));
         if (fs.existsSync(candidate1)) resolvedPath = candidate1;
         else if (fs.existsSync(candidate2)) resolvedPath = candidate2;
+        else if (fs.existsSync(candidate3)) resolvedPath = candidate3;
       }
 
       if (resolvedPath && fs.existsSync(resolvedPath)) {
@@ -184,4 +203,33 @@ export function setupSystemIPC() {
       return null;
     }
   });
+
+  /**
+   * Safely opens an external URL in the OS default web browser
+   */
+  ipcMain.handle('system:open-external', async (_, url: string) => {
+    try {
+      if (!url || typeof url !== 'string') return false;
+      const { shell } = require('electron');
+      await shell.openExternal(url);
+      return true;
+    } catch (err) {
+      console.error('[baglib:system] open-external error:', err);
+      return false;
+    }
+  });
+
+  /**
+   * Returns active status of uBlock-inspired content shield
+   */
+  ipcMain.handle('system:get-shield-status', async () => {
+    try {
+      const { ContentShieldService } = require('../services/shield/content-shield.service');
+      return ContentShieldService.getInstance().getActiveShieldStatus();
+    } catch (err) {
+      console.error('[baglib:system] get-shield-status error:', err);
+      return null;
+    }
+  });
 }
+

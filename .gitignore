@@ -47,3 +47,4 @@ repos/
 .baglib-data/
 docs/*
 !docs/features/
+libgen-calibre-store-plugin-main/

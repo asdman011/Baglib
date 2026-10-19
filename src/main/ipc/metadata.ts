@@ -4,7 +4,9 @@
 
 import { ipcMain, app, shell } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { libgenProvider } from '../services/metadata/libgen.provider';
+import { libgenDownloadService } from '../services/digital/libgen-download.service';
 import { annasProvider } from '../services/metadata/annas.provider';
 import { ContentShieldService } from '../services/shield/content-shield.service';
 import { bibliographicMetadataService } from '../services/metadata/bibliographic-metadata.service';
@@ -12,6 +14,16 @@ import { FilenameParser } from '../services/metadata/filename-parser';
 import { coverResolverService } from '../services/metadata/cover-resolver.service';
 import { quotaTracker } from '../services/metadata/quotaTracker';
 import { providerConfigService } from '../services/metadata/provider-config.service';
+
+function resolveCandidatePath(filePath?: string): string | undefined {
+  if (!filePath) return undefined;
+  if (fs.existsSync(filePath)) return filePath;
+  const inImports = path.join(app.getPath('userData'), 'imports', path.basename(filePath));
+  if (fs.existsSync(inImports)) return inImports;
+  const inCwd = path.resolve(process.cwd(), filePath);
+  if (fs.existsSync(inCwd)) return inCwd;
+  return filePath;
+}
 
 export function setupMetadataIPC() {
   /**
@@ -24,6 +36,60 @@ export function setupMetadataIPC() {
     } catch (err) {
       console.error('[baglib/metadata-ipc] Failed to search LibGen:', err);
       return [];
+    }
+  });
+
+  /**
+   * Path A: Direct Hash Lookup on LibGen
+   */
+  ipcMain.handle('library:lookup-libgen-hash', async (_, hash: string, hashType?: 'md5' | 'sha1' | 'sha256') => {
+    try {
+      if (!hash || typeof hash !== 'string') return [];
+      return await libgenProvider.lookupByHash(hash, hashType || 'md5');
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] Failed to lookup LibGen by hash:', err);
+      return [];
+    }
+  });
+
+  /**
+   * Path B: Direct Identifier Lookup on LibGen (ISBN, DOI)
+   */
+  ipcMain.handle('library:lookup-libgen-identifier', async (_, identifier: string, type?: 'isbn' | 'doi') => {
+    try {
+      if (!identifier || typeof identifier !== 'string') return [];
+      return await libgenProvider.lookupByIdentifier(identifier, type || 'isbn');
+    } catch (err) {
+      console.error('[baglib/metadata-ipc] Failed to lookup LibGen by identifier:', err);
+      return [];
+    }
+  });
+
+  /**
+   * Download a book file from LibGen with progress events and checksum verification
+   */
+  ipcMain.handle('library:download-libgen', async (event, options: {
+    md5: string;
+    ipfsCid?: string;
+    filename: string;
+    expectedFormat?: string;
+    expectedFilesize?: number;
+  }) => {
+    try {
+      return await libgenDownloadService.downloadBookFile({
+        ...options,
+        onProgress: (progress) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('libgen:download-progress', {
+              md5: options.md5,
+              ...progress,
+            });
+          }
+        },
+      });
+    } catch (err: any) {
+      console.error('[baglib/metadata-ipc] Failed to download from LibGen:', err);
+      return { success: false, error: err?.message || 'Download failed' };
     }
   });
 
@@ -177,7 +243,11 @@ export function setupMetadataIPC() {
   ipcMain.handle('library:extract-offline-metadata', async (_, params: { filePath?: string; filename?: string }) => {
     try {
       if (!params) return null;
-      return await bibliographicMetadataService.extractOfflineMetadata(params);
+      const resolvedFilePath = resolveCandidatePath(params.filePath);
+      return await bibliographicMetadataService.extractOfflineMetadata({
+        ...params,
+        filePath: resolvedFilePath,
+      });
     } catch (err) {
       console.error('[baglib/metadata-ipc] extract-offline-metadata error:', err);
       return null;
@@ -190,7 +260,11 @@ export function setupMetadataIPC() {
   ipcMain.handle('library:discover-metadata', async (_, params: { filePath?: string; filename?: string; title?: string; author?: string; isbn?: string; page?: number; deeper?: boolean; offlineOnly?: boolean }) => {
     try {
       if (!params) return null;
-      return await bibliographicMetadataService.discoverBook(params);
+      const resolvedFilePath = resolveCandidatePath(params.filePath);
+      return await bibliographicMetadataService.discoverBook({
+        ...params,
+        filePath: resolvedFilePath,
+      });
     } catch (err) {
       console.error('[baglib/metadata-ipc] discover-metadata error:', err);
       return null;
@@ -206,7 +280,8 @@ export function setupMetadataIPC() {
       if (!filePath || typeof filePath !== 'string') {
         return { success: false, error: 'NO_FILE_PATH' };
       }
-      const res = await bibliographicMetadataService.extractPdfCoverDetails(filePath, pageIndex || 1);
+      const resolved = resolveCandidatePath(filePath) || filePath;
+      const res = await bibliographicMetadataService.extractPdfCoverDetails(resolved, pageIndex || 1);
       if (res && res.coverUrl) {
         return {
           success: true,
@@ -223,14 +298,56 @@ export function setupMetadataIPC() {
     }
   });
 
+  /**
+   * Extract cover image from a local EPUB file using the 5-Tier Cover Extraction Engine.
+   */
+  ipcMain.handle('library:extract-epub-cover', async (_, filePath: string) => {
+    try {
+      if (!filePath || typeof filePath !== 'string') {
+        return { success: false, error: 'NO_FILE_PATH' };
+      }
+      const resolved = resolveCandidatePath(filePath) || filePath;
+      const res = await bibliographicMetadataService.extractEpubCoverDetails(resolved);
+      if (res && res.coverUrl) {
+        return {
+          success: true,
+          coverUrl: res.coverUrl,
+          savedFilePath: res.savedFilePath,
+          tierUsed: res.tierUsed,
+          byteSize: res.byteSize,
+        };
+      }
+      return { success: false, error: 'NO_IMAGE_FOUND' };
+    } catch (err: any) {
+      console.error('[baglib/metadata-ipc] extract-epub-cover error:', err);
+      return { success: false, error: err?.message || 'EXTRACTION_FAILED' };
+    }
+  });
+
 
   /**
-   * Safe download through content shield
+   * Safe download through content shield with LibGen resilient pipeline routing
    */
   ipcMain.handle('library:safe-download', async (_, url: string, filename: string) => {
     try {
       if (!url) throw new Error('Missing download URL');
       const downloadsPath = app.getPath('downloads');
+
+      // If URL is a LibGen download URL or contains an MD5, route through resilient libgenDownloadService
+      const md5Match = url.match(/([a-fA-F0-9]{32})/);
+      if (md5Match && (url.includes('libgen') || url.includes('booksdl') || url.includes('get.php') || url.includes('ads.php'))) {
+        const ext = path.extname(filename).replace('.', '').toLowerCase();
+        const res = await libgenDownloadService.downloadBookFile({
+          md5: md5Match[1],
+          filename,
+          expectedFormat: ext,
+          targetDirectory: downloadsPath,
+        });
+        if (res.success && res.filePath) {
+          return { success: true, path: res.filePath, filename: res.filename || filename };
+        }
+      }
+
       const shield = ContentShieldService.getInstance();
       const savedPath = await shield.downloadFileDirectly(url, downloadsPath, filename);
       return { success: true, path: savedPath, filename };

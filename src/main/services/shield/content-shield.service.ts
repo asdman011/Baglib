@@ -2,19 +2,20 @@
  * Content Shield & Ad Blocker Service for Baglib
  *
  * Reverse-engineered & inspired by uBlock Origin (uBlock-master: traffic.js, urlskip.js, scriptlets.js):
- * - Network-level ad & tracker blocking (webRequest.onBeforeRequest)
+ * - Network-level ad & tracker blocking (webRequest.onBeforeRequest) across ALL sessions
  * - Window open defuser & popunder blocker (webContents.setWindowOpenHandler)
  * - Safe download streamer to bypass third-party ad redirect traps
  */
 
-import { session, app, WebContents } from 'electron';
+import { session, app, WebContents, Session, shell } from 'electron';
 import https from 'https';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import { libgenDownloadService } from '../digital/libgen-download.service';
 
-// Known intrusive ad networks, popup gateways, and tracking domains commonly encountered on mirror sites
-const BLOCKED_HOST_PATTERNS = [
+// Comprehensive pattern list of known intrusive ad networks, popunders, and tracking domains
+export const BLOCKED_HOST_PATTERNS = [
   // Ad Networks & Popunders
   'doubleclick.net',
   'google-analytics.com',
@@ -37,6 +38,22 @@ const BLOCKED_HOST_PATTERNS = [
   'adfocus.us',
   'shorte.st',
   'linkvertise.com',
+  'adcash.com',
+  'bet365',
+  '1xbet',
+  'fastclick.net',
+  'exosrv.com',
+  'deloton.com',
+  'hilltopads.net',
+  'ad-maven.com',
+  'admaven.com',
+  'onclickalgo.com',
+  'onclickpredictv1.com',
+  'realsrv.com',
+  'syndication.exoclick.com',
+  'tsyndicate.com',
+  'adxprts.com',
+  'ad-delivery.net',
   'adclick.',
   'track.',
   'telemetry.',
@@ -46,12 +63,15 @@ const BLOCKED_HOST_PATTERNS = [
   'adroll.com',
   'criteo.com',
   'coinhive.com',
-  'crypto-loot.com'
+  'crypto-loot.com',
+  'pushwoosh.com',
+  'onesignal.com',
 ];
 
 export class ContentShieldService {
   private static instance: ContentShieldService | null = null;
   private isInitialized = false;
+  private attachedSessions = new Set<Session>();
 
   private constructor() {}
 
@@ -63,16 +83,40 @@ export class ContentShieldService {
   }
 
   /**
-   * Initializes network request filtering and popup defense across all Electron sessions
+   * Initializes network request filtering and popup defense across ALL Electron sessions
    */
   public initialize(): void {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    // 1. Install uBlock-inspired onBeforeRequest filter
-    const defaultSession = session.defaultSession;
-    if (defaultSession) {
-      defaultSession.webRequest.onBeforeRequest(
+    // 1. Attach uBlock-inspired filter to default session
+    if (typeof session !== 'undefined' && session.defaultSession) {
+      this.attachToSession(session.defaultSession);
+    }
+
+    // 2. Automatically attach to any newly created sessions (custom partitions, helper windows)
+    if (typeof app !== 'undefined' && app.on) {
+      app.on('session-created', (newSession: Session) => {
+        this.attachToSession(newSession);
+      });
+
+      // 3. Attach window.open defuser to all webContents
+      app.on('web-contents-created', (_, contents: WebContents) => {
+        this.defuseWebContents(contents);
+      });
+    }
+  }
+
+  /**
+   * Attaches uBlock-inspired network filtering to a specific Electron Session instance
+   */
+  public attachToSession(targetSession: Session): void {
+    if (!targetSession || this.attachedSessions.has(targetSession)) return;
+    this.attachedSessions.add(targetSession);
+
+    // 1. Block ad & tracker network requests
+    try {
+      targetSession.webRequest.onBeforeRequest(
         { urls: ['http://*/*', 'https://*/*'] },
         (details, callback) => {
           const urlLower = details.url.toLowerCase();
@@ -88,36 +132,91 @@ export class ContentShieldService {
         }
       );
 
-      // Strip intrusive ad headers
-      defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      // 2. Strip intrusive headers and protect against frame hijackings
+      targetSession.webRequest.onHeadersReceived((details, callback) => {
         callback({ responseHeaders: details.responseHeaders });
       });
+    } catch (err) {
+      console.warn('[ContentShield] Error registering webRequest on session:', err);
     }
 
-    // 2. Attach window.open defuser to all webContents
-    app.on('web-contents-created', (_, contents: WebContents) => {
-      this.defuseWebContents(contents);
-    });
+    // 3. Check and load any unpacked extension (e.g. uBlock Origin) if present
+    this.tryLoadExtension(targetSession);
   }
 
   /**
-   * Defuses popup ads and popunders on a specific WebContents instance
+   * Tries loading an unpacked extension if present on disk
+   */
+  private async tryLoadExtension(targetSession: Session): Promise<void> {
+    try {
+      const candidatePaths = [
+        path.join(process.cwd(), 'extensions', 'ublock'),
+        path.join(process.cwd(), 'resources', 'extensions', 'ublock'),
+      ];
+
+      for (const extPath of candidatePaths) {
+        if (fs.existsSync(path.join(extPath, 'manifest.json'))) {
+          await targetSession.loadExtension(extPath, { allowFileAccess: true });
+          console.log(`[ContentShield] Successfully loaded extension from ${extPath}`);
+          break;
+        }
+      }
+    } catch (err: any) {
+      console.warn('[ContentShield] Extension load notice:', err?.message || err);
+    }
+  }
+
+  /**
+   * Defuses popup ads and popunders on a specific WebContents instance.
+   * NEVER opens a raw internal Electron window! External links are delegated to the OS browser.
    */
   public defuseWebContents(contents: WebContents): void {
+    if (!contents || contents.isDestroyed()) return;
+
     contents.setWindowOpenHandler(({ url }) => {
       const urlLower = url.toLowerCase();
 
-      // Block known ad networks and javascript: URI popunders
+      // Block known ad networks, javascript: URIs, and blank popunders
       if (
         urlLower.startsWith('javascript:') ||
+        urlLower.startsWith('about:blank') ||
         BLOCKED_HOST_PATTERNS.some((pattern) => urlLower.includes(pattern))
       ) {
         return { action: 'deny' };
       }
 
-      // Allow legitimate safe navigations
-      return { action: 'allow' };
+      // If user clicked a legitimate external web link, open it in their default system web browser
+      // and ALWAYS deny Electron creating an unexpected internal visible BrowserWindow.
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        if (typeof shell !== 'undefined' && shell && typeof shell.openExternal === 'function') {
+          shell.openExternal(url).catch((err) => {
+            console.warn('[ContentShield] Failed to open external URL in system browser:', err);
+          });
+        }
+      }
+
+      return { action: 'deny' };
     });
+  }
+
+  /**
+   * Diagnostic method returning current shield status across active sessions
+   */
+  public getActiveShieldStatus(): {
+    attachedSessionsCount: number;
+    blockedDomainsCount: number;
+    loadedExtensions: Array<{ id: string; name: string }>;
+  } {
+    const loadedExtensions =
+      typeof session !== 'undefined' && session.defaultSession
+        ? session.defaultSession.getAllExtensions().map((ext) => ({ id: ext.id, name: ext.name }))
+        : [];
+
+    return {
+      attachedSessionsCount: this.attachedSessions.size,
+      blockedDomainsCount: BLOCKED_HOST_PATTERNS.length,
+      loadedExtensions,
+    };
   }
 
   /**
@@ -134,201 +233,123 @@ export class ContentShieldService {
     fs.mkdirSync(targetDirectory, { recursive: true });
     const destinationPath = path.join(targetDirectory, safeFilename);
 
-    // Collect candidate mirrors for LibGen / Anna MD5
-    const getCandidateDownloadUrls = async (inputUrl: string): Promise<string[]> => {
-      const candidates: string[] = [];
-      const md5Match = inputUrl.match(/([a-fA-F0-9]{32})/);
-      if (!md5Match) return [inputUrl];
-
-      const md5 = md5Match[1].toLowerCase();
-
-      // Mirror 1: libgen.li ads -> key -> get.php CDN stream
-      try {
-        const adsUrl = `https://libgen.li/ads.php?md5=${md5}`;
-        const adsHtml = await new Promise<string>((res, rej) => {
-          const req = https.get(adsUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 4000, rejectUnauthorized: false }, (resp) => {
-            let data = '';
-            resp.on('data', (c) => (data += c));
-            resp.on('end', () => res(data));
-          });
-          req.on('error', rej);
-          req.on('timeout', () => { req.destroy(); rej(new Error('timeout')); });
-        });
-
-        const keyMatch = adsHtml.match(/get\.php\?md5=[^&"']+&key=([a-zA-Z0-9]+)/i);
-        if (keyMatch && keyMatch[1]) {
-          const key = keyMatch[1];
-          const getUrl = `https://libgen.li/get.php?md5=${md5}&key=${key}`;
-          const cdnLocation = await new Promise<string | undefined>((res, rej) => {
-            const req = https.get(getUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                Referer: adsUrl,
-              },
-              timeout: 4000,
-              rejectUnauthorized: false,
-            }, (resp) => {
-              res(resp.headers.location);
-            });
-            req.on('error', rej);
-            req.on('timeout', () => { req.destroy(); rej(new Error('timeout')); });
-          });
-
-          if (cdnLocation) {
-            candidates.push(cdnLocation);
-          }
-          candidates.push(getUrl);
-        }
-      } catch {
-        // Continue to other mirrors
-      }
-
-      // Mirror 2: libgen.bz ads -> key -> get.php
-      try {
-        const bzAdsUrl = `https://libgen.bz/ads.php?md5=${md5}`;
-        const bzHtml = await new Promise<string>((res, rej) => {
-          const req = https.get(bzAdsUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3500, rejectUnauthorized: false }, (resp) => {
-            let data = '';
-            resp.on('data', (c) => (data += c));
-            resp.on('end', () => res(data));
-          });
-          req.on('error', rej);
-          req.on('timeout', () => { req.destroy(); rej(new Error('timeout')); });
-        });
-
-        const bzKeyMatch = bzHtml.match(/get\.php\?md5=[^&"']+&key=([a-zA-Z0-9]+)/i);
-        if (bzKeyMatch && bzKeyMatch[1]) {
-          candidates.push(`https://libgen.bz/get.php?md5=${md5}&key=${bzKeyMatch[1]}`);
-        }
-      } catch {
-        // Continue
-      }
-
-      // Mirror 3: Direct libgen.is get.php
-      candidates.push(`http://libgen.is/get.php?md5=${md5}`);
-
-      // Mirror 4: Direct libgen.rs get.php
-      candidates.push(`http://libgen.rs/get.php?md5=${md5}`);
-
-      // Mirror 5: Original inputUrl if not already present
-      if (!candidates.includes(inputUrl)) {
-        candidates.push(inputUrl);
-      }
-
-      return candidates;
-    };
-
-    const tryDownloadFromUrl = (targetUrl: string): Promise<boolean> => {
-      return new Promise((resolve) => {
-        const executeRequest = (currentUrl: string, redirectCount = 0) => {
-          if (redirectCount > 8) {
-            resolve(false);
-            return;
-          }
-
-          const client = currentUrl.startsWith('https:') ? https : http;
-          let parsedOrigin = '';
-          try {
-            parsedOrigin = new URL(currentUrl).origin;
-          } catch {
-            parsedOrigin = 'https://libgen.li';
-          }
-
-          const req = client.get(
-            currentUrl,
-            {
-              headers: {
-                'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                Referer: currentUrl.includes('booksdl.lc') || currentUrl.includes('libgen')
-                  ? 'https://libgen.li/'
-                  : parsedOrigin,
-              },
-              rejectUnauthorized: false,
-              timeout: 15000,
-            },
-            (res) => {
-              // Follow redirects (301, 302, 303, 307, 308)
-              if (
-                res.statusCode &&
-                [301, 302, 303, 307, 308].includes(res.statusCode) &&
-                res.headers.location
-              ) {
-                const nextUrl = new URL(res.headers.location, currentUrl).toString();
-                executeRequest(nextUrl, redirectCount + 1);
-                return;
-              }
-
-              // If HTTP error (500, 502, 404, 403, etc.), fail gracefully so next mirror can be tried
-              if (!res.statusCode || res.statusCode >= 400) {
-                console.warn(`[ContentShield] Mirror ${currentUrl} returned status ${res.statusCode}, failing over...`);
-                resolve(false);
-                return;
-              }
-
-              const contentType = res.headers['content-type'] || '';
-              if (contentType.includes('text/html') && redirectCount > 0 && !safeFilename.endsWith('.html')) {
-                console.warn(`[ContentShield] Received HTML webpage instead of binary file from ${currentUrl}, failing over...`);
-                resolve(false);
-                return;
-              }
-
-              const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
-              let downloadedBytes = 0;
-
-              const fileStream = fs.createWriteStream(destinationPath);
-              res.on('data', (chunk) => {
-                downloadedBytes += chunk.length;
-                if (onProgress) {
-                  onProgress(downloadedBytes, totalBytes);
-                }
-              });
-
-              res.pipe(fileStream);
-
-              fileStream.on('finish', () => {
-                fileStream.close();
-                try {
-                  const stat = fs.statSync(destinationPath);
-                  if (stat.size > 500) {
-                    resolve(true);
-                    return;
-                  }
-                } catch {}
-                fs.unlink(destinationPath, () => {});
-                resolve(false);
-              });
-
-              fileStream.on('error', () => {
-                fs.unlink(destinationPath, () => {});
-                resolve(false);
-              });
-            }
-          );
-
-          req.on('error', (err) => {
-            console.warn(`[ContentShield] Network error fetching ${currentUrl}:`, err?.message || err);
-            resolve(false);
-          });
-
-          req.on('timeout', () => {
-            req.destroy();
-            resolve(false);
-          });
-        };
-
-        executeRequest(targetUrl);
+    // If downloadUrl contains an MD5, delegate to LibgenDownloadService which has full multi-mirror failover
+    const md5Match = downloadUrl.match(/([a-fA-F0-9]{32})/);
+    if (md5Match && md5Match[1]) {
+      const ext = path.extname(safeFilename).replace(/^\./, '').toLowerCase();
+      const res = await libgenDownloadService.downloadBookFile({
+        md5: md5Match[1],
+        filename: safeFilename,
+        targetDirectory,
+        expectedFormat: ext,
+        onProgress: onProgress
+          ? (p) => onProgress(p.bytesTransferred, p.totalBytes)
+          : undefined,
       });
-    };
 
-    const candidateUrls = await getCandidateDownloadUrls(downloadUrl);
-    for (const url of candidateUrls) {
-      const ok = await tryDownloadFromUrl(url);
-      if (ok) {
-        return destinationPath;
+      if (res.success && res.filePath) {
+        return res.filePath;
       }
     }
 
-    throw new Error('All download mirrors failed to provide the book file');
+    // High-performance fallback direct stream
+    return new Promise((resolve, reject) => {
+      const executeRequest = (currentUrl: string, redirectCount = 0) => {
+        if (redirectCount > 8) {
+          return reject(new Error('Too many HTTP redirects'));
+        }
+
+        const client = currentUrl.startsWith('https:') ? https : http;
+        let parsedOrigin = 'https://libgen.li';
+        try {
+          parsedOrigin = new URL(currentUrl).origin;
+        } catch {}
+
+        const req = client.get(
+          currentUrl,
+          {
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              Accept:
+                'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,application/octet-stream,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Accept-Encoding': 'gzip, deflate, br',
+              Connection: 'keep-alive',
+              Referer:
+                currentUrl.includes('booksdl.lc') || currentUrl.includes('libgen')
+                  ? 'https://libgen.li/'
+                  : parsedOrigin,
+            },
+            rejectUnauthorized: false,
+            timeout: 15000,
+          },
+          (res) => {
+            // Follow redirects (301, 302, 303, 307, 308)
+            if (
+              res.statusCode &&
+              [301, 302, 303, 307, 308].includes(res.statusCode) &&
+              res.headers.location
+            ) {
+              const nextUrl = new URL(res.headers.location, currentUrl).toString();
+              return executeRequest(nextUrl, redirectCount + 1);
+            }
+
+            if (!res.statusCode || res.statusCode >= 400) {
+              return reject(new Error(`Server returned HTTP ${res.statusCode}`));
+            }
+
+            const contentType = res.headers['content-type'] || '';
+            if (contentType.includes('text/html') && !safeFilename.endsWith('.html')) {
+              return reject(new Error('Received HTML webpage instead of binary file'));
+            }
+
+            const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+            let downloadedBytes = 0;
+
+            const fileStream = fs.createWriteStream(destinationPath, {
+              highWaterMark: 1024 * 1024,
+            });
+
+            res.on('data', (chunk) => {
+              downloadedBytes += chunk.length;
+              if (onProgress) {
+                onProgress(downloadedBytes, totalBytes);
+              }
+            });
+
+            res.pipe(fileStream);
+
+            fileStream.on('finish', () => {
+              fileStream.close();
+              try {
+                const stat = fs.statSync(destinationPath);
+                if (stat.size > 500) {
+                  return resolve(destinationPath);
+                }
+              } catch {}
+              fs.unlink(destinationPath, () => {});
+              reject(new Error('Downloaded file is empty or corrupted'));
+            });
+
+            fileStream.on('error', (err) => {
+              fs.unlink(destinationPath, () => {});
+              reject(err);
+            });
+          }
+        );
+
+        req.on('error', (err) => {
+          reject(err);
+        });
+
+        req.on('timeout', () => {
+          req.destroy();
+          reject(new Error('Download request timed out'));
+        });
+      };
+
+      executeRequest(downloadUrl);
+    });
   }
 }

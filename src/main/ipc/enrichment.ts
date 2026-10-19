@@ -9,10 +9,34 @@ import { getDatabase } from '../database';
 import { SqliteWorkRepository } from '../database/repositories/work.repository';
 import { metadataEnrichmentService } from '../services/metadata/metadata-enrichment.service';
 import { coverFetchService } from '../services/metadata/cover-fetch.service';
-import { ApplyEnrichmentRequest, CoverFetchRequest, EnrichmentCandidateEdition } from '../../shared/types/enrichment';
+import { ApplyEnrichmentRequest, CoverFetchRequest, EnrichmentCandidateEdition, EnrichmentFieldKey } from '../../shared/types/enrichment';
 import { BookItem, DigitalFormat } from '../../shared/types/work';
 import { ContentShieldService } from '../services/shield/content-shield.service';
 import { HttpClient, BAGLIB_USER_AGENT } from '../services/metadata/http-client';
+
+function isPlaceholderTitle(val?: string): boolean {
+  if (!val) return true;
+  const trimmed = val.trim();
+  return (
+    trimmed === 'مادة جديدة في المكتبة' ||
+    trimmed === 'New Library Material' ||
+    trimmed === 'New Material' ||
+    trimmed === ''
+  );
+}
+
+function isPlaceholderAuthor(val?: string): boolean {
+  if (!val) return true;
+  const trimmed = val.trim();
+  return (
+    trimmed === 'مؤلف جديد' ||
+    trimmed === 'New Author' ||
+    trimmed === 'مؤلف مجهول' ||
+    trimmed === 'Unknown Author' ||
+    trimmed === 'غير معروف' ||
+    trimmed === ''
+  );
+}
 
 export function setupEnrichmentIPC(): void {
   const getRepo = () => new SqliteWorkRepository(getDatabase());
@@ -185,4 +209,169 @@ export function setupEnrichmentIPC(): void {
       }
     }
   );
+
+  /**
+   * Bulk download online metadata for multiple selected books respecting provider rate limits
+   */
+  ipcMain.handle('enrichment:bulk-enrich-works', async (event, input: { workIds: string[] }) => {
+    const repo = getRepo();
+    const workIds = input?.workIds || [];
+    let updatedCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
+
+    for (let i = 0; i < workIds.length; i++) {
+      const workId = workIds[i];
+      let targetBook: BookItem | undefined = repo.getById
+        ? (await repo.getById(workId)) || undefined
+        : (await repo.getAllWorks()).find((b) => b.id === workId);
+
+      if (!targetBook) {
+        skippedCount++;
+        continue;
+      }
+
+      event.sender.send('enrichment:bulk-progress', {
+        current: i + 1,
+        total: workIds.length,
+        bookTitle: targetBook.title,
+        status: 'searching',
+      });
+
+      try {
+        const res = await metadataEnrichmentService.findCandidateEditions(targetBook);
+        if (res && res.candidates && res.candidates.length > 0) {
+          const topCandidate = res.candidates[0];
+          const diffs = metadataEnrichmentService.computeFieldDiffs(targetBook, topCandidate);
+
+          // Safe non-destructive update: populate fields that are currently empty or generic
+          const approvedFields: EnrichmentFieldKey[] = [];
+          for (const [key, diff] of Object.entries(diffs.diffs)) {
+            const fieldKey = key as EnrichmentFieldKey;
+            if (!diff.hasCurrent && diff.hasIncoming) {
+              approvedFields.push(fieldKey);
+            } else if (fieldKey === 'title' && (targetBook.title.includes('---') || isPlaceholderTitle(targetBook.title))) {
+              approvedFields.push('title');
+            } else if (fieldKey === 'author' && (targetBook.author === 'غير معروف' || targetBook.author === 'Unknown Author' || isPlaceholderAuthor(targetBook.author))) {
+              approvedFields.push('author');
+            }
+          }
+
+          if (approvedFields.length > 0) {
+            const incomingValues: Partial<BookItem> = {};
+            for (const f of approvedFields) {
+              const diff = diffs.diffs[f];
+              if (diff) {
+                (incomingValues as any)[f] = diff.incomingValue;
+              }
+            }
+
+            await metadataEnrichmentService.applyEnrichment(
+              {
+                workId,
+                candidateId: topCandidate.id,
+                selectedFields: approvedFields,
+                incomingValues,
+                overwritePopulatedFields: true,
+              },
+              repo
+            );
+            updatedCount++;
+          } else {
+            skippedCount++;
+          }
+        } else {
+          skippedCount++;
+        }
+      } catch (err) {
+        console.warn(`[baglib/enrichment-ipc] Bulk enrichment error for ${workId}:`, err);
+        failedCount++;
+      }
+    }
+
+    event.sender.send('enrichment:bulk-progress', {
+      current: workIds.length,
+      total: workIds.length,
+      status: 'completed',
+    });
+
+    return {
+      total: workIds.length,
+      updated: updatedCount,
+      failed: failedCount,
+      skipped: skippedCount,
+    };
+  });
+
+  /**
+   * Reverse-Engineered Readest Refresh Metadata function
+   * Fetches latest online candidate editions respecting rate limits,
+   * with optional direct auto-apply or diff computation.
+   */
+  ipcMain.handle('enrichment:refresh-work', async (_, input: { workId: string; autoApply?: boolean }) => {
+    const repo = getRepo();
+    const targetBook = repo.getById
+      ? (await repo.getById(input.workId)) || undefined
+      : (await repo.getAllWorks()).find((b) => b.id === input.workId);
+
+    if (!targetBook) {
+      throw new Error(`Book "${input.workId}" not found for refresh.`);
+    }
+
+    const res = await metadataEnrichmentService.findCandidateEditions(targetBook);
+    if (!res || !res.candidates || res.candidates.length === 0) {
+      return {
+        success: false,
+        message: 'No online matches found',
+        candidates: [],
+      };
+    }
+
+    const topCandidate = res.candidates[0];
+    const diffs = metadataEnrichmentService.computeFieldDiffs(targetBook, topCandidate);
+
+    if (input.autoApply) {
+      const approvedFields = (Object.keys(diffs.diffs) as EnrichmentFieldKey[]).filter((k) => {
+        const d = diffs.diffs[k];
+        return (
+          (!d.hasCurrent && d.hasIncoming) ||
+          (k === 'author' && (targetBook.author === 'Unknown Author' || targetBook.author === 'غير معروف' || isPlaceholderAuthor(targetBook.author))) ||
+          (k === 'title' && isPlaceholderTitle(targetBook.title))
+        );
+      });
+
+      const incomingValues: Partial<BookItem> = {};
+      for (const f of approvedFields) {
+        const diff = diffs.diffs[f];
+        if (diff) {
+          (incomingValues as any)[f] = diff.incomingValue;
+        }
+      }
+
+      const applied = await metadataEnrichmentService.applyEnrichment(
+        {
+          workId: input.workId,
+          candidateId: topCandidate.id,
+          selectedFields: approvedFields,
+          incomingValues,
+          overwritePopulatedFields: true,
+        },
+        repo
+      );
+
+      return {
+        success: true,
+        updatedBook: applied.updatedBook,
+        candidate: topCandidate,
+        diffs,
+      };
+    }
+
+    return {
+      success: true,
+      candidates: res.candidates,
+      topCandidate,
+      diffs,
+    };
+  });
 }
