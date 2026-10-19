@@ -135,7 +135,8 @@ export function extractContentBlocks(htmlOrText: string): Array<{ tag: string; h
 export async function paginateBookSections(
   sections: SectionItem[],
   toc?: TOCItem[],
-  targetCharsPerPage = 1500
+  targetCharsPerPage = 1500,
+  resolveHref?: ((href: string) => { index: number; anchor?: any } | null) | null
 ): Promise<PaginatedBookResult> {
   const pages: FormattedPage[] = [];
   const sectionStartPages: number[] = [];
@@ -244,26 +245,113 @@ export async function paginateBookSections(
     });
   }
 
-  // Map Table of Contents to target page numbers
+  // Helper to safely escape special characters in regex
+  const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // Map Table of Contents and all recursive subitems to accurate target page numbers
   if (toc && toc.length > 0) {
-    for (const item of toc) {
-      let targetPage = 1;
-      if (typeof item.index === 'number' && item.index >= 0 && item.index < sectionStartPages.length) {
-        targetPage = sectionStartPages[item.index];
-      } else if (item.href) {
-        // Try matching href to section ID
-        const matchedSecIdx = sections.findIndex(
-          (s) => item.href.includes(s.id) || s.id.includes(item.href)
-        );
-        if (matchedSecIdx !== -1) {
-          targetPage = sectionStartPages[matchedSecIdx];
+    const processTocItems = (items: TOCItem[], parentTargetPage?: number) => {
+      for (const item of items) {
+        let targetPage: number | undefined;
+
+        const rawHref = item.href || '';
+        let filePart = rawHref;
+        let hashPart = '';
+        if (rawHref.includes('#')) {
+          const parts = rawHref.split('#');
+          filePart = parts[0];
+          hashPart = parts[1];
+        }
+
+        // 1. Try foliate/document loader resolveHref
+        if (resolveHref && rawHref) {
+          try {
+            const resolved = resolveHref(rawHref);
+            if (
+              resolved &&
+              typeof resolved.index === 'number' &&
+              resolved.index >= 0 &&
+              resolved.index < sectionStartPages.length
+            ) {
+              targetPage = sectionStartPages[resolved.index];
+            }
+          } catch {}
+        }
+
+        // 2. If not yet resolved, match by section index or section ID/filename
+        if (targetPage === undefined) {
+          if (typeof item.index === 'number' && item.index >= 0 && item.index < sectionStartPages.length) {
+            targetPage = sectionStartPages[item.index];
+          } else if (filePart) {
+            const cleanFile = filePart.split('/').pop() || filePart;
+            const matchedSecIdx = sections.findIndex((s) => {
+              if (!s.id) return false;
+              const sClean = s.id.split('/').pop() || s.id;
+              return (
+                s.id.includes(filePart) ||
+                filePart.includes(s.id) ||
+                sClean === cleanFile ||
+                sClean.includes(cleanFile) ||
+                cleanFile.includes(sClean)
+              );
+            });
+            if (matchedSecIdx !== -1) {
+              targetPage = sectionStartPages[matchedSecIdx];
+            }
+          }
+        }
+
+        // 3. If there is a hash anchor (#anchorId), find the EXACT page containing that anchor
+        if (hashPart) {
+          const hashPattern = new RegExp(`(?:id|name)=["']?${escapeRegex(hashPart)}["']?`, 'i');
+          // Search within pages starting from the section start page first
+          let foundPage: FormattedPage | undefined;
+          if (targetPage !== undefined) {
+            foundPage = pages.find((p) => p.pageNumber >= targetPage! && hashPattern.test(p.html));
+          }
+          if (!foundPage) {
+            foundPage = pages.find((p) => hashPattern.test(p.html));
+          }
+          if (foundPage) {
+            targetPage = foundPage.pageNumber;
+          }
+        }
+
+        // 4. If still unresolved, fallback to parent's target page, or 1
+        if (targetPage === undefined) {
+          targetPage = parentTargetPage !== undefined ? parentTargetPage : 1;
+        }
+
+        // Keep item.index in sync so (item.index + 1) matches targetPage
+        item.index = targetPage - 1;
+
+        // Register in tocMap under id and all href variations
+        if (item.id !== undefined && item.id !== null) {
+          tocMap.set(item.id, targetPage);
+          tocMap.set(String(item.id), targetPage);
+        }
+        if (rawHref) {
+          tocMap.set(rawHref, targetPage);
+          const cleanFile = filePart.split('/').pop() || filePart;
+          if (cleanFile) {
+            tocMap.set(cleanFile, targetPage);
+          }
+          if (hashPart) {
+            tocMap.set(`#${hashPart}`, targetPage);
+            if (cleanFile) {
+              tocMap.set(`${cleanFile}#${hashPart}`, targetPage);
+            }
+          }
+        }
+
+        // 5. Recursively process nested subitems
+        if (item.subitems && Array.isArray(item.subitems) && item.subitems.length > 0) {
+          processTocItems(item.subitems, targetPage);
         }
       }
-      tocMap.set(item.id, targetPage);
-      if (item.href) {
-        tocMap.set(item.href, targetPage);
-      }
-    }
+    };
+
+    processTocItems(toc);
   }
 
   return {

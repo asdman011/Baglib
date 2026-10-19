@@ -198,6 +198,81 @@ export class DocumentLoader {
 
     const initialized = await epub.init();
 
+    const blobUrls = new Map<string, string>();
+
+    const getBlobUrl = (zipPath: string): string | null => {
+      let data = entryMap.get(zipPath);
+      let foundPath = zipPath;
+
+      if (!data) {
+        try {
+          const decoded = decodeURIComponent(zipPath);
+          data = entryMap.get(decoded);
+          if (data) foundPath = decoded;
+        } catch {}
+      }
+
+      if (!data) {
+        const clean = zipPath.replace(/^\/+/, '').toLowerCase();
+        for (const [key, val] of entryMap.entries()) {
+          const kLower = key.toLowerCase();
+          if (kLower === clean || kLower.endsWith('/' + clean)) {
+            data = val;
+            foundPath = key;
+            break;
+          }
+        }
+      }
+
+      if (!data) return null;
+
+      const cached = blobUrls.get(foundPath);
+      if (cached) return cached;
+
+      const ext = foundPath.split('.').pop()?.toLowerCase();
+      const mime =
+        ext === 'css' ? 'text/css' :
+        ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
+        ext === 'png' ? 'image/png' :
+        ext === 'gif' ? 'image/gif' :
+        ext === 'webp' ? 'image/webp' :
+        ext === 'svg' ? 'image/svg+xml' :
+        ext === 'woff' ? 'font/woff' :
+        ext === 'woff2' ? 'font/woff2' :
+        ext === 'ttf' ? 'font/ttf' :
+        ext === 'otf' ? 'font/otf' :
+        'application/octet-stream';
+
+      const blob = new Blob([data as any], { type: mime });
+      const url = URL.createObjectURL(blob);
+      blobUrls.set(foundPath, url);
+      return url;
+    };
+
+    const resolveZipRelativePath = (relativeHref: string, baseDocPath: string): string => {
+      try {
+        if (!relativeHref || /^(https?:|data:|blob:|file:)/i.test(relativeHref)) return relativeHref;
+        const cleanHref = relativeHref.split('#')[0].split('?')[0];
+        if (!cleanHref) return '';
+
+        const baseDir = baseDocPath.includes('/') ? baseDocPath.substring(0, baseDocPath.lastIndexOf('/') + 1) : '';
+        const combined = baseDir + cleanHref;
+        const segments = combined.split('/');
+        const resolved: string[] = [];
+        for (const seg of segments) {
+          if (seg === '.' || seg === '') continue;
+          if (seg === '..') {
+            resolved.pop();
+          } else {
+            resolved.push(seg);
+          }
+        }
+        return resolved.join('/');
+      } catch {
+        return relativeHref;
+      }
+    };
+
     // Enhance sections with Warichu / Sharh transformation, styling, and syntax highlighting
     const enhancedSections: SectionItem[] = initialized.sections.map((section: any, idx: number) => {
       const originalCreateDoc = section.createDocument ? section.createDocument.bind(section) : null;
@@ -220,6 +295,61 @@ export class DocumentLoader {
             doc.body.innerHTML = rawText || '';
           }
 
+          // Strip any <base> tags that could distort browser URL resolution
+          doc.querySelectorAll('base').forEach((b) => b.remove());
+
+          // Rewrite all relative images, SVG image tags, and stylesheets to in-memory blob URLs
+          const basePath = section.id || '';
+
+          doc.querySelectorAll('img[src]').forEach((img) => {
+            const src = img.getAttribute('src');
+            if (src && !/^(https?:|data:|blob:|file:)/i.test(src)) {
+              const zipPath = resolveZipRelativePath(src, basePath);
+              const bUrl = getBlobUrl(zipPath);
+              if (bUrl) img.setAttribute('src', bUrl);
+            }
+          });
+
+          doc.querySelectorAll('image').forEach((svgImg) => {
+            const xlinkHref = svgImg.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || svgImg.getAttribute('xlink:href');
+            if (xlinkHref && !/^(https?:|data:|blob:|file:)/i.test(xlinkHref)) {
+              const zipPath = resolveZipRelativePath(xlinkHref, basePath);
+              const bUrl = getBlobUrl(zipPath);
+              if (bUrl) {
+                svgImg.setAttributeNS('http://www.w3.org/1999/xlink', 'href', bUrl);
+                svgImg.setAttribute('xlink:href', bUrl);
+              }
+            }
+            const href = svgImg.getAttribute('href');
+            if (href && !/^(https?:|data:|blob:|file:)/i.test(href)) {
+              const zipPath = resolveZipRelativePath(href, basePath);
+              const bUrl = getBlobUrl(zipPath);
+              if (bUrl) svgImg.setAttribute('href', bUrl);
+            }
+          });
+
+          doc.querySelectorAll('link[rel="stylesheet"][href], link[type="text/css"][href]').forEach((link) => {
+            const href = link.getAttribute('href');
+            if (href && !/^(https?:|data:|blob:|file:)/i.test(href)) {
+              const zipPath = resolveZipRelativePath(href, basePath);
+              const bUrl = getBlobUrl(zipPath);
+              if (bUrl) link.setAttribute('href', bUrl);
+            }
+          });
+
+          doc.querySelectorAll('[style*="url("]').forEach((el) => {
+            const style = el.getAttribute('style');
+            if (style) {
+              const replaced = style.replace(/url\(['"]?([^'"\)]+)['"]?\)/gi, (match, u) => {
+                if (/^(https?:|data:|blob:|file:)/i.test(u)) return match;
+                const zipPath = resolveZipRelativePath(u, basePath);
+                const bUrl = getBlobUrl(zipPath);
+                return bUrl ? `url("${bUrl}")` : match;
+              });
+              el.setAttribute('style', replaced);
+            }
+          });
+
           // Apply classical commentary (Sharh) transformation
           doc.body.innerHTML = transformClassicalGlosses(doc.body.innerHTML);
 
@@ -240,6 +370,20 @@ export class DocumentLoader {
       };
     });
 
+    const mapTocItem = (t: any, idx: number, parentPrefix = ''): TOCItem => {
+      const id = t.id ?? (parentPrefix ? `${parentPrefix}-${idx + 1}` : idx + 1);
+      const subitems = t.subitems || t.children;
+      return {
+        id,
+        label: (t.label || t.title || `Chapter ${idx + 1}`).trim(),
+        href: t.href || '',
+        index: typeof t.index === 'number' ? t.index : (parentPrefix ? -1 : idx),
+        subitems: Array.isArray(subitems) && subitems.length > 0
+          ? subitems.map((sub: any, sIdx: number) => mapTocItem(sub, sIdx, String(id)))
+          : undefined,
+      };
+    };
+
     const bookDoc: BookDoc = {
       metadata: {
         title: initialized.metadata?.title || this.filename.replace(/\.[^/.]+$/, ''),
@@ -252,13 +396,7 @@ export class DocumentLoader {
       },
       rendition: initialized.rendition || { layout: 'reflowable', spread: 'auto' },
       dir: initialized.dir === 'rtl' ? 'rtl' : 'ltr',
-      toc: (initialized.toc || []).map((t: any, i: number) => ({
-        id: t.id || i + 1,
-        label: t.label || `Chapter ${i + 1}`,
-        href: t.href || '',
-        index: i,
-        subitems: t.subitems,
-      })),
+      toc: (initialized.toc || []).map((t: any, i: number) => mapTocItem(t, i)),
       sections: enhancedSections,
       splitTOCHref: initialized.splitTOCHref?.bind(initialized),
       resolveHref: initialized.resolveHref?.bind(initialized),
@@ -266,6 +404,8 @@ export class DocumentLoader {
       getCover: initialized.getCover ? initialized.getCover.bind(initialized) : undefined,
       destroy: () => {
         initialized.destroy?.();
+        blobUrls.forEach((url) => URL.revokeObjectURL(url));
+        blobUrls.clear();
         entryMap.clear();
         textCache.clear();
       },

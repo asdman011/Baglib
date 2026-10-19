@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, Eye } from 'lucide-react';
 import { transformClassicalGlosses } from '../../libs/reader/typography';
+import type { ReaderTheme } from '../../libs/reader/types';
 
 interface ParagraphOverlayProps {
   paragraphs: string[];
   initialIndex?: number;
   direction?: 'rtl' | 'ltr';
-  theme?: 'light' | 'dark' | 'sepia' | 'night' | 'e-ink';
+  theme?: ReaderTheme;
   onClose: () => void;
   onParagraphChange?: (index: number) => void;
 }
@@ -109,10 +110,13 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
     }
   };
 
-  const themeClasses = {
+  const themeClasses: Record<ReaderTheme, string> = {
+    paper: 'bg-[#fcfaf2] text-[#2b2b2b] shadow-2xl border border-[#e8e4d9]',
+    sepia: 'bg-[#fbf0d9] text-[#5f4b32] shadow-2xl border border-[#e6d5b8]',
+    dusk: 'bg-[#2d2a32] text-[#e0dede] shadow-2xl border border-[#3f3b47]',
+    midnight: 'bg-[#0f172a] text-[#e2e8f0] shadow-2xl border border-[#1e293b]',
     light: 'bg-white text-slate-800 shadow-2xl border border-slate-200',
     dark: 'bg-slate-900 text-slate-100 shadow-2xl border border-slate-700',
-    sepia: 'bg-[#fbf0d9] text-[#5f4b32] shadow-2xl border border-[#e6d5b8]',
     night: 'bg-black text-neutral-200 shadow-2xl border border-neutral-800',
     'e-ink': 'bg-white text-black shadow-2xl border-2 border-black',
   };

@@ -11,14 +11,14 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { RSVPController } from '../../libs/reader/rsvp-controller';
-import { RSVPState, RSVPWordToken } from '../../libs/reader/types';
+import { RSVPState, RSVPWordToken, ReaderTheme } from '../../libs/reader/types';
 
 interface RSVPOverlayProps {
   text: string;
   initialWpm?: number;
   onClose: () => void;
   direction?: 'rtl' | 'ltr';
-  theme?: 'light' | 'dark' | 'sepia' | 'night' | 'e-ink';
+  theme?: ReaderTheme;
 }
 
 export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
@@ -133,10 +133,13 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
     );
   };
 
-  const themeCardClasses = {
+  const themeCardClasses: Record<ReaderTheme, string> = {
+    paper: 'bg-[#fcfaf2] text-[#2b2b2b] border border-[#e8e4d9] shadow-2xl',
+    sepia: 'bg-[#fbf0d9] text-[#5f4b32] border border-[#e6d5b8] shadow-2xl',
+    dusk: 'bg-[#2d2a32] text-[#e0dede] border border-[#3f3b47] shadow-2xl',
+    midnight: 'bg-[#0f172a] text-[#e2e8f0] border border-[#1e293b] shadow-2xl',
     light: 'bg-white text-slate-800 border border-slate-200 shadow-2xl',
     dark: 'bg-slate-900 text-slate-100 border border-slate-700 shadow-2xl',
-    sepia: 'bg-[#fbf0d9] text-[#5f4b32] border border-[#e6d5b8] shadow-2xl',
     night: 'bg-black text-neutral-200 border border-neutral-800 shadow-2xl',
     'e-ink': 'bg-white text-black border-2 border-black shadow-2xl',
   };

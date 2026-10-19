@@ -208,3 +208,162 @@ Inspired by Koodo Reader and Readest knowledge export workflows, Baglib provides
 - Format selection cards with icon visual cues, scope toggle (Single Book vs All Books ZIP), configuration checkboxes (Frontmatter, Bookmarks, Tags), live collapsible output preview, one-click clipboard copying, and direct local Anki sync with connection feedback.
 - 100% localized in Arabic (RTL) and English (LTR) using CSS logical properties.
 
+---
+
+## 8. Pure Page Zen Viewport, Native Bilingual Reading Physics & Knowledge Architecture (Phases 1–5)
+
+### 8.1 Pure Page Zen Viewport Architecture (`FullPageBookReader.tsx`)
+Inspired by Readest's distraction-free reading canvas and Koodo Reader's immersive full-screen presentation, Baglib implements a native **Zero-Distraction ("Pure Page") Viewport**:
+1. **Zero Permanent Chrome & Zero Cumulative Layout Shift (CLS = 0):**
+   - The reader container spans the entire screen (`fixed inset-0 z-50 w-screen h-screen overflow-hidden`).
+   - All toolbars, scrubbers, and drawers float above the reading canvas using CSS absolute/fixed positioning with glassmorphic `backdrop-blur-md` surfaces and subtle entrance/exit transitions.
+   - Revealing or hiding chrome never reflows text or shifts document page dimensions.
+2. **Proximity Edge Sensors & Hover-Intent Debouncing:**
+   - **Top Edge Sensor (48px):** Moving the cursor to the top edge opens `ZenTopBar` with document metadata, reading mode selector, theme toggles, search, and drawer triggers.
+   - **Bottom Edge Sensor (56px):** Moving the cursor to the bottom edge reveals `ZenBottomScrubber` with a continuous chapter slider, dual-page indicator, and jump-back button.
+   - **140ms Hover Intent Delay:** Prevents accidental tool flashing during rapid vertical pointer movement across pages.
+   - **Corner Hotspots (`ZenCornerHotspots`):** Discrete interactive hit targets at bottom corners (current page/time and quick bookmark toggle).
+3. **Auto-Hiding Cursor (2000ms Idle):**
+   - Pointer inactivity for 2000ms automatically applies `cursor-none`, removing visual clutter while reading.
+   - Any pointer movement, scroll, or keystroke immediately restores cursor visibility.
+4. **Footnote Popover Interceptor (`ZenFootnotePopover`):**
+   - EPUB/HTML internal footnote links (`href="#fn1"`, `epub:type="noteref"`, `sup > a`) are automatically intercepted on click.
+   - Rather than jumping the entire document to the back matter, the footnote content is resolved and rendered in an anchored floating glassmorphic popover.
+
+### 8.2 Native Bilingual Reading Physics & Classical Arabic Typography
+1. **Natural Page Progression Physics:**
+   - Document metadata and content analysis dynamically determine writing direction (`dir="rtl"` vs `dir="ltr"`).
+   - In RTL mode, keyboard arrow navigation is intuitively inverted: `ArrowLeft` advances to the next page and `ArrowRight` returns to the previous page, aligning with physical Arabic right-to-left book turning.
+2. **Dual-Spread Column Ordering:**
+   - Under two-column spread mode with `dir="rtl"`, CSS Grid / Flexbox naturally maps Column 1 to the right and Column 2 to the left.
+   - Page stepping increments by 2, maintaining accurate right-to-left reading flow.
+3. **Tashkeel & Diacritic Clipping Prevention:**
+   - Universal rule `* { overflow-clip-margin: 8px !important; }` prevents high Arabic vowel marks (Fatha, Damma, Shaddah, Tanwin) from being clipped by line bounding boxes.
+   - Arabic text sets `letter-spacing: 0 !important;` to ensure browser text-shaping engines never break cursive ligatures.
+4. **Classical Arabic Text Layouts:**
+   - **Quranic Verses:** Matched with ornate brackets `﴿ ... ﴾` and rendered in emerald accent styling with traditional serif typography.
+   - **Classical Commentary (*Sharh* / *Warichu*):** Split into two balanced sub-lines wrapped in bracket delimiters, rendering interlinear glosses without disrupting paragraph rhythm.
+   - **Poetic Couplets (*Sadr* and *'Ajz*):** Balanced across two responsive columns with a central ornamental divider (`❊`).
+5. **Calibrated Themes & Smart PDF Inversion:**
+   - 8 calibrated color schemes: `paper` (warm cream), `sepia` (golden parchment), `dusk` (twilight charcoal), `midnight` (deep OLED blue-black), `light`, `dark`, `night`, and `e-ink` (pure high-contrast black/white).
+   - For scanned and vector PDFs, calibrated CSS smart filters (`invert`, `hue-rotate(180deg)`, `sepia`, `contrast`) transform black-on-white PDF documents into comfortable night/sepia tones without corrupting color images.
+   - **Whitespace Auto-Crop Toggle:** Smart margin crop transform (`scale(1.16) translateY(-1%)`) maximizes visible PDF body text on laptop and widescreen displays.
+
+### 8.3 SQLite Polymorphic Knowledge Architecture (Migration 015)
+To support Baglib's core research knowledge layer, Migration 015 creates an extensible polymorphic schema:
+1. **Polymorphic Parent Table (`knowledge`):**
+   - Canonical parent entity storing `id`, `work_id`, `edition_id`, `source_id`, `knowledge_type`, `location` (page or CFI), `created_at`, `updated_at`.
+   - Indexed on `(work_id, knowledge_type)` and `(work_id, location)` for sub-millisecond retrieval during reading.
+2. **Dedicated Type-Specific Detail Tables:**
+   - `highlight_detail` (`quoted_text`, semantic `color`)
+   - `note_detail` (`content`)
+   - `quote_detail` (`quoted_text`, `context_note`)
+   - `bookmark_detail` (`label`)
+   - `question_detail` (`question_text`)
+   - Joined via foreign keys with `ON DELETE CASCADE`.
+3. **Many-to-Many Categorization:**
+   - `knowledge_tag` (`knowledge_id`, `tag_id`)
+   - `knowledge_collection` (`knowledge_id`, `collection_id`)
+4. **Reading Sessions & Location Tracking:**
+   - `reading_session` table records reading intervals (`started_at`, `ended_at`, `pages_read`, `mood`) for user statistics.
+   - `work.last_read_location` column stores the exact last reading position, automatically debounced every 2000ms while reading and committed on reader exit.
+5. **Dual-Sync Backward Compatibility:**
+   - The knowledge repository (`knowledge.repository.ts`) automatically dual-syncs to the legacy `annotations` table whenever it is present, ensuring zero regressions across existing UI views.
+
+### 8.4 Modular Component Inventory
+- **`ZenTopBar.tsx`:** Floating glassmorphic top bar with auto-hiding logic, format badge, navigation controls, theme switcher, and focus tools.
+- **`ZenBottomScrubber.tsx`:** Floating glassmorphic bottom bar with interactive page range slider, chapter jump buttons, and previous location jump-back.
+- **`ZenCornerHotspots.tsx`:** Corner sensor targets showing current time/page and quick bookmark toggle without opening full toolbars.
+- **`ZenSelectionMenu.tsx`:** Floating contextual toolbar on text selection for instant color highlighting, note creation, copy, dictionary lookup, TTS pronunciation, and AI query.
+- **`ZenKnowledgeDrawer.tsx`:** Sliding side drawer with categorized knowledge tabs (Highlights, Notes, Quotes, Bookmarks, Questions), filtering, and live search.
+- **`ZenTocDrawer.tsx`:** Sliding Table of Contents drawer with nested chapter hierarchy, page thumbnail navigation grid, and bookmark navigation.
+- **`ZenFootnotePopover.tsx`:** Anchored floating popover for immediate in-place reading of academic citations and notes.
+- **`PdfNativeViewer.tsx`:** Native PDF renderer implementing the Three-Layer Page Stack, normalized percentage rect calculation, line merging, and multi-mode layout.
+- **`HighlightActionPopover.tsx`:** Floating contextual action popover anchored to existing highlights for immediate color modification, margin note editing, copying, and deletion.
+
+---
+
+## 9. Native `pdfjs-dist` Architectural Overhaul (Zero-Iframe)
+
+### 9.1 Root Cause of Chromium Iframe Viewer Failure
+Chromium's built-in PDF viewer plugin invoked by `<iframe>` / `<embed>` tags fundamentally broke desktop reader requirements:
+1. **Event Capture & Trap:** Chromium's PDF plugin is an Out-Of-Process (OOPIF) browser instance that completely intercepts and swallows native pointer events (`mousemove`, `mouseup`), breaking top edge sensor reveal and parent DOM selection tracking.
+2. **Unthemed UI Chrome:** Rendered a browser-level dark gray chrome bar displaying the internal raw UUID file name (`ebd06a65...`) along with browser print and download controls that bypassed Baglib's design system.
+3. **No Persistent Visual DOM Overlays:** Prohibited injecting SVG or DOM highlight overlays on page coordinates.
+4. **No Direct Document Outline Extraction:** Prevented querying the PDF's internal outline/bookmarks hierarchy.
+
+### 9.2 The Three-Layer Page Stack
+Every rendered PDF page in `PdfNativeViewer.tsx` is contained in an isolated `.pdf-page-container` element composed of three stacked layers:
+
+```
++-------------------------------------------------------------+
+| Layer 3: <div className="textLayer">                        |  Interactive DOM text selection
+|          pdfjs-dist TextLayer API with invisible spans      |  ::selection styled with vivid tint
++-------------------------------------------------------------+
+| Layer 2: <div className="pdf-highlight-layer">              |  Persistent colored SVG/DOM rects
+|          mix-blend-mode: multiply / screen                  |  Clickable popover for color/notes
++-------------------------------------------------------------+
+| Layer 1: <canvas className="pdf-canvas">                    |  High-DPI sharp rendering (DPR)
+|          Calibrated theme filters (paper, sepia, dusk, etc) |  Pointer-events disabled
++-------------------------------------------------------------+
+```
+
+1. **Layer 1 — Canvas Visual Layer:** Renders the PDF page rasterized at `scale * window.devicePixelRatio` with context transform `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)` for crisp text on Retina and 4K displays. Calibrated color filters (Paper, Sepia, Dusk, Midnight) are applied directly to the canvas without altering DOM text nodes.
+2. **Layer 2 — Persistent Highlight Overlay (`pdf-highlight-layer`):** Positioned `absolute inset-0 pointer-events-none z-10`. Renders colored `<div className="pdf-highlight-rect">` elements using normalized page-relative percentages (`x%`, `y%`, `width%`, `height%`). Employs `mix-blend-mode: multiply` in light and sepia themes and `mix-blend-mode: screen` with glowing transparency in dark/midnight themes. Clicking any highlight opens the `HighlightActionPopover` to adjust colors across 5 swatches, append notes, copy text, or delete.
+3. **Layer 3 — Interactive Text Layer (`textLayer`):** Uses official `pdfjs-dist/web/pdf_viewer.css` standards with `pdfjsLib.TextLayer` mapped directly to `page.getTextContent()`. Text spans are positioned precisely over the canvas. Standard selection styling `::selection` lights up text in vivid blue (`rgba(59, 130, 246, 0.38)`) as the user drags their cursor.
+
+### 9.3 Highlight Coordinate Normalization & Line Merging
+To prevent fragmented highlight rectangles caused by separate glyph bounding boxes in PDF text streams:
+- `handleMouseUp` converts DOM `range.getClientRects()` to relative bounding box percentages against `.pdf-page-container`:
+  $$\text{x\%} = \frac{R_{\text{left}} - P_{\text{left}}}{P_{\text{width}}} \times 100, \quad \text{y\%} = \frac{R_{\text{top}} - P_{\text{top}}}{P_{\text{height}}} \times 100$$
+- `mergeNormalizedRects()` sorts rects by vertical line offset and combines adjacent or overlapping boxes on the same baseline ($|\Delta y| < 1.4\%$), producing continuous, uninterrupted highlight banners.
+- Highlights are stored in SQLite `knowledge` (`location` JSON containing `{ page, rects, text, color }`) and synced with `highlight_detail`.
+
+### 9.4 Hover Physics & Zero-Jitter Toolbar Reveal
+Because the `<iframe>` is gone, global window pointer tracking operates uniformly across 100% of the viewport:
+- **Throttled Pointer Engine:** A single global `mousemove` listener on `window` throttled to ~40fps (`lastMove < 25ms`).
+- **Activation Zone:** When `clientY <= 44px`, `isTopBarVisible` is immediately set to `true`, and any pending hide timers are canceled.
+- **Hysteresis Keep-Alive:** The top bar remains open while `clientY <= 88px` OR while the mouse is hovering directly inside the top bar or its child dropdowns (`isTopBarHoveredRef.current === true`).
+- **Smooth Exit Debounce:** When the mouse descends below `88px` into the text area, the toolbar smoothly glides away only after a `250ms` grace period, preventing accidental closing during reading.
+- **GPU-Accelerated Animations:** Smooth GPU transitions via `transform: translateY(0)` vs `translateY(-125%)` with `cubic-bezier(0.16, 1, 0.3, 1)` and `opacity 180ms ease`, completely eliminating sudden layout jumps.
+
+### 9.5 Table of Contents (TOC) Extraction & Virtual Outlines
+1. **Embedded Outline Resolution:** Traverses `pdfDoc.getOutline()` recursively, resolving string destination keys (`pdfDoc.getDestination(dest)`) and destination arrays (`pdfDoc.getPageIndex(dest[0])`) to 1-based page numbers.
+2. **Smart Heading Scanner Fallback:** When a PDF lacks embedded outline bookmarks (`!rawOutline`), the system scans the text stream of the first 15 pages for chapter patterns (`/^(Chapter|الفصل|الباب|المبحث|المطلب|Part|Section|المقدمة|الفهرس|المحتويات|تمهيد)/i`) or prominent heading font sizes ($>16\text{pt}$) to construct a virtual outline.
+3. **Visual Page Thumbnails:** `ZenTocDrawer` provides a dedicated "Thumbnails" grid tab alongside TOC and Bookmarks, displaying virtual page card navigation for rapid visual scanning of both PDFs and EPUBs.
+
+---
+
+## 10. EPUB Mouse Wheel Scrolling & Hands-Free Auto-Reader Architecture
+
+### 10.1 EPUB Mouse Wheel Interception & Debounced Navigation
+In paginated or column reader modes (`single` and `two-column`), discrete screen-sized page layouts prevent vertical document overflow, causing standard browser wheel events (`e.deltaY`) to be silently ignored. In legacy iframe-based readers, wheel events are frequently trapped inside nested window contexts.
+
+Baglib implements a unified mouse wheel interceptor on `contentContainerRef` and all nested frame contexts:
+1. **Headroom Inspection:** Before intercepting, checks if the target element or any ancestor has local scroll headroom (`scrollTop + clientHeight < scrollHeight`). If so, local scrolling proceeds uninhibited.
+2. **Micro-Jitter Suppression:** Filters out minor trackpad vibrations ($|\Delta y| < 15\text{px}$ and $|\Delta x| < 15\text{px}$).
+3. **Debounced Page Progression:** Wheel events are debounced with a `~200ms` timestamp threshold, ensuring a single mouse wheel flick advances exactly one page/spread rather than skipping dozens of pages.
+4. **Bilingual Directionality:**
+   - Vertical wheel: $\Delta y > 0$ advances to the next page; $\Delta y < 0$ returns to the previous page.
+   - Horizontal wheel / swipe: In Arabic RTL, $\Delta x < 0$ turns forward and $\Delta x > 0$ turns back; in English LTR, $\Delta x > 0$ turns forward and $\Delta x < 0$ turns back.
+5. **Continuous Scroll Mode Protection:** When `viewMode === 'scrolled'`, default browser scrolling is preserved (`e.preventDefault()` is bypassed), and any trapped iframe events are forwarded to the container scroll offset (`scrollEl.scrollTop += e.deltaY`).
+
+### 10.2 Hands-Free Auto-Scrolling Engine
+A hands-free auto-scroller is embedded directly into the floating `ZenTopBar`, offering Play/Pause toggle and speed multipliers (`0.5x`, `1x`, `1.5x`, `2x`):
+1. **Continuous Scroll Mode (`viewMode === 'scrolled'`):**
+   - Driven by a high-precision `requestAnimationFrame` loop.
+   - Computes delta time ($\Delta t$) between animation frames: $\text{step} = \Delta t \times 45\text{px/s} \times \text{speedMultiplier}$.
+   - Automatically pauses upon reaching document boundary ($\text{scrollTop} + \text{clientHeight} \ge \text{scrollHeight} - 6\text{px}$).
+2. **Paginated Book Spread Mode (`viewMode !== 'scrolled'`):**
+   - Timed interval timer: $T = \text{round}\left(\frac{20}{\text{speedMultiplier}}\right) \times 1000\text{ ms}$ (20s at 1x, 40s at 0.5x, 13.3s at 1.5x, 10s at 2x).
+   - Automatically turns pages until reaching `maxBookPages`.
+
+### 10.3 Safety Pause Triggers & Deliberate Motion Detection
+To provide an effortless reading experience without accidental interruption:
+- **Grace Period on Launch:** When starting auto-scroll, an initial `600ms` grace period ignores mouse liftoff, and motion under `20px` is filtered out.
+- **Intentional Motion Threshold:** Moving the cursor deliberately ($> 20\text{px}$) after the grace period immediately pauses auto-scrolling.
+- **Interrupt Events:** Mouse clicks on the page, keyboard keystrokes, and window blur / tab switching (`visibilitychange` / `blur`) immediately pause auto-scrolling and display a localized toast notification (`showToast(t('autoScrollPaused'))`).
+- **Control Exemption:** Clicks on the Play/Pause toggle button or speed selector cycle through speeds without triggering an interruption pause.
+
+
+

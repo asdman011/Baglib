@@ -124,6 +124,44 @@ describe('EPUB Paginator & Multi-Format Screen Chunking Engine Tests', () => {
       assert.ok(chap2Start > chap1Start);
       assert.equal(result.tocMap.get('t3'), chap2Start);
     });
+
+    it('maps nested TOC subitems and fragment anchors (#hash) to exact inner page numbers', async () => {
+      const section1: SectionItem = {
+        id: 'part1.xhtml',
+        size: 3000,
+        loadText: async () => [
+          '<h1>Part I. First the Quran</h1>',
+          '<p>' + 'Introductory text. '.repeat(60) + '</p>',
+          '<h2 id="subchap_1">A Spiritual Journey</h2>',
+          '<p>' + 'Subchapter 1 content here. '.repeat(60) + '</p>',
+          '<h2 id="subchap_2">Hadith Corpus</h2>',
+          '<p>' + 'Subchapter 2 content here. '.repeat(60) + '</p>',
+        ].join('\n\n'),
+      };
+
+      const mockTOC: TOCItem[] = [
+        {
+          id: 'part1',
+          label: 'Part I',
+          href: 'part1.xhtml',
+          subitems: [
+            { id: 'sub1', label: 'A Spiritual Journey', href: 'part1.xhtml#subchap_1' },
+            { id: 'sub2', label: 'Hadith Corpus', href: 'part1.xhtml#subchap_2' },
+          ],
+        },
+      ];
+
+      const result = await paginateBookSections([section1], mockTOC, 900);
+
+      assert.ok(result.pages.length >= 3, `Expected at least 3 pages, got ${result.pages.length}`);
+      assert.equal(result.tocMap.get('part1'), 1);
+
+      // Subitems should be mapped to their exact page numbers, NOT 1
+      const sub1Page = result.tocMap.get('sub1');
+      const sub2Page = result.tocMap.get('sub2');
+      assert.ok(typeof sub1Page === 'number' && sub1Page > 1, `Expected sub1Page > 1, got ${sub1Page}`);
+      assert.ok(typeof sub2Page === 'number' && sub2Page > sub1Page, `Expected sub2Page > sub1Page, got ${sub2Page}`);
+    });
   });
 
   describe('3. PDF Page Split Regex Integrity', () => {

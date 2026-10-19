@@ -78,11 +78,11 @@ export interface BookDoc {
 export interface DocumentLoaderOptions {
   nativeFilePath?: string;
   languageHint?: string;
-  theme?: 'light' | 'dark' | 'sepia' | 'night' | 'e-ink';
+  theme?: ReaderTheme;
 }
 
 export type ReaderViewMode = 'single' | 'two-column' | 'scrolled';
-export type ReaderTheme = 'light' | 'sepia' | 'dark' | 'night' | 'e-ink';
+export type ReaderTheme = 'paper' | 'sepia' | 'dusk' | 'midnight' | 'light' | 'dark' | 'night' | 'e-ink';
 export type FocusAidMode = 'none' | 'ruler' | 'paragraph' | 'rsvp';
 
 export interface ReaderViewportSettings {

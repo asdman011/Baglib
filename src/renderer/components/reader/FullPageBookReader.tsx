@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   ArrowRight,
   BookOpen,
@@ -62,7 +62,16 @@ import {
   getReaderStyles,
   transformClassicalGlosses,
   getViewportCssVariables,
+  getPdfThemeFilter,
 } from '../../libs/reader/typography';
+import { ZenTopBar } from './ZenTopBar';
+import { ZenBottomScrubber } from './ZenBottomScrubber';
+import { ZenCornerHotspots } from './ZenCornerHotspots';
+import { ZenSelectionMenu } from './ZenSelectionMenu';
+import { ZenKnowledgeDrawer } from './ZenKnowledgeDrawer';
+import { ZenTocDrawer } from './ZenTocDrawer';
+import { ZenFootnotePopover } from './ZenFootnotePopover';
+import type { KnowledgeItemDTO, KnowledgeType } from '../../../shared/types/knowledge';
 import { ReadingRuler } from './ReadingRuler';
 import { ParagraphOverlay } from './ParagraphOverlay';
 import { RSVPOverlay } from './RSVPOverlay';
@@ -89,8 +98,16 @@ import type { BookBibliographicInfo, BookWithAnnotations } from '../../../shared
 import {
   registerCssCustomHighlights,
   clearCssCustomHighlights,
+  setActiveSelectionHighlight,
+  clearActiveSelectionHighlight,
+  renderTempSelectionOverlay,
+  removeTempSelectionOverlay,
+  injectHighlightStyles,
+  findRangesForText,
   HIGHLIGHT_COLORS,
 } from '../../libs/reader/highlight-manager';
+import { PdfNativeViewer, type PdfSelectionInfo, type NormalizedRect } from './PdfNativeViewer';
+import { HighlightActionPopover } from './HighlightActionPopover';
 
 export const FullPageBookReader: React.FC = () => {
   const {
@@ -109,6 +126,7 @@ export const FullPageBookReader: React.FC = () => {
   } = useWorkspace();
 
   const [selectedText, setSelectedText] = useState('');
+  const [activeRange, setActiveRange] = useState<Range | null>(null);
   const [newNoteText, setNewNoteText] = useState('');
   const [filterMode, setFilterMode] = useState<'current_page' | 'all_pages'>('current_page');
   const [viewType, setViewType] = useState<'text_manuscript' | 'native_pdf'>('native_pdf');
@@ -119,7 +137,23 @@ export const FullPageBookReader: React.FC = () => {
 
   // Multi-Format Reader Engine State
   const [bookDoc, setBookDoc] = useState<BookDoc | null>(null);
-  const [detectedFormat, setDetectedFormat] = useState<BookFormat>('PDF');
+  const [detectedFormat, setDetectedFormat] = useState<BookFormat>(() => {
+    return activeBook?.filePath ? detectFormat(activeBook.filePath) : 'PDF';
+  });
+  const effectiveFormat = activeBook?.filePath ? detectFormat(activeBook.filePath) : detectedFormat;
+  const isComic = ['CBZ', 'CBR', 'CBT', 'CB7'].includes(effectiveFormat);
+  const isReflowable = [
+    'EPUB',
+    'MOBI',
+    'AZW',
+    'AZW3',
+    'FB2',
+    'FBZ',
+    'TXT',
+    'MD',
+    'DOCX',
+    'HTML',
+  ].includes(effectiveFormat);
   const [readerDirection, setReaderDirection] = useState<'rtl' | 'ltr'>('ltr');
   const [isTocOpen, setIsTocOpen] = useState<boolean>(false);
   const [currentSectionHtml, setCurrentSectionHtml] = useState<string>('');
@@ -127,10 +161,47 @@ export const FullPageBookReader: React.FC = () => {
   const [secondComicPageUrl, setSecondComicPageUrl] = useState<string | null>(null);
   const [isWideComicPage, setIsWideComicPage] = useState<boolean>(false);
 
+  // Zen Viewport & Edge Sensors State
+  const [isTopBarVisible, setIsTopBarVisible] = useState<boolean>(false);
+  const [isBottomBarVisible, setIsBottomBarVisible] = useState<boolean>(false);
+  const [isIdle, setIsIdle] = useState<boolean>(false);
+  const [isTocPinned, setIsTocPinned] = useState<boolean>(false);
+  const [isKnowledgeDrawerOpen, setIsKnowledgeDrawerOpen] = useState<boolean>(false);
+  const [isKnowledgePinned, setIsKnowledgePinned] = useState<boolean>(false);
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemDTO[]>([]);
+  const [previousJumpPage, setPreviousJumpPage] = useState<number | null>(null);
+  const [autoCropMargins, setAutoCropMargins] = useState<boolean>(false);
+  const [pdfFitMode, setPdfFitMode] = useState<'Fit' | 'FitH' | 'FitV'>('FitH');
+  const [activeFootnote, setActiveFootnote] = useState<{
+    index: string | number;
+    text: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const [pdfSelectionInfo, setPdfSelectionInfo] = useState<PdfSelectionInfo | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<PdfSelectionInfo | null>(null);
+  const [pdfToc, setPdfToc] = useState<TOCItem[]>([]);
+  const [activeHighlightPopover, setActiveHighlightPopover] = useState<{
+    highlight: KnowledgeItemDTO;
+    position: { x: number; y: number };
+  } | null>(null);
+  const isTopBarHoveredRef = useRef(false);
+  const isBottomBarHoveredRef = useRef(false);
+  const topHideTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const bottomHideTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const topHoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const bottomHoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionStartTimeRef = useRef<number>(Date.now());
+  const startPageRef = useRef<number>(readingPage);
+
   // EPUB & Reflowable Pagination State
   const [paginatedPages, setPaginatedPages] = useState<FormattedPage[]>([]);
   const [tocPageMap, setTocPageMap] = useState<Map<string | number, number>>(new Map());
   const [isPaginating, setIsPaginating] = useState<boolean>(false);
+  const [pdfDocProxy, setPdfDocProxy] = useState<any>(null);
 
   // View Modes & Typography State
   const [viewMode, setViewMode] = useState<ReaderViewMode>('single');
@@ -167,6 +238,13 @@ export const FullPageBookReader: React.FC = () => {
   const [showToast, setShowToast] = useState<string | null>(null);
   const [showCopiedToast, setShowCopiedToast] = useState<boolean>(false);
 
+  // Hands-Free Auto-Scrolling / Auto-Reader Mode State
+  const [isAutoScrolling, setIsAutoScrolling] = useState<boolean>(false);
+  const [autoScrollSpeed, setAutoScrollSpeed] = useState<number>(1);
+  const lastWheelTimeRef = useRef<number>(0);
+  const isPositioningEpubScrollRef = useRef<boolean>(false);
+  const lastReportedEpubPageRef = useRef<number>(1);
+
   // In-Book Full-Text Search State (KEY-140)
   const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState<boolean>(false);
 
@@ -199,6 +277,80 @@ export const FullPageBookReader: React.FC = () => {
   // Editable Page Target for Notes
   const [noteTargetPage, setNoteTargetPage] = useState<number>(readingPage);
 
+  // Exclusive Panel Switching: Opening any panel automatically closes previously open panels
+  const closeAllPanelsExcept = useCallback((except?: 'toc' | 'knowledge' | 'search' | 'settings' | 'ai' | 'annotations') => {
+    if (except !== 'toc') {
+      setIsTocOpen(false);
+      setIsTocPinned(false);
+    }
+    if (except !== 'knowledge') {
+      setIsKnowledgeDrawerOpen(false);
+      setIsKnowledgePinned(false);
+    }
+    if (except !== 'annotations') {
+      setIsAnnotationsDrawerOpen(false);
+    }
+    if (except !== 'search') {
+      setIsSearchDrawerOpen(false);
+    }
+    if (except !== 'ai') {
+      setIsAIDrawerOpen(false);
+    }
+    if (except !== 'settings') {
+      setIsSettingsOpen(false);
+    }
+  }, []);
+
+  const handleToggleToc = useCallback(() => {
+    setIsTocOpen((prev) => {
+      const willOpen = !prev;
+      if (willOpen) {
+        closeAllPanelsExcept('toc');
+      }
+      return willOpen;
+    });
+  }, [closeAllPanelsExcept]);
+
+  const handleToggleKnowledge = useCallback(() => {
+    setIsKnowledgeDrawerOpen((prev) => {
+      const willOpen = !prev;
+      if (willOpen) {
+        closeAllPanelsExcept('knowledge');
+      }
+      return willOpen;
+    });
+  }, [closeAllPanelsExcept]);
+
+  const handleToggleSearch = useCallback(() => {
+    setIsSearchDrawerOpen((prev) => {
+      const willOpen = !prev;
+      if (willOpen) {
+        closeAllPanelsExcept('search');
+      }
+      return willOpen;
+    });
+  }, [closeAllPanelsExcept]);
+
+  const handleToggleAIDrawer = useCallback(() => {
+    setIsAIDrawerOpen((prev) => {
+      const willOpen = !prev;
+      if (willOpen) {
+        closeAllPanelsExcept('ai');
+      }
+      return willOpen;
+    });
+  }, [closeAllPanelsExcept]);
+
+  const handleToggleSettings = useCallback(() => {
+    setIsSettingsOpen((prev) => {
+      const willOpen = !prev;
+      if (willOpen) {
+        closeAllPanelsExcept('settings');
+      }
+      return willOpen;
+    });
+  }, [closeAllPanelsExcept]);
+
   // Maximum valid pages calculation
   const maxBookPages = Math.max(
     1,
@@ -212,6 +364,10 @@ export const FullPageBookReader: React.FC = () => {
   // Sync noteTargetPage with readingPage when user navigates
   useEffect(() => {
     setNoteTargetPage(Math.min(maxBookPages, Math.max(1, readingPage)));
+    setSelectedText('');
+    setPdfSelectionInfo(null);
+    clearActiveSelectionHighlight();
+    setActiveRange(null);
   }, [readingPage, maxBookPages]);
 
   // Load custom plugin CSS styles dynamically
@@ -257,7 +413,308 @@ export const FullPageBookReader: React.FC = () => {
     return () => clearInterval(heartbeatTimer);
   }, []);
 
-  // Full Screen-Reader Accessible Keyboard Navigation (KEY-149)
+  const handleNextPage = useCallback(() => {
+    setReadingPage(Math.min(maxBookPages, readingPage + (viewMode === 'two-column' ? 2 : 1)));
+  }, [maxBookPages, readingPage, viewMode, setReadingPage]);
+
+  const handlePrevPage = useCallback(() => {
+    setReadingPage(Math.max(1, readingPage - (viewMode === 'two-column' ? 2 : 1)));
+  }, [readingPage, viewMode, setReadingPage]);
+
+  const handleCycleAutoScrollSpeed = useCallback(() => {
+    const speeds = [0.5, 1, 1.5, 2] as const;
+    const nextIdx = (speeds.indexOf(autoScrollSpeed as any) + 1) % speeds.length;
+    setAutoScrollSpeed(speeds[nextIdx]);
+  }, [autoScrollSpeed]);
+
+  const handleToggleAutoScroll = useCallback(() => {
+    setIsAutoScrolling((prev) => {
+      const next = !prev;
+      if (next && viewMode !== 'scrolled') {
+        isPositioningEpubScrollRef.current = true;
+        setViewMode('scrolled');
+      }
+      return next;
+    });
+  }, [viewMode]);
+
+  // Helper to discover true scrollable node in EPUB / reflowable reader
+  const getEpubScrollElement = useCallback((mountEl: HTMLElement | null): HTMLElement | null => {
+    if (!mountEl) return null;
+    const candidates = [
+      mountEl.querySelector('.epub-container') as HTMLElement,
+      mountEl.querySelector('.epub-stream-container') as HTMLElement,
+      mountEl,
+      ...Array.from(mountEl.querySelectorAll<HTMLElement>('.select-text, .epub-stream-page, div')),
+    ].filter(Boolean);
+
+    for (const el of candidates) {
+      if (el.scrollHeight > el.clientHeight + 4) {
+        return el;
+      }
+    }
+    const iframe = mountEl.querySelector('iframe');
+    const docScroll = iframe?.contentDocument?.scrollingElement as HTMLElement | null;
+    if (docScroll && docScroll.scrollHeight > docScroll.clientHeight + 4) {
+      return docScroll;
+    }
+    return (mountEl.querySelector('.epub-stream-container') as HTMLElement) || (mountEl.querySelector('.epub-container') as HTMLElement) || mountEl;
+  }, []);
+
+  // EPUB & Reader Mouse Wheel Scrolling Interceptor
+  useEffect(() => {
+    const container = contentContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // 1. Do not intercept if user is scrolling inside modals, dialogs, aside, or inputs
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest('[role="dialog"]') ||
+        target?.closest('[role="toolbar"]') ||
+        target?.closest('[role="complementary"]') ||
+        target?.closest('aside') ||
+        target?.closest('select') ||
+        target?.closest('input') ||
+        target?.closest('textarea')
+      ) {
+        return;
+      }
+
+      // 2. In continuous scroll mode, ensure standard vertical scrolling functions smoothly
+      if (viewMode === 'scrolled') {
+        const scrollEl =
+          detectedFormat === 'PDF' && viewType === 'native_pdf'
+            ? (container.querySelector('.pdf-native-viewer-container') as HTMLElement) || container
+            : getEpubScrollElement(container) || container;
+
+        if (scrollEl) {
+          scrollEl.scrollTop += e.deltaY;
+          if (target && target.ownerDocument !== document) {
+            e.preventDefault();
+          }
+          if (e.deltaY > 0 && scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 5) {
+            if (typeof (bookDoc as any)?.rendition?.next === 'function') {
+              (bookDoc as any).rendition.next();
+            }
+            if (readingPage < maxBookPages) {
+              handleNextPage();
+            }
+          } else if (e.deltaY < 0 && scrollEl.scrollTop <= 2) {
+            if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
+              (bookDoc as any).rendition.prev();
+            }
+            if (readingPage > 1) {
+              handlePrevPage();
+            }
+          }
+        }
+        return;
+      }
+
+      // 3. In pagination / column mode:
+      // If a nested child element has active scroll headroom, let it scroll locally first
+      if (target && target !== container) {
+        let parent: HTMLElement | null = target;
+        let hasLocalScroll = false;
+        while (parent && parent !== container) {
+          const style = window.getComputedStyle(parent);
+          if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+            const canScrollDown = e.deltaY > 0 && parent.scrollTop + parent.clientHeight < parent.scrollHeight - 1;
+            const canScrollUp = e.deltaY < 0 && parent.scrollTop > 1;
+            if (canScrollDown || canScrollUp) {
+              hasLocalScroll = true;
+              break;
+            }
+          }
+          parent = parent.parentElement;
+        }
+        if (hasLocalScroll) return;
+      }
+
+      // Ignore micro-jitter below threshold
+      if (Math.abs(e.deltaY) < 15 && Math.abs(e.deltaX) < 15) {
+        return;
+      }
+
+      // Prevent native viewport bounce or default page scroll
+      e.preventDefault();
+
+      // Debounce wheel events (~200ms threshold) so a single flick doesn't flip 10 pages
+      const now = performance.now();
+      if (now - lastWheelTimeRef.current < 200) {
+        return;
+      }
+      lastWheelTimeRef.current = now;
+
+      // Determine next vs. prev based on deltaY (vertical) or deltaX (horizontal swipe)
+      let isNext = false;
+      let isPrev = false;
+
+      if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+        if (e.deltaY > 0) isNext = true;
+        else if (e.deltaY < 0) isPrev = true;
+      } else {
+        const isRtl = readerDirection === 'rtl';
+        if (isRtl) {
+          if (e.deltaX < 0) isNext = true;
+          else if (e.deltaX > 0) isPrev = true;
+        } else {
+          if (e.deltaX > 0) isNext = true;
+          else if (e.deltaX < 0) isPrev = true;
+        }
+      }
+
+      if (isNext) {
+        if (typeof (bookDoc as any)?.rendition?.next === 'function') {
+          (bookDoc as any).rendition.next();
+        }
+        handleNextPage();
+      } else if (isPrev) {
+        if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
+          (bookDoc as any).rendition.prev();
+        }
+        handlePrevPage();
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+
+    const attachIframeWheel = () => {
+      const iframes = container.querySelectorAll('iframe');
+      iframes.forEach((iframe) => {
+        try {
+          iframe.contentDocument?.removeEventListener('wheel', handleWheel);
+          iframe.contentDocument?.addEventListener('wheel', handleWheel, { passive: false });
+          iframe.contentWindow?.removeEventListener('wheel', handleWheel);
+          iframe.contentWindow?.addEventListener('wheel', handleWheel, { passive: false });
+        } catch {}
+      });
+    };
+
+    attachIframeWheel();
+    const wheelInterval = setInterval(attachIframeWheel, 1000);
+
+    return () => {
+      clearInterval(wheelInterval);
+      container.removeEventListener('wheel', handleWheel);
+      const iframes = container.querySelectorAll('iframe');
+      iframes.forEach((iframe) => {
+        try {
+          iframe.contentDocument?.removeEventListener('wheel', handleWheel);
+          iframe.contentWindow?.removeEventListener('wheel', handleWheel);
+        } catch {}
+      });
+    };
+  }, [
+    viewMode,
+    readerDirection,
+    detectedFormat,
+    viewType,
+    readingPage,
+    maxBookPages,
+    bookDoc,
+    handleNextPage,
+    handlePrevPage,
+    paginatedPages.length,
+    getEpubScrollElement,
+  ]);
+
+  // Hands-Free Auto-Scrolling Engine: Continuous Scroll Mode (rAF loop with Sub-Pixel Accumulator)
+  useEffect(() => {
+    if (!isAutoScrolling || viewMode !== 'scrolled') return;
+
+    let animId: number;
+    let lastTime = performance.now();
+    let accumulatedScroll = 0;
+
+    const getScrollEl = (): HTMLElement | null => {
+      if (!contentContainerRef.current) return null;
+      const root = contentContainerRef.current;
+
+      // 1. PDF scroll container
+      if (effectiveFormat === 'PDF' && viewType === 'native_pdf') {
+        const pdfEl = (root.classList.contains('pdf-native-viewer-container')
+          ? root
+          : root.querySelector('.pdf-native-viewer-container')) as HTMLElement | null;
+        if (pdfEl && pdfEl.scrollHeight > pdfEl.clientHeight) {
+          return pdfEl;
+        }
+      }
+
+      // 2. EPUB / reflowable scroll element
+      return getEpubScrollElement(root) || root;
+    };
+
+    const step = (now: number) => {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      const el = getScrollEl();
+      if (el) {
+        // Base speed: 45 px/sec at 1x multiplier, scaled smoothly with sub-pixel accumulator
+        const pxPerSec = 45 * autoScrollSpeed;
+        accumulatedScroll += pxPerSec * dt;
+
+        if (accumulatedScroll >= 1) {
+          const wholePixels = Math.floor(accumulatedScroll);
+          el.scrollTop += wholePixels;
+          accumulatedScroll -= wholePixels;
+        }
+
+        // Check if reached bottom of scroll container: advance to next chapter/page
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) {
+          if (readingPage < maxBookPages) {
+            handleNextPage();
+          } else {
+            setIsAutoScrolling(false);
+            return;
+          }
+        }
+      }
+
+      animId = requestAnimationFrame(step);
+    };
+
+    animId = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [
+    isAutoScrolling,
+    viewMode,
+    autoScrollSpeed,
+    detectedFormat,
+    viewType,
+    readingPage,
+    maxBookPages,
+    handleNextPage,
+    getEpubScrollElement,
+  ]);
+
+  // Hands-Free Auto-Scrolling Engine: Paginated / Book Spread Mode (Timed page turn)
+  useEffect(() => {
+    if (!isAutoScrolling || viewMode === 'scrolled') return;
+
+    // Base interval: 20 seconds at 1x, scaled inversely by speed (0.5x -> 40s, 1x -> 20s, 1.5x -> 13.3s, 2x -> 10s)
+    const intervalMs = Math.round((20 / autoScrollSpeed) * 1000);
+
+    const timer = setInterval(() => {
+      if (readingPage < maxBookPages) {
+        handleNextPage();
+      } else {
+        // Reached end of book
+        setIsAutoScrolling(false);
+      }
+    }, intervalMs);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [isAutoScrolling, viewMode, autoScrollSpeed, readingPage, maxBookPages, handleNextPage]);
+
+
+  // Full Screen-Reader Accessible Keyboard Navigation & Physics
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Never intercept keystrokes when typing in inputs/textareas
@@ -271,24 +728,100 @@ export const FullPageBookReader: React.FC = () => {
         return;
       }
 
+      // 1. Continuous Scroll Mode Keyboard Navigation
+      if (viewMode === 'scrolled') {
+        const container = contentContainerRef.current;
+        const scrollEl = container
+          ? (detectedFormat === 'PDF' && viewType === 'native_pdf'
+              ? (container.querySelector('.pdf-native-viewer-container') as HTMLElement) || container
+              : getEpubScrollElement(container) || container)
+          : null;
+
+        if (scrollEl) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            scrollEl.scrollTop += 60;
+            if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 5) {
+              if (typeof (bookDoc as any)?.rendition?.next === 'function') {
+                (bookDoc as any).rendition.next();
+              }
+              if (readingPage < maxBookPages) {
+                handleNextPage();
+              }
+            }
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            scrollEl.scrollTop -= 60;
+            if (scrollEl.scrollTop <= 2) {
+              if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
+                (bookDoc as any).rendition.prev();
+              }
+              if (readingPage > 1) {
+                handlePrevPage();
+              }
+            }
+            return;
+          }
+          if (e.key === 'PageDown' || e.key === ' ') {
+            e.preventDefault();
+            const pageStep = Math.round(scrollEl.clientHeight * 0.85);
+            scrollEl.scrollTop += pageStep;
+            if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 5) {
+              if (typeof (bookDoc as any)?.rendition?.next === 'function') {
+                (bookDoc as any).rendition.next();
+              }
+              if (readingPage < maxBookPages) {
+                handleNextPage();
+              }
+            }
+            return;
+          }
+          if (e.key === 'PageUp') {
+            e.preventDefault();
+            const pageStep = Math.round(scrollEl.clientHeight * 0.85);
+            scrollEl.scrollTop -= pageStep;
+            if (scrollEl.scrollTop <= 2) {
+              if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
+                (bookDoc as any).rendition.prev();
+              }
+              if (readingPage > 1) {
+                handlePrevPage();
+              }
+            }
+            return;
+          }
+        }
+      }
+
+      // 2. Paginated Mode Keyboard Navigation
       const isRtl = readerDirection === 'rtl';
       const isNext =
         (isRtl && e.key === 'ArrowLeft') ||
         (!isRtl && e.key === 'ArrowRight') ||
+        e.key === 'ArrowDown' ||
         e.key === 'PageDown' ||
         e.key === ' ';
 
       const isPrev =
         (isRtl && e.key === 'ArrowRight') ||
         (!isRtl && e.key === 'ArrowLeft') ||
+        e.key === 'ArrowUp' ||
         e.key === 'PageUp';
 
       if (isNext) {
         e.preventDefault();
-        setReadingPage(Math.min(maxBookPages, readingPage + 1));
+        if (typeof (bookDoc as any)?.rendition?.next === 'function') {
+          (bookDoc as any).rendition.next();
+        }
+        handleNextPage();
       } else if (isPrev) {
         e.preventDefault();
-        setReadingPage(Math.max(1, readingPage - 1));
+        if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
+          (bookDoc as any).rendition.prev();
+        }
+        handlePrevPage();
       } else if (e.key === 'Home') {
         e.preventDefault();
         setReadingPage(1);
@@ -297,25 +830,424 @@ export const FullPageBookReader: React.FC = () => {
         setReadingPage(maxBookPages);
       } else if (e.key === 'Escape') {
         if (isSearchDrawerOpen) setIsSearchDrawerOpen(false);
+        else if (isKnowledgeDrawerOpen) setIsKnowledgeDrawerOpen(false);
         else if (isAnnotationsDrawerOpen) setIsAnnotationsDrawerOpen(false);
         else if (isTocOpen) setIsTocOpen(false);
         else if (isSettingsOpen) setIsSettingsOpen(false);
         else if (isPluginsModalOpen) setIsPluginsModalOpen(false);
+        else if (selectedText) {
+          setSelectedText('');
+          setPendingSelection(null);
+          setPdfSelectionInfo(null);
+          window.getSelection()?.removeAllRanges();
+          clearActiveSelectionHighlight();
+          setActiveRange(null);
+        }
+        else if (activeFootnote) setActiveFootnote(null);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const container = contentContainerRef.current;
+    if (container) {
+      container.addEventListener('keydown', handleKeyDown);
+    }
+
+    const attachIframeKeydown = () => {
+      if (!contentContainerRef.current) return;
+      const iframes = contentContainerRef.current.querySelectorAll('iframe');
+      iframes.forEach((iframe) => {
+        try {
+          iframe.contentDocument?.removeEventListener('keydown', handleKeyDown);
+          iframe.contentDocument?.addEventListener('keydown', handleKeyDown);
+          iframe.contentWindow?.removeEventListener('keydown', handleKeyDown);
+          iframe.contentWindow?.addEventListener('keydown', handleKeyDown);
+        } catch {}
+      });
+    };
+
+    attachIframeKeydown();
+    const keyInterval = setInterval(attachIframeKeydown, 1000);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (container) {
+        container.removeEventListener('keydown', handleKeyDown);
+      }
+      clearInterval(keyInterval);
+      if (contentContainerRef.current) {
+        const iframes = contentContainerRef.current.querySelectorAll('iframe');
+        iframes.forEach((iframe) => {
+          try {
+            iframe.contentDocument?.removeEventListener('keydown', handleKeyDown);
+            iframe.contentWindow?.removeEventListener('keydown', handleKeyDown);
+          } catch {}
+        });
+      }
+    };
   }, [
     readingPage,
     readerDirection,
     maxBookPages,
+    viewMode,
+    detectedFormat,
+    viewType,
+    bookDoc,
+    handleNextPage,
+    handlePrevPage,
+    getEpubScrollElement,
     isSearchDrawerOpen,
+    isKnowledgeDrawerOpen,
     isAnnotationsDrawerOpen,
     isTocOpen,
     isSettingsOpen,
     isPluginsModalOpen,
+    selectedText,
+    activeFootnote,
   ]);
+
+  // Global Mouse Coordinate Tracking & Edge Hover Physics (Natural, Zero-Jitter Reveal)
+  useEffect(() => {
+    let lastMove = 0;
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      setIsIdle(false);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        setIsIdle(true);
+      }, 2500);
+
+      const now = performance.now();
+      if (now - lastMove < 25) return; // throttle ~40fps
+      lastMove = now;
+
+      const y = e.clientY;
+      const windowHeight = window.innerHeight;
+
+      // 1. Top Bar Trigger (clientY <= 44px). Keep open while <= 88px or hovering directly inside.
+      if (y <= 44) {
+        if (topHideTimerRef.current) {
+          clearTimeout(topHideTimerRef.current);
+          topHideTimerRef.current = null;
+        }
+        setIsTopBarVisible(true);
+      } else if (y > 88 && !isTopBarHoveredRef.current) {
+        if (!topHideTimerRef.current) {
+          topHideTimerRef.current = setTimeout(() => {
+            setIsTopBarVisible(false);
+            topHideTimerRef.current = null;
+          }, 250);
+        }
+      } else {
+        if (topHideTimerRef.current) {
+          clearTimeout(topHideTimerRef.current);
+          topHideTimerRef.current = null;
+        }
+      }
+
+      // 2. Bottom Scrubber Trigger (dist <= 44px). Keep open while <= 88px or hovering inside.
+      const distFromBottom = windowHeight - y;
+      if (distFromBottom <= 44) {
+        if (bottomHideTimerRef.current) {
+          clearTimeout(bottomHideTimerRef.current);
+          bottomHideTimerRef.current = null;
+        }
+        setIsBottomBarVisible(true);
+      } else if (distFromBottom > 88 && !isBottomBarHoveredRef.current) {
+        if (!bottomHideTimerRef.current) {
+          bottomHideTimerRef.current = setTimeout(() => {
+            setIsBottomBarVisible(false);
+            bottomHideTimerRef.current = null;
+          }, 250);
+        }
+      } else {
+        if (bottomHideTimerRef.current) {
+          clearTimeout(bottomHideTimerRef.current);
+          bottomHideTimerRef.current = null;
+        }
+      }
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove, { passive: true });
+    idleTimerRef.current = setTimeout(() => {
+      setIsIdle(true);
+    }, 2500);
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (topHideTimerRef.current) clearTimeout(topHideTimerRef.current);
+      if (bottomHideTimerRef.current) clearTimeout(bottomHideTimerRef.current);
+    };
+  }, []);
+
+  // Viewport Click / Tap Toggle (when clicking empty book canvas)
+  const handleViewportClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('select') ||
+      target.closest('textarea') ||
+      target.closest('a') ||
+      target.closest('[role="toolbar"]') ||
+      target.closest('[role="dialog"]') ||
+      target.closest('[role="complementary"]') ||
+      target.closest('[role="tooltip"]') ||
+      window.getSelection()?.toString().trim()
+    ) {
+      return;
+    }
+    // Dismiss active selection if clicking empty viewport canvas
+    if (selectedText) {
+      setSelectedText('');
+      setPdfSelectionInfo(null);
+      window.getSelection()?.removeAllRanges();
+      clearActiveSelectionHighlight();
+      setActiveRange(null);
+      return;
+    }
+    setIsTopBarVisible((prev) => !prev);
+    setIsBottomBarVisible((prev) => !prev);
+  };
+
+  // Resolves and navigates internal EPUB anchors, chapters, and footnotes without browser URL reloads
+  const navigateToInternalEpubHref = useCallback(
+    (rawHref: string, anchorEl?: HTMLElement, clickEvent?: MouseEvent | React.MouseEvent) => {
+      if (!rawHref) return;
+
+      // 1. Direct page references e.g. #page=12
+      if (rawHref.includes('#page=')) {
+        const match = rawHref.match(/#page=(\d+)/);
+        if (match) {
+          const target = parseInt(match[1], 10);
+          if (!isNaN(target)) {
+            setPreviousJumpPage(readingPage);
+            setReadingPage(Math.min(maxBookPages, Math.max(1, target)));
+            return;
+          }
+        }
+      }
+
+      // 2. Pure anchor fragment e.g. #fn1, #footnote-1, #ref1
+      if (rawHref.startsWith('#')) {
+        const targetId = rawHref.replace(/^#/, '');
+        if (!targetId) return;
+
+        // Check if target element exists on current rendered page
+        if (contentContainerRef.current) {
+          try {
+            const targetEl = contentContainerRef.current.querySelector(
+              `#${CSS.escape(targetId)}, [name="${CSS.escape(targetId)}"]`
+            ) as HTMLElement | null;
+
+            if (targetEl) {
+              const isFootnote =
+                anchorEl?.matches('a[href^="#fn"], a[href^="#note"], a.footnote-ref, sup a, a[data-footnote]') ||
+                anchorEl?.hasAttribute('data-footnote') ||
+                rawHref.startsWith('#fn') ||
+                rawHref.startsWith('#note');
+
+              if (isFootnote && clickEvent) {
+                const noteText =
+                  targetEl.textContent?.trim() ||
+                  anchorEl?.getAttribute('title') ||
+                  anchorEl?.textContent?.trim() ||
+                  '';
+                if (noteText) {
+                  setActiveFootnote({
+                    index: anchorEl?.textContent?.trim() || '1',
+                    text: noteText,
+                    x: clickEvent.clientX,
+                    y: clickEvent.clientY,
+                  });
+                }
+              }
+
+              targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              return;
+            }
+          } catch {
+            // ignore selector error
+          }
+        }
+
+        // If not on current page, search in paginatedPages
+        const targetPageObj = paginatedPages.find(
+          (p) =>
+            p.html.includes(`id="${targetId}"`) ||
+            p.html.includes(`id='${targetId}'`) ||
+            p.html.includes(`name="${targetId}"`) ||
+            p.html.includes(`name='${targetId}'`)
+        );
+
+        if (targetPageObj) {
+          setPreviousJumpPage(readingPage);
+          setReadingPage(targetPageObj.pageNumber);
+          setTimeout(() => {
+            try {
+              const el = contentContainerRef.current?.querySelector(
+                `#${CSS.escape(targetId)}, [name="${CSS.escape(targetId)}"]`
+              );
+              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch {}
+          }, 120);
+          return;
+        }
+
+        // Check tocPageMap
+        const mappedPage = tocPageMap.get(rawHref) || tocPageMap.get(targetId);
+        if (mappedPage) {
+          setPreviousJumpPage(readingPage);
+          setReadingPage(mappedPage);
+          return;
+        }
+
+        return;
+      }
+
+      // 3. Cross-file / Chapter link e.g. chapter2.xhtml#fn1, ../Text/ch01.xhtml
+      const [filePart, hashPart] = rawHref.split('#');
+      const cleanFileName = filePart.split('/').pop() || filePart;
+
+      let targetPage =
+        tocPageMap.get(rawHref) ||
+        tocPageMap.get(filePart) ||
+        tocPageMap.get(cleanFileName);
+
+      if (!targetPage && hashPart) {
+        const targetWithHash = paginatedPages.find(
+          (p) =>
+            (p.sectionId.includes(cleanFileName) || cleanFileName === '') &&
+            (p.html.includes(`id="${hashPart}"`) ||
+              p.html.includes(`id='${hashPart}'`) ||
+              p.html.includes(`name="${hashPart}"`) ||
+              p.html.includes(`name='${hashPart}'`))
+        );
+        if (targetWithHash) {
+          targetPage = targetWithHash.pageNumber;
+        }
+      }
+
+      if (!targetPage) {
+        const targetSection = paginatedPages.find(
+          (p) =>
+            p.sectionId.includes(cleanFileName) ||
+            cleanFileName.includes(p.sectionId) ||
+            p.sectionId.endsWith(cleanFileName)
+        );
+        if (targetSection) {
+          targetPage = targetSection.pageNumber;
+        }
+      }
+
+      if (!targetPage && bookDoc?.resolveHref) {
+        try {
+          const resolved = bookDoc.resolveHref(rawHref);
+          if (resolved && typeof resolved.index === 'number') {
+            const pageForIndex = paginatedPages.find(
+              (p) => p.sectionIndex === resolved.index
+            );
+            if (pageForIndex) {
+              targetPage = pageForIndex.pageNumber;
+            }
+          }
+        } catch {}
+      }
+
+      if (targetPage) {
+        setPreviousJumpPage(readingPage);
+        setReadingPage(Math.min(maxBookPages, Math.max(1, targetPage)));
+
+        if (hashPart) {
+          setTimeout(() => {
+            try {
+              const el = contentContainerRef.current?.querySelector(
+                `#${CSS.escape(hashPart)}, [name="${CSS.escape(hashPart)}"]`
+              );
+              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch {}
+          }, 120);
+        }
+      }
+    },
+    [readingPage, maxBookPages, paginatedPages, tocPageMap, bookDoc]
+  );
+
+  // Content Click Interceptor for Footnotes & Links (React synthetic event fallback)
+  const handleContentClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    const anchor = target.closest('a[href], [xlink\\:href], a[data-footnote]') as HTMLElement | null;
+    if (!anchor) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rawHref = anchor.getAttribute('href') || anchor.getAttribute('xlink:href') || '';
+    if (!rawHref) return;
+
+    if (/^(https?:|mailto:|tel:)/i.test(rawHref)) {
+      const winAPI = (window as any).electronAPI;
+      if (winAPI?.openExternal) {
+        winAPI.openExternal(rawHref);
+      } else {
+        window.open(rawHref, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
+
+    navigateToInternalEpubHref(rawHref, anchor, e);
+  };
+
+  // Capture-phase native click and auxclick listener attached to EPUB container
+  // Guarantees zero 404 navigations against http://localhost:3000/... across all internal links
+  useEffect(() => {
+    const container = contentContainerRef.current;
+    if (!container) return;
+
+    const handleCaptureClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      const anchor = target.closest('a[href], [xlink\\:href], a[data-footnote]') as HTMLElement | null;
+      if (!anchor) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const rawHref = anchor.getAttribute('href') || anchor.getAttribute('xlink:href') || '';
+      if (!rawHref) return;
+
+      if (/^(https?:|mailto:|tel:)/i.test(rawHref)) {
+        const winAPI = (window as any).electronAPI;
+        if (winAPI?.openExternal) {
+          winAPI.openExternal(rawHref);
+        } else {
+          window.open(rawHref, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
+
+      navigateToInternalEpubHref(rawHref, anchor, event);
+    };
+
+    const handleCaptureAuxClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('a[href], [xlink\\:href]')) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    container.addEventListener('click', handleCaptureClick, true);
+    container.addEventListener('auxclick', handleCaptureAuxClick, true);
+
+    return () => {
+      container.removeEventListener('click', handleCaptureClick, true);
+      container.removeEventListener('auxclick', handleCaptureAuxClick, true);
+    };
+  }, [navigateToInternalEpubHref]);
 
   // Aggregate searchable text sections for in-book search engine
   const searchableSections: SearchableSection[] = useMemo(() => {
@@ -350,12 +1282,12 @@ export const FullPageBookReader: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
-        setIsSearchDrawerOpen((prev) => !prev);
+        handleToggleSearch();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [handleToggleSearch]);
 
   // Background SQLite FTS5 Indexing on Book Load (KEY-140)
   useEffect(() => {
@@ -424,6 +1356,7 @@ export const FullPageBookReader: React.FC = () => {
     const loadDocumentPipeline = async () => {
       if (!activeBook?.filePath) {
         setAssetUrl(null);
+        setPdfBlobUrl(null);
         setBookDoc(null);
         setExtractedFullText('');
         setExtractedPages([]);
@@ -432,6 +1365,7 @@ export const FullPageBookReader: React.FC = () => {
         return;
       }
 
+      setPdfBlobUrl(null);
       setIsLoadingFile(true);
       setIsExtractingText(true);
       setExtractionFailed(false);
@@ -442,7 +1376,9 @@ export const FullPageBookReader: React.FC = () => {
       setDetectedFormat(format);
 
       // Construct privileged streaming URL
-      const streamUrl = `baglib-asset://${encodeURIComponent(filePath)}`;
+      const normalizedPath = filePath.replace(/\\/g, '/');
+      const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
+      const streamUrl = `baglib-asset:///${cleanPath}`;
       setAssetUrl(streamUrl);
 
       const windowAPI = (window as any).electronAPI;
@@ -504,7 +1440,7 @@ export const FullPageBookReader: React.FC = () => {
               // Paginate reflowable EPUB/MOBI/FB2/HTML/TXT sections into screen-sized pages
               setIsPaginating(true);
               try {
-                const { pages, tocMap } = await paginateBookSections(book.sections, book.toc, 1500);
+                const { pages, tocMap } = await paginateBookSections(book.sections, book.toc, 1500, book.resolveHref);
                 if (!isCancelled) {
                   setPaginatedPages(pages);
                   setTocPageMap(tocMap);
@@ -636,6 +1572,106 @@ export const FullPageBookReader: React.FC = () => {
       isCancelled = true;
     };
   }, [readingPage, bookDoc, detectedFormat, viewMode]);
+
+  // Synchronize readingPage as user scrolls down the continuous EPUB vertical stream
+  useEffect(() => {
+    if (viewMode !== 'scrolled' || !isReflowable) return;
+
+    const pageElements = document.querySelectorAll('.epub-stream-page');
+    if (pageElements.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (isPositioningEpubScrollRef.current) return;
+
+        let bestPage = -1;
+        let maxRatio = 0;
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
+            maxRatio = entry.intersectionRatio;
+            const p = parseInt(entry.target.getAttribute('data-page-number') || '0', 10);
+            if (p > 0) bestPage = p;
+          }
+        }
+        if (
+          !isPositioningEpubScrollRef.current &&
+          bestPage > 0 &&
+          bestPage !== lastReportedEpubPageRef.current
+        ) {
+          lastReportedEpubPageRef.current = bestPage;
+          setReadingPage(bestPage);
+        }
+      },
+      {
+        threshold: [0.1, 0.4, 0.7],
+      }
+    );
+
+    pageElements.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [viewMode, isReflowable, paginatedPages.length]);
+
+  // When switching into scrolled mode, scroll directly to current readingPage and preserve position
+  useEffect(() => {
+    if (viewMode === 'scrolled' && isReflowable) {
+      isPositioningEpubScrollRef.current = true;
+      const targetPage = readingPage;
+      lastReportedEpubPageRef.current = targetPage;
+
+      const scrollToTargetPage = () => {
+        const scrollEl = getEpubScrollElement(contentContainerRef.current) || contentContainerRef.current;
+        const pageEl =
+          document.getElementById(`epub-page-${targetPage}`) ||
+          (contentContainerRef.current?.querySelector(
+            `.epub-stream-page[data-page-number="${targetPage}"]`
+          ) as HTMLElement | null);
+
+        if (scrollEl && pageEl) {
+          const scrollRect = scrollEl.getBoundingClientRect();
+          const pageRect = pageEl.getBoundingClientRect();
+          scrollEl.scrollTop += (pageRect.top - scrollRect.top);
+          setTimeout(() => {
+            isPositioningEpubScrollRef.current = false;
+          }, 350);
+        } else if (pageEl) {
+          pageEl.scrollIntoView({ behavior: 'auto', block: 'start' });
+          setTimeout(() => {
+            isPositioningEpubScrollRef.current = false;
+          }, 350);
+        } else {
+          requestAnimationFrame(() => {
+            const retryPageEl = document.getElementById(`epub-page-${targetPage}`);
+            if (scrollEl && retryPageEl) {
+              const sRect = scrollEl.getBoundingClientRect();
+              const pRect = retryPageEl.getBoundingClientRect();
+              scrollEl.scrollTop += (pRect.top - sRect.top);
+            }
+            setTimeout(() => {
+              isPositioningEpubScrollRef.current = false;
+            }, 350);
+          });
+        }
+      };
+
+      requestAnimationFrame(scrollToTargetPage);
+    }
+  }, [viewMode, isReflowable, getEpubScrollElement]);
+
+  // When readingPage changes externally while in EPUB scrolled mode (TOC, scrubber)
+  useEffect(() => {
+    if (viewMode === 'scrolled' && isReflowable && !isPositioningEpubScrollRef.current) {
+      if (readingPage !== lastReportedEpubPageRef.current) {
+        lastReportedEpubPageRef.current = readingPage;
+        const scrollEl = getEpubScrollElement(contentContainerRef.current) || contentContainerRef.current;
+        const pageEl = document.getElementById(`epub-page-${readingPage}`);
+        if (scrollEl && pageEl) {
+          const scrollRect = scrollEl.getBoundingClientRect();
+          const pageRect = pageEl.getBoundingClientRect();
+          scrollEl.scrollTop += (pageRect.top - scrollRect.top);
+        }
+      }
+    }
+  }, [readingPage, viewMode, isReflowable, getEpubScrollElement]);
 
   // Handle Comic Image Loaded to determine aspect ratio for wide spread
   const handleComicImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -880,28 +1916,486 @@ export const FullPageBookReader: React.FC = () => {
     }
   };
 
-  // Bookmark current page
-  const isCurrentPageBookmarked = annotations.some(
-    (a) => a.type === 'bookmark' && parseInt(a.locationCfiOrPage, 10) === readingPage
+  // Restore Last Read Location on mount
+  useEffect(() => {
+    if (!activeBook?.id) return;
+    const api = (window as any).electronAPI;
+    if (api?.reader?.getLastLocation) {
+      api.reader
+        .getLastLocation(activeBook.id)
+        .then((loc: string | null) => {
+          if (loc) {
+            const pageNum = parseInt(loc, 10);
+            if (!isNaN(pageNum) && pageNum > 0 && pageNum !== readingPage) {
+              setReadingPage(pageNum);
+            }
+          }
+        })
+        .catch(console.warn);
+    }
+  }, [activeBook?.id]);
+
+  // Debounced continuous tracking of reading location (2000ms debounce)
+  useEffect(() => {
+    if (!activeBook?.id) return;
+    const timer = setTimeout(() => {
+      const api = (window as any).electronAPI;
+      if (api?.reader?.updateLastLocation) {
+        api.reader.updateLastLocation(activeBook.id, String(readingPage)).catch(console.warn);
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [readingPage, activeBook?.id]);
+
+  // Record Reading Session to SQLite on unmount or book switch
+  const recordCurrentReadingSession = () => {
+    if (!activeBook?.id) return;
+    const api = (window as any).electronAPI;
+    if (api?.reader?.recordSession) {
+      const now = Date.now();
+      const durationSeconds = Math.max(1, Math.round((now - sessionStartTimeRef.current) / 1000));
+      const pagesRead = Math.abs(readingPage - startPageRef.current);
+      api.reader
+        .recordSession({
+          workId: activeBook.id,
+          startTime: sessionStartTimeRef.current,
+          endTime: now,
+          startLocation: String(startPageRef.current),
+          endLocation: String(readingPage),
+          durationSeconds,
+          pagesRead,
+        })
+        .catch(console.warn);
+    }
+  };
+
+  useEffect(() => {
+    sessionStartTimeRef.current = Date.now();
+    startPageRef.current = readingPage;
+    return () => {
+      recordCurrentReadingSession();
+    };
+  }, [activeBook?.id]);
+
+  const handleCloseReader = () => {
+    recordCurrentReadingSession();
+    closeReaderToLibrary();
+  };
+
+  // Load Knowledge Items from SQLite (KEY-12 / Epic 5)
+  useEffect(() => {
+    if (!activeBook?.id) return;
+    const api = (window as any).electronAPI;
+    if (api?.knowledge?.getByWork) {
+      api.knowledge
+        .getByWork(activeBook.id)
+        .then((items: KnowledgeItemDTO[]) => {
+          if (items) setKnowledgeItems(items);
+        })
+        .catch(console.warn);
+    }
+  }, [activeBook?.id]);
+
+  // Unified SQLite Knowledge Item Persistence (Supports PDF Normalized Rects & EPUB CFIs)
+  const handleSaveKnowledge = async (
+    type: KnowledgeType,
+    color?: string,
+    content?: string,
+    contextNote?: string
+  ) => {
+    if (!activeBook?.id) return;
+    const safePage = Math.min(maxBookPages, Math.max(1, readingPage));
+    const textToUse = selectedText || '';
+
+    // Determine location payload: PDF normalized rects JSON or page string
+    let locationToSave = String(safePage);
+    const pdfSelection = pendingSelection || pdfSelectionInfo;
+    if (type === 'highlight' && pdfSelection && pdfSelection.rects.length > 0) {
+      locationToSave = JSON.stringify({
+        page: pdfSelection.pageNumber,
+        rects: pdfSelection.rects,
+        text: textToUse || pdfSelection.text,
+        color: color || activeHighlightColor,
+      });
+    }
+
+    // 1. Save to SQLite knowledge table
+    const api = (window as any).electronAPI;
+    if (api?.knowledge?.save) {
+      try {
+        const savedItem: KnowledgeItemDTO = await api.knowledge.save({
+          workId: activeBook.id,
+          type,
+          location: locationToSave,
+          selectedText: textToUse || undefined,
+          noteContent: type === 'note' ? content : undefined,
+          quoteContext: type === 'quote' ? contextNote : undefined,
+          questionText: type === 'question' ? content : undefined,
+          color: color || activeHighlightColor,
+        });
+
+        if (savedItem) {
+          setKnowledgeItems((prev) => [savedItem, ...prev.filter((i) => i.id !== savedItem.id)]);
+        }
+      } catch (e) {
+        console.warn('[FullPageBookReader] Save knowledge failed:', e);
+      }
+    }
+
+    // 2. Dual-sync to annotations table for backward compatibility
+    const annotationType =
+      type === 'highlight'
+        ? 'highlight'
+        : type === 'note'
+        ? 'note'
+        : type === 'bookmark'
+        ? 'bookmark'
+        : 'note';
+    await handleSaveAnnotation({
+      bookId: activeBook.id,
+      type: annotationType as any,
+      locationCfiOrPage: locationToSave,
+      selectedText: textToUse || undefined,
+      noteContent:
+        content ||
+        contextNote ||
+        (type === 'highlight' ? `Highlight on Page ${safePage}` : undefined),
+      color: color || activeHighlightColor,
+    });
+
+    // 3. Sync to WorkspaceContext legacy notes
+    if (textToUse) {
+      if (type === 'highlight') {
+        const colorClass = `bg-${color || 'amber'}-500/30`;
+        addHighlight(safePage, textToUse, colorClass);
+      }
+      addPageNote({
+        pageNumber: safePage,
+        highlightedText: textToUse,
+        content: content || `${t('selectedQuote').replace('"{text}"', `"${textToUse}"`)}`,
+      });
+    }
+
+    setPendingSelection(null);
+    setPdfSelectionInfo(null);
+    window.getSelection()?.removeAllRanges();
+    clearActiveSelectionHighlight();
+    removeTempSelectionOverlay();
+    setActiveRange(null);
+    setSelectedText('');
+    setShowToast(t('bookmarkAdded', { page: safePage }) || 'Saved to Knowledge Base');
+    setTimeout(() => setShowToast(null), 2500);
+    setTimeout(() => renderSavedEpubHighlights(), 50);
+  };
+
+  const handleChangeHighlightColor = async (highlightId: string, newColor: string) => {
+    const item = knowledgeItems.find((k) => k.id === highlightId);
+    if (!item || !activeBook?.id) return;
+
+    let updatedLocation = item.location;
+    try {
+      if (updatedLocation.startsWith('{')) {
+        const parsed = JSON.parse(updatedLocation);
+        parsed.color = newColor;
+        updatedLocation = JSON.stringify(parsed);
+      }
+    } catch {
+      // ignore
+    }
+
+    const payload = {
+      ...item,
+      color: newColor,
+      location: updatedLocation,
+    };
+
+    const api = (window as any).electronAPI;
+    if (api?.knowledge?.save) {
+      try {
+        const saved = await api.knowledge.save(payload);
+        if (saved) {
+          setKnowledgeItems((prev) => prev.map((k) => (k.id === highlightId ? saved : k)));
+        }
+      } catch (err) {
+        console.warn('Failed to update highlight color:', err);
+      }
+    }
+    setActiveHighlightPopover((prev) =>
+      prev ? { ...prev, highlight: { ...prev.highlight, color: newColor, location: updatedLocation } } : null
+    );
+  };
+
+  const handleSaveHighlightNote = async (highlightId: string, noteContent: string) => {
+    const item = knowledgeItems.find((k) => k.id === highlightId);
+    if (!item) return;
+
+    const payload = {
+      ...item,
+      noteContent,
+    };
+
+    const api = (window as any).electronAPI;
+    if (api?.knowledge?.save) {
+      try {
+        const saved = await api.knowledge.save(payload);
+        if (saved) {
+          setKnowledgeItems((prev) => prev.map((k) => (k.id === highlightId ? saved : k)));
+        }
+      } catch (err) {
+        console.warn('Failed to save highlight note:', err);
+      }
+    }
+    setActiveHighlightPopover((prev) =>
+      prev ? { ...prev, highlight: { ...prev.highlight, noteContent } } : null
+    );
+  };
+
+  const handleDeleteKnowledgeItem = async (id: string) => {
+    const api = (window as any).electronAPI;
+    if (api?.knowledge?.delete) {
+      try {
+        await api.knowledge.delete(id);
+        setKnowledgeItems((prev) => prev.filter((i) => i.id !== id));
+      } catch (e) {
+        console.warn('[FullPageBookReader] Delete knowledge failed:', e);
+      }
+    }
+    await handleDeleteAnnotation(id);
+    setActiveHighlightPopover(null);
+  };
+
+  const colorHexMap: Record<string, string> = useMemo(
+    () => ({
+      yellow: '#FACC15',
+      amber: '#F59E0B',
+      green: '#4ADE80',
+      emerald: '#10B981',
+      red: '#F87171',
+      rose: '#F43F5E',
+      blue: '#60A5FA',
+      sky: '#0EA5E9',
+      purple: '#C084FC',
+      violet: '#8B5CF6',
+    }),
+    []
   );
+
+  // Render Saved EPUB & Reflowable Highlights (supports epub.js rendition SVG fill + DOM/iframe marks)
+  const renderSavedEpubHighlights = useCallback(() => {
+    const container = contentContainerRef.current;
+    if (!container) return;
+
+    const allItems = [...knowledgeItems, ...annotations];
+
+    // 1. If using epub.js: apply SVG fill + fill-opacity attributes
+    const rendition = (bookDoc as any)?.rendition;
+    if (rendition && typeof rendition.annotations?.highlight === 'function') {
+      allItems.forEach((item) => {
+        const cfiRange = (item as any).location || (item as any).locationCfiOrPage;
+        if (cfiRange && (cfiRange.startsWith('epubcfi(') || cfiRange.startsWith('cfi('))) {
+          const colorKey = item.color || 'amber';
+          const hex = colorHexMap[colorKey] || colorKey || '#FACC15';
+          try {
+            rendition.annotations.remove(cfiRange, 'highlight');
+          } catch {}
+          try {
+            rendition.annotations.highlight(
+              cfiRange,
+              { id: item.id, color: colorKey },
+              (e: MouseEvent) => {
+                setActiveHighlightPopover({
+                  highlight: item as any,
+                  position: { x: e.clientX, y: e.clientY },
+                });
+              },
+              `baglib-epub-highlight-${colorKey}`,
+              {
+                fill: hex,
+                'fill-opacity': '0.38',
+                'mix-blend-mode': 'multiply',
+                'pointer-events': 'all',
+                cursor: 'pointer',
+              }
+            );
+          } catch {}
+        }
+      });
+    }
+
+    // 2. Direct DOM range / iframe rendering with <mark class="baglib-highlight ...">
+    const rootsToProcess: HTMLElement[] = [container];
+    const iframes = container.querySelectorAll('iframe');
+    iframes.forEach((iframe) => {
+      try {
+        const doc = iframe.contentDocument;
+        if (doc?.body) {
+          injectHighlightStyles(doc);
+          rootsToProcess.push(doc.body);
+        }
+      } catch {}
+    });
+
+    injectHighlightStyles(document);
+
+    // Apply W3C CSS Custom Highlights
+    rootsToProcess.forEach((root) => {
+      try {
+        registerCssCustomHighlights(root, allItems as any);
+      } catch {}
+    });
+
+    // Directly paint text marks for saved highlights
+    const highlightItems = allItems.filter(
+      (item) =>
+        (item.type === 'highlight' || (item as any).knowledgeType === 'highlight') &&
+        ((item as any).selectedText || (item as any).quotedText)
+    );
+
+    rootsToProcess.forEach((root) => {
+      // Clean previous marks cleanly without destroying text nodes
+      const previousMarks = root.querySelectorAll('mark.baglib-highlight');
+      previousMarks.forEach((mark) => {
+        const parent = mark.parentNode;
+        if (parent) {
+          while (mark.firstChild) {
+            parent.insertBefore(mark.firstChild, mark);
+          }
+          parent.removeChild(mark);
+          parent.normalize();
+        }
+      });
+
+      // Wrap each matching text occurrence in visible colored mark
+      highlightItems.forEach((item) => {
+        const text = ((item as any).selectedText || (item as any).quotedText || '').trim();
+        if (!text || text.length < 2) return;
+        const color = item.color || 'amber';
+        const hex = colorHexMap[color] || '#FACC15';
+
+        const ranges = findRangesForText(root, text);
+        ranges.forEach((range) => {
+          try {
+            const mark = (root.ownerDocument || document).createElement('mark');
+            mark.className = `baglib-highlight baglib-highlight-${color}`;
+            mark.setAttribute('data-highlight-id', item.id);
+            mark.style.backgroundColor = `${hex}66`;
+            mark.style.color = 'inherit';
+            mark.style.borderRadius = '2px';
+            mark.style.padding = '1px 0';
+            mark.style.cursor = 'pointer';
+
+            mark.onclick = (e) => {
+              e.stopPropagation();
+              setActiveHighlightPopover({
+                highlight: item as any,
+                position: { x: e.clientX, y: e.clientY },
+              });
+            };
+
+            range.surroundContents(mark);
+          } catch {
+            try {
+              const mark = (root.ownerDocument || document).createElement('mark');
+              mark.className = `baglib-highlight baglib-highlight-${color}`;
+              mark.setAttribute('data-highlight-id', item.id);
+              mark.style.backgroundColor = `${hex}66`;
+              mark.style.color = 'inherit';
+              mark.style.borderRadius = '2px';
+              mark.style.padding = '1px 0';
+              mark.style.cursor = 'pointer';
+
+              mark.onclick = (e) => {
+                e.stopPropagation();
+                setActiveHighlightPopover({
+                  highlight: item as any,
+                  position: { x: e.clientX, y: e.clientY },
+                });
+              };
+
+              const fragment = range.extractContents();
+              mark.appendChild(fragment);
+              range.insertNode(mark);
+            } catch {}
+          }
+        });
+      });
+    });
+  }, [bookDoc, knowledgeItems, annotations, colorHexMap]);
+
+  useEffect(() => {
+    renderSavedEpubHighlights();
+  }, [
+    renderSavedEpubHighlights,
+    readingPage,
+    activeFormattedPage,
+    currentSectionHtml,
+    viewMode,
+    paginatedPages.length,
+    knowledgeItems,
+    annotations,
+  ]);
+
+  useEffect(() => {
+    const rendition = (bookDoc as any)?.rendition;
+    if (rendition && typeof rendition.on === 'function') {
+      const onRendered = () => {
+        renderSavedEpubHighlights();
+      };
+      rendition.on('rendered', onRendered);
+      return () => {
+        try {
+          rendition.off('rendered', onRendered);
+        } catch {}
+      };
+    }
+  }, [bookDoc, renderSavedEpubHighlights]);
+
+  // Bookmark current page status
+  const isCurrentPageBookmarked =
+    knowledgeItems.some((k) => k.type === 'bookmark' && parseInt(k.location, 10) === readingPage) ||
+    annotations.some(
+      (a) => a.type === 'bookmark' && parseInt(a.locationCfiOrPage, 10) === readingPage
+    );
+
+  const bookmarkedPageNumbers = useMemo(() => {
+    const pages = new Set<number>();
+    knowledgeItems.forEach((k) => {
+      if (k.type === 'bookmark') {
+        const p = parseInt(k.location, 10);
+        if (!isNaN(p)) pages.add(p);
+      }
+    });
+    annotations.forEach((a) => {
+      if (a.type === 'bookmark') {
+        const p = parseInt(a.locationCfiOrPage, 10);
+        if (!isNaN(p)) pages.add(p);
+      }
+    });
+    return Array.from(pages).sort((a, b) => a - b);
+  }, [knowledgeItems, annotations]);
 
   const handleToggleBookmark = async () => {
     if (!activeBook) return;
-    const existing = annotations.find(
+    const existingKnowledge = knowledgeItems.find(
+      (k) => k.type === 'bookmark' && parseInt(k.location, 10) === readingPage
+    );
+    if (existingKnowledge) {
+      await handleDeleteKnowledgeItem(existingKnowledge.id);
+      setShowToast(t('bookmarkRemoved', { page: readingPage }) || 'Bookmark removed');
+      setTimeout(() => setShowToast(null), 2000);
+      return;
+    }
+    const existingAnnotation = annotations.find(
       (a) => a.type === 'bookmark' && parseInt(a.locationCfiOrPage, 10) === readingPage
     );
-    if (existing) {
-      await handleDeleteAnnotation(existing.id);
-    } else {
-      await handleSaveAnnotation({
-        bookId: activeBook.id,
-        type: 'bookmark',
-        locationCfiOrPage: readingPage.toString(),
-        noteContent: `Bookmark on Page ${readingPage}`,
-      });
-      setShowToast(t('bookmarkAdded', { page: readingPage }));
-      setTimeout(() => setShowToast(null), 2500);
+    if (existingAnnotation) {
+      await handleDeleteAnnotation(existingAnnotation.id);
+      setShowToast(t('bookmarkRemoved', { page: readingPage }) || 'Bookmark removed');
+      setTimeout(() => setShowToast(null), 2000);
+      return;
     }
+
+    await handleSaveKnowledge('bookmark', undefined, `Page ${readingPage}`);
   };
 
   // Current page ink annotation & strokes handler
@@ -1033,19 +2527,103 @@ export const FullPageBookReader: React.FC = () => {
     }
   };
 
-  // Handle Text Selection in Manuscript View (Supports Instant Mode & Standard Mode)
+  // Handle Text Selection in Manuscript / Reflowable View (Supports Instant Mode & Standard Mode)
   const handleMouseUp = () => {
     const selection = window.getSelection();
-    const text = selection?.toString().trim();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+    const text = selection.toString().trim();
     if (!text) return;
+
+    // 1. Capture and Lock Selection Range on mouseup
+    const range = selection.getRangeAt(0).cloneRange();
+    setActiveRange(range);
+    setActiveSelectionHighlight(range);
+    renderTempSelectionOverlay(range, document);
 
     if (isInstantHighlightMode) {
       handleApplyHighlight(activeHighlightColor, text);
-      selection?.removeAllRanges();
+      selection.removeAllRanges();
+      clearActiveSelectionHighlight();
+      removeTempSelectionOverlay();
+      setActiveRange(null);
     } else {
       setSelectedText(text);
     }
   };
+
+  // Global mouseup listener to catch selection releases across container margins, padding, and iframes
+  useEffect(() => {
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest('[role="dialog"]') ||
+        target?.closest('[role="toolbar"]') ||
+        target?.closest('button') ||
+        target?.closest('input') ||
+        target?.closest('textarea')
+      ) {
+        return;
+      }
+
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+
+      if (contentContainerRef.current && contentContainerRef.current.contains(selection.anchorNode)) {
+        const text = selection.toString().trim();
+        if (text && text !== selectedText) {
+          const range = selection.getRangeAt(0).cloneRange();
+          setActiveRange(range);
+          setActiveSelectionHighlight(range);
+          renderTempSelectionOverlay(range, document);
+          setSelectedText(text);
+        }
+      }
+    };
+
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, [selectedText]);
+
+  // EPUB / Sub-document iframe text selection listener
+  useEffect(() => {
+    const container = contentContainerRef.current;
+    if (!container) return;
+
+    const handleIframeMouseUp = (e: MouseEvent) => {
+      const targetDoc = e.currentTarget as Document;
+      const selection = targetDoc.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+      const text = selection.toString().trim();
+      if (!text) return;
+
+      const range = selection.getRangeAt(0).cloneRange();
+      setActiveRange(range);
+      renderTempSelectionOverlay(range, targetDoc);
+      setSelectedText(text);
+    };
+
+    const attachIframeSelection = () => {
+      const iframes = container.querySelectorAll('iframe');
+      iframes.forEach((iframe) => {
+        try {
+          iframe.contentDocument?.removeEventListener('mouseup', handleIframeMouseUp);
+          iframe.contentDocument?.addEventListener('mouseup', handleIframeMouseUp);
+        } catch {}
+      });
+    };
+
+    attachIframeSelection();
+    const interval = setInterval(attachIframeSelection, 1000);
+    return () => {
+      clearInterval(interval);
+      const iframes = container.querySelectorAll('iframe');
+      iframes.forEach((iframe) => {
+        try {
+          iframe.contentDocument?.removeEventListener('mouseup', handleIframeMouseUp);
+        } catch {}
+      });
+    };
+  }, []);
 
   const handleApplyHighlight = async (color = 'amber', customText?: string) => {
     const textToUse = customText || selectedText;
@@ -1069,7 +2647,14 @@ export const FullPageBookReader: React.FC = () => {
       content: `${t('selectedQuote').replace('"{text}"', `"${textToUse}"`)}`,
     });
 
+    setPendingSelection(null);
+    setPdfSelectionInfo(null);
+    window.getSelection()?.removeAllRanges();
+    clearActiveSelectionHighlight();
+    removeTempSelectionOverlay();
+    setActiveRange(null);
     setSelectedText('');
+    setTimeout(() => renderSavedEpubHighlights(), 50);
   };
 
   const handleApplyUnderline = async (customText?: string) => {
@@ -1085,6 +2670,10 @@ export const FullPageBookReader: React.FC = () => {
       color: 'underline',
     });
 
+    setPdfSelectionInfo(null);
+    window.getSelection()?.removeAllRanges();
+    clearActiveSelectionHighlight();
+    setActiveRange(null);
     setSelectedText('');
   };
 
@@ -1114,6 +2703,10 @@ export const FullPageBookReader: React.FC = () => {
       highlightedText: selectedText,
       content: `${t('selectedQuote').replace('"{text}"', `"${selectedText}"`)}`,
     });
+    setPdfSelectionInfo(null);
+    window.getSelection()?.removeAllRanges();
+    clearActiveSelectionHighlight();
+    setActiveRange(null);
     setSelectedText('');
   };
 
@@ -1133,133 +2726,85 @@ export const FullPageBookReader: React.FC = () => {
       content: newNoteText,
     });
     setNewNoteText('');
+    setPdfSelectionInfo(null);
+    window.getSelection()?.removeAllRanges();
+    clearActiveSelectionHighlight();
+    setActiveRange(null);
     setSelectedText('');
   };
 
-  // Floating Selection Popover (KEY-137 Standard Mode)
+  // Floating Zen Selection Menu (KEY-137 / KEY-12)
   const renderSelectionPopover = () => {
     if (!selectedText || isInstantHighlightMode) return null;
     return (
-      <div className="absolute top-16 start-1/2 -translate-x-1/2 z-40 bg-surface/95 backdrop-blur-md text-main p-2 rounded-2xl shadow-2xl flex items-center gap-2 text-xs animate-in fade-in zoom-in duration-150 border border-subtle">
-        <span className="font-bold truncate max-w-xs px-2 border-s border-subtle font-serif text-muted">
-          "{selectedText}"
-        </span>
-
-        {/* 5 Highlight Colors */}
-        <div className="flex items-center gap-1 px-1 border-e border-subtle">
-          {HIGHLIGHT_COLORS.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => handleApplyHighlight(c.id)}
-              title={`Highlight ${c.label}`}
-              className="w-5 h-5 rounded-full hover:scale-110 transition-transform cursor-pointer shadow-xs"
-              style={{ backgroundColor: c.hex }}
-            />
-          ))}
-        </div>
-
-        {/* Underline Button */}
-        <button
-          onClick={() => handleApplyUnderline()}
-          title={t('underlineBtn')}
-          className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-        >
-          <Underline className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Link / Create Note Button */}
-        <button
-          onClick={handleCreateNoteFromSelection}
-          title={t('linkToNotesBtn')}
-          className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-        >
-          <MessageSquare className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Copy Text Button */}
-        <button
-          onClick={handleCopySelectedText}
-          title={t('copyTextBtn')}
-          className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-        >
-          <Copy className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Dictionary & Encyclopedia Lookup Button (KEY-142) */}
-        <button
-          onClick={() => {
-            setDictionaryLookupWord(selectedText);
-            setIsDictionaryModalOpen(true);
-          }}
-          title={t('dictionaryLookupBtn')}
-          className="p-1.5 rounded-xl hover:bg-canvas text-pale-sky-600 dark:text-pale-sky-400 hover:text-pale-sky-700 transition-colors cursor-pointer"
-        >
-          <BookA className="w-3.5 h-3.5" />
-        </button>
-
-        {/* AI Research Assistant Trigger (KEY-143) */}
-        <button
-          onClick={() => {
-            setAiSelectedText(selectedText);
-            setAiInitialTool('contextual_dictionary');
-            setIsAIDrawerOpen(true);
-          }}
-          title={t('aiAssistantTitle')}
-          className="p-1.5 rounded-xl hover:bg-canvas text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors cursor-pointer"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-        </button>
-
-        {/* TTS Read Aloud Selection (KEY-145) */}
-        <button
-          onClick={() => {
-            ttsAudio.setSentences([selectedText]);
-            setIsTTSPlayerActive(true);
-            ttsAudio.play();
-            setSelectedText('');
-          }}
-          title={t('ttsReadAloudSelection')}
-          className="p-1.5 rounded-xl hover:bg-canvas text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors cursor-pointer"
-        >
-          <Headphones className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="h-4 w-px bg-subtle" />
-
-        {/* Close */}
-        <button
-          onClick={() => setSelectedText('')}
-          className="p-1 hover:bg-canvas rounded-lg text-muted hover:text-main cursor-pointer"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      <ZenSelectionMenu
+        selectedText={selectedText}
+        readingPage={readingPage}
+        bookTitle={activeBook.title}
+        bookAuthor={activeBook.author}
+        bookPublisher={activeBook.publisher}
+        onApplyHighlight={(colorId) => handleSaveKnowledge('highlight', colorId)}
+        onSaveNote={(content) => handleSaveKnowledge('note', undefined, content)}
+        onSaveQuote={(contextNote) =>
+          handleSaveKnowledge('quote', undefined, undefined, contextNote)
+        }
+        onSaveQuestion={(questionText) =>
+          handleSaveKnowledge('question', undefined, questionText)
+        }
+        onOpenDictionary={() => {
+          closeAllPanelsExcept();
+          setDictionaryLookupWord(selectedText);
+          setIsDictionaryModalOpen(true);
+        }}
+        onOpenAI={() => {
+          closeAllPanelsExcept('ai');
+          setAiSelectedText(selectedText);
+          setAiInitialTool('contextual_dictionary');
+          setIsAIDrawerOpen(true);
+        }}
+        onPlayTTS={() => {
+          ttsAudio.setSentences([selectedText]);
+          setIsTTSPlayerActive(true);
+          ttsAudio.play();
+          setPdfSelectionInfo(null);
+          window.getSelection()?.removeAllRanges();
+          clearActiveSelectionHighlight();
+          removeTempSelectionOverlay();
+          setActiveRange(null);
+          setSelectedText('');
+        }}
+        onClose={() => {
+          setPdfSelectionInfo(null);
+          window.getSelection()?.removeAllRanges();
+          clearActiveSelectionHighlight();
+          removeTempSelectionOverlay();
+          setActiveRange(null);
+          setSelectedText('');
+        }}
+        t={t}
+      />
     );
   };
 
-  // Jump to TOC chapter using paginator TOC map
+  // Jump to TOC chapter using paginator TOC map or explicit #page target
   const handleJumpToTOC = (item: TOCItem) => {
-    const target =
-      tocPageMap.get(item.id) ||
-      tocPageMap.get(item.href) ||
-      (item.index >= 0 ? item.index + 1 : 1);
+    let target = 1;
+    if (item.href && item.href.includes('#page=')) {
+      const match = item.href.match(/#page=(\d+)/);
+      if (match) target = parseInt(match[1], 10);
+    } else {
+      target =
+        tocPageMap.get(item.id) ||
+        tocPageMap.get(item.href) ||
+        (item.index >= 0 ? item.index + 1 : 1);
+    }
+    setPreviousJumpPage(readingPage);
     setReadingPage(Math.min(maxBookPages, Math.max(1, target)));
-    setIsTocOpen(false);
+    if (!isTocPinned) {
+      setIsTocOpen(false);
+    }
   };
 
-  const isComic = ['CBZ', 'CBR', 'CBT', 'CB7'].includes(detectedFormat);
-  const isReflowable = [
-    'EPUB',
-    'MOBI',
-    'AZW',
-    'AZW3',
-    'FB2',
-    'FBZ',
-    'TXT',
-    'MD',
-    'DOCX',
-    'HTML',
-  ].includes(detectedFormat);
 
   const getFontFamilyStyle = () => {
     switch (fontFamily) {
@@ -1278,10 +2823,13 @@ export const FullPageBookReader: React.FC = () => {
     }
   };
 
-  const themeClasses = {
+  const themeClasses: Record<ReaderTheme, string> = {
+    paper: 'bg-[#fcfaf2] text-[#2b2b2b] border-[#e8e4d9]',
+    sepia: 'bg-[#fbf0d9] text-[#5f4b32] border-[#e6d5b8]',
+    dusk: 'bg-[#2d2a32] text-[#e0dede] border-[#3f3b47]',
+    midnight: 'bg-[#0f172a] text-[#e2e8f0] border-[#1e293b]',
     light: 'bg-white text-slate-800 border-slate-200',
     dark: 'bg-[#0f172a] text-slate-100 border-slate-700',
-    sepia: 'bg-[#fbf0d9] text-[#5f4b32] border-[#e6d5b8]',
     night: 'bg-[#000000] text-[#999999] border-neutral-800',
     'e-ink': 'bg-[#ffffff] text-[#000000] border-black',
   };
@@ -1437,7 +2985,10 @@ export const FullPageBookReader: React.FC = () => {
     <div
       role="region"
       aria-label={t('a11yReaderLandmark') || 'Digital Book Reader'}
-      className="flex-1 flex flex-col h-full bg-canvas text-main overflow-hidden font-sans select-none relative"
+      onClick={handleViewportClick}
+      className={`fixed inset-0 z-50 w-screen h-screen overflow-hidden bg-canvas text-main font-sans select-none flex flex-col ${
+        isIdle ? 'cursor-none' : 'cursor-auto'
+      }`}
       style={getViewportCssVariables({
         theme: readerTheme,
         fontSize: readerFontSize,
@@ -1461,491 +3012,96 @@ export const FullPageBookReader: React.FC = () => {
         <style id="baglib-reader-plugins-styles">{pluginStyles}</style>
       )}
 
-      {/* Top Header Bar */}
-      <header
-        role="toolbar"
-        aria-label={t('a11yToolbarLandmark') || 'Reader Action Toolbar'}
-        className="h-14 bg-surface border-b border-subtle flex items-center justify-between px-3 sm:px-4 z-20 shrink-0 gap-2"
-      >
-        {/* Left Actions: Back to Library & TOC Button */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            onClick={closeReaderToLibrary}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-bold transition-all cursor-pointer"
-          >
-            <ArrowRight className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
-            <span className="hidden sm:inline">{t('backToLibrary')}</span>
-          </button>
+      {/* Floating Zen Top Bar */}
+      <ZenTopBar
+        isVisible={isTopBarVisible || isSettingsOpen || isTocPinned || isKnowledgePinned}
+        activeBook={activeBook}
+        detectedFormat={detectedFormat}
+        chapterTitle={activeFormattedPage?.chapterLabel}
+        readerDirection={readerDirection}
+        setReaderDirection={setReaderDirection}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        viewType={viewType}
+        setViewType={setViewType}
+        pdfFitMode={pdfFitMode}
+        setPdfFitMode={setPdfFitMode}
+        autoCropMargins={autoCropMargins}
+        setAutoCropMargins={setAutoCropMargins}
+        onClose={handleCloseReader}
+        onToggleToc={handleToggleToc}
+        isTocOpen={isTocOpen}
+        onToggleKnowledge={handleToggleKnowledge}
+        isKnowledgeOpen={isKnowledgeDrawerOpen}
+        onToggleSearch={handleToggleSearch}
+        onToggleAIDrawer={handleToggleAIDrawer}
+        onToggleDictionary={() => {
+          closeAllPanelsExcept();
+          setDictionaryLookupWord(selectedText || '');
+          setIsDictionaryModalOpen(true);
+        }}
+        onToggleSettings={handleToggleSettings}
+        isSettingsOpen={isSettingsOpen}
+        onTogglePlugins={() => {
+          closeAllPanelsExcept();
+          setIsPluginsModalOpen(true);
+        }}
+        isAutoScrolling={isAutoScrolling}
+        onToggleAutoScroll={handleToggleAutoScroll}
+        autoScrollSpeed={autoScrollSpeed}
+        onCycleAutoScrollSpeed={handleCycleAutoScrollSpeed}
+        onMouseEnter={() => {
+          isTopBarHoveredRef.current = true;
+          if (topHideTimerRef.current) {
+            clearTimeout(topHideTimerRef.current);
+            topHideTimerRef.current = null;
+          }
+        }}
+        onMouseLeave={() => {
+          isTopBarHoveredRef.current = false;
+        }}
+        t={t}
+      />
 
-          {/* Table of Contents Drawer Toggle */}
-          {bookDoc?.toc && bookDoc.toc.length > 0 && (
-            <button
-              onClick={() => setIsTocOpen(!isTocOpen)}
-              className={`p-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1 text-xs font-bold ${
-                isTocOpen
-                  ? 'bg-pale-sky-500 text-white border-pale-sky-500 shadow-sm'
-                  : 'bg-canvas border-subtle text-muted hover:text-main'
-              }`}
-              title={t('tableOfContents')}
-            >
-              <ListTree className="w-4 h-4" />
-              <span className="hidden md:inline">{t('tableOfContents')}</span>
-            </button>
-          )}
+      {/* Floating Zen Bottom Scrubber */}
+      <ZenBottomScrubber
+        isVisible={isBottomBarVisible || isSettingsOpen}
+        readingPage={readingPage}
+        maxBookPages={maxBookPages}
+        onPageChange={(p) => setReadingPage(Math.min(maxBookPages, Math.max(1, p)))}
+        previousPage={previousJumpPage}
+        onReturnToPrevious={() => {
+          if (previousJumpPage !== null) {
+            setReadingPage(previousJumpPage);
+            setPreviousJumpPage(null);
+          }
+        }}
+        readerDirection={readerDirection}
+        chapterLabel={activeFormattedPage?.chapterLabel}
+        onMouseEnter={() => {
+          isBottomBarHoveredRef.current = true;
+          if (bottomHideTimerRef.current) {
+            clearTimeout(bottomHideTimerRef.current);
+            bottomHideTimerRef.current = null;
+          }
+        }}
+        onMouseLeave={() => {
+          isBottomBarHoveredRef.current = false;
+        }}
+        t={t}
+      />
 
-          <div className="h-4 w-px bg-subtle hidden sm:block" />
-
-          {/* Book Info Title & Format Badge */}
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-pale-sky-500 shrink-0" />
-            <h2 className="font-bold text-main text-xs sm:text-sm truncate max-w-xs sm:max-w-sm">
-              {activeBook.title} - <span className="text-muted font-serif">{activeBook.author}</span>
-            </h2>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 font-mono font-bold uppercase">
-              {detectedFormat}
-            </span>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-canvas border border-subtle text-muted uppercase font-mono">
-              {readerDirection.toUpperCase()}
-            </span>
-          </div>
-        </div>
-
-        {/* Center: View Modes & Focus Aids */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* View Modes Selector (Single, Two-Column, Continuous Scrolled) */}
-          <div className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle text-xs">
-            <button
-              onClick={() => setViewMode('single')}
-              title={t('viewModeSingle')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                viewMode === 'single'
-                  ? 'bg-pale-sky-500 text-white shadow-sm'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">{t('viewModeSingle')}</span>
-            </button>
-            <button
-              onClick={() => setViewMode('two-column')}
-              title={t('viewModeTwoColumn')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                viewMode === 'two-column'
-                  ? 'bg-pale-sky-500 text-white shadow-sm'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <Columns2 className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">{t('viewModeTwoColumn')}</span>
-            </button>
-            <button
-              onClick={() => setViewMode('scrolled')}
-              title={t('viewModeScrolled')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                viewMode === 'scrolled'
-                  ? 'bg-pale-sky-500 text-white shadow-sm'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <Scroll className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">{t('viewModeScrolled')}</span>
-            </button>
-          </div>
-
-          {/* PDF Native vs Manuscript Mode Switcher */}
-          {detectedFormat === 'PDF' && (
-            <div className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle text-xs">
-              <button
-                onClick={() => setViewType('native_pdf')}
-                title={t('readerViewPdf')}
-                className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                  viewType === 'native_pdf'
-                    ? 'bg-pale-sky-500 text-white shadow-sm'
-                    : 'text-muted hover:text-main'
-                }`}
-              >
-                <FileCode className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">{t('readerViewPdf')}</span>
-              </button>
-              <button
-                onClick={() => setViewType('text_manuscript')}
-                title={t('readerViewText')}
-                className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                  viewType === 'text_manuscript'
-                    ? 'bg-pale-sky-500 text-white shadow-sm'
-                    : 'text-muted hover:text-main'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">{t('readerViewText')}</span>
-              </button>
-            </div>
-          )}
-
-          {/* Focus Aids Dropdown / Buttons */}
-          <div className="hidden md:flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle text-xs">
-            <button
-              onClick={() =>
-                setActiveFocusAid((prev) => (prev === 'ruler' ? 'none' : 'ruler'))
-              }
-              title={t('readingRulerBtn')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                activeFocusAid === 'ruler'
-                  ? 'bg-pale-sky-500 text-white shadow-sm'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <Glasses className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">{t('readingRulerBtn')}</span>
-            </button>
-            <button
-              onClick={() =>
-                setActiveFocusAid((prev) => (prev === 'paragraph' ? 'none' : 'paragraph'))
-              }
-              title={t('paragraphFocusBtn')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                activeFocusAid === 'paragraph'
-                  ? 'bg-pale-sky-500 text-white shadow-sm'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">{t('paragraphFocusBtn')}</span>
-            </button>
-            <button
-              onClick={() =>
-                setActiveFocusAid((prev) => (prev === 'rsvp' ? 'none' : 'rsvp'))
-              }
-              title={t('speedReaderBtn')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                activeFocusAid === 'rsvp'
-                  ? 'bg-pale-sky-500 text-white shadow-sm'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">{t('speedReaderBtn')}</span>
-            </button>
-          </div>
-
-          {/* Typography Settings Button */}
-          <button
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            title={t('typographySettings')}
-            className={`p-2 rounded-xl border transition-all cursor-pointer ${
-              isSettingsOpen
-                ? 'bg-pale-sky-500 text-white border-pale-sky-500 shadow-sm'
-                : 'bg-canvas border-subtle text-muted hover:text-main'
-            }`}
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
-
-          {/* Annotations & Ink Tools (KEY-137) */}
-          <div className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle text-xs">
-            {/* Bookmark Current Page */}
-            <button
-              onClick={handleToggleBookmark}
-              title={t('addBookmarkBtn')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                isCurrentPageBookmarked
-                  ? 'bg-amber-500 text-white shadow-xs'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <Bookmark className={`w-3.5 h-3.5 ${isCurrentPageBookmarked ? 'fill-current' : ''}`} />
-            </button>
-
-            {/* Stylus Freehand Ink Mode Toggle */}
-            <button
-              onClick={() => setIsInkModeActive(!isInkModeActive)}
-              title={t('stylusInkMode')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                isInkModeActive
-                  ? 'bg-pale-sky-500 text-white shadow-xs'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <PenTool className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Instant Highlight Mode Toggle */}
-            <button
-              onClick={() => {
-                const next = !isInstantHighlightMode;
-                setIsInstantHighlightMode(next);
-                setShowToast(next ? t('instantModeActiveToast') : t('instantModeDisabledToast'));
-                setTimeout(() => setShowToast(null), 3000);
-              }}
-              title={t('instantModeToggle')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                isInstantHighlightMode
-                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <Zap className={`w-3.5 h-3.5 ${isInstantHighlightMode ? 'fill-current' : ''}`} />
-              <span className="hidden xl:inline">{t('instantModeToggle')}</span>
-            </button>
-
-            {/* Annotations Drawer Toggle */}
-            <button
-              onClick={() => setIsAnnotationsDrawerOpen(!isAnnotationsDrawerOpen)}
-              title={t('annotationsDrawerTitle')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                isAnnotationsDrawerOpen
-                  ? 'bg-pale-sky-500 text-white shadow-xs'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <Highlighter className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">{t('tabHighlights')}</span>
-              {annotations.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-surface border border-subtle text-[10px] text-main font-mono">
-                  {annotations.length}
-                </span>
-              )}
-            </button>
-
-            {/* In-Book Search Drawer Toggle (KEY-140) */}
-            <button
-              onClick={() => setIsSearchDrawerOpen(!isSearchDrawerOpen)}
-              title={t('searchInBook')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                isSearchDrawerOpen
-                  ? 'bg-pale-sky-500 text-white shadow-xs'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">{t('searchInBook')}</span>
-            </button>
-
-            {/* Offline Dictionary & Encyclopedia Lookup (KEY-142) */}
-            <button
-              onClick={() => {
-                setDictionaryLookupWord(selectedText || '');
-                setIsDictionaryModalOpen(true);
-              }}
-              title={t('dictionaryLookupTitle')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                isDictionaryModalOpen
-                  ? 'bg-pale-sky-500 text-white shadow-xs'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <BookA className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">{t('dictionaryLookupTitle')}</span>
-            </button>
-
-            {/* BYOK AI Research Assistant & Translator (KEY-143) */}
-            <button
-              onClick={() => {
-                setAiSelectedText(selectedText || '');
-                setAiInitialTool('chat');
-                setIsAIDrawerOpen(true);
-              }}
-              title={t('aiAssistantTitle')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                isAIDrawerOpen
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-muted hover:text-indigo-600 dark:hover:text-indigo-400'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">{t('aiAssistantTitle')}</span>
-            </button>
-
-            {/* TTS / Audiobook Player Toggle (KEY-145) */}
-            <button
-              onClick={() => {
-                setIsTTSPlayerActive((prev) => !prev);
-                if (!isTTSPlayerActive && !ttsAudio.isPlaying) {
-                  ttsAudio.play();
-                }
-              }}
-              title={t('ttsPlayerTitle')}
-              className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                isTTSPlayerActive || ttsAudio.isPlaying
-                  ? 'bg-pale-sky-500 text-white shadow-xs'
-                  : 'text-muted hover:text-pale-sky-600 dark:hover:text-pale-sky-400'
-              }`}
-            >
-              <Headphones className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">{t('ttsPlayerTitle')}</span>
-            </button>
-
-            {/* KOReader & Cloud Sync Trigger (KEY-147) */}
-            <button
-              onClick={() => setIsCloudSyncModalOpen(true)}
-              title={t('cloudSyncModalTitle')}
-              className="p-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer text-muted hover:text-amber-600 dark:hover:text-amber-400"
-            >
-              <Cloud className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">{t('tabKOSync')}</span>
-            </button>
-
-            {/* Reader Plugins & Extensibility (KEY-149) */}
-            <button
-              onClick={() => setIsPluginsModalOpen(true)}
-              title={t('pluginsModalTitle')}
-              className="p-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer text-muted hover:text-purple-600 dark:hover:text-purple-400"
-              aria-label={t('pluginsModalTitle')}
-            >
-              <Puzzle className="w-3.5 h-3.5 text-purple-500" />
-              <span className="hidden xl:inline">{t('pluginsModalTitle').split(' ')[0]}</span>
-            </button>
-
-            {/* Local OCR Engine Trigger & Options (KEY-141) */}
-            <div className="relative">
-              <button
-                onClick={() => setIsOcrMenuOpen(!isOcrMenuOpen)}
-                disabled={isOcrRunning}
-                title={t('ocrRecognizePageBtn')}
-                className={`p-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  isOcrRunning
-                    ? 'bg-amber-500/20 text-amber-600 animate-pulse'
-                    : isOcrMenuOpen
-                    ? 'bg-pale-sky-500 text-white shadow-xs'
-                    : 'text-muted hover:text-main'
-                }`}
-              >
-                {isOcrRunning ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
-                ) : (
-                  <ScanText className="w-3.5 h-3.5" />
-                )}
-                <span className="hidden xl:inline">{t('ocrRecognizePageBtn')}</span>
-              </button>
-
-              {/* OCR Dropdown Menu */}
-              {isOcrMenuOpen && (
-                <div className="absolute top-full mt-2 inset-inline-end-0 w-64 bg-surface/95 backdrop-blur-md rounded-2xl shadow-2xl border border-subtle p-3 z-50 animate-in fade-in slide-in-from-top-1 duration-150 space-y-2.5 text-xs">
-                  <div className="flex items-center justify-between border-b border-subtle pb-2">
-                    <span className="font-bold text-main flex items-center gap-1.5">
-                      <ScanText className="w-3.5 h-3.5 text-pale-sky-500" />
-                      {t('ocrRecognizePageBtn')}
-                    </span>
-                    <button
-                      onClick={() => setIsOcrMenuOpen(false)}
-                      className="text-muted hover:text-main p-0.5 rounded cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-muted">
-                      {t('ocrLanguageLabel')}
-                    </label>
-                    <select
-                      value={ocrLanguage}
-                      onChange={(e) => setOcrLanguage(e.target.value as OcrLanguage)}
-                      className="w-full px-2 py-1 rounded-lg border border-subtle bg-canvas text-main text-xs outline-none focus:ring-1 focus:ring-pale-sky-500"
-                    >
-                      <option value="auto">{t('ocrLangAuto')}</option>
-                      <option value="ar-SA">{t('ocrLangAr')}</option>
-                      <option value="en-US">{t('ocrLangEn')}</option>
-                      <option value="fr-FR">{t('ocrLangFr')}</option>
-                      <option value="ja-JP">{t('ocrLangJa')}</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5 pt-1">
-                    <button
-                      disabled={isOcrRunning}
-                      onClick={() => {
-                        setIsOcrMenuOpen(false);
-                        handleRunOcrPage(readingPage);
-                      }}
-                      className="w-full py-1.5 px-3 rounded-xl bg-pale-sky-500 text-white font-bold hover:bg-pale-sky-600 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <ScanText className="w-3.5 h-3.5" />
-                      <span>{t('ocrRecognizePageBtn')}</span>
-                    </button>
-
-                    <button
-                      disabled={isOcrRunning}
-                      onClick={() => {
-                        setIsOcrMenuOpen(false);
-                        handleRunOcrDocument();
-                      }}
-                      className="w-full py-1.5 px-3 rounded-xl bg-canvas border border-subtle text-main font-bold hover:bg-surface transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <BookOpen className="w-3.5 h-3.5 text-pale-sky-500" />
-                      <span>{t('ocrRecognizeBookBtn')}</span>
-                    </button>
-                  </div>
-
-                  <div className="pt-2 border-t border-subtle/50">
-                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-muted">
-                      <input
-                        type="checkbox"
-                        checked={showOcrDebug}
-                        onChange={(e) => setShowOcrDebug(e.target.checked)}
-                        className="rounded border-subtle text-pale-sky-500 accent-pale-sky-500"
-                      />
-                      <span>{t('ocrDebugOverlay')}</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Layout Split Mode Switcher */}
-        <div className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle text-xs">
-          <button
-            onClick={() => setSplitOrientation('none')}
-            title={t('splitFullReader')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-              splitOrientation === 'none'
-                ? 'bg-pale-sky-500 text-white shadow-sm'
-                : 'text-muted hover:text-main'
-            }`}
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">{t('splitFullReader')}</span>
-          </button>
-
-          <button
-            onClick={() => setSplitOrientation('vertical')}
-            title={t('splitVertical')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-              splitOrientation === 'vertical'
-                ? 'bg-pale-sky-500 text-white shadow-sm'
-                : 'text-muted hover:text-main'
-            }`}
-          >
-            <Columns2 className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">{t('splitVertical')}</span>
-          </button>
-
-          <button
-            onClick={() => setSplitOrientation('horizontal')}
-            title={t('splitHorizontal')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
-              splitOrientation === 'horizontal'
-                ? 'bg-pale-sky-500 text-white shadow-sm'
-                : 'text-muted hover:text-main'
-            }`}
-          >
-            <Rows2 className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">{t('splitHorizontal')}</span>
-          </button>
-        </div>
-
-        {/* Parallel Reading Workspace Button */}
-        <button
-          onClick={() => setIsParallelReading(true)}
-          title={t('parallelReadingWorkspace')}
-          className="px-3 py-1.5 rounded-xl bg-pale-sky-500/10 hover:bg-pale-sky-500/20 text-pale-sky-600 dark:text-pale-sky-400 font-bold border border-pale-sky-500/30 transition-all flex items-center gap-1.5 cursor-pointer text-xs shadow-sm hover:shadow"
-        >
-          <ArrowRightLeft className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{t('parallelReadingBtn')}</span>
-        </button>
-      </header>
+      {/* Zen Corner Hotspots */}
+      <ZenCornerHotspots
+        isCurrentPageBookmarked={isCurrentPageBookmarked}
+        onToggleBookmark={handleToggleBookmark}
+        onPrevPage={handlePrevPage}
+        onNextPage={handleNextPage}
+        readerDirection={readerDirection}
+        canGoPrev={readingPage > 1}
+        canGoNext={readingPage < maxBookPages}
+        t={t}
+      />
 
       {/* Main Content Area */}
       <div
@@ -1953,35 +3109,80 @@ export const FullPageBookReader: React.FC = () => {
           splitOrientation === 'horizontal' ? 'flex-col' : 'flex-row'
         }`}
       >
-        {/* Slide-out Table of Contents (TOC) Drawer */}
-        {isTocOpen && bookDoc?.toc && (
-          <div className="absolute top-0 bottom-0 inset-inline-start-0 w-72 bg-surface/95 backdrop-blur-md border-r border-subtle z-30 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
-            <div className="p-3 border-b border-subtle flex items-center justify-between bg-canvas/30">
-              <span className="font-bold text-xs flex items-center gap-1.5 text-main">
-                <ListTree className="w-4 h-4 text-pale-sky-500" />
-                {t('tableOfContents')}
-              </span>
-              <button
-                onClick={() => setIsTocOpen(false)}
-                className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1 text-xs">
-              {bookDoc.toc.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleJumpToTOC(item)}
-                  className="w-full text-start p-2 rounded-xl hover:bg-canvas text-main font-medium transition-colors flex items-center gap-2 truncate cursor-pointer"
-                >
-                  <BookMarked className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Slide-out Table of Contents (TOC) & Bookmarks Drawer */}
+        <ZenTocDrawer
+          isOpen={isTocOpen}
+          isPinned={isTocPinned}
+          onTogglePin={() => setIsTocPinned(!isTocPinned)}
+          onClose={() => setIsTocOpen(false)}
+          onMouseEnter={() => {
+            isTopBarHoveredRef.current = true;
+          }}
+          onMouseLeave={() => {
+            isTopBarHoveredRef.current = false;
+          }}
+          toc={pdfToc.length > 0 ? pdfToc : (bookDoc?.toc || [])}
+          tocPageMap={tocPageMap}
+          onJumpToTOC={handleJumpToTOC}
+          readingPage={readingPage}
+          totalPages={maxBookPages}
+          bookmarkedPages={bookmarkedPageNumbers}
+          onJumpToPage={(p) => {
+            setPreviousJumpPage(readingPage);
+            setReadingPage(p);
+          }}
+          t={t}
+          pdfDoc={pdfDocProxy}
+          paginatedPages={paginatedPages}
+        />
+
+        {/* Slide-out SQLite Knowledge & Highlights Drawer */}
+        <ZenKnowledgeDrawer
+          isOpen={isKnowledgeDrawerOpen}
+          isPinned={isKnowledgePinned}
+          onTogglePin={() => setIsKnowledgePinned(!isKnowledgePinned)}
+          onClose={() => setIsKnowledgeDrawerOpen(false)}
+          onMouseEnter={() => {
+            isTopBarHoveredRef.current = true;
+          }}
+          onMouseLeave={() => {
+            isTopBarHoveredRef.current = false;
+          }}
+          knowledgeItems={knowledgeItems}
+          onDeleteKnowledge={handleDeleteKnowledgeItem}
+          onJumpToLocation={(loc) => {
+            const p = parseInt(loc, 10);
+            if (!isNaN(p)) {
+              setPreviousJumpPage(readingPage);
+              setReadingPage(p);
+            }
+          }}
+          readingPage={readingPage}
+          readerTheme={readerTheme}
+          setReaderTheme={setReaderTheme}
+          fontFamily={fontFamily}
+          setFontFamily={setFontFamily}
+          readerFontSize={readerFontSize}
+          setReaderFontSize={setReaderFontSize}
+          lineSpacing={lineSpacing}
+          setLineSpacing={setLineSpacing}
+          paragraphSpacing={paragraphSpacing}
+          setParagraphSpacing={setParagraphSpacing}
+          margin={margin}
+          setMargin={setMargin}
+          brightness={brightness}
+          setBrightness={setBrightness}
+          contrast={contrast}
+          setContrast={setContrast}
+          t={t}
+        />
+
+        {/* Inline Footnote / Classical Gloss Popover */}
+        <ZenFootnotePopover
+          footnote={activeFootnote}
+          onClose={() => setActiveFootnote(null)}
+          t={t}
+        />
 
         {/* Slide-out Annotations & Highlights Drawer (KEY-137 / KEY-138) */}
         <AnnotationsDrawer
@@ -2273,7 +3474,8 @@ export const FullPageBookReader: React.FC = () => {
         {/* Reading Content Viewport */}
         <div
           ref={contentContainerRef}
-          className="flex-1 flex flex-col items-center justify-start p-3 sm:p-6 overflow-y-auto relative"
+          onClick={handleContentClick}
+          className="flex-1 flex flex-col items-center justify-start p-3 sm:p-6 overflow-y-auto relative w-full h-full select-text"
           style={{
             filter: `brightness(${brightness}%) contrast(${contrast}%)`,
           }}
@@ -2463,9 +3665,6 @@ export const FullPageBookReader: React.FC = () => {
                 </div>
               </div>
 
-              {/* Floating Selection Popover for Reflowable Content */}
-              {renderSelectionPopover()}
-
               {/* Rendered HTML Section Content with Discrete Screen-Sized Pagination */}
               <div
                 className={`flex-1 py-6 space-y-4 select-text leading-relaxed ${
@@ -2484,6 +3683,28 @@ export const FullPageBookReader: React.FC = () => {
                     <span className="text-xs font-bold font-sans">
                       {isPaginating ? t('loadingDocument') : t('loadingDocument')}
                     </span>
+                  </div>
+                ) : viewMode === 'scrolled' ? (
+                  /* Continuous Vertical Stream of Pages / Sections (EPUB & Reflowable) */
+                  <div className="epub-stream-container w-full flex flex-col items-center gap-10 py-4">
+                    {paginatedPages.length > 0 ? (
+                      paginatedPages.map((page, idx) => (
+                        <div
+                          key={`epub-stream-${idx}`}
+                          id={`epub-page-${idx + 1}`}
+                          data-page-number={idx + 1}
+                          className="epub-stream-page w-full max-w-3xl pb-8 border-b border-subtle/30 prose prose-slate dark:prose-invert max-w-none break-words relative"
+                          style={{ lineHeight: lineSpacing }}
+                          dangerouslySetInnerHTML={{ __html: page.html }}
+                        />
+                      ))
+                    ) : (
+                      <div
+                        dangerouslySetInnerHTML={{ __html: currentSectionHtml }}
+                        className="prose prose-slate dark:prose-invert max-w-none break-words"
+                        style={{ lineHeight: lineSpacing }}
+                      />
+                    )}
                   </div>
                 ) : activeFormattedPage ? (
                   viewMode === 'two-column' && secondFormattedPage ? (
@@ -2587,9 +3808,6 @@ export const FullPageBookReader: React.FC = () => {
                 </div>
               </div>
 
-              {/* Floating Selection Popover for Manuscript Content */}
-              {renderSelectionPopover()}
-
               {/* Manuscript Content Area with View Modes */}
               <div
                 className={`flex-1 py-6 space-y-6 select-text ${
@@ -2687,56 +3905,72 @@ export const FullPageBookReader: React.FC = () => {
               </div>
             </div>
           ) : (
-            /* NATIVE PRIVILEGED ASSET STREAMING PDF VIEW */
-            <div className="w-full h-full bg-surface border border-subtle rounded-2xl overflow-hidden shadow-2xl relative flex flex-col">
-              {isLoadingFile ? (
+            /* NATIVE PRIVILEGED ASSET STREAMING PDF VIEW VIA PDFJS-DIST */
+            <div
+              className="pdf-viewer-workspace w-full h-full bg-surface border border-subtle rounded-2xl overflow-hidden shadow-2xl relative flex flex-col justify-center items-center"
+              dir="ltr"
+              style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
+            >
+              {isLoadingFile || (!pdfBlobUrl && effectiveFormat === 'PDF' && activeBook?.filePath) ? (
                 <div className="w-full h-full bg-surface flex flex-col items-center justify-center text-muted gap-2">
                   <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
                   <span className="text-xs font-bold">{t('loadingNativePdf')}</span>
                 </div>
-              ) : (pdfBlobUrl || assetUrl) ? (
-                <div className="w-full h-full flex flex-col">
-                  {/* Floating PDF Header Controls */}
-                  <div className="h-10 bg-surface/90 backdrop-blur border-b border-subtle flex items-center justify-between px-4 text-xs font-sans text-muted shrink-0 z-10">
-                    <span className="font-medium truncate max-w-sm">
-                      {activeBook.title}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        disabled={readingPage <= 1}
-                        onClick={() => setReadingPage(Math.max(1, readingPage - 1))}
-                        className="p-1 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-40 cursor-pointer"
-                        title={t('paginationPrevious') || 'Previous'}
-                      >
-                        <ChevronRight className="w-3.5 h-3.5 rtl:rotate-0 ltr:rotate-180" />
-                      </button>
-                      <span className="font-bold text-main">
-                        {t('page')} {readingPage} / {maxBookPages}
-                      </span>
-                      <button
-                        disabled={readingPage >= maxBookPages}
-                        onClick={() => setReadingPage(Math.min(maxBookPages, readingPage + 1))}
-                        className="p-1 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-40 cursor-pointer"
-                        title={t('paginationNext') || 'Next'}
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-0 ltr:rotate-180" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="relative w-full flex-1 overflow-hidden">
-                    <iframe
-                      key={`pdf-${readingPage}-${pdfBlobUrl}`}
-                      src={`${pdfBlobUrl || assetUrl}#page=${readingPage}&view=FitH`}
-                      title={activeBook.title}
-                      className="w-full h-full border-none"
+              ) : pdfBlobUrl ? (
+                <div
+                  className="pdf-viewport-container relative w-full h-full overflow-hidden flex items-center justify-center"
+                  dir="ltr"
+                  style={{ direction: 'ltr', unicodeBidi: 'normal' }}
+                >
+                  <PdfNativeViewer
+                    fileUrl={pdfBlobUrl}
+                    currentPage={readingPage}
+                    totalPages={maxBookPages}
+                    onPageChange={(p) => setReadingPage(p)}
+                    onTotalPagesLoaded={(total) => {
+                      setPdfTotalPages(total);
+                    }}
+                    onOutlineLoaded={(items) => {
+                      setPdfToc(items);
+                    }}
+                    onPdfDocLoaded={(doc) => {
+                      setPdfDocProxy(doc);
+                    }}
+                    viewMode={viewMode}
+                    theme={readerTheme}
+                    zoom={pdfFitMode === 'Fit' ? 1.0 : 1.25}
+                    autoCropMargins={autoCropMargins}
+                    direction={readerDirection}
+                    highlights={knowledgeItems}
+                    activeSelectionInfo={pdfSelectionInfo}
+                    onSelectionChange={(info) => {
+                      if (info) {
+                        setPdfSelectionInfo(info);
+                        setPendingSelection(info);
+                        setSelectedText(info.text);
+                        setNoteTargetPage(info.pageNumber);
+                      } else {
+                        // Crucial: keep selection snapshot so clicking floating color button does not lose anchor
+                        if (!selectedText) {
+                          setPdfSelectionInfo(null);
+                          setPendingSelection(null);
+                        }
+                      }
+                    }}
+                    onHighlightClick={(highlight, e) => {
+                      setActiveHighlightPopover({
+                        highlight,
+                        position: { x: e.clientX, y: e.clientY },
+                      });
+                    }}
+                    contentContainerRef={contentContainerRef}
+                  />
+                  {ocrPages.get(readingPage) && (
+                    <OcrTextOverlay
+                      pageResult={ocrPages.get(readingPage)!}
+                      showVisualDebug={showOcrDebug}
                     />
-                    {ocrPages.get(readingPage) && (
-                      <OcrTextOverlay
-                        pageResult={ocrPages.get(readingPage)!}
-                        showVisualDebug={showOcrDebug}
-                      />
-                    )}
-                  </div>
+                  )}
                 </div>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-muted text-xs p-6 space-y-3">
@@ -2751,6 +3985,21 @@ export const FullPageBookReader: React.FC = () => {
         {/* Optional Split-Screen Notes Panel */}
         {splitOrientation !== 'none' && renderNotesPanel()}
       </div>
+
+      {/* Floating Selection Action Pill */}
+      {renderSelectionPopover()}
+
+      {/* Existing Highlight Options Popover */}
+      {activeHighlightPopover && (
+        <HighlightActionPopover
+          highlight={activeHighlightPopover.highlight}
+          position={activeHighlightPopover.position}
+          onChangeColor={handleChangeHighlightColor}
+          onSaveNote={handleSaveHighlightNote}
+          onDelete={handleDeleteKnowledgeItem}
+          onClose={() => setActiveHighlightPopover(null)}
+        />
+      )}
     </div>
   );
 };
