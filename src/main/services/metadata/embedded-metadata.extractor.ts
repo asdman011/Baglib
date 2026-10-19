@@ -9,9 +9,11 @@ import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
 import { isValidIsbn, isPlaceholderAuthor, isPlaceholderTitle, isbn10ToIsbn13 } from '../../../shared/validators/metadata-validator';
+import { isGarbageTitle, isGarbageAuthor } from './pdf-metadata-reconciler';
 import { languageDetectorService } from './language-detector.service';
 import { FilenameParser } from './filename-parser';
 import { textIsbnScannerService } from './text-isbn-scanner.service';
+import { EpubCoverExtractor } from './epub-cover-extractor.service';
 
 // Use require for pdf-parse and yauzl
 const pdfParse = require('pdf-parse');
@@ -22,6 +24,8 @@ export interface EmbeddedBookMetadata {
   authors: string[];
   publisher?: string;
   publicationYear?: number;
+  edition?: string;
+  pagesCount?: number;
   isbn?: string;
   isbn10?: string;
   isbn13?: string;
@@ -428,6 +432,9 @@ export class EmbeddedMetadataExtractor {
 
     let title: string | undefined;
     const authors: string[] = [];
+    let publisher: string | undefined;
+    let edition: string | undefined;
+    let pagesCount: number | undefined;
     let publicationYear: number | undefined;
     let description: string | undefined;
     let language: string | undefined;
@@ -440,17 +447,31 @@ export class EmbeddedMetadataExtractor {
         const pdfData = await pdfFn(new Uint8Array(dataBuffer), { max: 1 }); // only parse first page for fast header info
         const info = pdfData.info || {};
 
+        if (pdfData.numpages && pdfData.numpages > 0) {
+          pagesCount = pdfData.numpages;
+        }
+
         if (typeof info.Title === 'string' && info.Title.trim()) {
           title = info.Title.trim();
         }
-        if (title && isPlaceholderTitle(title)) {
+        if (title && (isPlaceholderTitle(title) || isGarbageTitle(title, filePath))) {
           title = undefined;
         }
 
         if (typeof info.Author === 'string' && info.Author.trim()) {
           const split = FilenameParser.splitMultiAuthors(info.Author.trim());
-          const valid = split.filter((a) => !isPlaceholderAuthor(a));
+          const valid = split.filter(
+            (a) => !isPlaceholderAuthor(a) && !isGarbageAuthor(a, filePath)
+          );
           authors.push(...valid);
+        }
+
+        if (typeof (info as any).Publisher === 'string' && (info as any).Publisher.trim()) {
+          publisher = (info as any).Publisher.trim();
+        }
+
+        if (typeof (info as any).Edition === 'string' && (info as any).Edition.trim()) {
+          edition = (info as any).Edition.trim();
         }
 
         if (info.CreationDate) {
@@ -483,6 +504,9 @@ export class EmbeddedMetadataExtractor {
         }
 
         if (pdfData.text) {
+          if (!edition) {
+            edition = this.extractEditionPattern(pdfData.text.slice(0, 4000));
+          }
           const langDetect = languageDetectorService.detectLanguage({
             contentSample: pdfData.text,
             title,
@@ -496,6 +520,18 @@ export class EmbeddedMetadataExtractor {
       } catch (err) {
         console.warn(`[EmbeddedMetadataExtractor] pdf-parse warning for ${filePath}:`, err);
       }
+    }
+
+    if (!pagesCount) {
+      const pdfSample = dataBuffer.slice(0, 100000).toString('latin1');
+      const countMatch = pdfSample.match(/\/Type\s*\/Pages[\s\S]*?\/Count\s+(\d+)/);
+      if (countMatch) {
+        pagesCount = parseInt(countMatch[1], 10);
+      }
+    }
+
+    if (!edition && title) {
+      edition = this.extractEditionPattern(title);
     }
 
     // Calibre Extract ISBN adaptation: Scan PDF text with page budgeting (first 10, then last 5)
@@ -518,7 +554,10 @@ export class EmbeddedMetadataExtractor {
     return {
       title,
       authors,
+      publisher,
       publicationYear,
+      edition,
+      pagesCount,
       description,
       language,
       isbn,
@@ -530,11 +569,32 @@ export class EmbeddedMetadataExtractor {
   }
 
   /**
+   * Helper to detect edition phrases in Arabic and English text
+   */
+  static extractEditionPattern(text?: string): string | undefined {
+    if (!text) return undefined;
+
+    // Arabic edition patterns: الطبعة الثانية, ط 2, طبعة خاصة...
+    const arMatch = text.match(/(?:^|[^\p{L}\d])(الطبعة\s+(?:الأولى|الثانية|الثالثة|الرابعة|الخامسة|السادسة|السابعة|الثامنة|التاسعة|العاشرة|الحادية\s+عشرة|الثانية\s+عشرة|\d+)|ط\s*\d+|طبعة\s+(?:مزيدة\s+ومنقحة|جديدة|خاصة))(?:[^\p{L}\d]|$)/u);
+    if (arMatch) {
+      return arMatch[1].trim();
+    }
+
+    // English edition patterns: 2nd Edition, 3rd ed., Second Edition...
+    const enMatch = text.match(/(?:^|[^\w])(\d+(?:st|nd|rd|th)\s+(?:ed(?:ition)?|revised\s+edition)|(?:First|Second|Third|Fourth|Fifth|Sixth|Seventh|Eighth|Ninth|Tenth)\s+(?:Edition|Ed\.)|(?:Edition|Ed\.)\s+\d+|Revised\s+(?:and\s+Expanded\s+)?Edition|International\s+(?:Student\s+)?Edition)(?:[^\w]|$)/i);
+    if (enMatch) {
+      return enMatch[1].trim();
+    }
+
+    return undefined;
+  }
+
+  /**
    * EPUB Metadata & Cover Extraction via yauzl
    */
   private static async extractFromEpub(filePath: string): Promise<EmbeddedBookMetadata | null> {
     return new Promise((resolve) => {
-      yauzl.open(filePath, { lazyEntries: true }, (err: any, zipfile: any) => {
+      yauzl.open(filePath, { lazyEntries: true, autoClose: false }, (err: any, zipfile: any) => {
         if (err || !zipfile) {
           resolve(null);
           return;
@@ -544,11 +604,16 @@ export class EmbeddedMetadataExtractor {
         let opfPath: string | null = null;
         let coverHref: string | null = null;
         let opfDir = '';
+        let totalTextBytes = 0;
 
         zipfile.readEntry();
 
         zipfile.on('entry', (entry: any) => {
           entries[entry.fileName] = entry;
+
+          if (/\.(?:x?html?)$/i.test(entry.fileName)) {
+            totalTextBytes += (entry.uncompressedSize || 0);
+          }
 
           // Check if this is the container
           if (entry.fileName === 'META-INF/container.xml') {
@@ -640,38 +705,17 @@ export class EmbeddedMetadataExtractor {
               }
             }
 
-            // Find Cover Image
-            // 1. Look for <item properties="cover-image" href="...">
-            const coverPropMatch = opfXml.match(/<item[^>]*properties="[^"]*cover-image[^"]*"[^>]*href="([^"]+)"/i);
-            if (coverPropMatch) {
-              coverHref = coverPropMatch[1];
-            } else {
-              // 2. Look for <meta name="cover" content="cover-id" />
-              const metaCoverMatch = opfXml.match(/<meta[^>]*name="cover"[^>]*content="([^"]+)"/i);
-              if (metaCoverMatch) {
-                const coverId = metaCoverMatch[1];
-                const itemMatch = opfXml.match(new RegExp(`<item[^>]*id="${coverId}"[^>]*href="([^"]+)"`, 'i'));
-                if (itemMatch) coverHref = itemMatch[1];
-              }
-            }
-
-            // If not found, check standard cover item names
-            if (!coverHref) {
-              const fallbackItem = opfXml.match(/<item[^>]*href="([^"]*(?:cover|cover-image)[^"]*\.(?:jpg|jpeg|png|webp))"/i);
-              if (fallbackItem) coverHref = fallbackItem[1];
-            }
-
+            // Robust 5-Tier Cover Image resolution
             let coverBuffer: Buffer | undefined;
             let coverMimeType: string | undefined;
-
-            if (coverHref) {
-              const fullCoverPath = opfDir ? path.posix.join(opfDir, coverHref) : coverHref;
-              const coverEntry = entries[fullCoverPath] || entries[coverHref];
-              if (coverEntry) {
-                coverBuffer = await this.readZipEntry(zipfile, coverEntry);
-                const ext = path.extname(fullCoverPath).toLowerCase();
-                coverMimeType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+            try {
+              const coverResult = await EpubCoverExtractor.extractCover(filePath);
+              if (coverResult.success && coverResult.coverBuffer) {
+                coverBuffer = coverResult.coverBuffer;
+                coverMimeType = coverResult.coverMimeType;
               }
+            } catch (coverErr) {
+              console.warn(`[EmbeddedMetadataExtractor] EPUB cover extraction warning for ${filePath}:`, coverErr);
             }
 
             // Extract sample text from first XHTML/HTML document for content-based language detection
@@ -694,11 +738,34 @@ export class EmbeddedMetadataExtractor {
             });
             const detectedLanguage = langDetect.isReliable ? langDetect.language : undefined;
 
+            // Extract edition from schema:bookEdition or description or title
+            const edMatch = opfXml.match(/<meta\s+property="schema:bookEdition"[^>]*>([^<]+)<\/meta>/i);
+            let edition = edMatch ? edMatch[1].trim() : undefined;
+            if (!edition) {
+              edition = this.extractEditionPattern(title) || this.extractEditionPattern(description);
+            }
+
+            // Extract pagesCount from schema:numberOfPages or dc:extent or uncompressed text byte estimation
+            const pagesMatch = opfXml.match(/<(?:meta[^>]+(?:property|name)="schema:numberOfPages"[^>]*>|dc:extent[^>]*>)[^0-9]*?(\d+)/i);
+            let pagesCount = pagesMatch ? parseInt(pagesMatch[1], 10) : undefined;
+            if (!pagesCount && totalTextBytes > 0) {
+              // Standard Adobe Digital Editions (ADE) & Calibre algorithm: 1 page ~= 1024 bytes uncompressed text
+              pagesCount = Math.max(1, Math.round(totalTextBytes / 1024));
+            }
+            if (!pagesCount) {
+              const spineItems = [...opfXml.matchAll(/<itemref\b[^>]*>/gi)];
+              if (spineItems.length > 0) {
+                pagesCount = Math.max(1, spineItems.length * 15);
+              }
+            }
+
             resolve({
               title,
               authors,
               publisher,
               publicationYear,
+              edition,
+              pagesCount,
               isbn,
               isbn10,
               isbn13,
@@ -709,10 +776,21 @@ export class EmbeddedMetadataExtractor {
             });
           } catch (e) {
             resolve(null);
+          } finally {
+            try {
+              zipfile.close();
+            } catch {}
           }
         });
       });
     });
+  }
+
+  /**
+   * Public static helper for direct EPUB cover extraction
+   */
+  public static async extractEpubCover(filePath: string) {
+    return EpubCoverExtractor.extractCover(filePath);
   }
 
   private static readZipEntry(zipfile: any, entry: any): Promise<Buffer> {

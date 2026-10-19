@@ -13,6 +13,7 @@ export interface BibliographicEdition {
   isbn10?: string;
   isbn13?: string;
   pages?: number;
+  pagesCount?: number;
   coverUrl?: string;
   language?: string;
   sources: BibliographicSource[];

@@ -238,8 +238,19 @@ Readest is an open-source reader crafted specifically for immersive and deep rea
     - Dynamic CSS injection targeting reader iframes and overlays.
     - Custom TTS voice providers and dictionary lookup adapters.
     - Event hooks (`onReaderInit`, `onPageTurn`, `onReaderDestroy`).
-- **Dynamic Style Application:**
-  - Plugins inject specialized typography rules, classical margins, and custom themes (e.g. Warm Parchment `#fbf0d9`, Classic Turath typography, high-contrast dark modes) directly into the rendered book view without modifying underlying ebook files.
+### P. Reverse-Engineered Metadata Refresh & Rate-Limited Bulk Fetching
+*Source:* `apps/readest-app/src/services/metadataRefresh.ts`, `packages/network-client/rateLimiter.ts`
+- **Metadata Auto-Retrieve & Safe Refresh:**
+  - Readest exposes an on-demand "Refresh Metadata" function for single books and library batches.
+  - When refreshed, the application queries upstream catalogs (Google Books, Open Library) using title/author/ISBN fingerprints.
+  - Rather than destructively clobbering existing local metadata, Readest computes a property-by-property delta (field diff) and only updates missing fields or placeholder values (`Unknown Author`, `New Title`), leaving user annotations and custom edits unmolested.
+- **Provider-Aware Rate Limiting & Sliding Windows:**
+  - Aggressive rapid requests to public book APIs (notably Google Books API) trigger HTTP 429 Too Many Requests and IP bans.
+  - Readest introduces a provider-specific sliding token bucket / inter-request sleep gate:
+    - Google Books: Minimum spacing of 1,500ms between calls + exponential backoff with jitter on 429 errors.
+    - Open Library: 1,000ms minimum spacing between queries.
+    - Internet Archive: 800ms minimum spacing between queries.
+  - In Baglib, this pattern is formalized in `RateLimitGate` (`src/main/services/metadata/rate-limit-gate.ts`), wired into `HttpClient` (`src/main/services/metadata/http-client.ts`), and exposed via `enrichment:bulk-enrich-works` and `enrichment:refresh-work`.
 
 ---
 
@@ -256,6 +267,8 @@ Readest is an open-source reader crafted specifically for immersive and deep rea
 9. **Web Clipper & Spec-Compliant EPUB Packaging:** Adopting Readest's Readability pipeline and `srcset` high-resolution image resolver lets Baglib readers turn web articles, academic blog posts, and serialized treatises into beautiful offline `.epub` and `.md` books, packaged purely in-memory using `fflate.zipSync` without temporary external tools.
 10. **Reading Analytics & Dwell Protection:** Implemented the KOReader / Readest `reading_book_stat` and `reading_page_stat` schema in `014_reading_statistics.ts`, complete with `MAX_PAGE_SECONDS = 180s` capping, median page pace math, 365-day bilingual activity heatmap, reading velocity (pages/hour, words/min), and subject distribution across Islamic and academic domains.
 11. **Sandboxed Reader Plugins:** Built `BaglibReaderPlugin` architecture supporting dynamic theme CSS injection, custom dictionaries, and TTS voice providers with instant hot-reloading in `FullPageBookReader`.
+12. **Metadata Refresh & Rate-Limiting Gate:** Adapted Readest's safe metadata auto-retrieve and rate-limiting sliding window. Implemented `RateLimitGate` in Baglib to strictly throttle Google Books (1,500ms), Open Library (1,000ms), and Internet Archive (800ms) with non-destructive diff merging, protecting users' libraries against HTTP 429 quota exhaustion and data loss.
+
 
 
 

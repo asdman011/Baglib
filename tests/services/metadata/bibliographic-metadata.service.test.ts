@@ -197,8 +197,8 @@ describe('BibliographicMetadataService (Waterfall Aggregator - Task 5.1, 5.2, 5.
   });
 
   describe('Get Work Details Routing', () => {
-    it('routes gb- prefixed IDs directly to Google Books provider', async () => {
-      let gbCalled = false;
+    it('routes ia- prefixed IDs directly to Internet Archive provider', async () => {
+      let iaCalled = false;
       let olCalled = false;
 
       const mockOL: MetadataProvider = {
@@ -211,23 +211,97 @@ describe('BibliographicMetadataService (Waterfall Aggregator - Task 5.1, 5.2, 5.
         searchByIsbn: async () => null
       };
 
-      const mockGB: MetadataProvider = {
-        name: 'Google Books',
+      const mockIA: MetadataProvider = {
+        name: 'Internet Archive',
         search: async () => [],
         getWorkDetails: async (id: string) => {
-          gbCalled = true;
-          return dummyWork(id, 'Clean Code Volume', 'Google Books');
+          iaCalled = true;
+          return dummyWork(id, 'Clean Code Volume', 'Internet Archive');
         },
         searchByIsbn: async () => null
       };
 
-      const service = new BibliographicMetadataService([mockOL, mockGB]);
-      const result = await service.getWorkDetails('gb-kacTBQAAQBAJ');
+      const service = new BibliographicMetadataService([mockOL, mockIA]);
+      const result = await service.getWorkDetails('ia-clean-code-volume');
 
       assert.ok(result);
-      assert.strictEqual(gbCalled, true);
-      assert.strictEqual(olCalled, false, 'Open Library should not be called for gb- prefixed work IDs');
+      assert.strictEqual(iaCalled, true);
+      assert.strictEqual(olCalled, false, 'Open Library should not be called for ia- prefixed work IDs');
       assert.strictEqual(result.title, 'Clean Code Volume');
+    });
+  });
+
+  describe('Google Books Disabling Enforcement', () => {
+    it('guarantees Google Books is completely excluded from getOrderedActiveProviders', () => {
+      const mockGB: MetadataProvider = {
+        name: 'Google Books',
+        search: async () => [],
+        getWorkDetails: async () => null,
+        searchByIsbn: async () => null,
+      };
+      const mockOL: MetadataProvider = {
+        name: 'Open Library',
+        search: async () => [],
+        getWorkDetails: async () => null,
+        searchByIsbn: async () => null,
+      };
+      const mockIA: MetadataProvider = {
+        name: 'Internet Archive',
+        search: async () => [],
+        getWorkDetails: async () => null,
+        searchByIsbn: async () => null,
+      };
+
+      // Even if Google Books is passed in constructor
+      const service = new BibliographicMetadataService([mockGB, mockIA, mockOL]);
+      const providers = service.getOrderedActiveProviders();
+
+      assert.strictEqual(providers.length, 2);
+      assert.strictEqual(providers.some((p) => p.name === 'Google Books'), false);
+    });
+
+    it('guarantees Google Books is never executed during ISBN search fallback', async () => {
+      const callOrder: string[] = [];
+
+      const mockOL: MetadataProvider = {
+        name: 'Open Library',
+        search: async () => [],
+        getWorkDetails: async () => null,
+        searchByIsbn: async () => {
+          callOrder.push('Open Library');
+          return null;
+        },
+      };
+
+      const mockIA: MetadataProvider = {
+        name: 'Internet Archive',
+        search: async () => [],
+        getWorkDetails: async () => null,
+        searchByIsbn: async () => {
+          callOrder.push('Internet Archive');
+          return dummyWork('ia-1', 'Target Book', 'Internet Archive');
+        },
+      };
+
+      const mockGB: MetadataProvider = {
+        name: 'Google Books',
+        search: async () => [],
+        getWorkDetails: async () => null,
+        searchByIsbn: async () => {
+          callOrder.push('Google Books');
+          return dummyWork('gb-1', 'Target Book', 'Google Books');
+        },
+      };
+
+      // Even if Google Books is passed first
+      const service = new BibliographicMetadataService([mockGB, mockOL, mockIA]);
+      const res = await service.searchByIsbn('9780134494166');
+
+      assert.ok(res);
+      assert.strictEqual(res.title, 'Target Book');
+      assert.strictEqual(callOrder.includes('Google Books'), false, 'Google Books must never be called');
+      assert.ok(callOrder.includes('Open Library'));
+      assert.ok(callOrder.includes('Internet Archive'));
     });
   });
 });

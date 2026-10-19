@@ -99,11 +99,11 @@ describe('MetadataEnrichmentService Unit Tests (Story 12)', () => {
       },
     ]);
 
-    const provider2 = new MockSearchProvider('googlebooks', 'Google Books', 'جوجل بوكس', '', '', 'globe', false, false, [
+    const provider2 = new MockSearchProvider('internetarchive', 'Internet Archive', 'أرشيف الإنترنت', '', '', 'globe', false, false, [
       {
-        id: 'gb-clean',
-        providerId: 'googlebooks',
-        providerName: 'Google Books',
+        id: 'ia-clean',
+        providerId: 'internetarchive',
+        providerName: 'Internet Archive',
         title: 'Clean Architecture',
         author: 'Robert C. Martin',
         isbn: '9780134494166', // Same normalized ISBN -> should be deduplicated
@@ -111,9 +111,9 @@ describe('MetadataEnrichmentService Unit Tests (Story 12)', () => {
         publisher: 'Prentice Hall',
       },
       {
-        id: 'gb-alt',
-        providerId: 'googlebooks',
-        providerName: 'Google Books',
+        id: 'ia-alt',
+        providerId: 'internetarchive',
+        providerName: 'Internet Archive',
         title: 'Clean Architecture in C#',
         author: 'Jason Taylor',
         isbn: '9781800560710',
@@ -129,6 +129,14 @@ describe('MetadataEnrichmentService Unit Tests (Story 12)', () => {
     assert.strictEqual(response.candidates[0].isbn, '9780134494166');
     assert.strictEqual(response.candidates[0].downloadFormat, 'EPUB');
     assert.strictEqual(response.candidates[0].downloadUrl, 'https://archive.org/download/clean-arch.epub');
+
+    // Verify technical diagnostics and candidate factor breakdown (Story refinement)
+    assert.ok(response.technicalDiagnostics, 'Response must include technical diagnostics');
+    assert.strictEqual(response.technicalDiagnostics.activeQuery.normalizedTitle, 'Clean Architecture');
+    assert.strictEqual(response.technicalDiagnostics.activeQuery.detectedIsbn, '9780134494166');
+    assert.ok(response.candidates[0].matchFactors, 'Candidate edition must include matchFactors breakdown');
+    assert.strictEqual(response.candidates[0].matchFactors?.isbnMatched, true);
+    assert.strictEqual(response.candidates[0].matchConfidence, 1.0);
   });
 
   it('computes field diffs accurately: detects new, overwrite, and identical fields', () => {
@@ -238,4 +246,99 @@ describe('MetadataEnrichmentService Unit Tests (Story 12)', () => {
     assert.strictEqual(savedBook.title, 'Completely Different Title', 'Title should now overwrite');
     assert.ok(resOverwrite.appliedFields.includes('title'));
   });
+
+  it('completely excludes Google Books provider from active search and discovery', async () => {
+    const events: string[] = [];
+
+    const nonGoogle1 = new MockSearchProvider('openlibrary', 'Open Library', 'أوبن لايبراري', '', '', 'globe', true, false, []);
+    nonGoogle1.search = async () => {
+      events.push('start:openlibrary');
+      await new Promise((r) => setTimeout(r, 10));
+      events.push('end:openlibrary');
+      return [];
+    };
+
+    const googleProvider = new MockSearchProvider('googlebooks', 'Google Books', 'جوجل بوكس', '', '', 'globe', false, false, []);
+    googleProvider.search = async () => {
+      events.push('start:googlebooks');
+      return [];
+    };
+
+    // Even if googleProvider is passed in options, MetadataEnrichmentService must completely filter it out
+    const service = new MetadataEnrichmentService([googleProvider, nonGoogle1]);
+    await service.findCandidateEditions(sampleBook);
+
+    assert.ok(events.includes('start:openlibrary'));
+    assert.strictEqual(events.includes('start:googlebooks'), false, 'Google Books must never be executed');
+  });
+
+  it('updates title when existing title is a placeholder / prepress artifact / filename even when overwritePopulatedFields is false', async () => {
+    const service = new MetadataEnrichmentService([]);
+
+    const placeholderBook: BookItem = {
+      id: 'book-placeholder-1',
+      title: 'mcgrawh 19768',
+      author: 'Unknown Author',
+      categories: [],
+      tags: [],
+      lendingHistory: [],
+      readingStatus: 'unread',
+      readingProgress: 0,
+      bookType: 'digital',
+    };
+
+    let savedBook: BookItem = { ...placeholderBook };
+    const mockRepo: any = {
+      updateBook: async (b: any) => {
+        savedBook = { ...savedBook, ...b };
+      },
+      getById: async () => savedBook,
+      getAllWorks: async () => [savedBook],
+    };
+
+    const candidate: EnrichmentCandidateEdition = {
+      id: 'cand-placeholder-match',
+      providerId: 'openlibrary',
+      providerName: 'Open Library',
+      title: 'An Introduction to Applying Social Work Theories and Methods 3e',
+      authors: ['Barbra Teater'],
+      publisher: 'Open University Press',
+      publicationYear: 2010,
+      isbn: '9780335237784',
+    };
+
+    // Verify computeFieldDiffs recognizes title and author as empty/placeholder (not overwriting legitimate data)
+    const diffs = service.computeFieldDiffs(placeholderBook, candidate);
+    assert.strictEqual(diffs.diffs.title.hasCurrent, false, 'Prepress title "mcgrawh 19768" must be treated as hasCurrent: false');
+    assert.strictEqual(diffs.diffs.title.hasIncoming, true);
+    assert.strictEqual(diffs.diffs.title.isOverwriting, false);
+    assert.strictEqual(diffs.diffs.author.hasCurrent, false, 'Unknown Author must be treated as hasCurrent: false');
+
+    // Verify applyEnrichment applies the incoming title even with overwritePopulatedFields: false
+    const req: ApplyEnrichmentRequest = {
+      workId: placeholderBook.id,
+      candidateId: candidate.id,
+      selectedFields: ['title', 'author', 'publisher', 'publicationYear', 'isbn'],
+      incomingValues: {
+        title: candidate.title,
+        author: candidate.authors![0],
+        publisher: candidate.publisher,
+        publicationYear: candidate.publicationYear,
+        isbn: candidate.isbn,
+      },
+      overwritePopulatedFields: false,
+    };
+
+    const res = await service.applyEnrichment(req, mockRepo);
+    assert.strictEqual(res.success, true);
+    assert.strictEqual(
+      savedBook.title,
+      'An Introduction to Applying Social Work Theories and Methods 3e',
+      'Placeholder title must be updated with online canonical title'
+    );
+    assert.strictEqual(savedBook.author, 'Barbra Teater');
+    assert.ok(res.appliedFields.includes('title'));
+    assert.ok(res.appliedFields.includes('author'));
+  });
 });
+

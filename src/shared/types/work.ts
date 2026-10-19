@@ -59,11 +59,40 @@ export interface WorkDTO extends Work {
   } | null;
 }
 
+export interface MetadataProvenance {
+  primaryProvider?: string;
+  providerId?: string;
+  sourceUrl?: string;
+  discoveredAt?: string;
+  method?: 'online_api' | 'offline_embedded' | 'offline_filename' | 'manual' | 'hybrid';
+  confidence?: number;
+  fieldSources?: Record<string, {
+    source: string;
+    status: 'verified' | 'extracted' | 'calculated' | 'fallback' | 'user_override';
+    value?: any;
+    confidence?: number;
+    rawMatch?: string;
+  }>;
+  apiQueries?: {
+    provider: string;
+    endpoint: string;
+    query: string;
+    timestamp: string;
+    status: number | string;
+    latencyMs?: number;
+  }[];
+  auditTrace?: string[];
+  rawBibliographic?: any;
+}
+
 export interface BookItem {
   id: string;
   title: string;
   author: string;
   edition?: string;
+  editionRawMatch?: string;
+  editionSource?: string;
+  editionConfidence?: number;
   publisher?: string;
   publicationYear?: number | string;
   isbn?: string;
@@ -161,6 +190,9 @@ export interface BookItem {
   // Online / Auto-fill Info
   onlineSource?: 'Shamela' | 'Noor Library' | 'LibGen' | 'Anna Archive' | 'Inoreader' | 'Manual';
   sourceUrl?: string;
+
+  // Metadata Diagnostics & Geek Provenance
+  metadataProvenance?: MetadataProvenance;
 }
 
 export interface BookItemInput {
@@ -168,6 +200,9 @@ export interface BookItemInput {
   title: string;
   author?: string;
   edition?: string;
+  editionRawMatch?: string;
+  editionSource?: string;
+  editionConfidence?: number;
   publisher?: string;
   publicationYear?: number | string;
   isbn?: string;
@@ -240,6 +275,7 @@ export interface BookItemInput {
   lendingHistory?: LendingRecord[];
   onlineSource?: string;
   sourceUrl?: string;
+  metadataProvenance?: MetadataProvenance;
 }
 
 

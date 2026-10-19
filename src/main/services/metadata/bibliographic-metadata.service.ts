@@ -1,18 +1,19 @@
 import { MetadataProvider, SearchQuery } from './providers/provider.interface';
 import { OpenLibraryProvider } from './providers/open-library.provider';
 import { InternetArchiveProvider } from './providers/internet-archive.provider';
-import { GoogleBooksProvider } from './providers/google-books.provider';
 import { BibliographicWork, BibliographicEdition } from '../../../shared/types/bibliographic';
 import { FilenameParser, ParsedFilenameMetadata } from './filename-parser';
 import { CandidateMatcher, CandidateEvaluation, TargetBookEvidence } from './candidate-matcher';
 import { EmbeddedMetadataExtractor, EmbeddedBookMetadata } from './embedded-metadata.extractor';
 import { coverResolverService, CoverResolutionResult } from './cover-resolver.service';
 import { isValidIsbn, isPlaceholderTitle, isPlaceholderAuthor, isbn10ToIsbn13 } from '../../../shared/validators/metadata-validator';
+import { PdfMetadataReconciler, DiscardedArtifact } from './pdf-metadata-reconciler';
 import { QuotaTracker, quotaTracker as defaultQuotaTracker } from './quotaTracker';
 import { ProviderConfigService, providerConfigService as defaultProviderConfigService } from './provider-config.service';
 import { authorBioService } from './author-bio.service';
 import { languageDetectorService } from './language-detector.service';
 import { textIsbnScannerService } from './text-isbn-scanner.service';
+import { extractEditionFromEbook, ExtractedEditionResult } from '../import/editionExtractor';
 
 export interface DiscoveredCandidateItem {
   work: BibliographicWork;
@@ -33,6 +34,8 @@ export interface DiscoveredBookResult {
   publisher?: string;
   publicationYear?: number;
   edition?: string;
+  editionDetails?: ExtractedEditionResult;
+  pagesCount?: number;
   isbn?: string;
   isbn10?: string;
   isbn13?: string;
@@ -48,6 +51,7 @@ export interface DiscoveredBookResult {
   candidates: BibliographicWork[];
   rankedEvaluations?: DiscoveredCandidateItem[];
   parsedFilename?: ParsedFilenameMetadata;
+  discardedArtifacts?: DiscardedArtifact[];
   provenance: {
     localParsed: boolean;
     embeddedFound: boolean;
@@ -68,36 +72,40 @@ export class BibliographicMetadataService {
   ) {
     this.quotaTracker = quotaTracker;
     this.providerConfigService = configService;
-    this.providers = customProviders || [
+    const defaultProviders = [
       new OpenLibraryProvider(),
       new InternetArchiveProvider(),
-      new GoogleBooksProvider(this.quotaTracker),
     ];
+    if (customProviders) {
+      this.providers = customProviders.filter((p) => p.name !== 'Google Books' && !p.name.toLowerCase().includes('google'));
+    } else {
+      this.providers = defaultProviders;
+    }
   }
 
   /**
    * Returns active/enabled providers in user priority order.
+   * Google Books is completely excluded from active providers.
    */
   getOrderedActiveProviders(): MetadataProvider[] {
     const configs = this.providerConfigService.getProviderConfigs();
-    const enabledConfigs = configs.filter((c) => c.enabled);
+    const enabledConfigs = configs.filter((c) => c.enabled && c.id !== 'google-books');
     const ordered: MetadataProvider[] = [];
 
     for (const conf of enabledConfigs) {
       const match = this.providers.find((p) => {
-        if (conf.id === 'google-books') return p.name === 'Google Books';
         if (conf.id === 'open-library') return p.name === 'Open Library';
         if (conf.id === 'internet-archive') return p.name === 'Internet Archive';
         return p.name.toLowerCase() === conf.name.toLowerCase();
       });
-      if (match) ordered.push(match);
+      if (match && !ordered.includes(match)) ordered.push(match);
     }
 
-    // Include custom providers that might be registered directly
+    // Include custom providers that might be registered directly (excluding Google)
     for (const p of this.providers) {
+      if (p.name === 'Google Books' || p.name.toLowerCase().includes('google')) continue;
       if (!ordered.includes(p)) {
         const conf = configs.find((c) => {
-          if (c.id === 'google-books' && p.name === 'Google Books') return true;
           if (c.id === 'open-library' && p.name === 'Open Library') return true;
           if (c.id === 'internet-archive' && p.name === 'Internet Archive') return true;
           return c.name.toLowerCase() === p.name.toLowerCase();
@@ -108,7 +116,7 @@ export class BibliographicMetadataService {
       }
     }
 
-    return ordered;
+    return ordered.filter((p) => p.name !== 'Google Books' && !p.name.toLowerCase().includes('google'));
   }
 
   /**
@@ -137,7 +145,7 @@ export class BibliographicMetadataService {
   }
 
   /**
-   * Fetch work details by iterating through providers.
+   * Fetch work details by iterating through active providers.
    */
   async getWorkDetails(workId: string): Promise<BibliographicWork | null> {
     if (workId.startsWith('ia-')) {
@@ -145,14 +153,8 @@ export class BibliographicMetadataService {
       if (iaProvider) return iaProvider.getWorkDetails(workId);
     }
 
-    if (workId.startsWith('gb-')) {
-      if (this.quotaTracker.isDepleted()) return null;
-      const gbProvider = this.providers.find((p) => p.name === 'Google Books');
-      if (gbProvider) return gbProvider.getWorkDetails(workId);
-    }
-
-    for (const provider of this.providers) {
-      if (this.quotaTracker.isDepleted() && provider.name === 'Google Books') continue;
+    const activeProviders = this.getOrderedActiveProviders();
+    for (const provider of activeProviders) {
       try {
         const details = await provider.getWorkDetails(workId);
         if (details) return details;
@@ -232,49 +234,54 @@ export class BibliographicMetadataService {
       embeddedMeta = await EmbeddedMetadataExtractor.extract(params.filePath);
     }
 
-    // Assemble local target evidence (user input > embedded > filename)
+    // Reconcile embedded vs filename metadata using the intelligent garbage-detection engine
+    const reconciled = PdfMetadataReconciler.reconcile({
+      embeddedMeta,
+      parsedFilename: parsedFilename || null,
+      rawFilename: identifierPath,
+    });
+    const discardedArtifacts = reconciled.discardedArtifacts;
+
+    // Assemble local target evidence (user input > reconciled > filename)
     let rawTitle = params.title?.trim() || '';
     if (isPlaceholderTitle(rawTitle)) {
       rawTitle = '';
     }
     if (!rawTitle) {
-      const embeddedTitle = embeddedMeta?.title?.trim();
-      const filenameTitle = parsedFilename?.title?.trim();
-      if (embeddedTitle && !isPlaceholderTitle(embeddedTitle)) {
-        rawTitle = embeddedTitle;
-      } else if (filenameTitle && !isPlaceholderTitle(filenameTitle)) {
-        rawTitle = filenameTitle;
-      }
+      rawTitle = reconciled.title || parsedFilename?.title?.trim() || '';
     }
     const targetTitle = rawTitle;
 
-    // Calibre smart_update resolution for authors:
-    // User override (if non-placeholder) > Valid embedded file metadata > Valid filename parsed metadata
+    // User override (if non-placeholder) > Reconciled authors
     const validUserAuthors: string[] = params.author?.trim()
       ? FilenameParser.splitMultiAuthors(params.author.trim()).filter((a) => !isPlaceholderAuthor(a))
       : [];
 
-    const validEmbeddedAuthors: string[] = (embeddedMeta?.authors || []).filter(
-      (a) => !isPlaceholderAuthor(a)
-    );
-
-    const validFilenameAuthors: string[] = (parsedFilename?.authors || []).filter(
-      (a) => !isPlaceholderAuthor(a)
-    );
-
     let targetAuthors: string[] = [];
     if (validUserAuthors.length > 0) {
       targetAuthors = validUserAuthors;
-    } else if (validEmbeddedAuthors.length > 0) {
-      targetAuthors = validEmbeddedAuthors;
-    } else if (validFilenameAuthors.length > 0) {
-      targetAuthors = validFilenameAuthors;
+    } else {
+      targetAuthors = reconciled.authors;
     }
 
     const targetTranslators: string[] = parsedFilename?.translators || [];
-    const targetPublisher = embeddedMeta?.publisher || parsedFilename?.publisher;
-    const targetYear = embeddedMeta?.publicationYear || parsedFilename?.publicationYear;
-    const targetEdition = parsedFilename?.edition;
+    const targetPublisher = reconciled.publisher;
+    const targetYear = reconciled.publicationYear;
+    let targetEdition = reconciled.edition;
+    let editionDetails: ExtractedEditionResult | undefined;
+    const targetPagesCount = reconciled.pagesCount;
+
+    if (!targetEdition && params.filePath) {
+      try {
+        const extEdition = await extractEditionFromEbook(params.filePath);
+        if (extEdition.editionLabel && extEdition.confidence >= 0.70) {
+          targetEdition = extEdition.editionLabel;
+        }
+        editionDetails = extEdition;
+      } catch (edErr) {
+        console.warn('[BibliographicMetadataService] Edition extraction failed:', edErr);
+      }
+    }
 
     // Resolve language reliably without assigning arbitrary defaults
     let targetLanguage: string | undefined = embeddedMeta?.language;
@@ -346,6 +353,16 @@ export class BibliographicMetadataService {
         } catch (pdfErr) {
           console.warn('[BibliographicMetadataService] Direct PDF cover fallback failed in offline mode:', pdfErr);
         }
+      } else if (params.filePath && params.filePath.toLowerCase().endsWith('.epub')) {
+        try {
+          const directEpubCover = await coverResolverService.extractEpubCover(params.filePath);
+          if (directEpubCover?.coverUrl) {
+            localCoverUrl = directEpubCover.coverUrl;
+            localCoverSource = 'embedded';
+          }
+        } catch (epubErr) {
+          console.warn('[BibliographicMetadataService] Direct EPUB cover fallback failed in offline mode:', epubErr);
+        }
       }
 
       const finalTitle = targetTitle || (identifierPath ? identifierPath.replace(/\.[^.]+$/, '') : 'Untitled');
@@ -363,6 +380,8 @@ export class BibliographicMetadataService {
         publisher: targetPublisher,
         publicationYear: targetYear,
         edition: targetEdition,
+        editionDetails,
+        pagesCount: targetPagesCount,
         isbn: targetIsbn,
         isbn10: targetIsbn10,
         isbn13: targetIsbn13,
@@ -375,6 +394,7 @@ export class BibliographicMetadataService {
         candidates: [],
         rankedEvaluations: [],
         parsedFilename,
+        discardedArtifacts,
         provenance: {
           localParsed: !!parsedFilename,
           embeddedFound: !!embeddedMeta,
@@ -580,6 +600,19 @@ export class BibliographicMetadataService {
       } catch (directErr) {
         console.warn('[BibliographicMetadataService] Direct PDF cover fallback failed:', directErr);
       }
+    } else if (!coverResolution.coverUrl && params.filePath && params.filePath.toLowerCase().endsWith('.epub')) {
+      try {
+        const directEpubCover = await coverResolverService.extractEpubCover(params.filePath);
+        if (directEpubCover && directEpubCover.coverUrl) {
+          coverResolution = {
+            coverUrl: directEpubCover.coverUrl,
+            source: 'embedded',
+            verified: true,
+          };
+        }
+      } catch (directErr) {
+        console.warn('[BibliographicMetadataService] Direct EPUB cover fallback failed:', directErr);
+      }
     }
 
     const confidence = bestEvaluation
@@ -600,6 +633,8 @@ export class BibliographicMetadataService {
       publisher: finalPublisher,
       publicationYear: finalYear,
       edition: targetEdition,
+      editionDetails,
+      pagesCount: matchedEdition?.pagesCount || matchedEdition?.pages || targetPagesCount,
       isbn: finalIsbn,
       isbn10: matchedEdition?.isbn10 || targetIsbn10 || parsedFilename?.isbn10,
       isbn13: matchedEdition?.isbn13 || targetIsbn13 || parsedFilename?.isbn13,
@@ -614,6 +649,7 @@ export class BibliographicMetadataService {
       candidates: outputCandidates,
       rankedEvaluations,
       parsedFilename,
+      discardedArtifacts,
       provenance: {
         localParsed: !!parsedFilename,
         embeddedFound: !!embeddedMeta,
@@ -671,6 +707,29 @@ export class BibliographicMetadataService {
       currentPage: res.currentPage || pageIndex,
       totalPages: res.totalPages || 0,
       pageNumber: res.pageNumber,
+    };
+  }
+
+  /**
+   * Directly extracts an image of an EPUB file to make it the book's cover image.
+   */
+  async extractEpubCover(filePath: string): Promise<string | null> {
+    const res = await coverResolverService.extractEpubCover(filePath);
+    return res.coverUrl || null;
+  }
+
+  /**
+   * Directly extracts an image with complete EPUB cover details.
+   */
+  async extractEpubCoverDetails(
+    filePath: string
+  ): Promise<{ coverUrl: string | null; savedFilePath?: string; tierUsed?: number; byteSize?: number }> {
+    const res = await coverResolverService.extractEpubCover(filePath);
+    return {
+      coverUrl: res.coverUrl || null,
+      savedFilePath: res.savedFilePath,
+      tierUsed: res.tierUsed,
+      byteSize: res.contentLength,
     };
   }
 }

@@ -2,6 +2,7 @@ import { MetadataProvider, SearchQuery } from './provider.interface';
 import { BibliographicWork, BibliographicEdition } from '../../../../shared/types/bibliographic';
 import { googleBooksClient } from '../http-client';
 import { QuotaTracker, quotaTracker as defaultQuotaTracker } from '../quotaTracker';
+import { GoogleBooksQuerySanitizer } from './google-books-query-sanitizer';
 
 export const DEFAULT_GOOGLE_BOOKS_API_KEY = 'AIzaSyDLDKUVqab2CqPBN3QjuzGnE0phS0063UU';
 
@@ -129,21 +130,16 @@ export class GoogleBooksProvider implements MetadataProvider {
     try {
       return await requestFn();
     } catch (err: any) {
-      if (this.quotaTracker.isConservationMode() && this.quotaTracker.canRequest()) {
-        await this.quotaTracker.applyRetryBackoff();
-        if (this.quotaTracker.canRequest()) {
-          this.quotaTracker.recordRequest();
-          try {
-            return await requestFn();
-          } catch (retryErr: any) {
-            this.logError(retryErr);
-            return null;
-          }
-        }
-      }
       this.logError(err);
       return null;
     }
+  }
+
+  private cache = new Map<string, { timestamp: number; works: BibliographicWork[] }>();
+  private readonly CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+  public clearCache(): void {
+    this.cache.clear();
   }
 
   async search(query: string | SearchQuery, maxResults = 10): Promise<BibliographicWork[]> {
@@ -155,17 +151,21 @@ export class GoogleBooksProvider implements MetadataProvider {
       ? Math.min(maxResults, 2)
       : maxResults;
 
-    let queryParam = '';
+    let sanitizedQuery: { queryString: string; isIsbnQuery: boolean; rawSearchTerm: string } | null = null;
+
     if (typeof query === 'string') {
-      if (!query.trim()) return [];
-      queryParam = encodeURIComponent(query.trim());
+      sanitizedQuery = GoogleBooksQuerySanitizer.buildQuery({ general: query });
     } else {
-      const tokens: string[] = [];
-      if (query.title?.trim()) tokens.push(`intitle:${query.title.trim()}`);
-      if (query.author?.trim()) tokens.push(`inauthor:${query.author.trim()}`);
-      if (query.general?.trim() && !query.title?.trim()) tokens.push(query.general.trim());
-      if (tokens.length === 0) return [];
-      queryParam = encodeURIComponent(tokens.join(' '));
+      sanitizedQuery = GoogleBooksQuerySanitizer.buildQuery({
+        title: query.title,
+        author: query.author,
+        general: query.general,
+      });
+    }
+
+    // If query could not be safely formed, fail fast without firing an invalid request
+    if (!sanitizedQuery || !sanitizedQuery.queryString.trim()) {
+      return [];
     }
 
     const startIndex =
@@ -175,30 +175,40 @@ export class GoogleBooksProvider implements MetadataProvider {
         ? (query.page - 1) * effectiveMaxResults
         : 0;
 
-    const url = `/volumes?q=${queryParam}&maxResults=${effectiveMaxResults}&startIndex=${startIndex}${this.getApiKeyParam()}`;
+    const cacheKey = `${sanitizedQuery.queryString}:${effectiveMaxResults}:${startIndex}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
+      return cached.works;
+    }
+
+    const url = `/volumes?q=${encodeURIComponent(sanitizedQuery.queryString)}&maxResults=${effectiveMaxResults}&startIndex=${startIndex}${this.getApiKeyParam()}`;
     let data = await this.executeWithQuotaProtections(() => googleBooksClient.getJson<any>(url));
 
-    // If structured search returned 0 items, fallback to title search directly
+    // Fallback: If structured intitle search returned 0 items, try plain text query (which Google Books handles with highest resilience)
     if (
       (!data || !data.items || data.items.length === 0) &&
-      typeof query !== 'string' &&
-      query.title?.trim() &&
+      !sanitizedQuery.isIsbnQuery &&
+      sanitizedQuery.rawSearchTerm &&
       !this.quotaTracker.isConservationMode() &&
       !this.quotaTracker.isDepleted()
     ) {
-      const fallbackQuery = encodeURIComponent(query.title.trim());
-      const fallbackUrl = `/volumes?q=${fallbackQuery}&maxResults=${effectiveMaxResults}${this.getApiKeyParam()}`;
-      const fallbackData = await this.executeWithQuotaProtections(() =>
-        googleBooksClient.getJson<any>(fallbackUrl)
-      );
-      if (fallbackData && fallbackData.items && fallbackData.items.length > 0) {
-        data = fallbackData;
+      const fallbackTerm = GoogleBooksQuerySanitizer.cleanTextToken(sanitizedQuery.rawSearchTerm, 50);
+      if (fallbackTerm && fallbackTerm !== sanitizedQuery.queryString) {
+        const fallbackUrl = `/volumes?q=${encodeURIComponent(fallbackTerm)}&maxResults=${effectiveMaxResults}${this.getApiKeyParam()}`;
+        const fallbackData = await this.executeWithQuotaProtections(() =>
+          googleBooksClient.getJson<any>(fallbackUrl)
+        );
+        if (fallbackData && fallbackData.items && fallbackData.items.length > 0) {
+          data = fallbackData;
+        }
       }
     }
 
-    if (!data || !data.items) return [];
+    if (!data || !data.items || !Array.isArray(data.items)) return [];
 
-    return data.items.map((item: any) => this.mapVolumeToWork(item));
+    const works = data.items.map((item: any) => this.mapVolumeToWork(item));
+    this.cache.set(cacheKey, { timestamp: Date.now(), works });
+    return works;
   }
 
   async getWorkDetails(workId: string): Promise<BibliographicWork | null> {
@@ -206,7 +216,7 @@ export class GoogleBooksProvider implements MetadataProvider {
 
     const volumeId = workId.startsWith('gb-') ? workId.substring(3) : workId;
     const keyParam = this.getApiKeyParam() ? `?${this.getApiKeyParam().substring(1)}` : '';
-    const url = `/volumes/${volumeId}${keyParam}`;
+    const url = `/volumes/${encodeURIComponent(volumeId)}${keyParam}`;
 
     const data = await this.executeWithQuotaProtections(() => googleBooksClient.getJson<any>(url));
     if (!data) return null;
@@ -215,13 +225,24 @@ export class GoogleBooksProvider implements MetadataProvider {
   }
 
   async searchByIsbn(isbn: string): Promise<BibliographicWork | null> {
+    if (!isbn) return null;
+    const cleanIsbn = GoogleBooksQuerySanitizer.cleanIsbn(isbn);
+    if (!cleanIsbn) return null; // Never send unvalidated ISBNs that trigger 503 backendFailed
     if (this.quotaTracker.isDepleted()) return null;
 
-    const url = `/volumes?q=isbn:${isbn}&maxResults=1${this.getApiKeyParam()}`;
+    const cacheKey = `isbn:${cleanIsbn}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS && cached.works.length > 0) {
+      return cached.works[0];
+    }
+
+    const url = `/volumes?q=isbn:${encodeURIComponent(cleanIsbn)}&maxResults=1${this.getApiKeyParam()}`;
     const data = await this.executeWithQuotaProtections(() => googleBooksClient.getJson<any>(url));
 
     if (!data || !data.items || data.items.length === 0) return null;
 
-    return this.mapVolumeToWork(data.items[0]);
+    const work = this.mapVolumeToWork(data.items[0]);
+    this.cache.set(cacheKey, { timestamp: Date.now(), works: [work] });
+    return work;
   }
 }

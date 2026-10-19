@@ -1,9 +1,12 @@
+import { RateLimitGate, googleBooksGate, openLibraryGate, internetArchiveGate } from './rate-limit-gate';
+
 export interface HttpClientConfig {
   baseUrl?: string;
   defaultHeaders?: Record<string, string>;
   requestsPerSecond?: number;
   timeoutMs?: number;
   maxRetries?: number;
+  rateLimitGate?: RateLimitGate;
 }
 
 export class HttpClient {
@@ -12,15 +15,22 @@ export class HttpClient {
   private readonly minIntervalMs: number;
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
+  private readonly rateLimitGate?: RateLimitGate;
 
   constructor(config: HttpClientConfig) {
     this.config = config;
     this.minIntervalMs = config.requestsPerSecond ? 1000 / config.requestsPerSecond : 0;
     this.timeoutMs = config.timeoutMs ?? 8000;
     this.maxRetries = config.maxRetries ?? 2;
+    this.rateLimitGate = config.rateLimitGate;
   }
 
   private async throttle(): Promise<void> {
+    if (this.rateLimitGate) {
+      await this.rateLimitGate.wait();
+      return;
+    }
+
     if (this.minIntervalMs === 0) return;
 
     const now = Date.now();
@@ -69,6 +79,10 @@ export class HttpClient {
           signal: controller.signal,
         });
 
+        if (this.rateLimitGate) {
+          this.rateLimitGate.handleResponse(response.status, response.headers);
+        }
+
         // If rate limited (429), respect Retry-After header unless it's Google Books (which needs fast failover)
         if (response.status === 429) {
           if (fullUrl.includes('googleapis.com')) {
@@ -78,26 +92,41 @@ export class HttpClient {
             const retryAfterSec = parseInt(response.headers.get('Retry-After') || '2', 10);
             const backoff = (isNaN(retryAfterSec) ? 2 : retryAfterSec) * 1000;
             await new Promise((r) => setTimeout(r, backoff));
+            await this.throttle();
             attempt++;
             continue;
           }
         }
 
         // Retry on transient 5xx server errors
-        if (response.status >= 500 && attempt < this.maxRetries) {
-          const backoff = Math.pow(2, attempt) * 500 + Math.random() * 200;
-          await new Promise((r) => setTimeout(r, backoff));
-          attempt++;
-          continue;
+        if (response.status >= 500) {
+          // Google Books 503 backendFailed indicates query rejection or backend timeout.
+          // Retrying multiplies failure statistics in Google Cloud Console. Fail fast instead.
+          if (fullUrl.includes('googleapis.com')) {
+            throw new Error(`HTTP error ${response.status}: Google Books service notice`);
+          }
+
+          if (attempt < this.maxRetries) {
+            const backoff = Math.pow(2, attempt) * 500 + Math.random() * 200;
+            await new Promise((r) => setTimeout(r, backoff));
+            await this.throttle();
+            attempt++;
+            continue;
+          }
         }
 
         return response;
       } catch (err: any) {
         lastError = err;
+        // Do not retry Google Books on errors
+        if (fullUrl.includes('googleapis.com')) {
+          throw err;
+        }
         // Retry on network errors or timeouts if attempts remain
         if (attempt < this.maxRetries && err.name !== 'AbortError' && !String(err.message).includes('429')) {
           const backoff = Math.pow(2, attempt) * 500 + Math.random() * 200;
           await new Promise((r) => setTimeout(r, backoff));
+          await this.throttle();
           attempt++;
         } else {
           throw err;
@@ -135,7 +164,7 @@ export const openLibraryClient = new HttpClient({
     'User-Agent': BAGLIB_USER_AGENT,
     Accept: 'application/json',
   },
-  requestsPerSecond: 1, // Be a good citizen
+  rateLimitGate: openLibraryGate,
 });
 
 export const internetArchiveClient = new HttpClient({
@@ -144,7 +173,7 @@ export const internetArchiveClient = new HttpClient({
     'User-Agent': BAGLIB_USER_AGENT,
     Accept: 'application/json',
   },
-  requestsPerSecond: 3,
+  rateLimitGate: internetArchiveGate,
   timeoutMs: 20000, // Internet Archive advanced search queries take longer than lightweight REST APIs
 });
 
@@ -153,7 +182,7 @@ export const googleBooksClient = new HttpClient({
   defaultHeaders: {
     'User-Agent': BAGLIB_USER_AGENT,
   },
-  requestsPerSecond: 5,
+  rateLimitGate: googleBooksGate,
   timeoutMs: 12000,
 });
 

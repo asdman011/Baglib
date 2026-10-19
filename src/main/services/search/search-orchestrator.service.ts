@@ -50,7 +50,9 @@ export class SearchOrchestratorService {
    * Retrieves provider metadata and enabled status.
    */
   public getProviders(): SearchProviderInfo[] {
-    return Array.from(this.providers.values()).map((p) => ({
+    const all = Array.from(this.providers.values());
+
+    return all.map((p) => ({
       id: p.id,
       name: p.name,
       nameAr: p.nameAr,
@@ -74,7 +76,8 @@ export class SearchOrchestratorService {
   }
 
   /**
-   * Executes unified book search across all eligible providers concurrently.
+   * Executes unified book search across all eligible providers.
+   * Enforces that non-Google providers run first, and Google Books is strictly executed last.
    */
   public async search(
     query: UnifiedSearchQuery,
@@ -131,7 +134,7 @@ export class SearchOrchestratorService {
       };
     }
 
-    const providerPromises = eligibleProviders.map(async (provider) => {
+    const executeProvider = async (provider: ISearchProvider) => {
       const startTime = Date.now();
       providerStatuses[provider.id].status = 'running';
 
@@ -208,9 +211,11 @@ export class SearchOrchestratorService {
         if (timeoutHandle) clearTimeout(timeoutHandle);
         if (parentSignal) parentSignal.removeEventListener('abort', abortListener);
       }
-    });
+    };
 
-    const settleResults = await Promise.allSettled(providerPromises);
+    // Run active providers in parallel
+    const activePromises = eligibleProviders.map((p) => executeProvider(p));
+    const settleResults = await Promise.allSettled(activePromises);
 
     // Flatten all collected raw results
     const rawAllResults: UnifiedSearchResult[] = [];

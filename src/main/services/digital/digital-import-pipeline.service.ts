@@ -13,6 +13,7 @@ import type {
   ImportProgressEvent,
 } from '../../../shared/types/digital-file';
 import type { BookItemInput } from '../../../shared/types/work';
+import { isPlaceholderAuthor, isPlaceholderTitle } from '../../../shared/validators/metadata-validator';
 
 import { QuotaTracker, quotaTracker as defaultQuotaTracker } from '../metadata/quotaTracker';
 
@@ -132,14 +133,74 @@ export class DigitalImportPipelineService {
         if (targetId) {
           const format = validation.format || options.targetFormat || 'PDF';
           const extracted = await this.extractor.extract(filePath, format);
+          const existingWork = (this.getRepository().getById(targetId) as any) || dup.existingWork;
+
+          // Non-Destructive Merge Policy: Existing curated metadata wins!
+          const hasCuratedTitle = Boolean(
+            existingWork?.title && existingWork.title.trim() !== '' && !isPlaceholderTitle(existingWork.title)
+          );
+          const finalTitle = hasCuratedTitle ? existingWork.title : (extracted.title || fileName);
+
+          const hasCuratedAuthor = Boolean(
+            existingWork?.author &&
+            existingWork.author.trim() !== '' &&
+            existingWork.author !== 'Unknown Author' &&
+            existingWork.author !== 'غير معروف' &&
+            !isPlaceholderAuthor(existingWork.author)
+          );
+          const finalAuthor = hasCuratedAuthor
+            ? existingWork.author
+            : (extracted.authors?.[0] || existingWork?.author || 'Unknown Author');
+
+          const finalPublisher =
+            existingWork?.publisher && existingWork.publisher.trim() !== ''
+              ? existingWork.publisher
+              : (extracted.publisher || existingWork?.publisher);
+
+          const finalYear =
+            existingWork?.publicationYear && Number(existingWork.publicationYear) > 0
+              ? existingWork.publicationYear
+              : (extracted.publicationYear || existingWork?.publicationYear);
+
+          const finalIsbn =
+            existingWork?.isbn && existingWork.isbn.trim() !== ''
+              ? existingWork.isbn
+              : (extracted.isbn || existingWork?.isbn);
+
+          const finalCover =
+            existingWork?.coverImage && existingWork.coverImage.trim() !== ''
+              ? existingWork.coverImage
+              : (extracted.coverDataUrl || existingWork?.coverImage);
+
+          const finalDescription =
+            existingWork?.description && existingWork.description.trim() !== ''
+              ? existingWork.description
+              : (extracted.description || existingWork?.description);
+
+          const finalEdition =
+            existingWork?.edition && existingWork.edition.trim() !== ''
+              ? existingWork.edition
+              : (extracted.edition || existingWork?.edition);
+
           this.getRepository().updateBook({
             id: targetId,
-            title: extracted.title || fileName,
+            title: finalTitle,
+            author: finalAuthor,
+            publisher: finalPublisher,
+            publicationYear: finalYear,
+            isbn: finalIsbn,
+            edition: finalEdition,
+            editionRawMatch: extracted.editionDetails?.rawMatch,
+            editionSource: extracted.editionDetails?.source,
+            editionConfidence: extracted.editionDetails?.confidence,
+            coverImage: finalCover,
+            description: finalDescription,
             filePath: path.resolve(filePath),
             fileHash,
             fileSize: this.formatBytes(validation.fileSizeBytes),
             digitalFormat: format,
-            coverImage: extracted.coverDataUrl,
+            pagesCount: extracted.pagesCount || existingWork?.pagesCount,
+            bookType: existingWork?.bookType === 'physical' ? 'hybrid' : 'digital',
           });
 
           return {
@@ -151,13 +212,20 @@ export class DigitalImportPipelineService {
             fileHash,
             fileSizeBytes: validation.fileSizeBytes,
             extractedMetadata: {
-              title: extracted.title || fileName,
-              author: extracted.authors?.[0] || 'Unknown Author',
-              publisher: extracted.publisher,
-              publicationYear: extracted.publicationYear,
-              isbn: extracted.isbn,
-              hasCover: Boolean(extracted.coverDataUrl),
-              coverDataUrl: extracted.coverDataUrl,
+              title: finalTitle,
+              author: finalAuthor,
+              publisher: finalPublisher,
+              publicationYear:
+                typeof finalYear === 'number'
+                  ? finalYear
+                  : finalYear
+                  ? parseInt(String(finalYear), 10)
+                  : undefined,
+              isbn: finalIsbn,
+              edition: finalEdition,
+              editionDetails: extracted.editionDetails,
+              hasCover: Boolean(finalCover),
+              coverDataUrl: finalCover,
             },
           };
         }
@@ -229,6 +297,33 @@ export class DigitalImportPipelineService {
       // Merge tags
       const mergedTags = Array.from(new Set([...(extracted.tags || []), ...(options.tags || [])]));
 
+      let initialProvenance: any = undefined;
+      if (extracted.editionDetails?.rawMatch || extracted.edition) {
+        initialProvenance = {
+          primaryProvider: 'Local Container Extractor',
+          discoveredAt: new Date().toISOString(),
+          method: 'offline_embedded',
+          confidence: extracted.editionDetails?.confidence || 0.85,
+          fieldSources: {
+            edition: {
+              source: extracted.editionDetails?.rawMatch
+                ? extracted.editionDetails.rawMatch
+                : (extracted.editionDetails?.source ? `Tier: ${extracted.editionDetails.source}` : 'Local Container Extractor'),
+              status: 'extracted',
+              value: extracted.edition,
+              confidence: extracted.editionDetails?.confidence || 0.85,
+              rawMatch: extracted.editionDetails?.rawMatch,
+            },
+          },
+          auditTrace: [
+            `[Digital Import] Imported file "${fileName}"`,
+            extracted.editionDetails?.rawMatch
+              ? `[Edition Engine] ${extracted.editionDetails.rawMatch} -> "${extracted.edition}"`
+              : `[Edition Engine] Edition registered on record: "${extracted.edition}"`,
+          ],
+        };
+      }
+
       // 5. Build database payload for atomic insertion
       const bookInput: BookItemInput = {
         title,
@@ -238,6 +333,12 @@ export class DigitalImportPipelineService {
         publicationYear: extracted.publicationYear,
         isbn: extracted.isbn,
         abstract: extracted.description,
+        edition: extracted.edition,
+        editionRawMatch: extracted.editionDetails?.rawMatch,
+        editionSource: extracted.editionDetails?.source,
+        editionConfidence: extracted.editionDetails?.confidence,
+        metadataProvenance: initialProvenance,
+        pagesCount: extracted.pagesCount,
         language: extracted.language || undefined,
         categories: mergedTags,
         tags: mergedTags,
@@ -270,6 +371,9 @@ export class DigitalImportPipelineService {
           author: primaryAuthor,
           publisher: extracted.publisher,
           publicationYear: extracted.publicationYear,
+          edition: extracted.edition,
+          editionDetails: extracted.editionDetails,
+          pagesCount: extracted.pagesCount,
           isbn: extracted.isbn,
           description: extracted.description,
           language: extracted.language,

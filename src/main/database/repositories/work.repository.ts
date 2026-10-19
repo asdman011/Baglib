@@ -15,7 +15,7 @@ import type {
   StorageHealthSummary,
   FileStorageStatus,
 } from '../../../shared/types/digital-file';
-import type { DigitalFormat } from '../../../shared/types/work';
+import type { DigitalFormat, MetadataProvenance } from '../../../shared/types/work';
 
 export class SqliteWorkRepository implements IWorkRepository {
   constructor(private db: Database) {}
@@ -78,11 +78,15 @@ export class SqliteWorkRepository implements IWorkRepository {
       title: r.title || 'بدون عنوان',
       author: r.author || meta.speaker || meta.scribe || meta.advisor || (/[\u0600-\u06FF]/.test(r.title || '') ? 'غير معروف' : 'Unknown Author'),
       edition: r.edition || meta.edition || undefined,
+      editionRawMatch: meta.editionRawMatch || undefined,
+      editionSource: meta.editionSource || undefined,
+      editionConfidence: meta.editionConfidence || undefined,
       publisher: r.publisher || meta.publisher || undefined,
       publicationYear: r.publicationYear !== undefined && r.publicationYear !== null
         ? r.publicationYear
         : (meta.publicationYear || undefined),
       isbn: r.isbn || meta.isbn || undefined,
+      pagesCount: meta.pagesCount !== undefined && meta.pagesCount !== null ? Number(meta.pagesCount) : undefined,
       coverImage: meta.coverImage || undefined,
       shelf,
       room,
@@ -160,6 +164,126 @@ export class SqliteWorkRepository implements IWorkRepository {
 
       // Contributors list
       contributors: meta.contributors || undefined,
+
+      // Metadata Provenance (Geek Details)
+      metadataProvenance: meta.metadataProvenance || this.deriveProvenanceFallback(r, meta),
+    };
+  }
+
+  private deriveProvenanceFallback(r: any, meta: any): MetadataProvenance {
+    const cover = meta.coverImage || '';
+    const onlineSource = meta.onlineSource || '';
+    const isbn = r.isbn || meta.isbn;
+    const filePath = r.filePath || '';
+
+    let primaryProvider = 'Manual Entry';
+    let method: MetadataProvenance['method'] = 'manual';
+
+    if (cover.includes('books.google.com')) {
+      primaryProvider = 'Google Books API';
+      method = 'online_api';
+    } else if (cover.includes('covers.openlibrary.org')) {
+      primaryProvider = 'Open Library API';
+      method = 'online_api';
+    } else if (cover.includes('archive.org')) {
+      primaryProvider = 'Internet Archive API';
+      method = 'online_api';
+    } else if (onlineSource) {
+      primaryProvider = `${onlineSource} Archive`;
+      method = 'online_api';
+    } else if (filePath) {
+      primaryProvider = 'Offline File Extraction';
+      method = 'offline_embedded';
+    }
+
+    const fieldSources: NonNullable<MetadataProvenance['fieldSources']> = {};
+    if (r.title) {
+      fieldSources['title'] = {
+        source: primaryProvider,
+        status: method === 'online_api' ? 'verified' : 'extracted',
+        value: r.title,
+      };
+    }
+    if (r.authorName || meta.author) {
+      fieldSources['author'] = {
+        source: primaryProvider,
+        status: method === 'online_api' ? 'verified' : 'extracted',
+        value: r.authorName || meta.author,
+      };
+    }
+    if (isbn) {
+      fieldSources['isbn'] = {
+        source: method === 'offline_embedded' ? 'Embedded Barcode / Stream Scan' : primaryProvider,
+        status: 'verified',
+        value: isbn,
+      };
+    }
+    if (meta.pagesCount || r.pagesCount) {
+      fieldSources['pagesCount'] = {
+        source: filePath.toLowerCase().endsWith('.epub') ? 'EPUB Layout Standard (ADE)' : 'Document Stream',
+        status: 'calculated',
+        value: meta.pagesCount || r.pagesCount,
+      };
+    }
+    if (cover) {
+      fieldSources['coverImage'] = {
+        source: primaryProvider,
+        status: 'verified',
+        value: cover,
+      };
+    }
+    if (r.publisher || meta.publisher) {
+      fieldSources['publisher'] = {
+        source: primaryProvider,
+        status: 'extracted',
+        value: r.publisher || meta.publisher,
+      };
+    }
+    if (r.edition || meta.edition) {
+      const edVal = r.edition || meta.edition;
+      const edRaw = meta.editionRawMatch;
+      const edSrc = meta.editionSource;
+      fieldSources['edition'] = {
+        source: edRaw ? edRaw : (edSrc ? `Tier: ${edSrc}` : primaryProvider),
+        status: 'extracted',
+        value: edVal,
+        confidence: meta.editionConfidence || 0.85,
+        rawMatch: edRaw,
+      };
+    }
+
+    const auditTrace: string[] = [
+      `[Provenance Audit] Initialized diagnostic record for book "${r.title || 'Untitled'}"`,
+      `[Target File] ${filePath ? `Linked storage: ${filePath}` : 'Physical or non-file material'}`,
+      `[Attribution] Primary bibliographic source attributed to ${primaryProvider}`,
+      (r.edition || meta.edition)
+        ? (meta.editionRawMatch
+            ? `[Edition Engine] ${meta.editionRawMatch} -> "${r.edition || meta.edition}"`
+            : `[Edition Engine] Edition registered on record: "${r.edition || meta.edition}"`)
+        : `[Edition Engine] No edition registered`,
+      `[Identifiers] ${isbn ? `Registered ISBN: ${isbn}` : 'No ISBN registered'}`,
+      `[Cover Resolution] ${cover ? `Cover source: ${cover.slice(0, 60)}...` : 'Default placeholder cover'}`,
+    ];
+
+    return {
+      primaryProvider,
+      sourceUrl: meta.sourceUrl || undefined,
+      discoveredAt: r.createdAt || new Date().toISOString(),
+      method,
+      confidence: isbn ? 0.95 : 0.85,
+      fieldSources,
+      auditTrace,
+      rawBibliographic: {
+        title: r.title,
+        author: r.authorName || meta.author,
+        publisher: r.publisher || meta.publisher,
+        year: r.publicationYear,
+        isbn,
+        pages: meta.pagesCount,
+        format: r.digitalFormat,
+        source: primaryProvider,
+        storedMetadata: meta,
+      },
     };
   }
 
@@ -377,6 +501,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         workType: workTypeInfo.key,
         workTypeId,
         coverImage: data.coverImage,
+        pagesCount: data.pagesCount !== undefined && data.pagesCount !== null ? Number(data.pagesCount) : undefined,
+        edition: data.edition,
         description: data.description,
         authorBio: data.authorBio,
         fileSize: data.fileSize,
@@ -417,6 +543,10 @@ export class SqliteWorkRepository implements IWorkRepository {
         shelfSection: data.shelfSection,
         acquisition: (data as any).acquisition,
         physicalLocation: (data as any).physicalLocation,
+        metadataProvenance: (data as any).metadataProvenance,
+        editionRawMatch: (data as any).editionRawMatch,
+        editionSource: (data as any).editionSource,
+        editionConfidence: (data as any).editionConfidence,
       };
 
       // Strip undefined
@@ -583,6 +713,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         workType: workTypeKey,
         workTypeId,
         coverImage: data.coverImage,
+        pagesCount: data.pagesCount !== undefined ? (data.pagesCount !== null ? Number(data.pagesCount) : null) : undefined,
+        edition: data.edition !== undefined ? data.edition : undefined,
         description: data.description,
         authorBio: data.authorBio,
         fileSize: data.fileSize,
@@ -623,6 +755,10 @@ export class SqliteWorkRepository implements IWorkRepository {
         shelfSection: data.shelfSection,
         acquisition: (data as any).acquisition,
         physicalLocation: (data as any).physicalLocation,
+        metadataProvenance: (data as any).metadataProvenance,
+        editionRawMatch: (data as any).editionRawMatch,
+        editionSource: (data as any).editionSource,
+        editionConfidence: (data as any).editionConfidence,
       };
 
       for (const [k, v] of Object.entries(updatePayload)) {
@@ -697,18 +833,32 @@ export class SqliteWorkRepository implements IWorkRepository {
         ? data.publicationYear 
         : data.publicationYear ? parseInt(String(data.publicationYear), 10) || null : null;
 
-      const edition = this.db.prepare('SELECT id FROM edition WHERE work_id = ? LIMIT 1').get(data.id) as { id: string } | undefined;
-      if (edition) {
+      let edition = this.db.prepare('SELECT id FROM edition WHERE work_id = ? LIMIT 1').get(data.id) as { id: string } | undefined;
+      let editionId = edition?.id;
+      if (!editionId) {
+        editionId = crypto.randomUUID();
+        this.db.prepare(`
+          INSERT INTO edition (id, work_id, label, publisher, publication_year, language, isbn)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(editionId, data.id, data.edition || null, data.publisher || null, pubYear, data.language || 'العربية', data.isbn || null);
+      } else {
         this.db.prepare(`
           UPDATE edition 
           SET label = ?, publisher = ?, publication_year = ?, language = ?, isbn = ?
           WHERE id = ?
-        `).run(data.edition || null, data.publisher || null, pubYear, data.language || 'العربية', data.isbn || null, edition.id);
+        `).run(data.edition || null, data.publisher || null, pubYear, data.language || 'العربية', data.isbn || null, editionId);
+      }
 
-        const source = this.db.prepare('SELECT id FROM source WHERE edition_id = ? LIMIT 1').get(edition.id) as { id: string } | undefined;
-        if (source) {
-          const bookType = data.bookType || (data.filePath ? 'digital' : 'physical');
-          this.db.prepare('UPDATE source SET source_type = ? WHERE id = ?').run(bookType, source.id);
+      let source = this.db.prepare('SELECT id FROM source WHERE edition_id = ? LIMIT 1').get(editionId) as { id: string } | undefined;
+      if (!source) {
+        const sourceId = crypto.randomUUID();
+        const bookType = data.bookType || (data.filePath ? 'digital' : 'physical');
+        this.db.prepare('INSERT INTO source (id, edition_id, source_type) VALUES (?, ?, ?)').run(sourceId, editionId, bookType);
+        source = { id: sourceId };
+      }
+      if (source) {
+        const bookType = data.bookType || (data.filePath ? 'digital' : 'physical');
+        this.db.prepare('UPDATE source SET source_type = ? WHERE id = ?').run(bookType, source.id);
           
           if (data.filePath || bookType === 'digital') {
             const fmt = data.digitalFormat || (data.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'PDF');
@@ -755,7 +905,6 @@ export class SqliteWorkRepository implements IWorkRepository {
             }
           }
         }
-      }
 
       // 4. Update Lending Records if passed
       if (data.lendingHistory && Array.isArray(data.lendingHistory)) {
@@ -785,7 +934,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         }
       }
 
-      return data;
+      return (this.getById(data.id!) as BookItem) || data;
     });
 
     return updateTransaction();

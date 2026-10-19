@@ -83,15 +83,12 @@ describe('CoverResolverService Unit Tests', () => {
     assert.strictEqual(validation.isValid, false);
   });
 
-  it('cleans and upgrades Google Books imageLinks (HTTPS upgrade and &edge=curl strip)', async () => {
-    global.fetch = async () => {
-      return new Response(new Uint8Array(2000), {
-        status: 200,
-        headers: {
-          'content-type': 'image/jpeg',
-          'content-length': '2000',
-        },
-      });
+
+  it('does not query Google Books imageLinks and completely disables Google Books covers', async () => {
+    const urlsRequested: string[] = [];
+    global.fetch = async (url: any) => {
+      urlsRequested.push(String(url));
+      return new Response('Not Found', { status: 404 });
     };
 
     const result = await service.resolveCover({
@@ -100,10 +97,8 @@ describe('CoverResolverService Unit Tests', () => {
       },
     });
 
-    assert.strictEqual(result.verified, true);
-    assert.strictEqual(result.source, 'google-books');
-    assert.strictEqual(result.coverUrl?.startsWith('https://'), true);
-    assert.strictEqual(result.coverUrl?.includes('&edge=curl'), false);
+    assert.strictEqual(result.verified, false);
+    assert.strictEqual(urlsRequested.some((u) => u.includes('books.google.com')), false);
   });
 
   it('applies positive and negative caching properly', async () => {
@@ -130,5 +125,37 @@ describe('CoverResolverService Unit Tests', () => {
     assert.strictEqual(secondRes.verified, true);
     assert.strictEqual(secondRes.coverUrl, firstRes.coverUrl);
     assert.strictEqual(callCount, initialCallCount);
+  });
+
+  it('prioritizes Open Library and Internet Archive over Google Books imageLinks', async () => {
+    const urlsRequested: string[] = [];
+
+    global.fetch = async (url: any) => {
+      const urlStr = String(url);
+      urlsRequested.push(urlStr);
+
+      if (urlStr.includes('openlibrary.org')) {
+        return new Response(new Uint8Array(2000), {
+          status: 200,
+          headers: {
+            'content-type': 'image/jpeg',
+            'content-length': '2000',
+          },
+        });
+      }
+
+      return new Response('Not Found', { status: 404 });
+    };
+
+    const result = await service.resolveCover({
+      isbn: '9780132350884',
+      googleBooksImageLinks: {
+        thumbnail: 'http://books.google.com/books/content?id=xyz&printsec=frontcover&img=1',
+      },
+    });
+
+    assert.strictEqual(result.verified, true);
+    assert.strictEqual(result.source, 'open-library', 'Open Library must be chosen over Google Books');
+    assert.ok(!urlsRequested.some((u) => u.includes('books.google.com')), 'Google Books URL should not be fetched when Open Library succeeds');
   });
 });

@@ -18,6 +18,7 @@
 import { BAGLIB_USER_AGENT } from './http-client';
 import { isValidIsbn } from '../../../shared/validators/metadata-validator';
 import { EmbeddedMetadataExtractor } from './embedded-metadata.extractor';
+import { EpubCoverExtractor } from './epub-cover-extractor.service';
 
 export interface CoverResolutionOptions {
   isbn?: string;
@@ -100,8 +101,11 @@ export class CoverResolverService {
       };
     }
 
-    // 2. Stage 2: Matched Provider Cover URL (already associated with winning match)
-    if (options.providerCoverUrl) {
+    const isGoogleBooksUrl = (url?: string) =>
+      Boolean(url && (url.includes('books.google') || url.includes('googleusercontent.com')));
+
+    // 2. Stage 2: Matched Provider Cover URL (non-Google)
+    if (options.providerCoverUrl && !isGoogleBooksUrl(options.providerCoverUrl)) {
       const validation = await this.validateImageUrl(options.providerCoverUrl);
       if (validation.isValid) {
         this.setInCache(cacheKey, options.providerCoverUrl, 'provider', false);
@@ -181,39 +185,7 @@ export class CoverResolverService {
       }
     }
 
-    // 4. Stage 4: Google Books ImageLinks (High-Res & Cleaned)
-    if (options.googleBooksImageLinks) {
-      const links = options.googleBooksImageLinks;
-      const candidates = [
-        links.extraLarge,
-        links.large,
-        links.medium,
-        links.small,
-        links.thumbnail,
-        links.smallThumbnail,
-      ].filter(Boolean) as string[];
-
-      for (const rawUrl of candidates) {
-        // Transform: HTTPS upgrade, remove curl, request higher zoom if possible
-        const cleaned = rawUrl
-          .replace(/^http:/i, 'https:')
-          .replace(/&edge=curl/gi, '');
-
-        const validation = await this.validateImageUrl(cleaned);
-        if (validation.isValid) {
-          this.setInCache(cacheKey, cleaned, 'google-books', false);
-          return {
-            coverUrl: cleaned,
-            source: 'google-books',
-            verified: true,
-            contentLength: validation.contentLength,
-            contentType: validation.contentType,
-          };
-        }
-      }
-    }
-
-    // 5. Stage 5: Internet Archive Book Images
+    // 4. Stage 4: Internet Archive Book Images
     if (options.internetArchiveId) {
       const iaUrl = `https://archive.org/services/img/${encodeURIComponent(options.internetArchiveId)}`;
       const validation = await this.validateImageUrl(iaUrl);
@@ -229,7 +201,7 @@ export class CoverResolverService {
       }
     }
 
-    // 6. Stage 6: Goodreads Scraper (Reverse Engineered from bookcover-api)
+    // 5. Stage 5: Goodreads Scraper (Reverse Engineered from bookcover-api)
     if (hasValidIsbn) {
       const grCover = await this.fetchGoodreadsCoverByIsbn(cleanIsbn);
       if (grCover) {
@@ -242,7 +214,7 @@ export class CoverResolverService {
       }
     }
 
-    // 7. Stage 7: Internet Archive Title Search Cover Resolution (Crucial for un-ISBN'd and Arabic books)
+    // 6. Stage 6: Internet Archive Title Search Cover Resolution (Crucial for un-ISBN'd and Arabic books)
     if (options.title && options.title.trim().length >= 3) {
       try {
         const cleanTitle = options.title.trim().replace(/["()]/g, ' ');
@@ -273,11 +245,11 @@ export class CoverResolverService {
           }
         }
       } catch {
-        // Continue to negative caching
+        // Continue to fallback
       }
     }
 
-    // 9. No valid cover found -> Apply negative caching
+    // 7. No valid cover found -> Apply negative caching
     this.setInCache(cacheKey, undefined, 'none', true);
     return {
       coverUrl: undefined,
@@ -531,6 +503,35 @@ export class CoverResolverService {
       verified: false,
       currentPage: 1,
       totalPages: 0,
+    };
+  }
+
+  /**
+   * Directly extracts a cover image from a local EPUB file using the 5-Tier Cover Extraction Engine.
+   */
+  async extractEpubCover(
+    filePath: string
+  ): Promise<CoverResolutionResult & { savedFilePath?: string; tierUsed?: number }> {
+    try {
+      const extracted = await EpubCoverExtractor.extractCover(filePath);
+      if (extracted.success && extracted.dataUrl) {
+        return {
+          coverUrl: extracted.dataUrl,
+          source: 'embedded',
+          verified: true,
+          contentLength: extracted.byteSize,
+          contentType: extracted.coverMimeType,
+          savedFilePath: extracted.savedFilePath,
+          tierUsed: extracted.tierUsed,
+        };
+      }
+    } catch (err) {
+      console.warn(`[CoverResolverService] Failed to extract EPUB cover from ${filePath}:`, err);
+    }
+    return {
+      coverUrl: undefined,
+      source: 'none',
+      verified: false,
     };
   }
 

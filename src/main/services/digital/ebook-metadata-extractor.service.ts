@@ -6,8 +6,11 @@ import type { ExtractedEbookMetadata } from '../../../shared/types/digital-file'
 import { FilenameParser } from '../metadata/filename-parser';
 import { EmbeddedMetadataExtractor } from '../metadata/embedded-metadata.extractor';
 import { isValidIsbn, isPlaceholderAuthor, isPlaceholderTitle } from '../../../shared/validators/metadata-validator';
+import { isGarbageTitle, isGarbageAuthor, PdfMetadataReconciler } from '../metadata/pdf-metadata-reconciler';
 import { languageDetectorService } from '../metadata/language-detector.service';
 import { textIsbnScannerService } from '../metadata/text-isbn-scanner.service';
+import { extractEditionFromEbook } from '../import/editionExtractor';
+import { EpubCoverExtractor } from '../metadata/epub-cover-extractor.service';
 
 const pdfParse = require('pdf-parse');
 const yauzl = require('yauzl');
@@ -56,7 +59,7 @@ export class EbookMetadataExtractorService {
     }
 
     // Apply Calibre-style smart fallbacks: FilenameParser and Clean Basename
-    return this.applyFallbacks(filePath, resolvedFormat, meta);
+    return await this.applyFallbacks(filePath, resolvedFormat, meta);
   }
 
   /**
@@ -98,6 +101,8 @@ export class EbookMetadataExtractorService {
     let title: string | undefined;
     let authors: string[] = [];
     let publisher: string | undefined;
+    let edition: string | undefined;
+    let pagesCount: number | undefined;
     let publicationYear: number | undefined;
     let description: string | undefined;
     let language: string | undefined;
@@ -110,15 +115,29 @@ export class EbookMetadataExtractorService {
     if (typeof pdfFn === 'function') {
       try {
         const parsed = await pdfFn(new Uint8Array(fileBuffer), { max: 1 });
+        if (parsed.numpages && parsed.numpages > 0) {
+          pagesCount = parsed.numpages;
+        }
         if (parsed.text) parsedText = parsed.text;
         const info = parsed.info || {};
 
         if (typeof info.Title === 'string' && info.Title.trim()) {
-          title = info.Title.trim();
+          const rawTitle = info.Title.trim();
+          if (!isPlaceholderTitle(rawTitle) && !isGarbageTitle(rawTitle, filePath)) {
+            title = rawTitle;
+          }
         }
         if (typeof info.Author === 'string' && info.Author.trim()) {
           const split = FilenameParser.splitMultiAuthors(info.Author.trim());
-          authors = split.filter((a) => !isPlaceholderAuthor(a));
+          authors = split.filter(
+            (a) => !isPlaceholderAuthor(a) && !isGarbageAuthor(a, filePath)
+          );
+        }
+        if (typeof (info as any).Publisher === 'string' && (info as any).Publisher.trim()) {
+          publisher = (info as any).Publisher.trim();
+        }
+        if (typeof (info as any).Edition === 'string' && (info as any).Edition.trim()) {
+          edition = (info as any).Edition.trim();
         }
         if (info.CreationDate) {
           const yearMatch = String(info.CreationDate).match(/(?:D:)?(18\d{2}|19\d{2}|20\d{2})/);
@@ -142,6 +161,14 @@ export class EbookMetadataExtractorService {
         }
       } catch (err) {
         // Continue to XMP inspection
+      }
+    }
+
+    if (!pagesCount) {
+      const pdfSample = fileBuffer.slice(0, 100000).toString('latin1');
+      const countMatch = pdfSample.match(/\/Type\s*\/Pages[\s\S]*?\/Count\s+(\d+)/);
+      if (countMatch) {
+        pagesCount = parseInt(countMatch[1], 10);
       }
     }
 
@@ -212,9 +239,21 @@ export class EbookMetadataExtractorService {
             identifiers['isbn'] = cleanIsbn;
           }
         }
+
+        const dcEdition = this.extractXmlTag(xmpXml, 'prism:edition') || this.extractXmlTag(xmpXml, 'pdfx:edition');
+        if (dcEdition) {
+          edition = dcEdition;
+        }
       }
     } catch (err) {
       // Continue to cover extraction
+    }
+
+    if (!edition && parsedText) {
+      edition = EmbeddedMetadataExtractor.extractEditionPattern(parsedText.slice(0, 4000));
+    }
+    if (!edition && title) {
+      edition = EmbeddedMetadataExtractor.extractEditionPattern(title);
     }
 
     // Step B2: Text ISBN Scan (Calibre Extract ISBN page budgeting)
@@ -264,6 +303,8 @@ export class EbookMetadataExtractorService {
       authors,
       publisher,
       publicationYear,
+      edition,
+      pagesCount,
       description,
       language: language || detectedLanguage,
       isbn,
@@ -332,11 +373,15 @@ export class EbookMetadataExtractorService {
         const entries: Record<string, any> = {};
         let opfPath: string | null = null;
         let opfDir = '';
+        let totalTextBytes = 0;
 
         zipfile.readEntry();
 
         zipfile.on('entry', (entry: any) => {
           entries[entry.fileName] = entry;
+          if (/\.(?:x?html?)$/i.test(entry.fileName)) {
+            totalTextBytes += (entry.uncompressedSize || 0);
+          }
           zipfile.readEntry();
         });
 
@@ -428,40 +473,17 @@ export class EbookMetadataExtractorService {
               }
             }
 
-            // Cover Image resolution
+            // Robust 5-Tier Cover Image resolution
             let coverBuffer: Buffer | undefined;
             let coverMimeType: string | undefined;
-
-            let coverHref: string | null = null;
-            const itemMatches = [...opfXml.matchAll(/<item\s+[^>]*href="([^"]+)"[^>]*>/gi)];
-            for (const im of itemMatches) {
-              const fullTag = im[0];
-              const href = im[1];
-              if (/properties="[^"]*cover-image[^"]*"/i.test(fullTag)) {
-                coverHref = href;
-                break;
+            try {
+              const coverResult = await EpubCoverExtractor.extractCover(filePath);
+              if (coverResult.success && coverResult.coverBuffer) {
+                coverBuffer = coverResult.coverBuffer;
+                coverMimeType = coverResult.coverMimeType;
               }
-            }
-
-            if (!coverHref) {
-              const metaCover = opfXml.match(/<meta\s+name="cover"\s+content="([^"]+)"/i);
-              if (metaCover) {
-                const coverId = metaCover[1];
-                const idTag = new RegExp(`<item\\s+[^>]*id="${coverId}"[^>]*href="([^"]+)"`, 'i').exec(opfXml);
-                if (idTag) {
-                  coverHref = idTag[1];
-                }
-              }
-            }
-
-            if (coverHref) {
-              const resolvedCoverPath = opfDir ? path.posix.join(opfDir, coverHref) : coverHref;
-              const coverEntry = entries[resolvedCoverPath] || entries[coverHref];
-              if (coverEntry) {
-                coverBuffer = await this.readZipEntryBuffer(zipfile, coverEntry);
-                const coverExt = path.extname(resolvedCoverPath).toLowerCase();
-                coverMimeType = coverExt === '.png' ? 'image/png' : 'image/jpeg';
-              }
+            } catch (coverErr) {
+              console.warn(`[EbookMetadataExtractor] Cover extraction warning for ${filePath}:`, coverErr);
             }
 
             // Extract sample text from first XHTML/HTML document for content-based language detection
@@ -485,11 +507,34 @@ export class EbookMetadataExtractorService {
             });
             const detectedLanguage = langDetect.isReliable ? langDetect.language : undefined;
 
+            // Extract edition from schema:bookEdition or description or title
+            const edMatch = opfXml.match(/<meta\s+property="schema:bookEdition"[^>]*>([^<]+)<\/meta>/i);
+            let edition = edMatch ? edMatch[1].trim() : undefined;
+            if (!edition) {
+              edition = EmbeddedMetadataExtractor.extractEditionPattern(title) || EmbeddedMetadataExtractor.extractEditionPattern(description);
+            }
+
+            // Extract pagesCount from schema:numberOfPages or dc:extent or uncompressed text byte estimation
+            const pagesMatch = opfXml.match(/<(?:meta[^>]+(?:property|name)="schema:numberOfPages"[^>]*>|dc:extent[^>]*>)[^0-9]*?(\d+)/i);
+            let pagesCount = pagesMatch ? parseInt(pagesMatch[1], 10) : undefined;
+            if (!pagesCount && totalTextBytes > 0) {
+              // Standard Adobe Digital Editions (ADE) & Calibre algorithm: 1 page ~= 1024 bytes uncompressed text
+              pagesCount = Math.max(1, Math.round(totalTextBytes / 1024));
+            }
+            if (!pagesCount) {
+              const spineItems = [...opfXml.matchAll(/<itemref\b[^>]*>/gi)];
+              if (spineItems.length > 0) {
+                pagesCount = Math.max(1, spineItems.length * 15);
+              }
+            }
+
             resolve({
               title,
               authors,
               publisher,
               publicationYear,
+              edition,
+              pagesCount,
               description,
               language: rawLang || detectedLanguage,
               isbn,
@@ -706,47 +751,54 @@ export class EbookMetadataExtractorService {
   /**
    * Smart Merge and Graceful Basename Fallback
    */
-  private applyFallbacks(
+  private async applyFallbacks(
     filePath: string,
     format: DigitalFormat,
     meta: Partial<ExtractedEbookMetadata>
-  ): ExtractedEbookMetadata {
+  ): Promise<ExtractedEbookMetadata> {
     const parsedFilename = FilenameParser.parse(filePath);
 
-    // Title Resolution: Embedded > FilenameParser > Clean Basename
-    let finalTitle = meta.title?.trim();
-    if (!finalTitle || this.isPlaceholderTitle(finalTitle)) {
-      finalTitle = parsedFilename.title?.trim();
-    }
-    if (!finalTitle) {
-      finalTitle = parsedFilename.cleanedFilename || path.basename(filePath, path.extname(filePath));
-    }
+    // Run Intelligent Metadata Reconciliation & Garbage-Detection Engine
+    const reconciled = PdfMetadataReconciler.reconcile({
+      embeddedMeta: {
+        title: meta.title,
+        authors: meta.authors || [],
+        publisher: meta.publisher,
+        publicationYear: meta.publicationYear,
+        edition: meta.edition,
+        pagesCount: meta.pagesCount,
+        isbn: meta.isbn,
+        language: meta.language,
+        description: meta.description,
+      },
+      parsedFilename,
+      rawFilename: path.basename(filePath),
+    });
 
-    // Authors Resolution: Valid Embedded > Valid FilenameParser > Localized Fallback ('غير معروف' for Arabic, 'Unknown Author' for English)
-    const validMetaAuthors = (meta.authors || []).filter((a) => !isPlaceholderAuthor(a));
-    const validFilenameAuthors = (parsedFilename.authors || []).filter((a) => !isPlaceholderAuthor(a));
-
-    const isArabic =
-      (meta.language && (meta.language.toLowerCase().startsWith('ar') || meta.language === 'العربية')) ||
-      parsedFilename.language === 'ar' ||
-      /[\u0600-\u06FF]/.test(finalTitle);
-
-    const defaultUnknownAuthor = isArabic ? 'غير معروف' : 'Unknown Author';
-
-    let finalAuthors: string[];
-    if (validMetaAuthors.length > 0) {
-      finalAuthors = validMetaAuthors;
-    } else if (validFilenameAuthors.length > 0) {
-      finalAuthors = validFilenameAuthors;
-    } else {
-      finalAuthors = [defaultUnknownAuthor];
-    }
+    let finalTitle = reconciled.title || parsedFilename.cleanedFilename || path.basename(filePath, path.extname(filePath));
+    let finalAuthors = reconciled.authors;
 
     // Supplementary bibliographic attributes
-    const finalPublisher = meta.publisher || parsedFilename.publisher;
-    const finalYear = meta.publicationYear || parsedFilename.publicationYear;
+    const finalPublisher = reconciled.publisher;
+    const finalYear = reconciled.publicationYear;
     const finalIsbn = meta.isbn || parsedFilename.isbn;
     const finalDescription = meta.description || undefined;
+    let finalEdition = reconciled.edition;
+    let editionDetails: any = undefined;
+
+    if (!finalEdition) {
+      try {
+        const extEdition = await extractEditionFromEbook(filePath);
+        if (extEdition.editionLabel && extEdition.confidence >= 0.70) {
+          finalEdition = extEdition.editionLabel;
+          editionDetails = extEdition;
+        }
+      } catch (edErr) {
+        console.warn('[EbookMetadataExtractor] Edition extraction error:', edErr);
+      }
+    }
+
+    const finalPagesCount = meta.pagesCount;
 
     // Language Resolution: Content/Embedded > Reliable Filename/Metadata Detection > Undefined
     let finalLanguage: string | undefined = meta.language;
@@ -780,6 +832,9 @@ export class EbookMetadataExtractorService {
       authors: finalAuthors,
       publisher: finalPublisher,
       publicationYear: finalYear,
+      edition: finalEdition,
+      editionDetails,
+      pagesCount: finalPagesCount,
       isbn: finalIsbn,
       description: finalDescription,
       language: finalLanguage,

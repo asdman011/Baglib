@@ -229,7 +229,7 @@ describe('Google Books Local Daily Quota Tracker & Quota-Saver Mode', () => {
       }
     }
 
-    it('in Normal Mode (< 750), queries both Open Library and Google Books to aggregate multi-candidate results', async () => {
+    it('in Normal Mode (< 750), queries Open Library and ignores disabled Google Books', async () => {
       tracker.setCountForTesting(100);
       const mockOL = new MockOLProvider(true);
       const mockGB = new MockGBProvider();
@@ -237,11 +237,11 @@ describe('Google Books Local Daily Quota Tracker & Quota-Saver Mode', () => {
 
       const result = await service.discoverBook({ title: 'Clean Code' });
       assert.strictEqual(mockOL.callCount >= 1, true, 'OL should be called');
-      assert.strictEqual(mockGB.callCount >= 1, true, 'GB should be called');
-      assert.strictEqual(result.candidates.length, 2, 'Aggregates both candidates');
+      assert.strictEqual(mockGB.callCount, 0, 'GB should never be called as it is disabled');
+      assert.strictEqual(result.candidates.length, 1, 'Only OL candidate returned');
     });
 
-    it('in Quota-Saver Mode (>= 750), does not skip Google Books when Open Library returns matches and aggregates candidates', async () => {
+    it('in Quota-Saver Mode (>= 750), ignores Google Books as it is disabled', async () => {
       tracker.setCountForTesting(750);
       assert.strictEqual(tracker.isConservationMode(), true);
 
@@ -251,8 +251,8 @@ describe('Google Books Local Daily Quota Tracker & Quota-Saver Mode', () => {
 
       const result = await service.discoverBook({ title: 'Clean Code' });
       assert.strictEqual(mockOL.callCount >= 1, true, 'Open Library should be queried');
-      assert.strictEqual(mockGB.callCount >= 1, true, 'Google Books is NOT skipped in Quota-Saver mode');
-      assert.strictEqual(result.candidates.length, 2, 'Aggregates candidates from both providers');
+      assert.strictEqual(mockGB.callCount, 0, 'Google Books is completely disabled');
+      assert.strictEqual(result.candidates.length, 1, 'Only OL candidate returned');
     });
 
     it('in Depleted Mode (>= 1,000), skips Google Books completely even if Open Library returns 0 matches', async () => {

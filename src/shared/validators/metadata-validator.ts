@@ -398,38 +398,80 @@ const PLACEHOLDER_AUTHORS_EXACT = new Set([
 /**
  * Common PDF generator / printer / scanner software strings frequently mistaken for authors.
  */
-const GENERATOR_SOFTWARE_REGEX = /^(?:microsoft\s+(?:word|office)|adobe\s+(?:indesign|acrobat|distiller|illustrator|photoshop)|acrobat\s+distiller|indesign|scansnap|fujitsu|abbyy\s+finereader|abbyy|canon|epson|hp\s+(?:scan|laserjet|deskjet)|pdfcreator|pdf24|latex\s+with\s+hyperref|canva|calibre|nitro\s+pro|foxit|quarkxpress|coreldraw|camscanner|distiller)(?:\s+.*)?$/i;
+const GENERATOR_SOFTWARE_REGEX = /^(?:microsoft\s+(?:word|office)|adobe\s+(?:indesign|acrobat|distiller|illustrator|photoshop|pdf\s+library)|acrobat\s+distiller|indesign|scansnap|fujitsu|abbyy\s+finereader|abbyy|canon|epson|hp\s+(?:scan|laserjet|deskjet)|pdfcreator|pdf24|latex\s+with\s+hyperref|canva|calibre|nitro\s+pro|foxit|quarkxpress|coreldraw|camscanner|distiller)(?:\s+.*)?$/i;
 
 /**
- * Checks if a title string is a default placeholder or empty.
+ * Common publisher prepress job code prefixes and production identifiers
+ */
+const PRODUCTION_JOB_CODE_REGEX =
+  /^(?:mcgrawh|mcgraw[-_]?hill|wiley|springer|elsevier|pearson|tandf|taylor[-_]?francis|oxford|cup|oup|cambridge|job|prn|print|layout|doc|scan|book|proof|galley|typeset|ts)[-_ ]*\d+.*$/i;
+
+/**
+ * Generic document titles and export placeholders
+ */
+const GENERIC_DOC_TITLES_REGEX =
+  /^(?:untitled|document\d*|export\d*|scan\d*|pdf\s*document|microsoft\s*word|adobe\s*indesign|cover|fm|bm|prelims|frontmatter|backmatter|chapter\s*\d+|ch\d+|page\s*\d+|p\d+|unknown|untitled\s*document)$/i;
+
+/**
+ * Checks if a title string is a default placeholder, prepress artifact, or empty.
  */
 export function isPlaceholderTitle(title?: string | null): boolean {
   if (!title) return true;
-  const t = title.trim().toLowerCase();
+  const t = title.trim();
+  if (t.length < 3) return true;
+  if (/^\d+$/.test(t)) return true;
+  if (/^[a-f0-9]{16,64}$/i.test(t)) return true;
+  if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(t)) return true;
+
+  const lower = t.toLowerCase();
   if (
-    t === '' ||
-    t === 'مادة جديدة في المكتبة' ||
-    t === 'new library material' ||
-    t === 'كتاب جديد' ||
-    t === 'new book' ||
-    t === 'untitled' ||
-    t === 'بلا عنوان' ||
-    t === 'بدون عنوان'
+    lower === 'مادة جديدة في المكتبة' ||
+    lower === 'new library material' ||
+    lower === 'كتاب جديد' ||
+    lower === 'new book' ||
+    lower === 'untitled' ||
+    lower === 'بلا عنوان' ||
+    lower === 'بدون عنوان'
   ) {
     return true;
   }
-  return /^(?:untitled|microsoft\s+word|export|document\d*|scan\d*|pdf\s*document)$/i.test(t);
+
+  if (PRODUCTION_JOB_CODE_REGEX.test(t)) return true;
+  if (GENERIC_DOC_TITLES_REGEX.test(t)) return true;
+  if (GENERATOR_SOFTWARE_REGEX.test(t)) return true;
+
+  // File extension artifacts (e.g. "book.pdf", "title.epub")
+  if (/\.(?:pdf|epub|mobi|azw3?|djvu|cbr|cbz|docx?|fb2)$/i.test(t)) return true;
+
+  // Raw file paths or separator artifacts
+  if (/^[a-z]:[\\/]/i.test(t) || t.includes('\\') || /^\/[a-z0-9_-]+\//i.test(t)) return true;
+  if (t.includes('---')) return true;
+
+  return false;
 }
 
 /**
- * Checks if an author string is a default placeholder, software generator, or unknown indicator.
+ * Checks if an author string is a default placeholder, software generator, OS handle, or unknown indicator.
  */
 export function isPlaceholderAuthor(author?: string | null): boolean {
   if (!author) return true;
-  const a = author.trim().toLowerCase();
-  if (PLACEHOLDER_AUTHORS_EXACT.has(a)) {
+  const a = author.trim();
+  if (a.length < 2) return true;
+  if (/^\d+$/.test(a)) return true;
+  if (/^[a-f0-9]{16,64}$/i.test(a)) return true;
+
+  const lower = a.toLowerCase();
+  if (PLACEHOLDER_AUTHORS_EXACT.has(lower)) {
     return true;
   }
-  return GENERATOR_SOFTWARE_REGEX.test(a);
+  if (GENERATOR_SOFTWARE_REGEX.test(a)) {
+    return true;
+  }
+  // Single-token lowercase OS usernames / system handles (e.g. "jharding", "asmith", "typesetter1")
+  if (/^[a-z][a-z0-9_-]{2,15}$/.test(a) && !/[\u0600-\u06FF]/.test(a)) {
+    return true;
+  }
+
+  return false;
 }
 

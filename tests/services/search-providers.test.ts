@@ -6,6 +6,7 @@ import { GoogleBooksSearchProvider } from '../../src/main/services/search/provid
 import { InternetArchiveSearchProvider } from '../../src/main/services/search/providers/internet-archive-search.provider';
 import { GutenbergSearchProvider } from '../../src/main/services/search/providers/gutenberg-search.provider';
 import { DuplicateDetector } from '../../src/main/services/search/duplicate-detector';
+import { SearchOrchestratorService } from '../../src/main/services/search/search-orchestrator.service';
 import { BookItem } from '../../src/shared/types/work';
 import { HttpClient } from '../../src/main/services/metadata/http-client';
 import { QuotaTracker } from '../../src/main/services/metadata/quotaTracker';
@@ -216,6 +217,57 @@ describe('Search Providers & Duplicate Detector Unit Tests', () => {
       assert.equal(book.downloadUrl, 'https://www.gutenberg.org/ebooks/1342.epub.images');
       assert.deepEqual(book.availableFormats, ['EPUB']);
       assert.equal(book.coverUrl, 'https://www.gutenberg.org/cache/epub/1342/pg1342.cover.medium.jpg');
+    });
+  });
+
+  describe('SearchOrchestratorService Provider Ordering', () => {
+    it('registers and retrieves active providers in getProviders()', () => {
+      const orchestrator = new SearchOrchestratorService(() => []);
+      const openLib = new OpenLibrarySearchProvider();
+      const gutenberg = new GutenbergSearchProvider();
+
+      orchestrator.registerProvider(openLib);
+      orchestrator.registerProvider(gutenberg);
+
+      const providers = orchestrator.getProviders();
+      assert.equal(providers.length, 2);
+      assert.ok(providers.some((p) => p.id === 'openlibrary'));
+      assert.ok(providers.some((p) => p.id === 'gutenberg'));
+    });
+
+    it('executes registered providers in parallel during search', async () => {
+      const events: string[] = [];
+      const orchestrator = new SearchOrchestratorService(() => []);
+
+      const mockOpenLib: any = {
+        id: 'openlibrary',
+        name: 'Open Library',
+        nameAr: 'أوبن لايبراري',
+        isEnabled: () => true,
+        search: async () => {
+          events.push('start:openlibrary');
+          return [];
+        },
+      };
+
+      const mockGutenberg: any = {
+        id: 'gutenberg',
+        name: 'Project Gutenberg',
+        nameAr: 'مشروع غوتنبرغ',
+        isEnabled: () => true,
+        search: async () => {
+          events.push('start:gutenberg');
+          return [];
+        },
+      };
+
+      orchestrator.registerProvider(mockOpenLib);
+      orchestrator.registerProvider(mockGutenberg);
+
+      await orchestrator.search({ query: 'test' });
+
+      assert.ok(events.includes('start:openlibrary'));
+      assert.ok(events.includes('start:gutenberg'));
     });
   });
 });

@@ -11,25 +11,18 @@ export interface ProviderConfigItem {
 
 export const DEFAULT_PROVIDER_CONFIGS: ProviderConfigItem[] = [
   {
-    id: 'google-books',
-    name: 'Google Books',
-    nameAr: 'كتب جوجل (Google Books)',
-    enabled: true,
-    priority: 1,
-  },
-  {
     id: 'open-library',
     name: 'Open Library',
     nameAr: 'المكتبة المفتوحة (Open Library)',
     enabled: true,
-    priority: 2,
+    priority: 1,
   },
   {
     id: 'internet-archive',
     name: 'Internet Archive',
     nameAr: 'أرشيف الإنترنت (Internet Archive)',
     enabled: true,
-    priority: 3,
+    priority: 2,
   },
 ];
 
@@ -108,7 +101,13 @@ export class ProviderConfigService {
       const parsed: ProviderConfigItem[] = JSON.parse(row.value);
       // Ensure all standard providers are present in case new ones were added
       const merged = this.mergeWithDefaults(parsed);
-      this.cachedConfigs = merged.sort((a, b) => a.priority - b.priority);
+      const activeConfigs = merged
+        .filter((c) => c.id !== 'google-books')
+        .sort((a, b) => a.priority - b.priority);
+      this.cachedConfigs = activeConfigs.map((item, idx) => ({
+        ...item,
+        priority: idx + 1,
+      }));
       return this.cachedConfigs;
     } catch (err) {
       console.warn('[ProviderConfigService] Error reading provider configs, using defaults:', err);
@@ -118,7 +117,7 @@ export class ProviderConfigService {
 
   private mergeWithDefaults(configs: ProviderConfigItem[]): ProviderConfigItem[] {
     const existingIds = new Set(configs.map((c) => c.id));
-    const merged = [...configs];
+    const merged = configs.filter((c) => c.id !== 'google-books');
     for (const def of DEFAULT_PROVIDER_CONFIGS) {
       if (!existingIds.has(def.id)) {
         merged.push({ ...def, priority: merged.length + 1 });
@@ -129,12 +128,14 @@ export class ProviderConfigService {
 
   /**
    * Updates provider configurations and persists them to SQLite app_settings table.
+   * Completely excludes Google Books.
    */
   public updateProviderConfigs(configs: ProviderConfigItem[]): ProviderConfigItem[] {
     this.ensureTableExists();
-    // Normalize priorities 1..N
-    const sorted = [...configs].sort((a, b) => a.priority - b.priority);
-    const normalized = sorted.map((item, idx) => ({
+    const activeConfigs = configs
+      .filter((c) => c.id !== 'google-books')
+      .sort((a, b) => a.priority - b.priority);
+    const normalized = activeConfigs.map((item, idx) => ({
       ...item,
       priority: idx + 1,
     }));

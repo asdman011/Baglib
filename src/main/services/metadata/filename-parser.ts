@@ -45,19 +45,47 @@ export interface ParsedFilenameMetadata {
 
 // Common irrelevant sharing/tracker tokens and site brands to strip out cleanly
 const TRACKER_TAG_PATTERNS = [
-  /\[\s*(?:z-lib|libgen|annas-archive|oceanofpdf|vk|pdfdrive)[^\]]*\]/gi,
-  /\(\s*(?:z-lib(?:\.sk|\.org|\.is|\.li)?|libgen(?:\.li|\.rs|\.is|\.lc)?|1lib\.sk|annas-archive|oceanofpdf|vk|pdfdrive|z-library)[^\)]*\)/gi,
-  /\b(?:z-lib(?:\.org|\.is|\.li|\.sk)?|b-ok(?:\.org)?|libgen(?:\.li|\.rs|\.is|\.lc)?|1lib\.sk|oceanofpdf(?:\.com)?|annas-archive(?:\.org|\.li|\.gl)?)\b/gi,
+  // Trailing domain tags with leading hyphen/underscore/spaces e.g. " - libgen.li", " _libgen.rs", " - 1lib.domains", " - vdoc.pub", " _z-lib.org"
+  /\s*[-_–—]\s*(?:libgen|z-lib|1lib|vdoc|b-ok|annas-archive|oceanofpdf)\.[a-z0-9.]+\b.*$/i,
+  // Brackets / Parentheses tags e.g. [z-lib.org], (libgen.li), [vdoc.pub], (1lib.domains), [annas-archive.org]
+  /[\[\(]\s*(?:z-lib(?:\.[a-z]+)?|libgen(?:\.[a-z]+)?|vdoc(?:\.pub)?|1lib(?:\.[a-z]+)?|b-ok(?:\.[a-z]+)?|annas-archive(?:\.[a-z]+)?|oceanofpdf(?:\.[a-z]+)?|vk|pdfdrive)[^\]\)]*[\]\)]/gi,
+  // Generic domain boundary tags
+  /\b(?:z-lib\.[a-z]+|libgen\.[a-z]+|vdoc\.pub|1lib\.[a-z]+|b-ok\.[a-z]+|annas-archive\.[a-z]+|oceanofpdf\.[a-z]+)\b/gi,
   /\s*\(\s*\d{1,2}\s*\)\s*(?=\.[^.]+$|$)/g, // e.g. " (1)" duplicate download indicator
   /\s*\[\s*\d{1,2}\s*\]\s*(?=\.[^.]+$|$)/g, // e.g. " [1]"
   /\s*-\s*copy(?:\s*\(\d+\))?\b/gi,
-  /\s*[-_]\s*libgen\.(?:li|rs|is|lc|org)\b.*$/i,
   /\s*[-_]\s*Ktaab\.com\b.*$/i,
   /\s*(?:كتاب\s+)?اقرأ?\s+اونلاين.*$/i,
   /\s*---\s*.*\(مؤلف\).*$/,
   /\s*\(\s*مقدمة\s*\)$/,
   /\s*نسخة\s+مصورة(?:\s+\d+)?$/i,
+  // Trailing hex download hashes e.g. "_6a2f... " or "_1234567"
+  /\s*[-_]\s*[a-f0-9]{24,64}\b.*$/i,
 ];
+
+/**
+ * Normalizes publisher strings by converting underscores between distinct publisher names
+ * or imprints into readable slashes (e.g. "McGraw-Hill_Open University Press" -> "McGraw-Hill / Open University Press")
+ * while preserving multi-word titles or single imprints.
+ */
+export function normalizePublisherSeparators(raw: string): string {
+  if (!raw) return '';
+  let str = raw.trim();
+
+  if (str.includes('_')) {
+    const parts = str.split('_').map((p) => p.trim()).filter(Boolean);
+    const hasSpacesInPart = parts.some((p) => p.includes(' '));
+    const hasKnownPub = parts.some((p) => FilenameParser.isRecognizedPublisher(p));
+
+    if (hasSpacesInPart || hasKnownPub || parts.length === 2) {
+      str = parts.join(' / ');
+    } else {
+      str = parts.join(' ');
+    }
+  }
+
+  return str.replace(/\s+/g, ' ').trim();
+}
 
 // Arabic role markers
 const ARABIC_TRANSLATOR_PREFIX = /(?:^|\s)(?:ترجمة|المترجم|نقل|تعريب)(?::|\s)\s*/i;
@@ -200,10 +228,10 @@ const SUBTITLE_PHRASE_REGEX = /^(?:in\s+\d+\s+(?:hours|days|weeks|steps)|for\s+(
 const SUBTITLE_SERIES_REGEX = /^(?:vol\.?|volume|part|ch\.?|chapter|book|no\.?|العدد|الجزء|المجلد|القسم|الطبعه|طبعة)\s*[\divxlcdm]+/i;
 const ARABIC_SUBTITLE_INDICATOR_REGEX = /^(?:دراسة\s+وتحقيق|تحقيق\s+ودراسة|شرح\s+وتعليق|دراسة\s+نقدية|قراءة\s+معاصرة|رؤية\s+نقدية|شرح\s+|تحقيق\s+|دراسة\s+|تلخيص\s+|تهذيب\s+|مختصر\s+|تعليق\s+|تخريج\s+|مدخل\s+إلى|مقدمة\s+في|أصول\s+|مبادئ\s+|الجزء|المجلد|القسم)/i;
 
-// Nouns that characterize book titles, subtitles, or topics — not author names
-const NON_AUTHOR_TITLE_WORDS = /\b(?:book|title|author|publisher|novel|story|vol|volume|part|guide|handbook|introduction|elements|principles|fundamentals|architecture|patterns|programming|algorithms|approach|concepts|applications|practice|definitive|comprehensive|practical|advanced|beginning|mastering|essential|crash\s+course|cookbook|tutorial|reference|solutions?|manual|workbook|textbook|code|system|design|software|computer|data|learning|database|web|cloud|network|security|calculus|physics|economics|edition)\b/i;
+// Nouns and prepositions that characterize book titles, subtitles, or topics — not author names
+const NON_AUTHOR_TITLE_WORDS = /\b(?:book|title|author|publisher|novel|story|vol|volume|part|guide|handbook|introduction|elements|principles|fundamentals|architecture|patterns|programming|algorithms|approach|concepts|applications|practice|definitive|comprehensive|practical|advanced|beginning|mastering|essential|crash\s+course|cookbook|tutorial|reference|solutions?|manual|workbook|textbook|code|system|design|software|computer|data|learning|database|web|cloud|network|security|calculus|physics|economics|edition|theories|methods|theory|method|without|truth|beauty|rights|justice|freedom|peace|god|quran|qur'an|qur’an|applying|social\s+work)\b/i;
 
-const ARABIC_NON_AUTHOR_TITLE_WORDS = /(?:^|\s)(?:كتاب|الكتاب|شرح|الشرح|تحقيق|التحقيق|دراسة|الدراسة|تلخيص|تهذيب|مختصر|حاشية|تعليق|تخريج|سلسلة|تاريخ|التاريخ|رواية|الرواية|قصة|القصة|ديوان|الديوان|صحيح|سنن|تفسير|التفسير|معجم|المعجم|أصول|الأصول|فقه|الفقه|علوم|العلوم|دراسات|منهاج|المنهاج|مقدمة|المقدمة|أدب|الأدب|شعر|الشعر|لسان|بيان)(?:\s|$)/;
+const ARABIC_NON_AUTHOR_TITLE_WORDS = /(?:^|\s)(?:كتاب|الكتاب|شرح|الشرح|تحقيق|التحقيق|دراسة|الدراسة|تلخيص|تهذيب|مختصر|حاشية|تعليق|تخريج|سلسلة|تاريخ|التاريخ|رواية|الرواية|قصة|القصة|ديوان|الديوان|صحيح|سنن|تفسير|التفسير|معجم|المعجم|أصول|الأصول|فقه|الفقه|علوم|العلوم|دراسات|منهاج|المنهاج|مقدمة|المقدمة|أدب|الأدب|شعر|الشعر|لسان|بيان|قواعد|القواعد|أحكام|الأحكام|مسائل|المسائل|مباحث|نظم|رسالة|الرسالة|مقالة|فصول|الفصول|مفتاح|المفتاح|أعلام|الأعلام|مصالح|المصالح|أنام|الأنام|رياض|روضة|تحفة|جامع|الجامع|إحياء|زاد|فتح|سبل|عمدة)(?:\s|$)/;
 
 export class FilenameParser {
   /**
@@ -241,6 +269,20 @@ export class FilenameParser {
     }
     workingString = workingString.replace(/[\(\[]\s*[\)\]]/g, ' ');
 
+    // Strip trailing dashes/underscores leftover from tracker tags
+    workingString = workingString.replace(/\s*[-_–—]+\s*$/, '').trim();
+
+    // 5. PARADIGM 2: Parenthetical Publisher and Year (BEFORE blanket underscore replacement!)
+    const parentheticalPub = this.extractParentheticalPublisherAndYear(workingString);
+    let extractedPublisher = parentheticalPub.publisher;
+    let extractedYear = parentheticalPub.year;
+    let publisherConfidence = parentheticalPub.publisherConfidence;
+    let yearConfidence = parentheticalPub.yearConfidence;
+    workingString = parentheticalPub.remainingText;
+
+    // Strip trailing dashes/underscores again after parenthetical removal
+    workingString = workingString.replace(/\s*[-_–—]+\s*$/, '').trim();
+
     // Normalize underscores: replace "_-_" with " - "
     workingString = workingString.replace(/_-_/g, ' - ');
     // If not LibGen multi-author pattern ("Last, First_Last, First_..."), convert underscores to spaces
@@ -263,14 +305,6 @@ export class FilenameParser {
     const hasLatin = /[a-zA-Z]/.test(workingString);
     const language: 'ar' | 'en' | 'mixed' | undefined =
       hasArabic && hasLatin ? 'mixed' : hasArabic ? 'ar' : hasLatin ? 'en' : undefined;
-
-    // 5. PARADIGM 2: Parenthetical Publisher and Year (LibGen format: e.g. "(1992, Free Press)", "(2013, Healing Arts Press)")
-    const parentheticalPub = this.extractParentheticalPublisherAndYear(workingString);
-    let extractedPublisher = parentheticalPub.publisher;
-    let extractedYear = parentheticalPub.year;
-    let publisherConfidence = parentheticalPub.publisherConfidence;
-    let yearConfidence = parentheticalPub.yearConfidence;
-    workingString = parentheticalPub.remainingText;
 
     // 6. Detect and extract ISBN (with checksum verification)
     const isbnResult = this.extractAndRemoveIsbn(workingString);
@@ -476,21 +510,32 @@ export class FilenameParser {
     let year: number | undefined;
     let yearConfidence = 0;
 
-    // Pattern A: "(1992, Free Press)" or "(2012, Farrar, Straus and Giroux)"
-    const yearPubMatch = working.match(/\(\s*(\d{4})\s*,\s*([^\)]+)\)/);
+    // Pattern A1: "(1992, Free Press)" or "(2010, McGraw-Hill_Open University Press)" or "[2010, ...]"
+    const yearPubMatch = working.match(/[\(\[]\s*(\d{4})\s*,\s*([^\)\]]+)[\)\]]/);
     if (yearPubMatch) {
       year = parseInt(yearPubMatch[1], 10);
       yearConfidence = 0.9;
-      publisher = yearPubMatch[2].replace(/_/g, ' ').trim();
+      publisher = normalizePublisherSeparators(yearPubMatch[2]);
       publisherConfidence = 0.85;
       working = working.replace(yearPubMatch[0], ' ');
       return { publisher, publisherConfidence, year, yearConfidence, remainingText: working };
     }
 
+    // Pattern A2: "(Free Press, 1992)" or "(McGraw-Hill_Open University Press, 2010)"
+    const pubYearMatch = working.match(/[\(\[]\s*([^\),\]]+?)\s*,\s*(\d{4})\s*[\)\]]/);
+    if (pubYearMatch) {
+      publisher = normalizePublisherSeparators(pubYearMatch[1]);
+      publisherConfidence = 0.85;
+      year = parseInt(pubYearMatch[2], 10);
+      yearConfidence = 0.9;
+      working = working.replace(pubYearMatch[0], ' ');
+      return { publisher, publisherConfidence, year, yearConfidence, remainingText: working };
+    }
+
     // Pattern B: Suffix publisher with year: "-Gorgias Press (2019)" or "-Oneworld Publications (2014)"
-    const sufPubMatch = working.match(/[-–—]\s*([A-Z][a-zA-Z\s&]+(?:Press|Publications?|Books|Publishing))\s*\((\d{4})\)/);
+    const sufPubMatch = working.match(/[-–—]\s*([A-Z][a-zA-Z\s&]+(?:Press|Publications?|Books|Publishing))\s*[\(\[](\d{4})[\)\]]/);
     if (sufPubMatch) {
-      publisher = sufPubMatch[1].trim();
+      publisher = normalizePublisherSeparators(sufPubMatch[1]);
       publisherConfidence = 0.9;
       year = parseInt(sufPubMatch[2], 10);
       yearConfidence = 0.9;
@@ -499,11 +544,11 @@ export class FilenameParser {
     }
 
     // Pattern C: Parenthetical publisher alone: "(Farrar, Straus and Giroux)"
-    const parenPubMatch = working.match(/\(\s*([^\)]+)\s*\)$/);
+    const parenPubMatch = working.match(/[\(\[]\s*([^\)\]]+)\s*[\)\]]$/);
     if (parenPubMatch) {
       const candidate = parenPubMatch[1].trim();
       if (FilenameParser.isRecognizedPublisher(candidate)) {
-        publisher = candidate;
+        publisher = normalizePublisherSeparators(candidate);
         publisherConfidence = 0.85;
         working = working.replace(parenPubMatch[0], ' ');
       }
@@ -823,6 +868,36 @@ export class FilenameParser {
       }
     }
 
+    // 3.5. Check colon delimiter "Author: Title" (e.g. "Barbra Teater: An introduction to applying social work theories and methods")
+    if (working.includes(':')) {
+      const colonMatch = working.match(/^([^:]+):\s+(.+)$/);
+      if (colonMatch) {
+        const segA = colonMatch[1].trim();
+        const segB = colonMatch[2].trim();
+        const isSegAPerson = FilenameParser.isLikelyPersonName(segA);
+        const isSegBPerson = FilenameParser.isLikelyPersonName(segB);
+        const isSegBTitle =
+          NON_AUTHOR_TITLE_WORDS.test(segB) ||
+          SUBTITLE_INDICATOR_REGEX.test(segB) ||
+          SUBTITLE_OF_REGEX.test(segB) ||
+          /^(?:the|a|an)\s+/i.test(segB);
+
+        if (isSegAPerson && (!isSegBPerson || isSegBTitle)) {
+          authors.push(...this.splitMultiAuthors(segA));
+          return {
+            title: this.cleanTitle(segB),
+            titleConfidence: 0.85,
+            authors: Array.from(new Set(authors)),
+            authorConfidence: 0.85,
+            translators,
+            translatorConfidence,
+            publisher,
+            publisherConfidence,
+          };
+        }
+      }
+    }
+
     // 4. Split by major separators: " - ", " – ", " — ", " ~ "
     const segments = working
       .split(/\s*[-–—~]\s+|\s+[-–—~]\s*/)
@@ -886,20 +961,6 @@ export class FilenameParser {
         return;
       }
 
-      // Check subtitle in segB
-      if (FilenameParser.isRecognizedSubtitle(segB)) {
-        title = `${segA}: ${segB}`;
-        titleConfidence = 0.8;
-        return;
-      }
-
-      // Check subtitle in segA
-      if (FilenameParser.isRecognizedSubtitle(segA)) {
-        title = `${segB}: ${segA}`;
-        titleConfidence = 0.8;
-        return;
-      }
-
       // Check inverted author in segA e.g. "Martin, Robert C. - Clean Code"
       const isSegAInverted = /^[\p{L}'-]+,\s*[\p{L}\s.'-]+$/u.test(segA);
       if (isSegAInverted) {
@@ -934,19 +995,35 @@ export class FilenameParser {
         /author/i.test(segB) ||
         /المؤلف/i.test(segB);
 
+      // Pattern 1: Author - Title (e.g. "Barbra Teater - An introduction to applying social work theories and methods")
       if (isSegAPerson && !isSegBPerson && !isSegBAuthor) {
         title = segB;
-        titleConfidence = 0.8;
+        titleConfidence = 0.85;
         authors.push(...this.splitMultiAuthors(segA));
-        authorConfidence = 0.75;
+        authorConfidence = 0.85;
         return;
       }
 
+      // Pattern 2: Title - Author (e.g. "قواعد الأحكام في مصالح الأنام - العز بن عبد السلام")
       if ((isSegBPerson || isSegBAuthor) && (!isSegAPerson || isSegATitle)) {
         title = segA;
-        titleConfidence = 0.8;
+        titleConfidence = 0.85;
         authors.push(...this.splitMultiAuthors(segB));
-        authorConfidence = 0.75;
+        authorConfidence = 0.85;
+        return;
+      }
+
+      // Check subtitle in segB (only when segA is not an author)
+      if (FilenameParser.isRecognizedSubtitle(segB)) {
+        title = `${segA}: ${segB}`;
+        titleConfidence = 0.8;
+        return;
+      }
+
+      // Check subtitle in segA
+      if (FilenameParser.isRecognizedSubtitle(segA)) {
+        title = `${segB}: ${segA}`;
+        titleConfidence = 0.8;
         return;
       }
 
@@ -1125,8 +1202,8 @@ export class FilenameParser {
       return false;
     }
 
-    // English definite/indefinite articles at the start indicate a title, not a person name
-    if (/^(?:the|a|an)\s+/i.test(clean)) {
+    // English definite/indefinite articles, question starters, or negative/universal qualifiers indicate a title, not a person name
+    if (/^(?:the|a|an|no|not|never|every|all|how|why|what|when|where)\s+/i.test(clean)) {
       return false;
     }
 
@@ -1141,7 +1218,14 @@ export class FilenameParser {
       if (ARABIC_NON_AUTHOR_TITLE_WORDS.test(normalizedArabic)) {
         return false;
       }
+      // Standalone Arabic prepositions (في, على, إلى, من, عن, حول) are title indicators, not person names
+      if (/(?:^|\s)(?:في|على|إلى|من|عن|حول)(?:\s|$)/.test(normalizedArabic)) {
+        return false;
+      }
       if (/^(?:د\.?|دكتور|الشيخ|الإمام|الأستاذ|ابن|أبو|العلامة|القاضي)\s+/i.test(normalizedArabic)) {
+        return true;
+      }
+      if (/(?:^|\s)(?:بن|ابن|أبو|أبي|عبد\s+(?:الله|الرحمن|السلام|الرحيم|العزيز|الكريم|الواحد|اللطيف|العليم|الخالق|الملك|القدوس|العظيم|الحليم|الحكيم|الوهاب|الرزاق|الفتاح|السميع|البصير|القادر|الحق))(?:\s|$)/.test(normalizedArabic)) {
         return true;
       }
       const arWords = normalizedArabic.split(/\s+/).filter(Boolean);

@@ -14,6 +14,7 @@ import {
 import { googleBooksClient } from '../../metadata/http-client';
 import { QuotaTracker, quotaTracker as defaultQuotaTracker } from '../../metadata/quotaTracker';
 import { DEFAULT_GOOGLE_BOOKS_API_KEY } from '../../metadata/providers/google-books.provider';
+import { GoogleBooksQuerySanitizer } from '../../metadata/providers/google-books-query-sanitizer';
 
 function sanitizeHtml(html?: string): string | undefined {
   if (!html) return undefined;
@@ -74,20 +75,21 @@ export class GoogleBooksSearchProvider implements ISearchProvider {
     }
 
     try {
-      const parts: string[] = [];
-      if (isbn) {
-        parts.push(`isbn:${isbn.replace(/[-\s]/g, '')}`);
-      } else {
-        if (title) parts.push(`intitle:${title}`);
-        if (author) parts.push(`inauthor:${author}`);
-        if (rawTerm && !title) parts.push(rawTerm);
+      const sanitized = GoogleBooksQuerySanitizer.buildQuery({
+        isbn,
+        title,
+        author,
+        general: rawTerm,
+      });
+
+      if (!sanitized || !sanitized.queryString.trim()) {
+        return [];
       }
 
-      const qString = parts.join(' ');
       const limit = Math.min(query.limit || 20, 40);
       const startIndex = query.page && query.page > 1 ? (query.page - 1) * limit : 0;
 
-      const url = `/volumes?q=${encodeURIComponent(qString)}&maxResults=${limit}&startIndex=${startIndex}&key=${this.apiKey}`;
+      const url = `/volumes?q=${encodeURIComponent(sanitized.queryString)}&maxResults=${limit}&startIndex=${startIndex}&key=${this.apiKey}`;
       this.quotaTracker.recordRequest();
 
       const data = await googleBooksClient.getJson<any>(url);

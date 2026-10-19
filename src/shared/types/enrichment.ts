@@ -26,6 +26,12 @@ export interface EnrichmentCandidateEdition {
   pageCount?: number;
   matchConfidence?: number;
   matchReason?: string;
+  matchFactors?: {
+    isbnMatched?: boolean;
+    titleSimilarity?: number;
+    authorMatched?: boolean;
+    summary?: string;
+  };
 }
 
 export type EnrichmentFieldKey =
@@ -85,6 +91,36 @@ export interface ApplyEnrichmentResult {
   error?: string;
 }
 
+export interface TechnicalSearchDiagnostics {
+  filePath?: string;
+  fileFormat?: string;
+  fileSizeBytes?: number;
+  fileSizeFormatted?: string;
+  embeddedDocInfo?: {
+    title?: string;
+    author?: string;
+    publisher?: string;
+    publicationYear?: number;
+    pagesCount?: number;
+  };
+  filenameBreakdown?: {
+    rawFilename?: string;
+    parsedTitle?: string;
+    parsedAuthor?: string;
+    parsedYear?: number | string;
+    parsedPublisher?: string;
+    discardedArtifacts?: Array<{ field: string; value: string; reason: string }>;
+  };
+  activeQuery: {
+    normalizedTitle?: string;
+    normalizedAuthor?: string;
+    detectedIsbn?: string;
+    detectedDoi?: string;
+    queryString?: string;
+    providersQueried?: string[];
+  };
+}
+
 export interface CandidateEditionsQueryResult {
   workId: string;
   candidates: EnrichmentCandidateEdition[];
@@ -94,6 +130,7 @@ export interface CandidateEditionsQueryResult {
     author?: string;
   };
   totalFound: number;
+  technicalDiagnostics?: TechnicalSearchDiagnostics;
 }
 
 export interface CoverFetchRequest {

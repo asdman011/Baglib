@@ -8,6 +8,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
   let originalGetJson: typeof googleBooksClient.getJson;
 
   beforeEach(() => {
+    provider.clearCache();
     originalGetJson = googleBooksClient.getJson;
   });
 

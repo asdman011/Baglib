@@ -6,15 +6,15 @@ import { BibliographicWork } from '../../../src/shared/types/bibliographic';
 import { CandidateMatcher, TargetBookEvidence } from '../../../src/main/services/metadata/candidate-matcher';
 
 describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
-  const googleBooksCandidate: BibliographicWork = {
-    workId: 'gb-vol1',
+  const internetArchiveCandidate: BibliographicWork = {
+    workId: 'ia-vol1',
     title: 'Clean Code: A Handbook of Agile Software Craftsmanship',
     authors: ['Robert C. Martin'],
     firstPublishYear: 2008,
     description: 'A handbook of agile software craftsmanship with comprehensive code examples.',
     editions: [
       {
-        editionId: 'gb-ed1',
+        editionId: 'ia-ed1',
         title: 'Clean Code',
         publisher: 'Prentice Hall',
         publishDate: '2008-08-01',
@@ -22,8 +22,8 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
         isbn10: '0132350882',
         pages: 464,
         language: 'en',
-        coverUrl: 'https://books.google.com/content?id=vol1&zoom=1',
-        sources: [{ provider: 'Google Books', providerId: 'vol1' }],
+        coverUrl: 'https://archive.org/services/img/vol1',
+        sources: [{ provider: 'Internet Archive', providerId: 'vol1' }],
       },
     ],
   };
@@ -49,38 +49,18 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
     ],
   };
 
-  const internetArchiveCandidate: BibliographicWork = {
-    workId: 'ia-cleanarchitecture',
-    title: 'Clean Architecture',
-    authors: ['Robert C. Martin'],
-    firstPublishYear: 2017,
-    description: 'Architectural rules and principles for software systems.',
-    editions: [
-      {
-        editionId: 'ia-ed3',
-        title: 'Clean Architecture',
-        publisher: 'Prentice Hall',
-        publishDate: '2017',
-        isbn13: '9780134494166',
-        pages: 432,
-        language: 'en',
-        sources: [{ provider: 'Internet Archive', providerId: 'ia-cleanarchitecture' }],
-      },
-    ],
-  };
-
-  class MockGoogleBooksProvider implements MetadataProvider {
+  class MockInternetArchiveProvider implements MetadataProvider {
     get name(): string {
-      return 'Google Books';
+      return 'Internet Archive';
     }
     async search(): Promise<BibliographicWork[]> {
-      return [googleBooksCandidate];
+      return [internetArchiveCandidate];
     }
     async searchByIsbn(isbn: string): Promise<BibliographicWork | null> {
-      return isbn.includes('9780132350884') ? googleBooksCandidate : null;
+      return isbn.includes('9780132350884') ? internetArchiveCandidate : null;
     }
     async getWorkDetails(): Promise<BibliographicWork | null> {
-      return googleBooksCandidate;
+      return internetArchiveCandidate;
     }
   }
 
@@ -116,7 +96,7 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
 
   it('aggregates candidates across multiple providers and ranks them by relevance', async () => {
     const service = new BibliographicMetadataService([
-      new MockGoogleBooksProvider(),
+      new MockInternetArchiveProvider(),
       new MockOpenLibraryProvider(),
     ]);
 
@@ -128,8 +108,8 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
     assert.strictEqual(result.candidates.length, 2, 'Should aggregate candidates from both providers');
     assert.strictEqual(result.rankedEvaluations?.length, 2);
 
-    // Google Books exact English edition ranks first for 'Clean Code'
-    assert.strictEqual(result.candidates[0].workId, 'gb-vol1');
+    // Internet Archive exact English edition ranks first for 'Clean Code'
+    assert.strictEqual(result.candidates[0].workId, 'ia-vol1');
     assert.strictEqual(result.rankedEvaluations?.[0].matchType, 'exact');
     assert.strictEqual(result.rankedEvaluations?.[0].score >= 60, true);
 
@@ -140,7 +120,7 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
 
   it('provides distinguishable metadata for editions to allow user selection', async () => {
     const service = new BibliographicMetadataService([
-      new MockGoogleBooksProvider(),
+      new MockInternetArchiveProvider(),
       new MockOpenLibraryProvider(),
     ]);
 
@@ -164,7 +144,7 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
   it('recovers gracefully when a provider fails with rate limit (429) and retains surviving candidates', async () => {
     const service = new BibliographicMetadataService([
       new FailingRateLimitedProvider(),
-      new MockGoogleBooksProvider(),
+      new MockInternetArchiveProvider(),
     ]);
 
     const result = await service.discoverBook({
@@ -174,7 +154,7 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
 
     // Failing rate-limited provider did not crash the pipeline
     assert.strictEqual(result.candidates.length, 1);
-    assert.strictEqual(result.candidates[0].workId, 'gb-vol1');
+    assert.strictEqual(result.candidates[0].workId, 'ia-vol1');
     assert.strictEqual(result.isVerifiedMatch, true);
   });
 
@@ -214,7 +194,7 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
       isbn: '9781234567890',
     };
 
-    const incomingCandidate = googleBooksCandidate;
+    const incomingCandidate = internetArchiveCandidate;
 
     // Simulate default selection behavior: empty fields auto-selected, existing fields NOT selected
     const initialSelection: Record<string, boolean> = {

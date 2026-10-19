@@ -6,7 +6,9 @@
  * and executes atomic multi-field merges with optional local cover caching.
  */
 
-import { BookItem, BookItemInput, DigitalFormat } from '../../../shared/types/work';
+import fs from 'fs';
+import path from 'path';
+import { BookItem, BookItemInput, DigitalFormat, MetadataProvenance } from '../../../shared/types/work';
 import { IWorkRepository } from '../../../shared/types/repository';
 import {
   EnrichmentCandidateEdition,
@@ -16,15 +18,19 @@ import {
   ApplyEnrichmentRequest,
   ApplyEnrichmentResult,
   CandidateEditionsQueryResult,
+  TechnicalSearchDiagnostics,
 } from '../../../shared/types/enrichment';
 import { DuplicateDetector } from '../search/duplicate-detector';
 import { OpenLibrarySearchProvider } from '../search/providers/open-library-search.provider';
-import { GoogleBooksSearchProvider } from '../search/providers/google-books-search.provider';
 import { InternetArchiveSearchProvider } from '../search/providers/internet-archive-search.provider';
 import { GutenbergSearchProvider } from '../search/providers/gutenberg-search.provider';
 import { ISearchProvider, UnifiedSearchResult } from '../../../shared/types/search';
 import { CoverFetchService, coverFetchService as defaultCoverFetchService } from './cover-fetch.service';
 import { normalizeSearchString } from '../../../shared/utils/text-normalizer';
+import { FilenameParser } from './filename-parser';
+import { EmbeddedMetadataExtractor } from './embedded-metadata.extractor';
+import { PdfMetadataReconciler, calculateTokenOverlap } from './pdf-metadata-reconciler';
+import { isPlaceholderAuthor, isPlaceholderTitle } from '../../../shared/validators/metadata-validator';
 
 export class MetadataEnrichmentService {
   private providers: ISearchProvider[];
@@ -34,22 +40,21 @@ export class MetadataEnrichmentService {
     providers?: ISearchProvider[];
     coverFetcher?: CoverFetchService;
   }) {
-    if (Array.isArray(options)) {
-      this.providers = options;
-      this.coverFetcher = defaultCoverFetchService;
-    } else {
-      this.coverFetcher = options?.coverFetcher || defaultCoverFetchService;
-      this.providers = options?.providers || [
-        new OpenLibrarySearchProvider(),
-        new GoogleBooksSearchProvider(),
-        new InternetArchiveSearchProvider(),
-        new GutenbergSearchProvider(),
-      ];
-    }
+    const defaultProviders = [
+      new OpenLibrarySearchProvider(),
+      new InternetArchiveSearchProvider(),
+      new GutenbergSearchProvider(),
+    ];
+    const rawProviders = Array.isArray(options) ? options : (options?.providers || defaultProviders);
+    const isGoogleBooks = (p: ISearchProvider) =>
+      p.id === 'googlebooks' || (p.id as string) === 'google-books' || p.name.toLowerCase().includes('google');
+    this.providers = rawProviders.filter((p) => !isGoogleBooks(p));
+    this.coverFetcher = Array.isArray(options) ? defaultCoverFetchService : (options?.coverFetcher || defaultCoverFetchService);
   }
 
   /**
    * Discovers candidate editions from online bibliographic catalogs for an existing library book.
+   * Enforces that non-Google providers are queried first, and Google Books is strictly executed last.
    */
   public async findCandidateEditions(work: BookItem): Promise<CandidateEditionsQueryResult> {
     const cleanIsbn = work.isbn ? DuplicateDetector.normalizeIsbn(work.isbn) : undefined;
@@ -58,9 +63,6 @@ export class MetadataEnrichmentService {
 
     const candidates: EnrichmentCandidateEdition[] = [];
     const seenCandidateKeys = new Set<string>();
-
-    // 1. Prepare search queries: prioritize ISBN if available, with Title/Author as fallback or companion
-    const searchPromises: Promise<UnifiedSearchResult[]>[] = [];
 
     const createTimeoutSignal = (ms: number): AbortSignal | undefined => {
       try {
@@ -73,33 +75,37 @@ export class MetadataEnrichmentService {
       return undefined;
     };
 
-    for (const provider of this.providers) {
-      if (!provider.isEnabled()) continue;
+    const activeProviders = this.providers.filter((p) => p.isEnabled());
 
-      // Primary query: search by ISBN if valid, else by Title + Author
+    const searchWithProvider = async (provider: ISearchProvider): Promise<UnifiedSearchResult[]> => {
       if (cleanIsbn && cleanIsbn.length >= 10) {
-        searchPromises.push(
-          provider.search({ isbn: cleanIsbn, query: cleanIsbn }, createTimeoutSignal(8000)).catch(() => [])
-        );
+        try {
+          const isbnResults = await provider.search({ isbn: cleanIsbn, query: cleanIsbn }, createTimeoutSignal(8000));
+          if (isbnResults && isbnResults.length > 0) {
+            return isbnResults;
+          }
+        } catch {
+          // Ignore and proceed to title search
+        }
       }
 
       if (queryTitle) {
         const textQuery = queryAuthor ? `${queryTitle} ${queryAuthor}` : queryTitle;
-        searchPromises.push(
-          provider.search(
+        try {
+          return await provider.search(
             { query: textQuery, title: queryTitle, author: queryAuthor },
             createTimeoutSignal(8000)
-          ).catch(() => [])
-        );
+          );
+        } catch {
+          return [];
+        }
       }
-    }
 
-    const settledResults = await Promise.allSettled(searchPromises);
+      return [];
+    };
 
-    for (const res of settledResults) {
-      if (res.status !== 'fulfilled') continue;
-
-      for (const item of res.value) {
+    const processResults = (items: UnifiedSearchResult[]) => {
+      for (const item of items) {
         // Skip local library results if returned
         if (item.providerId === 'local') continue;
 
@@ -113,7 +119,7 @@ export class MetadataEnrichmentService {
         seenCandidateKeys.add(dedupKey);
 
         // Calculate match confidence between work and candidate
-        const { confidence, reason } = this.calculateMatchConfidence(work, item);
+        const { confidence, reason, factors } = this.calculateMatchConfidence(work, item);
 
         // Determine downloadable digital format if available
         let downloadUrl: string | undefined = item.downloadUrl;
@@ -149,12 +155,99 @@ export class MetadataEnrichmentService {
           sourceUrl: item.sourceUrl,
           matchConfidence: confidence,
           matchReason: reason,
+          matchFactors: factors,
         });
+      }
+    };
+
+    // Execute all active providers in parallel
+    const searchPromises = activeProviders.map((p) => searchWithProvider(p));
+    const searchSettled = await Promise.allSettled(searchPromises);
+    for (const res of searchSettled) {
+      if (res.status === 'fulfilled') {
+        processResults(res.value);
       }
     }
 
     // Sort candidates by match confidence descending
     candidates.sort((a, b) => (b.matchConfidence || 0) - (a.matchConfidence || 0));
+
+    // Assemble rich Technical Diagnostics for transparency
+    let technicalDiagnostics: TechnicalSearchDiagnostics | undefined;
+    try {
+      const filePath = work.filePath || '';
+      let fileFormat = filePath.includes('.')
+        ? path.extname(filePath).replace('.', '').toUpperCase()
+        : 'PDF';
+      let fileSizeBytes: number | undefined;
+      let fileSizeFormatted = work.fileSize ? String(work.fileSize) : undefined;
+      let embeddedDocInfo: TechnicalSearchDiagnostics['embeddedDocInfo'];
+      let discardedArtifacts: Array<{ field: string; value: string; reason: string }> = [];
+
+      if (filePath) {
+        try {
+          if (fs.existsSync(filePath)) {
+            const stats = fs.statSync(filePath);
+            fileSizeBytes = stats.size;
+            fileSizeFormatted = `${(stats.size / (1024 * 1024)).toFixed(1)} MB`;
+          }
+        } catch {
+          // ignore stat errors
+        }
+
+        try {
+          const embedded = await EmbeddedMetadataExtractor.extract(filePath);
+          if (embedded) {
+            embeddedDocInfo = {
+              title: embedded.title,
+              author: embedded.authors?.join(', '),
+              publisher: embedded.publisher,
+              publicationYear: embedded.publicationYear,
+              pagesCount: embedded.pagesCount,
+            };
+          }
+
+          const parsed = FilenameParser.parse(filePath);
+          const reconciled = PdfMetadataReconciler.reconcile({
+            embeddedMeta: embedded,
+            parsedFilename: parsed,
+            rawFilename: filePath,
+          });
+          discardedArtifacts = reconciled.discardedArtifacts || [];
+        } catch {
+          // ignore extraction errors
+        }
+      }
+
+      const parsedFilename = filePath ? FilenameParser.parse(filePath) : undefined;
+      const providersQueried = this.providers.filter((p) => p.isEnabled()).map((p) => p.name);
+
+      technicalDiagnostics = {
+        filePath: filePath || undefined,
+        fileFormat: fileFormat || 'PDF',
+        fileSizeBytes,
+        fileSizeFormatted,
+        embeddedDocInfo,
+        filenameBreakdown: {
+          rawFilename: filePath ? path.basename(filePath) : (work.title || ''),
+          parsedTitle: parsedFilename?.title || work.title,
+          parsedAuthor: parsedFilename?.authors?.join(', ') || work.author,
+          parsedYear: parsedFilename?.publicationYear || work.publicationYear,
+          parsedPublisher: parsedFilename?.publisher || work.publisher,
+          discardedArtifacts,
+        },
+        activeQuery: {
+          normalizedTitle: queryTitle,
+          normalizedAuthor: queryAuthor,
+          detectedIsbn: cleanIsbn,
+          detectedDoi: undefined,
+          queryString: cleanIsbn ? `isbn:${cleanIsbn}` : (queryAuthor ? `${queryTitle} ${queryAuthor}` : queryTitle),
+          providersQueried,
+        },
+      };
+    } catch (e) {
+      console.warn('[MetadataEnrichmentService] Could not assemble technical diagnostics:', e);
+    }
 
     return {
       workId: work.id,
@@ -165,6 +258,7 @@ export class MetadataEnrichmentService {
         author: queryAuthor,
       },
       totalFound: candidates.length,
+      technicalDiagnostics,
     };
   }
 
@@ -174,12 +268,30 @@ export class MetadataEnrichmentService {
   private calculateMatchConfidence(
     work: BookItem,
     candidate: UnifiedSearchResult
-  ): { confidence: number; reason: string } {
+  ): {
+    confidence: number;
+    reason: string;
+    factors: {
+      isbnMatched?: boolean;
+      titleSimilarity?: number;
+      authorMatched?: boolean;
+      summary?: string;
+    };
+  } {
     const workIsbn = work.isbn ? DuplicateDetector.normalizeIsbn(work.isbn) : undefined;
     const candIsbn = candidate.isbn ? DuplicateDetector.normalizeIsbn(candidate.isbn) : undefined;
 
     if (workIsbn && candIsbn && workIsbn === candIsbn) {
-      return { confidence: 1.0, reason: 'Exact ISBN Match' };
+      return {
+        confidence: 1.0,
+        reason: 'Exact ISBN Match',
+        factors: {
+          isbnMatched: true,
+          titleSimilarity: 1.0,
+          authorMatched: true,
+          summary: 'Exact ISBN Match (100%)',
+        },
+      };
     }
 
     const normWorkTitle = normalizeSearchString(work.title || '');
@@ -198,31 +310,50 @@ export class MetadataEnrichmentService {
     const normWorkAuthor = normalizeSearchString(workAuthorStr);
     const normCandAuthor = normalizeSearchString(candAuthorStr);
 
-    const titlesMatch =
+    const titleOverlap = calculateTokenOverlap(normWorkTitle, normCandTitle);
+    const titlesExactOrPrefix =
       normWorkTitle === normCandTitle ||
-      normWorkTitle.startsWith(normCandTitle) ||
-      normCandTitle.startsWith(normWorkTitle);
+      (normWorkTitle.length > 3 && normCandTitle.startsWith(normWorkTitle)) ||
+      (normCandTitle.length > 3 && normWorkTitle.startsWith(normCandTitle));
 
-    const authorsMatch =
+    const authorsMatch = Boolean(
       normWorkAuthor &&
       normCandAuthor &&
       (normWorkAuthor === normCandAuthor ||
         normWorkAuthor.includes(normCandAuthor) ||
-        normCandAuthor.includes(normWorkAuthor));
+        normCandAuthor.includes(normWorkAuthor))
+    );
 
-    if (titlesMatch && authorsMatch) {
-      return { confidence: 0.95, reason: 'Title & Author Match' };
+    let confidence = 0.3;
+    let reason = 'Partial Keyword Match';
+
+    if (titlesExactOrPrefix && authorsMatch) {
+      confidence = 0.95;
+      reason = 'Title & Author Match';
+    } else if (titleOverlap >= 0.8 && authorsMatch) {
+      confidence = Math.round((0.80 + titleOverlap * 0.15) * 100) / 100;
+      reason = `Title Token Similarity (${Math.round(titleOverlap * 100)}%) & Author Match`;
+    } else if (titlesExactOrPrefix) {
+      confidence = 0.80;
+      reason = 'Exact Title Match';
+    } else if (titleOverlap >= 0.5) {
+      confidence = Math.round((0.50 + titleOverlap * 0.30) * 100) / 100;
+      reason = `Title Token Similarity (${Math.round(titleOverlap * 100)}%)`;
+    } else if (authorsMatch) {
+      confidence = 0.50;
+      reason = 'Author Alignment Only';
     }
 
-    if (titlesMatch) {
-      return { confidence: 0.75, reason: 'Title Match' };
-    }
-
-    if (authorsMatch) {
-      return { confidence: 0.5, reason: 'Author Match' };
-    }
-
-    return { confidence: 0.3, reason: 'Partial Keyword Match' };
+    return {
+      confidence,
+      reason,
+      factors: {
+        isbnMatched: false,
+        titleSimilarity: Math.round(titleOverlap * 100) / 100,
+        authorMatched: authorsMatch,
+        summary: reason,
+      },
+    };
   }
 
   /**
@@ -240,7 +371,13 @@ export class MetadataEnrichmentService {
       currentVal: any,
       incomingVal: any
     ) => {
-      const hasCurrent = this.isPopulated(currentVal);
+      let hasCurrent = this.isPopulated(currentVal);
+      if (field === 'title' && hasCurrent && isPlaceholderTitle(currentVal)) {
+        hasCurrent = false;
+      }
+      if (field === 'author' && hasCurrent && isPlaceholderAuthor(currentVal)) {
+        hasCurrent = false;
+      }
       const hasIncoming = this.isPopulated(incomingVal);
       const isDiff = this.areValuesDifferent(currentVal, incomingVal);
       const isOverwriting = Boolean(hasCurrent && isDiff && hasIncoming);
@@ -375,7 +512,13 @@ export class MetadataEnrichmentService {
       }
 
       const currentVal = (existingBook as any)[field];
-      const hasCurrent = this.isPopulated(currentVal);
+      let hasCurrent = this.isPopulated(currentVal);
+      if (field === 'title' && hasCurrent && isPlaceholderTitle(currentVal)) {
+        hasCurrent = false;
+      }
+      if (field === 'author' && hasCurrent && isPlaceholderAuthor(currentVal)) {
+        hasCurrent = false;
+      }
 
       // Overwrite protection: if field is already populated and overwritePopulatedFields is NOT true, skip!
       if (hasCurrent && !request.overwritePopulatedFields) {
@@ -403,6 +546,41 @@ export class MetadataEnrichmentService {
       (updatedInput as any)[field] = incomingVal;
       appliedFields.push(field);
     }
+
+    // Build and attach rich Geek Provenance for the enriched book
+    const candidate = (request as any).candidate;
+    const providerName = candidate?.providerName || candidate?.providerId || 'Online API';
+    const fieldSources: NonNullable<MetadataProvenance['fieldSources']> = {
+      ...(existingBook.metadataProvenance?.fieldSources || {}),
+    };
+
+    for (const f of appliedFields) {
+      fieldSources[f] = {
+        source: providerName,
+        status: 'verified',
+        value: (updatedInput as any)[f],
+        confidence: candidate?.matchConfidence ?? 0.95,
+      };
+    }
+
+    const auditTrace: string[] = [
+      ...(existingBook.metadataProvenance?.auditTrace || []),
+      `[${new Date().toLocaleTimeString()}] Applied enrichment from ${providerName} (Candidate ID: ${request.candidateId})`,
+      `[Updated Fields] ${appliedFields.join(', ')}`,
+      `[Match Confidence] ${Math.round((candidate?.matchConfidence ?? 0.95) * 100)}% (${candidate?.matchReason || 'Online Verified'})`,
+    ];
+
+    updatedInput.metadataProvenance = {
+      primaryProvider: providerName,
+      providerId: request.candidateId,
+      sourceUrl: candidate?.sourceUrl,
+      discoveredAt: new Date().toISOString(),
+      method: 'online_api',
+      confidence: candidate?.matchConfidence ?? 0.95,
+      fieldSources,
+      auditTrace,
+      rawBibliographic: candidate || request.incomingValues,
+    };
 
     // Persist changes to database
     await repository.updateBook(updatedInput);

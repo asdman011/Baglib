@@ -22,6 +22,14 @@ The core objective is to eliminate premature or unwanted online metadata overwri
   - High availability of rich bibliographic data (ISBNs, publishers, high-resolution covers, page counts, subject tags).
 - **Trade-offs**: Susceptible to HTTP 429 / 503 transient failures, daily quota caps (e.g., Google Books 1,000 queries/day), and discrepancies in naming conventions.
 
+### 2.3 Readest (Metadata Auto-Retrieve & Rate-Limiting Sliding Windows)
+- **Architecture**:
+  - Readest exposes an on-demand "Refresh Metadata" feature. When invoked, it searches online providers using title, author, and ISBN clues.
+  - Rate limiting is handled via sliding token delays between requests to keep the client within provider quotas (especially Google Books' strict limits).
+  - Merging is strictly non-destructive: updates populate missing fields without clobbering existing custom values.
+- **Strengths**: Clean UX, safe non-destructive updates, high resilience against HTTP 429 rate limit bans.
+- **Baglib Adaptation**: Formalized provider-aware `RateLimitGate` and safe refresh workflow for single books and bulk library selections.
+
 ---
 
 ## 3. Baglib Architecture: The Two-Phase Pipeline
@@ -168,6 +176,71 @@ When auto-filling metadata from online providers:
    - **Header Action**: A "Find Online" (`البحث عبر الإنترنت`) button in [`BookDetailModal`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/BookDetailModal.tsx) opens the side-by-side [`EditionComparisonModal`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/EditionComparisonModal.tsx).
    - **Cover Section Action**: A dedicated "Fetch Cover" (`جلب الغلاف`) button in the cover thumbnail section initiates high-resolution image discovery.
    - **Digital Attachment**: Users can attach free digital copies (EPUB/PDF) directly from public archives via [`ContentShieldService.downloadFileDirectly`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/shield/content-shield.service.ts), transitioning physical books to hybrid works.
+6. **Provider-Aware Rate Limiting Gate ([`RateLimitGate`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/metadata/rate-limit-gate.ts))**:
+   - **Sliding Interval Throttling**: Enforces domain-specific minimum pacing:
+     - Google Books (`googleapis.com`): 1,500ms spacing between requests.
+     - Open Library (`openlibrary.org`): 1,000ms spacing between requests.
+     - Internet Archive (`archive.org`): 800ms spacing between requests.
+   - **Exponential Backoff with Jitter**: Intercepts HTTP 429 Too Many Requests and automatically backs off (3s, 6s, 12s) with randomized jitter before retry.
+   - **Central Integration**: Integrated at the lowest transport level into [`HttpClient`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/metadata/http-client.ts) so every provider query seamlessly obeys rate limits.
+7. **Bulk Online Metadata Download & Safe Refresh ([`enrichment.ts`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/ipc/enrichment.ts))**:
+   - **Bulk Download Toolbar**: [`BulkActionsToolbar`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/BulkActionsToolbar.tsx) provides a "Download Online Metadata" (`جلب البيانات أونلاين`) button for batch selections, reporting live progress via `enrichment:bulk-progress`.
+   - **One-Click Refresh**: Single-book "Refresh Metadata" (`تحديث البيانات`) button in [`BookDetailModal`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/BookDetailModal.tsx) header retrieves candidate editions and computes field diffs.
+   - **Non-Destructive Merge Policy**: Populates missing or placeholder fields (`Unknown Author`, `New Library Material`) without clobbering user notes or custom edits.
+
+8. **Robust Drag-and-Drop Path Resolution ([`file-path-helper.ts`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/utils/file-path-helper.ts))**:
+   - **Modern Electron `webUtils` Bridge**: In Chromium 128+ (Electron 32), accessing `(file as any).path` from HTML5 drag events returns an empty string. The solution bridges `webUtils.getPathForFile(file)` through preload to resolve the true host filesystem path.
+   - **Four-Tier Resolution & Buffer Fallback**:
+     1. Preload `webUtils.getPathForFile(file)`.
+     2. Direct `file.path` property for older runtimes.
+     3. Path segment validation (presence of `/` or `\`).
+     4. Guaranteed persistence fallback: streams the file's raw `ArrayBuffer` to `userData/imports` via `system:save-file-buffer`, ensuring an authentic absolute path is always provided to backend offline extractors.
+9. **Standardized EPUB Page Count Estimation**:
+   - **Adobe Digital Editions (ADE) & Calibre Compatibility**: Most commercial EPUBs omit `schema:numberOfPages` and `dc:extent`. Baglib now accumulates uncompressed text byte sizes across all `.xhtml`/`.html` content files in the EPUB ZIP archive during indexing.
+   - **1024-Byte Page Formula**: Calculates `pagesCount = Math.max(1, Math.round(totalTextBytes / 1024))` (standard 1 page ~= 1024 bytes / ~250 words), with fallback to spine item length multiplied by 15.
+
+10. **Library Metadata Audit & Refresh Workflow ([`MetadataAuditModal.tsx`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/MetadataAuditModal.tsx))**:
+   - **Centralized Header Placement**: Removed the legacy single-book refresh button from `BookDetailModal` header. Replaced with a prominent "Audit & Refresh Metadata" (`تدقيق وتحديث البيانات`) button in the main library header toolbar in [`LibraryGridView`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/renderer/components/library/LibraryGridView.tsx) and selection action bar.
+   - **Smart Scope Resolution**:
+     - When books are selected (`selectedBookIds.size > 0`): audits and processes only the selected items.
+     - When no books are selected: audits the entire library catalog.
+   - **Missing Metadata Audit Scanner**:
+     - Scans for essential missing fields: Author (empty or placeholder `Unknown Author` / `غير معروف`), Publication Year, Cover image, Description/Abstract, and Identifiers/Category/Language (ISBN, Category, Language).
+     - Breakdown statistics, interactive issue chips, search filter, and clean book indicators.
+   - **Two-Tier Action Workflow**:
+     1. **"Re-scan Files First" (`إعادة فحص الملفات أولاً`)**:
+        - Prioritizes offline data resolution by re-running local container parsers (EPUB OPF, PDF XMP/Info) and PDF first-page raster thumbnail generation.
+        - Updates the audit list live and saves changes to SQLite without consuming any online API quotas.
+     2. **Online Resolution Options**:
+        - **"Auto-Enrich All" (`تحديث تلقائي شامل`)**: Background worker queries open catalogs sequentially, strictly enforcing a 1,000ms delay between API queries (`RateLimitGate` pacing) and applying high-confidence matches (`confidence >= 0.75` or `isVerifiedMatch`). Shows a live progress bar with item counts and stop control.
+        - **"Review One by One" (`مراجعة كتاباً بكتاب`)**: Sequential guided stepper walking through flagged books one at a time. Queries candidate editions and lets the user inspect scores, match types, and choose to approve or skip.
+   - **Strict Data Preservation**: User custom notes, tags (`tags`), reading status (`readingStatus`, `readingProgress`), and lending records (`lendingHistory`) are guaranteed to never be overwritten.
+
+11. **Intelligent PDF Metadata Reconciliation & Prepress Garbage Detection ([`pdf-metadata-reconciler.ts`](file:///D:/Ammar's/Projects/Baglib/repo/Baglib/src/main/services/metadata/pdf-metadata-reconciler.ts))**:
+   - **Real-World Problem**: Internal PDF metadata (DocInfo/XMP) generated by desktop publishing software (Adobe InDesign, QuarkXPress, Acrobat Distiller) frequently contains prepress job codes, printer queue identifiers, or typesetter operating system usernames rather than true bibliographic information. For example, `Barbra Teater - An introduction to applying social work theories and methods (2010, McGraw-Hill_Open University Press) - libgen.li.pdf` embeds `mcgrawh 19768` as Title and `jharding` as Author.
+   - **Prepress & Job Code Detector (`isGarbageTitle`)**:
+     - Flags publisher internal production codes (e.g., `mcgrawh \d+`, `job_\d+`, `wiley_\d+`, `springer_\d+`, `cup_\d+`, `elsevier_\d+`).
+     - Flags generic document strings (e.g., `untitled`, `document\d*`, `scan\d*`, `export`, `chapter\s*\d+`).
+     - Flags desktop publishing software names (e.g., `InDesign`, `Adobe PDF Library`, `Acrobat Distiller`, `Microsoft Word`).
+     - Flags degenerate values: purely numeric strings, hex/MD5/UUID hashes, or strings shorter than 3 characters.
+   - **Typesetter & OS Username Detector (`isGarbageAuthor`)**:
+     - Flags single-token lowercase handles and system accounts (e.g., `jharding`, `admin`, `user`, `desktop`, `scanner`, `root`).
+     - Flags DTP generator software names in author fields.
+   - **Token Discrepancy & Jaccard Overlap**:
+     - When the filename contains $\ge 4$ distinct words and the embedded PDF Title shares 0% token overlap with the filename, the embedded title is flagged as untrusted prepress garbage.
+   - **Filename Sanitization & Strip Rules**:
+     - Strips repository and shadow library tags (e.g., `- libgen.li`, `_libgen.rs`, `(z-lib.org)`, `[vdoc.pub]`, `_1lib.domains`).
+     - Normalizes publisher separators within parentheticals (e.g., `McGraw-Hill_Open University Press` $\rightarrow$ `McGraw-Hill / Open University Press`).
+     - Preserves edition and volume identifiers while eliminating random download hashes.
+   - **Structured Pattern Parsing**:
+     - Academic multi-part format: `^{Author}\s*-\s*{Title}\s*\((?:{Year})?,?\s*(?:{Publisher})?\)`
+     - Standard delimited format: `^{Author}\s*-\s*{Title}$` or `^{Title}\s*-\s*{Author}$`
+     - Bracketed author format: `^\[{Author}\]\s*{Title}\s*\({Year}\)`
+     - Arabic standard format: `^{Title}\s*-\s*{Author}$` (with Arabic patronymic and syntactic title/author disambiguation).
+   - **Multi-Factor Scoring & Reconciliation**:
+     - Evaluates confidence scores across candidate sources (`embedded_pdf`, `filename`, `merged`).
+     - Merges valid components (e.g., authentic embedded publisher with filename title/author when embedded title/author are bogus).
+     - Tracks all discarded artifacts and reasons for auditability and diagnostic visibility.
 
 ---
 
@@ -175,6 +248,4 @@ When auto-filling metadata from online providers:
 - Adheres strictly to the **Work → Edition → Source** polymorphic data model.
 - No unapproved schema alterations: uses existing `author.bio` and `work.description` columns.
 - Maintains bilingual RTL/LTR layout consistency using CSS logical properties and centralized translation keys.
-
-
 

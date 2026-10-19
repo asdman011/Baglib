@@ -91,6 +91,9 @@ export interface ExtractedEbookMetadata {
   coverDataUrl?: string;
   identifiers: Record<string, string>;
   format: DigitalFormat;
+  pagesCount?: number;
+  edition?: string;
+  editionDetails?: any;
 }
 
 export type FileStorageStatus = 'available' | 'missing' | 'unmounted' | 'corrupted' | 'duplicate';
@@ -277,6 +280,9 @@ export interface DigitalImportResult {
     publicationYear?: number;
     isbn?: string;
     description?: string;
+    edition?: string;
+    editionDetails?: any;
+    pagesCount?: number;
     language?: string;
     tags?: string[];
     hasCover: boolean;
