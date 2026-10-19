@@ -29,6 +29,8 @@ async function ensurePdfJs(): Promise<any> {
   // 1. Check if already present on window
   if (win.pdfjsDistBuildPdf?.PDFJS) return win.pdfjsDistBuildPdf.PDFJS;
   if (win.pdfjsDistBuildPdf?.getDocument) return win.pdfjsDistBuildPdf;
+  if (win.pdfjsLib?.getDocument) return win.pdfjsLib;
+  if (win['pdfjs-dist/build/pdf']?.getDocument) return win['pdfjs-dist/build/pdf'];
   if (win.PDFJS) return win.PDFJS;
 
   // 2. Inject static script tag pointing to /vendor/pdfjs/pdf.js if not already added
@@ -50,21 +52,21 @@ async function ensurePdfJs(): Promise<any> {
   while (attempts < 30) {
     if (win.pdfjsDistBuildPdf?.PDFJS) return win.pdfjsDistBuildPdf.PDFJS;
     if (win.pdfjsDistBuildPdf?.getDocument) return win.pdfjsDistBuildPdf;
+    if (win.pdfjsLib?.getDocument) return win.pdfjsLib;
+    if (win['pdfjs-dist/build/pdf']?.getDocument) return win['pdfjs-dist/build/pdf'];
     if (win.PDFJS) return win.PDFJS;
     await new Promise((r) => setTimeout(r, 50));
     attempts++;
   }
 
-  const resolved = win.pdfjsDistBuildPdf?.PDFJS || win.pdfjsDistBuildPdf || win.PDFJS;
+  const resolved = win.pdfjsDistBuildPdf?.PDFJS || win.pdfjsDistBuildPdf || win.pdfjsLib || win['pdfjs-dist/build/pdf'] || win.PDFJS;
   if (!resolved) {
     throw new Error('PDF.js engine could not be initialized.');
   }
 
-  // Disable web worker to run directly and synchronously in main window thread
-  if (resolved.PDFJS) {
-    resolved.PDFJS.disableWorker = true;
+  if (resolved.GlobalWorkerOptions && !resolved.GlobalWorkerOptions.workerSrc) {
+    resolved.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.js';
   }
-  resolved.disableWorker = true;
   return resolved;
 }
 
@@ -114,6 +116,27 @@ export async function renderPdfPage(
       bytes[i] = binary.charCodeAt(i);
     }
 
+    // Quick magic-bytes pre-check: All valid PDFs start with '%PDF-'
+    const isPdf = bytes.length >= 5 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d;
+    if (!isPdf) {
+      if (windowAPI?.extractPdfCover) {
+        const nativeRes = await windowAPI.extractPdfCover(filePath, pageNumber);
+        if (nativeRes?.success && nativeRes.coverUrl) {
+          renderedPageCache.set(cacheKey, {
+            dataUrl: nativeRes.coverUrl,
+            totalPages: nativeRes.totalPages || 1,
+          });
+          return {
+            success: true,
+            coverUrl: nativeRes.coverUrl,
+            currentPage: pageNumber,
+            totalPages: nativeRes.totalPages || 1,
+          };
+        }
+      }
+      return { success: false, currentPage: 1, totalPages: 0, error: 'INVALID_PDF_STRUCTURE' };
+    }
+
     // 3. Initialize PDF.js
     const pdfjs = await ensurePdfJs();
     if (!pdfjs) {
@@ -132,9 +155,20 @@ export async function renderPdfPage(
     const page = await pdfDoc.getPage(targetPage);
 
     // 7. Calculate crisp rendering scale
-    const baseViewport = page.getViewport(1.0);
-    const scale = Math.max(0.8, Math.min(2.5, customTargetWidth / baseViewport.width));
-    const viewport = page.getViewport(scale);
+    let baseViewport: any;
+    try {
+      baseViewport = page.getViewport({ scale: 1.0 });
+    } catch {
+      baseViewport = page.getViewport(1.0);
+    }
+    const baseWidth = baseViewport?.width || 600;
+    const scale = Math.max(0.8, Math.min(2.5, customTargetWidth / baseWidth));
+    let viewport: any;
+    try {
+      viewport = page.getViewport({ scale });
+    } catch {
+      viewport = page.getViewport(scale);
+    }
 
     // 8. Create offscreen canvas with white background
     const canvas = document.createElement('canvas');
@@ -178,7 +212,30 @@ export async function renderPdfPage(
       totalPages: totalPages,
     };
   } catch (err: any) {
-    console.error('[pdf-page-renderer] Rendering failed:', err);
+    console.warn('[pdf-page-renderer] Client-side canvas render failed, trying native extractPdfCover:', err);
+
+    // Automatic Fallback: Direct extraction in Node.js via Electron IPC
+    const windowAPI = typeof window !== 'undefined' ? (window as any).electronAPI : undefined;
+    if (windowAPI?.extractPdfCover) {
+      try {
+        const nativeRes = await windowAPI.extractPdfCover(filePath, pageNumber);
+        if (nativeRes?.success && nativeRes.coverUrl) {
+          renderedPageCache.set(cacheKey, {
+            dataUrl: nativeRes.coverUrl,
+            totalPages: nativeRes.totalPages || 1,
+          });
+          return {
+            success: true,
+            coverUrl: nativeRes.coverUrl,
+            currentPage: nativeRes.currentPage || pageNumber,
+            totalPages: nativeRes.totalPages || 1,
+          };
+        }
+      } catch (nativeErr) {
+        console.warn('[pdf-page-renderer] Native PDF cover extraction also failed:', nativeErr);
+      }
+    }
+
     return {
       success: false,
       currentPage: pageNumber,

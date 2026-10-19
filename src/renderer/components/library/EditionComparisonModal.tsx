@@ -6,7 +6,9 @@ import {
   EnrichmentComparison,
   EnrichmentFieldKey,
   ApplyEnrichmentRequest,
+  TechnicalSearchDiagnostics,
 } from '../../../shared/types/enrichment';
+import { FileQueryDiagnosticsPanel } from './FileQueryDiagnosticsPanel';
 
 interface EditionComparisonModalProps {
   isOpen: boolean;
@@ -29,6 +31,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
   const [candidates, setCandidates] = useState<EnrichmentCandidateEdition[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<EnrichmentCandidateEdition | null>(null);
   const [comparison, setComparison] = useState<EnrichmentComparison | null>(null);
+  const [diagnostics, setDiagnostics] = useState<TechnicalSearchDiagnostics | null>(null);
 
   // User selections
   const [selectedFieldKeys, setSelectedFieldKeys] = useState<Record<EnrichmentFieldKey, boolean>>({
@@ -126,11 +129,23 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
             pagesCount: false,
           };
 
+          let hasOverwrites = false;
           for (const [key, diff] of Object.entries(comp.diffs)) {
             const fKey = key as EnrichmentFieldKey;
-            if (!diff.hasCurrent && diff.hasIncoming) {
-              initialSelection[fKey] = true;
+            if (diff.hasIncoming) {
+              if (!diff.hasCurrent) {
+                initialSelection[fKey] = true;
+              } else if (fKey === 'title' && diff.isDifferent) {
+                initialSelection[fKey] = true;
+                hasOverwrites = true;
+              } else if (fKey === 'author' && diff.isDifferent && (!book.author || book.author === 'Unknown Author' || book.author === 'غير معروف')) {
+                initialSelection[fKey] = true;
+                hasOverwrites = true;
+              }
             }
+          }
+          if (hasOverwrites) {
+            setAllowOverwrite(true);
           }
           setSelectedFieldKeys(initialSelection);
         })
@@ -235,7 +250,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
         candidateId: selectedCandidate.id,
         selectedFields: chosenFields,
         incomingValues,
-        overwritePopulatedFields: allowOverwrite,
+        overwritePopulatedFields: allowOverwrite || chosenFields.includes('title'),
         downloadCoverLocally,
         attachDigitalCopy: attachDigitalCopy && Boolean(selectedCandidate.downloadUrl),
       };
@@ -334,6 +349,16 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
             </div>
           )}
 
+          {/* Collapsible File & Query Diagnostics Panel */}
+          <FileQueryDiagnosticsPanel
+            diagnostics={diagnostics}
+            filePath={book.filePath}
+            fileSize={book.fileSize}
+            searchTitle={book.title}
+            searchAuthor={book.author}
+            searchIsbn={book.isbn}
+          />
+
           {/* Candidate Editions Section */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -354,9 +379,10 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                 <p className="text-xs text-gray-500 mt-1">{t('noEditionsHint')}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-48 overflow-y-auto p-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-1">
                 {candidates.map((cand) => {
                   const isSelected = selectedCandidate?.id === cand.id;
+                  const confidencePct = Math.round((cand.matchConfidence || 0) * 100);
                   return (
                     <div
                       key={cand.id}
@@ -381,13 +407,21 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                       </div>
                       <div className="flex-1 min-w-0 flex flex-col justify-between">
                         <div>
-                          <div className="flex items-center gap-1.5 mb-1">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1">
                             <span className="px-1.5 py-0.2 rounded text-[9px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                               {cand.providerName}
                             </span>
-                            {cand.matchConfidence && cand.matchConfidence >= 0.9 && (
-                              <span className="px-1 py-0.2 rounded text-[8px] bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                                {Math.round(cand.matchConfidence * 100)}%
+                            {cand.matchConfidence !== undefined && (
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[8px] font-bold border ${
+                                  confidencePct >= 80
+                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                    : confidencePct >= 50
+                                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                    : 'bg-gray-800 text-gray-400 border-gray-700'
+                                }`}
+                              >
+                                {confidencePct}% {language === 'ar' ? 'تطابق' : 'match'}
                               </span>
                             )}
                           </div>
@@ -395,6 +429,32 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                           <p className="text-[11px] text-gray-400 truncate">
                             {cand.authors?.join(', ') || t('unknownAuthor')}
                           </p>
+
+                          {/* Matched Factors Breakdown */}
+                          {(cand.matchFactors || cand.matchReason) && (
+                            <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                              {cand.matchFactors?.isbnMatched && (
+                                <span className="px-1 py-0.2 rounded text-[8px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                  {t('factorIsbnMatch')}
+                                </span>
+                              )}
+                              {cand.matchFactors?.titleSimilarity && cand.matchFactors.titleSimilarity > 0.5 && (
+                                <span className="px-1 py-0.2 rounded text-[8px] font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                  {Math.round(cand.matchFactors.titleSimilarity * 100)}% {t('factorTitleSimilarity')}
+                                </span>
+                              )}
+                              {cand.matchFactors?.authorMatched && (
+                                <span className="px-1 py-0.2 rounded text-[8px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                  {t('factorAuthorMatch')}
+                                </span>
+                              )}
+                              {!cand.matchFactors && cand.matchReason && (
+                                <span className="text-[9px] text-gray-400 truncate">
+                                  {cand.matchReason}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-gray-500 mt-1">
                           <span>{cand.publicationYear || cand.publisher || '—'}</span>

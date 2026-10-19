@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Check,
@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { BookItem } from '../../types/library';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
-import { isPlaceholderAuthor } from '../../../shared/validators/metadata-validator';
+import { isPlaceholderAuthor, isPlaceholderTitle } from '../../../shared/validators/metadata-validator';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 export interface DiffFieldItem {
@@ -67,7 +67,9 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
   const incomingTitle = incomingWork.title || primaryEdition?.title;
   const incomingLanguage = primaryEdition?.language;
   const isArabicIncoming = incomingLanguage?.toLowerCase().startsWith('ar') || /[\u0600-\u06FF]/.test(incomingTitle || '');
-  const incomingAuthor = incomingWork.authors?.[0] || (isArabicIncoming ? 'غير معروف' : 'Unknown Author');
+  const incomingAuthor = (incomingWork.authors && incomingWork.authors.length > 0)
+    ? incomingWork.authors.join(isArabicIncoming ? '، ' : ', ')
+    : (isArabicIncoming ? 'غير معروف' : 'Unknown Author');
   const incomingPublisher = primaryEdition?.publisher;
   const incomingYear = incomingWork.firstPublishYear || (primaryEdition?.publishDate ? parseInt(primaryEdition.publishDate.substring(0, 4)) : undefined);
   const incomingIsbn = primaryEdition?.isbn13 || primaryEdition?.isbn || primaryEdition?.isbn10;
@@ -115,8 +117,8 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
         icon: BookOpen,
         currentValue: currentBook.title || '',
         incomingValue: incomingTitle || '',
-        hasCurrent: Boolean(currentBook.title?.trim()),
-        hasIncoming: Boolean(incomingTitle?.trim()),
+        hasCurrent: Boolean(currentBook.title?.trim() && !isPlaceholderTitle(currentBook.title)),
+        hasIncoming: Boolean(incomingTitle?.trim() && !isPlaceholderTitle(incomingTitle)),
         isDifferent: (currentBook.title || '').trim() !== (incomingTitle || '').trim(),
       },
       {
@@ -244,20 +246,25 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
   }, [currentBook, incomingWork, lang]);
 
   // Default selection state:
-  // Preserves existing data by default!
-  // If field is missing or empty in current book, auto-check it.
-  // If field already exists with a value, DO NOT auto-check: user must explicitly choose to overwrite it.
+  // When an online catalog candidate is approved, all incoming fields with valid values
+  // are selected by default so the canonical title and verified metadata are applied.
+  // The user can uncheck individual fields if they want to retain specific local values.
   const [selectedFieldIds, setSelectedFieldIds] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const f of diffFields) {
-      if (!f.hasCurrent) {
-        initial[f.id] = true;
-      } else {
-        initial[f.id] = false;
-      }
+      initial[f.id] = f.hasIncoming;
     }
     return initial;
   });
+
+  // Re-sync selections whenever incoming candidate or current book diffFields change
+  useEffect(() => {
+    const next: Record<string, boolean> = {};
+    for (const f of diffFields) {
+      next[f.id] = f.hasIncoming;
+    }
+    setSelectedFieldIds(next);
+  }, [diffFields]);
 
   if (!isOpen) return null;
 
@@ -299,6 +306,54 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
     if (selectedFieldIds.authorBio && incomingAuthorBio) {
       updates.authorBio = incomingAuthorBio;
     }
+
+    const prov: any = {
+      ...(currentBook.metadataProvenance || {}),
+      primaryProvider: providerName,
+      providerId: incomingWork.workId,
+      sourceUrl: primaryEdition?.sources?.[0]?.url || incomingWork.editions?.[0]?.sources?.[0]?.url,
+      discoveredAt: new Date().toISOString(),
+      method: 'online_api',
+      confidence: 0.95,
+      fieldSources: {
+        ...(currentBook.metadataProvenance?.fieldSources || {}),
+      },
+      auditTrace: [
+        ...(currentBook.metadataProvenance?.auditTrace || []),
+        `[Online Auto-Fill] Applied updates from ${providerName} (Work: ${incomingWork.workId}) at ${new Date().toLocaleTimeString()}`,
+      ],
+      rawBibliographic: incomingWork,
+    };
+
+    if (selectedFieldIds.title && incomingTitle) {
+      prov.fieldSources.title = { source: providerName, status: 'verified', value: incomingTitle, confidence: 0.98 };
+    }
+    if (selectedFieldIds.author && incomingAuthor) {
+      prov.fieldSources.author = { source: providerName, status: 'verified', value: incomingAuthor, confidence: 0.98 };
+    }
+    if (selectedFieldIds.publisher && incomingPublisher) {
+      prov.fieldSources.publisher = { source: providerName, status: 'verified', value: incomingPublisher, confidence: 0.95 };
+    }
+    if (selectedFieldIds.publicationYear && incomingYear) {
+      prov.fieldSources.publicationYear = { source: providerName, status: 'verified', value: incomingYear, confidence: 0.95 };
+    }
+    if (selectedFieldIds.isbn && incomingIsbn) {
+      prov.fieldSources.isbn = { source: providerName, status: 'verified', value: incomingIsbn, confidence: 1.0 };
+    }
+    if (selectedFieldIds.pagesCount && incomingPages) {
+      prov.fieldSources.pagesCount = { source: providerName, status: 'verified', value: incomingPages, confidence: 0.95 };
+    }
+    if (selectedFieldIds.coverImage && incomingCover) {
+      prov.fieldSources.coverImage = { source: providerName, status: 'verified', value: incomingCover, confidence: 0.95 };
+    }
+    if (selectedFieldIds.description && incomingDescription) {
+      prov.fieldSources.description = { source: providerName, status: 'verified', value: incomingDescription, confidence: 0.9 };
+    }
+    if (selectedFieldIds.authorBio && incomingAuthorBio) {
+      prov.fieldSources.authorBio = { source: providerName, status: 'verified', value: incomingAuthorBio, confidence: 0.9 };
+    }
+
+    updates.metadataProvenance = prov;
 
     onApply(updates);
     onClose();

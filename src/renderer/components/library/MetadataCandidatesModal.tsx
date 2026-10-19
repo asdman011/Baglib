@@ -26,12 +26,17 @@ import {
 import { BibliographicWork } from '../../../shared/types/bibliographic';
 import { CandidateMetadataItem } from '../../hooks/useMetadataLookup';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { TechnicalSearchDiagnostics } from '../../../shared/types/enrichment';
+import { FileQueryDiagnosticsPanel } from './FileQueryDiagnosticsPanel';
 
 interface MetadataCandidatesModalProps {
   isOpen: boolean;
   searchTitle?: string;
   searchAuthor?: string;
   searchIsbn?: string;
+  filePath?: string;
+  fileSize?: string | number;
+  diagnostics?: TechnicalSearchDiagnostics;
   candidates: BibliographicWork[];
   evaluations?: CandidateMetadataItem[];
   selectedWork: BibliographicWork | null;
@@ -47,6 +52,9 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
   searchTitle,
   searchAuthor,
   searchIsbn,
+  filePath,
+  fileSize,
+  diagnostics,
   candidates,
   evaluations = [],
   selectedWork,
@@ -252,6 +260,23 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
               {matchBadge.label} ({matchBadge.score}%)
             </span>
 
+            {/* Match factors breakdown */}
+            {evalItem?.isCertainMatch && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                {t('factorIsbnMatch')}
+              </span>
+            )}
+            {evalItem?.matchType === 'exact' && !evalItem.isCertainMatch && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">
+                {t('factorTitleSimilarity')} 100%
+              </span>
+            )}
+            {evalItem?.matchType === 'high' && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/25">
+                {t('factorAuthorMatch')}
+              </span>
+            )}
+
             {/* Selected Pill if active */}
             {isSelected && (
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500 text-white">
@@ -397,6 +422,17 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
 
         {/* Candidates List Container */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3">
+          {/* Collapsible File & Query Diagnostics Panel */}
+          <FileQueryDiagnosticsPanel
+            diagnostics={diagnostics}
+            filePath={filePath}
+            fileSize={fileSize}
+            searchTitle={searchTitle}
+            searchAuthor={searchAuthor}
+            searchIsbn={searchIsbn}
+            className="mb-3"
+          />
+
           {candidates.length === 0 ? (
             <div className="py-12 px-4 text-center flex flex-col items-center justify-center">
               <div className="w-16 h-16 rounded-3xl bg-canvas border border-subtle flex items-center justify-center text-muted mb-3">

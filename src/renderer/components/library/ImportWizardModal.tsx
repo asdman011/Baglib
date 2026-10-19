@@ -23,6 +23,7 @@ import {
   PlusCircle
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { resolveDroppedFilePath } from '../../utils/file-path-helper';
 import {
   DuplicateDetectionResult,
   DuplicateResolutionAction,
@@ -183,15 +184,16 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   };
 
   // HTML fallback input
-  const handleFallbackInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFallbackInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const items: { name: string; path: string; size?: number }[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
+      const resolvedPath = await resolveDroppedFilePath(f);
       items.push({
         name: f.name,
-        path: (f as any).path || f.name,
+        path: resolvedPath,
         size: f.size
       });
     }
@@ -209,7 +211,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     setIsDragOver(false);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const files = e.dataTransfer.files;
@@ -217,9 +219,10 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     const items: { name: string; path: string; size?: number }[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
+      const resolvedPath = await resolveDroppedFilePath(f);
       items.push({
         name: f.name,
-        path: (f as any).path || f.name,
+        path: resolvedPath,
         size: f.size
       });
     }

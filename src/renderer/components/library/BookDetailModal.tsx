@@ -36,7 +36,8 @@ import {
   Globe,
   Sliders,
   HardDrive,
-  AlertTriangle
+  AlertTriangle,
+  Terminal
 } from 'lucide-react';
 import {
   BookItem,
@@ -51,7 +52,9 @@ import {
   validateWorkMetadata,
   isValidIsbn,
   isValidDoi,
-  isValidIssn
+  isValidIssn,
+  isPlaceholderAuthor as isSharedPlaceholderAuthor,
+  isPlaceholderTitle as isSharedPlaceholderTitle
 } from '../../../shared/validators/metadata-validator';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useMetadataLookup } from '../../hooks/useMetadataLookup';
@@ -62,9 +65,11 @@ import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { ReturnBookModal } from './ReturnBookModal';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
+import { resolveDroppedFilePath, formatCoverUrl } from '../../utils/file-path-helper';
 import { CategoryCascader } from '../categories/CategoryCascader';
 import { TagEditor } from '../tags/TagEditor';
 import { EditionComparisonModal } from './EditionComparisonModal';
+import { GeekMetadataModal } from './GeekMetadataModal';
 
 
 interface BookDetailModalProps {
@@ -97,14 +102,17 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const lookupHook = useMetadataLookup();
   const [isDiscoveringFile, setIsDiscoveringFile] = useState<boolean>(false);
   const [isExtractingPdfCover, setIsExtractingPdfCover] = useState<boolean>(false);
+  const [isExtractingEpubCover, setIsExtractingEpubCover] = useState<boolean>(false);
   const [currentPdfPage, setCurrentPdfPage] = useState<number>(1);
   const [totalPdfPages, setTotalPdfPages] = useState<number>(1);
   const [pdfCoverMessage, setPdfCoverMessage] = useState<string | null>(null);
+  const [epubCoverMessage, setEpubCoverMessage] = useState<string | null>(null);
   const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
   const [showCandidatesModal, setShowCandidatesModal] = useState<boolean>(false);
   const [showProviderSettingsModal, setShowProviderSettingsModal] = useState<boolean>(false);
   const [selectedCandidateWork, setSelectedCandidateWork] = useState<BibliographicWork | null>(null);
   const [fetchedWork, setFetchedWork] = useState<BibliographicWork | null>(null);
+  const [showGeekModal, setShowGeekModal] = useState<boolean>(false);
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState<boolean>(false);
   const [isFindOnlineModalOpen, setIsFindOnlineModalOpen] = useState<boolean>(false);
@@ -120,25 +128,32 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const isPlaceholderTitle = (val?: string) => {
     if (!val) return true;
     const trimmed = val.trim();
-    return (
+    if (
       trimmed === 'مادة جديدة في المكتبة' ||
       trimmed === 'New Library Material' ||
       trimmed === t('newMaterialDefaultTitle') ||
       trimmed === ''
-    );
+    ) {
+      return true;
+    }
+    return isSharedPlaceholderTitle(val);
   };
 
   const isPlaceholderAuthor = (val?: string) => {
     if (!val) return true;
     const trimmed = val.trim();
-    return (
+    if (
       trimmed === 'مؤلف جديد' ||
       trimmed === 'New Author' ||
       trimmed === 'مؤلف مجهول' ||
       trimmed === 'Unknown Author' ||
+      trimmed === 'غير معروف' ||
       trimmed === t('noAuthor') ||
       trimmed === ''
-    );
+    ) {
+      return true;
+    }
+    return isSharedPlaceholderAuthor(val);
   };
 
   // Contributor form state
@@ -215,6 +230,19 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             }
           })
           .catch(() => {});
+      }
+
+      if (initial.filePath && initial.filePath.toLowerCase().endsWith('.epub') && !initial.coverImage) {
+        const windowAPI = (window as any).electronAPI;
+        if (windowAPI?.extractEpubCover) {
+          windowAPI.extractEpubCover(initial.filePath)
+            .then((res: any) => {
+              if (res?.success && res.coverUrl) {
+                setFormData((prev) => ({ ...prev, coverImage: res.coverUrl }));
+              }
+            })
+            .catch(() => {});
+        }
       }
     }
   }, [book, isOpen]);
@@ -303,6 +331,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     let discoveredIsbn = '';
     let discoveredCover = '';
     let discoveredEdition = '';
+    let discoveredPagesCount: number | undefined;
     let discoveredLanguage = '';
     let discoveredAbstract = '';
 
@@ -325,6 +354,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           if (discovery.isbn) discoveredIsbn = discovery.isbn;
           if (discovery.coverUrl) discoveredCover = discovery.coverUrl;
           if (discovery.edition) discoveredEdition = discovery.edition;
+          if (discovery.pagesCount) discoveredPagesCount = discovery.pagesCount;
           if (discovery.language) discoveredLanguage = discovery.language;
           if (discovery.description) discoveredAbstract = discovery.description;
         }
@@ -347,33 +377,89 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       } catch (pdfErr) {
         console.warn('[BookDetailModal] renderPdfPage error:', pdfErr);
       }
+    } else if (ext === 'EPUB' && !discoveredCover) {
+      try {
+        if (windowAPI?.extractEpubCover) {
+          const epubRes = await windowAPI.extractEpubCover(fullPath);
+          if (epubRes?.success && epubRes.coverUrl) {
+            discoveredCover = epubRes.coverUrl;
+          }
+        }
+      } catch (epubErr) {
+        console.warn('[BookDetailModal] extractEpubCover error:', epubErr);
+      }
     }
 
-    // Update the form fields with the newly selected file's metadata
-    setFormData((prev) => ({
-      ...prev,
-      filePath: fullPath,
-      digitalFormat: ext as any,
-      fileSize: fileSizeStr || prev.fileSize || '1.5 MB',
-      bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
-      title: discoveredTitle,
-      author:
-        discoveredAuthor ||
-        (discoveredLanguage?.toLowerCase().startsWith('ar') ||
-        discoveredLanguage === 'العربية' ||
-        /[\u0600-\u06FF]/.test(discoveredTitle) ||
-        lang === 'ar'
-          ? 'غير معروف'
-          : 'Unknown Author'),
-      publisher: discoveredPublisher,
-      publicationYear: discoveredYear,
-      isbn: discoveredIsbn,
-      coverImage: discoveredCover,
-      edition: discoveredEdition,
-      language: discoveredLanguage,
-      description: discoveredAbstract || prev.description,
-      abstract: discoveredAbstract || prev.abstract,
-    }));
+    // Update the form fields with the newly selected file's metadata respecting Non-Destructive Merge Policy
+    setFormData((prev) => {
+      // 1. Existing Curated Data Wins: Never overwrite existing non-empty curated fields
+      const hasCuratedTitle = Boolean(prev.title && prev.title.trim() !== '' && !isPlaceholderTitle(prev.title));
+      const finalTitle = hasCuratedTitle ? prev.title : (discoveredTitle || prev.title);
+
+      const hasCuratedAuthor = Boolean(prev.author && prev.author.trim() !== '' && !isPlaceholderAuthor(prev.author));
+      const finalAuthor = hasCuratedAuthor
+        ? prev.author
+        : (discoveredAuthor ||
+          (discoveredLanguage?.toLowerCase().startsWith('ar') ||
+          discoveredLanguage === 'العربية' ||
+          /[\u0600-\u06FF]/.test(finalTitle) ||
+          lang === 'ar'
+            ? 'غير معروف'
+            : 'Unknown Author'));
+
+      const hasCuratedPublisher = Boolean(prev.publisher && prev.publisher.trim() !== '');
+      const finalPublisher = hasCuratedPublisher ? prev.publisher : (discoveredPublisher || prev.publisher);
+
+      const hasCuratedYear = Boolean(
+        prev.publicationYear && String(prev.publicationYear).trim() !== '' && Number(prev.publicationYear) > 0
+      );
+      const finalYear = hasCuratedYear ? prev.publicationYear : (discoveredYear || prev.publicationYear);
+
+      const hasCuratedIsbn = Boolean(prev.isbn && prev.isbn.trim() !== '');
+      const finalIsbn = hasCuratedIsbn ? prev.isbn : (discoveredIsbn || prev.isbn);
+
+      const hasCuratedCover = Boolean(prev.coverImage && prev.coverImage.trim() !== '');
+      const finalCover = hasCuratedCover ? prev.coverImage : (discoveredCover || prev.coverImage);
+
+      const hasCuratedEdition = Boolean(prev.edition && prev.edition.trim() !== '');
+      const finalEdition = hasCuratedEdition ? prev.edition : (discoveredEdition || prev.edition);
+
+      const hasCuratedLanguage = Boolean(prev.language && prev.language.trim() !== '');
+      const finalLanguage = hasCuratedLanguage ? prev.language : (discoveredLanguage || prev.language);
+
+      const hasCuratedDescription = Boolean(
+        (prev.description && prev.description.trim() !== '') || (prev.abstract && prev.abstract.trim() !== '')
+      );
+      const finalDescription = hasCuratedDescription
+        ? (prev.description || prev.abstract)
+        : (discoveredAbstract || prev.description);
+      const finalAbstract = hasCuratedDescription
+        ? (prev.abstract || prev.description)
+        : (discoveredAbstract || prev.abstract);
+
+      return {
+        ...prev,
+        // Always extract and save technical file properties that belong strictly to the file
+        filePath: fullPath,
+        digitalFormat: ext as any,
+        fileSize: fileSizeStr || prev.fileSize || '1.5 MB',
+        pagesCount: discoveredPagesCount !== undefined ? discoveredPagesCount : prev.pagesCount,
+        bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
+        storageState: 'available',
+
+        // Merged fields: curated existing metadata wins, file metadata fills gaps only
+        title: finalTitle,
+        author: finalAuthor,
+        publisher: finalPublisher,
+        publicationYear: finalYear,
+        isbn: finalIsbn,
+        coverImage: finalCover,
+        edition: finalEdition,
+        language: finalLanguage,
+        description: finalDescription,
+        abstract: finalAbstract,
+      };
+    });
 
     setIsDiscoveringFile(false);
     setIsFileImported(true);
@@ -473,7 +559,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
     const file = files[0];
-    const fullPath = (file as any).path || file.name;
+    const fullPath = await resolveDroppedFilePath(file);
     const sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
     await applyFileMetadata(fullPath, file.name, sizeStr);
   };
@@ -561,6 +647,45 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     }
   };
 
+  const handleExtractEpubCover = async () => {
+    if (!formData.filePath) return;
+
+    setIsExtractingEpubCover(true);
+    setEpubCoverMessage(null);
+    try {
+      const windowAPI = (window as any).electronAPI;
+      if (windowAPI?.extractEpubCover) {
+        const res = await windowAPI.extractEpubCover(formData.filePath);
+        if (res?.success && res.coverUrl) {
+          handleInputChange('coverImage', res.coverUrl);
+          setEpubCoverMessage(
+            t('epubCoverExtracted') ||
+              (lang === 'ar'
+                ? 'تم استخراج الغلاف من ملف EPUB وتعيينه كغلاف بنجاح!'
+                : 'Cover extracted from EPUB file and set as book cover successfully!')
+          );
+          setTimeout(() => setEpubCoverMessage(null), 3500);
+        } else {
+          setEpubCoverMessage(
+            t('noEpubImagesFound') ||
+              (lang === 'ar'
+                ? 'تعذر العثور على صورة غلاف داخل ملف EPUB.'
+                : 'No cover image found inside EPUB file.')
+          );
+          setTimeout(() => setEpubCoverMessage(null), 3500);
+        }
+      }
+    } catch (err) {
+      console.warn('[BookDetailModal] extractEpubCover error:', err);
+      setEpubCoverMessage(
+        lang === 'ar' ? 'تعذر استخراج الغلاف من ملف EPUB.' : 'Failed to extract cover from EPUB.'
+      );
+      setTimeout(() => setEpubCoverMessage(null), 3500);
+    } finally {
+      setIsExtractingEpubCover(false);
+    }
+  };
+
   const handleSwitchPdfPage = (targetPage: number) => {
     if (targetPage < 1) return;
     if (totalPdfPages > 0 && targetPage > totalPdfPages) return;
@@ -603,7 +728,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const file = files[0];
-    const filePath = (file as any).path || file.name;
+    const filePath = await resolveDroppedFilePath(file);
     const sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
     await applyFileMetadata(filePath, file.name, sizeStr);
   };
@@ -1228,7 +1353,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     </div>
                   ) : formData.coverImage ? (
                     <img
-                      src={formData.coverImage}
+                      src={formatCoverUrl(formData.coverImage)}
                       alt={formData.title || 'Cover'}
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -1270,6 +1395,22 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           <Sparkles className="w-3.5 h-3.5" />
                         )}
                         <span>{isExtractingPdfCover ? t('extractingPdfCover') : t('extractPdfCoverBtn')}</span>
+                      </button>
+                    )}
+                    {formData.filePath && formData.filePath.toLowerCase().endsWith('.epub') && (
+                      <button
+                        type="button"
+                        onClick={handleExtractEpubCover}
+                        disabled={isExtractingEpubCover}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-pale-sky-500/30 bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-400 hover:bg-pale-sky-500/20 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                        title={t('extractEpubCoverBtn')}
+                      >
+                        {isExtractingEpubCover ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isExtractingEpubCover ? t('extractingEpubCover') : t('extractEpubCoverBtn')}</span>
                       </button>
                     )}
                     <button
@@ -1347,9 +1488,17 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     </div>
                   )}
 
-                  {!formData.filePath && pdfCoverMessage && (
+                  {formData.filePath && formData.filePath.toLowerCase().endsWith('.epub') && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="text-[11px] font-semibold text-pale-sky-600 dark:text-pale-sky-400 min-h-[16px]">
+                        {epubCoverMessage || ''}
+                      </div>
+                    </div>
+                  )}
+
+                  {!formData.filePath && (pdfCoverMessage || epubCoverMessage) && (
                     <div className="text-[11px] font-semibold text-pale-sky-600 dark:text-pale-sky-400">
-                      {pdfCoverMessage}
+                      {pdfCoverMessage || epubCoverMessage}
                     </div>
                   )}
                 </div>
@@ -1389,6 +1538,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           className="p-1.5 rounded-lg bg-canvas border border-subtle text-muted hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/30 transition-all cursor-pointer"
                         >
                           <Sliders className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowGeekModal(true)}
+                          title={t('geekDetailsBtn')}
+                          aria-label={t('geekDetailsBtn')}
+                          className="p-1.5 rounded-lg bg-canvas border border-subtle text-muted hover:text-purple-600 dark:hover:text-purple-400 hover:border-purple-500/30 transition-all cursor-pointer"
+                        >
+                          <Terminal className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     )}
@@ -2410,16 +2568,28 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* MODAL FOOTER                                                      */}
         {/* ================================================================= */}
         <div className="p-4 sm:p-5 bg-canvas border-t border-subtle flex items-center justify-between gap-3">
-          <div>
+          <div className="flex items-center gap-2">
             {!isCreateMode && (
-              <button
-                type="button"
-                onClick={() => onDelete(formData.id)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-red-500 hover:bg-red-500/10 text-xs font-bold transition-all cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">{t('deleteFromLibrary')}</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => onDelete(formData.id)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-red-500 hover:bg-red-500/10 text-xs font-bold transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t('deleteFromLibrary')}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowGeekModal(true)}
+                  title={t('geekDetailsTooltip')}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-subtle bg-surface/40 hover:bg-surface text-muted hover:text-purple-600 dark:hover:text-purple-400 text-xs font-medium transition-all cursor-pointer"
+                >
+                  <Terminal className="w-3.5 h-3.5 opacity-70" />
+                  <span>{t('geekDetailsBtn')}</span>
+                </button>
+              </>
             )}
           </div>
 
@@ -2450,6 +2620,20 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       }
                     } catch (err) {
                       console.warn('[BookDetailModal] Auto PDF cover extraction on save error:', err);
+                    }
+                  } else if (
+                    !toSave.coverImage &&
+                    toSave.filePath &&
+                    toSave.filePath.toLowerCase().endsWith('.epub') &&
+                    (window as any).electronAPI?.extractEpubCover
+                  ) {
+                    try {
+                      const epubCoverRes = await (window as any).electronAPI.extractEpubCover(toSave.filePath);
+                      if (epubCoverRes?.success && epubCoverRes.coverUrl) {
+                        toSave.coverImage = epubCoverRes.coverUrl;
+                      }
+                    } catch (err) {
+                      console.warn('[BookDetailModal] Auto EPUB cover extraction on save error:', err);
                     }
                   }
                   onSave(toSave);
@@ -2484,6 +2668,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             searchTitle={formData.title}
             searchAuthor={formData.author}
             searchIsbn={formData.isbn}
+            filePath={formData.filePath}
+            fileSize={formData.fileSize}
             candidates={lookupHook.candidates}
             evaluations={lookupHook.evaluations}
             selectedWork={selectedCandidateWork}
@@ -2539,6 +2725,13 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           book={formData}
           onClose={() => setIsFindOnlineModalOpen(false)}
           onEnrichmentApplied={handleEnrichmentApplied}
+        />
+
+        {/* Geek Metadata Diagnostics Modal */}
+        <GeekMetadataModal
+          isOpen={showGeekModal}
+          onClose={() => setShowGeekModal(false)}
+          book={formData}
         />
       </div>
     </div>

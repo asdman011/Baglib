@@ -10,6 +10,7 @@ import {
   Trash2,
   AlertTriangle,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { BookItem, ReadingStatus } from '../../types/library';
@@ -23,6 +24,7 @@ interface BulkActionsToolbarProps {
   allCategories: { id: string; nameAr: string; nameEn: string }[];
   onClearSelection: () => void;
   onOperationComplete: (message: string) => void;
+  onOpenAudit?: () => void;
 }
 
 export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
@@ -31,12 +33,15 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   allCategories,
   onClearSelection,
   onOperationComplete,
+  onOpenAudit,
 }) => {
   const { t, lang, dir } = useWorkspace();
 
   // Modals state
-  const [activeModal, setActiveModal] = useState<'category' | 'tags' | 'status' | 'delete' | null>(null);
+  const [activeModal, setActiveModal] = useState<'category' | 'tags' | 'status' | 'delete' | 'enrich' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [enrichProgress, setEnrichProgress] = useState<{ current: number; total: number; bookTitle?: string; status: string } | null>(null);
+  const [enrichResult, setEnrichResult] = useState<{ total: number; updated: number; skipped: number; failed: number } | null>(null);
 
   // Form states
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
@@ -46,6 +51,44 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   if (selectedBookIds.length === 0) return null;
 
   const count = selectedBookIds.length;
+
+  // Bulk Online Metadata Enrichment with Rate-Limiting
+  const handleBulkEnrich = async () => {
+    setIsLoading(true);
+    setEnrichResult(null);
+    setEnrichProgress({ current: 0, total: count, status: 'starting' });
+
+    let unsubscribe: (() => void) | undefined;
+    const windowEnrichment = (window as any)?.electronAPI?.enrichment;
+    if (windowEnrichment?.onBulkProgress) {
+      unsubscribe = windowEnrichment.onBulkProgress((prog: any) => {
+        setEnrichProgress(prog);
+      });
+    }
+
+    try {
+      if (windowEnrichment?.bulkEnrichWorks) {
+        const result = await windowEnrichment.bulkEnrichWorks({
+          workIds: selectedBookIds,
+        });
+        setEnrichResult(result);
+        onOperationComplete(
+          t('bulkEnrichComplete', {
+            updated: result.updated,
+            skipped: result.skipped,
+            failed: result.failed,
+          })
+        );
+      }
+    } catch (err) {
+      console.error('Failed to bulk enrich metadata:', err);
+    } finally {
+      setIsLoading(false);
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    }
+  };
 
   // 1. Bulk Category Assignment
   const handleApplyCategory = async () => {
@@ -182,6 +225,32 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
             >
               <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
               <span className="hidden sm:inline">{t('bulkChangeStatus')}</span>
+            </button>
+
+            {/* Library Metadata Audit & Refresh for Selection */}
+            {onOpenAudit && (
+              <button
+                onClick={onOpenAudit}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 dark:text-amber-400 font-semibold transition-all shadow-sm cursor-pointer"
+                title={t('auditAndRefreshMetadata')}
+              >
+                <Sparkles className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">{t('auditAndRefreshMetadata')}</span>
+              </button>
+            )}
+
+            {/* Online Metadata Enrichment */}
+            <button
+              onClick={() => {
+                setEnrichResult(null);
+                setEnrichProgress(null);
+                setActiveModal('enrich');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 font-medium transition-all"
+              title={t('bulkDownloadMetadata')}
+            >
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">{t('bulkDownloadMetadata')}</span>
             </button>
 
             {/* Export */}
@@ -394,6 +463,88 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <span>{t('bulkDeleteBtn')}</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Modal: Bulk Download Online Metadata */}
+      {activeModal === 'enrich' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-sky-400" />
+              <span>{t('bulkEnrichModalTitle', { count })}</span>
+            </h3>
+
+            <p className="text-xs text-muted leading-relaxed">
+              {t('bulkDownloadMetadataDesc')}
+            </p>
+
+            {enrichProgress && (
+              <div className="space-y-2 bg-surface/70 border border-border/60 rounded-xl p-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-foreground font-medium">
+                    {t('bulkEnrichProgress', {
+                      current: enrichProgress.current,
+                      total: enrichProgress.total,
+                    })}
+                  </span>
+                  <span className="text-muted">
+                    {Math.round((enrichProgress.current / (enrichProgress.total || 1)) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full bg-border/40 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-sky-500 h-full transition-all duration-300"
+                    style={{
+                      width: `${Math.round((enrichProgress.current / (enrichProgress.total || 1)) * 100)}%`,
+                    }}
+                  />
+                </div>
+                {enrichProgress.bookTitle && (
+                  <div className="text-[11px] text-muted truncate">
+                    {enrichProgress.bookTitle}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {enrichResult && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-400 space-y-1">
+                <div className="font-semibold flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>
+                    {t('bulkEnrichComplete', {
+                      updated: enrichResult.updated,
+                      skipped: enrichResult.skipped,
+                      failed: enrichResult.failed,
+                    })}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => setActiveModal(null)}
+                className="px-4 py-2 rounded-xl border border-border/60 hover:bg-surface text-xs font-medium text-muted transition-colors disabled:opacity-50"
+              >
+                {enrichResult ? (lang === 'ar' ? 'إغلاق' : 'Close') : t('bulkCancelBtn')}
+              </button>
+              {!enrichResult && (
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={handleBulkEnrich}
+                  className="flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
+                >
+                  {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{lang === 'ar' ? 'بدء التنزيل' : 'Start Download'}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

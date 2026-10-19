@@ -17,6 +17,7 @@ import {
 import { BookItem } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { BorrowerSummary } from '../../../shared/types/physical-library';
+import { formatCoverUrl } from '../../utils/file-path-helper';
 
 interface LendBookModalProps {
   isOpen: boolean;
@@ -160,7 +161,7 @@ export const LendBookModal: React.FC<LendBookModalProps> = ({
         <div className="p-4 bg-canvas/30 border-b border-subtle flex items-start gap-3">
           <div className="w-12 h-16 rounded-xl bg-canvas border border-subtle overflow-hidden shrink-0 flex items-center justify-center">
             {book.coverImage ? (
-              <img src={book.coverImage} alt={book.title} className="w-full h-full object-cover" />
+              <img src={formatCoverUrl(book.coverImage)} alt={book.title} className="w-full h-full object-cover" />
             ) : (
               <span className="text-xs font-bold text-muted uppercase">{book.title.slice(0, 2)}</span>
             )}

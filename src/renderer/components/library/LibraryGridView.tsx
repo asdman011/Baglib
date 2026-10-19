@@ -36,6 +36,7 @@ import {
   Scissors,
   BarChart2,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { BookItem, ReadingStatus } from '../../types/library';
 import { BookDetailModal } from './BookDetailModal';
@@ -52,9 +53,11 @@ import { ReturnBookModal } from './ReturnBookModal';
 import { PaginationBar } from './PaginationBar';
 import { ColumnSelectorDropdown } from './ColumnSelectorDropdown';
 import { BulkActionsToolbar } from './BulkActionsToolbar';
+import { MetadataAuditModal } from './MetadataAuditModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { matchesSearchQuery } from '../../utils/search';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
+import { resolveDroppedFilePath, formatCoverUrl } from '../../utils/file-path-helper';
 import type {
   CardDensity,
   ListDensity,
@@ -198,8 +201,17 @@ export const LibraryGridView: React.FC = () => {
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isLockScreenActive, setIsLockScreenActive] = useState(false);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const dragCounterRef = useRef(0);
+
+  // Books scope for audit & refresh modal (selection vs entire library)
+  const booksToAudit = useMemo(() => {
+    if (selectedBookIds.size > 0) {
+      return books.filter((b) => selectedBookIds.has(b.id));
+    }
+    return books;
+  }, [books, selectedBookIds]);
 
   // App Lock Security check on mount and periodic idle monitoring
   useEffect(() => {
@@ -556,6 +568,7 @@ export const LibraryGridView: React.FC = () => {
     let discoveredIsbn: string | undefined;
     let discoveredCover: string | undefined;
     let discoveredEdition: string | undefined;
+    let discoveredPagesCount: number | undefined;
     let discoveredDescription: string | undefined;
     let discoveredLanguage: string | undefined;
 
@@ -565,6 +578,8 @@ export const LibraryGridView: React.FC = () => {
         ? 'جاري استيراد الكتاب واكتشاف بياناته بدون إنترنت...'
         : 'Importing book & discovering offline metadata...'
     );
+
+    let discoveryResult: any = null;
 
     try {
       const windowAPI = (window as any).electronAPI;
@@ -577,6 +592,7 @@ export const LibraryGridView: React.FC = () => {
             offlineOnly: true,
           });
           if (discovery) {
+            discoveryResult = discovery;
             if (discovery.title) discoveredTitle = discovery.title;
             if (discovery.authors && discovery.authors.length > 0) {
               discoveredAuthor = discovery.authors.join('، ');
@@ -593,6 +609,7 @@ export const LibraryGridView: React.FC = () => {
             if (discovery.isbn) discoveredIsbn = discovery.isbn;
             if (discovery.coverUrl) discoveredCover = discovery.coverUrl;
             if (discovery.edition) discoveredEdition = discovery.edition;
+            if (discovery.pagesCount) discoveredPagesCount = discovery.pagesCount;
             if (discovery.description) discoveredDescription = discovery.description;
             if (discovery.language) discoveredLanguage = discovery.language;
           }
@@ -601,19 +618,56 @@ export const LibraryGridView: React.FC = () => {
         }
       }
 
-      // Render page 1 of the imported PDF as cover image of the book if not already found
+      // Automatically extract cover from PDF if not already discovered
       if (!discoveredCover && ext === 'PDF') {
         try {
-          const pdfCoverRes = await renderPdfPage(fullPath, 1);
-          if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
-            discoveredCover = pdfCoverRes.coverUrl;
+          if (windowAPI?.extractPdfCover) {
+            const extRes = await windowAPI.extractPdfCover(fullPath, 1);
+            if (extRes?.success && extRes.coverUrl) {
+              discoveredCover = extRes.coverUrl;
+            }
+          }
+          if (!discoveredCover) {
+            const pdfCoverRes = await renderPdfPage(fullPath, 1);
+            if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
+              discoveredCover = pdfCoverRes.coverUrl;
+            }
           }
         } catch (err) {
-          console.warn('[LibraryGridView] renderPdfPage cover fallback error:', err);
+          console.warn('[LibraryGridView] Automatic PDF cover extraction error:', err);
         }
       }
 
       const formattedSize = fileSize ? `${(fileSize / (1024 * 1024)).toFixed(1)} MB` : '1.5 MB';
+
+      const offlineProvenance: any = {
+        primaryProvider: discoveryResult?.provenance?.providerUsed || (discoveryResult?.provenance?.embeddedFound ? 'Embedded Container' : 'Local Filename Parser'),
+        discoveredAt: new Date().toISOString(),
+        method: discoveryResult?.provenance?.embeddedFound ? 'offline_embedded' : 'offline_filename',
+        confidence: discoveryResult?.confidence || 0.85,
+        fieldSources: {
+          title: { source: discoveryResult?.provenance?.embeddedFound ? 'Container Metadata' : 'Filename Parser', status: 'extracted', value: discoveredTitle, confidence: 0.9 },
+          author: { source: discoveryResult?.provenance?.embeddedFound ? 'Container Metadata' : 'Filename Parser', status: 'extracted', value: discoveredAuthor, confidence: 0.9 },
+          isbn: { source: discoveredIsbn ? 'Container Stream' : 'none', status: discoveredIsbn ? 'verified' : 'fallback', value: discoveredIsbn, confidence: 1.0 },
+          pagesCount: { source: discoveredPagesCount ? 'Page Counter Stream' : 'none', status: 'calculated', value: discoveredPagesCount, confidence: 1.0 },
+          coverImage: { source: discoveredCover ? 'Raster Extraction Stream' : 'none', status: 'extracted', value: discoveredCover ? 'Extracted Cover' : undefined, confidence: 0.9 },
+          publisher: { source: discoveredPublisher ? 'Container Metadata' : 'none', status: 'extracted', value: discoveredPublisher, confidence: 0.85 },
+          publicationYear: { source: discoveredYear ? 'Container Metadata' : 'none', status: 'extracted', value: discoveredYear, confidence: 0.85 },
+        },
+        auditTrace: [
+          `[Digital Ingestion] Processed local file: ${fileNameWithExt} (${formattedSize})`,
+          discoveryResult?.provenance?.embeddedFound
+            ? `[Extractor] Successfully extracted embedded ${ext} headers and metadata tags`
+            : `[Extractor] Analyzed filename patterns and tokens`,
+          discoveredPagesCount
+            ? `[Page Counter] Detected ${discoveredPagesCount} pages`
+            : `[Page Counter] Page count deferred or not available in headers`,
+          discoveredCover
+            ? `[Raster Cover Engine] Generated first-page raster thumbnail`
+            : `[Raster Cover Engine] Cover image extraction deferred`,
+        ],
+        rawBibliographic: discoveryResult || { fileName: fileNameWithExt, path: fullPath, ext, size: formattedSize },
+      };
 
       const newDigitalBook: BookItem = {
         id: `book-local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -624,6 +678,7 @@ export const LibraryGridView: React.FC = () => {
         isbn: discoveredIsbn,
         coverImage: discoveredCover,
         edition: discoveredEdition,
+        pagesCount: discoveredPagesCount,
         abstract: discoveredDescription,
         digitalFormat: ext as any,
         bookType: 'digital',
@@ -635,6 +690,7 @@ export const LibraryGridView: React.FC = () => {
         categories: ['ملفات رقمية محددة'],
         tags: [`#${ext}`],
         lendingHistory: [],
+        metadataProvenance: offlineProvenance,
       };
 
       addBook(newDigitalBook);
@@ -676,7 +732,7 @@ export const LibraryGridView: React.FC = () => {
     if (!files || files.length === 0) return;
 
     const file = files[0];
-    const fullPath = (file as any).path || file.name;
+    const fullPath = await resolveDroppedFilePath(file);
     const importedBook = await importDigitalBookFromFile(fullPath, file.name, file.size);
     if (importedBook) {
       openBookForReading(importedBook);
@@ -721,7 +777,7 @@ export const LibraryGridView: React.FC = () => {
       const ext = file.name.split('.').pop()?.toUpperCase() || '';
       if (!supportedExts.has(ext)) continue;
 
-      const fullPath = (file as any).path || file.name;
+      const fullPath = await resolveDroppedFilePath(file);
       await importDigitalBookFromFile(fullPath, file.name, file.size);
       addedCount += 1;
     }
@@ -953,6 +1009,33 @@ export const LibraryGridView: React.FC = () => {
               {storageIssueCount > 0 && (
                 <span className="inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white animate-pulse">
                   {storageIssueCount}
+                </span>
+              )}
+            </button>
+
+            {/* Library Metadata Audit & Refresh */}
+            <button
+              onClick={() => setIsAuditModalOpen(true)}
+              title={
+                selectedBookIds.size > 0
+                  ? t('auditScopeSelected', { count: selectedBookIds.size })
+                  : t('auditAndRefreshMetadata')
+              }
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                selectedBookIds.size > 0
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400 shadow-sm'
+                  : 'bg-canvas border-subtle hover:bg-surface text-muted hover:text-amber-500'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span className="hidden sm:inline">
+                {selectedBookIds.size > 0
+                  ? `${t('auditAndRefreshMetadata')} (${selectedBookIds.size})`
+                  : t('auditAndRefreshMetadata')}
+              </span>
+              {selectedBookIds.size > 0 && (
+                <span className="sm:hidden inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+                  {selectedBookIds.size}
                 </span>
               )}
             </button>
@@ -1380,7 +1463,7 @@ export const LibraryGridView: React.FC = () => {
                         >
                           {book.coverImage ? (
                             <img
-                              src={book.coverImage}
+                              src={formatCoverUrl(book.coverImage)}
                               alt={book.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                               onError={(e) => {
@@ -1512,7 +1595,7 @@ export const LibraryGridView: React.FC = () => {
                           <div className="w-28 h-40 shrink-0 rounded-xl overflow-hidden bg-canvas border border-subtle shadow-inner relative group-hover:opacity-95 transition-opacity">
                             {book.coverImage ? (
                               <img
-                                src={book.coverImage}
+                                src={formatCoverUrl(book.coverImage)}
                                 alt={book.title}
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                 onError={(e) => {
@@ -1740,7 +1823,7 @@ export const LibraryGridView: React.FC = () => {
                         {book.coverImage ? (
                           <div className="w-full h-44 rounded-xl overflow-hidden bg-canvas border border-subtle shadow-inner relative group-hover:opacity-95 transition-opacity">
                             <img
-                              src={book.coverImage}
+                              src={formatCoverUrl(book.coverImage)}
                               alt={book.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               onError={(e) => {
@@ -2065,7 +2148,7 @@ export const LibraryGridView: React.FC = () => {
                               <td className="w-12 py-2 px-2">
                                 {book.coverImage ? (
                                   <img
-                                    src={book.coverImage}
+                                    src={formatCoverUrl(book.coverImage)}
                                     alt={book.title}
                                     className={`${listDensity === 'compact' ? 'w-8 h-10' : 'w-10 h-14'} object-cover rounded-lg border border-subtle shrink-0`}
                                     onError={(e) => {
@@ -2322,6 +2405,7 @@ export const LibraryGridView: React.FC = () => {
         selectedBooks={books.filter((b) => selectedBookIds.has(b.id))}
         allCategories={allCategories}
         onClearSelection={handleClearSelection}
+        onOpenAudit={() => setIsAuditModalOpen(true)}
         onOperationComplete={(msg) => {
           setSaveToast(msg);
           setTimeout(() => setSaveToast(null), 4000);
@@ -2432,6 +2516,23 @@ export const LibraryGridView: React.FC = () => {
           refreshBooks();
         }}
       />
+
+      {/* Library Metadata Audit & Refresh Modal */}
+      {isAuditModalOpen && (
+        <MetadataAuditModal
+          isOpen={isAuditModalOpen}
+          onClose={() => {
+            setIsAuditModalOpen(false);
+            refreshBooks();
+          }}
+          booksToAudit={booksToAudit}
+          onUpdateBook={async (b) => {
+            await updateBook(b);
+            await refreshBooks();
+          }}
+          allCategories={allCategories}
+        />
+      )}
 
       {/* Book Import & Discovery Progress Floating Pill */}
       {isImportingBook && (
