@@ -8,6 +8,65 @@
 import type { WikipediaSummaryCard } from '../../../shared/types/dictionary';
 import { stripArabicDiacritics } from '../../../shared/utils/lookup-candidates';
 
+/**
+ * Normalizes user/book language representations into valid ISO Wikipedia subdomains (e.g. 'ar', 'en', 'fr').
+ */
+export function normalizeWikipediaLang(lang?: string, isArabicText?: boolean): string {
+  if (!lang) return isArabicText ? 'ar' : 'en';
+  const clean = lang.trim().toLowerCase();
+
+  if (
+    clean === 'ar' ||
+    clean.startsWith('ar-') ||
+    clean === 'العربية' ||
+    clean === 'عربي' ||
+    clean === 'arabic'
+  ) {
+    return 'ar';
+  }
+
+  if (
+    clean === 'en' ||
+    clean.startsWith('en-') ||
+    clean === 'الإنجليزية' ||
+    clean === 'الانجليزية' ||
+    clean === 'english'
+  ) {
+    return 'en';
+  }
+
+  if (clean === 'fr' || clean.startsWith('fr-') || clean === 'الفرنسية' || clean === 'french') {
+    return 'fr';
+  }
+
+  if (clean === 'de' || clean.startsWith('de-') || clean === 'الألمانية' || clean === 'german') {
+    return 'de';
+  }
+
+  if (clean === 'es' || clean.startsWith('es-') || clean === 'الإسبانية' || clean === 'spanish') {
+    return 'es';
+  }
+
+  if (clean === 'tr' || clean.startsWith('tr-') || clean === 'التركية' || clean === 'turkish') {
+    return 'tr';
+  }
+
+  if (clean === 'fa' || clean.startsWith('fa-') || clean === 'الفارسية' || clean === 'persian') {
+    return 'fa';
+  }
+
+  if (clean === 'ur' || clean.startsWith('ur-') || clean === 'الأوردية' || clean === 'urdu') {
+    return 'ur';
+  }
+
+  // If already a valid 2-3 letter ASCII language code (e.g. 'it', 'ja', 'ru', 'zh')
+  if (/^[a-z]{2,3}$/.test(clean)) {
+    return clean;
+  }
+
+  return isArabicText ? 'ar' : 'en';
+}
+
 export class WikipediaService {
   /**
    * Fetch summary card from Wikipedia REST API.
@@ -17,9 +76,14 @@ export class WikipediaService {
     const trimmed = word.trim();
     if (!trimmed) return null;
 
+    // Disregard URLs and web addresses
+    if (/^(https?:\/\/|www\.)/i.test(trimmed)) {
+      return null;
+    }
+
     // Detect language: check for Arabic unicode range
     const isArabic = /[\u0600-\u06FF]/.test(trimmed);
-    const langCode = preferredLang || (isArabic ? 'ar' : 'en');
+    const langCode = normalizeWikipediaLang(preferredLang, isArabic);
 
     // Try original word first
     let result = await this.queryApi(trimmed, langCode);
@@ -41,13 +105,15 @@ export class WikipediaService {
   }
 
   private async queryApi(term: string, lang: string): Promise<WikipediaSummaryCard | null> {
+    const validLang = normalizeWikipediaLang(lang);
     try {
-      const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`;
+      const url = `https://${validLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`;
       const response = await fetch(url, {
         headers: {
           'User-Agent': 'Baglib-Reader/0.1.0 (https://github.com/asdman011/Baglib; book-reader@baglib.local)',
           'Accept': 'application/json',
         },
+        signal: AbortSignal.timeout(5000),
       });
 
       if (!response.ok) {
@@ -59,10 +125,10 @@ export class WikipediaService {
         return null;
       }
 
-      const isRtl = data.dir === 'rtl' || lang === 'ar';
+      const isRtl = data.dir === 'rtl' || validLang === 'ar';
       const articleUrl =
         data.content_urls?.desktop?.page ||
-        `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(term)}`;
+        `https://${validLang}.wikipedia.org/wiki/${encodeURIComponent(term)}`;
 
       return {
         title: data.title || term,
@@ -72,11 +138,11 @@ export class WikipediaService {
         description: data.description,
         thumbnailUrl: data.thumbnail?.source,
         articleUrl,
-        lang,
+        lang: validLang,
         dir: isRtl ? 'rtl' : 'ltr',
       };
-    } catch (err) {
-      console.warn(`[WikipediaService] Failed to query ${lang}.wikipedia.org for "${term}":`, err);
+    } catch (err: any) {
+      console.warn(`[WikipediaService] Notice: Could not fetch summary from ${validLang}.wikipedia.org for "${term}":`, err?.message || err);
       return null;
     }
   }

@@ -53,10 +53,12 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
 
     setIsLoading(true);
     try {
+      const isArabic = /[\u0600-\u06FF]/.test(trimmed);
+      const normalizedLang = (bookLang === 'العربية' || bookLang === 'ar' || isArabic) ? 'ar' : 'en';
       const windowAPI = (window as any).electronAPI;
       if (windowAPI?.dictionaryLookup) {
         const data = await windowAPI.dictionaryLookup(trimmed, {
-          lang: bookLang,
+          lang: normalizedLang,
           includeWikipedia: true,
         });
         setResult(data);
