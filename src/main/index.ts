@@ -3,6 +3,7 @@ import path from "path";
 import serve from "electron-serve";
 import { pathToFileURL } from "url";
 import fs from "fs";
+import { Readable } from "stream";
 import { setupSystemIPC } from "./ipc/system";
 import { setupDatabaseIPC } from "./ipc/database";
 import { setupMetadataIPC } from "./ipc/metadata";
@@ -131,12 +132,21 @@ const MIME_BY_EXT: Record<string, string> = {
 };
 
 function resolveLocalFilePath(rawUrlPath: string): string | null {
-  let decodedPath = decodeURIComponent(rawUrlPath);
-  // Strip leading slash if followed by Windows drive letter, e.g. "/C:/..." -> "C:/..."
-  if (/^\/[a-zA-Z]:[\\/]/.test(decodedPath)) {
-    decodedPath = decodedPath.slice(1);
+  let decodedPath = rawUrlPath;
+  try {
+    decodedPath = decodeURIComponent(rawUrlPath);
+  } catch {}
+
+  // Strip leading slashes, e.g. "///C:/..." or "/C:/..." -> "C:/..."
+  decodedPath = decodedPath.replace(/^\/+/, '');
+  // If Windows drive letter followed by slash or colon, e.g. "C:/..." or "c:/..."
+  if (/^[a-zA-Z]:[\\/]/.test(decodedPath)) {
+    decodedPath = path.normalize(decodedPath);
+  } else if (/^[a-zA-Z][\\/]/.test(decodedPath)) {
+    decodedPath = path.normalize(`${decodedPath[0]}:${decodedPath.slice(1)}`);
+  } else {
+    decodedPath = path.normalize(`/${decodedPath}`);
   }
-  decodedPath = path.normalize(decodedPath);
 
   if (fs.existsSync(decodedPath)) {
     return decodedPath;
@@ -180,9 +190,10 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
       }
 
       const chunksize = end - start + 1;
-      const stream = fs.createReadStream(filePath, { start, end });
+      const nodeStream = fs.createReadStream(filePath, { start, end });
+      const webStream = (Readable as any).toWeb ? (Readable as any).toWeb(nodeStream) : nodeStream;
 
-      return new Response(stream as any, {
+      return new Response(webStream as any, {
         status: 206,
         headers: {
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,

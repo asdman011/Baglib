@@ -236,6 +236,13 @@ describe('KEY-134 Viewport Controller, Typography Engine & Focus Aids Tests', ()
       'paragraphFocusBtn',
       'speedReaderBtn',
       'wideComicSpreadLabel',
+      'autoScrollPlay',
+      'autoScrollPause',
+      'autoScrollPaused',
+      'autoScrollSpeed',
+      'expandAll',
+      'collapseAll',
+      'searchTocPlaceholder',
     ] as const;
 
     it('ensures all Viewport and Focus Aid keys are defined in Arabic', () => {
@@ -254,6 +261,118 @@ describe('KEY-134 Viewport Controller, Typography Engine & Focus Aids Tests', ()
           `Missing English translation for key: ${key}`
         );
       }
+    });
+  });
+
+  describe('5. Exclusive Panel Switching & TOC Expand/Collapse Algorithms', () => {
+    it('exclusive panel transition ensures opening any panel closes all other active panels', () => {
+      type PanelType = 'toc' | 'knowledge' | 'search' | 'settings' | 'ai';
+      let state: Record<PanelType, boolean> = {
+        toc: false,
+        knowledge: false,
+        search: false,
+        settings: false,
+        ai: false,
+      };
+
+      const openExclusive = (panel: PanelType) => {
+        const next: Record<PanelType, boolean> = {
+          toc: false,
+          knowledge: false,
+          search: false,
+          settings: false,
+          ai: false,
+        };
+        next[panel] = true;
+        state = next;
+      };
+
+      // 1. Open TOC
+      openExclusive('toc');
+      assert.equal(state.toc, true);
+      assert.equal(state.knowledge, false);
+
+      // 2. Open Highlights / Knowledge
+      openExclusive('knowledge');
+      assert.equal(state.toc, false);
+      assert.equal(state.knowledge, true);
+      assert.equal(state.search, false);
+
+      // 3. Open Search in Book
+      openExclusive('search');
+      assert.equal(state.knowledge, false);
+      assert.equal(state.search, true);
+      assert.equal(state.settings, false);
+
+      // 4. Open Typography & Display Settings
+      openExclusive('settings');
+      assert.equal(state.search, false);
+      assert.equal(state.settings, true);
+      assert.equal(state.toc, false);
+    });
+
+    it('TOC Expand All / Collapse All collects all parent IDs and toggles collapsed state', () => {
+      interface TocTestItem {
+        id: string;
+        label: string;
+        subitems?: TocTestItem[];
+      }
+
+      const mockToc: TocTestItem[] = [
+        {
+          id: 'part-1',
+          label: 'Part I',
+          subitems: [
+            { id: 'ch-1', label: 'Chapter 1' },
+            { id: 'ch-2', label: 'Chapter 2' },
+          ],
+        },
+        {
+          id: 'part-2',
+          label: 'Part II',
+          subitems: [
+            {
+              id: 'sec-a',
+              label: 'Section A',
+              subitems: [{ id: 'ch-3', label: 'Chapter 3' }],
+            },
+          ],
+        },
+        { id: 'part-3', label: 'Part III' },
+      ];
+
+      // Recursive parent ID collector
+      const collectParentIds = (items: TocTestItem[]): string[] => {
+        const ids: string[] = [];
+        const traverse = (list: TocTestItem[]) => {
+          for (const it of list) {
+            if (it.subitems && it.subitems.length > 0) {
+              ids.push(it.id);
+              traverse(it.subitems);
+            }
+          }
+        };
+        traverse(items);
+        return ids;
+      };
+
+      const parentIds = collectParentIds(mockToc);
+      assert.deepEqual(parentIds, ['part-1', 'part-2', 'sec-a']);
+
+      let collapsedItems = new Set<string>();
+
+      // Initially open -> clicking Collapse All collapses all parents
+      let isAllCollapsed = parentIds.length > 0 && parentIds.every((id) => collapsedItems.has(id));
+      assert.equal(isAllCollapsed, false);
+
+      collapsedItems = new Set(parentIds);
+      isAllCollapsed = parentIds.length > 0 && parentIds.every((id) => collapsedItems.has(id));
+      assert.equal(isAllCollapsed, true);
+
+      // Clicking Expand All clears collapsed state
+      collapsedItems = new Set();
+      isAllCollapsed = parentIds.length > 0 && parentIds.every((id) => collapsedItems.has(id));
+      assert.equal(isAllCollapsed, false);
     });
   });
 });

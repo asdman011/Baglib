@@ -4,6 +4,9 @@
   "private": true,
   "main": "dist/main/index.js",
   "scripts": {
+    "copy:pdfjs": "node scripts/copy-pdfjs-assets.js",
+    "predev": "npm run copy:pdfjs",
+    "prebuild": "npm run copy:pdfjs",
     "dev:next": "next dev -p 3000 src/renderer",
     "dev:electron": "tsup --watch --onSuccess \"electron .\"",
     "dev": "concurrently -k -s first \"npm run dev:next\" \"wait-on http://localhost:3000 && npm run dev:electron\"",
@@ -27,6 +30,7 @@
     "lucide-react": "^1.28.0",
     "next": "16.2.12",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^4.10.38",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

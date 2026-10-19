@@ -48,3 +48,7 @@ repos/
 docs/*
 !docs/features/
 libgen-calibre-store-plugin-main/
+
+# pdf.js vendor assets (generated via copy:pdfjs)
+public/vendor/pdfjs/
+src/renderer/public/vendor/pdfjs/

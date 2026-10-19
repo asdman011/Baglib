@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   BookOpen,
   FileText,
@@ -21,6 +21,7 @@ import { OcrTextOverlay } from './OcrTextOverlay';
 import type { OcrPageResult } from '../../../shared/types/ocr';
 import { BookItem } from '../../types/library';
 import { DocumentLoader, detectFormat } from '../../libs/reader/document-loader';
+import { PdfNativeViewer } from './PdfNativeViewer';
 import type { BookDoc, BookFormat, TOCItem, ReaderTheme } from '../../libs/reader/types';
 import {
   paginateBookSections,
@@ -78,6 +79,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
   // Privileged stream asset URL & Native PDF Blob URL
   const [assetUrl, setAssetUrl] = useState<string | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfTotalPages, setPdfTotalPages] = useState<number>(1);
   const [viewType, setViewType] = useState<'text_manuscript' | 'native_pdf'>('native_pdf');
 
   // OCR state for scanned PDFs in ReaderPane
@@ -102,7 +104,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
   const maxPages = Math.max(
     1,
     detectedFormat === 'PDF'
-      ? (scannedInfo?.numPages || (bookDoc?.sections?.length || book.pagesCount || 1))
+      ? (pdfTotalPages || scannedInfo?.numPages || (bookDoc?.sections?.length || book.pagesCount || 1))
       : isComic
       ? (bookDoc?.sections?.length || 1)
       : (paginatedPages.length > 0 ? paginatedPages.length : (bookDoc?.sections?.length || 1))
@@ -132,6 +134,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
 
     const loadDoc = async () => {
       if (!book.filePath) return;
+      setPdfBlobUrl(null);
       setIsLoadingFile(true);
       setIsExtractingText(true);
       setExtractionFailed(false);
@@ -140,7 +143,9 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
       const format = detectFormat(filePath);
       setDetectedFormat(format);
 
-      const streamUrl = `baglib-asset://${encodeURIComponent(filePath)}`;
+      const normalizedPath = filePath.replace(/\\/g, '/');
+      const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
+      const streamUrl = `baglib-asset:///${cleanPath}`;
       setAssetUrl(streamUrl);
 
       const windowAPI = (window as any).electronAPI;
@@ -198,7 +203,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
               // Paginate reflowable EPUB/MOBI/FB2/HTML/TXT sections into screen-sized pages
               setIsPaginating(true);
               try {
-                const { pages, tocMap } = await paginateBookSections(doc.sections, doc.toc, 1500);
+                const { pages, tocMap } = await paginateBookSections(doc.sections, doc.toc, 1500, doc.resolveHref);
                 if (!isCancelled) {
                   setPaginatedPages(pages);
                   setTocPageMap(tocMap);
@@ -310,6 +315,184 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
     };
   }, [currentPage, bookDoc, detectedFormat]);
 
+  const reflowableContainerRef = useRef<HTMLDivElement>(null);
+
+  const navigateToInternalEpubHref = useCallback(
+    (rawHref: string) => {
+      if (!rawHref) return;
+
+      if (rawHref.includes('#page=')) {
+        const match = rawHref.match(/#page=(\d+)/);
+        if (match) {
+          const target = parseInt(match[1], 10);
+          if (!isNaN(target)) {
+            const safe = Math.min(maxPages, Math.max(1, target));
+            setCurrentPage(safe);
+            onPageChange?.(safe);
+            return;
+          }
+        }
+      }
+
+      if (rawHref.startsWith('#')) {
+        const targetId = rawHref.replace(/^#/, '');
+        if (!targetId) return;
+
+        if (reflowableContainerRef.current) {
+          try {
+            const el = reflowableContainerRef.current.querySelector(
+              `#${CSS.escape(targetId)}, [name="${CSS.escape(targetId)}"]`
+            );
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              return;
+            }
+          } catch {}
+        }
+
+        const targetPageObj = paginatedPages.find(
+          (p) =>
+            p.html.includes(`id="${targetId}"`) ||
+            p.html.includes(`id='${targetId}'`) ||
+            p.html.includes(`name="${targetId}"`) ||
+            p.html.includes(`name='${targetId}'`)
+        );
+
+        if (targetPageObj) {
+          const safe = Math.min(maxPages, Math.max(1, targetPageObj.pageNumber));
+          setCurrentPage(safe);
+          onPageChange?.(safe);
+          setTimeout(() => {
+            try {
+              const el = reflowableContainerRef.current?.querySelector(
+                `#${CSS.escape(targetId)}, [name="${CSS.escape(targetId)}"]`
+              );
+              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch {}
+          }, 120);
+          return;
+        }
+
+        const mappedPage = tocPageMap.get(rawHref) || tocPageMap.get(targetId);
+        if (mappedPage) {
+          const safe = Math.min(maxPages, Math.max(1, mappedPage));
+          setCurrentPage(safe);
+          onPageChange?.(safe);
+          return;
+        }
+
+        return;
+      }
+
+      const [filePart, hashPart] = rawHref.split('#');
+      const cleanFileName = filePart.split('/').pop() || filePart;
+
+      let target =
+        tocPageMap.get(rawHref) ||
+        tocPageMap.get(filePart) ||
+        tocPageMap.get(cleanFileName);
+
+      if (!target && hashPart) {
+        const match = paginatedPages.find(
+          (p) =>
+            (p.sectionId.includes(cleanFileName) || cleanFileName === '') &&
+            (p.html.includes(`id="${hashPart}"`) ||
+              p.html.includes(`id='${hashPart}'`) ||
+              p.html.includes(`name="${hashPart}"`) ||
+              p.html.includes(`name='${hashPart}'`))
+        );
+        if (match) target = match.pageNumber;
+      }
+
+      if (!target) {
+        const secMatch = paginatedPages.find(
+          (p) =>
+            p.sectionId.includes(cleanFileName) ||
+            cleanFileName.includes(p.sectionId) ||
+            p.sectionId.endsWith(cleanFileName)
+        );
+        if (secMatch) target = secMatch.pageNumber;
+      }
+
+      if (!target && bookDoc?.resolveHref) {
+        try {
+          const resolved = bookDoc.resolveHref(rawHref);
+          if (resolved && typeof resolved.index === 'number') {
+            const pageForIndex = paginatedPages.find(
+              (p) => p.sectionIndex === resolved.index
+            );
+            if (pageForIndex) target = pageForIndex.pageNumber;
+          }
+        } catch {}
+      }
+
+      if (target) {
+        const safe = Math.min(maxPages, Math.max(1, target));
+        setCurrentPage(safe);
+        onPageChange?.(safe);
+
+        if (hashPart) {
+          setTimeout(() => {
+            try {
+              const el = reflowableContainerRef.current?.querySelector(
+                `#${CSS.escape(hashPart)}, [name="${CSS.escape(hashPart)}"]`
+              );
+              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch {}
+          }, 120);
+        }
+      }
+    },
+    [maxPages, paginatedPages, tocPageMap, bookDoc, onPageChange]
+  );
+
+  useEffect(() => {
+    const container = reflowableContainerRef.current;
+    if (!container) return;
+
+    const handleCaptureClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      const anchor = target.closest('a[href], [xlink\\:href], a[data-footnote]') as HTMLElement | null;
+      if (!anchor) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const rawHref = anchor.getAttribute('href') || anchor.getAttribute('xlink:href') || '';
+      if (!rawHref) return;
+
+      if (/^(https?:|mailto:|tel:)/i.test(rawHref)) {
+        const winAPI = (window as any).electronAPI;
+        if (winAPI?.openExternal) {
+          winAPI.openExternal(rawHref);
+        } else {
+          window.open(rawHref, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
+
+      navigateToInternalEpubHref(rawHref);
+    };
+
+    const handleCaptureAuxClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('a[href], [xlink\\:href]')) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    container.addEventListener('click', handleCaptureClick, true);
+    container.addEventListener('auxclick', handleCaptureAuxClick, true);
+
+    return () => {
+      container.removeEventListener('click', handleCaptureClick, true);
+      container.removeEventListener('auxclick', handleCaptureAuxClick, true);
+    };
+  }, [navigateToInternalEpubHref]);
+
   const handlePageStep = (delta: number) => {
     const next = Math.max(1, Math.min(maxPages, currentPage + delta));
     setCurrentPage(next);
@@ -333,10 +516,13 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
     ocrPages.get(currentPage)?.text ||
     extractedFullText;
 
-  const themeClasses = {
+  const themeClasses: Record<ReaderTheme, string> = {
+    paper: 'bg-[#fcfaf2] text-[#2b2b2b] border-[#e8e4d9]',
+    sepia: 'bg-[#fbf0d9] text-[#5f4b32] border-[#e6d5b8]',
+    dusk: 'bg-[#2d2a32] text-[#e0dede] border-[#3f3b47]',
+    midnight: 'bg-[#0f172a] text-[#e2e8f0] border-[#1e293b]',
     light: 'bg-white text-slate-800 border-slate-200',
     dark: 'bg-[#0f172a] text-slate-100 border-slate-700',
-    sepia: 'bg-[#fbf0d9] text-[#5f4b32] border-[#e6d5b8]',
     night: 'bg-[#000000] text-[#999999] border-neutral-800',
     'e-ink': 'bg-[#ffffff] text-[#000000] border-black',
   };
@@ -413,30 +599,43 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
 
           {/* Theme Switcher */}
           <div className="flex items-center gap-1 bg-canvas p-0.5 rounded-lg border border-subtle">
-            {(['sepia', 'light', 'dark', 'night', 'e-ink'] as ReaderTheme[]).map((th) => (
-              <button
-                key={th}
-                onClick={() => setReaderTheme(th)}
-                className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center transition-all ${
-                  readerTheme === th ? 'ring-1 ring-pale-sky-500' : 'opacity-60'
-                }`}
-                style={{
-                  backgroundColor:
-                    th === 'sepia'
-                      ? '#fbf0d9'
-                      : th === 'light'
-                      ? '#ffffff'
-                      : th === 'dark'
-                      ? '#0f172a'
-                      : th === 'night'
-                      ? '#000000'
-                      : '#ffffff',
-                  color: th === 'sepia' ? '#5f4b32' : th === 'light' ? '#1e293b' : '#f1f5f9',
-                }}
-              >
-                A
-              </button>
-            ))}
+            {(['paper', 'sepia', 'dusk', 'midnight', 'light', 'dark', 'night', 'e-ink'] as ReaderTheme[]).map((th) => {
+              const bgColors: Record<ReaderTheme, string> = {
+                paper: '#fcfaf2',
+                sepia: '#fbf0d9',
+                dusk: '#2d2a32',
+                midnight: '#0f172a',
+                light: '#ffffff',
+                dark: '#1e293b',
+                night: '#000000',
+                'e-ink': '#ffffff',
+              };
+              const textColors: Record<ReaderTheme, string> = {
+                paper: '#2b2b2b',
+                sepia: '#5f4b32',
+                dusk: '#e0dede',
+                midnight: '#e2e8f0',
+                light: '#1e293b',
+                dark: '#f1f5f9',
+                night: '#999999',
+                'e-ink': '#000000',
+              };
+              return (
+                <button
+                  key={th}
+                  onClick={() => setReaderTheme(th)}
+                  className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center transition-all ${
+                    readerTheme === th ? 'ring-1 ring-pale-sky-500' : 'opacity-60'
+                  }`}
+                  style={{
+                    backgroundColor: bgColors[th],
+                    color: textColors[th],
+                  }}
+                >
+                  A
+                </button>
+              );
+            })}
           </div>
 
           {/* Zoom controls */}
@@ -562,6 +761,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
           </div>
         ) : isReflowable ? (
           <div
+            ref={reflowableContainerRef}
             className={`w-full max-w-2xl rounded-2xl p-6 shadow-md border ${
               themeClasses[readerTheme] || themeClasses.sepia
             }`}
@@ -620,17 +820,25 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
               ))}
             </div>
           </div>
-        ) : (pdfBlobUrl || assetUrl) ? (
-          <div className="relative w-full h-full overflow-hidden rounded-xl">
-            <iframe
-              key={`pane-${paneId}-${currentPage}-${pdfBlobUrl}`}
-              src={`${pdfBlobUrl || assetUrl}#page=${currentPage}&view=FitH`}
-              title={book.title}
-              className="w-full h-full border-none rounded-xl"
+        ) : (pdfBlobUrl || (detectedFormat === 'PDF' && assetUrl)) ? (
+          <div
+            className="pdf-viewport-container pdf-viewer-workspace relative w-full h-full overflow-hidden rounded-xl bg-surface"
+            dir="ltr"
+            style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
+          >
+            <PdfNativeViewer
+              fileUrl={pdfBlobUrl || assetUrl || ''}
+              currentPage={currentPage}
+              totalPages={maxPages}
+              onPageChange={(p) => onPageChange?.(p)}
+              onTotalPagesLoaded={(tot) => {
+                setPdfTotalPages(tot);
+                onTotalPagesChange?.(tot);
+              }}
+              theme={readerTheme}
+              direction={readerDirection}
+              viewMode="single"
             />
-            {ocrPages.get(currentPage) && (
-              <OcrTextOverlay pageResult={ocrPages.get(currentPage)!} />
-            )}
           </div>
         ) : (
           <div className="h-48 flex items-center justify-center text-muted text-xs">
