@@ -317,6 +317,100 @@ export function setupDatabaseIPC() {
   });
 
   /**
+   * Core Knowledge Layer IPC (highlights, notes, quotes, bookmarks, questions)
+   */
+  ipcMain.handle('knowledge:get-by-work', (_, workId: string, type?: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      return repo.getKnowledgeByWork(workId, type);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get knowledge by work:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('knowledge:get-all', () => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      return repo.getAllKnowledge();
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get all knowledge:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('knowledge:save', (_, payload) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      return repo.saveKnowledge(payload);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to save knowledge item:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('knowledge:delete', (_, knowledgeId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      return repo.deleteKnowledge(knowledgeId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to delete knowledge item:', err);
+      throw err;
+    }
+  });
+
+  /**
+   * Reading Session & Continuous Location Persistence
+   */
+  ipcMain.handle('reader:record-session', (_, session) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      return repo.recordReadingSession(session);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to record reading session:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('reader:get-sessions', (_, workId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      return repo.getReadingSessions(workId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get reading sessions:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('reader:update-last-location', (_, workId: string, location: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      return repo.updateLastReadLocation(workId, location);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to update last location:', err);
+      return false;
+    }
+  });
+
+  ipcMain.handle('reader:get-last-location', (_, workId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      return repo.getLastReadLocation(workId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get last location:', err);
+      return null;
+    }
+  });
+
+  /**
    * Fetch category tree
    */
   ipcMain.handle('library:get-category-tree', async () => {

@@ -440,6 +440,22 @@ export const API = {
     lookupWord: (word: string, lang?: string) => ipcRenderer.invoke('plugins:lookup-word', word, lang),
     getTtsVoices: () => ipcRenderer.invoke('plugins:get-tts-voices'),
   },
+
+  // Core Knowledge Layer (highlights, notes, quotes, bookmarks, questions)
+  knowledge: {
+    getByWork: (workId: string, type?: string) => ipcRenderer.invoke('knowledge:get-by-work', workId, type),
+    getAll: () => ipcRenderer.invoke('knowledge:get-all'),
+    save: (payload: any) => ipcRenderer.invoke('knowledge:save', payload),
+    delete: (knowledgeId: string) => ipcRenderer.invoke('knowledge:delete', knowledgeId),
+  },
+
+  // Reader Session & Continuous Location Tracking
+  reader: {
+    recordSession: (session: any) => ipcRenderer.invoke('reader:record-session', session),
+    getSessions: (workId: string) => ipcRenderer.invoke('reader:get-sessions', workId),
+    updateLastLocation: (workId: string, location: string) => ipcRenderer.invoke('reader:update-last-location', workId, location),
+    getLastLocation: (workId: string) => ipcRenderer.invoke('reader:get-last-location', workId),
+  },
 };
 
 if (typeof contextBridge !== 'undefined' && contextBridge?.exposeInMainWorld) {

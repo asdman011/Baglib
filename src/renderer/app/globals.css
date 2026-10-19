@@ -124,3 +124,115 @@
   background-position: 0 0, 16px 16px;
   opacity: 0.2;
 }
+
+/* PDF.js Strict LTR Isolation & Text Layer Styling */
+.pdf-page-container,
+.canvasWrapper,
+.textLayer {
+  direction: ltr !important;
+  unicode-bidi: normal !important;
+  text-align: left !important;
+}
+
+.textLayer {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  overflow: hidden !important;
+  opacity: 1;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 20;
+}
+
+.textLayer span {
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  direction: ltr !important;
+  unicode-bidi: normal !important;
+}
+
+.textLayer br,
+.textLayer .endOfContent {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  pointer-events: none !important;
+  display: none !important;
+}
+
+.textLayer span:empty {
+  display: none !important;
+}
+
+.textLayer span {
+  color: transparent !important;
+}
+
+/* Global Visible Text Selection Styling */
+::selection {
+  background-color: rgba(59, 130, 246, 0.35) !important;
+  color: inherit !important;
+}
+
+.textLayer ::selection {
+  background: rgba(59, 130, 246, 0.38) !important;
+  color: transparent !important;
+}
+
+/* Constrain PDF Highlight & Active Selection Layers to Canvas Box */
+.pdf-highlight-layer {
+  direction: ltr !important;
+  text-align: left !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+}
+
+.pdf-active-selection-rect {
+  pointer-events: none !important;
+  outline: none !important;
+  border: none !important;
+  overflow: hidden !important;
+}
+
+/* EPUB & Reflowable Continuous Scroll Container */
+.epub-container,
+.epub-stream-container {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+/* Persistent EPUB & Reflowable Highlight Marks */
+mark.baglib-highlight {
+  color: inherit !important;
+  border-radius: 2px !important;
+  padding: 1px 0 !important;
+  box-decoration-break: clone !important;
+  -webkit-box-decoration-break: clone !important;
+  cursor: pointer !important;
+}
+mark.baglib-highlight-amber, mark.baglib-highlight-yellow {
+  background-color: rgba(250, 204, 21, 0.42) !important;
+}
+mark.baglib-highlight-emerald, mark.baglib-highlight-green {
+  background-color: rgba(74, 222, 128, 0.42) !important;
+}
+mark.baglib-highlight-rose, mark.baglib-highlight-red {
+  background-color: rgba(248, 113, 113, 0.42) !important;
+}
+mark.baglib-highlight-sky, mark.baglib-highlight-blue {
+  background-color: rgba(96, 165, 250, 0.42) !important;
+}
+mark.baglib-highlight-violet, mark.baglib-highlight-purple {
+  background-color: rgba(192, 132, 252, 0.42) !important;
+}
+

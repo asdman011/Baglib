@@ -17,7 +17,12 @@ export const HIGHLIGHT_COLORS = [
 ];
 
 export function isCustomHighlightSupported(): boolean {
-  return typeof CSS !== 'undefined' && 'highlights' in CSS && typeof (window as any).Highlight !== 'undefined';
+  return (
+    typeof window !== 'undefined' &&
+    typeof CSS !== 'undefined' &&
+    'highlights' in CSS &&
+    typeof (window as any).Highlight !== 'undefined'
+  );
 }
 
 /**
@@ -127,6 +132,34 @@ const HIGHLIGHT_STYLES = `
   text-decoration: underline wavy #f59e0b;
   text-decoration-thickness: 2.5px;
 }
+::highlight(baglib-active-selection) {
+  background-color: rgba(59, 130, 246, 0.35) !important;
+  color: inherit !important;
+}
+
+mark.baglib-highlight {
+  color: inherit !important;
+  border-radius: 2px !important;
+  padding: 1px 0 !important;
+  box-decoration-break: clone !important;
+  -webkit-box-decoration-break: clone !important;
+  cursor: pointer !important;
+}
+mark.baglib-highlight-amber, mark.baglib-highlight-yellow {
+  background-color: rgba(250, 204, 21, 0.42) !important;
+}
+mark.baglib-highlight-emerald, mark.baglib-highlight-green {
+  background-color: rgba(74, 222, 128, 0.42) !important;
+}
+mark.baglib-highlight-rose, mark.baglib-highlight-red {
+  background-color: rgba(248, 113, 113, 0.42) !important;
+}
+mark.baglib-highlight-sky, mark.baglib-highlight-blue {
+  background-color: rgba(96, 165, 250, 0.42) !important;
+}
+mark.baglib-highlight-violet, mark.baglib-highlight-purple {
+  background-color: rgba(192, 132, 252, 0.42) !important;
+}
 `;
 
 /**
@@ -134,13 +167,14 @@ const HIGHLIGHT_STYLES = `
  * This prevents build-time CSS parsers (PostCSS/Turbopack/LightningCSS) from choking
  * on the ::highlight pseudo-element while providing full runtime styling in Chromium.
  */
-export function injectHighlightStyles(doc: Document = document): void {
-  if (typeof doc === 'undefined' || !doc.head) return;
-  if (doc.getElementById('baglib-highlight-styles')) return;
-  const styleEl = doc.createElement('style');
+export function injectHighlightStyles(doc?: Document): void {
+  const targetDoc = doc || (typeof document !== 'undefined' ? document : undefined);
+  if (!targetDoc || !targetDoc.head) return;
+  if (targetDoc.getElementById('baglib-highlight-styles')) return;
+  const styleEl = targetDoc.createElement('style');
   styleEl.id = 'baglib-highlight-styles';
   styleEl.textContent = HIGHLIGHT_STYLES;
-  doc.head.appendChild(styleEl);
+  targetDoc.head.appendChild(styleEl);
 }
 
 /**
@@ -166,11 +200,13 @@ export function registerCssCustomHighlights(container: HTMLElement, annotations:
   };
 
   for (const annot of annotations) {
-    if (annot.type !== 'highlight' && annot.type !== 'underline' && annot.type !== 'note') continue;
-    if (!annot.selectedText) continue;
+    const kType = annot.type || (annot as any).knowledgeType;
+    if (kType !== 'highlight' && kType !== 'underline' && kType !== 'note') continue;
+    const text = annot.selectedText || (annot as any).quotedText;
+    if (!text) continue;
 
     let group = 'baglib-highlight-amber';
-    if (annot.type === 'underline') {
+    if (kType === 'underline') {
       group = 'baglib-underline';
     } else if (annot.color) {
       if (annot.color.includes('emerald') || annot.color.includes('green') || annot.color === 'emerald') {
@@ -184,7 +220,7 @@ export function registerCssCustomHighlights(container: HTMLElement, annotations:
       }
     }
 
-    const matchedRanges = findRangesForText(container, annot.selectedText);
+    const matchedRanges = findRangesForText(container, text);
     rangesByGroup[group].push(...matchedRanges);
   }
 
@@ -200,6 +236,42 @@ export function registerCssCustomHighlights(container: HTMLElement, annotations:
 }
 
 /**
+ * Locks the active transient selection range into the W3C CSS Highlight API.
+ * Guarantees text remains visibly highlighted in blue when the mouse is released
+ * and even if focus shifts to the floating action menu.
+ */
+export function setActiveSelectionHighlight(range: Range | null, doc?: Document): void {
+  if (!isCustomHighlightSupported()) return;
+  const targetDoc = doc || (typeof document !== 'undefined' ? document : undefined);
+  if (targetDoc) {
+    injectHighlightStyles(targetDoc);
+  }
+
+  const CSSObj = CSS as any;
+  const HighlightClass = (window as any).Highlight;
+
+  if (range && !range.collapsed) {
+    try {
+      const hl = new HighlightClass(range);
+      CSSObj.highlights.set('baglib-active-selection', hl);
+    } catch (err) {
+      console.warn('[highlight-manager] setActiveSelectionHighlight error:', err);
+    }
+  } else {
+    CSSObj.highlights.delete('baglib-active-selection');
+  }
+}
+
+/**
+ * Clears the active transient selection highlight.
+ */
+export function clearActiveSelectionHighlight(): void {
+  if (!isCustomHighlightSupported()) return;
+  const CSSObj = CSS as any;
+  CSSObj.highlights.delete('baglib-active-selection');
+}
+
+/**
  * Clears all Baglib highlights from CSS.highlights
  */
 export function clearCssCustomHighlights(): void {
@@ -212,8 +284,72 @@ export function clearCssCustomHighlights(): void {
     'baglib-highlight-sky',
     'baglib-highlight-violet',
     'baglib-underline',
+    'baglib-active-selection',
   ];
   for (const g of groups) {
     CSSObj.highlights.delete(g);
   }
 }
+
+/**
+ * Injects a temporary active-selection overlay (.baglib-temp-selection-overlay)
+ * directly over the exact selected client rects. This guarantees selection rects
+ * remain visible on mouseup even when focus transfers to the floating toolbar or
+ * when an iframe collapses its native Selection.
+ */
+export function renderTempSelectionOverlay(range: Range, doc?: Document): void {
+  const targetDoc =
+    doc || range.startContainer?.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  if (!targetDoc || !targetDoc.body) return;
+
+  removeTempSelectionOverlay(targetDoc);
+
+  const rects = Array.from(range.getClientRects()).filter((r) => r.width >= 3 && r.height >= 3);
+  if (rects.length === 0) return;
+
+  const scrollX = targetDoc.defaultView?.scrollX || targetDoc.documentElement.scrollLeft || 0;
+  const scrollY = targetDoc.defaultView?.scrollY || targetDoc.documentElement.scrollTop || 0;
+
+  const overlayContainer = targetDoc.createElement('div');
+  overlayContainer.className = 'baglib-temp-selection-overlay';
+  overlayContainer.style.cssText =
+    'position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999;';
+
+  rects.forEach((r) => {
+    const rectDiv = targetDoc.createElement('div');
+    rectDiv.className = 'baglib-temp-selection-rect';
+    rectDiv.style.cssText = `position: absolute; left: ${r.left + scrollX}px; top: ${r.top + scrollY}px; width: ${r.width}px; height: ${r.height}px; background: rgba(59, 130, 246, 0.32); pointer-events: none; mix-blend-mode: multiply; border-radius: 2px;`;
+    overlayContainer.appendChild(rectDiv);
+  });
+
+  targetDoc.body.appendChild(overlayContainer);
+}
+
+/**
+ * Removes any active .baglib-temp-selection-overlay from the document and all accessible iframes.
+ */
+export function removeTempSelectionOverlay(doc?: Document): void {
+  const docs: Document[] = [];
+  if (typeof document !== 'undefined') docs.push(document);
+  if (doc && !docs.includes(doc)) docs.push(doc);
+
+  if (typeof document !== 'undefined') {
+    const iframes = document.querySelectorAll('iframe');
+    iframes.forEach((iframe) => {
+      try {
+        if (iframe.contentDocument && !docs.includes(iframe.contentDocument)) {
+          docs.push(iframe.contentDocument);
+        }
+      } catch {}
+    });
+  }
+
+  docs.forEach((d) => {
+    try {
+      const existing = d.querySelectorAll('.baglib-temp-selection-overlay');
+      existing.forEach((el) => el.remove());
+    } catch {}
+  });
+}
+
+

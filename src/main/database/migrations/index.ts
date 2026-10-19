@@ -24,6 +24,7 @@ import migration011 from './011_book_content_fts';
 import migration012 from './012_dictionaries_and_headwords';
 import migration013 from './013_audiobook_pairing';
 import migration014 from './014_reading_statistics';
+import migration015 from './015_reading_location_and_knowledge_enhancements';
 
 /** All migrations in chronological order. */
 export const migrations: Migration[] = [
@@ -41,6 +42,7 @@ export const migrations: Migration[] = [
   migration012,
   migration013,
   migration014,
+  migration015,
 ];
 
 

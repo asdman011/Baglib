@@ -236,17 +236,57 @@ export interface ITagRepository {
  */
 export interface IKnowledgeRepository {
   /**
-   * Retrieves all notes across works.
+   * Retrieves all notes across works (legacy helper).
    */
   getAllNotes(): Promise<PageNoteDTO[]> | PageNoteDTO[];
 
   /**
-   * Adds a new note attached to a work.
+   * Adds a new note attached to a work (legacy helper).
    */
   addNote(note: PageNotePayload): Promise<PageNotePayload> | PageNotePayload;
 
   /**
-   * Deletes a note by its ID.
+   * Deletes a note by its ID (legacy helper).
    */
   deleteNote(noteId: string): Promise<void> | void;
+
+  /**
+   * Retrieves all knowledge items (highlights, notes, quotes, bookmarks, questions) for a work.
+   */
+  getKnowledgeByWork?(workId: string, type?: import('./knowledge').KnowledgeType): Promise<import('./knowledge').KnowledgeItemDTO[]> | import('./knowledge').KnowledgeItemDTO[];
+
+  /**
+   * Retrieves all knowledge items across all works.
+   */
+  getAllKnowledge?(): Promise<import('./knowledge').KnowledgeItemDTO[]> | import('./knowledge').KnowledgeItemDTO[];
+
+  /**
+   * Creates or updates a polymorphic knowledge record with its type-specific details.
+   */
+  saveKnowledge?(payload: import('./knowledge').SaveKnowledgePayload): Promise<import('./knowledge').KnowledgeItemDTO> | import('./knowledge').KnowledgeItemDTO;
+
+  /**
+   * Deletes a knowledge record by ID.
+   */
+  deleteKnowledge?(knowledgeId: string): Promise<boolean> | boolean;
+
+  /**
+   * Records a completed or ongoing reading session.
+   */
+  recordReadingSession?(session: import('./knowledge').RecordReadingSessionPayload): Promise<import('./knowledge').ReadingSessionRecord> | import('./knowledge').ReadingSessionRecord;
+
+  /**
+   * Retrieves reading sessions for a work.
+   */
+  getReadingSessions?(workId: string): Promise<import('./knowledge').ReadingSessionRecord[]> | import('./knowledge').ReadingSessionRecord[];
+
+  /**
+   * Updates last read location (page number or CFI) on the work record.
+   */
+  updateLastReadLocation?(workId: string, location: string): Promise<boolean> | boolean;
+
+  /**
+   * Retrieves the last read location for a work.
+   */
+  getLastReadLocation?(workId: string): Promise<string | null> | string | null;
 }

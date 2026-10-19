@@ -10,10 +10,14 @@ import {
   computeContourPoints,
   traceOutline,
 } from '../../src/renderer/libs/reader/ink-bezier';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   HIGHLIGHT_COLORS,
   isCustomHighlightSupported,
   findRangesForText,
+  setActiveSelectionHighlight,
+  clearActiveSelectionHighlight,
 } from '../../src/renderer/libs/reader/highlight-manager';
 import { translations } from '../../src/renderer/translations';
 
@@ -341,4 +345,112 @@ describe('KEY-137 Highlighting, Bookmarking, Margin Notes & Freehand Ink System'
       assert.equal(translations.ar.stylusInkMode, 'قلم الرسم والخط الحر');
     });
   });
+
+  /* -------------------------------------------------------------------------
+   * 5. Text Selection Locking & Active Custom Highlight Persistence
+   * ------------------------------------------------------------------------- */
+  describe('5. Text Selection Locking & Active Custom Highlight Persistence', () => {
+    it('safely handles setActiveSelectionHighlight and clearActiveSelectionHighlight in Node/SSR environment', () => {
+      assert.doesNotThrow(() => {
+        setActiveSelectionHighlight(null);
+        clearActiveSelectionHighlight();
+      });
+    });
+
+    it('manages W3C Highlight registry with baglib-active-selection when CSS highlights API exists', () => {
+      const mockHighlightMap = new Map<string, any>();
+      const originalCSS = (globalThis as any).CSS;
+      const originalHighlight = (globalThis as any).Highlight;
+      const originalWindow = (globalThis as any).window;
+
+      class MockHighlight {
+        ranges: any[];
+        constructor(...ranges: any[]) {
+          this.ranges = ranges;
+        }
+      }
+
+      (globalThis as any).CSS = {
+        highlights: mockHighlightMap,
+      };
+      (globalThis as any).Highlight = MockHighlight;
+      (globalThis as any).window = { Highlight: MockHighlight };
+
+      try {
+        const mockRange = { collapsed: false } as Range;
+        const mockDoc = {
+          head: { appendChild: () => {} },
+          getElementById: () => null,
+          createElement: () => ({ setAttribute: () => {} }),
+        } as any;
+
+        setActiveSelectionHighlight(mockRange, mockDoc);
+        assert.ok(mockHighlightMap.has('baglib-active-selection'));
+
+        clearActiveSelectionHighlight();
+        assert.equal(mockHighlightMap.has('baglib-active-selection'), false);
+      } finally {
+        (globalThis as any).CSS = originalCSS;
+        (globalThis as any).Highlight = originalHighlight;
+        (globalThis as any).window = originalWindow;
+      }
+    });
+
+    it('verifies ZenSelectionMenu stops mousedown propagation to prevent selection loss', () => {
+      const menuCode = fs.readFileSync(
+        path.join(__dirname, '../../src/renderer/components/reader/ZenSelectionMenu.tsx'),
+        'utf8'
+      );
+      assert.match(
+        menuCode,
+        /onMouseDown=\{\(e\)\s*=>\s*\{[\s\S]*?e\.stopPropagation\(\)/,
+        'ZenSelectionMenu must stop mousedown propagation on root dialog'
+      );
+      assert.match(
+        menuCode,
+        /e\.preventDefault\(\)/,
+        'ZenSelectionMenu action buttons must call e.preventDefault() on mousedown to preserve document focus'
+      );
+    });
+
+    it('verifies PdfNativeViewer renders transient activeSelectionRects overlay', () => {
+      const pdfViewerCode = fs.readFileSync(
+        path.join(__dirname, '../../src/renderer/components/reader/PdfNativeViewer.tsx'),
+        'utf8'
+      );
+      assert.match(
+        pdfViewerCode,
+        /activeSelectionRects/,
+        'PdfNativeViewer must accept and handle activeSelectionRects'
+      );
+      assert.match(
+        pdfViewerCode,
+        /pdf-active-selection-rect/,
+        'PdfNativeViewer must render pdf-active-selection-rect in highlight layer'
+      );
+    });
+
+    it('verifies FullPageBookReader captures and locks Range on mouseup', () => {
+      const readerCode = fs.readFileSync(
+        path.join(__dirname, '../../src/renderer/components/reader/FullPageBookReader.tsx'),
+        'utf8'
+      );
+      assert.match(
+        readerCode,
+        /selection\.getRangeAt\(0\)\.cloneRange\(\)/,
+        'FullPageBookReader must clone and lock the active Range on mouseup'
+      );
+      assert.match(
+        readerCode,
+        /setActiveSelectionHighlight\(range\)/,
+        'FullPageBookReader must call setActiveSelectionHighlight on mouseup'
+      );
+      assert.match(
+        readerCode,
+        /activeSelectionInfo=\{pdfSelectionInfo\}/,
+        'FullPageBookReader must pass activeSelectionInfo to PdfNativeViewer'
+      );
+    });
+  });
 });
+
