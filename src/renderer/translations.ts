@@ -972,6 +972,10 @@ export const translations = {
     // Text-to-Speech (TTS), Audiobook Playback & SMIL Media Overlays (Story 4.1 / KEY-145)
     ttsPlayerTitle: "الصوت والقراءة الآلية",
     ttsPlayBtn: "تشغيل القراءة",
+    ttsReadAloud: "القراءة بصوت عالٍ",
+    ttsProviderUnavailable: "تعذّر تجهيز محرك القراءة المحلي. تحقّق من تثبيت Pocket TTS وملفات الصوت المختار.",
+    ttsArabicFallback: "لا يدعم Pocket TTS العربية رسميًا بعد. ستُستخدم أصوات النظام المتاحة لقراءة النص العربي.",
+    ttsPlaybackFallback: "توقفت القراءة المحلية أو لم تستجب. ستتم محاولة المتابعة باستخدام صوت من النظام؛ يمكنك اختيار الصوت من إعدادات القراءة.",
     ttsPauseBtn: "إيقاف مؤقت",
     ttsStopBtn: "إيقاف وإغلاق",
     ttsPrevSentence: "الجملة السابقة",
@@ -2250,6 +2254,10 @@ export const translations = {
     // Text-to-Speech (TTS), Audiobook Playback & SMIL Media Overlays (Story 4.1 / KEY-145)
     ttsPlayerTitle: "Audio & Narration",
     ttsPlayBtn: "Play Narration",
+    ttsReadAloud: "Read aloud",
+    ttsProviderUnavailable: "The local speech engine could not be prepared. Check the Pocket TTS installation and selected voice files.",
+    ttsArabicFallback: "Pocket TTS does not officially support Arabic yet. Available system voices will read Arabic text instead.",
+    ttsPlaybackFallback: "Local narration failed or stopped responding. Playback will try a system voice instead; choose a voice in narration settings.",
     ttsPauseBtn: "Pause",
     ttsStopBtn: "Stop & Close",
     ttsPrevSentence: "Previous Sentence",

@@ -13,16 +13,23 @@ import type {
   SmilPar,
 } from '../../shared/types/audio';
 import { segmentMixedTextForTTS, detectDominantLanguage } from '../../shared/utils/tts-language-segmenter';
+import type { PocketTTSLanguage, TTSProviderAudioChunk } from '../../shared/types/tts-provider';
+import { POCKET_TTS_LANGUAGES } from '../../shared/types/tts-provider';
+import { segmentTextIntoSentences } from '../../shared/utils/tts-text';
+
+export type TTSProviderNoticeKind = 'unavailable' | 'arabicUnsupported' | 'playbackFallback';
 
 export interface UseTTSAudioOptions {
   bookId?: string;
   initialText?: string;
+  language?: string;
   onSentenceChange?: (sentenceIndex: number, text: string) => void;
   onOverlayParChange?: (par: SmilPar | null) => void;
+  onProviderNotice?: (message: string, kind?: TTSProviderNoticeKind) => void;
 }
 
 export function useTTSAudio(options: UseTTSAudioOptions = {}) {
-  const { bookId, initialText = '', onSentenceChange, onOverlayParChange } = options;
+  const { bookId, initialText = '', language = 'en', onSentenceChange, onOverlayParChange, onProviderNotice } = options;
 
   // Playback state
   const [playbackState, setPlaybackState] = useState<TTSPlaybackState>('idle');
@@ -62,23 +69,78 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
   const isPlayingRef = useRef<boolean>(false);
   const sleepTimerRef = useRef<NodeJS.Timeout | null>(null);
   const utteranceQueueRef = useRef<SpeechSynthesisUtterance[]>([]);
+  const sentencesRef = useRef<string[]>([]);
+  const currentSentenceRef = useRef(0);
+  const configRef = useRef(config);
+  const pocketContextRef = useRef<AudioContext | null>(null);
+  const pocketGainRef = useRef<GainNode | null>(null);
+  const pocketSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const pocketJobRef = useRef<string | null>(null);
+  const pocketJobCompleteRef = useRef(false);
+  const pocketNextPlayTimeRef = useRef(0);
+  const pocketUnavailableRef = useRef(false);
+  const pocketPlayRef = useRef<(sentenceIdx: number) => void>(() => undefined);
+  const pocketPrefetchRef = useRef<{ index: number; jobId: string; chunks: TTSProviderAudioChunk[]; complete: boolean } | null>(null);
+  const pocketChunkRef = useRef<(chunk: TTSProviderAudioChunk) => void>(() => undefined);
+  const pocketSessionRef = useRef(0);
+
+  const cancelPocketQueue = useCallback(() => {
+    pocketSessionRef.current++;
+    const ttsApi = window.electronAPI?.audio?.tts;
+    const prefetched = pocketPrefetchRef.current;
+    pocketPrefetchRef.current = null;
+    if (prefetched) ttsApi?.stop(prefetched.jobId).catch(() => undefined);
+    if (pocketJobRef.current) ttsApi?.stop(pocketJobRef.current).catch(() => undefined);
+    pocketJobRef.current = null;
+    pocketJobCompleteRef.current = false;
+    for (const source of pocketSourcesRef.current) {
+      source.onended = null;
+      try { source.stop(); } catch {}
+    }
+    pocketSourcesRef.current.clear();
+    pocketNextPlayTimeRef.current = 0;
+  }, []);
+
+  const prefetchPocketSentence = useCallback((index: number) => {
+    const ttsApi = window.electronAPI?.audio?.tts;
+    const text = sentencesRef.current[index];
+    if (!ttsApi || !text || pocketPrefetchRef.current) return;
+    if (segmentMixedTextForTTS(text).some((segment) => segment.lang === 'ar')) return;
+    const jobId = crypto.randomUUID();
+    const entry = { index, jobId, chunks: [] as TTSProviderAudioChunk[], complete: false };
+    pocketPrefetchRef.current = entry;
+    void ttsApi.synthesize({
+      jobId,
+      text,
+      language: (detectDominantLanguage(text, language) || language) as PocketTTSLanguage,
+      voiceId: configRef.current.voiceEn?.startsWith('pocket:') ? configRef.current.voiceEn : undefined,
+    }).catch(() => {
+      if (pocketPrefetchRef.current === entry) pocketPrefetchRef.current = null;
+    });
+  }, [language]);
+
+  useEffect(() => {
+    sentencesRef.current = sentences;
+  }, [sentences]);
+
+  useEffect(() => {
+    currentSentenceRef.current = currentSentenceIndex;
+  }, [currentSentenceIndex]);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
 
   // Split text into readable sentences
   const splitSentences = useCallback((raw: string): string[] => {
-    if (!raw || !raw.trim()) return [];
-    // Split by punctuation: period, exclamation, question mark, Arabic comma/semicolon/question mark, or newlines
-    const splits = raw
-      .replace(/([.!?؟؛\n]+)/g, '$1\u0000')
-      .split('\u0000')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    return splits.length > 0 ? splits : [raw.trim()];
+    return segmentTextIntoSentences(raw).map((sentence) => sentence.text);
   }, []);
 
   // Initialize sentences when initialText changes
   useEffect(() => {
     if (initialText) {
       const parsed = splitSentences(initialText);
+      sentencesRef.current = parsed;
       setSentences(parsed);
       setCurrentSentenceIndex(0);
     }
@@ -97,17 +159,17 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
           lang: v.lang,
           isDefault: v.default,
           localService: v.localService,
+          provider: 'browser',
         }));
-        setVoices(mapped);
+        setVoices((previous) => [...previous.filter((voice) => voice.provider === 'pocket-tts'), ...mapped]);
 
         // Auto-select preferred Arabic & English voices if not yet configured
         const arVoice = mapped.find((v) => v.lang.toLowerCase().startsWith('ar'));
-        const enVoice = mapped.find((v) => v.lang.toLowerCase().startsWith('en'));
 
         setConfig((prev) => ({
           ...prev,
           voiceAr: prev.voiceAr || arVoice?.id,
-          voiceEn: prev.voiceEn || enVoice?.id,
+          voiceEn: prev.voiceEn || 'pocket:alba',
         }));
       };
 
@@ -117,6 +179,40 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const ttsApi = typeof window !== 'undefined' ? window.electronAPI?.audio?.tts : undefined;
+    if (!ttsApi) return;
+
+    let mounted = true;
+    Promise.all([ttsApi.getVoices(), ttsApi.getStatus()])
+      .then(([pocketVoices, status]) => {
+        if (!mounted) return;
+        const mapped = (pocketVoices || []).map((voice: TTSVoice) => ({ ...voice, provider: 'pocket-tts' as const }));
+        setVoices((previous) => [...mapped, ...previous.filter((voice) => voice.provider !== 'pocket-tts')]);
+        if (!status?.available && status?.message && status.message !== 'Pocket TTS has not been initialized.') {
+          onProviderNotice?.(status.message);
+        }
+      })
+      .catch((error) => onProviderNotice?.(error instanceof Error ? error.message : String(error)));
+
+    return () => {
+      mounted = false;
+    };
+  }, [onProviderNotice]);
+
+  useEffect(() => {
+    const voiceId = config.voiceEn;
+    if (!voiceId?.startsWith('pocket:') || !window.electronAPI?.audio?.tts) return;
+    const normalizedLanguage = language.toLowerCase().split('-')[0];
+    const languageMap: Record<string, PocketTTSLanguage> = {
+      en: 'english', fr: 'french', de: 'german', pt: 'portuguese', it: 'italian', es: 'spanish', nl: 'dutch',
+    };
+    window.electronAPI.audio.tts.loadVoice({
+      voiceId,
+      language: languageMap[normalizedLanguage] || 'english',
+    }).catch((error) => onProviderNotice?.(error instanceof Error ? error.message : String(error)));
+  }, [config.voiceEn, language, onProviderNotice]);
 
   // Sleep timer interval tick
   useEffect(() => {
@@ -202,10 +298,19 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
   // Play TTS
   const playTTS = useCallback(
     (sentenceIdx = currentSentenceIndex) => {
+      const sentenceList = sentencesRef.current;
+      if (sentenceIdx < 0 || sentenceIdx >= sentenceList.length) return;
+      const sentenceSegments = segmentMixedTextForTTS(sentenceList[sentenceIdx]);
+      const hasArabic = sentenceSegments.some((segment) => segment.lang === 'ar');
+      const sentenceLanguage = detectDominantLanguage(sentenceList[sentenceIdx], language);
+      if (!hasArabic && sentenceLanguage !== 'ar' && window.electronAPI?.audio?.tts && !pocketUnavailableRef.current) {
+        pocketPlayRef.current(sentenceIdx);
+        return;
+      }
       if (!synthRef.current) return;
       synthRef.current.cancel();
 
-      if (sentenceIdx >= sentences.length) {
+      if (sentenceIdx >= sentenceList.length) {
         setPlaybackState('idle');
         return;
       }
@@ -215,12 +320,221 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
       setPlaybackMode('tts');
       setCurrentSentenceIndex(sentenceIdx);
 
-      onSentenceChange?.(sentenceIdx, sentences[sentenceIdx]);
-      const segments = segmentMixedTextForTTS(sentences[sentenceIdx]);
+      onSentenceChange?.(sentenceIdx, sentenceList[sentenceIdx]);
+      const segments = segmentMixedTextForTTS(sentenceList[sentenceIdx]);
       speakSegment(segments, 0, sentenceIdx);
     },
-    [sentences, currentSentenceIndex, speakSegment, onSentenceChange]
+    [currentSentenceIndex, language, speakSegment, onSentenceChange]
   );
+
+  const getPocketAudioContext = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    if (!pocketContextRef.current) {
+      const AudioContextConstructor = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextConstructor) return null;
+      pocketContextRef.current = new AudioContextConstructor();
+    }
+    const context = pocketContextRef.current;
+    if (!context) return null;
+    if (!pocketGainRef.current) {
+      pocketGainRef.current = context.createGain();
+      pocketGainRef.current.connect(context.destination);
+      pocketGainRef.current.gain.value = configRef.current.volume;
+    }
+    return context;
+  }, []);
+
+  const finishPocketSentence = useCallback(() => {
+    if (!isPlayingRef.current || !pocketJobCompleteRef.current) return;
+    pocketJobRef.current = null;
+    pocketJobCompleteRef.current = false;
+    const nextIndex = currentSentenceRef.current + 1;
+    if (nextIndex < sentencesRef.current.length) {
+      currentSentenceRef.current = nextIndex;
+      setCurrentSentenceIndex(nextIndex);
+      onSentenceChange?.(nextIndex, sentencesRef.current[nextIndex]);
+      pocketPlayRef.current(nextIndex);
+      return;
+    }
+    setPlaybackState('idle');
+    isPlayingRef.current = false;
+  }, [onSentenceChange]);
+
+  const playPocketSentence = useCallback(
+    async (sentenceIdx: number) => {
+      const ttsApi = window.electronAPI?.audio?.tts;
+      const sentenceList = sentencesRef.current;
+      if (!ttsApi || !sentenceList[sentenceIdx]) return;
+      const detected = detectDominantLanguage(sentenceList[sentenceIdx], language);
+      if (detected === 'ar') {
+        onProviderNotice?.('Pocket TTS does not currently provide an official Arabic model; using the available local voice provider instead.', 'arabicUnsupported');
+        if (synthRef.current) {
+          isPlayingRef.current = true;
+          setPlaybackState('playing');
+          setPlaybackMode('tts');
+          setCurrentSentenceIndex(sentenceIdx);
+          onSentenceChange?.(sentenceIdx, sentenceList[sentenceIdx]);
+          speakSegment(segmentMixedTextForTTS(sentenceList[sentenceIdx]), 0, sentenceIdx);
+        }
+        return;
+      }
+
+      const pocketLanguage = (POCKET_TTS_LANGUAGES.includes(detected as PocketTTSLanguage)
+        ? detected
+        : language) as PocketTTSLanguage;
+      const context = getPocketAudioContext();
+      if (!context) {
+        pocketUnavailableRef.current = true;
+        onProviderNotice?.('Pocket TTS audio playback is unavailable in this environment. Using browser speech instead.', 'playbackFallback');
+        isPlayingRef.current = true;
+        setPlaybackState('playing');
+        setPlaybackMode('tts');
+        setCurrentSentenceIndex(sentenceIdx);
+        onSentenceChange?.(sentenceIdx, sentenceList[sentenceIdx]);
+        speakSegment(segmentMixedTextForTTS(sentenceList[sentenceIdx]), 0, sentenceIdx);
+        return;
+      }
+      const session = pocketSessionRef.current;
+      if (context.state === 'suspended') await context.resume();
+      if (session !== pocketSessionRef.current) return;
+      if (pocketJobRef.current) await ttsApi.stop(pocketJobRef.current);
+
+      isPlayingRef.current = true;
+      setPlaybackState('buffering');
+      setPlaybackMode('tts');
+      setCurrentSentenceIndex(sentenceIdx);
+      currentSentenceRef.current = sentenceIdx;
+      setCurrentTime(0);
+      setDuration(0);
+      onSentenceChange?.(sentenceIdx, sentenceList[sentenceIdx]);
+      pocketNextPlayTimeRef.current = Math.max(context.currentTime + 0.03, pocketNextPlayTimeRef.current);
+      pocketJobCompleteRef.current = false;
+
+      const prefetched = pocketPrefetchRef.current;
+      if (prefetched?.index === sentenceIdx) {
+        pocketPrefetchRef.current = null;
+        pocketJobRef.current = prefetched.jobId;
+        for (const chunk of prefetched.chunks) pocketChunkRef.current(chunk);
+        pocketJobCompleteRef.current = prefetched.complete;
+        if (prefetched.complete) {
+          prefetchPocketSentence(sentenceIdx + 1);
+          if (pocketSourcesRef.current.size === 0) finishPocketSentence();
+        }
+        return;
+      }
+
+      try {
+        const jobId = crypto.randomUUID();
+        pocketJobRef.current = jobId;
+        await ttsApi.synthesize({
+          jobId,
+          text: sentenceList[sentenceIdx],
+          language: pocketLanguage,
+          voiceId: configRef.current.voiceEn?.startsWith('pocket:') ? configRef.current.voiceEn : undefined,
+        });
+        if (session !== pocketSessionRef.current) await ttsApi.stop(jobId);
+      } catch (error) {
+        if (session !== pocketSessionRef.current) return;
+        setPlaybackState('idle');
+        isPlayingRef.current = false;
+        onProviderNotice?.(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [getPocketAudioContext, language, onProviderNotice, onSentenceChange, speakSegment, prefetchPocketSentence, finishPocketSentence]
+  );
+
+  useEffect(() => {
+    pocketPlayRef.current = playPocketSentence;
+  }, [playPocketSentence]);
+
+  useEffect(() => {
+    const ttsApi = typeof window !== 'undefined' ? window.electronAPI?.audio?.tts : undefined;
+    if (!ttsApi) return;
+
+    const decodeChunk = (chunk: TTSProviderAudioChunk) => {
+      const prefetched = pocketPrefetchRef.current;
+      if (prefetched?.jobId === chunk.jobId) {
+        if (chunk.pcmBase64) prefetched.chunks.push(chunk);
+        return;
+      }
+      if (chunk.jobId !== pocketJobRef.current || !chunk.pcmBase64) return;
+      const context = getPocketAudioContext();
+      if (!context) return;
+      const bytes = Uint8Array.from(atob(chunk.pcmBase64), (value) => value.charCodeAt(0));
+      const samples = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+      const frameCount = Math.floor(samples.length / chunk.channels);
+      const buffer = context.createBuffer(chunk.channels, frameCount, chunk.sampleRate);
+      for (let channel = 0; channel < chunk.channels; channel++) {
+        const output = buffer.getChannelData(channel);
+        for (let frame = 0; frame < frameCount; frame++) {
+          output[frame] = samples[frame * chunk.channels + channel] / 32768;
+        }
+      }
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.playbackRate.value = configRef.current.rate;
+      source.connect(pocketGainRef.current || context.destination);
+      const startAt = Math.max(context.currentTime + 0.02, pocketNextPlayTimeRef.current);
+      source.start(startAt);
+      pocketNextPlayTimeRef.current = startAt + buffer.duration / configRef.current.rate;
+      pocketSourcesRef.current.add(source);
+      if (isPlayingRef.current) setPlaybackState('playing');
+      setDuration((value) => value + buffer.duration / configRef.current.rate);
+      source.onended = () => {
+        pocketSourcesRef.current.delete(source);
+        if (pocketJobCompleteRef.current && pocketSourcesRef.current.size === 0) finishPocketSentence();
+      };
+    };
+    pocketChunkRef.current = decodeChunk;
+
+    const onComplete = ({ jobId }: { jobId: string }) => {
+      if (pocketPrefetchRef.current?.jobId === jobId) {
+        pocketPrefetchRef.current.complete = true;
+        return;
+      }
+      if (jobId !== pocketJobRef.current) return;
+      pocketJobCompleteRef.current = true;
+      prefetchPocketSentence(currentSentenceRef.current + 1);
+      const context = getPocketAudioContext();
+      if (!context || pocketSourcesRef.current.size === 0) {
+        finishPocketSentence();
+        return;
+      }
+    };
+
+    const onError = ({ jobId, message }: { jobId: string; message: string }) => {
+      if (pocketPrefetchRef.current?.jobId === jobId) {
+        pocketPrefetchRef.current = null;
+        return;
+      }
+      if (jobId !== pocketJobRef.current) return;
+      const failedSentenceIndex = currentSentenceRef.current;
+      cancelPocketQueue();
+      pocketJobRef.current = null;
+      pocketJobCompleteRef.current = false;
+      pocketUnavailableRef.current = true;
+      setPlaybackState('idle');
+      isPlayingRef.current = false;
+      onProviderNotice?.(message, 'playbackFallback');
+      if (synthRef.current && sentencesRef.current[failedSentenceIndex]) {
+        isPlayingRef.current = true;
+        setPlaybackState('playing');
+        setPlaybackMode('tts');
+        setCurrentSentenceIndex(failedSentenceIndex);
+        onSentenceChange?.(failedSentenceIndex, sentencesRef.current[failedSentenceIndex]);
+        speakSegment(segmentMixedTextForTTS(sentencesRef.current[failedSentenceIndex]), 0, failedSentenceIndex);
+      }
+    };
+
+    const removeChunk = ttsApi.onChunk(decodeChunk);
+    const removeComplete = ttsApi.onComplete(onComplete);
+    const removeError = ttsApi.onError(onError);
+    return () => {
+      removeChunk();
+      removeComplete();
+      removeError();
+    };
+  }, [finishPocketSentence, getPocketAudioContext, onProviderNotice, onSentenceChange, speakSegment, prefetchPocketSentence, cancelPocketQueue]);
 
   // Audio element setup for Audiobook & SMIL
   const getOrCreateAudioElement = useCallback(() => {
@@ -314,10 +628,15 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
       } else {
         playAudioFile(currentAudioFileIndex, currentTime);
       }
+    } else if (pocketContextRef.current?.state === 'suspended' && pocketJobRef.current) {
+      pocketContextRef.current.resume().catch(() => undefined);
+      isPlayingRef.current = true;
+      setPlaybackState('playing');
+      if (pocketJobCompleteRef.current && pocketSourcesRef.current.size === 0) finishPocketSentence();
     } else {
       playTTS(currentSentenceIndex);
     }
-  }, [playbackMode, audiobookPairing, currentAudioFileIndex, currentTime, playAudioFile, playTTS, currentSentenceIndex]);
+  }, [playbackMode, audiobookPairing, currentAudioFileIndex, currentTime, playAudioFile, playTTS, currentSentenceIndex, finishPocketSentence]);
 
   // Pause
   const pause = useCallback(() => {
@@ -326,6 +645,8 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
 
     if (playbackMode === 'audiobook' && audioRef.current) {
       audioRef.current.pause();
+    } else if (pocketContextRef.current && pocketJobRef.current) {
+      pocketContextRef.current.suspend().catch(() => undefined);
     } else if (synthRef.current) {
       synthRef.current.cancel();
     }
@@ -342,6 +663,7 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
 
   // Stop
   const stop = useCallback(() => {
+    cancelPocketQueue();
     isPlayingRef.current = false;
     setPlaybackState('stopped');
     setActiveWord('');
@@ -350,21 +672,43 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
+    for (const source of pocketSourcesRef.current) {
+      try {
+        source.stop();
+      } catch {
+        // A source can already be ended when stop is pressed.
+      }
+    }
+    pocketSourcesRef.current.clear();
+    pocketJobCompleteRef.current = false;
+    if (pocketJobRef.current) {
+      window.electronAPI?.audio?.tts?.stop(pocketJobRef.current).catch(() => undefined);
+      pocketJobRef.current = null;
+    }
+    pocketContextRef.current?.suspend().catch(() => undefined);
     if (synthRef.current) {
       synthRef.current.cancel();
     }
     setCurrentTime(0);
-  }, []);
+  }, [cancelPocketQueue]);
 
   // Jump to specific sentence
   const playSentence = useCallback(
     (index: number) => {
-      if (index >= 0 && index < sentences.length) {
+      if (index >= 0 && index < sentencesRef.current.length) {
+        cancelPocketQueue();
         playTTS(index);
       }
     },
-    [sentences, playTTS]
+    [playTTS, cancelPocketQueue]
   );
+
+  useEffect(() => {
+    cancelPocketQueue();
+    isPlayingRef.current = false;
+    synthRef.current?.cancel();
+    setPlaybackState('stopped');
+  }, [bookId, config.voiceEn, config.voiceAr, cancelPocketQueue]);
 
   // Skip forward (seconds for audio, next sentence for TTS)
   const skipForward = useCallback(
@@ -403,6 +747,7 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
       if (audioRef.current) {
         audioRef.current.playbackRate = clamped;
       }
+      if (pocketGainRef.current) pocketGainRef.current.gain.value = configRef.current.volume;
     },
     []
   );
@@ -414,6 +759,12 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
     } else {
       setSleepRemainingSeconds(minutes * 60);
     }
+  }, []);
+
+  const setSentenceList = useCallback((value: string[] | ((previous: string[]) => string[])) => {
+    const next = typeof value === 'function' ? value(sentencesRef.current) : value;
+    sentencesRef.current = next;
+    setSentences(next);
   }, []);
 
   // Seek audio position
@@ -453,6 +804,7 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
   useEffect(() => {
     return () => {
       isPlayingRef.current = false;
+      cancelPocketQueue();
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -460,6 +812,17 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
       if (synthRef.current) {
         synthRef.current.cancel();
       }
+      for (const source of pocketSourcesRef.current) {
+        try {
+          source.stop();
+        } catch {
+          // Ignore already-ended sources during reader teardown.
+        }
+      }
+      if (pocketJobRef.current) {
+        window.electronAPI?.audio?.tts?.stop(pocketJobRef.current).catch(() => undefined);
+      }
+      pocketContextRef.current?.close().catch(() => undefined);
       if (sleepTimerRef.current) {
         clearTimeout(sleepTimerRef.current);
       }
@@ -494,7 +857,7 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
     setSleepTimer,
     loadAudiobook,
     loadSmilOverlay,
-    setSentences,
+    setSentences: setSentenceList,
     setConfig,
   };
 }

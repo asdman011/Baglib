@@ -58,7 +58,7 @@ interface TTSMiniPlayerProps {
   onOpenPairingWizard: () => void;
 }
 
-const SPEED_OPTIONS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
+const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 const SLEEP_OPTIONS = [
   { label: 'Off', minutes: null },
   { label: '5m', minutes: 5 },
@@ -149,7 +149,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
       : 0;
 
   const arVoices = voices.filter((v) => v.lang.toLowerCase().startsWith('ar'));
-  const enVoices = voices.filter((v) => v.lang.toLowerCase().startsWith('en'));
+  const enVoices = voices.filter((v) => v.provider === 'pocket-tts' || v.lang.toLowerCase().startsWith('en'));
 
   return (
     <div

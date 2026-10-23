@@ -52,6 +52,7 @@ interface ZenTopBarProps {
   onToggleKnowledge?: () => void;
   isKnowledgeOpen?: boolean;
   onTogglePlugins: () => void;
+  onReadAloud?: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   isAutoScrolling?: boolean;
@@ -87,6 +88,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
   onToggleKnowledge,
   isKnowledgeOpen,
   onTogglePlugins,
+  onReadAloud,
   onMouseEnter,
   onMouseLeave,
   isAutoScrolling = false,
@@ -178,6 +180,10 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
 
       {/* Center: View Mode, Zoom/Fit, Direction */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <button onClick={onReadAloud} title={t('ttsReadAloud')} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl hover:bg-canvas text-xs cursor-pointer">
+          <Play className="w-4 h-4 rtl:rotate-180" />
+          <span>{t('ttsReadAloud')}</span>
+        </button>
         {/* View Mode Switcher */}
         <div className="flex items-center gap-0.5 bg-canvas/80 p-0.5 rounded-xl border border-subtle text-xs">
           <button

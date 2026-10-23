@@ -136,6 +136,13 @@ const HIGHLIGHT_STYLES = `
   background-color: rgba(59, 130, 246, 0.35) !important;
   color: inherit !important;
 }
+::highlight(baglib-tts-active) {
+  background-color: rgba(14, 165, 233, 0.28) !important;
+  color: inherit !important;
+  text-decoration: underline;
+  text-decoration-color: rgba(14, 165, 233, 0.75);
+  text-decoration-thickness: 2px;
+}
 
 mark.baglib-highlight {
   color: inherit !important;
@@ -271,6 +278,24 @@ export function clearActiveSelectionHighlight(): void {
   CSSObj.highlights.delete('baglib-active-selection');
 }
 
+export function setActiveTtsHighlight(ranges: Range[], doc?: Document): void {
+  if (!isCustomHighlightSupported()) return;
+  const targetDoc = doc || (typeof document !== 'undefined' ? document : undefined);
+  if (targetDoc) injectHighlightStyles(targetDoc);
+  const CSSObj = CSS as any;
+  const HighlightClass = (window as any).Highlight;
+  if (ranges.length > 0) {
+    CSSObj.highlights.set('baglib-tts-active', new HighlightClass(...ranges));
+  } else {
+    CSSObj.highlights.delete('baglib-tts-active');
+  }
+}
+
+export function clearActiveTtsHighlight(): void {
+  if (!isCustomHighlightSupported()) return;
+  (CSS as any).highlights.delete('baglib-tts-active');
+}
+
 /**
  * Clears all Baglib highlights from CSS.highlights
  */
@@ -285,6 +310,7 @@ export function clearCssCustomHighlights(): void {
     'baglib-highlight-violet',
     'baglib-underline',
     'baglib-active-selection',
+    'baglib-tts-active',
   ];
   for (const g of groups) {
     CSSObj.highlights.delete(g);

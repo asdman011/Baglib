@@ -83,7 +83,7 @@ import { OcrTextOverlay } from './OcrTextOverlay';
 import { DictionaryLookupModal } from './DictionaryLookupModal';
 import { AISettingsModal } from '../ai/AISettingsModal';
 import { AIResearchAssistantDrawer } from './AIResearchAssistantDrawer';
-import { useTTSAudio } from '../../hooks/useTTSAudio';
+import { useTTSAudio, type TTSProviderNoticeKind } from '../../hooks/useTTSAudio';
 import { TTSMiniPlayer } from '../tts/TTSMiniPlayer';
 import { TTSLyricsView } from '../tts/TTSLyricsView';
 import { AudiobookPairingDialog } from '../audiobook/AudiobookPairingDialog';
@@ -104,10 +104,14 @@ import {
   removeTempSelectionOverlay,
   injectHighlightStyles,
   findRangesForText,
+  setActiveTtsHighlight,
+  clearActiveTtsHighlight,
   HIGHLIGHT_COLORS,
 } from '../../libs/reader/highlight-manager';
 import { PdfNativeViewer, type PdfSelectionInfo, type NormalizedRect } from './PdfNativeViewer';
 import { HighlightActionPopover } from './HighlightActionPopover';
+import { segmentTextIntoSentences } from '../../../shared/utils/tts-text';
+import { readerAssetUrl } from '../../../shared/utils/reader-asset-url';
 
 export const FullPageBookReader: React.FC = () => {
   const {
@@ -1376,9 +1380,7 @@ export const FullPageBookReader: React.FC = () => {
       setDetectedFormat(format);
 
       // Construct privileged streaming URL
-      const normalizedPath = filePath.replace(/\\/g, '/');
-      const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
-      const streamUrl = `baglib-asset:///${cleanPath}`;
+      const streamUrl = readerAssetUrl(filePath);
       setAssetUrl(streamUrl);
 
       const windowAPI = (window as any).electronAPI;
@@ -1715,23 +1717,73 @@ export const FullPageBookReader: React.FC = () => {
     ocrPages.get(readingPage)?.text ||
     extractedFullText;
 
+  const narrationPageTexts = useMemo(() => {
+    if (effectiveFormat === 'PDF' && extractedPages.length > 0) return extractedPages;
+    if (paginatedPages.length > 0) return paginatedPages.map((page) => page.text);
+    return activePageText ? [activePageText] : [];
+  }, [activePageText, effectiveFormat, extractedPages, paginatedPages]);
+
+  const narrationText = useMemo(() => narrationPageTexts.filter(Boolean).join('\n\n'), [narrationPageTexts]);
+  const narrationSentencePages = useMemo(
+    () => narrationPageTexts.flatMap((text, pageIndex) => segmentTextIntoSentences(text).map(() => pageIndex)),
+    [narrationPageTexts]
+  );
+
+  const handleTtsSentenceChange = useCallback(
+    (sentenceIndex: number) => {
+      const targetPage = narrationSentencePages[sentenceIndex];
+      if (typeof targetPage === 'number' && targetPage + 1 !== readingPage) {
+        setReadingPage(targetPage + 1);
+      }
+    },
+    [narrationSentencePages, readingPage, setReadingPage]
+  );
+
+  const handleTtsProviderNotice = useCallback((message: string, kind: TTSProviderNoticeKind = 'unavailable') => {
+    console.warn('[baglib:tts]', message);
+    const notices = {
+      unavailable: t('ttsProviderUnavailable'),
+      arabicUnsupported: t('ttsArabicFallback'),
+      playbackFallback: t('ttsPlaybackFallback'),
+    };
+    setShowToast(notices[kind]);
+  }, [t]);
+
   // TTS & Audiobook Playback Engine Hook (KEY-145)
   const ttsAudio = useTTSAudio({
     bookId: activeBook?.id,
-    initialText: activePageText,
+    initialText: narrationText || activePageText,
+    language:
+      (typeof activeBook?.language === 'string' ? activeBook.language : undefined) ||
+      (typeof bookDoc?.metadata?.language === 'string' ? bookDoc.metadata.language : undefined) ||
+      'en',
+    onSentenceChange: handleTtsSentenceChange,
+    onProviderNotice: handleTtsProviderNotice,
   });
 
-  // Sync active page text with TTS queue when page changes (if not actively playing)
-  useEffect(() => {
-    if (activePageText && !ttsAudio.isPlaying) {
-      const parsed = activePageText
-        .replace(/([.!?؟؛\n]+)/g, '$1\u0000')
-        .split('\u0000')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-      ttsAudio.setSentences(parsed);
+  const startReadAloud = (selection?: string) => {
+    ttsAudio.stop();
+    closeAllPanelsExcept();
+    const sentences = narrationPageTexts.flatMap((text) => segmentTextIntoSentences(text).map((sentence) => sentence.text));
+    const pageIndex = narrationPageTexts.length > 1 ? readingPage - 1 : 0;
+    let startIndex = narrationSentencePages.findIndex((page) => page >= pageIndex);
+    if (startIndex < 0) return;
+    if (selection) {
+      const normalizedSelection = selection.replace(/\s+/g, ' ').trim();
+      const selectedIndex = sentences.findIndex((sentence, index) => index >= startIndex && narrationSentencePages[index] === pageIndex && sentence.includes(normalizedSelection));
+      if (selectedIndex >= 0) startIndex = selectedIndex;
     }
-  }, [activePageText, ttsAudio.isPlaying]);
+    ttsAudio.setSentences(sentences);
+    setIsTTSLyricsOpen(false);
+    setIsTTSPlayerActive(true);
+    ttsAudio.playSentence(startIndex);
+  };
+
+  useEffect(() => {
+    if (!showToast) return;
+    const timer = setTimeout(() => setShowToast(null), 6000);
+    return () => clearTimeout(timer);
+  }, [showToast]);
 
   // Load existing audiobook pairing when active book changes
   useEffect(() => {
@@ -1879,6 +1931,20 @@ export const FullPageBookReader: React.FC = () => {
       clearCssCustomHighlights();
     };
   }, [annotations, readingPage, activeFormattedPage, currentSectionHtml, activePageText]);
+
+  useEffect(() => {
+    const container = contentContainerRef.current;
+    const sentence = ttsAudio.sentences[ttsAudio.currentSentenceIndex];
+    if (!container || !sentence || !ttsAudio.isPlaying) {
+      clearActiveTtsHighlight();
+      return;
+    }
+    const ranges = findRangesForText(container, sentence);
+    setActiveTtsHighlight(ranges);
+    const activeRange = ranges[0];
+    activeRange?.startContainer.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return () => clearActiveTtsHighlight();
+  }, [activeFormattedPage, activePageText, currentSectionHtml, readingPage, ttsAudio.currentSentenceIndex, ttsAudio.isPlaying, ttsAudio.sentences]);
 
   // Save annotation to SQLite
   const handleSaveAnnotation = async (payload: AnnotationPayload): Promise<AnnotationDTO | undefined> => {
@@ -2763,9 +2829,10 @@ export const FullPageBookReader: React.FC = () => {
           setIsAIDrawerOpen(true);
         }}
         onPlayTTS={() => {
-          ttsAudio.setSentences([selectedText]);
+          closeAllPanelsExcept();
+          setIsTTSLyricsOpen(false);
+          startReadAloud(selectedText);
           setIsTTSPlayerActive(true);
-          ttsAudio.play();
           setPdfSelectionInfo(null);
           window.getSelection()?.removeAllRanges();
           clearActiveSelectionHighlight();
@@ -3014,6 +3081,7 @@ export const FullPageBookReader: React.FC = () => {
 
       {/* Floating Zen Top Bar */}
       <ZenTopBar
+        onReadAloud={() => startReadAloud()}
         isVisible={isTopBarVisible || isSettingsOpen || isTocPinned || isKnowledgePinned}
         activeBook={activeBook}
         detectedFormat={detectedFormat}
