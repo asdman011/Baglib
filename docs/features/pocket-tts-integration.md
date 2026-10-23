@@ -52,6 +52,28 @@ processes are CPU-only and do not require an external speech API.
 
 ## Runtime architecture
 
+### Sleep timer expiry correction (2026-10-23)
+
+The timer popover also offers a custom positive whole-minute duration alongside
+Off and the existing 5/15/30/45/60-minute presets. Enter a duration and use Set timer
+or Enter to apply it through the same countdown/stop path. Empty, fractional and
+nonpositive values cannot be applied. Labels and presets use centralized Arabic
+and English translations; the form follows the interface direction with an LTR
+numeric field and a diacritic-safe label line height.
+
+The countdown previously changed from one second directly to `null`, bypassing
+the zero-second branch that stops playback. It now reaches zero and invokes the
+same stop path as the player button, canceling active and prefetched generation
+and suspending audio. The countdown continues during buffering and freezes while
+paused; transitions between playing and buffering no longer restart its tick.
+The effect includes the stop callback in its dependencies and is declared after it.
+
+The React hook regression reproduced continued playback before the fix and passes
+afterward: a one-second timer stays armed during pause, then stops on expiry after
+resume, clears itself, cancels both jobs and ignores late chunks. The new custom
+duration form adds localized controls inside the existing timer popover. This is an automated hook
+test, not manual listening verification.
+
 ### Confirmed next-sentence stall and hardware investigation (2026-10-23)
 
 **Root cause, reproduced:** the real provider benchmark delivered sentence 1 in

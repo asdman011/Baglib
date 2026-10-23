@@ -4,7 +4,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import {
   Play,
   Pause,
@@ -59,14 +59,7 @@ interface TTSMiniPlayerProps {
 }
 
 const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-const SLEEP_OPTIONS = [
-  { label: 'Off', minutes: null },
-  { label: '5m', minutes: 5 },
-  { label: '15m', minutes: 15 },
-  { label: '30m', minutes: 30 },
-  { label: '45m', minutes: 45 },
-  { label: '60m', minutes: 60 },
-];
+const SLEEP_OPTIONS = [null, 5, 15, 30, 45, 60];
 
 export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
   bookTitle,
@@ -104,6 +97,10 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSpeedOpen, setIsSpeedOpen] = useState(false);
   const [isSleepOpen, setIsSleepOpen] = useState(false);
+  const [customMinutes, setCustomMinutes] = useState('');
+  const customTimerId = useId();
+  const customDuration = Number(customMinutes);
+  const isCustomDurationValid = customDuration > 0 && Number.isSafeInteger(customDuration) && Number.isSafeInteger(customDuration * 60);
   const [isVisible, setIsVisible] = useState(true);
   const lingerTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -271,19 +268,52 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
               </button>
 
               {isSleepOpen && (
-                <div className="absolute bottom-10 start-0 z-50 bg-surface dark:bg-zinc-800 border border-subtle rounded-2xl p-2 shadow-xl flex flex-col gap-1 min-w-[100px]">
-                  {SLEEP_OPTIONS.map((opt) => (
+                <div className="absolute bottom-10 start-0 z-50 bg-surface dark:bg-zinc-800 border border-subtle rounded-2xl p-2 shadow-xl flex flex-col gap-1 min-w-[220px]">
+                  {SLEEP_OPTIONS.map((minutes) => (
                     <button
-                      key={opt.label}
+                      key={minutes ?? 'off'}
                       onClick={() => {
-                        onSleepTimerChange(opt.minutes);
+                        onSleepTimerChange(minutes);
                         setIsSleepOpen(false);
                       }}
                       className="px-3 py-1 text-xs rounded-xl font-mono text-start hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
                     >
-                      {opt.label}
+                      {minutes === null ? t('ttsTimerOff') : t('ttsTimerMinutes', { minutes })}
                     </button>
                   ))}
+                  <form
+                    className="border-t border-subtle mt-1 pt-2 space-y-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (!isCustomDurationValid) return;
+                      onSleepTimerChange(customDuration);
+                      setIsSleepOpen(false);
+                    }}
+                  >
+                    <label htmlFor={customTimerId} className="block text-xs text-start leading-relaxed px-1">
+                      {t('ttsTimerCustomMinutes')}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id={customTimerId}
+                        type="number"
+                        min={1}
+                        step={1}
+                        required
+                        dir="ltr"
+                        value={customMinutes}
+                        onChange={(event) => setCustomMinutes(event.target.value)}
+                        className="min-w-0 w-20 flex-1 rounded-lg border border-subtle bg-canvas px-2 py-1.5 text-xs text-main focus-visible:outline-2 focus-visible:outline-pale-sky-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!isCustomDurationValid}
+                        className="rounded-lg bg-pale-sky-500 px-3 py-1.5 text-xs leading-relaxed text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {t('ttsTimerSet')}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
             </div>

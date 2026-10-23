@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { parseHTML } from 'linkedom';
 import { useTTSAudio } from '../../src/renderer/hooks/useTTSAudio';
 
-it('prefetches during playback, consumes buffered audio, pauses and discards canceled chunks', async () => {
+it('prefetches during playback, pauses the sleep timer and cancels queued audio on expiry', async () => {
   const { window } = parseHTML('<html><body><div id="root"></div></body></html>');
   const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const savedDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -59,16 +59,22 @@ it('prefetches during playback, consumes buffered audio, pauses and discards can
     assert.equal(audio.currentSentenceIndex, 1);
     assert.equal(sources.length, 2);
     assert.equal(requests.length, 3);
-    await act(async () => { audio.pause(); });
+    await act(async () => { audio.setSleepTimer(1 / 60); audio.pause(); });
     assert.equal(context.state, 'suspended');
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1100)); });
+    assert.equal(audio.sleepRemainingSeconds, 1);
     await act(async () => { emitChunk(requests[2].jobId); });
     assert.equal(audio.playbackState, 'paused');
     await act(async () => { audio.play(); });
     assert.equal(context.state, 'running');
-    await act(async () => { audio.stop(); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1100)); });
+    assert.equal(audio.playbackState, 'stopped');
+    assert.equal(audio.sleepRemainingSeconds, null);
+    assert.equal(context.state, 'suspended');
     const sourceCount = sources.length;
     await act(async () => { emitChunk(requests[2].jobId); completeListener({ jobId: requests[2].jobId }); });
     assert.equal(sources.length, sourceCount);
+    assert.ok(stopped.includes(requests[1].jobId));
     assert.ok(stopped.includes(requests[2].jobId));
   } finally {
     await act(async () => { root.unmount(); });

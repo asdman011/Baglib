@@ -214,21 +214,6 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
     }).catch((error) => onProviderNotice?.(error instanceof Error ? error.message : String(error)));
   }, [config.voiceEn, language, onProviderNotice]);
 
-  // Sleep timer interval tick
-  useEffect(() => {
-    if (sleepRemainingSeconds !== null && sleepRemainingSeconds > 0 && playbackState === 'playing') {
-      sleepTimerRef.current = setTimeout(() => {
-        setSleepRemainingSeconds((prev) => (prev && prev > 1 ? prev - 1 : null));
-      }, 1000);
-    } else if (sleepRemainingSeconds === 0) {
-      stop();
-      setSleepRemainingSeconds(null);
-    }
-    return () => {
-      if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
-    };
-  }, [sleepRemainingSeconds, playbackState]);
-
   // Handle SpeechSynthesis segment execution
   const speakSegment = useCallback(
     (segments: TTSUtteranceSegment[], segIdx: number, sentenceIdx: number) => {
@@ -691,6 +676,21 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
     }
     setCurrentTime(0);
   }, [cancelPocketQueue]);
+
+  const sleepTimerRunning = playbackState === 'playing' || playbackState === 'buffering';
+  useEffect(() => {
+    if (sleepRemainingSeconds === 0) {
+      stop();
+      setSleepRemainingSeconds(null);
+    } else if (sleepRemainingSeconds !== null && sleepRemainingSeconds > 0 && sleepTimerRunning) {
+      sleepTimerRef.current = setTimeout(() => {
+        setSleepRemainingSeconds((previous) => previous === null ? null : Math.max(0, previous - 1));
+      }, 1000);
+    }
+    return () => {
+      if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
+    };
+  }, [sleepRemainingSeconds, sleepTimerRunning, stop]);
 
   // Jump to specific sentence
   const playSentence = useCallback(
