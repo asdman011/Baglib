@@ -367,3 +367,24 @@ To provide an effortless reading experience without accidental interruption:
 
 
 
+# PDF opening latency correction — 2026-10-23
+
+Source inspection of `FullPageBookReader.tsx::loadDocumentPipeline` found that
+`isLoadingFile` stayed true until `extractPdfText` finished parsing the entire PDF.
+The native viewer was gated by that flag even though its Blob URL was already
+available. `system:extract-pdf-text` in `src/main/ipc/system.ts` reads the complete
+file and runs `pdf-parse`, so its duration grows with the document.
+
+PDF byte readiness now releases the native-view loading gate immediately. PDF.js
+can display pages while manuscript/search/narration text extraction continues;
+text extraction retains its separate loading indicator. This removes a serial
+dependency, not the cost of extraction itself. The initial full-file read/Blob
+creation and PDF.js parsing remain; no per-document timing improvement is claimed.
+
+Opening another document clears previous extracted text, page counts, outlines and
+PDF proxies while new content is prepared. Pending fetches are aborted on switch,
+stale loads do not start extraction, and cleanup destroys the document created by
+that load rather than an earlier render's document. Existing Arabic/English text
+and RTL/LTR layout are unchanged. TypeScript and focused reader regressions verify
+compatibility; manual PDF opening latency and visual RTL/LTR checks remain pending.
+

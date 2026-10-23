@@ -1356,6 +1356,8 @@ export const FullPageBookReader: React.FC = () => {
   useEffect(() => {
     let isCancelled = false;
     let activeObjectUrl: string | null = null;
+    let loadedBook: BookDoc | null = null;
+    const fetchController = new AbortController();
 
     const loadDocumentPipeline = async () => {
       if (!activeBook?.filePath) {
@@ -1370,6 +1372,13 @@ export const FullPageBookReader: React.FC = () => {
       }
 
       setPdfBlobUrl(null);
+      setBookDoc(null);
+      setExtractedFullText('');
+      setExtractedPages([]);
+      setPaginatedPages([]);
+      setPdfTotalPages(1);
+      setPdfToc([]);
+      setPdfDocProxy(null);
       setIsLoadingFile(true);
       setIsExtractingText(true);
       setExtractionFailed(false);
@@ -1389,11 +1398,12 @@ export const FullPageBookReader: React.FC = () => {
         // Fetch raw bytes for parser engine
         let bytes: Uint8Array | null = null;
         try {
-          const res = await fetch(streamUrl);
+          const res = await fetch(streamUrl, { signal: fetchController.signal });
           if (res.ok) {
             bytes = new Uint8Array(await res.arrayBuffer());
           }
         } catch (e) {
+          if (isCancelled) return;
           console.warn('[baglib:reader] Stream fetch failed:', e);
         }
 
@@ -1418,6 +1428,7 @@ export const FullPageBookReader: React.FC = () => {
             activeObjectUrl = URL.createObjectURL(pdfBlob);
             setPdfBlobUrl(activeObjectUrl);
             setViewType('native_pdf');
+            setIsLoadingFile(false);
           }
 
           // Open via DocumentLoader
@@ -1426,6 +1437,11 @@ export const FullPageBookReader: React.FC = () => {
             languageHint: activeBook.language,
           });
           const { book } = await loader.open();
+          loadedBook = book;
+          if (isCancelled) {
+            book.destroy?.();
+            return;
+          }
 
           if (!isCancelled) {
             setBookDoc(book);
@@ -1460,6 +1476,7 @@ export const FullPageBookReader: React.FC = () => {
       }
 
       // If PDF, also run native text extraction for manuscript and search
+      if (isCancelled) return;
       if (format === 'PDF' && windowAPI?.extractPdfText) {
         try {
           const result = await windowAPI.extractPdfText(filePath);
@@ -1516,8 +1533,9 @@ export const FullPageBookReader: React.FC = () => {
 
     return () => {
       isCancelled = true;
+      fetchController.abort();
       if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
-      bookDoc?.destroy?.();
+      loadedBook?.destroy?.();
     };
   }, [activeBook?.filePath]);
 
