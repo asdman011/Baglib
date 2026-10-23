@@ -16,6 +16,7 @@
     "package": "npm run build && electron-builder",
     "start": "next start",
     "test": "node scripts/test-runner.js",
+    "test:tts:live": "node scripts/tts-live/run.mjs",
     "lint": "eslint"
   },
   "dependencies": {
