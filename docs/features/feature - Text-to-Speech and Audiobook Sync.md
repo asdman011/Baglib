@@ -2,6 +2,19 @@
 
 ## 1. Overview & Objectives
 
+**2026-10-23 implementation update:** Pocket TTS is Baglib's default local inference
+provider for supported languages; Web Speech remains the Arabic/unavailable-engine
+fallback. The older comparison table's Web-Speech-only description is superseded.
+Pocket inference runs outside the renderer, streams PCM through IPC, and prefetches
+one sentence while the current sentence plays. Cached model/voice warm starts disable
+Hugging Face network checks. Compared with browser-managed utterances, this requires
+explicit buffering, cancellation and pause-aware audio scheduling in Baglib. Existing
+audiobook and SMIL playback remain separate paths. See
+[Pocket TTS integration](pocket-tts-integration.md) for evidence, cache behavior and
+verification limits. The subsequent streaming-stall investigation inspected the
+local Pocket TTS 4.0.1 source and its reference Web Audio player, plus upstream
+GitHub issues; the findings are summarized below.
+
 In modern electronic reading applications, combining visual reading with auditory narration significantly increases retention, accessibility, and engagement. For Baglib—which prioritizes multilingual scholarship, classical Arabic literature (*Turath*), and bilingual academic research—the audio narration system must support three core paradigms:
 1. **Multilingual Text-to-Speech (TTS) with Script Auto-Switching:** Seamlessly switching between Arabic and English synthesis voices within a single mixed-script sentence or paragraph without playback interruption.
 2. **EPUB 3 Media Overlays:** Real-time synchronized read-along highlighting driven by embedded SMIL (`.smil`) timecodes.
@@ -13,7 +26,7 @@ In modern electronic reading applications, combining visual reading with auditor
 
 | Dimension | Readest | Foliate (Original) | Audiobookshelf (ABS) | Baglib (Implemented) |
 | :--- | :--- | :--- | :--- | :--- |
-| **TTS Engine** | Web Speech API + SpeechSynthesis | Native Linux `eSpeak` / `speech-dispatcher` | Server-side transcode / streaming | Web Speech API with Regex-based Script Auto-Switching (`ar` / `en`) |
+| **TTS Engine** | Web Speech API + SpeechSynthesis | Native Linux `eSpeak` / `speech-dispatcher` | Server-side transcode / streaming | Local Pocket TTS over IPC; Web Speech for Arabic/unavailable-engine fallback |
 | **Mixed-Script Support** | Single selected voice per session | Single voice per document | Pre-recorded audio only | Dynamic segment-level voice auto-switching within sentences |
 | **Media Overlays** | SMIL 3.0 parsing with custom clock math | Basic SMIL support via Foliate-js | Not applicable | Isomorphic Regex-based SMIL parser supporting clock formats and unit timecounts |
 | **Audiobook Pairing** | Continuum anchor mapping with 5-step wizard | Manual chapter index matching | Native server library item matching | 5-Step Wizard (`summary`, `select`, `abs`, `anchor`, `review`) with SQLite persistence |
@@ -46,6 +59,38 @@ In modern electronic reading applications, combining visual reading with auditor
 - Baglib's `segmentMixedTextForTTS` scans characters with Unicode block regexes (`[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]`), segmenting text into contiguous Arabic and Latin runs while cleanly grouping neutral punctuation (spaces, commas, quotes) into the preceding active language run.
 - When executing the speech queue, the audio engine switches between the user's preferred Arabic voice (`voiceAr`) and English voice (`voiceEn`) on the fly.
 
+### D. Stream Framing and Sentence Lookahead (2026-10-23)
+
+Unlike browser-managed Web Speech utterances, Pocket TTS exposes a raw streaming
+WAV response. Its reference `pocket_tts/static/index.html::StreamingWavPlayer`
+accumulates a full header, preserves sample alignment and buffers 16,384 bytes
+before playback. This protects against transport fragmentation but adds startup
+latency. The inspected Python writer deliberately declares a placeholder WAV size;
+consumers must use stream EOF, not that declared duration, to detect completion.
+
+Baglib keeps inference in Electron main's managed Python service and schedules PCM
+in the renderer, retaining one future sentence while the current audio plays.
+This combines explicit transport parsing with the reader's sentence-position
+tracking rather than delegating the entire queue to browser speech. The parser
+previously stopped after reading `fmt ` even if `data` arrived later: a real test
+generated sentence 2 in 1.79 seconds but delivered zero PCM to the renderer.
+Continuing header parsing until `data` and retaining partial samples fixed this
+failure. Empty/truncated output is now rejected; a 30-second idle watchdog prevents
+unbounded waiting for a stalled server. No schema or engine dependency changed.
+Failure and fallback notices use the centralized Arabic/English translations;
+raw engine diagnostics are logged rather than shown as English-only reader toasts.
+
+Compared with the demo's fixed initial buffer, Baglib favors low first-audio latency
+plus bounded sentence lookahead. This works when synthesis exceeds consumption;
+it cannot guarantee gapless playback under every hardware load or speed. The
+measured Ryzen 7 PRO 5750G produced English audio at roughly 2.5x real-time. Real
+hidden/muted Electron tests completed Alba at 1x and Anna at 2x offline, with maximum
+scheduled-buffer gaps of approximately 38-39 ms. A longer 30-sentence Anna/2x run
+passed with a maximum gap of 41.59 ms. These are scheduling measurements, not
+subjective listening tests or full reader-layout validation. Existing Readest,
+Foliate and Audiobookshelf comparisons were not re-investigated in this pass.
+See [Pocket TTS evidence, test commands and limitations](pocket-tts-integration.md#confirmed-next-sentence-stall-and-hardware-investigation-2026-10-23).
+
 ---
 
 ## 4. Baglib Implementation & Architectural Alignment
@@ -63,5 +108,9 @@ All audiobook pairings and reading playback sessions are stored in SQLite:
 ---
 
 ## 5. Verification & Tests
+The following counts are historical. The 2026-10-23 parser/fallback update passes
+all **790 repository tests**, including 15 focused TTS/reader regressions; see the
+Pocket TTS integration report for live offline measurements and remaining limits.
+
 - Comprehensive unit tests in `tests/utils/audio.test.ts` (14/14 passing) and `tests/services/audiobook.service.test.ts` (7/7 passing).
 - Zero regressions across the full repository test suite (580/580 passing).
