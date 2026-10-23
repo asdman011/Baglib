@@ -352,6 +352,33 @@ export const API = {
     scanLocalAudioFiles: (folderPath: string) => ipcRenderer.invoke('audio:scan-local-files', folderPath),
     queryAudiobookshelf: (serverUrl: string, apiKey: string, query?: string) =>
       ipcRenderer.invoke('audio:query-abs', serverUrl, apiKey, query),
+    tts: {
+      getStatus: () => ipcRenderer.invoke('tts:get-status'),
+      getVoices: () => ipcRenderer.invoke('tts:get-voices'),
+      init: (options?: import('../shared/types/tts-provider').TTSProviderInitOptions) =>
+        ipcRenderer.invoke('tts:init', options),
+      loadVoice: (options: import('../shared/types/tts-provider').TTSProviderVoiceOptions) =>
+        ipcRenderer.invoke('tts:load-voice', options),
+      synthesize: (request: Omit<import('../shared/types/tts-provider').TTSProviderSynthesisRequest, 'jobId'> & { jobId?: string }) =>
+        ipcRenderer.invoke('tts:synthesize', request),
+      stop: (jobId?: string) => ipcRenderer.invoke('tts:stop', jobId),
+      release: () => ipcRenderer.invoke('tts:release'),
+      onChunk: (callback: (chunk: import('../shared/types/tts-provider').TTSProviderAudioChunk) => void) => {
+        const subscription = (_: unknown, chunk: import('../shared/types/tts-provider').TTSProviderAudioChunk) => callback(chunk);
+        ipcRenderer.on('tts:chunk', subscription);
+        return () => ipcRenderer.removeListener('tts:chunk', subscription);
+      },
+      onComplete: (callback: (event: { jobId: string }) => void) => {
+        const subscription = (_: unknown, event: { jobId: string }) => callback(event);
+        ipcRenderer.on('tts:complete', subscription);
+        return () => ipcRenderer.removeListener('tts:complete', subscription);
+      },
+      onError: (callback: (event: { jobId: string; message: string }) => void) => {
+        const subscription = (_: unknown, event: { jobId: string; message: string }) => callback(event);
+        ipcRenderer.on('tts:error', subscription);
+        return () => ipcRenderer.removeListener('tts:error', subscription);
+      },
+    },
   },
 
   // Cloud Backup, KOReader Progress Sync & Version Snapshots (KEY-147)

@@ -10,6 +10,7 @@ export interface TTSVoice {
   lang: string;
   isDefault?: boolean;
   localService?: boolean;
+  provider?: 'pocket-tts' | 'browser';
 }
 
 export interface TTSUtteranceSegment {

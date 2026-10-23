@@ -5,12 +5,19 @@
 import { ipcMain } from 'electron';
 import { getDatabase } from '../database/connection';
 import { AudiobookService } from '../services/audio/audiobook.service';
+import { PocketTTSProvider, createTTSJobId } from '../services/audio/pocket-tts.provider';
 import type {
   SaveAudiobookPairingPayload,
   AudiobookPlaybackProgress,
 } from '../../shared/types/audio';
+import type {
+  TTSProviderInitOptions,
+  TTSProviderSynthesisRequest,
+  TTSProviderVoiceOptions,
+} from '../../shared/types/tts-provider';
 
 let audiobookServiceInstance: AudiobookService | null = null;
+const pocketTTSProvider = new PocketTTSProvider();
 
 function getAudiobookService(): AudiobookService {
   if (!audiobookServiceInstance) {
@@ -108,4 +115,52 @@ export function registerAudioIpc(): void {
       return [];
     }
   });
+
+  ipcMain.handle('tts:get-status', () => pocketTTSProvider.getStatus());
+
+  ipcMain.handle('tts:get-voices', () => PocketTTSProvider.getVoices());
+
+  ipcMain.handle('tts:init', async (_, options?: TTSProviderInitOptions) => {
+    return pocketTTSProvider.init(options);
+  });
+
+  ipcMain.handle('tts:load-voice', async (_, options: TTSProviderVoiceOptions) => {
+    await pocketTTSProvider.loadVoice(options);
+    return true;
+  });
+
+  ipcMain.handle('tts:synthesize', async (event, request: Omit<TTSProviderSynthesisRequest, 'jobId'> & { jobId?: string }) => {
+    const jobId = request.jobId || createTTSJobId();
+    const fullRequest = { ...request, jobId };
+    void pocketTTSProvider
+      .synthesize(fullRequest, (chunk) => {
+        if (!event.sender.isDestroyed()) event.sender.send('tts:chunk', chunk);
+      })
+      .then(() => {
+        if (!event.sender.isDestroyed()) event.sender.send('tts:complete', { jobId });
+      })
+      .catch((error: unknown) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('tts:error', {
+            jobId,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      });
+    return { jobId };
+  });
+
+  ipcMain.handle('tts:stop', async (_, jobId?: string) => {
+    await pocketTTSProvider.stop(jobId);
+    return true;
+  });
+
+  ipcMain.handle('tts:release', async () => {
+    await pocketTTSProvider.release();
+    return true;
+  });
+}
+
+export async function shutdownAudioIpc(): Promise<void> {
+  await pocketTTSProvider.release();
 }

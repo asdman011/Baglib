@@ -16,7 +16,7 @@ import { setupEnrichmentIPC } from "./ipc/enrichment";
 import { registerOcrIpc } from "./ipc/ocr";
 import { registerDictionaryIpc } from "./ipc/dictionary";
 import { registerAIIpc } from "./ipc/ai";
-import { registerAudioIpc } from "./ipc/audio";
+import { registerAudioIpc, shutdownAudioIpc } from "./ipc/audio";
 import { registerCloudSyncIpc } from "./ipc/cloud-sync";
 import { registerOpdsIpcHandlers } from "./ipc/opds";
 import { registerWebClipperIpcHandlers } from "./ipc/web-clipper";
@@ -159,6 +159,17 @@ function resolveLocalFilePath(rawUrlPath: string): string | null {
 }
 
 async function handleAssetProtocolRequest(request: Request): Promise<Response> {
+  const origin = request.headers.get('origin');
+  const allowedOrigin = origin === 'http://localhost:3000' || origin === 'app://-';
+  if (origin && origin !== 'null' && !allowedOrigin) return new Response(null, { status: 403 });
+  const corsHeaders: Record<string, string> = allowedOrigin ? {
+    'Access-Control-Allow-Origin': origin!,
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+    'Access-Control-Allow-Headers': 'Range',
+    'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length',
+    'Vary': 'Origin',
+  } : {};
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   try {
     let rawPath = request.url.replace(/^(baglib-asset|local-pdf):\/\//, '');
     const questionIndex = rawPath.indexOf('?');
@@ -196,6 +207,7 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
       return new Response(webStream as any, {
         status: 206,
         headers: {
+          ...corsHeaders,
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
           'Accept-Ranges': 'bytes',
           'Content-Length': chunksize.toString(),
@@ -204,7 +216,11 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
       });
     }
 
-    return net.fetch(pathToFileURL(filePath).toString());
+    const response = await net.fetch(pathToFileURL(filePath).toString());
+    const headers = new Headers(response.headers);
+    for (const [name, value] of Object.entries(corsHeaders)) headers.set(name, value);
+    headers.set('Content-Type', mimeType);
+    return new Response(response.body, { status: response.status, headers });
   } catch (err: any) {
     console.error('[baglib:protocol] Error streaming asset:', err);
     return new Response('Internal asset streaming error', { status: 500 });
@@ -316,4 +332,8 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on('before-quit', () => {
+  void shutdownAudioIpc();
 });
