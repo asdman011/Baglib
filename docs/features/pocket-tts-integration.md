@@ -52,6 +52,22 @@ processes are CPU-only and do not require an external speech API.
 
 ## Runtime architecture
 
+### Callback-driven render loop correction (2026-10-23)
+
+Provider discovery depended on the caller's `onProviderNotice` function. A caller
+creating that function during render caused discovery to run again after every
+`setVoices`, producing a render loop. Sentence/progress callbacks could similarly
+invalidate the streaming subscription chain. The hook now uses stable callback
+wrappers backed by refs updated after commit, so notifications reach the latest
+caller without restarting provider discovery solely because callbacks changed.
+
+The React regression reproduced nine voice initialization attempts before the fix
+(bounded by the mock to avoid an endless test), versus exactly one after the fix,
+including streamed playback updates and timer expiry. It also checks that playback
+invokes the latest committed sentence callback. Four focused tests and TypeScript
+pass. No user-facing strings or layout changed; actual reported app-session error
+logs have not been recaptured after this change.
+
 ### Sleep timer expiry correction (2026-10-23)
 
 The timer popover also offers a custom positive whole-minute duration alongside

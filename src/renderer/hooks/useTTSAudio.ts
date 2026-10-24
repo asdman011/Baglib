@@ -29,7 +29,28 @@ export interface UseTTSAudioOptions {
 }
 
 export function useTTSAudio(options: UseTTSAudioOptions = {}) {
-  const { bookId, initialText = '', language = 'en', onSentenceChange, onOverlayParChange, onProviderNotice } = options;
+  const { bookId, initialText = '', language = 'en' } = options;
+  const callbacksRef = useRef({
+    onSentenceChange: options.onSentenceChange,
+    onOverlayParChange: options.onOverlayParChange,
+    onProviderNotice: options.onProviderNotice,
+  });
+  useEffect(() => {
+    callbacksRef.current = {
+      onSentenceChange: options.onSentenceChange,
+      onOverlayParChange: options.onOverlayParChange,
+      onProviderNotice: options.onProviderNotice,
+    };
+  }, [options.onSentenceChange, options.onOverlayParChange, options.onProviderNotice]);
+  const onSentenceChange = useCallback((sentenceIndex: number, text: string) => {
+    callbacksRef.current.onSentenceChange?.(sentenceIndex, text);
+  }, []);
+  const onOverlayParChange = useCallback((par: SmilPar | null) => {
+    callbacksRef.current.onOverlayParChange?.(par);
+  }, []);
+  const onProviderNotice = useCallback((message: string, kind?: TTSProviderNoticeKind) => {
+    callbacksRef.current.onProviderNotice?.(message, kind);
+  }, []);
 
   // Playback state
   const [playbackState, setPlaybackState] = useState<TTSPlaybackState>('idle');

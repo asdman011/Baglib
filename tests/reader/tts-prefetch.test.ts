@@ -15,6 +15,9 @@ it('prefetches during playback, pauses the sleep timer and cancels queued audio 
   const requests: any[] = [];
   const stopped: string[] = [];
   const sources: any[] = [];
+  let voiceRequests = 0;
+  let renderVersion = 0;
+  const notifiedVersions: number[] = [];
   let chunkListener: (chunk: any) => void = () => {};
   let completeListener: (event: any) => void = () => {};
   const context = {
@@ -32,7 +35,11 @@ it('prefetches during playback, pauses the sleep timer and cancels queued audio 
   };
   (window as any).AudioContext = function () { return context; };
   (window as any).electronAPI = { audio: { tts: {
-    getVoices: async () => [], getStatus: async () => ({ available: true }), loadVoice: async () => {},
+    getVoices: async () => {
+      voiceRequests++;
+      if (voiceRequests > 8) throw new Error('Repeated voice initialization');
+      return [];
+    }, getStatus: async () => ({ available: true }), loadVoice: async () => {},
     synthesize: async (request: any) => { requests.push(request); return { jobId: request.jobId }; },
     stop: async (jobId: string) => { stopped.push(jobId); },
     onChunk: (listener: any) => { chunkListener = listener; return () => {}; },
@@ -41,14 +48,18 @@ it('prefetches during playback, pauses the sleep timer and cancels queued audio 
   } } };
   let audio!: ReturnType<typeof useTTSAudio>;
   function Harness() {
-    audio = useTTSAudio({ initialText: 'First sentence. Second sentence. Third sentence.' });
+    const version = ++renderVersion;
+    audio = useTTSAudio({ initialText: 'First sentence. Second sentence. Third sentence.', onProviderNotice: () => {}, onSentenceChange: () => { notifiedVersions.push(version); } });
     return null;
   }
   const root = createRoot(window.document.getElementById('root')!);
   const emitChunk = (jobId: string) => chunkListener({ jobId, pcmBase64: Buffer.alloc(480).toString('base64'), sampleRate: 24000, channels: 1, bitsPerSample: 16 });
   try {
     await act(async () => { root.render(createElement(Harness)); });
+    assert.equal(voiceRequests, 1, 'Changing callback identity must not restart voice initialization');
+    const versionBeforePlay = renderVersion;
     await act(async () => { audio.playSentence(0); });
+    assert.equal(notifiedVersions[0], versionBeforePlay, 'Playback must invoke the latest committed callback');
     await act(async () => { emitChunk(requests[0].jobId); completeListener({ jobId: requests[0].jobId }); });
     assert.equal(requests.length, 2);
     assert.equal(requests[1].text, 'Second sentence.');
@@ -76,6 +87,7 @@ it('prefetches during playback, pauses the sleep timer and cancels queued audio 
     assert.equal(sources.length, sourceCount);
     assert.ok(stopped.includes(requests[1].jobId));
     assert.ok(stopped.includes(requests[2].jobId));
+    assert.equal(voiceRequests, 1, 'Streaming state updates must not restart voice initialization');
   } finally {
     await act(async () => { root.unmount(); });
     if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow);

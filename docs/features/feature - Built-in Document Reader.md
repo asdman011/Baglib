@@ -388,3 +388,23 @@ that load rather than an earlier render's document. Existing Arabic/English text
 and RTL/LTR layout are unchanged. TypeScript and focused reader regressions verify
 compatibility; manual PDF opening latency and visual RTL/LTR checks remain pending.
 
+# Reader toolbar responsive layout correction — 2026-10-23
+
+`ZenTopBar.tsx` previously forced all actions into a fixed 52px-high, non-wrapping
+row. Combined title/navigation widths and action groups collided in both Arabic
+and English, including wide viewports. A hidden Electron fixture using the actual
+component and Tailwind CSS reproduced button intersections at 320, 480, 768, 1024,
+1280 and 1920 CSS pixels for both directions.
+
+The toolbar now has an automatic height, bounded shrinking title area, and wrapping
+action groups. At narrower widths controls occupy additional rows; long titles
+truncate within the available space and retain their full title tooltip. Existing
+actions remain available at their original visibility breakpoints. Logical layout
+properties and localized labels are preserved; redundant hardcoded label fallbacks
+were removed. Title/read-aloud line heights allow room for Arabic diacritics.
+
+After the change, all 12 width/language combinations had zero intersecting button
+rectangles and zero buttons outside the header. Arabic RTL and English LTR screenshots
+at 768px were inspected with a mixed-script long title. This isolated fixture verifies
+toolbar geometry, not every open drawer, popup or complete application interaction.
+

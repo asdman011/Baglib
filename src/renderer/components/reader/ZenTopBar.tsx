@@ -100,10 +100,10 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
   return (
     <header
       role="toolbar"
-      aria-label={t('a11yToolbarLandmark') || 'Reader Action Toolbar'}
+      aria-label={t('a11yToolbarLandmark')}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="fixed top-3 inset-x-3 sm:inset-x-8 max-w-7xl mx-auto h-13 backdrop-blur-2xl bg-surface/90 border border-subtle/70 rounded-2xl flex items-center justify-between px-3 sm:px-4 z-40 shadow-2xl select-none"
+      className="fixed top-3 inset-x-3 sm:inset-x-8 max-w-7xl mx-auto min-h-13 backdrop-blur-2xl bg-surface/90 border border-subtle/70 rounded-2xl flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 sm:px-4 py-2 z-40 shadow-2xl select-none"
       style={{
         transform: isVisible || isSettingsOpen ? 'translateY(0)' : 'translateY(-125%)',
         opacity: isVisible || isSettingsOpen ? 1 : 0,
@@ -112,7 +112,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
       }}
     >
       {/* Start: Back to Library, TOC & Book Title */}
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      <div className="flex flex-1 basis-64 items-center gap-2 sm:gap-3 min-w-0 max-w-full">
         <button
           onClick={onClose}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas/80 border border-subtle hover:bg-canvas text-muted hover:text-main text-xs font-bold transition-all cursor-pointer shrink-0"
@@ -145,7 +145,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
                 ? 'bg-pale-sky-500 text-white border-pale-sky-500 shadow-sm'
                 : 'bg-canvas/80 border-subtle text-muted hover:text-main'
             }`}
-            title={t('tabHighlights') || 'Highlights & Knowledge'}
+            title={t('tabHighlights')}
           >
             <Highlighter className="w-4 h-4" />
             <span className="hidden md:inline">{t('tabHighlights')}</span>
@@ -155,10 +155,10 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
         <div className="h-4 w-px bg-subtle/60 hidden sm:block shrink-0" />
 
         {/* Title, Author & Format Badge */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex flex-1 items-center gap-2 min-w-0">
           <BookOpen className="w-4 h-4 text-pale-sky-500 shrink-0" />
           <div className="flex flex-col min-w-0">
-            <h2 className="font-bold text-main text-xs sm:text-sm truncate max-w-xs sm:max-w-sm lg:max-w-md">
+            <h2 className="font-bold text-main text-xs sm:text-sm leading-relaxed truncate" title={activeBook.title}>
               {activeBook.title}
               {activeBook.author && (
                 <span className="text-muted font-serif font-normal ms-1.5">
@@ -179,8 +179,8 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
       </div>
 
       {/* Center: View Mode, Zoom/Fit, Direction */}
-      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        <button onClick={onReadAloud} title={t('ttsReadAloud')} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl hover:bg-canvas text-xs cursor-pointer">
+      <div className="flex flex-1 basis-full 2xl:basis-auto min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 [&>button]:shrink-0 [&>div]:shrink-0">
+        <button onClick={onReadAloud} title={t('ttsReadAloud')} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl hover:bg-canvas text-xs leading-relaxed whitespace-nowrap cursor-pointer">
           <Play className="w-4 h-4 rtl:rotate-180" />
           <span>{t('ttsReadAloud')}</span>
         </button>
@@ -337,7 +337,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
         {/* Plugins Modal */}
         <button
           onClick={onTogglePlugins}
-          title={t('pluginsTitle') || 'Plugins'}
+          title={t('pluginsTitle')}
           className="p-1.5 rounded-xl bg-canvas/80 border border-subtle text-muted hover:text-main transition-all cursor-pointer"
         >
           <Puzzle className="w-4 h-4" />
