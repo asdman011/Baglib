@@ -9,7 +9,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+import { hashImportFile } from './import-files';
 import { getDatabase } from '../../database/connection';
 import { WorkRepository, SqliteWorkRepository } from '../../database/repositories/work.repository';
 import { EbookMetadataExtractorService } from './ebook-metadata-extractor.service';
@@ -61,7 +61,7 @@ export class DuplicateDetectorService {
   /**
    * Inspects a candidate file on disk or metadata payload for duplicates in the library.
    */
-  public async checkDuplicate(input: string | DuplicateCheckCandidate): Promise<DuplicateDetectionResult> {
+  public async checkDuplicate(input: string | DuplicateCheckCandidate, candidates?: Pick<BookItem, 'id' | 'title' | 'author'>[], exactOnly = false): Promise<DuplicateDetectionResult> {
     const candidate: DuplicateCheckCandidate = typeof input === 'string' ? { filePath: input } : input;
     const filePath = candidate.filePath;
     const fileName = candidate.fileName || (filePath ? path.basename(filePath) : 'Unknown');
@@ -76,8 +76,7 @@ export class DuplicateDetectorService {
         fileSizeBytes = fileSizeBytes ?? stat.size;
 
         if (!fileHash) {
-          const buffer = await fs.promises.readFile(filePath);
-          fileHash = crypto.createHash('sha256').update(buffer).digest('hex');
+          fileHash = await hashImportFile(filePath);
         }
       } catch (err) {
         console.warn(`[DuplicateDetector] Failed reading ${filePath}:`, err);
@@ -106,6 +105,8 @@ export class DuplicateDetectorService {
         };
       }
     }
+
+    if (exactOnly) return { filePath, fileName, fileHash, fileSizeBytes, matchType: 'none', confidence: 0, reason: '' };
 
     // Extract embedded metadata if title or ISBN are missing and file exists
     let title = candidate.title || (candidate as any).candidateMetadata?.title;
@@ -150,11 +151,13 @@ export class DuplicateDetectorService {
 
     // Tier 3: Title & Author Linguistic Similarity
     if (title && title.trim().length >= 3) {
-      const allWorks = this.workRepository.getAllWorks();
+      const allWorks = candidates || (this.workRepository.getDuplicateCandidates?.() ?? this.workRepository.getAllWorks());
       const normCandidateTitle = normalizeSearchString(title);
       const stripCandidateTitle = normCandidateTitle.replace(/(?:^|\s+)ال([^\s]{3,})/gu, '$1').trim();
 
-      for (const work of allWorks) {
+      for (let index = 0; index < allWorks.length; index++) {
+        if (index % 100 === 0) await new Promise<void>(resolve => setImmediate(resolve));
+        const work = allWorks[index];
         const normWorkTitle = normalizeSearchString(work.title);
         if (!normWorkTitle) continue;
         const stripWorkTitle = normWorkTitle.replace(/(?:^|\s+)ال([^\s]{3,})/gu, '$1').trim();
@@ -206,7 +209,7 @@ export class DuplicateDetectorService {
             confidence: parseFloat(confidence.toFixed(2)),
             reason:
               'العنوان واسم المؤلف متطابقان أو شديدا الشبه مع كتاب مسجل بالفعل / Title and author closely match an existing work in library',
-            existingWork: work,
+            existingWork: this.workRepository.getById(work.id) || work as BookItem,
             candidateMetadata: {
               title,
               author,
@@ -241,9 +244,17 @@ export class DuplicateDetectorService {
     inputs: Array<string | DuplicateCheckCandidate>
   ): Promise<DuplicateDetectionResult[]> {
     const results: DuplicateDetectionResult[] = [];
+    const candidates = this.workRepository.getDuplicateCandidates?.() ?? this.workRepository.getAllWorks();
     for (const input of inputs) {
-      const res = await this.checkDuplicate(input);
-      results.push(res);
+      await new Promise<void>(resolve => setImmediate(resolve));
+      const res = await this.checkDuplicate(input, candidates);
+      const existing = res.existingWork;
+      results.push({ ...res, existingWork: existing ? {
+        id: existing.id, title: existing.title, author: existing.author,
+        isbn: existing.isbn, filePath: existing.filePath, digitalFormat: existing.digitalFormat,
+        publisher: existing.publisher, publicationYear: existing.publicationYear,
+        bookType: existing.bookType, categories: existing.categories, tags: existing.tags, lendingHistory: [],
+      } : undefined });
     }
     return results;
   }

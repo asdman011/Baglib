@@ -195,6 +195,7 @@ export const LibraryGridView: React.FC = () => {
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
+  const [droppedImportPaths, setDroppedImportPaths] = useState<string[]>([]);
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
   const [isOpdsHubOpen, setIsOpdsHubOpen] = useState(false);
   const [isWebClipperOpen, setIsWebClipperOpen] = useState(false);
@@ -742,6 +743,7 @@ export const LibraryGridView: React.FC = () => {
   // Drag & Drop Handlers for Library View
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
+    if (isImportWizardOpen) return;
     dragCounterRef.current += 1;
     if (e.dataTransfer.types.includes('Files')) {
       setIsDragActive(true);
@@ -763,29 +765,18 @@ export const LibraryGridView: React.FC = () => {
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     dragCounterRef.current = 0;
     setIsDragActive(false);
 
-    const files = e.dataTransfer.files;
+    if (isImportWizardOpen) return;
+    const files = Array.from(e.dataTransfer.files);
     if (!files || files.length === 0) return;
 
-    const supportedExts = new Set(['PDF', 'EPUB', 'MOBI', 'AZW3', 'TXT', 'HTML', 'DJVU']);
-    let addedCount = 0;
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const ext = file.name.split('.').pop()?.toUpperCase() || '';
-      if (!supportedExts.has(ext)) continue;
-
-      const fullPath = await resolveDroppedFilePath(file);
-      await importDigitalBookFromFile(fullPath, file.name, file.size);
-      addedCount += 1;
-    }
-
-    if (addedCount === 0) {
-      setSaveToast(t('dropInvalidFile'));
-      setTimeout(() => setSaveToast(null), 3500);
-    }
+    const paths: string[] = [];
+    for (const file of files) paths.push(await resolveDroppedFilePath(file));
+    setDroppedImportPaths(paths);
+    setIsImportWizardOpen(true);
   };
 
   const handleImportOnlineBook = (partialBook: Partial<BookItem>) => {
@@ -2445,8 +2436,8 @@ export const LibraryGridView: React.FC = () => {
       {/* Import Wizard Modal (Story 6) */}
       <ImportWizardModal
         isOpen={isImportWizardOpen}
-        onClose={() => setIsImportWizardOpen(false)}
-        onImportComplete={() => refreshBooks()}
+        initialPaths={droppedImportPaths}
+        onClose={() => { setIsImportWizardOpen(false); setDroppedImportPaths([]); }}
       />
 
       {/* Cloud Backup & KOReader Sync Modal (KEY-147) */}

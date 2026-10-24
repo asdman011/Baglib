@@ -1,19 +1,29 @@
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import { DigitalFileValidatorService } from '../services/digital/digital-file-validator.service';
 import { DigitalImportPipelineService } from '../services/digital/digital-import-pipeline.service';
-import { EbookMetadataExtractorService } from '../services/digital/ebook-metadata-extractor.service';
 import { DuplicateDetectorService } from '../services/digital/duplicate-detector.service';
 import { StorageManagerService } from '../services/storage/storage-manager.service';
-import { WorkRepository } from '../database/repositories/work.repository';
-import { getDatabase } from '../database/connection';
 import type { DigitalImportOptions } from '../../shared/types/digital-file';
 import type { DigitalFormat } from '../../shared/types/work';
+import { BackgroundMetadataService } from '../services/digital/background-metadata.service';
+import { discoverImportFiles } from '../services/digital/import-files';
 
 export function setupDigitalIPC(): void {
   const validator = DigitalFileValidatorService.getInstance();
-  const pipeline = DigitalImportPipelineService.getInstance();
-  const extractor = EbookMetadataExtractorService.getInstance();
-  const duplicateDetector = DuplicateDetectorService.getInstance();
+  const extractor = new BackgroundMetadataService();
+  const duplicateDetector = new DuplicateDetectorService(undefined, extractor);
+  const pipeline = new DigitalImportPipelineService(undefined, validator, extractor, undefined, duplicateDetector);
+  app.once('before-quit', () => extractor.dispose());
+  let pending: Promise<unknown> = Promise.resolve();
+  const enqueue = <Value>(action: () => Promise<Value>): Promise<Value> => {
+    const job = pending.then(action);
+    pending = job.catch(() => {});
+    return job;
+  };
+  ipcMain.handle('digital:discover-files', (_event, paths: string[]) => {
+    if (!Array.isArray(paths) || paths.some(value => typeof value !== 'string')) throw new Error('Invalid import paths');
+    return discoverImportFiles(paths);
+  });
 
   /**
    * Validate a single digital file on disk by path
@@ -80,7 +90,7 @@ export function setupDigitalIPC(): void {
           error: 'خيارات الاستيراد غير صالحة / Invalid import options provided',
         };
       }
-      return await pipeline.importFile(options);
+      return await enqueue(() => pipeline.importFile(options));
     } catch (err: any) {
       console.error('[DigitalIPC] Error importing digital file:', err);
       return {
@@ -102,7 +112,7 @@ export function setupDigitalIPC(): void {
       if (!Array.isArray(optionsList)) {
         return { totalFiles: 0, successfulImports: 0, failedImports: 0, skippedImports: 0, results: [] };
       }
-      return await pipeline.importFiles(optionsList, (progress) => {
+      return await enqueue(() => pipeline.importFiles(optionsList, (progress) => {
         try {
           if (!event.sender.isDestroyed()) {
             event.sender.send('digital:import-progress', progress);
@@ -110,10 +120,10 @@ export function setupDigitalIPC(): void {
         } catch {
           // ignore if sender window closed
         }
-      });
+      }));
     } catch (err: any) {
       console.error('[DigitalIPC] Error batch importing digital files:', err);
-      return { totalFiles: 0, successfulImports: 0, failedImports: 0, skippedImports: 0, results: [] };
+      throw err;
     }
   });
 
@@ -123,10 +133,10 @@ export function setupDigitalIPC(): void {
   ipcMain.handle('digital:check-duplicates', async (_event, inputs: any[]) => {
     try {
       if (!Array.isArray(inputs)) return [];
-      return await duplicateDetector.batchCheckDuplicates(inputs);
+      return await enqueue(() => duplicateDetector.batchCheckDuplicates(inputs));
     } catch (err: any) {
       console.error('[DigitalIPC] Error checking duplicates:', err);
-      return [];
+      throw err;
     }
   });
 

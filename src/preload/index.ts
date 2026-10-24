@@ -154,6 +154,7 @@ export const API = {
   // Digital E-Book File Validation & Ingestion (Story 6)
   validateDigitalFile: (filePath: string) =>
     ipcRenderer.invoke('digital:validate-file', filePath),
+  discoverDigitalFiles: (paths: string[]) => ipcRenderer.invoke('digital:discover-files', paths),
   validateDigitalFiles: (filePaths: string[]) =>
     ipcRenderer.invoke('digital:validate-files', filePaths),
   getSupportedDigitalFormats: () =>

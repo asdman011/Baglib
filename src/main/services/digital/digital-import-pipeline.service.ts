@@ -1,6 +1,5 @@
-import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+import { hashImportFile } from './import-files';
 import { DigitalFileValidatorService } from './digital-file-validator.service';
 import { EbookMetadataExtractorService } from './ebook-metadata-extractor.service';
 import { getDatabase } from '../../database/connection';
@@ -85,8 +84,7 @@ export class DigitalImportPipelineService {
 
     try {
       // 2. Read file buffer & compute SHA-256 hash for deduplication
-      const fileBuffer = await fs.promises.readFile(filePath);
-      const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+      const fileHash = await hashImportFile(filePath);
 
       // Check duplicates if requested
       if (options.duplicateAction === 'skip') {
@@ -94,7 +92,7 @@ export class DigitalImportPipelineService {
           filePath,
           fileHash,
           fileSizeBytes: validation.fileSizeBytes,
-        });
+        }, undefined, options.skipExactDuplicatesOnly);
 
         if (dup.matchType !== 'none') {
           return {
@@ -418,6 +416,7 @@ export class DigitalImportPipelineService {
     }
 
     for (let i = 0; i < totalFiles; i++) {
+      await new Promise<void>(resolve => setImmediate(resolve));
       const opt = optionsList[i];
       const fileName = path.basename(opt.filePath);
 
@@ -439,7 +438,7 @@ export class DigitalImportPipelineService {
         });
 
         const result = await this.importFile(opt);
-        results.push(result);
+        results.push({ ...result, extractedMetadata: result.extractedMetadata ? { ...result.extractedMetadata, coverDataUrl: undefined } : undefined });
 
         const status = result.skipped ? 'skipped' : (result.success ? 'completed' : 'failed');
         onProgress?.({

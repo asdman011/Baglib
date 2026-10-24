@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { resolveDroppedFilePath } from '../../utils/file-path-helper';
+import { useImportStaging } from '../../hooks/useImportStaging';
 import {
   DuplicateDetectionResult,
   DuplicateResolutionAction,
@@ -45,6 +46,7 @@ interface ImportWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportComplete?: () => void;
+  initialPaths?: string[];
 }
 
 type WizardStep = 'select' | 'duplicates' | 'importing' | 'summary';
@@ -52,12 +54,15 @@ type WizardStep = 'select' | 'duplicates' | 'importing' | 'summary';
 export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   isOpen,
   onClose,
-  onImportComplete
+  onImportComplete,
+  initialPaths
 }) => {
   const { t, dir, lang, refreshBooks } = useWorkspace();
 
   const [step, setStep] = useState<WizardStep>('select');
-  const [stagedFiles, setStagedFiles] = useState<StagedFileItem[]>([]);
+  const { files: stagedFiles, setFiles: setStagedFiles, discovering, discoveryErrors, addPaths, clear } = useImportStaging();
+  const [visibleCount, setVisibleCount] = useState(100);
+  const [operationError, setOperationError] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -79,6 +84,9 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   const [progressEvent, setProgressEvent] = useState<ImportProgressEvent | null>(null);
   const [importSummary, setImportSummary] = useState<BatchImportSummary | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  useEffect(() => {
+    if (isOpen && initialPaths?.length) void addPaths(initialPaths);
+  }, [isOpen, initialPaths, addPaths]);
 
   // Load category options on modal open
   useEffect(() => {
@@ -104,9 +112,11 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
   // Reset states when closed
   const handleModalClose = () => {
-    if (isImporting) return; // Prevent closing mid-import
+    if (isImporting || isScanningDuplicates) return;
     setStep('select');
-    setStagedFiles([]);
+    clear();
+    setOperationError(false);
+    setVisibleCount(100);
     setDuplicateResults([]);
     setFileActions({});
     setProgressEvent(null);
@@ -125,43 +135,9 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     return `${value.toFixed(1)} ${units[idx]}`;
   };
 
-  const getFormatFromFileName = (fileName: string): DigitalFormat => {
-    const ext = fileName.split('.').pop()?.toUpperCase() || '';
-    if (['PDF', 'EPUB', 'MOBI', 'AZW3', 'TXT', 'HTML', 'DJVU'].includes(ext)) {
-      return ext as DigitalFormat;
-    }
-    return 'PDF';
-  };
-
-  // Add files to stage
-  const addFilesToStage = (fileList: { name: string; path: string; size?: number }[]) => {
-    const supportedExts = new Set(['pdf', 'epub', 'mobi', 'azw3', 'txt', 'html', 'djvu']);
-    const newItems: StagedFileItem[] = [];
-
-    for (const f of fileList) {
-      const ext = f.name.split('.').pop()?.toLowerCase() || '';
-      if (!supportedExts.has(ext)) continue;
-
-      // Avoid exact path duplicate in current stage
-      const alreadyStaged = stagedFiles.some((s) => s.path === f.path);
-      if (alreadyStaged) continue;
-
-      newItems.push({
-        id: `staged-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        name: f.name,
-        path: f.path,
-        size: f.size || 0,
-        format: getFormatFromFileName(f.name)
-      });
-    }
-
-    if (newItems.length > 0) {
-      setStagedFiles((prev) => [...prev, ...newItems]);
-    }
-  };
-
   // Native File Picker trigger
   const handleBrowseFiles = async () => {
+    if (discovering) return;
     const api = (window as any).electronAPI;
     if (api?.openFilesDialog) {
       const selectedPaths: string[] = await api.openFilesDialog();
@@ -170,13 +146,12 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
           const name = p.split(/[/\\]/).pop() || p;
           return { name, path: p };
         });
-        addFilesToStage(items);
+        await addPaths(items.map(item => item.path));
       }
     } else if (api?.openFileDialog) {
       const singlePath: string | null = await api.openFileDialog();
       if (singlePath) {
-        const name = singlePath.split(/[/\\]/).pop() || singlePath;
-        addFilesToStage([{ name, path: singlePath }]);
+        await addPaths([singlePath]);
       }
     } else {
       fileInputRef.current?.click();
@@ -197,22 +172,26 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
         size: f.size
       });
     }
-    addFilesToStage(items);
+    await addPaths(items.map(item => item.path));
   };
 
   // Drag and Drop handlers inside modal drop zone
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragOver(false);
   };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    if (isImporting || isScanningDuplicates || discovering) return;
     setIsDragOver(false);
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
@@ -226,7 +205,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
         size: f.size
       });
     }
-    addFilesToStage(items);
+    await addPaths(items.map(item => item.path));
   };
 
   const handleRemoveStaged = (id: string) => {
@@ -235,16 +214,17 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
   // Proceed to Step 2: Check Duplicates
   const handleScanDuplicates = async () => {
-    if (stagedFiles.length === 0) return;
+    if (stagedFiles.length === 0 || discovering) return;
     setIsScanningDuplicates(true);
+    setOperationError(false);
     setStep('duplicates');
+    setVisibleCount(100);
 
     try {
       const api = (window as any).electronAPI;
       if (api?.checkDigitalDuplicates) {
         const inputs = stagedFiles.map((s) => ({
-          filePath: s.path,
-          fileSizeBytes: s.size
+          filePath: s.path
         }));
         const results: DuplicateDetectionResult[] = await api.checkDigitalDuplicates(inputs);
         setDuplicateResults(results);
@@ -269,6 +249,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
       }
     } catch (err) {
       console.error('[ImportWizard] Failed to check duplicates:', err);
+      setOperationError(true);
       setDuplicateResults([]);
     } finally {
       setIsScanningDuplicates(false);
@@ -277,9 +258,10 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
   // Step 3: Trigger batch import backend
   const handleStartImport = async () => {
-    if (stagedFiles.length === 0) return;
+    if (stagedFiles.length === 0 || isImporting || operationError) return;
     setIsImporting(true);
     setStep('importing');
+    setVisibleCount(100);
 
     // Subscribe to streaming progress
     const api = (window as any).electronAPI;
@@ -297,6 +279,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
         primaryCategoryId: batchCategory || undefined,
         readingStatus: batchReadingStatus,
         duplicateAction: fileActions[s.path] || 'skip',
+        skipExactDuplicatesOnly: !fileActions[s.path],
         existingWorkId: duplicateResults.find((d) => d.filePath === s.path)
           ?.existingWork?.id
       }));
@@ -307,11 +290,11 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
       // Refresh workspace library books immediately without manual page reload
       await refreshBooks();
-      if (onImportComplete) {
-        onImportComplete();
-      }
+      onImportComplete?.();
     } catch (err) {
       console.error('[ImportWizard] Batch import failed:', err);
+      setOperationError(true);
+      setStep('duplicates');
     } finally {
       if (unsubscribeProgress) {
         unsubscribeProgress();
@@ -344,9 +327,9 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
           <button
             onClick={handleModalClose}
-            disabled={isImporting}
+            disabled={isImporting || isScanningDuplicates}
             className="p-2 rounded-xl text-muted hover:text-main hover:bg-canvas transition-colors disabled:opacity-40 cursor-pointer"
-            title="إغلاق المعالج"
+            title={t('closeImportWizard')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -436,7 +419,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                   multiple
                   ref={fileInputRef}
                   onChange={handleFallbackInputChange}
-                  accept=".pdf,.epub,.mobi,.azw3,.txt,.html,.djvu"
+                  accept=".pdf,.epub,.mobi,.prc,.azw3,.azw,.txt,.html,.htm,.xhtml"
                   className="hidden"
                 />
 
@@ -449,6 +432,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
                 <button
                   type="button"
+                  disabled={discovering}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleBrowseFiles();
@@ -458,6 +442,16 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                   <FileText className="w-4 h-4" />
                   <span>{t('browseFilesBtn')}</span>
                 </button>
+                <button type="button" disabled={discovering} className="mt-3 text-sm text-main" onClick={async event => {
+                  event.stopPropagation();
+                  try {
+                    const folder = await window.electronAPI.openDirectoryDialog();
+                    if (folder) await addPaths([folder]);
+                  } catch { setOperationError(true); }
+                }}>{t('browseImportFolder')}</button>
+                <p className="mt-3 text-xs text-muted">{t('bulkImportResourceNote')}</p>
+                {discovering && <p role="status" className="mt-2 text-sm">{t('discoveringImportFiles')}</p>}
+                {discoveryErrors > 0 && <p role="alert" className="mt-2 text-sm text-red-500">{t('importDiscoveryErrors', { count: discoveryErrors })}</p>}
               </div>
 
               {/* Staged Items List */}
@@ -470,7 +464,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                     </span>
 
                     <button
-                      onClick={() => setStagedFiles([])}
+                      onClick={clear}
                       className="text-red-500 hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -479,7 +473,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                   </div>
 
                   <div className="max-h-52 overflow-y-auto space-y-2 pe-1">
-                    {stagedFiles.map((file) => (
+                    {stagedFiles.slice(0, visibleCount).map((file) => (
                       <div
                         key={file.id}
                         className="px-4 py-2.5 rounded-2xl bg-canvas border border-subtle flex items-center justify-between text-xs hover:border-pale-sky-500/30 transition-all"
@@ -499,7 +493,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                         <button
                           onClick={() => handleRemoveStaged(file.id)}
                           className="p-1.5 rounded-lg text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
-                          title="إزالة من القائمة"
+                          title={t('removeImportFile')}
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -524,7 +518,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                           onChange={(e) => setBatchCategory(e.target.value)}
                           className="w-full px-3 py-2 rounded-xl bg-surface border border-subtle text-main outline-none focus:border-pale-sky-500 cursor-pointer font-sans text-xs"
                         >
-                          <option value="">(بدون تصنيف افتراضي)</option>
+                          <option value="">{t('noDefaultImportCategory')}</option>
                           {categoriesList.map((cat) => (
                             <option key={cat.id} value={cat.id}>
                               {lang === 'ar' ? cat.nameAr : cat.nameEn}
@@ -546,9 +540,9 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                           }
                           className="w-full px-3 py-2 rounded-xl bg-surface border border-subtle text-main outline-none focus:border-pale-sky-500 cursor-pointer font-sans text-xs"
                         >
-                          <option value="unread">{t('statusUnread') || 'لم يُقرأ'}</option>
-                          <option value="reading">{t('statusReading') || 'قيد القراءة'}</option>
-                          <option value="completed">{t('statusCompleted') || 'مكتمل'}</option>
+                          <option value="unread">{t('statusUnread')}</option>
+                          <option value="reading">{t('statusReading')}</option>
+                          <option value="completed">{t('statusCompleted')}</option>
                         </select>
                       </div>
                     </div>
@@ -588,7 +582,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                   </div>
 
                   <div className="space-y-4 max-h-[50vh] overflow-y-auto pe-1">
-                    {conflictedResults.map((dup) => {
+                    {conflictedResults.slice(0, visibleCount).map((dup) => {
                       const incomingPath = dup.filePath;
                       const defaultAction: DuplicateResolutionAction =
                         dup.matchType === 'exact_file'
@@ -639,7 +633,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                               </span>
                               <div className="space-y-1">
                                 <h5 className="font-bold text-main line-clamp-1">
-                                  {dup.existingWork?.title || 'Unknown Title'}
+                                  {dup.existingWork?.title || t('unknownImportTitle')}
                                 </h5>
                                 <p className="text-[11px] text-muted">
                                   {dup.existingWork?.author || t('noAuthor')}
@@ -650,7 +644,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                                   </p>
                                 )}
                                 <p className="text-[10px] text-muted/70 truncate font-mono">
-                                  {dup.existingWork?.filePath || 'No physical file linked'}
+                                  {dup.existingWork?.filePath || t('noLinkedImportFile')}
                                 </p>
                               </div>
                             </div>
@@ -830,7 +824,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                         total: progressEvent.totalFiles,
                         file: progressEvent.currentFilename
                       })
-                    : 'جاري البدء...'}
+                    : t('startingBulkImport')}
                 </p>
               </div>
 
@@ -852,7 +846,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                         ? t('phaseExtracting')
                         : progressEvent.status === 'saving'
                         ? t('phaseSaving')
-                        : progressEvent.status
+                        : progressEvent.status === 'completed' ? t('metricImported') : progressEvent.status === 'skipped' ? t('metricSkipped') : progressEvent.status === 'failed' ? t('metricFailed') : t('scanningDuplicatesProgress')
                       : ''}
                   </span>
                 </div>
@@ -920,9 +914,9 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
               {/* Individual Item Results */}
               <div className="space-y-2">
-                <h4 className="text-xs font-bold text-main">تفاصيل الملفات المعالجة:</h4>
+                <h4 className="text-xs font-bold text-main">{t('processedImportFiles')}</h4>
                 <div className="max-h-52 overflow-y-auto space-y-2 pe-1">
-                  {importSummary.results.map((res: DigitalImportResult, i: number) => (
+                  {importSummary.results.slice(0, visibleCount).map((res: DigitalImportResult, i: number) => (
                     <div
                       key={i}
                       className="px-4 py-2.5 rounded-2xl bg-canvas border border-subtle flex items-center justify-between text-xs"
@@ -970,6 +964,9 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
           )}
         </div>
 
+        {operationError && <p role="alert" className="px-6 py-2 text-sm text-red-500">{t('bulkImportFailed')}</p>}
+        {(step === 'select' ? stagedFiles.length : step === 'duplicates' ? conflictedResults.length : step === 'summary' ? importSummary?.results.length || 0 : 0) > visibleCount &&
+          <button type="button" className="px-6 py-2 text-sm text-main" onClick={() => setVisibleCount(count => count + 100)}>{t('showMoreImportFiles')}</button>}
         {/* Modal Footer Controls */}
         <div className="px-6 py-4 bg-canvas/80 border-t border-subtle flex items-center justify-between shrink-0">
           {step === 'select' && (
@@ -979,12 +976,12 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                 onClick={handleModalClose}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-muted hover:text-main hover:bg-canvas transition-colors cursor-pointer"
               >
-                إلغاء
+                {t('cancel')}
               </button>
 
               <button
                 type="button"
-                disabled={stagedFiles.length === 0}
+                disabled={stagedFiles.length === 0 || discovering}
                 onClick={handleScanDuplicates}
                 className="px-5 py-2.5 rounded-2xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-pale-sky-500/20 transition-all flex items-center gap-2 cursor-pointer"
               >
@@ -1003,12 +1000,12 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-muted hover:text-main hover:bg-canvas transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <BackArrow className="w-4 h-4" />
-                <span>الرجوع للملفات</span>
+                <span>{t('backToImportFiles')}</span>
               </button>
 
               <button
                 type="button"
-                disabled={isScanningDuplicates}
+                disabled={isScanningDuplicates || operationError}
                 onClick={handleStartImport}
                 className="px-6 py-2.5 rounded-2xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-40 shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2 cursor-pointer"
               >
@@ -1021,7 +1018,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
           {step === 'importing' && (
             <div className="w-full flex justify-end">
               <span className="text-xs text-muted font-medium animate-pulse">
-                يرجى الانتظار، جاري الفهرسة والأرشفة...
+                {t('waitingBulkImport')}
               </span>
             </div>
           )}

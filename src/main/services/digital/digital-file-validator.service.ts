@@ -234,7 +234,10 @@ export class DigitalFileValidatorService {
    * Batch validates multiple files sequentially or concurrently.
    */
   public async validateFiles(filePaths: string[]): Promise<BatchValidationSummary> {
-    const results = await Promise.all(filePaths.map((fp) => this.validateFile(fp)));
+    const results: DigitalFileValidationResult[] = [];
+    for (let offset = 0; offset < filePaths.length; offset += 4) {
+      results.push(...await Promise.all(filePaths.slice(offset, offset + 4).map(filePath => this.validateFile(filePath))));
+    }
     const validFiles = results.filter((r) => r.isValid).length;
     return {
       totalFiles: results.length,

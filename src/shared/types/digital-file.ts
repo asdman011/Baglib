@@ -250,6 +250,7 @@ export interface ImportProgressEvent {
 
 export interface DigitalImportOptions {
   filePath: string;
+  skipExactDuplicatesOnly?: boolean;
   targetFormat?: DigitalFormat;
   customTitle?: string;
   customAuthor?: string;

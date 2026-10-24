@@ -397,6 +397,16 @@ export class SqliteWorkRepository implements IWorkRepository {
     return items;
   }
 
+  getDuplicateCandidates(): Pick<BookItem, 'id' | 'title' | 'author'>[] {
+    return this.db.prepare(`
+      SELECT w.id, w.title, GROUP_CONCAT(DISTINCT a.name) AS author
+      FROM work w
+      LEFT JOIN work_author wa ON wa.work_id = w.id
+      LEFT JOIN author a ON a.id = wa.author_id
+      GROUP BY w.id ORDER BY w.created_at DESC
+    `).all() as Pick<BookItem, 'id' | 'title' | 'author'>[];
+  }
+
   /**
    * Fetch a single work by ID with complete extended metadata and lending history.
    */
