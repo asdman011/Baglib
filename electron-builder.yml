@@ -1,6 +1,9 @@
 appId: com.Baglib.app
 productName: Baglib
 npmRebuild: false
+extraResources:
+  - from: assets/native-share.ps1
+    to: native-share.ps1
 directories:
   output: release
 files:

@@ -1,6 +1,15 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import type { SunnahAPI } from '../shared/types/sunnah';
+
+const sunnah: SunnahAPI = {
+  share: text => ipcRenderer.invoke('sunnah:share', text),
+  catalog: () => ipcRenderer.invoke('sunnah:catalog'),
+  importCorpus: () => ipcRenderer.invoke('sunnah:import'),
+  chapter: (collection, number) => ipcRenderer.invoke('sunnah:chapter', collection, number),
+};
 
 export const API = {
+  sunnah,
   getSystemInfo: () => ipcRenderer.invoke('system:get-info'),
   openFileDialog: () => ipcRenderer.invoke('system:open-file-dialog'),
   openFilesDialog: () => ipcRenderer.invoke('system:open-files-dialog'),

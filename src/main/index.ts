@@ -23,6 +23,7 @@ import { registerWebClipperIpcHandlers } from "./ipc/web-clipper";
 import { registerReadingStatisticsIpc } from "./ipc/reading-statistics";
 import { registerSecurityIpc } from "./ipc/security";
 import { registerReaderPluginsIpc } from "./ipc/reader-plugins";
+import { registerSunnahIpc } from "./ipc/sunnah";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 
@@ -306,6 +307,7 @@ registerWebClipperIpcHandlers();
 registerReadingStatisticsIpc();
 registerSecurityIpc();
 registerReaderPluginsIpc();
+registerSunnahIpc();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection
