@@ -11,6 +11,7 @@ export type LayoutDirection = 'rtl' | 'ltr';
 export type ThemeMode = 'dark' | 'light';
 export type LanguageMode = 'ar' | 'en';
 export type SplitOrientationMode = 'vertical' | 'horizontal' | 'none' | 'full_notes';
+export type WorkspaceViewMode = 'sunnah' | 'library' | 'categories' | 'reader' | 'notes' | 'settings';
 
 export interface PageNote {
   id: string;
@@ -46,7 +47,7 @@ export interface WorkspaceState {
   highlights: { id: string; pageNumber: number; text: string; color: string }[];
 
   // App Main View Mode
-  viewMode: 'library' | 'categories' | 'reader' | 'notes' | 'settings';
+  viewMode: WorkspaceViewMode;
   activeLibraryCategory: string;
 }
 
@@ -58,7 +59,7 @@ interface WorkspaceContextType extends WorkspaceState {
   toggleSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setSearchHubOpen: (open: boolean) => void;
-  setViewMode: (mode: 'library' | 'categories' | 'reader' | 'notes' | 'settings') => void;
+  setViewMode: (mode: WorkspaceViewMode) => void;
   setActiveLibraryCategory: (catId: string) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   
@@ -96,7 +97,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   // Navigation & View Mode
-  const [viewMode, setViewMode] = useState<'library' | 'categories' | 'reader' | 'notes' | 'settings'>('library');
+  const [viewMode, setViewMode] = useState<WorkspaceViewMode>('library');
   const [activeLibraryCategory, setActiveLibraryCategory] = useState<string>('ALL');
   
   // Pure Real Data (Zero Mock Items)

@@ -1,0 +1,56 @@
+.sunnah-workspace { color: var(--text-main); background: var(--bg-canvas); }
+.sunnah-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem; border-block-end: 1px solid var(--border-subtle); background: var(--bg-surface); }
+.sunnah-emblem { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border-subtle); border-radius: 1rem; color: #60cfd0; background: #173a40; flex-shrink: 0; }
+.sunnah-toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.sunnah-mode { display: flex; flex-wrap: wrap; padding: .25rem; gap: .25rem; border: 1px solid var(--border-subtle); border-radius: .75rem; }
+.sunnah-mode button { padding: .5rem .75rem; border-radius: .5rem; font-size: .8rem; line-height: 1.6; }
+.sunnah-mode button[aria-pressed="true"] { background: #173a40; color: #c9f0eb; }
+.sunnah-button, .sunnah-icon-button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; padding: .5rem .75rem; border: 1px solid var(--border-subtle); border-radius: .65rem; font-size: .8rem; line-height: 1.6; background: var(--bg-surface); }
+.sunnah-icon-button { padding: .5rem; flex-shrink: 0; }
+.sunnah-button:hover, .sunnah-icon-button:hover { border-color: #3d8c8e; }
+.sunnah-workspace button:disabled { opacity: .4; cursor: not-allowed; }
+.sunnah-workspace :is(button, input, select, summary):focus-visible { outline: 2px solid #3d8c8e; outline-offset: 3px; }
+.sunnah-size { display: flex; align-items: center; gap: .5rem; font-size: .75rem; color: var(--text-muted); }
+.sunnah-size input { width: 5rem; accent-color: #3d8c8e; }
+.sunnah-browser { display: flex; flex-wrap: wrap; align-items: end; gap: .85rem; padding: 1rem 1.5rem; border-block-end: 1px solid var(--border-subtle); }
+.sunnah-browser label { display: flex; flex: 1 1 10rem; flex-direction: column; min-width: 0; gap: .4rem; }
+.sunnah-browser label > span { font-size: .75rem; color: var(--text-muted); }
+.sunnah-browser .sunnah-chapter-select { flex: 2 1 14rem; }
+.sunnah-browser select { width: 100%; min-width: 0; border: 1px solid var(--border-subtle); border-radius: .65rem; padding: .55rem; background: var(--bg-surface); font-size: .85rem; line-height: 1.8; text-overflow: ellipsis; }
+.sunnah-navigation { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem; }
+.sunnah-search { display: flex; flex: 0 1 24rem; min-width: 0; align-items: center; gap: .5rem; color: var(--text-muted); padding: .5rem .75rem; border: 1px solid var(--border-subtle); border-radius: .7rem; background: var(--bg-surface); }
+.sunnah-search input { min-width: 0; width: 100%; outline: none; font-size: .85rem; line-height: 1.6; }
+.sunnah-chapter { max-width: 90rem; margin-inline: auto; padding: 0 1.5rem 1.5rem; }
+.sunnah-parallel { display: grid; grid-template-columns: minmax(0, 1fr); }
+.sunnah-bilingual { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sunnah-arabic { grid-column: 1; grid-row: 1; text-align: start; min-width: 0; overflow-wrap: anywhere; }
+.sunnah-bilingual > .sunnah-arabic { grid-column: 2; padding-inline-end: 1.5rem; border-inline-end: 1px solid var(--border-subtle); }
+.sunnah-english { grid-column: 1; grid-row: 1; padding-inline-end: 1.5rem; text-align: start; min-width: 0; overflow-wrap: anywhere; }
+.sunnah-chapter-heading { padding-block: 1.4rem 1.8rem; }
+.sunnah-chapter-heading h2 { display: flex; align-items: baseline; gap: .7rem; font-size: 1.4rem; line-height: 1.9; font-weight: 700; }
+.sunnah-chapter-heading .sunnah-arabic h2 { font-family: var(--font-amiri), serif; font-size: 1.8rem; }
+.sunnah-number:empty { display: none; }
+.sunnah-number { color: var(--text-muted); font-family: var(--font-tajawal), sans-serif; font-size: .85em; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.sunnah-section-heading { background: var(--bg-sidebar); border: 1px solid var(--border-subtle); padding: .75rem 1.25rem; border-radius: .85rem; margin-block: 1rem; }
+.sunnah-section-heading h3 { display: flex; gap: .65rem; align-items: baseline; font-size: .95rem; line-height: 1.9; }
+.sunnah-section-heading .sunnah-arabic h3 { font-family: var(--font-amiri), serif; font-size: 1.25rem; line-height: 2; }
+.sunnah-hadith { border: 1px solid var(--border-subtle); border-radius: 1rem; background: var(--bg-surface); padding: 1.25rem; margin-block-end: 1rem; }
+.sunnah-passage { margin: 0; white-space: pre-wrap; }
+.sunnah-arabic .sunnah-passage { font-family: var(--font-amiri), 'Traditional Arabic', serif; font-size: var(--sunnah-font-size, 24px); line-height: 2.1; }
+.sunnah-english .sunnah-passage { font-family: var(--font-tajawal), sans-serif; font-size: calc(var(--sunnah-font-size, 24px) * .7); line-height: 1.9; }
+.sunnah-narrator { color: rgb(96, 207, 208); border-radius: .18em; box-decoration-break: clone; }
+.sunnah-narrator:hover { background: rgb(96 207 208 / 12%); }
+.sunnah-grade { margin-block-start: 1.25rem; padding-block-start: 1rem; border-block-start: 1px solid var(--border-subtle); font-size: .8rem; line-height: 1.8; }
+.sunnah-message { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .75rem; padding: 2rem; text-align: center; line-height: 1.8; }
+.sunnah-welcome { max-width: 32rem; margin: 4rem auto; padding: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center; line-height: 1.8; }
+.sunnah-welcome h2 { font-size: 1.5rem; font-weight: 700; }
+.sunnah-source { margin-inline: auto; max-width: 80rem; padding: 1.5rem; color: var(--text-muted); font-size: .75rem; }
+.sunnah-source summary { cursor: pointer; }
+@media (max-width: 700px) {
+  .sunnah-toolbar, .sunnah-browser, .sunnah-navigation { padding: .8rem; }
+  .sunnah-chapter { padding-inline: .65rem; }
+  .sunnah-hadith, .sunnah-section-heading { padding: .7rem; }
+  .sunnah-bilingual > .sunnah-arabic, .sunnah-english { padding-inline-end: .65rem; }
+  .sunnah-chapter-heading h2 { font-size: 1rem; }
+  .sunnah-chapter-heading .sunnah-arabic h2 { font-size: 1.4rem; }
+}

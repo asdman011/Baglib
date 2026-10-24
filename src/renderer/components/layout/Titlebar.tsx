@@ -11,8 +11,13 @@ import {
   Eye
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { SunnahSearch, type SunnahSearchTarget } from '../sunnah/SunnahSearch';
 
 export const Titlebar: React.FC = () => {
+  const [sunnahSearch, setSunnahSearch] = React.useState(false);
+  const [sunnahQuery, setSunnahQuery] = React.useState('');
+  const sunnahDialog = React.useRef<HTMLDialogElement>(null);
+  React.useEffect(() => { if (sunnahSearch) sunnahDialog.current?.showModal(); }, [sunnahSearch]);
   const {
     dir,
     theme,
@@ -23,6 +28,7 @@ export const Titlebar: React.FC = () => {
     toggleTheme,
     setCommandPaletteOpen,
     setSearchHubOpen,
+    setViewMode,
     t,
   } = useWorkspace();
 
@@ -39,7 +45,8 @@ export const Titlebar: React.FC = () => {
       </div>
 
       {/* Center Group: Global Search & Command Center (Cmd + K) */}
-      <div className="flex-1 max-w-lg mx-4">
+      <div className="flex-1 max-w-lg mx-4 flex items-center gap-2 min-w-0">
+        <button type="button" onClick={() => setSunnahSearch(true)} className="shrink-0 text-xs p-2 rounded-lg border border-subtle" title={t('sunnahSearchAll')}>{t('navSunnah')}</button>
         <div
           onClick={() => setSearchHubOpen(true)}
           className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:border-pale-sky-500/50 hover:text-main transition-all group shadow-inner text-xs cursor-pointer"
@@ -64,6 +71,15 @@ export const Titlebar: React.FC = () => {
         </div>
       </div>
 
+      {sunnahSearch && <dialog ref={sunnahDialog} onCancel={() => setSunnahSearch(false)} className="m-auto bg-transparent text-main p-4 w-full max-w-3xl backdrop:bg-black/50">
+        <section role="dialog" aria-modal="true" aria-label={t('sunnahSearchAll')} className="bg-surface rounded-xl border border-subtle w-full max-w-3xl max-h-[85vh] overflow-auto p-4">
+          <div className="flex gap-3 items-center"><input autoFocus type="search" className="flex-1 min-w-0 p-3 bg-canvas border border-subtle rounded-lg" value={sunnahQuery} onChange={event => setSunnahQuery(event.target.value)} placeholder={t('sunnahSearchAll')} aria-label={t('sunnahSearchAll')} /><button onClick={() => setSunnahSearch(false)}>{t('sunnahClose')}</button></div>
+          <SunnahSearch query={sunnahQuery} scope="all" t={t} onOpen={(target: SunnahSearchTarget) => {
+            try { const previous = JSON.parse(localStorage.getItem('baglib:sunnah:position:v1') || '{}'); localStorage.setItem('baglib:sunnah:position:v1', JSON.stringify({ ...previous, ...target, mode: 'single' })); } catch {}
+            setViewMode('sunnah'); window.dispatchEvent(new CustomEvent('baglib:sunnah-open', { detail: target })); setSunnahSearch(false);
+          }} />
+        </section>
+      </dialog>}
       {/* Right Group: Action Controls & Theme */}
       <div className="flex items-center gap-1.5">
         {/* Zen Mode Button */}

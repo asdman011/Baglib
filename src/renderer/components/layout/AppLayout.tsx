@@ -7,6 +7,7 @@ import { StatusBar } from './StatusBar';
 import { NavigationRail } from './NavigationRail';
 import { LibraryGridView } from '../library/LibraryGridView';
 import { FullPageBookReader } from '../reader/FullPageBookReader';
+import { SunnahView } from '../sunnah/SunnahView';
 import { NotesOverviewView } from '../notes/NotesOverviewView';
 import { CategoriesOverviewView } from '../categories/CategoriesOverviewView';
 import { QuotaWarningBanner } from './QuotaWarningBanner';
@@ -50,6 +51,7 @@ export const AppLayout: React.FC = () => {
           {/* Quota-Saver & Search Limit Banner */}
           <QuotaWarningBanner />
 
+          {viewMode === 'sunnah' && <SunnahView />}
           {viewMode === 'library' && <LibraryGridView />}
           {viewMode === 'categories' && <CategoriesOverviewView />}
           {viewMode === 'reader' && <FullPageBookReader />}

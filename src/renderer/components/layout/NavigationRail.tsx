@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   Layers,
   Globe,
+  BookOpenText,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 
@@ -27,6 +28,13 @@ export const NavigationRail: React.FC = () => {
   } = useWorkspace();
 
   const navItems = [
+    {
+      id: 'sunnah',
+      label: t('navSunnah'),
+      icon: BookOpenText,
+      count: 0,
+      disabled: false,
+    },
     {
       id: 'library',
       label: t('navLibrary'),

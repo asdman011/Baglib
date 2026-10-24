@@ -1,0 +1,79 @@
+'use client';
+
+import React, { memo } from 'react';
+import { Focus } from 'lucide-react';
+import type { SunnahChapter, SunnahHadith, SunnahLanguage, SunnahPassage, SunnahText } from '../../../shared/types/sunnah';
+import type { TranslationKey } from '../../translations';
+import { isnadTokens, splitSunnahPassage } from '../../libs/sunnah/text';
+import { HadithActions } from './HadithActions';
+
+export type SunnahTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string;
+
+function ParallelRow({ showEnglish, arabic, english, className = '' }: {
+  showEnglish: boolean; arabic: React.ReactNode; english: React.ReactNode; className?: string;
+}) {
+  return <div className={`sunnah-parallel ${showEnglish ? 'sunnah-bilingual' : ''} ${className}`} dir="ltr">
+    <div className="sunnah-arabic" dir="rtl" lang="ar">{arabic}</div>
+    {showEnglish && <div className="sunnah-english" dir="ltr" lang="en">{english}</div>}
+  </div>;
+}
+
+const Passage = memo(function Passage({ passage, language, t }: { passage: SunnahPassage; language: SunnahLanguage; t: SunnahTranslate }) {
+  const { isnad, matn, segmented } = splitSunnahPassage(passage);
+  if (!isnad && !matn) return <p className="text-muted text-sm italic leading-relaxed">{t(language === 'ar' ? 'sunnahMissingArabic' : 'sunnahMissingEnglish')}</p>;
+  return <p className="sunnah-passage">
+    {isnad && <span className="text-muted" data-isnad="true">{language === 'ar'
+      ? isnadTokens(isnad).map((token, index) => <span key={index} className={token.narrator ? 'sunnah-narrator' : undefined}>{token.text}</span>)
+      : <span className="sunnah-narrator">{isnad}</span>}</span>}
+    {!passage.full && isnad && matn && ' '}
+    <span className="font-semibold text-main" data-matn="true">{matn}</span>
+    {!segmented && passage.isnad && <span className="block mt-3 text-sm font-sans text-muted">{t('sunnahUnaligned')}</span>}
+  </p>;
+});
+
+function NumberedTitle({ number, title, language, fallback }: { number: string; title: SunnahText; language: SunnahLanguage; fallback: string }) {
+  return <><bdi className="sunnah-number" dir="ltr">{number}</bdi><span>{title[language] || fallback}</span></>;
+}
+
+export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, onFocus }: {
+  chapter: SunnahChapter;
+  hadiths: SunnahHadith[];
+  showEnglish: boolean;
+  single: boolean;
+  t: SunnahTranslate;
+  onFocus: (id: string) => void;
+}) {
+  return <div className="sunnah-chapter select-text" data-testid="sunnah-chapter">
+    <ParallelRow showEnglish={showEnglish} className="sunnah-chapter-heading"
+      arabic={<h2><NumberedTitle number={String(chapter.number)} title={chapter.title} language="ar" fallback={t('sunnahUntitledChapter')} /></h2>}
+      english={<h2><NumberedTitle number={String(chapter.number)} title={chapter.title} language="en" fallback={t('sunnahMissingEnglish')} /></h2>} />
+    {hadiths.map((hadith, index) => {
+      const previous = hadiths[index - 1]?.section;
+      const section = hadith.section;
+      const showSection = index === 0 || previous.number !== section.number || previous.title.ar !== section.title.ar || previous.title.en !== section.title.en;
+      const hasSection = section.number || section.title.ar || section.title.en;
+      return <div key={hadith.id} className="sunnah-entry" data-hadith-id={hadith.id}>
+        {showSection && hasSection && <ParallelRow showEnglish={showEnglish} className="sunnah-section-heading"
+          arabic={<h3><NumberedTitle number={section.number} title={section.title} language="ar" fallback="" /></h3>}
+          english={<h3><NumberedTitle number={section.number} title={section.title} language="en" fallback="" /></h3>} />}
+        <article className="sunnah-hadith" aria-label={t('sunnahHadithNumber', { number: hadith.number || '—' })}>
+          <div className="flex items-center justify-between gap-3 mb-4 text-xs font-sans text-muted">
+            <span className="font-bold">{t('sunnahHadithNumber', { number: hadith.number || '—' })}</span>
+            {!single && <button type="button" onClick={() => onFocus(hadith.id)} className="sunnah-icon-button" title={t('sunnahOpenHadith')} aria-label={t('sunnahOpenHadith')}><Focus size={17} /></button>}
+          </div>
+          <ParallelRow showEnglish={showEnglish}
+            arabic={<Passage passage={hadith.text.ar} language="ar" t={t} />}
+            english={<Passage passage={hadith.text.en} language="en" t={t} />} />
+          {!['Bukhari', 'Muslim'].includes(chapter.collection) && (hadith.grade.ar || (showEnglish && hadith.grade.en)) && <ParallelRow showEnglish={showEnglish} className="sunnah-grade"
+            arabic={hadith.grade.ar && <p><span className="text-muted">{t('sunnahGrade')}: </span>{hadith.grade.ar}</p>}
+            english={hadith.grade.en && <p><span className="text-muted">{t('sunnahGrade')}: </span>{hadith.grade.en}</p>} />}
+          {hadith.comment && <details className="mt-5 border-t border-subtle pt-3 text-sm">
+            <summary className="cursor-pointer text-muted font-sans">{t('sunnahComment')}</summary>
+            <p className="font-reading text-lg leading-loose mt-2 whitespace-pre-wrap" dir="rtl" lang="ar">{hadith.comment}</p>
+          </details>}
+          <HadithActions chapter={chapter} hadith={hadith} showEnglish={showEnglish} t={t} />
+        </article>
+      </div>;
+    })}
+  </div>;
+}
