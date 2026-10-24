@@ -47,6 +47,7 @@ export interface MetadataAuditModalProps {
 }
 
 export interface MissingFieldsInfo {
+  edition: boolean;
   author: boolean;
   year: boolean;
   cover: boolean;
@@ -59,6 +60,7 @@ export interface MissingFieldsInfo {
 }
 
 export function auditBook(book: BookItem): MissingFieldsInfo {
+  const editionMissing = !book.edition?.trim();
   const authorMissing = !book.author || isPlaceholderAuthor(book.author);
   const yearMissing =
     !book.publicationYear ||
@@ -75,6 +77,7 @@ export function auditBook(book: BookItem): MissingFieldsInfo {
   const languageMissing = !book.language || book.language.trim() === '';
 
   const missingFlags = [
+    editionMissing,
     authorMissing,
     yearMissing,
     coverMissing,
@@ -86,6 +89,7 @@ export function auditBook(book: BookItem): MissingFieldsInfo {
   const missingCount = missingFlags.filter(Boolean).length;
 
   return {
+    edition: editionMissing,
     author: authorMissing,
     year: yearMissing,
     cover: coverMissing,
@@ -153,6 +157,8 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
   // Toast / notification banner
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   // Synchronize when booksToAudit prop changes
   useEffect(() => {
@@ -263,7 +269,8 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4500);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMessage(null), 4500);
   };
 
   // --------------------------------------------------------------------------
@@ -367,7 +374,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
           }
 
           // Edition
-          if ((!updatedBook.edition || updatedBook.edition === '') && discovered?.edition) {
+          if (!updatedBook.edition?.trim() && discovered?.edition?.trim()) {
             updatedBook.edition = discovered.edition;
             if (discovered.editionDetails?.rawMatch) {
               updatedBook.editionRawMatch = discovered.editionDetails.rawMatch;
@@ -538,7 +545,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
             if ((!updatedBook.pagesCount || updatedBook.pagesCount <= 0) && discovery.pagesCount) {
               updatedBook.pagesCount = discovery.pagesCount;
             }
-            if ((!updatedBook.edition || updatedBook.edition === '') && discovery.edition) {
+            if (!updatedBook.edition?.trim() && discovery.edition?.trim()) {
               updatedBook.edition = discovery.edition;
               if (discovery.editionDetails?.rawMatch) {
                 updatedBook.editionRawMatch = discovery.editionDetails.rawMatch;
@@ -1054,6 +1061,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                                   {t('auditMissingCategory')}
                                 </span>
                               )}
+                              {audit.edition && <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold">{t('auditMissingEdition')}</span>}
                               {audit.language && (
                                 <span className="px-2 py-0.5 rounded-md bg-canvas text-muted text-[10px] border border-subtle">
                                   {t('auditMissingLanguage')}
@@ -1179,6 +1187,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                             {t('auditMissingYear')}
                           </span>
                         )}
+                        {auditBook(currentReviewBook).edition && <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold">{t('auditMissingEdition')}</span>}
                         {auditBook(currentReviewBook).cover && (
                           <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-bold">
                             {t('auditMissingCover')}

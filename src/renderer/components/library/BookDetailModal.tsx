@@ -70,6 +70,7 @@ import { CategoryCascader } from '../categories/CategoryCascader';
 import { TagEditor } from '../tags/TagEditor';
 import { EditionComparisonModal } from './EditionComparisonModal';
 import { GeekMetadataModal } from './GeekMetadataModal';
+import { EditionInput } from './EditionInput';
 
 
 interface BookDetailModalProps {
@@ -1705,16 +1706,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'الطبعة (Edition):' : 'Edition:'}</label>
-                      <input
-                        type="text"
-                        value={formData.edition || ''}
-                        onChange={(e) => handleInputChange('edition', e.target.value)}
-                        placeholder={lang === 'ar' ? 'مثال: الطبعة الثالثة' : 'e.g. 3rd Edition'}
-                        className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
-                      />
-                    </div>
+                    <EditionInput key={formData.id} book={formData} onChange={value => handleInputChange('edition', value)} t={t} />
                     <div className="space-y-1">
                       <label className="font-bold text-main">{lang === 'ar' ? 'عدد الصفحات (Pages):' : 'Pages Count:'}</label>
                       <input

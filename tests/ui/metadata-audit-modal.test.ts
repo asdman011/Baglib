@@ -172,6 +172,7 @@ describe('Library Metadata Audit & Refresh Feature Tests', () => {
       const cleanBook: BookItem = {
         id: '5',
         title: 'The Clean Book',
+        edition: '3rd Edition',
         author: 'Dr. Jane Doe',
         publicationYear: 2023,
         coverImage: 'https://example.com/cover.jpg',

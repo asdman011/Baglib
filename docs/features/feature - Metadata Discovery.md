@@ -249,3 +249,12 @@ When auto-filling metadata from online providers:
 - No unapproved schema alterations: uses existing `author.bio` and `work.description` columns.
 - Maintains bilingual RTL/LTR layout consistency using CSS logical properties and centralized translation keys.
 
+## Publication-year fallback for edition — 2026-10-24
+
+- `EditionInput.tsx` displays a known publication year in the book's Edition field when the actual edition is empty, with a localized explanation that this is temporary. Existing edition labels always take precedence. Numeric years and Arabic/Persian digit strings are supported; missing, invalid, zero, negative and date-string values are not invented into editions.
+- The fallback is presentation-only. It does not persist a year as an edition label, alter the publication-year field, backfill database records or create new schema/provenance fields. Saving an unrelated change therefore cannot accidentally turn the year into a verified edition. On focus, the underlying edition remains editable with the year as its placeholder; entering a real label behaves normally.
+- `auditBook` now explicitly tracks a missing edition, including books whose other metadata is complete. Such books remain in “Needs attention” and eligible for existing missing-metadata lookup. Both audit and guided-review views identify the missing edition instead of treating a displayed year as complete metadata.
+- Existing local/automatic enrichment fills blank or whitespace-only editions when discovery returns a nonempty edition label; a fetched label replaces the temporary display automatically. Populated editions remain protected. Provider availability and whether an online record actually supplies an edition label are unchanged; no new network request or automatic background search was added.
+- A metadata-audit toast timer is cleared when replaced or unmounted, addressing asynchronous activity exposed by the new lookup-flow test.
+- Verification: 13 focused edition/audit tests passed, including Arabic/English rendering, focus/blur without canonical mutation, replacement by an incoming edition, and a mocked discovery response exercised through the actual audit auto-enrichment handler. TypeScript and new-source ESLint passed. These tests do not claim a live online-provider search or full-application visual acceptance.
+

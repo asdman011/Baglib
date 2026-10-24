@@ -1,5 +1,9 @@
 export const translations = {
   ar: {
+    bookEditionLabel: "الطبعة",
+    bookEditionPlaceholder: "مثال: الطبعة الثالثة",
+    editionYearFallbackHint: "تُعرض سنة النشر مؤقتًا حتى العثور على الطبعة. يظل حقل الطبعة مؤهلًا لاستكمال البيانات الناقصة.",
+    auditMissingEdition: "الطبعة غير متوفرة",
     unknownImportTitle: "عنوان غير معروف",
     noLinkedImportFile: "لا يوجد ملف مرتبط",
     closeImportWizard: "إغلاق معالج الاستيراد",
@@ -1371,6 +1375,10 @@ export const translations = {
     pluginsTitle: "إضافات ومكونات القارئ",
   },
   en: {
+    bookEditionLabel: "Edition",
+    bookEditionPlaceholder: "e.g. 3rd Edition",
+    editionYearFallbackHint: "Publication year is shown temporarily until an edition is found. Edition remains eligible for missing-metadata lookup.",
+    auditMissingEdition: "Missing edition",
     unknownImportTitle: "Unknown title",
     noLinkedImportFile: "No linked file",
     closeImportWizard: "Close import wizard",
