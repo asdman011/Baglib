@@ -21,7 +21,11 @@ const run = async (request: QuranReaderRequest) => {
         ? await reader!.commentary(request.query)
         : request.action === 'mushaf-page'
         ? await reader!.mushafPage(request.pack, request.page)
-        : await reader!.mushafPageForAyah(request.pack, request.surah, request.ayah);
+        : request.action === 'mushaf-page-for-ayah'
+        ? await reader!.mushafPageForAyah(request.pack, request.surah, request.ayah)
+        : request.action === 'recitation-audio'
+        ? await reader!.recitationAudio(request.pack, request.surah, request.ayah)
+        : await reader!.recitationSurah(request.pack, request.surah);
     port.postMessage({ id: request.id, ok: true, data });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';

@@ -67,3 +67,87 @@ for (const lang of ['ar', 'en'] as const) {
   });
 }
 
+for (const lang of ['ar', 'en'] as const) {
+  test(`QuranPassageView renders active audio ayah and synchronized word highlight in ${lang}`, () => {
+    const translate = (key: TranslationKey, params?: Record<string, string | number>) => Object.entries(params || {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), translations[lang][key]);
+    const html = renderToStaticMarkup(createElement(QuranPassageView, {
+      passage,
+      t: translate,
+      lang,
+      selected: null,
+      showWords: true,
+      commentary: null,
+      onCommentary() {},
+      onCopy() {},
+      activeAudio: { surah: 1, ayah: 1, isPlaying: true, activeWordIndex: 1 },
+      onPlayAyah() {},
+    }));
+    const { document } = parseHTML(html);
+    assert.ok(html.includes('border-emerald-500'));
+    assert.ok(html.includes('text-amber-600'));
+    assert.ok(html.includes(translations[lang].quranAudioPause));
+  });
+
+  test(`QuranMushafView renders dynamic CSS rules for active audio ayah and word segment in ${lang}`, () => {
+    const dir = lang === 'ar' ? 'rtl' : 'ltr';
+    const translate = (key: TranslationKey, params?: Record<string, string | number>) => Object.entries(params || {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), translations[lang][key]);
+    const html = renderToStaticMarkup(createElement(QuranMushafView, {
+      page: mockMushafPage,
+      surahs: [{ number: 1, count: 7, arabic: 'الفاتحة', name: 'Al-Fatihah' }],
+      t: translate,
+      lang,
+      dir,
+      selectedAyah: { surah: 1, ayah: 1 },
+      activeAudio: { surah: 1, ayah: 1, isPlaying: true, activeWordIndex: 1 },
+      onSelectAyah() {},
+      onNavigatePage() {},
+      onOpenInStudyReader() {},
+      onCopyText() {},
+      onPlayAyah() {},
+    }));
+    assert.ok(html.includes('data-word-index-in-ayah="1"'));
+    assert.ok(html.includes('#059669'));
+    assert.ok(html.includes('#d97706'));
+    assert.ok(html.includes(translations[lang].quranAudioPlay));
+  });
+}
+
+test('audio translations have complete parity in Arabic and English', () => {
+  const audioKeys: TranslationKey[] = [
+    'quranAudioPlay',
+    'quranAudioPause',
+    'quranAudioResume',
+    'quranAudioStop',
+    'quranAudioNext',
+    'quranAudioPrev',
+    'quranAudioReciter',
+    'quranAudioSpeed',
+    'quranAudioRepeatMode',
+    'quranAudioRepeatNone',
+    'quranAudioRepeatAyah',
+    'quranAudioRepeatSurah',
+    'quranAudioRepeatCount',
+    'quranAudioRepeatInfinite',
+    'quranAudioSleepTimer',
+    'quranAudioSleepTimerOff',
+    'quranAudioSleepMinutes',
+    'quranAudioSleepEndOfSurah',
+    'quranAudioDownloadSurah',
+    'quranAudioDownloadingSurah',
+    'quranAudioDownloadedSurah',
+    'quranAudioOfflineReady',
+    'quranAudioOnlineStream',
+    'quranAudioRecitationRequired',
+    'quranAudioGapDuration',
+    'quranAudioGapNone',
+    'quranAudioGapSeconds',
+    'quranAudioPlayingAyah',
+  ];
+
+  for (const key of audioKeys) {
+    assert.ok(translations.ar[key], `Missing Arabic translation for ${key}`);
+    assert.ok(translations.en[key], `Missing English translation for ${key}`);
+  }
+});
+
+

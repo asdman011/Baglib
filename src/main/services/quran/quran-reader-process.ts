@@ -8,7 +8,9 @@ type Action =
   | { action: 'search'; query: { script: string; text: string } }
   | { action: 'commentary'; query: { script: string; pack: string; surah: number; ayah: number } }
   | { action: 'mushaf-page'; pack: string; page: number }
-  | { action: 'mushaf-page-for-ayah'; pack: string; surah: number; ayah: number };
+  | { action: 'mushaf-page-for-ayah'; pack: string; surah: number; ayah: number }
+  | { action: 'recitation-audio'; pack: string; surah: number; ayah: number }
+  | { action: 'recitation-surah'; pack: string; surah: number };
 export type QuranReaderRequest = Action & { id: number; root: string; packs: QuranPack[] };
 
 export class QuranReaderProcess {

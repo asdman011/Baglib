@@ -10,6 +10,7 @@ import type {
   QuranPassage,
   QuranCommentary,
   QuranMushafPage,
+  QuranAyahAudio,
   QuranError,
 } from '../src/shared/types/quran';
 
@@ -157,6 +158,25 @@ app.whenReady().then(async () => {
         ayah: 282,
       })) as { pageNumber: number };
       console.log(`[provision] Ayah 2:282 resolves to Mushaf Page: ${lookup282.pageNumber}.`);
+    }
+
+    const recitation = catalog.sources.find(s => s.kind === 'recitation');
+    if (recitation) {
+      console.log('\n[provision] Testing Recitation audio & segments: 1:1...');
+      const audio1 = (await reader.request(root, latestPacks, {
+        action: 'recitation-audio',
+        pack: recitation.id,
+        surah: 1,
+        ayah: 1,
+      })) as QuranAyahAudio;
+      console.log(`[provision] Recitation audio loaded: URL: ${audio1.audioUrl}, segments: ${audio1.segments.length}.`);
+
+      const surah1 = (await reader.request(root, latestPacks, {
+        action: 'recitation-surah',
+        pack: recitation.id,
+        surah: 1,
+      })) as QuranAyahAudio[];
+      console.log(`[provision] Recitation surah 1 loaded: ${surah1.length} verses.`);
     }
 
     reader.close();

@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, mkdir, rename, rm, realpath, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseHTML } from 'linkedom';
-import type { QuranAyah, QuranCommentary, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit } from '../../../shared/types/quran';
+import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranCommentary, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit } from '../../../shared/types/quran';
 import { normalizeQuranSearch } from './qul-catalog';
 import { readerPreset, readerPresets } from './reader-resources';
 
@@ -129,7 +129,7 @@ export class QuranReader {
             working.pragma('user_version = 1');
           } finally { working.close(); }
         } else {
-          const index = pack.files.findIndex(file => file.type === 'sqlite' && file.name === preset.filename.replace(/\.zip$/, ''));
+          const index = pack.files.findIndex(file => file.type === 'sqlite');
           const source = await realpath(path.join(parent, `${index}.sqlite`));
           if (path.dirname(source) !== parent) throw new Error('invalid-resource');
           await copyFile(source, temporary);
@@ -143,7 +143,14 @@ export class QuranReader {
               if (!verses.length || verses.length > 7000) throw new Error('invalid-package');
               working.transaction(() => { for (const verse of verses) insert.run(verse.surah, verse.ayah, verse.text, normalizeQuranSearch(verse.text)); })();
             } else {
-              const sql: Record<string, string> = { translation: 'CREATE INDEX baglib_translation ON translation(sura, ayah)', tafsir: 'CREATE INDEX baglib_tafsir ON tafsir(ayah_key)', 'word-translation': 'CREATE INDEX baglib_meanings ON word_translation(surah_number, ayah_number)', 'word-transliteration': 'CREATE INDEX baglib_transliteration ON word_transliteration(surah_number, ayah_number)', surahs: 'CREATE INDEX baglib_surahs ON chapters(id)' };
+              const sql: Record<string, string> = {
+                translation: 'CREATE INDEX baglib_translation ON translation(sura, ayah)',
+                tafsir: 'CREATE INDEX baglib_tafsir ON tafsir(ayah_key)',
+                'word-translation': 'CREATE INDEX baglib_meanings ON word_translation(surah_number, ayah_number)',
+                'word-transliteration': 'CREATE INDEX baglib_transliteration ON word_transliteration(surah_number, ayah_number)',
+                surahs: 'CREATE INDEX baglib_surahs ON chapters(id)',
+                recitation: 'CREATE INDEX baglib_recitation ON verses(surah_number, ayah_number)',
+              };
               working.exec(sql[kind]);
             }
             working.pragma('user_version = 1');
@@ -251,6 +258,65 @@ export class QuranReader {
     const row = database.prepare('SELECT page_number FROM page_ayahs WHERE surah = ? AND ayah = ? ORDER BY page_number ASC LIMIT 1').get(surah, ayah) as { page_number: number } | undefined;
     if (!row) throw new Error('invalid-resource');
     return { pageNumber: row.page_number };
+  }
+  async recitationAudio(packId: string, surah: number, ayah: number): Promise<QuranAyahAudio> {
+    if (!Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
+    this.source(packId, 'recitation');
+    const database = await this.database(packId, 'recitation');
+    const row = database.prepare('SELECT surah_number, ayah_number, audio_url, duration, segments FROM verses WHERE surah_number = ? AND ayah_number = ?').get(surah, ayah) as {
+      surah_number: number;
+      ayah_number: number;
+      audio_url: string;
+      duration: number | null;
+      segments: string | null;
+    } | undefined;
+    if (!row) throw new Error('invalid-resource');
+    let segments: QuranAudioSegment[] = [];
+    if (row.segments) {
+      try {
+        const parsed = JSON.parse(row.segments);
+        if (Array.isArray(parsed)) {
+          segments = parsed.filter(s => Array.isArray(s) && s.length >= 4 && typeof s[2] === 'number' && typeof s[3] === 'number');
+        }
+      } catch {}
+    }
+    return {
+      surah: row.surah_number,
+      ayah: row.ayah_number,
+      audioUrl: row.audio_url,
+      duration: row.duration ?? null,
+      segments,
+    };
+  }
+  async recitationSurah(packId: string, surah: number): Promise<QuranAyahAudio[]> {
+    if (!Number.isInteger(surah) || surah < 1 || surah > 114) throw new Error('invalid-resource');
+    this.source(packId, 'recitation');
+    const database = await this.database(packId, 'recitation');
+    const rows = database.prepare('SELECT surah_number, ayah_number, audio_url, duration, segments FROM verses WHERE surah_number = ? ORDER BY ayah_number ASC').all(surah) as {
+      surah_number: number;
+      ayah_number: number;
+      audio_url: string;
+      duration: number | null;
+      segments: string | null;
+    }[];
+    return rows.map(row => {
+      let segments: QuranAudioSegment[] = [];
+      if (row.segments) {
+        try {
+          const parsed = JSON.parse(row.segments);
+          if (Array.isArray(parsed)) {
+            segments = parsed.filter(s => Array.isArray(s) && s.length >= 4 && typeof s[2] === 'number' && typeof s[3] === 'number');
+          }
+        } catch {}
+      }
+      return {
+        surah: row.surah_number,
+        ayah: row.ayah_number,
+        audioUrl: row.audio_url,
+        duration: row.duration ?? null,
+        segments,
+      };
+    });
   }
   close(): void { for (const database of this.databases.values()) database.close(); this.databases.clear(); }
 }

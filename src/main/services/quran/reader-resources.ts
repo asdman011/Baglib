@@ -9,13 +9,15 @@ export const readerPresets: { id: string; title: string; kind: QuranReaderKind; 
   { id: 'transliteration/71', title: 'English word transliteration', kind: 'word-transliteration', filename: 'english-wbw-transliteration.db.zip', relative: '4-Translation & Transliteration/Transliteration', profile: 'hafs' },
   { id: 'quran-metadata/70', title: 'Quran surah metadata', kind: 'surahs', filename: 'quran-metadata-surah-name.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
   { id: 'mushaf-layout/569', title: 'Ligature-based SVG Mushaf', kind: 'mushaf-layout', filename: 'ligature-basd-svg.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Layout', profile: 'hafs' },
+  { id: 'recitation/957', title: 'محمود خليل الحصري (مرتل)', kind: 'recitation', filename: 'ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-957 (with segments).db.zip', relative: '3-Recitations and segments data', profile: 'hafs' },
+  { id: 'recitation/959', title: 'محمد صديق المنشاوي (مرتل)', kind: 'recitation', filename: 'ayah-recitation-muhammad-siddiq-al-minshawi-murattal-hafs-959.db.zip', relative: '3-Recitations and segments data', profile: 'hafs' },
 ];
 
 export function readerPreset(pack: QuranPack) {
   return readerPresets.find(preset => {
     if (preset.id !== pack.resource.id) return false;
     if (preset.kind === 'mushaf-layout') return pack.files.some(file => file.type === 'svg');
-    return pack.files.some(file => file.type === 'sqlite' && file.name === preset.filename.replace(/\.zip$/, ''));
+    return pack.files.some(file => file.type === 'sqlite');
   });
 }
 

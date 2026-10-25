@@ -11,6 +11,7 @@ import {
   Maximize2,
   X,
   BookOpen,
+  Play,
 } from 'lucide-react';
 import type { QuranMushafPage } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
@@ -28,6 +29,13 @@ interface QuranMushafViewProps {
   onNavigatePage: (pageNumber: number) => void;
   onOpenInStudyReader?: (surah: number, ayah: number) => void;
   onCopyText: (text: string) => void;
+  activeAudio?: {
+    surah: number;
+    ayah: number;
+    isPlaying: boolean;
+    activeWordIndex: number | null;
+  } | null;
+  onPlayAyah?: (surah: number, ayah: number) => void;
   loading?: boolean;
 }
 
@@ -42,6 +50,8 @@ export function QuranMushafView({
   onNavigatePage,
   onOpenInStudyReader,
   onCopyText,
+  activeAudio,
+  onPlayAyah,
   loading = false,
 }: QuranMushafViewProps) {
   const [zoom, setZoom] = useState(100);
@@ -147,8 +157,36 @@ export function QuranMushafView({
         }
       `);
     }
+    if (activeAudio?.isPlaying) {
+      const padSurah = String(activeAudio.surah).padStart(3, '0');
+      const padAyah = String(activeAudio.ayah).padStart(3, '0');
+      styles.push(`
+        .mushaf-svg-surface [data-surah="${padSurah}"][data-aya="${padAyah}"] path,
+        .mushaf-svg-surface [data-surah="${activeAudio.surah}"][data-aya="${activeAudio.ayah}"] path {
+          fill: #059669 !important;
+        }
+        :is(.dark) .mushaf-svg-surface [data-surah="${padSurah}"][data-aya="${padAyah}"] path,
+        :is(.dark) .mushaf-svg-surface [data-surah="${activeAudio.surah}"][data-aya="${activeAudio.ayah}"] path {
+          fill: #34d399 !important;
+        }
+      `);
+      if (activeAudio.activeWordIndex !== null && activeAudio.activeWordIndex !== undefined) {
+        styles.push(`
+          .mushaf-svg-surface [data-surah="${padSurah}"][data-aya="${padAyah}"][data-word-index-in-ayah="${activeAudio.activeWordIndex}"] path,
+          .mushaf-svg-surface [data-surah="${activeAudio.surah}"][data-aya="${activeAudio.ayah}"][data-word-index-in-ayah="${activeAudio.activeWordIndex}"] path {
+            fill: #d97706 !important;
+            filter: drop-shadow(0 0 2px rgba(217, 119, 6, 0.6));
+          }
+          :is(.dark) .mushaf-svg-surface [data-surah="${padSurah}"][data-aya="${padAyah}"][data-word-index-in-ayah="${activeAudio.activeWordIndex}"] path,
+          :is(.dark) .mushaf-svg-surface [data-surah="${activeAudio.surah}"][data-aya="${activeAudio.ayah}"][data-word-index-in-ayah="${activeAudio.activeWordIndex}"] path {
+            fill: #fbbf24 !important;
+            filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.7));
+          }
+        `);
+      }
+    }
     return styles.join('\n');
-  }, [hoveredAyah, selectedAyah]);
+  }, [hoveredAyah, selectedAyah, activeAudio]);
 
   const sanitizedInnerSvg = useMemo(() => {
     return page.svg.replace(/^<\?xml[\s\S]*?\?>/i, '').trim();
@@ -303,6 +341,16 @@ export function QuranMushafView({
             </div>
 
             <div className="flex items-center gap-2">
+              {onPlayAyah && (
+                <button
+                  type="button"
+                  onClick={() => onPlayAyah(selectedAyah.surah, selectedAyah.ayah)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-pale-sky-600 text-white px-3 py-1.5 text-xs hover:bg-pale-sky-700 transition-colors shadow-xs"
+                >
+                  <Play className="size-3.5" />
+                  {t('quranAudioPlay')}
+                </button>
+              )}
               {onOpenInStudyReader && (
                 <button
                   type="button"

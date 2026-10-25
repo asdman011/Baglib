@@ -151,3 +151,72 @@ test('reader indexes SVG mushaf layout into derived database and supports page/a
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('reader manages recitation packs and serves audio URLs with segment timings', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'baglib-quran-recitation-'));
+  const packs: QuranPack[] = [];
+  const preset = readerPresets.find(v => v.id === 'recitation/957')!;
+  const id = randomUUID();
+  await mkdir(path.join(root, 'packs', id), { recursive: true });
+  const filename = path.join(root, 'packs', id, '0.sqlite');
+  const database = new Database(filename);
+  database.exec(`
+    CREATE TABLE verses (surah_number INTEGER, ayah_number INTEGER, audio_url TEXT, duration INTEGER, segments TEXT);
+    INSERT INTO verses VALUES
+      (1, 1, 'https://audio-cdn.tarteel.ai/quran/husary/001001.mp3', 5160, '[[0,1,0,480],[1,2,600,1000],[2,3,1800,2160],[3,4,2480,5160]]'),
+      (1, 2, 'https://audio-cdn.tarteel.ai/quran/husary/001002.mp3', 6240, '[[0,1,800,1240],[1,2,1570,1670],[2,3,2530,2630],[3,4,2800,6240]]'),
+      (1, 3, 'https://audio-cdn.tarteel.ai/quran/husary/001003.mp3', null, null);
+  `);
+  database.close();
+  const digest = createHash('sha256').update(await readFile(filename)).digest('hex');
+  const pack: QuranPack = {
+    id,
+    digest,
+    resource: presetResource('recitation/957'),
+    bytes: 100,
+    files: [{ name: preset.filename.replace(/\.zip$/, ''), bytes: 100, type: 'sqlite' }],
+    installedAt: '',
+    capability: 'stored',
+  };
+  packs.push(pack);
+
+  let reader: QuranReader | undefined;
+  try {
+    reader = new QuranReader(root, packs);
+    const catalog = reader.catalog();
+    const source = catalog.sources.find(s => s.kind === 'recitation');
+    assert.ok(source);
+    assert.equal(source.id, id);
+    assert.equal(source.profile, 'hafs');
+
+    const audio1 = await reader.recitationAudio(id, 1, 1);
+    assert.equal(audio1.surah, 1);
+    assert.equal(audio1.ayah, 1);
+    assert.equal(audio1.audioUrl, 'https://audio-cdn.tarteel.ai/quran/husary/001001.mp3');
+    assert.equal(audio1.duration, 5160);
+    assert.equal(audio1.segments.length, 4);
+    assert.deepEqual(audio1.segments[0], [0, 1, 0, 480]);
+    assert.deepEqual(audio1.segments[3], [3, 4, 2480, 5160]);
+
+    const audio3 = await reader.recitationAudio(id, 1, 3);
+    assert.equal(audio3.duration, null);
+    assert.deepEqual(audio3.segments, []);
+
+    const surahVerses = await reader.recitationSurah(id, 1);
+    assert.equal(surahVerses.length, 3);
+    assert.equal(surahVerses[0].ayah, 1);
+    assert.equal(surahVerses[1].ayah, 2);
+    assert.equal(surahVerses[2].ayah, 3);
+
+    await assert.rejects(reader.recitationAudio(id, 0, 1));
+    await assert.rejects(reader.recitationAudio(id, 115, 1));
+    await assert.rejects(reader.recitationAudio(id, 1, 0));
+    await assert.rejects(reader.recitationAudio(id, 1, 301));
+    await assert.rejects(reader.recitationSurah(id, 0));
+    await assert.rejects(reader.recitationSurah(id, 115));
+  } finally {
+    reader?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+

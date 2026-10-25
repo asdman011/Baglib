@@ -4,7 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { registerQuranIpc } from '../../src/main/ipc/quran';
 import { readerPresets } from '../../src/main/services/quran/reader-resources';
-import type { QuranResult, QuranReaderCatalog, QuranPassage, QuranCommentary, QuranSearchHit, QuranMushafPage } from '../../src/shared/types/quran';
+import type { QuranResult, QuranReaderCatalog, QuranPassage, QuranCommentary, QuranSearchHit, QuranMushafPage, QuranAyahAudio } from '../../src/shared/types/quran';
 
 const directory = process.env.BAGLIB_QURAN_TEST_DIRECTORY!;
 app.setPath('userData', path.join(directory, 'profile'));
@@ -53,14 +53,14 @@ app.whenReady().then(async () => {
   const unwrap = <Value>(result: QuranResult<Value>): Value => { assert.ok(result.ok, JSON.stringify(result)); return result.data; };
   try {
     await owner.loadFile(path.join(directory, 'index.html'));
-    await until('Boolean(window.quranWorkspace) && document.querySelectorAll("input[type=checkbox]").length===8');
+    await until(`Boolean(window.quranWorkspace) && document.querySelectorAll("input[type=checkbox]").length===${readerPresets.length}`);
     const ids = readerPresets.filter(value => value.kind !== 'translation').map(value => value.id);
     const setup = unwrap(await evaluate<QuranResult<{ installed: string[]; missing: string[]; failed: string[] }>>(`window.electronAPI.quran.setup(${JSON.stringify(ids)})`));
-    assert.equal(setup.installed.length, 7); assert.equal(setup.missing.length, 0); assert.equal(setup.failed.length, 0);
+    assert.equal(setup.installed.length, ids.length); assert.equal(setup.missing.length, 0); assert.equal(setup.failed.length, 0);
     assert.equal((await evaluate<QuranResult<null>>("window.electronAPI.quran.setup(['../outside'])")).ok, false);
     const download = await evaluate<QuranResult<string>>("window.electronAPI.quran.download('translation/193')");
     unwrap(download);
-    await until("window.electronAPI.quran.library({view:'installed'}).then(result=>result.ok && result.data.installed.length===8)");
+    await until(`window.electronAPI.quran.library({view:'installed'}).then(result=>result.ok && result.data.installed.length===${readerPresets.length})`);
     assert.equal(downloaded, 1);
     const catalog = unwrap(await evaluate<QuranResult<QuranReaderCatalog>>('window.electronAPI.quran.readerCatalog()'));
     const find = (kind: string, profile = 'hafs') => catalog.sources.find(source => source.kind === kind && source.profile === profile)!.id;
@@ -82,7 +82,7 @@ app.whenReady().then(async () => {
     const incompatible = await evaluate<QuranResult<QuranPassage>>(`window.electronAPI.quran.read(${JSON.stringify({ ...query, script: find('script', 'warsh') })})`);
     assert.equal(incompatible.ok, false);
     await until('document.querySelectorAll("section:first-child article[aria-label]").length===7 && !document.querySelector("section [role=alert]")');
-    const clickCopy = "document.querySelector('article button').click()";
+    const clickCopy = "([...document.querySelectorAll('article button')].find(b => b.querySelector('.lucide-copy')) || document.querySelectorAll('article button')[1]).click()";
     await evaluate(clickCopy);
     await new Promise(resolve => setTimeout(resolve, 200));
     assert.ok(copied.endsWith('1:1'));
@@ -103,6 +103,15 @@ app.whenReady().then(async () => {
     assert.ok(mushafP1.svg.includes('<svg'));
     const mushafAyahLookup = unwrap(await evaluate<QuranResult<{ pageNumber: number }>>(`window.electronAPI.quran.mushafPageForAyah({ pack: ${JSON.stringify(mushafLayoutId)}, surah: 2, ayah: 282 })`));
     assert.equal(mushafAyahLookup.pageNumber, 48);
+    const recitationPackId = find('recitation');
+    assert.ok(recitationPackId);
+    const audioRes = unwrap(await evaluate<QuranResult<QuranAyahAudio>>(`window.electronAPI.quran.recitationAudio({ pack: ${JSON.stringify(recitationPackId)}, surah: 1, ayah: 1 })`));
+    assert.equal(audioRes.surah, 1);
+    assert.equal(audioRes.ayah, 1);
+    assert.ok(audioRes.audioUrl.startsWith('https://audio-cdn.tarteel.ai/'));
+    assert.ok(audioRes.segments.length > 0);
+    const surahAudioRes = unwrap(await evaluate<QuranResult<QuranAyahAudio[]>>(`window.electronAPI.quran.recitationSurah({ pack: ${JSON.stringify(recitationPackId)}, surah: 1 })`));
+    assert.equal(surahAudioRes.length, 7);
     await evaluate("document.querySelectorAll('header div.flex button')[1].click()");
     await until("Boolean(document.querySelector('.mushaf-svg-surface svg'))");
     assert.ok(await evaluate("document.querySelector('.mushaf-svg-surface').innerHTML.includes('md-page')"));
