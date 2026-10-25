@@ -23,6 +23,7 @@ const quran: QuranAPI = {
   ayahThemes: query => ipcRenderer.invoke('quran:ayah-themes', query),
   ayahTopics: query => ipcRenderer.invoke('quran:ayah-topics', query),
   searchTopics: query => ipcRenderer.invoke('quran:search-topics', query),
+  similarAyahs: query => ipcRenderer.invoke('quran:similar-ayahs', query),
   setup: ids => ipcRenderer.invoke('quran:setup', ids),
   library: query => ipcRenderer.invoke('quran:library', query),
   refresh: category => ipcRenderer.invoke('quran:refresh', category),

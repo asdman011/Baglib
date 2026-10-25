@@ -35,7 +35,9 @@ const run = async (request: QuranReaderRequest) => {
         ? await reader!.ayahThemes(request.pack, request.surah, request.ayah)
         : request.action === 'ayah-topics'
         ? await reader!.ayahTopics(request.pack, request.surah, request.ayah)
-        : await reader!.searchTopics(request.pack, request.text);
+        : request.action === 'search-topics'
+        ? await reader!.searchTopics(request.pack, request.text)
+        : await reader!.similarAyahs(request.pack, request.surah, request.ayah);
     port.postMessage({ id: request.id, ok: true, data });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';

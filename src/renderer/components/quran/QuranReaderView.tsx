@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BookOpen, ChevronLeft, ChevronRight, Copy, Download, FolderOpen, Layers, Play, Pause, Search, Settings2, Volume2, X, Maximize2, Minimize2 } from 'lucide-react';
-import type { QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranPassage, QuranReaderCatalog, QuranReadQuery, QuranRichNode, QuranSearchHit, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
+import { BookOpen, ChevronLeft, ChevronRight, Copy, CopyCheck, Download, FolderOpen, Layers, Play, Pause, Search, Settings2, Volume2, X, Maximize2, Minimize2 } from 'lucide-react';
+import type { QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranPassage, QuranReaderCatalog, QuranReadQuery, QuranRichNode, QuranSearchHit, QuranSimilarAyah, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { QuranMushafView } from './QuranMushafView';
 import { QuranAudioPlayer, type QuranAudioState } from './QuranAudioPlayer';
 import { QuranSurahIntroCard } from './QuranSurahIntroCard';
 import { QuranTopicDrawer } from './QuranTopicDrawer';
+import { QuranSimilarAyahsDrawer } from './QuranSimilarAyahsDrawer';
 import { QuranAyahInspector } from './QuranAyahInspector';
 import { QuranTranslationText } from './QuranTranslationText';
 import type { QuranAyahDetails } from '../../../shared/types/quran';
@@ -37,6 +38,7 @@ export function QuranPassageView({
   onPlayAyah,
   themes,
   onOpenTopics,
+  onOpenSimilar,
   onInspectAyah,
 }: {
   passage: QuranPassage;
@@ -53,6 +55,7 @@ export function QuranPassageView({
   onPlayAyah?: (ayah: number) => void;
   themes?: QuranAyahTheme[];
   onOpenTopics?: (ayah: number) => void;
+  onOpenSimilar?: (ayah: number) => void;
   onInspectAyah?: (ayah: number) => void;
 }) {
   const [hoveredWord, setHoveredWord] = useState<{ ayah: number; position: number } | null>(null);
@@ -98,6 +101,7 @@ export function QuranPassageView({
               <button type="button" onClick={() => onCopy(ayah.words.map(word => word.text).join(' ') + (ayah.translation ? `\n\n${ayah.translation.text}` : '') + `\n${passage.surah}:${ayah.number}`)} className="rounded-lg border border-subtle p-2" title={t('quranCopyAyah')} aria-label={t('quranCopyAyah')}><Copy className="size-4" /></button>
               {onViewInMushaf && <button type="button" onClick={() => onViewInMushaf(ayah.number)} title={t('quranViewInMushaf')} aria-label={t('quranViewInMushaf')} className="inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-xs"><BookOpen className="size-4" />{t('quranViewInMushaf')}</button>}
               {onOpenTopics && <button type="button" onClick={() => onOpenTopics(ayah.number)} title={t('quranTopics')} aria-label={t('quranTopics')} className="inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-xs hover:bg-pale-sky-500/10 transition-colors"><Layers className="size-4 text-emerald-600 dark:text-emerald-400" />{t('quranTopics')}</button>}
+              {onOpenSimilar && <button type="button" onClick={() => onOpenSimilar(ayah.number)} title={t('quranSimilarAyahs')} aria-label={t('quranSimilarAyahs')} className="inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-xs hover:bg-pale-sky-500/10 transition-colors"><CopyCheck className="size-4 text-emerald-600 dark:text-emerald-400" />{t('quranSimilarAyahs')}</button>}
               {onCommentary && <button type="button" onClick={() => onCommentary(ayah.number)} aria-expanded={selected === ayah.number} className="inline-flex items-center gap-2 rounded-lg border border-subtle px-3 py-2"><BookOpen className="size-4" />{t('quranCatTafsir')}</button>}
             </div>
           </div>
@@ -141,7 +145,12 @@ export function QuranReaderView() {
   const [topicDrawerOpen, setTopicDrawerOpen] = useState(false);
   const [ayahTopicsList, setAyahTopicsList] = useState<QuranTopic[]>([]);
   const [activeTopic, setActiveTopic] = useState<QuranTopic | null>(null);
-  const [checked, setChecked] = useState(['quran-script/312', 'translation/193', 'tafsir/22', 'translation/92', 'quran-metadata/70', 'mushaf-layout/569', 'recitation/957', 'recitation/959', 'surah-info/3', 'ayah-theme/62', 'ayah-topics/45']);
+  const [similarDrawerOpen, setSimilarDrawerOpen] = useState(false);
+  const [similarTargetAyah, setSimilarTargetAyah] = useState<{ surah: number; ayah: number } | null>(null);
+  const [similarAyahsList, setSimilarAyahsList] = useState<QuranSimilarAyah[]>([]);
+  const [similarAyahsLoading, setSimilarAyahsLoading] = useState(false);
+  const [similarAyahsError, setSimilarAyahsError] = useState(false);
+  const [checked, setChecked] = useState(['quran-script/312', 'translation/193', 'tafsir/22', 'translation/92', 'quran-metadata/70', 'mushaf-layout/569', 'recitation/957', 'recitation/959', 'surah-info/3', 'ayah-theme/62', 'ayah-topics/45', 'similar-ayah/74']);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [noticeInfo, setNoticeInfo] = useState<{ key: TranslationKey; params?: Record<string, string | number>; details?: string } | null>(null);
@@ -241,7 +250,7 @@ export function QuranReaderView() {
     return () => { document.removeEventListener('fullscreenchange', changed); document.removeEventListener('keydown', escape); };
   }, []);
   const leaveImmersive = () => { setImmersive(false); if (document.fullscreenElement === root.current) void document.exitFullscreen().catch(() => {}); };
-  const inspect = (reference: { surah: number; ayah: number } | null) => { setPanel(null); setSelected(null); setTopicDrawerOpen(false); setSelectedMushafAyah(reference); setInspected(reference); };
+  const inspect = (reference: { surah: number; ayah: number } | null) => { setPanel(null); setSelected(null); setTopicDrawerOpen(false); setSimilarDrawerOpen(false); setSelectedMushafAyah(reference); setInspected(reference); };
   useEffect(() => {
     if (readerMode !== 'mushaf' || !mushafSourceId || profile === 'warsh') return;
     let alive = true;
@@ -319,6 +328,7 @@ export function QuranReaderView() {
   const hasSurahInfo = catalog.sources.some(s => s.kind === 'surah-info');
   const hasAyahThemes = catalog.sources.some(s => s.kind === 'ayah-theme');
   const hasAyahTopics = catalog.sources.some(s => s.kind === 'ayah-topics');
+  const hasSimilarAyahs = catalog.sources.some(s => s.kind === 'similar-ayah');
 
   useEffect(() => {
     let alive = true;
@@ -356,6 +366,25 @@ export function QuranReaderView() {
       return res.ok ? res.data : [];
     } catch {
       return [];
+    }
+  };
+
+  const handleOpenSimilar = async (ayahNumber: number, targetSurah = surah) => {
+    setSimilarTargetAyah({ surah: targetSurah, ayah: ayahNumber });
+    setSimilarDrawerOpen(true);
+    setSimilarAyahsLoading(true);
+    setSimilarAyahsError(false);
+    try {
+      const res = await api().similarAyahs({ surah: targetSurah, ayah: ayahNumber });
+      if (res.ok) {
+        setSimilarAyahsList(res.data);
+      } else {
+        setSimilarAyahsError(true);
+      }
+    } catch {
+      setSimilarAyahsError(true);
+    } finally {
+      setSimilarAyahsLoading(false);
     }
   };
 
@@ -559,6 +588,7 @@ export function QuranReaderView() {
             onPlayAyah={handlePlayAyah}
             themes={surahThemes}
             onOpenTopics={hasAyahTopics ? handleOpenTopics : undefined}
+            onOpenSimilar={hasSimilarAyahs ? handleOpenSimilar : undefined}
           />
           {!passage.ayahs.length && <p className="text-muted">{t('quranNoAyahs')}</p>}
           <div className="flex flex-wrap justify-between gap-3 mt-5"><button type="button" disabled={from <= 1} onClick={() => setFrom(Math.max(1, from - 20))} className="inline-flex items-center gap-2 rounded-xl border border-subtle px-4 py-2 disabled:opacity-40"><ChevronLeft className="size-4 rtl:rotate-180" />{t('quranPrevious')}</button><button type="button" disabled={!passage.next} onClick={() => { if (passage.next) setFrom(passage.next); }} className="inline-flex items-center gap-2 rounded-xl border border-subtle px-4 py-2 disabled:opacity-40">{t('quranNext')}<ChevronRight className="size-4 rtl:rotate-180" /></button></div>
@@ -568,7 +598,7 @@ export function QuranReaderView() {
 
     {!selection.script && loading && <p role="status">{t('quranLoading')}</p>}
     {panel && !immersive && <button type="button" onClick={() => { setPanel(null); setSelected(null); }} className="inline-flex items-center gap-2 text-sm text-muted mt-5"><X className="size-4" />{t('quranClosePanel')}</button>}
-    {inspected && <QuranAyahInspector reference={inspected} details={inspection?.key === inspectionKey ? inspection.details : null} error={inspection?.key === inspectionKey && inspection.error} surahName={((lang === 'ar' ? passage?.surahs.find(item => item.number === inspected.surah)?.arabic : passage?.surahs.find(item => item.number === inspected.surah)?.name) || t('quranSurahNumber', { number: inspected.surah }))} t={t} dir={dir} onClose={() => setInspected(null)} onCopy={text => { void api().copyText(text).then(result => { if (result.ok) setNotice('quranCopied'); else setError(true); }).catch(() => setError(true)); }} onStudy={() => { leaveImmersive(); setSurah(inspected.surah); setFrom(inspected.ayah); setReaderMode('study'); setInspected(null); }} />}
+    {inspected && <QuranAyahInspector reference={inspected} details={inspection?.key === inspectionKey ? inspection.details : null} error={inspection?.key === inspectionKey && inspection.error} surahName={((lang === 'ar' ? passage?.surahs.find(item => item.number === inspected.surah)?.arabic : passage?.surahs.find(item => item.number === inspected.surah)?.name) || t('quranSurahNumber', { number: inspected.surah }))} t={t} dir={dir} onClose={() => setInspected(null)} onCopy={text => { void api().copyText(text).then(result => { if (result.ok) setNotice('quranCopied'); else setError(true); }).catch(() => setError(true)); }} onStudy={() => { leaveImmersive(); setSurah(inspected.surah); setFrom(inspected.ayah); setReaderMode('study'); setInspected(null); }} onSimilar={hasSimilarAyahs ? () => { handleOpenSimilar(inspected.ayah, inspected.surah); setInspected(null); } : undefined} />}
 
     {/* Quran Recorded Audio Player */}
     {audioPlayerOpen && (
@@ -604,6 +634,36 @@ export function QuranReaderView() {
         lang={lang}
         dir={dir}
         onSearch={handleSearchTopics}
+      />
+    )}
+
+    {/* Quran Similar Ayahs (Mutashabihat) Drawer */}
+    {similarDrawerOpen && similarTargetAyah && (
+      <QuranSimilarAyahsDrawer
+        surah={similarTargetAyah.surah}
+        ayah={similarTargetAyah.ayah}
+        similarAyahs={similarAyahsList}
+        loading={similarAyahsLoading}
+        error={similarAyahsError}
+        surahName={(lang === 'ar' ? passage?.surahs.find(item => item.number === similarTargetAyah.surah)?.arabic : passage?.surahs.find(item => item.number === similarTargetAyah.surah)?.name) || t('quranSurahNumber', { number: similarTargetAyah.surah })}
+        surahs={passage?.surahs}
+        script={selection.script}
+        t={t}
+        lang={lang}
+        dir={dir}
+        onClose={() => setSimilarDrawerOpen(false)}
+        onNavigateAyah={(s, a) => {
+          leaveImmersive();
+          setSurah(s);
+          setFrom(a);
+          setSimilarDrawerOpen(false);
+        }}
+        onCopy={text => {
+          void api().copyText(text).then(result => {
+            if (result.ok) setNotice('quranCopied');
+            else setError(true);
+          }).catch(() => setError(true));
+        }}
       />
     )}
   </section>;

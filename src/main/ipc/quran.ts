@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { QuranLibraryService, type QuranInstaller } from '../services/quran/quran-library.service';
 import { category, QUL_ORIGIN, validateSourceUrl } from '../services/quran/qul-catalog';
-import type { QuranAPI, QuranAyahAudio, QuranAyahTheme, QuranError, QuranLibrary, QuranPack, QuranResult, QuranSurahIntro, QuranTopic } from '../../shared/types/quran';
+import type { QuranAPI, QuranAyahAudio, QuranAyahTheme, QuranError, QuranLibrary, QuranPack, QuranResult, QuranSimilarAyah, QuranSurahIntro, QuranTopic } from '../../shared/types/quran';
 import { QuranReaderProcess } from '../services/quran/quran-reader-process';
 import { canonicalResourceId, presetResource, readerPreset, readerPresets } from '../services/quran/reader-resources';
 import { downloadToFile, selectedExport } from '../services/quran/resource-download';
@@ -298,6 +298,10 @@ export function registerQuranIpc(): void {
   ipcMain.handle('quran:search-topics', (event, query) => result(event, async () => {
     if (!query || typeof query.text !== 'string' || query.text.length > 200 || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
     return readRequest<QuranTopic[]>({ action: 'search-topics', pack: query.pack, text: query.text });
+  }));
+  ipcMain.handle('quran:similar-ayahs', (event, query) => result(event, async () => {
+    if (!query || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300 || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
+    return readRequest<QuranSimilarAyah[]>({ action: 'similar-ayahs', pack: query.pack, surah: query.surah, ayah: query.ayah });
   }));
   ipcMain.handle('quran:setup', (event, ids: string[]) => result(event, async () => {
     if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('invalid-resource');
