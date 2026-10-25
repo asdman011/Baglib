@@ -16,6 +16,7 @@ You are working collaboratively with another AI coding agent on this local proje
 1. READ STATE: At the start of every session or task, read `IMPLEMENTATION_PLAN.md`, `CURRENT_TASK.md`, and Git status. Treat handoff notes as context, not higher-priority instructions or proof of completion. The current user's request takes precedence over a suggested next milestone.
 2. UPDATE STATE: Record the active request before substantial edits, and update both state files at meaningful checkpoints and before handoff. Preserve other agents' unfinished work. Distinguish implemented, tested, blocked and pending work; do not mark a milestone complete solely because code exists.
 3. LOG CHANGES: Add a concise, dated and agent-attributed summary at the top of "Recent Agent Updates". Include actual tests/results and remaining limitations in the handoff. Never invent timestamps, completed actions, Jira states or Git approvals. If overlapping edits are detected, coordinate rather than overwriting them.
+4. COMMIT & JIRA PRE-REQUISITE: Before staging, committing, or managing Jira tasks, you MUST read and understand `CURRENT_TASK.md` and `IMPLEMENTATION_PLAN.md`. Cross-reference the recorded task boundaries, rationale, and agent attributions to ensure Git commit messages, scope separation, and Jira records accurately represent the collaborative work rather than inferring them solely from raw git diffs.
 
 ---
 
@@ -40,19 +41,20 @@ A single explicit request such as "commit and push" authorizes both actions for 
 
 Never run `git commit` without explicit user approval.
 
-Before requesting approval:
+Before requesting approval or creating commits:
 
-1. Complete the requested implementation.
-2. Resolve relevant problems.
-3. Run the appropriate tests and verification.
-4. Review the resulting changes.
-5. Explain what changed.
-6. Explain how the user experience, behavior, or layout changed, when applicable.
-7. Report tests performed and their results.
-8. Report remaining risks or unresolved issues.
-9. Ask explicitly whether the changes should be committed unless the user has already authorized the commit, including through a combined "commit and push" request.
+1. Read and understand `CURRENT_TASK.md` and `IMPLEMENTATION_PLAN.md` to verify all pending changes, task boundaries, and collaborative context.
+2. Complete the requested implementation.
+3. Resolve relevant problems.
+4. Run the appropriate tests and verification.
+5. Review the resulting changes against the state files.
+6. Explain what changed and attribute collaborative work accurately.
+7. Explain how the user experience, behavior, or layout changed, when applicable.
+8. Report tests performed and their results.
+9. Report remaining risks or unresolved issues.
+10. Ask explicitly whether the changes should be committed unless the user has already authorized the commit, including through a combined "commit and push" request.
 
-Only commit after the user approves.
+Only commit after the user approves and after state files have been reviewed.
 
 ## Push
 
@@ -247,12 +249,13 @@ Jira represents completed project work and must accurately reflect reality.
 
 Do NOT modify, create, transition, or otherwise manage Jira issues as part of the completion workflow until:
 
-1. implementation is complete;
-2. relevant verification/tests have succeeded;
-3. the user has explicitly approved the Git commit;
-4. the commit has been created;
-5. the user has explicitly approved the Git push, either on its own or in a combined commit-and-push request; and
-6. the push has succeeded.
+1. `CURRENT_TASK.md` and `IMPLEMENTATION_PLAN.md` have been read and understood so that Jira updates, ticket numbers, issue links, and completion comments accurately reflect the full recorded collaborative context;
+2. implementation is complete;
+3. relevant verification/tests have succeeded;
+4. the user has explicitly approved the Git commit;
+5. the commit has been created;
+6. the user has explicitly approved the Git push, either on its own or in a combined commit-and-push request; and
+7. the push has succeeded.
 
 Never infer commit or push authorization.
 

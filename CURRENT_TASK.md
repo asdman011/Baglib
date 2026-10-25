@@ -1,58 +1,48 @@
 # Current Task
 
-## Active Milestone: Quran Task 6.2 (Jira KEY-177)
+## Active Milestone: Quran Task 6.4 (Jira KEY-179)
 **Epic:** KEY-161 (Quran Epic 6: Semantic Context, Themes & Introductions)  
-**Title:** Integrate similar ayahs (mutashabihat) and cross-verse references  
-**Status:** In Progress (Transitioned in Jira; ready for implementation)
+**Title:** Evaluate future local-first semantic retrieval and cited AI  
+**Status:** Completed (Verification Complete; Awaiting Git Approval)
 
 ---
 
-### Previous Pushed Milestones & Completed Commits
-All previous work has been organized into 6 commits and pushed to `origin/feature/library-domain`:
-1. `7532332`: `chore(agents): initialize cross-agent coordination system and tracking docs`
-2. `014518d`: `fix(quran): prevent runtime AbortError during rapid audio play and pause transitions`
-3. `678e64a`: `feat(quran): add resilient background resource downloads and electron net fetcher`
-4. `d7b5e80`: `refactor(quran): extract ayah inspector, add positioned translation footnotes and global search dialog`
-5. `b056e4c`: `feat(quran): add surah intros, ayah themes, and topic concepts indexer and UI (KEY-176)`
-6. `57eaf0d`: `docs(quran): document study reader route verification, footnotes, and topic concepts`
-
-Jira Task 6.1 (`KEY-176`) is marked **Done** with full test results and commit notes.
-
----
-
-### Context & Resources Inspected
-Source datasets located in `repos/Quran/QUL Developer Resources/`:
-1. **Similar Ayahs (`Similiar ayahs/matching-ayah.db.zip`)**:
-   - Table: `similar_ayahs (verse_key TEXT, matched_ayah_key TEXT, matched_words_count INTEGER, coverage INTEGER, score INTEGER, match_words_range TEXT)`
-   - Rows: 3,552 matched ayah pairs with similarity scores, matched word counts, and word ranges.
-2. **Mutashabihat ul Quran (`Mutashabihat ul Quran/Mutashabihat ul Quran.json.bz2`)**:
-   - JSON structure containing classified mutashabihat groups with linguistic nuances and phrase differences.
+### Implementation Summary & Deliverables
+1. **Source-Preserving Semantic Retrieval Contracts (`src/shared/types/quran.ts`)**:
+   - Defined `QuranSemanticChunkKind`: `'ayah' | 'tafsir-section' | 'surah-intro' | 'ayah-theme' | 'topic-concept'`.
+   - Defined `QuranSemanticChunk`: versioned data structure preserving `chunkId`, `profileKey` (`hafs-kufi` or `warsh-madani`), authentic `sourceId`, ayah interval boundaries, `immutableSourceDigest`, and canonical citation.
+   - Defined `QuranRetrievalQuery` & `QuranRetrievalHit`: hybrid query contracts supporting combined BM25 lexical + dense vector reciprocal rank fusion scoring with profile filtering.
+   - Defined `QuranAICitedResponse` & `QuranAIAbstentionReason`: enforcement of mandatory citations (`[Surah:Ayah]`, `[Tafsir, Vol/P]`), out-of-renderer execution, and explicit abstention triggers (`no-retrieved-evidence`, `out-of-domain`, `theological-controversy`, `user-notes-unconsented`).
+2. **Comprehensive Architectural Feature Document (`docs/features/feature - Quran Semantic Retrieval and Cited AI.md`)**:
+   - Synthesized comparative findings from Tarteel/QUL lexical FTS5, dense multilingual embeddings (`multilingual-e5-small`, `BGE-M3`), and Readest/Baglib BYOK patterns.
+   - Formulated Reciprocal Rank Fusion (RRF) pipeline combining SQLite FTS5 exact morphological recall with CPU ONNX semantic embeddings.
+   - Mapped out user machine hardware capacity (AMD Ryzen 7 PRO 5750G 8c/16t, 15.4 GiB RAM, integrated Radeon GPU) establishing CPU embedding feasibility (~130 MiB RAM, ~15–25 ms latency) while advising against heavy 7B+ local models on shared APU memory.
+   - Enforced non-negotiable theological guardrails: zero substitution of canonical Quranic text or published tafsir, process isolation to keep narration/UI non-blocking, and 100% private local study notes with strict opt-in consent before external requests.
+   - Documented cost and infrastructure comparison between local offline inference ($0) vs BYOK cloud endpoints vs dedicated servers.
+3. **Roadmap & Contracts Synchronization (`docs/features/feature - Quran Experience.md`)**:
+   - Added Phase 6.4 delivery notes and cross-linked the dedicated feature document.
 
 ---
 
-### Previous Task Completed
-- **Task 6.1 (`KEY-176`)**: Integrate topics, themes and surah introductions.
-  - Implemented SQLite indexation & FTS5 search for Surah introductions, Ayah themes, and 2,512 Quran topics.
-  - Added `QuranSurahIntroCard` and `QuranTopicDrawer` with bilingual (RTL/LTR) support.
-  - Passed all 21 unit/UI tests and live Electron runner checks.
+### Verification Results
+- **TypeScript Typecheck (`npx tsc --noEmit`)**:
+  - Clean compilation, **0 errors**.
+- **Focused Service & UI Tests (`scripts/test-runner.js`)**:
+  - `tests/services/quran-reader.test.ts`: **8 passed, 0 failed**.
+  - `tests/ui/quran-reader.test.ts`: **21 passed, 0 failed**.
+  - Combined focused tests: **29 passed, 0 failed**.
+- **Full Test Suite (`npm test`)**:
+  - **883 tests passed, 0 failed** across 184 test suites.
+- **Native Live Electron Integration (`node scripts/quran-live/run.mjs --reader`)**:
+  - Bundled and executed headless with 15 real source packs, 0 errors, dark and light themes, Arabic and English.
 
 ---
 
-### Immediate Next Steps for Task 6.2
-1. **TypeScript Contracts (`src/shared/types/quran.ts`)**:
-   - Define `QuranSimilarAyah`:
-     `{ verseKey: string; matchedAyahKey: string; surah: number; ayah: number; matchedWordsCount: number; coverage: number; score: number; matchWordsRange: [number, number][] }`
-   - Update `QuranAPI` with `similarAyahs(query: { surah: number; ayah: number; pack?: string })`.
-2. **Resource Preset Registration (`src/main/services/quran/reader-resources.ts`)**:
-   - Register `similar-ayah/matching` with `matching-ayah.db.zip`.
-3. **Reader Service Engine (`src/main/services/quran/quran-reader.ts`)**:
-   - Add indexing for `similar_ayahs(verse_key)` and reverse lookup `similar_ayahs(matched_ayah_key)`.
-   - Implement `similarAyahs(packId: string | undefined, surah: number, ayah: number)`.
-4. **IPC Bridge & Preload (`src/main/ipc/quran.ts`, `src/preload/index.ts`)**:
-   - Expose `quran:similar-ayahs` handler and preload mapping.
-5. **UI Integration (`src/renderer/components/quran/`)**:
-   - Add similar ayahs action button / badge on ayah cards.
-   - Display side-by-side comparison of matched verses with highlighted differences.
-6. **Verification**:
-   - Type check (`npx tsc --noEmit`).
-   - Unit & UI tests (`node scripts/test-runner.js`).
+### Previous Deliverables Staged in Working Tree (Pending User Git Approval)
+- **Task 6.2 (Jira KEY-177)**: Similar Ayahs (Mutashabihat) integration complete and verified (28 focused tests, 882 full suite tests, native live runner passing).
+- **Task 6.3 (Jira KEY-178)**: Qira'at reading profiles (`hafs-kufi` vs `warsh-madani`, 6,214 verses) with boundary safeguards and Warsh layout preset complete and verified.
+
+---
+
+### Next Milestone in Line
+- **Task 7.1 / Epic 7**: Advanced Study Tools & Annotations (Bookmarks, highlights, personal study tags, and exporting ayah notes to Baglib notebooks).

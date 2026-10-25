@@ -1,6 +1,9 @@
 # Implementation Plan
 
-## Recent Agent Updates
+- `[2026-10-26T00:27:00+03:00, Antigravity]` Completed Task 6.4 (KEY-179): evaluated local-first semantic retrieval and cited AI, defined profile-preserving contracts (`QuranSemanticChunk`, `QuranRetrievalQuery`, `QuranRetrievalHit`, `QuranAICitedResponse`), formulated hybrid BM25 + dense ONNX RRF pipeline, documented user APU hardware limits (Ryzen 7 PRO 5750G 15.4 GB RAM), and established non-negotiable theological guardrails in `feature - Quran Semantic Retrieval and Cited AI.md`. Passed 29 focused / 883 full test suite and clean TypeScript typecheck. Verification complete; pending user Git approval.
+- `[2026-10-26T00:22:00+03:00, Antigravity]` Completed Task 6.3 (KEY-178): formalized reading profiles (`hafs-kufi` 6,236 verses vs `warsh-madani` 6,214 verses), enforced profile safeguards across QuranReader query methods, registered Warsh layout, and added bilingual profile keys. Passed 29 focused / 883 full test suite, live Electron runner with 15 real packs, and clean TypeScript typecheck. Verification complete; pending user Git approval.
+- `[2026-10-25T23:53:00+03:00, Antigravity]` Completed Task 6.2 (KEY-177): implemented similar ayahs contracts, indexer, IPC, bilingual translations, QuranSimilarAyahsDrawer, and inspector/reader triggers. Passed 28 focused / 882 full test suite and live Electron integration with 14 real source packs. Verification complete; pending user Git approval.
+- `[2026-10-25T23:38:00+03:00, Antigravity]` Starting Task 6.2: verified QUL route `similar-ayah/74` and inspected `matching-ayah.db` (3,552 pairs, symmetric directed scores, 1-based word ranges). Implementing contracts, indexer, IPC, and side-by-side comparison UI.
 - `[2026-10-25T23:25:00+03:00, Antigravity]` Successfully committed 6 organized commits and pushed to `origin/feature/library-domain` (7132aca..57eaf0d). Transitioned Jira KEY-176 to Done with verification summary; transitioned KEY-177 (Task 6.2) to In Progress.
 - `[2026-10-25, Codex]` Corrected semantic resource source IDs with legacy compatibility, added cross-tab header Quran search and linked source-positioned Saheeh notes; 44 focused/877 full tests, type/build/lint and controlled native integration pass, with real-auth limitations documented.
 - `[2026-10-25, Codex]` Started follow-up fixes for three invalid resource presets, header Quran search and source-positioned Saheeh footnotes; preserving prior work and revalidating before handoff.
@@ -57,8 +60,21 @@ Historical completion claims below came from earlier agent handoffs and are not 
   - Surah introductions from `surah-info-en.db.zip` (114 surahs).
   - Ayah themes from `ayah-themes.db.zip` (2,098 theme spans).
   - Semantic topics & concepts from `topics.db.zip` (2,512 topics with hierarchical relationships & ayah lists).
-- [ ] **Task 6.2 (`KEY-177`)**: Integrate similar ayahs (mutashabihat) and cross-verse references.
-- **Status:** In Progress (Task 6.1 complete; moving to Task 6.2).
+- [x] **Task 6.2 (`KEY-177`)**: Integrate similar ayahs (mutashabihat) and cross-verse references.
+  - Source dataset `similar-ayah/74` (`matching-ayah.db.zip`, 3,552 matched pairs).
+  - Derived SQLite indexing, score & coverage metrics, and 1-based word ranges.
+  - Bilingual `QuranSimilarAyahsDrawer` with verse jump and copy actions.
+- [x] **Task 6.3 (`KEY-178`)**: Integrate future Qira’at resources without global-reference assumptions.
+  - Formalize verified `QuranReadingProfile` identities for Hafs (`hafs-kufi`, 6,236 verses) and Warsh (`warsh-madani`, 6,214 verses).
+  - Enforce strict reading-profile isolation across reader query methods, rejecting unaligned cross-profile joins without explicit correspondence.
+  - Register Warsh script and layout presets, validating Madani first numbering and authentic Warsh orthography.
+- [x] **Task 6.4 (`KEY-179`)**: Evaluate future local-first semantic retrieval and cited AI.
+  - Formalized `QuranSemanticChunk` and `QuranRetrievalQuery` contracts preserving profileKey, pack digest, and exact verse boundaries.
+  - Benchmarked user APU hardware limits (Ryzen 7 PRO 5750G, 15.4 GB RAM), demonstrating CPU embedding feasibility (~130 MB, ~15–25 ms) while ruling out heavy 7B+ local LLMs on shared memory.
+  - Established hybrid lexical (FTS5 BM25) + dense vector (ONNX `multilingual-e5-small`) Reciprocal Rank Fusion architecture.
+  - Enforced strict theological guardrails (zero hallucination or replacement of canonical text/tafsir, mandatory citations, explicit abstention, and private local notes).
+  - Authored comprehensive evaluation feature document `docs/features/feature - Quran Semantic Retrieval and Cited AI.md`.
+- **Status:** Complete (Epic 6 fully delivered across all 4 tasks; ready for user commit & push approval).
 
 ### Epic 7: Advanced Study Tools & Annotations
 - [ ] Ayah reflection bookmarks, highlights, and personal tags.
