@@ -53,6 +53,7 @@ for (const lang of ['ar', 'en'] as const) {
         onChanged: () => { subscribed++; return () => { subscribed--; }; },
         refresh: async () => { refreshes++; state = library; return { ok: true, data: null }; },
         download: async () => { downloads++; return { ok: true, data: 'one' }; },
+        downloadBatch: async () => { downloads++; return { ok: true, data: ['one'] }; },
         importFile: async () => { imports++; return { ok: true, data: null }; },
       },
     } });
@@ -70,10 +71,10 @@ for (const lang of ['ar', 'en'] as const) {
       assert.equal(window.document.querySelector('section')?.getAttribute('dir'), lang === 'ar' ? 'rtl' : 'ltr');
       const navigation = [...window.document.querySelectorAll('aside button')].map(node => node.textContent?.trim());
       assert.ok(navigation.indexOf(translations[lang].navQuran) < navigation.indexOf(translations[lang].navSunnah));
-      assert.equal(window.document.querySelectorAll('select option').length, 14);
+      assert.equal(window.document.querySelectorAll('select option').length, 15);
       assert.equal(refreshes, 0);
       await click('quranRefresh');
-      assert.equal(refreshes, 1);
+      assert.equal(refreshes, 14);
       await click('quranDownload');
       assert.equal(downloads, 1);
       await click('quranAllResources');
