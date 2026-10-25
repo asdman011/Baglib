@@ -24,6 +24,7 @@ import { registerReadingStatisticsIpc } from "./ipc/reading-statistics";
 import { registerSecurityIpc } from "./ipc/security";
 import { registerReaderPluginsIpc } from "./ipc/reader-plugins";
 import { registerSunnahIpc } from "./ipc/sunnah";
+import { registerQuranIpc } from "./ipc/quran";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 
@@ -308,6 +309,7 @@ registerReadingStatisticsIpc();
 registerSecurityIpc();
 registerReaderPluginsIpc();
 registerSunnahIpc();
+registerQuranIpc();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection

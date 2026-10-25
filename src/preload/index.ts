@@ -1,5 +1,17 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { SunnahAPI } from '../shared/types/sunnah';
+import type { QuranAPI } from '../shared/types/quran';
+
+const quran: QuranAPI = {
+  library: query => ipcRenderer.invoke('quran:library', query),
+  refresh: category => ipcRenderer.invoke('quran:refresh', category),
+  download: id => ipcRenderer.invoke('quran:download', id),
+  importFile: id => ipcRenderer.invoke('quran:import', id),
+  cancel: id => ipcRenderer.invoke('quran:cancel', id),
+  remove: id => ipcRenderer.invoke('quran:remove', id),
+  chooseDirectory: () => ipcRenderer.invoke('quran:directory'),
+  onChanged: listener => { const handler = () => listener(); ipcRenderer.on('quran:changed', handler); return () => ipcRenderer.removeListener('quran:changed', handler); },
+};
 
 const sunnah: SunnahAPI = {
   share: text => ipcRenderer.invoke('sunnah:share', text),
@@ -9,6 +21,7 @@ const sunnah: SunnahAPI = {
 };
 
 export const API = {
+  quran,
   sunnah,
   getSystemInfo: () => ipcRenderer.invoke('system:get-info'),
   openFileDialog: () => ipcRenderer.invoke('system:open-file-dialog'),
