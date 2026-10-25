@@ -1,6 +1,16 @@
 # Quran resource contracts — approved boundary
 
-Updated 2026-10-25. The user explicitly approved the Quran-specific boundary, these contracts, SQLite-first storage and Phase 2 implementation, with future Qira’at support. The Phase 2 resource manager now implements the catalog/install subset below. Work → Edition → Source and the library database remain unchanged. Evidence and source schemas: [QUL](QUL.md). Roadmap: [Quran Experience](feature%20-%20Quran%20Experience.md).
+Updated 2026-10-25. The user explicitly approved the Quran-specific boundary, these contracts, SQLite-first storage and implementation, with future Qira’at support. The resource manager and initial SQLite study reader now implement the catalog/install/query subset below. Work → Edition → Source and the library database remain unchanged. Evidence and source schemas: [QUL](QUL.md). Roadmap: [Quran Experience](feature%20-%20Quran%20Experience.md).
+
+## Implemented study-query boundary
+
+`src/shared/types/quran.ts` defines typed catalog, bounded passage, search-hit, inert rich-text commentary and selected-setup contracts. The preload passes requests only to guarded main-frame IPC. Main resolves trusted installed packs; an isolated utility process owns read-only SQLite handles. Renderer-supplied file paths or SQL are never accepted. Copy IPC bounds text length and writes only to the system clipboard.
+
+Derived indexed SQLite copies are disposable caches, not new canonical domain entities. Their keys include the source archive digest, adapter version and resource kind. They preserve immutable installed pack bytes and can be rebuilt. Original Quran text and the library database are not normalized or migrated. Removing a source makes its adapter unavailable; leftover derived caches are not currently garbage-collected and may be removed while the app is closed.
+
+Adapter selection is a curated allowlist of resource IDs and exact original SQLite names. Hafs/Warsh compatibility here is an audited adapter decision, not fabricated verified profile metadata. Warsh supplements remain disabled until separately mapped and approved. Existing source profiles remain explicitly unverified where appropriate. No notes, bookmarks, new user-state tables or automatic cross-Qira’at joins are introduced.
+
+Installer selection reuses already installed compatible presets, reports missing/failed files individually and uses the existing background installer sequentially. Updates remain explicit in the Resource Library. Arbitrary downloaded resource storage is not synonymous with reader-adapter support. Download authentication remains inside the isolated QUL source window; the application never embeds the user's credentials.
 
 ## Decision: SQLite first, not SQLite only
 
@@ -67,5 +77,19 @@ Phase 2 implements a sandboxed QUL window with no Baglib preload/Node integratio
 The resource manager intentionally labels installations as **stored**. Phase 2 does not claim reader rendering, tafsir/word-study integration, playback, full catalog coverage, automatic compatibility/dependency resolution or Qira’at datasets. Those are later roadmap deliverables, not hidden capabilities of a saved archive.
 
 ## Verification required for production
+
+### Representative-export clarifications — 2026-10-25
+
+The [five-family QUL audit](QUL.md#five-family-developer-resource-audit--2026-10-25) refines adapter requirements, not the approved entity boundary. No application schema or API changed during that audit.
+
+- **Identity adapters are format-specific:** the supplied recitation SQLite column `ayah_number` is a global `verse_id`; the JSON exporter uses a local verse number. Join the SQLite value through matching ayah metadata before constructing `QuranLocation`. Resource-page ID and reciter/export IDs are also distinct.
+- **Numbering profiles are substantive:** supplied Warsh has 6,214 references, Hafs 6,236; their `1:1` contains different passages. Shared layouts do not authorize unqualified cross-reading verse/word joins.
+- **Layout decision:** the user intends a shared ligature-based SVG layout for Hafs and Warsh. The QPC V4 15-line SQLite layout is Hafs-only; its accidental Warsh copy was reported deleted and must not be inspected/restored. SVG rendering infrastructure can be shared, but source paths/content and word correspondence require reading-specific verification. SVG word indices also differ from QPC tokenization in an inspected page.
+- **Display versus text:** V4 glyph codes are presentation data. The supplied Hafs glyph and Unicode IDs/locations match completely, permitting an explicitly validated Unicode copy/search representation. Font identity includes page and resource version; standalone Unicode and page-glyph fonts are not interchangeable.
+- **Typed rich text:** inline-footnote translation text is JSON-encoded; ayah transliteration text is not. Tafsir coverage is CSV. Word translations/transliterations have their own schemas, markup and coverage. Do not apply a generic decode or HTML-render rule to every text field.
+- **Alignment gates:** plain translation has three missing lexical keys; colored translation and word transliteration have additional location/segmentation discrepancies. Preserve provenance and report unsupported word mappings rather than silently reindexing canonical data. Ayah-level alternatives may remain available where independently validated.
+- **Audio shape and clock:** supplied legacy segments normalize from four numeric values to `[first + 1, third, fourth]`, supported by inspected source and tuple checks. Other three-value/metadata forms need distinct detection. Preserve repetitions, validate times against actual media and gate word highlights on segmentation compatibility. All sampled durations are NULL; source metadata installation is not offline audio availability.
+- **Metadata:** six division/sajdah families have documentation but no inspected supplied payloads. Validate them before declaring navigation complete. Store source classifications as attributed data, not universal religious rulings. Keep search-only normalization separate from canonical text.
+- **SVG safety and packaging:** the existing installer does not support SVG or ignore AppleDouble entries. A later dedicated importer must validate/sanitize active vector content, preserve semantic attributes and handle large archives without renderer-wide materialization. This audit does not certify that implementation.
 
 Carry forward the 14 passing proof/runtime tests and the full sample join audit. Add pagination/catalog-completeness checks, real native authenticated download capture, restart/cancel/disk-full recovery, malformed package isolation, rendering/diacritic checks in Arabic RTL and English LTR, packaged asset/path tests, and performance measurements with large installed collections. No application schema or UI should be described as complete based solely on the development sample installer.

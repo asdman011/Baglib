@@ -1,6 +1,16 @@
 # Feature: Quran Experience — approved roadmap
 
-Initial roadmap: 2026-10-24. Updated: 2026-10-25. The user explicitly approved the Quran-specific boundary and contracts, authorized Phase 2, and requested future Qira’at scalability. Phase 2 now adds the Quran tab/resource manager; the reader and later phases remain planned. Research: [QUL](QUL.md). Approved storage/IPC boundary: [Quran Resource Contracts](Quran%20Resource%20Contracts.md). No library migration, AI model, commit/push or Jira change is included.
+Initial roadmap: 2026-10-24. Updated: 2026-10-25. The user explicitly approved the Quran-specific boundary and contracts, authorized implementation, and requested future Qira’at scalability. The Quran tab/resource manager and first SQLite study reader are implemented; later Mushaf/audio/morphology work remains planned. Research: [QUL](QUL.md). Approved storage/IPC boundary: [Quran Resource Contracts](Quran%20Resource%20Contracts.md). No library migration or AI model is included.
+
+## Current delivery: first study-reader slice
+
+The Quran tab now opens **Read**, alongside **Resources**. Readers choose a surah/start ayah, read bounded passages with optional English translation/footnotes, search canonical Arabic through a normalized local index, enable word meanings/transliteration and expand grouped Ibn Kathir tafsir beneath an ayah. Reading options collapse on demand; switching to Resources preserves the mounted reading session. Copy includes displayed text and an ayah reference. Arabic RTL and English LTR use centralized strings and readable Arabic line height.
+
+Choose resources offers seven explicit audited SQLite adapters with native QUL download links and selected-folder import. The real-source integration fixture reuses supplied archives plus previously downloaded surah metadata, in isolated storage only. No fresh authenticated download or automatic installation into the user's actual profile is claimed. To provision the app, import the supplied `QUL Developer Resources` folder through this UI and obtain any missing selected metadata via QUL. The folder's empty metadata directory is not silently repaired.
+
+Verification: 20 focused service/UI tests pass; TypeScript and main/preload/worker build pass. Focused lint reports only the existing Next pages-directory advisory. The real Electron fixture validates seven packs, offline queries, controlled native download capture, source gaps, grouped tafsir, copy dispatch, Warsh isolation and basmala exceptions. Arabic/English × dark/light × three viewport widths pass geometry checks with no renderer errors. No packaged-installer certification or full renderer production build is claimed.
+
+Remaining milestones: safe SVG/page-font Mushaf rendering, recorded audio and verified segment highlights, metadata divisions, topic search, morphology/root/lemma/POS, persistent reading position and broader resource-adapter coverage. The present text reader is not a claim that all five audited resource families are fully integrated. Current implementation changes are uncommitted; no new push or Jira update has occurred.
 
 ## Scope
 
@@ -63,6 +73,18 @@ Audio exports can be manifests pointing to media, not the media itself. Distingu
 8. **Future NLP/AI, separately authorized:** benchmark Arabic/English retrieval, then optional cited generation. Not part of current delivery.
 
 Each milestone includes regression checks for Library/Sunnah and research updates. Git and Jira remain subject to their separate approval gates. No delivery-time estimate is fixed before the access/schema proof.
+
+### Five-family sample audit acceptance updates — 2026-10-25
+
+The [QUL developer-resource audit](QUL.md#five-family-developer-resource-audit--2026-10-25) inspected the supplied script/font/layout, tafsir, recitation and translation/transliteration samples and all 18 linked documentation pages. The supplied metadata folder was empty at inventory time; older ayah/surah samples remain separate. This adds evidence and acceptance requirements, not completed reader features or new implementation authorization.
+
+- Core reader: prove format-specific JSON decoding, safe inline footnotes/transliteration and profile-specific verse joins. Do not attach Hafs resources to Warsh by unqualified ayah key.
+- Tafsir/word study: all 4,325 Ibn Kathir pointer rows resolve, but supplied word translation/transliteration alignments have documented gaps. Preserve grouped commentary and explicitly gate incompatible word overlays.
+- Mushaf: honor the user's shared ligature-based SVG layout decision for Hafs/Warsh while validating reading-specific paths and semantic mappings. QPC V4 SQLite layout remains Hafs-only. SVG and V4 glyph rendering are separate implementations with separate safety/font checks; the current package installer lacks SVG support.
+- Audio: map global SQLite verse IDs, normalize the observed legacy four-number tuples, preserve repeated words and independently verify word segmentation and actual media timings. Ayah playback must not depend on unverified word highlights. Actual recordings remain optional downloads, not embedded database content.
+- Navigation/hardening: inspect the six missing metadata families, validate page/font rendering in Arabic RTL and English LTR, and benchmark bounded SVG/font/media handling before marking the corresponding milestones complete.
+
+No app layout, source schema, IPC, canonical dataset or playback behavior changed during this audit. The user-reported deleted Warsh copy of the Hafs SQLite layout was not revisited or restored.
 
 ### Phase 1 checkpoint — 2026-10-25
 
