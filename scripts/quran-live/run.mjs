@@ -1,0 +1,27 @@
+import { buildSync } from 'esbuild';
+import postcss from 'postcss';
+import tailwind from '@tailwindcss/postcss';
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { spawn } from 'node:child_process';
+import electron from 'electron';
+
+const root = path.resolve('.baglib-data/quran-live');
+fs.mkdirSync(root, { recursive: true });
+const directory = fs.mkdtempSync(path.join(root, 'run-'));
+for (const [entry, outfile] of [['scripts/quran-live/main.ts', 'main.cjs'], ['src/preload/index.ts', 'preload.cjs'], ['src/main/quran-worker.ts', 'quran-worker.js']]) buildSync({ entryPoints: [entry], outfile: path.join(directory, outfile), bundle: true, platform: 'node', format: 'cjs', packages: 'external' });
+buildSync({ entryPoints: ['scripts/quran-live/fixture.tsx'], outfile: path.join(directory, 'fixture.js'), bundle: true, platform: 'browser', define: { 'process.env.NODE_ENV': '"development"' } });
+let styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8') + '\n@source "../../../src/renderer/components/quran";\n@source "../../../src/renderer/components/layout/NavigationRail.tsx";\n';
+const fonts = path.resolve('out/dev/static/chunks');
+if (fs.existsSync(fonts)) for (const file of fs.readdirSync(fonts).filter(name => /^\[next\]_internal_font_google_(amiri|tajawal|reem_kufi).*\.single\.css$/.test(name))) styles += fs.readFileSync(path.join(fonts, file), 'utf8').replace(/url\("(\.\.\/media\/[^" ]+)"\)/g, (_, target) => `url("${pathToFileURL(path.resolve(fonts, target)).href}")`);
+styles += '\n:root { --font-amiri: Amiri; --font-tajawal: Tajawal; --font-reem-kufi: "Reem Kufi"; }';
+styles += '\n*, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }';
+fs.writeFileSync(path.join(directory, 'style.css'), (await postcss([tailwind()]).process(styles, { from: path.join(directory, 'input.css') })).css);
+fs.writeFileSync(path.join(directory, 'index.html'), '<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="style.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>');
+const environment = { ...process.env, BAGLIB_QURAN_TEST_DIRECTORY: directory };
+delete environment.ELECTRON_RUN_AS_NODE;
+const child = spawn(electron, [path.join(directory, 'main.cjs')], { env: environment, stdio: 'inherit', windowsHide: true });
+const timer = setTimeout(() => child.kill(), 90_000);
+child.on('exit', code => { clearTimeout(timer); process.exitCode = code ?? 1; });
+child.on('error', error => { clearTimeout(timer); console.error(error); process.exitCode = 1; });
