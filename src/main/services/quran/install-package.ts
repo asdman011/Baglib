@@ -5,6 +5,18 @@ import { unzipSync } from 'fflate';
 import Database from 'better-sqlite3';
 import type { QuranPack, QuranResource } from '../../../shared/types/quran';
 
+export function sanitizeSvg(svg: string): string {
+  if (svg.length > 5000000) throw new Error('unsupported-format');
+  return svg
+    .replace(/^\uFEFF/, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/\shref\s*=\s*["']javascript:[^"']*["']/gi, '');
+}
+
 export function detectPayload(bytes: Uint8Array): QuranPack['files'][number]['type'] {
   const header = Buffer.from(bytes).subarray(0, 16);
   if (header.toString() === 'SQLite format 3\0') return 'sqlite';
@@ -12,6 +24,7 @@ export function detectPayload(bytes: Uint8Array): QuranPack['files'][number]['ty
   if (header.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) || (header[0] === 255 && header[1] === 216)) return 'image';
   if (header.subarray(0, 3).toString() === 'ID3' || (header[0] === 255 && (header[1] & 224) === 224)) return 'audio';
   const text = Buffer.from(bytes).toString('utf8').trimStart();
+  if ((text.startsWith('<?xml') && text.includes('<svg')) || text.startsWith('<svg')) return 'svg';
   if (text.startsWith('{') || text.startsWith('[')) { JSON.parse(text); return 'json'; }
   throw new Error('unsupported-format');
 }
@@ -31,6 +44,7 @@ export async function installPackage(root: string, jobId: string, archive: strin
     let expanded = 0;
     let count = 0;
     const entries = bytes.subarray(0, 4).equals(Buffer.from([80, 75, 3, 4])) ? unzipSync(bytes, { filter: file => {
+      if (file.name.includes('__MACOSX/') || file.name.startsWith('._') || file.name.includes('/._')) return false;
       expanded += file.originalSize;
       count++;
       if (count > 2000 || expanded > 512 * 1024 * 1024 || file.originalSize > 128 * 1024 * 1024) throw new Error('invalid-package');
@@ -39,11 +53,17 @@ export async function installPackage(root: string, jobId: string, archive: strin
     } }) : { 'payload.bin': bytes };
     const files: QuranPack['files'] = [];
     const metadata: { name: string; tables: string[] }[] = [];
-    for (const [originalName, content] of Object.entries(entries)) {
+    const sortedEntries = Object.entries(entries).sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+    for (const [originalName, content] of sortedEntries) {
       const type = detectPayload(content);
-      const name = `${files.length}.${type === 'sqlite' ? 'sqlite' : type === 'json' ? 'json' : 'bin'}`;
+      let dataToWrite: Uint8Array = content;
+      if (type === 'svg') {
+        const sanitized = sanitizeSvg(Buffer.from(content).toString('utf8'));
+        dataToWrite = Buffer.from(sanitized, 'utf8');
+      }
+      const name = `${files.length}.${type === 'sqlite' ? 'sqlite' : type === 'json' ? 'json' : type === 'svg' ? 'svg' : 'bin'}`;
       const target = path.join(staging, name);
-      await writeFile(target, content, { flag: 'wx' });
+      await writeFile(target, dataToWrite, { flag: 'wx' });
       if (type === 'sqlite') {
         const database = new Database(target, { readonly: true, fileMustExist: true });
         try {
@@ -54,7 +74,7 @@ export async function installPackage(root: string, jobId: string, archive: strin
           metadata.push({ name, tables: schema.filter(item => item.type === 'table').map(item => item.name) });
         } finally { database.close(); }
       }
-      files.push({ name: originalName, bytes: content.length, type });
+      files.push({ name: originalName, bytes: dataToWrite.length, type });
     }
     if (!files.length) throw new Error('invalid-package');
     const pack: QuranPack = { id: jobId, resource, digest, bytes: files.reduce((total, file) => total + file.bytes, 0), files, installedAt: new Date().toISOString(), capability: 'stored' };

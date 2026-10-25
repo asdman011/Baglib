@@ -8,14 +8,20 @@ export const readerPresets: { id: string; title: string; kind: QuranReaderKind; 
   { id: 'translation/92', title: 'English word translation', kind: 'word-translation', filename: 'english-wbw-translation.db.zip', relative: '4-Translation & Transliteration/Translation', profile: 'hafs' },
   { id: 'transliteration/71', title: 'English word transliteration', kind: 'word-transliteration', filename: 'english-wbw-transliteration.db.zip', relative: '4-Translation & Transliteration/Transliteration', profile: 'hafs' },
   { id: 'quran-metadata/70', title: 'Quran surah metadata', kind: 'surahs', filename: 'quran-metadata-surah-name.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
+  { id: 'mushaf-layout/569', title: 'Ligature-based SVG Mushaf', kind: 'mushaf-layout', filename: 'ligature-basd-svg.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Layout', profile: 'hafs' },
 ];
 
 export function readerPreset(pack: QuranPack) {
-  return readerPresets.find(preset => preset.id === pack.resource.id && pack.files.some(file => file.type === 'sqlite' && file.name === preset.filename.replace(/\.zip$/, '')));
+  return readerPresets.find(preset => {
+    if (preset.id !== pack.resource.id) return false;
+    if (preset.kind === 'mushaf-layout') return pack.files.some(file => file.type === 'svg');
+    return pack.files.some(file => file.type === 'sqlite' && file.name === preset.filename.replace(/\.zip$/, ''));
+  });
 }
 
 export function presetResource(id: string): QuranResource {
   const preset = readerPresets.find(value => value.id === id);
   if (!preset) throw new Error('invalid-resource');
-  return { id, category: id.split('/')[0] as QuranResource['category'], title: preset.title, sourcePath: `/resources/${id}`, tags: [], formats: ['SQLite'], related: [], restricted: false, fetchedAt: new Date().toISOString(), profile: { key: `qul:${id}:unverified`, qiraah: null, riwayah: null, tariq: null, numbering: null, segmentation: null, script: null, verified: false } };
+  const formats = preset.kind === 'mushaf-layout' ? ['SVG'] : ['SQLite'];
+  return { id, category: id.split('/')[0] as QuranResource['category'], title: preset.title, sourcePath: `/resources/${id}`, tags: [], formats, related: [], restricted: false, fetchedAt: new Date().toISOString(), profile: { key: `qul:${id}:unverified`, qiraah: null, riwayah: null, tariq: null, numbering: null, segmentation: null, script: null, verified: false } };
 }

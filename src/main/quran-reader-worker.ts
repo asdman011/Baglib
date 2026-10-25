@@ -10,7 +10,18 @@ const run = async (request: QuranReaderRequest) => {
   try {
     const next = JSON.stringify([request.root, request.packs.map(pack => pack.id)]);
     if (next !== identity) { reader?.close(); reader = new QuranReader(request.root, request.packs); identity = next; }
-    const data = request.action === 'catalog' ? reader!.catalog() : request.action === 'read' ? await reader!.read(request.query) : request.action === 'search' ? await reader!.search(request.query.script, request.query.text) : await reader!.commentary(request.query);
+    const data =
+      request.action === 'catalog'
+        ? reader!.catalog()
+        : request.action === 'read'
+        ? await reader!.read(request.query)
+        : request.action === 'search'
+        ? await reader!.search(request.query.script, request.query.text)
+        : request.action === 'commentary'
+        ? await reader!.commentary(request.query)
+        : request.action === 'mushaf-page'
+        ? await reader!.mushafPage(request.pack, request.page)
+        : await reader!.mushafPageForAyah(request.pack, request.surah, request.ayah);
     port.postMessage({ id: request.id, ok: true, data });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';

@@ -105,6 +105,14 @@ export function registerQuranIpc(): void {
     if (!query || typeof query.script !== 'string' || typeof query.pack !== 'string') throw new Error('invalid-resource');
     return readRequest({ action: 'commentary', query });
   }));
+  ipcMain.handle('quran:mushaf-page', (event, query) => result(event, async () => {
+    if (!query || typeof query.pack !== 'string' || !Number.isInteger(query.page) || query.page < 1 || query.page > 604) throw new Error('invalid-resource');
+    return readRequest({ action: 'mushaf-page', pack: query.pack, page: query.page });
+  }));
+  ipcMain.handle('quran:mushaf-page-for-ayah', (event, query) => result(event, async () => {
+    if (!query || typeof query.pack !== 'string' || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300) throw new Error('invalid-resource');
+    return readRequest({ action: 'mushaf-page-for-ayah', pack: query.pack, surah: query.surah, ayah: query.ayah });
+  }));
   ipcMain.handle('quran:setup', (event, ids: string[]) => result(event, async () => {
     if (!Array.isArray(ids) || !ids.length || ids.length > readerPresets.length || ids.some(id => !readerPresets.some(preset => preset.id === id)) || new Set(ids).size !== ids.length) throw new Error('invalid-resource');
     const instance = await getService();

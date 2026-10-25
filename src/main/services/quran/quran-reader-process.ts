@@ -2,7 +2,13 @@ import { utilityProcess } from 'electron';
 import path from 'node:path';
 import type { QuranPack, QuranReadQuery, QuranResult } from '../../../shared/types/quran';
 
-type Action = { action: 'catalog' } | { action: 'read'; query: QuranReadQuery } | { action: 'search'; query: { script: string; text: string } } | { action: 'commentary'; query: { script: string; pack: string; surah: number; ayah: number } };
+type Action =
+  | { action: 'catalog' }
+  | { action: 'read'; query: QuranReadQuery }
+  | { action: 'search'; query: { script: string; text: string } }
+  | { action: 'commentary'; query: { script: string; pack: string; surah: number; ayah: number } }
+  | { action: 'mushaf-page'; pack: string; page: number }
+  | { action: 'mushaf-page-for-ayah'; pack: string; surah: number; ayah: number };
 export type QuranReaderRequest = Action & { id: number; root: string; packs: QuranPack[] };
 
 export class QuranReaderProcess {

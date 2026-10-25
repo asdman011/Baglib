@@ -50,7 +50,7 @@ export interface QuranPack {
   resource: QuranResource;
   digest: string;
   bytes: number;
-  files: { name: string; bytes: number; type: 'sqlite' | 'json' | 'font' | 'image' | 'audio' }[];
+  files: { name: string; bytes: number; type: 'sqlite' | 'json' | 'font' | 'image' | 'audio' | 'svg' }[];
   installedAt: string;
   capability: 'stored';
 }
@@ -68,6 +68,8 @@ export interface QuranAPI {
   read: (query: QuranReadQuery) => Promise<QuranResult<QuranPassage>>;
   searchAyahs: (query: { script: string; text: string }) => Promise<QuranResult<QuranSearchHit[]>>;
   commentary: (query: { script: string; pack: string; surah: number; ayah: number }) => Promise<QuranResult<QuranCommentary>>;
+  mushafPage: (query: { pack: string; page: number }) => Promise<QuranResult<QuranMushafPage>>;
+  mushafPageForAyah: (query: { pack: string; surah: number; ayah: number }) => Promise<QuranResult<{ pageNumber: number }>>;
   setup: (ids: string[]) => Promise<QuranResult<{ installed: string[]; missing: string[]; failed: string[] } | null>>;
   library: (query?: { category?: QuranCategory; search?: string; offset?: number; view?: 'all' | 'installed' | 'downloads' }) => Promise<QuranResult<QuranLibrary>>;
   refresh: (category: QuranCategory) => Promise<QuranResult<null>>;
@@ -79,7 +81,7 @@ export interface QuranAPI {
   onChanged: (listener: () => void) => () => void;
 }
 
-export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs';
+export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs' | 'mushaf-layout';
 export interface QuranReaderSource { id: string; title: string; kind: QuranReaderKind; profile: 'hafs' | 'warsh'; }
 export interface QuranReaderCatalog { sources: QuranReaderSource[]; presets: { id: string; title: string; kind: QuranReaderKind; installed: boolean }[]; }
 export interface QuranReadQuery { script: string; surah: number; from: number; translation?: string; meanings?: string; transliteration?: string; }
@@ -88,3 +90,6 @@ export interface QuranAyah { number: number; words: { position: number; text: st
 export interface QuranPassage { profile: 'hafs' | 'warsh'; surah: number; surahs: { number: number; count: number; arabic?: string; name?: string }[]; basmala?: string; ayahs: QuranAyah[]; next: number | null; }
 export interface QuranSearchHit { surah: number; ayah: number; text: string; }
 export interface QuranCommentary { from: string; to: string; nodes: QuranRichNode[]; }
+export interface QuranMushafWord { id: string; surah: number; ayah: number; wordIndex: number; type?: 'text' | 'aya-mark'; line?: number; textHafs?: string; imlaey?: string; }
+export interface QuranMushafPage { pageNumber: number; totalPages: number; surahStart: number; ayahStart: number; surahEnd: number; ayahEnd: number; svg: string; profile: 'hafs' | 'warsh'; words: QuranMushafWord[]; }
+
