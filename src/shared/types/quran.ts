@@ -17,6 +17,41 @@ export interface QuranReadingProfile {
   segmentation: string | null;
   script: string | null;
   verified: boolean;
+  totalVerses?: number;
+}
+
+export const HAFS_READING_PROFILE: Readonly<QuranReadingProfile> = {
+  key: 'hafs-kufi',
+  qiraah: "'asim",
+  riwayah: 'hafs',
+  tariq: 'shatibiyyah',
+  numbering: 'kufi',
+  segmentation: 'qpc-hafs',
+  script: 'kfgqpc-hafs',
+  verified: true,
+  totalVerses: 6236,
+};
+
+export const WARSH_READING_PROFILE: Readonly<QuranReadingProfile> = {
+  key: 'warsh-madani',
+  qiraah: "nafi'",
+  riwayah: 'warsh',
+  tariq: 'azraq',
+  numbering: 'madani-first',
+  segmentation: 'qpc-warsh',
+  script: 'qpc-warsh',
+  verified: true,
+  totalVerses: 6214,
+};
+
+export function isProfileCompatible(profile1: QuranReadingProfile, profile2: QuranReadingProfile): boolean {
+  if (profile1.key === profile2.key) return true;
+  if (!profile1.verified || !profile2.verified) return false;
+  return profile1.riwayah === profile2.riwayah && profile1.numbering === profile2.numbering;
+}
+
+export function areLocationsCompatible(loc1: QuranLocation, loc2: QuranLocation): boolean {
+  return loc1.profileKey === loc2.profileKey;
 }
 
 export interface QuranResource {
@@ -85,6 +120,7 @@ export interface QuranAPI {
   ayahThemes: (query: { surah: number; ayah?: number; pack?: string }) => Promise<QuranResult<QuranAyahTheme[]>>;
   ayahTopics: (query: { surah: number; ayah: number; pack?: string }) => Promise<QuranResult<QuranTopic[]>>;
   searchTopics: (query: { text: string; pack?: string }) => Promise<QuranResult<QuranTopic[]>>;
+  similarAyahs: (query: { surah: number; ayah: number; pack?: string }) => Promise<QuranResult<QuranSimilarAyah[]>>;
   setup: (ids: string[]) => Promise<QuranResult<{ installed: string[]; missing: string[]; failed: string[] } | null>>;
   library: (query?: { category?: QuranCategory; search?: string; offset?: number; view?: 'all' | 'installed' | 'downloads' }) => Promise<QuranResult<QuranLibrary>>;
   refresh: (category: QuranCategory) => Promise<QuranResult<null>>;
@@ -96,7 +132,7 @@ export interface QuranAPI {
   onChanged: (listener: () => void) => () => void;
 }
 
-export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs' | 'mushaf-layout' | 'recitation' | 'surah-info' | 'ayah-theme' | 'ayah-topics';
+export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs' | 'mushaf-layout' | 'recitation' | 'surah-info' | 'ayah-theme' | 'ayah-topics' | 'similar-ayah';
 export interface QuranReaderSource { id: string; title: string; kind: QuranReaderKind; profile: 'hafs' | 'warsh'; }
 export interface QuranReaderCatalog { sources: QuranReaderSource[]; presets: { id: string; title: string; kind: QuranReaderKind; installed: boolean }[]; }
 export interface QuranReadQuery { script: string; surah: number; from: number; translation?: string; meanings?: string; transliteration?: string; }
@@ -110,8 +146,70 @@ export interface QuranAyahDetails { surah: number; ayah: number; profile: 'hafs'
 export interface QuranMushafWord { id: string; surah: number; ayah: number; wordIndex: number; type?: 'text' | 'aya-mark'; line?: number; textHafs?: string; imlaey?: string; }
 export interface QuranMushafPage { pageNumber: number; totalPages: number; surahStart: number; ayahStart: number; surahEnd: number; ayahEnd: number; svg: string; profile: 'hafs' | 'warsh'; words: QuranMushafWord[]; }
 export type QuranAudioSegment = [fromWord: number, toWord: number, startMs: number, endMs: number];
-export interface QuranAyahAudio { surah: number; ayah: number; audioUrl: string; duration: number | null; segments: QuranAudioSegment[]; localUrl?: string; cached?: boolean; }
+export interface QuranAyahAudio { surah: number; ayah: number; audioUrl: string; duration: number | null; segments: QuranAudioSegment[]; localUrl?: string; cached?: boolean; profile?: 'hafs' | 'warsh'; }
 export interface QuranSurahIntro { surahNumber: number; surahName: string; text: string; shortText: string; }
 export interface QuranAyahTheme { theme: string; surahNumber: number; ayahFrom: number; ayahTo: number; keywords: string[]; totalAyahs: number; }
 export interface QuranTopic { topicId: number; name: string; arabicName: string; parentId: number | null; thematicParentId: number | null; ontologyParentId: number | null; description: string; wikiLink: string; thematic: boolean; ontology: boolean; ayahs: { surah: number; ayah: number }[]; relatedTopics: number[]; }
+export interface QuranSimilarAyah {
+  verseKey: string;
+  matchedAyahKey: string;
+  surah: number;
+  ayah: number;
+  matchedWordsCount: number;
+  coverage: number;
+  score: number;
+  matchWordsRange: [number, number][];
+}
+
+// Semantic Retrieval and Cited AI Contracts (Task 6.4 / KEY-179)
+export type QuranSemanticChunkKind = 'ayah' | 'tafsir-section' | 'surah-intro' | 'ayah-theme' | 'topic-concept';
+
+export interface QuranSemanticChunk {
+  chunkId: string;
+  profileKey: string;
+  sourceId: string;
+  kind: QuranSemanticChunkKind;
+  surah: number;
+  ayahStart: number;
+  ayahEnd: number;
+  text: string;
+  language: 'ar' | 'en';
+  citation: string;
+  metadata?: Record<string, unknown>;
+  immutableSourceDigest?: string;
+}
+
+export interface QuranRetrievalQuery {
+  queryText: string;
+  profileKey: string;
+  language?: 'ar' | 'en';
+  hybridWeight?: { lexicalBm25: number; denseVector: number };
+  filterSurah?: number;
+  filterKinds?: QuranSemanticChunkKind[];
+  topK?: number;
+}
+
+export interface QuranRetrievalHit {
+  chunk: QuranSemanticChunk;
+  lexicalScore?: number;
+  vectorScore?: number;
+  combinedScore: number;
+  provenance: { sourceId: string; citation: string };
+}
+
+export type QuranAIAbstentionReason =
+  | 'no-retrieved-evidence'
+  | 'out-of-domain'
+  | 'theological-controversy'
+  | 'user-notes-unconsented';
+
+export interface QuranAICitedResponse {
+  query: string;
+  answerMarkdown: string;
+  citations: { citation: string; surah: number; ayahStart: number; ayahEnd: number; sourceId: string }[];
+  abstained: boolean;
+  abstentionReason?: QuranAIAbstentionReason;
+  modelProvenance: { modelName: string; provider: 'local-cpu' | 'cloud-byok'; latencyMs: number };
+}
+
 

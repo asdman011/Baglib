@@ -118,6 +118,22 @@ Final verification: **54 focused regression tests passed**, covering the Quran m
 
 An earlier test assertion was corrected to query the matching resource page rather than assuming its pack would appear on every catalog page; test cleanup now closes its SQLite handle even on assertion failure. A cleanup command for that earlier failed run's single OS-temporary fixture directory was blocked by client policy, so that old small fixture may remain. This does not affect application data or the passing final run. No commit, push or Jira update was performed.
 
+### Phase 6.3 delivery: Qira'at reading profiles & boundary isolation — 2026-10-26
+
+- **Reading profile formalization**: Explicit contracts `HAFS_READING_PROFILE` (`hafs-kufi`, 6,236 verses) and `WARSH_READING_PROFILE` (`warsh-madani`, 6,214 verses) distinguish Qira'ah (`'asim` vs `nafi'`), Riwayah (`hafs` vs `warsh`), Tariq (`shatibiyyah` vs `azraq`), Numbering (`kufi` vs `madani-first`), Segmentation (`qpc-hafs` vs `qpc-warsh`), and Script (`kfgqpc-hafs` vs `qpc-warsh`).
+- **Strict profile isolation**: In `QuranReader.read`, `commentary`, `inspectAyah`, `ayahThemes`, and `similarAyahs`, cross-profile resource joins (e.g. attempting to attach Hafs translations, Ibn Kathir tafsir, Hafs word meanings/transliterations, or Hafs similar-ayahs to Warsh script without explicit mapping) are strictly rejected with `'invalid-resource'`.
+- **Madani-first numbering**: Warsh Surah 1:1 begins with "اِ۬لْحَمْدُ لِلَّهِ رَبِّ اِ۬لْعَٰلَمِينَ" (Basmala is an unnumbered preamble in Surah 1 in Warsh), having 6,214 verses total across the Quran compared to 6,236 in Hafs.
+- **Audio & Layout isolation**: Recitations and layouts are profile-tagged. Warsh layout preset `mushaf-layout/warsh-svg` is registered for vector Mushaf rendering, and Hafs layouts/recitations are prevented from being misaligned onto Warsh text.
+- **Bilingual notices**: Users switching to Warsh script receive clear bilingual notices (`quranWarshNotice`) in Arabic RTL and English LTR, and incompatible Hafs-only options are disabled in the UI.
+
+### Phase 6.4 delivery: Local-First Semantic Retrieval and Cited AI Evaluation — 2026-10-26
+
+- **Evaluation Document**: Formalized complete architectural evaluation in [`feature - Quran Semantic Retrieval and Cited AI.md`](./feature%20-%20Quran%20Semantic%20Retrieval%20and%20Cited%20AI.md).
+- **Hybrid Retrieval Architecture**: Formulated Reciprocal Rank Fusion (RRF) pipeline combining SQLite FTS5 BM25 exact lexical root/lemma recall with ONNX-quantized dense multilingual embeddings (`multilingual-e5-small`).
+- **Source-Preserving Data Contracts**: Defined `QuranSemanticChunk`, `QuranRetrievalQuery`, `QuranRetrievalHit`, and `QuranAICitedResponse` in `src/shared/types/quran.ts`, guaranteeing strict profile tagging (`hafs-kufi` vs `warsh-madani`), pack digest verification, and exact verse boundaries.
+- **Hardware Capacity Limits**: Measured and documented user machine constraints (Ryzen 7 PRO 5750G 8c/16t, 15.4 GB RAM, integrated Radeon GPU); proved feasibility of lightweight CPU embeddings (~130 MB, ~15-25 ms) while ruling out heavy local 7B+ LLMs due to memory contention with Electron and Windows.
+- **Theological & Privacy Guardrails**: Formulated non-negotiable policies: zero substitution of canonical Quranic text or published tafsir; mandatory exact citations; explicit abstention policy; background utility process isolation; and 100% private local study notes with strict opt-in consent before external requests.
+
 ## Future NLP/AI and this machine
 
 Read-only Windows hardware queries on 2026-10-24 reported Ryzen 7 PRO 5750G (8 cores/16 threads), 15.4 GiB OS-visible physical RAM and integrated AMD Radeon Graphics. Windows reported 512 MiB adapter memory; this is not a dedicated modern compute GPU and does not describe all shared graphics memory. C: had about 32.4 GiB free; D: about 103.9 GiB. These are a snapshot, not a benchmark. Offer a configurable data folder rather than filling C: with audio.
