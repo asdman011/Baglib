@@ -1,12 +1,14 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, net, session, utilityProcess } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, session, utilityProcess } from 'electron';
 import { mkdir, readFile, writeFile, rm, stat, rename } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { QuranLibraryService, type QuranInstaller } from '../services/quran/quran-library.service';
 import { category, QUL_ORIGIN, validateSourceUrl } from '../services/quran/qul-catalog';
-import type { QuranAPI, QuranAyahAudio, QuranError, QuranLibrary, QuranPack, QuranResult } from '../../shared/types/quran';
+import type { QuranAPI, QuranAyahAudio, QuranAyahTheme, QuranError, QuranLibrary, QuranPack, QuranResult, QuranSurahIntro, QuranTopic } from '../../shared/types/quran';
 import { QuranReaderProcess } from '../services/quran/quran-reader-process';
-import { presetResource, readerPreset, readerPresets } from '../services/quran/reader-resources';
+import { canonicalResourceId, presetResource, readerPreset, readerPresets } from '../services/quran/reader-resources';
+import { downloadToFile, selectedExport } from '../services/quran/resource-download';
+import { electronDownloadFetch } from '../services/quran/electron-download-fetch';
 
 const allowedDownloadOrigins = new Set([QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
 const allowedAudioOrigins = new Set(['https://audio-cdn.tarteel.ai', QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
@@ -17,7 +19,8 @@ const getAudioFilePath = (root: string, packId: string, surah: number, ayah: num
   return path.join(root, 'audio', packId, `${padSurah}_${padAyah}.mp3`);
 };
 
-const cacheSingleAudioFile = async (root: string, packId: string, surah: number, ayah: number, audioUrl: string): Promise<string> => {
+const cacheSingleAudioFile = async (root: string, packId: string, surah: number, ayah: number, audioUrl: string, signal = new AbortController().signal): Promise<string> => {
+  if (!/^[a-f0-9-]{36}$/.test(packId)) throw new Error('invalid-resource');
   const targetFile = getAudioFilePath(root, packId, surah, ayah);
   try {
     const s = await stat(targetFile);
@@ -36,11 +39,8 @@ const cacheSingleAudioFile = async (root: string, packId: string, surah: number,
   const tempFile = path.join(dir, `${randomUUID()}.tmp`);
 
   try {
-    const response = await net.fetch(audioUrl);
-    if (!response.ok) throw new Error('network');
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length < 500 || buffer.length > 30 * 1024 * 1024) throw new Error('invalid-package');
-    await writeFile(tempFile, buffer);
+    await downloadToFile({ url: audioUrl, filename: tempFile, fetcher: electronDownloadFetch(session.defaultSession, 30 * 1024 * 1024), origins: allowedAudioOrigins, signal, limit: 30 * 1024 * 1024 });
+    if ((await stat(tempFile)).size < 1000) throw new Error('invalid-package');
     await rename(tempFile, targetFile);
     return `baglib-asset://${targetFile.replace(/\\/g, '/')}`;
   } catch (err) {
@@ -76,10 +76,17 @@ export function registerQuranIpc(): void {
   let settingUp = false;
   const windows = new Map<string, BrowserWindow>();
   const downloads = new Map<string, Electron.DownloadItem>();
-  const changed = () => { for (const window of BrowserWindow.getAllWindows()) if (window.webContents.getURL().startsWith('file:') || window.webContents.getURL().startsWith('http://localhost:3000')) window.webContents.send('quran:changed'); };
-  const fetchHtml = async (source: string) => {
+  let changeTimer: ReturnType<typeof setTimeout> | undefined;
+  const changed = () => {
+    if (changeTimer) return;
+    changeTimer = setTimeout(() => {
+      changeTimer = undefined;
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed() && (window.webContents.getURL().startsWith('file:') || window.webContents.getURL().startsWith('http://localhost:3000'))) window.webContents.send('quran:changed');
+    }, 250);
+  };
+  const fetchHtml = async (source: string, signal?: AbortSignal) => {
     let response: Response;
-    try { response = await session.fromPartition('baglib-qul').fetch(validateSourceUrl(source).href, { signal: AbortSignal.timeout(30_000), redirect: 'error' }); }
+    try { response = await session.fromPartition('baglib-qul').fetch(validateSourceUrl(source).href, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000), redirect: 'error' }); }
     catch { throw new Error('network'); }
     if (!response.ok || Number(response.headers.get('content-length')) > 4 * 1024 * 1024) throw new Error('network');
     const reader = response.body?.getReader();
@@ -101,6 +108,7 @@ export function registerQuranIpc(): void {
     const instance = new QuranLibraryService(root, fetchHtml, runQuranInstaller, changed);
     await instance.initialize();
     instance.store.saveResources(readerPresets.filter(preset => !instance.store.resource(preset.id)).map(preset => presetResource(preset.id)));
+    for (const preset of readerPresets) for (const alias of preset.aliases || []) instance.store.removeResource(alias);
     return instance;
   };
   const getService = () => initializing ??= (async () => {
@@ -124,10 +132,69 @@ export function registerQuranIpc(): void {
   const readRequest = async <Value>(action: Parameters<QuranReaderProcess['request']>[2]) => {
     const instance = await getService();
     const latest = new Map<string, QuranPack>();
-    for (const pack of instance.store.packs()) if (readerPreset(pack)) latest.set(pack.resource.id, pack);
+    for (const pack of instance.store.packs()) if (readerPreset(pack)) latest.set(canonicalResourceId(pack.resource.id), pack);
     return reader.request<Value>(instance.root, [...latest.values()], action);
   };
   ipcMain.handle('quran:reader-catalog', event => result(event, () => readRequest({ action: 'catalog' })));
+  ipcMain.handle('quran:sign-in', event => result(event, async () => {
+    const browser = new BrowserWindow({ width: 1000, height: 800, parent: BrowserWindow.fromWebContents(event.sender) || undefined, autoHideMenuBar: true, webPreferences: { partition: 'baglib-qul', sandbox: true, nodeIntegration: false, contextIsolation: true } });
+    const key = `sign-in-${randomUUID()}`;
+    windows.set(key, browser);
+    browser.once('closed', () => windows.delete(key));
+    browser.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    browser.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+    browser.webContents.on('will-navigate', (navigation, url) => { try { if (new URL(url).origin !== QUL_ORIGIN) navigation.preventDefault(); } catch { navigation.preventDefault(); } });
+    await browser.loadURL(`${QUL_ORIGIN}/users/sign_in`);
+    return null;
+  }));
+  ipcMain.handle('quran:inspect-ayah', (event, query) => result(event, async () => {
+    if (!query || typeof query.script !== 'string' || (query.layout !== undefined && typeof query.layout !== 'string') || !Number.isInteger(query.surah) || !Number.isInteger(query.ayah)) throw new Error('invalid-resource');
+    return readRequest({ action: 'inspect-ayah', query });
+  }));
+  ipcMain.handle('quran:download-batch', (event, ids: string[]) => result(event, async () => {
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('invalid-resource');
+    ids = ids.map(canonicalResourceId);
+    const instance = await getService();
+    if (settingUp) throw new Error('busy');
+    return instance.enqueue(ids, async (job, signal) => {
+      const resource = instance.store.resource(job.resourceId)!;
+      const url = selectedExport(await fetchHtml(resource.sourcePath, signal), resource);
+      const filename = path.join(instance.root, 'downloads', `${job.id}.download`);
+      await downloadToFile({ url, filename, fetcher: electronDownloadFetch(session.fromPartition('baglib-qul')), origins: allowedDownloadOrigins, signal, limit: 128 * 1024 * 1024, progress: (received, total) => instance.update({ ...job, state: 'downloading', received, total }) });
+      return filename;
+    });
+  }));
+  ipcMain.handle('quran:download-recitation', (event, query) => result(event, async () => {
+    if (!query || typeof query.pack !== 'string' || (query.surah !== undefined && (!Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114))) throw new Error('invalid-resource');
+    const instance = await getService();
+    if (settingUp) throw new Error('busy');
+    const pack = instance.store.packs().find(pack => pack.id === query.pack && readerPreset(pack)?.kind === 'recitation');
+    if (!pack) throw new Error('invalid-resource');
+    const active = instance.store.jobs().find(job => job.resourceId === pack.resource.id && ['queued', 'downloading', 'installing', 'awaiting-download'].includes(job.state));
+    if (active) {
+      if (active.recitation && active.recitation.pack === query.pack && active.recitation.surah === query.surah) return active.id;
+      throw new Error('busy');
+    }
+    const jobIds = instance.enqueue([pack.resource.id], async (job, signal) => {
+      const surahs: number[] = query.surah ? [query.surah] : Array.from({ length: 114 }, (_, index) => index + 1);
+      const recordings: QuranAyahAudio[] = [];
+      for (const surah of surahs) {
+        signal.throwIfAborted();
+        recordings.push(...await readRequest<QuranAyahAudio[]>({ action: 'recitation-surah', pack: query.pack, surah }));
+      }
+      let completed = 0;
+      for (const recording of recordings) {
+        signal.throwIfAborted();
+        await cacheSingleAudioFile(instance.root, query.pack, recording.surah, recording.ayah, recording.audioUrl, signal);
+        instance.update({ ...job, state: 'downloading', progressUnit: 'files', received: ++completed, total: recordings.length });
+      }
+      return null;
+    }, false);
+    if (!jobIds[0]) throw new Error('busy');
+    const job = instance.store.jobs().find(job => job.id === jobIds[0])!;
+    instance.update({ ...job, progressUnit: 'files', recitation: { pack: query.pack, surah: query.surah } });
+    return jobIds[0];
+  }));
   ipcMain.handle('quran:copy', (event, text: string) => result(event, async () => {
     if (typeof text !== 'string' || !text.trim() || text.length > 200000) throw new Error('invalid-resource');
     clipboard.writeText(text);
@@ -216,7 +283,25 @@ export function registerQuranIpc(): void {
     }
     return { completed, total: list.length };
   }));
+  ipcMain.handle('quran:surah-intro', (event, query) => result(event, async () => {
+    if (!query || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
+    return readRequest<QuranSurahIntro | null>({ action: 'surah-intro', pack: query.pack, surah: query.surah });
+  }));
+  ipcMain.handle('quran:ayah-themes', (event, query) => result(event, async () => {
+    if (!query || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || (query.ayah !== undefined && (!Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300)) || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
+    return readRequest<QuranAyahTheme[]>({ action: 'ayah-themes', pack: query.pack, surah: query.surah, ayah: query.ayah });
+  }));
+  ipcMain.handle('quran:ayah-topics', (event, query) => result(event, async () => {
+    if (!query || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300 || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
+    return readRequest<QuranTopic[]>({ action: 'ayah-topics', pack: query.pack, surah: query.surah, ayah: query.ayah });
+  }));
+  ipcMain.handle('quran:search-topics', (event, query) => result(event, async () => {
+    if (!query || typeof query.text !== 'string' || query.text.length > 200 || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
+    return readRequest<QuranTopic[]>({ action: 'search-topics', pack: query.pack, text: query.text });
+  }));
   ipcMain.handle('quran:setup', (event, ids: string[]) => result(event, async () => {
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('invalid-resource');
+    ids = [...new Set(ids.map(canonicalResourceId))];
     if (!Array.isArray(ids) || !ids.length || ids.length > readerPresets.length || ids.some(id => !readerPresets.some(preset => preset.id === id)) || new Set(ids).size !== ids.length) throw new Error('invalid-resource');
     const instance = await getService();
     if (instance.busy || settingUp) throw new Error('busy');
@@ -250,6 +335,8 @@ export function registerQuranIpc(): void {
   }));
   ipcMain.handle('quran:refresh', (event, kind) => result(event, async () => { await (await getService()).refresh(category(kind)); return null; }));
   ipcMain.handle('quran:download', (event, id: string) => result(event, async () => {
+    if (typeof id !== 'string') throw new Error('invalid-resource');
+    id = canonicalResourceId(id);
     const instance = await getService();
     const { resource } = await instance.details(id);
     if (resource.restricted) throw new Error('restricted');
@@ -311,6 +398,8 @@ export function registerQuranIpc(): void {
     return job.id;
   }));
   ipcMain.handle('quran:import', (event, id: string) => result(event, async () => {
+    if (typeof id !== 'string') throw new Error('invalid-resource');
+    id = canonicalResourceId(id);
     const instance = await getService();
     const resource = instance.store.resource(id);
     if (!resource) throw new Error('invalid-resource');
@@ -346,6 +435,7 @@ export function registerQuranIpc(): void {
     return null;
   }));
   app.once('before-quit', () => {
+    clearTimeout(changeTimer);
     reader.close();
     for (const item of downloads.values()) item.cancel();
     for (const id of windows.keys()) closeWindow(id);

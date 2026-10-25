@@ -4,12 +4,25 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parseHTML } from 'linkedom';
 import { QuranPassageView } from '../../src/renderer/components/quran/QuranReaderView';
+import { QuranAyahInspector } from '../../src/renderer/components/quran/QuranAyahInspector';
 import { QuranMushafView } from '../../src/renderer/components/quran/QuranMushafView';
+import { QuranSurahIntroCard } from '../../src/renderer/components/quran/QuranSurahIntroCard';
+import { QuranTopicDrawer } from '../../src/renderer/components/quran/QuranTopicDrawer';
 import { translations, type TranslationKey } from '../../src/renderer/translations';
-import type { QuranMushafPage, QuranPassage } from '../../src/shared/types/quran';
+import type { QuranAyahTheme, QuranMushafPage, QuranPassage, QuranSurahIntro, QuranTopic } from '../../src/shared/types/quran';
 
 const passage: QuranPassage = { profile: 'hafs', surah: 1, surahs: [{ number: 1, count: 7 }], next: null, ayahs: [{ number: 1, words: [{ position: 1, text: 'بِسۡمِ', marker: false, meaning: 'In the name' }, { position: 2, text: '١', marker: true }], translation: { text: 'Meaning <script>not executed</script>', notes: ['A source note'] } }] };
 for (const lang of ['ar', 'en'] as const) {
+  test(`shared Ayah Inspector exposes both canonical forms and a start-side drawer in ${lang}`, () => {
+    const translate = (key: TranslationKey) => translations[lang][key];
+    const html = renderToStaticMarkup(createElement(QuranAyahInspector, { reference: { surah: 1, ayah: 1 }, details: { surah: 1, ayah: 1, profile: 'hafs', canonical: 'بِسۡمِ ٱللَّهِ', imlaey: 'بسم الله' }, surahName: 'الفاتحة', error: false, t: translate, dir: lang === 'ar' ? 'rtl' : 'ltr', onClose() {}, onCopy() {}, onStudy() {} }));
+    const { document } = parseHTML(html);
+    assert.ok(document.querySelector('[role=dialog]')?.classList.contains('start-0'));
+    assert.ok(document.querySelector('[role=dialog]')?.textContent.includes('بسم الله'));
+    assert.ok(document.querySelector('[role=dialog]')?.textContent.includes('بِسۡمِ ٱللَّهِ'));
+    for (const key of ['quranCopyCanonical', 'quranCopyImlaey', 'quranOpenInStudyReader'] as const) assert.ok(html.includes(translations[lang][key]));
+    assert.equal(document.querySelector('[role=dialog]')?.getAttribute('aria-modal'), 'true');
+  });
   test(`Quran passage preserves Arabic and renders safe English/tafsir content in ${lang}`, () => {
     const translate = (key: TranslationKey, params?: Record<string, string | number>) => Object.entries(params || {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), translations[lang][key]);
     const html = renderToStaticMarkup(createElement(QuranPassageView, { passage, t: translate, lang, selected: 1, showWords: true, commentary: { from: '1:1', to: '1:2', nodes: [{ tag: 'p', children: [{ tag: 'text', text: 'تفسير <img src=x onerror=alert(1)>' }] }] }, onCommentary() {}, onCopy() {} }));
@@ -61,8 +74,7 @@ for (const lang of ['ar', 'en'] as const) {
     assert.ok(html.includes('mushaf-svg-surface'));
     assert.ok(html.includes('بِسۡمِ'));
     assert.ok(html.includes('604'));
-    assert.ok(document.querySelector('aside') !== null);
-    assert.ok(html.includes(translations[lang].quranOpenInStudyReader));
+    assert.equal(document.querySelector('aside'), null);
     assert.ok(html.includes(translations[lang].quranCopyPage));
   });
 }
@@ -105,10 +117,10 @@ for (const lang of ['ar', 'en'] as const) {
       onCopyText() {},
       onPlayAyah() {},
     }));
-    assert.ok(html.includes('data-word-index-in-ayah="1"'));
+    assert.ok(html.includes('data-baglib-audio-word'));
     assert.ok(html.includes('#059669'));
     assert.ok(html.includes('#d97706'));
-    assert.ok(html.includes(translations[lang].quranAudioPlay));
+    assert.ok(html.includes('data-baglib-playing'));
   });
 }
 
@@ -149,5 +161,80 @@ test('audio translations have complete parity in Arabic and English', () => {
     assert.ok(translations.en[key], `Missing English translation for ${key}`);
   }
 });
+
+for (const lang of ['ar', 'en'] as const) {
+  test(`QuranSurahIntroCard renders surah introduction bilingually in ${lang}`, () => {
+    const translate = (key: TranslationKey, params?: Record<string, string | number>) => Object.entries(params || {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), translations[lang][key]);
+    const intro: QuranSurahIntro = {
+      surahNumber: 1,
+      surahName: 'Al-Fatihah',
+      text: 'Overview text of the opening chapter.',
+      shortText: 'A concise summary of Al-Fatihah.',
+    };
+    const html = renderToStaticMarkup(createElement(QuranSurahIntroCard, { intro, t: translate }));
+    const { document } = parseHTML(html);
+    assert.ok(html.includes(translations[lang].quranSurahIntro));
+    assert.ok(html.includes('Al-Fatihah'));
+    assert.ok(html.includes('A concise summary of Al-Fatihah.'));
+    assert.ok(document.querySelector('section'));
+  });
+
+  test(`QuranTopicDrawer renders concept cards and related ayah links in ${lang}`, () => {
+    const translate = (key: TranslationKey, params?: Record<string, string | number>) => Object.entries(params || {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), translations[lang][key]);
+    const topic: QuranTopic = {
+      topicId: 1,
+      name: 'Allah',
+      arabicName: 'الله',
+      parentId: null,
+      thematicParentId: 1837,
+      ontologyParentId: null,
+      description: '<b>Allah</b> is the one and only true God.',
+      wikiLink: 'wiki/Allah',
+      thematic: true,
+      ontology: true,
+      ayahs: [{ surah: 1, ayah: 1 }, { surah: 2, ayah: 7 }],
+      relatedTopics: [],
+    };
+    const html = renderToStaticMarkup(createElement(QuranTopicDrawer, {
+      topics: [topic],
+      activeTopic: topic,
+      onSelectTopic() {},
+      onSelectAyah() {},
+      onClose() {},
+      t: translate,
+      lang,
+      dir: lang === 'ar' ? 'rtl' : 'ltr',
+    }));
+    const { document } = parseHTML(html);
+    assert.ok(html.includes('Allah'));
+    assert.ok(html.includes('الله'));
+    assert.ok(html.includes('1:1'));
+    assert.ok(html.includes('2:7'));
+    assert.equal(document.querySelectorAll('button').length >= 3, true);
+  });
+
+  test(`QuranPassageView displays theme badges and topic buttons in ${lang}`, () => {
+    const translate = (key: TranslationKey, params?: Record<string, string | number>) => Object.entries(params || {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), translations[lang][key]);
+    const themes: QuranAyahTheme[] = [
+      { theme: 'Opening of the book', surahNumber: 1, ayahFrom: 1, ayahTo: 7, keywords: ['fatihah'], totalAyahs: 7 },
+    ];
+    let topicOpenedAyah: number | null = null;
+    const html = renderToStaticMarkup(createElement(QuranPassageView, {
+      passage,
+      t: translate,
+      lang,
+      selected: null,
+      showWords: false,
+      commentary: null,
+      themes,
+      onOpenTopics: (a) => { topicOpenedAyah = a; },
+      onCopy() {},
+    }));
+    const { document } = parseHTML(html);
+    assert.ok(html.includes(translations[lang].quranTheme));
+    assert.ok(html.includes('Opening of the book'));
+    assert.ok(html.includes(translations[lang].quranTopics));
+  });
+}
 
 

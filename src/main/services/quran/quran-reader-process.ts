@@ -4,13 +4,18 @@ import type { QuranPack, QuranReadQuery, QuranResult } from '../../../shared/typ
 
 type Action =
   | { action: 'catalog' }
+  | { action: 'inspect-ayah'; query: { script: string; layout?: string; surah: number; ayah: number } }
   | { action: 'read'; query: QuranReadQuery }
   | { action: 'search'; query: { script: string; text: string } }
   | { action: 'commentary'; query: { script: string; pack: string; surah: number; ayah: number } }
   | { action: 'mushaf-page'; pack: string; page: number }
   | { action: 'mushaf-page-for-ayah'; pack: string; surah: number; ayah: number }
   | { action: 'recitation-audio'; pack: string; surah: number; ayah: number }
-  | { action: 'recitation-surah'; pack: string; surah: number };
+  | { action: 'recitation-surah'; pack: string; surah: number }
+  | { action: 'surah-intro'; pack?: string; surah: number }
+  | { action: 'ayah-themes'; pack?: string; surah: number; ayah?: number }
+  | { action: 'ayah-topics'; pack?: string; surah: number; ayah: number }
+  | { action: 'search-topics'; pack?: string; text: string };
 export type QuranReaderRequest = Action & { id: number; root: string; packs: QuranPack[] };
 
 export class QuranReaderProcess {

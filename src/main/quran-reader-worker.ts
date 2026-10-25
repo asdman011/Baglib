@@ -11,7 +11,9 @@ const run = async (request: QuranReaderRequest) => {
     const next = JSON.stringify([request.root, request.packs.map(pack => pack.id)]);
     if (next !== identity) { reader?.close(); reader = new QuranReader(request.root, request.packs); identity = next; }
     const data =
-      request.action === 'catalog'
+      request.action === 'inspect-ayah'
+        ? await reader!.inspectAyah(request.query)
+        : request.action === 'catalog'
         ? reader!.catalog()
         : request.action === 'read'
         ? await reader!.read(request.query)
@@ -25,7 +27,15 @@ const run = async (request: QuranReaderRequest) => {
         ? await reader!.mushafPageForAyah(request.pack, request.surah, request.ayah)
         : request.action === 'recitation-audio'
         ? await reader!.recitationAudio(request.pack, request.surah, request.ayah)
-        : await reader!.recitationSurah(request.pack, request.surah);
+        : request.action === 'recitation-surah'
+        ? await reader!.recitationSurah(request.pack, request.surah)
+        : request.action === 'surah-intro'
+        ? await reader!.surahIntro(request.pack, request.surah)
+        : request.action === 'ayah-themes'
+        ? await reader!.ayahThemes(request.pack, request.surah, request.ayah)
+        : request.action === 'ayah-topics'
+        ? await reader!.ayahTopics(request.pack, request.surah, request.ayah)
+        : await reader!.searchTopics(request.pack, request.text);
     port.postMessage({ id: request.id, ok: true, data });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';

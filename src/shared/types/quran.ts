@@ -34,7 +34,7 @@ export interface QuranResource {
 
 export type QuranError = 'unavailable' | 'network' | 'invalid-resource' | 'restricted' | 'invalid-package' | 'unsupported-format' | 'storage' | 'cancelled' | 'interrupted' | 'busy';
 export type QuranResult<Value> = { ok: true; data: Value } | { ok: false; error: QuranError };
-export type QuranJobState = 'awaiting-download' | 'downloading' | 'installing' | 'complete' | 'failed' | 'cancelled';
+export type QuranJobState = 'queued' | 'awaiting-download' | 'downloading' | 'installing' | 'complete' | 'failed' | 'cancelled';
 export interface QuranJob {
   id: string;
   resourceId: string;
@@ -44,6 +44,8 @@ export interface QuranJob {
   total: number;
   error: QuranError | null;
   updatedAt: string;
+  progressUnit?: 'files';
+  recitation?: { pack: string; surah?: number };
 }
 export interface QuranPack {
   id: string;
@@ -63,6 +65,10 @@ export interface QuranLibrary {
   catalogStatus: 'cached-partial' | 'source-listing';
 }
 export interface QuranAPI {
+  signIn: () => Promise<QuranResult<null>>;
+  inspectAyah: (query: { script: string; layout?: string; surah: number; ayah: number }) => Promise<QuranResult<QuranAyahDetails>>;
+  downloadBatch: (ids: string[]) => Promise<QuranResult<string[]>>;
+  downloadRecitation: (query: { pack: string; surah?: number }) => Promise<QuranResult<string>>;
   copyText: (text: string) => Promise<QuranResult<null>>;
   readerCatalog: () => Promise<QuranResult<QuranReaderCatalog>>;
   read: (query: QuranReadQuery) => Promise<QuranResult<QuranPassage>>;
@@ -75,6 +81,10 @@ export interface QuranAPI {
   cacheAudio: (query: { pack: string; surah: number; ayah: number; audioUrl: string }) => Promise<QuranResult<{ localUrl: string }>>;
   surahAudioStatus: (query: { pack: string; surah: number }) => Promise<QuranResult<{ cachedCount: number; totalCount: number; isComplete: boolean }>>;
   downloadSurahAudio: (query: { pack: string; surah: number }) => Promise<QuranResult<{ completed: number; total: number }>>;
+  surahIntro: (query: { surah: number; pack?: string }) => Promise<QuranResult<QuranSurahIntro | null>>;
+  ayahThemes: (query: { surah: number; ayah?: number; pack?: string }) => Promise<QuranResult<QuranAyahTheme[]>>;
+  ayahTopics: (query: { surah: number; ayah: number; pack?: string }) => Promise<QuranResult<QuranTopic[]>>;
+  searchTopics: (query: { text: string; pack?: string }) => Promise<QuranResult<QuranTopic[]>>;
   setup: (ids: string[]) => Promise<QuranResult<{ installed: string[]; missing: string[]; failed: string[] } | null>>;
   library: (query?: { category?: QuranCategory; search?: string; offset?: number; view?: 'all' | 'installed' | 'downloads' }) => Promise<QuranResult<QuranLibrary>>;
   refresh: (category: QuranCategory) => Promise<QuranResult<null>>;
@@ -86,17 +96,22 @@ export interface QuranAPI {
   onChanged: (listener: () => void) => () => void;
 }
 
-export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs' | 'mushaf-layout' | 'recitation';
+export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs' | 'mushaf-layout' | 'recitation' | 'surah-info' | 'ayah-theme' | 'ayah-topics';
 export interface QuranReaderSource { id: string; title: string; kind: QuranReaderKind; profile: 'hafs' | 'warsh'; }
 export interface QuranReaderCatalog { sources: QuranReaderSource[]; presets: { id: string; title: string; kind: QuranReaderKind; installed: boolean }[]; }
 export interface QuranReadQuery { script: string; surah: number; from: number; translation?: string; meanings?: string; transliteration?: string; }
 export interface QuranRichNode { tag: 'text' | 'p' | 'div' | 'br' | 'b' | 'i' | 'u' | 'sup'; text?: string; children?: QuranRichNode[]; }
-export interface QuranAyah { number: number; words: { position: number; text: string; marker: boolean; meaning?: string; transliteration?: string }[]; translation?: { text: string; notes: string[] }; }
+export interface QuranAyah { number: number; words: { position: number; text: string; marker: boolean; meaning?: string; transliteration?: string }[]; translation?: QuranTranslation; }
+export interface QuranTranslation { text: string; notes: string[]; anchors?: { offset: number; note: number }[]; }
 export interface QuranPassage { profile: 'hafs' | 'warsh'; surah: number; surahs: { number: number; count: number; arabic?: string; name?: string }[]; basmala?: string; ayahs: QuranAyah[]; next: number | null; }
 export interface QuranSearchHit { surah: number; ayah: number; text: string; }
 export interface QuranCommentary { from: string; to: string; nodes: QuranRichNode[]; }
+export interface QuranAyahDetails { surah: number; ayah: number; profile: 'hafs' | 'warsh'; canonical: string; imlaey: string | null; }
 export interface QuranMushafWord { id: string; surah: number; ayah: number; wordIndex: number; type?: 'text' | 'aya-mark'; line?: number; textHafs?: string; imlaey?: string; }
 export interface QuranMushafPage { pageNumber: number; totalPages: number; surahStart: number; ayahStart: number; surahEnd: number; ayahEnd: number; svg: string; profile: 'hafs' | 'warsh'; words: QuranMushafWord[]; }
 export type QuranAudioSegment = [fromWord: number, toWord: number, startMs: number, endMs: number];
 export interface QuranAyahAudio { surah: number; ayah: number; audioUrl: string; duration: number | null; segments: QuranAudioSegment[]; localUrl?: string; cached?: boolean; }
+export interface QuranSurahIntro { surahNumber: number; surahName: string; text: string; shortText: string; }
+export interface QuranAyahTheme { theme: string; surahNumber: number; ayahFrom: number; ayahTo: number; keywords: string[]; totalAyahs: number; }
+export interface QuranTopic { topicId: number; name: string; arabicName: string; parentId: number | null; thematicParentId: number | null; ontologyParentId: number | null; description: string; wikiLink: string; thematic: boolean; ontology: boolean; ayahs: { surah: number; ayah: number }[]; relatedTopics: number[]; }
 

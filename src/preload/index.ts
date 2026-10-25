@@ -3,6 +3,10 @@ import type { SunnahAPI } from '../shared/types/sunnah';
 import type { QuranAPI } from '../shared/types/quran';
 
 const quran: QuranAPI = {
+  signIn: () => ipcRenderer.invoke('quran:sign-in'),
+  inspectAyah: query => ipcRenderer.invoke('quran:inspect-ayah', query),
+  downloadBatch: ids => ipcRenderer.invoke('quran:download-batch', ids),
+  downloadRecitation: query => ipcRenderer.invoke('quran:download-recitation', query),
   copyText: text => ipcRenderer.invoke('quran:copy', text),
   readerCatalog: () => ipcRenderer.invoke('quran:reader-catalog'),
   read: query => ipcRenderer.invoke('quran:read', query),
@@ -15,6 +19,10 @@ const quran: QuranAPI = {
   cacheAudio: query => ipcRenderer.invoke('quran:cache-audio', query),
   surahAudioStatus: query => ipcRenderer.invoke('quran:surah-audio-status', query),
   downloadSurahAudio: query => ipcRenderer.invoke('quran:download-surah-audio', query),
+  surahIntro: query => ipcRenderer.invoke('quran:surah-intro', query),
+  ayahThemes: query => ipcRenderer.invoke('quran:ayah-themes', query),
+  ayahTopics: query => ipcRenderer.invoke('quran:ayah-topics', query),
+  searchTopics: query => ipcRenderer.invoke('quran:search-topics', query),
   setup: ids => ipcRenderer.invoke('quran:setup', ids),
   library: query => ipcRenderer.invoke('quran:library', query),
   refresh: category => ipcRenderer.invoke('quran:refresh', category),

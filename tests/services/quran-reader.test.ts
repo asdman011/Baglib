@@ -10,7 +10,8 @@ import { presetResource, readerPresets } from '../../src/main/services/quran/rea
 import type { QuranPack } from '../../src/shared/types/quran';
 
 test('inline footnotes decode exactly once without executing HTML', () => {
-  assert.deepEqual(inlineTranslation(JSON.stringify('Meaning [[first note]] and [[second note]].')), { text: 'Meaning  and .', notes: ['first note', 'second note'] });
+  assert.deepEqual(inlineTranslation(JSON.stringify('Meaning [[first note]] and [[second note]].')), { text: 'Meaning  and .', notes: ['first note', 'second note'], anchors: [{ offset: 8, note: 1 }, { offset: 13, note: 2 }] });
+  assert.deepEqual(inlineTranslation(JSON.stringify('Allāh[[one]][[two]]!')), { text: 'Allāh!', notes: ['one', 'two'], anchors: [{ offset: 5, note: 1 }, { offset: 5, note: 2 }] });
   assert.throws(() => inlineTranslation('plain text'));
   assert.throws(() => inlineTranslation('{"unexpected":true}'));
 });
@@ -50,11 +51,15 @@ test('reader uses immutable source packs, indexed search, explicit gaps and grou
     reader = new QuranReader(root, packs);
     assert.equal(reader.catalog().sources.length, 5);
     const passage = await reader.read({ script: script.id, surah: 1, from: 1, translation: translation.id, meanings: meanings.id });
+    const inspected = await reader.inspectAyah({ script: script.id, surah: 1, ayah: 1 });
+    assert.equal(inspected.canonical, 'بِسۡمِ ٱللَّهِ ١');
+    assert.equal(inspected.imlaey, null);
+    await assert.rejects(reader.inspectAyah({ script: script.id, surah: 1, ayah: 99 }));
     assert.equal(passage.ayahs.length, 2);
     assert.equal(passage.ayahs[0].words[2].marker, true);
     assert.equal(passage.ayahs[0].words[0].meaning, 'In the name');
     assert.equal(passage.ayahs[0].words[1].meaning, undefined);
-    assert.deepEqual(passage.ayahs[0].translation, { text: 'Meaning ', notes: ['note'] });
+    assert.deepEqual(passage.ayahs[0].translation, { text: 'Meaning ', notes: ['note'], anchors: [{ offset: 8, note: 1 }] });
     assert.equal((await reader.search(script.id, 'بسم الله'))[0].ayah, 1);
     assert.equal((await reader.search(script.id, 'الحمد'))[0].ayah, 2);
     assert.equal((await reader.search(script.id, '" OR *')) .length, 0);
@@ -220,3 +225,99 @@ test('reader manages recitation packs and serves audio URLs with segment timings
   }
 });
 
+test('reader indexes and queries surah intros, ayah themes, and topic concepts', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'baglib-quran-semantic-'));
+  const packs: QuranPack[] = [];
+  const add = async (resource: string, sql: string) => {
+    const preset = readerPresets.find(value => value.id === resource)!;
+    const id = randomUUID();
+    await mkdir(path.join(root, 'packs', id), { recursive: true });
+    const filename = path.join(root, 'packs', id, '0.sqlite');
+    const database = new Database(filename);
+    database.exec(sql);
+    database.close();
+    const digest = createHash('sha256').update(await readFile(filename)).digest('hex');
+    const pack: QuranPack = { id, digest, resource: presetResource(resource), bytes: 1, files: [{ name: preset.filename.replace(/\.zip$/, ''), bytes: 1, type: 'sqlite' }], installedAt: '', capability: 'stored' };
+    packs.push(pack);
+    return { id, filename, digest };
+  };
+
+  let reader: QuranReader | undefined;
+  try {
+    const surahInfo = await add('surah-info/3', `
+      CREATE TABLE surah_infos (surah_number INTEGER PRIMARY KEY, surah_name TEXT, text TEXT, short_text TEXT);
+      INSERT INTO surah_infos VALUES (1, 'Al-Fatihah', 'Full overview of Al-Fatihah', 'Opening chapter summary');
+    `);
+    const ayahTheme = await add('ayah-theme/62', `
+      CREATE TABLE themes (theme TEXT, surah_number INTEGER, ayah_from INTEGER, ayah_to INTEGER, keywords TEXT, total_ayahs INTEGER);
+      INSERT INTO themes VALUES ('Warning to disbelievers', 2, 6, 7, 'warning, disbelief', 2), ('Signs of hypocrites', 2, 8, 16, '', 9);
+    `);
+    const ayahTopics = await add('ayah-topics/45', `
+      CREATE TABLE topics (topic_id INTEGER PRIMARY KEY, name TEXT, arabic_name TEXT, parent_id INTEGER, thematic_parent_id INTEGER, ontology_parent_id INTEGER, description TEXT, wiki_link TEXT, thematic INTEGER, ontology INTEGER, ayahs TEXT, related_topics TEXT);
+      INSERT INTO topics VALUES
+        (1, 'Allah', 'الله', NULL, 1837, NULL, '<b>Allah</b> description', 'wiki/Allah', 1, 1, '1:1, 1:2, 2:7', '2'),
+        (2, 'Day of Resurrection', 'يوم القيامة', NULL, NULL, 251, 'Resurrection desc', 'wiki/Judgment', 0, 1, '2:7, 2:85', '1');
+    `);
+
+    reader = new QuranReader(root, packs);
+
+    // 1. Surah Intro
+    const intro1 = await reader.surahIntro(surahInfo.id, 1);
+    assert.ok(intro1);
+    assert.equal(intro1.surahNumber, 1);
+    assert.equal(intro1.surahName, 'Al-Fatihah');
+    assert.equal(intro1.text, 'Full overview of Al-Fatihah');
+    assert.equal(intro1.shortText, 'Opening chapter summary');
+
+    const intro2 = await reader.surahIntro(undefined, 2);
+    assert.equal(intro2, null);
+
+    // 2. Ayah Themes
+    const themesForAyah = await reader.ayahThemes(ayahTheme.id, 2, 6);
+    assert.equal(themesForAyah.length, 1);
+    assert.equal(themesForAyah[0].theme, 'Warning to disbelievers');
+    assert.deepEqual(themesForAyah[0].keywords, ['warning', 'disbelief']);
+    assert.equal(themesForAyah[0].totalAyahs, 2);
+
+    const allSurahThemes = await reader.ayahThemes(undefined, 2);
+    assert.equal(allSurahThemes.length, 2);
+    assert.equal(allSurahThemes[1].theme, 'Signs of hypocrites');
+
+    // 3. Ayah Topics
+    const topicsFor2_7 = await reader.ayahTopics(ayahTopics.id, 2, 7);
+    assert.equal(topicsFor2_7.length, 2);
+    assert.equal(topicsFor2_7[0].name, 'Allah');
+    assert.equal(topicsFor2_7[0].arabicName, 'الله');
+    assert.deepEqual(topicsFor2_7[0].relatedTopics, [2]);
+    assert.equal(topicsFor2_7[1].name, 'Day of Resurrection');
+    assert.deepEqual(topicsFor2_7[1].ayahs, [{ surah: 2, ayah: 7 }, { surah: 2, ayah: 85 }]);
+
+    const topicsFor1_1 = await reader.ayahTopics(undefined, 1, 1);
+    assert.equal(topicsFor1_1.length, 1);
+    assert.equal(topicsFor1_1[0].name, 'Allah');
+
+    // 4. Topic Search
+    const searchAllah = await reader.searchTopics(undefined, 'Allah');
+    assert.ok(searchAllah.length >= 1);
+    assert.equal(searchAllah[0].name, 'Allah');
+
+    const searchArabic = await reader.searchTopics(undefined, 'القيامة');
+    assert.ok(searchArabic.length >= 1);
+    assert.equal(searchArabic[0].name, 'Day of Resurrection');
+
+    // 5. Validation boundaries
+    await assert.rejects(reader.surahIntro(undefined, 0));
+    await assert.rejects(reader.surahIntro(undefined, 115));
+    await assert.rejects(reader.ayahThemes(undefined, 0));
+    await assert.rejects(reader.ayahThemes(undefined, 115));
+    await assert.rejects(reader.ayahThemes(undefined, 2, 0));
+    await assert.rejects(reader.ayahThemes(undefined, 2, 301));
+    await assert.rejects(reader.ayahTopics(undefined, 0, 1));
+    await assert.rejects(reader.ayahTopics(undefined, 115, 1));
+    await assert.rejects(reader.ayahTopics(undefined, 1, 0));
+    await assert.rejects(reader.ayahTopics(undefined, 1, 301));
+  } finally {
+    reader?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
