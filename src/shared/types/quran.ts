@@ -63,6 +63,12 @@ export interface QuranLibrary {
   catalogStatus: 'cached-partial' | 'source-listing';
 }
 export interface QuranAPI {
+  copyText: (text: string) => Promise<QuranResult<null>>;
+  readerCatalog: () => Promise<QuranResult<QuranReaderCatalog>>;
+  read: (query: QuranReadQuery) => Promise<QuranResult<QuranPassage>>;
+  searchAyahs: (query: { script: string; text: string }) => Promise<QuranResult<QuranSearchHit[]>>;
+  commentary: (query: { script: string; pack: string; surah: number; ayah: number }) => Promise<QuranResult<QuranCommentary>>;
+  setup: (ids: string[]) => Promise<QuranResult<{ installed: string[]; missing: string[]; failed: string[] } | null>>;
   library: (query?: { category?: QuranCategory; search?: string; offset?: number; view?: 'all' | 'installed' | 'downloads' }) => Promise<QuranResult<QuranLibrary>>;
   refresh: (category: QuranCategory) => Promise<QuranResult<null>>;
   download: (id: string) => Promise<QuranResult<string>>;
@@ -72,3 +78,13 @@ export interface QuranAPI {
   chooseDirectory: () => Promise<QuranResult<null>>;
   onChanged: (listener: () => void) => () => void;
 }
+
+export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs';
+export interface QuranReaderSource { id: string; title: string; kind: QuranReaderKind; profile: 'hafs' | 'warsh'; }
+export interface QuranReaderCatalog { sources: QuranReaderSource[]; presets: { id: string; title: string; kind: QuranReaderKind; installed: boolean }[]; }
+export interface QuranReadQuery { script: string; surah: number; from: number; translation?: string; meanings?: string; transliteration?: string; }
+export interface QuranRichNode { tag: 'text' | 'p' | 'div' | 'br' | 'b' | 'i' | 'u' | 'sup'; text?: string; children?: QuranRichNode[]; }
+export interface QuranAyah { number: number; words: { position: number; text: string; marker: boolean; meaning?: string; transliteration?: string }[]; translation?: { text: string; notes: string[] }; }
+export interface QuranPassage { profile: 'hafs' | 'warsh'; surah: number; surahs: { number: number; count: number; arabic?: string; name?: string }[]; basmala?: string; ayahs: QuranAyah[]; next: number | null; }
+export interface QuranSearchHit { surah: number; ayah: number; text: string; }
+export interface QuranCommentary { from: string; to: string; nodes: QuranRichNode[]; }

@@ -1,9 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, session, utilityProcess } from 'electron';
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, session, utilityProcess } from 'electron';
+import { mkdir, readFile, writeFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { QuranLibraryService, type QuranInstaller } from '../services/quran/quran-library.service';
 import { category, QUL_ORIGIN, validateSourceUrl } from '../services/quran/qul-catalog';
 import type { QuranAPI, QuranError, QuranLibrary, QuranPack, QuranResult } from '../../shared/types/quran';
+import { QuranReaderProcess } from '../services/quran/quran-reader-process';
+import { presetResource, readerPreset, readerPresets } from '../services/quran/reader-resources';
 
 const allowedDownloadOrigins = new Set([QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
 
@@ -28,8 +30,10 @@ export const runQuranInstaller: QuranInstaller = (request, signal) => new Promis
 });
 
 export function registerQuranIpc(): void {
+  const reader = new QuranReaderProcess();
   let service: QuranLibraryService | undefined;
   let initializing: Promise<QuranLibraryService> | undefined;
+  let settingUp = false;
   const windows = new Map<string, BrowserWindow>();
   const downloads = new Map<string, Electron.DownloadItem>();
   const changed = () => { for (const window of BrowserWindow.getAllWindows()) if (window.webContents.getURL().startsWith('file:') || window.webContents.getURL().startsWith('http://localhost:3000')) window.webContents.send('quran:changed'); };
@@ -56,6 +60,7 @@ export function registerQuranIpc(): void {
   const createService = async (root: string) => {
     const instance = new QuranLibraryService(root, fetchHtml, runQuranInstaller, changed);
     await instance.initialize();
+    instance.store.saveResources(readerPresets.filter(preset => !instance.store.resource(preset.id)).map(preset => presetResource(preset.id)));
     return instance;
   };
   const getService = () => initializing ??= (async () => {
@@ -76,6 +81,55 @@ export function registerQuranIpc(): void {
     }
   };
   const closeWindow = (id: string) => { const window = windows.get(id); if (window && !window.isDestroyed()) window.destroy(); windows.delete(id); };
+  const readRequest = async <Value>(action: Parameters<QuranReaderProcess['request']>[2]) => {
+    const instance = await getService();
+    const latest = new Map<string, QuranPack>();
+    for (const pack of instance.store.packs()) if (readerPreset(pack)) latest.set(pack.resource.id, pack);
+    return reader.request<Value>(instance.root, [...latest.values()], action);
+  };
+  ipcMain.handle('quran:reader-catalog', event => result(event, () => readRequest({ action: 'catalog' })));
+  ipcMain.handle('quran:copy', (event, text: string) => result(event, async () => {
+    if (typeof text !== 'string' || !text.trim() || text.length > 200000) throw new Error('invalid-resource');
+    clipboard.writeText(text);
+    return null;
+  }));
+  ipcMain.handle('quran:read', (event, query) => result(event, async () => {
+    if (!query || typeof query.script !== 'string' || ['translation', 'meanings', 'transliteration'].some(key => query[key] !== undefined && typeof query[key] !== 'string')) throw new Error('invalid-resource');
+    return readRequest({ action: 'read', query });
+  }));
+  ipcMain.handle('quran:search-ayahs', (event, query) => result(event, async () => {
+    if (!query || typeof query.script !== 'string' || typeof query.text !== 'string' || query.text.length > 200) throw new Error('invalid-resource');
+    return readRequest({ action: 'search', query });
+  }));
+  ipcMain.handle('quran:commentary', (event, query) => result(event, async () => {
+    if (!query || typeof query.script !== 'string' || typeof query.pack !== 'string') throw new Error('invalid-resource');
+    return readRequest({ action: 'commentary', query });
+  }));
+  ipcMain.handle('quran:setup', (event, ids: string[]) => result(event, async () => {
+    if (!Array.isArray(ids) || !ids.length || ids.length > readerPresets.length || ids.some(id => !readerPresets.some(preset => preset.id === id)) || new Set(ids).size !== ids.length) throw new Error('invalid-resource');
+    const instance = await getService();
+    if (instance.busy || settingUp) throw new Error('busy');
+    settingUp = true;
+    try {
+    const selection = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+    if (selection.canceled || !selection.filePaths[0]) return null;
+    const installed: string[] = [], missing: string[] = [], failed: string[] = [];
+    for (const id of ids) {
+      if (instance.store.packs().some(pack => readerPreset(pack)?.id === id)) { installed.push(id); continue; }
+      const preset = readerPresets.find(value => value.id === id)!;
+      let filename: string | undefined;
+      for (const candidate of [path.join(selection.filePaths[0], preset.filename), path.join(selection.filePaths[0], preset.relative, preset.filename)]) {
+        try { if ((await stat(candidate)).isFile()) { filename = candidate; break; } } catch {}
+      }
+      if (!filename) { missing.push(id); continue; }
+      const job = instance.createJob(id);
+      await instance.installFile(job, filename);
+      const state = instance.store.jobs().find(value => value.id === job.id);
+      if (state?.state === 'complete') installed.push(id); else failed.push(id);
+    }
+    return { installed, missing, failed };
+    } finally { settingUp = false; }
+  }));
   ipcMain.handle('quran:library', (event, query: Parameters<QuranAPI['library']>[0]) => result(event, async () => {
     if (query?.category) category(query.category);
     if (query?.view !== undefined && !['all', 'installed', 'downloads'].includes(query.view)) throw new Error('invalid-resource');
@@ -162,15 +216,16 @@ export function registerQuranIpc(): void {
     closeWindow(id);
     return null;
   }));
-  ipcMain.handle('quran:remove', (event, id: string) => result(event, async () => { await (await getService()).remove(id); return null; }));
+  ipcMain.handle('quran:remove', (event, id: string) => result(event, async () => { if (settingUp) throw new Error('busy'); reader.close(); await (await getService()).remove(id); return null; }));
   ipcMain.handle('quran:directory', event => result(event, async () => {
     const instance = await getService();
-    if (instance.busy) throw new Error('busy');
+    if (instance.busy || settingUp) throw new Error('busy');
     const selection = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
     if (selection.canceled || !selection.filePaths[0]) return null;
     const directory = path.join(selection.filePaths[0], 'Baglib Quran');
     if (directory === instance.root) return null;
     const next = await createService(directory);
+    reader.close();
     await mkdir(app.getPath('userData'), { recursive: true });
     await writeFile(path.join(app.getPath('userData'), 'quran-location.json'), JSON.stringify({ directory }));
     await instance.dispose();
@@ -180,6 +235,7 @@ export function registerQuranIpc(): void {
     return null;
   }));
   app.once('before-quit', () => {
+    reader.close();
     for (const item of downloads.values()) item.cancel();
     for (const id of windows.keys()) closeWindow(id);
     void service?.dispose();

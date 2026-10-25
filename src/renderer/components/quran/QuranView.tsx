@@ -5,6 +5,7 @@ import { BookOpen, Download, FolderOpen, RefreshCw, Search, ShieldCheck, Trash2,
 import { QURAN_CATEGORIES, type QuranCategory, type QuranError, type QuranLibrary, type QuranResource } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { QuranReaderView } from './QuranReaderView';
 
 export const quranCategoryKeys: Record<QuranCategory, TranslationKey> = {
   'quran-script': 'quranCatScript', 'mushaf-layout': 'quranCatLayout', font: 'quranCatFont', 'quran-metadata': 'quranCatMetadata', translation: 'quranCatTranslation', tafsir: 'quranCatTafsir', recitation: 'quranCatRecitation', transliteration: 'quranCatTransliteration', 'surah-info': 'quranCatSurah', 'ayah-topics': 'quranCatTopics', morphology: 'quranCatMorphology', mutashabihat: 'quranCatMutashabihat', 'similar-ayah': 'quranCatSimilar', 'ayah-theme': 'quranCatTheme',
@@ -55,7 +56,7 @@ export function QuranLibraryPanel({ library, t, lang, tab, onDownload, onImport,
   </div>;
 }
 
-export function QuranView() {
+export function QuranResourceView() {
   const { t, lang, dir } = useWorkspace();
   const [library, setLibrary] = useState<QuranLibrary>(empty);
   const [tab, setTab] = useState<Tab>('all');
@@ -110,4 +111,16 @@ export function QuranView() {
       <p className="text-xs text-muted break-all leading-relaxed">{t('quranLocationHint')} <bdi>{library.directory}</bdi></p>
     </div>
   </section>;
+}
+
+export function QuranView() {
+  const { t, dir } = useWorkspace();
+  const [view, setView] = useState<'reader' | 'resources'>('reader');
+  return <div dir={dir} className="flex-1 min-h-0 min-w-0 flex flex-col">
+    <nav className="flex flex-wrap gap-2 px-4 py-3 border-b border-subtle bg-surface" aria-label={t('navQuran')}>
+      {(['reader', 'resources'] as const).map(value => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)} className={`rounded-xl px-4 py-2 text-sm ${view === value ? 'bg-pale-sky-600 text-white' : 'border border-subtle'}`}>{t(value === 'reader' ? 'quranRead' : 'quranResources')}</button>)}
+    </nav>
+    <div className={`${view === 'reader' ? 'flex' : 'hidden'} flex-1 min-h-0 min-w-0`}><QuranReaderView /></div>
+    <div className={`${view === 'resources' ? 'flex' : 'hidden'} flex-1 min-h-0 min-w-0`}><QuranResourceView /></div>
+  </div>;
 }

@@ -3,6 +3,12 @@ import type { SunnahAPI } from '../shared/types/sunnah';
 import type { QuranAPI } from '../shared/types/quran';
 
 const quran: QuranAPI = {
+  copyText: text => ipcRenderer.invoke('quran:copy', text),
+  readerCatalog: () => ipcRenderer.invoke('quran:reader-catalog'),
+  read: query => ipcRenderer.invoke('quran:read', query),
+  searchAyahs: query => ipcRenderer.invoke('quran:search-ayahs', query),
+  commentary: query => ipcRenderer.invoke('quran:commentary', query),
+  setup: ids => ipcRenderer.invoke('quran:setup', ids),
   library: query => ipcRenderer.invoke('quran:library', query),
   refresh: category => ipcRenderer.invoke('quran:refresh', category),
   download: id => ipcRenderer.invoke('quran:download', id),

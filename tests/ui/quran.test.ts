@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parseHTML } from 'linkedom';
-import { QuranView, QuranLibraryPanel, quranCategoryKeys } from '../../src/renderer/components/quran/QuranView';
+import { QuranResourceView, QuranLibraryPanel, quranCategoryKeys } from '../../src/renderer/components/quran/QuranView';
 import { NavigationRail } from '../../src/renderer/components/layout/NavigationRail';
 import { WorkspaceProvider, useWorkspace } from '../../src/renderer/components/context/WorkspaceContext';
 import { translations, type TranslationKey } from '../../src/renderer/translations';
@@ -56,7 +56,7 @@ for (const lang of ['ar', 'en'] as const) {
         importFile: async () => { imports++; return { ok: true, data: null }; },
       },
     } });
-    function Harness() { workspace = useWorkspace(); return createElement('div', null, createElement(NavigationRail), createElement(QuranView)); }
+    function Harness() { workspace = useWorkspace(); return createElement('div', null, createElement(NavigationRail), createElement(QuranResourceView)); }
     const root = createRoot(window.document.getElementById('root')!);
     const click = async (key: TranslationKey) => {
       const button = [...window.document.querySelectorAll('button')].find(node => node.textContent?.trim() === translations[lang][key]);
