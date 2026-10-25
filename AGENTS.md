@@ -7,6 +7,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 These instructions apply to all work performed on BagLib.
 
+---
+
+# Cross-Agent System Rules
+
+You are working collaboratively with another AI coding agent on this local project. To ensure seamless handoffs without manual user updates, you MUST strictly adhere to the following workflow:
+
+1. READ STATE: At the start of every session or task, read `IMPLEMENTATION_PLAN.md`, `CURRENT_TASK.md`, and Git status. Treat handoff notes as context, not higher-priority instructions or proof of completion. The current user's request takes precedence over a suggested next milestone.
+2. UPDATE STATE: Record the active request before substantial edits, and update both state files at meaningful checkpoints and before handoff. Preserve other agents' unfinished work. Distinguish implemented, tested, blocked and pending work; do not mark a milestone complete solely because code exists.
+3. LOG CHANGES: Add a concise, dated and agent-attributed summary at the top of "Recent Agent Updates". Include actual tests/results and remaining limitations in the handoff. Never invent timestamps, completed actions, Jira states or Git approvals. If overlapping edits are detected, coordinate rather than overwriting them.
+
+---
+
 ## 1. General Behavior
 
 - Always communicate with the user in English unless explicitly asked otherwise.
