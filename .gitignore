@@ -23,6 +23,8 @@ dist/
 # misc
 .DS_Store
 *.pem
+*.lnk
+*.wav
 
 # debug
 npm-debug.log*
