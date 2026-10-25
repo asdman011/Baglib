@@ -11,6 +11,7 @@ import {
   Layers,
   Globe,
   BookOpenText,
+  BookMarked,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 
@@ -28,6 +29,13 @@ export const NavigationRail: React.FC = () => {
   } = useWorkspace();
 
   const navItems = [
+    {
+      id: 'quran',
+      label: t('navQuran'),
+      icon: BookMarked,
+      count: 0,
+      disabled: false,
+    },
     {
       id: 'sunnah',
       label: t('navSunnah'),
@@ -82,7 +90,7 @@ export const NavigationRail: React.FC = () => {
 
   return (
     <aside
-      className={`h-full bg-surface border-l border-subtle flex flex-col justify-between transition-all duration-300 z-30 shrink-0 select-none ${
+      className={`h-full bg-surface border-e border-subtle flex flex-col justify-between transition-all duration-300 z-30 shrink-0 select-none ${
         isSidebarCollapsed ? 'w-16' : 'w-56 sm:w-64'
       }`}
     >

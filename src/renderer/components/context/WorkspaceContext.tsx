@@ -11,7 +11,7 @@ export type LayoutDirection = 'rtl' | 'ltr';
 export type ThemeMode = 'dark' | 'light';
 export type LanguageMode = 'ar' | 'en';
 export type SplitOrientationMode = 'vertical' | 'horizontal' | 'none' | 'full_notes';
-export type WorkspaceViewMode = 'sunnah' | 'library' | 'categories' | 'reader' | 'notes' | 'settings';
+export type WorkspaceViewMode = 'quran' | 'sunnah' | 'library' | 'categories' | 'reader' | 'notes' | 'settings';
 
 export interface PageNote {
   id: string;
