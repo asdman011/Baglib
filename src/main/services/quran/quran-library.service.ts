@@ -4,12 +4,14 @@ import path from 'node:path';
 import type { QuranCategory, QuranJob, QuranError, QuranPack, QuranResource } from '../../../shared/types/quran';
 import { QuranStore } from './quran-store';
 import { parseResourceListing, parseResourceDetails } from './qul-catalog';
+import { canonicalResourceId } from './reader-resources';
 
 export type QuranInstaller = (request: { root: string; id: string; archive: string; resource: QuranResource }, signal: AbortSignal) => Promise<QuranPack>;
 
 export class QuranLibraryService {
   readonly store: QuranStore;
   private pending = Promise.resolve();
+  private transfers = Promise.resolve();
   private controllers = new Map<string, AbortController>();
   private disposed = false;
   constructor(readonly root: string, private readonly fetchHtml: (path: string) => Promise<string>, private readonly install: QuranInstaller, private readonly changed: () => void = () => {}) {
@@ -44,22 +46,53 @@ export class QuranLibraryService {
     this.store.saveResources([result.resource]);
     return result;
   }
-  createJob(id: string): QuranJob {
+  createJob(id: string, queued = false): QuranJob {
     if (this.disposed) throw new Error('unavailable');
     const resource = this.store.resource(id);
     if (!resource) throw new Error('invalid-resource');
     if (resource.restricted) throw new Error('restricted');
-    if (this.store.jobs().filter(job => ['awaiting-download', 'downloading', 'installing'].includes(job.state)).length >= 3) throw new Error('busy');
-    const job: QuranJob = { id: randomUUID(), resourceId: id, title: resource.title, state: 'awaiting-download', received: 0, total: 0, error: null, updatedAt: new Date().toISOString() };
+    if ((!queued && this.store.jobs().filter(job => ['awaiting-download', 'downloading', 'installing'].includes(job.state)).length >= 3) || this.controllers.size >= 500) throw new Error('busy');
+    const job: QuranJob = { id: randomUUID(), resourceId: id, title: resource.title, state: queued ? 'queued' : 'awaiting-download', received: 0, total: 0, error: null, updatedAt: new Date().toISOString() };
     this.controllers.set(job.id, new AbortController());
     this.update(job);
     return job;
+  }
+  enqueue(ids: string[], transfer: (job: QuranJob, signal: AbortSignal) => Promise<string | null>, keepInstalled = true): string[] {
+    if (!Array.isArray(ids) || !ids.length || ids.length > 500 || ids.some(id => typeof id !== 'string' || !this.store.resource(id))) throw new Error('invalid-resource');
+    const selected = [...new Set(ids)].filter(id => !keepInstalled || !this.store.packs().some(pack => canonicalResourceId(pack.resource.id) === id));
+    const active = this.store.jobs().filter(job => ['queued', 'awaiting-download', 'downloading', 'installing'].includes(job.state));
+    const pending = selected.filter(id => !active.some(job => job.resourceId === id));
+    if (this.controllers.size + pending.length > 500) throw new Error('busy');
+    if (pending.some(id => this.store.resource(id)?.restricted)) throw new Error('restricted');
+    const jobs = pending.map(id => this.createJob(id, true));
+    for (const job of jobs) {
+      const controller = this.controllers.get(job.id)!;
+      this.transfers = this.transfers.then(async () => {
+        if (this.disposed || controller.signal.aborted) return;
+        try {
+          this.update({ ...job, state: 'downloading' });
+          const filename = await transfer(job, controller.signal);
+          if (controller.signal.aborted || this.disposed) return;
+          if (filename) await this.installFile(job, filename);
+          else this.update({ ...(this.store.jobs().find(value => value.id === job.id) || job), state: 'complete' });
+        } catch (cause) {
+          if (!this.disposed && !controller.signal.aborted) {
+            const message = cause instanceof Error ? cause.message : '';
+            this.fail(job, ['restricted', 'unsupported-format', 'invalid-package', 'invalid-resource'].includes(message) ? message as QuranError : 'network');
+          }
+        } finally {
+          this.controllers.delete(job.id);
+          await rm(path.join(this.root, 'downloads', `${job.id}.download`), { force: true });
+        }
+      }).catch(() => {});
+    }
+    return [...active.filter(job => selected.includes(job.resourceId)).map(job => job.id), ...jobs.map(job => job.id)];
   }
   update(job: QuranJob): void {
     if (this.disposed) return;
     const previous = this.store.jobs().find(value => value.id === job.id);
     if (previous && ['complete', 'failed', 'cancelled'].includes(previous.state)) return;
-    this.store.saveJob({ ...job, updatedAt: new Date().toISOString() });
+    this.store.saveJob({ ...previous, ...job, updatedAt: new Date().toISOString() });
     this.changed();
   }
   async installFile(job: QuranJob, filename: string): Promise<void> {
@@ -95,7 +128,7 @@ export class QuranLibraryService {
   fail(job: QuranJob, error: QuranError): void {
     this.controllers.get(job.id)?.abort();
     this.controllers.delete(job.id);
-    this.update({ ...job, state: error === 'cancelled' ? 'cancelled' : 'failed', error });
+    this.update({ ...(this.store.jobs().find(value => value.id === job.id) || job), state: error === 'cancelled' ? 'cancelled' : 'failed', error });
   }
   cancel(id: string): void {
     const job = this.store.jobs().find(item => item.id === id);
@@ -115,6 +148,7 @@ export class QuranLibraryService {
     this.disposed = true;
     for (const controller of this.controllers.values()) controller.abort();
     this.controllers.clear();
+    await this.transfers;
     await this.pending;
     this.store.close();
   }
