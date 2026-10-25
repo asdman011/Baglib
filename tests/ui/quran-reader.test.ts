@@ -8,19 +8,20 @@ import { QuranAyahInspector } from '../../src/renderer/components/quran/QuranAya
 import { QuranMushafView } from '../../src/renderer/components/quran/QuranMushafView';
 import { QuranSurahIntroCard } from '../../src/renderer/components/quran/QuranSurahIntroCard';
 import { QuranTopicDrawer } from '../../src/renderer/components/quran/QuranTopicDrawer';
+import { QuranSimilarAyahsDrawer } from '../../src/renderer/components/quran/QuranSimilarAyahsDrawer';
 import { translations, type TranslationKey } from '../../src/renderer/translations';
-import type { QuranAyahTheme, QuranMushafPage, QuranPassage, QuranSurahIntro, QuranTopic } from '../../src/shared/types/quran';
+import type { QuranAyahTheme, QuranMushafPage, QuranPassage, QuranSimilarAyah, QuranSurahIntro, QuranTopic } from '../../src/shared/types/quran';
 
 const passage: QuranPassage = { profile: 'hafs', surah: 1, surahs: [{ number: 1, count: 7 }], next: null, ayahs: [{ number: 1, words: [{ position: 1, text: 'بِسۡمِ', marker: false, meaning: 'In the name' }, { position: 2, text: '١', marker: true }], translation: { text: 'Meaning <script>not executed</script>', notes: ['A source note'] } }] };
 for (const lang of ['ar', 'en'] as const) {
   test(`shared Ayah Inspector exposes both canonical forms and a start-side drawer in ${lang}`, () => {
     const translate = (key: TranslationKey) => translations[lang][key];
-    const html = renderToStaticMarkup(createElement(QuranAyahInspector, { reference: { surah: 1, ayah: 1 }, details: { surah: 1, ayah: 1, profile: 'hafs', canonical: 'بِسۡمِ ٱللَّهِ', imlaey: 'بسم الله' }, surahName: 'الفاتحة', error: false, t: translate, dir: lang === 'ar' ? 'rtl' : 'ltr', onClose() {}, onCopy() {}, onStudy() {} }));
+    const html = renderToStaticMarkup(createElement(QuranAyahInspector, { reference: { surah: 1, ayah: 1 }, details: { surah: 1, ayah: 1, profile: 'hafs', canonical: 'بِسۡمِ ٱللَّهِ', imlaey: 'بسم الله' }, surahName: 'الفاتحة', error: false, t: translate, dir: lang === 'ar' ? 'rtl' : 'ltr', onClose() {}, onCopy() {}, onStudy() {}, onSimilar() {} }));
     const { document } = parseHTML(html);
     assert.ok(document.querySelector('[role=dialog]')?.classList.contains('start-0'));
     assert.ok(document.querySelector('[role=dialog]')?.textContent.includes('بسم الله'));
     assert.ok(document.querySelector('[role=dialog]')?.textContent.includes('بِسۡمِ ٱللَّهِ'));
-    for (const key of ['quranCopyCanonical', 'quranCopyImlaey', 'quranOpenInStudyReader'] as const) assert.ok(html.includes(translations[lang][key]));
+    for (const key of ['quranCopyCanonical', 'quranCopyImlaey', 'quranOpenInStudyReader', 'quranSimilarAyahs'] as const) assert.ok(html.includes(translations[lang][key]));
     assert.equal(document.querySelector('[role=dialog]')?.getAttribute('aria-modal'), 'true');
   });
   test(`Quran passage preserves Arabic and renders safe English/tafsir content in ${lang}`, () => {
@@ -234,6 +235,54 @@ for (const lang of ['ar', 'en'] as const) {
     assert.ok(html.includes(translations[lang].quranTheme));
     assert.ok(html.includes('Opening of the book'));
     assert.ok(html.includes(translations[lang].quranTopics));
+  });
+
+  test(`QuranPassageView displays similar ayahs button when onOpenSimilar is provided in ${lang}`, () => {
+    const translate = (key: TranslationKey, params?: Record<string, string | number>) => Object.entries(params || {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), translations[lang][key]);
+    let openedAyah: number | null = null;
+    const html = renderToStaticMarkup(createElement(QuranPassageView, {
+      passage,
+      t: translate,
+      lang,
+      selected: null,
+      showWords: false,
+      commentary: null,
+      onOpenSimilar: (a) => { openedAyah = a; },
+      onCopy() {},
+    }));
+    assert.ok(html.includes(translations[lang].quranSimilarAyahs));
+  });
+
+  test(`QuranSimilarAyahsDrawer renders similar verses with score, coverage, and navigation in ${lang}`, () => {
+    const translate = (key: TranslationKey, params?: Record<string, string | number>) => Object.entries(params || {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), translations[lang][key]);
+    const similarItem: QuranSimilarAyah = {
+      verseKey: '1:1',
+      matchedAyahKey: '27:30',
+      surah: 27,
+      ayah: 30,
+      matchedWordsCount: 4,
+      coverage: 100,
+      score: 80,
+      matchWordsRange: [[1, 4]],
+    };
+    const html = renderToStaticMarkup(createElement(QuranSimilarAyahsDrawer, {
+      surah: 1,
+      ayah: 1,
+      similarAyahs: [similarItem],
+      surahName: lang === 'ar' ? 'الفاتحة' : 'Al-Fatihah',
+      surahs: [{ number: 27, count: 93, name: 'An-Naml', arabic: 'النمل' }],
+      t: translate,
+      lang,
+      dir: lang === 'ar' ? 'rtl' : 'ltr',
+      onClose() {},
+      onNavigateAyah() {},
+    }));
+    const { document } = parseHTML(html);
+    assert.ok(html.includes(translations[lang].quranSimilarAyahs));
+    assert.ok(html.includes('27:30'));
+    assert.ok(html.includes(translations[lang].quranJumpToSimilarAyah));
+    assert.ok(html.includes(translations[lang].quranSimilarDrawerClose));
+    assert.equal(document.querySelectorAll('button').length >= 2, true);
   });
 }
 

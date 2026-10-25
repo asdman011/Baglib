@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { QuranReader, inlineTranslation, richText } from '../../src/main/services/quran/quran-reader';
 import { presetResource, readerPresets } from '../../src/main/services/quran/reader-resources';
+import { HAFS_READING_PROFILE, WARSH_READING_PROFILE, isProfileCompatible, areLocationsCompatible } from '../../src/shared/types/quran';
 import type { QuranPack } from '../../src/shared/types/quran';
 
 test('inline footnotes decode exactly once without executing HTML', () => {
@@ -321,3 +322,192 @@ test('reader indexes and queries surah intros, ayah themes, and topic concepts',
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('reader supports similar ayahs (mutashabihat) query with score, coverage, and word ranges', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'baglib-quran-similar-'));
+  const packs: QuranPack[] = [];
+  const add = async (resource: string, sql: string) => {
+    const preset = readerPresets.find(value => value.id === resource)!;
+    const id = randomUUID();
+    await mkdir(path.join(root, 'packs', id), { recursive: true });
+    const filename = path.join(root, 'packs', id, '0.sqlite');
+    const database = new Database(filename);
+    database.exec(sql);
+    database.close();
+    const digest = createHash('sha256').update(await readFile(filename)).digest('hex');
+    const pack: QuranPack = { id, digest, resource: presetResource(resource), bytes: 1, files: [{ name: preset.filename.replace(/\.zip$/, ''), bytes: 1, type: 'sqlite' }], installedAt: '', capability: 'stored' };
+    packs.push(pack);
+    return { id, filename, digest };
+  };
+
+  let reader: QuranReader | undefined;
+  try {
+    const similarPack = await add('similar-ayah/74', `
+      CREATE TABLE similar_ayahs (
+        verse_key TEXT,
+        matched_ayah_key TEXT,
+        matched_words_count INTEGER,
+        coverage INTEGER,
+        score INTEGER,
+        match_words_range TEXT
+      );
+      INSERT INTO similar_ayahs VALUES
+        ('1:1', '27:30', 4, 100, 80, '[[1,4]]'),
+        ('1:1', '2:1', 1, 25, 30, '[[1,1]]'),
+        ('27:30', '1:1', 4, 30, 50, '[[5,8]]');
+    `);
+
+    reader = new QuranReader(root, packs);
+
+    // 1. Query for 1:1
+    const results1_1 = await reader.similarAyahs(similarPack.id, 1, 1);
+    assert.equal(results1_1.length, 2);
+    assert.equal(results1_1[0].verseKey, '1:1');
+    assert.equal(results1_1[0].matchedAyahKey, '27:30');
+    assert.equal(results1_1[0].surah, 27);
+    assert.equal(results1_1[0].ayah, 30);
+    assert.equal(results1_1[0].matchedWordsCount, 4);
+    assert.equal(results1_1[0].coverage, 100);
+    assert.equal(results1_1[0].score, 80);
+    assert.deepEqual(results1_1[0].matchWordsRange, [[1, 4]]);
+
+    assert.equal(results1_1[1].matchedAyahKey, '2:1');
+    assert.equal(results1_1[1].score, 30);
+
+    // 2. Query with default pack resolution
+    const resultsDefault = await reader.similarAyahs(undefined, 27, 30);
+    assert.equal(resultsDefault.length, 1);
+    assert.equal(resultsDefault[0].matchedAyahKey, '1:1');
+    assert.deepEqual(resultsDefault[0].matchWordsRange, [[5, 8]]);
+
+    // 3. Query for ayah with no similarities
+    const emptyResults = await reader.similarAyahs(undefined, 2, 2);
+    assert.deepEqual(emptyResults, []);
+
+    // 4. Validation boundaries
+    await assert.rejects(reader.similarAyahs(undefined, 0, 1));
+    await assert.rejects(reader.similarAyahs(undefined, 115, 1));
+    await assert.rejects(reader.similarAyahs(undefined, 1, 0));
+    await assert.rejects(reader.similarAyahs(undefined, 1, 301));
+  } finally {
+    reader?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reader enforces strict Qira\'at reading profile isolation and Madani-first numbering without cross-profile assumptions', async () => {
+  // 1. Verify profile contracts
+  assert.equal(HAFS_READING_PROFILE.key, 'hafs-kufi');
+  assert.equal(HAFS_READING_PROFILE.qiraah, "'asim");
+  assert.equal(HAFS_READING_PROFILE.riwayah, 'hafs');
+  assert.equal(HAFS_READING_PROFILE.tariq, 'shatibiyyah');
+  assert.equal(HAFS_READING_PROFILE.numbering, 'kufi');
+  assert.equal(HAFS_READING_PROFILE.totalVerses, 6236);
+  assert.equal(HAFS_READING_PROFILE.verified, true);
+
+  assert.equal(WARSH_READING_PROFILE.key, 'warsh-madani');
+  assert.equal(WARSH_READING_PROFILE.qiraah, "nafi'");
+  assert.equal(WARSH_READING_PROFILE.riwayah, 'warsh');
+  assert.equal(WARSH_READING_PROFILE.tariq, 'azraq');
+  assert.equal(WARSH_READING_PROFILE.numbering, 'madani-first');
+  assert.equal(WARSH_READING_PROFILE.totalVerses, 6214);
+  assert.equal(WARSH_READING_PROFILE.verified, true);
+
+  assert.ok(isProfileCompatible(HAFS_READING_PROFILE, HAFS_READING_PROFILE));
+  assert.ok(isProfileCompatible(WARSH_READING_PROFILE, WARSH_READING_PROFILE));
+  assert.equal(isProfileCompatible(HAFS_READING_PROFILE, WARSH_READING_PROFILE), false);
+
+  assert.ok(areLocationsCompatible({ profileKey: 'hafs-kufi', surah: 1, ayah: 1 }, { profileKey: 'hafs-kufi', surah: 1, ayah: 1 }));
+  assert.equal(areLocationsCompatible({ profileKey: 'hafs-kufi', surah: 1, ayah: 1 }, { profileKey: 'warsh-madani', surah: 1, ayah: 1 }), false);
+
+  // 2. Verify preset resource mapping
+  const hafsScriptRes = presetResource('quran-script/312');
+  assert.equal(hafsScriptRes.profile.key, 'hafs-kufi');
+  assert.equal(hafsScriptRes.profile.totalVerses, 6236);
+
+  const warshScriptRes = presetResource('quran-script/qpc-warsh-script-wbw');
+  assert.equal(warshScriptRes.profile.key, 'warsh-madani');
+  assert.equal(warshScriptRes.profile.totalVerses, 6214);
+
+  const warshLayoutRes = presetResource('mushaf-layout/warsh-svg');
+  assert.equal(warshLayoutRes.profile.key, 'warsh-madani');
+
+  // 3. Test runtime reading isolation with packs
+  const root = await mkdtemp(path.join(tmpdir(), 'baglib-quran-qiraat-'));
+  const packs: QuranPack[] = [];
+
+  const add = async (resource: string, sql: string) => {
+    const preset = readerPresets.find(value => value.id === resource)!;
+    const id = randomUUID();
+    await mkdir(path.join(root, 'packs', id), { recursive: true });
+    const filename = path.join(root, 'packs', id, '0.sqlite');
+    const database = new Database(filename);
+    database.exec(sql);
+    database.close();
+    const digest = createHash('sha256').update(await readFile(filename)).digest('hex');
+    const pack: QuranPack = { id, digest, resource: presetResource(resource), bytes: 1, files: [{ name: preset.filename.replace(/\.zip$/, ''), bytes: 1, type: 'sqlite' }], installedAt: '', capability: 'stored' };
+    packs.push(pack);
+    return { id, filename, digest };
+  };
+
+  let reader: QuranReader | undefined;
+  try {
+    // Hafs script: 1:1 is Basmala, 1:2 is Alhamdulillah
+    const hafsScript = await add('quran-script/312', `
+      CREATE TABLE words(id INTEGER, location TEXT, surah INTEGER, ayah INTEGER, word INTEGER, text TEXT);
+      INSERT INTO words VALUES 
+        (1, '1:1:1', 1, 1, 1, 'بِسۡمِ'), (2, '1:1:2', 1, 1, 2, 'ٱللَّهِ'), (3, '1:1:3', 1, 1, 3, '١'),
+        (4, '1:2:1', 1, 2, 1, 'ٱلۡحَمۡدُ'), (5, '1:2:2', 1, 2, 2, 'لِلَّهِ'), (6, '1:2:3', 1, 2, 3, '٢');
+    `);
+
+    // Warsh script (Madani first): 1:1 is Alhamdulillah (Basmala is unnumbered in Surah 1)
+    const warshScript = await add('quran-script/qpc-warsh-script-wbw', `
+      CREATE TABLE words(id INTEGER, location TEXT, surah INTEGER, ayah INTEGER, word INTEGER, text TEXT);
+      INSERT INTO words VALUES 
+        (1, '1:1:1', 1, 1, 1, 'اِ۬لْحَمْدُ'), (2, '1:1:2', 1, 1, 2, 'لِلَّهِ'), (3, '1:1:3', 1, 1, 3, 'رَبِّ'), (4, '1:1:4', 1, 1, 4, 'اِ۬لْعَٰلَمِينَ'), (5, '1:1:5', 1, 1, 5, '١'),
+        (6, '1:2:1', 1, 2, 1, 'الرَّحْمَٰنِ'), (7, '1:2:2', 1, 2, 2, 'الرَّحِيمِ'), (8, '1:2:3', 1, 2, 3, '٢');
+    `);
+
+    // Hafs translation & tafsir & meanings
+    const hafsTrans = await add('translation/193', `CREATE TABLE translation(sura INTEGER, ayah INTEGER, ayah_key TEXT, text TEXT); INSERT INTO translation VALUES(1, 1, '1:1', '"In the name of Allah"');`);
+    const hafsMeanings = await add('translation/92', `CREATE TABLE word_translation(surah_number INTEGER, ayah_number INTEGER, word_number TEXT, text TEXT); INSERT INTO word_translation VALUES(1, 1, '1', 'In the name');`);
+    const hafsTafsir = await add('tafsir/22', `CREATE TABLE tafsir(ayah_key TEXT, group_ayah_key TEXT, from_ayah TEXT, to_ayah TEXT, ayah_keys TEXT, text TEXT); INSERT INTO tafsir VALUES('1:1', '1:1', '1:1', '1:1', '1:1', '<p>تفسير البسملة</p>');`);
+    const hafsThemes = await add('ayah-theme/62', `CREATE TABLE themes(theme TEXT, surah_number INTEGER, ayah_from INTEGER, ayah_to INTEGER, keywords TEXT, total_ayahs INTEGER); INSERT INTO themes VALUES('Opening', 1, 1, 7, 'Praise', 7);`);
+    const hafsSimilar = await add('similar-ayah/74', `CREATE TABLE similar_ayahs(verse_key TEXT, matched_ayah_key TEXT, matched_words_count INTEGER, coverage REAL, score REAL, match_words_range TEXT); INSERT INTO similar_ayahs VALUES('1:1', '27:30', 4, 1.0, 100.0, '[[1,4]]');`);
+
+    reader = new QuranReader(root, packs);
+
+    // 4. Test Warsh reading returns correct profile and verse 1 text
+    const warshPassage = await reader.read({ script: warshScript.id, surah: 1, from: 1 });
+    assert.equal(warshPassage.profile, 'warsh');
+    assert.equal(warshPassage.ayahs[0].number, 1);
+    assert.equal(warshPassage.ayahs[0].words[0].text, 'اِ۬لْحَمْدُ');
+
+    const warshInspect = await reader.inspectAyah({ script: warshScript.id, surah: 1, ayah: 1 });
+    assert.equal(warshInspect.profile, 'warsh');
+    assert.ok(warshInspect.canonical.includes('اِ۬لْحَمْدُ'));
+
+    // 5. Cross-profile enforcement: attaching Hafs resources to Warsh must throw 'invalid-resource'
+    await assert.rejects(reader.read({ script: warshScript.id, surah: 1, from: 1, translation: hafsTrans.id }));
+    await assert.rejects(reader.read({ script: warshScript.id, surah: 1, from: 1, meanings: hafsMeanings.id }));
+    await assert.rejects(reader.commentary({ script: warshScript.id, pack: hafsTafsir.id, surah: 1, ayah: 1 }));
+
+    // 6. Hafs-keyed semantic context functions work for Hafs
+    const themes = await reader.ayahThemes(hafsThemes.id, 1, 1);
+    assert.equal(themes.length, 1);
+    assert.equal(themes[0].theme, 'Opening');
+
+    const similar = await reader.similarAyahs(hafsSimilar.id, 1, 1);
+    assert.equal(similar.length, 1);
+    assert.equal(similar[0].matchedAyahKey, '27:30');
+
+    // 7. Hafs reading returns hafs profile and verse 1 text as Basmala
+    const hafsPassage = await reader.read({ script: hafsScript.id, surah: 1, from: 1, translation: hafsTrans.id, meanings: hafsMeanings.id });
+    assert.equal(hafsPassage.profile, 'hafs');
+    assert.equal(hafsPassage.ayahs[0].words[0].text, 'بِسۡمِ');
+  } finally {
+    reader?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+

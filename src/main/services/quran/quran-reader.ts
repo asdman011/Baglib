@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, mkdir, rename, rm, realpath, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseHTML } from 'linkedom';
-import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
+import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit, QuranSimilarAyah, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
 import { normalizeQuranSearch } from './qul-catalog';
 import { readerPreset, readerPresets } from './reader-resources';
 
@@ -187,6 +187,7 @@ export class QuranReader {
                 recitation: 'CREATE INDEX baglib_recitation ON verses(surah_number, ayah_number)',
                 'surah-info': 'CREATE INDEX baglib_surah_info ON surah_infos(surah_number)',
                 'ayah-theme': 'CREATE INDEX baglib_ayah_theme ON themes(surah_number, ayah_from, ayah_to)',
+                'similar-ayah': 'CREATE INDEX IF NOT EXISTS baglib_similar_verse ON similar_ayahs(verse_key); CREATE INDEX IF NOT EXISTS baglib_similar_matched ON similar_ayahs(matched_ayah_key);',
               };
               if (sql[kind]) working.exec(sql[kind]);
             }
@@ -205,7 +206,9 @@ export class QuranReader {
   async read(query: QuranReadQuery): Promise<QuranPassage> {
     if (!Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.from) || query.from < 1 || query.from > 300) throw new Error('invalid-resource');
     const { preset } = this.source(query.script, 'script');
-    if (preset.profile !== 'hafs' && (query.translation || query.meanings || query.transliteration)) throw new Error('invalid-resource');
+    if (query.translation && this.source(query.translation, 'translation').preset.profile !== preset.profile) throw new Error('invalid-resource');
+    if (query.meanings && this.source(query.meanings, 'word-translation').preset.profile !== preset.profile) throw new Error('invalid-resource');
+    if (query.transliteration && this.source(query.transliteration, 'word-transliteration').preset.profile !== preset.profile) throw new Error('invalid-resource');
     const database = await this.database(query.script, 'script');
     const surahs = database.prepare('SELECT surah AS number, COUNT(DISTINCT ayah) AS count FROM words GROUP BY surah ORDER BY surah').all() as QuranPassage['surahs'];
     let basmala: string | undefined;
@@ -248,7 +251,9 @@ export class QuranReader {
     return database.prepare('SELECT surah, ayah, original AS text FROM baglib_search WHERE baglib_search MATCH ? ORDER BY rank LIMIT 30').all(match) as QuranSearchHit[];
   }
   async commentary(query: { script: string; pack: string; surah: number; ayah: number }): Promise<QuranCommentary> {
-    if (this.source(query.script, 'script').preset.profile !== 'hafs' || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300) throw new Error('invalid-resource');
+    const scriptSource = this.source(query.script, 'script');
+    const tafsirSource = this.source(query.pack, 'tafsir');
+    if (scriptSource.preset.profile !== tafsirSource.preset.profile || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300) throw new Error('invalid-resource');
     const database = await this.database(query.pack, 'tafsir');
     const seen = new Set<string>();
     let key = `${query.surah}:${query.ayah}`;
@@ -266,12 +271,15 @@ export class QuranReader {
     const ayah = passage.ayahs.find(value => value.number === query.ayah);
     if (!ayah) throw new Error('invalid-resource');
     let imlaey: string | null = null;
-    if (query.layout && passage.profile === 'hafs') {
-      const database = await this.database(query.layout, 'mushaf-layout');
-      const pages = database.prepare('SELECT words_json FROM pages WHERE page_number IN (SELECT page_number FROM page_ayahs WHERE surah=? AND ayah=?) ORDER BY page_number').all(query.surah, query.ayah) as { words_json: string }[];
-      const words = pages.flatMap(page => JSON.parse(page.words_json) as QuranMushafWord[]).filter(word => word.surah === query.surah && word.ayah === query.ayah && word.type !== 'aya-mark');
-      if (words.length && words.every(word => word.imlaey)) {
-        imlaey = words.map(word => parseHTML(`<html><body>${word.imlaey}</body></html>`).document.body.textContent).join(' ');
+    if (query.layout) {
+      const layoutSource = this.source(query.layout, 'mushaf-layout');
+      if (layoutSource.preset.profile === passage.profile) {
+        const database = await this.database(query.layout, 'mushaf-layout');
+        const pages = database.prepare('SELECT words_json FROM pages WHERE page_number IN (SELECT page_number FROM page_ayahs WHERE surah=? AND ayah=?) ORDER BY page_number').all(query.surah, query.ayah) as { words_json: string }[];
+        const words = pages.flatMap(page => JSON.parse(page.words_json) as QuranMushafWord[]).filter(word => word.surah === query.surah && word.ayah === query.ayah && word.type !== 'aya-mark');
+        if (words.length && words.every(word => word.imlaey)) {
+          imlaey = words.map(word => parseHTML(`<html><body>${word.imlaey}</body></html>`).document.body.textContent).join(' ');
+        }
       }
     }
     return { surah: query.surah, ayah: query.ayah, profile: passage.profile, canonical: ayah.words.map(word => word.text).join(' '), imlaey };
@@ -313,7 +321,7 @@ export class QuranReader {
   }
   async recitationAudio(packId: string, surah: number, ayah: number): Promise<QuranAyahAudio> {
     if (!Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
-    this.source(packId, 'recitation');
+    const { preset } = this.source(packId, 'recitation');
     const database = await this.database(packId, 'recitation');
     const row = database.prepare('SELECT surah_number, ayah_number, audio_url, duration, segments FROM verses WHERE surah_number = ? AND ayah_number = ?').get(surah, ayah) as {
       surah_number: number;
@@ -338,11 +346,12 @@ export class QuranReader {
       audioUrl: row.audio_url,
       duration: row.duration ?? null,
       segments,
+      profile: preset.profile,
     };
   }
   async recitationSurah(packId: string, surah: number): Promise<QuranAyahAudio[]> {
     if (!Number.isInteger(surah) || surah < 1 || surah > 114) throw new Error('invalid-resource');
-    this.source(packId, 'recitation');
+    const { preset } = this.source(packId, 'recitation');
     const database = await this.database(packId, 'recitation');
     const rows = database.prepare('SELECT surah_number, ayah_number, audio_url, duration, segments FROM verses WHERE surah_number = ? ORDER BY ayah_number ASC').all(surah) as {
       surah_number: number;
@@ -367,6 +376,7 @@ export class QuranReader {
         audioUrl: row.audio_url,
         duration: row.duration ?? null,
         segments,
+        profile: preset.profile,
       };
     });
   }
@@ -401,6 +411,8 @@ export class QuranReader {
     if (!Number.isInteger(surah) || surah < 1 || surah > 114) throw new Error('invalid-resource');
     if (ayah !== undefined && (!Number.isInteger(ayah) || ayah < 1 || ayah > 300)) throw new Error('invalid-resource');
     const id = this.resolvePack('ayah-theme', packId);
+    const { preset } = this.source(id, 'ayah-theme');
+    if (preset.profile !== 'hafs') throw new Error('invalid-resource');
     const database = await this.database(id, 'ayah-theme');
     const rows = (ayah !== undefined
       ? database.prepare('SELECT theme, surah_number, ayah_from, ayah_to, keywords, total_ayahs FROM themes WHERE surah_number = ? AND ayah_from <= ? AND ayah_to >= ? ORDER BY ayah_from, ayah_to').all(surah, ayah, ayah)
@@ -424,6 +436,8 @@ export class QuranReader {
   async ayahTopics(packId: string | undefined, surah: number, ayah: number): Promise<QuranTopic[]> {
     if (!Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
     const id = this.resolvePack('ayah-topics', packId);
+    const { preset } = this.source(id, 'ayah-topics');
+    if (preset.profile !== 'hafs') throw new Error('invalid-resource');
     const database = await this.database(id, 'ayah-topics');
     const rows = database.prepare(`
       SELECT t.topic_id, t.name, t.arabic_name, t.parent_id, t.thematic_parent_id, t.ontology_parent_id, t.description, t.wiki_link, t.thematic, t.ontology, t.ayahs, t.related_topics
@@ -542,6 +556,49 @@ export class QuranReader {
         ontology: Boolean(row.ontology),
         ayahs: ayahsList,
         relatedTopics,
+      };
+    });
+  }
+  async similarAyahs(packId: string | undefined, surah: number, ayah: number): Promise<QuranSimilarAyah[]> {
+    if (!Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
+    const id = this.resolvePack('similar-ayah', packId);
+    const { preset } = this.source(id, 'similar-ayah');
+    if (preset.profile !== 'hafs') throw new Error('invalid-resource');
+    const database = await this.database(id, 'similar-ayah');
+    const verseKey = `${surah}:${ayah}`;
+    const rows = database.prepare(`
+      SELECT verse_key, matched_ayah_key, matched_words_count, coverage, score, match_words_range
+      FROM similar_ayahs
+      WHERE verse_key = ?
+      ORDER BY score DESC, coverage DESC
+    `).all(verseKey) as {
+      verse_key: string;
+      matched_ayah_key: string;
+      matched_words_count: number;
+      coverage: number;
+      score: number;
+      match_words_range: string | null;
+    }[];
+    return rows.map(r => {
+      const [mSurah, mAyah] = r.matched_ayah_key.split(':').map(Number);
+      let matchWordsRange: [number, number][] = [];
+      if (r.match_words_range) {
+        try {
+          const parsed = JSON.parse(r.match_words_range);
+          if (Array.isArray(parsed)) {
+            matchWordsRange = parsed.filter(item => Array.isArray(item) && item.length === 2 && typeof item[0] === 'number' && typeof item[1] === 'number');
+          }
+        } catch {}
+      }
+      return {
+        verseKey: r.verse_key,
+        matchedAyahKey: r.matched_ayah_key,
+        surah: mSurah,
+        ayah: mAyah,
+        matchedWordsCount: r.matched_words_count,
+        coverage: r.coverage,
+        score: r.score,
+        matchWordsRange,
       };
     });
   }

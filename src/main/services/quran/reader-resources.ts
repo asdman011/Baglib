@@ -1,4 +1,5 @@
 import type { QuranPack, QuranReaderKind, QuranResource } from '../../../shared/types/quran';
+import { HAFS_READING_PROFILE, WARSH_READING_PROFILE } from '../../../shared/types/quran';
 
 export const readerPresets: { id: string; aliases?: string[]; title: string; kind: QuranReaderKind; filename: string; relative: string; profile: 'hafs' | 'warsh' }[] = [
   { id: 'quran-script/312', title: 'KFGQPC Hafs script', kind: 'script', filename: 'qpc-hafs-word-by-word.db.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Script', profile: 'hafs' },
@@ -9,11 +10,13 @@ export const readerPresets: { id: string; aliases?: string[]; title: string; kin
   { id: 'transliteration/71', title: 'English word transliteration', kind: 'word-transliteration', filename: 'english-wbw-transliteration.db.zip', relative: '4-Translation & Transliteration/Transliteration', profile: 'hafs' },
   { id: 'quran-metadata/70', title: 'Quran surah metadata', kind: 'surahs', filename: 'quran-metadata-surah-name.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
   { id: 'mushaf-layout/569', title: 'Ligature-based SVG Mushaf', kind: 'mushaf-layout', filename: 'ligature-basd-svg.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Layout', profile: 'hafs' },
+  { id: 'mushaf-layout/warsh-svg', title: 'Warsh Ligature-based SVG Mushaf', kind: 'mushaf-layout', filename: 'ligature-basd-svg.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Warsh/Layout', profile: 'warsh' },
   { id: 'recitation/957', title: 'محمود خليل الحصري (مرتل)', kind: 'recitation', filename: 'ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-957 (with segments).db.zip', relative: '3-Recitations and segments data', profile: 'hafs' },
   { id: 'recitation/959', title: 'محمد صديق المنشاوي (مرتل)', kind: 'recitation', filename: 'ayah-recitation-muhammad-siddiq-al-minshawi-murattal-hafs-959.db.zip', relative: '3-Recitations and segments data', profile: 'hafs' },
   { id: 'surah-info/3', aliases: ['surah-info/en'], title: 'Surah Information (English)', kind: 'surah-info', filename: 'surah-info-en.db.zip', relative: 'Surah information', profile: 'hafs' },
   { id: 'ayah-theme/62', aliases: ['ayah-theme/default'], title: 'Ayah Themes', kind: 'ayah-theme', filename: 'ayah-themes.db.zip', relative: 'Ayah theme', profile: 'hafs' },
   { id: 'ayah-topics/45', aliases: ['ayah-topics/default'], title: 'Quran Topics & Concepts', kind: 'ayah-topics', filename: 'topics.db.zip', relative: 'Topics and concepts in the Quran', profile: 'hafs' },
+  { id: 'similar-ayah/74', aliases: ['similar-ayah/matching', 'similar-ayah/default'], title: 'Similar Ayah (Mutashabihat)', kind: 'similar-ayah', filename: 'matching-ayah.db.zip', relative: 'Similiar ayahs', profile: 'hafs' },
 ];
 
 export function canonicalResourceId(id: string): string {
@@ -32,5 +35,17 @@ export function presetResource(id: string): QuranResource {
   const preset = readerPresets.find(value => value.id === canonicalResourceId(id));
   if (!preset) throw new Error('invalid-resource');
   const formats = preset.kind === 'mushaf-layout' ? ['SVG'] : ['SQLite'];
-  return { id: preset.id, category: preset.id.split('/')[0] as QuranResource['category'], title: preset.title, sourcePath: `/resources/${preset.id}`, tags: [], formats, related: [], restricted: false, fetchedAt: new Date().toISOString(), profile: { key: `qul:${preset.id}:unverified`, qiraah: null, riwayah: null, tariq: null, numbering: null, segmentation: null, script: null, verified: false } };
+  const profile = preset.profile === 'warsh' ? WARSH_READING_PROFILE : HAFS_READING_PROFILE;
+  return {
+    id: preset.id,
+    category: preset.id.split('/')[0] as QuranResource['category'],
+    title: preset.title,
+    sourcePath: `/resources/${preset.id}`,
+    tags: [preset.profile],
+    formats,
+    related: [],
+    restricted: false,
+    fetchedAt: new Date().toISOString(),
+    profile,
+  };
 }
