@@ -25,6 +25,7 @@ import {
 import { useWorkspace } from '../context/WorkspaceContext';
 import { resolveDroppedFilePath } from '../../utils/file-path-helper';
 import { useImportStaging } from '../../hooks/useImportStaging';
+import type { DigitalFileValidationResult } from '../../../shared/types/digital-file';
 import {
   DuplicateDetectionResult,
   DuplicateResolutionAction,
@@ -77,6 +78,9 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
   // Duplicate Resolution States
   const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
+  const scanActive = useRef(false);
+  const importActive = useRef(false);
+  const [reviewFailures, setReviewFailures] = useState<{ fileName: string }[]>([]);
   const [duplicateResults, setDuplicateResults] = useState<DuplicateDetectionResult[]>([]);
   const [fileActions, setFileActions] = useState<Record<string, DuplicateResolutionAction>>({});
 
@@ -112,12 +116,13 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
   // Reset states when closed
   const handleModalClose = () => {
-    if (isImporting || isScanningDuplicates) return;
+    if (isImporting || isScanningDuplicates || scanActive.current || importActive.current) return;
     setStep('select');
     clear();
     setOperationError(false);
     setVisibleCount(100);
     setDuplicateResults([]);
+    setReviewFailures([]);
     setFileActions({});
     setProgressEvent(null);
     setImportSummary(null);
@@ -214,7 +219,8 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
   // Proceed to Step 2: Check Duplicates
   const handleScanDuplicates = async () => {
-    if (stagedFiles.length === 0 || discovering) return;
+    if (stagedFiles.length === 0 || discovering || scanActive.current || importActive.current) return;
+    scanActive.current = true;
     setIsScanningDuplicates(true);
     setOperationError(false);
     setStep('duplicates');
@@ -222,11 +228,20 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
     try {
       const api = (window as any).electronAPI;
-      if (api?.checkDigitalDuplicates) {
-        const inputs = stagedFiles.map((s) => ({
+      if (api?.checkDigitalDuplicates && api?.validateDigitalFiles) {
+        const validation: { results: DigitalFileValidationResult[] } = await api.validateDigitalFiles(stagedFiles.map(file => file.path));
+        const stagedPaths = new Set(stagedFiles.map(file => file.path));
+        if (validation.results.length !== stagedFiles.length || new Set(validation.results.map(file => file.filePath)).size !== stagedPaths.size || validation.results.some(file => !file.filePath || !stagedPaths.has(file.filePath))) throw new Error('Incomplete file validation');
+        const invalid = validation.results.filter(file => !file.isValid);
+        setReviewFailures(invalid);
+        const validPaths = new Set(validation.results.filter(file => file.isValid).map(file => file.filePath));
+        const inputs = stagedFiles.filter(file => validPaths.has(file.path)).map((s) => ({
           filePath: s.path
         }));
         const results: DuplicateDetectionResult[] = await api.checkDigitalDuplicates(inputs);
+        if (results.length !== inputs.length || new Set(results.map(result => result.filePath)).size !== validPaths.size || results.some(result => !validPaths.has(result.filePath))) throw new Error('Incomplete duplicate review');
+        const failures = [...invalid, ...results.filter(result => result.error)];
+        setReviewFailures(failures);
         setDuplicateResults(results);
 
         // Pre-fill default actions
@@ -243,22 +258,26 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
           }
         }
         setFileActions(initialActions);
+        if (!failures.length && !discoveryErrors && results.every(result => result.matchType === 'none')) {
+          await startImport(results, initialActions);
+        }
       } else {
-        // Fallback when IPC is not available in mock/test
-        setDuplicateResults([]);
+        throw new Error('Import validation unavailable');
       }
     } catch (err) {
       console.error('[ImportWizard] Failed to check duplicates:', err);
       setOperationError(true);
       setDuplicateResults([]);
     } finally {
+      scanActive.current = false;
       setIsScanningDuplicates(false);
     }
   };
 
   // Step 3: Trigger batch import backend
-  const handleStartImport = async () => {
-    if (stagedFiles.length === 0 || isImporting || operationError) return;
+  const startImport = async (review: DuplicateDetectionResult[], actions: Record<string, DuplicateResolutionAction>) => {
+    if (stagedFiles.length === 0 || importActive.current) return;
+    importActive.current = true;
     setIsImporting(true);
     setStep('importing');
     setVisibleCount(100);
@@ -266,21 +285,20 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     // Subscribe to streaming progress
     const api = (window as any).electronAPI;
     let unsubscribeProgress: (() => void) | undefined;
-    if (api?.onDigitalImportProgress) {
-      unsubscribeProgress = api.onDigitalImportProgress((progress: ImportProgressEvent) => {
-        setProgressEvent(progress);
-      });
-    }
-
     try {
+      if (api?.onDigitalImportProgress) {
+        unsubscribeProgress = api.onDigitalImportProgress((progress: ImportProgressEvent) => {
+          setProgressEvent(progress);
+        });
+      }
       const optionsList = stagedFiles.map((s) => ({
         filePath: s.path,
         targetFormat: s.format,
         primaryCategoryId: batchCategory || undefined,
         readingStatus: batchReadingStatus,
-        duplicateAction: fileActions[s.path] || 'skip',
-        skipExactDuplicatesOnly: !fileActions[s.path],
-        existingWorkId: duplicateResults.find((d) => d.filePath === s.path)
+        duplicateAction: actions[s.path] || 'skip',
+        skipExactDuplicatesOnly: !actions[s.path],
+        existingWorkId: review.find((d) => d.filePath === s.path)
           ?.existingWork?.id
       }));
 
@@ -300,7 +318,12 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
         unsubscribeProgress();
       }
       setIsImporting(false);
+      importActive.current = false;
     }
+  };
+
+  const handleStartImport = () => {
+    if (!operationError) return startImport(duplicateResults, fileActions);
   };
 
   const conflictedResults = duplicateResults.filter((d) => d.matchType !== 'none');
@@ -557,6 +580,10 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
           {/* ========================================================================= */}
           {step === 'duplicates' && (
             <div className="space-y-6">
+              {reviewFailures.length > 0 && <div role="alert" className="p-4 rounded-xl border border-red-500/30 text-red-500 space-y-2">
+                <p>{t('importReviewFailures', { count: reviewFailures.length })}</p>
+                {reviewFailures.slice(0, visibleCount).map((file, index) => <p key={index} className="text-sm break-words" dir="auto">{file.fileName}</p>)}
+              </div>}
               {isScanningDuplicates ? (
                 <div className="p-12 text-center flex flex-col items-center justify-center space-y-4">
                   <RefreshCw className="w-10 h-10 text-pale-sky-500 animate-spin" />
@@ -564,7 +591,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                     {t('scanningDuplicatesProgress')}
                   </p>
                 </div>
-              ) : conflictedResults.length === 0 ? (
+              ) : conflictedResults.length === 0 && !reviewFailures.length && !operationError ? (
                 <div className="p-8 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-center flex flex-col items-center justify-center space-y-3">
                   <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center">
                     <ShieldCheck className="w-8 h-8" />
@@ -572,7 +599,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                   <h3 className="font-bold text-base text-main">{t('noDuplicatesHeading')}</h3>
                   <p className="text-xs text-muted max-w-md">{t('noDuplicatesDesc')}</p>
                 </div>
-              ) : (
+              ) : conflictedResults.length > 0 ? (
                 <div className="space-y-4">
                   <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
@@ -802,7 +829,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                     })}
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -936,7 +963,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                               ? `${res.extractedMetadata.title} • ${
                                   res.extractedMetadata.author || ''
                                 }`
-                              : res.error || res.duplicateReason || res.filePath}
+                              : res.errorCode === 'METADATA_ERROR' ? t('importMetadataFailed') : res.error || res.duplicateReason || res.filePath}
                           </span>
                         </div>
                       </div>

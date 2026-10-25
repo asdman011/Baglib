@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { EmbeddedMetadataExtractor } from '../../../src/main/services/metadata/embedded-metadata.extractor';
-import { coverResolverService } from '../../../src/main/services/metadata/cover-resolver.service';
+import { coverResolverService, CoverResolverService } from '../../../src/main/services/metadata/cover-resolver.service';
 import { bibliographicMetadataService } from '../../../src/main/services/metadata/bibliographic-metadata.service';
 
 /**
@@ -139,16 +139,18 @@ describe('PDF Cover Extractor Unit Tests', () => {
     fs.writeFileSync(tempFile, pdfBuf);
 
     try {
-      const resolution = await coverResolverService.extractPdfCover(tempFile);
+      const resolver = new CoverResolverService(async (_file, page) => ({ coverUrl: 'baglib-asset://rendered-page-1.jpg', currentPage: page, totalPages: 1, documentPages: 1 }));
+      const resolution = await resolver.extractPdfCover(tempFile);
       assert.strictEqual(resolution.verified, true);
       assert.strictEqual(resolution.source, 'embedded');
-      assert.ok(resolution.coverUrl?.startsWith('data:image/jpeg;base64,'));
+      assert.equal(resolution.coverUrl, 'baglib-asset://rendered-page-1.jpg');
     } finally {
       if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
     }
   });
 
-  it('integrates with BibliographicMetadataService.extractPdfCover', async () => {
+  it('delegates BibliographicMetadataService covers to the full-page rendering resolver', async context => {
+    context.mock.method(coverResolverService, 'extractPdfCover', async () => ({ coverUrl: 'baglib-asset://rendered-page-1.jpg', source: 'embedded' as const, verified: true, currentPage: 1, totalPages: 1, pageNumber: 1 }));
     const pdfBuf = createSyntheticPdfWithImage();
     const os = await import('os');
     const path = await import('path');
@@ -159,13 +161,13 @@ describe('PDF Cover Extractor Unit Tests', () => {
     try {
       const coverUrl = await bibliographicMetadataService.extractPdfCover(tempFile);
       assert.ok(coverUrl, 'Expected coverUrl to be resolved');
-      assert.ok(coverUrl.startsWith('data:image/jpeg;base64,'));
+      assert.equal(coverUrl, 'baglib-asset://rendered-page-1.jpg');
     } finally {
       if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
     }
   });
 
-  it('allows navigating between next and previous pages in a multi-page PDF', async () => {
+  it('retains the legacy image-enumeration helper separately from cover-page rendering', async () => {
     const multiPdf = createSyntheticMultiPagePdfWithImages();
 
     // 1. Extract first page (candidate 1)

@@ -12,6 +12,7 @@ import { ContentShieldService } from '../services/shield/content-shield.service'
 import { bibliographicMetadataService } from '../services/metadata/bibliographic-metadata.service';
 import { FilenameParser } from '../services/metadata/filename-parser';
 import { coverResolverService } from '../services/metadata/cover-resolver.service';
+import { getPdfPageCoverService } from '../services/metadata/pdf-page-cover.service';
 import { quotaTracker } from '../services/metadata/quotaTracker';
 import { providerConfigService } from '../services/metadata/provider-config.service';
 
@@ -272,9 +273,12 @@ export function setupMetadataIPC() {
   });
 
   /**
-   * Extract image from a local PDF to make it the book's cover image.
-   * Supports pageIndex (1-based) to cycle between pages and candidate images.
+   * Render the first five complete PDF pages for manual cover selection.
    */
+  ipcMain.handle('library:extract-pdf-cover-pages', async (_event, filePath: string) => {
+    try { return { success: true, pages: await getPdfPageCoverService().renderPages(filePath) }; }
+    catch (error) { console.error('[baglib:pdf-covers]', error); return { success: false, pages: [] }; }
+  });
   ipcMain.handle('library:extract-pdf-cover', async (_, filePath: string, pageIndex?: number) => {
     try {
       if (!filePath || typeof filePath !== 'string') {
@@ -291,7 +295,7 @@ export function setupMetadataIPC() {
           pageNumber: res.pageNumber,
         };
       }
-      return { success: false, error: 'NO_IMAGE_FOUND' };
+      return { success: false, error: 'PAGE_RENDER_FAILED' };
     } catch (err: any) {
       console.error('[baglib/metadata-ipc] extract-pdf-cover error:', err);
       return { success: false, error: err?.message || 'EXTRACTION_FAILED' };

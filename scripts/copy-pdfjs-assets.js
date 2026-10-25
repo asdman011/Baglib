@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { buildSync } = require('esbuild');
 
 const rootDir = path.resolve(__dirname, '..');
 const srcWorker = path.join(rootDir, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs');
@@ -13,6 +14,8 @@ const targets = [
 
 targets.forEach((targetDir) => {
   fs.mkdirSync(targetDir, { recursive: true });
+  buildSync({ entryPoints: [path.join(rootDir, 'node_modules', 'pdfjs-dist', 'build', 'pdf.mjs')], outfile: path.join(targetDir, 'pdf.cover.min.js'), bundle: true, format: 'iife', globalName: 'baglibCoverPdfjs', platform: 'browser', target: 'chrome128', minify: true });
+  for (const filename of ['pdf-cover-frame.html', 'pdf-cover-frame.js']) fs.copyFileSync(path.join(rootDir, 'assets', filename), path.join(targetDir, filename));
 
   if (fs.existsSync(srcWorker)) {
     fs.copyFileSync(srcWorker, path.join(targetDir, 'pdf.worker.min.mjs'));

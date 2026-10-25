@@ -80,6 +80,7 @@ export class DuplicateDetectorService {
         }
       } catch (err) {
         console.warn(`[DuplicateDetector] Failed reading ${filePath}:`, err);
+        return { filePath, fileName, fileSizeBytes, matchType: 'none', confidence: 0, reason: '', error: String(err) };
       }
     }
 
@@ -119,8 +120,8 @@ export class DuplicateDetectorService {
         title = title || extracted.title;
         author = author || (extracted.authors && extracted.authors[0]);
         isbn = isbn || extracted.isbn;
-      } catch {
-        // Fallback to filename if extractor fails
+      } catch (error) {
+        return { filePath, fileName, fileHash, fileSizeBytes, matchType: 'none', confidence: 0, reason: '', error: String(error) };
       }
     }
 

@@ -72,15 +72,14 @@ export class EmbeddedMetadataExtractor {
   }
 
   /**
-   * Extracts the first image of a PDF file (defaults to page/candidate index 1).
+   * Extracts the first PDF image resource for legacy/OCR consumers, not a rendered page.
    */
   static extractFirstPdfImage(filePathOrBuffer: string | Buffer): ExtractedPdfCover | null {
     return this.extractPdfImage(filePathOrBuffer, 1);
   }
 
   /**
-   * Extracts an image from a PDF file by index (1-based: 1, 2, 3...) to allow switching
-   * between previous/next pages and candidate covers.
+   * Extracts a PDF image resource by candidate index (1-based), not document page.
    */
   static extractPdfImage(
     filePathOrBuffer: string | Buffer,
@@ -548,9 +547,6 @@ export class EmbeddedMetadataExtractor {
       }
     }
 
-    // Extract the first image of the PDF to make it the cover
-    const pdfCover = this.extractFirstPdfImage(dataBuffer);
-
     return {
       title,
       authors,
@@ -563,8 +559,6 @@ export class EmbeddedMetadataExtractor {
       isbn,
       isbn10,
       isbn13,
-      coverBuffer: pdfCover?.coverBuffer,
-      coverMimeType: pdfCover?.coverMimeType,
     };
   }
 

@@ -155,6 +155,7 @@ export const API = {
     ipcRenderer.invoke('library:extract-offline-metadata', params),
   discoverMetadata: (params: { filePath?: string; filename?: string; title?: string; author?: string; isbn?: string; page?: number; deeper?: boolean; offlineOnly?: boolean }) =>
     ipcRenderer.invoke('library:discover-metadata', params),
+  extractPdfCoverPages: (filePath: string) => ipcRenderer.invoke('library:extract-pdf-cover-pages', filePath),
   extractPdfCover: (filePath: string, pageIndex?: number) =>
     ipcRenderer.invoke('library:extract-pdf-cover', filePath, pageIndex),
   extractEpubCover: (filePath: string) =>

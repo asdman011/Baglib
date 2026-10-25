@@ -339,7 +339,7 @@ export class BibliographicMetadataService {
       let localCoverUrl: string | undefined;
       let localCoverSource: CoverResolutionResult['source'] = 'none';
 
-      if (embeddedMeta?.coverBuffer) {
+      if (embeddedMeta?.coverBuffer && !params.filePath?.toLowerCase().endsWith('.pdf')) {
         const mime = embeddedMeta.coverMimeType || 'image/jpeg';
         localCoverUrl = `data:${mime};base64,${embeddedMeta.coverBuffer.toString('base64')}`;
         localCoverSource = 'embedded';
@@ -574,7 +574,7 @@ export class BibliographicMetadataService {
     };
 
     try {
-      coverResolution = await coverResolverService.resolveCover({
+      coverResolution = params.filePath?.toLowerCase().endsWith('.pdf') ? await coverResolverService.extractPdfCover(params.filePath, 1) : await coverResolverService.resolveCover({
         isbn: finalIsbn,
         providerCoverUrl: matchedEdition?.coverUrl,
         title: finalTitle,

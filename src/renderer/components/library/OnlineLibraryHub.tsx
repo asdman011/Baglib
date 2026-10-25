@@ -308,7 +308,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
       if (res && res.success && res.path) {
           const isEpub = (item.format || '').toUpperCase() === 'EPUB';
           let coverImage = item.coverUrl;
-          if (!coverImage && res.path.toLowerCase().endsWith('.pdf') && windowAPI?.extractPdfCover) {
+          if (res.path.toLowerCase().endsWith('.pdf') && windowAPI?.extractPdfCover) {
             try {
               const pdfCoverRes = await windowAPI.extractPdfCover(res.path);
               if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {

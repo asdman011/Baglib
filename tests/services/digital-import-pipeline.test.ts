@@ -91,7 +91,7 @@ describe('Digital E-Book Ingestion Pipeline & Metadata Extractor (Story 6.2 / KE
       VALUES ('cat-philosophy', 'Philosophy', 'فلسفة')
     `).run();
     repo = new SqliteWorkRepository(db);
-    pipeline = new DigitalImportPipelineService(repo);
+    pipeline = new DigitalImportPipelineService(repo, undefined, undefined, undefined, undefined, async () => ({ coverUrl: 'baglib-asset://rendered-page-1.jpg' }));
   });
 
   afterEach(() => {
@@ -108,7 +108,7 @@ describe('Digital E-Book Ingestion Pipeline & Metadata Extractor (Story 6.2 / KE
   });
 
   describe('Embedded Metadata Extractor Service', () => {
-    it('extracts Adobe XMP packet and cover from sample PDF', async () => {
+    it('extracts Adobe XMP metadata without treating embedded PDF images as covers', async () => {
       assert.strictEqual(fs.existsSync(samplePdfPath), true, 'Sample PDF should exist in docs/');
 
       const meta = await extractor.extract(samplePdfPath, 'PDF');
@@ -118,8 +118,8 @@ describe('Digital E-Book Ingestion Pipeline & Metadata Extractor (Story 6.2 / KE
       assert.strictEqual(meta.format, 'PDF');
       assert.ok(meta.identifiers?.['mobi-asin']);
       assert.strictEqual(meta.identifiers?.['mobi-asin'], 'B01MYMUGQL');
-      assert.ok(meta.coverDataUrl, 'PDF with embedded cover image should produce cover data URL');
-      assert.ok(meta.coverDataUrl?.startsWith('data:image/'));
+      assert.equal(meta.coverDataUrl, undefined);
+      assert.equal(meta.coverBuffer, undefined);
     });
 
     it('extracts Dublin Core metadata from valid EPUB archive', async () => {
@@ -248,7 +248,7 @@ describe('Digital E-Book Ingestion Pipeline & Metadata Extractor (Story 6.2 / KE
       assert.strictEqual(work.filePath, path.resolve(samplePdfPath));
       assert.strictEqual(work.fileHash, expectedHash);
       assert.strictEqual(work.readingStatus, 'unread');
-      assert.ok(work.coverImage?.startsWith('data:image/'));
+      assert.equal(work.coverImage, 'baglib-asset://rendered-page-1.jpg');
 
       // Check file_source_detail table directly
       const fileDetail = db.prepare(`SELECT * FROM file_source_detail WHERE file_hash = ?`).get(expectedHash) as any;

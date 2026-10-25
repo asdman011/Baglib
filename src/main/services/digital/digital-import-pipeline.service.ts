@@ -1,5 +1,8 @@
 import path from 'path';
 import { hashImportFile } from './import-files';
+import { app } from 'electron';
+import { getPdfPageCoverService } from '../metadata/pdf-page-cover.service';
+import type { DigitalFormat } from '../../../shared/types/work';
 import { DigitalFileValidatorService } from './digital-file-validator.service';
 import { EbookMetadataExtractorService } from './ebook-metadata-extractor.service';
 import { getDatabase } from '../../database/connection';
@@ -29,7 +32,8 @@ export class DigitalImportPipelineService {
     validator?: DigitalFileValidatorService,
     extractor?: EbookMetadataExtractorService,
     quotaTracker: QuotaTracker = defaultQuotaTracker,
-    duplicateDetector?: DuplicateDetectorService
+    duplicateDetector?: DuplicateDetectorService,
+    private readonly pdfCoverRenderer?: (filePath: string) => Promise<{ coverUrl: string }>
   ) {
     this.validator = validator || DigitalFileValidatorService.getInstance();
     this.extractor = extractor || EbookMetadataExtractorService.getInstance();
@@ -56,6 +60,17 @@ export class DigitalImportPipelineService {
     }
     const db = getDatabase();
     return new WorkRepository(db);
+  }
+
+  private async extractForImport(filePath: string, format: DigitalFormat) {
+    const metadata = await this.extractor.extract(filePath, format);
+    if (format === 'PDF' && (this.pdfCoverRenderer || app?.isReady?.())) {
+      try {
+        const cover = this.pdfCoverRenderer ? await this.pdfCoverRenderer(filePath) : await getPdfPageCoverService().render(filePath, 1);
+        return { ...metadata, coverBuffer: undefined, coverDataUrl: undefined, coverPath: cover.coverUrl };
+      } catch (error) { throw Object.assign(new Error(`PDF cover rendering failed: ${String(error)}`), { code: 'METADATA_ERROR' }); }
+    }
+    return metadata;
   }
 
   /**
@@ -130,7 +145,7 @@ export class DigitalImportPipelineService {
         const targetId = options.existingWorkId || dup.existingWork?.id;
         if (targetId) {
           const format = validation.format || options.targetFormat || 'PDF';
-          const extracted = await this.extractor.extract(filePath, format);
+          const extracted = await this.extractForImport(filePath, format);
           const existingWork = (this.getRepository().getById(targetId) as any) || dup.existingWork;
 
           // Non-Destructive Merge Policy: Existing curated metadata wins!
@@ -168,7 +183,7 @@ export class DigitalImportPipelineService {
           const finalCover =
             existingWork?.coverImage && existingWork.coverImage.trim() !== ''
               ? existingWork.coverImage
-              : (extracted.coverDataUrl || existingWork?.coverImage);
+            : (extracted.coverPath || extracted.coverDataUrl || existingWork?.coverImage);
 
           const finalDescription =
             existingWork?.description && existingWork.description.trim() !== ''
@@ -236,7 +251,7 @@ export class DigitalImportPipelineService {
         const targetId = options.existingWorkId || dup.existingWork?.id;
         if (targetId && this.getRepository().addEditionToWork) {
           const format = validation.format || options.targetFormat || 'PDF';
-          const extracted = await this.extractor.extract(filePath, format);
+          const extracted = await this.extractForImport(filePath, format);
           this.getRepository().addEditionToWork(targetId, {
             edition: options.customTitle ? undefined : extracted.title,
             publisher: extracted.publisher,
@@ -263,7 +278,7 @@ export class DigitalImportPipelineService {
               publisher: extracted.publisher,
               publicationYear: extracted.publicationYear,
               isbn: extracted.isbn,
-              hasCover: Boolean(extracted.coverDataUrl),
+              hasCover: Boolean(extracted.coverPath || extracted.coverDataUrl),
               coverDataUrl: extracted.coverDataUrl,
             },
           };
@@ -272,7 +287,7 @@ export class DigitalImportPipelineService {
 
       // 3. Extract Embedded Metadata & Cover
       const format = validation.format || options.targetFormat || 'PDF';
-      const extracted = await this.extractor.extract(filePath, format);
+      const extracted = await this.extractForImport(filePath, format);
 
       // 4. Resolve Final Bibliographic Fields (User override > Extracted > Fallback)
       const title = (options.customTitle || extracted.title || fileName).trim();
@@ -348,7 +363,7 @@ export class DigitalImportPipelineService {
         filePath: path.resolve(filePath),
         fileHash,
         fileSize: this.formatBytes(validation.fileSizeBytes),
-        coverImage: extracted.coverDataUrl,
+        coverImage: extracted.coverPath || extracted.coverDataUrl,
         workType: 'book',
         workTypeId: 'wt-book',
       };
@@ -376,21 +391,21 @@ export class DigitalImportPipelineService {
           description: extracted.description,
           language: extracted.language,
           tags: mergedTags,
-          hasCover: Boolean(extracted.coverDataUrl),
+          hasCover: Boolean(extracted.coverPath || extracted.coverDataUrl),
           coverDataUrl: extracted.coverDataUrl,
           identifiers: extracted.identifiers,
         },
       };
     } catch (err: any) {
-      console.error(`[DigitalImportPipeline] Database insertion failed for ${filePath}:`, err);
+      console.error(`[DigitalImportPipeline] Import failed for ${filePath}:`, err);
       return {
         success: false,
         filePath,
         fileName,
         fileSizeBytes: validation.fileSizeBytes,
         format: validation.format,
-        errorCode: 'DB_ERROR',
-        error: `خطأ أثناء تسجيل الكتاب في قاعدة البيانات: ${err?.message || err} / Database error registering digital book: ${err?.message || err}`,
+        errorCode: err?.code === 'METADATA_ERROR' ? 'METADATA_ERROR' : 'DB_ERROR',
+        error: err?.code === 'METADATA_ERROR' ? String(err.message) : `خطأ أثناء تسجيل الكتاب في قاعدة البيانات: ${err?.message || err} / Database error registering digital book: ${err?.message || err}`,
       };
     }
   }

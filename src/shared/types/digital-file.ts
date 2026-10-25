@@ -78,6 +78,7 @@ export interface BatchValidationSummary {
 }
 
 export interface ExtractedEbookMetadata {
+  coverPath?: string;
   title?: string;
   authors: string[];
   publisher?: string;
@@ -213,6 +214,7 @@ export type DuplicateMatchType = 'exact_file' | 'same_edition' | 'potential_dupl
 export type DuplicateResolutionAction = 'skip' | 'add_new_edition' | 'replace' | 'import_anyway';
 
 export interface DuplicateDetectionResult {
+  error?: string;
   filePath: string;
   fileName: string;
   fileHash?: string;
@@ -291,7 +293,7 @@ export interface DigitalImportResult {
     identifiers?: Record<string, string>;
   };
   error?: string;
-  errorCode?: DigitalFileErrorCode | 'IMPORT_ERROR' | 'DB_ERROR';
+  errorCode?: DigitalFileErrorCode | 'IMPORT_ERROR' | 'DB_ERROR' | 'METADATA_ERROR';
 }
 
 export interface BatchImportSummary {

@@ -2,18 +2,20 @@ import { Worker } from 'node:worker_threads';
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
 import { EbookMetadataExtractorService } from './ebook-metadata-extractor.service';
-import { FilenameParser } from '../metadata/filename-parser';
+import { app, utilityProcess } from 'electron';
+import { MetadataProcess } from './metadata-process';
 import type { ExtractedEbookMetadata } from '../../../shared/types/digital-file';
 import type { DigitalFormat } from '../../../shared/types/work';
 
 export class BackgroundMetadataService extends EbookMetadataExtractorService {
-  private worker?: Worker;
+  private worker?: Worker | MetadataProcess;
   private queue: Promise<unknown> = Promise.resolve();
   private disposed = false;
   private completed = 0;
   private readonly cache = new Map<string, ExtractedEbookMetadata>();
 
-  constructor(private readonly workerPath = path.join(__dirname, 'metadata-worker.js'), private readonly timeoutMs = 30_000) { super(); }
+  constructor(private readonly workerPath = path.join(__dirname, 'metadata-worker.js'), private readonly timeoutMs = 120_000,
+    private readonly coverDirectory = path.join(app?.getPath?.('userData') || path.resolve('.baglib-data'), 'covers')) { super(); }
 
   dispose(): void {
     this.disposed = true;
@@ -30,23 +32,19 @@ export class BackgroundMetadataService extends EbookMetadataExtractorService {
       const key = JSON.stringify([filePath, info.size, info.mtimeMs, resolvedFormat]);
       const cached = this.cache.get(key);
       if (cached) return cached;
-      const parsed = FilenameParser.parse(filePath);
-      const fallback: ExtractedEbookMetadata = { title: parsed.title || parsed.cleanedFilename || path.basename(filePath, path.extname(filePath)), authors: parsed.authors, publisher: parsed.publisher, publicationYear: parsed.publicationYear, isbn: parsed.isbn, tags: [], identifiers: {}, format: format || this.formatFromPath(filePath) };
-      if (info.size > 64 * 1024 * 1024) return fallback;
-      try {
-        const metadata = await this.run(filePath, resolvedFormat);
-        if ((metadata.coverDataUrl?.length || 0) < 2 * 1024 * 1024) {
-          this.cache.set(key, metadata);
-          if (this.cache.size > 4) this.cache.delete(this.cache.keys().next().value!);
-        }
-        return metadata;
-      } catch (error) {
-        console.warn('[DigitalImport] Metadata extraction deferred:', filePath, String(error));
-        return fallback;
+      const metadata = await this.run(filePath, resolvedFormat);
+      if ((metadata.coverDataUrl?.length || 0) < 2 * 1024 * 1024) {
+        this.cache.set(key, metadata);
+        if (this.cache.size > 4) this.cache.delete(this.cache.keys().next().value!);
       }
+      return metadata;
     });
-    this.queue = job.catch(() => {});
-    return job;
+    const checked = job.catch(error => {
+      const failure = error instanceof Error ? error : new Error(String(error));
+      throw Object.assign(failure, { code: 'METADATA_ERROR' });
+    });
+    this.queue = checked.catch(() => {});
+    return checked;
   }
 
   private formatFromPath(filePath: string): DigitalFormat {
@@ -59,8 +57,8 @@ export class BackgroundMetadataService extends EbookMetadataExtractorService {
 
   private run(filePath: string, format?: DigitalFormat): Promise<ExtractedEbookMetadata> {
     if (!this.worker) {
-      const created = new Worker(this.workerPath, { resourceLimits: { maxOldGenerationSizeMb: 192 } });
-      created.on('error', () => { if (this.worker === created) this.worker = undefined; });
+      const created = typeof utilityProcess?.fork === 'function' && app?.isReady?.() ? new MetadataProcess(this.workerPath) : new Worker(this.workerPath, { resourceLimits: { maxOldGenerationSizeMb: 768 } });
+      created.on('error', () => { if (this.worker === created) this.worker = undefined; void created.terminate(); });
       created.on('exit', () => { if (this.worker === created) this.worker = undefined; });
       this.worker = created;
     }
@@ -93,7 +91,7 @@ export class BackgroundMetadataService extends EbookMetadataExtractorService {
       worker.once('message', message);
       worker.once('error', failed);
       worker.once('exit', exited);
-      worker.postMessage({ filePath, format });
+      worker.postMessage({ filePath, format, coverDirectory: this.coverDirectory });
     });
   }
 }

@@ -271,19 +271,6 @@ export class EbookMetadataExtractorService {
       }
     }
 
-    // Step C: Cover Image Extraction
-    let coverBuffer: Buffer | undefined;
-    let coverMimeType: string | undefined;
-    try {
-      const pdfCover = EmbeddedMetadataExtractor.extractFirstPdfImage(fileBuffer);
-      if (pdfCover && pdfCover.coverBuffer) {
-        coverBuffer = pdfCover.coverBuffer;
-        coverMimeType = pdfCover.coverMimeType;
-      }
-    } catch {
-      // fallback
-    }
-
     // Step D: Reliable Content & Metadata Language Detection
     let detectedLanguage: string | undefined;
     const langDetect = languageDetectorService.detectLanguage({
@@ -309,8 +296,6 @@ export class EbookMetadataExtractorService {
       language: language || detectedLanguage,
       isbn,
       tags,
-      coverBuffer,
-      coverMimeType,
       identifiers,
       format: 'PDF',
     };

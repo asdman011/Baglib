@@ -107,21 +107,21 @@ it('imports 300 nested books with actual SQLite and background metadata while ti
   }
 });
 
-it('recovers from a stalled parser and avoids deep reads for oversized books', { timeout: 15_000 }, async () => {
+it('reports stalled/crashed parsers, recovers for later jobs and still parses oversized books', { timeout: 15_000 }, async () => {
   const directory = await temporaryDirectory();
   const workerPath = path.join(directory, 'stalled.cjs');
-  await writeFile(workerPath, "const {parentPort}=require('node:worker_threads'); parentPort.on('message', request => { if(request.filePath.includes('Small')) { while(true) {} } if(request.filePath.includes('Crash')) process.exit(1); parentPort.postMessage({metadata:{title:'Recovered',authors:[],tags:[],identifiers:{},format:'TXT'}}); });");
+  await writeFile(workerPath, "const {parentPort}=require('node:worker_threads'); parentPort.on('message', request => { if(request.filePath.includes('Small')) { while(true) {} } if(request.filePath.includes('Crash')) process.exit(1); parentPort.postMessage({metadata:{title:'Recovered',authors:[],tags:[],identifiers:{},format:request.format || 'TXT'}}); });");
   const extractor = new BackgroundMetadataService(workerPath, 500);
   try {
     const small = path.join(directory, 'Small Book.txt');
     await writeFile(small, 'text');
-    assert.ok((await extractor.extract(small)).title);
+    await assert.rejects(extractor.extract(small), /timed out/);
     const recovery = path.join(directory, 'Recovery.txt');
     await writeFile(recovery, 'recovery');
     assert.equal((await extractor.extract(recovery)).title, 'Recovered');
     const crashed = path.join(directory, 'Crash.txt');
     await writeFile(crashed, 'crash');
-    assert.ok((await extractor.extract(crashed)).title);
+    await assert.rejects(extractor.extract(crashed), /exited/);
     const recoveredAgain = path.join(directory, 'Recovery Again.txt');
     await writeFile(recoveredAgain, 'recovery');
     assert.equal((await extractor.extract(recoveredAgain)).title, 'Recovered');
@@ -132,7 +132,7 @@ it('recovers from a stalled parser and avoids deep reads for oversized books', {
     const started = performance.now();
     const metadata = await extractor.extract(large);
     assert.equal(metadata.format, 'PDF');
-    assert.ok(metadata.title);
+    assert.equal(metadata.title, 'Recovered');
     assert.ok(performance.now() - started < 1000);
   } finally { extractor.dispose(); await rm(directory, { recursive: true, force: true }); }
 });

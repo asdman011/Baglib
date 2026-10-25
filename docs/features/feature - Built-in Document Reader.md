@@ -408,3 +408,7 @@ rectangles and zero buttons outside the header. Arabic RTL and English LTR scree
 at 768px were inspected with a mixed-script long title. This isolated fixture verifies
 toolbar geometry, not every open drawer, popup or complete application interaction.
 
+### Background PDF diagnostic consistency — 2026-10-24
+
+The metadata worker now installs the same narrow PDF diagnostic filter as the main entry. This prevents the two known font-private-use/empty-FlateDecode notices from flooding the import terminal while preserving unrelated warnings and all console errors. This changes diagnostics only; it does not repair fonts, modify imported files, or change reader rendering. Investigation evidence, the exact dependency code paths and limitations are recorded in [pdf-parse](pdf-parse.md).
+

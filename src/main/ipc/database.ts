@@ -10,6 +10,7 @@ import { ipcMain } from 'electron';
 import { getDatabase, getDatabasePath } from '../database/connection';
 import { WorkRepository } from '../database/repositories/work.repository';
 import { coverResolverService } from '../services/metadata/cover-resolver.service';
+import { getPdfPageCoverService } from '../services/metadata/pdf-page-cover.service';
 
 export function setupDatabaseIPC() {
   /**
@@ -60,24 +61,18 @@ export function setupDatabaseIPC() {
 
   /**
    * Add a new book (work, edition, author, source) into SQLite database
-   * Automatically extracts the first PDF image as the cover if a PDF file is linked and no cover exists.
+   * Defaults linked PDFs to their rendered first page unless the cover was explicitly selected.
    */
   ipcMain.handle('library:add-book', async (_, bookData) => {
     try {
       if (
-        !bookData.coverImage &&
+        bookData.metadataProvenance?.fieldSources?.coverImage?.status !== 'user_override' &&
         bookData.filePath &&
         typeof bookData.filePath === 'string' &&
         bookData.filePath.toLowerCase().endsWith('.pdf')
       ) {
-        try {
-          const pdfRes = await coverResolverService.extractPdfCover(bookData.filePath);
-          if (pdfRes?.coverUrl) {
-            bookData.coverImage = pdfRes.coverUrl;
-          }
-        } catch (pdfErr) {
-          console.warn('[baglib/db-ipc] Auto PDF cover extraction fallback error:', pdfErr);
-        }
+        const pdfRes = await getPdfPageCoverService().render(bookData.filePath, 1);
+        bookData.coverImage = pdfRes.coverUrl;
       }
       const db = getDatabase();
       const repo = new WorkRepository(db);
@@ -90,12 +85,13 @@ export function setupDatabaseIPC() {
 
   /**
    * Update an existing book (work, edition, metadata) in SQLite database
-   * Automatically extracts the first PDF image as the cover if a PDF file is linked and no cover exists.
+   * Renders the first PDF page when a linked book has no cover or explicit cover override.
    */
   ipcMain.handle('library:update-book', async (_, bookData) => {
     try {
       if (
         !bookData.coverImage &&
+        bookData.metadataProvenance?.fieldSources?.coverImage?.status !== 'user_override' &&
         bookData.filePath &&
         typeof bookData.filePath === 'string' &&
         bookData.filePath.toLowerCase().endsWith('.pdf')

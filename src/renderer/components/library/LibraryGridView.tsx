@@ -58,6 +58,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { matchesSearchQuery } from '../../utils/search';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
 import { resolveDroppedFilePath, formatCoverUrl } from '../../utils/file-path-helper';
+import { routeBookDrop } from '../../utils/book-drop';
 import type {
   CardDensity,
   ListDensity,
@@ -190,7 +191,11 @@ export const LibraryGridView: React.FC = () => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isNewBook, setIsNewBook] = useState(false);
   const [saveToast, setSaveToast] = useState<string | null>(null);
+  const [dropNotice, setDropNotice] = useState<{ text: string; error: boolean } | null>(null);
+  const dropNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (dropNoticeTimer.current) clearTimeout(dropNoticeTimer.current); }, []);
   const [isImportingBook, setIsImportingBook] = useState(false);
+  const dropImporting = useRef(false);
   const [importMessage, setImportMessage] = useState<string>('');
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
@@ -620,7 +625,7 @@ export const LibraryGridView: React.FC = () => {
       }
 
       // Automatically extract cover from PDF if not already discovered
-      if (!discoveredCover && ext === 'PDF') {
+      if (ext === 'PDF') {
         try {
           if (windowAPI?.extractPdfCover) {
             const extRes = await windowAPI.extractPdfCover(fullPath, 1);
@@ -769,14 +774,38 @@ export const LibraryGridView: React.FC = () => {
     dragCounterRef.current = 0;
     setIsDragActive(false);
 
-    if (isImportWizardOpen) return;
+    if (isImportWizardOpen || isImportingBook || dropImporting.current) return;
     const files = Array.from(e.dataTransfer.files);
     if (!files || files.length === 0) return;
 
-    const paths: string[] = [];
-    for (const file of files) paths.push(await resolveDroppedFilePath(file));
-    setDroppedImportPaths(paths);
-    setIsImportWizardOpen(true);
+    dropImporting.current = true;
+    setDropNotice(null);
+    setSaveToast(null);
+    if (dropNoticeTimer.current) clearTimeout(dropNoticeTimer.current);
+    setIsImportingBook(true);
+    setImportMessage(t('singleDropImporting'));
+    try {
+      const paths: string[] = [];
+      for (const file of files) paths.push(await resolveDroppedFilePath(file));
+      const outcome = await routeBookDrop(paths, window.electronAPI);
+      if (outcome.kind === 'batch') {
+        setDroppedImportPaths(outcome.paths);
+        setIsImportWizardOpen(true);
+      } else if (!outcome.result.success) {
+        setDropNotice({ text: t('singleDropFailed'), error: true });
+      } else if (outcome.result.skipped) {
+        setDropNotice({ text: t('singleDropAlreadyImported'), error: false });
+      } else {
+        await refreshBooks();
+        setDropNotice({ text: t('bookAddedFromDrop', { title: outcome.result.extractedMetadata?.title || outcome.result.fileName }), error: false });
+      }
+    } catch {
+      setDropNotice({ text: t('singleDropFailed'), error: true });
+    } finally {
+      dropImporting.current = false;
+      setIsImportingBook(false);
+      dropNoticeTimer.current = setTimeout(() => setDropNotice(null), 5000);
+    }
   };
 
   const handleImportOnlineBook = (partialBook: Partial<BookItem>) => {
@@ -2534,6 +2563,10 @@ export const LibraryGridView: React.FC = () => {
       )}
 
       {/* Save Success Toast */}
+      {dropNotice && <div role={dropNotice.error ? 'alert' : 'status'} className={`fixed bottom-6 end-6 z-50 px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold ${dropNotice.error ? 'bg-red-600 text-white' : 'bg-evergreen-600 text-white'}`}>
+        {dropNotice.error ? <AlertTriangle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+        <span>{dropNotice.text}</span>
+      </div>}
       {saveToast && (
         <div className="fixed bottom-6 end-6 z-50 bg-evergreen-600 text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-2 duration-300">
           <CheckCircle2 className="w-4 h-4 shrink-0" />

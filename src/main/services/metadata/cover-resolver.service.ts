@@ -17,7 +17,7 @@
 
 import { BAGLIB_USER_AGENT } from './http-client';
 import { isValidIsbn } from '../../../shared/validators/metadata-validator';
-import { EmbeddedMetadataExtractor } from './embedded-metadata.extractor';
+import { getPdfPageCoverService, type PdfPageCover } from './pdf-page-cover.service';
 import { EpubCoverExtractor } from './epub-cover-extractor.service';
 
 export interface CoverResolutionOptions {
@@ -65,6 +65,7 @@ interface CacheEntry {
 }
 
 export class CoverResolverService {
+  constructor(private readonly pdfRenderer: (filePath: string, page: number) => Promise<PdfPageCover> = (filePath, page) => getPdfPageCoverService().render(filePath, page)) {}
   private cache = new Map<string, CacheEntry>();
   private readonly POSITIVE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
   private readonly NEGATIVE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -473,7 +474,7 @@ export class CoverResolverService {
   }
 
   /**
-   * Directly extracts an image from a local PDF as cover art.
+   * Renders a complete local PDF page as cover art.
    * Allows specifying pageIndex (1-based) to switch to next or previous pages.
    */
   async extractPdfCover(
@@ -481,17 +482,16 @@ export class CoverResolverService {
     pageIndex: number = 1
   ): Promise<CoverResolutionResult & { currentPage?: number; totalPages?: number; pageNumber?: number }> {
     try {
-      const extracted = EmbeddedMetadataExtractor.extractPdfImage(filePath, pageIndex);
+      const extracted = await this.pdfRenderer(filePath, pageIndex);
       if (extracted) {
         return {
-          coverUrl: extracted.dataUrl,
+          coverUrl: extracted.coverUrl,
           source: 'embedded',
           verified: true,
-          contentLength: extracted.coverBuffer.length,
-          contentType: extracted.coverMimeType,
-          currentPage: extracted.pageIndex,
+          contentType: 'image/jpeg',
+          currentPage: extracted.currentPage,
           totalPages: extracted.totalPages,
-          pageNumber: extracted.pageNumber,
+          pageNumber: extracted.currentPage,
         };
       }
     } catch (err) {

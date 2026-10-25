@@ -27,6 +27,7 @@ import { registerSunnahIpc } from "./ipc/sunnah";
 import { registerQuranIpc } from "./ipc/quran";
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
+import { installPdfDiagnosticFilter } from "./services/digital/pdf-diagnostics";
 
 // Register privileged custom schemes before app.whenReady()
 // Grants standard, secure, fetch, streaming, CORS, and CSP privileges to reader assets.
@@ -55,32 +56,7 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-// Suppress verbose internal pdf.js font warnings, empty stream notices, and indexing noise that flood dev terminal
-const originalConsoleLog = console.log;
-console.log = (...args: any[]) => {
-  const msg = typeof args[0] === 'string' ? args[0] : '';
-  if (
-    msg.includes('Empty "FlateDecode" stream') ||
-    msg.includes('Ran out of space in font private use area') ||
-    msg.includes('Indexing all PDF objects')
-  ) {
-    return;
-  }
-  originalConsoleLog.apply(console, args);
-};
-
-const originalConsoleWarn = console.warn;
-console.warn = (...args: any[]) => {
-  const msg = typeof args[0] === 'string' ? args[0] : '';
-  if (
-    msg.includes('Ran out of space in font private use area') ||
-    msg.includes('Indexing all PDF objects') ||
-    msg.includes('Empty "FlateDecode" stream')
-  ) {
-    return;
-  }
-  originalConsoleWarn.apply(console, args);
-};
+installPdfDiagnosticFilter();
 
 // Global process error boundary to intercept uncaught exceptions and unhandled promise rejections,
 // preventing abrupt Node process exits or terminal crash artifacts during transient network failures.
