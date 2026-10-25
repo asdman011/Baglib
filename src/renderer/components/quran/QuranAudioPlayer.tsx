@@ -72,20 +72,86 @@ export function QuranAudioPlayer({
   const [gapDuration, setGapDuration] = useState<number>(0);
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
   const [sleepTimerExpiresAt, setSleepTimerExpiresAt] = useState<number | null>(null);
+  const [clockTime, setClockTime] = useState(Date.now);
+  useEffect(() => { const timer = setInterval(() => setClockTime(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [currentAudio, setCurrentAudio] = useState<QuranAyahAudio | null>(null);
   const [isOfflineReady, setIsOfflineReady] = useState(false);
   const [isDownloadingSurah, setIsDownloadingSurah] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ current: number; total: number } | null>(null);
+  const [downloadScope, setDownloadScope] = useState<'surah' | 'quran'>('surah');
+  const [downloadJob, setDownloadJob] = useState('');
+  const [downloadError, setDownloadError] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playPromiseRef = useRef<Promise<void> | null>(null);
   const gapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sleepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentSegmentsRef = useRef<QuranAyahAudio['segments']>([]);
 
+  const playbackSpeedRef = useRef(playbackSpeed);
+  const volumeRef = useRef(volume);
+  const isMutedRef = useRef(isMuted);
+
+  const surahRef = useRef(surah);
+  const ayahRef = useRef(ayah);
+  const surahCountRef = useRef(surahCount);
+  const repeatModeRef = useRef(repeatMode);
+  const repeatCountSettingRef = useRef(repeatCountSetting);
+  const repeatCountRemainingRef = useRef(repeatCountRemaining);
+  const gapDurationRef = useRef(gapDuration);
+  const activeReciterIdRef = useRef(activeReciterId);
+  const onAyahChangeRef = useRef(onAyahChange);
+  const onAudioStateChangeRef = useRef(onAudioStateChange);
+
+  useEffect(() => {
+    playbackSpeedRef.current = playbackSpeed;
+    volumeRef.current = volume;
+    isMutedRef.current = isMuted;
+    surahRef.current = surah;
+    ayahRef.current = ayah;
+    surahCountRef.current = surahCount;
+    repeatModeRef.current = repeatMode;
+    repeatCountSettingRef.current = repeatCountSetting;
+    repeatCountRemainingRef.current = repeatCountRemaining;
+    gapDurationRef.current = gapDuration;
+    activeReciterIdRef.current = activeReciterId;
+    onAyahChangeRef.current = onAyahChange;
+    onAudioStateChangeRef.current = onAudioStateChange;
+  }, [playbackSpeed, volume, isMuted, surah, ayah, surahCount, repeatMode, repeatCountSetting, repeatCountRemaining, gapDuration, activeReciterId, onAyahChange, onAudioStateChange]);
+
   const api = () => window.electronAPI?.quran;
+
+  const safePlay = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    try {
+      const promise = audio.play();
+      playPromiseRef.current = promise;
+      await promise;
+    } catch (err: unknown) {
+      if ((err as Error)?.name !== 'AbortError') {
+        console.warn('Recitation playback error:', err);
+      }
+    } finally {
+      playPromiseRef.current = null;
+    }
+  }, []);
+
+  const safePause = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playPromiseRef.current) {
+      try {
+        await playPromiseRef.current;
+      } catch {}
+    }
+    try {
+      audio.pause();
+    } catch {}
+  }, []);
 
   // Check offline status for current surah
   const checkSurahOfflineStatus = useCallback(async (packId: string, surahNum: number) => {
@@ -98,23 +164,39 @@ export function QuranAudioPlayer({
     } catch {}
   }, []);
 
-  // Download entire surah for offline listening
   const handleDownloadSurah = async () => {
     if (!activeReciterId || isDownloadingSurah) return;
     setIsDownloadingSurah(true);
-    setDownloadProgress({ current: 0, total: surahCount });
+    setDownloadError(false);
+    setDownloadProgress({ current: 0, total: downloadScope === 'surah' ? surahCount : 6236 });
     try {
-      const res = await api().downloadSurahAudio({ pack: activeReciterId, surah });
-      if (res.ok) {
-        setIsOfflineReady(true);
-        setDownloadProgress({ current: res.data.completed, total: res.data.total });
-      }
+      const res = await api().downloadRecitation({ pack: activeReciterId, surah: downloadScope === 'surah' ? surah : undefined });
+      if (!res.ok) throw new Error();
+      setDownloadJob(res.data);
     } catch {
-    } finally {
       setIsDownloadingSurah(false);
-      setTimeout(() => setDownloadProgress(null), 3000);
+      setDownloadError(true);
     }
   };
+  useEffect(() => {
+    if (!downloadJob) return;
+    let alive = true;
+    const load = async () => {
+      const result = await window.electronAPI.quran.library({ view: 'downloads' });
+      if (!alive || !result.ok) return;
+      const job = result.data.jobs.find(value => value.id === downloadJob);
+      if (!job) return;
+      if (job.progressUnit === 'files') setDownloadProgress({ current: job.received, total: job.total });
+      if (['complete', 'failed', 'cancelled'].includes(job.state)) {
+        setIsDownloadingSurah(false);
+        setDownloadError(job.state === 'failed');
+        if (job.state === 'complete') void checkSurahOfflineStatus(activeReciterId, surah);
+      }
+    };
+    void load().catch(() => {});
+    const unsubscribe = window.electronAPI.quran.onChanged(() => { void load().catch(() => {}); });
+    return () => { alive = false; unsubscribe(); };
+  }, [downloadJob, activeReciterId, surah, checkSurahOfflineStatus]);
 
   // Load and play ayah audio
   const loadAyahAudio = useCallback(async (packId: string, s: number, a: number, autoPlay: boolean = true) => {
@@ -145,33 +227,35 @@ export function QuranAudioPlayer({
       const audio = audioRef.current;
       if (!audio) return;
 
+      await safePause();
+
       const sourceUrl = audioData.localUrl || audioData.audioUrl;
-      audio.src = sourceUrl;
-      audio.playbackRate = playbackSpeed;
-      audio.volume = isMuted ? 0 : volume;
+      if (audio.src !== sourceUrl) {
+        audio.src = sourceUrl;
+      }
+      audio.playbackRate = playbackSpeedRef.current;
+      audio.volume = isMutedRef.current ? 0 : volumeRef.current;
 
       if (autoPlay) {
-        try {
-          await audio.play();
-          setIsPlaying(true);
-        } catch {
-          setIsPlaying(false);
-        }
+        await safePlay();
       }
     } catch {
       setIsPlaying(false);
     }
-  }, [playbackSpeed, isMuted, volume]);
+  }, [safePause, safePlay]);
 
   // Handle active reciter or ayah change
   useEffect(() => {
-    if (activeReciterId && surah && ayah) {
-      void loadAyahAudio(activeReciterId, surah, ayah, isPlaying);
-      void checkSurahOfflineStatus(activeReciterId, surah);
-    }
+    const timer = setTimeout(() => {
+      if (activeReciterId && surah && ayah) {
+        void loadAyahAudio(activeReciterId, surah, ayah, true);
+        void checkSurahOfflineStatus(activeReciterId, surah);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [activeReciterId, surah, ayah, checkSurahOfflineStatus, loadAyahAudio]);
 
-  // Audio lifecycle & listeners
+  // Audio lifecycle & listeners (attached ONCE on mount)
   useEffect(() => {
     const audio = new Audio();
     audioRef.current = audio;
@@ -188,17 +272,16 @@ export function QuranAudioPlayer({
       if (segments && segments.length > 0) {
         const seg = segments.find(s => ms >= s[2] && ms < s[3]);
         if (seg) {
-          // Normalize 0-indexed segment word to 1-indexed word index
           matchedWord = seg[0] + 1;
         }
       }
 
-      onAudioStateChange({
-        surah,
-        ayah,
+      onAudioStateChangeRef.current({
+        surah: surahRef.current,
+        ayah: ayahRef.current,
         isPlaying: !audio.paused,
         activeWordIndex: matchedWord,
-        reciterId: activeReciterId,
+        reciterId: activeReciterIdRef.current,
       });
     };
 
@@ -208,7 +291,6 @@ export function QuranAudioPlayer({
 
     const onPlay = () => {
       setIsPlaying(true);
-      // Cancel TTS
       if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
       }
@@ -216,56 +298,63 @@ export function QuranAudioPlayer({
 
     const onPause = () => {
       setIsPlaying(false);
-      onAudioStateChange({
-        surah,
-        ayah,
+      onAudioStateChangeRef.current({
+        surah: surahRef.current,
+        ayah: ayahRef.current,
         isPlaying: false,
         activeWordIndex: null,
-        reciterId: activeReciterId,
+        reciterId: activeReciterIdRef.current,
       });
     };
 
     const onEnded = () => {
       setIsPlaying(false);
-      onAudioStateChange({
-        surah,
-        ayah,
+      onAudioStateChangeRef.current({
+        surah: surahRef.current,
+        ayah: ayahRef.current,
         isPlaying: false,
         activeWordIndex: null,
-        reciterId: activeReciterId,
+        reciterId: activeReciterIdRef.current,
       });
 
       // Handle Repeat Mode & Next Ayah
       const executeNext = () => {
-        if (repeatMode === 'ayah') {
-          if (repeatCountSetting > 1) {
-            if (repeatCountRemaining > 1) {
+        const mode = repeatModeRef.current;
+        const currentAyah = ayahRef.current;
+        const currentSurah = surahRef.current;
+        const totalCount = surahCountRef.current;
+
+        if (mode === 'ayah') {
+          const setting = repeatCountSettingRef.current;
+          if (setting > 1) {
+            if (repeatCountRemainingRef.current > 1) {
               setRepeatCountRemaining(prev => prev - 1);
               audio.currentTime = 0;
-              void audio.play();
+              void safePlay();
               return;
             } else {
-              setRepeatCountRemaining(repeatCountSetting);
+              setRepeatCountRemaining(setting);
             }
           } else {
             // Infinite ayah repeat
             audio.currentTime = 0;
-            void audio.play();
+            void safePlay();
             return;
           }
         }
 
         // Proceed to next ayah
-        if (ayah < surahCount) {
-          onAyahChange(surah, ayah + 1);
-        } else if (repeatMode === 'surah') {
+        if (currentAyah < totalCount) {
+          onAyahChangeRef.current(currentSurah, currentAyah + 1);
+        } else if (mode === 'surah') {
           // Loop back to ayah 1
-          onAyahChange(surah, 1);
+          onAyahChangeRef.current(currentSurah, 1);
         }
       };
 
-      if (gapDuration > 0) {
-        gapTimerRef.current = setTimeout(executeNext, gapDuration * 1000);
+      const gap = gapDurationRef.current;
+      if (gap > 0) {
+        gapTimerRef.current = setTimeout(executeNext, gap * 1000);
       } else {
         executeNext();
       }
@@ -289,9 +378,9 @@ export function QuranAudioPlayer({
       audioRef.current = null;
       if (gapTimerRef.current) clearTimeout(gapTimerRef.current);
       if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
-      onAudioStateChange(null);
+      onAudioStateChangeRef.current(null);
     };
-  }, [surah, ayah, surahCount, repeatMode, repeatCountSetting, repeatCountRemaining, gapDuration, activeReciterId, onAyahChange, onAudioStateChange]);
+  }, [safePlay]);
 
   // Sleep Timer handling
   useEffect(() => {
@@ -300,25 +389,22 @@ export function QuranAudioPlayer({
       sleepTimerRef.current = null;
     }
     if (sleepTimerMinutes && sleepTimerMinutes > 0) {
-      setSleepTimerExpiresAt(Date.now() + sleepTimerMinutes * 60 * 1000);
       sleepTimerRef.current = setTimeout(() => {
-        audioRef.current?.pause();
+        void safePause();
         setIsPlaying(false);
         setSleepTimerMinutes(null);
         setSleepTimerExpiresAt(null);
       }, sleepTimerMinutes * 60 * 1000);
-    } else {
-      setSleepTimerExpiresAt(null);
     }
-  }, [sleepTimerMinutes]);
+  }, [sleepTimerMinutes, safePause]);
 
   const togglePlayPause = () => {
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
-      void audio.play();
+      void safePlay();
     } else {
-      audio.pause();
+      void safePause();
     }
   };
 
@@ -385,7 +471,7 @@ export function QuranAudioPlayer({
       <div className="flex flex-col gap-3">
         {/* Top Info Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-main">
               {t('quranAudioPlayingAyah', { ayah: new Intl.NumberFormat(lang).format(ayah) })}
             </span>
@@ -424,17 +510,19 @@ export function QuranAudioPlayer({
           </div>
 
           {/* Quick Actions & Close */}
-          <div className="flex items-center gap-2">
-            {/* Download surah offline */}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs flex flex-col gap-1"><span>{t('quranAudioDownloadScope')}</span><select aria-label={t('quranAudioDownloadScope')} value={downloadScope} disabled={isDownloadingSurah} onChange={event => setDownloadScope(event.target.value as 'surah' | 'quran')} className="bg-surface border border-subtle rounded-lg p-1 min-w-0"><option value="surah">{t('quranAudioThisSurah')}</option><option value="quran">{t('quranAudioWholeQuran')}</option></select></label>
+            {isDownloadingSurah && <button type="button" aria-label={t('quranCancel')} onClick={() => { void api().cancel(downloadJob); }} className="p-2 border border-subtle rounded-lg"><X className="size-4" /></button>}
+            {downloadError && <p role="alert" className="text-xs text-red-600">{t('quranAudioDownloadFailed')}</p>}
             <button
               type="button"
-              disabled={isDownloadingSurah || isOfflineReady}
+              disabled={isDownloadingSurah || (downloadScope === 'surah' && isOfflineReady)}
               onClick={handleDownloadSurah}
-              title={isOfflineReady ? t('quranAudioDownloadedSurah', { count: surahCount }) : t('quranAudioDownloadSurah')}
-              aria-label={t('quranAudioDownloadSurah')}
+              title={t('quranDownload')}
+              aria-label={t('quranDownload')}
               className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 hover:bg-pale-sky-500/10 disabled:opacity-50 transition-colors"
             >
-              {isOfflineReady ? (
+              {isOfflineReady && downloadScope === 'surah' ? (
                 <>
                   <CheckCircle2 className="size-3.5 text-emerald-500" />
                   <span className="text-[11px] text-muted">{t('quranAudioOfflineReady')}</span>
@@ -445,7 +533,7 @@ export function QuranAudioPlayer({
                   <span className="text-[11px]">
                     {downloadProgress
                       ? `${downloadProgress.current}/${downloadProgress.total}`
-                      : t('quranAudioDownloadSurah')}
+                      : t(downloadScope === 'surah' ? 'quranAudioDownloadSurah' : 'quranAudioWholeQuran')}
                   </span>
                 </>
               )}
@@ -497,7 +585,7 @@ export function QuranAudioPlayer({
         {/* Main Transport Controls */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Play, Prev, Next */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={ayah <= 1}
@@ -532,7 +620,7 @@ export function QuranAudioPlayer({
           </div>
 
           {/* Repeat Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -592,7 +680,7 @@ export function QuranAudioPlayer({
           </div>
 
           {/* Volume Control */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={toggleMute}
@@ -670,7 +758,7 @@ export function QuranAudioPlayer({
                 {t('quranAudioSleepTimer')}
                 {sleepTimerExpiresAt && (
                   <span className="text-pale-sky-600 font-bold">
-                    ({Math.max(0, Math.ceil((sleepTimerExpiresAt - Date.now()) / 60000))}m)
+                    ({Math.max(0, Math.ceil((sleepTimerExpiresAt - clockTime) / 60000))}m)
                   </span>
                 )}
               </span>
@@ -679,7 +767,7 @@ export function QuranAudioPlayer({
                   <button
                     key={mins === null ? 'off' : mins}
                     type="button"
-                    onClick={() => setSleepTimerMinutes(mins)}
+                    onClick={() => { setSleepTimerMinutes(mins); const now = Date.now(); setClockTime(now); setSleepTimerExpiresAt(mins ? now + mins * 60000 : null); }}
                     className={`px-2 py-1 rounded-lg border border-subtle transition-colors ${
                       sleepTimerMinutes === mins
                         ? 'bg-pale-sky-600 text-white font-bold'
