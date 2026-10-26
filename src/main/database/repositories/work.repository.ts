@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import type { Database } from 'better-sqlite3';
@@ -540,9 +541,9 @@ export class SqliteWorkRepository implements IWorkRepository {
         recordingUrl: data.recordingUrl,
         periodicalTitle: data.periodicalTitle,
         issueNumber: data.issueNumber,
-        volumeNumber: data.volumeNumber,
-        seriesTitle: data.seriesTitle,
-        totalVolumes: data.totalVolumes,
+        volumeNumber: data.volumeNumber !== undefined && data.volumeNumber !== null && String(data.volumeNumber).trim() !== '' ? data.volumeNumber : undefined,
+        seriesTitle: data.seriesTitle !== undefined && data.seriesTitle !== null && String(data.seriesTitle).trim() !== '' ? data.seriesTitle : undefined,
+        totalVolumes: data.totalVolumes !== undefined && data.totalVolumes !== null && (data.totalVolumes as any) !== '' && !Number.isNaN(Number(data.totalVolumes)) ? Number(data.totalVolumes) : undefined,
         publicationSeasonOrMonth: data.publicationSeasonOrMonth,
         issn: data.issn,
         degreeLevel: data.degreeLevel,
@@ -754,9 +755,9 @@ export class SqliteWorkRepository implements IWorkRepository {
         recordingUrl: data.recordingUrl,
         periodicalTitle: data.periodicalTitle,
         issueNumber: data.issueNumber,
-        volumeNumber: data.volumeNumber,
-        seriesTitle: data.seriesTitle,
-        totalVolumes: data.totalVolumes,
+        volumeNumber: data.volumeNumber !== undefined && data.volumeNumber !== null && String(data.volumeNumber).trim() !== '' ? data.volumeNumber : undefined,
+        seriesTitle: data.seriesTitle !== undefined && data.seriesTitle !== null && String(data.seriesTitle).trim() !== '' ? data.seriesTitle : undefined,
+        totalVolumes: data.totalVolumes !== undefined && data.totalVolumes !== null && (data.totalVolumes as any) !== '' && !Number.isNaN(Number(data.totalVolumes)) ? Number(data.totalVolumes) : undefined,
         publicationSeasonOrMonth: data.publicationSeasonOrMonth,
         issn: data.issn,
         degreeLevel: data.degreeLevel,
@@ -785,7 +786,9 @@ export class SqliteWorkRepository implements IWorkRepository {
         }
       }
 
-      if (Object.prototype.hasOwnProperty.call(data, 'totalVolumes') && data.totalVolumes === undefined) delete existingMeta.totalVolumes;
+      if (Object.prototype.hasOwnProperty.call(data, 'totalVolumes') && (data.totalVolumes === undefined || data.totalVolumes === null || (data.totalVolumes as any) === '')) delete existingMeta.totalVolumes;
+      if (Object.prototype.hasOwnProperty.call(data, 'volumeNumber') && (data.volumeNumber === undefined || data.volumeNumber === null || String(data.volumeNumber).trim() === '')) delete existingMeta.volumeNumber;
+      if (Object.prototype.hasOwnProperty.call(data, 'seriesTitle') && (data.seriesTitle === undefined || data.seriesTitle === null || String(data.seriesTitle).trim() === '')) delete existingMeta.seriesTitle;
       if (workTypeKey === 'book' && bookVolumeIssue(existingMeta)) throw new Error('invalid-volume-metadata');
 
       const metadataJson = Object.keys(existingMeta).length > 0 ? JSON.stringify(existingMeta) : null;

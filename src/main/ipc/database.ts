@@ -12,6 +12,14 @@ import { WorkRepository } from '../database/repositories/work.repository';
 import { coverResolverService } from '../services/metadata/cover-resolver.service';
 import { getPdfPageCoverService } from '../services/metadata/pdf-page-cover.service';
 
+function normalizeIpcError(err: unknown, fallbackMessage: string): Error {
+  if (err instanceof Error) return err;
+  if (typeof err === 'object' && err !== null && (err as any).message) {
+    return new Error(String((err as any).message));
+  }
+  return new Error(typeof err === 'string' && err ? err : fallbackMessage);
+}
+
 export function setupDatabaseIPC() {
   /**
    * Returns basic database status info for debugging / status bar.
@@ -66,20 +74,27 @@ export function setupDatabaseIPC() {
   ipcMain.handle('library:add-book', async (_, bookData) => {
     try {
       if (
+        !bookData.coverImage &&
         bookData.metadataProvenance?.fieldSources?.coverImage?.status !== 'user_override' &&
         bookData.filePath &&
         typeof bookData.filePath === 'string' &&
         bookData.filePath.toLowerCase().endsWith('.pdf')
       ) {
-        const pdfRes = await getPdfPageCoverService().render(bookData.filePath, 1);
-        bookData.coverImage = pdfRes.coverUrl;
+        try {
+          const pdfRes = await coverResolverService.extractPdfCover(bookData.filePath);
+          if (pdfRes?.coverUrl) {
+            bookData.coverImage = pdfRes.coverUrl;
+          }
+        } catch (pdfErr) {
+          console.warn('[baglib/db-ipc] Auto PDF cover extraction fallback error:', pdfErr);
+        }
       }
       const db = getDatabase();
       const repo = new WorkRepository(db);
       return repo.addBook(bookData);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to add book:', err);
-      throw err;
+      throw normalizeIpcError(err, 'Failed to add book');
     }
   });
 
@@ -110,7 +125,7 @@ export function setupDatabaseIPC() {
       return repo.updateBook(bookData);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to update book:', err);
-      throw err;
+      throw normalizeIpcError(err, 'Failed to update book');
     }
   });
 
@@ -124,7 +139,7 @@ export function setupDatabaseIPC() {
       return repo.deleteBook(bookId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to delete book:', err);
-      throw err;
+      throw normalizeIpcError(err, 'Failed to delete book');
     }
   });
 
@@ -138,7 +153,7 @@ export function setupDatabaseIPC() {
       return repo.updateReadingStatus(workId, status, progress);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to update reading status:', err);
-      throw err;
+      throw normalizeIpcError(err, 'Failed to update reading status');
     }
   });
 
@@ -152,7 +167,7 @@ export function setupDatabaseIPC() {
       return repo.recordLoan(workId, loanData);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to record loan:', err);
-      throw err;
+      throw normalizeIpcError(err, 'Failed to record loan');
     }
   });
 
@@ -163,7 +178,7 @@ export function setupDatabaseIPC() {
       return repo.returnLoan(loanId, returnDate, conditionOnReturn);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to return loan:', err);
-      throw err;
+      throw normalizeIpcError(err, 'Failed to return loan');
     }
   });
 

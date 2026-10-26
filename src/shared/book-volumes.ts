@@ -12,13 +12,18 @@ export function volumeOrdinal(value: string | number | undefined): number | unde
 }
 
 export function bookVolumeIssue(input: VolumeFields): 'bookVolumesTotalInvalid' | 'bookVolumesNumberInvalid' | 'bookVolumesNumberExceedsTotal' | 'bookVolumesTitleInvalid' | null {
-  if (input.seriesTitle !== undefined && (typeof input.seriesTitle !== 'string' || input.seriesTitle.length > 300)) return 'bookVolumesTitleInvalid';
-  if (input.totalVolumes !== undefined && (!Number.isInteger(input.totalVolumes) || input.totalVolumes < 1 || input.totalVolumes > 10000)) return 'bookVolumesTotalInvalid';
-  if (input.volumeNumber !== undefined && (typeof input.volumeNumber !== 'string' && typeof input.volumeNumber !== 'number' || String(input.volumeNumber).length > 40)) return 'bookVolumesNumberInvalid';
-  const ordinal = volumeOrdinal(input.volumeNumber);
-  if (input.volumeNumber !== undefined && /^[-+]?[\d٠-٩۰-۹]+(?:[.,][\d٠-٩۰-۹]+)?$/.test(String(input.volumeNumber).trim()) && ordinal === undefined) return 'bookVolumesNumberInvalid';
-  if (input.volumeNumber !== undefined && String(input.volumeNumber).trim() && (ordinal === 0 || typeof input.volumeNumber === 'number' && (!Number.isSafeInteger(input.volumeNumber) || input.volumeNumber < 1))) return 'bookVolumesNumberInvalid';
-  if (ordinal !== undefined && input.totalVolumes !== undefined && ordinal > input.totalVolumes) return 'bookVolumesNumberExceedsTotal';
+  const seriesTitle = input.seriesTitle === null || input.seriesTitle === undefined ? undefined : input.seriesTitle;
+  const rawTotal = input.totalVolumes === null || input.totalVolumes === undefined || (typeof input.totalVolumes === 'string' && (input.totalVolumes as string).trim() === '') ? undefined : input.totalVolumes;
+  const totalVolumes = rawTotal !== undefined && typeof rawTotal === 'string' && !Number.isNaN(Number(rawTotal)) ? Number(rawTotal) : rawTotal;
+  const volumeNumber = input.volumeNumber === null || input.volumeNumber === undefined || (typeof input.volumeNumber === 'string' && (input.volumeNumber as string).trim() === '') ? undefined : input.volumeNumber;
+
+  if (seriesTitle !== undefined && (typeof seriesTitle !== 'string' || seriesTitle.length > 300)) return 'bookVolumesTitleInvalid';
+  if (totalVolumes !== undefined && (!Number.isInteger(totalVolumes) || totalVolumes < 1 || totalVolumes > 10000)) return 'bookVolumesTotalInvalid';
+  if (volumeNumber !== undefined && (typeof volumeNumber !== 'string' && typeof volumeNumber !== 'number' || String(volumeNumber).length > 40)) return 'bookVolumesNumberInvalid';
+  const ordinal = volumeOrdinal(volumeNumber);
+  if (volumeNumber !== undefined && /^[-+]?[\d٠-٩۰-۹]+(?:[.,][\d٠-٩۰-۹]+)?$/.test(String(volumeNumber).trim()) && ordinal === undefined) return 'bookVolumesNumberInvalid';
+  if (volumeNumber !== undefined && String(volumeNumber).trim() && (ordinal === 0 || (typeof volumeNumber === 'number' && (!Number.isSafeInteger(volumeNumber) || volumeNumber < 1)))) return 'bookVolumesNumberInvalid';
+  if (ordinal !== undefined && totalVolumes !== undefined && typeof totalVolumes === 'number' && ordinal > totalVolumes) return 'bookVolumesNumberExceedsTotal';
   return null;
 }
 

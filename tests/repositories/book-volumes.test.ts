@@ -35,6 +35,9 @@ test('volume values validate bounded counts and reject inconsistent numbers', ()
   for (const totalVolumes of [0, -1, NaN, Infinity, 1.5, 10001]) assert.equal(bookVolumeIssue({ totalVolumes }), 'bookVolumesTotalInvalid');
   for (const volumeNumber of [0, -1, '0', '-1', '1.5', '٠']) assert.equal(bookVolumeIssue({ volumeNumber }), 'bookVolumesNumberInvalid');
   assert.equal(bookVolumeIssue({ totalVolumes: 3, volumeNumber: '٣' }), null);
+  assert.equal(bookVolumeIssue({ totalVolumes: undefined, volumeNumber: undefined, seriesTitle: undefined }), null);
+  assert.equal(bookVolumeIssue({ totalVolumes: null as any, volumeNumber: null as any, seriesTitle: null as any }), null);
+  assert.equal(bookVolumeIssue({ totalVolumes: '' as any, volumeNumber: '' as any, seriesTitle: '' as any }), null);
 });
 
 test('existing SQLite metadata stores multiple volumes without schema changes and supports clearing total count', () => {
