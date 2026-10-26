@@ -1,8 +1,14 @@
 # Quran resource contracts — approved boundary
 
+## Private Khatmah settings — 2026-10-26
+
+The requested Khatmah feature reuses the existing `app_settings` SQLite key/value table with a versioned `quran.khatmah.v1` configuration/history value. No new database table, column, library-domain entity or canonical corpus write is introduced. Guarded main-process IPC validates installed source bindings, bounded unique page reads and local dates. A plan's script/layout pack IDs and reading profile remain fixed; removing resources does not erase its private history. Hafs Juz endpoints are resolved through that layout; adapted Warsh plans do not inherit Hafs divisions. Detailed behavior, tests and reminder/background limitations: [Khatmah](feature%20-%20Quran%20Khatmah.md).
+
 Updated 2026-10-25. The user explicitly approved the Quran-specific boundary, these contracts, SQLite-first storage and implementation, with future Qira’at support. The resource manager and initial SQLite study reader now implement the catalog/install/query subset below. Work → Edition → Source and the library database remain unchanged. Evidence and source schemas: [QUL](QUL.md). Roadmap: [Quran Experience](feature%20-%20Quran%20Experience.md).
 
 ## Implemented study-query boundary
+
+The 2026-10-26 catalog follow-up adds optional observed `downloadAccess` to the existing resource JSON descriptor and transient `localResources` IDs to library responses. The existing SQLite catalog tables/columns are unchanged. A public metadata snapshot is seeded offline; canonical datasets remain immutable source files. Shared audited preset definitions supply dependency/recommendation hints, not generic permission to join arbitrary resources. Anonymous sign-in buttons/redirects are classified separately from copyright restrictions. Local files can install directly, but unknown schemas remain storage-only, and QUL's account requirement is not bypassed.
 
 Follow-up: three local semantic-resource aliases resolve to verified official IDs without rewriting source manifests or introducing new database fields. Cleanup applies only to mutable catalog rows. Translation payloads optionally include source-derived `{offset, note}` anchors alongside display text and notes; these are transient query data, not a new canonical corpus representation. Header search uses existing catalog/FTS calls and an in-memory, validated script/surah/ayah handoff, not a new persistence schema.
 

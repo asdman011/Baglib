@@ -1,5 +1,5 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, session, utilityProcess } from 'electron';
-import { mkdir, readFile, writeFile, rm, stat, rename } from 'node:fs/promises';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, session, utilityProcess } from 'electron';
+import { mkdir, readFile, writeFile, rm, stat, rename, copyFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { QuranLibraryService, type QuranInstaller } from '../services/quran/quran-library.service';
@@ -9,14 +9,33 @@ import { QuranReaderProcess } from '../services/quran/quran-reader-process';
 import { canonicalResourceId, presetResource, readerPreset, readerPresets } from '../services/quran/reader-resources';
 import { downloadToFile, selectedExport } from '../services/quran/resource-download';
 import { electronDownloadFetch } from '../services/quran/electron-download-fetch';
+import publicCatalog from '../../shared/data/qul-public-catalog.json';
+import { quranResourceDependencies } from '../../shared/quran-resource-guidance';
+import { localResourceCandidates } from '../services/quran/local-resources';
+import { khatmahService } from '../services/quran/khatmah-reminders';
+import { KHATMAH_JUZ_ENDS, KHATMAH_JUZ_STARTS } from '../../shared/khatmah';
+import type { KhatmahMutation } from '../../shared/types/khatmah';
+import type { QuranMushafPage, QuranReaderCatalog } from '../../shared/types/quran';
 
 const allowedDownloadOrigins = new Set([QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
 const allowedAudioOrigins = new Set(['https://audio-cdn.tarteel.ai', QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
+const localResourcePackage = async (id: string): Promise<string | null> => {
+  if (app.isPackaged) return null;
+  const root = path.join(app.getAppPath(), 'repos', 'Quran', 'QUL Developer Resources');
+  for (const filename of localResourceCandidates(id, root)) if ((await stat(filename).catch(() => null))?.isFile()) return filename;
+  return null;
+};
 
 const getAudioFilePath = (root: string, packId: string, surah: number, ayah: number) => {
   const padSurah = String(surah).padStart(3, '0');
   const padAyah = String(ayah).padStart(3, '0');
   return path.join(root, 'audio', packId, `${padSurah}_${padAyah}.mp3`);
+};
+const suppliedAudioPath = (audioUrl: string, surah: number, ayah: number): string | null => {
+  const url = new URL(audioUrl);
+  const source = url.origin === 'https://audio-cdn.tarteel.ai' ? url.pathname.match(/^\/quran\/(husary|minshawyMurattal)\/(\d{3})(\d{3})\.mp3$/) : null;
+  if (!source || Number(source[2]) !== surah || Number(source[3]) !== ayah) return null;
+  return path.join(app.getAppPath(), 'repos', 'Quran', 'QUL Developer Resources', '3-Recitations and segments data', 'audio', source[1] === 'husary' ? 'husary' : 'minshawi', source[2], `${source[2]}${source[3]}.mp3`);
 };
 
 const cacheSingleAudioFile = async (root: string, packId: string, surah: number, ayah: number, audioUrl: string, signal = new AbortController().signal): Promise<string> => {
@@ -39,6 +58,16 @@ const cacheSingleAudioFile = async (root: string, packId: string, surah: number,
   const tempFile = path.join(dir, `${randomUUID()}.tmp`);
 
   try {
+    const supplied = suppliedAudioPath(audioUrl, surah, ayah);
+    if (supplied) {
+      const info = await stat(supplied).catch(() => null);
+      if (info?.isFile() && info.size > 1000 && info.size <= 30 * 1024 * 1024) {
+        if (signal.aborted) throw new Error('cancelled');
+        await copyFile(supplied, tempFile);
+        await rename(tempFile, targetFile);
+        return `baglib-asset://${targetFile.replace(/\\/g, '/')}`;
+      }
+    }
     await downloadToFile({ url: audioUrl, filename: tempFile, fetcher: electronDownloadFetch(session.defaultSession, 30 * 1024 * 1024), origins: allowedAudioOrigins, signal, limit: 30 * 1024 * 1024 });
     if ((await stat(tempFile)).size < 1000) throw new Error('invalid-package');
     await rename(tempFile, targetFile);
@@ -107,14 +136,33 @@ export function registerQuranIpc(): void {
   const createService = async (root: string) => {
     const instance = new QuranLibraryService(root, fetchHtml, runQuranInstaller, changed);
     await instance.initialize();
-    instance.store.saveResources(readerPresets.filter(preset => !instance.store.resource(preset.id)).map(preset => presetResource(preset.id)));
+    instance.store.saveResources(readerPresets.filter(preset => !instance.store.resource(preset.id)).map(preset => {
+      const resource = presetResource(preset.id);
+      const published = publicCatalog.resources.find(item => item.id === preset.id);
+      return published ? { ...resource, title: published.title, tags: published.tags, formats: published.formats, related: published.related, restricted: published.restricted, downloadAccess: published.downloadAccess as 'sign-in-required' | 'unknown' } : resource;
+    }));
+    instance.store.saveResources(publicCatalog.resources.filter(resource => !instance.store.resource(resource.id)).map(resource => ({
+      ...resource, category: category(resource.category), downloadAccess: resource.downloadAccess as 'sign-in-required' | 'unknown', fetchedAt: publicCatalog.fetchedAt,
+      profile: { key: `qul:${resource.id}:unverified`, qiraah: null, riwayah: null, tariq: null, numbering: null, segmentation: null, script: null, verified: false },
+    })));
     for (const preset of readerPresets) for (const alias of preset.aliases || []) instance.store.removeResource(alias);
+    instance.store.removeResource('mushaf-layout/warsh-svg');
     return instance;
   };
   const getService = () => initializing ??= (async () => {
     let root = path.join(app.getPath('userData'), 'quran');
     try { const config = JSON.parse(await readFile(path.join(app.getPath('userData'), 'quran-location.json'), 'utf8')); if (typeof config.directory === 'string' && path.isAbsolute(config.directory)) root = config.directory; } catch {}
     service = await createService(root);
+    const supplied = path.join(app.getAppPath(), 'repos', 'Quran', 'QUL Developer Resources');
+    if (!app.isPackaged && (await stat(supplied).catch(() => null))?.isDirectory()) {
+      const files = new Map<string, string>();
+      for (const preset of readerPresets) {
+        if (preset.id === 'mushaf-layout/warsh-svg') continue;
+        const filename = path.join(supplied, preset.relative, preset.filename);
+        if ((await stat(filename).catch(() => null))?.isFile()) files.set(preset.id, filename);
+      }
+      service.enqueue([...files.keys()], async job => files.get(job.resourceId) || null);
+    }
     return service;
   })().catch(error => { initializing = undefined; throw error; });
   const result = async <Value>(event: Electron.IpcMainInvokeEvent, action: () => Promise<Value>): Promise<QuranResult<Value>> => {
@@ -124,7 +172,7 @@ export function registerQuranIpc(): void {
       return { ok: true, data: await action() };
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : '';
-      const valid: QuranError[] = ['unavailable', 'network', 'invalid-resource', 'restricted', 'invalid-package', 'unsupported-format', 'storage', 'cancelled', 'interrupted', 'busy'];
+      const valid: QuranError[] = ['unavailable', 'network', 'invalid-resource', 'restricted', 'authentication-required', 'invalid-package', 'unsupported-format', 'storage', 'cancelled', 'interrupted', 'busy'];
       return { ok: false, error: valid.includes(message as QuranError) ? message as QuranError : 'storage' };
     }
   };
@@ -136,6 +184,30 @@ export function registerQuranIpc(): void {
     return reader.request<Value>(instance.root, [...latest.values()], action);
   };
   ipcMain.handle('quran:reader-catalog', event => result(event, () => readRequest({ action: 'catalog' })));
+  const khatmahState = () => ({ plans: khatmahService.list(), notificationsSupported: Notification.isSupported() });
+  ipcMain.handle('quran:khatmah-list', event => result(event, async () => khatmahState()));
+  ipcMain.handle('quran:khatmah-mutate', (event, query: KhatmahMutation) => result(event, async () => {
+    if (!query || typeof query !== 'object') throw new Error('invalid-resource');
+    if (query.action === 'create') {
+      const config = query.config;
+      if (!config || typeof config.script !== 'string' || typeof config.layout !== 'string') throw new Error('invalid-resource');
+      const catalog = await readRequest<QuranReaderCatalog>({ action: 'catalog' });
+      const script = catalog.sources.find(source => source.id === config.script && source.kind === 'script');
+      const layout = catalog.sources.find(source => source.id === config.layout && (source.kind === 'mushaf-layout' || source.kind === 'glyph-layout'));
+      if (!script || !layout || (layout.kind === 'glyph-layout' && (script.profile !== 'hafs' || layout.profile !== script.profile))) throw new Error('invalid-resource');
+      const page = await readRequest<QuranMushafPage>({ action: 'mushaf-page', pack: layout.id, page: 1, script: script.id });
+      const juzPages: number[] = [];
+      const juzEndPages: number[] = [];
+      if (page.profile === 'hafs' && !page.layoutMode) for (const [index, reference] of [...KHATMAH_JUZ_STARTS, ...KHATMAH_JUZ_ENDS].entries()) {
+        const [surah, ayah] = reference.split(':').map(Number);
+        const result = await readRequest<{ pageNumber: number }>({ action: 'mushaf-page-for-ayah', pack: layout.id, script: script.id, surah, ayah });
+        (index < 30 ? juzPages : juzEndPages).push(result.pageNumber);
+      }
+      khatmahService.create(config, { script: script.id, layout: layout.id, profile: page.profile, adapted: page.layoutMode === 'adapted', totalPages: page.totalPages, juzPages, juzEndPages });
+    } else khatmahService.mutate(query);
+    changed();
+    return khatmahState();
+  }));
   ipcMain.handle('quran:sign-in', event => result(event, async () => {
     const browser = new BrowserWindow({ width: 1000, height: 800, parent: BrowserWindow.fromWebContents(event.sender) || undefined, autoHideMenuBar: true, webPreferences: { partition: 'baglib-qul', sandbox: true, nodeIntegration: false, contextIsolation: true } });
     const key = `sign-in-${randomUUID()}`;
@@ -153,10 +225,12 @@ export function registerQuranIpc(): void {
   }));
   ipcMain.handle('quran:download-batch', (event, ids: string[]) => result(event, async () => {
     if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('invalid-resource');
-    ids = ids.map(canonicalResourceId);
+    ids = quranResourceDependencies(ids.map(canonicalResourceId));
     const instance = await getService();
     if (settingUp) throw new Error('busy');
     return instance.enqueue(ids, async (job, signal) => {
+      const local = await localResourcePackage(job.resourceId);
+      if (local) return local;
       const resource = instance.store.resource(job.resourceId)!;
       const url = selectedExport(await fetchHtml(resource.sourcePath, signal), resource);
       const filename = path.join(instance.root, 'downloads', `${job.id}.download`);
@@ -213,12 +287,12 @@ export function registerQuranIpc(): void {
     return readRequest({ action: 'commentary', query });
   }));
   ipcMain.handle('quran:mushaf-page', (event, query) => result(event, async () => {
-    if (!query || typeof query.pack !== 'string' || !Number.isInteger(query.page) || query.page < 1 || query.page > 604) throw new Error('invalid-resource');
-    return readRequest({ action: 'mushaf-page', pack: query.pack, page: query.page });
+    if (!query || typeof query.pack !== 'string' || !Number.isInteger(query.page) || query.page < 1 || query.page > 604 || (query.script !== undefined && typeof query.script !== 'string')) throw new Error('invalid-resource');
+    return readRequest({ action: 'mushaf-page', pack: query.pack, page: query.page, script: query.script });
   }));
   ipcMain.handle('quran:mushaf-page-for-ayah', (event, query) => result(event, async () => {
-    if (!query || typeof query.pack !== 'string' || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300) throw new Error('invalid-resource');
-    return readRequest({ action: 'mushaf-page-for-ayah', pack: query.pack, surah: query.surah, ayah: query.ayah });
+    if (!query || typeof query.pack !== 'string' || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300 || (query.script !== undefined && typeof query.script !== 'string')) throw new Error('invalid-resource');
+    return readRequest({ action: 'mushaf-page-for-ayah', pack: query.pack, surah: query.surah, ayah: query.ayah, script: query.script });
   }));
   ipcMain.handle('quran:recitation-audio', (event, query) => result(event, async () => {
     if (!query || typeof query.pack !== 'string' || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300) throw new Error('invalid-resource');
@@ -232,6 +306,13 @@ export function registerQuranIpc(): void {
         ayahAudio.cached = true;
       }
     } catch {}
+    if (!ayahAudio.cached) {
+      const supplied = suppliedAudioPath(ayahAudio.audioUrl, query.surah, query.ayah);
+      if (supplied && (await stat(supplied).catch(() => null))?.isFile()) {
+        ayahAudio.localUrl = await cacheSingleAudioFile(instance.root, query.pack, query.surah, query.ayah, ayahAudio.audioUrl);
+        ayahAudio.cached = true;
+      }
+    }
     return ayahAudio;
   }));
   ipcMain.handle('quran:recitation-surah', (event, query) => result(event, async () => {
@@ -291,6 +372,14 @@ export function registerQuranIpc(): void {
     if (!query || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || (query.ayah !== undefined && (!Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300)) || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
     return readRequest<QuranAyahTheme[]>({ action: 'ayah-themes', pack: query.pack, surah: query.surah, ayah: query.ayah });
   }));
+  ipcMain.handle('quran:morphology', (event, query) => result(event, async () => {
+    if (!query || typeof query.script !== 'string' || !Number.isInteger(query.surah) || !Number.isInteger(query.ayah)) throw new Error('invalid-resource');
+    return readRequest({ action: 'morphology', script: query.script, surah: query.surah, ayah: query.ayah });
+  }));
+  ipcMain.handle('quran:mutashabihat', (event, query) => result(event, async () => {
+    if (!query || typeof query.script !== 'string' || !Number.isInteger(query.surah) || !Number.isInteger(query.ayah)) throw new Error('invalid-resource');
+    return readRequest({ action: 'mutashabihat', script: query.script, surah: query.surah, ayah: query.ayah });
+  }));
   ipcMain.handle('quran:ayah-topics', (event, query) => result(event, async () => {
     if (!query || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300 || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
     return readRequest<QuranTopic[]>({ action: 'ayah-topics', pack: query.pack, surah: query.surah, ayah: query.ayah });
@@ -335,7 +424,10 @@ export function registerQuranIpc(): void {
     if (query?.view !== undefined && !['all', 'installed', 'downloads'].includes(query.view)) throw new Error('invalid-resource');
     if (query?.search !== undefined && (typeof query.search !== 'string' || query.search.length > 200)) throw new Error('invalid-resource');
     if (query?.offset !== undefined && (!Number.isSafeInteger(query.offset) || query.offset < 0 || query.offset > 100000)) throw new Error('invalid-resource');
-    return (await getService()).store.library(query) as QuranLibrary;
+    const library = (await getService()).store.library(query) as QuranLibrary;
+    const resources = new Set([...library.resources.map(resource => resource.id), ...library.installed.map(pack => pack.resource.id)]);
+    library.localResources = (await Promise.all([...resources].map(async id => await localResourcePackage(id) ? id : null))).filter((id): id is string => id !== null);
+    return library;
   }));
   ipcMain.handle('quran:refresh', (event, kind) => result(event, async () => { await (await getService()).refresh(category(kind)); return null; }));
   ipcMain.handle('quran:download', (event, id: string) => result(event, async () => {

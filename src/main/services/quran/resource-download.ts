@@ -5,10 +5,12 @@ import { QUL_ORIGIN, parseResourceDetails } from './qul-catalog';
 
 export function selectedExport(html: string, resource: QuranResource): string {
   const details = parseResourceDetails(html, resource);
-  if (details.resource.restricted || !details.downloads.length) throw new Error('restricted');
+  if (details.resource.restricted) throw new Error('restricted');
+  if (details.resource.downloadAccess === 'sign-in-required') throw new Error('authentication-required');
+  if (!details.downloads.length) throw new Error('restricted');
   const { document } = parseHTML(html);
   const candidates = [...document.querySelectorAll('a[href]')].filter(anchor => details.downloads.includes(anchor.getAttribute('href') || ''));
-  const formats = resource.category === 'font' ? [/woff2/i, /woff|ttf/i, /zip/i] : resource.category === 'mushaf-layout' ? [/svg/i, /sqlite|\.db/i, /zip/i] : [/sqlite|\.db|database/i, /json/i, /zip/i];
+  const formats = resource.category === 'font' ? [/woff2/i, /woff|ttf/i, /zip/i] : resource.id === 'mushaf-layout/569' ? [/svg/i, /sqlite|\.db/i, /zip/i] : [/sqlite|\.db|database/i, /json/i, /svg/i, /zip/i];
   const chosen = formats.flatMap(format => candidates.filter(anchor => format.test(anchor.textContent) && (resource.id !== 'translation/193' || /inline/i.test(anchor.textContent))))[0];
   if (!chosen) throw new Error('unsupported-format');
   return new URL(chosen.getAttribute('href')!, QUL_ORIGIN).href;
@@ -23,6 +25,7 @@ export async function downloadToFile({ url, filename, fetcher, origins, signal, 
   let response: Response | undefined;
   for (let redirect = 0; redirect < 6; redirect++) {
     if (current.protocol !== 'https:' || current.username || current.password || !origins.has(current.origin)) throw new Error('invalid-resource');
+    if (current.origin === QUL_ORIGIN && /^\/users\/sign_in(?:\/|$)/.test(current.pathname)) throw new Error('authentication-required');
     response = await fetcher(current.href, { redirect: 'manual', signal: bounded });
     if (![301, 302, 303, 307, 308].includes(response.status)) break;
     const next = response.headers.get('location');

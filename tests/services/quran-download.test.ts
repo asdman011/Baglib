@@ -50,6 +50,17 @@ test('bounded streaming validates each redirect, cleans failed transfers and pre
   } finally { assert.equal(path.dirname(root), path.resolve(tmpdir())); await rm(root, { recursive: true, force: true }); }
 });
 
+test('a logged-out export redirect is reported as authentication rather than installed as an HTML dataset', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'baglib-qul-auth-'));
+  const filename = path.join(root, 'export');
+  let requests = 0;
+  try {
+    await assert.rejects(downloadToFile({ url: 'https://qul.tarteel.ai/resources/translation/token/download', filename, origins: new Set(['https://qul.tarteel.ai']), signal: new AbortController().signal, limit: 1024, fetcher: async () => { requests++; return new Response(null,{status:302,headers:{location:'/users/sign_in?modal=true'}}); } }), /authentication-required/);
+    assert.equal(requests, 1);
+    await assert.rejects(readFile(filename));
+  } finally { assert.equal(path.dirname(root),path.resolve(tmpdir())); await rm(root,{recursive:true,force:true}); }
+});
+
 test('mixed resource batches are sequential, deduplicated, cancellable and continue after failure', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'baglib-batch-'));
   const service = new QuranLibraryService(root, async () => '', async () => { throw new Error('unexpected installer'); });

@@ -11,7 +11,11 @@ const run = async (request: QuranReaderRequest) => {
     const next = JSON.stringify([request.root, request.packs.map(pack => pack.id)]);
     if (next !== identity) { reader?.close(); reader = new QuranReader(request.root, request.packs); identity = next; }
     const data =
-      request.action === 'inspect-ayah'
+      request.action === 'mutashabihat'
+        ? await reader!.mutashabihat(request.script, request.surah, request.ayah)
+        : request.action === 'morphology'
+        ? await reader!.morphology(request.script, request.surah, request.ayah)
+        : request.action === 'inspect-ayah'
         ? await reader!.inspectAyah(request.query)
         : request.action === 'catalog'
         ? reader!.catalog()
@@ -22,9 +26,9 @@ const run = async (request: QuranReaderRequest) => {
         : request.action === 'commentary'
         ? await reader!.commentary(request.query)
         : request.action === 'mushaf-page'
-        ? await reader!.mushafPage(request.pack, request.page)
+        ? await reader!.mushafPage(request.pack, request.page, request.script)
         : request.action === 'mushaf-page-for-ayah'
-        ? await reader!.mushafPageForAyah(request.pack, request.surah, request.ayah)
+        ? await reader!.mushafPageForAyah(request.pack, request.surah, request.ayah, request.script)
         : request.action === 'recitation-audio'
         ? await reader!.recitationAudio(request.pack, request.surah, request.ayah)
         : request.action === 'recitation-surah'

@@ -35,7 +35,10 @@ export class QuranLibraryService {
     const listing = parseResourceListing(await this.fetchHtml(`/resources/${kind}`), kind);
     if (!listing.length) throw new Error('network');
     if (this.disposed) return;
-    this.store.saveResources(listing);
+    this.store.saveResources(listing.map(resource => {
+      const previous = this.store.resource(resource.id);
+      return previous?.profile.verified ? { ...resource, profile: previous.profile } : resource;
+    }));
     this.changed();
   }
   async details(id: string): Promise<{ resource: QuranResource; downloads: string[] }> {
@@ -78,7 +81,7 @@ export class QuranLibraryService {
         } catch (cause) {
           if (!this.disposed && !controller.signal.aborted) {
             const message = cause instanceof Error ? cause.message : '';
-            this.fail(job, ['restricted', 'unsupported-format', 'invalid-package', 'invalid-resource'].includes(message) ? message as QuranError : 'network');
+            this.fail(job, ['restricted', 'authentication-required', 'unsupported-format', 'invalid-package', 'invalid-resource'].includes(message) ? message as QuranError : 'network');
           }
         } finally {
           this.controllers.delete(job.id);

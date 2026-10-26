@@ -3,6 +3,8 @@ import type { SunnahAPI } from '../shared/types/sunnah';
 import type { QuranAPI } from '../shared/types/quran';
 
 const quran: QuranAPI = {
+  khatmahList: () => ipcRenderer.invoke('quran:khatmah-list'),
+  khatmahMutate: query => ipcRenderer.invoke('quran:khatmah-mutate', query),
   signIn: () => ipcRenderer.invoke('quran:sign-in'),
   inspectAyah: query => ipcRenderer.invoke('quran:inspect-ayah', query),
   downloadBatch: ids => ipcRenderer.invoke('quran:download-batch', ids),
@@ -21,6 +23,8 @@ const quran: QuranAPI = {
   downloadSurahAudio: query => ipcRenderer.invoke('quran:download-surah-audio', query),
   surahIntro: query => ipcRenderer.invoke('quran:surah-intro', query),
   ayahThemes: query => ipcRenderer.invoke('quran:ayah-themes', query),
+  morphology: query => ipcRenderer.invoke('quran:morphology', query),
+  mutashabihat: query => ipcRenderer.invoke('quran:mutashabihat', query),
   ayahTopics: query => ipcRenderer.invoke('quran:ayah-topics', query),
   searchTopics: query => ipcRenderer.invoke('quran:search-topics', query),
   similarAyahs: query => ipcRenderer.invoke('quran:similar-ayahs', query),

@@ -4,7 +4,8 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parseHTML } from 'linkedom';
-import { QuranResourceView, QuranLibraryPanel, quranCategoryKeys } from '../../src/renderer/components/quran/QuranView';
+import { QuranResourceView, QuranLibraryPanel, QuranResourceRecommendations, quranCategoryKeys } from '../../src/renderer/components/quran/QuranView';
+import { presetResource } from '../../src/main/services/quran/reader-resources';
 import { NavigationRail } from '../../src/renderer/components/layout/NavigationRail';
 import { WorkspaceProvider, useWorkspace } from '../../src/renderer/components/context/WorkspaceContext';
 import { translations, type TranslationKey } from '../../src/renderer/translations';
@@ -14,6 +15,18 @@ const resource: QuranResource = { id: 'quran-script/86', category: 'quran-script
 const library: QuranLibrary = { resources: [resource], installed: [], jobs: [], directory: 'D:\\كتب\\Quran', hasMore: false, catalogStatus: 'cached-partial' };
 
 for (const lang of ['ar', 'en'] as const) {
+  test(`resource recommendations and local access guidance explain supported combinations in ${lang}`, () => {
+    const translate = (key: TranslationKey, params?: Record<string,string|number>) => Object.entries(params || {}).reduce((value,[name,replacement])=>value.replace(`{${name}}`,String(replacement)),translations[lang][key]);
+    const html = renderToStaticMarkup(createElement(QuranResourceRecommendations,{t:translate,busy:false,onInstall(){}}));
+    const document = parseHTML(html).document;
+    assert.equal(document.querySelectorAll('button').length,4);
+    for (const key of ['quranBundleHafsReader','quranBundleHafsStudy','quranBundleV4','quranBundleWarsh','quranDependencyHint'] as const) assert.ok(html.includes(translations[lang][key]));
+    const source = { ...presetResource('recitation/957'), downloadAccess: 'sign-in-required' as const };
+    const local = renderToStaticMarkup(createElement(QuranLibraryPanel,{library:{...library,resources:[source],localResources:[source.id]},t:translate,lang,tab:'all',busy:false,onDownload(){},onImport(){},onRemove(){},onCancel(){}}));
+    assert.ok(local.includes(translations[lang].quranLocalNoAccount));
+    assert.ok(local.includes(translations[lang].quranAudioDatasetOnly));
+    assert.ok(!local.includes(translations[lang].quranSourceSignIn));
+  });
   const translate = (key: TranslationKey, params?: Record<string, string | number>) => {
     let text: string = translations[lang][key];
     for (const [name, value] of Object.entries(params || {})) text = text.replace(`{${name}}`, String(value));

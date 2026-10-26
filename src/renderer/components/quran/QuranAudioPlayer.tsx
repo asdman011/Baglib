@@ -87,6 +87,7 @@ export function QuranAudioPlayer({
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playPromiseRef = useRef<Promise<void> | null>(null);
+  const loadSequence = useRef(0);
   const gapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sleepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentSegmentsRef = useRef<QuranAyahAudio['segments']>([]);
@@ -199,8 +200,9 @@ export function QuranAudioPlayer({
   }, [downloadJob, activeReciterId, surah, checkSurahOfflineStatus]);
 
   // Load and play ayah audio
-  const loadAyahAudio = useCallback(async (packId: string, s: number, a: number, autoPlay: boolean = true) => {
+  const loadAyahAudio = useCallback(async (packId: string, s: number, a: number, autoPlay: boolean = true, signal?: AbortSignal) => {
     if (!packId || !api()?.recitationAudio) return;
+    const sequence = ++loadSequence.current;
     try {
       // Prevent overlap with book TTS
       if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
@@ -213,6 +215,7 @@ export function QuranAudioPlayer({
       }
 
       const res = await api().recitationAudio({ pack: packId, surah: s, ayah: a });
+      if (sequence !== loadSequence.current || signal?.aborted) return;
       if (!res.ok) throw new Error(res.error);
 
       const audioData = res.data;
@@ -228,6 +231,7 @@ export function QuranAudioPlayer({
       if (!audio) return;
 
       await safePause();
+      if (sequence !== loadSequence.current || signal?.aborted || audio !== audioRef.current) return;
 
       const sourceUrl = audioData.localUrl || audioData.audioUrl;
       if (audio.src !== sourceUrl) {
@@ -240,19 +244,20 @@ export function QuranAudioPlayer({
         await safePlay();
       }
     } catch {
-      setIsPlaying(false);
+      if (sequence === loadSequence.current) setIsPlaying(false);
     }
   }, [safePause, safePlay]);
 
   // Handle active reciter or ayah change
   useEffect(() => {
+    const controller = new AbortController();
     const timer = setTimeout(() => {
       if (activeReciterId && surah && ayah) {
-        void loadAyahAudio(activeReciterId, surah, ayah, true);
+        void loadAyahAudio(activeReciterId, surah, ayah, true, controller.signal);
         void checkSurahOfflineStatus(activeReciterId, surah);
       }
     }, 0);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); controller.abort(); };
   }, [activeReciterId, surah, ayah, checkSurahOfflineStatus, loadAyahAudio]);
 
   // Audio lifecycle & listeners (attached ONCE on mount)
@@ -272,7 +277,7 @@ export function QuranAudioPlayer({
       if (segments && segments.length > 0) {
         const seg = segments.find(s => ms >= s[2] && ms < s[3]);
         if (seg) {
-          matchedWord = seg[0] + 1;
+          matchedWord = Number.isInteger(seg[1]) && seg[1] > 0 ? seg[1] : null;
         }
       }
 
@@ -349,6 +354,8 @@ export function QuranAudioPlayer({
         } else if (mode === 'surah') {
           // Loop back to ayah 1
           onAyahChangeRef.current(currentSurah, 1);
+        } else {
+          onAyahChangeRef.current(currentSurah === 114 ? 1 : currentSurah + 1, 1);
         }
       };
 

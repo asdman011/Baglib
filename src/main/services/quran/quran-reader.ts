@@ -6,6 +6,7 @@ import { parseHTML } from 'linkedom';
 import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit, QuranSimilarAyah, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
 import { normalizeQuranSearch } from './qul-catalog';
 import { readerPreset, readerPresets } from './reader-resources';
+import { buildWarshLayout, type WarshLayout, type WarshLayoutWord } from './warsh-layout';
 
 type Word = { id: number; surah: number; ayah: number; word: number; text: string };
 const marker = (text: string) => /^[\u0660-\u0669]+$/.test(text.trim());
@@ -45,6 +46,7 @@ export function richText(value: string): QuranRichNode[] {
 
 export class QuranReader {
   private databases = new Map<string, Database.Database>();
+  private warshLayouts = new Map<string, Promise<WarshLayout>>();
   constructor(private readonly root: string, private readonly packs: QuranPack[]) {}
   catalog(): QuranReaderCatalog {
     return { sources: this.packs.flatMap(pack => { const preset = readerPreset(pack); return preset ? [{ id: pack.id, title: pack.resource.title, kind: preset.kind, profile: preset.profile }] : []; }), presets: readerPresets.map(preset => ({ id: preset.id, title: preset.title, kind: preset.kind, installed: this.packs.some(pack => readerPreset(pack)?.id === preset.id) })) };
@@ -56,7 +58,7 @@ export class QuranReader {
     return { pack, preset };
   }
   private async database(id: string, kind: string): Promise<Database.Database> {
-    const { pack, preset } = this.source(id, kind);
+    const { pack } = this.source(id, kind);
     const cached = this.databases.get(id);
     if (cached) return cached;
     const parent = await realpath(path.join(this.root, 'packs', pack.id));
@@ -188,6 +190,11 @@ export class QuranReader {
                 'surah-info': 'CREATE INDEX baglib_surah_info ON surah_infos(surah_number)',
                 'ayah-theme': 'CREATE INDEX baglib_ayah_theme ON themes(surah_number, ayah_from, ayah_to)',
                 'similar-ayah': 'CREATE INDEX IF NOT EXISTS baglib_similar_verse ON similar_ayahs(verse_key); CREATE INDEX IF NOT EXISTS baglib_similar_matched ON similar_ayahs(matched_ayah_key);',
+                'glyph-script': 'CREATE INDEX baglib_glyph_id ON words(id); CREATE INDEX baglib_glyph_location ON words(surah,ayah,word)',
+                'glyph-layout': 'CREATE INDEX baglib_glyph_page ON pages(page_number,line_number)',
+                'word-root': 'CREATE INDEX baglib_root_location ON root_words(word_location)',
+                'word-lemma': 'CREATE INDEX baglib_lemma_location ON lemma_words(word_location)',
+                'word-stem': 'CREATE INDEX baglib_stem_location ON stem_words(word_location)',
               };
               if (sql[kind]) working.exec(sql[kind]);
             }
@@ -284,7 +291,22 @@ export class QuranReader {
     }
     return { surah: query.surah, ayah: query.ayah, profile: passage.profile, canonical: ayah.words.map(word => word.text).join(' '), imlaey };
   }
-  async mushafPage(packId: string, pageNumber: number): Promise<QuranMushafPage> {
+  async mushafPage(packId: string, pageNumber: number, scriptId?: string): Promise<QuranMushafPage> {
+    if (scriptId && this.source(scriptId, 'script').preset.profile === 'warsh') {
+      if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > 604) throw new Error('invalid-resource');
+      const layout = await this.warshLayout(packId, scriptId);
+      const page = layout.pages.get(pageNumber);
+      if (!page) throw new Error('invalid-resource');
+      const font = this.catalog().sources.find(source => source.kind === 'font' && source.profile === 'warsh');
+      if (!font) throw new Error('invalid-resource');
+      const { pack } = this.source(font.id, 'font');
+      const index = pack.files.findIndex(file => file.type === 'font');
+      const directory = await realpath(path.join(this.root, 'packs', pack.id));
+      const filename = await realpath(path.join(directory, `${index}.bin`));
+      if (path.dirname(filename) !== directory) throw new Error('invalid-resource');
+      return { ...page, fontUrl: `baglib-asset://${filename.replace(/\\/g, '/')}` };
+    }
+    if (this.catalog().sources.find(source => source.id === packId)?.kind === 'glyph-layout') return this.glyphPage(packId, pageNumber);
     if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > 604) throw new Error('invalid-resource');
     const { preset } = this.source(packId, 'mushaf-layout');
     const database = await this.database(packId, 'mushaf-layout');
@@ -311,8 +333,24 @@ export class QuranReader {
       words: JSON.parse(row.words_json),
     };
   }
-  async mushafPageForAyah(packId: string, surah: number, ayah: number): Promise<{ pageNumber: number }> {
+  async mushafPageForAyah(packId: string, surah: number, ayah: number, scriptId?: string): Promise<{ pageNumber: number }> {
     if (!Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
+    if (scriptId && this.source(scriptId, 'script').preset.profile === 'warsh') {
+      const layout = await this.warshLayout(packId, scriptId);
+      const pageNumber = layout.references.get(`${surah}:${ayah}`);
+      if (!pageNumber) throw new Error('invalid-resource');
+      return { pageNumber };
+    }
+    if (this.catalog().sources.find(source => source.id === packId)?.kind === 'glyph-layout') {
+      const glyph = this.catalog().sources.find(source => source.kind === 'glyph-script');
+      if (!glyph) throw new Error('invalid-resource');
+      const words = await this.database(glyph.id, 'glyph-script');
+      const word = words.prepare('SELECT id FROM words WHERE surah=? AND ayah=? ORDER BY word LIMIT 1').get(surah, ayah) as { id: number } | undefined;
+      const layout = await this.database(packId, 'glyph-layout');
+      const row = word && layout.prepare('SELECT page_number FROM pages WHERE first_word_id<=? AND last_word_id>=? ORDER BY page_number LIMIT 1').get(word.id, word.id) as { page_number: number } | undefined;
+      if (!row) throw new Error('invalid-resource');
+      return { pageNumber: row.page_number };
+    }
     this.source(packId, 'mushaf-layout');
     const database = await this.database(packId, 'mushaf-layout');
     const row = database.prepare('SELECT page_number FROM page_ayahs WHERE surah = ? AND ayah = ? ORDER BY page_number ASC LIMIT 1').get(surah, ayah) as { page_number: number } | undefined;
@@ -321,33 +359,9 @@ export class QuranReader {
   }
   async recitationAudio(packId: string, surah: number, ayah: number): Promise<QuranAyahAudio> {
     if (!Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
-    const { preset } = this.source(packId, 'recitation');
-    const database = await this.database(packId, 'recitation');
-    const row = database.prepare('SELECT surah_number, ayah_number, audio_url, duration, segments FROM verses WHERE surah_number = ? AND ayah_number = ?').get(surah, ayah) as {
-      surah_number: number;
-      ayah_number: number;
-      audio_url: string;
-      duration: number | null;
-      segments: string | null;
-    } | undefined;
+    const row = (await this.recitationSurah(packId, surah)).find(value => value.ayah === ayah);
     if (!row) throw new Error('invalid-resource');
-    let segments: QuranAudioSegment[] = [];
-    if (row.segments) {
-      try {
-        const parsed = JSON.parse(row.segments);
-        if (Array.isArray(parsed)) {
-          segments = parsed.filter(s => Array.isArray(s) && s.length >= 4 && typeof s[2] === 'number' && typeof s[3] === 'number');
-        }
-      } catch {}
-    }
-    return {
-      surah: row.surah_number,
-      ayah: row.ayah_number,
-      audioUrl: row.audio_url,
-      duration: row.duration ?? null,
-      segments,
-      profile: preset.profile,
-    };
+    return row;
   }
   async recitationSurah(packId: string, surah: number): Promise<QuranAyahAudio[]> {
     if (!Number.isInteger(surah) || surah < 1 || surah > 114) throw new Error('invalid-resource');
@@ -360,7 +374,12 @@ export class QuranReader {
       duration: number | null;
       segments: string | null;
     }[];
+    const seen = new Set<number>();
     return rows.map(row => {
+      const reference = new URL(row.audio_url).pathname.match(/\/(\d{3})(\d{3})\.mp3$/);
+      const localAyah = Number(reference?.[2]);
+      if (!reference || Number(reference[1]) !== surah || localAyah < 1 || localAyah > 300 || seen.has(localAyah)) throw new Error('invalid-resource');
+      seen.add(localAyah);
       let segments: QuranAudioSegment[] = [];
       if (row.segments) {
         try {
@@ -372,12 +391,107 @@ export class QuranReader {
       }
       return {
         surah: row.surah_number,
-        ayah: row.ayah_number,
+        ayah: localAyah,
         audioUrl: row.audio_url,
         duration: row.duration ?? null,
         segments,
         profile: preset.profile,
       };
+    }).sort((first, second) => first.ayah - second.ayah);
+  }
+  async morphology(script: string, surah: number, ayah: number): Promise<import('../../../shared/types/quran').QuranMorphology[]> {
+    if (this.source(script, 'script').preset.profile !== 'hafs' || !Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
+    const values = new Map<string, import('../../../shared/types/quran').QuranMorphology>();
+    for (const family of ['root', 'lemma', 'stem'] as const) {
+      const kind = `word-${family}`;
+      const source = this.catalog().sources.find(item => item.kind === kind);
+      if (!source) continue;
+      const database = await this.database(source.id, kind);
+      const field = family === 'root' ? 'arabic_trilateral' : 'text';
+      const rows = database.prepare(`SELECT link.word_location AS location, entry.${field} AS text FROM ${family}_words link JOIN ${family}s entry ON entry.id=link.${family}_id WHERE link.word_location GLOB ? LIMIT 600`).all(`${surah}:${ayah}:*`) as { location: string; text: string }[];
+      for (const row of rows) {
+        const record = values.get(row.location) || { location: row.location };
+        record[family] = row.text;
+        values.set(row.location, record);
+      }
+    }
+    return [...values.values()].sort((first, second) => Number(first.location.split(':')[2]) - Number(second.location.split(':')[2]));
+  }
+  private warshLayout(packId: string, scriptId: string): Promise<WarshLayout> {
+    this.source(packId, 'mushaf-layout');
+    if (this.source(scriptId, 'script').preset.profile !== 'warsh') throw new Error('invalid-resource');
+    const key = `${packId}:${scriptId}`;
+    const cached = this.warshLayouts.get(key);
+    if (cached) return cached;
+    const pending = (async () => {
+      const template = await this.database(packId, 'mushaf-layout');
+      const pages = template.prepare('SELECT page_number,words_json FROM pages ORDER BY page_number').all() as { page_number: number; words_json: string }[];
+      const script = await this.database(scriptId, 'script');
+      const words = script.prepare('SELECT id,surah,ayah,word,text FROM words ORDER BY surah,ayah,word').all() as WarshLayoutWord[];
+      return buildWarshLayout(pages.map(page => ({ pageNumber: page.page_number, words: JSON.parse(page.words_json) as QuranMushafWord[] })), words);
+    })();
+    this.warshLayouts.set(key, pending);
+    void pending.catch(() => this.warshLayouts.delete(key));
+    return pending;
+  }
+  private async glyphPage(packId: string, pageNumber: number): Promise<QuranMushafPage> {
+    if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > 604) throw new Error('invalid-resource');
+    const sources = this.catalog().sources;
+    const glyph = sources.find(source => source.kind === 'glyph-script' && source.profile === 'hafs');
+    const canonical = sources.find(source => source.kind === 'script' && source.profile === 'hafs');
+    const font = sources.find(source => source.kind === 'font' && source.profile === 'hafs');
+    if (!glyph || !canonical || !font) throw new Error('invalid-resource');
+    const layout = await this.database(packId, 'glyph-layout');
+    const glyphs = await this.database(glyph.id, 'glyph-script');
+    const script = await this.database(canonical.id, 'script');
+    const { pack: fonts } = this.source(font.id, 'font');
+    const index = fonts.files.findIndex(file => file.type === 'font' && new RegExp(`(?:^|/)p${pageNumber}\\.(?:woff2|ttf)$`).test(file.name));
+    if (index < 0) throw new Error('invalid-resource');
+    const fontPath = await realpath(path.join(this.root, 'packs', fonts.id, `${index}.bin`));
+    if (path.dirname(fontPath) !== await realpath(path.join(this.root, 'packs', fonts.id))) throw new Error('invalid-resource');
+    const rows = layout.prepare('SELECT line_number,line_type,is_centered,first_word_id,last_word_id,surah_number FROM pages WHERE page_number=? ORDER BY line_number').all(pageNumber) as { line_number: number; line_type: string; is_centered: number; first_word_id: number; last_word_id: number; surah_number: number }[];
+    if (!rows.length || rows.length > 20) throw new Error('invalid-package');
+    const words: QuranMushafWord[] = [];
+    const lines: NonNullable<QuranMushafPage['glyphLines']> = [];
+    for (const row of rows) {
+      const tokens = row.line_type === 'ayah' ? glyphs.prepare('SELECT id,surah,ayah,word,text FROM words WHERE id BETWEEN ? AND ? ORDER BY id').all(row.first_word_id, row.last_word_id) as Word[] : [];
+      const lineWords = tokens.map(token => {
+        const original = script.prepare('SELECT surah,ayah,word,text FROM words WHERE id=?').get(token.id) as Word | undefined;
+        if (!original || original.surah !== token.surah || original.ayah !== token.ayah || original.word !== token.word) throw new Error('invalid-package');
+        words.push({ id: String(token.id), surah: token.surah, ayah: token.ayah, wordIndex: token.word, type: marker(original.text) ? 'aya-mark' : 'text', line: row.line_number, textHafs: original.text });
+        return { surah: token.surah, ayah: token.ayah, position: token.word, glyph: token.text, text: original.text };
+      });
+      lines.push({ number: row.line_number, type: row.line_type, centered: Boolean(row.is_centered), surah: Number(row.surah_number) || 0, words: lineWords });
+    }
+    if (!words.length) throw new Error('invalid-package');
+    const basmala = (script.prepare('SELECT text FROM words WHERE surah=1 AND ayah=1 ORDER BY word').all() as { text: string }[]).filter(word => !marker(word.text)).map(word => word.text).join(' ');
+    return { pageNumber, totalPages: 604, profile: 'hafs', svg: '', fontUrl: `baglib-asset://${fontPath.replace(/\\/g, '/')}`, basmala, glyphLines: lines, words, surahStart: words[0].surah, ayahStart: words[0].ayah, surahEnd: words[words.length - 1].surah, ayahEnd: words[words.length - 1].ayah };
+  }
+  async mutashabihat(script: string, surah: number, ayah: number): Promise<import('../../../shared/types/quran').QuranPhraseMatch[]> {
+    if (this.source(script, 'script').preset.profile !== 'hafs' || !Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
+    const source = this.catalog().sources.find(item => item.kind === 'mutashabihat');
+    if (!source) return [];
+    const { pack } = this.source(source.id, 'mutashabihat');
+    const read = async (name: string) => {
+      const index = pack.files.findIndex(file => file.name === name && file.type === 'json');
+      if (index < 0 || pack.files[index].bytes > 8 * 1024 * 1024) throw new Error('invalid-package');
+      const directory = await realpath(path.join(this.root, 'packs', pack.id));
+      const filename = await realpath(path.join(directory, `${index}.json`));
+      if (path.dirname(filename) !== directory) throw new Error('invalid-resource');
+      return JSON.parse(await readFile(filename, 'utf8'));
+    };
+    const locations = await read('phrase_verses.json') as Record<string, number[]>;
+    const phrases = await read('phrases.json') as Record<string, { source: { key: string; from: number; to: number }; ayah: Record<string, [number, number][]> }>;
+    const ids = locations[`${surah}:${ayah}`] || [];
+    if (!Array.isArray(ids) || ids.length > 500) throw new Error('invalid-package');
+    const database = await this.database(script, 'script');
+    return ids.slice(0, 50).map(id => {
+      const phrase = phrases[String(id)];
+      if (!phrase || !/^\d{1,3}:\d{1,3}$/.test(phrase.source.key)) throw new Error('invalid-package');
+      const [sourceSurah, sourceAyah] = phrase.source.key.split(':').map(Number);
+      const tokens = database.prepare('SELECT text FROM words WHERE surah=? AND ayah=? AND word BETWEEN ? AND ? ORDER BY word').all(sourceSurah, sourceAyah, phrase.source.from, phrase.source.to) as { text: string }[];
+      const references = Object.keys(phrase.ayah);
+      return { id, text: tokens.map(token => token.text).join(' '), source: phrase.source.key, ranges: phrase.ayah[`${surah}:${ayah}`] || [], references: references.slice(0, 100), total: references.length };
     });
   }
   private resolvePack(kind: string, packId?: string): string {
@@ -602,5 +716,5 @@ export class QuranReader {
       };
     });
   }
-  close(): void { for (const database of this.databases.values()) database.close(); this.databases.clear(); }
+  close(): void { for (const database of this.databases.values()) database.close(); this.databases.clear(); this.warshLayouts.clear(); }
 }

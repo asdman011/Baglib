@@ -4,12 +4,14 @@ import type { QuranPack, QuranReadQuery, QuranResult } from '../../../shared/typ
 
 type Action =
   | { action: 'catalog' }
+  | { action: 'morphology'; script: string; surah: number; ayah: number }
+  | { action: 'mutashabihat'; script: string; surah: number; ayah: number }
   | { action: 'inspect-ayah'; query: { script: string; layout?: string; surah: number; ayah: number } }
   | { action: 'read'; query: QuranReadQuery }
   | { action: 'search'; query: { script: string; text: string } }
   | { action: 'commentary'; query: { script: string; pack: string; surah: number; ayah: number } }
-  | { action: 'mushaf-page'; pack: string; page: number }
-  | { action: 'mushaf-page-for-ayah'; pack: string; surah: number; ayah: number }
+  | { action: 'mushaf-page'; pack: string; page: number; script?: string }
+  | { action: 'mushaf-page-for-ayah'; pack: string; surah: number; ayah: number; script?: string }
   | { action: 'recitation-audio'; pack: string; surah: number; ayah: number }
   | { action: 'recitation-surah'; pack: string; surah: number }
   | { action: 'surah-intro'; pack?: string; surah: number }
@@ -25,7 +27,7 @@ export class QuranReaderProcess {
   private sequence = 0;
   private idle?: ReturnType<typeof setTimeout>;
   request<Value>(root: string, packs: QuranPack[], action: Action): Promise<Value> {
-    if (this.pending.size >= 6) return Promise.reject(new Error('busy'));
+    if (this.pending.size >= 32) return Promise.reject(new Error('busy'));
     clearTimeout(this.idle);
     if (!this.child) {
       const child = utilityProcess.fork(path.join(__dirname, 'quran-reader-worker.js'), [], { serviceName: 'Baglib Quran reader', stdio: 'ignore', execArgv: ['--max-old-space-size=512'] });

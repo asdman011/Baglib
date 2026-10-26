@@ -6,6 +6,7 @@ import { parseHTML } from 'linkedom';
 import { QuranPassageView } from '../../src/renderer/components/quran/QuranReaderView';
 import { QuranAyahInspector } from '../../src/renderer/components/quran/QuranAyahInspector';
 import { QuranMushafView } from '../../src/renderer/components/quran/QuranMushafView';
+import { QuranMushafWorkspace } from '../../src/renderer/components/quran/QuranMushafWorkspace';
 import { QuranSurahIntroCard } from '../../src/renderer/components/quran/QuranSurahIntroCard';
 import { QuranTopicDrawer } from '../../src/renderer/components/quran/QuranTopicDrawer';
 import { QuranSimilarAyahsDrawer } from '../../src/renderer/components/quran/QuranSimilarAyahsDrawer';
@@ -14,6 +15,13 @@ import type { QuranAyahTheme, QuranMushafPage, QuranPassage, QuranSimilarAyah, Q
 
 const passage: QuranPassage = { profile: 'hafs', surah: 1, surahs: [{ number: 1, count: 7 }], next: null, ayahs: [{ number: 1, words: [{ position: 1, text: 'بِسۡمِ', marker: false, meaning: 'In the name' }, { position: 2, text: '١', marker: true }], translation: { text: 'Meaning <script>not executed</script>', notes: ['A source note'] } }] };
 for (const lang of ['ar', 'en'] as const) {
+  test(`unified Mushaf exposes localized page tools and a compact play dock in ${lang}`, () => {
+    const html = renderToStaticMarkup(createElement(QuranMushafWorkspace, { page: { pageNumber: 1, totalPages: 604, surahStart: 1, ayahStart: 1, surahEnd: 1, ayahEnd: 7, profile: 'hafs', svg: '<svg/>', words: [] }, selection: { script: '', translation: '', tafsir: '', meanings: '', transliteration: '' }, surahs: [], t: key => translations[lang][key], lang, dir: lang === 'ar' ? 'rtl' : 'ltr', canPlay: true, onStartAudio() {}, selectedAyah: null, onSelectAyah() {}, onNavigatePage() {}, onCopyText() {} }));
+    const { document } = parseHTML(html);
+    assert.ok(document.querySelector('[data-quran-workspace]'));
+    assert.equal(document.querySelectorAll('[data-quran-mode]').length, 0);
+    for (const key of ['quranCatTafsir', 'quranCatTranslation', 'quranCatTopics', 'quranCatTheme', 'quranAudioPlay'] as const) assert.ok(document.querySelector(`button[aria-label="${translations[lang][key]}"]`));
+  });
   test(`shared Ayah Inspector exposes both canonical forms and a start-side drawer in ${lang}`, () => {
     const translate = (key: TranslationKey) => translations[lang][key];
     const html = renderToStaticMarkup(createElement(QuranAyahInspector, { reference: { surah: 1, ayah: 1 }, details: { surah: 1, ayah: 1, profile: 'hafs', canonical: 'بِسۡمِ ٱللَّهِ', imlaey: 'بسم الله' }, surahName: 'الفاتحة', error: false, t: translate, dir: lang === 'ar' ? 'rtl' : 'ltr', onClose() {}, onCopy() {}, onStudy() {}, onSimilar() {} }));
@@ -23,6 +31,13 @@ for (const lang of ['ar', 'en'] as const) {
     assert.ok(document.querySelector('[role=dialog]')?.textContent.includes('بِسۡمِ ٱللَّهِ'));
     for (const key of ['quranCopyCanonical', 'quranCopyImlaey', 'quranOpenInStudyReader', 'quranSimilarAyahs'] as const) assert.ok(html.includes(translations[lang][key]));
     assert.equal(document.querySelector('[role=dialog]')?.getAttribute('aria-modal'), 'true');
+  });
+  test(`floating Ayah Inspector is resizable and does not block other study windows in ${lang}`, () => {
+    const html = renderToStaticMarkup(createElement(QuranAyahInspector, { floating: true, reference: { surah: 1, ayah: 1 }, details: null, surahName: 'الفاتحة', error: false, t: key => translations[lang][key], dir: lang === 'ar' ? 'rtl' : 'ltr', onClose() {}, onCopy() {}, onStudy() {} }));
+    const { document } = parseHTML(html);
+    assert.ok(document.querySelector('[data-quran-inspector-layer]')?.classList.contains('resize'));
+    assert.equal(document.querySelector('[role=dialog]')?.hasAttribute('aria-modal'), false);
+    assert.equal(document.querySelectorAll('button[tabindex="-1"]').length, 0);
   });
   test(`Quran passage preserves Arabic and renders safe English/tafsir content in ${lang}`, () => {
     const translate = (key: TranslationKey, params?: Record<string, string | number>) => Object.entries(params || {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), translations[lang][key]);

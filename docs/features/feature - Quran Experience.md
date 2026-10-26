@@ -1,5 +1,34 @@
 # Feature: Quran Experience — approved roadmap
 
+## Integrated Khatmah — 2026-10-26
+
+A localized Khatmahs tab adds independent private completion plans, custom/preset scheduling, page/session and verified Hafs Juz pacing, adaptive assignments, exact Mushaf jumps, progress/streaks and pace forecasts. A reader-side mark/undo control supports optional visibility/focus-gated 20-second activity tracking. Native reminders require Baglib to be running. No source Quran databases or Work → Edition → Source schemas are modified; the existing private SQLite settings repository is reused. See [Khatmah](feature%20-%20Quran%20Khatmah.md) for contracts, calculations, evidence, resource-binding/Warsh limits and verification.
+
+## Public catalog and compatibility UX — 2026-10-26
+
+The Resource Library now starts with a scraped, offline-browsable public catalog (546 entries across all 14 categories), stored in the existing SQLite catalog. Cards show preferred format, observed access requirements, audited reader support versus storage-only status, reading profile, companion dependencies and feature badges. Four localized install bundles compare lightweight Hafs, feature-rich Hafs study, matched V4 and Warsh/shared-template setups. Companion resources are added automatically; arbitrary matching tags do not certify compatibility.
+
+Provided local resources install directly without QUL registration. Most advertised remote exports still open QUL sign-in; the app now reports that access condition precisely instead of calling it copyright restriction or installing a login page. Universal anonymous downloading is a provider/licensing limitation, not a completed feature. See [QUL investigation](QUL.md#public-catalog-access-limits-and-recommendations--codex-2026-10-26) for discovery counts, REA evidence, bundle comparison and remaining boundaries. No credentials or signed URLs are shipped; no API/mirror server or SQL schema migration was introduced.
+
+## Warsh correction — 2026-10-26
+
+Warsh is now available in the same Mushaf workspace using the supplied Warsh script/font and the selected shared SVG **template**, rather than a Hafs-only renderer gate. Script selection travels through IPC and determines page content, numbering, font and ayah lookup. All 77,856 supplied Warsh words / 6,214 references passed complete ordered coverage validation. Arabic/English native checks load the actual Warsh font and verify inspector text and navigation.
+
+The adapter preserves source words and riwayah numbering while adapting line/page breaks to shared line capacities. It does not relabel Hafs vector outlines or claim a facsimile of a particular Warsh print. This distinction is explained in reading options, not through a blocking warning. Hafs-only verse annotations and recitations remain isolated. See [QUL evidence](QUL.md#warsh-shared-template-rendering-correction--codex-2026-10-26) for the precise reflow method and tests. Earlier statements that Warsh could not render at all are superseded.
+
+## Unified workspace checkpoint — 2026-10-26
+
+The split reader modes described in older checkpoints below are superseded by one page-centered Mushaf workspace. SVG and the selected compatible V4 glyph/layout/font stack share the same tools; canonical Arabic remains separate from display glyphs. [Source evidence and download results](QUL.md#unified-mushaf-and-live-provisioning--codex-2026-10-26) document verified scope and source gaps.
+
+- Right-side tafsir, translation and topic/concept tools read **every ayah on the current page**, including pages spanning surahs. Grouped tafsir is deduplicated by source coverage. Multiple panels stay open and can be resized.
+- Right-click opens a cursor-positioned tool menu. Selected tools open in a scrollable left-side stack; double-click opens morphology, transliteration, phrase-based Mutashabihat and scored similar ayahs together. The inspector is a resizable nonmodal card, so it no longer blocks other tools.
+- Themes appear as brackets immediately beside the page, not at the far tool rail. Word hit testing includes transparent SVG hit regions and a 12-CSS-pixel nearest-word tolerance. Hover still colors the word emerald and softly illuminates its encompassing ayah.
+- Script, layout and compatible font information live at the upper right. Layouts enforce profile compatibility; V4 fonts are matched to their page glyphs, not offered as arbitrary interchangeable decorative fonts. Side docks remain visible in normal mode and reveal on pointer proximity or keyboard focus in fullscreen.
+- A medium bottom play button starts at the current page's first ayah and expands the recitation controls. Default playback crosses surah boundaries and wraps after surah 114; existing repeat/gap/sleep settings can override that behavior. Manual page navigation stops the old playback to prevent stale page jumps. Async generation identifiers prevent stale audio loads from replacing a newly selected source.
+- Selected local datasets install automatically in development. Both complete selected recitations are now supplied locally; recordings are reused into app-private caches without needing the user to redownload them. Arbitrary published QUL resources still require their own compatible adapters/rights checks.
+
+Scope limitations: no fabricated Warsh page mapping, no invented POS/grammar fields, no correction of source translation/transliteration gaps, and no certification that every possible QUL export or every supplied metadata family has a reader UI. These limitations are not waived by successful package installation.
+
 Initial roadmap: 2026-10-24. Updated: 2026-10-25. The user approved the Quran-specific boundary, SQLite-first implementation and future Qira’at scalability. Study reading, SVG Mushaf and recorded-audio code now exist; the current checkpoint below describes what was actually verified. Research: [QUL](QUL.md). Approved boundary: [Quran Resource Contracts](Quran%20Resource%20Contracts.md). No library migration or AI model is included.
 
 ## Current checkpoint: interaction, bulk downloads and immersive Mushaf

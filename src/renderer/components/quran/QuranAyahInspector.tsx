@@ -5,10 +5,11 @@ import { Copy, CopyCheck, ExternalLink, X } from 'lucide-react';
 import type { QuranAyahDetails } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 
-export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar }: {
+export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar, floating = false }: {
   details: QuranAyahDetails | null; reference: { surah: number; ayah: number }; surahName: string; error: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string; dir: 'rtl' | 'ltr';
   onClose: () => void; onCopy: (text: string) => void; onStudy: () => void; onSimilar?: () => void;
+  floating?: boolean;
 }) {
   const drawer = useRef<HTMLElement>(null);
   const close = useRef(onClose);
@@ -19,11 +20,11 @@ export function QuranAyahInspector({ details, reference, surahName, error, t, di
     return () => { if (previous?.isConnected) previous.focus(); };
   }, []);
   const copy = (text: string) => onCopy(`${text}\n[${reference.surah}:${reference.ayah}]`);
-  return <div dir={dir} className="fixed inset-0 z-[80]" data-quran-inspector-layer>
-    <button type="button" aria-label={t('quranClosePanel')} onClick={onClose} className="absolute inset-0 bg-black/20" tabIndex={-1} />
-    <aside ref={drawer} role="dialog" aria-modal="true" aria-labelledby="quran-inspector-title" className="absolute inset-y-0 start-0 w-[min(28rem,100%)] bg-surface text-main border-e border-subtle shadow-2xl p-5 overflow-y-auto space-y-5" onKeyDown={event => {
+  return <div dir={dir} className={floating ? 'absolute top-20 start-14 z-[80] w-[min(28rem,80%)] h-[65%] min-w-44 min-h-28 max-w-[90%] max-h-[80%] resize overflow-auto rounded-2xl border border-subtle shadow-xl' : 'fixed inset-0 z-[80]'} data-quran-inspector-layer>
+    {!floating && <button type="button" aria-label={t('quranClosePanel')} onClick={onClose} className="absolute inset-0 bg-black/20" tabIndex={-1} />}
+    <aside ref={drawer} role="dialog" aria-modal={floating ? undefined : true} aria-labelledby="quran-inspector-title" className={floating ? 'h-full w-full bg-surface text-main p-5 overflow-y-auto space-y-5' : 'absolute inset-y-0 start-0 w-[min(28rem,100%)] bg-surface text-main border-e border-subtle shadow-2xl p-5 overflow-y-auto space-y-5'} onKeyDown={event => {
       if (event.key === 'Escape') { event.stopPropagation(); close.current(); }
-      if (event.key === 'Tab') {
+      if (event.key === 'Tab' && !floating) {
         const buttons = [...(drawer.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])];
         const first = buttons[0], last = buttons[buttons.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }

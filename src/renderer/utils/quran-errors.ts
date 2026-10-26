@@ -3,6 +3,7 @@ import type { TranslationKey } from '../translations';
 
 export const quranErrorKeys: Record<QuranError, TranslationKey> = {
   unavailable: 'quranDesktopRequired', network: 'quranNetworkError', 'invalid-resource': 'quranInvalidResource', restricted: 'quranRestricted', 'invalid-package': 'quranInvalidPackage', 'unsupported-format': 'quranUnsupportedFormat', storage: 'quranStorageError', cancelled: 'quranCancelled', interrupted: 'quranInterrupted', busy: 'quranBusy',
+  'authentication-required': 'quranAuthenticationRequired',
 };
 
 export function quranActionError(cause: unknown): TranslationKey {

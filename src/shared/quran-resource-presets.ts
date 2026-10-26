@@ -1,0 +1,26 @@
+import type { QuranReaderKind } from './types/quran';
+
+export const readerPresets: { id: string; aliases?: string[]; title: string; kind: QuranReaderKind; filename: string; relative: string; profile: 'hafs' | 'warsh' }[] = [
+  { id: 'mutashabihat/73', title: 'Mutashabihat ul Quran', kind: 'mutashabihat', filename: 'Mutashabihat ul Quran.json.bz2', relative: 'Mutashabihat ul Quran', profile: 'hafs' },
+  { id: 'quran-script/47', title: 'V4 Glyphs (With Tajweed)', kind: 'glyph-script', filename: 'qpc-v4.db.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Script', profile: 'hafs' },
+  { id: 'mushaf-layout/19', title: 'KFGQPC V4 layout (1441H print)', kind: 'glyph-layout', filename: 'qpc-v4-tajweed-15-lines.db.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Layout', profile: 'hafs' },
+  { id: 'font/240', title: 'QPC V4 Tajweed Font', kind: 'font', filename: 'woff2.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Font', profile: 'hafs' },
+  { id: 'font/qpc-warsh-font', title: 'QPC Warsh font', kind: 'font', filename: 'uthmanic-warsh-v21.woff2.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Warsh/Font', profile: 'warsh' },
+  { id: 'morphology/quran-word-roots', title: 'Word root', kind: 'word-root', filename: 'word-root.db.zip', relative: 'Quranic Grammar and Morphology', profile: 'hafs' },
+  { id: 'morphology/75', title: 'Word lemma', kind: 'word-lemma', filename: 'word-lemma.db.zip', relative: 'Quranic Grammar and Morphology', profile: 'hafs' },
+  { id: 'morphology/77', title: 'Word stem', kind: 'word-stem', filename: 'word-stem.db.zip', relative: 'Quranic Grammar and Morphology', profile: 'hafs' },
+  { id: 'quran-script/312', title: 'KFGQPC Hafs script', kind: 'script', filename: 'qpc-hafs-word-by-word.db.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Script', profile: 'hafs' },
+  { id: 'quran-script/qpc-warsh-script-wbw', title: 'QPC Warsh script', kind: 'script', filename: 'qpc-warsh-script-wbw.db.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Warsh/Script', profile: 'warsh' },
+  { id: 'translation/193', title: 'Saheeh International', kind: 'translation', filename: 'en-sahih-international-inline-footnotes.db.zip', relative: '4-Translation & Transliteration/Translation', profile: 'hafs' },
+  { id: 'tafsir/22', title: 'تفسير ابن كثير', kind: 'tafsir', filename: 'ar-tafsir-ibn-kathir.db.zip', relative: '2-Tafsir', profile: 'hafs' },
+  { id: 'translation/92', title: 'English word translation', kind: 'word-translation', filename: 'english-wbw-translation.db.zip', relative: '4-Translation & Transliteration/Translation', profile: 'hafs' },
+  { id: 'transliteration/71', title: 'English word transliteration', kind: 'word-transliteration', filename: 'english-wbw-transliteration.db.zip', relative: '4-Translation & Transliteration/Transliteration', profile: 'hafs' },
+  { id: 'quran-metadata/70', title: 'Quran surah metadata', kind: 'surahs', filename: 'quran-metadata-surah-name.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
+  { id: 'mushaf-layout/569', title: 'Ligature-based SVG Mushaf', kind: 'mushaf-layout', filename: 'ligature-basd-svg.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Layout', profile: 'hafs' },
+  { id: 'recitation/957', title: 'محمود خليل الحصري (مرتل)', kind: 'recitation', filename: 'ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-957 (with segments).db.zip', relative: '3-Recitations and segments data', profile: 'hafs' },
+  { id: 'recitation/959', title: 'محمد صديق المنشاوي (مرتل)', kind: 'recitation', filename: 'ayah-recitation-muhammad-siddiq-al-minshawi-murattal-hafs-959.db.zip', relative: '3-Recitations and segments data', profile: 'hafs' },
+  { id: 'surah-info/3', aliases: ['surah-info/en'], title: 'Surah Information (English)', kind: 'surah-info', filename: 'surah-info-en.db.zip', relative: 'Surah information', profile: 'hafs' },
+  { id: 'ayah-theme/62', aliases: ['ayah-theme/default'], title: 'Ayah Themes', kind: 'ayah-theme', filename: 'ayah-themes.db.zip', relative: 'Ayah theme', profile: 'hafs' },
+  { id: 'ayah-topics/45', aliases: ['ayah-topics/default'], title: 'Quran Topics & Concepts', kind: 'ayah-topics', filename: 'topics.db.zip', relative: 'Topics and concepts in the Quran', profile: 'hafs' },
+  { id: 'similar-ayah/74', aliases: ['similar-ayah/matching', 'similar-ayah/default'], title: 'Similar Ayah (Mutashabihat)', kind: 'similar-ayah', filename: 'matching-ayah.db.zip', relative: 'Similiar ayahs', profile: 'hafs' },
+];

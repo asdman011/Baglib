@@ -1,14 +1,23 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, session } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, session, protocol } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import Database from 'better-sqlite3';
+import publicCatalog from '../../src/shared/data/qul-public-catalog.json';
 import { registerQuranIpc } from '../../src/main/ipc/quran';
+import { getDatabase, closeDatabase } from '../../src/main/database/connection';
+import { verifyKhatmah } from './khatmah';
 import { readerPresets } from '../../src/main/services/quran/reader-resources';
 import type { QuranResult, QuranReaderCatalog, QuranPassage, QuranCommentary, QuranSearchHit, QuranMushafPage, QuranAyahAudio } from '../../src/shared/types/quran';
 
 const directory = process.env.BAGLIB_QURAN_TEST_DIRECTORY!;
+const provisionOnly = process.env.BAGLIB_QURAN_PROVISION_ONLY === '1';
 app.setPath('userData', path.join(directory, 'profile'));
+protocol.registerSchemesAsPrivileged([{ scheme: 'baglib-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 app.whenReady().then(async () => {
+  const originalAppPath = app.getAppPath;
+  if (provisionOnly) app.getAppPath = () => path.resolve('.');
   const errors: string[] = [];
   let nativeFullscreenChecks = 0;
   const originalCopy = clipboard.writeText;
@@ -31,8 +40,10 @@ app.whenReady().then(async () => {
     semanticExports.set(`/resources/${preset.id}`, { token: `/resources/${preset.id.split('/')[0]}/${String(index + 1).repeat(32)}/download`, bytes: await fs.readFile(path.join(base, preset.relative, preset.filename)), file: `/fixture/semantic-${index}.zip` });
   }
   let downloaded = 0;
+  const gatedResource = publicCatalog.resources.find(resource=>resource.category==='translation' && resource.id!=='translation/193' && !resource.restricted)!;
   await qul.protocol.handle('https', request => {
     const url = new URL(request.url);
+    if(url.pathname===gatedResource.sourcePath) return new Response('<html><body><a href="#_" data-url="/users/sign_in?modal=true">Download SQLite</a></body></html>',{headers:{'content-type':'text/html'}});
     for (const [source, artifact] of semanticExports) {
       if (url.pathname === source) return new Response(`<html><body><a href="${artifact.token}">Download SQLite</a></body></html>`, { headers: { 'content-type': 'text/html' } });
       if (url.pathname === artifact.token) return new Response(null, { status: 302, headers: { location: `https://s3.us-east-1.wasabisys.com${artifact.file}` } });
@@ -48,9 +59,18 @@ app.whenReady().then(async () => {
       if (window.webContents.getURL().startsWith('https://qul.tarteel.ai')) void window.webContents.executeJavaScript("document.getElementById('download').click()");
     });
   });
+  await protocol.handle('baglib-asset', async request => {
+    const raw = decodeURIComponent(request.url.replace(/^baglib-asset:\/\//, ''));
+    const filename = /^[a-z][\\/]/i.test(raw) ? `${raw[0]}:${raw.slice(1)}` : raw;
+    assert.ok(path.resolve(filename).toLowerCase().startsWith((path.resolve(directory) + path.sep).toLowerCase()), request.url);
+    return new Response(await fs.readFile(filename), { headers: { 'content-type': filename.endsWith('.mp3') ? 'audio/mpeg' : 'application/octet-stream', 'access-control-allow-origin': '*' } });
+  });
+  getDatabase().exec("CREATE TABLE IF NOT EXISTS app_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
+  app.once('before-quit', closeDatabase);
   registerQuranIpc();
   for (const channel of ['library:get-all-books', 'library:get-all-notes', 'categories:get-tree', 'tags:get-all']) ipcMain.handle(channel, () => []);
   const owner = new BrowserWindow({ show: false, width: 1280, height: 1000, webPreferences: { preload: path.join(directory, 'preload.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  owner.webContents.setAudioMuted(true);
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) errors.push(message); });
   const evaluate = async <Value = unknown>(code: string): Promise<Value> => {
     try { return await owner.webContents.executeJavaScript(code, true); }
@@ -58,12 +78,38 @@ app.whenReady().then(async () => {
   };
   const until = async (code: string) => {
     for (let attempt = 0; attempt < 300; attempt++) { if (await evaluate(code)) return; await new Promise(resolve => setTimeout(resolve, 100)); }
-    throw new Error(`Timed out: ${code}`);
+    const audio = await evaluate("window.quranTestAudio ? {src:window.quranTestAudio.src,paused:window.quranTestAudio.paused,readyState:window.quranTestAudio.readyState,error:window.quranTestAudio.error?.code} : null");
+    throw new Error(`Timed out: ${code}; audio=${JSON.stringify(audio)}`);
   };
   const unwrap = <Value>(result: QuranResult<Value>): Value => { assert.ok(result.ok, JSON.stringify(result)); return result.data; };
   try {
     await owner.loadFile(path.join(directory, 'index.html'));
-    await until(`Boolean(window.quranWorkspace) && document.querySelectorAll("input[type=checkbox]").length===${readerPresets.length}`);
+    await until("Boolean(window.quranWorkspace) && Boolean(document.querySelector('[data-quran-reader]'))");
+    if (provisionOnly) {
+      await until(`window.electronAPI.quran.readerCatalog().then(result=>result.ok && result.data.sources.length===${readerPresets.length})`);
+      session.defaultSession.webRequest.onBeforeRequest({ urls: ['https://*/*', 'http://*/*'] }, (_request, callback) => callback({ cancel: true }));
+      const catalog = unwrap(await evaluate<QuranResult<QuranReaderCatalog>>('window.electronAPI.quran.readerCatalog()'));
+      for (const reciter of catalog.sources.filter(source=>source.kind==='recitation')) {
+        const audio = unwrap(await evaluate<QuranResult<QuranAyahAudio>>(`window.electronAPI.quran.recitationAudio({pack:${JSON.stringify(reciter.id)},surah:114,ayah:6})`));
+        assert.equal(audio.cached,true);
+        assert.ok(audio.localUrl?.startsWith('baglib-asset://'));
+      }
+      const before = downloaded;
+      const metadataJobs = unwrap(await evaluate<QuranResult<string[]>>("window.electronAPI.quran.downloadBatch(['quran-metadata/69'])"));
+      await until(`window.electronAPI.quran.library({view:'downloads'}).then(result=>result.ok && ${JSON.stringify(metadataJobs)}.every(id=>result.data.jobs.some(job=>job.id===id && job.state==='complete')))`);
+      const translation = catalog.sources.find(source=>source.kind==='translation')!;
+      unwrap(await evaluate<QuranResult<null>>(`window.electronAPI.quran.remove(${JSON.stringify(translation.id)})`));
+      const localJobs = unwrap(await evaluate<QuranResult<string[]>>("window.electronAPI.quran.downloadBatch(['translation/193'])"));
+      await until(`window.electronAPI.quran.library({view:'downloads'}).then(result=>result.ok && ${JSON.stringify(localJobs)}.every(id=>result.data.jobs.some(job=>job.id===id && job.state==='complete')))`);
+      assert.equal(downloaded,before);
+      const browserCount = BrowserWindow.getAllWindows().length;
+      const gatedJobs = unwrap(await evaluate<QuranResult<string[]>>(`window.electronAPI.quran.downloadBatch([${JSON.stringify(gatedResource.id)}])`));
+      await until(`window.electronAPI.quran.library({view:'downloads'}).then(result=>result.ok && result.data.jobs.some(job=>job.id===${JSON.stringify(gatedJobs[0])} && job.state==='failed' && job.error==='authentication-required'))`);
+      assert.equal(BrowserWindow.getAllWindows().length,browserCount);
+      assert.deepEqual(errors, []);
+      console.log(JSON.stringify({ directory, automaticLocalProvisioning: readerPresets.length, manualFolderSelection: false, directOfflineAudioVoices: 2, registrationFreeLocalReinstall: true, registrationFreeExtraMetadata: true, gatedExportExplainedWithoutBrowser: true, errors }));
+      return;
+    }
     const ids = readerPresets.filter(value => value.kind !== 'translation').map(value => value.id);
     const setup = unwrap(await evaluate<QuranResult<{ installed: string[]; missing: string[]; failed: string[] }>>(`window.electronAPI.quran.setup(${JSON.stringify(ids)})`));
     assert.equal(setup.installed.length, ids.length); assert.equal(setup.missing.length, 0); assert.equal(setup.failed.length, 0);
@@ -106,43 +152,6 @@ app.whenReady().then(async () => {
     assert.equal(warsh.profile, 'warsh'); assert.ok(warsh.ayahs[0].words[0].text.includes('حَمْدُ'));
     const incompatible = await evaluate<QuranResult<QuranPassage>>(`window.electronAPI.quran.read(${JSON.stringify({ ...query, script: find('script', 'warsh') })})`);
     assert.equal(incompatible.ok, false);
-    await until("Boolean(document.querySelector('.mushaf-svg-surface svg'))");
-    await evaluate("(() => { const word=document.querySelector('.mushaf-svg-surface [data-surah][data-aya] path');word.dispatchEvent(new PointerEvent('pointerover',{bubbles:true})); })()");
-    assert.ok(await evaluate("document.querySelectorAll('[data-baglib-hover-ayah]').length > 1"));
-    assert.equal(await evaluate("getComputedStyle(document.querySelector('[data-baglib-hover-word] path')).fill"), 'rgb(52, 211, 153)');
-    await evaluate("document.querySelector('[data-baglib-hover-word] path').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
-    await until("document.querySelector('[role=dialog]')?.textContent.includes('بسم')");
-    assert.ok(await evaluate("document.querySelector('[role=dialog]').textContent.includes('1:1')"));
-    await evaluate("document.querySelector('[data-quran-study-jump]').click()");
-    await evaluate("document.querySelector('[data-quran-mode=study]').click()");
-    await until('document.querySelectorAll("section:first-child article[aria-label]").length===7 && !document.querySelector("section [role=alert]")');
-    await evaluate("document.querySelector('[data-quran-options]').click()");
-    await evaluate(`(() => { const select=document.querySelectorAll('[data-quran-reader] select')[1];select.value=${JSON.stringify(find('translation'))};select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
-    await until("Boolean(document.querySelector('article [data-quran-translation]'))");
-    await evaluate("document.querySelector('[data-quran-options]').click()");
-    assert.equal(await evaluate("document.querySelector('article [data-quran-translation]').querySelectorAll('sup a').length"), 2);
-    await evaluate("document.querySelector('article [data-quran-translation] sup a').click()");
-    assert.ok(await evaluate("document.querySelector('article details').open && document.activeElement.tagName==='LI'"));
-    await evaluate("document.querySelector('article ol a').click()");
-    assert.equal(await evaluate("document.activeElement.closest('sup')?.textContent"), '[1]');
-    const clickCopy = "([...document.querySelectorAll('article button')].find(b => b.querySelector('.lucide-copy')) || document.querySelectorAll('article button')[1]).click()";
-    await evaluate(clickCopy);
-    await new Promise(resolve => setTimeout(resolve, 200));
-    assert.ok(copied.endsWith('1:1'));
-    const wordPoint = await evaluate<{ x: number; y: number }>("(() => {const rect=document.querySelector('[data-quran-word]').getBoundingClientRect();return {x:Math.round(rect.x+rect.width/2),y:Math.round(rect.y+rect.height/2)};})()");
-    owner.webContents.sendInputEvent({ type: 'mouseMove', ...wordPoint });
-    await evaluate("document.querySelector('[data-quran-word]').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}))");
-    await new Promise(resolve => setTimeout(resolve, 150));
-    assert.equal(await evaluate("getComputedStyle(document.querySelector('[data-quran-word]')).color"), 'oklch(0.765 0.177 163.223)');
-    await evaluate("document.querySelector('[data-quran-word]').click()");
-    await until("document.querySelector('[role=dialog]')?.textContent.includes('بسم')");
-    await evaluate("document.querySelector('[data-quran-study-jump]').click()");
-    await evaluate("document.querySelector('[data-quran-options]').click()");
-    const selectMeaning = `(() => { const select=document.querySelectorAll('section select')[2];select.value=${JSON.stringify(find('word-translation'))};select.dispatchEvent(new Event('change',{bubbles:true})); })()`;
-    await evaluate(selectMeaning);
-    await until("document.querySelector('article')?.textContent.includes('In (the) name')");
-    await evaluate("document.querySelector('[data-quran-options]').click()");
-    assert.equal(unwrap(await evaluate<QuranResult<QuranPassage>>(`window.electronAPI.quran.read(${JSON.stringify({ ...query, surah: 1, from: 1 })})`)).ayahs.length, 7);
     const mushafLayoutId = find('mushaf-layout');
     assert.ok(mushafLayoutId);
     const mushafP1 = unwrap(await evaluate<QuranResult<QuranMushafPage>>(`window.electronAPI.quran.mushafPage({ pack: ${JSON.stringify(mushafLayoutId)}, page: 1 })`));
@@ -176,84 +185,195 @@ app.whenReady().then(async () => {
     await until(`window.electronAPI.quran.library({view:'downloads'}).then(result=>result.ok && result.data.jobs.some(job=>job.id===${JSON.stringify(entireQuranJob)} && job.state==='cancelled'))`);
     await session.defaultSession.protocol.unhandle('https');
     session.defaultSession.webRequest.onBeforeRequest({ urls: ['https://*/*', 'http://*/*'] }, (_request, callback) => callback({ cancel: true }));
-    await evaluate("document.querySelector('[data-quran-mode=mushaf]').click()");
     await until("Boolean(document.querySelector('.mushaf-svg-surface svg'))");
-    assert.ok(await evaluate("document.querySelector('.mushaf-svg-surface').innerHTML.includes('md-page')"));
-    await evaluate("document.querySelector('[data-quran-mode=study]').click()");
-    await until("Boolean(document.querySelector('article[aria-label]'))");
-    await evaluate("document.querySelector('header button[aria-label=' + JSON.stringify(window.quranWorkspace.t('quranGlobalSearch')) + ']').click()");
-    await until("Boolean(document.querySelector('dialog[open] input[type=search]'))");
-    await evaluate("(() => { const input=document.querySelector('dialog input[type=search]');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'بسم الله');input.dispatchEvent(new Event('input',{bubbles:true})); })()");
-    await until("document.querySelectorAll('dialog button bdi').length>0");
-    await evaluate("document.querySelector('dialog button bdi').closest('button').click()");
-    await until("!document.querySelector('dialog[open]') && Boolean(document.querySelector('article[aria-label=\"1:1\"]'))");
+    assert.equal(await evaluate("document.querySelectorAll('[data-quran-mode]').length"), 0);
+    for (const surah of [2, 112, 113, 114]) {
+      const local = unwrap(await evaluate<QuranResult<QuranAyahAudio>>(`window.electronAPI.quran.recitationAudio({pack:${JSON.stringify(recitationPackId)},surah:${surah},ayah:1})`));
+      assert.equal(local.ayah, 1);
+      assert.equal(local.surah, surah);
+    }
+    const morphology = unwrap(await evaluate<QuranResult<unknown[]>>(`window.electronAPI.quran.morphology({script:${JSON.stringify(query.script)},surah:1,ayah:1})`));
+    assert.ok(morphology.length > 0);
+    const phrases = unwrap(await evaluate<QuranResult<unknown[]>>(`window.electronAPI.quran.mutashabihat({script:${JSON.stringify(query.script)},surah:2,ayah:23})`));
+    assert.ok(phrases.length > 0);
+    const glyphPage = unwrap(await evaluate<QuranResult<QuranMushafPage>>(`window.electronAPI.quran.mushafPage({pack:${JSON.stringify(find('glyph-layout'))},page:1})`));
+    assert.ok(glyphPage.glyphLines?.length);
+    assert.ok(glyphPage.fontUrl?.startsWith('baglib-asset://'));
+    assert.equal(glyphPage.words[0].textHafs, 'بِسۡمِ');
+    const lastGlyphPage = unwrap(await evaluate<QuranResult<QuranMushafPage>>(`window.electronAPI.quran.mushafPage({pack:${JSON.stringify(find('glyph-layout'))},page:604})`));
+    assert.equal(lastGlyphPage.surahEnd, 114);
+    assert.equal(lastGlyphPage.ayahEnd, 6);
+    await evaluate("document.querySelector('[data-quran-options]').click()");
+    await evaluate(`(() => { const select=[...document.querySelectorAll('aside select')].find(select=>[...select.options].some(option=>option.value===${JSON.stringify(find('glyph-layout'))}));select.value=${JSON.stringify(find('glyph-layout'))};select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+    await until("Boolean(document.querySelector('.mushaf-svg-surface span[data-surah]'))");
+    assert.ok(await evaluate("document.fonts.check('16px QuranPage1')"));
+    await evaluate(`(() => { const select=[...document.querySelectorAll('aside select')].find(select=>[...select.options].some(option=>option.value===${JSON.stringify(mushafLayoutId)}));select.value=${JSON.stringify(mushafLayoutId)};select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+    await until("Boolean(document.querySelector('.mushaf-svg-surface svg'))");
+    await evaluate("document.querySelector('[data-quran-options]').click()");
+    await evaluate("document.querySelector('.mushaf-svg-surface [data-surah] path').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}))");
+    assert.ok(await evaluate("document.querySelectorAll('[data-baglib-hover-ayah]').length>1"));
+    assert.ok(await evaluate("document.querySelectorAll('[data-baglib-hitbox]').length>0"));
+    await evaluate("document.querySelector('.mushaf-svg-surface [data-surah] path').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
+    await until("Boolean(document.querySelector('[role=dialog]'))");
+    await until("document.querySelector('[role=dialog]').textContent.includes('بسم')");
+    await evaluate("document.querySelector('[role=dialog] button svg.lucide-copy').closest('button').click()");
+    await new Promise(resolve=>setTimeout(resolve,200));
+    assert.ok(copied.endsWith('[1:1]'));
+    await evaluate("document.querySelector('[data-quran-study-jump]').click()");
+    await until("document.querySelectorAll('[data-quran-workspace] aside[role=region]').length===1");
+    await evaluate("document.querySelector('.mushaf-svg-surface [data-surah] path').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))");
+    await until("document.querySelectorAll('[data-quran-workspace] aside[role=region]').length===2");
+    await evaluate("document.querySelector('.mushaf-svg-surface [data-surah] path').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:450,clientY:350}))");
+    await until("Boolean(document.querySelector('[role=menu]'))");
+    assert.equal(await evaluate("document.querySelectorAll('[role=menuitem]').length"),7);
+    await evaluate("[...document.querySelectorAll('[role=menuitem]')].find(button=>button.textContent===window.quranWorkspace.t('quranCatTranslation')).click()");
+    await until("document.querySelectorAll('[data-quran-workspace] aside[role=region]').length===3");
+    await until("Boolean(document.querySelector('[data-quran-workspace] [data-quran-translation] sup a'))");
+    assert.equal(await evaluate("document.querySelector('[data-quran-workspace] [data-quran-translation]').querySelectorAll('sup a').length"), 2);
+    await evaluate("document.querySelector('[data-quran-workspace] [data-quran-translation] sup a').click()");
+    assert.ok(await evaluate("document.querySelector('[data-quran-workspace] details').open"));
+    await evaluate("document.querySelector('[data-quran-workspace] nav button[aria-label='+JSON.stringify(window.quranWorkspace.t('quranCatTheme'))+']').click()");
+    await until("document.querySelectorAll('[data-quran-workspace] aside.pointer-events-none').length>0");
+    await evaluate("[...document.querySelectorAll('[data-quran-workspace] aside[role=region] header button')].forEach(button=>button.click())");
+    const warshScript = find('script','warsh');
+    const sourceDatabase = new Database(path.join(directory,'profile','quran','packs',warshScript,'0.sqlite'),{readonly:true});
+    const sourceRows = sourceDatabase.prepare('SELECT surah,ayah,word,text FROM words ORDER BY surah,ayah,word').all() as {surah:number;ayah:number;word:number;text:string}[];
+    sourceDatabase.close();
+    const expectedDigest = createHash('sha256').update(JSON.stringify(sourceRows.map(word=>[word.surah,word.ayah,word.word,word.text]))).digest('hex');
+    const warshCoverage = await evaluate<{words:number;references:number;digest:string}>(`(async()=>{
+      const words=[], references=new Set();
+      for(let page=1;page<=604;page++){
+        const result=await window.electronAPI.quran.mushafPage({pack:${JSON.stringify(mushafLayoutId)},script:${JSON.stringify(warshScript)},page});
+        if(!result.ok||result.data.profile!=='warsh'||result.data.layoutMode!=='adapted'||result.data.svg)throw new Error('Warsh layout mismatch');
+        for(const word of result.data.words.filter(word=>word.type!=='aya-mark')){
+          if(word.textHafs!==undefined||!word.canonicalText)throw new Error('Warsh source mismatch');
+          words.push([word.surah,word.ayah,word.wordIndex,word.canonicalText]);references.add(word.surah+':'+word.ayah);
+        }
+      }
+      const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(words)));
+      return {words:words.length,references:references.size,digest:[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('')};
+    })()`);
+    assert.equal(warshCoverage.words,sourceRows.length);
+    assert.equal(warshCoverage.references,6214);
+    assert.equal(warshCoverage.digest,expectedDigest);
+    const warshFirst = unwrap(await evaluate<QuranResult<QuranMushafPage>>(`window.electronAPI.quran.mushafPage({pack:${JSON.stringify(mushafLayoutId)},script:${JSON.stringify(warshScript)},page:1})`));
+    assert.equal(warshFirst.words[0].canonicalText,'اِ۬لْحَمْدُ');
+    assert.equal(warshFirst.words[0].ayah,1);
+    for (const [surah,ayah] of [[1,7],[2,2],[114,6]]) {
+      const location = unwrap(await evaluate<QuranResult<{pageNumber:number}>>(`window.electronAPI.quran.mushafPageForAyah({pack:${JSON.stringify(mushafLayoutId)},script:${JSON.stringify(warshScript)},surah:${surah},ayah:${ayah}})`));
+      const page = unwrap(await evaluate<QuranResult<QuranMushafPage>>(`window.electronAPI.quran.mushafPage({pack:${JSON.stringify(mushafLayoutId)},script:${JSON.stringify(warshScript)},page:${location.pageNumber}})`));
+      assert.ok(page.words.some(word=>word.surah===surah && word.ayah===ayah));
+    }
+    for(const language of ['ar','en']){
+      await evaluate(`if(window.quranWorkspace.lang!==${JSON.stringify(language)})window.quranWorkspace.toggleLanguage()`);
+      await evaluate("document.querySelector('[data-quran-options]').click()");
+      await evaluate(`(()=>{const select=[...document.querySelectorAll('aside select')].find(select=>[...select.options].some(option=>option.value===${JSON.stringify(warshScript)}));select.value=${JSON.stringify(warshScript)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await until("Boolean(document.querySelector('.mushaf-svg-surface span[data-canonical]')) && document.querySelector('.mushaf-svg-surface span[data-canonical]').textContent==='اِ۬لْحَمْدُ'");
+      assert.ok(await evaluate("document.fonts.check('16px QuranWarshPage1')"));
+      assert.equal(await evaluate("document.querySelectorAll('.mushaf-svg-surface svg path').length"),0);
+      await evaluate("document.querySelector('[data-quran-options]').click()");
+      await evaluate("document.querySelector('[data-quran-fullscreen=enter]').click()");
+      await until("Boolean(document.querySelector('[data-immersive]'))");
+      await new Promise(resolve=>setTimeout(resolve,700));
+      assert.ok(owner.isFullScreen() || await evaluate('Boolean(document.fullscreenElement)'));
+      nativeFullscreenChecks++;
+      let warshPng = Buffer.alloc(0);
+      for(let retry=0;!warshPng.length && retry<8;retry++){
+        try { warshPng=(await owner.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG(); } catch {}
+        if(!warshPng.length)await new Promise(resolve=>setTimeout(resolve,300));
+      }
+      assert.ok(warshPng.length);
+      await fs.writeFile(path.join(directory,`warsh-${language}.png`),warshPng);
+      await evaluate("document.querySelector('[data-quran-fullscreen=exit]').click()");
+      await until('!document.fullscreenElement');
+      for(let retry=0;owner.isFullScreen() && retry<30;retry++)await new Promise(resolve=>setTimeout(resolve,100));
+      await new Promise(resolve=>setTimeout(resolve,300));
+      await evaluate("document.querySelector('.mushaf-svg-surface span[data-canonical]').click()");
+      await until("Boolean(document.querySelector('[role=dialog]')) && document.querySelector('[role=dialog]').textContent.includes('اِ۬لْحَمْدُ')");
+      await evaluate("document.querySelector('[role=dialog] header button').click()");
+      await evaluate("document.querySelector('[data-quran-options]').click()");
+      await evaluate(`(()=>{const select=[...document.querySelectorAll('aside select')].find(select=>[...select.options].some(option=>option.value===${JSON.stringify(query.script)}));select.value=${JSON.stringify(query.script)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await until("Boolean(document.querySelector('.mushaf-svg-surface svg'))");
+      await evaluate("document.querySelector('[data-quran-options]').click()");
+    }
+    await until("document.querySelectorAll('[data-quran-workspace] aside[role=region]').length===0");
+    for (const reciter of ['husary','minshawi']) {
+      const audioFile = path.join(base,'3-Recitations and segments data','audio',reciter,'114','114001.mp3');
+      const bytes = await fs.readFile(audioFile);
+      const decoded = await evaluate<{duration:number;channels:number}>(`(async()=>{const context=new AudioContext();try {const buffer=await context.decodeAudioData(Uint8Array.from(atob(${JSON.stringify(bytes.toString('base64'))}),value=>value.charCodeAt(0)).buffer);return {duration:buffer.duration,channels:buffer.numberOfChannels};}finally{await context.close();}})()`);
+      assert.ok(decoded.duration>1 && decoded.channels>0);
+    }
+    const cache = path.join(directory,'profile','quran','audio',recitationPackId);
+    await fs.mkdir(cache,{recursive:true});
+    for (let ayah=1;ayah<=7;ayah++) await fs.copyFile(path.join(base,'3-Recitations and segments data','audio','husary','001',`001${String(ayah).padStart(3,'0')}.mp3`),path.join(cache,`001_${String(ayah).padStart(3,'0')}.mp3`));
+    await fs.copyFile(path.join(base,'3-Recitations and segments data','audio','husary','002','002001.mp3'),path.join(cache,'002_001.mp3'));
+    await evaluate("(()=>{const Original=window.Audio;window.Audio=function(...args){const audio=new Original(...args);window.quranTestAudio=audio;return audio;};window.Audio.prototype=Original.prototype;window.quranOriginalAudio=Original;})()");
+    await evaluate("document.querySelector('[data-quran-workspace] button[aria-label='+JSON.stringify(window.quranWorkspace.t('quranAudioPlay'))+']').click()");
+    await until("Boolean(window.quranTestAudio && !window.quranTestAudio.paused && window.quranTestAudio.duration>0)");
+    for(let ayah=1;ayah<=7;ayah++) {
+      await until(`window.quranTestAudio.src.includes('001_${String(ayah).padStart(3,'0')}.mp3') && !window.quranTestAudio.paused`);
+      await evaluate("window.quranTestAudio.dispatchEvent(new Event('ended'))");
+    }
+    await until("window.quranTestAudio.src.includes('002_001.mp3') && !window.quranTestAudio.paused");
+    await evaluate("document.querySelector('button[aria-label='+JSON.stringify(window.quranWorkspace.t('quranAudioPause'))+']').click()");
+    await until('window.quranTestAudio.paused');
+    await evaluate("document.querySelector('[role=region][aria-label='+JSON.stringify(window.quranWorkspace.t('quranAudioPlay'))+'] button[aria-label='+JSON.stringify(window.quranWorkspace.t('quranClosePanel'))+']').click()");
+    assert.ok(await evaluate('window.quranTestAudio.paused'));
+    await evaluate('(()=>{window.Audio=window.quranOriginalAudio;return true;})()');
+    await evaluate("(()=>{const input=document.querySelector('[data-quran-mushaf] input[type=number]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'1');input.dispatchEvent(new Event('input',{bubbles:true}));})()");
+    await until("document.querySelector('[data-quran-mushaf] input[type=number]')?.value==='1'");
     await evaluate("window.quranWorkspace.setViewMode('library')");
     await until("!document.querySelector('[data-quran-reader]')");
-    await evaluate("document.querySelector('header button[aria-label=' + JSON.stringify(window.quranWorkspace.t('quranGlobalSearch')) + ']').click()");
+    await evaluate("document.querySelector('header button[aria-label='+JSON.stringify(window.quranWorkspace.t('quranGlobalSearch'))+']').click()");
     await until("Boolean(document.querySelector('dialog[open] input[type=search]'))");
-    await evaluate("(() => { const input=document.querySelector('dialog input[type=search]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'لا تأخذه سنة');input.dispatchEvent(new Event('input',{bubbles:true})); })()");
+    await evaluate("(()=>{const input=document.querySelector('dialog input[type=search]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'لا تأخذه سنة');input.dispatchEvent(new Event('input',{bubbles:true}));})()");
     await until("document.querySelectorAll('dialog button bdi').length>0");
     await evaluate("document.querySelector('dialog button bdi').closest('button').click()");
-    await until("Boolean(document.querySelector('article[aria-label=\"2:255\"]'))");
-    for (const theme of ['dark', 'light']) {
-    await evaluate(`document.documentElement.classList.toggle('dark',${theme === 'dark'})`);
-    for (const language of ['ar', 'en']) {
-      await evaluate(`if(window.quranWorkspace.lang!==${JSON.stringify(language)})window.quranWorkspace.toggleLanguage()`);
-      for (const width of [480, 768, 1280]) {
-        owner.setContentSize(width, 1000);
-        await evaluate(`if(window.quranWorkspace.isSidebarCollapsed!==${width < 1000})window.quranWorkspace.toggleSidebar()`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const geometry = await evaluate<{ overflow: boolean; direction: string; overlaps: number }>(`(() => { const region=document.querySelector('section');const controls=[...region.querySelectorAll('button,input,select')].map(node=>node.getBoundingClientRect());let overlaps=0;for(let first=0;first<controls.length;first++)for(let next=first+1;next<controls.length;next++){const firstRect=controls[first],nextRect=controls[next];if(Math.min(firstRect.right,nextRect.right)-Math.max(firstRect.left,nextRect.left)>1 && Math.min(firstRect.bottom,nextRect.bottom)-Math.max(firstRect.top,nextRect.top)>1)overlaps++;}return {overflow:region.scrollWidth>region.clientWidth+1,direction:region.getAttribute('dir'),overlaps}; })()`);
-        assert.equal(geometry.overflow, false, JSON.stringify({ width, geometry }));
-        assert.equal(geometry.overlaps, 0, JSON.stringify({ width, geometry }));
-        assert.equal(geometry.direction, language === 'ar' ? 'rtl' : 'ltr');
-        assert.ok(await evaluate("(() => {const header=document.querySelector('header');return header.scrollWidth<=header.clientWidth+1;})()"));
-        if (width === 480 && theme === 'dark') {
-          await evaluate("document.querySelector('header button[aria-label=' + JSON.stringify(window.quranWorkspace.t('quranGlobalSearch')) + ']').click()");
-          await until("Boolean(document.querySelector('dialog[open] input[type=search]'))");
-          await evaluate("(() => { const input=document.querySelector('dialog input[type=search]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'الحمد');input.dispatchEvent(new Event('input',{bubbles:true})); })()");
-          await until("document.querySelectorAll('dialog button bdi').length>0");
-          assert.equal(await evaluate("document.querySelector('dialog[open]').getAttribute('dir')"), language === 'ar' ? 'rtl' : 'ltr');
-          let searchPng = (await owner.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG();
-          for (let retry = 0; !searchPng.length && retry < 6; retry++) { await new Promise(resolve => setTimeout(resolve, 400)); searchPng = (await owner.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG(); }
-          assert.ok(searchPng.length > 0, 'Empty search screenshot');
-          await fs.writeFile(path.join(directory, `search-${language}-480.png`), searchPng);
-          await evaluate("document.querySelector('dialog header button').click()");
-        }
-        await evaluate("document.querySelector('[data-quran-mode=mushaf]').click()");
-        await until("Boolean(document.querySelector('.mushaf-svg-surface svg'))");
-        await evaluate("document.querySelector('[data-quran-fullscreen=enter]').click()");
-        await until("Boolean(document.querySelector('[data-immersive]'))");
-        await new Promise(resolve => setTimeout(resolve, 700));
-        if (owner.isFullScreen() || await evaluate('Boolean(document.fullscreenElement)')) nativeFullscreenChecks++;
-        assert.ok(await evaluate("(() => {const node=document.querySelector('[data-immersive]'),rect=node.getBoundingClientRect();return rect.x===0 && rect.y===0 && Math.abs(rect.width-innerWidth)<2 && Math.abs(rect.height-innerHeight)<2;})()"));
-        await evaluate("document.querySelector('.mushaf-svg-surface [data-surah][data-aya] path').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
-        await until("document.querySelector('[role=dialog]')?.textContent.includes('بسم')");
-        await new Promise(resolve => setTimeout(resolve, 400));
-        assert.ok(await evaluate(`(() => {const rect=document.querySelector('[role=dialog]').getBoundingClientRect();return ${language === 'ar' ? 'Math.abs(innerWidth-rect.right)<2' : 'Math.abs(rect.left)<2'};})()`));
-        if ((width === 480 && language === 'ar') || (width === 1280 && language === 'en')) {
-          if (theme === 'light') assert.equal(await evaluate("getComputedStyle(document.querySelector('.mushaf-svg-surface').parentElement).backgroundColor"), 'rgb(255, 255, 255)');
-          let png = (await owner.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG();
-          for (let retry = 0; !png.length && retry < 6; retry++) { await new Promise(resolve => setTimeout(resolve, 400)); png = (await owner.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG(); }
-          assert.ok(png.length > 0, 'Empty inspector screenshot');
-          await fs.writeFile(path.join(directory, `inspector-${language}-${theme}-${width}.png`), png);
-        }
-        await evaluate("document.querySelector('[data-quran-study-jump]').click()");
-        await until("!document.querySelector('[data-immersive]') && Boolean(document.querySelector('article[aria-label]'))");
-        await until('!document.fullscreenElement');
-        for (let attempt = 0; owner.isFullScreen() && attempt < 30; attempt++) await new Promise(resolve => setTimeout(resolve, 100));
-        assert.equal(owner.isFullScreen(), false);
-        await new Promise(resolve => setTimeout(resolve, 300));
-        if ((width === 480 && language === 'ar') || (width === 1280 && language === 'en')) {
-          let png = (await owner.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG();
-          for (let retry = 0; !png.length && retry < 6; retry++) { await new Promise(resolve => setTimeout(resolve, 400)); png = (await owner.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG(); }
-          assert.ok(png.length > 0, 'Empty reader screenshot');
-          await fs.writeFile(path.join(directory, `${language}-${theme}-${width}.png`), png);
+    const targetPage = unwrap(await evaluate<QuranResult<{pageNumber:number}>>(`window.electronAPI.quran.mushafPageForAyah({pack:${JSON.stringify(mushafLayoutId)},surah:2,ayah:255})`));
+    await until(`document.querySelector('[data-quran-mushaf] input[type=number]')?.value===${JSON.stringify(String(targetPage.pageNumber))}`);
+    await evaluate("[...document.querySelectorAll('[data-quran-workspace] aside[role=region] header button')].forEach(button=>button.click())");
+    for (const theme of ['dark','light']) {
+      await evaluate(`document.documentElement.classList.toggle('dark',${theme==='dark'})`);
+      for (const language of ['ar','en']) {
+        await evaluate(`if(window.quranWorkspace.lang!==${JSON.stringify(language)})window.quranWorkspace.toggleLanguage()`);
+        for (const width of [480,768,1280]) {
+          owner.setContentSize(width,1000);
+          await evaluate(`if(window.quranWorkspace.isSidebarCollapsed!==${width < 1000})window.quranWorkspace.toggleSidebar()`);
+          await new Promise(resolve=>setTimeout(resolve,300));
+          assert.ok(await evaluate("(()=>{const reader=document.querySelector('[data-quran-reader]');return reader.scrollWidth<=reader.clientWidth+1;})()"));
+          await evaluate("document.querySelector('[data-quran-fullscreen=enter]').click()");
+          await until("Boolean(document.querySelector('[data-immersive]'))");
+          await new Promise(resolve=>setTimeout(resolve,700));
+          assert.ok(owner.isFullScreen() || await evaluate('Boolean(document.fullscreenElement)'));
+          nativeFullscreenChecks++;
+          assert.ok(await evaluate("(()=>{const rect=document.querySelector('[data-immersive]').getBoundingClientRect();return rect.x===0&&rect.y===0&&Math.abs(rect.width-innerWidth)<2&&Math.abs(rect.height-innerHeight)<2;})()"));
+          await evaluate("document.querySelector('[data-quran-fullscreen=exit]').click()");
+          await until("!document.fullscreenElement");
+          for(let attempt=0;owner.isFullScreen()&&attempt<30;attempt++)await new Promise(resolve=>setTimeout(resolve,100));
+          await new Promise(resolve=>setTimeout(resolve,500));
+          if(width===1280){
+            let png=(await owner.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG();
+            for(let retry=0;!png.length&&retry<6;retry++){await new Promise(resolve=>setTimeout(resolve,400));png=(await owner.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG();}
+            assert.ok(png.length);
+            await fs.writeFile(path.join(directory,`workspace-${language}-${theme}.png`),png);
+          }
         }
       }
     }
+    await verifyKhatmah(owner, directory, query.script, mushafLayoutId, evaluate, until);
+    await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===window.quranWorkspace.t('quranResources')).click()");
+    await until("Boolean(document.querySelector('section[aria-label='+JSON.stringify(window.quranWorkspace.t('quranRecommendationTitle'))+']'))");
+    for(const language of ['ar','en']){
+      await evaluate(`if(window.quranWorkspace.lang!==${JSON.stringify(language)})window.quranWorkspace.toggleLanguage()`);
+      for(const width of [480,1280]){
+        owner.setContentSize(width,1000);
+        await evaluate(`if(window.quranWorkspace.isSidebarCollapsed!==${width<1000})window.quranWorkspace.toggleSidebar()`);
+        await new Promise(resolve=>setTimeout(resolve,300));
+        assert.equal(await evaluate("document.querySelector('section[aria-label='+JSON.stringify(window.quranWorkspace.t('quranRecommendationTitle'))+']').querySelectorAll('button').length"),4);
+        assert.ok(await evaluate("(()=>{const view=document.querySelector('section[aria-label='+JSON.stringify(window.quranWorkspace.t('navQuran'))+']');return view.scrollWidth<=view.clientWidth+1;})()"));
+      }
     }
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ directory, realSourcePacks: catalog.sources.length, controlledNativeDownload: 1, controlledBulkDownload: downloaded - 1, semanticResourceDownloads: 3, globalSearchFromLibrary: '2:255', linkedFootnotes: 2, audioFixtureFiles: audioFiles, wholeQuranCancellation: true, nativeFullscreenChecks, offlineReader: true, groupedTafsir: commentary.from, conservativeArabicSearch: search.length, widths: [480, 768, 1280], languages: ['ar', 'en'], themes: ['dark', 'light'], errors }));
-  } finally { if (errors.length) console.error(JSON.stringify({ rendererErrors: errors })); dialog.showOpenDialog = originalDialog; clipboard.writeText = originalCopy; owner.destroy(); app.quit(); }
+    console.log(JSON.stringify({ directory, realSourcePacks: catalog.sources.length, controlledNativeDownload: 1, controlledBulkDownload: downloaded - 1, semanticResourceDownloads: 3, unifiedWorkspace: true, warshCoverage, globalSearchFromLibrary: '2:255', morphologyRows: morphology.length, phraseMatches: phrases.length, decodedRealReciters: 2, continuousSurahBoundaryPlayback: true, linkedFootnotes: 2, audioFixtureFiles: audioFiles, wholeQuranCancellation: true, nativeFullscreenChecks, offlineReader: true, groupedTafsir: commentary.from, conservativeArabicSearch: search.length, widths: [480, 768, 1280], languages: ['ar', 'en'], themes: ['dark', 'light'], errors }));
+  } finally { if (errors.length) console.error(JSON.stringify({ rendererErrors: errors })); app.getAppPath = originalAppPath; dialog.showOpenDialog = originalDialog; clipboard.writeText = originalCopy; owner.destroy(); app.quit(); }
 }).catch(error => { console.error(error); app.exit(1); });

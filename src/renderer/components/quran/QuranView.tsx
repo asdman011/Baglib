@@ -6,14 +6,28 @@ import { QURAN_CATEGORIES, type QuranCategory, type QuranError, type QuranLibrar
 import type { TranslationKey } from '../../translations';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { QuranReaderView } from './QuranReaderView';
+import { QuranKhatmah } from './QuranKhatmah';
 import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
 import { quranErrorKeys as errorKeys } from '../../utils/quran-errors';
+import { quranResourceBundles, quranResourceGuidance, type QuranResourceBundle, type QuranResourceFeature } from '../../../shared/quran-resource-guidance';
+import { readerPresets } from '../../../shared/quran-resource-presets';
 
 export const quranCategoryKeys: Record<QuranCategory, TranslationKey> = {
   'quran-script': 'quranCatScript', 'mushaf-layout': 'quranCatLayout', font: 'quranCatFont', 'quran-metadata': 'quranCatMetadata', translation: 'quranCatTranslation', tafsir: 'quranCatTafsir', recitation: 'quranCatRecitation', transliteration: 'quranCatTransliteration', 'surah-info': 'quranCatSurah', 'ayah-topics': 'quranCatTopics', morphology: 'quranCatMorphology', mutashabihat: 'quranCatMutashabihat', 'similar-ayah': 'quranCatSimilar', 'ayah-theme': 'quranCatTheme',
 };
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 type Tab = 'all' | 'installed' | 'downloads';
+const bundleLabels: Record<QuranResourceBundle, [TranslationKey, TranslationKey]> = {
+  'hafs-reader': ['quranBundleHafsReader', 'quranBundleHafsReaderDescription'],
+  'hafs-study': ['quranBundleHafsStudy', 'quranBundleHafsStudyDescription'],
+  'hafs-v4': ['quranBundleV4', 'quranBundleV4Description'],
+  'warsh-reader': ['quranBundleWarsh', 'quranBundleWarshDescription'],
+};
+const featureLabels: Record<QuranResourceFeature, TranslationKey> = { search: 'quranFeatureSearch', words: 'quranFeatureWords', footnotes: 'quranFeatureFootnotes', tafsir: 'quranFeatureTafsir', glyphs: 'quranFeatureGlyphs', vectors: 'quranFeatureVectors', recitation: 'quranFeatureRecitation', timings: 'quranFeatureTimings', morphology: 'quranFeatureMorphology', topics: 'quranFeatureTopics', transliteration: 'quranFeatureTransliteration', metadata: 'quranFeatureMetadata' };
+
+export function QuranResourceRecommendations({ t, busy, onInstall }: { t: Translate; busy: boolean; onInstall: (ids: string[]) => void }) {
+  return <section aria-label={t('quranRecommendationTitle')} className="space-y-3"><h2 className="font-semibold">{t('quranRecommendationTitle')}</h2><div className="grid gap-3 md:grid-cols-2">{quranResourceBundles.map(bundle => <article key={bundle.id} className="rounded-xl border border-subtle bg-surface p-4 space-y-2"><h3 className="font-semibold text-sm">{t(bundleLabels[bundle.id][0])}</h3><p className="text-sm text-muted leading-relaxed">{t(bundleLabels[bundle.id][1])}</p><button type="button" disabled={busy} onClick={() => onInstall([...bundle.resources])} className="rounded-lg border border-subtle px-3 py-2 text-sm disabled:opacity-40">{t('quranInstallBundle')}</button></article>)}</div><p className="text-xs text-muted leading-relaxed">{t('quranDependencyHint')}</p></section>;
+}
 const empty: QuranLibrary = { resources: [], installed: [], jobs: [], directory: '', hasMore: false, catalogStatus: 'cached-partial' };
 
 export function QuranLibraryPanel({ library, t, lang, tab, onDownload, onImport, onRemove, onCancel, onRetry, busy, selectedIds = [], onSelect }: {
@@ -43,11 +57,20 @@ export function QuranLibraryPanel({ library, t, lang, tab, onDownload, onImport,
     {!resources.length && <p className="col-span-full rounded-2xl border border-dashed border-subtle p-8 text-muted leading-relaxed">{t(tab === 'installed' ? 'quranNoInstalled' : 'quranNoResources')}</p>}
     {resources.map((resource, position) => {
       const pack = tab === 'installed' ? library.installed[position] : library.installed.find(item => item.resource.id === resource.id);
+      const guidance = quranResourceGuidance(resource);
+      const local = Boolean(pack || library.localResources?.includes(resource.id));
       return <article key={pack?.id || resource.id} className="min-w-0 rounded-2xl border border-subtle bg-surface p-5 flex flex-col gap-4 shadow-xs">
         {tab === 'all' && onSelect && <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedIds.includes(resource.id)} disabled={resource.restricted} onChange={event => onSelect(resource.id, event.target.checked)} />{t('quranSelectResource')}</label>}
         <div className="flex items-start gap-3"><BookOpen className="size-5 text-pale-sky-500 shrink-0 mt-1" /><div className="min-w-0"><p className="text-xs text-muted mb-1">{t(quranCategoryKeys[resource.category])}</p><h3 dir="auto" className="font-semibold text-main text-base leading-relaxed break-words">{resource.title}</h3></div></div>
         <p className="text-xs text-muted leading-relaxed">{resource.restricted ? t('quranRestricted') : t('quranRightsNotice')}</p>
-        <p className="text-xs text-muted leading-relaxed">{t('quranProfileUnverified')}</p>
+        <p className="text-xs font-semibold leading-relaxed">{t(local ? 'quranLocalNoAccount' : resource.downloadAccess === 'sign-in-required' ? 'quranSourceSignIn' : 'quranAccessCheck')}</p>
+        <p className="text-xs text-muted leading-relaxed">{t(guidance.supported ? 'quranReaderSupported' : 'quranStorageOnly')}</p>
+        <p className="text-xs text-muted leading-relaxed">{t(guidance.profile === 'hafs' ? 'quranProfileHafs' : guidance.profile === 'warsh' ? 'quranProfileWarsh' : guidance.profile === 'shared-layout' ? 'quranProfileSharedLayout' : 'quranProfileUnverified')}</p>
+        <p className="text-xs text-muted">{t('quranPreferredFormat', { format: guidance.preferredFormat === 'source' ? t('quranFormatAuto') : guidance.preferredFormat })}</p>
+        {resource.tags.length > 0 && <p dir="auto" className="text-xs text-muted leading-relaxed break-words">{resource.tags.join(' · ')}</p>}
+        {guidance.requirements.length > 0 && <p className="text-xs text-muted leading-relaxed">{t('quranRequiredResources', { resources: guidance.requirements.map(id => readerPresets.find(preset => preset.id === id)?.title || id).join(' · ') })}</p>}
+        {guidance.features.length > 0 && <ul className="flex flex-wrap gap-2">{guidance.features.map(feature => <li key={feature} className="text-xs rounded-lg bg-emerald-500/10 px-2 py-1">{t(featureLabels[feature])}</li>)}</ul>}
+        {guidance.audioMetadataOnly && <p className="text-xs text-muted leading-relaxed">{t('quranAudioDatasetOnly')}</p>}
         {pack && <div className="rounded-xl bg-pale-sky-500/10 p-3 text-sm leading-relaxed"><p className="font-semibold text-pale-sky-600 dark:text-pale-sky-300">{t('quranStored')} · {size(pack.bytes)}</p><p className="text-muted mt-1">{t('quranStoredHint')}</p></div>}
         <div className="mt-auto flex flex-wrap gap-2">
           {tab === 'all' && <><button type="button" disabled={busy || resource.restricted} onClick={() => onDownload(resource)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-pale-sky-600 text-white text-sm disabled:opacity-50"><Download className="size-4" />{t('quranDownload')}</button><button type="button" disabled={busy || resource.restricted} onClick={() => onImport(resource)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-subtle text-sm disabled:opacity-50"><Upload className="size-4" />{t('quranImport')}</button></>}
@@ -103,7 +126,8 @@ export function QuranResourceView() {
       <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => void perform(() => api().chooseDirectory())} className="inline-flex gap-2 items-center border border-subtle rounded-xl px-3 py-2 text-sm disabled:opacity-50"><FolderOpen className="size-4" />{t('quranDirectory')}</button><button type="button" disabled={busy} onClick={() => void perform(() => (async () => { for (const kind of category === 'all' ? QURAN_CATEGORIES : [category]) { const result = await api().refresh(kind); if (!result.ok) return result; } return { ok: true }; })())} className="inline-flex gap-2 items-center bg-pale-sky-600 text-white rounded-xl px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />{t('quranRefresh')}</button></div>
     </header>
     <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5">
-      <div className="rounded-2xl bg-pale-sky-500/10 border border-pale-sky-500/20 p-4 flex gap-3"><ShieldCheck className="size-5 text-pale-sky-500 shrink-0 mt-1" /><div className="text-sm leading-relaxed min-w-0"><p>{t('quranSetup')}</p><p className="text-muted mt-1">{t('quranQiraatHint')}</p></div></div>
+      <div className="rounded-2xl bg-pale-sky-500/10 border border-pale-sky-500/20 p-4 flex gap-3"><ShieldCheck className="size-5 text-pale-sky-500 shrink-0 mt-1" /><div className="text-sm leading-relaxed min-w-0"><p>{t('quranCatalogAccessNotice')}</p><p className="text-muted mt-1">{t('quranQiraatHint')}</p></div></div>
+      {tab === 'all' && <QuranResourceRecommendations t={t} busy={busy} onInstall={ids => { setTab('downloads'); void perform(() => api().downloadBatch(ids)); }} />}
       <div className="flex flex-wrap gap-2" role="tablist" aria-label={t('quranResources')}>
         {(['all', 'installed', 'downloads'] as const).map(value => <button key={value} type="button" role="tab" aria-selected={value === tab} onClick={() => { setTab(value); setOffset(0); }} className={`px-4 py-2 rounded-xl text-sm ${value === tab ? 'bg-pale-sky-600 text-white' : 'bg-surface border border-subtle'}`}>{t(value === 'all' ? 'quranAllResources' : value === 'installed' ? 'quranInstalled' : 'quranDownloads')}</button>)}
       </div>
@@ -125,13 +149,14 @@ export function QuranResourceView() {
 
 export function QuranView() {
   const { t, dir } = useWorkspace();
-  const [view, setView] = useState<'reader' | 'resources'>('reader');
+  const [view, setView] = useState<'reader' | 'resources' | 'khatmah'>('reader');
   useEffect(() => { const open = () => setView('reader'); window.addEventListener(QURAN_OPEN_EVENT, open); return () => window.removeEventListener(QURAN_OPEN_EVENT, open); }, []);
   return <div dir={dir} className="flex-1 min-h-0 min-w-0 flex flex-col">
     <nav className="flex flex-wrap gap-2 px-4 py-3 border-b border-subtle bg-surface" aria-label={t('navQuran')}>
-      {(['reader', 'resources'] as const).map(value => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)} className={`rounded-xl px-4 py-2 text-sm ${view === value ? 'bg-pale-sky-600 text-white' : 'border border-subtle'}`}>{t(value === 'reader' ? 'quranRead' : 'quranResources')}</button>)}
+      {(['reader', 'resources', 'khatmah'] as const).map(value => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)} className={`rounded-xl px-4 py-2 text-sm ${view === value ? 'bg-pale-sky-600 text-white' : 'border border-subtle'}`}>{t(value === 'reader' ? 'quranRead' : value === 'resources' ? 'quranResources' : 'khatmahTitle')}</button>)}
     </nav>
-    <div className={`${view === 'reader' ? 'flex' : 'hidden'} flex-1 min-h-0 min-w-0`}><QuranReaderView /></div>
+    <div className={`${view === 'reader' ? 'flex' : 'hidden'} flex-1 min-h-0 min-w-0`}><QuranReaderView visible={view === 'reader'} /></div>
     <div className={`${view === 'resources' ? 'flex' : 'hidden'} flex-1 min-h-0 min-w-0`}><QuranResourceView /></div>
+    {view === 'khatmah' && <QuranKhatmah />}
   </div>;
 }

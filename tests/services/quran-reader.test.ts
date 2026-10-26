@@ -49,8 +49,15 @@ test('reader uses immutable source packs, indexed search, explicit gaps and grou
     const meanings = await add('translation/92', `CREATE TABLE word_translation(surah_number INTEGER,ayah_number INTEGER,word_number TEXT,text TEXT); INSERT INTO word_translation VALUES(1,1,'1','In the name');`);
     const tafsir = await add('tafsir/22', `CREATE TABLE tafsir(ayah_key TEXT,group_ayah_key TEXT,from_ayah TEXT,to_ayah TEXT,ayah_keys TEXT,text TEXT); INSERT INTO tafsir VALUES('1:1','1:1','1:1','1:2','1:1,1:2','<p>تفسير <b>النص</b></p>'),('1:2','1:1','','','','');`);
     const warsh = await add('quran-script/qpc-warsh-script-wbw', `CREATE TABLE words(id INTEGER,location TEXT,surah INTEGER,ayah INTEGER,word INTEGER,text TEXT); INSERT INTO words VALUES(1,'1:1:1',1,1,1,'اِ۬لْحَمْدُ');`);
+    await add('morphology/quran-word-roots', `CREATE TABLE roots(id INTEGER,arabic_trilateral TEXT); CREATE TABLE root_words(root_id INTEGER,word_location TEXT); INSERT INTO roots VALUES(1,'سمو'); INSERT INTO root_words VALUES(1,'1:1:1');`);
+    await add('morphology/75', `CREATE TABLE lemmas(id INTEGER,text TEXT); CREATE TABLE lemma_words(lemma_id INTEGER,word_location TEXT); INSERT INTO lemmas VALUES(1,'ٱسْم'); INSERT INTO lemma_words VALUES(1,'1:1:1');`);
+    await add('morphology/77', `CREATE TABLE stems(id INTEGER,text TEXT); CREATE TABLE stem_words(stem_id INTEGER,word_location TEXT); INSERT INTO stems VALUES(1,'بِسْم'); INSERT INTO stem_words VALUES(1,'1:1:1');`);
     reader = new QuranReader(root, packs);
-    assert.equal(reader.catalog().sources.length, 5);
+    assert.equal(reader.catalog().sources.length, 8);
+    assert.deepEqual(await reader.morphology(script.id, 1, 1), [{ location: '1:1:1', root: 'سمو', lemma: 'ٱسْم', stem: 'بِسْم' }]);
+    assert.deepEqual(await reader.morphology(script.id, 1, 2), []);
+    await assert.rejects(reader.morphology(warsh.id, 1, 1));
+    await assert.rejects(reader.morphology(script.id, 0, 1));
     const passage = await reader.read({ script: script.id, surah: 1, from: 1, translation: translation.id, meanings: meanings.id });
     const inspected = await reader.inspectAyah({ script: script.id, surah: 1, ayah: 1 });
     assert.equal(inspected.canonical, 'بِسۡمِ ٱللَّهِ ١');
@@ -171,7 +178,11 @@ test('reader manages recitation packs and serves audio URLs with segment timings
     INSERT INTO verses VALUES
       (1, 1, 'https://audio-cdn.tarteel.ai/quran/husary/001001.mp3', 5160, '[[0,1,0,480],[1,2,600,1000],[2,3,1800,2160],[3,4,2480,5160]]'),
       (1, 2, 'https://audio-cdn.tarteel.ai/quran/husary/001002.mp3', 6240, '[[0,1,800,1240],[1,2,1570,1670],[2,3,2530,2630],[3,4,2800,6240]]'),
-      (1, 3, 'https://audio-cdn.tarteel.ai/quran/husary/001003.mp3', null, null);
+      (1, 3, 'https://audio-cdn.tarteel.ai/quran/husary/001003.mp3', null, null),
+      (2, 8, 'https://audio-cdn.tarteel.ai/quran/husary/002001.mp3', null, null),
+      (112, 6222, 'https://audio-cdn.tarteel.ai/quran/husary/112001.mp3', null, null),
+      (113, 6226, 'https://audio-cdn.tarteel.ai/quran/husary/113001.mp3', null, null),
+      (114, 6231, 'https://audio-cdn.tarteel.ai/quran/husary/114001.mp3', null, null);
   `);
   database.close();
   const digest = createHash('sha256').update(await readFile(filename)).digest('hex');
@@ -213,6 +224,11 @@ test('reader manages recitation packs and serves audio URLs with segment timings
     assert.equal(surahVerses[0].ayah, 1);
     assert.equal(surahVerses[1].ayah, 2);
     assert.equal(surahVerses[2].ayah, 3);
+    for (const surah of [2, 112, 113, 114]) {
+      assert.equal((await reader.recitationAudio(id, surah, 1)).ayah, 1);
+      assert.equal((await reader.recitationSurah(id, surah))[0].ayah, 1);
+      await assert.rejects(reader.recitationAudio(id, surah, 2));
+    }
 
     await assert.rejects(reader.recitationAudio(id, 0, 1));
     await assert.rejects(reader.recitationAudio(id, 115, 1));
@@ -429,8 +445,7 @@ test('reader enforces strict Qira\'at reading profile isolation and Madani-first
   assert.equal(warshScriptRes.profile.key, 'warsh-madani');
   assert.equal(warshScriptRes.profile.totalVerses, 6214);
 
-  const warshLayoutRes = presetResource('mushaf-layout/warsh-svg');
-  assert.equal(warshLayoutRes.profile.key, 'warsh-madani');
+  assert.throws(() => presetResource('mushaf-layout/warsh-svg'));
 
   // 3. Test runtime reading isolation with packs
   const root = await mkdtemp(path.join(tmpdir(), 'baglib-quran-qiraat-'));
