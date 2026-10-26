@@ -15,6 +15,7 @@
  */
 
 import { isValidIsbn } from '../../../shared/validators/metadata-validator';
+import { parseHTML } from 'linkedom';
 import type { EnrichmentCandidateEdition } from '../../../shared/types/enrichment';
 
 export interface LibgenSearchResult {
@@ -52,6 +53,13 @@ const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 export class LibgenProvider {
+  private coverUrl(value: unknown, base: string): string | undefined {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    try {
+      const url = new URL(value.trim().replace(/&amp;/g, '&'), base);
+      return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? url.href : undefined;
+    } catch { return undefined; }
+  }
   private activeMirror: string | null = null;
   private lastMirrorCheck = 0;
   private readonly checkCacheMs = 10 * 60 * 1000; // 10 minutes cache
@@ -298,7 +306,7 @@ export class LibgenProvider {
   async searchFreeTextHydrated(query: string, maxResults = 25): Promise<LibgenSearchResult[]> {
     const mirror = await this.getActiveMirror();
     const encodedQuery = encodeURIComponent(query.trim());
-    const searchUrl = `${mirror}/index.php?req=${encodedQuery}&curtab=e`;
+    const searchUrl = `${mirror}/index.php?req=${encodedQuery}&curtab=e&covers=on`;
 
     let html = '';
     try {
@@ -323,6 +331,8 @@ export class LibgenProvider {
       console.warn(`[LibgenProvider] Gateway scrape failed:`, err?.message || err);
       return [];
     }
+
+    const previews = this.parseHtml(html, mirror, maxResults);
 
     // Extract unique Edition IDs
     const editionIds = [
@@ -349,7 +359,8 @@ export class LibgenProvider {
         const results: LibgenSearchResult[] = [];
         for (const [eid, eRec] of Object.entries(jsonRecords)) {
           const nestedFiles = eRec.files && typeof eRec.files === 'object' ? Object.values(eRec.files) : [];
-          results.push(...this.mapEditionToSearchResults(eid, eRec, nestedFiles, mirror));
+          const preview = previews.find(item => item.editionId === eid);
+          results.push(...this.mapEditionToSearchResults(eid, eRec, nestedFiles, mirror).map(item => ({ ...item, coverUrl: preview?.coverUrl || item.coverUrl })));
         }
 
         if (results.length > 0) {
@@ -359,7 +370,7 @@ export class LibgenProvider {
     }
 
     // Secondary fallback: parse the HTML table rows directly if json.php returned empty
-    return this.parseHtml(html, mirror, maxResults);
+    return previews;
   }
 
   /**
@@ -392,9 +403,9 @@ export class LibgenProvider {
     let coverUrl: string | undefined = undefined;
     const addCover = this.getAddValues(eRec.add, '863')[0];
     if (addCover) {
-      coverUrl = addCover.startsWith('http') ? addCover : `${mirror}${addCover.startsWith('/') ? '' : '/'}${addCover}`;
+      coverUrl = this.coverUrl(addCover, mirror);
     } else if (eRec.cover_url && typeof eRec.cover_url === 'string' && eRec.cover_url.trim()) {
-      coverUrl = eRec.cover_url.startsWith('http') ? eRec.cover_url : `${mirror}${eRec.cover_url.startsWith('/') ? '' : '/'}${eRec.cover_url}`;
+      coverUrl = this.coverUrl(eRec.cover_url, mirror);
     } else if (String(eRec.cover_exists) === '1') {
       const eNum = Number(editionId);
       const folder = !isNaN(eNum) ? Math.floor(eNum / 1000) * 1000 : 0;
@@ -533,141 +544,44 @@ export class LibgenProvider {
    * Legacy HTML parser fallback when json.php is unavailable or empty
    */
   parseHtml(html: string, baseUrl: string, maxResults = 25): LibgenSearchResult[] {
+    const { document } = parseHTML(html);
+    const table = document.querySelector('#tablelibgen, table.table-striped');
+    if (!table) return [];
+    for (const node of table.querySelectorAll('script, style')) node.remove();
+    const rows = [...table.querySelectorAll('tr')];
+    const header = rows[0];
+    if (!header) return [];
+    const columns = [...header.children].map(cell => cell.textContent?.toLowerCase().trim() || '');
+    const column = (name: string) => columns.findIndex(value => value.includes(name));
+    const titleColumn = column('title') >= 0 ? column('title') : 1;
+    const text = (cells: Element[], name: string) => cells[column(name)]?.textContent?.replace(/\s+/g, ' ').trim() || undefined;
     const results: LibgenSearchResult[] = [];
-
-    const tableMatch = html.match(/<table[^>]*class="[^"]*table-striped[^"]*"[^>]*>([\s\S]*?)<\/table>/i);
-    if (!tableMatch) return results;
-
-    const tableHtml = tableMatch[1];
-    if (!tableHtml) return results;
-    const trMatches = tableHtml.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-    if (trMatches.length < 2) return results;
-
-    // Discover column indices dynamically
-    const headerTr = trMatches[0];
-    if (!headerTr) return results;
-    const thMatches = headerTr.match(/<th[^>]*>([\s\S]*?)<\/th>/gi) || [];
-    const thTexts = thMatches.map((th) =>
-      th.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
-    );
-
-    const imageCol = 0;
-    const titleCol = 1;
-    let authorCol = thTexts.findIndex((t) => t.includes('author'));
-    let publisherCol = thTexts.findIndex((t) => t.includes('publisher'));
-    let yearCol = thTexts.findIndex((t) => t.includes('year'));
-    let langCol = thTexts.findIndex((t) => t.includes('language'));
-    let pagesCol = thTexts.findIndex((t) => t.includes('pages'));
-    let sizeCol = thTexts.findIndex((t) => t.includes('size'));
-    let extCol = thTexts.findIndex((t) => t.includes('ext'));
-    let mirrorsCol = thTexts.findIndex((t) => t.includes('mirror'));
-
-    if (authorCol === -1) authorCol = 2;
-    if (publisherCol === -1) publisherCol = 3;
-    if (yearCol === -1) yearCol = 4;
-    if (langCol === -1) langCol = 5;
-    if (pagesCol === -1) pagesCol = 6;
-    if (sizeCol === -1) sizeCol = 7;
-    if (extCol === -1) extCol = 8;
-    if (mirrorsCol === -1) mirrorsCol = 9;
-
-    const cleanText = (tdHtml: string): string => {
-      const neutralized = tdHtml.replace(/="[^"]*"/g, '=""').replace(/='[^']*'/g, "=''");
-      return neutralized.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    };
-
-    for (let i = 1; i < trMatches.length; i++) {
-      const tr = trMatches[i];
-      const tdMatches = tr.match(/<td[^>]*>[\s\S]*?<\/td>/gi) || [];
-      if (tdMatches.length <= Math.max(authorCol, extCol, mirrorsCol)) continue;
-
-      let coverUrl: string | undefined = undefined;
-      const coverMatch = tdMatches[imageCol]?.match(/<img[^>]*src="([^"]+)"/i);
-      if (coverMatch && coverMatch[1]) {
-        coverUrl = coverMatch[1].startsWith('http') ? coverMatch[1] : `${baseUrl}${coverMatch[1]}`;
-      }
-
-      const rawTitleTd = tdMatches[titleCol] || '';
-      let isbn: string | undefined = undefined;
-      const isbnMatch =
-        rawTitleTd.match(/<font[^>]*color="green"[^>]*>([\s\S]*?)<\/font>/i) ||
-        rawTitleTd.match(/\b(97[89][-\d\s]{10,17}|\b\d{9}[\dX]\b)/);
-      if (isbnMatch && isbnMatch[1]) {
-        const candidate = isbnMatch[1].replace(/<[^>]+>/g, '').trim().split(';')[0]?.trim();
-        if (candidate) isbn = candidate;
-      }
-
-      const neutralizedTitle = rawTitleTd.replace(/="[^"]*"/g, '=""').replace(/='[^']*'/g, "=''");
-      let title = '';
-
-      const linkMatches = neutralizedTitle.match(/<a[^>]*>([\s\S]*?)<\/a>/gi) || [];
-      for (const lm of linkMatches) {
-        const text = lm.replace(/<[^>]+>/g, '').trim();
-        if (text && !/^\d+/.test(text) && text.length > 3 && !text.includes('edition.php')) {
-          title = text;
-          break;
-        }
-      }
-
-      if (!title) {
-        const boldMatch = neutralizedTitle.match(/<b[^>]*>([\s\S]*?)<\/b>/i);
-        if (boldMatch && boldMatch[1]) {
-          title = boldMatch[1].replace(/<[^>]+>/g, '').trim();
-        }
-      }
-
-      if (!title) {
-        title = cleanText(neutralizedTitle).replace(/97[89][-\d\s]{10,17}.*$/g, '').trim();
-      }
-
-      const author = cleanText(tdMatches[authorCol] || '') || 'Unknown Author';
-      const publisher = cleanText(tdMatches[publisherCol] || '') || undefined;
-      const rawYear = cleanText(tdMatches[yearCol] || '');
-      const year = parseInt(rawYear, 10) || undefined;
-      const language = cleanText(tdMatches[langCol] || '') || 'English';
-      const pages = cleanText(tdMatches[pagesCol] || '') || undefined;
-      const fileSize = cleanText(tdMatches[sizeCol] || '') || undefined;
-      const format = (cleanText(tdMatches[extCol] || '') || 'PDF').toUpperCase();
-
-      const rawMirrorTd = tdMatches[mirrorsCol] || '';
-      const mirrorLinkMatch = rawMirrorTd.match(/href="([^"]+)"/i);
-      let detailUrl = baseUrl;
-      let downloadUrl: string | undefined = undefined;
-      let md5: string | undefined = undefined;
-
-      if (mirrorLinkMatch && mirrorLinkMatch[1]) {
-        const href = mirrorLinkMatch[1];
-        detailUrl = href.startsWith('http') ? href : `${baseUrl}${href}`;
-
-        const md5Match = href.match(/md5=([a-fA-F0-9]{32})/i) || href.match(/\/ads([a-fA-F0-9]{32})/i);
-        if (md5Match && md5Match[1]) {
-          md5 = md5Match[1].toLowerCase();
-          downloadUrl = this.transformDownloadUrl(href, baseUrl);
-        }
-      }
-
-      if (title && title.length > 1) {
-        results.push({
-          id: md5 ? `libgen-${md5}-${i}` : `libgen-${i}-${Date.now()}`,
-          title,
-          author,
-          publisher,
-          year,
-          language,
-          pages,
-          fileSize,
-          format,
-          coverUrl,
-          detailUrl,
-          downloadUrl,
-          isbn,
-          md5,
-        });
-      }
-
+    for (const row of rows.slice(1)) {
+      const cells = [...row.children];
+      const titleCell = cells[titleColumn];
+      if (!titleCell) continue;
+      const editionLink = [...titleCell.querySelectorAll('a[href]')].find(link => /edition\.php\?id=\d+/i.test(link.getAttribute('href') || ''));
+      const title = (editionLink?.textContent || titleCell.textContent || '').replace(/\s+/g, ' ').trim();
+      if (title.length < 2) continue;
+      const editionId = editionLink?.getAttribute('href')?.match(/edition\.php\?id=(\d+)/i)?.[1];
+      const image = row.querySelector('img');
+      const coverUrl = this.coverUrl(image?.getAttribute('data-src') || image?.getAttribute('src'), baseUrl);
+      const fileLink = [...row.querySelectorAll('a[href]')].map(link => link.getAttribute('href') || '').find(href => /(?:md5=|\/ads|\/get)([a-f\d]{32})/i.test(href));
+      const md5 = fileLink?.match(/(?:md5=|\/ads|\/get)([a-f\d]{32})/i)?.[1]?.toLowerCase();
+      const isbn = titleCell.querySelector('font[color="green"]')?.textContent?.trim().split(';')[0];
+      results.push({
+        id: md5 ? `libgen-${md5}` : editionId ? `libgen-e-${editionId}` : `libgen-row-${results.length}`,
+        title, author: text(cells, 'author') || 'Unknown Author',
+        publisher: text(cells, 'publisher'), year: Number.parseInt(text(cells, 'year') || '', 10) || undefined,
+        language: text(cells, 'language'), pages: text(cells, 'pages'), fileSize: text(cells, 'size'),
+        format: (text(cells, 'ext') || 'PDF').toUpperCase(), coverUrl, editionId,
+        detailUrl: editionId ? `${baseUrl}/edition.php?id=${editionId}` : this.coverUrl(fileLink, baseUrl) || baseUrl,
+        downloadUrl: md5 ? `${baseUrl}/get.php?md5=${md5}` : undefined,
+        isbn: isbn || titleCell.textContent?.match(/\b97[89][-\d ]{10,17}\b/)?.[0],
+        md5, series: titleCell.querySelector('b')?.textContent?.trim() || undefined,
+      });
       if (results.length >= maxResults) break;
     }
-
     return results;
   }
 }

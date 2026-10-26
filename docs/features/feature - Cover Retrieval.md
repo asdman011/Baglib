@@ -1,5 +1,11 @@
 # Feature: Cover Retrieval
 
+## Online search thumbnails versus imported PDF covers — 2026-10-26
+
+The public LibGen portal requires `covers=on` to expose result images. REA observed the current rating/image/title columns, actual fiction/comics cover paths and individual successful image responses; its JSON endpoint separately returned a provider-side HTTP 500. Baglib now uses inert header-aware HTML parsing, retains correlated row covers during JSON hydration and falls back to those rows when JSON fails. Unlike local PDF rendering, these images are lazy remote search thumbnails, not offline cached page renders. A stable icon remains if remote loading fails. Full evidence and limits: [LibGen](libgen.md).
+
+These approaches serve different purposes: provider artwork helps choose search results; the first complete PDF page is still authoritative for automatic PDF imports. The change does not restore the old arbitrary embedded-image extraction or replace a manually chosen local cover. No book content was downloaded during the LibGen metadata/cover audit.
+
 Updated 2026-10-24. This comparison concerns the installed PDF tooling and Baglib's inspected extraction paths, not a new investigation of external reader applications.
 
 ## Approaches and decision

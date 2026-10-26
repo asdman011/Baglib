@@ -16,6 +16,7 @@ import type {
   FileStorageStatus,
 } from '../../../shared/types/digital-file';
 import type { DigitalFormat, MetadataProvenance } from '../../../shared/types/work';
+import { bookVolumeIssue } from '../../../shared/book-volumes';
 
 export class SqliteWorkRepository implements IWorkRepository {
   constructor(private db: Database) {}
@@ -146,6 +147,8 @@ export class SqliteWorkRepository implements IWorkRepository {
       periodicalTitle: meta.periodicalTitle || undefined,
       issueNumber: meta.issueNumber !== undefined ? meta.issueNumber : undefined,
       volumeNumber: meta.volumeNumber !== undefined ? meta.volumeNumber : undefined,
+      seriesTitle: meta.seriesTitle || undefined,
+      totalVolumes: meta.totalVolumes !== undefined ? Number(meta.totalVolumes) : undefined,
       publicationSeasonOrMonth: meta.publicationSeasonOrMonth || undefined,
       issn: meta.issn || undefined,
 
@@ -484,6 +487,7 @@ export class SqliteWorkRepository implements IWorkRepository {
    * Adds a new Work, Author, Edition, Source, and Extended Details in a single atomic transaction.
    */
   addBook(data: BookItemInput): BookItem {
+    if (getWorkTypeInfo(data.workTypeId || data.workType).key === 'book' && bookVolumeIssue(data)) throw new Error('invalid-volume-metadata');
     if (data.id) {
       const existing = this.db.prepare('SELECT id FROM work WHERE id = ?').get(data.id);
       if (existing) {
@@ -537,6 +541,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         periodicalTitle: data.periodicalTitle,
         issueNumber: data.issueNumber,
         volumeNumber: data.volumeNumber,
+        seriesTitle: data.seriesTitle,
+        totalVolumes: data.totalVolumes,
         publicationSeasonOrMonth: data.publicationSeasonOrMonth,
         issn: data.issn,
         degreeLevel: data.degreeLevel,
@@ -749,6 +755,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         periodicalTitle: data.periodicalTitle,
         issueNumber: data.issueNumber,
         volumeNumber: data.volumeNumber,
+        seriesTitle: data.seriesTitle,
+        totalVolumes: data.totalVolumes,
         publicationSeasonOrMonth: data.publicationSeasonOrMonth,
         issn: data.issn,
         degreeLevel: data.degreeLevel,
@@ -776,6 +784,9 @@ export class SqliteWorkRepository implements IWorkRepository {
           existingMeta[k] = v;
         }
       }
+
+      if (Object.prototype.hasOwnProperty.call(data, 'totalVolumes') && data.totalVolumes === undefined) delete existingMeta.totalVolumes;
+      if (workTypeKey === 'book' && bookVolumeIssue(existingMeta)) throw new Error('invalid-volume-metadata');
 
       const metadataJson = Object.keys(existingMeta).length > 0 ? JSON.stringify(existingMeta) : null;
       const description = data.description !== undefined ? data.description : (data.abstract || (data as any).description || existingWork?.description || null);

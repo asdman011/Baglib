@@ -1,0 +1,22 @@
+import { buildSync } from 'esbuild';
+import postcss from 'postcss';
+import tailwind from '@tailwindcss/postcss';
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import electron from 'electron';
+
+const root = path.resolve('.baglib-data/book-details-live');
+fs.mkdirSync(root, { recursive: true });
+const directory = fs.mkdtempSync(path.join(root, 'run-'));
+buildSync({ entryPoints: ['scripts/book-details-live/fixture.tsx'], outfile: path.join(directory, 'fixture.js'), bundle: true, platform: 'browser', define: { 'process.env.NODE_ENV': '"development"' } });
+for (const [source, output] of [['scripts/book-details-live/main.ts', 'main.cjs'], ['src/preload/index.ts', 'preload.cjs']]) buildSync({ entryPoints: [source], outfile: path.join(directory, output), bundle: true, platform: 'node', format: 'cjs', packages: 'external' });
+const styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8') + '\n@source "../../../src/renderer/components/library";';
+fs.writeFileSync(path.join(directory, 'style.css'), (await postcss([tailwind()]).process(styles, { from: path.join(directory, 'input.css') })).css);
+fs.writeFileSync(path.join(directory, 'index.html'), '<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="style.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>');
+const environment = { ...process.env, BAGLIB_BOOK_DETAILS_TEST_DIRECTORY: directory };
+delete environment.ELECTRON_RUN_AS_NODE;
+const child = spawn(electron, [path.join(directory, 'main.cjs')], { env: environment, stdio: 'inherit', windowsHide: true });
+const timeout = setTimeout(() => child.kill(), 90_000);
+child.on('exit', code => { clearTimeout(timeout); process.exitCode = code ?? 1; });
+child.on('error', error => { clearTimeout(timeout); console.error(error); process.exitCode = 1; });

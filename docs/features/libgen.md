@@ -1,5 +1,24 @@
 # Reverse-Engineered Feature Documentation: Library Genesis (LibGen / libgen.li)
 
+## Cover search correction — Codex, 2026-10-26
+
+### Actually observed with REA
+
+Compared public `index.php?req=pride%20and%20prejudice&curtab=e` with the same request plus **`covers=on`**, using a fresh headless Edge scenario with no account. Without the flag, the only image in the captured document was the site logo. With it, result rows contained actual `/fictioncovers/..._small.jpg` and `/comicscovers/...` image paths; multiple captured image responses returned HTTP 200. The header contains a leading rating `<td>`, an extra image column and then the title cell. The old parser excluded header `<td>` cells when calculating indexes, assumed title column 1, and required legacy size/format/mirror columns that the current edition table omits.
+
+- Default search evidence: `ev_cd0d530be35b4af3614631ab155823e518c0a8c69bfdd20d87109f985e4b942b`.
+- Cover-enabled evidence: `ev_dcb2a9a4b74cba4ab41f86321fb8fb4ddef647aa3526dae6917ed4f7610cdd18`; individual 200 responses are observed, **not** a complete network inventory (the scenario reached its selected event budget).
+- The separate JSON request for edition 138119005 returned HTTP 500 and a provider database connection-limit message: `ev_8af1ebd9074f58c19ca20b5edf1049e167bdda184c3ee8c11ffa91d80347ccb4`. This audit does not certify live JSON hydration availability, all mirrors, all editions or long-term service uptime. No access-control/challenge bypass was attempted.
+- A two-row public metadata excerpt, without script execution, is retained at `tests/fixtures/libgen-cover-search.html`. It is a parser fixture, not a supplied book file or copied book content.
+
+### Baglib implementation
+
+`LibgenProvider.searchFreeTextHydrated` now requests `covers=on`. The existing `linkedom` dependency parses the table inertly, counts all header cells and locates title/author/year/page/language columns by actual headers. It preserves edition IDs, decodes text entities and normalizes relative/protocol-relative cover URLs. Only HTTP(S) cover/detail references are accepted; executable/file URLs are rejected. Actual row covers are correlated by edition ID and retained after JSON hydration, rather than replaced by a guessed edition-cover filename. When JSON is unavailable, the same parsed rows remain usable search results. Hash/identifier API paths and file downloads are otherwise unchanged.
+
+`BookCoverThumbnail` in the Online Library Hub lazy-loads the resolved image, sends no file-page referrer and retains a book icon when a cover fails instead of hiding the image and collapsing its slot. Search covers are remote thumbnails, not eagerly downloaded book files or permanent offline cover caches. The existing first-page PDF cover policy still applies when importing an actual PDF.
+
+Verification includes the original LibGen tests, shifted/current/legacy table fixtures, Arabic/Latin titles, hydration-ID correlation, JSON failure, URL safety and controlled native image success/failure. Native book-details fixture also verifies volume navigation and the compact geek control; final results are recorded in the handoff. See [Cover Retrieval](feature%20-%20Cover%20Retrieval.md) and [Book Volumes](feature%20-%20Book%20Volumes.md). Earlier general API descriptions below are historical documentation, not proof the endpoint succeeded during this audit.
+
 ## Overview & Investigation Context
 - **Target Application / Service:** Library Genesis (`https://libgen.li` API & Web Portal)
 - **Investigation Date:** October 2026

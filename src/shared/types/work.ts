@@ -89,6 +89,8 @@ export interface BookItem {
   id: string;
   title: string;
   author: string;
+  seriesTitle?: string;
+  totalVolumes?: number;
   edition?: string;
   editionRawMatch?: string;
   editionSource?: string;
@@ -199,6 +201,8 @@ export interface BookItemInput {
   id?: string;
   title: string;
   author?: string;
+  seriesTitle?: string;
+  totalVolumes?: number;
   edition?: string;
   editionRawMatch?: string;
   editionSource?: string;

@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { BookItem, ReadingStatus } from '../../types/library';
 import { BookDetailModal } from './BookDetailModal';
+import { BookVolumeBadge } from './BookVolumesPanel';
 import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { StorageManagerModal } from './StorageManagerModal';
 import { ImportWizardModal } from './ImportWizardModal';
@@ -1534,6 +1535,7 @@ export const LibraryGridView: React.FC = () => {
                           >
                             {book.title}
                           </h4>
+                          <BookVolumeBadge book={book} t={t} />
                           <p className="text-[10px] text-muted truncate">{book.author}</p>
                         </div>
                       </div>
@@ -1634,6 +1636,7 @@ export const LibraryGridView: React.FC = () => {
                               <h3 className="font-bold text-main text-base leading-snug line-clamp-2 group-hover:text-pale-sky-500 transition-colors">
                                 {book.title}
                               </h3>
+                              <BookVolumeBadge book={book} t={t} />
                               <p className="text-xs text-muted font-serif line-clamp-1">{book.author}</p>
                             </div>
 
@@ -1878,6 +1881,7 @@ export const LibraryGridView: React.FC = () => {
                           <h3 className="font-bold text-main text-sm leading-snug line-clamp-2 group-hover:text-pale-sky-500 transition-colors">
                             {book.title}
                           </h3>
+                          <BookVolumeBadge book={book} t={t} />
                           <p className="text-xs text-muted font-serif line-clamp-1">{book.author}</p>
                         </div>
 
@@ -2193,6 +2197,7 @@ export const LibraryGridView: React.FC = () => {
                                 >
                                   {book.title}
                                 </div>
+                                <BookVolumeBadge book={book} t={t} />
                                 <div className="text-muted text-[11px] truncate">{book.author}</div>
                               </div>
                             </td>
@@ -2445,6 +2450,7 @@ export const LibraryGridView: React.FC = () => {
         }}
         onSave={handleSaveBook}
         onDelete={handleDeleteBook}
+        onOpenVolume={(volume, create) => { setSelectedBook(volume); setIsNewBook(create); }}
       />
 
       {/* Online Library Hub Modal */}

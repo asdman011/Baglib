@@ -72,6 +72,8 @@ import { TagEditor } from '../tags/TagEditor';
 import { EditionComparisonModal } from './EditionComparisonModal';
 import { GeekMetadataModal } from './GeekMetadataModal';
 import { EditionInput } from './EditionInput';
+import { BookVolumesPanel } from './BookVolumesPanel';
+import { bookVolumeIssue } from '../../../shared/book-volumes';
 
 
 interface BookDetailModalProps {
@@ -82,6 +84,7 @@ interface BookDetailModalProps {
   onClose: () => void;
   onSave: (updatedBook: BookItem) => void;
   onDelete: (id: string) => void;
+  onOpenVolume?: (book: BookItem, create: boolean) => void;
 }
 
 export const BookDetailModal: React.FC<BookDetailModalProps> = ({
@@ -92,6 +95,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onClose,
   onSave,
   onDelete,
+  onOpenVolume,
 }) => {
   const { lang, dir, t, books, refreshBooks } = useWorkspace();
 
@@ -247,7 +251,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           windowAPI.extractEpubCover(initial.filePath)
             .then((res: any) => {
               if (res?.success && res.coverUrl) {
-                setFormData((prev) => ({ ...prev, coverImage: res.coverUrl }));
+                setFormData((prev) => prev.id === initial.id && prev.filePath === initial.filePath && !prev.coverImage ? { ...prev, coverImage: res.coverUrl } : prev);
               }
             })
             .catch(() => {});
@@ -1725,6 +1729,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       />
                     </div>
                     <EditionInput key={formData.id} book={formData} onChange={value => handleInputChange('edition', value)} t={t} />
+                    <BookVolumesPanel book={formData} books={books} t={t} saved={!isCreateMode && !isDirty} onChange={handleInputChange} onOpen={onOpenVolume ? volume => { if (!isDirty || window.confirm(t('bookVolumesDiscardConfirm'))) onOpenVolume(volume, false); } : undefined} onAdd={onOpenVolume ? volume => onOpenVolume(volume, true) : undefined} />
                     <div className="space-y-1">
                       <label className="font-bold text-main">{lang === 'ar' ? 'عدد الصفحات (Pages):' : 'Pages Count:'}</label>
                       <input
@@ -2594,10 +2599,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   type="button"
                   onClick={() => setShowGeekModal(true)}
                   title={t('geekDetailsTooltip')}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-subtle bg-surface/40 hover:bg-surface text-muted hover:text-purple-600 dark:hover:text-purple-400 text-xs font-medium transition-all cursor-pointer"
+                  aria-label={t('geekDetailsBtn')}
+                  className="size-7 shrink-0 inline-flex items-center justify-center rounded-lg border border-subtle bg-surface/40 hover:bg-surface text-muted hover:text-purple-600 dark:hover:text-purple-400 transition-colors cursor-pointer"
                 >
                   <Terminal className="w-3.5 h-3.5 opacity-70" />
-                  <span>{t('geekDetailsBtn')}</span>
                 </button>
               </>
             )}
@@ -2613,7 +2618,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             </button>
             <button
               type="button"
-              disabled={!validation.isValid}
+              disabled={!validation.isValid || (formData.workType === 'book' && !!bookVolumeIssue(formData))}
               onClick={async () => {
                 if (validation.isValid) {
                   let toSave = { ...formData };
