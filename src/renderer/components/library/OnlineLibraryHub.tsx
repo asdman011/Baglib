@@ -1,5 +1,7 @@
 'use client';
 
+import { BookCoverThumbnail } from './BookCoverThumbnail';
+
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Globe,
@@ -21,7 +23,6 @@ import {
 import { INITIAL_RSS_FEEDS } from '../../data/libraryMockData';
 import { BookItem } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { formatCoverUrl } from '../../utils/file-path-helper';
 
 interface OnlineLibraryHubProps {
   isOpen: boolean;
@@ -593,20 +594,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                         className="p-4 rounded-2xl bg-canvas border border-subtle flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-pale-sky-500/40 transition-all group"
                       >
                         <div className="flex items-start gap-3 min-w-0">
-                          {item.coverUrl ? (
-                            <img
-                              src={formatCoverUrl(item.coverUrl)}
-                              alt={item.title}
-                              className="w-12 h-16 object-cover rounded-lg border border-subtle shrink-0 bg-surface"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-12 h-16 rounded-lg bg-surface border border-subtle flex items-center justify-center text-muted shrink-0">
-                              <BookOpen className="w-5 h-5 opacity-40" />
-                            </div>
-                          )}
+                          <BookCoverThumbnail url={item.coverUrl} title={item.title} className="w-12 h-16 rounded-lg border border-subtle shrink-0" />
 
                           <div className="space-y-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">

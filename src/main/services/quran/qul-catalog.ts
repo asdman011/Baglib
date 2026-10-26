@@ -27,7 +27,13 @@ export function parseResourceListing(html: string, kind: QuranCategory): QuranRe
     const title = heading.textContent.trim().replace(/\s+/g, ' ');
     if (!title || title.length > 500) continue;
     const id = `${kind}/${href.split('/').at(-1)}`;
-    resources.set(id, { id, category: kind, title, sourcePath: href, tags: [], formats: [], related: [], restricted: false,
+    const card = heading.closest('li,article,[data-resource-id]') || heading.parentElement!;
+    const links = [...card.querySelectorAll('a[href]')];
+    const downloads = links.filter(link => /^Download\b/i.test(link.textContent.trim()));
+    const tags = links.filter(link => /tags/.test(link.getAttribute('href') || '')).map(link => link.textContent.trim()).filter(Boolean).slice(0, 40);
+    const related = links.map(link => link.getAttribute('href') || '').filter(link => /^\/resources\/[a-z-]+\/[a-zA-Z0-9_-]+$/.test(link) && link !== href).map(link => link.slice('/resources/'.length));
+    const signIn = downloads.some(link => /^\/users\/sign_in(?:\?|$)/.test(link.getAttribute('data-url') || ''));
+    resources.set(id, { id, category: kind, title, sourcePath: href, tags, formats: [...new Set(downloads.map(link => link.textContent.trim().replace(/\s+/g, ' ')))], related: [...new Set(related)].slice(0, 50), restricted: /This resource is\s*©?\s*copyrighted/i.test(card.textContent), downloadAccess: signIn ? 'sign-in-required' : 'unknown',
       profile: { key: `qul:${id}:unverified`, qiraah: null, riwayah: null, tariq: null, numbering: null, segmentation: null, script: null, verified: false }, fetchedAt: new Date().toISOString() });
   }
   return [...resources.values()];
@@ -39,13 +45,16 @@ export function parseResourceDetails(html: string, resource: QuranResource): { r
   const downloads: string[] = [];
   const formats: string[] = [];
   const related = new Set<string>();
+  let signIn = Boolean(document.querySelector('form[action="/users/sign_in"]'));
   for (const anchor of document.querySelectorAll('a[href]')) {
     const href = anchor.getAttribute('href') || '';
+    if (/^\/users\/sign_in(?:\?|$)/.test(href)) signIn = true;
+    if (/^Download\b/i.test(anchor.textContent.trim()) && /^\/users\/sign_in(?:\?|$)/.test(anchor.getAttribute('data-url') || '')) { signIn = true; formats.push(anchor.textContent.trim().replace(/\s+/g, ' ')); }
     if (new RegExp(`^/resources/${resource.category}/[a-f0-9]{32}/download$`).test(href)) { downloads.push(href); formats.push(anchor.textContent.trim().replace(/\s+/g, ' ')); }
     else if (/^\/resources\/[a-z-]+\/[a-zA-Z0-9_-]+$/.test(href) && href !== resource.sourcePath) related.add(href.slice('/resources/'.length));
   }
   const restricted = /This resource is\s*©?\s*copyrighted/i.test(document.body.textContent || document.documentElement.textContent);
-  return { resource: { ...resource, tags, formats: [...new Set(formats)], related: [...related].slice(0, 50), restricted, fetchedAt: new Date().toISOString() }, downloads: restricted ? [] : downloads };
+  return { resource: { ...resource, tags, formats: [...new Set(formats)], related: [...related].slice(0, 50), restricted, downloadAccess: signIn && !downloads.length ? 'sign-in-required' : downloads.length ? 'link-available' : 'unknown', fetchedAt: new Date().toISOString() }, downloads: restricted ? [] : downloads };
 }
 
 export function validateSourceUrl(raw: string): URL {
