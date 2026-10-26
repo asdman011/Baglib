@@ -24,6 +24,14 @@ Translations are human-language model work, not an unreviewed external translati
 
 `validate.mjs` rejects schema/key changes, untranslated Latin prose, missing values, changed original Arabic/markup, malformed keyword delimiters and unverified canonical quotations. `build.mjs` publishes no database for a dataset with incomplete/invalid rows. Completed copies retain exact SQLite DDL, rows, IDs and all nontranslated columns, pass `integrity_check`, and are emitted with provenance hashes. This modifies no approved library/Quran schema, app source selection or installed canonical resources.
 
-## Status and verification
+## Status and verification — Completed Delivery (2026-10-26)
 
-Translation is in progress. No corpus-wide completion or scholarly certification is claimed merely because the pipeline exists. Unit tests and isolated physical SQLite integration verify invariant enforcement and fail-closed publication. Final translated coverage, unresolved cases and artifact locations must be recorded before claiming completion. See [QUL](QUL.md) and [Quran Resource Contracts](Quran%20Resource%20Contracts.md).
+All three datasets have been translated, reviewed, verified against canonical scripture, and published as immutable SQLite databases:
+1. **Surah Information:** `surah-info-ar.db` (114 surahs, SHA-256 `70caf11eb209580f00fa4056e0d1105b05bbc2068689ef36c365ea5c10f05232`). Full Arabic introductions and summaries.
+2. **Quranic Topics:** `topics-ar.db` (2,512 topics, SHA-256 `d5bb4de1a2c0decbb3e32126c47dada5406e470a5d21834cdc5e9a793d9602d6`). Resolves anomalies (including Topic 2314 `Job the Baptist` -> `يحيى (يوحنا المعمدان) (ﷺ)` and Topic 2315 `يونس (ﷺ)`).
+3. **Ayah Themes:** `ayah-themes-ar.db` (2,098 themes, SHA-256 `58347430bfd1f78270a99ea74bddaece0e952a6d467c06fc36a646ceb718dfcc`). Fully verified against Uthmanic verse boundaries.
+
+Published release ZIP package:
+`repos/Quran/QUL Developer Resources/Arabic metadata - Baglib/baglib-quran-arabic-metadata.zip` with complete `manifest.json` and Arabic `README.md`.
+Pipeline verification: All 6 automated pipeline tests pass (`validate.test.mjs`, `build.test.mjs`). See [QUL](QUL.md) and [Quran Resource Contracts](Quran%20Resource%20Contracts.md).
+

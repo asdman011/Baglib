@@ -1,5 +1,21 @@
 # Current Task
 
+## Completed delivery — Documentation: ADR-004, Unified Data Dictionary, Quran Metadata Feature Doc — 2026-10-26, Antigravity
+
+Documented architectural decisions, schema dictionaries, and localization status:
+1. **ADR-004 (`docs/ADR-004-multivolume-works-and-sacred-corpus-partitioning.md`)**:
+   - Formally documented multi-volume work modeling via existing `metadata_json` (`seriesTitle`, `volumeNumber`, `totalVolumes`), preserving Baglib's Work → Edition → Source core architecture without unapproved SQL table alterations.
+   - Documented shielded external ingestion for LibGen: dynamic Referer/User-Agent injection, decompression fallbacks, magic-bytes format correction, and dual MD5/SHA-256 integrity verification.
+   - Documented immutable sacred corpus partitioning: isolated local packs for Holy Quran (QPC/QUL) and Sunnah (Six Canonical Hadith Books), ensuring uncorrupted scripture without mixing profane user library data.
+2. **Unified Data Dictionary (`docs/data-dictionary.md`)**:
+   - Mapped all entities, primary/foreign keys, indexes, and constraints for Core Library DB (`baglib.db`): `work`, `edition`, `source`, `file_source_detail`, `physical_source_detail`, `author`, `work_author`, `category`, `work_category`, `tag`, `work_tag`, `lending_record`, `annotation`, `app_settings`, and `book_content_fts` (FTS5).
+   - Documented Quran SQLite Pack Schemas: `surah_infos` (`surah-info-ar.db`/`en`), `topics` (`topics-ar.db`/`en`), `themes` (`ayah-themes-ar.db`/`en`), `words` (`qpc-hafs.db`/`v4`), and `pages` (`mushaf-layout`).
+   - Documented Sunnah Corpus File-Based JSON Store: `catalog.json` manifest and partitioned JSON chapter structure (`${collectionId}-${chapterNumber}.json`) with parallel Arabic/English text, isnad, matn, and scholar grade.
+3. **Quran Metadata Localization Feature Doc (`docs/features/feature - Quran Metadata Arabic Localization.md`)**:
+   - Updated document status to reflect completed publication of the three Arabic SQLite databases (`surah-info-ar.db`, `topics-ar.db`, `ayah-themes-ar.db`) and release package (`baglib-quran-arabic-metadata.zip`).
+4. **Git Tracking Configuration (`.gitignore`)**:
+   - Updated `.gitignore` to whitelist `!docs/*.md` so all project architectural records and data dictionaries remain tracked in Git without committing bulky binary files.
+
 ## Active request — fix LibGen corrupted downloads and missing covers — 2026-10-26, Antigravity
 
 Investigated and resolved issues with LibGen book downloads being corrupted and book covers missing from search results:

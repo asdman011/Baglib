@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-10-26, Antigravity] Documented multi-volume works, shielded LibGen ingestion, and sacred corpus partitioning in ADR-004; authored comprehensive unified data dictionary covering Core Library DB (baglib.db), Quran SQLite databases, and Sunnah corpus store in docs/data-dictionary.md; updated Quran metadata Arabic localization feature doc; unblocked docs markdown tracking in .gitignore. Clean verification, all 928 tests pass.
+
 - [2026-10-26, Antigravity] Resolved LibGen book download corruption and missing search covers: bypassed anti-hotlink protection via `strict-origin-when-cross-origin` and webRequest Referer injection; corrected search query to `curtab=f&covers=on` with authentic MD5/format extraction; enforced `Accept-Encoding: identity` and magic-bytes extension correction in `LibgenDownloadService`; supported MD5 hash verification in `StorageManagerService.verifyWorkStorage` to prevent false corrupted statuses. 928 full tests pass, clean TypeScript compilation and main build.
 
 - [2026-10-26, Antigravity] Fixed runtime error `Error invoking remote method 'library:add-book': [object Object]` by guarding PDF cover extraction with fallback try/catch, normalizing thrown IPC errors via `normalizeIpcError`, and sanitizing null/empty volume metadata inputs in `bookVolumeIssue` and `WorkRepository`. 928 full tests pass, clean TypeScript compilation and main build. Uncommitted collaborative changes preserved; no Git/Jira actions.
