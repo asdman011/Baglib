@@ -25,6 +25,7 @@ import { registerSecurityIpc } from "./ipc/security";
 import { registerReaderPluginsIpc } from "./ipc/reader-plugins";
 import { registerSunnahIpc } from "./ipc/sunnah";
 import { registerQuranIpc } from "./ipc/quran";
+import { startKhatmahReminders } from './services/quran/khatmah-reminders';
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 import { installPdfDiagnosticFilter } from "./services/digital/pdf-diagnostics";
@@ -294,6 +295,7 @@ app.whenReady().then(async () => {
   // Initialize SQLite database and run pending migrations
   try {
     await initializeDatabase();
+    startKhatmahReminders();
     console.log("[baglib] Database initialized successfully.");
   } catch (e) {
     console.error("[baglib] Database initialization failed:", e);
