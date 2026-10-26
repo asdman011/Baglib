@@ -6,6 +6,7 @@ import type { QuranAyahTheme, QuranRichNode } from '../../../shared/types/quran'
 import type { TranslationKey } from '../../translations';
 import { QuranMushafView } from './QuranMushafView';
 import { QuranTranslationText } from './QuranTranslationText';
+import { groupThemeLabels } from './quran-theme-labels';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
 
 type Reference = { surah: number; ayah: number; wordText?: string };
@@ -136,13 +137,7 @@ export function QuranMushafWorkspace(props: Props) {
     const surahs = [...new Set(page.words.map(word => word.surah))];
     void Promise.all(surahs.map(surah => window.electronAPI.quran.ayahThemes({ surah }))).then(results => {
       if (!alive) return;
-      const groups = new Map<string, QuranAyahTheme>();
-      for (const theme of results.flatMap(result => result.ok ? result.data : [])) {
-        const key = `${theme.surahNumber}:${theme.ayahFrom}:${theme.ayahTo}`;
-        const existing = groups.get(key);
-        groups.set(key, existing ? { ...existing, theme: `${existing.theme}\n${theme.theme}` } : theme);
-      }
-      setThemes([...groups.values()]);
+      setThemes(groupThemeLabels(results.flatMap(result => result.ok ? result.data : [])));
     }).catch(() => { if (alive) setThemes([]); });
     return () => { alive = false; };
   }, [showThemes, page]);
