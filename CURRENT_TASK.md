@@ -1,5 +1,37 @@
 # Current Task
 
+## Active request — fix LibGen corrupted downloads and missing covers — 2026-10-26, Antigravity
+
+Investigated and resolved issues with LibGen book downloads being corrupted and book covers missing from search results:
+1. **Cover Preview Anti-Hotlink Protection (`BookCoverThumbnail.tsx` & `content-shield.service.ts`):**
+   - Observed that LibGen reverse proxies return `HTTP 200` with 0 bytes when `Referer` is absent (caused by `referrerPolicy="no-referrer"`).
+   - Changed `BookCoverThumbnail.tsx` to `referrerPolicy="strict-origin-when-cross-origin"`.
+   - In `content-shield.service.ts`, added a header interceptor for all LibGen domains (`libgen.li`, `libgen.bz`, `libgen.is`, etc.) injecting `Referer: https://libgen.li/` and standard browser `User-Agent`. Full binary image streams (5KB–50KB) now load reliably.
+2. **Search File Metadata & Download Target Fix (`libgen.provider.ts`):**
+   - Switched `searchFreeTextHydrated` search URL from `curtab=e` (editions tab, lacking file details) to `curtab=f&covers=on` (files tab), guaranteeing authentic MD5, file format, file size, and cover image paths in parsed rows.
+   - Enhanced batch hydration via `json.php` to enrich descriptions, ISBNs, series, and missing covers while retaining authentic file download metadata.
+3. **Download Stream Integrity & Magic-Bytes Extension Correction (`libgen-download.service.ts` & `content-shield.service.ts`):**
+   - Enforced `Accept-Encoding: identity` with automatic decompression fallbacks (`zlib.createGunzip()`, `createInflate()`, `createBrotliDecompress()`) if mirror responds compressed.
+   - Added magic bytes inspection and automatic file extension correction (e.g., if an EPUB is downloaded, it is saved as `.epub` rather than default `.pdf`, preventing PDF reader corruption errors).
+   - Concurrently computes both MD5 (for LibGen verification) and SHA-256 (for Baglib storage indexing).
+   - Race mirror candidates across `libgen.li`, `libgen.bz`, `libgen.is`, and `libgen.rs`.
+4. **Storage Health False-Positive Fix (`storage-manager.service.ts` & `OnlineLibraryHub.tsx`):**
+   - In `verifyWorkStorage`, added support for 32-character MD5 hashes alongside 64-character SHA-256 hashes via `computeFileMd5`. If MD5 matches, the database record is automatically upgraded to SHA-256, eliminating false-positive "corrupted" statuses.
+   - In `OnlineLibraryHub.tsx` and `LibraryGridView.tsx`, forwarded `fileHash` and detected `digitalFormat` to `onImportBook`.
+5. **Verification**: All **928 tests pass** across 282 test suites in `node scripts/test-runner.js`; clean `npx tsc --noEmit` (0 errors); clean `npm run build:main`. Preserved bilingual RTL/LTR layouts and collaborative work. No commit, push, or Jira authorization.
+
+## Active request — fix library:add-book IPC error — 2026-10-26, Antigravity
+
+Investigated and resolved runtime error `Error invoking remote method 'library:add-book': [object Object]`:
+1. **Unguarded PDF Cover Rendering**: In `src/main/ipc/database.ts`, `library:add-book` called `getPdfPageCoverService().render(bookData.filePath, 1)` directly without checking whether `bookData.coverImage` already existed and without a `try/catch` block (unlike `library:update-book`). If PDF rendering failed, timed out, or threw an exception, the entire IPC call crashed. Replaced with `coverResolverService.extractPdfCover` guarded by `try/catch` and `!bookData.coverImage`.
+2. **IPC Error Normalization**: When errors were rethrown in `ipcMain.handle`, raw objects or non-Error instances were serialized across Electron IPC as `[object Object]`. Added `normalizeIpcError` helper ensuring thrown errors are standard `Error` instances with descriptive messages.
+3. **Volume Metadata Validation Guard**: In `src/shared/book-volumes.ts` and `src/main/database/repositories/work.repository.ts`, `bookVolumeIssue` previously failed on `null` or empty string volume fields from uninitialized UI inputs (`seriesTitle: null`, `volumeNumber: null`, `totalVolumes: null | ''`), throwing `invalid-volume-metadata`. Sanitized optional volume fields so empty/null values are treated as unset. Also explicitly imported `node:crypto` in `work.repository.ts`.
+4. **Verification**: 4/4 `book-volumes.test.ts` pass (including new empty/null assertions); 3/3 UI volume tests pass; clean `npx tsc --noEmit` (0 errors); clean `npm run build:main`; all **928 tests pass** across 282 test suites in `npm test`. No live visual layout changes; preserved collaborative uncommitted changes. No commit, push, or Jira authorization.
+
+## Active request — duplicate ayah theme — 2026-10-26, Codex
+
+Implemented display-only deduplication of Mushaf margin theme labels within each exact surah/ayah range. Whitespace-only differences are ignored for comparison; original source objects, Arabic diacritics, distinct labels and separate ranges remain intact. Verified 28 focused tests (Arabic/English reader rendering plus duplicate/mixed-script regression cases) and clean TypeScript check. No live desktop visual verification performed; margin geometry unchanged. No commit, push or Jira authorization.
+
 ## Completed delivery — Arabic Quran metadata copies — 2026-10-26, Antigravity
 
 Completed the Arabic Quran metadata review and publication pipeline following the handoff from Codex:

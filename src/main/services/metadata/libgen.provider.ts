@@ -306,7 +306,7 @@ export class LibgenProvider {
   async searchFreeTextHydrated(query: string, maxResults = 25): Promise<LibgenSearchResult[]> {
     const mirror = await this.getActiveMirror();
     const encodedQuery = encodeURIComponent(query.trim());
-    const searchUrl = `${mirror}/index.php?req=${encodedQuery}&curtab=e&covers=on`;
+    const searchUrl = `${mirror}/index.php?req=${encodedQuery}&curtab=f&covers=on`;
 
     let html = '';
     try {
@@ -339,37 +339,48 @@ export class LibgenProvider {
       ...new Set([...html.matchAll(/edition\.php\?id=(\d+)/gi)].map((m) => m[1])),
     ];
 
-    // Extract File MD5s if present in table
-    const md5List = [
-      ...new Set(
-        [...html.matchAll(/(?:ads\.php\?md5=|get\.php\?md5=|\/ads|\/get)([a-fA-F0-9]{32})/gi)].map((m) =>
-          m[1].toLowerCase()
-        )
-      ),
-    ];
-
-    // If edition IDs were found, batch hydrate via json.php
-    if (editionIds.length > 0) {
+    // If edition IDs were found, batch hydrate via json.php to enrich description, isbn, and series
+    if (editionIds.length > 0 && previews.length > 0) {
       const topIds = editionIds.slice(0, Math.min(maxResults, 20)).join(',');
       const addKeys = '10,101,102,401,505,606,630,863,995,996';
       const hydrateUrl = `${mirror}/json.php?object=e&ids=${topIds}&fields=*&addkeys=${addKeys}`;
 
       const jsonRecords = await this.fetchJson<Record<string, any>>(hydrateUrl);
       if (jsonRecords && typeof jsonRecords === 'object' && Object.keys(jsonRecords).length > 0) {
-        const results: LibgenSearchResult[] = [];
-        for (const [eid, eRec] of Object.entries(jsonRecords)) {
-          const nestedFiles = eRec.files && typeof eRec.files === 'object' ? Object.values(eRec.files) : [];
-          const preview = previews.find(item => item.editionId === eid);
-          results.push(...this.mapEditionToSearchResults(eid, eRec, nestedFiles, mirror).map(item => ({ ...item, coverUrl: preview?.coverUrl || item.coverUrl })));
-        }
+        return previews.map((item) => {
+          if (!item.editionId || !jsonRecords[item.editionId]) return item;
+          const eRec = jsonRecords[item.editionId];
+          const descList = this.getAddValues(eRec.add, '996');
+          const description = descList[0]
+            ? descList[0].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim()
+            : item.description;
+          const isbnList = this.getAddValues(eRec.add, '505');
+          const isbn = item.isbn || isbnList[0] || undefined;
+          const series = item.series || (eRec.series_name ? String(eRec.series_name).trim() : undefined);
 
-        if (results.length > 0) {
-          return results.slice(0, maxResults);
-        }
+          let hydratedCover: string | undefined = undefined;
+          const addCover = this.getAddValues(eRec.add, '863')[0];
+          if (addCover) {
+            hydratedCover = this.coverUrl(addCover, mirror);
+          } else if (eRec.cover_url && typeof eRec.cover_url === 'string' && eRec.cover_url.trim()) {
+            hydratedCover = this.coverUrl(eRec.cover_url, mirror);
+          } else if (String(eRec.cover_exists) === '1') {
+            const eNum = Number(item.editionId);
+            const folder = !isNaN(eNum) ? Math.floor(eNum / 1000) * 1000 : 0;
+            hydratedCover = `${mirror}/editioncovers/${folder}/${item.editionId}.jpg`;
+          }
+
+          return {
+            ...item,
+            coverUrl: item.coverUrl || hydratedCover,
+            description: description || item.description,
+            isbn,
+            series,
+          };
+        }).slice(0, maxResults);
       }
     }
 
-    // Secondary fallback: parse the HTML table rows directly if json.php returned empty
     return previews;
   }
 

@@ -283,8 +283,16 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
   };
 
   const handleShieldedDownload = async (item: any) => {
-    const targetUrl = item.downloadUrl || item.detailUrl;
-    if (!targetUrl && !item.md5) return;
+    // Prevent accidentally downloading HTML details pages
+    const isDirectDownload = item.downloadUrl && !item.downloadUrl.includes('edition.php') && !item.downloadUrl.includes('file.php');
+    const targetUrl = isDirectDownload ? item.downloadUrl : null;
+    if (!targetUrl && !item.md5) {
+      setDownloadToast({
+        message: lang === 'ar' ? 'رابط التحميل المباشر غير متوفر لهذا الكتاب' : 'Direct download link is not available for this record',
+        isError: true,
+      });
+      return;
+    }
 
     setDownloadingId(item.id);
     const windowAPI = (window as any).electronAPI;
@@ -300,14 +308,17 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
           filename,
           expectedFormat: format,
         });
-      } else if (windowAPI?.safeDownload) {
+      } else if (targetUrl && windowAPI?.safeDownload) {
         res = await windowAPI.safeDownload(targetUrl, filename);
       }
       if (res && res.success && res.filePath) {
         res.path = res.filePath;
       }
       if (res && res.success && res.path) {
-          const isEpub = (item.format || '').toUpperCase() === 'EPUB';
+          const pathExt = (res.path.split('.').pop() || '').toUpperCase();
+          const digitalFormat = ['PDF', 'EPUB', 'MOBI', 'AZW3', 'DJVU', 'CBZ', 'CBR', 'FB2', 'TXT'].includes(pathExt)
+            ? pathExt
+            : (item.format || 'PDF').toUpperCase();
           let coverImage = item.coverUrl;
           if (res.path.toLowerCase().endsWith('.pdf') && windowAPI?.extractPdfCover) {
             try {
@@ -336,7 +347,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
             publisher: item.publisher,
             publicationYear: item.year,
             language: item.language || (item.title && /[\u0600-\u06FF]/.test(item.title) ? 'العربية' : undefined),
-            digitalFormat: isEpub ? 'EPUB' : 'PDF',
+            digitalFormat: digitalFormat as any,
             bookType: 'digital',
             onlineSource: (activeSource === 'AnnasArchive' ? "Anna Archive" : activeSource) as any,
             categories: ['مستورد من الإنترنت', activeSource],
@@ -344,7 +355,8 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
             isbn: item.isbn,
             filePath: res.path,
             fileSize: item.fileSize,
-            tags: [`#${activeSource}`, item.format || 'PDF'],
+            fileHash: res.sha256 || res.md5 || item.md5,
+            tags: [`#${activeSource}`, digitalFormat],
             lendingHistory: [],
           });
           setDownloadToast({

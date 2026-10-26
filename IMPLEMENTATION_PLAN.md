@@ -2,6 +2,12 @@
 
 ## Recent Agent Updates
 
+- [2026-10-26, Antigravity] Resolved LibGen book download corruption and missing search covers: bypassed anti-hotlink protection via `strict-origin-when-cross-origin` and webRequest Referer injection; corrected search query to `curtab=f&covers=on` with authentic MD5/format extraction; enforced `Accept-Encoding: identity` and magic-bytes extension correction in `LibgenDownloadService`; supported MD5 hash verification in `StorageManagerService.verifyWorkStorage` to prevent false corrupted statuses. 928 full tests pass, clean TypeScript compilation and main build.
+
+- [2026-10-26, Antigravity] Fixed runtime error `Error invoking remote method 'library:add-book': [object Object]` by guarding PDF cover extraction with fallback try/catch, normalizing thrown IPC errors via `normalizeIpcError`, and sanitizing null/empty volume metadata inputs in `bookVolumeIssue` and `WorkRepository`. 928 full tests pass, clean TypeScript compilation and main build. Uncommitted collaborative changes preserved; no Git/Jira actions.
+
+- [2026-10-26, Codex] Fixed duplicate Mushaf margin theme labels with whitespace-aware, range-scoped display deduplication; canonical data and distinct Arabic/English labels preserved. 28 focused tests and TypeScript check pass. No live visual check; existing margin geometry unchanged. No Git/Jira actions.
+
 - `[2026-10-26T13:51:00+03:00, Antigravity]` Completed Arabic Quran metadata copies pipeline: disabled failing telemetry hook in plugin hooks.json, context-checked topic row 2315 to Yunus (ﷺ) supported by child 2316 (10:98), created 88 hash-bound reviews.json decisions, and executed fail-closed build & publication emitting 3 verified Arabic SQLite databases in baglib-quran-arabic-metadata.zip. 6/6 pipeline tests, 925/925 full test suite pass, clean typecheck. Collaborative uncommitted changes preserved; no git commit/push/Jira action.
 
 - `[2026-10-26, Codex]` Paused Arabic Quran metadata localization at the user's request and prepared handoff for the other agent. All 4,724 translated rows are saved and six pipeline tests pass, but semantic/source review still blocks publication. Confirmed row 2314 as John the Baptist (`يحيى`), preserved original English data, and identified adjacent row 2315 for context review. No final DB, commit, push, or Jira action.

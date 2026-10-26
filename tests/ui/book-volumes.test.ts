@@ -24,6 +24,6 @@ for (const lang of ['ar', 'en'] as const) {
 test('search covers lazy-load without file referrers and retain an underlying fallback', () => {
   const { document } = parseHTML(renderToStaticMarkup(createElement(BookCoverThumbnail, { url: 'https://libgen.li/covers/test.jpg', title: book.title })));
   assert.equal(document.querySelector('img')?.getAttribute('loading'), 'lazy');
-  assert.equal(document.querySelector('img')?.getAttribute('referrerPolicy'), 'no-referrer');
+  assert.equal(document.querySelector('img')?.getAttribute('referrerPolicy'), 'strict-origin-when-cross-origin');
   assert.equal(document.querySelectorAll('svg').length, 1);
 });

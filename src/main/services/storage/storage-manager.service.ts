@@ -60,6 +60,19 @@ export class StorageManagerService {
   }
 
   /**
+   * Computes an MD5 hash of a file on disk using streaming.
+   */
+  public async computeFileMd5(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const hash = crypto.createHash('md5');
+      const stream = fs.createReadStream(filePath);
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex').toLowerCase()));
+      stream.on('error', (err) => reject(err));
+    });
+  }
+
+  /**
    * Verifies the storage health of a single digital work on disk.
    */
   public async verifyWorkStorage(workId: string, verifyHash = false): Promise<FileHealthInfo | null> {
@@ -112,10 +125,27 @@ export class StorageManagerService {
           // Optional deep hash check or if hash not yet computed
           if (verifyHash || !row.fileHash) {
             try {
-              currentHash = await this.computeFileSha256(row.filePath);
-              if (row.fileHash && row.fileHash !== currentHash) {
-                status = 'corrupted';
-                errorReason = 'تغيّرت بصمة الملف الرقمية مقارنة بالأصل / File checksum differs from indexed hash';
+              if (row.fileHash && row.fileHash.length === 32) {
+                // Stored hash is MD5 (e.g. from LibGen)
+                const fileMd5 = await this.computeFileMd5(row.filePath);
+                if (row.fileHash.toLowerCase() !== fileMd5) {
+                  status = 'corrupted';
+                  errorReason = 'تغيّرت بصمة الملف الرقمية مقارنة بالأصل / File checksum differs from indexed hash';
+                } else {
+                  // Valid file! Compute SHA-256 and upgrade database record
+                  currentHash = await this.computeFileSha256(row.filePath);
+                  try {
+                    this.db.prepare(`UPDATE file_source_detail SET file_hash = ? WHERE source_id = ?`).run(currentHash, row.sourceId);
+                  } catch {
+                    // Ignore DB update error
+                  }
+                }
+              } else {
+                currentHash = await this.computeFileSha256(row.filePath);
+                if (row.fileHash && row.fileHash.toLowerCase() !== currentHash.toLowerCase()) {
+                  status = 'corrupted';
+                  errorReason = 'تغيّرت بصمة الملف الرقمية مقارنة بالأصل / File checksum differs from indexed hash';
+                }
               }
             } catch {
               // Ignore hash calculation error if file is temporarily busy

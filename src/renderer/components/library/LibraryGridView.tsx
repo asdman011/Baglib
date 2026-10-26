@@ -826,6 +826,7 @@ export const LibraryGridView: React.FC = () => {
       onlineSource: partialBook.onlineSource as any,
       filePath: partialBook.filePath,
       fileSize: partialBook.fileSize,
+      fileHash: partialBook.fileHash,
       coverImage: partialBook.coverImage,
       isbn: partialBook.isbn,
       publicationYear: partialBook.publicationYear,

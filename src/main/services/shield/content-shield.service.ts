@@ -12,6 +12,7 @@ import https from 'https';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import zlib from 'zlib';
 import { libgenDownloadService } from '../digital/libgen-download.service';
 
 // Comprehensive pattern list of known intrusive ad networks, popunders, and tracking domains
@@ -136,6 +137,32 @@ export class ContentShieldService {
       targetSession.webRequest.onHeadersReceived((details, callback) => {
         callback({ responseHeaders: details.responseHeaders });
       });
+
+      // 3. Ensure valid Referer & User-Agent for LibGen book cover requests to bypass 0-byte anti-hotlink gate
+      targetSession.webRequest.onBeforeSendHeaders(
+        {
+          urls: [
+            '*://*.libgen.li/*',
+            '*://*.libgen.bz/*',
+            '*://*.libgen.is/*',
+            '*://*.libgen.rs/*',
+            '*://*.libgen.gs/*',
+            '*://*.libgen.vg/*',
+            '*://*.booksdl.lc/*',
+          ],
+        },
+        (details, callback) => {
+          const requestHeaders = { ...details.requestHeaders };
+          if (!requestHeaders['Referer'] || requestHeaders['Referer'] === 'about:blank') {
+            requestHeaders['Referer'] = 'https://libgen.li/';
+          }
+          if (!requestHeaders['User-Agent']) {
+            requestHeaders['User-Agent'] =
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+          }
+          callback({ requestHeaders });
+        }
+      );
     } catch (err) {
       console.warn('[ContentShield] Error registering webRequest on session:', err);
     }
@@ -274,7 +301,7 @@ export class ContentShieldService {
               Accept:
                 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,application/octet-stream,*/*;q=0.8',
               'Accept-Language': 'en-US,en;q=0.9',
-              'Accept-Encoding': 'gzip, deflate, br',
+              'Accept-Encoding': 'identity',
               Connection: 'keep-alive',
               Referer:
                 currentUrl.includes('booksdl.lc') || currentUrl.includes('libgen')
@@ -311,14 +338,27 @@ export class ContentShieldService {
               highWaterMark: 1024 * 1024,
             });
 
-            res.on('data', (chunk) => {
+            // Handle potential compression if server ignored identity request
+            let decompressor: NodeJS.ReadWriteStream | null = null;
+            const contentEncoding = (res.headers['content-encoding'] || '').toLowerCase();
+            if (contentEncoding === 'gzip') {
+              decompressor = zlib.createGunzip();
+            } else if (contentEncoding === 'deflate') {
+              decompressor = zlib.createInflate();
+            } else if (contentEncoding === 'br') {
+              decompressor = zlib.createBrotliDecompress();
+            }
+
+            const inputStream = decompressor ? res.pipe(decompressor) : res;
+
+            inputStream.on('data', (chunk: Buffer) => {
               downloadedBytes += chunk.length;
               if (onProgress) {
                 onProgress(downloadedBytes, totalBytes);
               }
             });
 
-            res.pipe(fileStream);
+            inputStream.pipe(fileStream);
 
             fileStream.on('finish', () => {
               fileStream.close();

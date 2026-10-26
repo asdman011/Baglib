@@ -1,6 +1,22 @@
-# Reverse-Engineered Feature Documentation: Library Genesis (LibGen / libgen.li)
+## Cover Hotlink Protection & Download Integrity Fix — 2026-10-26, Antigravity
+
+### Actually Observed Behavior & Root Causes:
+1. **Cover Previews Blank (0 bytes):**
+   - **Root Cause:** LibGen CDN and mirror servers enforce strict hotlink protection checking the HTTP `Referer` header. When `referrerPolicy="no-referrer"` was specified in Chromium `<img>` tags, requests arrived with no `Referer`, causing LibGen's Nginx/Cloudflare reverse proxies to return `HTTP 200 OK` with `Content-Length: 0` (0 actual bytes). Chromium was unable to decode the 0-byte stream and triggered `onError`, hiding covers and falling back to empty slots.
+   - **Fix:** Switched `BookCoverThumbnail.tsx` to `referrerPolicy="strict-origin-when-cross-origin"`. In `ContentShieldService.attachToSession`, registered a webRequest header interceptor for all LibGen domains (`libgen.li`, `libgen.bz`, `libgen.is`, `libgen.rs`, `libgen.gs`, `libgen.vg`, `booksdl.lc`) injecting `Referer: https://libgen.li/` and standard browser `User-Agent`. Full binary image streams (5KB–50KB) now load reliably.
+
+2. **Corrupted Downloads:**
+   - **Root Cause A (HTML Page Saved as PDF):** `curtab=e` (editions tab) previously searched editions with missing file metadata. When `json.php` failed to hydrate files, `item.md5` was undefined. `OnlineLibraryHub.tsx` fell back to `safeDownload(item.detailUrl, filename)`, saving the HTML content of `edition.php` to disk as a `.pdf` file.
+   - **Fix A:** Switched `searchFreeTextHydrated` to search `curtab=f&covers=on` (files tab), guaranteeing authentic MD5, file format, file size, and cover image paths in every search result row.
+   - **Root Cause B (Format / Extension Mismatch):** EPUB/MOBI books downloaded from LibGen were previously saved with an assumed `.pdf` extension. Opening an EPUB renamed to `.pdf` in a PDF reader caused reader engines to report file corruption.
+   - **Fix B:** In `LibgenDownloadService`, implemented magic bytes inspection (`%PDF-`, `PK\x03\x04`, etc.) and automatic extension correction. If the server stream or magic bytes indicate EPUB/MOBI/DJVU while the filename has `.pdf`, the extension is automatically corrected to the authentic format.
+   - **Root Cause C (Uncompressed Stream Piping):** Direct download connections previously requested compressed encoding (`Accept-Encoding: gzip, deflate, br`) without decompressing before writing to disk.
+   - **Fix C:** Enforced `Accept-Encoding: identity` in download streams, with automatic decompression fallbacks (`zlib.createGunzip()`, `createInflate()`, `createBrotliDecompress()`) if a mirror responds with compressed encoding.
+   - **Root Cause D (False-Positive Hash Verification):** In `StorageManagerService.verifyWorkStorage`, files with 32-character MD5 hashes from LibGen were compared directly against 64-character SHA-256 hashes, immediately marking authentic files as `corrupted`.
+   - **Fix D:** Updated `verifyWorkStorage` to detect 32-character MD5 hashes, verify using `computeFileMd5`, and upgrade the database record to SHA-256 upon verification.
 
 ## Cover search correction — Codex, 2026-10-26
+
 
 ### Actually observed with REA
 

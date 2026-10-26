@@ -31,6 +31,7 @@ export interface LibgenDownloadResult {
   filename?: string;
   byteSize?: number;
   md5?: string;
+  sha256?: string;
   mimeType?: string;
   error?: string;
 }
@@ -44,6 +45,15 @@ export const PUBLIC_IPFS_GATEWAYS = [
   'https://gateway.pinata.cloud/ipfs/',
   'https://dweb.link/ipfs/',
 ];
+
+export const MIME_EXTENSION_MAP: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'application/epub+zip': '.epub',
+  'application/x-mobipocket-ebook': '.mobi',
+  'image/vnd.djvu': '.djvu',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.amazon.ebook': '.azw3',
+};
 
 // High-performance keep-alive agents to maximize download throughput and avoid TCP/TLS renegotiation lag
 const keepAliveHttpsAgent = new https.Agent({
@@ -81,8 +91,11 @@ export class LibgenDownloadService {
     // Mirror list to race in parallel: primary + reliable mirrors
     const candidateMirrors = [
       preferredMirror,
-      preferredMirror === 'https://libgen.bz' ? 'https://libgen.li' : 'https://libgen.bz',
-    ];
+      'https://libgen.li',
+      'https://libgen.bz',
+      'https://libgen.is',
+      'https://libgen.rs',
+    ].filter((m, i, arr) => arr.indexOf(m) === i);
 
     const probeMirror = async (mirror: string) => {
       const adsUrl = `${mirror}/ads.php?md5=${cleanMd5}`;
@@ -251,15 +264,18 @@ export class LibgenDownloadService {
       }
     }
 
-    // Candidate 3: Secondary HTTPS mirrors
-    candidateUrls.push({
-      url: `https://libgen.bz/get.php?md5=${cleanMd5}`,
-      referer: `https://libgen.bz/ads.php?md5=${cleanMd5}`,
-    });
-    candidateUrls.push({
-      url: `https://libgen.is/get.php?md5=${cleanMd5}`,
-      referer: `https://libgen.is/`,
-    });
+    // Candidate 3: Proactive fallback mirror key resolution if primary hasn't resolved
+    if (candidateUrls.length === 0) {
+      for (const fallbackMirror of ['https://libgen.bz', 'https://libgen.is', 'https://libgen.rs']) {
+        try {
+          const fbResolved = await this.resolveDownloadUrl(cleanMd5, fallbackMirror);
+          if (fbResolved) {
+            candidateUrls.push({ url: fbResolved.downloadUrl, referer: fbResolved.referer });
+            break;
+          }
+        } catch {}
+      }
+    }
 
     let lastError = 'No download mirrors succeeded';
 
@@ -278,19 +294,28 @@ export class LibgenDownloadService {
         });
 
         if (streamResult.success) {
-          if (fs.existsSync(destinationPath)) {
+          let finalFilename = safeFilename;
+          const detectedExt = streamResult.mimeType ? MIME_EXTENSION_MAP[streamResult.mimeType] : undefined;
+          const currentExt = path.extname(safeFilename).toLowerCase();
+          if (detectedExt && currentExt !== detectedExt) {
+            finalFilename = `${path.basename(safeFilename, currentExt)}${detectedExt}`;
+          }
+          const finalDestinationPath = path.join(targetDir, finalFilename);
+
+          if (fs.existsSync(finalDestinationPath)) {
             try {
-              fs.unlinkSync(destinationPath);
+              fs.unlinkSync(finalDestinationPath);
             } catch {}
           }
-          fs.renameSync(tempPath, destinationPath);
+          fs.renameSync(tempPath, finalDestinationPath);
 
           return {
             success: true,
-            filePath: destinationPath,
-            filename: safeFilename,
+            filePath: finalDestinationPath,
+            filename: finalFilename,
             byteSize: streamResult.byteSize,
             md5: streamResult.md5,
+            sha256: streamResult.sha256,
             mimeType: streamResult.mimeType,
           };
         } else {
@@ -323,19 +348,28 @@ export class LibgenDownloadService {
         });
 
         if (nativeResult.success) {
-          if (fs.existsSync(destinationPath)) {
+          let finalFilename = safeFilename;
+          const detectedExt = nativeResult.mimeType ? MIME_EXTENSION_MAP[nativeResult.mimeType] : undefined;
+          const currentExt = path.extname(safeFilename).toLowerCase();
+          if (detectedExt && currentExt !== detectedExt) {
+            finalFilename = `${path.basename(safeFilename, currentExt)}${detectedExt}`;
+          }
+          const finalDestinationPath = path.join(targetDir, finalFilename);
+
+          if (fs.existsSync(finalDestinationPath)) {
             try {
-              fs.unlinkSync(destinationPath);
+              fs.unlinkSync(finalDestinationPath);
             } catch {}
           }
-          fs.renameSync(tempPath, destinationPath);
+          fs.renameSync(tempPath, finalDestinationPath);
 
           return {
             success: true,
-            filePath: destinationPath,
-            filename: safeFilename,
+            filePath: finalDestinationPath,
+            filename: finalFilename,
             byteSize: nativeResult.byteSize,
             md5: nativeResult.md5,
+            sha256: nativeResult.sha256,
             mimeType: nativeResult.mimeType,
           };
         }
@@ -367,7 +401,7 @@ export class LibgenDownloadService {
     expectedFilesize?: number;
     timeoutMs: number;
     onProgress?: (progress: LibgenDownloadProgress) => void;
-  }): Promise<{ success: boolean; byteSize?: number; md5?: string; mimeType?: string; error?: string }> {
+  }): Promise<{ success: boolean; byteSize?: number; md5?: string; sha256?: string; mimeType?: string; serverFilename?: string; error?: string }> {
     const {
       url,
       referer,
@@ -381,7 +415,7 @@ export class LibgenDownloadService {
 
     return new Promise((resolve) => {
       let isResolved = false;
-      const safeResolve = (resVal: { success: boolean; byteSize?: number; md5?: string; mimeType?: string; error?: string }) => {
+      const safeResolve = (resVal: { success: boolean; byteSize?: number; md5?: string; sha256?: string; mimeType?: string; serverFilename?: string; error?: string }) => {
         if (isResolved) return;
         isResolved = true;
         resolve(resVal);
@@ -445,6 +479,7 @@ export class LibgenDownloadService {
               Accept:
                 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,application/octet-stream,*/*;q=0.8',
               'Accept-Language': 'en-US,en;q=0.9',
+              'Accept-Encoding': 'identity',
               Connection: 'keep-alive',
               Referer: currentReferer || (currentUrl.includes('libgen') ? 'https://libgen.li/ads.php?md5=' + cleanMd5 : origin),
             },
@@ -483,6 +518,31 @@ export class LibgenDownloadService {
               });
             }
 
+            // Extract original server filename from Content-Disposition if present
+            let serverFilename: string | undefined = undefined;
+            const contentDisp = res.headers['content-disposition'];
+            if (contentDisp) {
+              const fnMatch = contentDisp.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)["']?/i);
+              if (fnMatch && fnMatch[1]) {
+                try {
+                  serverFilename = decodeURIComponent(fnMatch[1].trim());
+                } catch {
+                  serverFilename = fnMatch[1].trim();
+                }
+              }
+            }
+
+            // Fallback decompressor if mirror ignored Accept-Encoding: identity
+            let decompressor: NodeJS.ReadWriteStream | null = null;
+            const contentEncoding = (res.headers['content-encoding'] || '').toLowerCase();
+            if (contentEncoding === 'gzip') {
+              decompressor = zlib.createGunzip();
+            } else if (contentEncoding === 'deflate') {
+              decompressor = zlib.createInflate();
+            } else if (contentEncoding === 'br') {
+              decompressor = zlib.createBrotliDecompress();
+            }
+
             const contentLength = parseInt(res.headers['content-length'] || '0', 10);
             const totalBytes = contentLength > 0 ? contentLength : expectedFilesize || 0;
             let downloadedBytes = 0;
@@ -490,6 +550,8 @@ export class LibgenDownloadService {
             let detectedMime = 'application/octet-stream';
 
             const hash = crypto.createHash('md5');
+            const sha256Hash = crypto.createHash('sha256');
+
             // 1MB buffer for maximum disk write throughput
             const fileStream = fs.createWriteStream(tempPath, { highWaterMark: 1024 * 1024 });
             activeFileStream = fileStream;
@@ -514,6 +576,7 @@ export class LibgenDownloadService {
 
               downloadedBytes += chunk.length;
               hash.update(chunk);
+              sha256Hash.update(chunk);
 
               if (onProgress) {
                 const percent = totalBytes > 0 ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : 0;
@@ -521,7 +584,8 @@ export class LibgenDownloadService {
               }
             });
 
-            res.pipe(pass).pipe(fileStream);
+            const inputStream = decompressor ? res.pipe(decompressor) : res;
+            inputStream.pipe(pass).pipe(fileStream);
 
             fileStream.on('finish', () => {
               if (idleTimer) {
@@ -530,6 +594,7 @@ export class LibgenDownloadService {
               }
               fileStream.close();
               const downloadedMd5 = hash.digest('hex').toLowerCase();
+              const downloadedSha256 = sha256Hash.digest('hex').toLowerCase();
 
               let statSize = 0;
               try {
@@ -553,7 +618,9 @@ export class LibgenDownloadService {
                 success: true,
                 byteSize: statSize,
                 md5: downloadedMd5,
+                sha256: downloadedSha256,
                 mimeType: detectedMime,
+                serverFilename,
               });
             });
 
@@ -600,7 +667,7 @@ export class LibgenDownloadService {
     expectedFilesize?: number;
     timeoutMs?: number;
     onProgress?: (progress: LibgenDownloadProgress) => void;
-  }): Promise<{ success: boolean; byteSize?: number; md5?: string; mimeType?: string; error?: string }> {
+  }): Promise<{ success: boolean; byteSize?: number; md5?: string; sha256?: string; mimeType?: string; error?: string }> {
     const { url, referer, tempPath, cleanMd5, expectedFormat, expectedFilesize, timeoutMs = 35000, onProgress } = options;
 
     return new Promise((resolve) => {
@@ -675,6 +742,7 @@ export class LibgenDownloadService {
                 // Verify MD5 if available
                 const fileBuf = fs.readFileSync(tempPath);
                 const fileHash = crypto.createHash('md5').update(fileBuf).digest('hex').toLowerCase();
+                const sha256Hash = crypto.createHash('sha256').update(fileBuf).digest('hex').toLowerCase();
                 if (cleanMd5 && /^[a-f0-9]{32}$/i.test(cleanMd5) && fileHash !== cleanMd5) {
                   return resolve({ success: false, error: `MD5 checksum mismatch` });
                 }
@@ -683,6 +751,7 @@ export class LibgenDownloadService {
                   success: true,
                   byteSize: stat.size,
                   md5: fileHash,
+                  sha256: sha256Hash,
                   mimeType: magic.detectedMime,
                 });
               } catch (err: any) {
