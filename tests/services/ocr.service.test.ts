@@ -38,6 +38,17 @@ const runPowerShellScript = (script: string, timeout = 30000): Promise<string> =
 };
 
 describe('KEY-141 OcrService Integration & Recognition Engine', () => {
+  it('reports PaddleOCR-VL-1.6 engine info and CPU device', async () => {
+    const info = await ocrService.getEngineInfo();
+    assert.equal(info.id, 'paddleocr_vl');
+    assert.equal(info.name, 'PaddleOCR-VL-1.6');
+    assert.equal(info.parameters, '0.9B');
+    assert.ok(info.device.includes('CPU'));
+    assert.ok(Array.isArray(info.supportedLanguages));
+    assert.ok(info.existingFilesCount !== undefined && info.existingFilesCount >= 13);
+    assert.ok(info.downloadedMb !== undefined && info.downloadedMb > 0);
+  });
+
   it('detects OS support correctly', () => {
     const supported = ocrService.isSupported();
     assert.equal(typeof supported, 'boolean');
@@ -86,7 +97,7 @@ Write-Output 'OK'
       const result = await ocrService.recognizeImage(testImgPath, 1, 'en-US');
 
       assert.equal(result.pageNumber, 1);
-      assert.equal(result.engine, 'windows_media_ocr');
+      assert.ok(result.engine === 'paddleocr_vl' || result.engine === 'windows_media_ocr');
       assert.ok(result.width >= 500);
       assert.ok(result.height >= 150);
       assert.ok(result.text.includes('Baglib'), `Expected 'Baglib' in '${result.text}'`);
@@ -145,7 +156,7 @@ Write-Output 'OK'
       const result = await ocrService.recognizeImage(testImgPath, 1, 'ar-SA');
 
       assert.equal(result.pageNumber, 1);
-      assert.equal(result.engine, 'windows_media_ocr');
+      assert.ok(result.engine === 'paddleocr_vl' || result.engine === 'windows_media_ocr');
       assert.ok(result.text.includes('مكتبة') || result.text.includes('بغداد'));
       assert.ok(result.words.length >= 1);
     } finally {
@@ -182,7 +193,7 @@ Write-Output 'OK'
 `;
       await runPowerShellScript(genScript);
 
-      const progressUpdates: any[] = [];
+      const progressUpdates: unknown[] = [];
       const docResult = await ocrService.recognizeDocument(
         {
           filePath: testImgPath,

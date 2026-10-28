@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import {
   OcrPageResult,
   OcrDocumentResult,
@@ -11,6 +11,8 @@ import {
   OcrRecognizePageParams,
   OcrRecognizeDocumentParams,
   OcrProgressPayload,
+  OcrEngineInfo,
+  OcrModelDownloadProgress,
 } from '../../../shared/types/ocr';
 import { cleanOcrText, resolveOcrLanguage } from '../../../shared/utils/ocr-cleaner';
 import { EmbeddedMetadataExtractor } from '../metadata/embedded-metadata.extractor';
@@ -44,6 +46,179 @@ export class OcrService {
    */
   private escapePsSingle(str: string): string {
     return str.replace(/'/g, "''");
+  }
+
+  /**
+   * Resolves the isolated Python executable for Baglib PDF/OCR tools.
+   */
+  private getPythonPath(): string {
+    const root = path.resolve(__dirname, '../../../..');
+    const venvPythonWin = path.join(root, '.baglib-data', 'pdf-engine', 'venv', 'Scripts', 'python.exe');
+    if (fs.existsSync(venvPythonWin)) return venvPythonWin;
+    const venvPythonUnix = path.join(root, '.baglib-data', 'pdf-engine', 'venv', 'bin', 'python');
+    if (fs.existsSync(venvPythonUnix)) return venvPythonUnix;
+    return 'python';
+  }
+
+  /**
+   * Resolves the path to the PaddleOCR-VL-1.6 inference worker script.
+   */
+  private getPaddleWorkerPath(): string {
+    const root = path.resolve(__dirname, '../../../..');
+    return path.join(root, 'assets', 'ocr', 'paddle_vl_worker.py');
+  }
+
+  /**
+   * Resolves the path to the PaddleOCR-VL-1.6 downloader script.
+   */
+  private getPaddleDownloaderPath(): string {
+    const root = path.resolve(__dirname, '../../../..');
+    return path.join(root, 'assets', 'ocr', 'download_paddle_vl.py');
+  }
+
+  /**
+   * Downloads the PaddleOCR-VL-1.6 model weights from HuggingFace with live progress streaming.
+   */
+  public downloadModel(
+    onProgress?: (payload: OcrModelDownloadProgress) => void
+  ): Promise<OcrEngineInfo> {
+    return new Promise((resolve, reject) => {
+      const python = this.getPythonPath();
+      const downloader = this.getPaddleDownloaderPath();
+
+      if (!fs.existsSync(downloader)) {
+        reject(new Error(`Downloader script not found at ${downloader}`));
+        return;
+      }
+
+      const child = spawn(python, [downloader, '--download'], {
+        windowsHide: true,
+      });
+
+      let buffer = '';
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        buffer += chunk.toString('utf8');
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const data = JSON.parse(trimmed) as OcrModelDownloadProgress;
+            onProgress?.(data);
+          } catch {
+            // Non-JSON stdout line
+          }
+        }
+      });
+
+      let stderr = '';
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString('utf8');
+      });
+
+      child.on('close', async (code) => {
+        if (code === 0) {
+          const info = await this.getEngineInfo();
+          resolve(info);
+        } else {
+          reject(new Error(`PaddleOCR-VL download failed with exit code ${code}: ${stderr}`));
+        }
+      });
+
+      child.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Checks whether the PaddleOCR-VL-1.6 local runtime is available.
+   */
+  public isPaddleOcrSupported(): boolean {
+    const worker = this.getPaddleWorkerPath();
+    const python = this.getPythonPath();
+    return fs.existsSync(worker) && (python === 'python' || fs.existsSync(python));
+  }
+
+  /**
+   * Retrieves active metadata about the PaddleOCR-VL engine.
+   */
+  public async getEngineInfo(): Promise<OcrEngineInfo> {
+    const python = this.getPythonPath();
+    const worker = this.getPaddleWorkerPath();
+    if (this.isPaddleOcrSupported()) {
+      try {
+        const output = await new Promise<string>((resolve, reject) => {
+          execFile(python, [worker, '--info'], { windowsHide: true, timeout: 5000 }, (err, stdout) => {
+            if (err) reject(err); else resolve(stdout);
+          });
+        });
+        const data = JSON.parse(output.trim());
+        return data as OcrEngineInfo;
+      } catch (e) {
+        console.warn('[OcrService] Could not query PaddleOCR-VL worker info:', e);
+      }
+    }
+    return {
+      id: 'paddleocr_vl',
+      name: 'PaddleOCR-VL-1.6',
+      version: '1.6.0',
+      parameters: '0.9B',
+      device: 'CPU (AVX2, 12 Threads)',
+      modelPath: '.baglib-data/models/paddleocr-vl',
+      isDownloaded: false,
+      supportedLanguages: ['ar', 'en', 'ar-SA', 'en-US', 'auto'],
+    };
+  }
+
+  /**
+   * Executes PaddleOCR-VL-1.6 via the local Python CPU worker.
+   */
+  private executePaddleOcr(
+    imagePath: string,
+    language: OcrLanguage,
+    pageNumber: number
+  ): Promise<OcrPageResult> {
+    return new Promise((resolve, reject) => {
+      const python = this.getPythonPath();
+      const worker = this.getPaddleWorkerPath();
+      execFile(
+        python,
+        [worker, '--image', imagePath, '--language', language, '--page', String(pageNumber)],
+        {
+          windowsHide: true,
+          timeout: 60000,
+          maxBuffer: 10 * 1024 * 1024,
+        },
+        (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(stderr || stdout || error.message));
+            return;
+          }
+          try {
+            const data = JSON.parse(stdout.trim());
+            const cleanedText = cleanOcrText(data.text || '');
+            resolve({
+              pageNumber,
+              text: cleanedText,
+              markdown: data.markdown || cleanedText,
+              lines: data.lines || [],
+              words: data.words || [],
+              width: data.width || 800,
+              height: data.height || 1100,
+              engine: 'paddleocr_vl',
+              durationMs: 0,
+              tables: data.tables || [],
+            });
+          } catch (err) {
+            reject(new Error(`Failed to parse PaddleOCR-VL output: ${err}`));
+          }
+        }
+      );
+    });
   }
 
   /**
@@ -112,10 +287,10 @@ $langs | ForEach-Object { $_.LanguageTag }
   }
 
   /**
-   * Checks if native OS OCR is supported on the current machine.
+   * Checks if native OS OCR or local PaddleOCR-VL is supported on the current machine.
    */
   public isSupported(): boolean {
-    return process.platform === 'win32' || process.platform === 'darwin';
+    return this.isPaddleOcrSupported() || process.platform === 'win32' || process.platform === 'darwin';
   }
 
   /**
@@ -150,6 +325,20 @@ $langs | ForEach-Object { $_.LanguageTag }
         tempFilePath = path.join(this.tempDir, `ocr-${process.pid}-${Date.now()}.${ext}`);
         fs.writeFileSync(tempFilePath, buffer);
         resolvedPath = tempFilePath;
+      }
+
+      // Priority 1: PaddleOCR-VL-1.6 (Sole/Default Local CPU Engine)
+      if (this.isPaddleOcrSupported()) {
+        try {
+          const result = await this.executePaddleOcr(resolvedPath, language, pageNumber);
+          if (result.words.length > 0 || result.text.trim().length > 0) {
+            result.durationMs = Date.now() - startTime;
+            return result;
+          }
+          console.warn('[OcrService] PaddleOCR-VL returned empty text, falling back to OS engine');
+        } catch (paddleErr) {
+          console.warn('[OcrService] PaddleOCR-VL execution error, falling back to OS engine:', paddleErr);
+        }
       }
 
       if (process.platform === 'win32') {
@@ -414,7 +603,7 @@ try {
           recognizedWords: wordsCount,
           status: 'running',
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn(`[OcrService] Error recognizing page ${current}:`, err);
       }
     }

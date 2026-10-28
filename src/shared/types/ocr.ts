@@ -40,8 +40,36 @@ export interface OcrPageResult {
   words: OcrWord[];
   width: number;
   height: number;
-  engine: 'windows_media_ocr' | 'macos_vision' | 'fallback_ocr';
+  engine: 'windows_media_ocr' | 'macos_vision' | 'fallback_ocr' | 'paddleocr_vl';
   durationMs: number;
+  markdown?: string;
+  tables?: Array<{ headers: string[]; rows: string[][] }>;
+}
+
+export interface OcrEngineInfo {
+  id: 'paddleocr_vl';
+  name: string;
+  version: string;
+  parameters: string;
+  device: string;
+  modelPath: string;
+  isDownloaded: boolean;
+  existingFilesCount?: number;
+  totalExpectedFiles?: number;
+  downloadedMb?: number;
+  supportedLanguages: string[];
+}
+
+export interface OcrModelDownloadProgress {
+  status: 'downloading' | 'file_complete' | 'completed' | 'error' | 'already_downloaded';
+  file?: string;
+  fileIndex?: number;
+  totalFiles?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  percent?: number;
+  speedMb?: number;
+  error?: string;
 }
 
 export interface OcrDocumentResult {
