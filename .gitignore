@@ -40,6 +40,8 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+__pycache__/
+*.pyc
 next-env.d.ts
 
 # build outputs
@@ -47,6 +49,17 @@ release/
 # Git sRepos
 repos/
 .baglib-data/
+.unsnooze/
+/LK-Hadith-Corpus/
+/Open-Hadith-Data/
+/tools/hadith-alignment/output/
+/tools/hadith-alignment/output-shamela*/
+/tools/hadith-alignment/data/
+/tools/hadith-alignment/.shamela-build-*/
+/tools/hadith-alignment/.hadith-build-*/
+/tools/hadith-alignment/output.previous-*/
+/tools/hadith-alignment/.venv/
+.pytest_cache/
 docs/*
 !docs/*.md
 !docs/features/
