@@ -30,4 +30,18 @@ targets.forEach((targetDir) => {
   }
 });
 
+const outDevDir = path.join(rootDir, 'out', 'dev');
+const outDevRoutes = path.join(outDevDir, 'types', 'routes.d.ts');
+if (fs.existsSync(outDevRoutes)) {
+  try {
+    const routesContent = fs.readFileSync(outDevRoutes, 'utf8');
+    if (routesContent.includes('type AppRoutes = never')) {
+      fs.rmSync(outDevDir, { recursive: true, force: true });
+      console.log('[baglib] Cleared stale out/dev Next.js route cache.');
+    }
+  } catch {}
+}
+
 console.log('[baglib] Copied PDF.js worker, cmaps, and fonts to public vendor directories.');
+const audioPreparation = require('node:child_process').spawnSync(process.execPath, ['--import', 'tsx', 'scripts/prepare-athan-audio.ts'], { cwd: rootDir, stdio: 'inherit' });
+if (audioPreparation.status !== 0) process.exit(audioPreparation.status || 1);

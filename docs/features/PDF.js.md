@@ -1,5 +1,9 @@
 # PDF.js: complete-page PDF covers
 
+## 2026-10-26 workstation extension
+
+The existing `pdfjs-dist@4.10.38` also powers bounded main-worker inspection and text-only HTML fallback in `src/main/services/pdf-editor/inspection.ts` and `src/main/pdf-editor-worker.ts`. This is implemented/runtime-tested extraction, not a new writing/signing capability. Tests exercise the real parser, permissions, source ownership and escaped bilingual HTML. The fallback refuses to label signatures or archival/accessibility conformance as verified. `electron-builder.yml` includes the existing package for packaged worker resolution. Advanced mutation now uses the separately approved local toolchain; see [Document Workstation](feature%20-%20Document%20Workstation.md). Historical cover research below remains applicable; no additional external reverse engineering is claimed by this extension.
+
 Investigated 2026-10-24; installed `pdfjs-dist@4.10.38`. Scope: local PDF cover generation, not a replacement of the document reader or metadata parser.
 
 ## Evidence

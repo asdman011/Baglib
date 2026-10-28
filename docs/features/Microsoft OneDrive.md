@@ -1,0 +1,13 @@
+# Microsoft OneDrive — local-primary PDF connector
+
+Implemented 2026-10-26 from [authorization-code/PKCE documentation](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow), [redirect URI restrictions](https://learn.microsoft.com/entra/identity-platform/reply-url), and [Graph upload sessions](https://learn.microsoft.com/graph/api/driveitem-createuploadsession). No live account login or external source reverse engineering claimed. App IDs and live verification are deferred by the user.
+
+Register a native/public client supporting the intended personal/work accounts. Add exactly `http://127.0.0.1:43819/baglib-oauth` as a native redirect in the application manifest when the portal refuses HTTP IP literals. Baglib uses this fixed port because Microsoft's documented variable-port exception is for `localhost`; it does not assume arbitrary IP-literal ports match. A port collision fails clearly. Enable public-client flows, delegated `Files.ReadWrite`, and offline access; tenant may be `common`, `organizations`, `consumers` or a tenant UUID. Enter the client ID and tenant in Baglib, then explicitly Connect when ready. No secret is embedded or required for the public-client PKCE flow.
+
+Implementation shares the Google connector's main-only encrypted vault, local-primary import and explicit opt-in sync. Graph API bearer tokens are only sent to `graph.microsoft.com`. Content redirects and upload session URLs must be HTTPS on approved OneDrive/SharePoint suffixes; their requests receive no bearer token, deny further redirects and never expose preauthenticated URLs to the renderer. Upload uses sequential 320-KiB-multiple chunks, conditional sessions and fail-on-conflict creation. Transfers are limited to 256 MiB.
+
+Unit evidence: `tests/services/pdf-cloud.test.ts` covers foreign-host/pagination rejection, no bearer on signed content URLs, transfer limits and refresh/conflict safeguards. Native configuration uses real safeStorage without signing in. Real tenant consent, account restrictions, upload-session completion and remote sync remain unverified until the user configures/signs in.
+
+See [Google Drive](Google%20Drive.md), [Document Workstation](feature%20-%20Document%20Workstation.md) and `src/main/services/pdf-editor/cloud-*.ts`.
+
+2026-10-27 extension: export selects the saved source or a staged PDF/DOCX/XLSX/PPTX/HTML. Main checks output ownership/hash, extension and file signature before uploading; staged export does not require publishing over the original. Import and automatic sync remain PDF-only. Export MIME/signature handling is unit-tested; real account transfers remain deferred.
