@@ -54,3 +54,51 @@
   .sunnah-chapter-heading h2 { font-size: 1rem; }
   .sunnah-chapter-heading .sunnah-arabic h2 { font-size: 1.4rem; }
 }
+/* Research workstation: reading remains primary; evidence expands in place. */
+.sunnah-corpus-status { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.6rem; padding:.6rem 1.5rem; background:var(--bg-sidebar); border-block-end:1px solid var(--border-subtle); font-size:.78rem; line-height:1.8; }
+.sunnah-corpus-status p { min-width:0; flex:1 1 16rem; }
+.sunnah-chapter { max-width:76rem; }
+.sunnah-toolbar { padding-block:.8rem; }
+.sunnah-browser { padding-block:.7rem; }
+.sunnah-navigation { gap:.6rem; padding-block:.7rem; }
+.sunnah-navigation > div { flex:1 1 18rem; }
+.sunnah-search { flex:1 1 16rem; }
+.sunnah-hadith { box-shadow:0 3px 15px rgb(0 0 0 / 3%); padding:clamp(.9rem,2vw,1.8rem); }
+.sunnah-research { margin-block-start:1.5rem; border:1px solid var(--border-subtle); border-radius:.85rem; background:var(--bg-canvas); overflow:hidden; }
+.sunnah-research > summary { cursor:pointer; padding:.85rem 1rem; font-size:.9rem; font-weight:600; line-height:1.8; }
+.sunnah-research > summary > span { display:inline-block; margin-inline-start:.8rem; color:var(--text-muted); font-size:.75rem; font-weight:400; }
+.sunnah-research-body { padding:0 1rem 1rem; min-width:0; }
+.sunnah-research-notice { font-size:.75rem; line-height:1.9; color:var(--text-muted); margin-block-end:1rem; }
+.sunnah-research-tabs { display:flex; flex-wrap:wrap; gap:.4rem; padding-block-end:.9rem; border-block-end:1px solid var(--border-subtle); margin-block-end:1rem; }
+.sunnah-research-tabs button { display:flex; gap:.6rem; align-items:center; padding:.45rem .7rem; border-radius:.55rem; font-size:.8rem; border:1px solid var(--border-subtle); }
+.sunnah-research-tabs button[aria-pressed=true] { color:var(--text-main); background:var(--bg-surface); border-color:#3d8c8e; }
+.sunnah-research-tabs bdi { font-size:.7rem; color:var(--text-muted); }
+.sunnah-research-citation { display:flex; flex-wrap:wrap; align-items:baseline; gap:.4rem 1rem; font-size:.8rem; line-height:1.9; margin-block-end:.9rem; overflow-wrap:anywhere; }
+.sunnah-research-citation strong { flex:1 1 100%; font-size:1.05rem; }
+.sunnah-research-text { max-block-size:32rem; overflow:auto; scrollbar-gutter:stable; margin-block-start:.9rem; padding-inline:.5rem; white-space:pre-wrap; overflow-wrap:anywhere; font-family:var(--font-amiri),'Traditional Arabic',serif; font-size:1.35rem; line-height:2.2; }
+.sunnah-research-text.is-expanded { max-block-size:none; overflow:visible; }
+.sunnah-research-empty, .sunnah-research-caption { padding-block:.6rem; font-size:.85rem; line-height:1.9; color:var(--text-muted); }
+.sunnah-chain-list { list-style:none; padding:0; display:grid; gap:.65rem; }
+.sunnah-chain-list li { display:flex; gap:.8rem; padding:.8rem; border:1px solid var(--border-subtle); border-radius:.6rem; }
+.sunnah-chain-list li > bdi { color:var(--text-muted); font-size:.75rem; }
+.sunnah-chain-list li > div { display:flex; flex-direction:column; align-items:start; gap:.35rem; min-width:0; overflow-wrap:anywhere; }
+.sunnah-chain-list span, .sunnah-chain-list button { font-family:var(--font-amiri),serif; font-size:1.2rem; line-height:1.9; }
+.sunnah-chain-list button { text-decoration:underline; text-underline-offset:.25rem; }
+.sunnah-chain-list p, .sunnah-chain-list small { font-size:.8rem; line-height:1.9; color:var(--text-muted); }
+.sunnah-root-chips { display:flex; flex-wrap:wrap; gap:.5rem; margin-block:.8rem 1.3rem; }
+.sunnah-root-chips button { padding:.4rem .8rem; border:1px solid var(--border-subtle); border-radius:.6rem; background:var(--bg-surface); line-height:1.9; }
+.sunnah-research-results { display:grid; gap:.65rem; margin-block-start:.75rem; }
+.sunnah-research-results button { display:flex; flex-direction:column; gap:.4rem; padding:.8rem; border:1px solid var(--border-subtle); border-radius:.65rem; text-align:start; }
+.sunnah-research-results button > span:first-child { font-size:.75rem; color:var(--text-muted); }
+.sunnah-research-results button > span:last-child { font-family:var(--font-amiri),serif; font-size:1.2rem; line-height:2; }
+.sunnah-relation-results { border-block-start:1px solid var(--border-subtle); padding-block-start:1rem; margin-block-start:1rem; }
+.sunnah-relation-results > p { font-size:.75rem; color:var(--text-muted); }
+@media (max-width:900px) {
+ .sunnah-bilingual { grid-template-columns:minmax(0,1fr); gap:1rem; }
+ .sunnah-bilingual > .sunnah-arabic { grid-column:1; grid-row:1; border-inline-end:0; padding-inline-end:0; }
+ .sunnah-bilingual > .sunnah-english { grid-column:1; grid-row:2; padding-inline-end:0; }
+ .sunnah-chapter-heading.sunnah-bilingual, .sunnah-section-heading.sunnah-bilingual { gap:.3rem; }
+ .sunnah-corpus-status { padding:.6rem .8rem; }
+ .sunnah-toolbar-actions { gap:.4rem; }
+ .sunnah-research-body { padding-inline:.7rem; }
+}

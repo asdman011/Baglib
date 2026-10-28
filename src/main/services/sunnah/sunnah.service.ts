@@ -4,6 +4,8 @@ import path from 'node:path';
 import { unzip } from 'fflate';
 import { SUNNAH_COLLECTION_IDS, type SunnahCatalog, type SunnahChapter, type SunnahCollectionId } from '../../../shared/types/sunnah';
 import { parseLkChapter } from './lk-corpus';
+import { discoverResearchCorpus, SunnahResearchCorpus } from './research-corpus';
+import type { SunnahResearchQuery } from '../../../shared/types/sunnah';
 
 const entryPattern = /^(?:[^/]+\/)?(Bukhari|Muslim|AbuDaud|Tirmizi|Nesai|IbnMaja)\/Chapter(\d+)\.csv$/;
 
@@ -12,7 +14,33 @@ export class SunnahService {
   private importing: Promise<SunnahCatalog> | null = null;
   private chapters = new Map<string, SunnahChapter>();
 
-  constructor(private readonly root: string, private readonly defaultArchives: string[] = []) {}
+  private researchCorpus: SunnahResearchCorpus | null = null;
+  constructor(private readonly root: string, private readonly defaultArchives: string[] = [], private readonly researchPaths: string[] = []) {}
+
+  close(): void { this.researchCorpus?.close(); this.researchCorpus = null; }
+
+  async attachResearch(filename: string): Promise<SunnahCatalog> {
+    const next = new SunnahResearchCorpus(filename);
+    try {
+      await mkdir(this.root, { recursive: true });
+      await writeFile(path.join(this.root, 'research-source.json'), JSON.stringify({ filename: path.resolve(filename) }), 'utf8');
+    } catch (error) { next.close(); throw error; }
+    this.close(); this.researchCorpus = next; this.chapters.clear();
+    this.initialization = Promise.resolve(next.catalog);
+    return next.catalog;
+  }
+
+  async research(id: number) {
+    await this.catalog();
+    if (!this.researchCorpus) throw new Error('Research corpus unavailable');
+    return this.researchCorpus.research(id);
+  }
+
+  async search(query: SunnahResearchQuery) {
+    await this.catalog();
+    if (!this.researchCorpus) throw new Error('Research corpus unavailable');
+    return this.researchCorpus.search(query);
+  }
 
   catalog(): Promise<SunnahCatalog | null> {
     if (!this.initialization) {
@@ -25,6 +53,14 @@ export class SunnahService {
   }
 
   private async initialize(): Promise<SunnahCatalog | null> {
+    let selected: { filename?: string; legacy?: boolean } = {};
+    try { selected = JSON.parse(await readFile(path.join(this.root, 'research-source.json'), 'utf8')); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    if (!selected.legacy) {
+      this.researchCorpus = discoverResearchCorpus(selected.filename ? [selected.filename] : this.researchPaths);
+      if (selected.filename && !this.researchCorpus) throw new Error('Selected research corpus is unavailable');
+      if (this.researchCorpus) return this.researchCorpus.catalog;
+    }
     try {
       const catalog = JSON.parse(await readFile(path.join(this.root, 'catalog.json'), 'utf8')) as SunnahCatalog;
       if (catalog.version !== 1 || !/^[a-f0-9]{64}$/.test(catalog.sha256) || !Array.isArray(catalog.collections)) {
@@ -43,7 +79,9 @@ export class SunnahService {
 
   importArchive(archive: string): Promise<SunnahCatalog> {
     if (this.importing) return this.importing;
-    this.importing = this.importInternal(archive).then(catalog => {
+    this.importing = this.importInternal(archive).then(async catalog => {
+      await writeFile(path.join(this.root, 'research-source.json'), JSON.stringify({ legacy: true }), 'utf8');
+      this.close();
       this.initialization = Promise.resolve(catalog);
       this.chapters.clear();
       return catalog;
@@ -122,7 +160,9 @@ export class SunnahService {
   }
 
   async chapter(collection: SunnahCollectionId, number: number): Promise<SunnahChapter> {
-    if (!SUNNAH_COLLECTION_IDS.includes(collection) || !Number.isSafeInteger(number) || number < 0) {
+    await this.catalog();
+    if (this.researchCorpus) return this.researchCorpus.chapter(collection, number);
+    if (!SUNNAH_COLLECTION_IDS.some(id => id === collection) || !Number.isSafeInteger(number) || number < 0) {
       throw new Error('Invalid Sunnah chapter');
     }
     const catalog = await this.catalog();

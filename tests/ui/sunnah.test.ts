@@ -94,7 +94,8 @@ for (const language of ['ar', 'en'] as const) {
     assert.equal(document.querySelectorAll('.sunnah-english').length, 0);
     assert.equal(document.querySelectorAll('.sunnah-bilingual').length, 0);
     assert.equal(document.querySelectorAll('article > div button').length, 0);
-    assert.equal(document.querySelectorAll('article footer button').length, 3);
+    assert.equal(document.querySelectorAll('article footer button').length, 4);
+    assert.ok([...document.querySelectorAll('article footer button')].some(button => button.textContent === translations[language].studyCaptureReference));
     assert.equal(document.querySelector('article footer button[aria-expanded]')?.getAttribute('aria-expanded'), 'false');
     assert.equal(document.querySelector('article footer textarea')?.getAttribute('rows'), '2');
     assert.equal(document.querySelectorAll('article footer details').length, 0);

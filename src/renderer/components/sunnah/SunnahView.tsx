@@ -9,11 +9,10 @@ import { normalizeSunnahSearch } from '../../libs/sunnah/text';
 import { SunnahChapterView } from './SunnahChapterView';
 import './sunnah.css';
 import { SunnahSearch, type SunnahSearchScope, type SunnahSearchTarget } from './SunnahSearch';
+import { consumeSunnahReference } from '../../utils/study-navigation';
 
-export const collectionKeys: Record<SunnahCollectionId, TranslationKey> = {
-  Bukhari: 'sunnahBukhari', Muslim: 'sunnahMuslim', AbuDaud: 'sunnahAbuDawud',
-  Tirmizi: 'sunnahTirmidhi', Nesai: 'sunnahNasai', IbnMaja: 'sunnahIbnMajah',
-};
+import { collectionKeys } from '../../utils/sunnah-collections';
+export { collectionKeys };
 
 interface Position {
   collection: SunnahCollectionId;
@@ -63,10 +62,12 @@ export function SunnahView() {
   const viewport = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
   const mounted = useRef(false);
+  const requestedReference = useRef<SunnahSearchTarget | null>(null);
 
   useEffect(() => {
     const open = (event: Event) => {
-      const target = (event as CustomEvent<SunnahSearchTarget>).detail;
+      const target = consumeSunnahReference() || (event as CustomEvent<SunnahSearchTarget>).detail;
+      requestedReference.current = target;
       setPosition(previous => ({ ...previous, ...target, mode: 'single' }));
       setQuery('');
     };
@@ -77,7 +78,9 @@ export function SunnahView() {
   useEffect(() => {
     mounted.current = true;
     const api: SunnahAPI | undefined = window.electronAPI?.sunnah;
-    const saved = restorePosition();
+    const pending = consumeSunnahReference();
+    if (pending) requestedReference.current = pending;
+    const restored = restorePosition();
     let cancelled = false;
     const load = async () => {
       setLoading(true);
@@ -88,9 +91,11 @@ export function SunnahView() {
         setError(api ? 'sunnahReadError' : 'sunnahDesktopRequired');
       } else {
         setCatalog(result.data);
+        const saved = requestedReference.current ? { ...restored, ...requestedReference.current, mode: 'single' as const } : restored;
         const collection = result.data?.collections.find(item => item.id === saved.collection) ?? result.data?.collections[0];
         const firstChapter = collection?.chapters.find(item => item.number === saved.chapter) ?? collection?.chapters[0];
         setPosition(collection && firstChapter ? { ...saved, collection: collection.id, chapter: firstChapter.number } : saved);
+        requestedReference.current = null;
       }
       setReady(true);
       setLoading(false);
@@ -174,7 +179,7 @@ export function SunnahView() {
     setImporting(true);
     setError(null);
     try {
-      const result = await api.importCorpus();
+      const result = await api.importCorpus(lang);
       if (!mounted.current) return;
       if (!result.ok) setError('sunnahImportError');
       else if (result.data) {
@@ -212,7 +217,7 @@ export function SunnahView() {
     <header className="sunnah-toolbar">
       <div className="flex items-center gap-3 min-w-0">
         <div className="sunnah-emblem"><BookOpenText size={23} /></div>
-        <div><h1 className="font-display text-xl font-bold leading-relaxed">{t('navSunnah')}</h1><p className="text-xs text-muted leading-relaxed">{t('sunnahSubtitle')}</p></div>
+        <div><h1 className="font-display text-xl font-bold leading-relaxed">{t('navSunnah')}</h1><p className="text-xs text-muted leading-relaxed">{t(catalog?.research ? 'sunnahResearchSubtitle' : 'sunnahSubtitle')}</p></div>
       </div>
       <div className="sunnah-toolbar-actions">
         <div className="sunnah-mode" role="group" aria-label={t('sunnahViewMode')}>
@@ -229,6 +234,7 @@ export function SunnahView() {
       </div>
     </header>
 
+    {catalog && <div className="sunnah-corpus-status"><p>{t(catalog.research ? 'sunnahResearchReady' : 'sunnahResearchFallback', { count: catalog.hadithCount, collections: catalog.collections.length })}</p><button type="button" className="sunnah-button" disabled={loading || importing} onClick={() => void importCorpus()}><Upload size={15} />{t('sunnahConnectResearch')}</button></div>}
     {catalog && <div className="sunnah-browser">
       <label><span>{t('sunnahCollection')}</span><select value={position.collection} disabled={importing} onChange={event => {
         const next = catalog.collections.find(item => item.id === event.target.value)!;
@@ -254,14 +260,14 @@ export function SunnahView() {
           <label className="text-sm"><span className="sr-only">{t('sunnahScope')}</span><select className="sunnah-button max-w-full" value={scope} onChange={event => setScope(event.target.value as SunnahSearchScope)}>
             <option value="all">{t('sunnahScopeAll')}</option><option value="collection">{t('sunnahScopeCollection')}</option><option value="chapter">{t('sunnahScopeChapter')}</option>
           </select></label>
-          <label className="sunnah-search"><Search size={16} /><input type="search" value={query} onChange={event => { setQuery(event.target.value); setVisibleCount(24); }} placeholder={t('sunnahSearchAll')} aria-label={t('sunnahSearchAll')} disabled={loading || importing} /></label>
+          <label className="sunnah-search"><Search size={16} /><input type="search" maxLength={500} value={query} onChange={event => { setQuery(event.target.value); setVisibleCount(24); }} placeholder={t(catalog.research ? 'sunnahResearchSearch' : 'sunnahBasicSearch')} aria-label={t(catalog.research ? 'sunnahResearchSearch' : 'sunnahBasicSearch')} disabled={loading || importing} /></label>
         </div>
       </div>}
       {error && <div role="alert" className="sunnah-message text-amber-700 dark:text-amber-300"><p>{t(error)}</p><button type="button" className="sunnah-button" onClick={() => setRetry(value => value + 1)}>{t('sunnahRetry')}</button></div>}
       {(loading || importing) && <div role="status" className="sunnah-message"><LoaderCircle size={24} className="animate-spin" /><p>{t(importing || !catalog ? 'sunnahPreparing' : 'sunnahLoading')}</p></div>}
       {!loading && !importing && !catalog && <div className="sunnah-welcome"><BookOpenText size={42} /><h2>{t('sunnahWelcome')}</h2><p>{t('sunnahImportHint')}</p><button type="button" className="sunnah-button" onClick={() => void importCorpus()}><Upload size={17} />{t('sunnahImport')}</button></div>}
-      {query.trim() && scope !== 'chapter' && <SunnahSearch query={query} scope={scope} collection={position.collection} chapter={position.chapter} t={t} onOpen={openSearchHit} />}
-      {!loading && !importing && chapter && !(query.trim() && scope !== 'chapter') && <>
+      {query.trim() && (scope !== 'chapter' || catalog?.research) && <SunnahSearch query={query} scope={scope} collection={position.collection} chapter={position.chapter} t={t} onOpen={openSearchHit} />}
+      {!loading && !importing && chapter && !(query.trim() && (scope !== 'chapter' || catalog?.research)) && <>
         {query.trim() && <p role="status" className="px-5 pb-4 text-sm text-muted">{t('sunnahSearchCount', { count: results.length })}</p>}
         <SunnahChapterView chapter={chapter} hadiths={visibleHadiths} showEnglish={position.english} single={single} t={t} onFocus={focusHadith} />
         {hasMore && <div className="flex justify-center p-4"><button type="button" className="sunnah-button" ref={more} onClick={() => setVisibleCount(count => count + 24)}>{t('sunnahMore')}</button></div>}
@@ -269,7 +275,7 @@ export function SunnahView() {
       </>}
       <footer className="sunnah-source">
         <details><summary>{t('sunnahAbout')}</summary><div className="space-y-3 mt-3 leading-relaxed">
-          <p>{t('sunnahAttribution')}</p><p>{t('sunnahAnnotationNotice')}</p><p>{t('sunnahMissingNotice')}</p>
+          <p>{t(catalog?.research ? 'sunnahMasterAttribution' : 'sunnahAttribution')}</p><p>{t(catalog?.research ? 'sunnahResearchNotice' : 'sunnahAnnotationNotice')}</p><p>{t('sunnahMissingNotice')}</p>
           {catalog && <p>{t('sunnahCorpusCount', { count: catalog.hadithCount })}</p>}
           <p>{t('sunnahCitation')}</p>
           <button type="button" className="sunnah-button" disabled={loading || importing} onClick={() => void importCorpus()}><Upload size={16} />{t('sunnahImport')}</button>

@@ -6,6 +6,7 @@ import type { SunnahChapter, SunnahHadith, SunnahLanguage, SunnahPassage, Sunnah
 import type { TranslationKey } from '../../translations';
 import { isnadTokens, splitSunnahPassage } from '../../libs/sunnah/text';
 import { HadithActions } from './HadithActions';
+import { SunnahResearchPanel } from './SunnahResearchPanel';
 
 export type SunnahTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
@@ -59,6 +60,10 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
         <article className="sunnah-hadith" aria-label={t('sunnahHadithNumber', { number: hadith.number || '—' })}>
           <div className="flex items-center justify-between gap-3 mb-4 text-xs font-sans text-muted">
             <span className="font-bold">{t('sunnahHadithNumber', { number: hadith.number || '—' })}</span>
+            {hadith.researchId !== undefined && <button type="button" className="sunnah-button" onClick={event => {
+              const panel = event.currentTarget.closest('article')?.querySelector<HTMLDetailsElement>('.sunnah-research');
+              if (panel) { panel.open = true; panel.scrollIntoView({ block: 'start' }); }
+            }}>{t('sunnahResearch')}</button>}
             {!single && <button type="button" onClick={() => onFocus(hadith.id)} className="sunnah-icon-button" title={t('sunnahOpenHadith')} aria-label={t('sunnahOpenHadith')}><Focus size={17} /></button>}
           </div>
           <ParallelRow showEnglish={showEnglish}
@@ -71,6 +76,7 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
             <summary className="cursor-pointer text-muted font-sans">{t('sunnahComment')}</summary>
             <p className="font-reading text-lg leading-loose mt-2 whitespace-pre-wrap" dir="rtl" lang="ar">{hadith.comment}</p>
           </details>}
+          {hadith.researchId !== undefined && <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} initialOpen={single} t={t} />}
           <HadithActions chapter={chapter} hadith={hadith} showEnglish={showEnglish} t={t} />
         </article>
       </div>;
