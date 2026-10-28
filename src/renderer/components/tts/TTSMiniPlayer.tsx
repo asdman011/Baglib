@@ -107,10 +107,15 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
   const isPlaying = playbackState === 'playing' || playbackState === 'buffering';
   const isBuffering = playbackState === 'buffering';
 
+  const [previousPlayerVisibility, setPreviousPlayerVisibility] = useState<readonly unknown[] | null>(null);
+  const inputsPlayerVisibility = [isHovered, isSettingsOpen, isSpeedOpen, isSleepOpen, isPlaying];
+  if (previousPlayerVisibility === null || inputsPlayerVisibility.some((value, index) => !Object.is(value, previousPlayerVisibility[index]))) {
+    setPreviousPlayerVisibility(inputsPlayerVisibility);
+    if (isHovered || isSettingsOpen || isSpeedOpen || isSleepOpen || !isPlaying) setIsVisible(true);
+  }
   // Auto-hide linger logic: stay visible for 5s after activity, unless hovered, settings open, or paused
   useEffect(() => {
     if (isHovered || isSettingsOpen || isSpeedOpen || isSleepOpen || !isPlaying) {
-      setIsVisible(true);
       if (lingerTimerRef.current) clearTimeout(lingerTimerRef.current);
       return;
     }
@@ -152,8 +157,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
     <div
       onMouseEnter={() => {
         setIsHovered(true);
-        setIsVisible(true);
-      }}
+        }}
       onMouseLeave={() => setIsHovered(false)}
       className={`fixed bottom-6 start-1/2 -translate-x-1/2 z-50 transition-all duration-300 ease-out select-none ${
         isVisible

@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 import React, { useState } from 'react';
 import {
   Scissors,
@@ -81,7 +82,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
         setStatusMessage({ type: 'error', text: res?.error || 'Failed to extract article' });
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setIsLoadingPreview(false);
@@ -113,7 +114,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
         setStatusMessage({ type: 'error', text: res?.error || 'Clipping failed' });
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setIsClipping(false);
@@ -125,7 +126,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
     try {
       await window.electronAPI?.clipper?.openBrowser(url.trim() || 'https://google.com');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       setStatusMessage({ type: 'error', text: msg });
     }
   };
@@ -142,7 +143,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
         setStatusMessage({ type: 'error', text: res?.error || 'Failed to clip browser' });
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setIsClipping(false);
@@ -175,7 +176,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
         setStatusMessage({ type: 'error', text: res?.error || 'Scraping failed' });
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setIsScrapingNovel(false);

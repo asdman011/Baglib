@@ -137,7 +137,7 @@ export const HighlightActionPopover: React.FC<HighlightActionPopoverProps> = ({
         {/* Existing Note Display if not editing */}
         {!isEditingNote && highlight.noteContent && (
           <div className="pt-1.5 border-t border-subtle/50 text-[11px] text-muted font-sans italic bg-surface/50 p-1.5 rounded-lg">
-            "{highlight.noteContent}"
+            &quot;{highlight.noteContent}&quot;
           </div>
         )}
       </div>

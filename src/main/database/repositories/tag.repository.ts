@@ -1,3 +1,4 @@
+interface TagRow { id: string; name: string; origin: 'manual' | 'calibre' | 'import' | 'ai'; category?: string; workCount: number; usage_count: number; usageCount: number; }
 import type { Database } from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { getDatabase } from '../connection';
@@ -27,7 +28,7 @@ export class SqliteTagRepository implements ITagRepository {
     }
 
     const db = this.getDb();
-    const existing = db.prepare('SELECT id, name, origin, category FROM tag WHERE LOWER(name) = LOWER(?)').get(trimmed) as any;
+    const existing = db.prepare('SELECT id, name, origin, category FROM tag WHERE LOWER(name) = LOWER(?)').get(trimmed) as TagRow | undefined;
     if (existing) {
       return {
         id: existing.id,
@@ -70,7 +71,7 @@ export class SqliteTagRepository implements ITagRepository {
       LEFT JOIN work_tag wt ON wt.tag_id = t.id
       GROUP BY t.id
       ORDER BY t.name COLLATE NOCASE ASC
-    `).all() as any[];
+    `).all() as TagRow[];
 
     return rows.map((r) => ({
       id: r.id,
@@ -98,7 +99,7 @@ export class SqliteTagRepository implements ITagRepository {
       GROUP BY t.id
       ORDER BY workCount DESC, t.name COLLATE NOCASE ASC
       LIMIT ?
-    `).all(limit) as any[];
+    `).all(limit) as TagRow[];
 
     return rows.map((r) => ({
       id: r.id,
@@ -119,7 +120,7 @@ export class SqliteTagRepository implements ITagRepository {
     }
 
     const db = this.getDb();
-    const tag = db.prepare('SELECT id, name, origin, category FROM tag WHERE id = ?').get(id) as any;
+    const tag = db.prepare('SELECT id, name, origin, category FROM tag WHERE id = ?').get(id) as TagRow | undefined;
     if (!tag) {
       throw new Error(`Tag with ID "${id}" not found`);
     }

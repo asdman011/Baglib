@@ -56,10 +56,15 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
   const currentStrokeRef = useRef<InkStroke | null>(null);
 
   // Sync with initialStrokes when page changes
-  useEffect(() => {
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [pageNumber, initialStrokes];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
     setStrokes(initialStrokes);
     setRedoStack([]);
-  }, [pageNumber, initialStrokes]);
+
+  }
 
   // Redraw all strokes onto canvas
   const redrawAll = useCallback(() => {

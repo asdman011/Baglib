@@ -61,7 +61,7 @@ export async function makeArchiveBookDoc(
   }
 
   // Parse ComicInfo.xml metadata if present
-  let metadata: BookMetadata = {
+  const metadata: BookMetadata = {
     title: fileName.replace(/\.[^/.]+$/, ''),
   };
 
@@ -125,7 +125,7 @@ export async function makeArchiveBookDoc(
           activeBlobUrls.set(name, url);
         }
         if (typeof document === 'undefined') {
-          return { body: { innerHTML: `<img src="${url}">` } } as any;
+          return { body: { innerHTML: `<img src="${url}">` } } as unknown as Document;
         }
         const doc = document.implementation.createHTMLDocument(name);
         doc.body.style.margin = '0';

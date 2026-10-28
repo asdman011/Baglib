@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — App Lock Security & OS Biometrics Service (KEY-149)
  *
@@ -228,8 +229,8 @@ try {
   async getBiometricCapability(): Promise<BiometricCapability> {
     if (process.platform === 'darwin') {
       const available =
-        typeof (systemPreferences as any)?.canPromptTouchID === 'function' &&
-        (systemPreferences as any).canPromptTouchID();
+        typeof (systemPreferences)?.canPromptTouchID === 'function' &&
+        (systemPreferences).canPromptTouchID();
       return {
         available: !!available,
         provider: 'Touch ID',
@@ -248,13 +249,13 @@ try {
           platform: process.platform,
           status: parsed.status || 'Unavailable',
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         return {
           available: false,
           provider: 'Windows Hello',
           platform: process.platform,
           status: 'Error',
-          error: err?.message || String(err),
+          error: errorMessage(err) || String(err),
         };
       }
     }
@@ -276,13 +277,13 @@ try {
   ): Promise<BiometricAuthResult> {
     if (process.platform === 'darwin') {
       try {
-        if (typeof (systemPreferences as any)?.promptTouchID === 'function') {
-          await (systemPreferences as any).promptTouchID(promptMessage);
+        if (typeof (systemPreferences)?.promptTouchID === 'function') {
+          await (systemPreferences).promptTouchID(promptMessage);
           this.unlock();
           return { success: true, code: 'Verified', provider: 'Touch ID' };
         }
-      } catch (err: any) {
-        const msg = String(err?.message || err);
+      } catch (err: unknown) {
+        const msg = String(errorMessage(err) || err);
         return {
           success: false,
           code: /cancel/i.test(msg) ? 'Canceled' : 'Failed',
@@ -310,12 +311,12 @@ try {
           provider: 'Windows Hello',
           error: parsed.status,
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         return {
           success: false,
           code: 'Error',
           provider: 'Windows Hello',
-          error: err?.message || String(err),
+          error: errorMessage(err) || String(err),
         };
       }
     }

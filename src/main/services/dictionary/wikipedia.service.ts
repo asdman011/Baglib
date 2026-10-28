@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Online Wikipedia Encyclopedia Service (KEY-142)
  *
@@ -141,8 +142,8 @@ export class WikipediaService {
         lang: validLang,
         dir: isRtl ? 'rtl' : 'ltr',
       };
-    } catch (err: any) {
-      console.warn(`[WikipediaService] Notice: Could not fetch summary from ${validLang}.wikipedia.org for "${term}":`, err?.message || err);
+    } catch (err: unknown) {
+      console.warn(`[WikipediaService] Notice: Could not fetch summary from ${validLang}.wikipedia.org for "${term}":`, errorMessage(err) || err);
       return null;
     }
   }

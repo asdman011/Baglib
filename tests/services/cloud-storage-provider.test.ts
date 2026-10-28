@@ -108,9 +108,9 @@ describe('Multi-Cloud Storage Providers (KEY-147)', () => {
       const provider = new WebDavStorageProvider(config);
 
       let putCalled = false;
-      let headersReceived: any = null;
+      let headersReceived: unknown = null;
 
-      global.fetch = async (url: any, init: any) => {
+      global.fetch = async (url: unknown, init: unknown) => {
         if (init?.method === 'MKCOL') {
           return new Response(null, { status: 201 });
         }
@@ -144,7 +144,7 @@ describe('Multi-Cloud Storage Providers (KEY-147)', () => {
       const provider = new S3StorageProvider(s3Config);
 
       let authHeader: string = '';
-      global.fetch = async (url: any, init: any) => {
+      global.fetch = async (url: unknown, init: unknown) => {
         authHeader = init?.headers?.['Authorization'] || '';
         return new Response('<ListBucketResult></ListBucketResult>', { status: 200 });
       };

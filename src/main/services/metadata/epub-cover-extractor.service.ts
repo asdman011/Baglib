@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Robust 5-Tier EPUB Cover Extraction Engine
  *
@@ -229,10 +230,10 @@ export class EpubCoverExtractor {
         try {
           const result = await this.extractCoverFromZip(zipfile);
           resolve(result);
-        } catch (execErr: any) {
+        } catch (execErr: unknown) {
           resolve({
             success: false,
-            error: execErr?.message || 'Unexpected EPUB cover extraction failure',
+            error: errorMessage(execErr) || 'Unexpected EPUB cover extraction failure',
           });
         } finally {
           try {
@@ -259,10 +260,10 @@ export class EpubCoverExtractor {
         try {
           const result = await this.extractCoverFromZip(zipfile);
           resolve(result);
-        } catch (execErr: any) {
+        } catch (execErr: unknown) {
           resolve({
             success: false,
-            error: execErr?.message || 'Unexpected EPUB buffer extraction failure',
+            error: errorMessage(execErr) || 'Unexpected EPUB buffer extraction failure',
           });
         } finally {
           try {
@@ -472,10 +473,10 @@ export class EpubCoverExtractor {
           // If Tiers 1-3 yield nothing, execute Tiers 4 & 5
           const fallbackRes = await this.executeTier4And5(zipfile, entries, opfDir, opfXml, manifestItems);
           resolve(fallbackRes);
-        } catch (zipErr: any) {
+        } catch (zipErr: unknown) {
           resolve({
             success: false,
-            error: zipErr?.message || 'Error parsing EPUB structure',
+            error: errorMessage(zipErr) || 'Error parsing EPUB structure',
           });
         }
       });

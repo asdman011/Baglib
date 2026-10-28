@@ -64,18 +64,18 @@ export interface AnkiCardData {
 export interface AnkiConnectRequest {
   action: string;
   version: number;
-  params?: Record<string, any>;
+  params?: Record<string, unknown>;
 }
 
-export interface AnkiConnectResponse<T = any> {
+export interface AnkiConnectResponse<T = unknown> {
   result: T | null;
   error: string | null;
 }
 
 export interface NotionPagePayload {
   parent: { database_id: string } | { page_id: string };
-  properties: Record<string, any>;
-  children: Array<Record<string, any>>;
+  properties: Record<string, unknown>;
+  children: Array<Record<string, unknown>>;
 }
 
 export interface JoplinNotePayload {

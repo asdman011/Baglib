@@ -50,7 +50,7 @@ export function stripArabicAffixes(word: string): string[] {
 
   // Helper to strip combinations
   const attemptStrip = (w: string) => {
-    let current = w;
+    const current = w;
     // Prefix stripping
     for (const prefix of ARABIC_PREFIXES) {
       if (current.startsWith(prefix) && current.length - prefix.length >= 3) {

@@ -1,5 +1,6 @@
+import { errorMessage } from '../../shared/errors';
 import { useState, useCallback, useRef } from 'react';
-import { BibliographicWork } from '../../shared/types/bibliographic';
+import { BibliographicWork, BibliographicEdition } from '../../shared/types/bibliographic';
 
 export type LookupStatus = 'idle' | 'searching' | 'found' | 'no_results' | 'error';
 
@@ -19,7 +20,7 @@ export interface CandidateMetadataItem {
   isCertainMatch: boolean;
   isSuggestion: boolean;
   matchType: 'exact' | 'high' | 'alternative';
-  matchedEdition?: any;
+  matchedEdition?: BibliographicEdition;
   discoveredIsbn?: string;
   providerName?: string;
 }
@@ -102,7 +103,7 @@ export function useMetadataLookup(): UseMetadataLookupReturn {
       setSource(null);
 
       try {
-        const electronAPI = (window as any).electronAPI;
+        const electronAPI = (window).electronAPI;
         if (!electronAPI?.lookupMetadata) {
           throw new Error('electronAPI.lookupMetadata is not available');
         }
@@ -133,12 +134,12 @@ export function useMetadataLookup(): UseMetadataLookupReturn {
           setError(res.details || res.error || 'Metadata lookup failed');
           return { match: null, candidates: [], evaluations: [] };
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (lookupId !== activeLookupIdRef.current) {
           return { match: null, candidates: [], evaluations: [] };
         }
         setStatus('error');
-        setError(err?.message || 'Network error occurred during lookup');
+        setError(errorMessage(err) || 'Network error occurred during lookup');
         return { match: null, candidates: [], evaluations: [] };
       }
     },
@@ -151,7 +152,7 @@ export function useMetadataLookup(): UseMetadataLookupReturn {
     const nextPage = page + 1;
 
     try {
-      const electronAPI = (window as any).electronAPI;
+      const electronAPI = (window).electronAPI;
       if (electronAPI?.discoverMetadata) {
         const res = await electronAPI.discoverMetadata({
           ...lastParams,
@@ -163,13 +164,13 @@ export function useMetadataLookup(): UseMetadataLookupReturn {
           setPage(nextPage);
           setCandidates((prev) => {
             const seenIds = new Set(prev.map((c) => c.workId));
-            const newCands = res.candidates.filter((c: any) => !seenIds.has(c.workId));
+            const newCands = res.candidates.filter((c: BibliographicWork) => !seenIds.has(c.workId));
             return [...prev, ...newCands];
           });
           if (res.rankedEvaluations && res.rankedEvaluations.length > 0) {
             setEvaluations((prev) => {
               const seenIds = new Set(prev.map((e) => e.work.workId));
-              const newEvals = res.rankedEvaluations.filter((e: any) => !seenIds.has(e.work.workId));
+              const newEvals = res.rankedEvaluations.filter((e: CandidateMetadataItem) => !seenIds.has(e.work.workId));
               return [...prev, ...newEvals];
             });
           }

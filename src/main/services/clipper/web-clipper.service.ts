@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -67,7 +68,7 @@ export class WebClipperService {
       onProgress?.({ stage: 'assets', message: 'Bundling media and images...' });
 
       let bundledHtml = article.content;
-      let images: any[] = [];
+      let images: import('../../../shared/types/web-clipper').ClippedImage[] = [];
 
       if (options.downloadImages !== false && article.images.length > 0) {
         const bundleRes = await this.bundler.bundleAssets(
@@ -132,7 +133,7 @@ export class WebClipperService {
         format,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       onProgress?.({ stage: 'error', message: msg });
       return {
         success: false,
@@ -196,7 +197,7 @@ export class WebClipperService {
       });
 
       const chapters: EpubChapterInput[] = [];
-      let totalImages: any[] = [];
+      const totalImages: import('../../../shared/types/web-clipper').ClippedImage[] = [];
       let novelTitle = options.title || 'Serialized Book';
       let novelAuthor = options.author || 'Web Author';
 
@@ -297,7 +298,7 @@ export class WebClipperService {
         format: 'epub',
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       onProgress?.({ stage: 'error', message: msg });
       return {
         success: false,

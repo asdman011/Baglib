@@ -93,7 +93,7 @@ export class RateLimitGate {
       let retryMs = 3000 * Math.pow(1.5, Math.min(this.consecutiveErrors, 5));
 
       if (headers) {
-        const retryAfter = typeof (headers as any).get === 'function'
+        const retryAfter = typeof (headers).get === 'function'
           ? (headers as Headers).get('Retry-After')
           : (headers as Record<string, string>)['retry-after'] || (headers as Record<string, string>)['Retry-After'];
 

@@ -1,6 +1,8 @@
 'use client';
+import { errorMessage as getErrorMessage } from '../../../shared/errors';
 
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import {
   X,
   CheckCircle2,
@@ -24,7 +26,7 @@ interface ReturnBookModalProps {
   onSuccess: () => void;
 }
 
-export const ReturnBookModal: React.FC<ReturnBookModalProps> = ({
+const ReturnBookModalContent: React.FC<ReturnBookModalProps> = ({
   isOpen,
   book,
   activeLoan,
@@ -33,8 +35,8 @@ export const ReturnBookModal: React.FC<ReturnBookModalProps> = ({
 }) => {
   const { lang, dir, t, refreshBooks } = useWorkspace();
 
-  const [actualReturnDate, setActualReturnDate] = useState('');
-  const [conditionOnReturn, setConditionOnReturn] = useState('good');
+  const [actualReturnDate, setActualReturnDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [conditionOnReturn, setConditionOnReturn] = useState(() => String(book?.condition || 'good'));
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -42,21 +44,6 @@ export const ReturnBookModal: React.FC<ReturnBookModalProps> = ({
   // Target loan is either explicitly passed or the first unreturned loan in the book's history
   const targetLoan = activeLoan || (book?.lendingHistory || []).find((l) => !l.isReturned);
 
-  useEffect(() => {
-    if (isOpen) {
-      const todayStr = new Date().toISOString().split('T')[0];
-      setActualReturnDate(todayStr);
-      setNotes('');
-      setErrorMessage(null);
-
-      // Default returned condition to book's condition or loan's recorded condition
-      if (book?.condition) {
-        setConditionOnReturn(String(book.condition));
-      } else {
-        setConditionOnReturn('good');
-      }
-    }
-  }, [isOpen, book, targetLoan]);
 
   if (!isOpen || !book || !targetLoan) return null;
 
@@ -114,9 +101,9 @@ export const ReturnBookModal: React.FC<ReturnBookModalProps> = ({
       await refreshBooks();
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/lending] Return book failed:', err);
-      setErrorMessage(err?.message || (lang === 'ar' ? 'فشلت عملية الإرجاع' : 'Return failed'));
+      setErrorMessage(getErrorMessage(err) || (lang === 'ar' ? 'فشلت عملية الإرجاع' : 'Return failed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -296,3 +283,5 @@ export const ReturnBookModal: React.FC<ReturnBookModalProps> = ({
     </div>
   );
 };
+
+export const ReturnBookModal: React.FC<ReturnBookModalProps> = props => props.isOpen ? <ReturnBookModalContent {...props} key={`${props.book?.id}:${props.activeLoan?.id || ''}`} /> : null;

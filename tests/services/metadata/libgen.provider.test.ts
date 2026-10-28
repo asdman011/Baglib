@@ -305,10 +305,10 @@ describe('LibgenProvider & Official json.php API Pipeline', () => {
       let handler: ((details: { url: string }) => { action: 'deny' | 'allow' }) | null = null;
       const mockWebContents = {
         isDestroyed: () => false,
-        setWindowOpenHandler: (fn: any) => {
+        setWindowOpenHandler: (fn: unknown) => {
           handler = fn;
         },
-      } as any;
+      } as unknown;
 
       shield.defuseWebContents(mockWebContents);
       assert.ok(handler !== null, 'Handler must be registered');

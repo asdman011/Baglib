@@ -56,8 +56,8 @@ if (typeof self !== 'undefined') {
           };
           self.postMessage(completeResp);
         }
-      } catch (err: any) {
-        if (err?.name !== 'AbortError') {
+      } catch (err: unknown) {
+        if ((!(err instanceof Error) || err.name !== 'AbortError')) {
           console.error('[baglib:search-worker] Search worker error:', err);
         }
       } finally {

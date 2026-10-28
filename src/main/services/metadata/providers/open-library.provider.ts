@@ -1,3 +1,4 @@
+import type { OpenLibrarySearchDoc, OpenLibraryEdition, OpenLibraryWork, OpenLibraryBook } from '../../../../shared/types/catalog-responses';
 import { MetadataProvider, SearchQuery } from './provider.interface';
 import { BibliographicWork, BibliographicEdition, BibliographicSource } from '../../../../shared/types/bibliographic';
 import { openLibraryClient } from '../http-client';
@@ -36,13 +37,13 @@ export class OpenLibraryProvider implements MetadataProvider {
 
       const pageParam = typeof query === 'object' && query.page && query.page > 1 ? `&page=${query.page}` : '';
       const url = `/search.json?${queryParam}&limit=${maxResults}${pageParam}`;
-      const data = await openLibraryClient.getJson<any>(url);
+      const data = await openLibraryClient.getJson<{ docs?: OpenLibrarySearchDoc[] }>(url);
       let docs = data?.docs;
 
       // Fallback: If title + author returned 0 docs, retry with title only
       if ((!docs || !Array.isArray(docs) || docs.length === 0) && hasAuthor && hasTitle && typeof query !== 'string' && query.title?.trim()) {
         const fallbackUrl = `/search.json?title=${encodeURIComponent(query.title.trim())}&limit=${maxResults}${pageParam}`;
-        const fallbackData = await openLibraryClient.getJson<any>(fallbackUrl);
+        const fallbackData = await openLibraryClient.getJson<{ docs?: OpenLibrarySearchDoc[] }>(fallbackUrl);
         if (fallbackData?.docs && Array.isArray(fallbackData.docs)) {
           docs = fallbackData.docs;
         }
@@ -50,7 +51,7 @@ export class OpenLibraryProvider implements MetadataProvider {
 
       if (!docs || !Array.isArray(docs)) return [];
 
-      return data.docs.map((doc: any): BibliographicWork => {
+      return docs.map((doc): BibliographicWork => {
         // Extract editions from search results
         const editions: BibliographicEdition[] = [];
         
@@ -109,10 +110,10 @@ export class OpenLibraryProvider implements MetadataProvider {
   async getWorkDetails(workId: string): Promise<BibliographicWork | null> {
     try {
       // Fetch work details
-      const workData = await openLibraryClient.getJson<any>(`/works/${workId}.json`);
+      const workData = await openLibraryClient.getJson<OpenLibraryWork>(`/works/${workId}.json`);
       
       // Fetch editions
-      const editionsData = await openLibraryClient.getJson<any>(`/works/${workId}/editions.json`);
+      const editionsData = await openLibraryClient.getJson<{ entries?: OpenLibraryEdition[] }>(`/works/${workId}/editions.json`);
 
       const editions: BibliographicEdition[] = [];
       if (editionsData && editionsData.entries) {
@@ -145,7 +146,7 @@ export class OpenLibraryProvider implements MetadataProvider {
       let authors: string[] = [];
       if (workData.authors) {
         // Normally requires another API call, but we return the keys or basic info
-        authors = workData.authors.map((a: any) => a.author?.key || 'Unknown');
+        authors = workData.authors.map((a) => a.author?.key || 'Unknown');
       }
 
       return {
@@ -167,7 +168,7 @@ export class OpenLibraryProvider implements MetadataProvider {
     try {
       // The Books API returns edition-level data by ISBN
       const url = `/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`;
-      const data = await openLibraryClient.getJson<any>(url);
+      const data = await openLibraryClient.getJson<Record<string, OpenLibraryBook>>(url);
       
       const bookData = data[`ISBN:${isbn}`];
       if (!bookData) return null;
@@ -178,7 +179,7 @@ export class OpenLibraryProvider implements MetadataProvider {
       const editionId = bookData.identifiers?.openlibrary ? bookData.identifiers.openlibrary[0] : `isbn-${isbn}`;
       const workId = bookData.key ? bookData.key.replace('/works/', '').replace('/books/', '') : `w-${isbn}`; // Usually returns book key, fallback
       
-      const authors = bookData.authors ? bookData.authors.map((a: any) => a.name) : [];
+      const authors = bookData.authors ? bookData.authors.map((a) => a.name) : [];
       
       const edition: BibliographicEdition = {
         editionId,

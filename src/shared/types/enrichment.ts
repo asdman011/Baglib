@@ -49,8 +49,8 @@ export type EnrichmentFieldKey =
 export interface EnrichmentFieldDiff {
   field: EnrichmentFieldKey;
   labelKey: string;
-  currentValue: any;
-  incomingValue: any;
+  currentValue: unknown;
+  incomingValue: unknown;
   hasCurrent: boolean;
   hasIncoming: boolean;
   isDifferent: boolean;

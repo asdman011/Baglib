@@ -237,3 +237,12 @@ mark.baglib-highlight-violet, mark.baglib-highlight-purple {
   background-color: rgba(192, 132, 252, 0.42) !important;
 }
 
+/* Study text owns one scroll region; keep its scrollbar consistent in both themes. */
+[data-quran-study-panel] > [tabindex="0"],
+[data-quran-inspector-layer] [tabindex="0"],
+[data-quran-popup],
+[data-quran-audio-dock] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-muted) transparent;
+}
+

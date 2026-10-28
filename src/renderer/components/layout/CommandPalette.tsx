@@ -1,187 +1,52 @@
 'use client';
-
-import React, { useState, useEffect, useMemo } from 'react';
-import { Search, BookOpen, FileText, Hash, Bookmark, ArrowRight, X, Globe } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Search, BookOpen, FileText, ArrowRight, X, Globe } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { matchesSearchQuery } from '../../utils/search';
+import { useStudyNotes } from '../../hooks/useStudyNotes';
+import { matchesStudyQuery } from '../../../shared/study-notes';
+import { openStudyNote } from '../../utils/study-navigation';
 
 export const CommandPalette: React.FC = () => {
-  const {
-    isCommandPaletteOpen,
-    setCommandPaletteOpen,
-    setSearchHubOpen,
-    openBookForReading,
-    books,
-    bookNotes,
-    t,
-    lang,
-    dir,
-  } = useWorkspace();
+  const { isCommandPaletteOpen, setCommandPaletteOpen, setSearchHubOpen, openBookForReading, books, t, dir } = useWorkspace();
+  const { notes } = useStudyNotes();
   const [query, setQuery] = useState('');
-
-  // Close on Escape
+  const [active, setActive] = useState(0);
+  const input = useRef<HTMLInputElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  const scope = /^\/(notes|books)\b\s*/iu.exec(query)?.[1].toLowerCase();
+  const keyword = query.replace(/^\/(notes|books)\b\s*/iu, '').trim();
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setCommandPaletteOpen(false);
-    };
-    if (isCommandPaletteOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    if (!isCommandPaletteOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    input.current?.focus();
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setCommandPaletteOpen(false); };
+    window.addEventListener('keydown', escape);
+    return () => { window.removeEventListener('keydown', escape); if (previous?.isConnected) previous.focus(); };
   }, [isCommandPaletteOpen, setCommandPaletteOpen]);
-
-  // Combine real books and notes with quick actions
-  const allResults = useMemo(() => {
-    const results: {
-      id: string;
-      title: string;
-      subtitle: string;
-      tag: string;
-      type: 'book' | 'note' | 'command';
-      icon: any;
-      action: () => void;
-    }[] = [];
-
-    // Real Books from library
-    books.forEach((b) => {
-      results.push({
-        id: b.id,
-        title: b.title,
-        subtitle: `${b.author} • ${b.digitalFormat || (b.bookType === 'digital' ? 'رقمي' : 'ورقي')}`,
-        tag: b.primaryCategory?.nameAr || 'كتاب',
-        type: 'book',
-        icon: Bookmark,
-        action: () => {
-          openBookForReading(b);
-          setCommandPaletteOpen(false);
-        },
-      });
-    });
-
-    // Real Notes
-    bookNotes.forEach((n) => {
-      const parentBook = books.find((b) => b.id === n.bookId);
-      results.push({
-        id: n.id,
-        title: n.content.substring(0, 45) + (n.content.length > 45 ? '...' : ''),
-        subtitle: `${parentBook?.title || 'كتاب'} • صفحة ${n.pageNumber}`,
-        tag: 'ملاحظة',
-        type: 'note',
-        icon: FileText,
-        action: () => {
-          if (parentBook) openBookForReading(parentBook);
-          setCommandPaletteOpen(false);
-        },
-      });
-    });
-
-    return results;
-  }, [books, bookNotes, openBookForReading, setCommandPaletteOpen]);
-
-  const filtered = useMemo(() => {
-    if (!query.trim()) return allResults.slice(0, 8);
-    const matches = allResults.filter((item) =>
-      matchesSearchQuery(`${item.title} ${item.subtitle} ${item.tag}`, query)
-    );
-
-    return [
-      {
-        id: 'action-search-hub',
-        title: lang === 'ar' ? `البحث عن "${query}" في الفهارس المفتوحة والإنترنت` : `Search for "${query}" in Online Discovery Hub`,
-        subtitle: lang === 'ar' ? 'البحث عبر Open Library، Google Books، أرشيف الإنترنت، ومكتبة غوتنبرغ' : 'Search across Open Library, Google Books, Internet Archive, and Gutenberg',
-        tag: t('navSearch'),
-        type: 'command' as const,
-        icon: Globe,
-        action: () => {
-          setCommandPaletteOpen(false);
-          setSearchHubOpen(true);
-        },
-      },
-      ...matches,
-    ];
-  }, [allResults, query, lang, t, setCommandPaletteOpen, setSearchHubOpen]);
-
+  const results = useMemo(() => {
+    const items: { id: string; title: string; subtitle: string; icon: typeof BookOpen; action: () => void }[] = [];
+    if (scope !== 'notes') for (const book of books) if (matchesStudyQuery(`${book.title} ${book.author}`, keyword)) items.push({ id: `book:${book.id}`, title: book.title, subtitle: book.author, icon: BookOpen, action: () => openBookForReading(book) });
+    if (scope !== 'books') for (const note of notes) if (matchesStudyQuery(`${note.title} ${note.content} ${note.aliases.join(' ')} ${note.tags.join(' ')}`, keyword)) items.push({ id: `note:${note.id}`, title: note.title || note.content.slice(0, 70), subtitle: note.aliases.join(' · ') || t('navNotes'), icon: FileText, action: () => openStudyNote({ id: note.id }) });
+    if (!scope && keyword) items.push({ id: 'discovery', title: t('studyOnlineSearch', { query: keyword }), subtitle: t('navSearch'), icon: Globe, action: () => setSearchHubOpen(true) });
+    return items.slice(0, 20);
+  }, [books, notes, scope, keyword, t, openBookForReading, setSearchHubOpen]);
   if (!isCommandPaletteOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
-      <div
-        className="w-full max-w-2xl bg-surface border border-subtle rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all"
-        dir={dir}
-      >
-        {/* Search Header Input */}
-        <div className="p-4 border-b border-subtle flex items-center gap-3 bg-canvas/50">
-          <Search className="w-5 h-5 text-pale-sky-500 shrink-0" />
-          <input
-            type="text"
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="ابحث في الكتب والملاحظات والصفحات..."
-            className="flex-1 bg-transparent border-none outline-none text-main placeholder:text-muted font-sans text-base"
-          />
-          <button
-            onClick={() => setCommandPaletteOpen(false)}
-            className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Results List */}
-        <div className="max-h-96 overflow-y-auto p-2 space-y-1">
-          {filtered.length > 0 ? (
-            filtered.map((item, idx) => {
-              const IconComp = item.icon;
-              return (
-                <div
-                  key={idx}
-                  onClick={item.action}
-                  className="p-3 rounded-xl hover:bg-canvas border border-transparent hover:border-subtle cursor-pointer flex items-center justify-between group transition-all"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-pale-sky-500/10 border border-pale-sky-500/20 flex items-center justify-center text-pale-sky-500 shrink-0">
-                      <IconComp className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-main truncate font-sans">{item.title}</h4>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">
-                          {item.tag}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted truncate font-serif">{item.subtitle}</p>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-muted group-hover:text-pale-sky-500 transition-colors shrink-0 rtl:rotate-180" />
-                </div>
-              );
-            })
-          ) : (
-            <div className="p-8 text-center text-muted font-sans text-sm">
-              لم يتم العثور على نتائج تطابق البحث
-            </div>
-          )}
-        </div>
-
-        {/* Modal Footer Controls */}
-        <div className="p-3 bg-canvas/80 border-t border-subtle flex items-center justify-between text-xs text-muted font-sans">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-surface border border-subtle text-[10px]">↑↓</kbd>{' '}
-              التنقل
-            </span>
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-surface border border-subtle text-[10px]">Enter</kbd>{' '}
-              الاختيار
-            </span>
-          </div>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 rounded bg-surface border border-subtle text-[10px]">Esc</kbd>{' '}
-            إغلاق
-          </span>
-        </div>
-      </div>
+  const choose = (index: number) => { results[index]?.action(); setCommandPaletteOpen(false); };
+  return <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-16 p-3" onPointerDown={event => { if (event.target === event.currentTarget) setCommandPaletteOpen(false); }}>
+    <div ref={dialog} role="dialog" aria-modal="true" aria-label={t('navSearch')} dir={dir} className="w-full max-w-2xl rounded-2xl border border-subtle bg-surface shadow-xl overflow-hidden" onKeyDown={event => {
+      if (event.key === 'Tab') {
+        const focusable = [...(dialog.current?.querySelectorAll<HTMLElement>('input,button') || [])];
+        const first = focusable[0], last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    }}>
+      <div className="flex items-center gap-3 border-b border-subtle p-4"><Search size={19} /><input ref={input} type="search" value={query} aria-label={t('studyCommandSearch')} placeholder={t('studyCommandSearch')} onChange={event => { setQuery(event.target.value); setActive(0); }} onKeyDown={event => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setActive(index => (index + (event.key === 'ArrowDown' ? 1 : -1) + Math.max(1, results.length)) % Math.max(1, results.length)); }
+        if (event.key === 'Enter') { event.preventDefault(); choose(active); }
+      }} className="flex-1 min-w-0 bg-transparent outline-none text-sm leading-loose" /><button type="button" aria-label={t('studyClose')} onClick={() => setCommandPaletteOpen(false)}><X size={18} /></button></div>
+      <div className="max-h-96 overflow-y-auto p-2 space-y-1">{results.map((item, index) => <button key={item.id} type="button" onClick={() => choose(index)} className={`w-full flex items-center gap-3 text-start rounded-xl p-3 ${index === active ? 'bg-canvas' : 'hover:bg-canvas'}`}><item.icon size={18} /><span className="min-w-0 flex-1"><span dir="auto" className="block truncate font-bold text-sm leading-relaxed">{item.title}</span><span dir="auto" className="block truncate text-xs text-muted leading-relaxed">{item.subtitle}</span></span><ArrowRight size={16} className="rtl:rotate-180" /></button>)}{!results.length && <p className="text-center p-6 text-muted text-sm">{t('studyNoResults')}</p>}</div>
+      <p className="px-4 py-3 border-t border-subtle text-xs text-muted" dir="ltr">/notes · /books</p>
     </div>
-  );
+  </div>;
 };

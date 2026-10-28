@@ -1,3 +1,5 @@
+import { app } from 'electron';
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Cloud Storage Manager Service
  *
@@ -77,7 +79,7 @@ export class StorageManagerService {
     }
   }
 
-  public async testConnection(customConfig?: CloudConfig): Promise<SyncOperationResult<{ reachable: boolean; details?: any }>> {
+  public async testConnection(customConfig?: CloudConfig): Promise<SyncOperationResult<{ reachable: boolean; details?: unknown }>> {
     const provider = this.getProvider(customConfig);
     return await provider.testConnection();
   }
@@ -120,8 +122,8 @@ export class StorageManagerService {
         };
       }
       return { success: false, message: `Cloud upload failed for destination: ${remotePath}` };
-    } catch (e: any) {
-      return { success: false, message: `Cloud upload error: ${e.message}` };
+    } catch (e: unknown) {
+      return { success: false, message: `Cloud upload error: ${errorMessage(e)}` };
     }
   }
 
@@ -151,8 +153,8 @@ export class StorageManagerService {
       // 2. Perform atomic restore with rollback protection
       const restoreResult = await librarySnapshotService.restoreSnapshot(localDestination);
       return restoreResult;
-    } catch (e: any) {
-      return { success: false, message: `Failed restoring from cloud: ${e.message}` };
+    } catch (e: unknown) {
+      return { success: false, message: `Failed restoring from cloud: ${errorMessage(e)}` };
     }
   }
 
@@ -165,8 +167,8 @@ export class StorageManagerService {
 
     let tempDir = '';
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { app } = require('electron');
+
+
       if (app && typeof app.getPath === 'function') {
         tempDir = path.join(app.getPath('userData'), 'cloud-imports');
       }
@@ -190,8 +192,8 @@ export class StorageManagerService {
         };
       }
       return { success: false, message: `Failed downloading ${remotePath}` };
-    } catch (e: any) {
-      return { success: false, message: `Error importing book from cloud: ${e.message}` };
+    } catch (e: unknown) {
+      return { success: false, message: `Error importing book from cloud: ${errorMessage(e)}` };
     }
   }
 }

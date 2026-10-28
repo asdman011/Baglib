@@ -30,7 +30,7 @@ describe('CoverResolverService Unit Tests', () => {
   });
 
   it('resolves and validates Open Library Cover API with ?default=false', async () => {
-    global.fetch = async (url: any) => {
+    global.fetch = async (url: unknown) => {
       const urlStr = String(url);
       assert.strictEqual(urlStr.includes('?default=false'), true);
 
@@ -86,7 +86,7 @@ describe('CoverResolverService Unit Tests', () => {
 
   it('does not query Google Books imageLinks and completely disables Google Books covers', async () => {
     const urlsRequested: string[] = [];
-    global.fetch = async (url: any) => {
+    global.fetch = async (url: unknown) => {
       urlsRequested.push(String(url));
       return new Response('Not Found', { status: 404 });
     };
@@ -130,7 +130,7 @@ describe('CoverResolverService Unit Tests', () => {
   it('prioritizes Open Library and Internet Archive over Google Books imageLinks', async () => {
     const urlsRequested: string[] = [];
 
-    global.fetch = async (url: any) => {
+    global.fetch = async (url: unknown) => {
       const urlStr = String(url);
       urlsRequested.push(urlStr);
 

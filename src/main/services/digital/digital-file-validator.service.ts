@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 import fs from 'fs';
 import path from 'path';
 import type { DigitalFormat } from '../../../shared/types/work';
@@ -67,7 +68,7 @@ export class DigitalFileValidatorService {
     let stats: fs.Stats;
     try {
       stats = await fs.promises.stat(filePath);
-    } catch (err: any) {
+    } catch (err: unknown) {
       return this.buildFailureResult({
         fileName,
         extension,
@@ -110,14 +111,14 @@ export class DigitalFileValidatorService {
       const readLength = Math.min(stats.size, HEADER_PROBE_SIZE);
       headerBuffer = Buffer.alloc(readLength);
       await fileHandle.read(headerBuffer, 0, readLength, 0);
-    } catch (err: any) {
+    } catch (err: unknown) {
       return this.buildFailureResult({
         fileName,
         extension,
         filePath,
         fileSizeBytes: stats.size,
         errorCode: 'READ_ERROR',
-        error: `فشل قراءة الملف: ${err?.message || fileName} / Failed to read file bytes: ${err?.message || fileName}`,
+        error: `فشل قراءة الملف: ${errorMessage(err) || fileName} / Failed to read file bytes: ${errorMessage(err) || fileName}`,
       });
     } finally {
       if (fileHandle) {

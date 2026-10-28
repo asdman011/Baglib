@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Text ISBN Scanner Service
  *
@@ -25,8 +26,8 @@ import {
 } from '../../../shared/validators/metadata-validator';
 
 // Use require for pdf-parse and yauzl
-const pdfParse = require('pdf-parse');
-const yauzl = require('yauzl');
+import pdfParse from 'pdf-parse';
+import yauzl from 'yauzl';
 
 export interface ScannedIsbnResult {
   isbn?: string;
@@ -181,7 +182,7 @@ export class TextIsbnScannerService {
         return null;
       }
 
-      const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
+      const pdfFn = pdfParse;
       if (typeof pdfFn !== 'function') return null;
 
       const frontLimit = pageBudget.front ?? 10;
@@ -203,7 +204,7 @@ export class TextIsbnScannerService {
         const backCutoff = Math.max(frontLimit + 1, totalPages - backLimit + 1);
         const backTexts: { pageNum: number; text: string }[] = [];
 
-        const pagerender = async (pageData: any) => {
+        const pagerender = async (pageData: import('pdf-parse').PdfParsePage) => {
           const pageNum = pageData.pageNumber || (pageData.pageIndex !== undefined ? pageData.pageIndex + 1 : 1);
           if (pageNum < backCutoff) {
             return '';
@@ -230,8 +231,8 @@ export class TextIsbnScannerService {
       }
 
       return null;
-    } catch (err: any) {
-      console.warn('[TextIsbnScannerService] scanPdf skipped or failed:', err?.message || err);
+    } catch (err: unknown) {
+      console.warn('[TextIsbnScannerService] scanPdf skipped or failed:', errorMessage(err) || err);
       return null;
     }
   }
@@ -245,19 +246,19 @@ export class TextIsbnScannerService {
     if (!filePath || !fs.existsSync(filePath)) return null;
 
     return new Promise((resolve) => {
-      yauzl.open(filePath, { lazyEntries: true }, (err: any, zipfile: any) => {
+      yauzl.open(filePath, { lazyEntries: true }, (err: unknown, zipfile: yauzl.ZipFile) => {
         if (err || !zipfile) {
           resolve(null);
           return;
         }
 
-        const entries: Record<string, any> = {};
+        const entries: Record<string, yauzl.Entry> = {};
         let opfPath: string | null = null;
         let opfDir = '';
 
         zipfile.readEntry();
 
-        zipfile.on('entry', (entry: any) => {
+        zipfile.on('entry', (entry: yauzl.Entry) => {
           entries[entry.fileName] = entry;
 
           if (entry.fileName === 'META-INF/container.xml') {
@@ -390,9 +391,9 @@ export class TextIsbnScannerService {
     return null;
   }
 
-  private readZipEntry(zipfile: any, entry: any): Promise<Buffer> {
+  private readZipEntry(zipfile: yauzl.ZipFile, entry: yauzl.Entry): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      zipfile.openReadStream(entry, (err: any, readStream: any) => {
+      zipfile.openReadStream(entry, (err: unknown, readStream: import('node:stream').Readable) => {
         if (err || !readStream) {
           reject(err || new Error('Failed to open read stream'));
           return;
@@ -401,7 +402,7 @@ export class TextIsbnScannerService {
         const chunks: Buffer[] = [];
         readStream.on('data', (chunk: Buffer) => chunks.push(chunk));
         readStream.on('end', () => resolve(Buffer.concat(chunks)));
-        readStream.on('error', (streamErr: any) => reject(streamErr));
+        readStream.on('error', (streamErr: unknown) => reject(streamErr));
       });
     });
   }

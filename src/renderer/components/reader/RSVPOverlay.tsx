@@ -28,7 +28,6 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
   direction = 'ltr',
   theme = 'light',
 }) => {
-  const [controller, setController] = useState<RSVPController | null>(null);
   const [state, setState] = useState<RSVPState>({
     words: [],
     currentIndex: 0,
@@ -37,18 +36,11 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
   });
   const [fontSize, setFontSize] = useState<number>(44);
 
-  // Initialize RSVPController
+  const controller = useMemo(() => new RSVPController(initialWpm, setState), [initialWpm]);
   useEffect(() => {
-    const ctrl = new RSVPController(initialWpm, (nextState) => {
-      setState(nextState);
-    });
-    ctrl.loadText(text);
-    setController(ctrl);
-
-    return () => {
-      ctrl.destroy();
-    };
-  }, [text, initialWpm]);
+    controller.loadText(text);
+    return () => controller.destroy();
+  }, [controller, text]);
 
   // Keyboard shortcuts: Space for Play/Pause, ArrowLeft/Right for steps, Escape for close
   useEffect(() => {

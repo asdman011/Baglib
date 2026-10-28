@@ -80,7 +80,7 @@ export function setupEnrichmentIPC(): void {
       }
 
       return await metadataEnrichmentService.findCandidateEditions(targetBook);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/enrichment-ipc] Failed to find online editions:', err);
       throw err;
     }
@@ -107,7 +107,7 @@ export function setupEnrichmentIPC(): void {
         }
 
         return metadataEnrichmentService.computeFieldDiffs(targetBook, input.candidate);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[baglib/enrichment-ipc] Failed to compute diffs:', err);
         throw err;
       }
@@ -121,7 +121,7 @@ export function setupEnrichmentIPC(): void {
     try {
       const repo = getRepo();
       return await metadataEnrichmentService.applyEnrichment(request, repo);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/enrichment-ipc] Failed to apply enrichment:', err);
       throw err;
     }
@@ -133,7 +133,7 @@ export function setupEnrichmentIPC(): void {
   ipcMain.handle('enrichment:fetch-and-cache-cover', async (_, request: CoverFetchRequest) => {
     try {
       return await coverFetchService.fetchAndCacheCover(request);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/enrichment-ipc] Failed to fetch and cache cover:', err);
       throw err;
     }
@@ -203,7 +203,7 @@ export function setupEnrichmentIPC(): void {
           filePath: targetPath,
           updatedBook: refreshed,
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[baglib/enrichment-ipc] Failed to attach digital copy:', err);
         throw err;
       }
@@ -222,7 +222,7 @@ export function setupEnrichmentIPC(): void {
 
     for (let i = 0; i < workIds.length; i++) {
       const workId = workIds[i];
-      let targetBook: BookItem | undefined = repo.getById
+      const targetBook: BookItem | undefined = repo.getById
         ? (await repo.getById(workId)) || undefined
         : (await repo.getAllWorks()).find((b) => b.id === workId);
 
@@ -262,7 +262,7 @@ export function setupEnrichmentIPC(): void {
             for (const f of approvedFields) {
               const diff = diffs.diffs[f];
               if (diff) {
-                (incomingValues as any)[f] = diff.incomingValue;
+                Object.assign(incomingValues, { [f]: diff.incomingValue });
               }
             }
 
@@ -344,7 +344,7 @@ export function setupEnrichmentIPC(): void {
       for (const f of approvedFields) {
         const diff = diffs.diffs[f];
         if (diff) {
-          (incomingValues as any)[f] = diff.incomingValue;
+          Object.assign(incomingValues, { [f]: diff.incomingValue });
         }
       }
 

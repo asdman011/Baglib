@@ -7,10 +7,15 @@ import type {
   InkStroke,
 } from '../../../shared/types/annotation';
 
+interface AnnotationRow {
+ id: string; book_id: string; type: AnnotationDTO['type']; location_cfi_or_page: string;
+ selected_text: string | null; note_content: string | null; color: string | null;
+ stroke_data: string | null; tags: string | null; created_at: string; updated_at: string;
+}
 export class SqliteAnnotationRepository {
   constructor(private db: Database) {}
 
-  private mapRow(row: any): AnnotationDTO {
+  private mapRow(row: AnnotationRow): AnnotationDTO {
     let strokeData: InkStroke[] | null = null;
     let tags: string[] | null = null;
 
@@ -50,7 +55,7 @@ export class SqliteAnnotationRepository {
       .prepare(
         `SELECT * FROM annotations WHERE book_id = ? ORDER BY CAST(location_cfi_or_page AS INTEGER) ASC, created_at ASC`
       )
-      .all(bookId) as any[];
+      .all(bookId) as AnnotationRow[];
 
     return rows.map((r) => this.mapRow(r));
   }
@@ -60,7 +65,7 @@ export class SqliteAnnotationRepository {
       .prepare(
         `SELECT * FROM annotations ORDER BY book_id ASC, CAST(location_cfi_or_page AS INTEGER) ASC, created_at ASC`
       )
-      .all() as any[];
+      .all() as AnnotationRow[];
 
     return rows.map((r) => this.mapRow(r));
   }
@@ -68,14 +73,14 @@ export class SqliteAnnotationRepository {
   getByBookIdAndPage(bookId: string, page: string): AnnotationDTO[] {
     const rows = this.db
       .prepare(`SELECT * FROM annotations WHERE book_id = ? AND location_cfi_or_page = ? ORDER BY created_at ASC`)
-      .all(bookId, page) as any[];
+      .all(bookId, page) as AnnotationRow[];
 
     return rows.map((r) => this.mapRow(r));
   }
 
   getFiltered(filter: AnnotationFilter): AnnotationDTO[] {
     let query = `SELECT * FROM annotations WHERE book_id = ?`;
-    const params: any[] = [filter.bookId];
+    const params: unknown[] = [filter.bookId];
 
     if (filter.type) {
       query += ` AND type = ?`;
@@ -96,7 +101,7 @@ export class SqliteAnnotationRepository {
     }
 
     query += ` ORDER BY CAST(location_cfi_or_page AS INTEGER) ASC, created_at ASC`;
-    const rows = this.db.prepare(query).all(...params) as any[];
+    const rows = this.db.prepare(query).all(...params) as AnnotationRow[];
     return rows.map((r) => this.mapRow(r));
   }
 

@@ -1,3 +1,4 @@
+import { errorMessage } from '../../shared/errors';
 /**
  * Baglib — Metadata & Online Provider IPC Handlers
  */
@@ -88,9 +89,9 @@ export function setupMetadataIPC() {
           }
         },
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/metadata-ipc] Failed to download from LibGen:', err);
-      return { success: false, error: err?.message || 'Download failed' };
+      return { success: false, error: errorMessage(err) || 'Download failed' };
     }
   });
 
@@ -110,7 +111,7 @@ export function setupMetadataIPC() {
   /**
    * Bibliographic Metadata Endpoints
    */
-  ipcMain.handle('library:search-bibliographic', async (_, query: any, maxResults?: number) => {
+  ipcMain.handle('library:search-bibliographic', async (_, query, maxResults?: number) => {
     try {
       if (!query) return [];
       return await bibliographicMetadataService.search(query, maxResults || 10);
@@ -205,9 +206,9 @@ export function setupMetadataIPC() {
         coverUrl: discovery.coverUrl,
         source: discovery.provenance.providerUsed || (discovery.provenance.embeddedFound ? 'embedded' : 'local'),
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/metadata-ipc] lookup-metadata error:', err);
-      return { success: false, error: 'NETWORK_ERROR', details: err?.message || 'Network request failed' };
+      return { success: false, error: 'NETWORK_ERROR', details: errorMessage(err) || 'Network request failed' };
     }
   });
 
@@ -227,7 +228,7 @@ export function setupMetadataIPC() {
   /**
    * Dedicated Cover Discovery & Validation
    */
-  ipcMain.handle('library:resolve-cover', async (_, options: any) => {
+  ipcMain.handle('library:resolve-cover', async (_, options) => {
     try {
       if (!options) return { coverUrl: undefined, source: 'none', verified: false };
       return await coverResolverService.resolveCover(options);
@@ -296,9 +297,9 @@ export function setupMetadataIPC() {
         };
       }
       return { success: false, error: 'PAGE_RENDER_FAILED' };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/metadata-ipc] extract-pdf-cover error:', err);
-      return { success: false, error: err?.message || 'EXTRACTION_FAILED' };
+      return { success: false, error: errorMessage(err) || 'EXTRACTION_FAILED' };
     }
   });
 
@@ -322,9 +323,9 @@ export function setupMetadataIPC() {
         };
       }
       return { success: false, error: 'NO_IMAGE_FOUND' };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/metadata-ipc] extract-epub-cover error:', err);
-      return { success: false, error: err?.message || 'EXTRACTION_FAILED' };
+      return { success: false, error: errorMessage(err) || 'EXTRACTION_FAILED' };
     }
   });
 
@@ -355,9 +356,9 @@ export function setupMetadataIPC() {
       const shield = ContentShieldService.getInstance();
       const savedPath = await shield.downloadFileDirectly(url, downloadsPath, filename);
       return { success: true, path: savedPath, filename };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/metadata-ipc] Safe download failed:', err);
-      return { success: false, error: err?.message || 'Download failed' };
+      return { success: false, error: errorMessage(err) || 'Download failed' };
     }
   });
 
@@ -423,7 +424,7 @@ export function setupMetadataIPC() {
     }
   });
 
-  ipcMain.handle('metadata:update-provider-config', async (_, configs: any) => {
+  ipcMain.handle('metadata:update-provider-config', async (_, configs) => {
     try {
       return providerConfigService.updateProviderConfigs(configs);
     } catch (err) {

@@ -45,8 +45,8 @@ describe('Edition Comparison UI & Bilingual Localization Tests (Story 12)', () =
 
   it('contains all Story 12 translation keys in both Arabic and English with non-empty values', () => {
     for (const key of story12Keys) {
-      const arVal = (translations.ar as any)[key];
-      const enVal = (translations.en as any)[key];
+      const arVal = (translations.ar as unknown)[key];
+      const enVal = (translations.en as unknown)[key];
 
       assert.ok(
         typeof arVal === 'string' && arVal.trim().length > 0,
@@ -118,7 +118,7 @@ describe('Edition Comparison UI & Bilingual Localization Tests (Story 12)', () =
           isDifferent: false,
           isOverwriting: false,
         },
-      } as any,
+      } as unknown,
       summary: {
         totalFields: 4,
         newFieldsCount: 2,

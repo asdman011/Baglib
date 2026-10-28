@@ -42,7 +42,7 @@ describe('Search Providers & Duplicate Detector Unit Tests', () => {
       ];
 
       // Candidate has ISBN-10: 0-201-63361-2
-      const candidate: any = {
+      const candidate: unknown = {
         id: 'ol:1',
         title: 'Design Patterns',
         author: 'Gang of Four',
@@ -69,7 +69,7 @@ describe('Search Providers & Duplicate Detector Unit Tests', () => {
       ];
 
       // Candidate with tashkeel and alef variant: "تَارِيخُ دِمَشْقَ" by "إِبْن عَسَاكِر"
-      const candidate: any = {
+      const candidate: unknown = {
         id: 'gb:1',
         title: 'تَارِيخُ دِمَشْقَ (طبعة دار الفكر)',
         author: 'إِبْن عَسَاكِر',
@@ -239,7 +239,7 @@ describe('Search Providers & Duplicate Detector Unit Tests', () => {
       const events: string[] = [];
       const orchestrator = new SearchOrchestratorService(() => []);
 
-      const mockOpenLib: any = {
+      const mockOpenLib: unknown = {
         id: 'openlibrary',
         name: 'Open Library',
         nameAr: 'أوبن لايبراري',
@@ -250,7 +250,7 @@ describe('Search Providers & Duplicate Detector Unit Tests', () => {
         },
       };
 
-      const mockGutenberg: any = {
+      const mockGutenberg: unknown = {
         id: 'gutenberg',
         name: 'Project Gutenberg',
         nameAr: 'مشروع غوتنبرغ',

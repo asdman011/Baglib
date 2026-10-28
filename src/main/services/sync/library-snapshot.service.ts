@@ -1,3 +1,5 @@
+import { app } from 'electron';
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Library Snapshot & Safe Rollback Engine
  *
@@ -47,8 +49,8 @@ export class LibrarySnapshotService {
 
     let baseDir = '';
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { app } = require('electron');
+
+
       if (app && typeof app.getPath === 'function') {
         baseDir = app.getPath('userData');
       }
@@ -130,7 +132,7 @@ export class LibrarySnapshotService {
 
       // Export settings & annotations
       const allSettings = settingsRepository.getAll();
-      let allAnnotations: any[] = [];
+      let allAnnotations: unknown[] = [];
       try {
         allAnnotations = db.prepare('SELECT * FROM annotation_record').all();
       } catch {}
@@ -179,9 +181,9 @@ export class LibrarySnapshotService {
         message: `Snapshot created successfully (${(manifest.sizeBytes / 1024).toFixed(1)} KB).`,
         data: manifest,
       };
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[Snapshot] Failed to create snapshot:', e);
-      return { success: false, message: `Failed to create snapshot: ${e?.message || e}` };
+      return { success: false, message: `Failed to create snapshot: ${errorMessage(e) || e}` };
     }
   }
 
@@ -307,7 +309,7 @@ export class LibrarySnapshotService {
         message: 'Library database and annotations successfully restored and verified.',
         data: { restored: true },
       };
-    } catch (restoreError: any) {
+    } catch (restoreError: unknown) {
       console.error('[Snapshot] Restore failed, triggering atomic rollback:', restoreError);
 
       // Trigger rollback guarantee
@@ -333,7 +335,7 @@ export class LibrarySnapshotService {
 
       return {
         success: false,
-        message: `Restore failed and was safely rolled back: ${restoreError?.message || restoreError}`,
+        message: `Restore failed and was safely rolled back: ${errorMessage(restoreError) || restoreError}`,
       };
     }
   }

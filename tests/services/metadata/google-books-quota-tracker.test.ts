@@ -276,10 +276,10 @@ describe('Google Books Local Daily Quota Tracker & Quota-Saver Mode', () => {
       assert.strictEqual(tracker.isConservationMode(), true);
 
       // Create a test instance with mock repo and validator
-      const mockRepo: any = {
-        addBook: (input: any) => ({ id: `book-${Date.now()}`, ...input }),
+      const mockRepo: unknown = {
+        addBook: (input: unknown) => ({ id: `book-${Date.now()}`, ...input }),
       };
-      const mockValidator: any = {
+      const mockValidator: unknown = {
         validateFile: async (filePath: string) => ({
           isValid: true,
           fileName: 'book.epub',
@@ -288,7 +288,7 @@ describe('Google Books Local Daily Quota Tracker & Quota-Saver Mode', () => {
           format: 'EPUB',
         }),
       };
-      const mockExtractor: any = {
+      const mockExtractor: unknown = {
         extract: async () => ({
           title: 'Extracted Local Title',
           authors: ['Local Author'],
@@ -313,10 +313,10 @@ describe('Google Books Local Daily Quota Tracker & Quota-Saver Mode', () => {
     it('allows single-file import without bulkAutoFillSuppressed flag', async () => {
       tracker.setCountForTesting(750);
 
-      const mockRepo: any = {
-        addBook: (input: any) => ({ id: `book-${Date.now()}`, ...input }),
+      const mockRepo: unknown = {
+        addBook: (input: unknown) => ({ id: `book-${Date.now()}`, ...input }),
       };
-      const mockValidator: any = {
+      const mockValidator: unknown = {
         validateFile: async (filePath: string) => ({
           isValid: true,
           fileName: 'book.epub',
@@ -325,7 +325,7 @@ describe('Google Books Local Daily Quota Tracker & Quota-Saver Mode', () => {
           format: 'EPUB',
         }),
       };
-      const mockExtractor: any = {
+      const mockExtractor: unknown = {
         extract: async () => ({
           title: 'Extracted Local Title',
           authors: ['Local Author'],

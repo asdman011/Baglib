@@ -97,10 +97,10 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     if (isOpen && typeof window !== 'undefined' && window.electronAPI) {
       window.electronAPI
         .getCategoryTree()
-        .then((tree: any) => {
+        .then((tree) => {
           if (Array.isArray(tree)) {
             const flat: { id: string; nameAr: string; nameEn: string }[] = [];
-            const walk = (nodes: any[]) => {
+            const walk = (nodes: import('../../../shared/types/category').CategoryNode[]) => {
               for (const n of nodes) {
                 flat.push({ id: n.id, nameAr: n.nameAr, nameEn: n.nameEn });
                 if (n.children && n.children.length > 0) walk(n.children);
@@ -143,7 +143,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   // Native File Picker trigger
   const handleBrowseFiles = async () => {
     if (discovering) return;
-    const api = (window as any).electronAPI;
+    const api = (window).electronAPI;
     if (api?.openFilesDialog) {
       const selectedPaths: string[] = await api.openFilesDialog();
       if (Array.isArray(selectedPaths) && selectedPaths.length > 0) {
@@ -227,7 +227,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     setVisibleCount(100);
 
     try {
-      const api = (window as any).electronAPI;
+      const api = (window).electronAPI;
       if (api?.checkDigitalDuplicates && api?.validateDigitalFiles) {
         const validation: { results: DigitalFileValidationResult[] } = await api.validateDigitalFiles(stagedFiles.map(file => file.path));
         const stagedPaths = new Set(stagedFiles.map(file => file.path));
@@ -283,7 +283,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     setVisibleCount(100);
 
     // Subscribe to streaming progress
-    const api = (window as any).electronAPI;
+    const api = (window).electronAPI;
     let unsubscribeProgress: (() => void) | undefined;
     try {
       if (api?.onDigitalImportProgress) {

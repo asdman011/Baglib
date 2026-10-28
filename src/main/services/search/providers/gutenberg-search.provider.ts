@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../../shared/errors';
 /**
  * Baglib — Project Gutenberg Public Domain Provider
  *
@@ -60,7 +61,7 @@ export class GutenbergSearchProvider implements ISearchProvider {
     try {
       const pageParam = query.page && query.page > 1 ? `&page=${query.page}` : '';
       const url = `/books/?search=${encodeURIComponent(searchTerm)}${pageParam}`;
-      const data = await this.client.getJson<any>(url);
+      const data = await this.client.getJson<{ results?: { id: number; title: string; authors?: (string | { name?: string })[]; formats?: Record<string, string>; languages?: string[]; subjects?: string[] }[] }>(url);
 
       if (signal?.aborted || !data?.results || !Array.isArray(data.results)) {
         return [];
@@ -72,7 +73,7 @@ export class GutenbergSearchProvider implements ISearchProvider {
         const id = `gutenberg:${item.id}`;
 
         const authors: string[] = Array.isArray(item.authors)
-          ? item.authors.map((a: any) => {
+          ? item.authors.map((a) => {
               if (typeof a === 'string') return a;
               if (a?.name && String(a.name).includes(',')) {
                 const parts = a.name.split(',').map((p: string) => p.trim());
@@ -124,9 +125,9 @@ export class GutenbergSearchProvider implements ISearchProvider {
 
       const limit = query.limit || 20;
       return results.slice(0, limit);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (signal?.aborted) return [];
-      console.warn('[baglib:gutenberg-search] Provider search error:', err?.message || err);
+      console.warn('[baglib:gutenberg-search] Provider search error:', errorMessage(err) || err);
       return [];
     }
   }

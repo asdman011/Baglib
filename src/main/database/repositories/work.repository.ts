@@ -19,6 +19,13 @@ import type {
 import type { DigitalFormat, MetadataProvenance } from '../../../shared/types/work';
 import { bookVolumeIssue } from '../../../shared/book-volumes';
 
+type WorkRow = Omit<Partial<BookItem>, 'categories' | 'readingProgress'> & Pick<BookItem, 'id' | 'title'> & {
+  metadataJson?: string; categories?: string; dbTags?: string; readingProgress?: number | string;
+  authorName?: string; workTypeId?: string; sourceType?: BookItem['bookType']; fileSizeBytes?: number;
+  primaryCategoryId?: string; pcNameAr?: string; pcNameEn?: string;
+};
+type LoanRow = Omit<LendingRecord, 'isReturned'> & { isReturned: number; workId: string; workTitle: string };
+
 export class SqliteWorkRepository implements IWorkRepository {
   constructor(private db: Database) {}
 
@@ -30,8 +37,8 @@ export class SqliteWorkRepository implements IWorkRepository {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   }
 
-  private mapRowToBookItem(r: any): BookItem {
-    let meta: Record<string, any> = {};
+  private mapRowToBookItem(r: WorkRow): BookItem {
+    let meta: Partial<BookItem> = {};
     if (r.metadataJson) {
       try {
         meta = JSON.parse(r.metadataJson);
@@ -41,7 +48,7 @@ export class SqliteWorkRepository implements IWorkRepository {
     }
 
     const workTypeKey: WorkTypeKey = (r.workTypeId && WORK_TYPE_ID_MAP[r.workTypeId])
-      || meta.workType
+      || (meta.workType && meta.workType in WORK_TYPES ? meta.workType as WorkTypeKey : undefined)
       || 'book';
 
     const workTypeId = r.workTypeId || WORK_TYPES[workTypeKey]?.id || 'wt-book';
@@ -103,14 +110,16 @@ export class SqliteWorkRepository implements IWorkRepository {
         nameEn: r.pcNameEn || '',
       } : null,
       tags: r.dbTags ? Array.from(new Set([...(meta.tags || []), ...r.dbTags.split(',')])) : (meta.tags || []),
-      readingStatus: (r.readingStatus as any) || 'unread',
+      readingStatus: r.readingStatus || 'unread',
       readingProgress: typeof r.readingProgress === 'number' ? r.readingProgress : (r.readingProgress ? parseInt(r.readingProgress, 10) : 0),
+      lastReadLocation: r.lastReadLocation || undefined,
+      createdAt: r.createdAt || undefined,
       lendingHistory: meta.lendingHistory || [],
       condition,
       purchaseDate,
       price: priceStr,
       acquisition,
-      bookType: (r.sourceType as any) || (r.filePath ? 'digital' : 'physical'),
+      bookType: r.sourceType || (r.filePath ? 'digital' : 'physical'),
       digitalFormat: r.digitalFormat || (r.filePath?.toLowerCase().endsWith('.pdf') ? 'PDF' : undefined),
       filePath: r.filePath || undefined,
       fileSize: meta.fileSize || (r.fileSizeBytes ? this.formatFileSize(r.fileSizeBytes) : undefined),
@@ -174,7 +183,7 @@ export class SqliteWorkRepository implements IWorkRepository {
     };
   }
 
-  private deriveProvenanceFallback(r: any, meta: any): MetadataProvenance {
+  private deriveProvenanceFallback(r: WorkRow, meta: Partial<BookItem>): MetadataProvenance {
     const cover = meta.coverImage || '';
     const onlineSource = meta.onlineSource || '';
     const isbn = r.isbn || meta.isbn;
@@ -305,6 +314,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         w.original_language as language,
         w.reading_status as readingStatus,
         w.reading_progress as readingProgress,
+        w.last_read_location as lastReadLocation,
+        w.created_at as createdAt,
         w.metadata_json as metadataJson,
         e.id as editionId,
         e.label as edition,
@@ -345,7 +356,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       LEFT JOIN category cat ON cat.id = w.primary_category_id
       GROUP BY w.id
       ORDER BY w.created_at DESC
-    `).all() as any[];
+    `).all() as WorkRow[];
 
     const items = rows.map((r) => this.mapRowToBookItem(r));
 
@@ -366,7 +377,7 @@ export class SqliteWorkRepository implements IWorkRepository {
           notes
         FROM lending_record
         ORDER BY borrow_date DESC, created_at DESC
-      `).all() as any[];
+      `).all() as LoanRow[];
 
       const today = new Date().toISOString().split('T')[0];
       const loansByWork = new Map<string, LendingRecord[]>();
@@ -425,6 +436,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         w.original_language as language,
         w.reading_status as readingStatus,
         w.reading_progress as readingProgress,
+        w.last_read_location as lastReadLocation,
+        w.created_at as createdAt,
         w.metadata_json as metadataJson,
         e.id as editionId,
         e.label as edition,
@@ -465,7 +478,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       LEFT JOIN category cat ON cat.id = w.primary_category_id
       WHERE w.id = ?
       GROUP BY w.id
-    `).get(workId) as any;
+    `).get(workId) as WorkRow | undefined;
 
     if (!row) {
       return null;
@@ -512,7 +525,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       const workTypeId = workTypeInfo.id;
 
       // Prepare metadata JSON
-      const metadataPayload: Record<string, any> = {
+      const metadataPayload: Record<string, unknown> = {
         workType: workTypeInfo.key,
         workTypeId,
         coverImage: data.coverImage,
@@ -543,7 +556,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         issueNumber: data.issueNumber,
         volumeNumber: data.volumeNumber !== undefined && data.volumeNumber !== null && String(data.volumeNumber).trim() !== '' ? data.volumeNumber : undefined,
         seriesTitle: data.seriesTitle !== undefined && data.seriesTitle !== null && String(data.seriesTitle).trim() !== '' ? data.seriesTitle : undefined,
-        totalVolumes: data.totalVolumes !== undefined && data.totalVolumes !== null && (data.totalVolumes as any) !== '' && !Number.isNaN(Number(data.totalVolumes)) ? Number(data.totalVolumes) : undefined,
+        totalVolumes: data.totalVolumes !== undefined && data.totalVolumes !== null && String(data.totalVolumes) !== '' && !Number.isNaN(Number(data.totalVolumes)) ? Number(data.totalVolumes) : undefined,
         publicationSeasonOrMonth: data.publicationSeasonOrMonth,
         issn: data.issn,
         degreeLevel: data.degreeLevel,
@@ -558,23 +571,23 @@ export class SqliteWorkRepository implements IWorkRepository {
         contributors: data.contributors,
         bookcase: data.bookcase,
         shelfSection: data.shelfSection,
-        acquisition: (data as any).acquisition,
-        physicalLocation: (data as any).physicalLocation,
-        metadataProvenance: (data as any).metadataProvenance,
-        editionRawMatch: (data as any).editionRawMatch,
-        editionSource: (data as any).editionSource,
-        editionConfidence: (data as any).editionConfidence,
+        acquisition: (data).acquisition,
+        physicalLocation: (data).physicalLocation,
+        metadataProvenance: (data).metadataProvenance,
+        editionRawMatch: (data).editionRawMatch,
+        editionSource: (data).editionSource,
+        editionConfidence: (data).editionConfidence,
       };
 
       // Strip undefined
-      const cleanMetadata: Record<string, any> = {};
+      const cleanMetadata: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(metadataPayload)) {
         if (v !== undefined) {
           cleanMetadata[k] = v;
         }
       }
       const metadataJson = Object.keys(cleanMetadata).length > 0 ? JSON.stringify(cleanMetadata) : null;
-      const description = data.description || data.abstract || (data as any).description || null;
+      const description = data.description || data.abstract || (data).description || null;
 
       // 1. Insert Work
       this.db.prepare(`
@@ -714,7 +727,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       // Existing work to preserve or merge metadata
       const existingWork = this.db.prepare('SELECT work_type_id, metadata_json, description FROM work WHERE id = ?').get(data.id) as { work_type_id: string; metadata_json?: string; description?: string } | undefined;
       
-      let existingMeta: Record<string, any> = {};
+      let existingMeta: Partial<BookItem> & Record<string, unknown> = {};
       if (existingWork?.metadata_json) {
         try {
           existingMeta = JSON.parse(existingWork.metadata_json);
@@ -726,7 +739,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         : (WORK_TYPE_ID_MAP[existingWork?.work_type_id || ''] || 'book');
       const workTypeId = WORK_TYPES[workTypeKey]?.id || existingWork?.work_type_id || 'wt-book';
 
-      const updatePayload: Record<string, any> = {
+      const updatePayload: Record<string, unknown> = {
         workType: workTypeKey,
         workTypeId,
         coverImage: data.coverImage,
@@ -757,7 +770,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         issueNumber: data.issueNumber,
         volumeNumber: data.volumeNumber !== undefined && data.volumeNumber !== null && String(data.volumeNumber).trim() !== '' ? data.volumeNumber : undefined,
         seriesTitle: data.seriesTitle !== undefined && data.seriesTitle !== null && String(data.seriesTitle).trim() !== '' ? data.seriesTitle : undefined,
-        totalVolumes: data.totalVolumes !== undefined && data.totalVolumes !== null && (data.totalVolumes as any) !== '' && !Number.isNaN(Number(data.totalVolumes)) ? Number(data.totalVolumes) : undefined,
+        totalVolumes: data.totalVolumes !== undefined && data.totalVolumes !== null && String(data.totalVolumes) !== '' && !Number.isNaN(Number(data.totalVolumes)) ? Number(data.totalVolumes) : undefined,
         publicationSeasonOrMonth: data.publicationSeasonOrMonth,
         issn: data.issn,
         degreeLevel: data.degreeLevel,
@@ -772,12 +785,12 @@ export class SqliteWorkRepository implements IWorkRepository {
         contributors: data.contributors,
         bookcase: data.bookcase,
         shelfSection: data.shelfSection,
-        acquisition: (data as any).acquisition,
-        physicalLocation: (data as any).physicalLocation,
-        metadataProvenance: (data as any).metadataProvenance,
-        editionRawMatch: (data as any).editionRawMatch,
-        editionSource: (data as any).editionSource,
-        editionConfidence: (data as any).editionConfidence,
+        acquisition: (data).acquisition,
+        physicalLocation: (data).physicalLocation,
+        metadataProvenance: (data).metadataProvenance,
+        editionRawMatch: (data).editionRawMatch,
+        editionSource: (data).editionSource,
+        editionConfidence: (data).editionConfidence,
       };
 
       for (const [k, v] of Object.entries(updatePayload)) {
@@ -786,13 +799,13 @@ export class SqliteWorkRepository implements IWorkRepository {
         }
       }
 
-      if (Object.prototype.hasOwnProperty.call(data, 'totalVolumes') && (data.totalVolumes === undefined || data.totalVolumes === null || (data.totalVolumes as any) === '')) delete existingMeta.totalVolumes;
+      if (Object.prototype.hasOwnProperty.call(data, 'totalVolumes') && (data.totalVolumes === undefined || data.totalVolumes === null || String(data.totalVolumes) === '')) delete existingMeta.totalVolumes;
       if (Object.prototype.hasOwnProperty.call(data, 'volumeNumber') && (data.volumeNumber === undefined || data.volumeNumber === null || String(data.volumeNumber).trim() === '')) delete existingMeta.volumeNumber;
       if (Object.prototype.hasOwnProperty.call(data, 'seriesTitle') && (data.seriesTitle === undefined || data.seriesTitle === null || String(data.seriesTitle).trim() === '')) delete existingMeta.seriesTitle;
       if (workTypeKey === 'book' && bookVolumeIssue(existingMeta)) throw new Error('invalid-volume-metadata');
 
       const metadataJson = Object.keys(existingMeta).length > 0 ? JSON.stringify(existingMeta) : null;
-      const description = data.description !== undefined ? data.description : (data.abstract || (data as any).description || existingWork?.description || null);
+      const description = data.description !== undefined ? data.description : (data.abstract || (data).description || existingWork?.description || null);
 
       // 1. Update Work
       this.db.prepare(`
@@ -857,7 +870,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         ? data.publicationYear 
         : data.publicationYear ? parseInt(String(data.publicationYear), 10) || null : null;
 
-      let edition = this.db.prepare('SELECT id FROM edition WHERE work_id = ? LIMIT 1').get(data.id) as { id: string } | undefined;
+      const edition = this.db.prepare('SELECT id FROM edition WHERE work_id = ? LIMIT 1').get(data.id) as { id: string } | undefined;
       let editionId = edition?.id;
       if (!editionId) {
         editionId = crypto.randomUUID();
@@ -944,12 +957,12 @@ export class SqliteWorkRepository implements IWorkRepository {
                 WHERE id = ?
               `).run(
                 loan.borrowerName,
-                (loan as any).borrowerContact || null,
+                (loan).borrowerContact || null,
                 loan.borrowDate,
                 loan.expectedReturnDate || null,
                 loan.actualReturnDate || null,
                 loan.isReturned ? 1 : 0,
-                (loan as any).conditionOnReturn || null,
+                (loan).conditionOnReturn || null,
                 loan.notes || null,
                 loan.id
               );
@@ -1010,13 +1023,13 @@ export class SqliteWorkRepository implements IWorkRepository {
       loanId,
       workId,
       loanData.borrowerName || 'مستعير',
-      (loanData as any).borrowerContact || null,
+      (loanData).borrowerContact || null,
       borrowDate,
       expectedReturnDate,
       loanData.actualReturnDate || null,
       isReturned,
       status,
-      (loanData as any).conditionOut || null,
+      (loanData).conditionOut || null,
       loanData.conditionOnReturn || null,
       loanData.notes || null,
       now
@@ -1038,7 +1051,7 @@ export class SqliteWorkRepository implements IWorkRepository {
     return {
       id: loanId,
       borrowerName: loanData.borrowerName || 'مستعير',
-      borrowerContact: (loanData as any).borrowerContact,
+      borrowerContact: (loanData).borrowerContact,
       borrowDate,
       expectedReturnDate: expectedReturnDate || 'غير محدد',
       actualReturnDate: loanData.actualReturnDate,
@@ -1055,7 +1068,7 @@ export class SqliteWorkRepository implements IWorkRepository {
     const today = new Date().toISOString().split('T')[0];
     const actualReturn = returnDate || today;
 
-    const existing = this.db.prepare('SELECT work_id, borrower_name, borrow_date, expected_return_date FROM lending_record WHERE id = ?').get(loanId) as any;
+    const existing = this.db.prepare('SELECT work_id, borrower_name, borrow_date, expected_return_date FROM lending_record WHERE id = ?').get(loanId) as { work_id: string; borrower_name: string; borrow_date: string; expected_return_date?: string } | undefined;
     if (!existing) {
       throw new Error(`Lending record with ID ${loanId} not found`);
     }
@@ -1113,7 +1126,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       FROM lending_record
       WHERE work_id = ?
       ORDER BY borrow_date DESC, created_at DESC
-    `).all(workId) as any[];
+    `).all(workId) as LoanRow[];
 
     const today = new Date().toISOString().split('T')[0];
     return rows.map((r) => {
@@ -1159,7 +1172,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       JOIN work w ON w.id = lr.work_id
       WHERE lr.is_returned = 0
       ORDER BY lr.expected_return_date ASC
-    `).all() as any[];
+    `).all() as LoanRow[];
 
     const today = new Date().toISOString().split('T')[0];
     return rows.map((r) => ({
@@ -1308,7 +1321,7 @@ export class SqliteWorkRepository implements IWorkRepository {
     let missingFiles = 0;
     let unmountedFiles = 0;
     let corruptedFiles = 0;
-    let duplicateFiles = 0;
+    const duplicateFiles = 0;
     let totalSizeBytes = 0;
     const formatBreakdown: Record<string, { count: number; totalBytes: number }> = {};
 
@@ -1412,7 +1425,7 @@ export class SqliteWorkRepository implements IWorkRepository {
     const offset = (page - 1) * pageSize;
 
     const whereClauses: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     // 1. Text Search across Title, Description, Author, Publisher, and ISBN
     if (options.search && options.search.trim()) {
@@ -1619,6 +1632,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         w.original_language as language,
         w.reading_status as readingStatus,
         w.reading_progress as readingProgress,
+        w.last_read_location as lastReadLocation,
+        w.created_at as createdAt,
         w.metadata_json as metadataJson,
         e.id as editionId,
         e.label as edition,
@@ -1663,7 +1678,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       LIMIT ? OFFSET ?
     `;
 
-    const rows = this.db.prepare(selectSql).all(...params, pageSize, offset) as any[];
+    const rows = this.db.prepare(selectSql).all(...params, pageSize, offset) as WorkRow[];
     const items = rows.map((r) => this.mapRowToBookItem(r));
 
     // Batch load lending history for paged books
@@ -1687,7 +1702,7 @@ export class SqliteWorkRepository implements IWorkRepository {
           FROM lending_record
           WHERE work_id IN (${placeholders})
           ORDER BY borrow_date DESC, created_at DESC
-        `).all(...workIds) as any[];
+        `).all(...workIds) as LoanRow[];
 
         const loansByWork = new Map<string, LendingRecord[]>();
         for (const r of loans) {
@@ -1792,7 +1807,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       const updateWork = this.db.prepare('UPDATE work SET metadata_json = ? WHERE id = ?');
       for (const workId of workIds) {
         const row = selectWork.get(workId) as { metadata_json?: string } | undefined;
-        let meta: Record<string, any> = {};
+        let meta: Partial<BookItem> = {};
         if (row?.metadata_json) {
           try {
             meta = JSON.parse(row.metadata_json);

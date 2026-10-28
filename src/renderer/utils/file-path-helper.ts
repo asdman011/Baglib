@@ -9,7 +9,7 @@
  */
 
 export async function resolveDroppedFilePath(file: File): Promise<string> {
-  const windowAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+  const windowAPI = typeof window !== 'undefined' ? (window).electronAPI : null;
 
   // 1. Try webUtils via preload API
   let resolvedPath = '';
@@ -23,7 +23,7 @@ export async function resolveDroppedFilePath(file: File): Promise<string> {
 
   // 2. Fallback to older Electron / direct file.path
   if (!resolvedPath) {
-    resolvedPath = (file as any).path || '';
+    resolvedPath = (file).path || '';
   }
 
   // 3. If resolvedPath is an authentic absolute path (contains / or \), return it immediately

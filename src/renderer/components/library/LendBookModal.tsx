@@ -1,4 +1,6 @@
 'use client';
+import { errorMessage as getErrorMessage } from '../../../shared/errors';
+
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -26,7 +28,7 @@ interface LendBookModalProps {
   onSuccess: () => void;
 }
 
-export const LendBookModal: React.FC<LendBookModalProps> = ({
+const LendBookModalContent: React.FC<LendBookModalProps> = ({
   isOpen,
   book,
   onClose,
@@ -36,9 +38,9 @@ export const LendBookModal: React.FC<LendBookModalProps> = ({
 
   const [borrowerName, setBorrowerName] = useState('');
   const [borrowerContact, setBorrowerContact] = useState('');
-  const [borrowDate, setBorrowDate] = useState('');
-  const [expectedReturnDate, setExpectedReturnDate] = useState('');
-  const [conditionOut, setConditionOut] = useState('good');
+  const [borrowDate, setBorrowDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [expectedReturnDate, setExpectedReturnDate] = useState(() => { const due = new Date(); due.setDate(due.getDate() + 14); return due.toISOString().split('T')[0]; });
+  const [conditionOut, setConditionOut] = useState(() => String(book?.condition || 'good'));
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -47,27 +49,6 @@ export const LendBookModal: React.FC<LendBookModalProps> = ({
   // Initialize dates and condition on open
   useEffect(() => {
     if (isOpen && book) {
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-      setBorrowDate(todayStr);
-
-      // Default expected return date: +14 days
-      const due = new Date(today);
-      due.setDate(due.getDate() + 14);
-      setExpectedReturnDate(due.toISOString().split('T')[0]);
-
-      setBorrowerName('');
-      setBorrowerContact('');
-      setNotes('');
-      setErrorMessage(null);
-
-      // Match current book condition if available
-      if (book.condition) {
-        setConditionOut(String(book.condition));
-      } else {
-        setConditionOut('good');
-      }
-
       // Fetch known past borrowers for autocomplete
       if (typeof window !== 'undefined' && window.electronAPI?.lending?.getBorrowers) {
         window.electronAPI.lending
@@ -115,9 +96,9 @@ export const LendBookModal: React.FC<LendBookModalProps> = ({
       await refreshBooks();
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/lending] Borrow book failed:', err);
-      setErrorMessage(err?.message || (lang === 'ar' ? 'فشلت عملية الإعارة' : 'Loan failed'));
+      setErrorMessage(getErrorMessage(err) || (lang === 'ar' ? 'فشلت عملية الإعارة' : 'Loan failed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -335,3 +316,5 @@ export const LendBookModal: React.FC<LendBookModalProps> = ({
     </div>
   );
 };
+
+export const LendBookModal: React.FC<LendBookModalProps> = props => props.isOpen ? <LendBookModalContent {...props} key={props.book?.id} /> : null;

@@ -39,7 +39,7 @@ export interface BaglibReaderPlugin {
   description?: string;
   type: ReaderPluginType;
   enabled: boolean;
-  settings?: Record<string, any>;
+  settings?: Record<string, unknown>;
   customCss?: string;
   supportedLanguages?: string[];
 

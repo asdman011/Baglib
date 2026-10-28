@@ -13,7 +13,7 @@ export interface IStorageProvider {
   /**
    * Tests connectivity, credentials, and directory/bucket access.
    */
-  testConnection(): Promise<SyncOperationResult<{ reachable: boolean; details?: any }>>;
+  testConnection(): Promise<SyncOperationResult<{ reachable: boolean; details?: unknown }>>;
 
   /**
    * Lists files and folders at the specified remote path.

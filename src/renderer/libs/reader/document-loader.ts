@@ -182,14 +182,14 @@ export class DocumentLoader {
         ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
         ext === 'png' ? 'image/png' :
         ext === 'svg' ? 'image/svg+xml' : 'application/octet-stream';
-      return new Blob([data as any], { type: mime });
+      return new Blob([new Uint8Array(data)], { type: mime });
     };
 
     const getSize = (name: string) => entryMap.get(name)?.length || 0;
 
     // Load foliate-js EPUB engine
     const { EPUB } = await import('foliate-js/epub.js');
-    const epub = new (EPUB as any)({
+    const epub = new EPUB({
       loadText,
       loadBlob,
       getSize,
@@ -243,7 +243,7 @@ export class DocumentLoader {
         ext === 'otf' ? 'font/otf' :
         'application/octet-stream';
 
-      const blob = new Blob([data as any], { type: mime });
+      const blob = new Blob([new Uint8Array(data)], { type: mime });
       const url = URL.createObjectURL(blob);
       blobUrls.set(foundPath, url);
       return url;
@@ -274,7 +274,7 @@ export class DocumentLoader {
     };
 
     // Enhance sections with Warichu / Sharh transformation, styling, and syntax highlighting
-    const enhancedSections: SectionItem[] = initialized.sections.map((section: any, idx: number) => {
+    const enhancedSections: SectionItem[] = initialized.sections.map((section: SectionItem, idx: number) => {
       const originalCreateDoc = section.createDocument ? section.createDocument.bind(section) : null;
 
       return {
@@ -370,7 +370,7 @@ export class DocumentLoader {
       };
     });
 
-    const mapTocItem = (t: any, idx: number, parentPrefix = ''): TOCItem => {
+    const mapTocItem = (t: import('foliate-js/epub.js').FoliateTOC, idx: number, parentPrefix = ''): TOCItem => {
       const id = t.id ?? (parentPrefix ? `${parentPrefix}-${idx + 1}` : idx + 1);
       const subitems = t.subitems || t.children;
       return {
@@ -379,7 +379,7 @@ export class DocumentLoader {
         href: t.href || '',
         index: typeof t.index === 'number' ? t.index : (parentPrefix ? -1 : idx),
         subitems: Array.isArray(subitems) && subitems.length > 0
-          ? subitems.map((sub: any, sIdx: number) => mapTocItem(sub, sIdx, String(id)))
+          ? subitems.map((sub, sIdx: number) => mapTocItem(sub, sIdx, String(id)))
           : undefined,
       };
     };
@@ -396,7 +396,7 @@ export class DocumentLoader {
       },
       rendition: initialized.rendition || { layout: 'reflowable', spread: 'auto' },
       dir: initialized.dir === 'rtl' ? 'rtl' : 'ltr',
-      toc: (initialized.toc || []).map((t: any, i: number) => mapTocItem(t, i)),
+      toc: (initialized.toc || []).map((t: import('foliate-js/epub.js').FoliateTOC, i: number) => mapTocItem(t, i)),
       sections: enhancedSections,
       splitTOCHref: initialized.splitTOCHref?.bind(initialized),
       resolveHref: initialized.resolveHref?.bind(initialized),
@@ -419,7 +419,7 @@ export class DocumentLoader {
    */
   private async makeMobiBook(bytes: Uint8Array): Promise<BookDoc> {
     const { MOBI } = await import('foliate-js/mobi.js');
-    const mobi = new (MOBI as any)({ unzlib: fflate.unzlibSync });
+    const mobi = new MOBI({ unzlib: fflate.unzlibSync });
     const opened = await mobi.open(bytes);
 
     return {
@@ -432,7 +432,7 @@ export class DocumentLoader {
       rendition: opened.rendition || { layout: 'reflowable', spread: 'auto' },
       dir: opened.dir === 'rtl' ? 'rtl' : 'ltr',
       toc: opened.toc || [],
-      sections: (opened.sections || []).map((sec: any, idx: number) => ({
+      sections: (opened.sections || []).map((sec: SectionItem, idx: number) => ({
         id: sec.id || `mobi_sec_${idx}`,
         size: sec.size || 0,
         loadText: sec.loadText ? sec.loadText.bind(sec) : undefined,
@@ -466,14 +466,14 @@ export class DocumentLoader {
 
     const { makeFB2 } = await import('foliate-js/fb2.js');
     const fb2Blob = new Blob([rawXml], { type: 'application/x-fictionbook+xml' });
-    const fb2 = await (makeFB2 as any)(fb2Blob);
+    const fb2 = await (makeFB2)(fb2Blob);
 
     return {
       metadata: fb2.metadata || { title: this.filename.replace(/\.[^/.]+$/, '') },
       rendition: { layout: 'reflowable', spread: 'auto' },
       dir: fb2.dir === 'rtl' ? 'rtl' : 'ltr',
       toc: fb2.toc || [],
-      sections: (fb2.sections || []).map((s: any, idx: number) => ({
+      sections: (fb2.sections || []).map((s: SectionItem, idx: number) => ({
         id: s.id || `fb2_sec_${idx}`,
         size: s.size || 0,
         loadText: s.loadText ? s.loadText.bind(s) : undefined,
@@ -564,7 +564,7 @@ export class DocumentLoader {
 
           const formattedHtml = transformClassicalGlosses(bodyHtml);
           if (typeof document === 'undefined') {
-            return { body: { innerHTML: formattedHtml } } as any;
+            return { body: { innerHTML: formattedHtml } } as unknown as Document;
           }
 
           const doc = document.implementation.createHTMLDocument(label);
@@ -635,7 +635,7 @@ export class DocumentLoader {
           createDocument: async () => {
             const bodyHtml = paragraphs.map((p) => `<p>${p}</p>`).join('');
             if (typeof document === 'undefined') {
-              return { body: { innerHTML: bodyHtml } } as any;
+              return { body: { innerHTML: bodyHtml } } as unknown as Document;
             }
             const d = document.implementation.createHTMLDocument(title);
             d.body.innerHTML = transformClassicalGlosses(bodyHtml);
@@ -702,7 +702,7 @@ export class DocumentLoader {
         {
           id: 'pdf_full',
           size: bytes.length,
-          loadBlob: async () => new Blob([bytes as any], { type: 'application/pdf' }),
+          loadBlob: async () => new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }),
           createDocument: async () => {
             const doc = document.implementation.createHTMLDocument(title);
             return doc;

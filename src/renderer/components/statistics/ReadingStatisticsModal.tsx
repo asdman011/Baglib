@@ -52,11 +52,11 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
   const loadData = async () => {
     setLoading(true);
     try {
-      if ((window as any).electronAPI?.statistics) {
+      if ((window).electronAPI?.statistics) {
         const [streak, heatmap, books] = await Promise.all([
-          (window as any).electronAPI.statistics.getStreakStats(),
-          (window as any).electronAPI.statistics.getDailyHeatmap(365),
-          (window as any).electronAPI.statistics.getAllBookStats(),
+          (window).electronAPI.statistics.getStreakStats(),
+          (window).electronAPI.statistics.getDailyHeatmap(365),
+          (window).electronAPI.statistics.getAllBookStats(),
         ]);
         setStreakStats(streak);
         setHeatmapData(heatmap || []);
@@ -69,9 +69,20 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
     }
   };
 
+  const [previousStatsVisibility, setPreviousStatsVisibility] = useState<readonly unknown[] | null>(null);
+  const inputsStatsVisibility = [isOpen];
+  if (previousStatsVisibility === null || inputsStatsVisibility.some((value, index) => !Object.is(value, previousStatsVisibility[index]))) {
+    setPreviousStatsVisibility(inputsStatsVisibility);
+    if (isOpen) setLoading(true);
+  }
   useEffect(() => {
     if (isOpen) {
-      loadData();
+      let alive = true;
+      const statistics = window.electronAPI.statistics;
+      void Promise.all([statistics.getStreakStats(), statistics.getDailyHeatmap(365), statistics.getAllBookStats()]).then(([streak, heatmap, books]) => {
+        if (alive) { setStreakStats(streak); setHeatmapData(heatmap || []); setBooksStats(books || []); }
+      }).catch(console.warn).finally(() => { if (alive) setLoading(false); });
+      return () => { alive = false; };
     }
   }, [isOpen]);
 

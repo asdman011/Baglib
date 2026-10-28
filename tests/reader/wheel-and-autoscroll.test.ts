@@ -85,8 +85,8 @@ describe('Reader EPUB Mouse Wheel & Hands-Free Auto-Scroll Tests', () => {
         },
       };
 
-      if (typeof (mockBookDoc as any)?.rendition?.next === 'function') {
-        (mockBookDoc as any).rendition.next();
+      if (typeof (mockBookDoc as unknown)?.rendition?.next === 'function') {
+        (mockBookDoc as unknown).rendition.next();
       } else {
         fallbackNextCalled = true;
       }
@@ -127,7 +127,7 @@ describe('Reader EPUB Mouse Wheel & Hands-Free Auto-Scroll Tests', () => {
     it('cycles through supported speed presets: 0.5x -> 1x -> 1.5x -> 2x -> 0.5x', () => {
       const speeds = [0.5, 1, 1.5, 2] as const;
       const cycleSpeed = (current: number) => {
-        const nextIdx = (speeds.indexOf(current as any) + 1) % speeds.length;
+        const nextIdx = (speeds.indexOf(current as unknown) + 1) % speeds.length;
         return speeds[nextIdx];
       };
 
@@ -202,7 +202,7 @@ describe('Reader EPUB Mouse Wheel & Hands-Free Auto-Scroll Tests', () => {
 
     it('ensures all Auto-Scroll translation keys are defined in Arabic', () => {
       for (const key of autoScrollKeys) {
-        const val = (translations.ar as any)[key];
+        const val = (translations.ar as unknown)[key];
         assert.ok(val, `Missing Arabic translation for key: ${key}`);
         assert.ok(typeof val === 'string' && val.length > 0);
       }
@@ -210,7 +210,7 @@ describe('Reader EPUB Mouse Wheel & Hands-Free Auto-Scroll Tests', () => {
 
     it('ensures all Auto-Scroll translation keys are defined in English', () => {
       for (const key of autoScrollKeys) {
-        const val = (translations.en as any)[key];
+        const val = (translations.en as unknown)[key];
         assert.ok(val, `Missing English translation for key: ${key}`);
         assert.ok(typeof val === 'string' && val.length > 0);
       }

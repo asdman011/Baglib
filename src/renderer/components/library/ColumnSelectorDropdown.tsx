@@ -106,7 +106,7 @@ export const ColumnSelectorDropdown: React.FC<ColumnSelectorDropdownProps> = ({
                   }`}
                 >
                   <span className={isVisible ? 'font-medium text-foreground' : 'text-muted'}>
-                    {t(col.labelKey as any)}
+                    {t(col.labelKey as import('../../translations').TranslationKey)}
                   </span>
                   <div
                     className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${

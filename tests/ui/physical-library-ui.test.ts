@@ -72,11 +72,11 @@ describe('Story 8 UI & Physical Library Bilingual Tests', () => {
     test('all required physical library keys exist in both Arabic and English', () => {
       for (const key of requiredKeys) {
         assert.ok(
-          (translations.ar as any)[key],
+          (translations.ar as unknown)[key],
           `Missing Arabic translation for key: ${key}`
         );
         assert.ok(
-          (translations.en as any)[key],
+          (translations.en as unknown)[key],
           `Missing English translation for key: ${key}`
         );
       }

@@ -20,7 +20,7 @@ interface ZenTocDrawerProps {
   bookmarkedPages: number[];
   onJumpToPage: (page: number) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  pdfDoc?: any;
+  pdfDoc?: import('pdfjs-dist').PDFDocumentProxy | null;
   paginatedPages?: Array<{ pageNumber: number; text?: string; html?: string }>;
 }
 

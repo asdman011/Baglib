@@ -1,4 +1,6 @@
 'use client';
+import { errorMessage } from '../../../shared/errors';
+
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -156,7 +158,7 @@ export const SearchHubModal: React.FC = () => {
 
       // SQLite FTS5 Full-Text Search Branch (KEY-140)
       if (targetScope === 'fulltext') {
-        const windowAPI = typeof window !== 'undefined' ? (window as any).api : null;
+        const windowAPI = typeof window !== 'undefined' ? (window).electronAPI : null;
         if (windowAPI?.searchLibraryFullText) {
           try {
             const ftsRes = await windowAPI.searchLibraryFullText(trimmed);
@@ -256,9 +258,9 @@ export const SearchHubModal: React.FC = () => {
         showToast(res.error || 'Import failed');
         return false;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib:search-hub] importResult error:', err);
-      showToast(err?.message || 'Import failed');
+      showToast(errorMessage(err) || 'Import failed');
       return false;
     }
   };

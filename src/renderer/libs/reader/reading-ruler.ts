@@ -174,11 +174,11 @@ export function getCaretRangeFromPoint(
   x: number,
   y: number
 ): Range | null {
-  if (typeof (doc as any).caretRangeFromPoint === 'function') {
-    return (doc as any).caretRangeFromPoint(x, y);
+  if (typeof (doc).caretRangeFromPoint === 'function') {
+    return (doc).caretRangeFromPoint(x, y);
   }
-  if (typeof (doc as any).caretPositionFromPoint === 'function') {
-    const pos = (doc as any).caretPositionFromPoint(x, y);
+  if (typeof (doc).caretPositionFromPoint === 'function') {
+    const pos = (doc).caretPositionFromPoint(x, y);
     if (pos && pos.offsetNode) {
       const range = doc.createRange();
       range.setStart(pos.offsetNode, pos.offset);

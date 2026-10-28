@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Library Genesis (LibGen / libgen.li) Metadata Provider
  *
@@ -17,6 +18,14 @@
 import { isValidIsbn } from '../../../shared/validators/metadata-validator';
 import { parseHTML } from 'linkedom';
 import type { EnrichmentCandidateEdition } from '../../../shared/types/enrichment';
+
+interface LibgenRecord {
+  e_id?: string; id?: string; f_id?: string; title?: string; author?: string; publisher?: string;
+  year?: string | number; pages?: string | number; series_name?: string; cover_url?: string;
+  cover_exists?: string | number; md5?: string; extension?: string; filesize?: string | number;
+  locator?: string; libgen_id?: string | number; add?: Record<string, unknown>;
+  editions?: Record<string, LibgenRecord>; files?: Record<string, LibgenRecord>;
+}
 
 export interface LibgenSearchResult {
   id: string;
@@ -129,7 +138,7 @@ export class LibgenProvider {
   /**
    * Helper: Performs a resilient JSON GET request with AbortController timeout
    */
-  public async fetchJson<T = any>(endpointUrl: string, timeoutMs = this.defaultTimeoutMs): Promise<T | null> {
+  public async fetchJson<T = unknown>(endpointUrl: string, timeoutMs = this.defaultTimeoutMs): Promise<T | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -150,9 +159,9 @@ export class LibgenProvider {
       }
 
       return (await resp.json()) as T;
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timer);
-      console.warn(`[LibgenProvider] Error fetching ${endpointUrl}:`, err?.message || err);
+      console.warn(`[LibgenProvider] Error fetching ${endpointUrl}:`, errorMessage(err) || err);
       return null;
     }
   }
@@ -160,11 +169,11 @@ export class LibgenProvider {
   /**
    * Helper: Extract values for a specific numeric key from the 'add' map
    */
-  public getAddValues(addObj?: Record<string, any>, targetKey?: string): string[] {
+  public getAddValues(addObj?: Record<string, unknown>, targetKey?: string): string[] {
     if (!addObj || typeof addObj !== 'object') return [];
     const values: string[] = [];
     for (const item of Object.values(addObj)) {
-      if (item && typeof item === 'object') {
+      if (item && typeof item === 'object' && 'key' in item && 'value' in item) {
         if (!targetKey || String(item.key) === String(targetKey)) {
           if (item.value && typeof item.value === 'string' && item.value.trim()) {
             values.push(item.value.trim());
@@ -219,14 +228,14 @@ export class LibgenProvider {
     const cleanHash = hash.trim().toLowerCase();
     const fileUrl = `${mirror}/json.php?object=f&${hashType}=${encodeURIComponent(cleanHash)}&fields=*&addkeys=851,852,877`;
 
-    const fileData = await this.fetchJson<Record<string, any>>(fileUrl);
+    const fileData = await this.fetchJson<Record<string, LibgenRecord>>(fileUrl);
     if (!fileData || typeof fileData !== 'object' || Object.keys(fileData).length === 0) {
       return [];
     }
 
     const editionIds: string[] = [];
-    const filesByEid: Record<string, any[]> = {};
-    const fileRecords: any[] = [];
+    const filesByEid: Record<string, LibgenRecord[]> = {};
+    const fileRecords: LibgenRecord[] = [];
 
     for (const [fid, fRec] of Object.entries(fileData)) {
       const fileObj = { ...fRec, f_id: fRec.f_id || fid };
@@ -234,7 +243,7 @@ export class LibgenProvider {
 
       if (fileObj.editions && typeof fileObj.editions === 'object') {
         for (const [_, eInfo] of Object.entries(fileObj.editions)) {
-          const eid = String((eInfo as any).e_id || (eInfo as any).id || '');
+          const eid = String(eInfo.e_id || eInfo.id || '');
           if (eid && !editionIds.includes(eid)) {
             editionIds.push(eid);
             if (!filesByEid[eid]) filesByEid[eid] = [];
@@ -252,7 +261,7 @@ export class LibgenProvider {
     // Step 4 of Path A: Hydrate edition metadata
     const addKeys = '10,101,102,401,505,606,630,863,920,945,990,995,996';
     const editionUrl = `${mirror}/json.php?object=e&ids=${editionIds.slice(0, 10).join(',')}&fields=*&addkeys=${addKeys}`;
-    const editionData = await this.fetchJson<Record<string, any>>(editionUrl);
+    const editionData = await this.fetchJson<Record<string, LibgenRecord>>(editionUrl);
 
     if (!editionData || typeof editionData !== 'object') {
       return fileRecords.map((f, i) => this.mapFileOnlyResult(f, mirror, i));
@@ -276,7 +285,7 @@ export class LibgenProvider {
     const cleanId = identifier.trim().replace(/[-\s]/g, '');
     const url = `${mirror}/json.php?object=e&${type}=${encodeURIComponent(cleanId)}&fields=*&addkeys=*`;
 
-    const data = await this.fetchJson<Record<string, any>>(url);
+    const data = await this.fetchJson<Record<string, LibgenRecord>>(url);
     if (!data || typeof data !== 'object' || Object.keys(data).length === 0) {
       return [];
     }
@@ -284,7 +293,7 @@ export class LibgenProvider {
     const eIds = Object.keys(data);
     // Re-query with ids mode to ensure nested files subarray is fully embedded
     const batchUrl = `${mirror}/json.php?object=e&ids=${eIds.slice(0, 10).join(',')}&fields=*&addkeys=10,101,102,401,505,606,630,863,920,945,990,995,996`;
-    const hydrated = await this.fetchJson<Record<string, any>>(batchUrl);
+    const hydrated = await this.fetchJson<Record<string, LibgenRecord>>(batchUrl);
     const sourceData = hydrated && typeof hydrated === 'object' ? hydrated : data;
 
     const results: LibgenSearchResult[] = [];
@@ -327,8 +336,8 @@ export class LibgenProvider {
         return [];
       }
       html = await res.text();
-    } catch (err: any) {
-      console.warn(`[LibgenProvider] Gateway scrape failed:`, err?.message || err);
+    } catch (err: unknown) {
+      console.warn(`[LibgenProvider] Gateway scrape failed:`, errorMessage(err) || err);
       return [];
     }
 
@@ -345,7 +354,7 @@ export class LibgenProvider {
       const addKeys = '10,101,102,401,505,606,630,863,995,996';
       const hydrateUrl = `${mirror}/json.php?object=e&ids=${topIds}&fields=*&addkeys=${addKeys}`;
 
-      const jsonRecords = await this.fetchJson<Record<string, any>>(hydrateUrl);
+      const jsonRecords = await this.fetchJson<Record<string, LibgenRecord>>(hydrateUrl);
       if (jsonRecords && typeof jsonRecords === 'object' && Object.keys(jsonRecords).length > 0) {
         return previews.map((item) => {
           if (!item.editionId || !jsonRecords[item.editionId]) return item;
@@ -389,8 +398,8 @@ export class LibgenProvider {
    */
   public mapEditionToSearchResults(
     editionId: string,
-    eRec: any,
-    filesList: any[],
+    eRec: LibgenRecord,
+    filesList: LibgenRecord[],
     mirror: string
   ): LibgenSearchResult[] {
     const title = (eRec.title || '').trim() || 'Untitled Document';
@@ -448,7 +457,7 @@ export class LibgenProvider {
     }
 
     // Emit a distinct candidate for each file representation (PDF, EPUB, etc.)
-    return filesList.map((f: any, idx: number) => {
+    return filesList.map((f: LibgenRecord, idx: number) => {
       const md5 = (f.md5 || '').trim().toLowerCase();
       const format = (f.extension || 'PDF').toUpperCase();
       const ipfsCid = this.getAddValues(f.add, '877')[0];
@@ -490,7 +499,7 @@ export class LibgenProvider {
   /**
    * Helper: Map a file-only record when no edition was linked
    */
-  private mapFileOnlyResult(f: any, mirror: string, index: number): LibgenSearchResult {
+  private mapFileOnlyResult(f: LibgenRecord, mirror: string, index: number): LibgenSearchResult {
     const md5 = (f.md5 || '').trim().toLowerCase();
     const format = (f.extension || 'PDF').toUpperCase();
     const title = f.locator || (md5 ? `LibGen Document ${md5.slice(0, 8)}` : `Document ${index + 1}`);
@@ -544,7 +553,7 @@ export class LibgenProvider {
       description: res.description,
       coverUrl: res.coverUrl,
       downloadUrl: res.downloadUrl,
-      downloadFormat: (res.format || 'PDF') as any,
+      downloadFormat: (res.format || 'PDF') as import('../../../shared/types/work').DigitalFormat,
       sourceUrl: res.detailUrl,
       pageCount: res.pages ? parseInt(res.pages, 10) : undefined,
       matchConfidence: res.isbn ? 0.95 : res.md5 ? 0.9 : 0.8,

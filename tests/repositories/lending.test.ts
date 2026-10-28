@@ -102,7 +102,7 @@ describe('Lending History Repository Tests (Task 4.4)', () => {
 
     const loans = repo.getLendingHistory('book-lend-2');
     assert.strictEqual(loans.length, 1);
-    assert.strictEqual((loans[0] as any).status, 'overdue');
+    assert.strictEqual((loans[0] as unknown).status, 'overdue');
 
     const activeList = repo.getActiveLoans();
     assert.strictEqual(activeList[0].status, 'overdue');

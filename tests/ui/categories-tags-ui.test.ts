@@ -194,8 +194,8 @@ describe('Categories & Tags UI & Integration Tests (Story 10 / KEY-117)', () => 
   });
 
   describe('Preload API Definition Integrity', () => {
-    it('verifies categories and tags namespaces are exposed in API structure', () => {
-      const { API } = require('../../src/preload/index');
+    it('verifies categories and tags namespaces are exposed in API structure', async () => {
+      const { API } = await import('../../src/preload/index');
       assert.ok(API.categories, 'API.categories namespace should exist');
       assert.strictEqual(typeof API.categories.getTree, 'function');
       assert.strictEqual(typeof API.categories.getAll, 'function');

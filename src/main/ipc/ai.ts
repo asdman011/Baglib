@@ -1,3 +1,4 @@
+import { errorMessage } from '../../shared/errors';
 /**
  * Baglib — AI Research Assistant & Translation IPC Handlers (KEY-143)
  */
@@ -53,11 +54,11 @@ export function registerAIIpc(): void {
     try {
       const service = getAIService();
       return await service.testConnection(customSettings);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn('[IPC:ai:test-connection] Error:', err);
       return {
         success: false,
-        message: err.message || 'Connection test failed',
+        message: errorMessage(err) || 'Connection test failed',
       };
     }
   });
@@ -67,10 +68,10 @@ export function registerAIIpc(): void {
     try {
       const service = getAIService();
       return await service.executeTool(payload);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn('[IPC:ai:execute-tool] Error:', err);
       return {
-        content: `Error executing AI research tool: ${err.message}`,
+        content: `Error executing AI research tool: ${errorMessage(err)}`,
         tool: payload.tool,
         spoilerPrevented: false,
         providerUsed: 'error',
@@ -86,10 +87,10 @@ export function registerAIIpc(): void {
       const settings = service.getSettings();
       const transService = getTranslationService();
       return await transService.translate(options, settings);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn('[IPC:ai:translate] Error:', err);
       return {
-        translatedText: `Translation error: ${err.message}`,
+        translatedText: `Translation error: ${errorMessage(err)}`,
         targetLang: options.targetLang || 'ar',
         providerUsed: 'error',
       };

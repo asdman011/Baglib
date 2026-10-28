@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Check,
@@ -28,14 +28,14 @@ import { useWorkspace } from '../context/WorkspaceContext';
 
 export interface DiffFieldItem {
   id: string;
-  labelKey: string;
+  labelKey: import('../../translations').TranslationKey;
   icon: React.ComponentType<{ className?: string }>;
-  currentValue: any;
-  incomingValue: any;
+  currentValue: unknown;
+  incomingValue: unknown;
   hasCurrent: boolean;
   hasIncoming: boolean;
   isDifferent: boolean;
-  renderValue?: (val: any) => React.ReactNode;
+  renderValue?: (val: unknown) => React.ReactNode;
 }
 
 interface MetadataDiffModalProps {
@@ -180,9 +180,9 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
         hasCurrent: Boolean(currentBook.categories && currentBook.categories.length > 0),
         hasIncoming: Boolean(incomingCategories && incomingCategories.length > 0),
         isDifferent: JSON.stringify(currentBook.categories || []) !== JSON.stringify(incomingCategories || []),
-        renderValue: (val: string[]) => (
+        renderValue: (val: unknown) => (
           <div className="flex flex-wrap gap-1">
-            {val && val.length > 0 ? (
+            {Array.isArray(val) && val.length > 0 ? (
               val.slice(0, 4).map((c, i) => (
                 <span key={i} className="px-2 py-0.5 rounded-md bg-canvas border border-subtle text-[11px] font-medium">
                   {c}
@@ -191,7 +191,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
             ) : (
               <span className="text-muted italic text-xs">{lang === 'ar' ? 'فارغ' : 'Empty'}</span>
             )}
-            {val && val.length > 4 && (
+            {Array.isArray(val) && val.length > 4 && (
               <span className="text-[10px] text-muted self-center">+{val.length - 4}</span>
             )}
           </div>
@@ -226,8 +226,8 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
         hasCurrent: Boolean(currentBook.coverImage?.trim()),
         hasIncoming: Boolean(incomingCover?.trim()),
         isDifferent: (currentBook.coverImage || '').trim() !== (incomingCover || '').trim(),
-        renderValue: (val: string) => (
-          val ? (
+        renderValue: (val: unknown) => (
+          typeof val === 'string' && val ? (
             <div className="flex items-center gap-2">
               <div className="w-9 h-12 rounded-lg bg-surface border border-subtle overflow-hidden shrink-0 shadow-xs">
                 <img src={val} alt="Cover" className="w-full h-full object-cover" />
@@ -258,13 +258,18 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
   });
 
   // Re-sync selections whenever incoming candidate or current book diffFields change
-  useEffect(() => {
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [diffFields];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
     const next: Record<string, boolean> = {};
     for (const f of diffFields) {
       next[f.id] = f.hasIncoming;
     }
     setSelectedFieldIds(next);
-  }, [diffFields]);
+
+  }
 
   if (!isOpen) return null;
 
@@ -307,7 +312,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
       updates.authorBio = incomingAuthorBio;
     }
 
-    const prov: any = {
+    const prov: import('../../../shared/types/work').MetadataProvenance & { fieldSources: NonNullable<import('../../../shared/types/work').MetadataProvenance['fieldSources']> } = {
       ...(currentBook.metadataProvenance || {}),
       primaryProvider: providerName,
       providerId: incomingWork.workId,
@@ -461,7 +466,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
                       <Icon className="w-4 h-4" />
                     </div>
                     <span className="font-bold text-main">
-                      {t(field.labelKey as any)}
+                      {t(field.labelKey)}
                     </span>
                     {field.hasCurrent && field.isDifferent && (
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">

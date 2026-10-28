@@ -69,7 +69,7 @@ export interface MetadataProvenance {
   fieldSources?: Record<string, {
     source: string;
     status: 'verified' | 'extracted' | 'calculated' | 'fallback' | 'user_override';
-    value?: any;
+    value?: unknown;
     confidence?: number;
     rawMatch?: string;
   }>;
@@ -82,7 +82,7 @@ export interface MetadataProvenance {
     latencyMs?: number;
   }[];
   auditTrace?: string[];
-  rawBibliographic?: any;
+  rawBibliographic?: unknown;
 }
 
 export interface BookItem {
@@ -102,6 +102,8 @@ export interface BookItem {
   pagesCount?: number;
   readingStatus?: ReadingStatus;
   readingProgress?: number;
+  lastReadLocation?: string;
+  createdAt?: string;
 
   // General Description & Author Bio
   description?: string;
@@ -214,6 +216,8 @@ export interface BookItemInput {
   pagesCount?: number;
   readingStatus?: ReadingStatus;
   readingProgress?: number;
+  lastReadLocation?: string;
+  createdAt?: string;
 
   // General Description & Author Bio
   description?: string;
@@ -253,6 +257,9 @@ export interface BookItemInput {
   scriptType?: string;
   folioCount?: number | string;
   contributors?: Contributor[];
+
+  acquisition?: BookItem['acquisition'];
+  physicalLocation?: BookItem['physicalLocation'];
 
   // Location & Categorization
   shelf?: string;

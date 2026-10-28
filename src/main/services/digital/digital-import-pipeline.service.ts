@@ -1,3 +1,4 @@
+import { errorMessage, errorCode } from '../../../shared/errors';
 import path from 'path';
 import { hashImportFile } from './import-files';
 import { app } from 'electron';
@@ -146,13 +147,13 @@ export class DigitalImportPipelineService {
         if (targetId) {
           const format = validation.format || options.targetFormat || 'PDF';
           const extracted = await this.extractForImport(filePath, format);
-          const existingWork = (this.getRepository().getById(targetId) as any) || dup.existingWork;
+          const existingWork = (this.getRepository().getById(targetId)) || dup.existingWork;
 
           // Non-Destructive Merge Policy: Existing curated metadata wins!
           const hasCuratedTitle = Boolean(
             existingWork?.title && existingWork.title.trim() !== '' && !isPlaceholderTitle(existingWork.title)
           );
-          const finalTitle = hasCuratedTitle ? existingWork.title : (extracted.title || fileName);
+          const finalTitle = hasCuratedTitle && existingWork ? existingWork.title : (extracted.title || fileName);
 
           const hasCuratedAuthor = Boolean(
             existingWork?.author &&
@@ -162,7 +163,7 @@ export class DigitalImportPipelineService {
             !isPlaceholderAuthor(existingWork.author)
           );
           const finalAuthor = hasCuratedAuthor
-            ? existingWork.author
+            ? existingWork!.author
             : (extracted.authors?.[0] || existingWork?.author || 'Unknown Author');
 
           const finalPublisher =
@@ -310,7 +311,7 @@ export class DigitalImportPipelineService {
       // Merge tags
       const mergedTags = Array.from(new Set([...(extracted.tags || []), ...(options.tags || [])]));
 
-      let initialProvenance: any = undefined;
+      let initialProvenance: import('../../../shared/types/work').MetadataProvenance | undefined = undefined;
       if (extracted.editionDetails?.rawMatch || extracted.edition) {
         initialProvenance = {
           primaryProvider: 'Local Container Extractor',
@@ -396,7 +397,7 @@ export class DigitalImportPipelineService {
           identifiers: extracted.identifiers,
         },
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(`[DigitalImportPipeline] Import failed for ${filePath}:`, err);
       return {
         success: false,
@@ -404,8 +405,8 @@ export class DigitalImportPipelineService {
         fileName,
         fileSizeBytes: validation.fileSizeBytes,
         format: validation.format,
-        errorCode: err?.code === 'METADATA_ERROR' ? 'METADATA_ERROR' : 'DB_ERROR',
-        error: err?.code === 'METADATA_ERROR' ? String(err.message) : `خطأ أثناء تسجيل الكتاب في قاعدة البيانات: ${err?.message || err} / Database error registering digital book: ${err?.message || err}`,
+        errorCode: errorCode(err) === 'METADATA_ERROR' ? 'METADATA_ERROR' : 'DB_ERROR',
+        error: errorCode(err) === 'METADATA_ERROR' ? String(errorMessage(err)) : `خطأ أثناء تسجيل الكتاب في قاعدة البيانات: ${errorMessage(err) || err} / Database error registering digital book: ${errorMessage(err) || err}`,
       };
     }
   }
@@ -464,14 +465,14 @@ export class DigitalImportPipelineService {
           progressPercentage: Math.round(((i + 1) / totalFiles) * 100),
           error: result.error,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         const errResult: DigitalImportResult = {
           success: false,
           filePath: opt.filePath,
           fileName,
           fileSizeBytes: 0,
           errorCode: 'IMPORT_ERROR',
-          error: err?.message || 'خطأ غير متوقع أثناء الاستيراد / Unexpected error during import',
+          error: errorMessage(err) || 'خطأ غير متوقع أثناء الاستيراد / Unexpected error during import',
         };
         results.push(errResult);
 

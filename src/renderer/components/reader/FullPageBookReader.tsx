@@ -108,6 +108,10 @@ import {
   clearActiveTtsHighlight,
   HIGHLIGHT_COLORS,
 } from '../../libs/reader/highlight-manager';
+import { useReaderPanels } from './useReaderPanels';
+import { PdfWorkstationPanel } from './PdfWorkstationPanel';
+import { OcrInspectorDrawer } from './OcrInspectorDrawer';
+import { OcrQuickActionPill } from './OcrQuickActionPill';
 import { PdfNativeViewer, type PdfSelectionInfo, type NormalizedRect } from './PdfNativeViewer';
 import { HighlightActionPopover } from './HighlightActionPopover';
 import { segmentTextIntoSentences } from '../../../shared/utils/tts-text';
@@ -129,6 +133,9 @@ export const FullPageBookReader: React.FC = () => {
     t,
   } = useWorkspace();
 
+  const panels = useReaderPanels();
+  const isDocumentPanelOpen = panels.activePanel === 'document';
+  const setIsDocumentPanelOpen = panels.setters.document;
   const [selectedText, setSelectedText] = useState('');
   const [activeRange, setActiveRange] = useState<Range | null>(null);
   const [newNoteText, setNewNoteText] = useState('');
@@ -136,6 +143,10 @@ export const FullPageBookReader: React.FC = () => {
   const [viewType, setViewType] = useState<'text_manuscript' | 'native_pdf'>('native_pdf');
   const [assetUrl, setAssetUrl] = useState<string | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfSourceRevision, setPdfSourceRevision] = useState(0);
+  useEffect(() => window.electronAPI?.pdfEditor?.onSourceChanged(source => {
+    if (source.workId === activeBook?.id) setPdfSourceRevision(previous => previous + 1);
+  }), [activeBook?.id]);
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(1);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
 
@@ -159,7 +170,8 @@ export const FullPageBookReader: React.FC = () => {
     'HTML',
   ].includes(effectiveFormat);
   const [readerDirection, setReaderDirection] = useState<'rtl' | 'ltr'>('ltr');
-  const [isTocOpen, setIsTocOpen] = useState<boolean>(false);
+  const isTocOpen = panels.activePanel === 'toc';
+  const setIsTocOpen = panels.setters['toc'];
   const [currentSectionHtml, setCurrentSectionHtml] = useState<string>('');
   const [comicPageUrl, setComicPageUrl] = useState<string | null>(null);
   const [secondComicPageUrl, setSecondComicPageUrl] = useState<string | null>(null);
@@ -169,9 +181,12 @@ export const FullPageBookReader: React.FC = () => {
   const [isTopBarVisible, setIsTopBarVisible] = useState<boolean>(false);
   const [isBottomBarVisible, setIsBottomBarVisible] = useState<boolean>(false);
   const [isIdle, setIsIdle] = useState<boolean>(false);
-  const [isTocPinned, setIsTocPinned] = useState<boolean>(false);
-  const [isKnowledgeDrawerOpen, setIsKnowledgeDrawerOpen] = useState<boolean>(false);
-  const [isKnowledgePinned, setIsKnowledgePinned] = useState<boolean>(false);
+  const isTocPinned = panels.tocPinned;
+  const setIsTocPinned = panels.pinToc;
+  const isKnowledgeDrawerOpen = panels.activePanel === 'knowledge';
+  const setIsKnowledgeDrawerOpen = panels.setters['knowledge'];
+  const isKnowledgePinned = panels.knowledgePinned;
+  const setIsKnowledgePinned = panels.pinKnowledge;
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemDTO[]>([]);
   const [previousJumpPage, setPreviousJumpPage] = useState<number | null>(null);
   const [autoCropMargins, setAutoCropMargins] = useState<boolean>(false);
@@ -198,14 +213,15 @@ export const FullPageBookReader: React.FC = () => {
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const topHoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const bottomHoverTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const sessionStartTimeRef = useRef<number>(Date.now());
+  const sessionStartTimeRef = useRef<number>(0);
+  useEffect(() => { sessionStartTimeRef.current = Date.now(); }, []);
   const startPageRef = useRef<number>(readingPage);
 
   // EPUB & Reflowable Pagination State
   const [paginatedPages, setPaginatedPages] = useState<FormattedPage[]>([]);
   const [tocPageMap, setTocPageMap] = useState<Map<string | number, number>>(new Map());
   const [isPaginating, setIsPaginating] = useState<boolean>(false);
-  const [pdfDocProxy, setPdfDocProxy] = useState<any>(null);
+  const [pdfDocProxy, setPdfDocProxy] = useState<import('pdfjs-dist').PDFDocumentProxy | null>(null);
 
   // View Modes & Typography State
   const [viewMode, setViewMode] = useState<ReaderViewMode>('single');
@@ -220,7 +236,8 @@ export const FullPageBookReader: React.FC = () => {
   const [wideComicSpread, setWideComicSpread] = useState<boolean>(true);
 
   // Panels & Focus Aids
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const isSettingsOpen = panels.activePanel === 'settings';
+  const setIsSettingsOpen = panels.setters['settings'];
   const [activeFocusAid, setActiveFocusAid] = useState<FocusAidMode>('none');
   const [isParallelReading, setIsParallelReading] = useState<boolean>(false);
   const [parallelOrientation, setParallelOrientation] = useState<'vertical' | 'horizontal'>('vertical');
@@ -235,7 +252,8 @@ export const FullPageBookReader: React.FC = () => {
 
   // Annotations & Freehand Ink State (KEY-137)
   const [annotations, setAnnotations] = useState<AnnotationDTO[]>([]);
-  const [isAnnotationsDrawerOpen, setIsAnnotationsDrawerOpen] = useState<boolean>(false);
+  const isAnnotationsDrawerOpen = panels.activePanel === 'annotations';
+  const setIsAnnotationsDrawerOpen = panels.setters['annotations'];
   const [isInkModeActive, setIsInkModeActive] = useState<boolean>(false);
   const [isInstantHighlightMode, setIsInstantHighlightMode] = useState<boolean>(false);
   const [activeHighlightColor, setActiveHighlightColor] = useState<string>('amber');
@@ -250,110 +268,54 @@ export const FullPageBookReader: React.FC = () => {
   const lastReportedEpubPageRef = useRef<number>(1);
 
   // In-Book Full-Text Search State (KEY-140)
-  const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState<boolean>(false);
+  const isSearchDrawerOpen = panels.activePanel === 'search';
+  const setIsSearchDrawerOpen = panels.setters['search'];
 
   // Local OCR Engine State (Story 3.2 / KEY-141)
   const [ocrPages, setOcrPages] = useState<Map<number, OcrPageResult>>(new Map());
   const [isOcrRunning, setIsOcrRunning] = useState<boolean>(false);
   const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('auto');
   const [showOcrDebug, setShowOcrDebug] = useState<boolean>(false);
-  const [isOcrMenuOpen, setIsOcrMenuOpen] = useState<boolean>(false);
+  const isOcrMenuOpen = panels.activePanel === 'ocr';
+  const setIsOcrMenuOpen = panels.setters['ocr'];
   const [ocrProgress, setOcrProgress] = useState<{ current: number; total: number; words: number } | null>(null);
+  const [activeOcrWordIndex, setActiveOcrWordIndex] = useState<number | null>(null);
 
   // Pluggable Offline Dictionary & Encyclopedia State (Story 3.3 / KEY-142)
-  const [isDictionaryModalOpen, setIsDictionaryModalOpen] = useState<boolean>(false);
+  const isDictionaryModalOpen = panels.activePanel === 'dictionary';
+  const setIsDictionaryModalOpen = panels.setters['dictionary'];
   const [dictionaryLookupWord, setDictionaryLookupWord] = useState<string>('');
 
   // BYOK AI Research Assistant & Translation State (KEY-143)
-  const [isAIDrawerOpen, setIsAIDrawerOpen] = useState<boolean>(false);
-  const [isAISettingsOpen, setIsAISettingsOpen] = useState<boolean>(false);
+  const isAIDrawerOpen = panels.activePanel === 'ai';
+  const setIsAIDrawerOpen = panels.setters['ai'];
+  const isAISettingsOpen = panels.activePanel === 'ai-settings';
+  const setIsAISettingsOpen = panels.setters['ai-settings'];
   const [aiInitialTool, setAiInitialTool] = useState<AIResearchToolType>('chat');
   const [aiSelectedText, setAiSelectedText] = useState<string>('');
 
   // Text-to-Speech (TTS), Audiobook & SMIL Read-Along State (KEY-145)
   const [isTTSPlayerActive, setIsTTSPlayerActive] = useState<boolean>(false);
-  const [isTTSLyricsOpen, setIsTTSLyricsOpen] = useState<boolean>(false);
-  const [isPairingDialogOpen, setIsPairingDialogOpen] = useState<boolean>(false);
-  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState<boolean>(false);
-  const [isPluginsModalOpen, setIsPluginsModalOpen] = useState<boolean>(false);
+  const isTTSLyricsOpen = panels.activePanel === 'lyrics';
+  const setIsTTSLyricsOpen = panels.setters['lyrics'];
+  const isPairingDialogOpen = panels.activePanel === 'pairing';
+  const setIsPairingDialogOpen = panels.setters['pairing'];
+  const isCloudSyncModalOpen = panels.activePanel === 'cloud';
+  const setIsCloudSyncModalOpen = panels.setters['cloud'];
+  const isPluginsModalOpen = panels.activePanel === 'plugins';
+  const setIsPluginsModalOpen = panels.setters['plugins'];
   const [pluginStyles, setPluginStyles] = useState<string>('');
 
   // Editable Page Target for Notes
   const [noteTargetPage, setNoteTargetPage] = useState<number>(readingPage);
 
   // Exclusive Panel Switching: Opening any panel automatically closes previously open panels
-  const closeAllPanelsExcept = useCallback((except?: 'toc' | 'knowledge' | 'search' | 'settings' | 'ai' | 'annotations') => {
-    if (except !== 'toc') {
-      setIsTocOpen(false);
-      setIsTocPinned(false);
-    }
-    if (except !== 'knowledge') {
-      setIsKnowledgeDrawerOpen(false);
-      setIsKnowledgePinned(false);
-    }
-    if (except !== 'annotations') {
-      setIsAnnotationsDrawerOpen(false);
-    }
-    if (except !== 'search') {
-      setIsSearchDrawerOpen(false);
-    }
-    if (except !== 'ai') {
-      setIsAIDrawerOpen(false);
-    }
-    if (except !== 'settings') {
-      setIsSettingsOpen(false);
-    }
-  }, []);
-
-  const handleToggleToc = useCallback(() => {
-    setIsTocOpen((prev) => {
-      const willOpen = !prev;
-      if (willOpen) {
-        closeAllPanelsExcept('toc');
-      }
-      return willOpen;
-    });
-  }, [closeAllPanelsExcept]);
-
-  const handleToggleKnowledge = useCallback(() => {
-    setIsKnowledgeDrawerOpen((prev) => {
-      const willOpen = !prev;
-      if (willOpen) {
-        closeAllPanelsExcept('knowledge');
-      }
-      return willOpen;
-    });
-  }, [closeAllPanelsExcept]);
-
-  const handleToggleSearch = useCallback(() => {
-    setIsSearchDrawerOpen((prev) => {
-      const willOpen = !prev;
-      if (willOpen) {
-        closeAllPanelsExcept('search');
-      }
-      return willOpen;
-    });
-  }, [closeAllPanelsExcept]);
-
-  const handleToggleAIDrawer = useCallback(() => {
-    setIsAIDrawerOpen((prev) => {
-      const willOpen = !prev;
-      if (willOpen) {
-        closeAllPanelsExcept('ai');
-      }
-      return willOpen;
-    });
-  }, [closeAllPanelsExcept]);
-
-  const handleToggleSettings = useCallback(() => {
-    setIsSettingsOpen((prev) => {
-      const willOpen = !prev;
-      if (willOpen) {
-        closeAllPanelsExcept('settings');
-      }
-      return willOpen;
-    });
-  }, [closeAllPanelsExcept]);
+  const closeAllPanelsExcept = panels.close;
+  const handleToggleToc = () => setIsTocOpen(previous => !previous);
+  const handleToggleKnowledge = () => setIsKnowledgeDrawerOpen(previous => !previous);
+  const handleToggleSearch = useCallback(() => setIsSearchDrawerOpen(previous => !previous), [setIsSearchDrawerOpen]);
+  const handleToggleAIDrawer = () => setIsAIDrawerOpen(previous => !previous);
+  const handleToggleSettings = () => setIsSettingsOpen(previous => !previous);
 
   // Maximum valid pages calculation
   const maxBookPages = Math.max(
@@ -366,27 +328,31 @@ export const FullPageBookReader: React.FC = () => {
   );
 
   // Sync noteTargetPage with readingPage when user navigates
-  useEffect(() => {
+  const [previousReaderPage, setPreviousReaderPage] = useState<readonly unknown[] | null>(null);
+  const inputsReaderPage = [readingPage, maxBookPages];
+  if (previousReaderPage === null || inputsReaderPage.some((value, index) => !Object.is(value, previousReaderPage[index]))) {
+    setPreviousReaderPage(inputsReaderPage);
     setNoteTargetPage(Math.min(maxBookPages, Math.max(1, readingPage)));
     setSelectedText('');
     setPdfSelectionInfo(null);
-    clearActiveSelectionHighlight();
     setActiveRange(null);
-  }, [readingPage, maxBookPages]);
+    setActiveOcrWordIndex(null);
+  }
+  useEffect(() => { clearActiveSelectionHighlight(); }, [readingPage, maxBookPages]);
 
   // Load custom plugin CSS styles dynamically
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.plugins?.getStyles) {
-      (window as any).electronAPI.plugins.getStyles().then((styles: string) => {
+    if (typeof window !== 'undefined' && window.electronAPI?.plugins) {
+      (window).electronAPI.plugins.getStyles().then((styles: string) => {
         if (styles) setPluginStyles(styles);
-      }).catch((e: any) => console.warn('[FullPageBookReader] Plugin styles error:', e));
+      }).catch((e) => console.warn('[FullPageBookReader] Plugin styles error:', e));
     }
   }, [isPluginsModalOpen]);
 
   // Reading Statistics Tracking Lifecycle (KEY-149)
   useEffect(() => {
-    if (activeBook?.id && typeof window !== 'undefined' && (window as any).electronAPI?.statistics) {
-      (window as any).electronAPI.statistics.startSession({
+    if (activeBook?.id && typeof window !== 'undefined' && (window).electronAPI?.statistics) {
+      (window).electronAPI.statistics.startSession({
         bookId: activeBook.id,
         title: activeBook.title,
         authors: activeBook.author,
@@ -396,22 +362,22 @@ export const FullPageBookReader: React.FC = () => {
       });
     }
     return () => {
-      if (typeof window !== 'undefined' && (window as any).electronAPI?.statistics) {
-        (window as any).electronAPI.statistics.endSession();
+      if (typeof window !== 'undefined' && (window).electronAPI?.statistics) {
+        (window).electronAPI.statistics.endSession();
       }
     };
   }, [activeBook?.id]);
 
   useEffect(() => {
-    if (activeBook?.id && typeof window !== 'undefined' && (window as any).electronAPI?.statistics) {
-      (window as any).electronAPI.statistics.turnPage(readingPage, maxBookPages);
+    if (activeBook?.id && typeof window !== 'undefined' && (window).electronAPI?.statistics) {
+      (window).electronAPI.statistics.turnPage(readingPage, maxBookPages);
     }
   }, [readingPage, maxBookPages, activeBook?.id]);
 
   useEffect(() => {
     const heartbeatTimer = setInterval(() => {
-      if (typeof window !== 'undefined' && (window as any).electronAPI?.statistics) {
-        (window as any).electronAPI.statistics.heartbeat();
+      if (typeof window !== 'undefined' && (window).electronAPI?.statistics) {
+        (window).electronAPI.statistics.heartbeat();
       }
     }, 10000);
     return () => clearInterval(heartbeatTimer);
@@ -426,8 +392,8 @@ export const FullPageBookReader: React.FC = () => {
   }, [readingPage, viewMode, setReadingPage]);
 
   const handleCycleAutoScrollSpeed = useCallback(() => {
-    const speeds = [0.5, 1, 1.5, 2] as const;
-    const nextIdx = (speeds.indexOf(autoScrollSpeed as any) + 1) % speeds.length;
+    const speeds: number[] = [0.5, 1, 1.5, 2];
+    const nextIdx = (speeds.indexOf(autoScrollSpeed) + 1) % speeds.length;
     setAutoScrollSpeed(speeds[nextIdx]);
   }, [autoScrollSpeed]);
 
@@ -498,15 +464,15 @@ export const FullPageBookReader: React.FC = () => {
             e.preventDefault();
           }
           if (e.deltaY > 0 && scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 5) {
-            if (typeof (bookDoc as any)?.rendition?.next === 'function') {
-              (bookDoc as any).rendition.next();
+            if (typeof (bookDoc)?.rendition?.next === 'function') {
+              (bookDoc).rendition.next();
             }
             if (readingPage < maxBookPages) {
               handleNextPage();
             }
           } else if (e.deltaY < 0 && scrollEl.scrollTop <= 2) {
-            if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
-              (bookDoc as any).rendition.prev();
+            if (typeof (bookDoc)?.rendition?.prev === 'function') {
+              (bookDoc).rendition.prev();
             }
             if (readingPage > 1) {
               handlePrevPage();
@@ -570,13 +536,13 @@ export const FullPageBookReader: React.FC = () => {
       }
 
       if (isNext) {
-        if (typeof (bookDoc as any)?.rendition?.next === 'function') {
-          (bookDoc as any).rendition.next();
+        if (typeof (bookDoc)?.rendition?.next === 'function') {
+          (bookDoc).rendition.next();
         }
         handleNextPage();
       } else if (isPrev) {
-        if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
-          (bookDoc as any).rendition.prev();
+        if (typeof (bookDoc)?.rendition?.prev === 'function') {
+          (bookDoc).rendition.prev();
         }
         handlePrevPage();
       }
@@ -746,8 +712,8 @@ export const FullPageBookReader: React.FC = () => {
             e.preventDefault();
             scrollEl.scrollTop += 60;
             if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 5) {
-              if (typeof (bookDoc as any)?.rendition?.next === 'function') {
-                (bookDoc as any).rendition.next();
+              if (typeof (bookDoc)?.rendition?.next === 'function') {
+                (bookDoc).rendition.next();
               }
               if (readingPage < maxBookPages) {
                 handleNextPage();
@@ -759,8 +725,8 @@ export const FullPageBookReader: React.FC = () => {
             e.preventDefault();
             scrollEl.scrollTop -= 60;
             if (scrollEl.scrollTop <= 2) {
-              if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
-                (bookDoc as any).rendition.prev();
+              if (typeof (bookDoc)?.rendition?.prev === 'function') {
+                (bookDoc).rendition.prev();
               }
               if (readingPage > 1) {
                 handlePrevPage();
@@ -773,8 +739,8 @@ export const FullPageBookReader: React.FC = () => {
             const pageStep = Math.round(scrollEl.clientHeight * 0.85);
             scrollEl.scrollTop += pageStep;
             if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 5) {
-              if (typeof (bookDoc as any)?.rendition?.next === 'function') {
-                (bookDoc as any).rendition.next();
+              if (typeof (bookDoc)?.rendition?.next === 'function') {
+                (bookDoc).rendition.next();
               }
               if (readingPage < maxBookPages) {
                 handleNextPage();
@@ -787,8 +753,8 @@ export const FullPageBookReader: React.FC = () => {
             const pageStep = Math.round(scrollEl.clientHeight * 0.85);
             scrollEl.scrollTop -= pageStep;
             if (scrollEl.scrollTop <= 2) {
-              if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
-                (bookDoc as any).rendition.prev();
+              if (typeof (bookDoc)?.rendition?.prev === 'function') {
+                (bookDoc).rendition.prev();
               }
               if (readingPage > 1) {
                 handlePrevPage();
@@ -816,14 +782,14 @@ export const FullPageBookReader: React.FC = () => {
 
       if (isNext) {
         e.preventDefault();
-        if (typeof (bookDoc as any)?.rendition?.next === 'function') {
-          (bookDoc as any).rendition.next();
+        if (typeof (bookDoc)?.rendition?.next === 'function') {
+          (bookDoc).rendition.next();
         }
         handleNextPage();
       } else if (isPrev) {
         e.preventDefault();
-        if (typeof (bookDoc as any)?.rendition?.prev === 'function') {
-          (bookDoc as any).rendition.prev();
+        if (typeof (bookDoc)?.rendition?.prev === 'function') {
+          (bookDoc).rendition.prev();
         }
         handlePrevPage();
       } else if (e.key === 'Home') {
@@ -833,7 +799,8 @@ export const FullPageBookReader: React.FC = () => {
         e.preventDefault();
         setReadingPage(maxBookPages);
       } else if (e.key === 'Escape') {
-        if (isSearchDrawerOpen) setIsSearchDrawerOpen(false);
+        if (isDocumentPanelOpen) setIsDocumentPanelOpen(false);
+        else if (isSearchDrawerOpen) setIsSearchDrawerOpen(false);
         else if (isKnowledgeDrawerOpen) setIsKnowledgeDrawerOpen(false);
         else if (isAnnotationsDrawerOpen) setIsAnnotationsDrawerOpen(false);
         else if (isTocOpen) setIsTocOpen(false);
@@ -900,6 +867,8 @@ export const FullPageBookReader: React.FC = () => {
     handleNextPage,
     handlePrevPage,
     getEpubScrollElement,
+    isDocumentPanelOpen,
+    setIsDocumentPanelOpen,
     isSearchDrawerOpen,
     isKnowledgeDrawerOpen,
     isAnnotationsDrawerOpen,
@@ -1192,7 +1161,7 @@ export const FullPageBookReader: React.FC = () => {
     if (!rawHref) return;
 
     if (/^(https?:|mailto:|tel:)/i.test(rawHref)) {
-      const winAPI = (window as any).electronAPI;
+      const winAPI = (window).electronAPI;
       if (winAPI?.openExternal) {
         winAPI.openExternal(rawHref);
       } else {
@@ -1224,7 +1193,7 @@ export const FullPageBookReader: React.FC = () => {
       if (!rawHref) return;
 
       if (/^(https?:|mailto:|tel:)/i.test(rawHref)) {
-        const winAPI = (window as any).electronAPI;
+        const winAPI = (window).electronAPI;
         if (winAPI?.openExternal) {
           winAPI.openExternal(rawHref);
         } else {
@@ -1296,7 +1265,7 @@ export const FullPageBookReader: React.FC = () => {
   // Background SQLite FTS5 Indexing on Book Load (KEY-140)
   useEffect(() => {
     if (!activeBook?.id || searchableSections.length === 0) return;
-    const windowAPI = typeof window !== 'undefined' ? (window as any).api : null;
+    const windowAPI = typeof window !== 'undefined' ? (window).electronAPI : null;
     if (!windowAPI?.indexBookContent || !windowAPI?.isBookIndexed) return;
 
     let isSubscribed = true;
@@ -1325,7 +1294,7 @@ export const FullPageBookReader: React.FC = () => {
   // Automatic KOReader Progress Sync on Book Load / Close (KEY-147)
   useEffect(() => {
     if (!activeBook?.id) return;
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.getKoSyncConfig || !windowAPI?.pullKoSyncProgress) return;
 
     let isSubscribed = true;
@@ -1392,7 +1361,7 @@ export const FullPageBookReader: React.FC = () => {
       const streamUrl = readerAssetUrl(filePath);
       setAssetUrl(streamUrl);
 
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
 
       try {
         // Fetch raw bytes for parser engine
@@ -1424,7 +1393,7 @@ export const FullPageBookReader: React.FC = () => {
         if (bytes && !isCancelled) {
           // If PDF, construct authentic Blob URL for native iframe rendering
           if (format === 'PDF') {
-            const pdfBlob = new Blob([bytes as any], { type: 'application/pdf' });
+            const pdfBlob = new Blob([new Uint8Array(bytes)], { type: 'application/pdf' });
             activeObjectUrl = URL.createObjectURL(pdfBlob);
             setPdfBlobUrl(activeObjectUrl);
             setViewType('native_pdf');
@@ -1537,7 +1506,7 @@ export const FullPageBookReader: React.FC = () => {
       if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
       loadedBook?.destroy?.();
     };
-  }, [activeBook?.filePath]);
+  }, [activeBook?.filePath, pdfSourceRevision]);
 
   // Update Section Content when readingPage changes in reflowable / archive mode
   useEffect(() => {
@@ -1649,7 +1618,7 @@ export const FullPageBookReader: React.FC = () => {
         if (scrollEl && pageEl) {
           const scrollRect = scrollEl.getBoundingClientRect();
           const pageRect = pageEl.getBoundingClientRect();
-          scrollEl.scrollTop += (pageRect.top - scrollRect.top);
+          scrollEl.scrollBy({ top: pageRect.top - scrollRect.top });
           setTimeout(() => {
             isPositioningEpubScrollRef.current = false;
           }, 350);
@@ -1687,7 +1656,7 @@ export const FullPageBookReader: React.FC = () => {
         if (scrollEl && pageEl) {
           const scrollRect = scrollEl.getBoundingClientRect();
           const pageRect = pageEl.getBoundingClientRect();
-          scrollEl.scrollTop += (pageRect.top - scrollRect.top);
+          scrollEl.scrollBy({ top: pageRect.top - scrollRect.top });
         }
       }
     }
@@ -1702,25 +1671,6 @@ export const FullPageBookReader: React.FC = () => {
     }
   };
 
-  if (!activeBook) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-canvas text-main font-sans text-center space-y-4">
-        <div className="w-16 h-16 rounded-3xl bg-surface border border-subtle flex items-center justify-center text-muted">
-          <BookOpen className="w-8 h-8 text-pale-sky-500" />
-        </div>
-        <div className="space-y-1">
-          <h2 className="font-bold text-lg text-main font-display">{t('noBookSelected')}</h2>
-          <p className="text-xs text-muted max-w-sm">{t('noBookSelectedDesc')}</p>
-        </div>
-        <button
-          onClick={closeReaderToLibrary}
-          className="px-4 py-2 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-md transition-all cursor-pointer"
-        >
-          {t('backToLibrary')}
-        </button>
-      </div>
-    );
-  }
 
   // Active Formatted Page & Text Content
   const activeFormattedPage = paginatedPages[readingPage - 1];
@@ -1863,21 +1813,13 @@ export const FullPageBookReader: React.FC = () => {
   const displayedNotes = filterMode === 'current_page' ? currentPageNotes : bookNotes;
 
   // Load annotations from SQLite for this book
-  const loadAnnotations = async () => {
-    if (!activeBook?.id) return;
-    try {
-      const api = (window as any).electronAPI;
-      if (api?.getAnnotations) {
-        const data = await api.getAnnotations(activeBook.id);
-        setAnnotations(data || []);
-      }
-    } catch (err) {
-      console.warn('[FullPageBookReader] Failed to load annotations:', err);
-    }
-  };
+
 
   useEffect(() => {
-    loadAnnotations();
+    if (!activeBook?.id || !window.electronAPI?.getAnnotations) return;
+    let alive = true;
+    void window.electronAPI.getAnnotations(activeBook.id).then(data => { if (alive) setAnnotations(data || []); }).catch(console.warn);
+    return () => { alive = false; };
   }, [activeBook?.id]);
 
   // Bibliographic metadata for Export Engine (KEY-138)
@@ -1901,7 +1843,7 @@ export const FullPageBookReader: React.FC = () => {
   useEffect(() => {
     const fetchAllNotes = async () => {
       try {
-        const api = (window as any).electronAPI;
+        const api = (window).electronAPI;
         if (api?.getAllAnnotations) {
           const allNotes: AnnotationDTO[] = await api.getAllAnnotations();
           const grouped = new Map<string, AnnotationDTO[]>();
@@ -1968,7 +1910,7 @@ export const FullPageBookReader: React.FC = () => {
   const handleSaveAnnotation = async (payload: AnnotationPayload): Promise<AnnotationDTO | undefined> => {
     if (!activeBook?.id) return;
     try {
-      const api = (window as any).electronAPI;
+      const api = (window).electronAPI;
       if (api?.saveAnnotation) {
         const saved = await api.saveAnnotation(payload);
         setAnnotations((prev) => {
@@ -1990,7 +1932,7 @@ export const FullPageBookReader: React.FC = () => {
   // Delete annotation from SQLite
   const handleDeleteAnnotation = async (id: string) => {
     try {
-      const api = (window as any).electronAPI;
+      const api = (window).electronAPI;
       if (api?.deleteAnnotation) {
         await api.deleteAnnotation(id);
         setAnnotations((prev) => prev.filter((a) => a.id !== id));
@@ -2003,7 +1945,7 @@ export const FullPageBookReader: React.FC = () => {
   // Restore Last Read Location on mount
   useEffect(() => {
     if (!activeBook?.id) return;
-    const api = (window as any).electronAPI;
+    const api = (window).electronAPI;
     if (api?.reader?.getLastLocation) {
       api.reader
         .getLastLocation(activeBook.id)
@@ -2023,7 +1965,7 @@ export const FullPageBookReader: React.FC = () => {
   useEffect(() => {
     if (!activeBook?.id) return;
     const timer = setTimeout(() => {
-      const api = (window as any).electronAPI;
+      const api = (window).electronAPI;
       if (api?.reader?.updateLastLocation) {
         api.reader.updateLastLocation(activeBook.id, String(readingPage)).catch(console.warn);
       }
@@ -2034,7 +1976,7 @@ export const FullPageBookReader: React.FC = () => {
   // Record Reading Session to SQLite on unmount or book switch
   const recordCurrentReadingSession = () => {
     if (!activeBook?.id) return;
-    const api = (window as any).electronAPI;
+    const api = (window).electronAPI;
     if (api?.reader?.recordSession) {
       const now = Date.now();
       const durationSeconds = Math.max(1, Math.round((now - sessionStartTimeRef.current) / 1000));
@@ -2069,7 +2011,7 @@ export const FullPageBookReader: React.FC = () => {
   // Load Knowledge Items from SQLite (KEY-12 / Epic 5)
   useEffect(() => {
     if (!activeBook?.id) return;
-    const api = (window as any).electronAPI;
+    const api = (window).electronAPI;
     if (api?.knowledge?.getByWork) {
       api.knowledge
         .getByWork(activeBook.id)
@@ -2104,7 +2046,7 @@ export const FullPageBookReader: React.FC = () => {
     }
 
     // 1. Save to SQLite knowledge table
-    const api = (window as any).electronAPI;
+    const api = (window).electronAPI;
     if (api?.knowledge?.save) {
       try {
         const savedItem: KnowledgeItemDTO = await api.knowledge.save({
@@ -2137,7 +2079,7 @@ export const FullPageBookReader: React.FC = () => {
         : 'note';
     await handleSaveAnnotation({
       bookId: activeBook.id,
-      type: annotationType as any,
+      type: annotationType,
       locationCfiOrPage: locationToSave,
       selectedText: textToUse || undefined,
       noteContent:
@@ -2193,7 +2135,7 @@ export const FullPageBookReader: React.FC = () => {
       location: updatedLocation,
     };
 
-    const api = (window as any).electronAPI;
+    const api = (window).electronAPI;
     if (api?.knowledge?.save) {
       try {
         const saved = await api.knowledge.save(payload);
@@ -2218,7 +2160,7 @@ export const FullPageBookReader: React.FC = () => {
       noteContent,
     };
 
-    const api = (window as any).electronAPI;
+    const api = (window).electronAPI;
     if (api?.knowledge?.save) {
       try {
         const saved = await api.knowledge.save(payload);
@@ -2235,7 +2177,7 @@ export const FullPageBookReader: React.FC = () => {
   };
 
   const handleDeleteKnowledgeItem = async (id: string) => {
-    const api = (window as any).electronAPI;
+    const api = (window).electronAPI;
     if (api?.knowledge?.delete) {
       try {
         await api.knowledge.delete(id);
@@ -2269,26 +2211,34 @@ export const FullPageBookReader: React.FC = () => {
     const container = contentContainerRef.current;
     if (!container) return;
 
-    const allItems = [...knowledgeItems, ...annotations];
+    const allItems = [
+      ...knowledgeItems.map(item => ({ ...item, locationCfiOrPage: item.location, selectedText: item.quotedText })),
+      ...annotations.map(item => ({
+        id: item.id, workId: item.bookId, knowledgeType: item.type === 'note' ? 'note' as const : 'highlight' as const, type: item.type,
+        location: item.locationCfiOrPage, locationCfiOrPage: item.locationCfiOrPage,
+        selectedText: item.selectedText || undefined, quotedText: item.selectedText || undefined,
+        noteContent: item.noteContent || undefined, color: item.color || undefined, createdAt: item.createdAt, updatedAt: item.updatedAt,
+      })),
+    ];
 
     // 1. If using epub.js: apply SVG fill + fill-opacity attributes
-    const rendition = (bookDoc as any)?.rendition;
+    const rendition = (bookDoc)?.rendition;
     if (rendition && typeof rendition.annotations?.highlight === 'function') {
       allItems.forEach((item) => {
-        const cfiRange = (item as any).location || (item as any).locationCfiOrPage;
+        const cfiRange = (item).location || (item).locationCfiOrPage;
         if (cfiRange && (cfiRange.startsWith('epubcfi(') || cfiRange.startsWith('cfi('))) {
           const colorKey = item.color || 'amber';
           const hex = colorHexMap[colorKey] || colorKey || '#FACC15';
           try {
-            rendition.annotations.remove(cfiRange, 'highlight');
+            rendition.annotations?.remove(cfiRange, 'highlight');
           } catch {}
           try {
-            rendition.annotations.highlight(
+            rendition.annotations?.highlight(
               cfiRange,
               { id: item.id, color: colorKey },
               (e: MouseEvent) => {
                 setActiveHighlightPopover({
-                  highlight: item as any,
+                  highlight: { ...item, type: item.knowledgeType },
                   position: { x: e.clientX, y: e.clientY },
                 });
               },
@@ -2324,15 +2274,15 @@ export const FullPageBookReader: React.FC = () => {
     // Apply W3C CSS Custom Highlights
     rootsToProcess.forEach((root) => {
       try {
-        registerCssCustomHighlights(root, allItems as any);
+        registerCssCustomHighlights(root, allItems);
       } catch {}
     });
 
     // Directly paint text marks for saved highlights
     const highlightItems = allItems.filter(
       (item) =>
-        (item.type === 'highlight' || (item as any).knowledgeType === 'highlight') &&
-        ((item as any).selectedText || (item as any).quotedText)
+        (item.type === 'highlight' || (!item.type && item.knowledgeType === 'highlight')) &&
+        ((item).selectedText || (item).quotedText)
     );
 
     rootsToProcess.forEach((root) => {
@@ -2351,7 +2301,7 @@ export const FullPageBookReader: React.FC = () => {
 
       // Wrap each matching text occurrence in visible colored mark
       highlightItems.forEach((item) => {
-        const text = ((item as any).selectedText || (item as any).quotedText || '').trim();
+        const text = ((item).selectedText || (item).quotedText || '').trim();
         if (!text || text.length < 2) return;
         const color = item.color || 'amber';
         const hex = colorHexMap[color] || '#FACC15';
@@ -2371,7 +2321,7 @@ export const FullPageBookReader: React.FC = () => {
             mark.onclick = (e) => {
               e.stopPropagation();
               setActiveHighlightPopover({
-                highlight: item as any,
+                highlight: { ...item, type: item.knowledgeType },
                 position: { x: e.clientX, y: e.clientY },
               });
             };
@@ -2391,7 +2341,7 @@ export const FullPageBookReader: React.FC = () => {
               mark.onclick = (e) => {
                 e.stopPropagation();
                 setActiveHighlightPopover({
-                  highlight: item as any,
+                  highlight: { ...item, type: item.knowledgeType },
                   position: { x: e.clientX, y: e.clientY },
                 });
               };
@@ -2420,7 +2370,7 @@ export const FullPageBookReader: React.FC = () => {
   ]);
 
   useEffect(() => {
-    const rendition = (bookDoc as any)?.rendition;
+    const rendition = (bookDoc)?.rendition;
     if (rendition && typeof rendition.on === 'function') {
       const onRendered = () => {
         renderSavedEpubHighlights();
@@ -2428,7 +2378,7 @@ export const FullPageBookReader: React.FC = () => {
       rendition.on('rendered', onRendered);
       return () => {
         try {
-          rendition.off('rendered', onRendered);
+          rendition.off?.('rendered', onRendered);
         } catch {}
       };
     }
@@ -2503,7 +2453,7 @@ export const FullPageBookReader: React.FC = () => {
   // Local OCR Handlers (KEY-141)
   const handleRunOcrPage = async (pageToScan: number = readingPage) => {
     if (!activeBook?.filePath) return;
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
     if (!windowAPI?.ocrRecognizePage) return;
 
     setIsOcrRunning(true);
@@ -2554,14 +2504,14 @@ export const FullPageBookReader: React.FC = () => {
 
   const handleRunOcrDocument = async () => {
     if (!activeBook?.filePath) return;
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
     if (!windowAPI?.ocrRecognizeDocument) return;
 
     setIsOcrRunning(true);
     setOcrProgress({ current: 1, total: maxBookPages, words: 0 });
 
     try {
-      const unsub = windowAPI.onOcrProgress?.((payload: any) => {
+      const unsub = windowAPI.onOcrProgress?.((payload) => {
         setOcrProgress({
           current: payload.currentPage,
           total: payload.totalPages,
@@ -2773,7 +2723,7 @@ export const FullPageBookReader: React.FC = () => {
   };
 
   const handleCreateNoteFromSelection = () => {
-    if (!selectedText) return;
+    if (!selectedText || !activeBook) return;
     const safePage = Math.min(maxBookPages, Math.max(1, noteTargetPage));
     handleSaveAnnotation({
       bookId: activeBook.id,
@@ -2819,7 +2769,7 @@ export const FullPageBookReader: React.FC = () => {
 
   // Floating Zen Selection Menu (KEY-137 / KEY-12)
   const renderSelectionPopover = () => {
-    if (!selectedText || isInstantHighlightMode) return null;
+    if (!activeBook || !selectedText || isInstantHighlightMode) return null;
     return (
       <ZenSelectionMenu
         selectedText={selectedText}
@@ -2935,7 +2885,7 @@ export const FullPageBookReader: React.FC = () => {
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-pale-sky-500" />
           <h3 className="font-bold text-main text-xs">
-            {t('notesForBook').replace('{title}', activeBook.title)}
+            {t('notesForBook').replace('{title}', activeBook?.title || '')}
           </h3>
         </div>
         <button
@@ -3022,7 +2972,7 @@ export const FullPageBookReader: React.FC = () => {
 
               {note.highlightedText && (
                 <blockquote className="border-r-2 border-pale-sky-500 pr-2 italic text-muted text-[11px] font-serif bg-surface/50 p-1.5 rounded-lg">
-                  "{note.highlightedText}"
+                  &quot;{note.highlightedText}&quot;
                 </blockquote>
               )}
 
@@ -3066,6 +3016,26 @@ export const FullPageBookReader: React.FC = () => {
     );
   }
 
+  if (!activeBook) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-canvas text-main font-sans text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-surface border border-subtle flex items-center justify-center text-muted">
+          <BookOpen className="w-8 h-8 text-pale-sky-500" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="font-bold text-lg text-main font-display">{t('noBookSelected')}</h2>
+          <p className="text-xs text-muted max-w-sm">{t('noBookSelectedDesc')}</p>
+        </div>
+        <button
+          onClick={closeReaderToLibrary}
+          className="px-4 py-2 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-md transition-all cursor-pointer"
+        >
+          {t('backToLibrary')}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       role="region"
@@ -3098,9 +3068,10 @@ export const FullPageBookReader: React.FC = () => {
       )}
 
       {/* Floating Zen Top Bar */}
+      {isDocumentPanelOpen && effectiveFormat === 'PDF' && <PdfWorkstationPanel key={activeBook.id} workId={activeBook.id} onClose={() => setIsDocumentPanelOpen(false)} />}
       <ZenTopBar
         onReadAloud={() => startReadAloud()}
-        isVisible={isTopBarVisible || isSettingsOpen || isTocPinned || isKnowledgePinned}
+        isVisible={isTopBarVisible || isSettingsOpen || isTocPinned || isKnowledgePinned || isDocumentPanelOpen}
         activeBook={activeBook}
         detectedFormat={detectedFormat}
         chapterTitle={activeFormattedPage?.chapterLabel}
@@ -3126,6 +3097,10 @@ export const FullPageBookReader: React.FC = () => {
           setDictionaryLookupWord(selectedText || '');
           setIsDictionaryModalOpen(true);
         }}
+        onOpenWorkstation={() => { setIsInkModeActive(false); setIsDocumentPanelOpen(previous => !previous); }}
+        isWorkstationOpen={isDocumentPanelOpen}
+        onToggleOcrInspector={() => { setIsInkModeActive(false); setIsOcrMenuOpen(previous => !previous); }}
+        isOcrInspectorOpen={isOcrMenuOpen}
         onToggleSettings={handleToggleSettings}
         isSettingsOpen={isSettingsOpen}
         onTogglePlugins={() => {
@@ -3328,6 +3303,28 @@ export const FullPageBookReader: React.FC = () => {
           isOpen={isAISettingsOpen}
           onClose={() => setIsAISettingsOpen(false)}
           t={t}
+        />
+
+        {/* PaddleOCR-VL-1.6 Layout & OCR Inspector Drawer */}
+        <OcrInspectorDrawer
+          isOpen={isOcrMenuOpen}
+          onClose={() => {
+            setIsOcrMenuOpen(false);
+            setActiveOcrWordIndex(null);
+          }}
+          pageResult={ocrPages.get(readingPage) || null}
+          readingPage={readingPage}
+          isOcrRunning={isOcrRunning}
+          onRunOcrPage={() => handleRunOcrPage(readingPage)}
+          showBoundingBoxes={showOcrDebug}
+          onToggleBoundingBoxes={() => setShowOcrDebug(prev => !prev)}
+          activeWordIndex={activeOcrWordIndex}
+          onSelectWord={(idx) => {
+            setActiveOcrWordIndex(idx);
+            if (idx !== null && !showOcrDebug) {
+              setShowOcrDebug(true);
+            }
+          }}
         />
 
         {/* TTS & Audiobook Mini Player (KEY-145) */}
@@ -4055,8 +4052,27 @@ export const FullPageBookReader: React.FC = () => {
                     <OcrTextOverlay
                       pageResult={ocrPages.get(readingPage)!}
                       showVisualDebug={showOcrDebug}
+                      activeWordIndex={activeOcrWordIndex}
+                      onWordClick={(word, idx) => {
+                        setActiveOcrWordIndex(idx);
+                        if (!isOcrMenuOpen) setIsOcrMenuOpen(true);
+                      }}
                     />
                   )}
+                  {/* Floating OCR Quick-Action Toolbar Pill (Story 3.2 / KEY-141) */}
+                  <OcrQuickActionPill
+                    pageResult={ocrPages.get(readingPage) || null}
+                    readingPage={readingPage}
+                    isOcrRunning={isOcrRunning}
+                    onRunOcrPage={() => handleRunOcrPage(readingPage)}
+                    showBoundingBoxes={showOcrDebug}
+                    onToggleBoundingBoxes={() => setShowOcrDebug(prev => !prev)}
+                    isInspectorOpen={isOcrMenuOpen}
+                    onToggleInspector={() => {
+                      setIsInkModeActive(false);
+                      setIsOcrMenuOpen(prev => !prev);
+                    }}
+                  />
                 </div>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-muted text-xs p-6 space-y-3">

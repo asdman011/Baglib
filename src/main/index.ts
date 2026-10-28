@@ -1,3 +1,4 @@
+import { errorMessage } from '../shared/errors';
 import { app, BrowserWindow, protocol, net } from "electron";
 import path from "path";
 import serve from "electron-serve";
@@ -25,6 +26,9 @@ import { registerSecurityIpc } from "./ipc/security";
 import { registerReaderPluginsIpc } from "./ipc/reader-plugins";
 import { registerSunnahIpc } from "./ipc/sunnah";
 import { registerQuranIpc } from "./ipc/quran";
+import { registerAthanIpc, startAthanScheduler } from "./ipc/athan";
+import { registerStudyNotesIpc } from "./ipc/study-notes";
+import { registerPdfEditorIpc } from "./ipc/pdf-editor";
 import { startKhatmahReminders } from './services/quran/khatmah-reminders';
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
@@ -61,8 +65,8 @@ installPdfDiagnosticFilter();
 
 // Global process error boundary to intercept uncaught exceptions and unhandled promise rejections,
 // preventing abrupt Node process exits or terminal crash artifacts during transient network failures.
-process.on('unhandledRejection', (reason: any) => {
-  const message = reason?.message || String(reason);
+process.on('unhandledRejection', (reason: unknown) => {
+  const message = errorMessage(reason);
   console.warn('[baglib:process] Intercepted unhandled async rejection:', message);
 });
 
@@ -107,6 +111,7 @@ const MIME_BY_EXT: Record<string, string> = {
   '.ttf': 'font/ttf',
   '.otf': 'font/otf',
   '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
   '.m4b': 'audio/mp4',
 };
 
@@ -181,9 +186,9 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
 
       const chunksize = end - start + 1;
       const nodeStream = fs.createReadStream(filePath, { start, end });
-      const webStream = (Readable as any).toWeb ? (Readable as any).toWeb(nodeStream) : nodeStream;
+      const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
 
-      return new Response(webStream as any, {
+      return new Response(webStream, {
         status: 206,
         headers: {
           ...corsHeaders,
@@ -200,7 +205,7 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
     for (const [name, value] of Object.entries(corsHeaders)) headers.set(name, value);
     headers.set('Content-Type', mimeType);
     return new Response(response.body, { status: response.status, headers });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[baglib:protocol] Error streaming asset:', err);
     return new Response('Internal asset streaming error', { status: 500 });
   }
@@ -211,6 +216,7 @@ async function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
+      autoplayPolicy: 'no-user-gesture-required',
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
@@ -287,6 +293,9 @@ registerSecurityIpc();
 registerReaderPluginsIpc();
 registerSunnahIpc();
 registerQuranIpc();
+registerAthanIpc();
+registerStudyNotesIpc();
+registerPdfEditorIpc();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection
@@ -296,6 +305,7 @@ app.whenReady().then(async () => {
   try {
     await initializeDatabase();
     startKhatmahReminders();
+    startAthanScheduler();
     console.log("[baglib] Database initialized successfully.");
   } catch (e) {
     console.error("[baglib] Database initialization failed:", e);

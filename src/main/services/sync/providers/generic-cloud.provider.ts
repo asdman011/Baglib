@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../../shared/errors';
 /**
  * Baglib — Generic Multi-Cloud Connector Provider
  *
@@ -19,7 +20,7 @@ export class GenericCloudProvider implements IStorageProvider {
     this.config = config;
   }
 
-  public async testConnection(): Promise<SyncOperationResult<{ reachable: boolean; details?: any }>> {
+  public async testConnection(): Promise<SyncOperationResult<{ reachable: boolean; details?: unknown }>> {
     switch (this.providerType) {
       case 'dropbox': {
         const token = this.config.dropbox?.token;
@@ -34,8 +35,8 @@ export class GenericCloudProvider implements IStorageProvider {
             return { success: true, message: `Connected to Dropbox (${data.name?.display_name || 'User'})`, data: { reachable: true } };
           }
           return { success: false, message: `Dropbox authorization failed (HTTP ${resp.status})` };
-        } catch (e: any) {
-          return { success: false, message: `Dropbox connection error: ${e.message}` };
+        } catch (e: unknown) {
+          return { success: false, message: `Dropbox connection error: ${errorMessage(e)}` };
         }
       }
 
@@ -51,8 +52,8 @@ export class GenericCloudProvider implements IStorageProvider {
             return { success: true, message: `Connected to Google Drive (${data.user?.displayName || 'User'})`, data: { reachable: true } };
           }
           return { success: false, message: `Google Drive authorization failed (HTTP ${resp.status})` };
-        } catch (e: any) {
-          return { success: false, message: `Google Drive connection error: ${e.message}` };
+        } catch (e: unknown) {
+          return { success: false, message: `Google Drive connection error: ${errorMessage(e)}` };
         }
       }
 
@@ -67,8 +68,8 @@ export class GenericCloudProvider implements IStorageProvider {
             return { success: true, message: 'Connected to Microsoft OneDrive successfully.', data: { reachable: true } };
           }
           return { success: false, message: `OneDrive authorization failed (HTTP ${resp.status})` };
-        } catch (e: any) {
-          return { success: false, message: `OneDrive connection error: ${e.message}` };
+        } catch (e: unknown) {
+          return { success: false, message: `OneDrive connection error: ${errorMessage(e)}` };
         }
       }
 
@@ -84,8 +85,8 @@ export class GenericCloudProvider implements IStorageProvider {
             return { success: true, message: `Connected to Box (${data.name || 'User'})`, data: { reachable: true } };
           }
           return { success: false, message: `Box authorization failed (HTTP ${resp.status})` };
-        } catch (e: any) {
-          return { success: false, message: `Box connection error: ${e.message}` };
+        } catch (e: unknown) {
+          return { success: false, message: `Box connection error: ${errorMessage(e)}` };
         }
       }
 

@@ -1,4 +1,6 @@
 'use client';
+import { errorMessage } from '../../../shared/errors';
+
 
 import React, { useState, useMemo } from 'react';
 import {
@@ -52,6 +54,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   t,
   direction = 'ltr',
 }) => {
+  const [exportTimestamp] = useState(() => Date.now());
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('markdown');
   const [scope, setScope] = useState<'single_book' | 'all_books'>('single_book');
   const [includeFrontmatter, setIncludeFrontmatter] = useState(true);
@@ -143,17 +146,16 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     return typeof result.content === 'string' ? result.content : '[Binary Data]';
   }, [activeBook, annotations, allBooksWithNotes, exportOptions, scope]);
 
-  if (!isOpen) return null;
 
   // Handle Download File
   const handleDownload = () => {
     if (scope === 'all_books' && allBooksWithNotes.length > 0) {
       const zipBytes = packageMultiBookZip(allBooksWithNotes, selectedFormat, exportOptions);
-      const blob = new Blob([zipBytes as unknown as BlobPart], { type: 'application/zip' });
-      triggerBlobDownload(blob, `Baglib_Annotations_${Date.now()}.zip`);
+      const blob = new Blob([zipBytes as BlobPart], { type: 'application/zip' });
+      triggerBlobDownload(blob, `Baglib_Annotations_${exportTimestamp}.zip`);
     } else {
       const result = exportSingleBook(activeBook, annotations, exportOptions);
-      const blob = new Blob([result.content as unknown as BlobPart], { type: result.mimeType });
+      const blob = new Blob([result.content as BlobPart], { type: result.mimeType });
       triggerBlobDownload(blob, result.fileName);
     }
   };
@@ -204,15 +206,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         message: t('syncAnkiSuccess', { count: res.created }),
         isError: false,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setAnkiFeedback({
-        message: `${t('syncAnkiFailed')} (${err.message || ''})`,
+        message: `${t('syncAnkiFailed')} (${errorMessage(err) || ''})`,
         isError: true,
       });
     } finally {
       setIsSyncingAnki(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div

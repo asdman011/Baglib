@@ -5,7 +5,7 @@ import { internetArchiveClient } from '../../../src/main/services/metadata/http-
 
 describe('InternetArchiveProvider Unit Tests', () => {
   let provider: InternetArchiveProvider;
-  let originalGetJson: any;
+  let originalGetJson: unknown;
 
   beforeEach(() => {
     provider = new InternetArchiveProvider();
@@ -13,7 +13,7 @@ describe('InternetArchiveProvider Unit Tests', () => {
   });
 
   afterEach(() => {
-    (internetArchiveClient as any).getJson = originalGetJson;
+    (internetArchiveClient as unknown).getJson = originalGetJson;
   });
 
   const mockIaSearchResponse = {
@@ -41,7 +41,7 @@ describe('InternetArchiveProvider Unit Tests', () => {
   });
 
   it('searches Internet Archive by query and maps to BibliographicWork with verified cover URL', async () => {
-    (internetArchiveClient as any).getJson = async (url: string) => {
+    (internetArchiveClient as unknown).getJson = async (url: string) => {
       assert.strictEqual(url.includes('/advancedsearch.php'), true);
       assert.strictEqual(url.includes('mediatype'), true);
       return mockIaSearchResponse;
@@ -66,7 +66,7 @@ describe('InternetArchiveProvider Unit Tests', () => {
   });
 
   it('searches specifically by ISBN', async () => {
-    (internetArchiveClient as any).getJson = async (url: string) => {
+    (internetArchiveClient as unknown).getJson = async (url: string) => {
       assert.strictEqual(url.includes('isbn%3A(9780137081073)'), true);
       return mockIaSearchResponse;
     };
@@ -78,11 +78,11 @@ describe('InternetArchiveProvider Unit Tests', () => {
   });
 
   it('handles empty results and network exceptions gracefully', async () => {
-    (internetArchiveClient as any).getJson = async () => ({ response: { docs: [] } });
+    (internetArchiveClient as unknown).getJson = async () => ({ response: { docs: [] } });
     const emptyResults = await provider.search('nonexistent book 999999');
     assert.deepStrictEqual(emptyResults, []);
 
-    (internetArchiveClient as any).getJson = async () => {
+    (internetArchiveClient as unknown).getJson = async () => {
       throw new Error('Connection reset');
     };
     const errorResults = await provider.search('error test');
@@ -91,7 +91,7 @@ describe('InternetArchiveProvider Unit Tests', () => {
 
   it('filters out placeholder authors and searches by title only', async () => {
     let queriedUrl = '';
-    (internetArchiveClient as any).getJson = async (url: string) => {
+    (internetArchiveClient as unknown).getJson = async (url: string) => {
       queriedUrl = url;
       return mockIaSearchResponse;
     };
@@ -104,7 +104,7 @@ describe('InternetArchiveProvider Unit Tests', () => {
 
   it('falls back to title-only search if title + author returns 0 docs', async () => {
     let callCount = 0;
-    (internetArchiveClient as any).getJson = async (url: string) => {
+    (internetArchiveClient as unknown).getJson = async (url: string) => {
       callCount++;
       if (callCount === 1) {
         // First call with creator: returns 0 docs

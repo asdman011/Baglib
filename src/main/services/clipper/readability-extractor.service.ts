@@ -73,7 +73,7 @@ export class ReadabilityExtractorService {
     // Run Mozilla Readability
     let parsed: ReturnType<Readability['parse']> = null;
     try {
-      const reader = new Readability(document as any);
+      const reader = new Readability(document);
       parsed = reader.parse();
     } catch {
       parsed = null;

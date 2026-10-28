@@ -1,3 +1,4 @@
+import { errorMessage as getErrorMessage } from '../../../shared/errors';
 import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { BookItem } from '../../../shared/types/work';
@@ -52,20 +53,28 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
   const [attachDigitalCopy, setAttachDigitalCopy] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Fetch online candidates when modal opens
-  useEffect(() => {
-    if (!isOpen || !book) return;
-
-    let isMounted = true;
+  const [previousComparisonTarget, setPreviousComparisonTarget] = useState<readonly unknown[] | null>(null);
+  const inputsComparisonTarget = [isOpen, book];
+  if (previousComparisonTarget === null || inputsComparisonTarget.some((value, index) => !Object.is(value, previousComparisonTarget[index]))) {
+    setPreviousComparisonTarget(inputsComparisonTarget);
+    if (isOpen && book) {
     setIsLoading(true);
     setErrorMessage(null);
     setCandidates([]);
     setSelectedCandidate(null);
     setComparison(null);
+    }
+  }
+  // Fetch online candidates when modal opens
+  useEffect(() => {
+    if (!isOpen || !book) return;
+
+    let isMounted = true;
+
 
     const fetchEditions = async () => {
       try {
-        const windowAPI = (window as any).electronAPI;
+        const windowAPI = (window).electronAPI;
         if (!windowAPI?.enrichment?.findOnlineEditions) {
           throw new Error('Enrichment API not available in current window');
         }
@@ -82,10 +91,10 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
             setSelectedCandidate(list[0]);
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (isMounted) {
           console.error('[baglib/ui] Error querying candidate editions:', err);
-          setErrorMessage(err?.message || String(err));
+          setErrorMessage(getErrorMessage(err) || String(err));
         }
       } finally {
         if (isMounted) {
@@ -101,14 +110,19 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
     };
   }, [isOpen, book]);
 
+  const [previousComparisonSelection, setPreviousComparisonSelection] = useState<readonly unknown[] | null>(null);
+  const inputsComparisonSelection = [selectedCandidate, book];
+  if (previousComparisonSelection === null || inputsComparisonSelection.some((value, index) => !Object.is(value, previousComparisonSelection[index]))) {
+    setPreviousComparisonSelection(inputsComparisonSelection);
+    if (!selectedCandidate || !book) setComparison(null);
+  }
   // Compute diffs whenever selected candidate changes
   useEffect(() => {
     if (!selectedCandidate || !book) {
-      setComparison(null);
       return;
     }
 
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
     if (windowAPI?.enrichment?.computeDiffs) {
       windowAPI.enrichment
         .computeDiffs({ book, candidate: selectedCandidate })
@@ -149,7 +163,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
           }
           setSelectedFieldKeys(initialSelection);
         })
-        .catch((err: any) => {
+        .catch((err) => {
           console.warn('[baglib/ui] Compute diffs failed:', err);
         });
     }
@@ -229,7 +243,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
     setErrorMessage(null);
 
     try {
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       const incomingValues: Partial<BookItem> = {};
 
       for (const field of chosenFields) {
@@ -273,15 +287,15 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
 
       onEnrichmentApplied(result.updatedBook || book);
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/ui] Apply enrichment failed:', err);
-      setErrorMessage(err?.message || String(err));
+      setErrorMessage(getErrorMessage(err) || String(err));
     } finally {
       setIsApplying(false);
     }
   };
 
-  const renderFieldValue = (val: any) => {
+  const renderFieldValue = (val: unknown) => {
     if (val === undefined || val === null || val === '') {
       return <span className="text-gray-500 italic text-xs">—</span>;
     }
@@ -547,12 +561,12 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                         />
                       </div>
                       <div className="col-span-2 font-medium text-gray-300">
-                        {t(diff.labelKey as any) || fieldKey}
+                        {t(diff.labelKey as import('../../translations').TranslationKey) || fieldKey}
                       </div>
                       <div className="col-span-4 pr-3 pl-3">
                         {fieldKey === 'coverImage' && diff.currentValue ? (
                           <div className="w-8 h-11 rounded border border-gray-700 overflow-hidden">
-                            <img src={diff.currentValue} alt="current" className="w-full h-full object-cover" />
+                            <img src={String(diff.currentValue)} alt="current" className="w-full h-full object-cover" />
                           </div>
                         ) : (
                           renderFieldValue(diff.currentValue)
@@ -576,7 +590,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                       <div className="col-span-3 pr-3 pl-3">
                         {fieldKey === 'coverImage' && diff.incomingValue ? (
                           <div className="w-8 h-11 rounded border border-emerald-500/40 overflow-hidden">
-                            <img src={diff.incomingValue} alt="candidate" className="w-full h-full object-cover" />
+                            <img src={String(diff.incomingValue)} alt="candidate" className="w-full h-full object-cover" />
                           </div>
                         ) : (
                           renderFieldValue(diff.incomingValue)

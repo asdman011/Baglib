@@ -12,8 +12,8 @@ import { textIsbnScannerService } from '../metadata/text-isbn-scanner.service';
 import { extractEditionFromEbook } from '../import/editionExtractor';
 import { EpubCoverExtractor } from '../metadata/epub-cover-extractor.service';
 
-const pdfParse = require('pdf-parse');
-const yauzl = require('yauzl');
+import pdfParse from 'pdf-parse';
+import yauzl from 'yauzl';
 
 export class EbookMetadataExtractorService {
   private static instance: EbookMetadataExtractorService;
@@ -96,7 +96,7 @@ export class EbookMetadataExtractorService {
       return {};
     }
 
-    const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
+    const pdfFn = pdfParse;
 
     let title: string | undefined;
     let authors: string[] = [];
@@ -133,11 +133,11 @@ export class EbookMetadataExtractorService {
             (a) => !isPlaceholderAuthor(a) && !isGarbageAuthor(a, filePath)
           );
         }
-        if (typeof (info as any).Publisher === 'string' && (info as any).Publisher.trim()) {
-          publisher = (info as any).Publisher.trim();
+        if (typeof info.Publisher === 'string' && info.Publisher.trim()) {
+          publisher = info.Publisher.trim();
         }
-        if (typeof (info as any).Edition === 'string' && (info as any).Edition.trim()) {
-          edition = (info as any).Edition.trim();
+        if (typeof info.Edition === 'string' && info.Edition.trim()) {
+          edition = info.Edition.trim();
         }
         if (info.CreationDate) {
           const yearMatch = String(info.CreationDate).match(/(?:D:)?(18\d{2}|19\d{2}|20\d{2})/);
@@ -349,20 +349,20 @@ export class EbookMetadataExtractorService {
    */
   private async extractFromEpub(filePath: string): Promise<Partial<ExtractedEbookMetadata>> {
     return new Promise((resolve) => {
-      yauzl.open(filePath, { lazyEntries: true, autoClose: false }, (err: any, zipfile: any) => {
+      yauzl.open(filePath, { lazyEntries: true, autoClose: false }, (err: unknown, zipfile: yauzl.ZipFile) => {
         if (err || !zipfile) {
           resolve({ format: 'EPUB' });
           return;
         }
 
-        const entries: Record<string, any> = {};
+        const entries: Record<string, yauzl.Entry> = {};
         let opfPath: string | null = null;
         let opfDir = '';
         let totalTextBytes = 0;
 
         zipfile.readEntry();
 
-        zipfile.on('entry', (entry: any) => {
+        zipfile.on('entry', (entry: yauzl.Entry) => {
           entries[entry.fileName] = entry;
           if (/\.(?:x?html?)$/i.test(entry.fileName)) {
             totalTextBytes += (entry.uncompressedSize || 0);
@@ -554,7 +554,7 @@ export class EbookMetadataExtractorService {
     // Palm title at bytes 0..31
     const palmTitle = buf.slice(0, 32).toString('latin1').replace(/\0.*$/g, '').trim();
     let title: string | undefined = palmTitle || undefined;
-    let authors: string[] = [];
+    const authors: string[] = [];
     let publisher: string | undefined;
     let description: string | undefined;
     let isbn: string | undefined;
@@ -760,8 +760,8 @@ export class EbookMetadataExtractorService {
       rawFilename: path.basename(filePath),
     });
 
-    let finalTitle = reconciled.title || parsedFilename.cleanedFilename || path.basename(filePath, path.extname(filePath));
-    let finalAuthors = reconciled.authors;
+    const finalTitle = reconciled.title || parsedFilename.cleanedFilename || path.basename(filePath, path.extname(filePath));
+    const finalAuthors = reconciled.authors;
 
     // Supplementary bibliographic attributes
     const finalPublisher = reconciled.publisher;
@@ -769,7 +769,7 @@ export class EbookMetadataExtractorService {
     const finalIsbn = meta.isbn || parsedFilename.isbn;
     const finalDescription = meta.description || undefined;
     let finalEdition = reconciled.edition;
-    let editionDetails: any = undefined;
+    let editionDetails = undefined;
 
     if (!finalEdition) {
       try {
@@ -842,9 +842,9 @@ export class EbookMetadataExtractorService {
   /**
    * Helper to read zip entry buffer asynchronously
    */
-  private readZipEntryBuffer(zipfile: any, entry: any): Promise<Buffer> {
+  private readZipEntryBuffer(zipfile: yauzl.ZipFile, entry: yauzl.Entry): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      zipfile.openReadStream(entry, (err: any, readStream: any) => {
+      zipfile.openReadStream(entry, (err: unknown, readStream: import('node:stream').Readable) => {
         if (err || !readStream) return reject(err);
         const chunks: Buffer[] = [];
         readStream.on('data', (c: Buffer) => chunks.push(c));

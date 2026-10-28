@@ -1,6 +1,31 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { SunnahAPI } from '../shared/types/sunnah';
 import type { QuranAPI } from '../shared/types/quran';
+import type { AthanAPI, AthanAlertPayload, PrayerStatusSnapshot } from '../shared/types/athan';
+import type { StudyNoteInput } from '../shared/study-notes';
+import type { PdfEditorAPI } from '../shared/types/pdf-editor';
+import type { PdfCloudAPI } from '../shared/types/pdf-cloud';
+import type { PdfCollaborationAPI } from '../shared/types/pdf-collaboration';
+
+const athan: AthanAPI = {
+  getState: () => ipcRenderer.invoke('athan:get-state'),
+  updateSettings: (partial) => ipcRenderer.invoke('athan:update-settings', partial),
+  detectAutoLocation: () => ipcRenderer.invoke('athan:detect-auto-location'),
+  syncMawaqit: (mosqueIdOrSlug) => ipcRenderer.invoke('athan:sync-mawaqit', mosqueIdOrSlug),
+  triggerTestAlert: (prayer, type) => ipcRenderer.invoke('athan:trigger-test-alert', prayer, type),
+  toggleMiniWidget: () => ipcRenderer.invoke('athan:toggle-mini-widget'),
+  chooseRecording: () => ipcRenderer.invoke('athan:choose-recording'),
+  onAlert: (callback) => {
+    const sub = (_: unknown, payload: AthanAlertPayload) => callback(payload);
+    ipcRenderer.on('athan:alert', sub);
+    return () => { ipcRenderer.removeListener('athan:alert', sub); };
+  },
+  onStateChanged: (callback) => {
+    const sub = (_: unknown, state: PrayerStatusSnapshot) => callback(state);
+    ipcRenderer.on('athan:state-changed', sub);
+    return () => { ipcRenderer.removeListener('athan:state-changed', sub); };
+  },
+};
 
 const quran: QuranAPI = {
   khatmahList: () => ipcRenderer.invoke('quran:khatmah-list'),
@@ -36,24 +61,28 @@ const quran: QuranAPI = {
   cancel: id => ipcRenderer.invoke('quran:cancel', id),
   remove: id => ipcRenderer.invoke('quran:remove', id),
   chooseDirectory: () => ipcRenderer.invoke('quran:directory'),
-  onChanged: listener => { const handler = () => listener(); ipcRenderer.on('quran:changed', handler); return () => ipcRenderer.removeListener('quran:changed', handler); },
+  onChanged: listener => { const handler = () => listener(); ipcRenderer.on('quran:changed', handler); return () => { ipcRenderer.removeListener('quran:changed', handler); }; },
 };
 
 const sunnah: SunnahAPI = {
   share: text => ipcRenderer.invoke('sunnah:share', text),
   catalog: () => ipcRenderer.invoke('sunnah:catalog'),
-  importCorpus: () => ipcRenderer.invoke('sunnah:import'),
+  research: id => ipcRenderer.invoke('sunnah:research', id),
+  openSource: id => ipcRenderer.invoke('sunnah:source', id),
+  search: query => ipcRenderer.invoke('sunnah:search', query),
+  importCorpus: language => ipcRenderer.invoke('sunnah:import', language),
   chapter: (collection, number) => ipcRenderer.invoke('sunnah:chapter', collection, number),
 };
 
 export const API = {
+  athan,
   quran,
   sunnah,
   getSystemInfo: () => ipcRenderer.invoke('system:get-info'),
   openFileDialog: () => ipcRenderer.invoke('system:open-file-dialog'),
   openFilesDialog: () => ipcRenderer.invoke('system:open-files-dialog'),
   openDirectoryDialog: () => ipcRenderer.invoke('system:open-directory-dialog'),
-  getPathForFile: (file: any): string => {
+  getPathForFile: (file: File & { path?: string }): string => {
     try {
       if (webUtils && typeof webUtils.getPathForFile === 'function') {
         const p = webUtils.getPathForFile(file);
@@ -74,8 +103,8 @@ export const API = {
   // Database
   getDatabaseStatus: () => ipcRenderer.invoke('database:get-status'),
   getAllBooks: () => ipcRenderer.invoke('library:get-all-books'),
-  addBook: (bookData: any) => ipcRenderer.invoke('library:add-book', bookData),
-  updateBook: (bookData: any) => ipcRenderer.invoke('library:update-book', bookData),
+  addBook: (bookData: unknown) => ipcRenderer.invoke('library:add-book', bookData),
+  updateBook: (bookData: unknown) => ipcRenderer.invoke('library:update-book', bookData),
   deleteBook: (bookId: string) => ipcRenderer.invoke('library:delete-book', bookId),
   updateReadingStatus: (bookId: string, status: string, progress?: number) =>
     ipcRenderer.invoke('library:update-reading-status', bookId, status, progress),
@@ -83,28 +112,35 @@ export const API = {
   // Annotations, Highlights, Margin Notes & Freehand Ink (Story 2.1 / KEY-137)
   getAnnotations: (bookId: string) => ipcRenderer.invoke('library:get-annotations', bookId),
   getAllAnnotations: () => ipcRenderer.invoke('library:get-all-annotations'),
-  saveAnnotation: (payload: any) => ipcRenderer.invoke('library:save-annotation', payload),
+  saveAnnotation: (payload: unknown) => ipcRenderer.invoke('library:save-annotation', payload),
   deleteAnnotation: (annotationId: string) => ipcRenderer.invoke('library:delete-annotation', annotationId),
-  getFilteredAnnotations: (filter: any) => ipcRenderer.invoke('library:get-filtered-annotations', filter),
+  getFilteredAnnotations: (filter: unknown) => ipcRenderer.invoke('library:get-filtered-annotations', filter),
 
   // Full-Text Search Engine (KEY-140)
-  indexBookContent: (bookId: string, pages: any[]) => ipcRenderer.invoke('search:index-book-content', bookId, pages),
+  indexBookContent: (bookId: string, pages: unknown[]) => ipcRenderer.invoke('search:index-book-content', bookId, pages),
   deleteBookContentIndex: (bookId: string) => ipcRenderer.invoke('search:delete-book-content', bookId),
   isBookIndexed: (bookId: string) => ipcRenderer.invoke('search:is-book-indexed', bookId),
-  searchLibraryFullText: (query: string, options?: any) => ipcRenderer.invoke('search:library-full-text', query, options),
+  searchLibraryFullText: (query: string, options?: unknown) => ipcRenderer.invoke('search:library-full-text', query, options),
   getFtsStats: () => ipcRenderer.invoke('search:get-fts-stats'),
 
   // Local OCR Engine for Scanned Documents & Manuscripts (Story 3.2 / KEY-141)
   ocrIsSupported: () => ipcRenderer.invoke('ocr:is-supported'),
+  ocrGetEngineInfo: () => ipcRenderer.invoke('ocr:get-engine-info'),
+  ocrDownloadModel: () => ipcRenderer.invoke('ocr:download-model'),
+  onOcrDownloadProgress: (callback: (payload: import('../shared/types/ocr').OcrModelDownloadProgress) => void) => {
+    const subscription = (_: unknown, value: Parameters<typeof callback>[0]) => callback(value);
+    ipcRenderer.on('ocr:download-progress', subscription);
+    return () => { ipcRenderer.removeListener('ocr:download-progress', subscription); };
+  },
   ocrGetAvailableLanguages: () => ipcRenderer.invoke('ocr:get-available-languages'),
   ocrRecognizePage: (params: import('../shared/types/ocr').OcrRecognizePageParams) =>
     ipcRenderer.invoke('ocr:recognize-page', params),
   ocrRecognizeDocument: (params: import('../shared/types/ocr').OcrRecognizeDocumentParams) =>
     ipcRenderer.invoke('ocr:recognize-document', params),
   onOcrProgress: (callback: (payload: import('../shared/types/ocr').OcrProgressPayload) => void) => {
-    const subscription = (_: any, value: any) => callback(value);
+    const subscription = (_: unknown, value: Parameters<typeof callback>[0]) => callback(value);
     ipcRenderer.on('ocr:progress', subscription);
-    return () => ipcRenderer.removeListener('ocr:progress', subscription);
+    return () => { ipcRenderer.removeListener('ocr:progress', subscription); };
   },
 
   // Pluggable Offline Dictionary & Encyclopedia Lookup (Story 3.3 / KEY-142)
@@ -120,7 +156,7 @@ export const API = {
     ipcRenderer.invoke('dictionary:toggle', id, isEnabled),
 
   // Story 9 Pagination & Bulk Operations
-  getPaginatedWorks: (options: any) =>
+  getPaginatedWorks: (options: unknown) =>
     ipcRenderer.invoke('library:get-paginated-works', options),
   bulkUpdateCategory: (input: { workIds: string[]; categoryId: string }) =>
     ipcRenderer.invoke('library:bulk-update-category', input),
@@ -132,7 +168,7 @@ export const API = {
     ipcRenderer.invoke('library:bulk-delete', input),
 
   // Lending Management
-  recordLoan: (workId: string, loanData: any) => ipcRenderer.invoke('library:record-loan', workId, loanData),
+  recordLoan: (workId: string, loanData: unknown) => ipcRenderer.invoke('library:record-loan', workId, loanData),
   returnLoan: (loanId: string, returnDate?: string, condition?: string) =>
     ipcRenderer.invoke('library:return-loan', loanId, returnDate, condition),
   getLendingHistory: (workId: string) => ipcRenderer.invoke('library:get-lending-history', workId),
@@ -153,13 +189,13 @@ export const API = {
     expectedFilesize?: number;
   }) => ipcRenderer.invoke('library:download-libgen', options),
   onLibgenDownloadProgress: (callback: (progress: { md5: string; bytesTransferred: number; totalBytes: number; percent: number }) => void) => {
-    const sub = (_: any, data: any) => callback(data);
+    const sub = (_: unknown, data: Parameters<typeof callback>[0]) => callback(data);
     ipcRenderer.on('libgen:download-progress', sub);
-    return () => ipcRenderer.removeListener('libgen:download-progress', sub);
+    return () => { ipcRenderer.removeListener('libgen:download-progress', sub); };
   },
   searchAnnasArchive: (query: string, maxResults?: number) =>
     ipcRenderer.invoke('library:search-annas', query, maxResults),
-  searchBibliographic: (query: any, maxResults?: number) =>
+  searchBibliographic: (query: unknown, maxResults?: number) =>
     ipcRenderer.invoke('library:search-bibliographic', query, maxResults),
   getBibliographicDetails: (workId: string) =>
     ipcRenderer.invoke('library:get-bibliographic-details', workId),
@@ -169,9 +205,9 @@ export const API = {
     ipcRenderer.invoke('library:lookup-metadata', params),
   parseFilename: (filename: string) =>
     ipcRenderer.invoke('library:parse-filename', filename),
-  resolveCover: (options: any) =>
+  resolveCover: (options: unknown) =>
     ipcRenderer.invoke('library:resolve-cover', options),
-  extractOfflineMetadata: (params: { filePath?: string; filename?: string }) =>
+  extractOfflineMetadata: (params: { filePath?: string; filename?: string; offlineOnly?: boolean }) =>
     ipcRenderer.invoke('library:extract-offline-metadata', params),
   discoverMetadata: (params: { filePath?: string; filename?: string; title?: string; author?: string; isbn?: string; page?: number; deeper?: boolean; offlineOnly?: boolean }) =>
     ipcRenderer.invoke('library:discover-metadata', params),
@@ -199,20 +235,20 @@ export const API = {
     ipcRenderer.invoke('digital:validate-files', filePaths),
   getSupportedDigitalFormats: () =>
     ipcRenderer.invoke('digital:get-supported-formats'),
-  importDigitalFile: (options: any) =>
+  importDigitalFile: (options: unknown) =>
     ipcRenderer.invoke('digital:import-file', options),
-  importDigitalFiles: (optionsList: any[]) =>
+  importDigitalFiles: (optionsList: unknown[]) =>
     ipcRenderer.invoke('digital:import-files', optionsList),
   extractDigitalMetadata: (filePath: string, formatHint?: string) =>
     ipcRenderer.invoke('digital:extract-metadata', filePath, formatHint),
-  checkDigitalDuplicates: (inputs: any[]) =>
+  checkDigitalDuplicates: (inputs: unknown[]) =>
     ipcRenderer.invoke('digital:check-duplicates', inputs),
   verifyFileStorage: (workId: string) =>
     ipcRenderer.invoke('digital:verify-file', workId),
   verifyAllFilesStorage: () =>
     ipcRenderer.invoke('digital:verify-files'),
-  onDigitalImportProgress: (callback: (progress: any) => void) => {
-    const listener = (_e: any, progress: any) => callback(progress);
+  onDigitalImportProgress: (callback: (progress: import('../shared/types/digital-file').ImportProgressEvent) => void) => {
+    const listener = (_e: unknown, progress: Parameters<typeof callback>[0]) => callback(progress);
     ipcRenderer.on('digital:import-progress', listener);
     return () => {
       ipcRenderer.removeListener('digital:import-progress', listener);
@@ -229,7 +265,7 @@ export const API = {
     batchAutoRebind: (searchDirectory: string) =>
       ipcRenderer.invoke('storage:batch-auto-rebind', searchDirectory),
     getAnalytics: () => ipcRenderer.invoke('storage:get-analytics'),
-    pruneDuplicate: (options: any) =>
+    pruneDuplicate: (options: unknown) =>
       ipcRenderer.invoke('storage:prune-duplicate', options),
   },
 
@@ -238,16 +274,16 @@ export const API = {
     getLocations: () => ipcRenderer.invoke('physical:get-locations'),
     getLocationTree: () => ipcRenderer.invoke('physical:get-location-tree'),
     getInventoryStats: () => ipcRenderer.invoke('physical:get-inventory-stats'),
-    updateLocation: (input: any) => ipcRenderer.invoke('physical:update-location', input),
+    updateLocation: (input: unknown) => ipcRenderer.invoke('physical:update-location', input),
   },
 
   // Lending Lifecycle & Borrowers (Story 8 / KEY-5)
   lending: {
-    borrowBook: (input: any) => ipcRenderer.invoke('lending:borrow-book', input),
-    returnBook: (input: any) => ipcRenderer.invoke('lending:return-book', input),
+    borrowBook: (input: unknown) => ipcRenderer.invoke('lending:borrow-book', input),
+    returnBook: (input: unknown) => ipcRenderer.invoke('lending:return-book', input),
     checkOverdue: () => ipcRenderer.invoke('lending:check-overdue'),
     getHistory: (workId: string) => ipcRenderer.invoke('lending:get-history', workId),
-    getAllLoans: (filter?: any) => ipcRenderer.invoke('lending:get-all-loans', filter),
+    getAllLoans: (filter?: unknown) => ipcRenderer.invoke('lending:get-all-loans', filter),
     getBorrowers: () => ipcRenderer.invoke('lending:get-borrowers'),
   },
 
@@ -292,38 +328,38 @@ export const API = {
 
   // Knowledge Layer
   getAllNotes: () => ipcRenderer.invoke('library:get-all-notes'),
-  addNote: (noteData: any) => ipcRenderer.invoke('library:add-note', noteData),
+  addNote: (noteData: unknown) => ipcRenderer.invoke('library:add-note', noteData),
   deleteNote: (noteId: string) => ipcRenderer.invoke('library:delete-note', noteId),
 
   // Application Settings & View Preferences (Story 9)
   settings: {
-    get: (key: string, defaultValue?: any) => ipcRenderer.invoke('settings:get', key, defaultValue),
-    set: (key: string, value: any) => ipcRenderer.invoke('settings:set', key, value),
+    get: (key: string, defaultValue?: unknown) => ipcRenderer.invoke('settings:get', key, defaultValue),
+    set: (key: string, value: unknown) => ipcRenderer.invoke('settings:set', key, value),
     getAll: () => ipcRenderer.invoke('settings:get-all'),
     delete: (key: string) => ipcRenderer.invoke('settings:delete', key),
     getViewPreferences: () => ipcRenderer.invoke('settings:get-view-preferences'),
-    saveViewPreferences: (prefs: any) => ipcRenderer.invoke('settings:save-view-preferences', prefs),
+    saveViewPreferences: (prefs: unknown) => ipcRenderer.invoke('settings:save-view-preferences', prefs),
   },
 
   // Quota & Rate-Limiter Tracking
   getQuotaStatus: () => ipcRenderer.invoke('metadata:get-quota-status'),
   setQuotaCountTest: (count: number, date?: string) =>
     ipcRenderer.invoke('metadata:set-quota-count-test', count, date),
-  onQuotaWarning: (callback: (payload: any) => void) => {
-    const subscription = (_: any, value: any) => callback(value);
+  onQuotaWarning: (callback: (payload: import('../main/services/metadata/quotaTracker').QuotaWarningPayload) => void) => {
+    const subscription = (_: unknown, value: Parameters<typeof callback>[0]) => callback(value);
     ipcRenderer.on('metadata:quota-warning', subscription);
-    return () => ipcRenderer.removeListener('metadata:quota-warning', subscription);
+    return () => { ipcRenderer.removeListener('metadata:quota-warning', subscription); };
   },
 
   // Provider Priority & Configuration
   getProviderConfig: () =>
     ipcRenderer.invoke('metadata:get-provider-config'),
-  updateProviderConfig: (configs: any) =>
+  updateProviderConfig: (configs: unknown) =>
     ipcRenderer.invoke('metadata:update-provider-config', configs),
 
   // Unified Multi-Provider Search & Discovery (Story 11)
   search: {
-    query: (query: any, options?: { timeoutMs?: number; searchId?: string }) =>
+    query: (query: unknown, options?: { timeoutMs?: number; searchId?: string }) =>
       ipcRenderer.invoke('search:query', query, options),
     cancel: (searchId?: string) =>
       ipcRenderer.invoke('search:cancel', searchId),
@@ -331,24 +367,24 @@ export const API = {
       ipcRenderer.invoke('search:get-providers'),
     setProviderEnabled: (providerId: string, enabled: boolean) =>
       ipcRenderer.invoke('search:set-provider-enabled', providerId, enabled),
-    importResult: (input: any) =>
+    importResult: (input: unknown) =>
       ipcRenderer.invoke('search:import-result', input),
-    onProgress: (callback: (update: any) => void) => {
-      const subscription = (_: any, value: any) => callback(value);
+    onProgress: (callback: (update: import('../shared/types/search').SearchProgressUpdate) => void) => {
+      const subscription = (_: unknown, value: Parameters<typeof callback>[0]) => callback(value);
       ipcRenderer.on('search:progress', subscription);
-      return () => ipcRenderer.removeListener('search:progress', subscription);
+      return () => { ipcRenderer.removeListener('search:progress', subscription); };
     },
   },
 
   // Online Metadata Enrichment & Safe Merge (Story 12 / KEY-3)
   enrichment: {
-    findOnlineEditions: (input: { workId?: string; book?: any }) =>
+    findOnlineEditions: (input: { workId?: string; book?: unknown }) =>
       ipcRenderer.invoke('enrichment:find-online-editions', input),
-    computeDiffs: (input: { workId?: string; book?: any; candidate: any }) =>
+    computeDiffs: (input: { workId?: string; book?: unknown; candidate: unknown }) =>
       ipcRenderer.invoke('enrichment:compute-diffs', input),
-    applyMerge: (request: any) =>
+    applyMerge: (request: unknown) =>
       ipcRenderer.invoke('enrichment:apply-merge', request),
-    fetchAndCacheCover: (request: any) =>
+    fetchAndCacheCover: (request: unknown) =>
       ipcRenderer.invoke('enrichment:fetch-and-cache-cover', request),
     attachDigitalCopy: (input: { workId: string; downloadUrl: string; format: string; title?: string }) =>
       ipcRenderer.invoke('enrichment:attach-digital-copy', input),
@@ -356,8 +392,8 @@ export const API = {
       ipcRenderer.invoke('enrichment:bulk-enrich-works', input),
     refreshWork: (input: { workId: string; autoApply?: boolean }) =>
       ipcRenderer.invoke('enrichment:refresh-work', input),
-    onBulkProgress: (callback: (progress: any) => void) => {
-      const listener = (_e: any, progress: any) => callback(progress);
+    onBulkProgress: (callback: (progress: { current: number; total: number; bookTitle?: string; status: string }) => void) => {
+      const listener = (_e: unknown, progress: Parameters<typeof callback>[0]) => callback(progress);
       ipcRenderer.on('enrichment:bulk-progress', listener);
       return () => {
         ipcRenderer.removeListener('enrichment:bulk-progress', listener);
@@ -366,38 +402,38 @@ export const API = {
   },
 
   onNotification: (callback: (message: string) => void) => {
-    const subscription = (_: any, value: string) => callback(value);
+    const subscription = (_: unknown, value: string) => callback(value);
     ipcRenderer.on('system:notification', subscription);
-    return () => ipcRenderer.removeListener('system:notification', subscription);
+    return () => { ipcRenderer.removeListener('system:notification', subscription); };
   },
 
   onReaderOpenFile: (callback: (filePath: string) => void) => {
-    const subscription = (_: any, filePath: string) => callback(filePath);
+    const subscription = (_: unknown, filePath: string) => callback(filePath);
     ipcRenderer.on('reader:open-file', subscription);
-    return () => ipcRenderer.removeListener('reader:open-file', subscription);
+    return () => { ipcRenderer.removeListener('reader:open-file', subscription); };
   },
 
   // BYOK AI Research Assistant & Translation (KEY-143)
   ai: {
     getSettings: () =>
       ipcRenderer.invoke('ai:get-settings'),
-    saveSettings: (settings: any) =>
+    saveSettings: (settings: unknown) =>
       ipcRenderer.invoke('ai:save-settings', settings),
-    testConnection: (customSettings?: any) =>
+    testConnection: (customSettings?: unknown) =>
       ipcRenderer.invoke('ai:test-connection', customSettings),
-    executeTool: (payload: any) =>
+    executeTool: (payload: unknown) =>
       ipcRenderer.invoke('ai:execute-tool', payload),
-    translate: (options: any) =>
+    translate: (options: unknown) =>
       ipcRenderer.invoke('ai:translate', options),
   },
 
   // Text-to-Speech (TTS), Audiobook Playback & SMIL Overlays (KEY-145)
   audio: {
     getPairing: (bookId: string) => ipcRenderer.invoke('audio:get-pairing', bookId),
-    savePairing: (payload: any) => ipcRenderer.invoke('audio:save-pairing', payload),
+    savePairing: (payload: unknown) => ipcRenderer.invoke('audio:save-pairing', payload),
     deletePairing: (bookId: string) => ipcRenderer.invoke('audio:delete-pairing', bookId),
     getProgress: (bookId: string) => ipcRenderer.invoke('audio:get-progress', bookId),
-    saveProgress: (progress: any) => ipcRenderer.invoke('audio:save-progress', progress),
+    saveProgress: (progress: unknown) => ipcRenderer.invoke('audio:save-progress', progress),
     parseSmil: (smilXml: string, smilHref?: string) => ipcRenderer.invoke('audio:parse-smil', smilXml, smilHref),
     scanLocalAudioFiles: (folderPath: string) => ipcRenderer.invoke('audio:scan-local-files', folderPath),
     queryAudiobookshelf: (serverUrl: string, apiKey: string, query?: string) =>
@@ -416,17 +452,17 @@ export const API = {
       onChunk: (callback: (chunk: import('../shared/types/tts-provider').TTSProviderAudioChunk) => void) => {
         const subscription = (_: unknown, chunk: import('../shared/types/tts-provider').TTSProviderAudioChunk) => callback(chunk);
         ipcRenderer.on('tts:chunk', subscription);
-        return () => ipcRenderer.removeListener('tts:chunk', subscription);
+        return () => { ipcRenderer.removeListener('tts:chunk', subscription); };
       },
       onComplete: (callback: (event: { jobId: string }) => void) => {
         const subscription = (_: unknown, event: { jobId: string }) => callback(event);
         ipcRenderer.on('tts:complete', subscription);
-        return () => ipcRenderer.removeListener('tts:complete', subscription);
+        return () => { ipcRenderer.removeListener('tts:complete', subscription); };
       },
       onError: (callback: (event: { jobId: string; message: string }) => void) => {
         const subscription = (_: unknown, event: { jobId: string; message: string }) => callback(event);
         ipcRenderer.on('tts:error', subscription);
-        return () => ipcRenderer.removeListener('tts:error', subscription);
+        return () => { ipcRenderer.removeListener('tts:error', subscription); };
       },
     },
   },
@@ -434,16 +470,16 @@ export const API = {
   // Cloud Backup, KOReader Progress Sync & Version Snapshots (KEY-147)
   cloudSync: {
     getKoSyncConfig: () => ipcRenderer.invoke('sync:koreader-get-config'),
-    saveKoSyncConfig: (config: any) => ipcRenderer.invoke('sync:koreader-save-config', config),
-    testKoSync: (customConfig?: any) => ipcRenderer.invoke('sync:koreader-test', customConfig),
+    saveKoSyncConfig: (config: unknown) => ipcRenderer.invoke('sync:koreader-save-config', config),
+    testKoSync: (customConfig?: unknown) => ipcRenderer.invoke('sync:koreader-test', customConfig),
     pullKoSyncProgress: (bookId: string, customDigest?: string) =>
       ipcRenderer.invoke('sync:koreader-pull', bookId, customDigest),
     pushKoSyncProgress: (bookId: string, progress: string, percentage: number, customDigest?: string) =>
       ipcRenderer.invoke('sync:koreader-push', bookId, progress, percentage, customDigest),
 
     getCloudConfig: () => ipcRenderer.invoke('sync:cloud-get-config'),
-    saveCloudConfig: (config: any) => ipcRenderer.invoke('sync:cloud-save-config', config),
-    testCloudConnection: (customConfig?: any) => ipcRenderer.invoke('sync:cloud-test', customConfig),
+    saveCloudConfig: (config: unknown) => ipcRenderer.invoke('sync:cloud-save-config', config),
+    testCloudConnection: (customConfig?: unknown) => ipcRenderer.invoke('sync:cloud-test', customConfig),
     listCloudFiles: (remotePath?: string) => ipcRenderer.invoke('sync:cloud-list-files', remotePath),
     backupToCloud: (targetFileName?: string) => ipcRenderer.invoke('sync:cloud-backup', targetFileName),
     restoreFromCloud: (remoteFileName: string) => ipcRenderer.invoke('sync:cloud-restore', remoteFileName),
@@ -460,33 +496,33 @@ export const API = {
   // OPDS 1.2 / 2.0 Catalog & Local Feed Server (KEY-148)
   opds: {
     getPresets: () => ipcRenderer.invoke('opds:get-presets'),
-    browseCatalog: (url: string, catalog?: any) => ipcRenderer.invoke('opds:browse-catalog', url, catalog),
-    searchCatalog: (searchTemplate: string, query: string, catalog?: any) =>
+    browseCatalog: (url: string, catalog?: unknown) => ipcRenderer.invoke('opds:browse-catalog', url, catalog),
+    searchCatalog: (searchTemplate: string, query: string, catalog?: unknown) =>
       ipcRenderer.invoke('opds:search-catalog', searchTemplate, query, catalog),
-    downloadBook: (downloadUrl: string, catalog?: any, suggestedFileName?: string) =>
+    downloadBook: (downloadUrl: string, catalog?: unknown, suggestedFileName?: string) =>
       ipcRenderer.invoke('opds:download-book', downloadUrl, catalog, suggestedFileName),
     startServer: (port?: number) => ipcRenderer.invoke('opds:server-start', port),
     stopServer: () => ipcRenderer.invoke('opds:server-stop'),
     getServerStatus: () => ipcRenderer.invoke('opds:server-status'),
-    setServerConfig: (config: any) => ipcRenderer.invoke('opds:server-set-config', config),
+    setServerConfig: (config: unknown) => ipcRenderer.invoke('opds:server-set-config', config),
   },
 
   // Web Clipper & Serialized Novel Ingestion (KEY-148)
   clipper: {
-    clipUrl: (options: any) => ipcRenderer.invoke('clipper:clip-url', options),
-    clipHtml: (options: any) => ipcRenderer.invoke('clipper:clip-html', options),
-    scrapeNovel: (options: any) => ipcRenderer.invoke('clipper:scrape-novel', options),
+    clipUrl: (options: unknown) => ipcRenderer.invoke('clipper:clip-url', options),
+    clipHtml: (options: unknown) => ipcRenderer.invoke('clipper:clip-html', options),
+    scrapeNovel: (options: unknown) => ipcRenderer.invoke('clipper:scrape-novel', options),
     openBrowser: (initialUrl?: string) => ipcRenderer.invoke('clipper:open-browser', initialUrl),
     clipBrowser: () => ipcRenderer.invoke('clipper:clip-browser'),
   },
 
   // Reading Statistics & Analytics Dashboard (KEY-149)
   statistics: {
-    startSession: (payload: any) => ipcRenderer.invoke('statistics:start-session', payload),
+    startSession: (payload: unknown) => ipcRenderer.invoke('statistics:start-session', payload),
     turnPage: (page: number, totalPages?: number) => ipcRenderer.invoke('statistics:turn-page', page, totalPages),
     heartbeat: () => ipcRenderer.invoke('statistics:heartbeat'),
     endSession: () => ipcRenderer.invoke('statistics:end-session'),
-    recordProgress: (payload: any) => ipcRenderer.invoke('statistics:record-progress', payload),
+    recordProgress: (payload: unknown) => ipcRenderer.invoke('statistics:record-progress', payload),
     getBookStats: (bookId: string) => ipcRenderer.invoke('statistics:get-book-stats', bookId),
     getAllBookStats: () => ipcRenderer.invoke('statistics:get-all-book-stats'),
     getDailyHeatmap: (days?: number) => ipcRenderer.invoke('statistics:get-daily-heatmap', days),
@@ -502,7 +538,7 @@ export const API = {
     setMasterPin: (pin: string) => ipcRenderer.invoke('security:set-master-pin', pin),
     clearMasterPin: () => ipcRenderer.invoke('security:clear-master-pin'),
     getLockConfig: () => ipcRenderer.invoke('security:get-lock-config'),
-    setLockConfig: (config: any) => ipcRenderer.invoke('security:set-lock-config', config),
+    setLockConfig: (config: unknown) => ipcRenderer.invoke('security:set-lock-config', config),
     getLockState: () => ipcRenderer.invoke('security:get-lock-state'),
     lock: (reason?: string) => ipcRenderer.invoke('security:lock', reason),
     unlock: () => ipcRenderer.invoke('security:unlock'),
@@ -519,16 +555,71 @@ export const API = {
   },
 
   // Core Knowledge Layer (highlights, notes, quotes, bookmarks, questions)
+  pdfEditor: {
+    capabilities: () => ipcRenderer.invoke('pdf-editor:capabilities'),
+    open: input => ipcRenderer.invoke('pdf-editor:open', input),
+    sources: workId => ipcRenderer.invoke('pdf-editor:sources', workId),
+    start: input => ipcRenderer.invoke('pdf-editor:start', input),
+    status: id => ipcRenderer.invoke('pdf-editor:status', id),
+    cancel: id => ipcRenderer.invoke('pdf-editor:cancel', id),
+    chooseSource: () => ipcRenderer.invoke('pdf-editor:choose-source'),
+    blankSession: () => ipcRenderer.invoke('pdf-editor:blank-session'),
+    chooseAsset: kind => ipcRenderer.invoke('pdf-editor:choose-asset', kind),
+    clipboard: () => ipcRenderer.invoke('pdf-editor:clipboard'),
+    save: input => ipcRenderer.invoke('pdf-editor:save', input),
+    saveCopy: id => ipcRenderer.invoke('pdf-editor:save-copy', id),
+    close: id => ipcRenderer.invoke('pdf-editor:close', id),
+    audit: () => ipcRenderer.invoke('pdf-editor:audit'),
+    onSourceChanged: callback => {
+      const listener = (_: unknown, source: { workId: string | null; sourceId: string | null }) => callback(source);
+      ipcRenderer.on('pdf-editor:source-changed', listener);
+      return () => { ipcRenderer.removeListener('pdf-editor:source-changed', listener); };
+    },
+  } satisfies PdfEditorAPI,
+  pdfCloud: {
+    status: provider => ipcRenderer.invoke('pdf-cloud:status', provider),
+    configure: (provider, config) => ipcRenderer.invoke('pdf-cloud:configure', provider, config),
+    connect: (provider, language) => ipcRenderer.invoke('pdf-cloud:connect', provider, language),
+    cancelLogin: provider => ipcRenderer.invoke('pdf-cloud:cancel-login', provider),
+    disconnect: provider => ipcRenderer.invoke('pdf-cloud:disconnect', provider),
+    list: (provider, folder, next) => ipcRenderer.invoke('pdf-cloud:list', provider, folder, next),
+    import: (provider, remoteId, workId) => ipcRenderer.invoke('pdf-cloud:import', provider, remoteId, workId),
+    export: (provider, sessionId, folder, name) => ipcRenderer.invoke('pdf-cloud:export', provider, sessionId, folder, name),
+    exportOutput: (provider, jobId, index, folder, name) => ipcRenderer.invoke('pdf-cloud:export-output', provider, jobId, index, folder, name),
+    links: () => ipcRenderer.invoke('pdf-cloud:links'),
+    link: (provider, sessionId, remoteId) => ipcRenderer.invoke('pdf-cloud:link', provider, sessionId, remoteId),
+    setSync: (id, enabled) => ipcRenderer.invoke('pdf-cloud:set-sync', id, enabled),
+    unlink: id => ipcRenderer.invoke('pdf-cloud:unlink', id),
+    sync: id => ipcRenderer.invoke('pdf-cloud:sync', id),
+  } satisfies PdfCloudAPI,
+  pdfCollaboration: {
+    reviews: session => ipcRenderer.invoke('pdf-collab:list', session),
+    saveReview: (session, input) => ipcRenderer.invoke('pdf-collab:add', session, input),
+    reply: (session, id, author, text, expected) => ipcRenderer.invoke('pdf-collab:reply', session, id, author, text, expected),
+    reviewStatus: (session, id, status, expected) => ipcRenderer.invoke('pdf-collab:status', session, id, status, expected),
+    exportReviews: (session, language) => ipcRenderer.invoke('pdf-collab:export', session, language),
+    ask: (session, question, language, allowRemote, password, options) => ipcRenderer.invoke('pdf-collab:ask', session, question, language, allowRemote, password, options),
+  } satisfies PdfCollaborationAPI,
+  studyNotes: {
+    list: () => ipcRenderer.invoke('study-notes:list') as Promise<import('../shared/study-notes').StudyNote[]>,
+    save: (input: StudyNoteInput) => ipcRenderer.invoke('study-notes:save', input) as Promise<import('../shared/study-notes').StudyNote>,
+    remove: (id: string) => ipcRenderer.invoke('study-notes:remove', id) as Promise<void>,
+    onChanged: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('study-notes:changed', listener);
+      return () => { ipcRenderer.removeListener('study-notes:changed', listener); };
+    },
+  },
   knowledge: {
     getByWork: (workId: string, type?: string) => ipcRenderer.invoke('knowledge:get-by-work', workId, type),
     getAll: () => ipcRenderer.invoke('knowledge:get-all'),
-    save: (payload: any) => ipcRenderer.invoke('knowledge:save', payload),
+    save: (payload: unknown) => ipcRenderer.invoke('knowledge:save', payload),
     delete: (knowledgeId: string) => ipcRenderer.invoke('knowledge:delete', knowledgeId),
   },
 
   // Reader Session & Continuous Location Tracking
   reader: {
-    recordSession: (session: any) => ipcRenderer.invoke('reader:record-session', session),
+    recordSession: (session: unknown) => ipcRenderer.invoke('reader:record-session', session),
     getSessions: (workId: string) => ipcRenderer.invoke('reader:get-sessions', workId),
     updateLastLocation: (workId: string, location: string) => ipcRenderer.invoke('reader:update-last-location', workId, location),
     getLastLocation: (workId: string) => ipcRenderer.invoke('reader:get-last-location', workId),

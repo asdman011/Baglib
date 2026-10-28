@@ -282,6 +282,7 @@ export interface LendingRecord {
   expectedReturnDate: string;
   actualReturnDate?: string;
   isReturned: boolean;
+  conditionOut?: string;
   conditionOnReturn?: string;
   notes?: string;
 }

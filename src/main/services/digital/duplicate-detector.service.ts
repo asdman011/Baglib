@@ -110,9 +110,9 @@ export class DuplicateDetectorService {
     if (exactOnly) return { filePath, fileName, fileHash, fileSizeBytes, matchType: 'none', confidence: 0, reason: '' };
 
     // Extract embedded metadata if title or ISBN are missing and file exists
-    let title = candidate.title || (candidate as any).candidateMetadata?.title;
-    let author = candidate.author || (candidate as any).candidateMetadata?.author;
-    let isbn = candidate.isbn || (candidate as any).candidateMetadata?.isbn;
+    let title = candidate.title || (candidate).candidateMetadata?.title;
+    let author = candidate.author || (candidate).candidateMetadata?.author;
+    let isbn = candidate.isbn || (candidate).candidateMetadata?.isbn;
 
     if (filePath && fs.existsSync(filePath) && (!title || !isbn)) {
       try {

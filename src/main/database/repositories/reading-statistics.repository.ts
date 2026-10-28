@@ -1,3 +1,4 @@
+interface ReadingStatRow { id: string; title: string; authors?: string; md5?: string; total_read_time: number; total_read_pages: number; last_open: number; pages: number; subject: string; start_time: number; duration: number; read_time: number; read_pages: number; total_time: number; total_pages: number; total_books: number; day: string; date: string; total_duration: number; pages_read: number; book_count: number; time_seconds: number; }
 /**
  * Baglib — Reading Statistics Repository (KEY-149)
  *
@@ -27,7 +28,7 @@ export interface IReadingStatisticsRepository {
     title: string;
     authors?: string;
     md5?: string;
-    subject?: string;
+    subject: string;
     totalPages?: number;
   }): void;
   recordPageReading(payload: RecordReadingProgressPayload): void;
@@ -50,7 +51,7 @@ export class SqliteReadingStatisticsRepository implements IReadingStatisticsRepo
     title: string;
     authors?: string;
     md5?: string;
-    subject?: string;
+    subject: string;
     totalPages?: number;
   }): void {
     const db = this.getDb();
@@ -146,7 +147,7 @@ export class SqliteReadingStatisticsRepository implements IReadingStatisticsRepo
       SELECT id, title, authors, md5, total_read_time, total_read_pages, last_open, pages, subject
       FROM reading_book_stat
       WHERE id = ?
-    `).get(bookId) as any;
+    `).get(bookId) as ReadingStatRow | undefined;
 
     if (!row) return null;
 
@@ -172,7 +173,7 @@ export class SqliteReadingStatisticsRepository implements IReadingStatisticsRepo
       SELECT id, title, authors, md5, total_read_time, total_read_pages, last_open, pages, subject
       FROM reading_book_stat
       ORDER BY last_open DESC
-    `).all() as any[];
+    `).all() as ReadingStatRow[];
 
     return rows.map((row) => ({
       bookId: row.id,
@@ -221,7 +222,7 @@ export class SqliteReadingStatisticsRepository implements IReadingStatisticsRepo
       WHERE start_time >= ?
       GROUP BY day
       ORDER BY day ASC
-    `).all(startTimeThreshold) as any[];
+    `).all(startTimeThreshold) as ReadingStatRow[];
 
     return rows.map((r) => ({
       date: r.day,
@@ -246,7 +247,7 @@ export class SqliteReadingStatisticsRepository implements IReadingStatisticsRepo
 
     let currentStreakDays = 0;
     let longestStreakDays = 0;
-    let lastReadDate: string | undefined = readDates[readDates.length - 1];
+    const lastReadDate: string | undefined = readDates[readDates.length - 1];
 
     if (readDates.length > 0) {
       const dateSet = new Set(readDates);
@@ -263,7 +264,7 @@ export class SqliteReadingStatisticsRepository implements IReadingStatisticsRepo
       const yesterdayStr = formatLocalDate(yesterday);
 
       // Check if user read today or yesterday for active streak
-      let checkDate = dateSet.has(todayStr)
+      const checkDate = dateSet.has(todayStr)
         ? new Date(today.getFullYear(), today.getMonth(), today.getDate())
         : (dateSet.has(yesterdayStr) ? new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate()) : null);
 
@@ -303,7 +304,7 @@ export class SqliteReadingStatisticsRepository implements IReadingStatisticsRepo
         COALESCE(SUM(duration), 0) AS total_time,
         COUNT(DISTINCT id_book || '-' || page) AS total_pages
       FROM reading_page_stat
-    `).get() as any;
+    `).get() as ReadingStatRow | undefined;
 
     const totalReadTimeSeconds = Number(totalsRow?.total_time || 0);
     const totalReadPages = Number(totalsRow?.total_pages || 0);
@@ -325,7 +326,7 @@ export class SqliteReadingStatisticsRepository implements IReadingStatisticsRepo
       LEFT JOIN reading_book_stat b ON b.id = p.id_book
       GROUP BY subject
       ORDER BY time_seconds DESC
-    `).all() as any[];
+    `).all() as ReadingStatRow[];
 
     const subjectBreakdown: SubjectReadingStat[] = subjectRows.map((s) => ({
       subject: s.subject,

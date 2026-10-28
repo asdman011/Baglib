@@ -1,3 +1,5 @@
+import type { OpenLibrarySearchDoc } from '../../../../shared/types/catalog-responses';
+import { errorMessage } from '../../../../shared/errors';
 /**
  * Baglib — Open Library Search Provider
  *
@@ -73,7 +75,7 @@ export class OpenLibrarySearchProvider implements ISearchProvider {
       }
 
       const url = `/search.json?${params.toString()}`;
-      const data = await openLibraryClient.getJson<any>(url);
+      const data = await openLibraryClient.getJson<{ docs?: OpenLibrarySearchDoc[] }>(url);
 
       if (signal?.aborted || !data?.docs || !Array.isArray(data.docs)) {
         return [];
@@ -127,12 +129,12 @@ export class OpenLibrarySearchProvider implements ISearchProvider {
       }
 
       return results;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (signal?.aborted) return [];
-      if (String(err?.message || err).includes('422')) {
+      if (String(errorMessage(err) || err).includes('422')) {
         return [];
       }
-      console.warn('[baglib:openlibrary-search] Provider search error:', err?.message || err);
+      console.warn('[baglib:openlibrary-search] Provider search error:', errorMessage(err) || err);
       return [];
     }
   }

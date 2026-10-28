@@ -1,3 +1,5 @@
+import * as electron from 'electron';
+import { errorMessage } from '../../../shared/errors';
 /**
  * Anna's Archive Provider for Baglib
  *
@@ -10,8 +12,8 @@
 // Safe fetch resolver that uses Electron net.fetch in Electron and global fetch in Node
 const getFetch = () => {
   try {
-    if (typeof process !== 'undefined' && (process.versions as any)?.electron) {
-      const electron = require('electron');
+    if (typeof process !== 'undefined' && (process.versions)?.electron) {
+
       if (electron?.net?.fetch) return electron.net.fetch;
     }
   } catch {
@@ -57,8 +59,8 @@ export class AnnasProvider {
    */
   async solveChallengeWithWindow(targetUrl: string, mirror: string): Promise<string> {
     try {
-      if (typeof process !== 'undefined' && (process.versions as any)?.electron) {
-        const electron = require('electron');
+      if (typeof process !== 'undefined' && (process.versions)?.electron) {
+
         if (electron.BrowserWindow && electron.session) {
           return await new Promise<string>((resolve) => {
             const win = new electron.BrowserWindow({
@@ -75,8 +77,8 @@ export class AnnasProvider {
               try {
                 const cookies = await electron.session.defaultSession.cookies.get({ domain });
                 if (cookies && cookies.length > 0) {
-                  this.cookieString = cookies.map((c: any) => `${c.name}=${c.value}`).join('; ');
-                  if (cookies.some((c: any) => c.name === 'aa_ddg_check')) {
+                  this.cookieString = cookies.map((c: { name: string; value: string }) => `${c.name}=${c.value}`).join('; ');
+                  if (cookies.some((c: { name: string; value: string }) => c.name === 'aa_ddg_check')) {
                     this.cookiesInitialized = true;
                   }
                 }
@@ -199,8 +201,8 @@ export class AnnasProvider {
         } else {
           console.warn(`[AnnasProvider] Fast fetch returned ${res.status}, falling back to background window`);
         }
-      } catch (err: any) {
-        console.warn('[AnnasProvider] Fast fetch error, falling back to window:', err?.message || err);
+      } catch (err: unknown) {
+        console.warn('[AnnasProvider] Fast fetch error, falling back to window:', errorMessage(err) || err);
       }
     }
 

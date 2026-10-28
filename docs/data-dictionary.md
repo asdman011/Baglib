@@ -1,8 +1,16 @@
 # Baglib — Unified Data Dictionary
 
-This document defines the comprehensive data models, tables, entities, fields, data types, constraints, and relationships across all persistent stores in Baglib:
+## PDF workstation persistence extension — 2026-10-26
+
+No database migration or new canonical entity is introduced. PDF files still belong to **Work → Edition → Source → file_source_detail**. Safe Save updates the exact source's `file_hash`, `file_size_bytes`, `last_verified_at` and invalidates its work's existing FTS rows. New edition saves and cloud pulls use the existing edition/source repository path; they do not create translated duplicate titles.
+
+Existing `annotations.note_content` stores plain review text; `location_cfi_or_page` holds a versioned JSON anchor with marker `baglib-pdf-review-v1`, exact `sourceId`, `sourceHash`, page/rectangle, author display name, kind/status, local reply thread and optional normalized ink strokes. These are private user annotations, not canonical corpus edits. Old source hashes remain read-only; display names are not verified identities.
+
+Existing `app_settings` keys: `pdf-editor.engine.v1` stores local executable/model locations; `private.pdf-cloud.v1:<google|microsoft>` stores OS-encrypted client configuration/tokens; `private.pdf-cloud.links.v1` holds explicit opt-in sync mappings and revision/hash baselines; `private.pdf-audit.key.v1`, `private.pdf-audit.head.v1`, `private.pdf-audit.records.v1` support a keyed local signature audit. Generic renderer settings get/set/delete/get-all reject the `private.` namespace. Tokens, certificate passwords and private-key bytes are never returned by workstation status APIs; no certificate password is persisted. Temporary owner-scoped jobs/assets are outside canonical data and cleaned when sessions/window owners close. Runtime provisioning details and limitations: [PDF workstation setup](pdf-workstation-setup.md).
+
+This document defines the comprehensive data models, schemas, entities, fields, data types, constraints, and relationships across all persistent stores in Baglib:
 1. **Core Personal Library Database** (`baglib.db`)
-2. **Quran Corpus & Metadata SQLite Packs** (`surah-info-ar.db`, `topics-ar.db`, `ayah-themes-ar.db`, QPC Hafs/Warsh)
+2. **Quran Corpus & Metadata SQLite Packs** (`surah-info-ar.db`, `topics-ar.db`, `ayah-themes-ar.db`, QPC Hafs/Warsh, Tafsir, Recitation Timings, Morphology)
 3. **Prophetic Sunnah Corpus Store** (`userData/sunnah/` & `catalog.json`)
 
 ---
@@ -34,14 +42,27 @@ The canonical intellectual creation (independent of physical or digital manifest
 | :--- | :--- | :--- | :--- |
 | `id` | TEXT | PRIMARY KEY | Unique UUID or prefix identifier (e.g. `work-...`) |
 | `title` | TEXT | NOT NULL | Canonical work title |
-| `author` | TEXT | NULL | Canonical author name string (for quick lookup) |
+| `author` | TEXT | NULL | Canonical author name string (for quick indexing/lookup) |
 | `description` | TEXT | NULL | Summary, abstract, or synopsis |
 | `author_bio` | TEXT | NULL | Biographical sketch of author |
-| `work_type_id` | TEXT | NULL | Classification ID (`wt-book`, `wt-research-paper`, etc.) |
+| `work_type_id` | TEXT | NULL | Classification ID (`wt-book`, `wt-research-paper`, `wt-manuscript`, etc.) |
 | `primary_category_id` | TEXT | NULL | Foreign key referencing primary `category.id` |
-| `metadata_json` | TEXT | NULL | Extensible JSON object storing volume metadata (`volumeNumber`, `totalVolumes`, `seriesTitle`), research papers (DOI, journal), thesis info, and diagnostics |
+| `metadata_json` | TEXT | NULL | Extensible JSON object storing volume metadata, DOI, journal, and specific diagnostics (see 1.1.1) |
 | `created_at` | TEXT | NOT NULL | ISO-8601 creation timestamp |
 | `updated_at` | TEXT | NOT NULL | ISO-8601 last update timestamp |
+
+#### 1.1.1 `work.metadata_json` Schema
+```json
+{
+  "seriesTitle": "تاريخ الرسل والملوك",
+  "volumeNumber": "١",
+  "totalVolumes": 10,
+  "doi": "10.1000/182",
+  "journal": "Journal of Islamic Studies",
+  "issue": "4",
+  "pages": "120-145"
+}
+```
 
 ### 1.2 `edition`
 A specific publication, printing, or release of a work.
@@ -166,13 +187,15 @@ Reader bookmarks, highlights, and annotations.
 | `updated_at` | TEXT | NOT NULL | ISO-8601 update timestamp |
 
 ### 1.11 `app_settings`
-System-wide configuration, view preferences, and Khatmah reading plans.
+System-wide configuration, view preferences, Khatmah reading plans and private study documents.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `key` | TEXT | PRIMARY KEY | Setting key (e.g., `view_preferences`, `quran.khatmah.v1`, `provider_settings`) |
 | `value` | TEXT | NOT NULL | Stored string or serialized JSON configuration object |
 | `updated_at` | TEXT | NOT NULL | ISO-8601 last modified timestamp |
+
+Private study notes use `study.note.v1:<id>` keys with JSON `{id, title, content, aliases, tags, workId?, createdAt, updatedAt}`. Links and backlinks are derived from note content; Quran/Sunnah references do not create library works or mutate source corpora. Book-attached captures also retain their existing `knowledge`/`note_detail` record. Drafts use `dashboard.scratchpad.draft.v1` and `study.capture.draft.v1`. See [Linked Study Notes and Dashboard](features/feature%20-%20Linked%20Study%20Notes%20and%20Dashboard.md). These are existing settings values, not added SQL columns or relations.
 
 ### 1.12 `book_content_fts` (Virtual FTS5 Table)
 SQLite FTS5 full-text search index for indexed ebook contents.
@@ -187,108 +210,210 @@ SQLite FTS5 full-text search index for indexed ebook contents.
 
 ## 2. Quran Corpus & Metadata SQLite Databases
 
-Isolated in immutable SQLite databases under `.baglib-data/` and `repos/Quran/`.
+Isolated in immutable SQLite databases under `.baglib-data/` and `repos/Quran/`. These databases are verified against the King Fahd Complex (KFGQPC) text and the Quran Universal Library (QUL) datasets.
 
-### 2.1 Surah Information (`surah-info-ar.db` & `surah-info-en.db`)
-Stores comprehensive surah introductions, historical context, themes, and summaries.
+### 2.1 Surah Information Database (`surah-info-ar.db` & `surah-info-en.db`)
+Stores comprehensive surah introductions, historical context, themes, and executive summaries (114 rows).
+
+- **Table: `surah_infos`**
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `surah_number` | INTEGER | NOT NULL | Surah index (1 to 114) |
-| `surah_name` | TEXT | NOT NULL | Arabic name (e.g., `الفاتحة`) or English name |
-| `text` | TEXT | NOT NULL | Full HTML rich-text introduction and analysis |
-| `short_text` | TEXT | NOT NULL | Concise one-paragraph executive summary |
+| `surah_name` | TEXT | NOT NULL | Surah name (`الفاتحة`, `البقرة`, etc.) |
+| `text` | TEXT | NOT NULL | Comprehensive HTML rich-text introduction and analysis |
+| `short_text` | TEXT | NOT NULL | Concise executive summary |
 
-### 2.2 Quran Thematic Classification (`topics-ar.db` & `topics.db`)
-Hierarchical ontology mapping Quranic subjects, prophets, concepts, and moral injunctions.
+### 2.2 Quran Thematic Classification Database (`topics-ar.db` & `topics.db`)
+Hierarchical ontology mapping Quranic subjects, prophets, concepts, and moral injunctions (2,512 topics).
+
+- **Table: `topics`**
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
-| `topic_id` | INTEGER | PRIMARY KEY | Unique topic integer identifier |
-| `name` | TEXT | NOT NULL | English topic name (e.g., "Prophets (25 mentioned by name)") |
-| `arabic_name` | TEXT | NULL | Arabic topic title (e.g., "يونس (ﷺ)") |
+| `topic_id` | INTEGER | PRIMARY KEY | Unique topic identifier (1 to 2,512) |
+| `name` | TEXT | NOT NULL | Topic name (e.g., `الله`, `يونس (ﷺ)`) |
+| `arabic_name` | TEXT | NULL | Arabic topic title |
 | `parent_id` | INTEGER | NULL | Hierarchical parent topic identifier |
 | `thematic_parent_id` | INTEGER | NULL | Semantic grouping parent identifier |
 | `ontology_parent_id` | INTEGER | NULL | Ontological parent node reference |
-| `description` | TEXT | NULL | Comprehensive explanation and thematic summary |
+| `description` | TEXT | NULL | Thematic explanation and contextual summary |
 | `wiki_link` | TEXT | NULL | Wikipedia or encyclopedia reference URL |
 | `thematic` | INTEGER | DEFAULT 0 | 1 if thematic node; 0 otherwise |
 | `ontology` | INTEGER | DEFAULT 0 | 1 if ontology node; 0 otherwise |
-| `ayahs` | TEXT | NULL | Comma-delimited list of referenced verses (`surah:ayah`) |
+| `ayahs` | TEXT | NULL | Comma-delimited list of referenced verses (`surah:ayah`, e.g. `10:98`) |
 | `related_topics`| TEXT | NULL | Comma-delimited list of related `topic_id`s |
 
 ### 2.3 Ayah Themes Database (`ayah-themes-ar.db` & `ayah-themes.db`)
-Ayah-by-ayah themes mapped across specific verse boundaries.
+Ayah-by-ayah themes mapped across specific verse boundaries (2,098 theme spans).
+
+- **Table: `themes`**
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
-| `theme` | TEXT | NOT NULL | Theme title or thematic summary for the verse range |
+| `theme` | TEXT | NOT NULL | Thematic label for the verse interval |
 | `surah_number` | INTEGER | NOT NULL | Surah index (1 to 114) |
 | `ayah_from` | INTEGER | NOT NULL | Starting ayah number |
 | `ayah_to` | INTEGER | NOT NULL | Ending ayah number |
 | `keywords` | TEXT | NULL | Comma-separated topical keywords |
 | `total_ayahs` | INTEGER | NOT NULL | Number of ayahs covered in the theme interval |
 
-### 2.4 Quran Script & Word-by-Word (`qpc-hafs.db` / `qpc-v4.db`)
-Authoritative Quran text and word-level segmentation conforming to the King Fahd Complex for the Printing of the Holy Quran (KFGQPC).
+### 2.4 Verse-Level Quran Text (`qpc-hafs.db`)
+Authoritative Hafs Quran text with Uthmanic diacritics and verse-level segmentation (6,236 verses).
+
+- **Table: `verses`**
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY | Word sequential index across the entire Quran |
-| `surah` | INTEGER | NOT NULL | Surah number (1–114) |
+| `id` | INTEGER | PRIMARY KEY | Sequential verse index (1 to 6,236) |
+| `verse_key` | TEXT | NOT NULL | Key formatted as `surah:ayah` (e.g. `1:1`) |
+| `surah` | INTEGER | NOT NULL | Surah number (1 to 114) |
+| `ayah` | INTEGER | NOT NULL | Ayah number within surah |
+| `text` | TEXT | NOT NULL | Complete Uthmanic verse text including ayah end ornament |
+
+### 2.5 Word-by-Word Quran Script (`qpc-hafs-word-by-word.db`)
+Word-level tokenization across the entire Holy Quran (83,668 words).
+
+- **Table: `words`**
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | INTEGER | PRIMARY KEY | Sequential word index (1 to 83,668) |
+| `location` | TEXT | NOT NULL | Canonical location coordinate (`surah:ayah:word`, e.g. `1:1:1`) |
+| `surah` | INTEGER | NOT NULL | Surah number (1 to 114) |
 | `ayah` | INTEGER | NOT NULL | Ayah number within surah |
 | `word` | INTEGER | NOT NULL | Word index within ayah (1-based) |
-| `text` | TEXT | NOT NULL | Uthmanic script representation or V4 glyph code |
+| `text` | TEXT | NOT NULL | Exact Uthmanic word text |
 
-### 2.5 Mushaf Layout Database (`mushaf-layout` packs)
-Defines physical 15-line standard Mushaf page layout geometry.
+### 2.6 Recitation Audio & Word-Segment Timing (`minshawi-959.db`, `husary.db`)
+Synchronized recitation audio metadata and millisecond word timing intervals (6,236 verses per voice).
+
+- **Table: `verses`**
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
-| `page_number` | INTEGER | NOT NULL | Standard Madani Mushaf page (1 to 604) |
-| `line_number` | INTEGER | NOT NULL | Line number on the page (1 to 15) |
-| `line_type` | TEXT | NOT NULL | `'ayah'`, `'surah_header'`, or `'basmala'` |
-| `is_centered` | INTEGER | DEFAULT 0 | 1 if centered title/basmala line; 0 otherwise |
-| `first_word_id`| INTEGER | NULL | Starting `words.id` on this line |
-| `last_word_id` | INTEGER | NULL | Ending `words.id` on this line |
-| `surah_number` | INTEGER | NULL | Current surah number on this line |
+| `surah_number` | INTEGER | NOT NULL | Surah index (1 to 114) |
+| `ayah_number` | INTEGER | NOT NULL | Ayah index within surah |
+| `audio_url` | TEXT | NOT NULL | Remote CDN stream endpoint or local audio file key |
+| `duration` | INTEGER | NULL | Total audio duration in milliseconds |
+| `segments` | TEXT | NOT NULL | JSON array of word intervals: `[[wordIdx, wordOrder, startMs, endMs], ...]` |
+
+### 2.7 Arabic Tafsir Database (`ar-tafsir-ibn-kathir.db`)
+Classical Quranic exegesis linked to verse keys (6,236 entries).
+
+- **Table: `tafsir`**
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `ayah_key` | TEXT | NOT NULL | Primary verse reference (`surah:ayah`) |
+| `group_ayah_key`| TEXT | NOT NULL | Grouped passage reference for multi-ayah tafsir sections |
+| `from_ayah` | TEXT | NOT NULL | Range start (`surah:ayah`) |
+| `to_ayah` | TEXT | NOT NULL | Range end (`surah:ayah`) |
+| `ayah_keys` | TEXT | NOT NULL | Comma-delimited list of all ayahs covered |
+| `text` | TEXT | NOT NULL | Rich HTML tafsir commentary text |
+
+### 2.8 Word Morphology Databases (`word-root.db`, `word-lemma.db`, `word-stem.db`)
+Deep linguistic decomposition of Quranic vocabulary.
+
+#### A. Roots Database (`word-root.db`)
+- **Table: `roots`** (1,642 roots)
+  - `id`: INTEGER PRIMARY KEY
+  - `arabic_trilateral`: TEXT (e.g. `ث و ي`)
+  - `english_trilateral`: TEXT (e.g. `vwy`)
+  - `words_count`: INTEGER
+  - `uniq_words_count`: INTEGER
+- **Table: `root_words`** (50,298 word links)
+  - `root_id`: INTEGER (FK `roots.id`)
+  - `word_location`: TEXT (`surah:ayah:word`, e.g. `41:24:4`)
+
+#### B. Lemmas Database (`word-lemma.db`)
+- **Table: `lemmas`** (4,817 lemmas)
+  - `id`: INTEGER PRIMARY KEY
+  - `text`: TEXT (e.g. `كَذَّاب`)
+  - `text_clean`: TEXT (e.g. `كذاب`)
+  - `words_count`: INTEGER
+  - `uniq_words_count`: INTEGER
+- **Table: `lemma_words`** (72,510 word links)
+  - `lemma_id`: INTEGER (FK `lemmas.id`)
+  - `word_location`: TEXT (`surah:ayah:word`, e.g. `54:26:4`)
+
+#### C. Stems Database (`word-stem.db`)
+- **Table: `stems`** (12,113 stems)
+  - `id`: INTEGER PRIMARY KEY
+  - `text`: TEXT (e.g. `دَّوَآئِرَ`)
+  - `text_clean`: TEXT (e.g. `دواير`)
+- **Table: `stem_words`** (77,427 word links)
+  - `stem_id`: INTEGER (FK `stems.id`)
+  - `word_location`: TEXT (`surah:ayah:word`, e.g. `9:98:10`)
 
 ---
 
 ## 3. Prophetic Sunnah Corpus Store
 
-Managed via `SunnahService` in `userData/sunnah/` containing authenticated chapter partitions and an authoritative integrity manifest.
+### Optional derived research corpus (2026-10-27)
 
-### 3.1 Corpus Catalog Manifest (`catalog.json`)
-Cryptographically verified integrity descriptor.
+The Sunnah reader can attach `sunnah_kutub_tisah_itqan.sqlite` read-only through `SunnahResearchCorpus`, exposing the existing 34-column derived `hadiths`, narrator, chain, root bridge and FTS tables. These are the standalone research pipeline's existing tables, not additions to `baglib.db` or canonical sources. Dev discovery uses `tools/hadith-alignment/data/output/`; installed apps can choose a local database file. `userData/sunnah/research-source.json` records `{ filename: absolutePath }` or `{ legacy: true }`; it is source-selection configuration, not a domain entity. The transient catalog has `research: true` and nine collection entries; its `sha256` is a metadata fingerprint, not a claim of a fresh whole-file content hash. Optional `researchId` on reader records addresses derived row identity. The original six-book source and saved chapter/ordinal identities remain compatible. See [Hadith Commentary Alignment](features/feature%20-%20Hadith%20Commentary%20Alignment.md).
+
+The legacy six-book store below remains the fallback and ZIP import format.
+
+Managed via `SunnahService` under `userData/sunnah/` containing authenticated chapter partitions and an authoritative integrity manifest. Derived from the authenticated LK-Hadith-Corpus archive (**34,088 hadiths across 335 chapters and six canonical collections**).
+
+### 3.1 Collections Covered
+
+| Collection ID | Collection Name | Chapters | Hadiths Count |
+| :--- | :--- | :--- | :--- |
+| `Bukhari` | Sahih al-Bukhari (صحيح البخاري) | 97 | 7,563 |
+| `Muslim` | Sahih Muslim (صحيح مسلم) | 56 | 7,500 |
+| `AbuDawud` | Sunan Abi Dawud (سنن أبي داود) | 43 | 5,274 |
+| `Tirmidhi` | Jami` al-Tirmidhi (جامع الترمذي) | 49 | 3,956 |
+| `Nasai` | Sunan an-Nasa'i (سنن النسائي) | 52 | 5,758 |
+| `IbnMajah` | Sunan Ibn Majah (سنن ابن ماجه) | 37 | 4,341 |
+| **Total** | **Six Canonical Books (الكتب الستة)** | **335** | **34,088** |
+
+### 3.2 Corpus Catalog Manifest (`catalog.json`)
+Cryptographically verified integrity descriptor stored under `<Electron userData>/sunnah/catalog.json`:
 
 ```json
 {
   "version": 1,
-  "sha256": "4a26d25f...",
-  "importedAt": "2026-10-26T12:00:00.000Z",
-  "hadithCount": 38200,
+  "sha256": "4a26d25f8a6...",
+  "importedAt": "2026-10-24T14:30:00.000Z",
+  "hadithCount": 34088,
   "collections": [
     {
       "id": "Bukhari",
       "hadithCount": 7563,
       "chapters": [
-        { "number": 1, "title": { "ar": "كتاب بدء الوحي", "en": "Revelation" }, "hadithCount": 7 }
+        { "number": 1, "title": { "ar": "كتاب بدء الوحي", "en": "Revelation" }, "hadithCount": 7 },
+        { "number": 2, "title": { "ar": "كتاب الإيمان", "en": "Belief" }, "hadithCount": 51 }
       ]
     }
   ]
 }
 ```
 
-### 3.2 Hadith Record Structure (`${collectionId}-${chapterNumber}.json`)
-Every hadith entry is partitioned into a verified JSON structure:
+### 3.3 Partitioned Chapter File (`<archive SHA-256>/${collectionId}-${chapterNumber}.json`)
+Every hadith entry is partitioned into an immutable JSON file per chapter:
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `id` | string | Unique hadith identifier (e.g. `bukhari-1`) |
-| `number` | string | Universal hadith reference number |
-| `section` | object | `{ number: string, title: { ar: string, en: string } }` |
-| `text.ar` | object | Arabic `{ full: string, isnad: string, matn: string }` |
-| `text.en` | object | English `{ full: string, isnad: string, matn: string }` |
-| `comment` | string | Scholarly notes or variant readings |
-| `grade` | object | Hadith authenticity evaluation `{ ar: string, en: string }` (e.g., `صحيح / Sahih`) |
+| `id` | string | Unique hadith identifier composed of collection, chapter, and row (e.g. `bukhari-1-1`) |
+| `number` | string | Universal hadith reference number from source compilation |
+| `section.number` | string | Source section/bab index within the chapter |
+| `section.title.ar`| string | Arabic section title (e.g., "باب كَيْفَ كَانَ بَدْءُ الْوَحْيِ") |
+| `section.title.en`| string | English section title |
+| `text.ar.full` | string | Complete canonical Arabic text with diacritics and punctuation |
+| `text.ar.isnad` | string | Segmented chain of transmission (sanad) |
+| `text.ar.matn` | string | Primary Prophetic saying or narrational core text |
+| `text.en.full` | string | Complete English translated text |
+| `text.en.isnad` | string | Translated chain of transmission |
+| `text.en.matn` | string | Translated narrational core text |
+| `comment` | string | Scholarly notes or variant textual readings |
+| `grade.ar` | string | Authenticity grading in Arabic (e.g., `صحيح`, `حسن`, `ضعيف`) |
+| `grade.en` | string | Authenticity grading in English (e.g., `Sahih`, `Hasan`, `Da'if`) |
+
+#### 3.3.1 Presentation & Export Heuristics
+- **Isnad Coloring:** Narrator-like words are styled with `rgb(96, 207, 208)` and contiguous name words share subtle hover highlights, stopping at transmission terms (`حَدَّثَنَا`, `عَنْ`, `أَخْبَرَنَا`).
+- **Grading Suppression:** For Bukhari and Muslim collections, individual grades are suppressed in the UI by default as their entire contents are canonical Sahih.
+- **Shortened Chain Export:** When exporting with "Reference off", Arabic text shortens dynamically to `عن ` followed by the final narrator and matn, while preserving diacritics and context.
+- **Personal Reflections:** User comments are stored in local storage keyed by stable record ID (`bukhari-1-1`), strictly isolated from the immutable corpus JSON files.

@@ -73,15 +73,19 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
   const [showPlausible, setShowPlausible] = useState<boolean>(false);
 
   // Sync selected work when candidates change
-  React.useEffect(() => {
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [selectedWork, candidates];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
     if (selectedWork) {
       setActiveSelected(selectedWork);
     } else if (candidates.length > 0 && !activeSelected) {
       setActiveSelected(candidates[0]);
     }
-  }, [selectedWork, candidates]);
 
-  if (!isOpen) return null;
+  }
+
 
   const handleCardClick = (work: BibliographicWork) => {
     setActiveSelected(work);
@@ -196,7 +200,9 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
     const pages = primaryEdition?.pages;
     const language = primaryEdition?.language;
 
-    return (
+    if (!isOpen) return null;
+
+  return (
       <div
         key={work.workId}
         onClick={() => handleCardClick(work)}

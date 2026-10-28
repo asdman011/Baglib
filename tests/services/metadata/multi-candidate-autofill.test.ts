@@ -185,7 +185,7 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
   });
 
   it('preserves existing data when calculating diff updates', () => {
-    const currentBook: Record<string, any> = {
+    const currentBook: Record<string, unknown> = {
       id: 'book-1',
       title: 'My Custom Title',
       author: 'Ammar',
@@ -207,7 +207,7 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
       coverImage: true, // missing in current -> true
     };
 
-    const appliedUpdates: Record<string, any> = {};
+    const appliedUpdates: Record<string, unknown> = {};
     if (initialSelection.description && incomingCandidate.description) {
       appliedUpdates.description = incomingCandidate.description;
     }
@@ -218,7 +218,7 @@ describe('Multi-Candidate Auto-fill & Provider Resilience Tests', () => {
       appliedUpdates.title = incomingCandidate.title;
     }
 
-    const mergedBook: Record<string, any> = { ...currentBook, ...appliedUpdates };
+    const mergedBook: Record<string, unknown> = { ...currentBook, ...appliedUpdates };
 
     // Existing fields preserved
     assert.strictEqual(mergedBook.title, 'My Custom Title');

@@ -16,8 +16,8 @@ import { textIsbnScannerService } from './text-isbn-scanner.service';
 import { EpubCoverExtractor } from './epub-cover-extractor.service';
 
 // Use require for pdf-parse and yauzl
-const pdfParse = require('pdf-parse');
-const yauzl = require('yauzl');
+import pdfParse from 'pdf-parse';
+import yauzl from 'yauzl';
 
 export interface EmbeddedBookMetadata {
   title?: string;
@@ -427,7 +427,7 @@ export class EmbeddedMetadataExtractor {
       return null;
     }
 
-    const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
+    const pdfFn = pdfParse;
 
     let title: string | undefined;
     const authors: string[] = [];
@@ -465,12 +465,12 @@ export class EmbeddedMetadataExtractor {
           authors.push(...valid);
         }
 
-        if (typeof (info as any).Publisher === 'string' && (info as any).Publisher.trim()) {
-          publisher = (info as any).Publisher.trim();
+        if (typeof info.Publisher === 'string' && info.Publisher.trim()) {
+          publisher = info.Publisher.trim();
         }
 
-        if (typeof (info as any).Edition === 'string' && (info as any).Edition.trim()) {
-          edition = (info as any).Edition.trim();
+        if (typeof info.Edition === 'string' && info.Edition.trim()) {
+          edition = info.Edition.trim();
         }
 
         if (info.CreationDate) {
@@ -588,21 +588,21 @@ export class EmbeddedMetadataExtractor {
    */
   private static async extractFromEpub(filePath: string): Promise<EmbeddedBookMetadata | null> {
     return new Promise((resolve) => {
-      yauzl.open(filePath, { lazyEntries: true, autoClose: false }, (err: any, zipfile: any) => {
+      yauzl.open(filePath, { lazyEntries: true, autoClose: false }, (err: unknown, zipfile: yauzl.ZipFile) => {
         if (err || !zipfile) {
           resolve(null);
           return;
         }
 
-        const entries: Record<string, any> = {};
+        const entries: Record<string, yauzl.Entry> = {};
         let opfPath: string | null = null;
-        let coverHref: string | null = null;
+        const coverHref: string | null = null;
         let opfDir = '';
         let totalTextBytes = 0;
 
         zipfile.readEntry();
 
-        zipfile.on('entry', (entry: any) => {
+        zipfile.on('entry', (entry: yauzl.Entry) => {
           entries[entry.fileName] = entry;
 
           if (/\.(?:x?html?)$/i.test(entry.fileName)) {
@@ -787,9 +787,9 @@ export class EmbeddedMetadataExtractor {
     return EpubCoverExtractor.extractCover(filePath);
   }
 
-  private static readZipEntry(zipfile: any, entry: any): Promise<Buffer> {
+  private static readZipEntry(zipfile: yauzl.ZipFile, entry: yauzl.Entry): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      zipfile.openReadStream(entry, (err: any, stream: any) => {
+      zipfile.openReadStream(entry, (err: unknown, stream: import('node:stream').Readable) => {
         if (err || !stream) {
           reject(err);
           return;
@@ -797,7 +797,7 @@ export class EmbeddedMetadataExtractor {
         const chunks: Buffer[] = [];
         stream.on('data', (c: Buffer) => chunks.push(c));
         stream.on('end', () => resolve(Buffer.concat(chunks)));
-        stream.on('error', (e: any) => reject(e));
+        stream.on('error', (e: unknown) => reject(e));
       });
     });
   }

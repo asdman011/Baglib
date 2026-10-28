@@ -122,7 +122,7 @@ export class MetadataEnrichmentService {
         const { confidence, reason, factors } = this.calculateMatchConfidence(work, item);
 
         // Determine downloadable digital format if available
-        let downloadUrl: string | undefined = item.downloadUrl;
+        const downloadUrl: string | undefined = item.downloadUrl;
         let downloadFormat: DigitalFormat | undefined;
 
         if (item.availableFormats && item.availableFormats.length > 0) {
@@ -176,7 +176,7 @@ export class MetadataEnrichmentService {
     let technicalDiagnostics: TechnicalSearchDiagnostics | undefined;
     try {
       const filePath = work.filePath || '';
-      let fileFormat = filePath.includes('.')
+      const fileFormat = filePath.includes('.')
         ? path.extname(filePath).replace('.', '').toUpperCase()
         : 'PDF';
       let fileSizeBytes: number | undefined;
@@ -299,8 +299,8 @@ export class MetadataEnrichmentService {
 
     const workAuthorStr =
       work.author ||
-      (Array.isArray((work as any).authors) && (work as any).authors.length > 0
-        ? (work as any).authors.join(', ')
+      (Array.isArray((work as BookItem & { authors?: string[] }).authors) && (work as BookItem & { authors: string[] }).authors.length > 0
+        ? (work as BookItem & { authors: string[] }).authors.join(', ')
         : '');
     const candAuthorStr =
       candidate.author ||
@@ -363,19 +363,19 @@ export class MetadataEnrichmentService {
     currentBook: BookItem,
     candidate: EnrichmentCandidateEdition
   ): EnrichmentComparison {
-    const diffs: Record<EnrichmentFieldKey, EnrichmentFieldDiff> = {} as any;
+    const diffs = {} as Record<EnrichmentFieldKey, EnrichmentFieldDiff>;
 
     const checkField = (
       field: EnrichmentFieldKey,
       labelKey: string,
-      currentVal: any,
-      incomingVal: any
+      currentVal: unknown,
+      incomingVal: unknown
     ) => {
       let hasCurrent = this.isPopulated(currentVal);
-      if (field === 'title' && hasCurrent && isPlaceholderTitle(currentVal)) {
+      if (field === 'title' && hasCurrent && isPlaceholderTitle(typeof currentVal === 'string' ? currentVal : undefined)) {
         hasCurrent = false;
       }
-      if (field === 'author' && hasCurrent && isPlaceholderAuthor(currentVal)) {
+      if (field === 'author' && hasCurrent && isPlaceholderAuthor(typeof currentVal === 'string' ? currentVal : undefined)) {
         hasCurrent = false;
       }
       const hasIncoming = this.isPopulated(incomingVal);
@@ -438,7 +438,7 @@ export class MetadataEnrichmentService {
     };
   }
 
-  private isPopulated(val: any): boolean {
+  private isPopulated(val: unknown): boolean {
     if (val === undefined || val === null) return false;
     if (typeof val === 'string') return val.trim().length > 0;
     if (Array.isArray(val)) return val.length > 0;
@@ -446,7 +446,7 @@ export class MetadataEnrichmentService {
     return true;
   }
 
-  private areValuesDifferent(a: any, b: any): boolean {
+  private areValuesDifferent(a: unknown, b: unknown): boolean {
     if (!this.isPopulated(a) && !this.isPopulated(b)) return false;
     if (this.isPopulated(a) !== this.isPopulated(b)) return true;
 
@@ -499,7 +499,7 @@ export class MetadataEnrichmentService {
       categories: [...(existingBook.categories || [])],
       tags: [...(existingBook.tags || [])],
       lendingHistory: existingBook.lendingHistory || [],
-    } as any;
+    };
 
     let downloadedCoverPath: string | undefined;
 
@@ -511,12 +511,12 @@ export class MetadataEnrichmentService {
         continue;
       }
 
-      const currentVal = (existingBook as any)[field];
+      const currentVal = (existingBook)[field];
       let hasCurrent = this.isPopulated(currentVal);
-      if (field === 'title' && hasCurrent && isPlaceholderTitle(currentVal)) {
+      if (field === 'title' && hasCurrent && isPlaceholderTitle(typeof currentVal === 'string' ? currentVal : undefined)) {
         hasCurrent = false;
       }
-      if (field === 'author' && hasCurrent && isPlaceholderAuthor(currentVal)) {
+      if (field === 'author' && hasCurrent && isPlaceholderAuthor(typeof currentVal === 'string' ? currentVal : undefined)) {
         hasCurrent = false;
       }
 
@@ -543,12 +543,12 @@ export class MetadataEnrichmentService {
       }
 
       // Apply field update
-      (updatedInput as any)[field] = incomingVal;
+      Object.assign(updatedInput, { [field]: incomingVal });
       appliedFields.push(field);
     }
 
     // Build and attach rich Geek Provenance for the enriched book
-    const candidate = (request as any).candidate;
+    const candidate = (request as ApplyEnrichmentRequest & { candidate?: EnrichmentCandidateEdition }).candidate;
     const providerName = candidate?.providerName || candidate?.providerId || 'Online API';
     const fieldSources: NonNullable<MetadataProvenance['fieldSources']> = {
       ...(existingBook.metadataProvenance?.fieldSources || {}),
@@ -558,7 +558,7 @@ export class MetadataEnrichmentService {
       fieldSources[f] = {
         source: providerName,
         status: 'verified',
-        value: (updatedInput as any)[f],
+        value: (updatedInput)[f],
         confidence: candidate?.matchConfidence ?? 0.95,
       };
     }

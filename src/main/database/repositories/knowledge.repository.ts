@@ -27,6 +27,7 @@ import type {
   SaveKnowledgePayload,
 } from '../../../shared/types/repository';
 
+type KnowledgeRow = KnowledgeItemDTO & { highlightText?: string; quoteText?: string; highlightColor?: string; bookmarkLabel?: string };
 export class SqliteKnowledgeRepository implements IKnowledgeRepository {
   constructor(private db: Database) {}
 
@@ -44,7 +45,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       ORDER BY k.created_at DESC
     `
       )
-      .all() as any[];
+      .all() as PageNoteDTO[];
 
     return rows.map((row) => ({
       id: row.id,
@@ -112,14 +113,14 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       WHERE k.work_id = ?
     `;
 
-    const params: any[] = [workId];
+    const params: unknown[] = [workId];
     if (type) {
       query += ` AND k.knowledge_type = ?`;
       params.push(type);
     }
     query += ` ORDER BY k.created_at ASC`;
 
-    const rows = this.db.prepare(query).all(...params) as any[];
+    const rows = this.db.prepare(query).all(...params) as KnowledgeRow[];
     return this.mapKnowledgeRows(rows);
   }
 
@@ -153,7 +154,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       ORDER BY k.created_at ASC
     `;
 
-    const rows = this.db.prepare(query).all() as any[];
+    const rows = this.db.prepare(query).all() as KnowledgeRow[];
     return this.mapKnowledgeRows(rows);
   }
 
@@ -395,7 +396,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       ORDER BY started_at DESC
     `
       )
-      .all(workId) as any[];
+      .all(workId) as ReadingSessionRecord[];
 
     return rows.map((r) => ({
       id: r.id,
@@ -427,7 +428,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
    */
   getLastReadLocation(workId: string): string | null {
     try {
-      const row = this.db.prepare(`SELECT last_read_location FROM work WHERE id = ?`).get(workId) as any;
+      const row = this.db.prepare(`SELECT last_read_location FROM work WHERE id = ?`).get(workId) as { last_read_location?: string } | undefined;
       return row?.last_read_location || null;
     } catch {
       return null;
@@ -437,7 +438,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
   /**
    * Helper to map joined knowledge rows into clean domain DTOs.
    */
-  private mapKnowledgeRows(rows: any[]): KnowledgeItemDTO[] {
+  private mapKnowledgeRows(rows: KnowledgeRow[]): KnowledgeItemDTO[] {
     if (!rows || rows.length === 0) return [];
 
     const knowledgeIds = rows.map((r) => r.id);
@@ -455,7 +456,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
         WHERE kt.knowledge_id IN (${placeholders})
       `
         )
-        .all(...knowledgeIds) as any[];
+        .all(...knowledgeIds) as { knowledge_id: string; id: string; name: string; color?: string }[];
 
       for (const t of tagRows) {
         if (!tagsMap.has(t.knowledge_id)) tagsMap.set(t.knowledge_id, []);
@@ -475,7 +476,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
         WHERE kc.knowledge_id IN (${placeholders})
       `
         )
-        .all(...knowledgeIds) as any[];
+        .all(...knowledgeIds) as { knowledge_id: string; id: string; name: string; color?: string }[];
 
       for (const c of colRows) {
         if (!collectionsMap.has(c.knowledge_id)) collectionsMap.set(c.knowledge_id, []);

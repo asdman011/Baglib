@@ -1,3 +1,4 @@
+import { errorMessage } from '../../shared/errors';
 /**
  * Baglib — Library Views & Bulk Operations IPC Handlers
  *
@@ -58,9 +59,9 @@ export function setupLibraryViewsIPC() {
       const repo = new SqliteWorkRepository(db);
       const affected = repo.bulkUpdateCategory(input.workIds, input.categoryId);
       return { success: true, affectedCount: affected };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/library-views-ipc] Failed to bulk update category:', err);
-      return { success: false, affectedCount: 0, error: err?.message || String(err) };
+      return { success: false, affectedCount: 0, error: errorMessage(err) || String(err) };
     }
   });
 
@@ -73,9 +74,9 @@ export function setupLibraryViewsIPC() {
       const repo = new SqliteWorkRepository(db);
       const affected = repo.bulkUpdateReadingStatus(input.workIds, input.readingStatus, input.readingProgress);
       return { success: true, affectedCount: affected };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/library-views-ipc] Failed to bulk update reading status:', err);
-      return { success: false, affectedCount: 0, error: err?.message || String(err) };
+      return { success: false, affectedCount: 0, error: errorMessage(err) || String(err) };
     }
   });
 
@@ -88,9 +89,9 @@ export function setupLibraryViewsIPC() {
       const repo = new SqliteWorkRepository(db);
       const affected = repo.bulkAddTags(input.workIds, input.tags);
       return { success: true, affectedCount: affected };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/library-views-ipc] Failed to bulk add tags:', err);
-      return { success: false, affectedCount: 0, error: err?.message || String(err) };
+      return { success: false, affectedCount: 0, error: errorMessage(err) || String(err) };
     }
   });
 
@@ -103,16 +104,17 @@ export function setupLibraryViewsIPC() {
       const repo = new SqliteWorkRepository(db);
       const affected = repo.bulkDelete(input.workIds);
       return { success: true, affectedCount: affected };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/library-views-ipc] Failed to bulk delete works:', err);
-      return { success: false, affectedCount: 0, error: err?.message || String(err) };
+      return { success: false, affectedCount: 0, error: errorMessage(err) || String(err) };
     }
   });
 
   /**
    * Settings IPC Handlers
    */
-  ipcMain.handle('settings:get', (_, key: string, defaultValue?: any) => {
+  ipcMain.handle('settings:get', (_, key: string, defaultValue?: unknown) => {
+    if (typeof key !== 'string' || key.startsWith('private.')) return defaultValue;
     try {
       return settingsRepository.get(key, defaultValue);
     } catch (err) {
@@ -121,7 +123,8 @@ export function setupLibraryViewsIPC() {
     }
   });
 
-  ipcMain.handle('settings:set', (_, key: string, value: any) => {
+  ipcMain.handle('settings:set', (_, key: string, value: unknown) => {
+    if (typeof key !== 'string' || key.startsWith('private.')) return false;
     try {
       settingsRepository.set(key, value);
       return true;
@@ -133,7 +136,7 @@ export function setupLibraryViewsIPC() {
 
   ipcMain.handle('settings:get-all', () => {
     try {
-      return settingsRepository.getAll();
+      return Object.fromEntries(Object.entries(settingsRepository.getAll()).filter(([key]) => !key.startsWith('private.')));
     } catch (err) {
       console.error('[baglib/settings-ipc] Failed to get all settings:', err);
       return {};
@@ -141,6 +144,7 @@ export function setupLibraryViewsIPC() {
   });
 
   ipcMain.handle('settings:delete', (_, key: string) => {
+    if (typeof key !== 'string' || key.startsWith('private.')) return false;
     try {
       return settingsRepository.delete(key);
     } catch (err) {

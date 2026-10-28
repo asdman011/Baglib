@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../../shared/errors';
 /**
  * Baglib — WebDAV & Nextcloud Storage Provider
  *
@@ -45,7 +46,7 @@ export class WebDavStorageProvider implements IStorageProvider {
     return cleaned ? `${this.baseUrl}/${cleaned}` : this.baseUrl;
   }
 
-  public async testConnection(): Promise<SyncOperationResult<{ reachable: boolean; details?: any }>> {
+  public async testConnection(): Promise<SyncOperationResult<{ reachable: boolean; details?: unknown }>> {
     if (!this.baseUrl) {
       return { success: false, message: 'WebDAV server URL is required.' };
     }
@@ -98,8 +99,8 @@ export class WebDavStorageProvider implements IStorageProvider {
         success: false,
         message: `WebDAV server responded with status: ${response.status} (${response.statusText})`,
       };
-    } catch (e: any) {
-      return { success: false, message: `Failed to connect to WebDAV server: ${e?.message || e}` };
+    } catch (e: unknown) {
+      return { success: false, message: `Failed to connect to WebDAV server: ${errorMessage(e) || e}` };
     }
   }
 
@@ -258,7 +259,7 @@ export class WebDavStorageProvider implements IStorageProvider {
       const hrefMatch = /<(?:[a-zA-Z0-9]+:)?href\b[^>]*>(.*?)<\/(?:[a-zA-Z0-9]+:)?href>/i.exec(responseBlock);
       if (!hrefMatch) continue;
 
-      let href = decodeURIComponent(hrefMatch[1].trim());
+      const href = decodeURIComponent(hrefMatch[1].trim());
 
       // Check isDirectory
       const isCollection = /<(?:[a-zA-Z0-9]+:)?resourcetype\b[^>]*>[\s\S]*?<(?:[a-zA-Z0-9]+:)?collection\b/i.test(responseBlock);

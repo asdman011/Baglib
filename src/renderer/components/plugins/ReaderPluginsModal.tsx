@@ -38,23 +38,19 @@ export const ReaderPluginsModal: React.FC<ReaderPluginsModalProps> = ({
   const [plugins, setPlugins] = useState<BaglibReaderPlugin[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadPlugins = async () => {
-    setLoading(true);
-    try {
-      if ((window as any).electronAPI?.plugins) {
-        const list = await (window as any).electronAPI.plugins.list();
-        setPlugins(list || []);
-      }
-    } catch (err) {
-      console.error('Failed to load plugins:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
+
+  const [previousPluginVisibility, setPreviousPluginVisibility] = useState<readonly unknown[] | null>(null);
+  const inputsPluginVisibility = [isOpen];
+  if (previousPluginVisibility === null || inputsPluginVisibility.some((value, index) => !Object.is(value, previousPluginVisibility[index]))) {
+    setPreviousPluginVisibility(inputsPluginVisibility);
+    if (isOpen) setLoading(true);
+  }
   useEffect(() => {
     if (isOpen) {
-      loadPlugins();
+      let alive = true;
+      void window.electronAPI.plugins.list().then(list => { if (alive) setPlugins(list || []); }).catch(console.warn).finally(() => { if (alive) setLoading(false); });
+      return () => { alive = false; };
     }
   }, [isOpen]);
 
@@ -62,7 +58,7 @@ export const ReaderPluginsModal: React.FC<ReaderPluginsModalProps> = ({
 
   const handleToggle = async (id: string, currentState: boolean) => {
     try {
-      await (window as any).electronAPI.plugins.enable(id, !currentState);
+      await (window).electronAPI.plugins.enable(id, !currentState);
       setPlugins((prev) =>
         prev.map((p) => (p.id === id ? { ...p, enabled: !currentState } : p))
       );

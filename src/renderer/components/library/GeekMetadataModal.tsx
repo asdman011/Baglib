@@ -437,7 +437,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
                         const displayVal =
                           info.value !== undefined
                             ? String(info.value)
-                            : String((book as any)[fieldName] || '—');
+                            : String(book[fieldName as keyof BookItem] || '—');
 
                         return (
                           <tr key={fieldName} className="hover:bg-canvas/50 transition-colors">

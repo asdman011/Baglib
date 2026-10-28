@@ -2,6 +2,11 @@ appId: com.Baglib.app
 productName: Baglib
 npmRebuild: false
 extraResources:
+  - from: assets/pdf-editor
+    to: pdf-editor
+    filter:
+      - "**/*"
+      - "!**/__pycache__/**"
   - from: assets/native-share.ps1
     to: native-share.ps1
 directories:
@@ -11,6 +16,7 @@ files:
   - out/**/*
   - package.json
   - node_modules/better-sqlite3/**/*
+  - node_modules/pdfjs-dist/**/*
   - node_modules/bindings/**/*
   - node_modules/file-uri-to-path/**/*
   - node_modules/prebuild-install/**/*

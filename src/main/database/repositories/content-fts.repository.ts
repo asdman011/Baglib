@@ -1,3 +1,4 @@
+interface ContentSearchRow { content: string; book_id: string; book_title: string; book_author?: string; page_number: number; location_cfi_or_page?: string; chapter_title?: string; rank: number; }
 /**
  * Baglib — SQLite FTS5 Book Content Repository (KEY-140)
  *
@@ -138,7 +139,7 @@ export class ContentFtsRepository {
       WHERE book_content_fts MATCH ?
     `;
 
-    const params: any[] = [`{chapter_title normalized_content}: (${formattedQuery})`];
+    const params: unknown[] = [`{chapter_title normalized_content}: (${formattedQuery})`];
 
     if (options.bookId) {
       sql += ` AND f.book_id = ?`;
@@ -148,9 +149,9 @@ export class ContentFtsRepository {
     sql += ` ORDER BY rank LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
-    let rows: any[] = [];
+    let rows: ContentSearchRow[] = [];
     try {
-      rows = this.db.prepare(sql).all(...params);
+      rows = this.db.prepare(sql).all(...params) as ContentSearchRow[];
     } catch {
       // Fallback: If column specifier is not supported or query syntax error,
       // fallback to standard FTS5 match without column filter
@@ -159,10 +160,10 @@ export class ContentFtsRepository {
           'WHERE book_content_fts MATCH ?',
           'WHERE book_content_fts MATCH ?'
         );
-        const fallbackParams: any[] = [formattedQuery];
+        const fallbackParams: unknown[] = [formattedQuery];
         if (options.bookId) fallbackParams.push(options.bookId);
         fallbackParams.push(limit, offset);
-        rows = this.db.prepare(fallbackSql).all(...fallbackParams);
+        rows = this.db.prepare(fallbackSql).all(...fallbackParams) as ContentSearchRow[];
       } catch (e) {
         console.warn('[baglib:fts] Search query error:', e);
         return [];

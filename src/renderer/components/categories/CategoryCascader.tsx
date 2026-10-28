@@ -69,10 +69,15 @@ export const CategoryCascader: React.FC<CategoryCascaderProps> = ({
       setTimeout(() => {
         searchInputRef.current?.focus();
       }, 50);
-    } else {
-      setSearchQuery('');
     }
   }, [isOpen]);
+
+  const [previousSearchVisibility, setPreviousSearchVisibility] = useState<readonly unknown[] | null>(null);
+  const inputsSearchVisibility = [isOpen];
+  if (previousSearchVisibility === null || inputsSearchVisibility.some((value, index) => !Object.is(value, previousSearchVisibility[index]))) {
+    setPreviousSearchVisibility(inputsSearchVisibility);
+    if (!isOpen) setSearchQuery('');
+  }
 
   // Flatten categories with ancestor breadcrumb chains for fast search and display lookup
   const flatCategories = useMemo(() => {
@@ -113,7 +118,11 @@ export const CategoryCascader: React.FC<CategoryCascaderProps> = ({
   const selectedItem = value ? flatMap.get(value) : null;
 
   // Sync active cascader path when value or isOpen changes
-  useEffect(() => {
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [value, flatMap, isOpen];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
     if (value && flatMap.has(value)) {
       // Find ancestor chain IDs
       const chain: string[] = [];
@@ -126,7 +135,8 @@ export const CategoryCascader: React.FC<CategoryCascaderProps> = ({
     } else {
       setActivePath([]);
     }
-  }, [value, flatMap, isOpen]);
+
+  }
 
   // Filtered categories for search mode
   const searchResults = useMemo(() => {
@@ -168,7 +178,7 @@ export const CategoryCascader: React.FC<CategoryCascaderProps> = ({
     setIsOpen(false);
   };
 
-  const handleClear = (e: React.MouseEvent) => {
+  const handleClear = (e: React.SyntheticEvent) => {
     e.stopPropagation();
     onChange(null);
   };
@@ -216,7 +226,7 @@ export const CategoryCascader: React.FC<CategoryCascaderProps> = ({
               onClick={handleClear}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
-                  handleClear(e as any);
+                  handleClear(e);
                 }
               }}
               className="p-1 hover:text-rose-500 hover:bg-subtle rounded-md transition-colors cursor-pointer"

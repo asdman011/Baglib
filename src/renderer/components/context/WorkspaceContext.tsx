@@ -11,7 +11,7 @@ export type LayoutDirection = 'rtl' | 'ltr';
 export type ThemeMode = 'dark' | 'light';
 export type LanguageMode = 'ar' | 'en';
 export type SplitOrientationMode = 'vertical' | 'horizontal' | 'none' | 'full_notes';
-export type WorkspaceViewMode = 'quran' | 'sunnah' | 'library' | 'categories' | 'reader' | 'notes' | 'settings';
+export type WorkspaceViewMode = 'dashboard' | 'quran' | 'sunnah' | 'library' | 'categories' | 'reader' | 'notes' | 'settings';
 
 export interface PageNote {
   id: string;
@@ -97,7 +97,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   // Navigation & View Mode
-  const [viewMode, setViewMode] = useState<WorkspaceViewMode>('library');
+  const [viewMode, setViewMode] = useState<WorkspaceViewMode>('dashboard');
   const [activeLibraryCategory, setActiveLibraryCategory] = useState<string>('ALL');
   
   // Pure Real Data (Zero Mock Items)
@@ -110,6 +110,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [splitOrientation, setSplitOrientation] = useState<SplitOrientationMode>('vertical');
 
   const [bookNotes, setBookNotes] = useState<PageNote[]>([]);
+  useEffect(() => {
+    const refresh = () => {
+      const api = window.electronAPI;
+      if (api?.getAllNotes) void api.getAllNotes().then(notes => { if (Array.isArray(notes)) setBookNotes(notes); }).catch(() => {});
+    };
+    window.addEventListener('baglib:notes-changed', refresh);
+    return () => window.removeEventListener('baglib:notes-changed', refresh);
+  }, []);
   const [highlights, setHighlights] = useState<{ id: string; pageNumber: number; text: string; color: string }[]>([]);
 
   const toggleLanguage = () => {
@@ -167,7 +175,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
           setBooks(uniqueBooks);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[baglib/ui] Failed to refresh books from database:', err);
       }
     }
@@ -177,7 +185,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const refreshCategoryTree = async () => {
     if (typeof window !== 'undefined') {
       try {
-        const api = window.electronAPI as any;
+        const api = window.electronAPI;
         if (api?.categories?.getTree) {
           const tree = await api.categories.getTree({ includeCounts: true });
           setCategoryTree(tree || []);
@@ -185,7 +193,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           const tree = await api.getCategoryTree({ includeCounts: true });
           setCategoryTree(tree || []);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[baglib/ui] Failed to refresh category tree:', err);
       }
     }
@@ -193,11 +201,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Refresh tags with work counts
   const refreshTags = async () => {
-    if (typeof window !== 'undefined' && (window.electronAPI as any)?.tags?.getAll) {
+    if (typeof window !== 'undefined' && window.electronAPI?.tags) {
       try {
-        const tags = await (window.electronAPI as any).tags.getAll();
+        const tags = await (window.electronAPI).tags.getAll();
         setAllTags(tags || []);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[baglib/ui] Failed to refresh tags:', err);
       }
     }
@@ -205,22 +213,34 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Load books, categories, tags, and notes from SQLite database on mount
   useEffect(() => {
-    refreshBooks();
-    refreshCategoryTree();
-    refreshTags();
-
-    if (typeof window !== 'undefined' && (window.electronAPI as any)?.getAllNotes) {
-      (window.electronAPI as any)
+    const api = window.electronAPI;
+    let alive = true;
+    if (typeof api?.getAllBooks === 'function') {
+      void api.getAllBooks().then((fetchedBooks: BookItem[]) => {
+        if (!alive || !Array.isArray(fetchedBooks)) return;
+        const seenIds = new Set<string>(), seenPaths = new Set<string>();
+        setBooks(fetchedBooks.filter(book => {
+          if (!book?.id || seenIds.has(book.id) || book.filePath && seenPaths.has(book.filePath)) return false;
+          seenIds.add(book.id); if (book.filePath) seenPaths.add(book.filePath); return true;
+        }));
+      }).catch(console.warn);
+    }
+    const categoriesRequest = api?.categories?.getTree?.({ includeCounts: true }) ?? api?.getCategoryTree?.({ includeCounts: true });
+    void categoriesRequest?.then(tree => { if (alive) setCategoryTree(tree || []); }).catch(console.warn);
+    void api?.tags?.getAll?.().then(tags => { if (alive) setAllTags(tags || []); }).catch(console.warn);
+    if (typeof window !== 'undefined' && typeof window.electronAPI?.getAllNotes === 'function') {
+      (window.electronAPI)
         .getAllNotes()
         .then((fetchedNotes: PageNote[]) => {
           if (Array.isArray(fetchedNotes)) {
             setBookNotes(fetchedNotes);
           }
         })
-        .catch((err: any) => {
+        .catch((err) => {
           console.error('[baglib/ui] Failed to load notes from database:', err);
         });
     }
+    return () => { alive = false; };
   }, []);
 
   // Add or Update book in library with SQLite persistence
@@ -295,7 +315,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     // 2. Persist to SQLite
     if (typeof window !== 'undefined') {
-      const api = window.electronAPI as any;
+      const api = window.electronAPI;
       try {
         if (api?.updateBook) {
           const res = await api.updateBook(updatedBook);
@@ -356,7 +376,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     );
 
     if (typeof window !== 'undefined') {
-      const api = window.electronAPI as any;
+      const api = window.electronAPI;
       if (api?.updateReadingStatus) {
         try {
           await api.updateReadingStatus(bookId, status, calcProgress);
@@ -413,9 +433,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       createdAt: new Date().toISOString(),
     };
 
-    if (typeof window !== 'undefined' && (window.electronAPI as any)?.addNote) {
+    if (typeof window !== 'undefined' && typeof window.electronAPI?.addNote === 'function') {
       try {
-        await (window.electronAPI as any).addNote(newNote);
+        await (window.electronAPI).addNote(newNote);
       } catch (err) {
         console.error('[baglib/ui] Failed to persist note to SQLite:', err);
       }
@@ -425,9 +445,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const deletePageNote = async (noteId: string) => {
-    if (typeof window !== 'undefined' && (window.electronAPI as any)?.deleteNote) {
+    if (typeof window !== 'undefined' && typeof window.electronAPI?.deleteNote === 'function') {
       try {
-        await (window.electronAPI as any).deleteNote(noteId);
+        await (window.electronAPI).deleteNote(noteId);
       } catch (err) {
         console.error('[baglib/ui] Failed to delete note from SQLite:', err);
       }

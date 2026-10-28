@@ -19,6 +19,12 @@ import type {
 } from '../../../shared/types/physical-library';
 import type { LendingRecord, LoanStatus } from '../../../shared/types/metadata';
 
+type PhysicalLoanRow = Omit<LendingRecord, 'isReturned'> & {
+ workId: string; workTitle: string; isReturned: number; status: LoanStatus;
+ work_id: string; borrower_name: string; borrower_contact?: string; borrow_date: string;
+ expected_return_date: string; actual_return_date?: string; is_returned: number;
+ condition_out?: string; condition_return?: string;
+};
 export class PhysicalLibraryService {
   constructor(private db: Database) {}
 
@@ -30,25 +36,25 @@ export class PhysicalLibraryService {
       SELECT DISTINCT room FROM physical_source_detail 
       WHERE room IS NOT NULL AND TRIM(room) != ''
       ORDER BY room ASC
-    `).all().map((r: any) => r.room as string);
+    `) .all().map((r) => (r as { room: string }).room);
 
     const bookcases = this.db.prepare(`
       SELECT DISTINCT bookcase FROM physical_source_detail 
       WHERE bookcase IS NOT NULL AND TRIM(bookcase) != ''
       ORDER BY bookcase ASC
-    `).all().map((r: any) => r.bookcase as string);
+    `) .all().map((r) => (r as { bookcase: string }).bookcase);
 
     const shelves = this.db.prepare(`
       SELECT DISTINCT shelf FROM physical_source_detail 
       WHERE shelf IS NOT NULL AND TRIM(shelf) != ''
       ORDER BY shelf ASC
-    `).all().map((r: any) => r.shelf as string);
+    `) .all().map((r) => (r as { shelf: string }).shelf);
 
     const shelfSections = this.db.prepare(`
       SELECT DISTINCT shelf_section FROM physical_source_detail 
       WHERE shelf_section IS NOT NULL AND TRIM(shelf_section) != ''
       ORDER BY shelf_section ASC
-    `).all().map((r: any) => r.shelf_section as string);
+    `) .all().map((r) => (r as { shelf_section: string }).shelf_section);
 
     return {
       rooms,
@@ -138,7 +144,7 @@ export class PhysicalLibraryService {
       JOIN source s ON s.id = psd.source_id
       JOIN edition e ON e.id = s.edition_id
       JOIN work w ON w.id = e.work_id
-    `).get() as any;
+    `).get() as { total: number; loaned: number; overdue: number; totalValue: number };
 
     const totalPhysicalBooks = totalRow?.total || 0;
     const borrowedCount = totalRow?.loaned || 0;
@@ -206,7 +212,7 @@ export class PhysicalLibraryService {
 
     // If no source exists, ensure edition & physical source exist
     if (!sourceRow) {
-      let editionRow = this.db.prepare(`SELECT id FROM edition WHERE work_id = ? LIMIT 1`).get(workId) as { id: string } | undefined;
+      const editionRow = this.db.prepare(`SELECT id FROM edition WHERE work_id = ? LIMIT 1`).get(workId) as { id: string } | undefined;
       let editionId = editionRow?.id;
       if (!editionId) {
         editionId = crypto.randomUUID();
@@ -266,8 +272,8 @@ export class PhysicalLibraryService {
 
     // Also sync the location properties in metadata_json on work table
     try {
-      const workMetaRow = this.db.prepare(`SELECT metadata_json FROM work WHERE id = ?`).get(workId) as any;
-      let meta: Record<string, any> = {};
+      const workMetaRow = this.db.prepare(`SELECT metadata_json FROM work WHERE id = ?`).get(workId) as { metadata_json?: string } | undefined;
+      let meta: Partial<import('../../../shared/types/work').BookItemInput> = {};
       if (workMetaRow?.metadata_json) {
         meta = JSON.parse(workMetaRow.metadata_json);
       }
@@ -312,7 +318,7 @@ export class PhysicalLibraryService {
       SELECT id, borrower_name as borrowerName FROM lending_record
       WHERE work_id = ? AND is_returned = 0
       LIMIT 1
-    `).get(workId) as any;
+    `).get(workId) as { id: string; borrowerName: string } | undefined;
 
     if (existingLoan) {
       throw new Error(`الكتاب معار حالياً إلى "${existingLoan.borrowerName}" / Book is currently already loaned to "${existingLoan.borrowerName}"`);
@@ -391,7 +397,7 @@ export class PhysicalLibraryService {
 
     const loan = this.db.prepare(`
       SELECT * FROM lending_record WHERE id = ?
-    `).get(loanId) as any;
+    `).get(loanId) as PhysicalLoanRow | undefined;
 
     if (!loan) {
       throw new Error('لم يتم العثور على سجل الإعارة / Lending record not found');
@@ -550,7 +556,7 @@ export class PhysicalLibraryService {
       FROM lending_record
       WHERE work_id = ?
       ORDER BY borrow_date DESC, created_at DESC
-    `).all(workId) as any[];
+    `).all(workId) as PhysicalLoanRow[];
 
     return rows.map((r) => ({
       id: r.id,
@@ -608,7 +614,7 @@ export class PhysicalLibraryService {
 
     query += ` GROUP BY lr.id ORDER BY lr.borrow_date DESC, lr.created_at DESC`;
 
-    return this.db.prepare(query).all().map((r: any) => ({
+    return (this.db.prepare(query).all() as PhysicalLoanRow[]).map((r) => ({
       ...r,
       isReturned: Boolean(r.isReturned),
     }));
@@ -631,7 +637,7 @@ export class PhysicalLibraryService {
       FROM lending_record
       GROUP BY borrower_name
       ORDER BY activeLoans DESC, lastLoanDate DESC
-    `).all(today) as any[];
+    `).all(today) as BorrowerSummary[];
 
     return rows.map((r) => ({
       borrowerName: r.borrowerName,

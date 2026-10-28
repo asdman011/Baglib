@@ -1,4 +1,8 @@
 'use client';
+import type { LibgenSearchResult } from '../../../main/services/metadata/libgen.provider';
+import type { AnnasSearchResult } from '../../../main/services/metadata/annas.provider';
+import { errorMessage } from '../../../shared/errors';
+
 
 import { BookCoverThumbnail } from './BookCoverThumbnail';
 
@@ -49,16 +53,16 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
   const [sortBy, setSortBy] = useState<SortCriterion>('relevance');
 
   // LibGen Live Search States
-  const [libgenResults, setLibgenResults] = useState<any[]>([]);
+  const [libgenResults, setLibgenResults] = useState<LibgenSearchResult[]>([]);
   const [isSearchingLibgen, setIsSearchingLibgen] = useState(false);
   const [hasSearchedLibgen, setHasSearchedLibgen] = useState(false);
   const [libgenError, setLibgenError] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
     if (windowAPI?.onLibgenDownloadProgress) {
-      const unsub = windowAPI.onLibgenDownloadProgress((p: any) => {
+      const unsub = windowAPI.onLibgenDownloadProgress((p) => {
         if (p?.md5 && typeof p.percent === 'number') {
           setDownloadProgress((prev) => ({ ...prev, [p.md5]: p.percent }));
         }
@@ -68,7 +72,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
   }, []);
 
   // Anna's Archive Live Search States
-  const [annasResults, setAnnasResults] = useState<any[]>([]);
+  const [annasResults, setAnnasResults] = useState<AnnasSearchResult[]>([]);
   const [isSearchingAnnas, setIsSearchingAnnas] = useState(false);
   const [hasSearchedAnnas, setHasSearchedAnnas] = useState(false);
   const [annasError, setAnnasError] = useState<string | null>(null);
@@ -136,7 +140,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
   );
 
   // Sort function prioritizing PDF & EPUB in relevance
-  const sortItems = (items: any[], criterion: SortCriterion, query: string) => {
+  const sortItems = (items: LibgenSearchResult[], criterion: SortCriterion, query: string) => {
     return [...items].sort((a, b) => {
       if (criterion === 'relevance') {
         const getFormatScore = (fmt?: string) => {
@@ -148,7 +152,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
           return 10;
         };
 
-        const getMatchScore = (item: any, q: string) => {
+        const getMatchScore = (item: LibgenSearchResult, q: string) => {
           if (!q) return 0;
           const qLow = q.toLowerCase();
           const tLow = (item.title || '').toLowerCase();
@@ -176,8 +180,8 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
         }
 
         // Secondary tiebreaker: Year
-        const yA = typeof a.year === 'number' ? a.year : parseInt(a.year, 10) || 0;
-        const yB = typeof b.year === 'number' ? b.year : parseInt(b.year, 10) || 0;
+        const yA = typeof a.year === 'number' ? a.year : parseInt(String(a.year ?? ""), 10) || 0;
+        const yB = typeof b.year === 'number' ? b.year : parseInt(String(b.year ?? ""), 10) || 0;
         return yB - yA;
       }
 
@@ -197,14 +201,14 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
       }
 
       if (criterion === 'year_desc') {
-        const yA = parseInt(a.year, 10) || 0;
-        const yB = parseInt(b.year, 10) || 0;
+        const yA = parseInt(String(a.year ?? ""), 10) || 0;
+        const yB = parseInt(String(b.year ?? ""), 10) || 0;
         return yB - yA;
       }
 
       if (criterion === 'year_asc') {
-        const yA = parseInt(a.year, 10) || 9999;
-        const yB = parseInt(b.year, 10) || 9999;
+        const yA = parseInt(String(a.year ?? ""), 10) || 9999;
+        const yB = parseInt(String(b.year ?? ""), 10) || 9999;
         return yA - yB;
       }
 
@@ -243,7 +247,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
 
     if (activeSource === 'LibGen') {
       setIsSearchingLibgen(true);
@@ -256,9 +260,9 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
         } else {
           setLibgenResults([]);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('LibGen search error:', err);
-        setLibgenError(err?.message || (lang === 'ar' ? 'فشل الاتصال بـ Library Genesis' : 'Failed to connect to Library Genesis'));
+        setLibgenError(errorMessage(err) || (lang === 'ar' ? 'فشل الاتصال بـ Library Genesis' : 'Failed to connect to Library Genesis'));
       } finally {
         setIsSearchingLibgen(false);
       }
@@ -273,16 +277,16 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
         } else {
           setAnnasResults([]);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Annas Archive search error:', err);
-        setAnnasError(err?.message || (lang === 'ar' ? 'فشل الاتصال بأرشيف آنّا' : 'Failed to connect to Anna\'s Archive'));
+        setAnnasError(errorMessage(err) || (lang === 'ar' ? 'فشل الاتصال بأرشيف آنّا' : 'Failed to connect to Anna\'s Archive'));
       } finally {
         setIsSearchingAnnas(false);
       }
     }
   };
 
-  const handleShieldedDownload = async (item: any) => {
+  const handleShieldedDownload = async (item: LibgenSearchResult) => {
     // Prevent accidentally downloading HTML details pages
     const isDirectDownload = item.downloadUrl && !item.downloadUrl.includes('edition.php') && !item.downloadUrl.includes('file.php');
     const targetUrl = isDirectDownload ? item.downloadUrl : null;
@@ -295,12 +299,12 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
     }
 
     setDownloadingId(item.id);
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
     const format = (item.format || 'pdf').toLowerCase();
     const filename = `${item.title.slice(0, 50)}.${format}`;
 
     try {
-      let res: any;
+      let res: { success?: boolean; path?: string; filePath?: string; error?: string; sha256?: string; md5?: string } | undefined;
       if (item.md5 && windowAPI?.downloadLibgen) {
         res = await windowAPI.downloadLibgen({
           md5: item.md5,
@@ -341,15 +345,15 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
           }
 
           onImportBook({
-            id: item.id || `download-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+            id: item.id,
             title: item.title,
             author: item.author,
             publisher: item.publisher,
             publicationYear: item.year,
             language: item.language || (item.title && /[\u0600-\u06FF]/.test(item.title) ? 'العربية' : undefined),
-            digitalFormat: digitalFormat as any,
+            digitalFormat: digitalFormat as BookItem['digitalFormat'],
             bookType: 'digital',
-            onlineSource: (activeSource === 'AnnasArchive' ? "Anna Archive" : activeSource) as any,
+            onlineSource: (activeSource === 'AnnasArchive' ? "Anna Archive" : activeSource),
             categories: ['مستورد من الإنترنت', activeSource],
             coverImage: coverImage,
             isbn: item.isbn,
@@ -371,8 +375,8 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
             isError: true,
           });
         }
-    } catch (err: any) {
-      const errDetail = err?.message || t('downloadFailed') || (lang === 'ar' ? 'فشل تحميل الكتاب' : 'Download failed');
+    } catch (err: unknown) {
+      const errDetail = errorMessage(err) || t('downloadFailed') || (lang === 'ar' ? 'فشل تحميل الكتاب' : 'Download failed');
       setDownloadToast({
         message: errDetail,
         isError: true,
@@ -382,7 +386,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
     }
   };
 
-  const handleImportOnlineItem = (item: any, sourceName: string) => {
+  const handleImportOnlineItem = (item: Partial<LibgenSearchResult> & { id: string; title: string; author: string; url?: string }, sourceName: string) => {
     const isEpub = item.format?.toUpperCase() === 'EPUB';
     onImportBook({
       title: item.title,
@@ -392,7 +396,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
       language: item.language || (item.title && /[\u0600-\u06FF]/.test(item.title) ? 'العربية' : undefined),
       digitalFormat: isEpub ? 'EPUB' : 'PDF',
       bookType: 'digital',
-      onlineSource: (sourceName === "Anna's Archive" ? 'Anna Archive' : sourceName) as any,
+      onlineSource: (sourceName === "Anna's Archive" ? 'Anna Archive' : sourceName) as BookItem['onlineSource'],
       categories: ['مستورد من الإنترنت', sourceName],
       coverImage: item.coverUrl,
       isbn: item.isbn,
@@ -437,7 +441,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
             <button
               key={src.id}
               onClick={() => {
-                setActiveSource(src.id as any);
+                setActiveSource(src.id as typeof activeSource);
                 setSearchQuery('');
               }}
               className={`px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
@@ -669,7 +673,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              const api = (window as any).electronAPI;
+                              const api = (window).electronAPI;
                               if (api?.openExternal && item.detailUrl) {
                                 api.openExternal(item.detailUrl);
                               } else if (item.detailUrl) {
@@ -874,7 +878,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const api = (window as any).electronAPI;
+                      const api = (window).electronAPI;
                       if (api?.showItemInFolder && downloadToast.path) {
                         api.showItemInFolder(downloadToast.path);
                       }
@@ -888,7 +892,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const api = (window as any).electronAPI;
+                      const api = (window).electronAPI;
                       if (api?.openFile && downloadToast.path) {
                         api.openFile(downloadToast.path);
                       }

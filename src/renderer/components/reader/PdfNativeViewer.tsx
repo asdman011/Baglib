@@ -1,4 +1,6 @@
 'use client';
+import { errorMessage } from '../../../shared/errors';
+
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -147,7 +149,7 @@ export function parseHighlightLocation(locStr: string): { page: number; rects: N
       if (parsed.rects && Array.isArray(parsed.rects)) {
         return {
           page: Number(parsed.page) || 1,
-          rects: parsed.rects.filter((r: any) => r && r.width >= 0.5 && r.height >= 0.5),
+          rects: parsed.rects.filter((r: { width: number; height: number }) => r && r.width >= 0.5 && r.height >= 0.5),
         };
       }
     }
@@ -189,7 +191,7 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
   const textLayerRef = useRef<HTMLDivElement>(null);
   const [isRendering, setIsRendering] = useState(true);
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
-  const renderTaskRef = useRef<any>(null);
+  const renderTaskRef = useRef<pdfjsLib.RenderTask | null>(null);
 
   const isDarkTheme = ['dark', 'night', 'midnight', 'dusk'].includes(theme);
 
@@ -267,8 +269,8 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
         }
 
         setIsRendering(false);
-      } catch (err: any) {
-        if (err?.name !== 'RenderingCancelledException') {
+      } catch (err: unknown) {
+        if ((err instanceof Error ? err.name : undefined) !== 'RenderingCancelledException') {
           console.error(`[PdfNativeViewer] Error rendering page ${pageNumber}:`, err);
         }
         if (!isCancelled) setIsRendering(false);
@@ -461,7 +463,10 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
     return s;
   });
 
-  useEffect(() => {
+  const [previousVisiblePageRange, setPreviousVisiblePageRange] = useState<readonly unknown[] | null>(null);
+  const inputsVisiblePageRange = [currentPage, totalPages];
+  if (previousVisiblePageRange === null || inputsVisiblePageRange.some((value, index) => !Object.is(value, previousVisiblePageRange[index]))) {
+    setPreviousVisiblePageRange(inputsVisiblePageRange);
     setVisiblePages((prev) => {
       let updated = false;
       const next = new Set(prev);
@@ -473,13 +478,20 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
       }
       return updated ? next : prev;
     });
-  }, [currentPage, totalPages]);
 
+  }
+
+  const [previousPdfSource, setPreviousPdfSource] = useState<readonly unknown[] | null>(null);
+  const inputsPdfSource = [fileUrl];
+  if (previousPdfSource === null || inputsPdfSource.some((value, index) => !Object.is(value, previousPdfSource[index]))) {
+    setPreviousPdfSource(inputsPdfSource);
+    setIsLoadingDoc(true);
+    setLoadError(null);
+  }
   // 1. Load PDF Document via pdfjsLib
   useEffect(() => {
     let isCancelled = false;
-    setIsLoadingDoc(true);
-    setLoadError(null);
+
 
     const loadDoc = async () => {
       if (!fileUrl || typeof fileUrl !== 'string' || fileUrl.trim() === '') {
@@ -508,7 +520,7 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
         try {
           const rawOutline = await doc.getOutline();
           if (rawOutline && rawOutline.length > 0) {
-            const traverseOutline = async (items: any[]): Promise<TOCItem[]> => {
+            const traverseOutline = async (items: Awaited<ReturnType<pdfjsLib.PDFDocumentProxy['getOutline']>>): Promise<TOCItem[]> => {
               const res: TOCItem[] = [];
               for (const it of items) {
                 let pageNumber = 1;
@@ -549,8 +561,8 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
                 const content = await page.getTextContent();
                 let maxFontSize = 0;
                 let candidateTitle = '';
-                for (const item of content.items as any[]) {
-                  if (item.str && item.str.trim().length > 2) {
+                for (const item of content.items) {
+                  if ('str' in item && item.str && item.str.trim().length > 2) {
                     const fontSize = Math.hypot(item.transform?.[0] || 0, item.transform?.[1] || 0) || item.height || 0;
                     const isHeadingKeyword = /^(Chapter|الفصل|الباب|المبحث|المطلب|Part|Section|المقدمة|الفهرس|المحتويات|تمهيد)\b/i.test(
                       item.str.trim()
@@ -593,18 +605,18 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
         } catch (tocErr) {
           console.warn('[PdfNativeViewer] Outline extraction notice:', tocErr);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!isCancelled) {
           const isInvalidPdf =
-            err?.name === 'InvalidPDFException' ||
-            err?.message?.includes('Invalid PDF structure') ||
-            err?.message?.includes('Missing PDF');
+            (err instanceof Error ? err.name : undefined) === 'InvalidPDFException' ||
+            errorMessage(err)?.includes('Invalid PDF structure') ||
+            errorMessage(err)?.includes('Missing PDF');
           if (isInvalidPdf) {
-            console.warn('[PdfNativeViewer] PDF parsing notice:', err?.message);
+            console.warn('[PdfNativeViewer] PDF parsing notice:', errorMessage(err));
           } else {
             console.error('[PdfNativeViewer] Document load error:', err);
           }
-          setLoadError(err?.message || 'Failed to load PDF document.');
+          setLoadError(errorMessage(err) || 'Failed to load PDF document.');
           setIsLoadingDoc(false);
         }
       }
@@ -618,10 +630,10 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
   }, [fileUrl]);
 
   // 2. Responsive Fit Calculation
-  const updateScale = useCallback(() => {
-    if (!scrollContainerRef.current) return;
-    const containerWidth = scrollContainerRef.current.clientWidth - (viewMode === 'two-column' ? 96 : 48);
-    const containerHeight = scrollContainerRef.current.clientHeight - 80;
+  const updateScale = useCallback((container: HTMLElement | null) => {
+    if (!container) return;
+    const containerWidth = container.clientWidth - (viewMode === 'two-column' ? 96 : 48);
+    const containerHeight = container.clientHeight - 80;
 
     const baseWidth = 595;
     const baseHeight = 842;
@@ -643,11 +655,11 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
 
     const finalComputed = Math.min(3.0, Math.max(0.5, computedScale * zoom));
     setCalculatedScale(finalComputed);
-  }, [viewMode, zoom, scrollContainerRef]);
+  }, [viewMode, zoom]);
 
   useEffect(() => {
-    updateScale();
-    const handleResize = () => updateScale();
+    updateScale(scrollContainerRef.current);
+    const handleResize = () => updateScale(scrollContainerRef.current);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [updateScale]);
@@ -663,13 +675,6 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
       const targetPage = currentPage;
       lastReportedPageRef.current = targetPage;
 
-      setVisiblePages((prev) => {
-        const next = new Set(prev);
-        for (let p = Math.max(1, targetPage - 2); p <= Math.min(pdfDoc.numPages, targetPage + 3); p++) {
-          next.add(p);
-        }
-        return next;
-      });
 
       const applyScroll = () => {
         const container = scrollContainerRef.current;

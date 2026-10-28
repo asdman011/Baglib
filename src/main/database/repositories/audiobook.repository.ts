@@ -1,3 +1,5 @@
+interface AudiobookRow { book_id: string; title: string; narrator?: string; source_type: 'local' | 'audiobookshelf' | 'epub_smil'; server_url?: string; audio_files: string; chapter_mappings: string; created_at: string; updated_at: string; }
+interface AudioProgressRow { book_id: string; current_file_id: string; current_time_seconds: number; playback_rate: number; is_completed: number; last_played_at: string; }
 /**
  * Baglib — SQLite Audiobook Pairing & Playback Progress Repository (KEY-145)
  */
@@ -26,7 +28,7 @@ export class SqliteAudiobookRepository {
 
     const row = db
       .prepare('SELECT * FROM audiobook_pairing WHERE book_id = ?')
-      .get(bookId) as any;
+      .get(bookId) as AudiobookRow | undefined;
 
     if (!row) return null;
 
@@ -132,7 +134,7 @@ export class SqliteAudiobookRepository {
 
     const row = db
       .prepare('SELECT * FROM audiobook_playback_progress WHERE book_id = ?')
-      .get(bookId) as any;
+      .get(bookId) as AudioProgressRow | undefined;
 
     if (!row) return null;
 

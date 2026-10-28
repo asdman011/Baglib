@@ -30,7 +30,6 @@ export const Titlebar: React.FC = () => {
     toggleLanguage,
     toggleTheme,
     setCommandPaletteOpen,
-    setSearchHubOpen,
     setViewMode,
     t,
   } = useWorkspace();
@@ -52,21 +51,21 @@ export const Titlebar: React.FC = () => {
         <button type="button" onClick={() => { setSunnahSearch(false); setQuranSearch(true); }} className="shrink-0 text-xs p-2 rounded-lg border border-subtle" title={t('quranGlobalSearch')} aria-label={t('quranGlobalSearch')}>{t('navQuran')}</button>
         <button type="button" onClick={() => setSunnahSearch(true)} className="shrink-0 text-xs p-2 rounded-lg border border-subtle" title={t('sunnahSearchAll')}>{t('navSunnah')}</button>
         <div
-          onClick={() => setSearchHubOpen(true)}
           className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:border-pale-sky-500/50 hover:text-main transition-all group shadow-inner text-xs cursor-pointer"
         >
-          <div className="flex items-center gap-2">
+          <button type="button" aria-label={t('studyCommandSearch')} onClick={() => setCommandPaletteOpen(true)} className="flex flex-1 items-center gap-2 text-start min-w-0">
             <Search className="w-3.5 h-3.5 text-muted group-hover:text-pale-sky-500 transition-colors" />
             <span className="hidden md:inline font-sans">
               {t('searchPlaceholder')}
             </span>
-          </div>
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               setCommandPaletteOpen(true);
             }}
-            title="Command Palette (Cmd + K)"
+            title={t('studyCommandSearch')}
+            aria-label={t('studyCommandSearch')}
             className="flex items-center gap-1 text-[10px] font-mono bg-surface hover:bg-canvas border border-subtle px-1.5 py-0.5 rounded text-muted hover:text-main transition-colors"
           >
             <Command className="w-3 h-3" />

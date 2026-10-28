@@ -19,8 +19,8 @@ export const QuotaWarningBanner: React.FC = () => {
 
   useEffect(() => {
     // 1. Initial check on mount
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.getQuotaStatus) {
-      (window as any).electronAPI.getQuotaStatus().then((status: any) => {
+    if (typeof window !== 'undefined' && typeof window.electronAPI?.getQuotaStatus === 'function') {
+      (window).electronAPI.getQuotaStatus().then((status) => {
         if (!status) return;
         if (status.mode === 'depleted') {
           setWarning({
@@ -41,14 +41,14 @@ export const QuotaWarningBanner: React.FC = () => {
               'قارب الحد اليومي للبحث السريع عن الكتب على الانتهاء. قد يستغرق البحث لحظات إضافية لتنظيم الاستخدام والاعتماد على فهارس بديلة، وسيتجدد الحد بالكامل غدًا.',
           });
         }
-      }).catch((err: any) => {
+      }).catch((err) => {
         console.warn('[QuotaWarningBanner] Error fetching quota status:', err);
       });
     }
 
     // 2. Listen for runtime IPC quota warning events
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.onQuotaWarning) {
-      const unsubscribe = (window as any).electronAPI.onQuotaWarning((payload: QuotaWarningPayload) => {
+    if (typeof window !== 'undefined' && typeof window.electronAPI?.onQuotaWarning === 'function') {
+      const unsubscribe = (window).electronAPI.onQuotaWarning((payload: QuotaWarningPayload) => {
         if (payload) {
           setWarning(payload);
           setDismissed(false); // Un-dismiss when a new event fires

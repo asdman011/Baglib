@@ -7,8 +7,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { MDX, MDD } = require('js-mdict');
+import { MDX, MDD } from 'js-mdict';
 
 export interface MdictEntry {
   headword: string;
@@ -17,8 +16,8 @@ export interface MdictEntry {
 }
 
 export class MdictReader {
-  private mdx: any = null;
-  private mdds: any[] = [];
+  private mdx: MDX | null = null;
+  private mdds: MDD[] = [];
   title = '';
   description = '';
 
@@ -98,7 +97,7 @@ export class MdictReader {
     try {
       if (typeof this.mdx.associate === 'function') {
         const list = this.mdx.associate('');
-        return list.slice(0, limit).map((item: any) => item.keyText || String(item));
+        return list.slice(0, limit).map((item: { keyText?: string }) => item.keyText || String(item));
       }
     } catch {
       // fallback

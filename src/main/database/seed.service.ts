@@ -56,7 +56,7 @@ export class SeedService {
       if (booksData && booksData.length > 0) {
         const repo = new WorkRepository(this.db);
         for (const book of booksData) {
-          repo.addBook(book as any);
+          repo.addBook({ ...book, bookType: book.bookType as import('../../shared/types/work').BookItemInput['bookType'] });
         }
         console.log(`[baglib/seed] Seeded ${booksData.length} works.`);
       }

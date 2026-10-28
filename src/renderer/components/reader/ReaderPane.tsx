@@ -117,15 +117,22 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
     onTotalPagesChange?.(maxPages);
   }, [maxPages, onTotalPagesChange]);
 
+  const [previousExternalPage, setPreviousExternalPage] = useState<readonly unknown[] | null>(null);
+  const inputsExternalPage = [externalPageTarget, maxPages];
+  if (previousExternalPage === null || inputsExternalPage.some((value, index) => !Object.is(value, previousExternalPage[index]))) {
+    setPreviousExternalPage(inputsExternalPage);
+    if (externalPageTarget != null && externalPageTarget >= 1 && externalPageTarget <= maxPages) setCurrentPage(externalPageTarget);
+  }
+  const lastExternalNotification = useRef<number | null>(null);
   // Handle external page sync from partner pane
   useEffect(() => {
     if (externalPageTarget != null && externalPageTarget >= 1 && externalPageTarget <= maxPages) {
-      if (externalPageTarget !== currentPage) {
-        setCurrentPage(externalPageTarget);
+      if (lastExternalNotification.current !== externalPageTarget) {
+        lastExternalNotification.current = externalPageTarget;
         onPageChange?.(externalPageTarget);
       }
-    }
-  }, [externalPageTarget, maxPages]);
+    } else lastExternalNotification.current = null;
+  }, [externalPageTarget, maxPages, onPageChange]);
 
   // Load document pipeline
   useEffect(() => {
@@ -148,7 +155,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
       const streamUrl = `baglib-asset:///${cleanPath}`;
       setAssetUrl(streamUrl);
 
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
 
       try {
         let bytes: Uint8Array | null = null;
@@ -177,7 +184,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
         if (bytes && !isCancelled) {
           // If PDF, construct authentic Blob URL for native iframe rendering
           if (format === 'PDF') {
-            const pdfBlob = new Blob([bytes as any], { type: 'application/pdf' });
+            const pdfBlob = new Blob([new Uint8Array(bytes)], { type: 'application/pdf' });
             activeObjectUrl = URL.createObjectURL(pdfBlob);
             setPdfBlobUrl(activeObjectUrl);
             setViewType('native_pdf');
@@ -464,7 +471,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
       if (!rawHref) return;
 
       if (/^(https?:|mailto:|tel:)/i.test(rawHref)) {
-        const winAPI = (window as any).electronAPI;
+        const winAPI = (window).electronAPI;
         if (winAPI?.openExternal) {
           winAPI.openExternal(rawHref);
         } else {
@@ -660,7 +667,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
             disabled={isOcrRunning}
             onClick={async () => {
               if (!book.filePath) return;
-              const windowAPI = (window as any).electronAPI;
+              const windowAPI = (window).electronAPI;
               if (!windowAPI?.ocrRecognizePage) return;
               setIsOcrRunning(true);
               try {

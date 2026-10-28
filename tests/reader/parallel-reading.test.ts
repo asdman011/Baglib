@@ -115,9 +115,8 @@ describe('KEY-135 Split-Screen Parallel Reading Workspace Tests', () => {
 
     it('prevents mutual recursion loops when synced pane emits an update back', () => {
       let pingPongCount = 0;
-      let ctrl: ParallelSyncController;
 
-      ctrl = new ParallelSyncController(true, (target, page) => {
+      const ctrl = new ParallelSyncController(true, (target, page) => {
         pingPongCount++;
         // Simulate Pane B receiving update and firing back to Pane A
         if (target === 'B') {

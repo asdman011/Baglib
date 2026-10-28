@@ -41,15 +41,20 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  const [previousProviderOpen, setPreviousProviderOpen] = useState<readonly unknown[] | null>(null);
+  const inputsProviderOpen = [isOpen];
+  if (previousProviderOpen === null || inputsProviderOpen.some((value, index) => !Object.is(value, previousProviderOpen[index]))) {
+    setPreviousProviderOpen(inputsProviderOpen);
+    if (isOpen) setLoading(true);
+  }
   useEffect(() => {
     if (!isOpen) return;
 
     let isMounted = true;
-    setLoading(true);
 
     const loadConfigs = async () => {
       try {
-        const windowAPI = (window as any).electronAPI;
+        const windowAPI = (window).electronAPI;
         if (windowAPI?.getProviderConfig) {
           const res = await windowAPI.getProviderConfig();
           if (isMounted && Array.isArray(res) && res.length > 0) {
@@ -114,7 +119,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       if (windowAPI?.updateProviderConfig) {
         await windowAPI.updateProviderConfig(configs);
       }

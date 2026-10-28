@@ -59,9 +59,9 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
     setEnrichProgress({ current: 0, total: count, status: 'starting' });
 
     let unsubscribe: (() => void) | undefined;
-    const windowEnrichment = (window as any)?.electronAPI?.enrichment;
+    const windowEnrichment = (window)?.electronAPI?.enrichment;
     if (windowEnrichment?.onBulkProgress) {
-      unsubscribe = windowEnrichment.onBulkProgress((prog: any) => {
+      unsubscribe = windowEnrichment.onBulkProgress((prog) => {
         setEnrichProgress(prog);
       });
     }

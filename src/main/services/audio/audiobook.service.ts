@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Audiobook & Audio Synchronization Service (KEY-145)
  */
@@ -136,7 +137,7 @@ export class AudiobookService {
     serverUrl: string,
     apiKey: string,
     query?: string
-  ): Promise<any[]> {
+  ): Promise<unknown[]> {
     const cleanUrl = serverUrl.replace(/\/+$/, '');
     const searchUrl = `${cleanUrl}/api/libraries`;
 
@@ -154,10 +155,10 @@ export class AudiobookService {
       const data = await response.json();
       const libraries = data.libraries || [];
       const bookLibraries = libraries.filter(
-        (lib: any) => lib.mediaType === 'book' || !lib.mediaType
+        (lib: { mediaType?: string }) => lib.mediaType === 'book' || !lib.mediaType
       );
 
-      const items: any[] = [];
+      const items: unknown[] = [];
       for (const lib of bookLibraries) {
         const itemsUrl = `${cleanUrl}/api/libraries/${lib.id}/items?limit=100${
           query ? `&q=${encodeURIComponent(query)}` : ''
@@ -183,8 +184,8 @@ export class AudiobookService {
       }
 
       return items;
-    } catch (err: any) {
-      console.warn('[AudiobookService] ABS Query error:', err.message);
+    } catch (err: unknown) {
+      console.warn('[AudiobookService] ABS Query error:', errorMessage(err));
       return [];
     }
   }

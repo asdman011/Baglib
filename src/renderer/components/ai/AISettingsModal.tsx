@@ -1,4 +1,6 @@
 'use client';
+import { errorMessage } from '../../../shared/errors';
+
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -48,36 +50,27 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   const [testResult, setTestResult] = useState<{ success: boolean; message?: string } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
+  const [previousAISettingsVisibility, setPreviousAISettingsVisibility] = useState<readonly unknown[] | null>(null);
+  const inputsAISettingsVisibility = [isOpen];
+  if (previousAISettingsVisibility === null || inputsAISettingsVisibility.some((value, index) => !Object.is(value, previousAISettingsVisibility[index]))) {
+    setPreviousAISettingsVisibility(inputsAISettingsVisibility);
+    if (isOpen) { setIsLoading(true); setTestResult(null); setSaveSuccess(false); }
+  }
   useEffect(() => {
     if (isOpen) {
-      loadSettings();
+      let alive = true;
+      void window.electronAPI.ai.getSettings().then(loaded => { if (alive && loaded) setSettings(loaded); }).catch(console.warn).finally(() => { if (alive) setIsLoading(false); });
+      return () => { alive = false; };
     }
   }, [isOpen]);
 
-  const loadSettings = async () => {
-    setIsLoading(true);
-    setTestResult(null);
-    setSaveSuccess(false);
-    try {
-      const windowAPI = (window as any).electronAPI;
-      if (windowAPI?.ai?.getSettings) {
-        const loaded = await windowAPI.ai.getSettings();
-        if (loaded) {
-          setSettings(loaded);
-        }
-      }
-    } catch (err) {
-      console.warn('[AISettingsModal] Failed to load AI settings:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
 
   const handleTestConnection = async () => {
     setIsTesting(true);
     setTestResult(null);
     try {
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       if (windowAPI?.ai?.testConnection) {
         const res = await windowAPI.ai.testConnection(settings);
         setTestResult(res);
@@ -87,10 +80,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
           message: 'Mock Connection OK (Browser preview mode)',
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: err.message || 'Connection test failed',
+        message: errorMessage(err) || 'Connection test failed',
       });
     } finally {
       setIsTesting(false);
@@ -100,7 +93,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       if (windowAPI?.ai?.saveSettings) {
         await windowAPI.ai.saveSettings(settings);
       }

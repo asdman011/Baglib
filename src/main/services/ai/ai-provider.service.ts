@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Unified BYOK (Bring Your Own Key / Local LLM) Provider Service (KEY-143)
  *
@@ -16,6 +17,7 @@ export interface ChatCompletionRequest {
   systemPrompt: string;
   userPrompt: string;
   temperature?: number;
+  preventRedirect?: boolean;
 }
 
 export interface HealthCheckResult {
@@ -53,10 +55,10 @@ export class AIProviderService {
         default:
           return await this.healthCheckOpenAI(settings);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         success: false,
-        message: err?.message || 'Connection failed or timed out',
+        message: errorMessage(err) || 'Connection failed or timed out',
       };
     }
   }
@@ -122,11 +124,11 @@ export class AIProviderService {
           : `Connected to Ollama (${modelNames.length} models installed), but "${targetModel}" was not found. Please run "ollama pull ${targetModel}".`,
         modelsFound: modelNames,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
       return {
         success: false,
-        message: `Could not reach Ollama at ${endpoint}. Make sure the Ollama server is running. (${err.message})`,
+        message: `Could not reach Ollama at ${endpoint}. Make sure the Ollama server is running. (${errorMessage(err)})`,
       };
     }
   }
@@ -145,6 +147,7 @@ export class AIProviderService {
     try {
       const res = await fetch(`${endpoint}/api/chat`, {
         method: 'POST',
+        redirect: request.preventRedirect ? 'error' : 'follow',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
@@ -168,9 +171,9 @@ export class AIProviderService {
 
       const data = await res.json() as { message?: { content?: string } };
       return data.message?.content || '';
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
-      throw new Error(`Ollama request failed: ${err.message}`);
+      throw new Error(`Ollama request failed: ${errorMessage(err)}`);
     }
   }
 
@@ -213,11 +216,11 @@ export class AIProviderService {
         success: true,
         message: 'Successfully connected to OpenAI-compatible API endpoint.',
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
       return {
         success: false,
-        message: `Failed to connect to ${baseUrl}: ${err.message}`,
+        message: `Failed to connect to ${baseUrl}: ${errorMessage(err)}`,
       };
     }
   }
@@ -262,9 +265,9 @@ export class AIProviderService {
         choices?: Array<{ message?: { content?: string } }>;
       };
       return data.choices?.[0]?.message?.content || '';
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
-      throw new Error(`OpenAI request failed: ${err.message}`);
+      throw new Error(`OpenAI request failed: ${errorMessage(err)}`);
     }
   }
 
@@ -305,11 +308,11 @@ export class AIProviderService {
         success: true,
         message: 'Successfully authenticated with Google Gemini API.',
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
       return {
         success: false,
-        message: `Gemini connection failed: ${err.message}`,
+        message: `Gemini connection failed: ${errorMessage(err)}`,
       };
     }
   }
@@ -364,9 +367,9 @@ export class AIProviderService {
       };
 
       return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
-      throw new Error(`Gemini request failed: ${err.message}`);
+      throw new Error(`Gemini request failed: ${errorMessage(err)}`);
     }
   }
 
@@ -415,11 +418,11 @@ export class AIProviderService {
         success: true,
         message: 'Successfully authenticated with Anthropic Claude API.',
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
       return {
         success: false,
-        message: `Claude connection failed: ${err.message}`,
+        message: `Claude connection failed: ${errorMessage(err)}`,
       };
     }
   }
@@ -464,9 +467,9 @@ export class AIProviderService {
       };
 
       return data.content?.[0]?.text || '';
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
-      throw new Error(`Claude request failed: ${err.message}`);
+      throw new Error(`Claude request failed: ${errorMessage(err)}`);
     }
   }
 }

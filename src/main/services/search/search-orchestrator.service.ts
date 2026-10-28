@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Unified Search Orchestrator Service
  *
@@ -112,7 +113,7 @@ export class SearchOrchestratorService {
       count: number;
       elapsedMs: number;
       error?: string;
-    }> = {} as any;
+    }> = Object.fromEntries(eligibleProviders.map(p => [p.id, { status: 'pending', count: 0, elapsedMs: 0 }])) as UnifiedSearchAggregateResult['providerStatuses'];
 
     // Initialize statuses
     for (const p of eligibleProviders) {
@@ -149,14 +150,13 @@ export class SearchOrchestratorService {
 
       // Create isolated timeout abort controller
       const timeoutController = new AbortController();
-      let timeoutHandle: NodeJS.Timeout | undefined;
 
       const abortListener = () => timeoutController.abort();
       if (parentSignal) {
         parentSignal.addEventListener('abort', abortListener, { once: true });
       }
 
-      timeoutHandle = setTimeout(() => {
+      const timeoutHandle = setTimeout(() => {
         timeoutController.abort();
       }, timeoutMs);
 
@@ -182,11 +182,11 @@ export class SearchOrchestratorService {
         }
 
         return rawResults;
-      } catch (err: any) {
+      } catch (err: unknown) {
         const elapsedMs = Date.now() - startTime;
         const isCancelled = timeoutController.signal.aborted || parentSignal?.aborted;
         const status: ProviderSearchStatus = isCancelled ? 'cancelled' : 'failed';
-        const errorMsg = isCancelled ? 'Search timed out or was cancelled' : err?.message || String(err);
+        const errorMsg = isCancelled ? 'Search timed out or was cancelled' : errorMessage(err) || String(err);
 
         providerStatuses[provider.id] = {
           status,

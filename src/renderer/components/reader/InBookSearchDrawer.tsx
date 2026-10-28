@@ -25,7 +25,7 @@ interface InBookSearchDrawerProps {
   sections: SearchableSection[];
   currentPage: number;
   onJumpToPage: (page: number, locationCfiOrPage?: string) => void;
-  t: (key: any, vars?: Record<string, any>) => string;
+  t: (key: import('../../translations').TranslationKey, vars?: Record<string, string | number>) => string;
   direction?: 'rtl' | 'ltr';
 }
 
@@ -64,6 +64,12 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
     }
   }, [isOpen]);
 
+  const [previousBookQuery, setPreviousBookQuery] = useState<readonly unknown[] | null>(null);
+  const inputsBookQuery = [isOpen, query, caseSensitive, matchWholeWord, normalizeArabic];
+  if (previousBookQuery === null || inputsBookQuery.some((value, index) => !Object.is(value, previousBookQuery[index]))) {
+    setPreviousBookQuery(inputsBookQuery);
+    if (isOpen) { setActiveMatchIndex(0); setIsSearching(Boolean(query.trim())); if (!query.trim()) { setMatches([]); setProgress(null); } }
+  }
   // Execute search when query or options change
   useEffect(() => {
     if (!isOpen) return;
@@ -74,17 +80,12 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
 
     const trimmed = query.trim();
     if (!trimmed) {
-      setMatches([]);
-      setProgress(null);
-      setIsSearching(false);
-      setActiveMatchIndex(0);
       return;
     }
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    setIsSearching(true);
-    setActiveMatchIndex(0);
+
 
     const timer = setTimeout(async () => {
       try {
@@ -103,8 +104,8 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
           setMatches(found);
           setIsSearching(false);
         }
-      } catch (err: any) {
-        if (err?.name !== 'AbortError') {
+      } catch (err: unknown) {
+        if ((!(err instanceof Error) || err.name !== 'AbortError')) {
           console.error('[baglib:search-drawer] Search error:', err);
         }
         setIsSearching(false);

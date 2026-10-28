@@ -94,7 +94,7 @@ export interface ExtractedEbookMetadata {
   format: DigitalFormat;
   pagesCount?: number;
   edition?: string;
-  editionDetails?: any;
+  editionDetails?: { rawMatch?: string; source?: string; confidence: number };
 }
 
 export type FileStorageStatus = 'available' | 'missing' | 'unmounted' | 'corrupted' | 'duplicate';
@@ -284,7 +284,7 @@ export interface DigitalImportResult {
     isbn?: string;
     description?: string;
     edition?: string;
-    editionDetails?: any;
+    editionDetails?: { rawMatch?: string; source?: string; confidence: number };
     pagesCount?: number;
     language?: string;
     tags?: string[];

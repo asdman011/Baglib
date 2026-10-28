@@ -176,7 +176,7 @@ export function formatAsObsidian(
 /**
  * Helper to escape CSV values according to RFC 4180
  */
-function escapeCsv(val: any): string {
+function escapeCsv(val: unknown): string {
   if (val == null) return '';
   const str = String(val);
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {

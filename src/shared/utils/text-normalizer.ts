@@ -33,7 +33,7 @@ export interface ArabicNormalizerOptions {
  * Preserves the canonical content while producing a match-friendly representation.
  */
 export function normalizeArabicText(
-  val: any,
+  val: unknown,
   options: ArabicNormalizerOptions = {}
 ): string {
   if (val === null || val === undefined) return '';
@@ -106,10 +106,10 @@ export function normalizeArabicText(
  *   - ئ -> ي
  * - Strips non-word characters and collapses whitespace.
  */
-export function normalizeSearchString(val: any): string {
+export function normalizeSearchString(val: unknown): string {
   if (val === null || val === undefined) return '';
 
-  let str = normalizeArabicText(val, {
+  const str = normalizeArabicText(val, {
     normalizeAlefs: true,
     normalizeTaaMarbuta: true,
     normalizeAlefMaksura: true,

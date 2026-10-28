@@ -124,7 +124,7 @@ export function tokenizeTextForRSVP(text: string): RSVPWordToken[] {
 
 export class RSVPController {
   private state: RSVPState;
-  private timer: any = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
   private onStateChange: ((state: RSVPState) => void) | null = null;
 
   constructor(initialWpm = 300, onStateChange?: (state: RSVPState) => void) {

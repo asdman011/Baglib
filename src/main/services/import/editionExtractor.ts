@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Dedicated 5-Vector Edition Intelligence Engine
  *
@@ -15,8 +16,8 @@ import fs from 'fs';
 import path from 'path';
 import { openLibraryClient } from '../metadata/http-client';
 
-const pdfParse = require('pdf-parse');
-const yauzl = require('yauzl');
+import pdfParse from 'pdf-parse';
+import yauzl from 'yauzl';
 
 // ---------------------------------------------------------------------------
 // Engine Output Contract & Types
@@ -169,7 +170,7 @@ export function containsArabic(text: string): boolean {
 /**
  * Reconstructs lines from PDF textContent items using vertical Y-coordinates.
  */
-export function extractTextWithLines(textContent: any): string {
+export function extractTextWithLines(textContent: import('pdf-parse').PdfTextContent): string {
   if (!textContent?.items || !Array.isArray(textContent.items)) return '';
   let pageStr = '';
   let lastY: number | null = null;
@@ -301,13 +302,13 @@ export async function lookupIsbnEdition(isbn: string): Promise<{
   try {
     const clean = isbn.replace(/[-\s]/g, '');
     const data = await Promise.race([
-      openLibraryClient.getJson<any>(`/isbn/${clean}.json`),
+      openLibraryClient.getJson<import('../../../shared/types/catalog-responses').OpenLibraryEdition>(`/isbn/${clean}.json`),
       new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
     ]);
     if (!data) return null;
 
-    let editionLabel: string | undefined = data.edition_name?.trim();
-    let publisher: string | undefined =
+    const editionLabel: string | undefined = data.edition_name?.trim();
+    const publisher: string | undefined =
       Array.isArray(data.publishers) && data.publishers.length > 0 ? data.publishers[0]?.trim() : undefined;
     let year: number | undefined;
     if (data.publish_date) {
@@ -899,13 +900,13 @@ export function parseEditionFromFilename(filePathOrName: string): ExtractedEditi
 
 async function scanPdfForEdition(filePath: string): Promise<ExtractedEditionResult> {
   const fileBuffer = await fs.promises.readFile(filePath);
-  const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
+  const pdfFn = pdfParse;
 
   try {
     const scoredPages: { pageNum: number; text: string; score: number }[] = [];
     let totalPages = 0;
 
-    const pagerender = async (pageData: any) => {
+    const pagerender = async (pageData: import('pdf-parse').PdfParsePage) => {
       const pageNum =
         pageData.pageNumber || (pageData.pageIndex !== undefined ? pageData.pageIndex + 1 : 1);
       // Scan first 8 pages
@@ -976,7 +977,7 @@ async function scanPdfForEdition(filePath: string): Promise<ExtractedEditionResu
       const backCutoff = Math.max(9, totalPages - 3);
       const backPages: { pageNum: number; text: string; score: number }[] = [];
 
-      const colophonRenderer = async (pageData: any) => {
+      const colophonRenderer = async (pageData: import('pdf-parse').PdfParsePage) => {
         const pageNum =
           pageData.pageNumber || (pageData.pageIndex !== undefined ? pageData.pageIndex + 1 : 1);
         if (pageNum < backCutoff) return '';
@@ -1054,8 +1055,8 @@ async function scanPdfForEdition(filePath: string): Promise<ExtractedEditionResu
       isRevised: false,
       source: 'none',
     };
-  } catch (err: any) {
-    console.warn('[editionExtractor] PDF page scan error:', err?.message || err);
+  } catch (err: unknown) {
+    console.warn('[editionExtractor] PDF page scan error:', errorMessage(err) || err);
     return {
       editionLabel: null,
       editionNumber: null,
@@ -1077,17 +1078,17 @@ async function scanPdfForEdition(filePath: string): Promise<ExtractedEditionResu
 
 function getZipEntryBuffer(filePath: string, targetFile: string): Promise<Buffer | null> {
   return new Promise((resolve) => {
-    yauzl.open(filePath, { lazyEntries: true }, (err: any, zip: any) => {
+    yauzl.open(filePath, { lazyEntries: true }, (err: unknown, zip: yauzl.ZipFile | undefined) => {
       if (err || !zip) return resolve(null);
       zip.readEntry();
-      zip.on('entry', (e: any) => {
+      zip.on('entry', (e: yauzl.Entry) => {
         const matches =
           e.fileName === targetFile ||
           e.fileName.toLowerCase() === targetFile.toLowerCase() ||
           e.fileName.endsWith('/' + targetFile) ||
           e.fileName.toLowerCase().endsWith('/' + targetFile.toLowerCase());
         if (matches) {
-          zip.openReadStream(e, (streamErr: any, stream: any) => {
+          zip.openReadStream(e, (streamErr: unknown, stream: import('node:stream').Readable) => {
             if (streamErr || !stream) {
               try { zip.close(); } catch (_) {}
               return resolve(null);
@@ -1115,11 +1116,11 @@ function getZipEntryBuffer(filePath: string, targetFile: string): Promise<Buffer
 
 function listZipEntries(filePath: string): Promise<string[]> {
   return new Promise((resolve) => {
-    yauzl.open(filePath, { lazyEntries: true }, (err: any, zip: any) => {
+    yauzl.open(filePath, { lazyEntries: true }, (err: unknown, zip: yauzl.ZipFile | undefined) => {
       if (err || !zip) return resolve([]);
       const fileNames: string[] = [];
       zip.readEntry();
-      zip.on('entry', (e: any) => {
+      zip.on('entry', (e: yauzl.Entry) => {
         fileNames.push(e.fileName);
         zip.readEntry();
       });
@@ -1308,9 +1309,9 @@ async function scanTextFileForEdition(filePath: string, ext: string): Promise<Ex
   };
 }
 
-function readZipEntry(zipfile: any, entry: any): Promise<Buffer> {
+function readZipEntry(zipfile: yauzl.ZipFile, entry: yauzl.Entry): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    zipfile.openReadStream(entry, (err: any, stream: any) => {
+    zipfile.openReadStream(entry, (err: unknown, stream: import('node:stream').Readable) => {
       if (err || !stream) {
         reject(err || new Error('Stream unavailable'));
         return;
@@ -1318,7 +1319,7 @@ function readZipEntry(zipfile: any, entry: any): Promise<Buffer> {
       const chunks: Buffer[] = [];
       stream.on('data', (chunk: Buffer) => chunks.push(chunk));
       stream.on('end', () => resolve(Buffer.concat(chunks)));
-      stream.on('error', (streamErr: any) => reject(streamErr));
+      stream.on('error', (streamErr: unknown) => reject(streamErr));
     });
   });
 }

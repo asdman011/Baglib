@@ -158,14 +158,13 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
   }, []);
 
   // Initialize sentences when initialText changes
-  useEffect(() => {
-    if (initialText) {
-      const parsed = splitSentences(initialText);
-      sentencesRef.current = parsed;
-      setSentences(parsed);
-      setCurrentSentenceIndex(0);
-    }
-  }, [initialText, splitSentences]);
+  const [previousNarrationText, setPreviousNarrationText] = useState<readonly unknown[] | null>(null);
+  const inputsNarrationText = [initialText, splitSentences];
+  if (previousNarrationText === null || inputsNarrationText.some((value, index) => !Object.is(value, previousNarrationText[index]))) {
+    setPreviousNarrationText(inputsNarrationText);
+    if (initialText) { setSentences(splitSentences(initialText)); setCurrentSentenceIndex(0); }
+  }
+  useEffect(() => { sentencesRef.current = sentences; }, [sentences]);
 
   // Load available speech synthesis voices
   useEffect(() => {
@@ -237,7 +236,7 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
 
   // Handle SpeechSynthesis segment execution
   const speakSegment = useCallback(
-    (segments: TTSUtteranceSegment[], segIdx: number, sentenceIdx: number) => {
+    function speakSegment(segments: TTSUtteranceSegment[], segIdx: number, sentenceIdx: number) {
       if (!synthRef.current || !isPlayingRef.current) return;
       if (segIdx >= segments.length) {
         // Move to next sentence
@@ -336,7 +335,7 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
   const getPocketAudioContext = useCallback(() => {
     if (typeof window === 'undefined') return null;
     if (!pocketContextRef.current) {
-      const AudioContextConstructor = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const AudioContextConstructor = (window).AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextConstructor) return null;
       pocketContextRef.current = new AudioContextConstructor();
     }
@@ -544,47 +543,14 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
 
   // Audio element setup for Audiobook & SMIL
   const getOrCreateAudioElement = useCallback(() => {
-    if (!audioRef.current && typeof window !== 'undefined') {
+    if (!audioRef.current && typeof window !== 'undefined' && typeof Audio !== 'undefined') {
       const audio = new Audio();
       audioRef.current = audio;
 
-      audio.ontimeupdate = () => {
-        setCurrentTime(audio.currentTime);
-        setDuration(audio.duration || 0);
 
-        // SMIL Media Overlay synchronization
-        if (activeSmilOverlay && activeSmilOverlay.pars.length > 0) {
-          const t = audio.currentTime;
-          const matchingPar = activeSmilOverlay.pars.find(
-            (p) => t >= p.clipBegin && t < p.clipEnd
-          );
-          if (matchingPar) {
-            setActiveSmilPar(matchingPar);
-            onOverlayParChange?.(matchingPar);
-          }
-        }
-      };
-
-      audio.onended = () => {
-        // Advance to next audio track if available
-        if (audiobookPairing && currentAudioFileIndex + 1 < audiobookPairing.audioFiles.length) {
-          playAudioFile(currentAudioFileIndex + 1);
-        } else {
-          setPlaybackState('idle');
-          isPlayingRef.current = false;
-        }
-      };
-
-      audio.onwaiting = () => setPlaybackState('buffering');
-      audio.onplaying = () => setPlaybackState('playing');
-      audio.onerror = (e) => {
-        console.warn('[useTTSAudio] Audio playback error:', e);
-        setPlaybackState('idle');
-        isPlayingRef.current = false;
-      };
     }
     return audioRef.current;
-  }, [activeSmilOverlay, audiobookPairing, currentAudioFileIndex, onOverlayParChange]);
+  }, []);
 
   // Play specific audio file by index
   const playAudioFile = useCallback(
@@ -623,6 +589,50 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
     },
     [audiobookPairing, config.rate, getOrCreateAudioElement]
   );
+
+  useEffect(() => {
+    if (!audiobookPairing) return;
+    const audio = getOrCreateAudioElement();
+    if (!audio) return;
+      audio.ontimeupdate = () => {
+        setCurrentTime(audio.currentTime);
+        setDuration(audio.duration || 0);
+
+        // SMIL Media Overlay synchronization
+        if (activeSmilOverlay && activeSmilOverlay.pars.length > 0) {
+          const t = audio.currentTime;
+          const matchingPar = activeSmilOverlay.pars.find(
+            (p) => t >= p.clipBegin && t < p.clipEnd
+          );
+          if (matchingPar) {
+            setActiveSmilPar(matchingPar);
+            onOverlayParChange?.(matchingPar);
+          }
+        }
+      };
+
+      audio.onended = () => {
+        // Advance to next audio track if available
+        if (audiobookPairing && currentAudioFileIndex + 1 < audiobookPairing.audioFiles.length) {
+          playAudioFile(currentAudioFileIndex + 1);
+        } else {
+          setPlaybackState('idle');
+          isPlayingRef.current = false;
+        }
+      };
+
+      audio.onwaiting = () => setPlaybackState('buffering');
+      audio.onplaying = () => setPlaybackState('playing');
+      audio.onerror = (e) => {
+        console.warn('[useTTSAudio] Audio playback error:', e);
+        setPlaybackState('idle');
+        isPlayingRef.current = false;
+      };
+    return () => {
+      audio.ontimeupdate = null; audio.onended = null; audio.onwaiting = null;
+      audio.onplaying = null; audio.onerror = null;
+    };
+  }, [getOrCreateAudioElement, activeSmilOverlay, audiobookPairing, currentAudioFileIndex, onOverlayParChange, playAudioFile]);
 
   // Play / Resume
   const play = useCallback(() => {
@@ -700,13 +710,13 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
 
   const sleepTimerRunning = playbackState === 'playing' || playbackState === 'buffering';
   useEffect(() => {
-    if (sleepRemainingSeconds === 0) {
-      stop();
-      setSleepRemainingSeconds(null);
-    } else if (sleepRemainingSeconds !== null && sleepRemainingSeconds > 0 && sleepTimerRunning) {
+    if (sleepRemainingSeconds !== null && sleepTimerRunning) {
       sleepTimerRef.current = setTimeout(() => {
-        setSleepRemainingSeconds((previous) => previous === null ? null : Math.max(0, previous - 1));
-      }, 1000);
+        if (sleepRemainingSeconds <= 1) {
+          stop();
+          setSleepRemainingSeconds(null);
+        } else setSleepRemainingSeconds(sleepRemainingSeconds - 1);
+      }, sleepRemainingSeconds === 0 ? 0 : 1000);
     }
     return () => {
       if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
@@ -724,11 +734,16 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
     [playTTS, cancelPocketQueue]
   );
 
+  const [previousNarrationVoice, setPreviousNarrationVoice] = useState<readonly unknown[] | null>(null);
+  const inputsNarrationVoice = [bookId, config.voiceEn, config.voiceAr];
+  if (previousNarrationVoice === null || inputsNarrationVoice.some((value, index) => !Object.is(value, previousNarrationVoice[index]))) {
+    setPreviousNarrationVoice(inputsNarrationVoice);
+    setPlaybackState('stopped');
+  }
   useEffect(() => {
     cancelPocketQueue();
     isPlayingRef.current = false;
     synthRef.current?.cancel();
-    setPlaybackState('stopped');
   }, [bookId, config.voiceEn, config.voiceAr, cancelPocketQueue]);
 
   // Skip forward (seconds for audio, next sentence for TTS)

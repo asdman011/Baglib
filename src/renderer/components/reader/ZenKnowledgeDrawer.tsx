@@ -264,7 +264,7 @@ export const ZenKnowledgeDrawer: React.FC<ZenKnowledgeDrawerProps> = ({
                           item.color === 'violet' ? '#8b5cf6' : '#f59e0b'
                       }}
                     >
-                      "{item.quotedText}"
+                      &quot;{item.quotedText}&quot;
                     </blockquote>
                   )}
 

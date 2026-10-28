@@ -177,11 +177,11 @@ describe('SqliteTagRepository Unit Tests (Task 10.1)', () => {
       assert.strictEqual(w1Tags[0].tag_id, targetTag.id);
 
       // w1 metadata should have CanonicalTag
-      const w1Meta = JSON.parse((db.prepare('SELECT metadata_json FROM work WHERE id = ?').get('w1') as any).metadata_json);
+      const w1Meta = JSON.parse((db.prepare('SELECT metadata_json FROM work WHERE id = ?').get('w1') as unknown).metadata_json);
       assert.deepStrictEqual(w1Meta.tags, ['CanonicalTag']);
 
       // w2 metadata should not have duplicates
-      const w2Meta = JSON.parse((db.prepare('SELECT metadata_json FROM work WHERE id = ?').get('w2') as any).metadata_json);
+      const w2Meta = JSON.parse((db.prepare('SELECT metadata_json FROM work WHERE id = ?').get('w2') as unknown).metadata_json);
       assert.deepStrictEqual(w2Meta.tags, ['CanonicalTag']);
     });
   });

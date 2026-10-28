@@ -30,7 +30,7 @@ export class AnkiConnectClient {
     this.endpoint = endpoint;
   }
 
-  private async request<T = any>(action: string, params?: Record<string, any>): Promise<T> {
+  private async request<T = unknown>(action: string, params?: Record<string, unknown>): Promise<T> {
     const payload: AnkiConnectRequest = {
       action,
       version: 6,
@@ -152,7 +152,7 @@ export class JoplinClient {
     }
   }
 
-  async createNote(payload: JoplinNotePayload): Promise<any> {
+  async createNote(payload: JoplinNotePayload): Promise<unknown> {
     const url = `${this.endpoint}/notes?token=${encodeURIComponent(this.token)}`;
     const res = await fetch(url, {
       method: 'POST',
@@ -170,7 +170,7 @@ export class JoplinClient {
   async exportBookToJoplin(
     book: BookBibliographicInfo,
     annotations: AnnotationDTO[]
-  ): Promise<any> {
+  ): Promise<unknown> {
     const md = formatAsMarkdown(book, annotations, { format: 'markdown', includeFrontmatter: false });
     return this.createNote({
       title: `${book.title} - Notes`,
@@ -188,7 +188,7 @@ export function buildNotionPagePayload(
   annotations: AnnotationDTO[],
   parentDatabaseId: string
 ): NotionPagePayload {
-  const children: Array<Record<string, any>> = [];
+  const children: Array<Record<string, unknown>> = [];
 
   // Book header Callout
   children.push({

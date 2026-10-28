@@ -1,4 +1,6 @@
 'use client';
+import { errorMessage } from '../../../shared/errors';
+
 
 import React, { useState, useRef, useMemo } from 'react';
 import {
@@ -184,31 +186,34 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     shelves: string[];
     shelfSections: string[];
   }>({ rooms: [], bookcases: [], shelves: [], shelfSections: [] });
-  const [pastBorrowers, setPastBorrowers] = useState<any[]>([]);
+  const [pastBorrowers, setPastBorrowers] = useState<import('../../../shared/types/physical-library').BorrowerSummary[]>([]);
 
   React.useEffect(() => {
     if (isOpen && typeof window !== 'undefined') {
       if (window.electronAPI?.physical?.getLocations) {
         window.electronAPI.physical
           .getLocations()
-          .then((res: any) => {
+          .then((res) => {
             if (res) setExistingLocations(res);
           })
-          .catch((err: any) => console.warn('[baglib/physical] Failed to load locations:', err));
+          .catch((err) => console.warn('[baglib/physical] Failed to load locations:', err));
       }
       if (window.electronAPI?.lending?.getBorrowers) {
         window.electronAPI.lending
           .getBorrowers()
-          .then((res: any) => {
+          .then((res) => {
             if (Array.isArray(res)) setPastBorrowers(res);
           })
-          .catch((err: any) => console.warn('[baglib/lending] Failed to load borrowers:', err));
+          .catch((err) => console.warn('[baglib/lending] Failed to load borrowers:', err));
       }
     }
   }, [isOpen]);
 
   // Sync state when book changes
-  React.useEffect(() => {
+  const [previousBookForm, setPreviousBookForm] = useState<readonly unknown[] | null>(null);
+  const inputsBookForm = [book, isOpen];
+  if (previousBookForm === null || inputsBookForm.some((value, index) => !Object.is(value, previousBookForm[index]))) {
+    setPreviousBookForm(inputsBookForm);
     if (book) {
       const initial: BookItem = {
         ...book,
@@ -224,12 +229,18 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       setShowConfirmDiscard(false);
       setActiveTab('info');
       setCurrentPdfPage(1);
-      pdfCoverRequest.current++;
       setPdfCoverPages([]);
       setIsExtractingPdfCover(false);
       setTotalPdfPages(1);
       setIsFileImported(Boolean(initial.filePath && initial.filePath.trim().length > 0));
 
+    }
+  }
+
+  React.useEffect(() => {
+    if (book) {
+      const initial = book;
+      pdfCoverRequest.current++;
       const initialCoverRequest = pdfCoverRequest.current;
       if (!initial.coverImage && initial.filePath && initial.filePath.toLowerCase().endsWith('.pdf')) {
         renderPdfPage(initial.filePath, 1)
@@ -246,10 +257,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       }
 
       if (initial.filePath && initial.filePath.toLowerCase().endsWith('.epub') && !initial.coverImage) {
-        const windowAPI = (window as any).electronAPI;
+        const windowAPI = (window).electronAPI;
         if (windowAPI?.extractEpubCover) {
           windowAPI.extractEpubCover(initial.filePath)
-            .then((res: any) => {
+            .then((res) => {
               if (res?.success && res.coverUrl) {
                 setFormData((prev) => prev.id === initial.id && prev.filePath === initial.filePath && !prev.coverImage ? { ...prev, coverImage: res.coverUrl } : prev);
               }
@@ -297,7 +308,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     return validateWorkMetadata(formData);
   }, [formData]);
 
-  const handleInputChange = (field: keyof BookItem, value: any) => {
+  const handleInputChange = <K extends keyof BookItem>(field: K, value: BookItem[K]) => {
     if (field === 'filePath') {
       pdfCoverRequest.current++;
       setPdfCoverPages([]);
@@ -329,7 +340,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
     setIsDiscoveringFile(true);
 
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
 
     // Validate digital file if validation service is available
     if (windowAPI?.validateDigitalFile) {
@@ -465,7 +476,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         ...prev,
         // Always extract and save technical file properties that belong strictly to the file
         filePath: fullPath,
-        digitalFormat: ext as any,
+        digitalFormat: ext as BookItem['digitalFormat'],
         fileSize: fileSizeStr || prev.fileSize || '1.5 MB',
         pagesCount: discoveredPagesCount !== undefined ? discoveredPagesCount : prev.pagesCount,
         bookType: prev.bookType === 'physical' ? 'hybrid' : 'digital',
@@ -497,7 +508,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   };
 
   const handlePickFileNative = async () => {
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
     if (windowAPI?.openFileDialog) {
       const fullPath: string | null = await windowAPI.openFileDialog();
       if (!fullPath) return;
@@ -511,7 +522,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   };
 
   const handleLocateAndRelink = async () => {
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
     if (windowAPI?.openFileDialog) {
       const fullPath: string | null = await windowAPI.openFileDialog();
       if (!fullPath) return;
@@ -541,8 +552,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           setPdfCoverMessage(t('storageLocateSuccess'));
           setTimeout(() => setPdfCoverMessage(null), 3500);
         }
-      } catch (err: any) {
-        setPdfCoverMessage(t('storageLocateError', { error: err?.message || 'Error' }));
+      } catch (err: unknown) {
+        setPdfCoverMessage(t('storageLocateError', { error: errorMessage(err) || 'Error' }));
         setTimeout(() => setPdfCoverMessage(null), 4000);
       } finally {
         setIsRelinking(false);
@@ -615,7 +626,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       language: imported.language || prev.language,
       description: imported.description || prev.description,
       abstract: imported.description || imported.abstract || prev.abstract,
-      onlineSource: (imported.onlineSource as any) || prev.onlineSource,
+      onlineSource: (imported.onlineSource) || prev.onlineSource,
       bookType: imported.filePath ? (prev.bookType === 'physical' ? 'hybrid' : 'digital') : prev.bookType,
       categories: imported.categories ? Array.from(new Set([...(prev.categories || []), ...imported.categories])) : prev.categories,
       tags: imported.tags ? Array.from(new Set([...(prev.tags || []), ...imported.tags])) : prev.tags,
@@ -670,7 +681,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     setIsExtractingEpubCover(true);
     setEpubCoverMessage(null);
     try {
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       if (windowAPI?.extractEpubCover) {
         const res = await windowAPI.extractEpubCover(formData.filePath);
         if (res?.success && res.coverUrl) {
@@ -717,7 +728,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const handleFetchOnlineCover = async () => {
     setIsFetchingOnlineCover(true);
     try {
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       if (windowAPI?.enrichment?.fetchAndCacheCover) {
         const res = await windowAPI.enrichment.fetchAndCacheCover({
           workId: formData.id,
@@ -797,7 +808,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           setFormData((prev) => ({ ...prev, lendingHistory: updated }));
         }
         await refreshBooks();
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[baglib/lending] Failed to record loan via IPC:', err);
       }
     } else {
@@ -1663,7 +1674,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   <label className="font-bold text-main">{lang === 'ar' ? 'نوع الحيازة' : 'Holding Type'}</label>
                   <select
                     value={formData.bookType || 'physical'}
-                    onChange={(e) => handleInputChange('bookType', e.target.value)}
+                    onChange={(e) => handleInputChange('bookType', e.target.value as BookItem['bookType'])}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   >
                     <option value="physical">{lang === 'ar' ? 'نسخة ورقية / فيزيائية' : 'Physical Copy'}</option>
@@ -2220,7 +2231,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <label className="font-bold text-main text-xs">{t('physicalCondition')}</label>
                     <select
                       value={formData.condition || 'good'}
-                      onChange={(e) => handleInputChange('condition', e.target.value)}
+                      onChange={(e) => handleInputChange('condition', e.target.value as BookItem['condition'])}
                       className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main text-xs outline-none focus:border-amber-500 transition-colors cursor-pointer"
                     >
                       <option value="mint">{t('conditionMint')}</option>
@@ -2552,7 +2563,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                               <strong className="text-main">{rec.conditionOnReturn}</strong>
                             </p>
                           )}
-                          {rec.notes && <p className="text-[11px] text-muted italic">"{rec.notes}"</p>}
+                          {rec.notes && <p className="text-[11px] text-muted italic">&quot;{rec.notes}&quot;</p>}
                         </div>
 
                         <button
@@ -2621,15 +2632,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               disabled={!validation.isValid || (formData.workType === 'book' && !!bookVolumeIssue(formData))}
               onClick={async () => {
                 if (validation.isValid) {
-                  let toSave = { ...formData };
+                  const toSave = { ...formData };
                   if (
                     !toSave.coverImage &&
                     toSave.filePath &&
                     toSave.filePath.toLowerCase().endsWith('.pdf') &&
-                    (window as any).electronAPI?.extractPdfCover
+                    typeof window.electronAPI?.extractPdfCover === 'function'
                   ) {
                     try {
-                      const pdfCoverRes = await (window as any).electronAPI.extractPdfCover(toSave.filePath);
+                      const pdfCoverRes = await (window).electronAPI.extractPdfCover(toSave.filePath);
                       if (pdfCoverRes?.success && pdfCoverRes.coverUrl) {
                         toSave.coverImage = pdfCoverRes.coverUrl;
                       }
@@ -2640,10 +2651,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     !toSave.coverImage &&
                     toSave.filePath &&
                     toSave.filePath.toLowerCase().endsWith('.epub') &&
-                    (window as any).electronAPI?.extractEpubCover
+                    typeof window.electronAPI?.extractEpubCover === 'function'
                   ) {
                     try {
-                      const epubCoverRes = await (window as any).electronAPI.extractEpubCover(toSave.filePath);
+                      const epubCoverRes = await (window).electronAPI.extractEpubCover(toSave.filePath);
                       if (epubCoverRes?.success && epubCoverRes.coverUrl) {
                         toSave.coverImage = epubCoverRes.coverUrl;
                       }

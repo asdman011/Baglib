@@ -300,7 +300,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                         {art.field}
                       </span>
                       <span className="line-through text-red-500/80 font-bold">
-                        "{art.value}"
+                        &quot;{art.value}&quot;
                       </span>
                     </div>
                     <span className="text-[10px] text-muted">

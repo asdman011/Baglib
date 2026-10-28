@@ -7,7 +7,7 @@ import { EnrichmentCandidateEdition, ApplyEnrichmentRequest } from '../../../src
 
 class MockSearchProvider implements ISearchProvider {
   constructor(
-    public readonly id: any,
+    public readonly id: unknown,
     public readonly name: string,
     public readonly nameAr: string,
     public readonly description: string = '',
@@ -58,7 +58,7 @@ describe('MetadataEnrichmentService Unit Tests (Story 12)', () => {
       isbn: '9780134494166',
     };
 
-    const { confidence, reason } = (service as any).calculateMatchConfidence(sampleBook, candidateResult);
+    const { confidence, reason } = (service as unknown).calculateMatchConfidence(sampleBook, candidateResult);
     assert.strictEqual(confidence, 1.0);
     assert.match(reason, /ISBN match/i);
   });
@@ -78,7 +78,7 @@ describe('MetadataEnrichmentService Unit Tests (Story 12)', () => {
       author: 'Robert C. Martin',
     };
 
-    const { confidence, reason } = (service as any).calculateMatchConfidence(bookWithoutIsbn, candidateResult);
+    const { confidence, reason } = (service as unknown).calculateMatchConfidence(bookWithoutIsbn, candidateResult);
     assert.ok(confidence >= 0.85, `Confidence ${confidence} should be >= 0.85`);
     assert.match(reason, /Title & Author match/i);
   });
@@ -185,10 +185,10 @@ describe('MetadataEnrichmentService Unit Tests (Story 12)', () => {
   it('applies enrichment non-destructively: respects overwrite protection guards', async () => {
     const service = new MetadataEnrichmentService([]);
 
-    let savedBook: any = null;
-    const mockRepo: any = {
+    let savedBook: unknown = null;
+    const mockRepo: unknown = {
       getById: async () => ({ ...sampleBook }),
-      updateBook: async (b: any) => {
+      updateBook: async (b: unknown) => {
         savedBook = b;
         return b;
       },
@@ -288,8 +288,8 @@ describe('MetadataEnrichmentService Unit Tests (Story 12)', () => {
     };
 
     let savedBook: BookItem = { ...placeholderBook };
-    const mockRepo: any = {
-      updateBook: async (b: any) => {
+    const mockRepo: unknown = {
+      updateBook: async (b: unknown) => {
         savedBook = { ...savedBook, ...b };
       },
       getById: async () => savedBook,

@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — App Lock & OS Biometrics Security Modal (KEY-149)
  *
@@ -67,10 +68,10 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
 
   const loadSecurityState = async () => {
     try {
-      if ((window as any).electronAPI?.appLock) {
+      if ((window).electronAPI?.appLock) {
         const [loadedConfig, cap] = await Promise.all([
-          (window as any).electronAPI.appLock.getLockConfig(),
-          (window as any).electronAPI.appLock.getBiometricCapability(),
+          (window).electronAPI.appLock.getLockConfig(),
+          (window).electronAPI.appLock.getBiometricCapability(),
         ]);
         setConfig(loadedConfig);
         setBiometricCapability(cap);
@@ -80,30 +81,41 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
     }
   };
 
-  useEffect(() => {
+  const [previousLockVisibility, setPreviousLockVisibility] = useState<readonly unknown[] | null>(null);
+  const inputsLockVisibility = [isOpen, isLockScreen];
+  if (previousLockVisibility === null || inputsLockVisibility.some((value, index) => !Object.is(value, previousLockVisibility[index]))) {
+    setPreviousLockVisibility(inputsLockVisibility);
     if (isOpen) {
-      loadSecurityState();
       setErrorMsg('');
       setSuccessMsg('');
       setPinInput('');
       setPinConfirmInput('');
       setIsSettingPin(false);
+    }
+  }
+  useEffect(() => {
+    if (isOpen) {
+      let alive = true;
+      const security = window.electronAPI.appLock;
+      void Promise.all([security.getLockConfig(), security.getBiometricCapability()]).then(([loadedConfig, capability]) => {
+        if (!alive) return;
+        setConfig(loadedConfig); setBiometricCapability(capability);
+        if (isLockScreen && capability.available) void handleBiometricPrompt(capability);
+      }).catch(console.warn);
+      return () => { alive = false; };
 
-      // Auto-trigger biometrics on lock screen if enabled
-      if (isLockScreen) {
-        handleBiometricPrompt();
-      }
+
     }
   }, [isOpen, isLockScreen]);
 
   if (!isOpen) return null;
 
-  const handleBiometricPrompt = async () => {
-    if (!biometricCapability?.available && isLockScreen) return;
+  async function handleBiometricPrompt(capability: BiometricCapability | null = biometricCapability) {
+    if (!capability?.available && isLockScreen) return;
     setAuthenticating(true);
     setErrorMsg('');
     try {
-      const res = await (window as any).electronAPI.appLock.promptBiometricAuth(
+      const res = await (window).electronAPI.appLock.promptBiometricAuth(
         t.securityModalTitle
       );
       if (res && res.success) {
@@ -117,18 +129,18 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
       } else {
         setErrorMsg(res?.error || t.securityPinInvalid);
       }
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Biometric auth failed');
+    } catch (err: unknown) {
+      setErrorMsg(errorMessage(err) || 'Biometric auth failed');
     } finally {
       setAuthenticating(false);
     }
-  };
+  }
 
   const handleUnlockWithPin = async () => {
     if (!pinInput) return;
     setErrorMsg('');
     try {
-      const isValid = await (window as any).electronAPI.appLock.verifyMasterPin(pinInput);
+      const isValid = await (window).electronAPI.appLock.verifyMasterPin(pinInput);
       if (isValid) {
         setSuccessMsg(t.securityUnlockedToast);
         setTimeout(() => {
@@ -138,8 +150,8 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
       } else {
         setErrorMsg(t.securityPinInvalid);
       }
-    } catch (err: any) {
-      setErrorMsg(err?.message || t.securityPinInvalid);
+    } catch (err: unknown) {
+      setErrorMsg(errorMessage(err) || t.securityPinInvalid);
     }
   };
 
@@ -154,30 +166,30 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
     }
     setErrorMsg('');
     try {
-      await (window as any).electronAPI.appLock.setMasterPin(pinInput);
+      await (window).electronAPI.appLock.setMasterPin(pinInput);
       setSuccessMsg(t.securityPinSaved);
       setIsSettingPin(false);
       setPinInput('');
       setPinConfirmInput('');
       loadSecurityState();
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Failed to set PIN');
+    } catch (err: unknown) {
+      setErrorMsg(errorMessage(err) || 'Failed to set PIN');
     }
   };
 
   const handleClearPin = async () => {
     try {
-      await (window as any).electronAPI.appLock.clearMasterPin();
+      await (window).electronAPI.appLock.clearMasterPin();
       setSuccessMsg(t.securityPinRemoved);
       loadSecurityState();
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Failed to remove PIN');
+    } catch (err: unknown) {
+      setErrorMsg(errorMessage(err) || 'Failed to remove PIN');
     }
   };
 
   const handleToggleAppLock = async (enabled: boolean) => {
     try {
-      const updated = await (window as any).electronAPI.appLock.setLockConfig({ enabled });
+      const updated = await (window).electronAPI.appLock.setLockConfig({ enabled });
       setConfig(updated);
     } catch (err) {
       console.error('Failed to toggle app lock:', err);
@@ -186,7 +198,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
 
   const handleToggleBiometrics = async (biometricsEnabled: boolean) => {
     try {
-      const updated = await (window as any).electronAPI.appLock.setLockConfig({
+      const updated = await (window).electronAPI.appLock.setLockConfig({
         biometricsEnabled,
       });
       setConfig(updated);
@@ -197,7 +209,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
 
   const handleTimeoutChange = async (minutes: number) => {
     try {
-      const updated = await (window as any).electronAPI.appLock.setLockConfig({
+      const updated = await (window).electronAPI.appLock.setLockConfig({
         lockTimeoutMinutes: minutes,
       });
       setConfig(updated);
@@ -208,7 +220,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
 
   const handleTogglePrivateShelves = async (lockPrivateShelvesOnly: boolean) => {
     try {
-      const updated = await (window as any).electronAPI.appLock.setLockConfig({
+      const updated = await (window).electronAPI.appLock.setLockConfig({
         lockPrivateShelvesOnly,
       });
       setConfig(updated);
@@ -219,7 +231,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
 
   const handleLockNow = async () => {
     try {
-      await (window as any).electronAPI.appLock.lock('manual');
+      await (window).electronAPI.appLock.lock('manual');
       onClose();
     } catch (err) {
       console.error('Failed to lock app:', err);
@@ -301,7 +313,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
               {biometricCapability?.available && config.biometricsEnabled && (
                 <div>
                   <button
-                    onClick={handleBiometricPrompt}
+                    onClick={() => { void handleBiometricPrompt(); }}
                     disabled={authenticating}
                     className="w-full flex items-center justify-center gap-2.5 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium shadow-md transition-all active:scale-[0.99] disabled:opacity-50"
                   >

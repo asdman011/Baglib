@@ -11,7 +11,7 @@ describe('Author Bio & Book Description Enrichment', () => {
     it('returns undefined when author name is empty or undefined', async () => {
       const bioService = new AuthorBioService();
       const bio1 = await bioService.resolveAuthorBio('');
-      const bio2 = await bioService.resolveAuthorBio(undefined as any);
+      const bio2 = await bioService.resolveAuthorBio(undefined as unknown);
       assert.strictEqual(bio1, undefined);
       assert.strictEqual(bio2, undefined);
     });
@@ -19,7 +19,7 @@ describe('Author Bio & Book Description Enrichment', () => {
     it('caches author bio in memory for subsequent calls', async () => {
       const bioService = new AuthorBioService();
       // Prime cache directly
-      (bioService as any).cache.set('نجيب محفوظ_auto', 'نجيب محفوظ أديب مصري حائز على جائزة نوبل في الأدب.');
+      (bioService as unknown).cache.set('نجيب محفوظ_auto', 'نجيب محفوظ أديب مصري حائز على جائزة نوبل في الأدب.');
       
       const res = await bioService.resolveAuthorBio('نجيب محفوظ');
       assert.strictEqual(res, 'نجيب محفوظ أديب مصري حائز على جائزة نوبل في الأدب.');
@@ -57,8 +57,8 @@ describe('Author Bio & Book Description Enrichment', () => {
         searchByIsbn: async () => null,
       };
 
-      (authorBioService as any).cache.set('نجيب محفوظ_auto', 'نجيب محفوظ روائي وكاتب مصري عالمي.');
-      (authorBioService as any).cache.set('نجيب محفوظ_العربية', 'نجيب محفوظ روائي وكاتب مصري عالمي.');
+      (authorBioService as unknown).cache.set('نجيب محفوظ_auto', 'نجيب محفوظ روائي وكاتب مصري عالمي.');
+      (authorBioService as unknown).cache.set('نجيب محفوظ_العربية', 'نجيب محفوظ روائي وكاتب مصري عالمي.');
 
       const bibService = new BibliographicMetadataService([mockProvider]);
       const res = await bibService.discoverBook({ title: 'اللص والكلاب', author: 'نجيب محفوظ' });

@@ -28,7 +28,7 @@ describe('KEY-137 Highlighting, Bookmarking, Margin Notes & Freehand Ink System'
   describe('1. Stylus Pressure Normalization & Bézier Disc Math', () => {
     it('normalizes stylus pressure according to pressureScale formula: 0.5 + (p ?? 0.5)', () => {
       assert.equal(pressureScale(undefined), 1.0);
-      assert.equal(pressureScale(null as any), 1.0);
+      assert.equal(pressureScale(null as unknown), 1.0);
       assert.equal(pressureScale(0.0), 0.5);
       assert.equal(pressureScale(0.5), 1.0);
       assert.equal(pressureScale(1.0), 1.5);
@@ -327,11 +327,11 @@ describe('KEY-137 Highlighting, Bookmarking, Margin Notes & Freehand Ink System'
     it('contains all required Story 2.1 localization keys in both Arabic and English dictionaries', () => {
       for (const key of requiredKeys) {
         assert.ok(
-          (translations.ar as any)[key],
+          (translations.ar as unknown)[key],
           `Missing Arabic translation for key: ${key}`
         );
         assert.ok(
-          (translations.en as any)[key],
+          (translations.en as unknown)[key],
           `Missing English translation for key: ${key}`
         );
       }
@@ -358,23 +358,23 @@ describe('KEY-137 Highlighting, Bookmarking, Margin Notes & Freehand Ink System'
     });
 
     it('manages W3C Highlight registry with baglib-active-selection when CSS highlights API exists', () => {
-      const mockHighlightMap = new Map<string, any>();
-      const originalCSS = (globalThis as any).CSS;
-      const originalHighlight = (globalThis as any).Highlight;
-      const originalWindow = (globalThis as any).window;
+      const mockHighlightMap = new Map<string, unknown>();
+      const originalCSS = (globalThis as unknown).CSS;
+      const originalHighlight = (globalThis as unknown).Highlight;
+      const originalWindow = (globalThis as unknown).window;
 
       class MockHighlight {
-        ranges: any[];
-        constructor(...ranges: any[]) {
+        ranges: unknown[];
+        constructor(...ranges: unknown[]) {
           this.ranges = ranges;
         }
       }
 
-      (globalThis as any).CSS = {
+      (globalThis as unknown).CSS = {
         highlights: mockHighlightMap,
       };
-      (globalThis as any).Highlight = MockHighlight;
-      (globalThis as any).window = { Highlight: MockHighlight };
+      (globalThis as unknown).Highlight = MockHighlight;
+      (globalThis as unknown).window = { Highlight: MockHighlight };
 
       try {
         const mockRange = { collapsed: false } as Range;
@@ -382,7 +382,7 @@ describe('KEY-137 Highlighting, Bookmarking, Margin Notes & Freehand Ink System'
           head: { appendChild: () => {} },
           getElementById: () => null,
           createElement: () => ({ setAttribute: () => {} }),
-        } as any;
+        } as unknown;
 
         setActiveSelectionHighlight(mockRange, mockDoc);
         assert.ok(mockHighlightMap.has('baglib-active-selection'));
@@ -390,9 +390,9 @@ describe('KEY-137 Highlighting, Bookmarking, Margin Notes & Freehand Ink System'
         clearActiveSelectionHighlight();
         assert.equal(mockHighlightMap.has('baglib-active-selection'), false);
       } finally {
-        (globalThis as any).CSS = originalCSS;
-        (globalThis as any).Highlight = originalHighlight;
-        (globalThis as any).window = originalWindow;
+        (globalThis as unknown).CSS = originalCSS;
+        (globalThis as unknown).Highlight = originalHighlight;
+        (globalThis as unknown).window = originalWindow;
       }
     });
 

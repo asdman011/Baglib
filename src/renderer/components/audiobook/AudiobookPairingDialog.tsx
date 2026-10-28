@@ -1,8 +1,10 @@
+'use client';
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — 5-Step Audiobook Pairing Wizard (KEY-145)
  */
 
-'use client';
+
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -35,6 +37,7 @@ import type { TOCItem } from '../../libs/reader/types';
 
 export type WizardStep = 'summary' | 'select' | 'abs' | 'anchor' | 'review';
 
+interface AbsItem { id: string; title: string; author: string; serverUrl: string; duration?: number; tracks?: { title?: string; index: number; duration?: number }[]; }
 interface AudiobookPairingDialogProps {
   isOpen: boolean;
   bookId: string;
@@ -70,7 +73,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
   const [absServerUrl, setAbsServerUrl] = useState('http://localhost:13378');
   const [absApiKey, setAbsApiKey] = useState('');
   const [absQuery, setAbsQuery] = useState('');
-  const [absResults, setAbsResults] = useState<any[]>([]);
+  const [absResults, setAbsResults] = useState<AbsItem[]>([]);
   const [isSearchingAbs, setIsSearchingAbs] = useState(false);
 
   // Step 4: Continuum Alignment Anchors
@@ -107,11 +110,16 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
     return list;
   }, [toc, t]);
 
+  const [previousAudioTarget, setPreviousAudioTarget] = useState<readonly unknown[] | null>(null);
+  const inputsAudioTarget = [isOpen, bookId];
+  if (previousAudioTarget === null || inputsAudioTarget.some((value, index) => !Object.is(value, previousAudioTarget[index]))) {
+    setPreviousAudioTarget(inputsAudioTarget);
+    if (isOpen && bookId) { setIsLoading(true); setError(null); }
+  }
   // Load existing pairing when opened
   useEffect(() => {
     if (isOpen && bookId) {
-      setIsLoading(true);
-      setError(null);
+
       if (window.electronAPI?.audio?.getPairing) {
         window.electronAPI.audio
           .getPairing(bookId)
@@ -134,15 +142,16 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
             setStep('select');
           })
           .finally(() => setIsLoading(false));
-      } else {
-        setStep('select');
-        setIsLoading(false);
       }
     }
   }, [isOpen, bookId]);
 
   // Auto-compute Continuum alignment whenever anchors change
-  useEffect(() => {
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [ebookChapters, audioFiles, selectedEbookAnchor, selectedAudioAnchor];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
     if (ebookChapters.length > 0 && audioFiles.length > 0) {
       const ebookIds = ebookChapters.map((c) => c.id);
       const audioIds = audioFiles.map((f) => f.id);
@@ -173,7 +182,8 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
 
       setComputedMappings(enriched);
     }
-  }, [ebookChapters, audioFiles, selectedEbookAnchor, selectedAudioAnchor]);
+
+  }
 
   // Clean up audio preview on unmount or close
   useEffect(() => {
@@ -211,8 +221,8 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
         }
         setStep('anchor');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to scan audio directory');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to scan audio directory');
     } finally {
       setIsLoading(false);
     }
@@ -238,21 +248,21 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
           setError(t('audiobookAbsNoResults'));
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to query Audiobookshelf server');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to query Audiobookshelf server');
     } finally {
       setIsSearchingAbs(false);
     }
   };
 
   // Handler: Select ABS Item
-  const handleSelectAbsItem = (item: any) => {
+  const handleSelectAbsItem = (item: AbsItem) => {
     setAudioTitle(item.title);
     setAudioNarrator(item.author);
     setSourceType('audiobookshelf');
 
     // Convert tracks or chapters to AudiobookFile
-    const files: AudiobookFile[] = (item.tracks || []).map((t: any, idx: number) => ({
+    const files: AudiobookFile[] = (item.tracks || []).map((t, idx: number) => ({
       id: `abs_track_${idx + 1}`,
       name: t.title || `Track ${idx + 1}`,
       path: `${item.serverUrl}/api/items/${item.id}/file/${t.index}?token=${encodeURIComponent(
@@ -334,8 +344,8 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
         onPairingSaved?.(saved);
         onClose();
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to save audiobook pairing');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to save audiobook pairing');
     } finally {
       setIsLoading(false);
     }
@@ -353,8 +363,8 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
         setComputedMappings([]);
         setStep('select');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete pairing');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to delete pairing');
     } finally {
       setIsLoading(false);
     }

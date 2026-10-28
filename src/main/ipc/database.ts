@@ -1,3 +1,7 @@
+import * as ipcModule0 from '../database/repositories/knowledge.repository';
+import * as ipcModule1 from '../database/repositories/annotation.repository';
+import * as ipcModule2 from '../database/repositories/category.repository';
+import * as ipcModule3 from '../database/repositories/content-fts.repository';
 /**
  * Baglib — Database IPC Handlers
  *
@@ -14,8 +18,8 @@ import { getPdfPageCoverService } from '../services/metadata/pdf-page-cover.serv
 
 function normalizeIpcError(err: unknown, fallbackMessage: string): Error {
   if (err instanceof Error) return err;
-  if (typeof err === 'object' && err !== null && (err as any).message) {
-    return new Error(String((err as any).message));
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    return new Error(String((err).message));
   }
   return new Error(typeof err === 'string' && err ? err : fallbackMessage);
 }
@@ -146,7 +150,7 @@ export function setupDatabaseIPC() {
   /**
    * Update reading status and progress for a book
    */
-  ipcMain.handle('library:update-reading-status', (_, workId: string, status: any, progress?: number) => {
+  ipcMain.handle('library:update-reading-status', (_, workId: string, status: import('../../shared/types/work').ReadingStatus, progress?: number) => {
     try {
       const db = getDatabase();
       const repo = new WorkRepository(db);
@@ -160,7 +164,7 @@ export function setupDatabaseIPC() {
   /**
    * Lending Operations (Task 4.4 / 4.6)
    */
-  ipcMain.handle('library:record-loan', (_, workId: string, loanData: any) => {
+  ipcMain.handle('library:record-loan', (_, workId: string, loanData: Partial<import('../../shared/types/metadata').LendingRecord>) => {
     try {
       const db = getDatabase();
       const repo = new WorkRepository(db);
@@ -210,7 +214,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('library:get-all-notes', () => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
       return repo.getAllNotes();
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to fetch notes:', err);
@@ -224,8 +228,8 @@ export function setupDatabaseIPC() {
   ipcMain.handle('library:add-note', (_, noteData) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
-      const annotRepo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
+      const annotRepo = new (ipcModule1.AnnotationRepository)(db);
 
       // Save to annotations table as well
       try {
@@ -255,8 +259,8 @@ export function setupDatabaseIPC() {
   ipcMain.handle('library:delete-note', (_, noteId: string) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
-      const annotRepo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
+      const annotRepo = new (ipcModule1.AnnotationRepository)(db);
 
       try {
         annotRepo.delete(noteId);
@@ -275,7 +279,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('library:get-annotations', (_, bookId: string) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      const repo = new (ipcModule1.AnnotationRepository)(db);
       return repo.getByBookId(bookId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to get annotations:', err);
@@ -286,7 +290,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('library:get-all-annotations', () => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      const repo = new (ipcModule1.AnnotationRepository)(db);
       return repo.getAll();
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to get all annotations:', err);
@@ -297,7 +301,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('library:save-annotation', (_, payload) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      const repo = new (ipcModule1.AnnotationRepository)(db);
       return repo.save(payload);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to save annotation:', err);
@@ -308,7 +312,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('library:delete-annotation', (_, annotationId: string) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      const repo = new (ipcModule1.AnnotationRepository)(db);
       return repo.delete(annotationId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to delete annotation:', err);
@@ -319,7 +323,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('library:get-filtered-annotations', (_, filter) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/annotation.repository').AnnotationRepository)(db);
+      const repo = new (ipcModule1.AnnotationRepository)(db);
       return repo.getFiltered(filter);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to filter annotations:', err);
@@ -330,10 +334,10 @@ export function setupDatabaseIPC() {
   /**
    * Core Knowledge Layer IPC (highlights, notes, quotes, bookmarks, questions)
    */
-  ipcMain.handle('knowledge:get-by-work', (_, workId: string, type?: string) => {
+  ipcMain.handle('knowledge:get-by-work', (_, workId: string, type?: import('../../shared/types/knowledge').KnowledgeType) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
       return repo.getKnowledgeByWork(workId, type);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to get knowledge by work:', err);
@@ -344,7 +348,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('knowledge:get-all', () => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
       return repo.getAllKnowledge();
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to get all knowledge:', err);
@@ -355,7 +359,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('knowledge:save', (_, payload) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
       return repo.saveKnowledge(payload);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to save knowledge item:', err);
@@ -366,7 +370,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('knowledge:delete', (_, knowledgeId: string) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
       return repo.deleteKnowledge(knowledgeId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to delete knowledge item:', err);
@@ -380,7 +384,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('reader:record-session', (_, session) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
       return repo.recordReadingSession(session);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to record reading session:', err);
@@ -391,7 +395,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('reader:get-sessions', (_, workId: string) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
       return repo.getReadingSessions(workId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to get reading sessions:', err);
@@ -402,7 +406,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('reader:update-last-location', (_, workId: string, location: string) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
       return repo.updateLastReadLocation(workId, location);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to update last location:', err);
@@ -413,7 +417,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('reader:get-last-location', (_, workId: string) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/knowledge.repository').KnowledgeRepository)(db);
+      const repo = new (ipcModule0.KnowledgeRepository)(db);
       return repo.getLastReadLocation(workId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to get last location:', err);
@@ -426,7 +430,7 @@ export function setupDatabaseIPC() {
    */
   ipcMain.handle('library:get-category-tree', async () => {
     try {
-      const repo = require('../database/repositories/category.repository').categoryRepository;
+      const repo = ipcModule2.categoryRepository;
       return await repo.getCategoryTree();
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to fetch category tree:', err);
@@ -439,7 +443,7 @@ export function setupDatabaseIPC() {
    */
   ipcMain.handle('library:get-category-breadcrumbs', async (_, categoryId: string) => {
     try {
-      const repo = require('../database/repositories/category.repository').categoryRepository;
+      const repo = ipcModule2.categoryRepository;
       return await repo.getBreadcrumbs(categoryId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to fetch category breadcrumbs:', err);
@@ -452,7 +456,7 @@ export function setupDatabaseIPC() {
    */
   ipcMain.handle('library:get-subtree-work-ids', async (_, categoryId: string) => {
     try {
-      const repo = require('../database/repositories/category.repository').categoryRepository;
+      const repo = ipcModule2.categoryRepository;
       return await repo.getSubtreeWorkIds(categoryId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to fetch subtree work ids:', err);
@@ -463,10 +467,10 @@ export function setupDatabaseIPC() {
   /**
    * Full-Text Search Engine IPC Handlers (KEY-140)
    */
-  ipcMain.handle('search:index-book-content', (_, bookId: string, pages: any[]) => {
+  ipcMain.handle('search:index-book-content', (_, bookId: string, pages: import('../../shared/types/full-text-search').IndexedBookPage[]) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      const repo = new (ipcModule3.ContentFtsRepository)(db);
       repo.indexBook(bookId, pages);
       return { success: true, count: pages.length };
     } catch (err) {
@@ -478,7 +482,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('search:delete-book-content', (_, bookId: string) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      const repo = new (ipcModule3.ContentFtsRepository)(db);
       repo.deleteBookIndex(bookId);
       return { success: true };
     } catch (err) {
@@ -490,7 +494,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('search:is-book-indexed', (_, bookId: string) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      const repo = new (ipcModule3.ContentFtsRepository)(db);
       return repo.isBookIndexed(bookId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to check book index status:', err);
@@ -498,10 +502,10 @@ export function setupDatabaseIPC() {
     }
   });
 
-  ipcMain.handle('search:library-full-text', (_, query: string, options?: any) => {
+  ipcMain.handle('search:library-full-text', (_, query: string, options?: import('../../shared/types/full-text-search').LibraryFtsQuery) => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      const repo = new (ipcModule3.ContentFtsRepository)(db);
       return repo.searchLibrary(query, options);
     } catch (err) {
       console.error('[baglib/db-ipc] Full-text search error:', err);
@@ -512,7 +516,7 @@ export function setupDatabaseIPC() {
   ipcMain.handle('search:get-fts-stats', () => {
     try {
       const db = getDatabase();
-      const repo = new (require('../database/repositories/content-fts.repository').ContentFtsRepository)(db);
+      const repo = new (ipcModule3.ContentFtsRepository)(db);
       return {
         booksCount: repo.getIndexedBooksCount(),
         pagesCount: repo.getIndexedPagesCount(),

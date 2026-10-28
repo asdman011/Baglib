@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -171,7 +172,7 @@ export class OpdsClientService {
     } catch (err: unknown) {
       return {
         success: false,
-        error: err instanceof Error ? err.message : String(err),
+        error: err instanceof Error ? errorMessage(err) : String(err),
       };
     }
   }

@@ -1,4 +1,6 @@
 'use client';
+import { errorMessage } from '../../../shared/errors';
+
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -81,7 +83,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
   useEffect(() => {
     if (!isOpen) return;
 
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI) return;
 
     windowAPI.getKoSyncConfig?.().then((cfg: KOSyncConfig) => {
@@ -95,8 +97,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
     loadSnapshots();
   }, [isOpen]);
 
-  const loadSnapshots = async () => {
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+  async function loadSnapshots() {
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.listSnapshots) return;
     try {
       const list = await windowAPI.listSnapshots();
@@ -104,18 +106,18 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
     } catch (e) {
       console.error('Failed to load snapshots:', e);
     }
-  };
+  }
 
   // --- KOReader Handlers ---
   const handleSaveKoConfig = async () => {
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.saveKoSyncConfig) return;
     await windowAPI.saveKoSyncConfig(koConfig);
     setKoStatus({ success: true, message: t('koSyncSuccess') });
   };
 
   const handleTestKo = async () => {
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.testKoSync) return;
     setIsTestingKo(true);
     setKoStatus(null);
@@ -123,8 +125,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
       await handleSaveKoConfig();
       const res = await windowAPI.testKoSync(koConfig);
       setKoStatus({ success: res.success, message: res.message });
-    } catch (e: any) {
-      setKoStatus({ success: false, message: e.message });
+    } catch (e: unknown) {
+      setKoStatus({ success: false, message: errorMessage(e) });
     } finally {
       setIsTestingKo(false);
     }
@@ -135,7 +137,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
       setKoStatus({ success: false, message: 'Please open a book to sync reading progress.' });
       return;
     }
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI) return;
 
     setIsSyncingKo(true);
@@ -152,8 +154,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
         const pushRes = await windowAPI.pushKoSyncProgress(activeBook.id, 'pos-1', percent);
         setKoStatus({ success: pushRes.success, message: pushRes.message });
       }
-    } catch (e: any) {
-      setKoStatus({ success: false, message: e.message });
+    } catch (e: unknown) {
+      setKoStatus({ success: false, message: errorMessage(e) });
     } finally {
       setIsSyncingKo(false);
     }
@@ -161,13 +163,13 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
   // --- Cloud Storage Handlers ---
   const handleSaveCloudConfig = async () => {
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.saveCloudConfig) return;
     await windowAPI.saveCloudConfig(cloudConfig);
   };
 
   const handleTestCloud = async () => {
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.testCloudConnection) return;
     setIsTestingCloud(true);
     setCloudStatus(null);
@@ -175,15 +177,15 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
       await handleSaveCloudConfig();
       const res = await windowAPI.testCloudConnection(cloudConfig);
       setCloudStatus({ success: res.success, message: res.message });
-    } catch (e: any) {
-      setCloudStatus({ success: false, message: e.message });
+    } catch (e: unknown) {
+      setCloudStatus({ success: false, message: errorMessage(e) });
     } finally {
       setIsTestingCloud(false);
     }
   };
 
   const handleBackupToCloud = async () => {
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.backupToCloud) return;
     setIsBackingUpCloud(true);
     setCloudStatus(null);
@@ -192,15 +194,15 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
       const res = await windowAPI.backupToCloud();
       setCloudStatus({ success: res.success, message: res.message });
       await loadSnapshots();
-    } catch (e: any) {
-      setCloudStatus({ success: false, message: e.message });
+    } catch (e: unknown) {
+      setCloudStatus({ success: false, message: errorMessage(e) });
     } finally {
       setIsBackingUpCloud(false);
     }
   };
 
   const handleListRemoteFiles = async () => {
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.listCloudFiles) return;
     setIsLoadingRemoteFiles(true);
     try {
@@ -215,7 +217,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
   const handleRestoreFromCloud = async (fileName: string) => {
     if (!window.confirm(t('snapshotConfirmRestore'))) return;
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.restoreFromCloud) return;
 
     setIsRestoring(true);
@@ -227,8 +229,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
         await refreshBooks();
         await loadSnapshots();
       }
-    } catch (e: any) {
-      setCloudStatus({ success: false, message: e.message });
+    } catch (e: unknown) {
+      setCloudStatus({ success: false, message: errorMessage(e) });
     } finally {
       setIsRestoring(false);
     }
@@ -236,7 +238,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
   // --- Snapshot Handlers ---
   const handleCreateSnapshot = async () => {
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.createSnapshot) return;
 
     setIsCreatingSnapshot(true);
@@ -246,8 +248,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
       setSnapshotStatus({ success: res.success, message: res.message });
       setNewSnapshotDesc('');
       await loadSnapshots();
-    } catch (e: any) {
-      setSnapshotStatus({ success: false, message: e.message });
+    } catch (e: unknown) {
+      setSnapshotStatus({ success: false, message: errorMessage(e) });
     } finally {
       setIsCreatingSnapshot(false);
     }
@@ -255,7 +257,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
   const handleRestoreSnapshot = async (fileName: string) => {
     if (!window.confirm(t('snapshotConfirmRestore'))) return;
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.restoreSnapshot) return;
 
     setIsRestoring(true);
@@ -266,8 +268,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
       if (res.success) {
         await refreshBooks();
       }
-    } catch (e: any) {
-      setSnapshotStatus({ success: false, message: e.message });
+    } catch (e: unknown) {
+      setSnapshotStatus({ success: false, message: errorMessage(e) });
     } finally {
       setIsRestoring(false);
     }
@@ -275,7 +277,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
   const handleDeleteSnapshot = async (fileName: string) => {
     if (!window.confirm(t('snapshotConfirmDelete'))) return;
-    const windowAPI = (window as any).electronAPI?.cloudSync;
+    const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.deleteSnapshot) return;
     await windowAPI.deleteSnapshot(fileName);
     await loadSnapshots();

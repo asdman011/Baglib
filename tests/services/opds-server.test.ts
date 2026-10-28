@@ -34,7 +34,7 @@ const mockBooks: BookItem[] = [
   },
 ];
 
-const mockRepo: any = {
+const mockRepo: unknown = {
   getAllWorks: () => mockBooks,
   getById: (id: string) => mockBooks.find((b) => b.id === id) || null,
 };

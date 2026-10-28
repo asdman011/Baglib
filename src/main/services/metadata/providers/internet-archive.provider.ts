@@ -1,3 +1,5 @@
+import type { ArchiveDoc, ArchiveSearch, ArchiveMetadata } from '../../../../shared/types/catalog-responses';
+import { errorMessage } from '../../../../shared/errors';
 /**
  * Baglib — Internet Archive Bibliographic Metadata & Cover Art Provider
  *
@@ -20,7 +22,7 @@ export class InternetArchiveProvider implements MetadataProvider {
     return 'Internet Archive';
   }
 
-  private mapDocToWork(doc: any): BibliographicWork {
+  private mapDocToWork(doc: ArchiveDoc): BibliographicWork {
     const rawTitle = typeof doc.title === 'string' ? doc.title.trim() : 'Unknown Title';
     // Clean leading catalog codes like "0780 كتاب ..." or "Noor Book.com ..."
     const cleanTitle = rawTitle
@@ -157,7 +159,7 @@ export class InternetArchiveProvider implements MetadataProvider {
       const pageParam = typeof query === 'object' && query.page && query.page > 1 ? `&page=${query.page}` : '';
       const url = `/advancedsearch.php?q=${qParam}&fl[]=identifier,title,creator,publisher,year,date,isbn,language,description&rows=${maxResults}${pageParam}&output=json`;
 
-      const data = await internetArchiveClient.getJson<any>(url);
+      const data = await internetArchiveClient.getJson<ArchiveSearch>(url);
       let docs = data?.response?.docs;
 
       // Fallback: If searching by title AND creator yielded 0 results, retry with title only
@@ -165,7 +167,7 @@ export class InternetArchiveProvider implements MetadataProvider {
         const fallbackTitle = query.title.trim().replace(/["()]/g, ' ');
         const fallbackTerms = ['mediatype:(texts)', `title:(${fallbackTitle})`];
         const fallbackUrl = `/advancedsearch.php?q=${encodeURIComponent(fallbackTerms.join(' AND '))}&fl[]=identifier,title,creator,publisher,year,date,isbn,language,description&rows=${maxResults}&output=json`;
-        const fallbackData = await internetArchiveClient.getJson<any>(fallbackUrl);
+        const fallbackData = await internetArchiveClient.getJson<ArchiveSearch>(fallbackUrl);
         if (fallbackData?.response?.docs && Array.isArray(fallbackData.response.docs)) {
           docs = fallbackData.response.docs;
         }
@@ -175,9 +177,9 @@ export class InternetArchiveProvider implements MetadataProvider {
         return [];
       }
 
-      return docs.map((doc: any) => this.mapDocToWork(doc));
-    } catch (err: any) {
-      console.info('[InternetArchiveProvider] Search note:', err?.message || err);
+      return docs.map((doc) => this.mapDocToWork(doc));
+    } catch (err: unknown) {
+      console.info('[InternetArchiveProvider] Search note:', errorMessage(err) || err);
       return [];
     }
   }
@@ -190,14 +192,14 @@ export class InternetArchiveProvider implements MetadataProvider {
       const q = encodeURIComponent(`isbn:(${cleanIsbn}) AND mediatype:(texts)`);
       const url = `/advancedsearch.php?q=${q}&fl[]=identifier,title,creator,publisher,year,date,isbn,language,description&rows=3&output=json`;
 
-      const data = await internetArchiveClient.getJson<any>(url);
+      const data = await internetArchiveClient.getJson<ArchiveSearch>(url);
       if (!data || !data.response || !Array.isArray(data.response.docs) || data.response.docs.length === 0) {
         return null;
       }
 
       return this.mapDocToWork(data.response.docs[0]);
-    } catch (err: any) {
-      console.info('[InternetArchiveProvider] SearchByIsbn note:', err?.message || err);
+    } catch (err: unknown) {
+      console.info('[InternetArchiveProvider] SearchByIsbn note:', errorMessage(err) || err);
       return null;
     }
   }
@@ -208,7 +210,7 @@ export class InternetArchiveProvider implements MetadataProvider {
 
     try {
       const url = `/metadata/${encodeURIComponent(identifier)}`;
-      const data = await internetArchiveClient.getJson<any>(url);
+      const data = await internetArchiveClient.getJson<ArchiveMetadata>(url);
 
       if (!data || !data.metadata) return null;
       const meta = {
@@ -216,8 +218,8 @@ export class InternetArchiveProvider implements MetadataProvider {
         identifier,
       };
       return this.mapDocToWork(meta);
-    } catch (err: any) {
-      console.info('[InternetArchiveProvider] GetWorkDetails note:', err?.message || err);
+    } catch (err: unknown) {
+      console.info('[InternetArchiveProvider] GetWorkDetails note:', errorMessage(err) || err);
       return null;
     }
   }

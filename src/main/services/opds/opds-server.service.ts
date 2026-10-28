@@ -117,7 +117,7 @@ export class OpdsServerService {
         this.handleHttpRequest(req, res);
       });
 
-      server.on('error', (err: any) => {
+      server.on('error', (err) => {
         this.server = null;
         reject(err);
       });

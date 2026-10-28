@@ -403,7 +403,7 @@ export default function DesignSystemPlayground() {
                     <span className="px-2 py-1 rounded bg-surface border text-xs">إعدادات المزامنة</span>
                   </div>
                   <div className="text-xs text-muted">
-                    مثال على نموذج إدخال: "أدخل الكلمة المفتاحية للبحث في المخطوطات..."
+                    مثال على نموذج إدخال: &quot;أدخل الكلمة المفتاحية للبحث في المخطوطات...&quot;
                   </div>
                 </div>
               </div>
@@ -422,7 +422,7 @@ export default function DesignSystemPlayground() {
                     ﴿إِنَّمَا يَخْشَى اللَّهَ مِنْ عِبَادِهِ الْعُلَمَاءُ﴾ <span className="text-xs font-sans text-muted">[فاطر: 28]</span>
                   </p>
                   <p className="text-main text-base">
-                    قال الإمام ابن كثير في تفسيره: "أي إنما يخشاه حق خشيته العلماء العارفون به، لأنه كلما كانت المعرفة برب العالمين أتم والعلم به أكمل، كانت الخشية له أعظم وأكثر."
+                    قال الإمام ابن كثير في تفسيره: &quot;أي إنما يخشاه حق خشيته العلماء العارفون به، لأنه كلما كانت المعرفة برب العالمين أتم والعلم به أكمل، كانت الخشية له أعظم وأكثر.&quot;
                   </p>
                 </div>
               </div>

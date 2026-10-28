@@ -1,3 +1,4 @@
+import { errorMessage } from '../../shared/errors';
 import { app, ipcMain } from 'electron';
 import { DigitalFileValidatorService } from '../services/digital/digital-file-validator.service';
 import { DigitalImportPipelineService } from '../services/digital/digital-import-pipeline.service';
@@ -41,14 +42,14 @@ export function setupDigitalIPC(): void {
         };
       }
       return await validator.validateFile(filePath);
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         isValid: false,
         fileName: '',
         extension: '',
         fileSizeBytes: 0,
         errorCode: 'READ_ERROR',
-        error: err?.message || 'خطأ غير متوقع أثناء فحص الملف / Unexpected error validating file',
+        error: errorMessage(err) || 'خطأ غير متوقع أثناء فحص الملف / Unexpected error validating file',
       };
     }
   });
@@ -62,7 +63,7 @@ export function setupDigitalIPC(): void {
         return { totalFiles: 0, validFiles: 0, invalidFiles: 0, results: [] };
       }
       return await validator.validateFiles(filePaths);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DigitalIPC] Error batch validating files:', err);
       return { totalFiles: 0, validFiles: 0, invalidFiles: 0, results: [] };
     }
@@ -91,7 +92,7 @@ export function setupDigitalIPC(): void {
         };
       }
       return await enqueue(() => pipeline.importFile(options));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DigitalIPC] Error importing digital file:', err);
       return {
         success: false,
@@ -99,7 +100,7 @@ export function setupDigitalIPC(): void {
         fileName: '',
         fileSizeBytes: 0,
         errorCode: 'UNEXPECTED_ERROR',
-        error: err?.message || 'خطأ غير متوقع أثناء استيراد الملف / Unexpected error importing file',
+        error: errorMessage(err) || 'خطأ غير متوقع أثناء استيراد الملف / Unexpected error importing file',
       };
     }
   });
@@ -121,7 +122,7 @@ export function setupDigitalIPC(): void {
           // ignore if sender window closed
         }
       }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DigitalIPC] Error batch importing digital files:', err);
       throw err;
     }
@@ -130,11 +131,11 @@ export function setupDigitalIPC(): void {
   /**
    * Check files or candidate metadata for potential duplicates in library
    */
-  ipcMain.handle('digital:check-duplicates', async (_event, inputs: any[]) => {
+  ipcMain.handle('digital:check-duplicates', async (_event, inputs: Parameters<DuplicateDetectorService['batchCheckDuplicates']>[0]) => {
     try {
       if (!Array.isArray(inputs)) return [];
       return await enqueue(() => duplicateDetector.batchCheckDuplicates(inputs));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DigitalIPC] Error checking duplicates:', err);
       throw err;
     }
@@ -147,7 +148,7 @@ export function setupDigitalIPC(): void {
     try {
       const storageManager = StorageManagerService.getInstance();
       return await storageManager.verifyWorkStorage(workId, true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DigitalIPC] Error verifying file health:', err);
       return null;
     }
@@ -160,7 +161,7 @@ export function setupDigitalIPC(): void {
     try {
       const storageManager = StorageManagerService.getInstance();
       return await storageManager.verifyAllStorage(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DigitalIPC] Error verifying all files:', err);
       return { totalDigitalWorks: 0, totalFiles: 0, availableFiles: 0, missingFiles: 0, unmountedFiles: 0, corruptedFiles: 0, duplicateFiles: 0, totalSizeBytes: 0, reclaimableSizeBytes: 0, formatBreakdown: {}, items: [] };
     }
@@ -173,7 +174,7 @@ export function setupDigitalIPC(): void {
     try {
       const storageManager = StorageManagerService.getInstance();
       return await storageManager.verifyAllStorage(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[StorageIPC] Error getting health summary:', err);
       return { totalDigitalWorks: 0, totalFiles: 0, availableFiles: 0, missingFiles: 0, unmountedFiles: 0, corruptedFiles: 0, duplicateFiles: 0, totalSizeBytes: 0, reclaimableSizeBytes: 0, formatBreakdown: {}, items: [] };
     }
@@ -183,7 +184,7 @@ export function setupDigitalIPC(): void {
     try {
       const storageManager = StorageManagerService.getInstance();
       return await storageManager.verifyAllStorage(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[StorageIPC] Error in verify-all:', err);
       return { totalDigitalWorks: 0, totalFiles: 0, availableFiles: 0, missingFiles: 0, unmountedFiles: 0, corruptedFiles: 0, duplicateFiles: 0, totalSizeBytes: 0, reclaimableSizeBytes: 0, formatBreakdown: {}, items: [] };
     }
@@ -193,7 +194,7 @@ export function setupDigitalIPC(): void {
     try {
       const storageManager = StorageManagerService.getInstance();
       return await storageManager.verifyWorkStorage(workId, true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[StorageIPC] Error in verify-file:', err);
       return null;
     }
@@ -203,9 +204,9 @@ export function setupDigitalIPC(): void {
     try {
       const storageManager = StorageManagerService.getInstance();
       return await storageManager.relinkFile(workId, newFilePath);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[StorageIPC] Error in relink-file:', err);
-      return { success: false, workId, newFilePath, error: err?.message || 'Error relinking file' };
+      return { success: false, workId, newFilePath, error: errorMessage(err) || 'Error relinking file' };
     }
   });
 
@@ -213,9 +214,9 @@ export function setupDigitalIPC(): void {
     try {
       const storageManager = StorageManagerService.getInstance();
       return await storageManager.batchAutoRebind(searchDirectory);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[StorageIPC] Error in batch-auto-rebind:', err);
-      return { scannedFilesCount: 0, resolvedCount: 0, unresolvedCount: 0, matches: [], errors: [err?.message || 'Error during batch scan'] };
+      return { scannedFilesCount: 0, resolvedCount: 0, unresolvedCount: 0, matches: [], errors: [errorMessage(err) || 'Error during batch scan'] };
     }
   });
 
@@ -223,7 +224,7 @@ export function setupDigitalIPC(): void {
     try {
       const storageManager = StorageManagerService.getInstance();
       return await storageManager.getStorageAnalytics();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[StorageIPC] Error in get-analytics:', err);
       return {
         totalDigitalWorks: 0,
@@ -237,13 +238,13 @@ export function setupDigitalIPC(): void {
     }
   });
 
-  ipcMain.handle('storage:prune-duplicate', async (_event, options: any) => {
+  ipcMain.handle('storage:prune-duplicate', async (_event, options) => {
     try {
       const storageManager = StorageManagerService.getInstance();
       return await storageManager.pruneDuplicate(options);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[StorageIPC] Error in prune-duplicate:', err);
-      return { success: false, freedBytes: 0, fileDeletedFromDisk: false, error: err?.message || 'Error pruning duplicate' };
+      return { success: false, freedBytes: 0, fileDeletedFromDisk: false, error: errorMessage(err) || 'Error pruning duplicate' };
     }
   });
 
@@ -256,7 +257,7 @@ export function setupDigitalIPC(): void {
         throw new Error('المسار المحدد غير صالح / Invalid file path provided');
       }
       return await extractor.extract(filePath, formatHint);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DigitalIPC] Error extracting digital metadata:', err);
       return null;
     }

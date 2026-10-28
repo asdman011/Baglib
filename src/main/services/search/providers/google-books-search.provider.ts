@@ -1,3 +1,5 @@
+import type { GoogleVolumes } from '../../../../shared/types/catalog-responses';
+import { errorMessage } from '../../../../shared/errors';
 /**
  * Baglib — Google Books Search Provider
  *
@@ -92,7 +94,7 @@ export class GoogleBooksSearchProvider implements ISearchProvider {
       const url = `/volumes?q=${encodeURIComponent(sanitized.queryString)}&maxResults=${limit}&startIndex=${startIndex}&key=${this.apiKey}`;
       this.quotaTracker.recordRequest();
 
-      const data = await googleBooksClient.getJson<any>(url);
+      const data = await googleBooksClient.getJson<GoogleVolumes>(url);
 
       if (signal?.aborted || !data?.items || !Array.isArray(data.items)) {
         return [];
@@ -106,8 +108,8 @@ export class GoogleBooksSearchProvider implements ISearchProvider {
 
         const authors: string[] = Array.isArray(info.authors) ? info.authors : [];
         const isbns = info.industryIdentifiers || [];
-        const isbn10Obj = isbns.find((i: any) => i.type === 'ISBN_10');
-        const isbn13Obj = isbns.find((i: any) => i.type === 'ISBN_13');
+        const isbn10Obj = isbns.find((i) => i.type === 'ISBN_10');
+        const isbn13Obj = isbns.find((i) => i.type === 'ISBN_13');
         const primaryIsbn = isbn13Obj?.identifier || isbn10Obj?.identifier;
 
         let publishYear: number | undefined;
@@ -144,13 +146,13 @@ export class GoogleBooksSearchProvider implements ISearchProvider {
       }
 
       return results;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (signal?.aborted) return [];
-      if (String(err?.message || err).includes('503') || String(err?.message || err).includes('429')) {
+      if (String(errorMessage(err) || err).includes('503') || String(errorMessage(err) || err).includes('429')) {
         console.warn('[baglib:googlebooks-search] Google Books is temporarily rate-limited or unavailable (503/429), failing over to other providers');
         return [];
       }
-      console.warn('[baglib:googlebooks-search] Provider search error:', err?.message || err);
+      console.warn('[baglib:googlebooks-search] Provider search error:', errorMessage(err) || err);
       return [];
     }
   }

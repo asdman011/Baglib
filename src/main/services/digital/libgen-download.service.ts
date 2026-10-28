@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 import https from 'https';
 import http from 'http';
 import fs from 'fs';
@@ -156,8 +157,8 @@ export class LibgenDownloadService {
     try {
       // Race candidate mirrors concurrently so a slow or blocked mirror doesn't stall the download
       return await Promise.any(candidateMirrors.map((m) => probeMirror(m)));
-    } catch (err: any) {
-      console.warn(`[LibgenDownloadService] Failed to resolve gateway for ${cleanMd5}:`, err?.message || err);
+    } catch (err: unknown) {
+      console.warn(`[LibgenDownloadService] Failed to resolve gateway for ${cleanMd5}:`, errorMessage(err) || err);
       return null;
     }
   }
@@ -322,8 +323,8 @@ export class LibgenDownloadService {
           lastError = streamResult.error || 'Failed stream download';
           if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
         }
-      } catch (streamErr: any) {
-        lastError = streamErr?.message || String(streamErr);
+      } catch (streamErr: unknown) {
+        lastError = errorMessage(streamErr) || String(streamErr);
         if (fs.existsSync(tempPath)) {
           try {
             fs.unlinkSync(tempPath);
@@ -373,8 +374,8 @@ export class LibgenDownloadService {
             mimeType: nativeResult.mimeType,
           };
         }
-      } catch (nativeErr: any) {
-        lastError = nativeErr?.message || String(nativeErr);
+      } catch (nativeErr: unknown) {
+        lastError = errorMessage(nativeErr) || String(nativeErr);
         if (fs.existsSync(tempPath)) {
           try {
             fs.unlinkSync(tempPath);
@@ -626,12 +627,12 @@ export class LibgenDownloadService {
 
             fileStream.on('error', (err) => {
               cleanup();
-              safeResolve({ success: false, error: err.message });
+              safeResolve({ success: false, error: errorMessage(err) });
             });
 
             res.on('error', (err) => {
               cleanup();
-              safeResolve({ success: false, error: err.message });
+              safeResolve({ success: false, error: errorMessage(err) });
             });
           }
         );
@@ -640,7 +641,7 @@ export class LibgenDownloadService {
 
         req.on('error', (err) => {
           cleanup();
-          safeResolve({ success: false, error: err.message });
+          safeResolve({ success: false, error: errorMessage(err) });
         });
 
         req.on('timeout', () => {
@@ -754,8 +755,8 @@ export class LibgenDownloadService {
                   sha256: sha256Hash,
                   mimeType: magic.detectedMime,
                 });
-              } catch (err: any) {
-                return resolve({ success: false, error: err?.message || 'File verification failed' });
+              } catch (err: unknown) {
+                return resolve({ success: false, error: errorMessage(err) || 'File verification failed' });
               }
             } else {
               return resolve({ success: false, error: `Chromium download cancelled or interrupted: ${state}` });
@@ -775,13 +776,13 @@ export class LibgenDownloadService {
           httpReferrer: referer || 'https://libgen.li/',
         }).catch((err) => {
           // If loadURL fails due to download starting (which aborts frame navigation in Chromium), ignore
-          if (!err?.message?.includes('ERR_ABORTED')) {
-            console.warn('[LibgenDownloadService] helperWin loadURL warning:', err?.message || err);
+          if (!errorMessage(err)?.includes('ERR_ABORTED')) {
+            console.warn('[LibgenDownloadService] helperWin loadURL warning:', errorMessage(err) || err);
           }
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         cleanup();
-        resolve({ success: false, error: err?.message || 'Failed to create headless download helper' });
+        resolve({ success: false, error: errorMessage(err) || 'Failed to create headless download helper' });
       }
     });
   }

@@ -415,7 +415,7 @@ export class BibliographicMetadataService {
     };
 
     // Stage B: Multi-Provider Online Search respecting user priority order
-    let candidates: BibliographicWork[] = [];
+    const candidates: BibliographicWork[] = [];
     let providerUsed: string | undefined;
 
     const activeProviders = this.getOrderedActiveProviders();

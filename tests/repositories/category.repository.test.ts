@@ -215,7 +215,7 @@ describe('SqliteCategoryRepository', () => {
       assert.strictEqual(updatedChild?.parentId, null);
 
       // Work primary_category_id is unlinked (null)
-      const work = db.prepare('SELECT primary_category_id FROM work WHERE id = ?').get('w1') as any;
+      const work = db.prepare('SELECT primary_category_id FROM work WHERE id = ?').get('w1') as unknown;
       assert.strictEqual(work.primary_category_id, null);
     });
 
@@ -236,7 +236,7 @@ describe('SqliteCategoryRepository', () => {
       assert.strictEqual(updatedChild?.parentId, target.id);
 
       // Work is reassigned to target
-      const work = db.prepare('SELECT primary_category_id FROM work WHERE id = ?').get('w1') as any;
+      const work = db.prepare('SELECT primary_category_id FROM work WHERE id = ?').get('w1') as unknown;
       assert.strictEqual(work.primary_category_id, target.id);
     });
   });

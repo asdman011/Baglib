@@ -145,7 +145,7 @@ describe('Storage Management & File Health Service (Story 7 / KEY-7)', () => {
       const row = db.prepare(`
         SELECT storage_state FROM file_source_detail
         WHERE source_id = 'src-work-missing-1'
-      `).get() as any;
+      `).get() as unknown;
       assert.strictEqual(row.storage_state, 'missing');
     });
 
@@ -258,7 +258,7 @@ describe('Storage Management & File Health Service (Story 7 / KEY-7)', () => {
         SELECT file_path, storage_state, file_size_bytes, file_hash
         FROM file_source_detail
         WHERE source_id = 'src-work-relink-1'
-      `).get() as any;
+      `).get() as unknown;
 
       assert.strictEqual(row.file_path, newPath);
       assert.strictEqual(row.storage_state, 'available');
@@ -329,7 +329,7 @@ describe('Storage Management & File Health Service (Story 7 / KEY-7)', () => {
       const row = db.prepare(`
         SELECT file_path, storage_state FROM file_source_detail
         WHERE source_id = 'src-work-batch-a'
-      `).get() as any;
+      `).get() as unknown;
       assert.strictEqual(row.file_path, bookAPath);
       assert.strictEqual(row.storage_state, 'available');
     });

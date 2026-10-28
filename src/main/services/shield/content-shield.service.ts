@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Content Shield & Ad Blocker Service for Baglib
  *
@@ -188,8 +189,8 @@ export class ContentShieldService {
           break;
         }
       }
-    } catch (err: any) {
-      console.warn('[ContentShield] Extension load notice:', err?.message || err);
+    } catch (err: unknown) {
+      console.warn('[ContentShield] Extension load notice:', errorMessage(err) || err);
     }
   }
 

@@ -23,7 +23,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.getLocations();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to fetch physical locations:', err);
       return {
         rooms: [],
@@ -42,7 +42,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.getLocationTree();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to fetch location tree:', err);
       return [];
     }
@@ -56,7 +56,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.getPhysicalInventoryStats();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to fetch physical inventory stats:', err);
       return {
         totalPhysicalBooks: 0,
@@ -79,7 +79,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.updatePhysicalLocation(input);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to update physical location:', err);
       throw err;
     }
@@ -93,7 +93,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.borrowBook(input);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to borrow book:', err);
       throw err;
     }
@@ -107,7 +107,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.returnBook(input);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to return book:', err);
       throw err;
     }
@@ -121,7 +121,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.checkAndRefreshOverdueLoans();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to check overdue loans:', err);
       return { overdueCount: 0, refreshedLoans: [] };
     }
@@ -135,7 +135,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.getLendingHistory(workId);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to get lending history:', err);
       return [];
     }
@@ -149,7 +149,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.getAllLoans(filter);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to get all loans:', err);
       return [];
     }
@@ -163,7 +163,7 @@ export function setupPhysicalIPC() {
       const db = getDatabase();
       const service = getPhysicalLibraryService(db);
       return service.getBorrowers();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/physical-ipc] Failed to get borrowers:', err);
       return [];
     }

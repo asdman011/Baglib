@@ -76,7 +76,7 @@ describe('KOReader Sync Protocol Client (KEY-147)', () => {
         password: 'test_password',
       });
 
-      global.fetch = async (url: any) => {
+      global.fetch = async (url: unknown) => {
         assert.ok(String(url).endsWith('/users/auth'));
         return new Response(JSON.stringify({ authorized: 'OK' }), {
           status: 200,
@@ -99,7 +99,7 @@ describe('KOReader Sync Protocol Client (KEY-147)', () => {
       let authAttempted = false;
       let regAttempted = false;
 
-      global.fetch = async (url: any) => {
+      global.fetch = async (url: unknown) => {
         const urlStr = String(url);
         if (urlStr.endsWith('/users/auth')) {
           authAttempted = true;
@@ -152,7 +152,7 @@ describe('KOReader Sync Protocol Client (KEY-147)', () => {
 
       const docHash = '5d41402abc4b2a76b9719d911017c592';
 
-      global.fetch = async (url: any) => {
+      global.fetch = async (url: unknown) => {
         assert.ok(String(url).endsWith(`/syncs/progress/${docHash}`));
         return new Response(
           JSON.stringify({
@@ -185,9 +185,9 @@ describe('KOReader Sync Protocol Client (KEY-147)', () => {
       });
 
       const docHash = '5d41402abc4b2a76b9719d911017c592';
-      let payloadSent: any = null;
+      let payloadSent: unknown = null;
 
-      global.fetch = async (url: any, init: any) => {
+      global.fetch = async (url: unknown, init: unknown) => {
         assert.ok(String(url).endsWith('/syncs/progress'));
         assert.strictEqual(init.method, 'PUT');
         payloadSent = JSON.parse(init.body);

@@ -6,7 +6,6 @@
  * completely preventing ligature breakage, letter disconnection, and diacritic clipping.
  */
 
-import type { AnnotationDTO } from '../../../shared/types/annotation';
 
 export const HIGHLIGHT_COLORS = [
   { id: 'amber', label: 'Amber', hex: '#f59e0b', cssClass: 'baglib-highlight-amber' },
@@ -21,7 +20,7 @@ export function isCustomHighlightSupported(): boolean {
     typeof window !== 'undefined' &&
     typeof CSS !== 'undefined' &&
     'highlights' in CSS &&
-    typeof (window as any).Highlight !== 'undefined'
+    typeof (window).Highlight !== 'undefined'
   );
 }
 
@@ -81,8 +80,8 @@ export function findRangesForText(root: Node, searchText: string): Range[] {
     const matchEnd = matchIdx + cleanSearch.length;
 
     // Map matchIdx and matchEnd back to text nodes
-    let startNodeInfo = nodeOffsetMap.find((m) => matchIdx >= m.startInFull && matchIdx < m.endInFull);
-    let endNodeInfo = nodeOffsetMap.find((m) => matchEnd > m.startInFull && matchEnd <= m.endInFull);
+    const startNodeInfo = nodeOffsetMap.find((m) => matchIdx >= m.startInFull && matchIdx < m.endInFull);
+    const endNodeInfo = nodeOffsetMap.find((m) => matchEnd > m.startInFull && matchEnd <= m.endInFull);
 
     if (startNodeInfo && endNodeInfo) {
       const range = document.createRange();
@@ -187,14 +186,14 @@ export function injectHighlightStyles(doc?: Document): void {
 /**
  * Registers annotations into W3C CSS Highlight API registry.
  */
-export function registerCssCustomHighlights(container: HTMLElement, annotations: AnnotationDTO[]): void {
+export function registerCssCustomHighlights(container: HTMLElement, annotations: readonly { type?: string; knowledgeType?: string; selectedText?: string | null; quotedText?: string; color?: string | null }[]): void {
   if (!isCustomHighlightSupported()) return;
 
   const targetDoc = container?.ownerDocument || document;
   injectHighlightStyles(targetDoc);
 
-  const CSSObj = CSS as any;
-  const HighlightClass = (window as any).Highlight;
+  const CSSObj = CSS;
+  const HighlightClass = (window).Highlight;
 
   // Group annotations by highlight identifier
   const rangesByGroup: Record<string, Range[]> = {
@@ -207,9 +206,9 @@ export function registerCssCustomHighlights(container: HTMLElement, annotations:
   };
 
   for (const annot of annotations) {
-    const kType = annot.type || (annot as any).knowledgeType;
+    const kType = annot.type || (annot).knowledgeType;
     if (kType !== 'highlight' && kType !== 'underline' && kType !== 'note') continue;
-    const text = annot.selectedText || (annot as any).quotedText;
+    const text = annot.selectedText || (annot).quotedText;
     if (!text) continue;
 
     let group = 'baglib-highlight-amber';
@@ -254,8 +253,8 @@ export function setActiveSelectionHighlight(range: Range | null, doc?: Document)
     injectHighlightStyles(targetDoc);
   }
 
-  const CSSObj = CSS as any;
-  const HighlightClass = (window as any).Highlight;
+  const CSSObj = CSS;
+  const HighlightClass = (window).Highlight;
 
   if (range && !range.collapsed) {
     try {
@@ -274,7 +273,7 @@ export function setActiveSelectionHighlight(range: Range | null, doc?: Document)
  */
 export function clearActiveSelectionHighlight(): void {
   if (!isCustomHighlightSupported()) return;
-  const CSSObj = CSS as any;
+  const CSSObj = CSS;
   CSSObj.highlights.delete('baglib-active-selection');
 }
 
@@ -282,8 +281,8 @@ export function setActiveTtsHighlight(ranges: Range[], doc?: Document): void {
   if (!isCustomHighlightSupported()) return;
   const targetDoc = doc || (typeof document !== 'undefined' ? document : undefined);
   if (targetDoc) injectHighlightStyles(targetDoc);
-  const CSSObj = CSS as any;
-  const HighlightClass = (window as any).Highlight;
+  const CSSObj = CSS;
+  const HighlightClass = (window).Highlight;
   if (ranges.length > 0) {
     CSSObj.highlights.set('baglib-tts-active', new HighlightClass(...ranges));
   } else {
@@ -293,7 +292,7 @@ export function setActiveTtsHighlight(ranges: Range[], doc?: Document): void {
 
 export function clearActiveTtsHighlight(): void {
   if (!isCustomHighlightSupported()) return;
-  (CSS as any).highlights.delete('baglib-tts-active');
+  (CSS).highlights.delete('baglib-tts-active');
 }
 
 /**
@@ -301,7 +300,7 @@ export function clearActiveTtsHighlight(): void {
  */
 export function clearCssCustomHighlights(): void {
   if (!isCustomHighlightSupported()) return;
-  const CSSObj = CSS as any;
+  const CSSObj = CSS;
   const groups = [
     'baglib-highlight-amber',
     'baglib-highlight-emerald',

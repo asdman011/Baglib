@@ -26,7 +26,7 @@ interface SearchResultCardProps {
 
 const PROVIDER_CONFIG: Record<
   SearchProviderId,
-  { labelEn: string; labelAr: string; colorClass: string; icon: any }
+  { labelEn: string; labelAr: string; colorClass: string; icon: import('lucide-react').LucideIcon }
 > = {
   local: {
     labelEn: 'My Library',

@@ -162,7 +162,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
               : 'text-muted hover:text-main'
           }`}
         >
-          {t('allNotesTab' as any) || 'All'} ({counts.all})
+          {t('allNotesTab') || 'All'} ({counts.all})
         </button>
         <button
           onClick={() => setActiveTab('highlight')}
@@ -247,7 +247,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
                   : 'text-muted hover:text-main'
               }`}
             >
-              {t('allNotesTab' as any) || 'All Pages'}
+              {t('allNotesTab') || 'All Pages'}
             </button>
             <button
               onClick={() => setScopeFilter('current')}
@@ -312,7 +312,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
                     <button
                       onClick={() => onJumpToPage(pageNum)}
                       className="px-2 py-0.5 rounded-full bg-surface border border-subtle hover:border-pale-sky-500 text-main flex items-center gap-1 cursor-pointer transition-colors"
-                      title={t('goToPage' as any) || `Jump to page ${pageNum}`}
+                      title={t('goToPage', { page: pageNum })}
                     >
                       <span className="text-[10px]">{t('page')}</span>
                       <span>{pageNum}</span>
@@ -352,7 +352,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
                     onClick={() => onJumpToPage(pageNum)}
                     className="border-s-2 border-pale-sky-500 ps-2.5 italic text-muted text-[11px] font-serif bg-surface/50 p-1.5 rounded-lg cursor-pointer hover:text-main transition-colors"
                   >
-                    "{item.selectedText}"
+                    &quot;{item.selectedText}&quot;
                   </blockquote>
                 )}
 

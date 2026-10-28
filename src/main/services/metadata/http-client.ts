@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 import { RateLimitGate, googleBooksGate, openLibraryGate, internetArchiveGate } from './rate-limit-gate';
 
 export interface HttpClientConfig {
@@ -58,7 +59,7 @@ export class HttpClient {
     };
 
     let attempt = 0;
-    let lastError: any;
+    let lastError: unknown;
 
     while (attempt <= this.maxRetries) {
       let timeoutId: NodeJS.Timeout | undefined;
@@ -116,14 +117,14 @@ export class HttpClient {
         }
 
         return response;
-      } catch (err: any) {
+      } catch (err: unknown) {
         lastError = err;
         // Do not retry Google Books on errors
         if (fullUrl.includes('googleapis.com')) {
           throw err;
         }
         // Retry on network errors or timeouts if attempts remain
-        if (attempt < this.maxRetries && err.name !== 'AbortError' && !String(err.message).includes('429')) {
+        if (attempt < this.maxRetries && (!(err instanceof Error) || err.name !== 'AbortError') && !String(errorMessage(err)).includes('429')) {
           const backoff = Math.pow(2, attempt) * 500 + Math.random() * 200;
           await new Promise((r) => setTimeout(r, backoff));
           await this.throttle();

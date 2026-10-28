@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Dedicated & LLM-Powered Translation Service (KEY-143)
  *
@@ -56,8 +57,8 @@ export class TranslationService {
         default:
           return await this.translateWithLLM(text, targetLang, options.bookTitle, settings);
       }
-    } catch (err: any) {
-      console.warn(`[baglib:translation] Provider ${provider} failed (${err.message}), falling back to LLM.`);
+    } catch (err: unknown) {
+      console.warn(`[baglib:translation] Provider ${provider} failed (${errorMessage(err)}), falling back to LLM.`);
       return await this.translateWithLLM(text, targetLang, options.bookTitle, settings);
     }
   }
@@ -184,11 +185,11 @@ export class TranslationService {
       throw new Error(`Google Translate fallback failed with status ${res.status}`);
     }
 
-    const data = await res.json() as any[];
+    const data = await res.json() as unknown[];
     // data[0] is array of [translatedChunk, originalChunk, ...]
-    const chunks = data?.[0] || [];
-    const translatedText = chunks.map((c: any) => c[0] || '').join('');
-    const detectedLang = data?.[2] || undefined;
+    const chunks = Array.isArray(data[0]) ? data[0] as unknown[] : [];
+    const translatedText = chunks.map((c: unknown) => Array.isArray(c) && typeof c[0] === 'string' ? c[0] : '').join('');
+    const detectedLang = typeof data[2] === 'string' ? data[2] : undefined;
 
     return {
       translatedText,

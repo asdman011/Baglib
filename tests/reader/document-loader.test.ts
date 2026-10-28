@@ -255,9 +255,9 @@ describe('KEY-133 Multi-Format Document Rendering Engine Tests', () => {
           };
         }
         class TestDOMParser extends XDOMParser {
-          parseFromString(str: string, type: any) {
+          parseFromString(str: string, type: unknown) {
             const doc = super.parseFromString(str, type);
-            const enhance = (node: any) => {
+            const enhance = (node: unknown) => {
               if (!node || typeof node !== 'object') return;
               if (!node.querySelector) {
                 node.querySelector = (sel: string) => {
@@ -284,7 +284,7 @@ describe('KEY-133 Multi-Format Document Rendering Engine Tests', () => {
               if (!node.children || !node.children[Symbol.iterator]) {
                 Object.defineProperty(node, 'children', {
                   get() {
-                    const result: any[] = [];
+                    const result: unknown[] = [];
                     if (node.childNodes) {
                       for (let i = 0; i < node.childNodes.length; i++) {
                         if (node.childNodes[i].nodeType === 1) {
@@ -307,7 +307,7 @@ describe('KEY-133 Multi-Format Document Rendering Engine Tests', () => {
             return doc;
           }
         }
-        (globalThis as any).DOMParser = TestDOMParser;
+        (globalThis as unknown).DOMParser = TestDOMParser;
       }
 
       const containerXml = `<?xml version="1.0"?>

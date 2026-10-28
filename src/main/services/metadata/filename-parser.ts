@@ -247,7 +247,7 @@ export class FilenameParser {
 
     // 2. Remove file extension
     const extMatch = rawBaseName.match(/\.([a-zA-Z0-9]{2,6})$/);
-    let nameWithoutExt = extMatch ? rawBaseName.slice(0, extMatch.index) : rawBaseName;
+    const nameWithoutExt = extMatch ? rawBaseName.slice(0, extMatch.index) : rawBaseName;
 
     // 3. PARADIGM 1: Anna's Archive Multi-Segment Pattern (`--`)
     if (
@@ -274,9 +274,9 @@ export class FilenameParser {
 
     // 5. PARADIGM 2: Parenthetical Publisher and Year (BEFORE blanket underscore replacement!)
     const parentheticalPub = this.extractParentheticalPublisherAndYear(workingString);
-    let extractedPublisher = parentheticalPub.publisher;
+    const extractedPublisher = parentheticalPub.publisher;
     let extractedYear = parentheticalPub.year;
-    let publisherConfidence = parentheticalPub.publisherConfidence;
+    const publisherConfidence = parentheticalPub.publisherConfidence;
     let yearConfidence = parentheticalPub.yearConfidence;
     workingString = parentheticalPub.remainingText;
 
@@ -394,14 +394,14 @@ export class FilenameParser {
 
     if (segments.length < 3) return null;
 
-    let title = segments[0]
+    const title = segments[0]
       .replace(/_\s+/g, ': ')
       .replace(/[{}]/g, '')
       .replace(/[\(\[]\s*[\)\]]/g, '')
       .trim();
 
     // Segment 1: Authors
-    let rawAuthor = segments[1].replace(/\[[^\]]+\]/g, '').trim();
+    const rawAuthor = segments[1].replace(/\[[^\]]+\]/g, '').trim();
     const rawTokens = rawAuthor.split(/;\s*|\s*,\s*(?=[A-Z\p{L}])/u);
     const authors: string[] = [];
 
@@ -1273,7 +1273,7 @@ export class FilenameParser {
   public static splitMultiAuthors(raw: string): string[] {
     if (!raw) return [];
 
-    let clean = raw.trim();
+    const clean = raw.trim();
 
     // Split by semicolons first if present (catalog multi-author standard)
     if (clean.includes(';')) {

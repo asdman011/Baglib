@@ -193,7 +193,7 @@ describe('Physical Library & Lending Service (Story 8 / KEY-5)', () => {
         JOIN source s ON s.id = psd.source_id
         JOIN edition e ON e.id = s.edition_id
         WHERE e.work_id = ?
-      `).get('w-update-loc') as any;
+      `).get('w-update-loc') as unknown;
 
       assert.strictEqual(row.room, 'المكتبة الجديدة');
       assert.strictEqual(row.bookcase, 'خزانة رقم 4');
@@ -231,7 +231,7 @@ describe('Physical Library & Lending Service (Story 8 / KEY-5)', () => {
         JOIN source s ON s.id = psd.source_id
         JOIN edition e ON e.id = s.edition_id
         WHERE e.work_id = ?
-      `).get('w-loan-1') as any;
+      `).get('w-loan-1') as unknown;
 
       assert.strictEqual(psd.lending_status, 'loaned');
     });
@@ -287,7 +287,7 @@ describe('Physical Library & Lending Service (Story 8 / KEY-5)', () => {
         JOIN source s ON s.id = psd.source_id
         JOIN edition e ON e.id = s.edition_id
         WHERE e.work_id = ?
-      `).get('w-return-1') as any;
+      `).get('w-return-1') as unknown;
 
       assert.strictEqual(psd.lending_status, 'available');
       assert.strictEqual(psd.condition, 'good');
@@ -320,7 +320,7 @@ describe('Physical Library & Lending Service (Story 8 / KEY-5)', () => {
         JOIN source s ON s.id = psd.source_id
         JOIN edition e ON e.id = s.edition_id
         WHERE e.work_id = ?
-      `).get('w-overdue-1') as any;
+      `).get('w-overdue-1') as unknown;
 
       assert.strictEqual(psd.lending_status, 'overdue');
     });

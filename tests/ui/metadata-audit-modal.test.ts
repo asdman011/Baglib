@@ -53,8 +53,8 @@ describe('Library Metadata Audit & Refresh Feature Tests', () => {
 
   it('contains all Metadata Audit translation keys in both Arabic and English', () => {
     for (const key of auditKeys) {
-      const arVal = (translations.ar as any)[key];
-      const enVal = (translations.en as any)[key];
+      const arVal = (translations.ar as unknown)[key];
+      const enVal = (translations.en as unknown)[key];
 
       assert.ok(
         typeof arVal === 'string' && arVal.trim().length > 0,

@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — High-Resolution Cover Fetcher & Local Cache Service (Story 12 / KEY-125)
  *
@@ -199,12 +200,12 @@ export class CoverFetchService {
         source: sourceName,
         resolution: `${buffer.length} bytes`,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         success: false,
         coverUrl: request.coverUrl || '',
         source: 'error',
-        error: err?.message || String(err),
+        error: errorMessage(err) || String(err),
       };
     }
   }

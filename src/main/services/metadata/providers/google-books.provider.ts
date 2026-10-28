@@ -1,3 +1,5 @@
+import type { GoogleVolume, GoogleVolumes } from '../../../../shared/types/catalog-responses';
+import { errorMessage } from '../../../../shared/errors';
 import { MetadataProvider, SearchQuery } from './provider.interface';
 import { BibliographicWork, BibliographicEdition } from '../../../../shared/types/bibliographic';
 import { googleBooksClient } from '../http-client';
@@ -28,14 +30,14 @@ export class GoogleBooksProvider implements MetadataProvider {
     return 'Google Books';
   }
 
-  private mapVolumeToWork(volume: any): BibliographicWork {
+  private mapVolumeToWork(volume: GoogleVolume): BibliographicWork {
     const volumeInfo = volume.volumeInfo || {};
 
     // Google Books merges Work and Edition concepts into a "Volume".
     // We separate it into a Work containing one Edition.
 
-    const isbn10Obj = volumeInfo.industryIdentifiers?.find((i: any) => i.type === 'ISBN_10');
-    const isbn13Obj = volumeInfo.industryIdentifiers?.find((i: any) => i.type === 'ISBN_13');
+    const isbn10Obj = volumeInfo.industryIdentifiers?.find((i) => i.type === 'ISBN_10');
+    const isbn13Obj = volumeInfo.industryIdentifiers?.find((i) => i.type === 'ISBN_13');
 
     const isbn10 = isbn10Obj ? isbn10Obj.identifier : undefined;
     const isbn13 = isbn13Obj ? isbn13Obj.identifier : undefined;
@@ -53,7 +55,7 @@ export class GoogleBooksProvider implements MetadataProvider {
 
     const edition: BibliographicEdition = {
       editionId: volume.id,
-      title: volumeInfo.title,
+      title: volumeInfo.title || '',
       publishDate: volumeInfo.publishedDate,
       publisher: volumeInfo.publisher,
       isbn,
@@ -73,7 +75,7 @@ export class GoogleBooksProvider implements MetadataProvider {
 
     return {
       workId: `gb-${volume.id}`,
-      title: volumeInfo.title,
+      title: volumeInfo.title || '',
       authors: volumeInfo.authors || [],
       description: sanitizeHtml(volumeInfo.description),
       firstPublishYear: volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.substring(0, 4)) : undefined,
@@ -85,13 +87,13 @@ export class GoogleBooksProvider implements MetadataProvider {
   private getApiKeyParam(): string {
     const key =
       process.env.GOOGLE_BOOKS_API_KEY ||
-      (typeof globalThis !== 'undefined' && (globalThis as any).GOOGLE_BOOKS_API_KEY) ||
+      (typeof globalThis !== 'undefined' && (globalThis as typeof globalThis & { GOOGLE_BOOKS_API_KEY?: string }).GOOGLE_BOOKS_API_KEY) ||
       DEFAULT_GOOGLE_BOOKS_API_KEY;
     return key ? `&key=${encodeURIComponent(key)}` : '';
   }
 
-  private logError(err: any): void {
-    const msg = String(err?.message || err);
+  private logError(err: unknown): void {
+    const msg = String(errorMessage(err) || err);
     if (msg.includes('429')) {
       console.info(
         '[GoogleBooksProvider] Google Books API quota reached (HTTP 429). Retaining surviving candidates.'
@@ -129,7 +131,7 @@ export class GoogleBooksProvider implements MetadataProvider {
 
     try {
       return await requestFn();
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logError(err);
       return null;
     }
@@ -182,7 +184,7 @@ export class GoogleBooksProvider implements MetadataProvider {
     }
 
     const url = `/volumes?q=${encodeURIComponent(sanitizedQuery.queryString)}&maxResults=${effectiveMaxResults}&startIndex=${startIndex}${this.getApiKeyParam()}`;
-    let data = await this.executeWithQuotaProtections(() => googleBooksClient.getJson<any>(url));
+    let data = await this.executeWithQuotaProtections(() => googleBooksClient.getJson<GoogleVolumes>(url));
 
     // Fallback: If structured intitle search returned 0 items, try plain text query (which Google Books handles with highest resilience)
     if (
@@ -196,7 +198,7 @@ export class GoogleBooksProvider implements MetadataProvider {
       if (fallbackTerm && fallbackTerm !== sanitizedQuery.queryString) {
         const fallbackUrl = `/volumes?q=${encodeURIComponent(fallbackTerm)}&maxResults=${effectiveMaxResults}${this.getApiKeyParam()}`;
         const fallbackData = await this.executeWithQuotaProtections(() =>
-          googleBooksClient.getJson<any>(fallbackUrl)
+          googleBooksClient.getJson<GoogleVolumes>(fallbackUrl)
         );
         if (fallbackData && fallbackData.items && fallbackData.items.length > 0) {
           data = fallbackData;
@@ -206,7 +208,7 @@ export class GoogleBooksProvider implements MetadataProvider {
 
     if (!data || !data.items || !Array.isArray(data.items)) return [];
 
-    const works = data.items.map((item: any) => this.mapVolumeToWork(item));
+    const works = data.items.map((item) => this.mapVolumeToWork(item));
     this.cache.set(cacheKey, { timestamp: Date.now(), works });
     return works;
   }
@@ -218,7 +220,7 @@ export class GoogleBooksProvider implements MetadataProvider {
     const keyParam = this.getApiKeyParam() ? `?${this.getApiKeyParam().substring(1)}` : '';
     const url = `/volumes/${encodeURIComponent(volumeId)}${keyParam}`;
 
-    const data = await this.executeWithQuotaProtections(() => googleBooksClient.getJson<any>(url));
+    const data = await this.executeWithQuotaProtections(() => googleBooksClient.getJson<GoogleVolume>(url));
     if (!data) return null;
 
     return this.mapVolumeToWork(data);
@@ -237,7 +239,7 @@ export class GoogleBooksProvider implements MetadataProvider {
     }
 
     const url = `/volumes?q=isbn:${encodeURIComponent(cleanIsbn)}&maxResults=1${this.getApiKeyParam()}`;
-    const data = await this.executeWithQuotaProtections(() => googleBooksClient.getJson<any>(url));
+    const data = await this.executeWithQuotaProtections(() => googleBooksClient.getJson<GoogleVolumes>(url));
 
     if (!data || !data.items || data.items.length === 0) return null;
 

@@ -455,20 +455,20 @@ export function getViewportCssVariables(settings: {
   brightness?: number;
   contrast?: number;
   fontFamily?: string;
-}): React.CSSProperties {
+}): React.CSSProperties & Record<`--${string}`, string | number> {
   const currentTheme = resolveTheme(settings.theme);
 
   return {
-    ['--reader-bg' as any]: currentTheme.bg,
-    ['--reader-text' as any]: currentTheme.text,
-    ['--reader-surface' as any]: currentTheme.surface,
-    ['--reader-border' as any]: currentTheme.border,
-    ['--reader-font-size' as any]: `${settings.fontSize ?? 18}px`,
-    ['--reader-line-height' as any]: `${settings.lineSpacing ?? 1.85}`,
-    ['--reader-p-spacing' as any]: `${settings.paragraphSpacing ?? 0.8}em`,
-    ['--reader-margin' as any]: `${settings.margin ?? 28}px`,
-    ['--reader-filter' as any]: `brightness(${settings.brightness ?? 100}%) contrast(${settings.contrast ?? 100}%)`,
-    ['--reader-pdf-filter' as any]: currentTheme.pdfFilter,
-    ['--reader-font-family' as any]: settings.fontFamily ?? 'inherit',
+    ['--reader-bg']: currentTheme.bg,
+    ['--reader-text']: currentTheme.text,
+    ['--reader-surface']: currentTheme.surface,
+    ['--reader-border']: currentTheme.border,
+    ['--reader-font-size']: `${settings.fontSize ?? 18}px`,
+    ['--reader-line-height']: `${settings.lineSpacing ?? 1.85}`,
+    ['--reader-p-spacing']: `${settings.paragraphSpacing ?? 0.8}em`,
+    ['--reader-margin']: `${settings.margin ?? 28}px`,
+    ['--reader-filter']: `brightness(${settings.brightness ?? 100}%) contrast(${settings.contrast ?? 100}%)`,
+    ['--reader-pdf-filter']: currentTheme.pdfFilter,
+    ['--reader-font-family']: settings.fontFamily ?? 'inherit',
   };
 }

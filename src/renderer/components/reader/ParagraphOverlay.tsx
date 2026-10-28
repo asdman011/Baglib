@@ -27,9 +27,14 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
   const textRef = useRef<HTMLDivElement>(null);
 
   // Sync index if initial changes
-  useEffect(() => {
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [initialIndex, paragraphs.length];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
     setCurrentIndex(Math.max(0, Math.min(paragraphs.length - 1, initialIndex)));
-  }, [initialIndex, paragraphs.length]);
+
+  }
 
   const activeText = paragraphs[currentIndex] || '';
 
@@ -40,9 +45,9 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
 
   // CSS Custom Highlight API Registration for flicker-free sentence tracking
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof (window as any).CSS === 'undefined') return;
-    const CSSAPI = (window as any).CSS;
-    if (!('highlights' in CSSAPI) || typeof (window as any).Highlight !== 'function') return;
+    if (typeof window === 'undefined' || typeof (window).CSS === 'undefined') return;
+    const CSSAPI = (window).CSS;
+    if (!('highlights' in CSSAPI) || typeof (window).Highlight !== 'function') return;
 
     const el = textRef.current;
     if (!el) return;
@@ -54,7 +59,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
         const range = document.createRange();
         range.setStart(textNode, 0);
         range.setEnd(textNode, Math.min(textNode.textContent.length, 120));
-        const highlight = new (window as any).Highlight(range);
+        const highlight = new (window).Highlight(range);
         CSSAPI.highlights.set('baglib-paragraph-focus', highlight);
       }
     } catch {
@@ -94,21 +99,21 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentIndex, paragraphs.length, direction, onClose]);
 
-  const handleNext = () => {
+  function handleNext() {
     if (currentIndex < paragraphs.length - 1) {
       const next = currentIndex + 1;
       setCurrentIndex(next);
       onParagraphChange?.(next);
     }
-  };
+  }
 
-  const handlePrev = () => {
+  function handlePrev() {
     if (currentIndex > 0) {
       const prev = currentIndex - 1;
       setCurrentIndex(prev);
       onParagraphChange?.(prev);
     }
-  };
+  }
 
   const themeClasses: Record<ReaderTheme, string> = {
     paper: 'bg-[#fcfaf2] text-[#2b2b2b] shadow-2xl border border-[#e8e4d9]',

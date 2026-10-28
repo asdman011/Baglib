@@ -63,7 +63,7 @@ describe('EPUB Paginator & Multi-Format Screen Chunking Engine Tests', () => {
             body: {
               innerHTML: `<h1>الفصل الأول</h1>\n${paragraphs}`,
             },
-          } as any;
+          } as unknown;
         },
       };
 

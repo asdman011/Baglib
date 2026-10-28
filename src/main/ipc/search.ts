@@ -1,3 +1,4 @@
+import { errorMessage } from '../../shared/errors';
 /**
  * Baglib — Unified Search & Online Book Discovery IPC Handlers
  *
@@ -103,7 +104,7 @@ export function setupSearchIPC(): { orchestrator: SearchOrchestratorService } {
 
         activeSearchControllers.delete(searchKey);
         return result;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[baglib/search-ipc] search:query failed:', err);
         return {
           searchId: options?.searchId || '',
@@ -112,7 +113,7 @@ export function setupSearchIPC(): { orchestrator: SearchOrchestratorService } {
           totalResults: 0,
           providerStatuses: {},
           hasLocalDuplicates: false,
-          error: err?.message || String(err),
+          error: errorMessage(err) || String(err),
         };
       }
     }
@@ -198,7 +199,7 @@ export function setupSearchIPC(): { orchestrator: SearchOrchestratorService } {
       let downloadedFilePath: string | undefined;
       let fileHash: string | undefined;
       let fileSizeStr: string | undefined;
-      let digitalFormat: any = undefined;
+      let digitalFormat = undefined;
 
       // Handle file download if requested and download link is available
       if (result.downloadUrl && input.downloadDigitalCopy !== false) {
@@ -278,11 +279,11 @@ export function setupSearchIPC(): { orchestrator: SearchOrchestratorService } {
         alreadyInLibrary: false,
         downloadedFilePath,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[baglib/search-ipc] search:import-result error:', err);
       return {
         success: false,
-        error: err?.message || String(err),
+        error: errorMessage(err) || String(err),
       };
     }
   });

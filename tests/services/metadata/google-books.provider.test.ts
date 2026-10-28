@@ -13,7 +13,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
   });
 
   afterEach(() => {
-    (googleBooksClient as any).getJson = originalGetJson;
+    (googleBooksClient as unknown).getJson = originalGetJson;
   });
 
   it('has provider name "Google Books"', () => {
@@ -27,7 +27,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
     });
 
     it('searches by query string and normalizes Volume into Work/Edition', async () => {
-      (googleBooksClient as any).getJson = async (url: string) => {
+      (googleBooksClient as unknown).getJson = async (url: string) => {
         assert.ok(url.includes('/volumes?q=Clean%20Code'));
         return {
           totalItems: 1,
@@ -90,7 +90,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
     });
 
     it('searches by structured title and author SearchQuery', async () => {
-      (googleBooksClient as any).getJson = async (url: string) => {
+      (googleBooksClient as unknown).getJson = async (url: string) => {
         const decoded = decodeURIComponent(url);
         assert.ok(decoded.includes('intitle:Clean Code'));
         assert.ok(decoded.includes('inauthor:Robert C. Martin'));
@@ -115,7 +115,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
 
     it('falls back to broad title search when intitle structured search returns zero items', async () => {
       let callCount = 0;
-      (googleBooksClient as any).getJson = async (url: string) => {
+      (googleBooksClient as unknown).getJson = async (url: string) => {
         callCount++;
         const decoded = decodeURIComponent(url);
         if (decoded.includes('intitle:The Rare Manuscript')) {
@@ -148,7 +148,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
     });
 
     it('extracts higher resolution cover images (medium / large) over small thumbnails', async () => {
-      (googleBooksClient as any).getJson = async () => ({
+      (googleBooksClient as unknown).getJson = async () => ({
         totalItems: 1,
         items: [
           {
@@ -173,7 +173,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
     });
 
     it('supports searching by Arabic book title and retrieves Arabic metadata', async () => {
-      (googleBooksClient as any).getJson = async (url: string) => {
+      (googleBooksClient as unknown).getJson = async (url: string) => {
         const decoded = decodeURIComponent(url);
         assert.ok(decoded.includes('مقدمة ابن خلدون'));
         return {
@@ -202,7 +202,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
     });
 
     it('recovers gracefully from network failure returning empty array', async () => {
-      (googleBooksClient as any).getJson = async () => {
+      (googleBooksClient as unknown).getJson = async () => {
         throw new Error('Google API Quota Exceeded (429)');
       };
       const results = await provider.search('test');
@@ -212,7 +212,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
 
   describe('Search by ISBN', () => {
     it('queries Google Books with isbn: parameter', async () => {
-      (googleBooksClient as any).getJson = async (url: string) => {
+      (googleBooksClient as unknown).getJson = async (url: string) => {
         assert.ok(url.includes('q=isbn:9780132350884'));
         return {
           totalItems: 1,
@@ -236,13 +236,13 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
     });
 
     it('returns null when no items are returned', async () => {
-      (googleBooksClient as any).getJson = async () => ({ totalItems: 0, items: [] });
+      (googleBooksClient as unknown).getJson = async () => ({ totalItems: 0, items: [] });
       const result = await provider.searchByIsbn('0000000000');
       assert.strictEqual(result, null);
     });
 
     it('returns null on network error', async () => {
-      (googleBooksClient as any).getJson = async () => {
+      (googleBooksClient as unknown).getJson = async () => {
         throw new Error('Connection reset');
       };
       const result = await provider.searchByIsbn('9780132350884');
@@ -252,7 +252,7 @@ describe('GoogleBooksProvider (Task 5.4 & 5.5)', () => {
 
   describe('Get Work Details', () => {
     it('retrieves volume details by stripping gb- prefix', async () => {
-      (googleBooksClient as any).getJson = async (url: string) => {
+      (googleBooksClient as unknown).getJson = async (url: string) => {
         assert.ok(url.startsWith('/volumes/kacTBQAAQBAJ'));
         assert.ok(url.includes('key=AIzaSyDLDKUVqab2CqPBN3QjuzGnE0phS0063UU'));
         return {

@@ -43,7 +43,7 @@ export const BacklinksSection: React.FC = () => {
             </div>
 
             <p className="text-[11px] text-muted font-serif line-clamp-2 leading-relaxed bg-canvas/40 p-2 rounded-lg border border-subtle/40">
-              "{item.excerpt}"
+              &quot;{item.excerpt}&quot;
             </p>
 
             <div className="flex items-center justify-between text-[10px] text-muted pt-1">

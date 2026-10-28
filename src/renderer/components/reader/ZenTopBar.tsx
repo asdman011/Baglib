@@ -21,6 +21,8 @@ import {
   Highlighter,
   Play,
   Pause,
+  FilePenLine,
+  ScanText,
 } from 'lucide-react';
 import type { BookItem } from '../../types/library';
 import type { BookFormat, ReaderViewMode } from '../../libs/reader/types';
@@ -46,6 +48,10 @@ interface ZenTopBarProps {
   isTocOpen: boolean;
   onToggleSearch: () => void;
   onToggleAIDrawer: () => void;
+  onOpenWorkstation?: () => void;
+  isWorkstationOpen?: boolean;
+  onToggleOcrInspector?: () => void;
+  isOcrInspectorOpen?: boolean;
   onToggleDictionary: () => void;
   onToggleSettings: () => void;
   isSettingsOpen: boolean;
@@ -82,6 +88,10 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
   isTocOpen,
   onToggleSearch,
   onToggleAIDrawer,
+  onOpenWorkstation,
+  isWorkstationOpen,
+  onToggleOcrInspector,
+  isOcrInspectorOpen,
   onToggleDictionary,
   onToggleSettings,
   isSettingsOpen,
@@ -316,7 +326,27 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
           <Search className="w-4 h-4" />
         </button>
 
-        {/* AI Research Assistant */}
+        {/* PDF Workstation & OCR Inspector Controls */}
+        {detectedFormat === 'PDF' && onOpenWorkstation && <button type="button" onClick={onOpenWorkstation} aria-pressed={!!isWorkstationOpen} aria-label={t('pdfSuiteTitle')} title={t('pdfSuiteTitle')} className="p-1.5 rounded-xl bg-canvas/80 border border-subtle text-muted hover:text-main"><FilePenLine className="w-4 h-4" /></button>}
+        {detectedFormat === 'PDF' && onToggleOcrInspector && (
+          <button
+            type="button"
+            onClick={onToggleOcrInspector}
+            aria-pressed={!!isOcrInspectorOpen}
+            aria-label={t('ocrOpenInspector')}
+            title={`${t('ocrOpenInspector')} — ${t('ocrEngineBadge')}`}
+            className={`p-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1 ${
+              isOcrInspectorOpen
+                ? 'bg-pale-sky-500 text-white border-pale-sky-500 shadow-sm'
+                : 'bg-canvas/80 border-subtle text-muted hover:text-main'
+            }`}
+          >
+            <ScanText className="w-4 h-4" />
+            <span className="hidden 2xl:inline text-[11px] font-bold">
+              {t('ocrOpenInspector')}
+            </span>
+          </button>
+        )}
         <button
           onClick={onToggleAIDrawer}
           title={t('aiAssistantTitle')}

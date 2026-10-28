@@ -124,7 +124,7 @@ describe('Audiobook Service & Repository (KEY-145)', () => {
       assert.strictEqual(updated.narrator, 'New Narrator');
       assert.strictEqual(updated.sourceType, 'audiobookshelf');
 
-      const count = (db.prepare('SELECT count(*) as cnt FROM audiobook_pairing').get() as any).cnt;
+      const count = (db.prepare('SELECT count(*) as cnt FROM audiobook_pairing').get() as unknown).cnt;
       assert.strictEqual(count, 1);
     });
 

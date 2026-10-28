@@ -49,7 +49,7 @@ export class DictionaryService {
          FROM dictionaries
          ORDER BY created_at DESC`
       )
-      .all() as any[];
+      .all() as DictionaryItem[];
 
     return rows.map((r) => ({
       ...r,
@@ -211,7 +211,7 @@ export class DictionaryService {
   /**
    * Get or initialize a reader for a dictionary.
    */
-  private async getReader(dict: DictionaryItem): Promise<any> {
+  private async getReader(dict: DictionaryItem): Promise<StarDictReader | BglReader | SlobReader | MdictReader | undefined> {
     let reader = this.readers.get(dict.id);
     if (reader) return reader;
 
@@ -272,7 +272,7 @@ export class DictionaryService {
           );
 
           // Fast SQLite B-tree query (< 0.5ms)
-          const indexedMatches = queryStmt.all(dict.id, normCandidate, candidate.token) as any[];
+          const indexedMatches = queryStmt.all(dict.id, normCandidate, candidate.token) as { headword: string }[];
 
           const wordsToLookup = indexedMatches.length > 0
             ? indexedMatches.map((m) => m.headword)
@@ -288,26 +288,26 @@ export class DictionaryService {
             let defText = '';
 
             try {
-              if (dict.format === 'stardict') {
+              if (dict.format === 'stardict' && reader instanceof StarDictReader) {
                 const match = reader.lookup(wordToLookup);
                 if (match) {
                   const raw = await reader.readDefinition(match);
                   defHtml = raw.replace(/\r\n/g, '<br>').replace(/\n/g, '<br>');
                   defText = raw;
                 }
-              } else if (dict.format === 'bgl') {
+              } else if (dict.format === 'bgl' && reader instanceof BglReader) {
                 const match = reader.lookup(wordToLookup);
                 if (match) {
                   defHtml = match.definition;
                   defText = match.definition.replace(/<[^>]+>/g, '');
                 }
-              } else if (dict.format === 'slob') {
+              } else if (dict.format === 'slob' && reader instanceof SlobReader) {
                 const match = reader.lookup(wordToLookup);
                 if (match && match.text) {
                   defHtml = match.text;
                   defText = match.text.replace(/<[^>]+>/g, '');
                 }
-              } else if (dict.format === 'mdict') {
+              } else if (dict.format === 'mdict' && reader instanceof MdictReader) {
                 const match = reader.lookup(wordToLookup);
                 if (match) {
                   defHtml = match.definitionHtml;

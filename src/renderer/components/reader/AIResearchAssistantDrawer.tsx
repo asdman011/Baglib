@@ -1,6 +1,8 @@
 'use client';
+import { errorMessage } from '../../../shared/errors';
 
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import {
   Sparkles,
   ShieldCheck,
@@ -62,20 +64,30 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isSavedToNotes, setIsSavedToNotes] = useState<boolean>(false);
 
-  useEffect(() => {
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [initialTool];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
     if (initialTool) {
       setActiveTool(initialTool);
     }
-  }, [initialTool]);
+
+  }
 
   // Auto pre-fill input when selection changes
-  useEffect(() => {
+  const [previousResetInputs2, setPreviousResetInputs2] = useState<readonly unknown[] | null>(null);
+  const resetInputs2 = [selectedText, activeTool];
+  if (previousResetInputs2 === null || resetInputs2.some((value, index) => !Object.is(value, previousResetInputs2[index]))) {
+    setPreviousResetInputs2(resetInputs2);
+
     if (selectedText) {
       if (activeTool === 'contextual_dictionary' || activeTool === 'biographical_tarajim') {
         setUserQuery(selectedText.trim());
       }
     }
-  }, [selectedText, activeTool]);
+
+  }
 
   const handleExecuteTool = async (forceSaveNote = false) => {
     setIsLoading(true);
@@ -83,7 +95,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
     setIsCopied(false);
 
     try {
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       if (windowAPI?.ai?.executeTool) {
         const payload: AIResearchQueryPayload = {
           bookId,
@@ -113,9 +125,9 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
           durationMs: 420,
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setResult({
-        content: `Error: ${err.message || 'Execution failed'}`,
+        content: `Error: ${errorMessage(err) || 'Execution failed'}`,
         tool: activeTool,
         spoilerPrevented: false,
         providerUsed: 'error',
@@ -136,7 +148,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
   const handleSaveToNotes = async () => {
     if (!result?.content || !bookId) return;
     try {
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       if (windowAPI?.saveAnnotation) {
         await windowAPI.saveAnnotation({
           bookId,
@@ -251,7 +263,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
               <span>{t('aiSelectedTextHeader')}</span>
             </div>
             <p className="italic text-zinc-700 dark:text-zinc-300 line-clamp-3 leading-relaxed">
-              "{selectedText}"
+              &quot;{selectedText}&quot;
             </p>
           </div>
         )}

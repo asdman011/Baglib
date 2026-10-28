@@ -205,11 +205,11 @@ describe('KEY-134 Viewport Controller, Typography Engine & Focus Aids Tests', ()
         fontFamily: "'Amiri', serif",
       });
 
-      assert.equal((vars as any)['--reader-bg'], '#fbf0d9');
-      assert.equal((vars as any)['--reader-text'], '#5f4b32');
-      assert.equal((vars as any)['--reader-font-size'], '22px');
-      assert.equal((vars as any)['--reader-line-height'], '1.9');
-      assert.equal((vars as any)['--reader-filter'], 'brightness(105%) contrast(110%)');
+      assert.equal((vars as unknown)['--reader-bg'], '#fbf0d9');
+      assert.equal((vars as unknown)['--reader-text'], '#5f4b32');
+      assert.equal((vars as unknown)['--reader-font-size'], '22px');
+      assert.equal((vars as unknown)['--reader-line-height'], '1.9');
+      assert.equal((vars as unknown)['--reader-filter'], 'brightness(105%) contrast(110%)');
     });
   });
 
@@ -248,7 +248,7 @@ describe('KEY-134 Viewport Controller, Typography Engine & Focus Aids Tests', ()
     it('ensures all Viewport and Focus Aid keys are defined in Arabic', () => {
       for (const key of requiredKeys) {
         assert.ok(
-          (translations.ar as any)[key],
+          (translations.ar as unknown)[key],
           `Missing Arabic translation for key: ${key}`
         );
       }
@@ -257,7 +257,7 @@ describe('KEY-134 Viewport Controller, Typography Engine & Focus Aids Tests', ()
     it('ensures all Viewport and Focus Aid keys are defined in English', () => {
       for (const key of requiredKeys) {
         assert.ok(
-          (translations.en as any)[key],
+          (translations.en as unknown)[key],
           `Missing English translation for key: ${key}`
         );
       }

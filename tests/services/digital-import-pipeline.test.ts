@@ -22,7 +22,7 @@ function createZipArchiveBuffer(files: { name: string; content: string | Buffer 
   for (const file of files) {
     const nameBuf = Buffer.from(file.name, 'utf8');
     const dataBuf = Buffer.isBuffer(file.content) ? file.content : Buffer.from(file.content, 'utf8');
-    const crc = (zlib as any).crc32 ? (zlib as any).crc32(dataBuf) : 0;
+    const crc = (zlib as unknown).crc32 ? (zlib as unknown).crc32(dataBuf) : 0;
 
     const lh = Buffer.alloc(30);
     lh.writeUInt32LE(0x04034b50, 0); // Local header signature
@@ -251,7 +251,7 @@ describe('Digital E-Book Ingestion Pipeline & Metadata Extractor (Story 6.2 / KE
       assert.equal(work.coverImage, 'baglib-asset://rendered-page-1.jpg');
 
       // Check file_source_detail table directly
-      const fileDetail = db.prepare(`SELECT * FROM file_source_detail WHERE file_hash = ?`).get(expectedHash) as any;
+      const fileDetail = db.prepare(`SELECT * FROM file_source_detail WHERE file_hash = ?`).get(expectedHash) as unknown;
       assert.ok(fileDetail);
       assert.strictEqual(fileDetail.file_hash, expectedHash);
       assert.strictEqual(fileDetail.file_format, 'PDF');

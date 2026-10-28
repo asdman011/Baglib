@@ -161,9 +161,14 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   // Synchronize when booksToAudit prop changes
-  useEffect(() => {
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [booksToAudit];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
     setAuditedBooks(booksToAudit);
-  }, [booksToAudit]);
+
+  }
 
   // Derived missing audits map
   const auditMap = useMemo(() => {
@@ -176,7 +181,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
   // Stats calculation
   const stats = useMemo(() => {
-    let total = auditedBooks.length;
+    const total = auditedBooks.length;
     let needsAttention = 0;
     let clean = 0;
     let missingAuthor = 0;
@@ -246,9 +251,14 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
   // Handle Review One by One book switch
   const currentReviewBook = flaggedBooksForReview[currentReviewIndex] || null;
 
+  const [previousReviewTarget, setPreviousReviewTarget] = useState<readonly unknown[] | null>(null);
+  const inputsReviewTarget = [isReviewMode, currentReviewBook?.id];
+  if (previousReviewTarget === null || inputsReviewTarget.some((value, index) => !Object.is(value, previousReviewTarget[index]))) {
+    setPreviousReviewTarget(inputsReviewTarget);
+    setSelectedCandidate(null);
+  }
   useEffect(() => {
     if (isReviewMode && currentReviewBook) {
-      setSelectedCandidate(null);
       const isPlaceholder = isPlaceholderAuthor(currentReviewBook.author);
       reviewLookup.lookupWithCandidates({
         title: currentReviewBook.title,
@@ -259,11 +269,16 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
     }
   }, [isReviewMode, currentReviewIndex, currentReviewBook?.id]);
 
-  useEffect(() => {
+  const [previousResetInputs2, setPreviousResetInputs2] = useState<readonly unknown[] | null>(null);
+  const resetInputs2 = [reviewLookup.candidates];
+  if (previousResetInputs2 === null || resetInputs2.some((value, index) => !Object.is(value, previousResetInputs2[index]))) {
+    setPreviousResetInputs2(resetInputs2);
+
     if (reviewLookup.candidates.length > 0 && !selectedCandidate) {
       setSelectedCandidate(reviewLookup.candidates[0]);
     }
-  }, [reviewLookup.candidates]);
+
+  }
 
   if (!isOpen) return null;
 
@@ -277,7 +292,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
   // ACTION 1: Re-scan Local Files First
   // --------------------------------------------------------------------------
   const handleRescanFiles = async () => {
-    const windowAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+    const windowAPI = typeof window !== 'undefined' ? (window).electronAPI : null;
     const candidates = auditedBooks.filter((b) => {
       const a = auditMap.get(b.id) || auditBook(b);
       return a.hasMissing && Boolean(b.filePath);
@@ -301,7 +316,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
         try {
           const fileName = book.filePath!.split(/[\\/]/).pop();
-          let discovered: any = null;
+          let discovered: Awaited<ReturnType<typeof window.electronAPI.discoverMetadata>> | null = null;
 
           if (windowAPI?.extractOfflineMetadata) {
             discovered = await windowAPI.extractOfflineMetadata({
@@ -316,7 +331,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
             });
           }
 
-          let updatedBook = { ...book };
+          const updatedBook = { ...book };
           let changed = false;
           const audit = auditMap.get(book.id) || auditBook(book);
 
@@ -409,8 +424,8 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
               }
             } else if (!cover && isEpub && book.filePath) {
               try {
-                if ((windowAPI as any)?.extractEpubCover) {
-                  const extRes = await (windowAPI as any).extractEpubCover(book.filePath);
+                if (windowAPI?.extractEpubCover) {
+                  const extRes = await windowAPI.extractEpubCover(book.filePath);
                   if (extRes?.success && extRes.coverUrl) cover = extRes.coverUrl;
                 }
               } catch (epubErr) {
@@ -427,9 +442,6 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
           if (changed) {
             // Strictly preserve user custom notes and tags
             updatedBook.tags = book.tags;
-            if ((book as any).notes) {
-              (updatedBook as any).notes = (book as any).notes;
-            }
 
             await onUpdateBook(updatedBook);
             setAuditedBooks((prev) => prev.map((b) => (b.id === updatedBook.id ? updatedBook : b)));
@@ -450,7 +462,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
   // ACTION 2.1: Auto-Enrich All Online (Background loop with 1s pacing)
   // --------------------------------------------------------------------------
   const handleAutoEnrichAll = async () => {
-    const windowAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+    const windowAPI = typeof window !== 'undefined' ? (window).electronAPI : null;
     const candidates = auditedBooks.filter((b) => {
       const a = auditMap.get(b.id) || auditBook(b);
       return a.hasMissing;
@@ -489,7 +501,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
         try {
           const isPlaceholder = isPlaceholderAuthor(book.author);
-          let discovery: any = null;
+          let discovery: Awaited<ReturnType<typeof window.electronAPI.discoverMetadata>> | null = null;
 
           if (windowAPI?.discoverMetadata) {
             discovery = await windowAPI.discoverMetadata({
@@ -504,7 +516,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
           const isHighConfidence = discovery && (discovery.isVerifiedMatch || (discovery.confidence || 0) >= 0.75);
 
           if (isHighConfidence) {
-            let updatedBook = { ...book };
+            const updatedBook = { ...book };
             const audit = auditMap.get(book.id) || auditBook(book);
 
             if (discovery.title && discovery.title.trim()) {
@@ -556,9 +568,6 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
             // Strictly preserve custom notes, tags, and reading progress
             updatedBook.tags = book.tags;
-            if ((book as any).notes) {
-              (updatedBook as any).notes = (book as any).notes;
-            }
 
             await onUpdateBook(updatedBook);
             setAuditedBooks((prev) => prev.map((b) => (b.id === updatedBook.id ? updatedBook : b)));
@@ -633,7 +642,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
     if (primaryEdition?.language) {
       updatedBook.language = primaryEdition.language;
     }
-    const candPublisher = primaryEdition?.publisher || (selectedCandidate as any).publisher;
+    const candPublisher = primaryEdition?.publisher || ('publisher' in selectedCandidate ? String(selectedCandidate.publisher) : undefined);
     if (candPublisher) {
       updatedBook.publisher = candPublisher;
     }
@@ -643,9 +652,6 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
     // Preserve custom tags and notes
     updatedBook.tags = currentReviewBook.tags;
-    if ((currentReviewBook as any).notes) {
-      (updatedBook as any).notes = (currentReviewBook as any).notes;
-    }
 
     await onUpdateBook(updatedBook);
     setAuditedBooks((prev) => prev.map((b) => (b.id === updatedBook.id ? updatedBook : b)));

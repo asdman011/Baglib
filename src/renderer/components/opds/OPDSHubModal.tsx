@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 import React, { useState, useEffect } from 'react';
 import {
   Globe,
@@ -73,7 +74,7 @@ export const OPDSHubModal: React.FC<OPDSHubModalProps> = ({
     loadServerStatus();
   }, [isOpen]);
 
-  const loadServerStatus = async () => {
+  async function loadServerStatus() {
     try {
       const status = await window.electronAPI?.opds?.getServerStatus();
       if (status) {
@@ -84,9 +85,9 @@ export const OPDSHubModal: React.FC<OPDSHubModalProps> = ({
     } catch (err) {
       console.warn('Failed to get OPDS server status', err);
     }
-  };
+  }
 
-  const loadFeed = async (url: string, pushHistory = true) => {
+  async function loadFeed(url: string, pushHistory = true) {
     setIsLoadingFeed(true);
     setStatusMessage(null);
     try {
@@ -99,12 +100,12 @@ export const OPDSHubModal: React.FC<OPDSHubModalProps> = ({
         setFeedHistory((prev) => [...prev, url]);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setIsLoadingFeed(false);
     }
-  };
+  }
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -124,7 +125,7 @@ export const OPDSHubModal: React.FC<OPDSHubModalProps> = ({
       setActiveFeed(feed);
       setFeedHistory((prev) => [...prev, activeFeed.searchLink!.href]);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setIsLoadingFeed(false);
@@ -169,7 +170,7 @@ export const OPDSHubModal: React.FC<OPDSHubModalProps> = ({
         });
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setDownloadingEntryId(null);
@@ -193,7 +194,7 @@ export const OPDSHubModal: React.FC<OPDSHubModalProps> = ({
         setServerStatus(res);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? errorMessage(err) : String(err);
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setIsStartingServer(false);

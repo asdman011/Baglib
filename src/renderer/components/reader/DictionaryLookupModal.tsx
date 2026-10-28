@@ -40,14 +40,21 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
+  const [previousLookupWord, setPreviousLookupWord] = useState<readonly unknown[] | null>(null);
+  const inputsLookupWord = [isOpen, word];
+  if (previousLookupWord === null || inputsLookupWord.some((value, index) => !Object.is(value, previousLookupWord[index]))) {
+    setPreviousLookupWord(inputsLookupWord);
+    if (isOpen && word) { setActiveWord(word); setIsLoading(Boolean(typeof window !== 'undefined' && window.electronAPI?.dictionaryLookup)); }
+  }
   useEffect(() => {
-    if (isOpen && word) {
-      setActiveWord(word);
-      performLookup(word);
-    }
-  }, [isOpen, word]);
+    if (!isOpen || !word || !window.electronAPI?.dictionaryLookup) return;
+    let alive = true;
+    const lang = bookLang === 'العربية' || bookLang === 'ar' || /[\u0600-\u06FF]/.test(word) ? 'ar' : 'en';
+    void window.electronAPI.dictionaryLookup(word.trim(), { lang, includeWikipedia: true }).then(data => { if (alive) setResult(data); }).catch(console.warn).finally(() => { if (alive) setIsLoading(false); });
+    return () => { alive = false; };
+  }, [isOpen, word, bookLang]);
 
-  const performLookup = async (targetWord: string) => {
+  async function performLookup(targetWord: string) {
     const trimmed = targetWord.trim();
     if (!trimmed) return;
 
@@ -55,7 +62,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
     try {
       const isArabic = /[\u0600-\u06FF]/.test(trimmed);
       const normalizedLang = (bookLang === 'العربية' || bookLang === 'ar' || isArabic) ? 'ar' : 'en';
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       if (windowAPI?.dictionaryLookup) {
         const data = await windowAPI.dictionaryLookup(trimmed, {
           lang: normalizedLang,
@@ -90,7 +97,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   if (!isOpen) return null;
 

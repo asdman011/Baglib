@@ -1,3 +1,5 @@
+interface StorageRow { workId: string; editionId: string; sourceId: string; title: string; author: string; filePath: string; fileSizeBytes: number; storageState: import('../../../shared/types/digital-file').FileStorageStatus; format: import('../../../shared/types/work').DigitalFormat; addedAt: string; fileHash?: string; }
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — Storage Management Service (Story 7 / KEY-7)
  *
@@ -96,7 +98,7 @@ export class StorageManagerService {
       LEFT JOIN author a ON a.id = wa.author_id
       WHERE w.id = ?
       GROUP BY w.id
-    `).get(workId) as any;
+    `).get(workId) as StorageRow | undefined;
 
     if (!row || !row.filePath) {
       return null;
@@ -164,10 +166,10 @@ export class StorageManagerService {
           errorReason = 'الملف غير موجود في المسار المحدد / File not found at specified path';
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       status = 'missing';
       exists = false;
-      errorReason = err?.message || 'تعذر الوصول إلى الملف على القرص / Cannot access file on disk';
+      errorReason = errorMessage(err) || 'تعذر الوصول إلى الملف على القرص / Cannot access file on disk';
     }
 
     // Check if duplicate of another file in library
@@ -363,12 +365,12 @@ export class StorageManagerService {
         fileSizeBytes: stat.size,
         format: validation.format,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         success: false,
         workId,
         newFilePath: resolved,
-        error: err?.message || 'فشل تحديث قاعدة البيانات / Failed updating database record',
+        error: errorMessage(err) || 'فشل تحديث قاعدة البيانات / Failed updating database record',
       };
     }
   }
@@ -551,16 +553,16 @@ export class StorageManagerService {
           try {
             const stat = fs.statSync(m.newPath);
             updateStmt.run(m.newPath, now, stat.size, m.sourceId);
-          } catch (err: any) {
-            errors.push(`فشل تحديث ${m.title}: ${err?.message || ''}`);
+          } catch (err: unknown) {
+            errors.push(`فشل تحديث ${m.title}: ${errorMessage(err) || ''}`);
           }
         }
       });
 
       try {
         tx();
-      } catch (err: any) {
-        errors.push(`فشل حفظ التغييرات: ${err?.message || ''}`);
+      } catch (err: unknown) {
+        errors.push(`فشل حفظ التغييرات: ${errorMessage(err) || ''}`);
       }
     }
 
@@ -613,7 +615,7 @@ export class StorageManagerService {
           WHERE fsd.file_hash = ?
           GROUP BY w.id
           ORDER BY s.added_at ASC
-        `).all(g.hash) as any[];
+        `).all(g.hash) as StorageRow[];
 
         dupGroups.push({
           hash: g.hash,
@@ -681,7 +683,7 @@ export class StorageManagerService {
       JOIN source s ON s.edition_id = e.id
       JOIN file_source_detail fsd ON fsd.source_id = s.id
       WHERE w.id = ?
-    `).get(duplicateWorkId) as any;
+    `).get(duplicateWorkId) as StorageRow | undefined;
 
     if (!dupRow) {
       return {
@@ -699,7 +701,7 @@ export class StorageManagerService {
       JOIN source s ON s.edition_id = e.id
       JOIN file_source_detail fsd ON fsd.source_id = s.id
       WHERE w.id = ?
-    `).get(primaryWorkId) as any;
+    `).get(primaryWorkId) as StorageRow | undefined;
 
     const freedBytes = dupRow.fileSizeBytes || 0;
     let fileDeleted = false;
@@ -710,7 +712,7 @@ export class StorageManagerService {
         try {
           fs.unlinkSync(dupRow.filePath);
           fileDeleted = true;
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.warn('[StorageManagerService] Could not unlink duplicate file:', err);
         }
       }
@@ -725,12 +727,12 @@ export class StorageManagerService {
         freedBytes,
         fileDeletedFromDisk: fileDeleted,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         success: false,
         freedBytes: 0,
         fileDeletedFromDisk: fileDeleted,
-        error: err?.message || 'فشل حذف السجل المكرر من قاعدة البيانات / Failed deleting duplicate record',
+        error: errorMessage(err) || 'فشل حذف السجل المكرر من قاعدة البيانات / Failed deleting duplicate record',
       };
     }
   }

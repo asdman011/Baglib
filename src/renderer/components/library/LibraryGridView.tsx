@@ -54,6 +54,7 @@ import { ReturnBookModal } from './ReturnBookModal';
 import { PaginationBar } from './PaginationBar';
 import { ColumnSelectorDropdown } from './ColumnSelectorDropdown';
 import { BulkActionsToolbar } from './BulkActionsToolbar';
+import { PdfCreationLauncher } from '../reader/PdfCreationLauncher';
 import { MetadataAuditModal } from './MetadataAuditModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { matchesSearchQuery } from '../../utils/search';
@@ -120,8 +121,8 @@ export const LibraryGridView: React.FC = () => {
 
   // Load View Preferences from SQLite app_settings on mount (Story 9: 9.7)
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.settings?.getViewPreferences) {
-      (window as any).electronAPI.settings.getViewPreferences().then((prefs: any) => {
+    if (typeof window !== 'undefined' && typeof window.electronAPI?.settings?.getViewPreferences === 'function') {
+      (window).electronAPI.settings.getViewPreferences().then((prefs) => {
         if (prefs) {
           if (prefs.viewMode) setViewMode(prefs.viewMode);
           if (prefs.cardDensity) setCardDensity(prefs.cardDensity);
@@ -133,7 +134,7 @@ export const LibraryGridView: React.FC = () => {
           if (prefs.sortDirection) setSortDirection(prefs.sortDirection);
           if (prefs.pageSize) setPageSize(prefs.pageSize);
         }
-      }).catch((e: any) => console.warn('[LibraryGridView] Failed to load view preferences:', e));
+      }).catch((e) => console.warn('[LibraryGridView] Failed to load view preferences:', e));
     }
   }, []);
 
@@ -147,17 +148,16 @@ export const LibraryGridView: React.FC = () => {
     sortDirection: SortDirection;
     pageSize: number;
   }>) => {
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.settings?.saveViewPreferences) {
-      (window as any).electronAPI.settings.saveViewPreferences(updates).catch((e: any) =>
+    if (typeof window !== 'undefined' && typeof window.electronAPI?.settings?.saveViewPreferences === 'function') {
+      (window).electronAPI.settings.saveViewPreferences(updates).catch((e) =>
         console.warn('[LibraryGridView] Failed to save view preferences:', e)
       );
     }
   };
 
   // Reset to first page whenever any filter or search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [
     searchQuery,
     selectedBookType,
     selectedReadingStatus,
@@ -169,7 +169,13 @@ export const LibraryGridView: React.FC = () => {
     selectedLocation,
     sortField,
     sortDirection,
-  ]);
+  ];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
+    setCurrentPage(1);
+
+  }
 
   // Quick Lending / Return modals for cards and table rows
   const [quickLendBook, setQuickLendBook] = useState<BookItem | null>(null);
@@ -222,19 +228,19 @@ export const LibraryGridView: React.FC = () => {
 
   // App Lock Security check on mount and periodic idle monitoring
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.appLock) {
-      (window as any).electronAPI.appLock.getLockState().then((state: any) => {
+    if (typeof window !== 'undefined' && (window).electronAPI?.appLock) {
+      (window).electronAPI.appLock.getLockState().then((state) => {
         if (state && state.enabled && state.isLocked) {
           setIsLockScreenActive(true);
         }
-      }).catch((e: any) => console.warn('[LibraryGridView] App lock initial check error:', e));
+      }).catch((e) => console.warn('[LibraryGridView] App lock initial check error:', e));
 
       const interval = setInterval(() => {
-        (window as any).electronAPI.appLock.checkIdleTimeout().then((timedOut: boolean) => {
+        (window).electronAPI.appLock.checkIdleTimeout().then((timedOut: boolean) => {
           if (timedOut) {
             setIsLockScreenActive(true);
           }
-        }).catch((e: any) => console.warn('[LibraryGridView] Idle timeout check error:', e));
+        }).catch((e) => console.warn('[LibraryGridView] Idle timeout check error:', e));
       }, 30000);
 
       return () => clearInterval(interval);
@@ -259,9 +265,9 @@ export const LibraryGridView: React.FC = () => {
     async function fetchCats() {
       if (typeof window !== 'undefined' && window.electronAPI) {
         try {
-          const tree = await window.electronAPI.getCategoryTree() as any[];
+          const tree = await window.electronAPI.getCategoryTree() as import('../../../shared/types/category').CategoryNode[];
           const flat: { id: string, nameAr: string, nameEn: string }[] = [];
-          const flatten = (nodes: any[]) => {
+          const flatten = (nodes: import('../../../shared/types/category').CategoryNode[]) => {
             for (const n of nodes) {
               flat.push({ id: n.id, nameAr: n.nameAr, nameEn: n.nameEn });
               if (n.children && n.children.length > 0) flatten(n.children);
@@ -444,7 +450,7 @@ export const LibraryGridView: React.FC = () => {
   }, [filteredAndSortedBooks, safeCurrentPage, pageSize]);
 
   // Batch Selection Helpers (Story 9: 9.6)
-  const handleToggleSelectBook = (id: string, e?: React.MouseEvent) => {
+  const handleToggleSelectBook = (id: string, e?: React.SyntheticEvent) => {
     if (e) e.stopPropagation();
     setSelectedBookIds((prev) => {
       const next = new Set(prev);
@@ -586,10 +592,10 @@ export const LibraryGridView: React.FC = () => {
         : 'Importing book & discovering offline metadata...'
     );
 
-    let discoveryResult: any = null;
+    let discoveryResult: Awaited<ReturnType<typeof window.electronAPI.discoverMetadata>> | null = null;
 
     try {
-      const windowAPI = (window as any).electronAPI;
+      const windowAPI = (window).electronAPI;
       const extractor = windowAPI?.extractOfflineMetadata || windowAPI?.discoverMetadata;
       if (extractor) {
         try {
@@ -647,7 +653,7 @@ export const LibraryGridView: React.FC = () => {
 
       const formattedSize = fileSize ? `${(fileSize / (1024 * 1024)).toFixed(1)} MB` : '1.5 MB';
 
-      const offlineProvenance: any = {
+      const offlineProvenance: import('../../../shared/types/work').MetadataProvenance = {
         primaryProvider: discoveryResult?.provenance?.providerUsed || (discoveryResult?.provenance?.embeddedFound ? 'Embedded Container' : 'Local Filename Parser'),
         discoveredAt: new Date().toISOString(),
         method: discoveryResult?.provenance?.embeddedFound ? 'offline_embedded' : 'offline_filename',
@@ -687,7 +693,7 @@ export const LibraryGridView: React.FC = () => {
         edition: discoveredEdition,
         pagesCount: discoveredPagesCount,
         abstract: discoveredDescription,
-        digitalFormat: ext as any,
+        digitalFormat: ext as BookItem['digitalFormat'],
         bookType: 'digital',
         readingStatus: 'reading',
         readingProgress: 0,
@@ -716,7 +722,7 @@ export const LibraryGridView: React.FC = () => {
 
   // Open Native Electron File Dialog with Progressive Metadata & Cover Discovery
   const handleOpenBookFromDevice = async () => {
-    const windowAPI = (window as any).electronAPI;
+    const windowAPI = (window).electronAPI;
 
     if (windowAPI?.openFileDialog) {
       const fullPath: string | null = await windowAPI.openFileDialog();
@@ -823,7 +829,7 @@ export const LibraryGridView: React.FC = () => {
       categories: partialBook.categories || ['مستورد من الإنترنت'],
       tags: partialBook.tags || ['#مستورد_رقمي'],
       lendingHistory: [],
-      onlineSource: partialBook.onlineSource as any,
+      onlineSource: partialBook.onlineSource,
       filePath: partialBook.filePath,
       fileSize: partialBook.fileSize,
       fileHash: partialBook.fileHash,
@@ -1063,6 +1069,7 @@ export const LibraryGridView: React.FC = () => {
             </button>
 
             {/* Import Wizard (Story 6) */}
+            <PdfCreationLauncher />
             <button
               onClick={() => setIsImportWizardOpen(true)}
               title={t('openImportWizard')}
@@ -1208,7 +1215,7 @@ export const LibraryGridView: React.FC = () => {
                 <HardDrive className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
                 <select
                   value={selectedStorageFilter}
-                  onChange={(e) => setSelectedStorageFilter(e.target.value as any)}
+                  onChange={(e) => setSelectedStorageFilter(e.target.value as typeof selectedStorageFilter)}
                   className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs truncate"
                 >
                   <option value="ALL">{t('storageFilterAll')}</option>
@@ -1474,7 +1481,7 @@ export const LibraryGridView: React.FC = () => {
                                 ? 'bg-pale-sky-500'
                                 : 'bg-muted/40'
                             }`}
-                            title={t(`status${readingStatus.charAt(0).toUpperCase() + readingStatus.slice(1)}` as any)}
+                            title={t(`status${readingStatus.charAt(0).toUpperCase() + readingStatus.slice(1)}` as import('../../translations').TranslationKey)}
                           />
                         </div>
 
@@ -1576,7 +1583,7 @@ export const LibraryGridView: React.FC = () => {
                                 value={readingStatus}
                                 onChange={(e) => {
                                   e.stopPropagation();
-                                  updateBookReadingStatus(book.id, e.target.value as any);
+                                  updateBookReadingStatus(book.id, e.target.value as NonNullable<BookItem['readingStatus']>);
                                 }}
                                 className={`text-[10px] font-bold rounded-full px-2 py-0.5 border cursor-pointer outline-none transition-all ${
                                   readingStatus === 'completed'
@@ -1742,7 +1749,7 @@ export const LibraryGridView: React.FC = () => {
                               value={readingStatus}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                updateBookReadingStatus(book.id, e.target.value as any);
+                                updateBookReadingStatus(book.id, e.target.value as NonNullable<BookItem['readingStatus']>);
                               }}
                               className={`text-[10px] font-bold rounded-full px-2 py-0.5 border cursor-pointer outline-none transition-all ${
                                 readingStatus === 'completed'
@@ -2163,7 +2170,7 @@ export const LibraryGridView: React.FC = () => {
                               <input
                                 type="checkbox"
                                 checked={isSelected}
-                                onChange={(e) => handleToggleSelectBook(book.id, e as any)}
+                                onChange={(e) => handleToggleSelectBook(book.id, e)}
                                 className="w-3.5 h-3.5 accent-pale-sky-500 rounded cursor-pointer"
                               />
                             </td>
@@ -2231,7 +2238,7 @@ export const LibraryGridView: React.FC = () => {
                                 <div className="space-y-1 max-w-[140px]">
                                   <select
                                     value={readingStatus}
-                                    onChange={(e) => updateBookReadingStatus(book.id, e.target.value as any)}
+                                    onChange={(e) => updateBookReadingStatus(book.id, e.target.value as NonNullable<BookItem['readingStatus']>)}
                                     className={`text-[10px] font-bold rounded-full px-2 py-0.5 border cursor-pointer outline-none transition-all ${
                                       readingStatus === 'completed'
                                         ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'

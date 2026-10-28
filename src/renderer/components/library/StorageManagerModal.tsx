@@ -1,4 +1,6 @@
 'use client';
+import { errorMessage } from '../../../shared/errors';
+
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -71,11 +73,16 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   const [deletePhysicalFile, setDeletePhysicalFile] = useState(false);
 
   // Sync tab if initialTab changes
-  useEffect(() => {
+  const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
+  const resetInputs1 = [initialTab];
+  if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
+    setPreviousResetInputs1(resetInputs1);
+
     if (initialTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab]);
+
+  }
 
   const loadData = async (triggerDeepAudit = false) => {
     if (typeof window === 'undefined' || !window.electronAPI) return;
@@ -83,7 +90,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
     if (triggerDeepAudit) setIsAuditing(true);
 
     try {
-      const api = window.electronAPI as any;
+      const api = window.electronAPI;
       const [sumRes, anaRes] = await Promise.all([
         triggerDeepAudit && api.storage?.verifyAll
           ? api.storage.verifyAll()
@@ -105,9 +112,20 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
     }
   };
 
+  const [previousStorageVisibility, setPreviousStorageVisibility] = useState<readonly unknown[] | null>(null);
+  const inputsStorageVisibility = [isOpen];
+  if (previousStorageVisibility === null || inputsStorageVisibility.some((value, index) => !Object.is(value, previousStorageVisibility[index]))) {
+    setPreviousStorageVisibility(inputsStorageVisibility);
+    if (isOpen) setIsLoading(true);
+  }
   useEffect(() => {
     if (isOpen) {
-      loadData(false);
+      let alive = true;
+      const storage = window.electronAPI.storage;
+      void Promise.all([storage.getHealthSummary(), storage.getAnalytics()]).then(([summary, analytics]) => {
+        if (alive) { if (summary) setSummary(summary); if (analytics) setAnalytics(analytics); }
+      }).catch(console.warn).finally(() => { if (alive) setIsLoading(false); });
+      return () => { alive = false; };
     }
   }, [isOpen]);
 
@@ -118,7 +136,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
 
   // Single-file locate / re-link handler
   const handleLocateFile = async (workId: string) => {
-    const api = window.electronAPI as any;
+    const api = window.electronAPI;
     if (!api?.openFileDialog || !api?.storage?.relinkFile) return;
 
     try {
@@ -133,14 +151,14 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
       } else {
         showToast(t('storageLocateError', { error: res.error || '' }));
       }
-    } catch (err: any) {
-      showToast(t('storageLocateError', { error: err?.message || '' }));
+    } catch (err: unknown) {
+      showToast(t('storageLocateError', { error: errorMessage(err) || '' }));
     }
   };
 
   // Re-verify single item
   const handleVerifySingle = async (workId: string) => {
-    const api = window.electronAPI as any;
+    const api = window.electronAPI;
     if (!api?.storage?.verifyFile) return;
 
     try {
@@ -155,7 +173,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   // Reveal in OS File Explorer
   const handleReveal = (filePath?: string) => {
     if (!filePath) return;
-    const api = window.electronAPI as any;
+    const api = window.electronAPI;
     if (api?.showItemInFolder) {
       api.showItemInFolder(filePath);
     }
@@ -163,7 +181,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
 
   // Batch auto-rebind folder scan
   const handleStartBatchRebind = async () => {
-    const api = window.electronAPI as any;
+    const api = window.electronAPI;
     if (!api?.openDirectoryDialog || !api?.storage?.batchAutoRebind) return;
 
     try {
@@ -185,7 +203,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   // Prune duplicate action
   const handleConfirmPrune = async () => {
     if (!pruneTarget) return;
-    const api = window.electronAPI as any;
+    const api = window.electronAPI;
 
     try {
       if (api?.storage?.pruneDuplicate) {
@@ -211,8 +229,8 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         await loadData(false);
         refreshBooks();
       }
-    } catch (err: any) {
-      showToast(err?.message || (isRtl ? 'خطأ أثناء الحذف' : 'Error pruning duplicate'));
+    } catch (err: unknown) {
+      showToast(errorMessage(err) || (isRtl ? 'خطأ أثناء الحذف' : 'Error pruning duplicate'));
     }
   };
 
@@ -243,7 +261,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
 
       return true;
     });
-  }, [summary?.items, activeTab, searchQuery]);
+  }, [summary, activeTab, searchQuery]);
 
   if (!isOpen) return null;
 

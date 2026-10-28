@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — KOReader Sync Service
  *
@@ -126,8 +127,8 @@ export class KOSyncService {
         message: `Synced progress (${progressPercent}%) from KOReader server.`,
         data: progress,
       };
-    } catch (e: any) {
-      return { success: false, message: `Failed to update local progress: ${e.message}`, data: progress };
+    } catch (e: unknown) {
+      return { success: false, message: `Failed to update local progress: ${errorMessage(e)}`, data: progress };
     }
   }
 

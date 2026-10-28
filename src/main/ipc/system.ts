@@ -1,12 +1,15 @@
+import * as ipcModule0 from 'electron';
+import * as ipcModule1 from '../services/shield/content-shield.service';
+import { errorMessage } from '../../shared/errors';
 import { ipcMain, app, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
-const pdfParse = require('pdf-parse');
+import pdfParse from 'pdf-parse';
 
 // Custom page renderer to accurately capture page boundaries
-function renderPageText(pageData: any) {
-  return pageData.getTextContent().then(function (textContent: any) {
+function renderPageText(pageData: import('pdf-parse').PdfParsePage) {
+  return pageData.getTextContent().then(function (textContent: import('pdf-parse').PdfTextContent) {
     let lastY: number | undefined;
     let text = '';
     for (const item of textContent.items) {
@@ -159,12 +162,12 @@ export function setupSystemIPC() {
           return null;
         }
 
-        const pdfFn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default || pdfParse.PDF;
+        const pdfFn = pdfParse;
         
         if (typeof pdfFn === 'function') {
           // Suppress verbose internal pdf.js font warnings that flood dev terminal
           const origWarn = console.warn;
-          console.warn = (...args: any[]) => {
+          console.warn = (...args: unknown[]) => {
             const first = args[0];
             if (typeof first === 'string' && first.includes('Ran out of space in font private use area')) {
               return;
@@ -172,7 +175,7 @@ export function setupSystemIPC() {
             origWarn.apply(console, args);
           };
 
-          let pdfData: any;
+          let pdfData: import('pdf-parse').PdfParseResult;
           try {
             pdfData = await pdfFn(new Uint8Array(dataBuffer), { pagerender: renderPageText });
           } finally {
@@ -198,8 +201,8 @@ export function setupSystemIPC() {
         }
       }
       return null;
-    } catch (err: any) {
-      console.warn('[baglib:pdf-text] Could not extract text from PDF:', err?.message || err);
+    } catch (err: unknown) {
+      console.warn('[baglib:pdf-text] Could not extract text from PDF:', errorMessage(err) || err);
       return null;
     }
   });
@@ -210,7 +213,7 @@ export function setupSystemIPC() {
   ipcMain.handle('system:open-external', async (_, url: string) => {
     try {
       if (!url || typeof url !== 'string') return false;
-      const { shell } = require('electron');
+      const { shell } = ipcModule0;
       await shell.openExternal(url);
       return true;
     } catch (err) {
@@ -224,7 +227,7 @@ export function setupSystemIPC() {
    */
   ipcMain.handle('system:get-shield-status', async () => {
     try {
-      const { ContentShieldService } = require('../services/shield/content-shield.service');
+      const { ContentShieldService } = ipcModule1;
       return ContentShieldService.getInstance().getActiveShieldStatus();
     } catch (err) {
       console.error('[baglib:system] get-shield-status error:', err);

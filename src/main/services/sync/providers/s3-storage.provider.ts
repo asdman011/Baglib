@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../../shared/errors';
 /**
  * Baglib — S3-Compatible Object Storage Provider
  *
@@ -118,7 +119,7 @@ export class S3StorageProvider implements IStorageProvider {
     return { url: fullUrl, headers };
   }
 
-  public async testConnection(): Promise<SyncOperationResult<{ reachable: boolean; details?: any }>> {
+  public async testConnection(): Promise<SyncOperationResult<{ reachable: boolean; details?: unknown }>> {
     if (!this.config.bucket || !this.config.accessKeyId || !this.config.secretAccessKey) {
       return { success: false, message: 'Bucket, Access Key ID, and Secret Access Key are required for S3.' };
     }
@@ -141,8 +142,8 @@ export class S3StorageProvider implements IStorageProvider {
       }
 
       return { success: false, message: `S3 server returned status: ${response.status} (${response.statusText})` };
-    } catch (e: any) {
-      return { success: false, message: `S3 connection failed: ${e?.message || e}` };
+    } catch (e: unknown) {
+      return { success: false, message: `S3 connection failed: ${errorMessage(e) || e}` };
     }
   }
 

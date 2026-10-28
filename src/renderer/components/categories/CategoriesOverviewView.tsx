@@ -1,4 +1,6 @@
 'use client';
+import { errorMessage } from '../../../shared/errors';
+
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -147,8 +149,8 @@ export const CategoriesOverviewView: React.FC = () => {
       await refreshCategoryTree();
       setCategoryModalMode(null);
       setEditingCategory(null);
-    } catch (err: any) {
-      setCategoryFormError(err?.message || 'Failed to save category');
+    } catch (err: unknown) {
+      setCategoryFormError(errorMessage(err) || 'Failed to save category');
     }
   };
 
@@ -190,8 +192,8 @@ export const CategoriesOverviewView: React.FC = () => {
       await refreshCategoryTree();
       await refreshBooks();
       setDeletingCategory(null);
-    } catch (err: any) {
-      alert(err?.message || 'Failed to delete category');
+    } catch (err: unknown) {
+      alert(errorMessage(err) || 'Failed to delete category');
     }
   };
 
@@ -223,8 +225,8 @@ export const CategoriesOverviewView: React.FC = () => {
       await refreshTags();
       await refreshBooks();
       setRenamingTag(null);
-    } catch (err: any) {
-      setTagActionError(err?.message || 'Failed to rename tag');
+    } catch (err: unknown) {
+      setTagActionError(errorMessage(err) || 'Failed to rename tag');
     }
   };
 
@@ -236,8 +238,8 @@ export const CategoriesOverviewView: React.FC = () => {
       await refreshTags();
       await refreshBooks();
       setMergingTag(null);
-    } catch (err: any) {
-      setTagActionError(err?.message || 'Failed to merge tags');
+    } catch (err: unknown) {
+      setTagActionError(errorMessage(err) || 'Failed to merge tags');
     }
   };
 
@@ -248,8 +250,8 @@ export const CategoriesOverviewView: React.FC = () => {
       await refreshTags();
       await refreshBooks();
       setDeletingTag(null);
-    } catch (err: any) {
-      alert(err?.message || 'Failed to delete tag');
+    } catch (err: unknown) {
+      alert(errorMessage(err) || 'Failed to delete tag');
     }
   };
 

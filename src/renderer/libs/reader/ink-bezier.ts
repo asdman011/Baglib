@@ -160,13 +160,14 @@ export function computeContourPoints(points: InkStrokePoint[], baseWidth = 3): C
  * Converts stroke sample points into a single continuous outer envelope closed Path2D.
  */
 export function traceOutline(points: InkStrokePoint[], baseWidth = 3): Path2D {
-  const Path2DClass = typeof Path2D !== 'undefined' ? Path2D : (globalThis as any).Path2D;
+  const Path2DClass = typeof Path2D !== 'undefined' ? Path2D : (globalThis).Path2D;
   const path = Path2DClass ? new Path2DClass() : ({
     moveTo: () => {},
     lineTo: () => {},
     arc: () => {},
     closePath: () => {},
-  } as any);
+    addPath: () => {}, arcTo: () => {}, bezierCurveTo: () => {}, ellipse: () => {}, quadraticCurveTo: () => {}, rect: () => {}, roundRect: () => {},
+  });
 
   if (!points || points.length === 0) return path;
 

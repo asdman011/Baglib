@@ -183,7 +183,7 @@ describe('KEY-143 BYOK AI Provider & Research Assistant Services', () => {
         // Verify note exists in database
         const row = db
           .prepare('SELECT * FROM annotations WHERE id = ?')
-          .get(result.savedNoteId) as any;
+          .get(result.savedNoteId) as unknown;
 
         assert.ok(row, 'Note should be persisted in annotations table');
         assert.equal(row.book_id, 'work-1');

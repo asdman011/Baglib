@@ -58,6 +58,11 @@ export interface BookMetadata {
 export interface BookDoc {
   metadata: BookMetadata;
   rendition: {
+    on?: (event: string, callback: () => void) => void;
+    off?: (event: string, callback: () => void) => void;
+    next?: () => void;
+    prev?: () => void;
+    annotations?: { highlight(cfi: string, data: unknown, callback: (event: MouseEvent) => void, className?: string, styles?: Record<string, string>): void; add(type: string, cfi: string, data: unknown, callback: (event: Event) => void, className?: string, styles?: Record<string, string>): void; remove(cfi: string, type: string): void };
     layout?: 'pre-paginated' | 'reflowable';
     spread?: 'auto' | 'none';
     viewport?: { width: number; height: number };
@@ -67,7 +72,7 @@ export interface BookDoc {
   pageList?: TOCItem[];
   sections: SectionItem[];
   splitTOCHref?: (href: string) => Array<string | number>;
-  resolveHref?: (href: string) => { index: number; anchor?: (doc: Document) => any } | null;
+  resolveHref?: (href: string) => { index: number; anchor?: (doc: Document) => unknown } | null;
   resolveCFI?: (cfi: string) => { index: number; anchor?: (doc: Document) => Range | number } | null;
   getCover?: () => Promise<Blob | null>;
   destroy?: () => void | Promise<void>;

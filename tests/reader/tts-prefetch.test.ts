@@ -11,15 +11,15 @@ it('prefetches during playback, pauses the sleep timer and cancels queued audio 
   const savedDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
   Object.defineProperty(globalThis, 'window', { value: window, configurable: true });
   Object.defineProperty(globalThis, 'document', { value: window.document, configurable: true });
-  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
-  const requests: any[] = [];
+  (globalThis as unknown).IS_REACT_ACT_ENVIRONMENT = true;
+  const requests: unknown[] = [];
   const stopped: string[] = [];
-  const sources: any[] = [];
+  const sources: unknown[] = [];
   let voiceRequests = 0;
   let renderVersion = 0;
   const notifiedVersions: number[] = [];
-  let chunkListener: (chunk: any) => void = () => {};
-  let completeListener: (event: any) => void = () => {};
+  let chunkListener: (chunk: unknown) => void = () => {};
+  let completeListener: (event: unknown) => void = () => {};
   const context = {
     state: 'running', currentTime: 0, destination: {},
     resume: async () => { context.state = 'running'; },
@@ -28,22 +28,22 @@ it('prefetches during playback, pauses the sleep timer and cancels queued audio 
     createGain: () => ({ connect() {}, gain: { value: 1 } }),
     createBuffer: (_channels: number, frames: number, sampleRate: number) => ({ duration: frames / sampleRate, getChannelData: () => new Float32Array(frames) }),
     createBufferSource: () => {
-      const source: any = { playbackRate: { value: 1 }, connect() {}, start() {}, stop() {}, onended: null };
+      const source: unknown = { playbackRate: { value: 1 }, connect() {}, start() {}, stop() {}, onended: null };
       sources.push(source);
       return source;
     },
   };
-  (window as any).AudioContext = function () { return context; };
-  (window as any).electronAPI = { audio: { tts: {
+  (window as unknown).AudioContext = function () { return context; };
+  (window as unknown).electronAPI = { audio: { tts: {
     getVoices: async () => {
       voiceRequests++;
       if (voiceRequests > 8) throw new Error('Repeated voice initialization');
       return [];
     }, getStatus: async () => ({ available: true }), loadVoice: async () => {},
-    synthesize: async (request: any) => { requests.push(request); return { jobId: request.jobId }; },
+    synthesize: async (request: unknown) => { requests.push(request); return { jobId: request.jobId }; },
     stop: async (jobId: string) => { stopped.push(jobId); },
-    onChunk: (listener: any) => { chunkListener = listener; return () => {}; },
-    onComplete: (listener: any) => { completeListener = listener; return () => {}; },
+    onChunk: (listener: unknown) => { chunkListener = listener; return () => {}; },
+    onComplete: (listener: unknown) => { completeListener = listener; return () => {}; },
     onError: () => () => {},
   } } };
   let audio!: ReturnType<typeof useTTSAudio>;
@@ -91,9 +91,9 @@ it('prefetches during playback, pauses the sleep timer and cancels queued audio 
   } finally {
     await act(async () => { root.unmount(); });
     if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow);
-    else delete (globalThis as any).window;
+    else delete (globalThis as unknown).window;
     if (savedDocument) Object.defineProperty(globalThis, 'document', savedDocument);
-    else delete (globalThis as any).document;
-    delete (globalThis as any).IS_REACT_ACT_ENVIRONMENT;
+    else delete (globalThis as unknown).document;
+    delete (globalThis as unknown).IS_REACT_ACT_ENVIRONMENT;
   }
 });

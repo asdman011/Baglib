@@ -122,7 +122,7 @@ export interface LibrarySnapshotMetadata {
   checksum?: string;
 }
 
-export interface SyncOperationResult<T = any> {
+export interface SyncOperationResult<T = unknown> {
   success: boolean;
   message?: string;
   data?: T;

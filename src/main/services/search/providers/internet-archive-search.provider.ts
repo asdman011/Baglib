@@ -1,3 +1,5 @@
+import type { ArchiveSearch } from '../../../../shared/types/catalog-responses';
+import { errorMessage } from '../../../../shared/errors';
 /**
  * Baglib — Internet Archive Search Provider
  *
@@ -69,7 +71,7 @@ export class InternetArchiveSearchProvider implements ISearchProvider {
         output: 'json',
       });
 
-      const data = await internetArchiveClient.getJson<any>(`/advancedsearch.php?${params.toString()}`);
+      const data = await internetArchiveClient.getJson<ArchiveSearch>(`/advancedsearch.php?${params.toString()}`);
 
       if (signal?.aborted || !data?.response?.docs || !Array.isArray(data.response.docs)) {
         return [];
@@ -153,9 +155,9 @@ export class InternetArchiveSearchProvider implements ISearchProvider {
       }
 
       return results;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (signal?.aborted) return [];
-      console.warn('[baglib:internetarchive-search] Provider search error:', err?.message || err);
+      console.warn('[baglib:internetarchive-search] Provider search error:', errorMessage(err) || err);
       return [];
     }
   }

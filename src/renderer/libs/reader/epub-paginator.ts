@@ -136,7 +136,7 @@ export async function paginateBookSections(
   sections: SectionItem[],
   toc?: TOCItem[],
   targetCharsPerPage = 1500,
-  resolveHref?: ((href: string) => { index: number; anchor?: any } | null) | null
+  resolveHref?: ((href: string) => { index: number; anchor?: unknown } | null) | null
 ): Promise<PaginatedBookResult> {
   const pages: FormattedPage[] = [];
   const sectionStartPages: number[] = [];

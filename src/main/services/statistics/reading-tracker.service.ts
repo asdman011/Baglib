@@ -76,7 +76,7 @@ export class ReadingTrackerService {
       authors: payload.authors,
       md5: payload.md5,
       totalPages: payload.totalPages,
-      subject: payload.subject,
+      subject: payload.subject || '',
     });
   }
 

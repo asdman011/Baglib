@@ -83,7 +83,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
           <div className="flex flex-wrap items-center gap-1.5 justify-between">
             {/* Snippet preview */}
             <span className="font-serif text-muted italic max-w-[140px] sm:max-w-xs truncate px-2 border-s-2 border-pale-sky-500">
-              "{selectedText}"
+              &quot;{selectedText}&quot;
             </span>
 
             {/* 5 Semantic Highlight Colors */}
@@ -317,7 +317,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
               </button>
             </div>
             <p className="text-muted text-[11px] font-serif border-s-2 border-amber-500/50 ps-2 line-clamp-2">
-              "{selectedText}"
+              &quot;{selectedText}&quot;
             </p>
             <input
               type="text"

@@ -3,11 +3,11 @@
 import React from 'react';
 import { Database, FileText } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useStudyNotes } from '../../hooks/useStudyNotes';
 
 export const StatusBar: React.FC = () => {
-  const { dir, bookNotes, t } = useWorkspace();
-
-  const isRtl = dir === 'rtl';
+  const { t } = useWorkspace();
+  const { notes } = useStudyNotes();
 
   return (
     <footer className="h-6 bg-surface border-t border-subtle flex items-center justify-between px-3 text-[11px] text-muted select-none z-20 shrink-0 font-sans">
@@ -16,7 +16,7 @@ export const StatusBar: React.FC = () => {
         {/* Total Book Notes Count */}
         <div className="flex items-center gap-1">
           <FileText className="w-3 h-3 text-pale-sky-500" />
-          <span>{bookNotes.length} {t('recordedNotes')}</span>
+          <span>{notes.length} {t('recordedNotes')}</span>
         </div>
 
         <span className="text-subtle">•</span>

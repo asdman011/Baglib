@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../shared/errors';
 /**
  * Baglib — KOReader Sync Protocol Client
  *
@@ -83,7 +84,7 @@ export class KOSyncClient {
     endpoint: string,
     options: {
       method?: 'GET' | 'POST' | 'PUT';
-      body?: any;
+      body?: unknown;
       headers?: Record<string, string>;
       useAuth?: boolean;
     } = {},
@@ -124,7 +125,7 @@ export class KOSyncClient {
       });
     };
 
-    let response = await attempt();
+    const response = await attempt();
 
     // Some custom servers return 400 or 401 for auth scheme mismatch; fallback to HTTP Basic
     if (response.status === 401 || response.status === 400) {
@@ -195,8 +196,8 @@ export class KOSyncClient {
         success: false,
         message: errorBody.message || `KOReader sync authorization failed (HTTP ${authResponse.status})`,
       };
-    } catch (e: any) {
-      return { success: false, message: `KOReader server connection failed: ${e?.message || e}` };
+    } catch (e: unknown) {
+      return { success: false, message: `KOReader server connection failed: ${errorMessage(e) || e}` };
     }
   }
 
@@ -248,7 +249,7 @@ export class KOSyncClient {
     if (!this.config.userkey && !this.config.password) return false;
     if (!documentHash) return false;
 
-    const payload: any = {
+    const payload: { document: string; progress: string; percentage: number; device?: string; device_id?: string; timestamp: number; metadata?: { filename: string; title: string; authors: string } } = {
       document: documentHash,
       progress,
       percentage: Number(percentage.toFixed(4)),

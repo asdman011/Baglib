@@ -97,11 +97,11 @@ describe('Story 6 Import Wizard & Duplicate Resolution Flow Tests', () => {
 
     for (const key of requiredKeys) {
       assert.ok(
-        (translations.ar as any)[key],
+        (translations.ar as unknown)[key],
         `Arabic translation key "${key}" should be defined and non-empty`
       );
       assert.ok(
-        (translations.en as any)[key],
+        (translations.en as unknown)[key],
         `English translation key "${key}" should be defined and non-empty`
       );
     }
@@ -188,7 +188,7 @@ describe('Story 6 Import Wizard & Duplicate Resolution Flow Tests', () => {
     tempFiles.push(newEditionFile);
 
     // Mock extractor to return metadata for new edition
-    (pipeline as any).extractor = {
+    (pipeline as unknown).extractor = {
       extract: async () => ({
         title: 'صحيح البخاري - طبعة دار التأصيل',
         authors: ['الإمام البخاري'],
@@ -223,7 +223,7 @@ describe('Story 6 Import Wizard & Duplicate Resolution Flow Tests', () => {
     fs.writeFileSync(f2, 'Content 2', 'utf8');
     tempFiles.push(f1, f2);
 
-    (pipeline as any).extractor = {
+    (pipeline as unknown).extractor = {
       extract: async (_fp: string) => ({
         title: 'كتاب تجريبي',
         authors: ['مؤلف تجريبي'],
