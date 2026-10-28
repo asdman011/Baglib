@@ -12,7 +12,7 @@ type Word = { id: number; surah: number; ayah: number; word: number; text: strin
 const marker = (text: string) => /^[\u0660-\u0669]+$/.test(text.trim());
 
 export function inlineTranslation(value: string) {
-  const decoded: unknown = JSON.parse(value);
+  const decoded = JSON.parse(value);
   if (typeof decoded !== 'string' || decoded.length > 200000) throw new Error('invalid-package');
   const notes: string[] = [];
   const anchors: { offset: number; note: number }[] = [];

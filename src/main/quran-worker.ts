@@ -3,7 +3,7 @@ import { installPackage } from './services/quran/install-package';
 import type { QuranResource, QuranError } from '../shared/types/quran';
 
 type Request = { root: string; id: string; archive: string; resource: QuranResource };
-const port = parentPort || (process as unknown as { parentPort: { on: (event: string, listener: (event: { data: Request }) => void) => void; postMessage: (value: unknown) => void } }).parentPort;
+const port = parentPort || (process as { parentPort: { on: (event: string, listener: (event: { data: Request }) => void) => void; postMessage: (value: unknown) => void } }).parentPort;
 const run = async (request: Request) => {
   try { port.postMessage({ ok: true, data: await installPackage(request.root, request.id, request.archive, request.resource) }); }
   catch (error) {

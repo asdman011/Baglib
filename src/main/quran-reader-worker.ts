@@ -2,7 +2,7 @@ import { parentPort } from 'node:worker_threads';
 import { QuranReader } from './services/quran/quran-reader';
 import type { QuranReaderRequest } from './services/quran/quran-reader-process';
 
-const port = parentPort || (process as unknown as { parentPort: { on: (name: string, listener: (event: { data: QuranReaderRequest }) => void) => void; postMessage: (value: unknown) => void } }).parentPort;
+const port = parentPort || (process as { parentPort: { on: (name: string, listener: (event: { data: QuranReaderRequest }) => void) => void; postMessage: (value: unknown) => void } }).parentPort;
 let reader: QuranReader | undefined;
 let identity = '';
 let pending = Promise.resolve();

@@ -14,6 +14,7 @@ import type { QuranAyahDetails } from '../../../shared/types/quran';
 import { consumeQuranAyah, QURAN_OPEN_EVENT, type QuranTarget } from '../../utils/quran-navigation';
 import { QuranKhatmahDock } from './QuranKhatmah';
 import { quranActionError } from '../../utils/quran-errors';
+import { quranPageKeyDelta, quranReadingKeyTarget } from './quran-page-keys';
 
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 const emptyCatalog: QuranReaderCatalog = { sources: [], presets: [] };
@@ -242,6 +243,21 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
     } catch (cause) { setError(quranActionError(cause)); }
   }, [layout, selection.script]);
   const jumpReference = useCallback((reference: { surah: number; ayah: number }) => { setAudioOpen(false); setAudioState(null); void jump(reference.surah, reference.ayah); }, [jump]);
+  const navigatePage = useCallback((number: number) => {
+    setPageNumber(number); setInspected(null); setAudioOpen(false); setAudioState(null);
+  }, []);
+  useEffect(() => {
+    const handle = (event: KeyboardEvent) => {
+      if (!visible || !page || loading || loadedKey !== queryKey || options || setup || inspected || showIntro || document.querySelector('dialog[open],[aria-modal="true"]') || !quranReadingKeyTarget(event.target)) return;
+      const delta = quranPageKeyDelta(event, dir);
+      if (!delta) return;
+      event.preventDefault();
+      const target = Math.max(1, Math.min(page.totalPages, pageNumber + delta));
+      if (target !== pageNumber) navigatePage(target);
+    };
+    window.addEventListener('keydown', handle);
+    return () => window.removeEventListener('keydown', handle);
+  }, [visible, page, loading, loadedKey, queryKey, options, setup, inspected, showIntro, dir, pageNumber, navigatePage]);
   const clearStudyTarget = useCallback(() => setStudyTarget(null), []);
   useEffect(() => {
     const open = () => {
@@ -304,23 +320,23 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
       <select aria-label={t('quranSurah')} value={page?.surahStart || 1} onChange={event => jumpReference({ surah: Number(event.target.value), ayah: 1 })} className="w-full min-w-0 bg-surface border border-subtle rounded-lg p-2 text-xs">{surahs.map(surah => <option key={surah.number} value={surah.number}>{surah.number} · {(lang === 'ar' ? surah.arabic : surah.name) || t('quranSurahNumber', { number: surah.number })}</option>)}</select>
       <button type="button" onClick={() => setShowIntro(value => !value)} className="w-full p-2 text-xs">{t('quranSurahIntro')}</button>
     </nav>
-    {error && <p role="alert" className="absolute top-16 start-1/2 -translate-x-1/2 z-50 max-w-[70%] rounded-xl bg-surface border border-red-500 p-3 text-sm">{t(error)}<button type="button" aria-label={t('quranClosePanel')} onClick={() => setError(null)} className="ms-2"><X className="size-4" /></button></p>}
+    {error && <p role="alert" className="absolute top-16 inset-x-3 mx-auto z-50 w-fit max-w-[90%] rounded-xl bg-surface border border-red-500 p-3 text-sm">{t(error)}<button type="button" aria-label={t('quranClosePanel')} onClick={() => setError(null)} className="ms-2"><X className="size-4" /></button></p>}
     {notice && <p role="status" className="sr-only">{t(notice)}</p>}
     {page && loadedKey === queryKey && layout && <QuranKhatmahDock key={targetKhatmah} script={selection.script} layout={layout.id} page={page.pageNumber} visible={visible && !loading} targetPlan={targetKhatmah} />}
     {page && loadedKey === queryKey && layout && page.profile === profile ? <QuranMushafWorkspace
       page={page} selection={selection} surahs={surahs} t={t} lang={lang} dir={dir} immersive={immersive} loading={loading}
-      selectedAyah={inspected} onSelectAyah={setInspected} onNavigatePage={number => { setPageNumber(number); setInspected(null); setAudioOpen(false); setAudioState(null); }}
+      selectedAyah={inspected} onSelectAyah={setInspected} onNavigatePage={navigatePage}
       onCopyText={copy} activeAudio={audioState} canPlay={reciters.length > 0} onStartAudio={startAudio}
       studyTarget={studyTarget} onStudyTargetConsumed={clearStudyTarget} onNavigateAyah={jumpReference}
     /> : <div className="flex h-full items-center justify-center p-16"><p role="status" className="text-sm text-muted max-w-lg leading-loose">{t(loading ? 'quranLoading' : 'quranMushafLayoutRequired')}</p></div>}
-    {options && <aside aria-label={t('quranReadingOptions')} className="absolute right-14 top-14 z-40 w-80 max-w-[85%] max-h-[80vh] overflow-auto resize rounded-2xl border border-subtle bg-surface p-4 shadow-xl">
+    {options && <aside data-quran-popup aria-label={t('quranReadingOptions')} className="absolute end-3 sm:end-14 top-16 z-40 w-80 max-w-[85%] max-h-[calc(100%-5rem)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] rounded-2xl border border-subtle bg-surface p-4 shadow-xl">
       <button type="button" aria-label={t('quranClosePanel')} onClick={() => setOptions(false)} className="p-2"><X className="size-4" /></button>
       {selectors.map(([key, kind, label]) => <label key={key} className="flex flex-col gap-1 my-3 text-sm">{t(label)}<select value={selection[key]} disabled={key !== 'script' && profile !== 'hafs'} onChange={event => { customized.current.add(key); if (key === 'script') changeScript(event.target.value); else setSelection(previous => ({ ...previous, [key]: event.target.value })); }} className="rounded-lg bg-surface border border-subtle p-2">{key !== 'script' && <option value="">{t('quranOff')}</option>}{catalog.sources.filter(source => source.kind === kind && (key === 'script' || source.profile === profile)).map(source => <option key={source.id} value={source.id}>{source.title}</option>)}</select></label>)}
       <label className="flex flex-col gap-1 my-3 text-sm">{t('quranCatLayout')}<select value={layout?.id || ''} onChange={event => setLayoutId(event.target.value)} className="rounded-lg bg-surface border border-subtle p-2">{layouts.map(source => <option key={source.id} value={source.id}>{source.title}</option>)}</select></label>
       <label className="flex flex-col gap-1 my-3 text-sm">{t('quranCatFont')}<select className="rounded-lg bg-surface border border-subtle p-2" disabled><option>{(layout?.kind === 'glyph-layout' || profile === 'warsh') ? catalog.sources.find(source => source.kind === 'font' && source.profile === profile)?.title || t('quranWordUnavailable') : t('quranVectorOutlines')}</option></select></label>
       {page?.layoutMode === 'adapted' && <p className="text-xs text-muted leading-relaxed">{t('quranAdaptedWarshLayout')}</p>}
     </aside>}
-    {setup && <aside className="absolute right-14 top-14 z-40 w-96 max-w-[85%] max-h-[80vh] overflow-auto resize rounded-2xl border border-subtle bg-surface p-4 shadow-xl">
+    {setup && <aside data-quran-popup className="absolute end-3 sm:end-14 top-16 z-40 w-96 max-w-[85%] max-h-[calc(100%-5rem)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] rounded-2xl border border-subtle bg-surface p-4 shadow-xl">
       <button type="button" aria-label={t('quranClosePanel')} onClick={() => setSetup(false)} className="p-2"><X className="size-4" /></button>
       <p className="text-sm leading-loose">{t('quranSetupPickerHint')}</p>
       <div className="space-y-2 my-3">{catalog.presets.filter(preset => preset.id !== 'mushaf-layout/warsh-svg').map(preset => <p key={preset.id} dir="auto" className="text-sm">{preset.title} · {t(preset.installed ? 'quranInstalled' : 'quranNotInstalled')}</p>)}</div>
@@ -328,8 +344,8 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
       <button type="button" className="rounded-lg border border-subtle p-2 text-sm ms-2" onClick={() => void api().signIn().then(result => { if (!result.ok) setError(quranActionError(new Error(result.error))); }).catch(() => setError('quranNetworkError'))}>{t('quranSignIn')}</button>
       <button type="button" className="rounded-lg border border-subtle p-2 text-sm mt-2" onClick={() => void api().setup(catalog.presets.filter(preset => preset.id !== 'mushaf-layout/warsh-svg').map(preset => preset.id)).then(result => { if (!result.ok || result.data?.failed.length) setError('quranReaderError'); }).catch(() => setError('quranReaderError'))}>{t('quranImportSelected')}</button>
     </aside>}
-    {showIntro && intro && <aside className="absolute left-14 top-14 z-40 w-96 max-w-[85%] max-h-[80vh] overflow-auto resize bg-surface rounded-2xl border border-subtle shadow-xl"><QuranSurahIntroCard intro={intro} t={t} onClose={() => setShowIntro(false)} /></aside>}
+    {showIntro && intro && <aside data-quran-popup className="absolute start-3 sm:start-14 top-16 z-40 w-96 max-w-[85%] max-h-[calc(100%-5rem)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] bg-surface rounded-2xl border border-subtle shadow-xl"><QuranSurahIntroCard intro={intro} t={t} onClose={() => setShowIntro(false)} /></aside>}
     {inspected && <QuranAyahInspector floating reference={inspected} details={details} error={inspectionError} surahName={(lang === 'ar' ? surahs.find(surah => surah.number === inspected.surah)?.arabic : surahs.find(surah => surah.number === inspected.surah)?.name) || t('quranSurahNumber', { number: inspected.surah })} t={t} dir={dir} onClose={() => setInspected(null)} onCopy={copy} onStudy={() => { setStudyTarget(inspected); setInspected(null); }} />}
-    {audioOpen && <div className="absolute bottom-2 start-1/2 -translate-x-1/2 z-40 w-[min(34rem,90%)] max-h-[75%] overflow-auto resize [&>div]:!relative [&>div]:!inset-auto [&>div]:!m-0 [&>div]:!max-w-none"><QuranAudioPlayer surah={audioAyah.surah} ayah={audioAyah.ayah} surahCount={surahs.find(surah => surah.number === audioAyah.surah)?.count || 300} reciters={reciters} activeReciterId={activeReciterId} onSelectReciter={setActiveReciterId} t={t} lang={lang} dir={dir} onAyahChange={(surah, ayah) => { setAudioAyah({ surah, ayah }); void jump(surah, ayah); }} onAudioStateChange={setAudioState} onClose={() => { setAudioOpen(false); setAudioState(null); }} /></div>}
+    {audioOpen && <div data-quran-audio-dock className="absolute bottom-3 inset-x-0 mx-auto z-40 w-[min(34rem,calc(100%-1.5rem))] max-h-[70%] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [&>div]:!relative [&>div]:!inset-auto [&>div]:!m-0 [&>div]:!max-w-none"><QuranAudioPlayer surah={audioAyah.surah} ayah={audioAyah.ayah} surahCount={surahs.find(surah => surah.number === audioAyah.surah)?.count || 300} reciters={reciters} activeReciterId={activeReciterId} onSelectReciter={setActiveReciterId} t={t} lang={lang} dir={dir} onAyahChange={(surah, ayah) => { setAudioAyah({ surah, ayah }); void jump(surah, ayah); }} onAudioStateChange={setAudioState} onClose={() => { setAudioOpen(false); setAudioState(null); }} /></div>}
   </section>;
 }

@@ -183,3 +183,13 @@ USD rates checked 2026-10-24 from [Hugging Face dedicated endpoint pricing](http
 | AWS L4, 24 GB GPU memory | $0.80 | $16.00 | $584.00 |
 
 These are arithmetic examples of infrastructure cost, not estimates of a specific query workload or training job. Initialization/idle running time may be billable; use pause/scale-to-zero and budget controls where supported. Local non-AI use and local inference need no hosting fee, but still use electricity, disk and download bandwidth. No AI server should be purchased for the current scope.
+## Quran navigation and study-layout refinement — 2026-10-26, Codex
+
+Implemented directly in Baglib's existing reader, without investigating an external application's implementation or changing canonical Quran data:
+
+- Left/Right arrows follow the current RTL/LTR reading direction. Space advances, Shift+Space goes back; PageUp/PageDown also work. Bounds, loading, IME composition, repeated held keys, modifiers, focused controls, editable text, study content and open dialogs are respected. The existing page navigation path closes transient ayah/audio state consistently.
+- Compact recitation and expanded player use direction-independent horizontal centering. The previous logical `start:50%` plus negative physical X translation shifted them in RTL.
+- Study tools replace the active floating card rather than stacking overlapping windows. The header/close control stays outside one keyboard-focusable scrolling body, with stable gutter, contained scrolling, wrapping and theme-aware thin scrollbar. The floating ayah inspector retains resize support with the same single-body scrolling pattern.
+- Popups are constrained to the reader's height and responsive insets. The Mushaf fits its actual container using `cqh`, reserves room for controls, and can still be zoomed/scrolled.
+
+Evidence: `quran-page-keys.ts`, `QuranReaderView.tsx`, `QuranMushafWorkspace.tsx`, `QuranMushafView.tsx`, `QuranAyahInspector.tsx`; 32 focused tests including navigation and existing source/footnote/theme behavior. `scripts/quran-layout-live/run.mjs` uses an existing disposable installed-pack profile, not the user's application profile. Run `run-H4emJC` passed actual Electron page transitions, input/study focus isolation, exact play-button centering, one scroll body and panel viewport bounds in Arabic/English at 480/1280; screenshots were inspected. Final run `run-CTfk57` additionally passed Arabic dark / English light screenshots with the theme-aware scrollbar. Keyboard events are dispatched in Electron DOM; physical keyboard hardware and speaker output are not certified. Existing native fixture preparation was corrected to include its bundled reader worker; earlier fixture timeouts were not application feature failures.

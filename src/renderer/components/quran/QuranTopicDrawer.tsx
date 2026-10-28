@@ -36,13 +36,17 @@ export function QuranTopicDrawer({
   const [searchResults, setSearchResults] = useState<QuranTopic[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  const [previousTopicQuery, setPreviousTopicQuery] = useState<readonly unknown[] | null>(null);
+  const inputsTopicQuery = [searchQuery, onSearch];
+  if (previousTopicQuery === null || inputsTopicQuery.some((value, index) => !Object.is(value, previousTopicQuery[index]))) {
+    setPreviousTopicQuery(inputsTopicQuery);
+    if (!searchQuery.trim() || !onSearch) { setSearchResults([]); setIsSearching(false); } else setIsSearching(true);
+  }
   useEffect(() => {
     if (!searchQuery.trim() || !onSearch) {
-      setSearchResults([]);
       return;
     }
     let alive = true;
-    setIsSearching(true);
     const timer = setTimeout(() => {
       void onSearch(searchQuery.trim()).then(results => {
         if (alive) {

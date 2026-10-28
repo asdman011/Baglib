@@ -122,8 +122,16 @@ export function QuranMushafWorkspace(props: Props) {
   const [positions, setPositions] = useState<{ theme: QuranAyahTheme; top: number; height: number; left: number }[]>([]);
   const root = useRef<HTMLDivElement>(null);
   const menuElement = useRef<HTMLDivElement>(null);
+  const studyPanel = useRef<HTMLElement>(null);
+  const activePanelId = windows[0]?.id;
+  useEffect(() => {
+    if (!activePanelId) return;
+    const previous = document.activeElement as HTMLElement | null;
+    studyPanel.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+    return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
+  }, [activePanelId]);
   const open = useCallback((tool: Tool, reference: Reference, side: 'left' | 'right') => {
-    setWindows(previous => [...previous, { id: ++sequence.current, tool, reference, side }]);
+    setWindows([{ id: ++sequence.current, tool, reference, side }]);
     setMenu(null);
   }, []);
   useEffect(() => {
@@ -187,14 +195,12 @@ export function QuranMushafWorkspace(props: Props) {
       {([['tafsir', BookOpen], ['translation', Languages], ['topics', Layers]] as const).map(([tool, Icon]) => <button key={tool} type="button" title={t(labels[tool])} aria-label={t(labels[tool])} onClick={() => open(tool, pageStart, 'right')} className="p-2 rounded-xl hover:bg-emerald-500/15"><Icon className="size-5" /></button>)}
       <button type="button" title={t('quranCatTheme')} aria-label={t('quranCatTheme')} aria-pressed={showThemes} onClick={() => setShowThemes(value => !value)} className="p-2 rounded-xl hover:bg-emerald-500/15"><Lightbulb className="size-5" /></button>
     </nav>
-    {props.canPlay && <div className="quran-edge absolute bottom-2 start-1/2 -translate-x-1/2 z-20 p-3"><button type="button" title={t('quranAudioPlay')} aria-label={t('quranAudioPlay')} onClick={() => props.onStartAudio(pageStart)} className="rounded-full bg-emerald-700 p-4 text-white shadow-lg"><Play className="size-6" /></button></div>}
+    {props.canPlay && <div className="quran-edge absolute bottom-3 inset-x-0 z-20 flex justify-center pointer-events-none"><button type="button" title={t('quranAudioPlay')} aria-label={t('quranAudioPlay')} onClick={() => props.onStartAudio(pageStart)} data-quran-play-button className="pointer-events-auto rounded-full bg-emerald-700 p-4 text-white shadow-lg"><Play className="size-6" /></button></div>}
     {showThemes && page.profile === 'hafs' && positions.map(({ theme, top, height, left }, index) => <aside key={`${theme.surahNumber}:${theme.ayahFrom}:${theme.ayahTo}:${index}`} style={{ top, height, left, maxWidth: `max(0px, min(7rem, calc(100% - ${left}px - 56px)))` }} className="absolute pointer-events-none border-s-4 border-y-2 border-amber-600 rounded-s-lg ps-2 text-xs text-amber-700 dark:text-amber-300 overflow-hidden whitespace-pre-line" dir="ltr"><span dir="auto">{theme.theme}</span></aside>)}
-    {(['left', 'right'] as const).map(side => <div key={side} className="absolute top-20 bottom-20 z-30 flex flex-col gap-3 overflow-auto pointer-events-none max-w-[calc(100%-5rem)]" style={{ [side]: 56, width: 'min(25rem, calc(100% - 5rem))' }}>{windows.filter(window => window.side === side).map(window => {
-      return <aside key={window.id} role="region" aria-label={t(labels[window.tool])} dir={props.dir} className="shrink-0 pointer-events-auto rounded-2xl border border-subtle bg-surface shadow-xl overflow-auto resize" style={{ width: '100%', height: windows.filter(candidate => candidate.side === side).length > 1 ? 230 : 420, minWidth: 180, minHeight: 100, maxWidth: '100%', maxHeight: '70vh' }}>
-        <header className="sticky top-0 bg-surface border-b border-subtle flex items-center justify-between gap-2 p-3"><h2 className="text-sm font-semibold">{t(labels[window.tool])}</h2><button type="button" aria-label={t('quranClosePanel')} onClick={() => setWindows(previous => previous.filter(candidate => candidate.id !== window.id))}><X className="size-4" /></button></header>
-        <div className="p-3">{(window.tool === 'explore' ? ['morphology', 'transliteration', 'mutashabihat', 'similar'] as Tool[] : [window.tool]).map(tool => <section key={tool}><h3 className="font-semibold text-sm">{t(labels[tool])}</h3><StudyContent tool={tool} reference={window.reference} page={page} selection={selection} t={t} onNavigateAyah={props.onNavigateAyah} /></section>)}</div>
-      </aside>;
-    })}</div>)}
+    {windows.map(panel => <aside ref={studyPanel} key={panel.id} data-quran-study-panel role="region" aria-label={t(labels[panel.tool])} dir={props.dir} className={`absolute top-20 bottom-24 z-30 w-[min(25rem,calc(100%-1.5rem))] max-h-[calc(100%-11rem)] min-h-28 flex flex-col rounded-2xl border border-subtle bg-surface shadow-xl overflow-hidden ${panel.side === 'left' ? 'start-3 sm:start-14' : 'end-3 sm:end-14'}`} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setWindows([]); } }}>
+      <header className="shrink-0 border-b border-subtle flex items-center justify-between gap-2 p-3"><h2 className="text-sm font-semibold">{t(labels[panel.tool])}</h2><button type="button" aria-label={t('quranClosePanel')} onClick={() => setWindows([])} className="rounded-lg p-2 focus-visible:outline-emerald-500"><X className="size-4" /></button></header>
+      <div tabIndex={0} aria-label={t(labels[panel.tool])} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] break-words select-text p-4 leading-loose focus-visible:outline-emerald-500">{(panel.tool === 'explore' ? ['morphology', 'transliteration', 'mutashabihat', 'similar'] as Tool[] : [panel.tool]).map(tool => <section key={tool}><h3 className="font-semibold text-sm">{t(labels[tool])}</h3><StudyContent tool={tool} reference={panel.reference} page={page} selection={selection} t={t} onNavigateAyah={props.onNavigateAyah} /></section>)}</div>
+    </aside>)}
     {menu && <><div className="fixed inset-0 z-40" onPointerDown={() => setMenu(null)} /><div ref={menuElement} role="menu" onKeyDown={event => {
       if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
