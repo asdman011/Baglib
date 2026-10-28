@@ -1,5 +1,11 @@
 # LK-Hadith-Corpus investigation
 
+## Alignment pipeline follow-up — 2026-10-27, Codex
+
+Cloned `https://github.com/ShathaTm/LK-Hadith-Corpus` to workspace-root `LK-Hadith-Corpus/`, revision `c45fa64aa40bf1d4a34b9b35359640a583b02881`. All 335 CSVs match the previously supplied archive byte-for-byte. CSV parsing reconfirmed 34,088 rows and 16 fields throughout. Actual folders are `Tirmizi` and `IbnMaja`, resolved to requested output keys `Tirmidhi` and `IbnMajah`. Current Muslim files contain **zero letter-suffixed Hadith_number values**; the attachment's `12a`/`12b` assumption is not true of this checkout. The pipeline supports that pattern synthetically but does not invent missing suffixes. Decimal-looking identifiers remain original strings.
+
+The supplied archive now resides at `repos/Sunnah/LK-Hadith-Corpus-master.zip`; historical paths below describe the original investigation. The new standalone pipeline preserves all 16 original fields and produces separate commentary exports, not a Sunnah reader migration. All 545,408 original field values were independently checked against CSV and SQLite output. See [Hadith Commentary Alignment](feature%20-%20Hadith%20Commentary%20Alignment.md) and [Open-Hadith-Data](Open-Hadith-Data.md).
+
 Investigated: 2026-10-24. This report describes the supplied archive, not an assertion that it matches the latest upstream release.
 
 ## Sources and evidence
