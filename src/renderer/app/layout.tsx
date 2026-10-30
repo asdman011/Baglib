@@ -40,6 +40,30 @@ export default function RootLayout({
       className={`${amiri.variable} ${tajawal.variable} ${reemKufi.variable} h-full`}
       suppressHydrationWarning
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var t = localStorage.getItem('baglib-theme');
+                if (t === 'light') {
+                  document.documentElement.classList.remove('dark');
+                } else {
+                  document.documentElement.classList.add('dark');
+                }
+                var l = localStorage.getItem('baglib-lang');
+                if (l === 'en') {
+                  document.documentElement.setAttribute('lang', 'en');
+                  document.documentElement.setAttribute('dir', 'ltr');
+                } else {
+                  document.documentElement.setAttribute('lang', 'ar');
+                  document.documentElement.setAttribute('dir', 'rtl');
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
       <body
         className="min-h-full flex flex-col antialiased bg-[var(--bg-canvas)] text-[var(--text-main)] font-sans"
         suppressHydrationWarning
