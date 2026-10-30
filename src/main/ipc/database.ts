@@ -134,16 +134,89 @@ export function setupDatabaseIPC() {
   });
 
   /**
-   * Delete a book from SQLite database by workId
+   * Delete a book from SQLite database by workId (soft-delete by default, permanent if requested - KEY-45)
    */
-  ipcMain.handle('library:delete-book', (_, bookId: string) => {
+  ipcMain.handle('library:delete-book', (_, bookId: string, permanent?: boolean) => {
     try {
       const db = getDatabase();
       const repo = new WorkRepository(db);
-      return repo.deleteBook(bookId);
+      if (permanent) {
+        return repo.permanentlyDeleteBook(bookId);
+      }
+      return repo.softDeleteBook(bookId);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to delete book:', err);
       throw normalizeIpcError(err, 'Failed to delete book');
+    }
+  });
+
+  /**
+   * Restore a soft-deleted book from the trash bin (KEY-45)
+   */
+  ipcMain.handle('library:restore-book', (_, bookId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.restoreBook(bookId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to restore book:', err);
+      throw normalizeIpcError(err, 'Failed to restore book');
+    }
+  });
+
+  /**
+   * Permanently delete a book from SQLite database (KEY-45)
+   */
+  ipcMain.handle('library:permanently-delete', (_, bookId: string) => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.permanentlyDeleteBook(bookId);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to permanently delete book:', err);
+      throw normalizeIpcError(err, 'Failed to permanently delete book');
+    }
+  });
+
+  /**
+   * Get all books in the trash bin (KEY-45)
+   */
+  ipcMain.handle('library:get-trash-works', () => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.getTrashWorks();
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get trash works:', err);
+      throw normalizeIpcError(err, 'Failed to get trash works');
+    }
+  });
+
+  /**
+   * Get total count of items in the trash bin (KEY-45)
+   */
+  ipcMain.handle('library:get-trash-count', () => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.getTrashCount();
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get trash count:', err);
+      throw normalizeIpcError(err, 'Failed to get trash count');
+    }
+  });
+
+  /**
+   * Empty all items from the trash bin permanently (KEY-45)
+   */
+  ipcMain.handle('library:empty-trash', () => {
+    try {
+      const db = getDatabase();
+      const repo = new WorkRepository(db);
+      return repo.emptyTrash();
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to empty trash:', err);
+      throw normalizeIpcError(err, 'Failed to empty trash');
     }
   });
 

@@ -17,6 +17,7 @@ import type {
   BulkUpdateStatusInput,
   BulkAddTagsInput,
   BulkDeleteInput,
+  BulkRestoreInput,
 } from '../../shared/types/library-views';
 
 const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
@@ -96,16 +97,33 @@ export function setupLibraryViewsIPC() {
   });
 
   /**
-   * Bulk deletes multiple works.
+   * Bulk deletes multiple works (soft-deletes by default, permanent if requested - KEY-45).
    */
   ipcMain.handle('library:bulk-delete', (_, input: BulkDeleteInput) => {
     try {
       const db = getDatabase();
       const repo = new SqliteWorkRepository(db);
-      const affected = repo.bulkDelete(input.workIds);
+      const affected = input.permanent
+        ? repo.bulkPermanentDelete(input.workIds)
+        : repo.bulkSoftDelete(input.workIds);
       return { success: true, affectedCount: affected };
     } catch (err: unknown) {
       console.error('[baglib/library-views-ipc] Failed to bulk delete works:', err);
+      return { success: false, affectedCount: 0, error: errorMessage(err) || String(err) };
+    }
+  });
+
+  /**
+   * Bulk restores multiple works from the trash bin (KEY-45).
+   */
+  ipcMain.handle('library:bulk-restore', (_, input: BulkRestoreInput) => {
+    try {
+      const db = getDatabase();
+      const repo = new SqliteWorkRepository(db);
+      const affected = repo.bulkRestore(input.workIds);
+      return { success: true, affectedCount: affected };
+    } catch (err: unknown) {
+      console.error('[baglib/library-views-ipc] Failed to bulk restore works:', err);
       return { success: false, affectedCount: 0, error: errorMessage(err) || String(err) };
     }
   });

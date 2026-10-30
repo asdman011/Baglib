@@ -51,7 +51,8 @@ export interface WorkQueryOptions {
   tag?: string | 'ALL';
   lendingStatus?: 'AVAILABLE' | 'LENT' | 'OVERDUE' | 'ALL';
   location?: string | 'ALL';      // matches room, shelf, bookcase, or section
-  storageFilter?: 'HEALTHY' | 'ATTENTION' | 'DUPLICATES' | 'ALL';
+  storageFilter?: 'HEALTHY' | 'ATTENTION' | 'DUPLICATES' | 'TRASH' | 'ALL';
+  showTrash?: boolean;
 }
 
 export interface PaginatedWorksResult {
@@ -95,5 +96,10 @@ export interface BulkAddTagsInput {
 }
 
 export interface BulkDeleteInput {
+  workIds: string[];
+  permanent?: boolean;
+}
+
+export interface BulkRestoreInput {
   workIds: string[];
 }

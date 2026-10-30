@@ -104,6 +104,7 @@ export interface BookItem {
   readingProgress?: number;
   lastReadLocation?: string;
   createdAt?: string;
+  deletedAt?: string;
 
   // General Description & Author Bio
   description?: string;
@@ -218,6 +219,7 @@ export interface BookItemInput {
   readingProgress?: number;
   lastReadLocation?: string;
   createdAt?: string;
+  deletedAt?: string;
 
   // General Description & Author Bio
   description?: string;

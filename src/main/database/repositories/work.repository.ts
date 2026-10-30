@@ -20,6 +20,7 @@ import type { DigitalFormat, MetadataProvenance } from '../../../shared/types/wo
 import { bookVolumeIssue } from '../../../shared/book-volumes';
 
 type WorkRow = Omit<Partial<BookItem>, 'categories' | 'readingProgress'> & Pick<BookItem, 'id' | 'title'> & {
+  deletedAt?: string;
   metadataJson?: string; categories?: string; dbTags?: string; readingProgress?: number | string;
   authorName?: string; workTypeId?: string; sourceType?: BookItem['bookType']; fileSizeBytes?: number;
   primaryCategoryId?: string; pcNameAr?: string; pcNameEn?: string;
@@ -114,6 +115,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       readingProgress: typeof r.readingProgress === 'number' ? r.readingProgress : (r.readingProgress ? parseInt(r.readingProgress, 10) : 0),
       lastReadLocation: r.lastReadLocation || undefined,
       createdAt: r.createdAt || undefined,
+      deletedAt: r.deletedAt || undefined,
       lendingHistory: meta.lendingHistory || [],
       condition,
       purchaseDate,
@@ -316,6 +318,8 @@ export class SqliteWorkRepository implements IWorkRepository {
         w.reading_progress as readingProgress,
         w.last_read_location as lastReadLocation,
         w.created_at as createdAt,
+        w.deleted_at as deletedAt,
+        w.deleted_at as deletedAt,
         w.metadata_json as metadataJson,
         e.id as editionId,
         e.label as edition,
@@ -354,6 +358,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       LEFT JOIN work_tag wt ON wt.work_id = w.id
       LEFT JOIN tag t ON t.id = wt.tag_id
       LEFT JOIN category cat ON cat.id = w.primary_category_id
+      WHERE w.deleted_at IS NULL
       GROUP BY w.id
       ORDER BY w.created_at DESC
     `).all() as WorkRow[];
@@ -438,6 +443,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         w.reading_progress as readingProgress,
         w.last_read_location as lastReadLocation,
         w.created_at as createdAt,
+        w.deleted_at as deletedAt,
         w.metadata_json as metadataJson,
         e.id as editionId,
         e.label as edition,
@@ -993,10 +999,120 @@ export class SqliteWorkRepository implements IWorkRepository {
   /**
    * Deletes a Work by ID (cascades to edition, source, details, etc.).
    */
+  /**
+   * Deletes a book by its ID (hard delete cascading to foreign keys).
+   */
   deleteBook(workId: string): boolean {
     const stmt = this.db.prepare('DELETE FROM work WHERE id = ?');
     const result = stmt.run(workId);
     return result.changes > 0;
+  }
+
+  /**
+   * Soft-deletes a work by stamping deleted_at with current timestamp.
+   */
+  softDeleteBook(workId: string): boolean {
+    const stmt = this.db.prepare("UPDATE work SET deleted_at = datetime('now') WHERE id = ?");
+    const result = stmt.run(workId);
+    return result.changes > 0;
+  }
+
+  /**
+   * Restores a soft-deleted work from the trash bin.
+   */
+  restoreBook(workId: string): boolean {
+    const stmt = this.db.prepare('UPDATE work SET deleted_at = NULL WHERE id = ?');
+    const result = stmt.run(workId);
+    return result.changes > 0;
+  }
+
+  /**
+   * Permanently expunges a work and cascades deletion.
+   */
+  permanentlyDeleteBook(workId: string): boolean {
+    const stmt = this.db.prepare('DELETE FROM work WHERE id = ?');
+    const result = stmt.run(workId);
+    return result.changes > 0;
+  }
+
+  /**
+   * Returns all soft-deleted works currently in the trash bin.
+   */
+  getTrashWorks(): BookItem[] {
+    const rows = this.db.prepare(`
+      SELECT 
+        w.id as id,
+        w.work_type_id as workTypeId,
+        wtype.name as workTypeName,
+        w.title as title,
+        w.description as description,
+        w.original_language as language,
+        w.reading_status as readingStatus,
+        w.reading_progress as readingProgress,
+        w.last_read_location as lastReadLocation,
+        w.created_at as createdAt,
+        w.deleted_at as deletedAt,
+        w.metadata_json as metadataJson,
+        e.id as editionId,
+        e.label as edition,
+        e.publisher as publisher,
+        e.publication_year as publicationYear,
+        e.isbn as isbn,
+        fsd.file_path as filePath,
+        fsd.file_hash as fileHash,
+        fsd.file_format as digitalFormat,
+        fsd.file_size_bytes as fileSizeBytes,
+        fsd.storage_state as storageState,
+        fsd.last_verified_at as lastVerifiedAt,
+        s.id as sourceId,
+        psd.shelf as shelf,
+        psd.room as room,
+        psd.bookcase as bookcase,
+        psd.shelf_section as shelfSection,
+        psd.condition as condition,
+        psd.purchase_date as purchaseDate,
+        psd.price as price,
+        s.source_type as sourceType,
+        GROUP_CONCAT(DISTINCT a.name) as author,
+        GROUP_CONCAT(DISTINCT a.bio) as authorBio,
+        GROUP_CONCAT(DISTINCT t.name) as categories,
+        w.primary_category_id as primaryCategoryId,
+        cat.name_ar as pcNameAr,
+        cat.name_en as pcNameEn
+      FROM work w
+      LEFT JOIN work_type wtype ON wtype.id = w.work_type_id
+      LEFT JOIN edition e ON e.work_id = w.id
+      LEFT JOIN source s ON s.edition_id = e.id
+      LEFT JOIN file_source_detail fsd ON fsd.source_id = s.id
+      LEFT JOIN physical_source_detail psd ON psd.source_id = s.id
+      LEFT JOIN work_author wa ON wa.work_id = w.id
+      LEFT JOIN author a ON a.id = wa.author_id
+      LEFT JOIN work_tag wt ON wt.work_id = w.id
+      LEFT JOIN tag t ON t.id = wt.tag_id
+      LEFT JOIN category cat ON cat.id = w.primary_category_id
+      WHERE w.deleted_at IS NOT NULL
+      GROUP BY w.id
+      ORDER BY w.deleted_at DESC
+    `).all() as WorkRow[];
+
+    return rows.map((r) => this.mapRowToBookItem(r));
+  }
+
+  /**
+   * Returns count of items currently in the trash bin.
+   */
+  getTrashCount(): number {
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM work WHERE deleted_at IS NOT NULL').get() as { count: number } | undefined;
+    return row ? row.count : 0;
+  }
+
+  /**
+   * Permanently expunges all works currently in the trash bin.
+   */
+  emptyTrash(): number {
+    const stmt = this.db.prepare('DELETE FROM work WHERE deleted_at IS NOT NULL');
+    const result = stmt.run();
+    return result.changes;
   }
 
   // ==========================================================================
@@ -1427,6 +1543,13 @@ export class SqliteWorkRepository implements IWorkRepository {
     const whereClauses: string[] = [];
     const params: unknown[] = [];
 
+    // Filter active works vs trash bin (KEY-45)
+    if (options.storageFilter === 'TRASH' || options.showTrash) {
+      whereClauses.push('w.deleted_at IS NOT NULL');
+    } else {
+      whereClauses.push('w.deleted_at IS NULL');
+    }
+
     // 1. Text Search across Title, Description, Author, Publisher, and ISBN
     if (options.search && options.search.trim()) {
       const term = `%${options.search.trim()}%`;
@@ -1634,6 +1757,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         w.reading_progress as readingProgress,
         w.last_read_location as lastReadLocation,
         w.created_at as createdAt,
+        w.deleted_at as deletedAt,
         w.metadata_json as metadataJson,
         e.id as editionId,
         e.label as edition,
@@ -1832,7 +1956,61 @@ export class SqliteWorkRepository implements IWorkRepository {
   /**
    * Bulk deletes multiple works atomically.
    */
+  /**
+   * Bulk deletes multiple works atomically (hard delete).
+   */
   bulkDelete(workIds: string[]): number {
+    if (!workIds || workIds.length === 0) return 0;
+    const stmt = this.db.prepare('DELETE FROM work WHERE id = ?');
+    const tx = this.db.transaction(() => {
+      let deleted = 0;
+      for (const id of workIds) {
+        const res = stmt.run(id);
+        deleted += res.changes;
+      }
+      return deleted;
+    });
+    return tx();
+  }
+
+  /**
+   * Bulk soft-deletes works by setting deleted_at to current timestamp.
+   */
+  bulkSoftDelete(workIds: string[]): number {
+    if (!workIds || workIds.length === 0) return 0;
+    const stmt = this.db.prepare("UPDATE work SET deleted_at = datetime('now') WHERE id = ?");
+    const tx = this.db.transaction(() => {
+      let count = 0;
+      for (const id of workIds) {
+        const res = stmt.run(id);
+        count += res.changes;
+      }
+      return count;
+    });
+    return tx();
+  }
+
+  /**
+   * Bulk restores works from the trash bin by clearing deleted_at.
+   */
+  bulkRestore(workIds: string[]): number {
+    if (!workIds || workIds.length === 0) return 0;
+    const stmt = this.db.prepare('UPDATE work SET deleted_at = NULL WHERE id = ?');
+    const tx = this.db.transaction(() => {
+      let count = 0;
+      for (const id of workIds) {
+        const res = stmt.run(id);
+        count += res.changes;
+      }
+      return count;
+    });
+    return tx();
+  }
+
+  /**
+   * Bulk permanently expunges works.
+   */
+  bulkPermanentDelete(workIds: string[]): number {
     if (!workIds || workIds.length === 0) return 0;
     const stmt = this.db.prepare('DELETE FROM work WHERE id = ?');
     const tx = this.db.transaction(() => {

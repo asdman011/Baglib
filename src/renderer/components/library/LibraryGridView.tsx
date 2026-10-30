@@ -1,17 +1,15 @@
 'use client';
 
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
   BookOpen,
   Search,
   Plus,
   HardDrive,
   MapPin,
-  Edit3,
   Info,
   BookMarked,
   FolderOpen,
-  PlusCircle,
   Filter,
   X,
   SlidersHorizontal,
@@ -24,7 +22,6 @@ import {
   LayoutGrid,
   List,
   CheckCircle2,
-  Clock,
   Trash2,
   FileText,
   RefreshCw,
@@ -37,12 +34,15 @@ import {
   BarChart2,
   ShieldCheck,
   Sparkles,
+  FolderPlus,
+  Cpu,
 } from 'lucide-react';
-import { BookItem, ReadingStatus } from '../../types/library';
+import { BookItem } from '../../types/library';
 import { BookDetailModal } from './BookDetailModal';
 import { BookVolumeBadge } from './BookVolumesPanel';
 import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { StorageManagerModal } from './StorageManagerModal';
+import { TrashBinModal } from './TrashBinModal';
 import { ImportWizardModal } from './ImportWizardModal';
 import { CloudSyncModal } from '../sync/CloudSyncModal';
 import { OPDSHubModal } from '../opds/OPDSHubModal';
@@ -55,6 +55,7 @@ import { PaginationBar } from './PaginationBar';
 import { ColumnSelectorDropdown } from './ColumnSelectorDropdown';
 import { BulkActionsToolbar } from './BulkActionsToolbar';
 import { PdfCreationLauncher } from '../reader/PdfCreationLauncher';
+import { StirlingToolsHub } from '../pdf-workstation/StirlingToolsHub';
 import { MetadataAuditModal } from './MetadataAuditModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { matchesSearchQuery } from '../../utils/search';
@@ -86,6 +87,7 @@ export const LibraryGridView: React.FC = () => {
     setActiveLibraryCategory,
   } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
+  const [isStirlingHubOpen, setIsStirlingHubOpen] = useState(false);
 
   // View Mode & Densities (Story 9: 9.4, 9.5)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -107,6 +109,16 @@ export const LibraryGridView: React.FC = () => {
 
   // Batch Multi-Select State (Story 9: 9.6)
   const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
+  const lastSelectedBookIdRef = useRef<string | null>(null);
+
+  // Trash Bin & Undo Deletion State (KEY-45)
+  const [isTrashModalOpen, setIsTrashModalOpen] = useState<boolean>(false);
+  const [trashCount, setTrashCount] = useState<number>(0);
+  const [undoToast, setUndoToast] = useState<{
+    id: string;
+    message: string;
+    onUndo: () => Promise<void>;
+  } | null>(null);
 
   // Scalable Filter States
   const [selectedBookType, setSelectedBookType] = useState<string>('ALL');
@@ -225,6 +237,41 @@ export const LibraryGridView: React.FC = () => {
     }
     return books;
   }, [books, selectedBookIds]);
+
+  // Refresh trash count on mount and when books change (KEY-45)
+  const refreshTrashCount = useCallback(async () => {
+    if (typeof window !== 'undefined' && window.electronAPI?.getTrashCount) {
+      try {
+        const count = await window.electronAPI.getTrashCount();
+        setTrashCount(Number(count) || 0);
+      } catch {
+        setTrashCount(0);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    if (typeof window !== 'undefined' && window.electronAPI?.getTrashCount) {
+      window.electronAPI.getTrashCount().then((count) => {
+        if (alive) setTrashCount(Number(count) || 0);
+      }).catch(() => {
+        if (alive) setTrashCount(0);
+      });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [books]);
+
+  // Auto-dismiss Undo toast after 8 seconds (KEY-45)
+  useEffect(() => {
+    if (!undoToast) return;
+    const timer = setTimeout(() => {
+      setUndoToast(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [undoToast]);
 
   // App Lock Security check on mount and periodic idle monitoring
   useEffect(() => {
@@ -449,15 +496,35 @@ export const LibraryGridView: React.FC = () => {
     return filteredAndSortedBooks.slice(start, start + pageSize);
   }, [filteredAndSortedBooks, safeCurrentPage, pageSize]);
 
-  // Batch Selection Helpers (Story 9: 9.6)
+  // Batch Selection Helpers with Shift-Click Range Support (Story 9: 9.6 / KEY-44)
   const handleToggleSelectBook = (id: string, e?: React.SyntheticEvent) => {
     if (e) e.stopPropagation();
+    const isShift = (e as React.MouseEvent)?.shiftKey;
+
     setSelectedBookIds((prev) => {
       const next = new Set(prev);
+
+      if (isShift && lastSelectedBookIdRef.current && lastSelectedBookIdRef.current !== id) {
+        const ids = paginatedBooks.map((b) => b.id);
+        const startIdx = ids.indexOf(lastSelectedBookIdRef.current);
+        const endIdx = ids.indexOf(id);
+
+        if (startIdx !== -1 && endIdx !== -1) {
+          const [low, high] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+          for (let i = low; i <= high; i++) {
+            next.add(ids[i]);
+          }
+          lastSelectedBookIdRef.current = id;
+          return next;
+        }
+      }
+
       if (next.has(id)) {
         next.delete(id);
+        lastSelectedBookIdRef.current = null;
       } else {
         next.add(id);
+        lastSelectedBookIdRef.current = id;
       }
       return next;
     });
@@ -541,10 +608,29 @@ export const LibraryGridView: React.FC = () => {
     setTimeout(() => setSaveToast(null), 3000);
   };
 
-  const handleDeleteBook = (id: string) => {
-    deleteBook(id);
+  const handleDeleteBook = async (id: string) => {
+    const targetBook = books.find((b) => b.id === id);
+    const bookTitle = targetBook?.title || (lang === 'ar' ? 'الكتاب' : 'Book');
+
+    await deleteBook(id);
     setIsDetailModalOpen(false);
     setIsNewBook(false);
+    void refreshTrashCount();
+
+    // Floating Interactive Undo Prompt (KEY-45)
+    setUndoToast({
+      id: String(Date.now()),
+      message: `${bookTitle} — ${t('bookMovedToTrash')}`,
+      onUndo: async () => {
+        if (typeof window !== 'undefined' && window.electronAPI?.restoreBook) {
+          await window.electronAPI.restoreBook(id);
+          await refreshBooks();
+          void refreshTrashCount();
+          setSaveToast(t('bookRestored'));
+          setTimeout(() => setSaveToast(null), 3500);
+        }
+      },
+    });
   };
 
   const handleAddNewBook = () => {
@@ -1068,7 +1154,16 @@ export const LibraryGridView: React.FC = () => {
               )}
             </button>
 
-            {/* Import Wizard (Story 6) */}
+            {/* Import Wizard & Batch Folder Scanner (KEY-48) */}
+            <button
+              type="button"
+              onClick={() => setIsStirlingHubOpen(true)}
+              title={t('pdfToolsHubTitle')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition-all cursor-pointer"
+            >
+              <Cpu className="w-3.5 h-3.5 text-white" />
+              <span className="hidden sm:inline">{t('pdfToolsHubTitle')}</span>
+            </button>
             <PdfCreationLauncher />
             <button
               onClick={() => setIsImportWizardOpen(true)}
@@ -1077,6 +1172,47 @@ export const LibraryGridView: React.FC = () => {
             >
               <UploadCloud className="w-3.5 h-3.5 text-pale-sky-500" />
               <span className="hidden sm:inline">{t('openImportWizard')}</span>
+            </button>
+
+            {/* Batch Folder Scanner (KEY-48) */}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const folder = await window.electronAPI?.openDirectoryDialog?.();
+                  if (folder) {
+                    setDroppedImportPaths([folder]);
+                    setIsImportWizardOpen(true);
+                  }
+                } catch (err) {
+                  console.error('Failed to open directory dialog:', err);
+                }
+              }}
+              title={t('importFolderDesc')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
+            >
+              <FolderPlus className="w-3.5 h-3.5 text-pale-sky-500" />
+              <span className="hidden sm:inline">{t('importFolder')}</span>
+            </button>
+
+            {/* Trash Bin / Recycle Bin (KEY-45) */}
+            <button
+              type="button"
+              onClick={() => setIsTrashModalOpen(true)}
+              title={t('trashBin')}
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                trashCount > 0
+                  ? 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/20'
+                  : 'bg-canvas border-subtle hover:bg-surface text-muted hover:text-main'
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+              <span className="hidden sm:inline">{t('trashBin')}</span>
+              {trashCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                  {trashCount}
+                </span>
+              )}
             </button>
 
             {/* Cloud Sync & Snapshots (KEY-147) */}
@@ -1704,7 +1840,7 @@ export const LibraryGridView: React.FC = () => {
                             </button>
                             <button
                               onClick={() => handleDeleteBook(book.id)}
-                              title="حذف الكتاب"
+                              title={t('delete')}
                               className="p-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1995,7 +2131,7 @@ export const LibraryGridView: React.FC = () => {
 
                           <button
                             onClick={() => handleDeleteBook(book.id)}
-                            title="حذف الكتاب"
+                            title={t('delete')}
                             className="p-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -2376,7 +2512,7 @@ export const LibraryGridView: React.FC = () => {
 
                                   <button
                                     onClick={() => handleDeleteBook(book.id)}
-                                    title="حذف"
+                                    title={t('delete')}
                                     className="p-1 rounded-xl bg-canvas border border-subtle text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -2444,6 +2580,18 @@ export const LibraryGridView: React.FC = () => {
           setTimeout(() => setSaveToast(null), 4000);
           refreshBooks();
         }}
+        onUndoToast={(toast) => {
+          setUndoToast({
+            id: String(Date.now()),
+            message: toast.message,
+            onUndo: async () => {
+              await toast.onUndo();
+              void refreshTrashCount();
+              setSaveToast(t('booksRestored'));
+              setTimeout(() => setSaveToast(null), 3500);
+            },
+          });
+        }}
       />
 
       {/* Book Detail & Edit Modal */}
@@ -2466,6 +2614,19 @@ export const LibraryGridView: React.FC = () => {
         isOpen={isOnlineHubOpen}
         onClose={() => setIsOnlineHubOpen(false)}
         onImportBook={handleImportOnlineBook}
+      />
+
+      {/* Trash Bin Modal (KEY-45) */}
+      <TrashBinModal
+        isOpen={isTrashModalOpen}
+        onClose={() => {
+          setIsTrashModalOpen(false);
+          void refreshTrashCount();
+        }}
+        onRestored={() => {
+          void refreshBooks();
+          void refreshTrashCount();
+        }}
       />
 
       {/* Storage Cleaner Modal */}
@@ -2568,6 +2729,25 @@ export const LibraryGridView: React.FC = () => {
         />
       )}
 
+      {/* Standalone Stirling-PDF Tools & Processor Hub Modal */}
+      {isStirlingHubOpen && (
+        <StirlingToolsHub
+          onClose={() => {
+            setIsStirlingHubOpen(false);
+            void refreshBooks();
+          }}
+          onOpenInWorkstation={(filePath) => {
+            setIsStirlingHubOpen(false);
+            const matchingBook = books.find(b => b.filePath === filePath);
+            if (matchingBook) {
+              openBookForReading(matchingBook);
+            } else {
+              void refreshBooks();
+            }
+          }}
+        />
+      )}
+
       {/* Book Import & Discovery Progress Floating Pill */}
       {isImportingBook && (
         <div className="fixed bottom-6 end-6 z-50 bg-surface/95 dark:bg-canvas/95 border border-pale-sky-500/40 text-main px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -2581,6 +2761,54 @@ export const LibraryGridView: React.FC = () => {
         {dropNotice.error ? <AlertTriangle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
         <span>{dropNotice.text}</span>
       </div>}
+      {/* Floating Interactive Undo Toast (KEY-45) */}
+      {undoToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-8 start-1/2 -translate-x-1/2 z-50 flex items-center gap-3.5 px-5 py-3 rounded-2xl bg-neutral-900/95 dark:bg-neutral-800/95 text-white border border-neutral-700/80 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-lg w-[calc(100%-2rem)] sm:w-auto"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="p-1.5 rounded-xl bg-red-500/20 text-red-400 shrink-0">
+              <Trash2 className="w-4 h-4" />
+            </span>
+            <span className="text-sm font-medium truncate text-neutral-100">
+              {undoToast.message}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 ms-auto">
+            <button
+              onClick={async () => {
+                const undoFn = undoToast.onUndo;
+                setUndoToast(null);
+                await undoFn();
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-pale-sky-500 hover:bg-pale-sky-600 active:scale-95 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+              <span>{t('undo')}</span>
+            </button>
+
+            <button
+              onClick={() => setUndoToast(null)}
+              className="p-1.5 rounded-xl hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              title={t('cancel')}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* 8-second animated countdown progress bar */}
+          <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10 rounded-b-2xl overflow-hidden pointer-events-none">
+            <div
+              className="h-full bg-pale-sky-500"
+              style={{ animation: 'undo-shrink 8s linear forwards' }}
+            />
+          </div>
+        </div>
+      )}
+
       {saveToast && (
         <div className="fixed bottom-6 end-6 z-50 bg-evergreen-600 text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-2 duration-300">
           <CheckCircle2 className="w-4 h-4 shrink-0" />

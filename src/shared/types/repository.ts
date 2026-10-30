@@ -49,7 +49,42 @@ export interface IWorkRepository {
   /**
    * Deletes a work by its ID.
    */
-  deleteBook(workId: string): Promise<boolean> | boolean;
+  deleteBook(workId: string, permanent?: boolean): Promise<boolean> | boolean;
+
+  /**
+   * Soft-deletes a work by setting deleted_at timestamp (KEY-45).
+   */
+  softDeleteBook?(workId: string): Promise<boolean> | boolean;
+
+  /**
+   * Restores a soft-deleted work from the trash bin (KEY-45).
+   */
+  restoreBook?(workId: string): Promise<boolean> | boolean;
+
+  /**
+   * Permanently deletes a work by ID.
+   */
+  permanentlyDeleteBook?(workId: string): Promise<boolean> | boolean;
+
+  /**
+   * Empties all works from trash bin.
+   */
+  emptyTrash?(): Promise<number> | number;
+
+  /**
+   * Gets all works currently in the trash bin.
+   */
+  getTrashWorks?(): Promise<BookItem[]> | BookItem[];
+
+  /**
+   * Gets the count of works currently in the trash bin.
+   */
+  getTrashCount?(): Promise<number> | number;
+
+  /**
+   * Bulk restores multiple soft-deleted works.
+   */
+  bulkRestore?(workIds: string[]): Promise<number> | number;
 
   /**
    * Updates reading status and progress for a work.

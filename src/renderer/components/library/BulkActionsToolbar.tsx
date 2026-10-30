@@ -25,17 +25,19 @@ interface BulkActionsToolbarProps {
   onClearSelection: () => void;
   onOperationComplete: (message: string) => void;
   onOpenAudit?: () => void;
+  onUndoToast?: (toast: { message: string; onUndo: () => Promise<void> }) => void;
 }
 
 export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   selectedBookIds,
   selectedBooks,
-  allCategories,
+  allCategories: _allCategories,
   onClearSelection,
   onOperationComplete,
   onOpenAudit,
+  onUndoToast,
 }) => {
-  const { t, lang, dir } = useWorkspace();
+  const { t, lang, refreshBooks } = useWorkspace();
 
   // Modals state
   const [activeModal, setActiveModal] = useState<'category' | 'tags' | 'status' | 'delete' | 'enrich' | null>(null);
@@ -172,13 +174,27 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   // 5. Bulk Delete
   const handleConfirmDelete = async () => {
     setIsLoading(true);
+    const idsToDelete = [...selectedBookIds];
     try {
       if (typeof window !== 'undefined' && window.electronAPI?.bulkDelete) {
-        await window.electronAPI.bulkDelete({ workIds: selectedBookIds });
+        await window.electronAPI.bulkDelete({ workIds: idsToDelete, permanent: false });
       }
       setActiveModal(null);
       onClearSelection();
-      onOperationComplete(t('bulkSuccessToast', { count }));
+      await refreshBooks();
+      if (onUndoToast) {
+        onUndoToast({
+          message: t('booksMovedToTrash', { count: idsToDelete.length }),
+          onUndo: async () => {
+            if (typeof window !== 'undefined' && window.electronAPI?.bulkRestore) {
+              await window.electronAPI.bulkRestore({ workIds: idsToDelete });
+              await refreshBooks();
+            }
+          },
+        });
+      } else {
+        onOperationComplete(t('bulkSuccessToast', { count: idsToDelete.length }));
+      }
     } catch (err) {
       console.error('Failed to bulk delete books:', err);
     } finally {

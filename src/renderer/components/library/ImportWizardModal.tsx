@@ -10,17 +10,12 @@ import {
   RefreshCw,
   Layers,
   Trash2,
-  ChevronRight,
-  ChevronLeft,
   ArrowRight,
   ArrowLeft,
-  Check,
-  BookOpen,
   FileCheck2,
-  ExternalLink,
   ShieldCheck,
   Copy,
-  PlusCircle
+  FolderPlus,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { resolveDroppedFilePath } from '../../utils/file-path-helper';
@@ -453,25 +448,38 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                 <h3 className="font-bold text-base text-main mb-1">{t('dragDropWizardTitle')}</h3>
                 <p className="text-xs text-muted mb-4">{t('dragDropWizardSubtitle')}</p>
 
-                <button
-                  type="button"
-                  disabled={discovering}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleBrowseFiles();
-                  }}
-                  className="px-5 py-2.5 rounded-2xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 shadow-md shadow-pale-sky-500/20 transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>{t('browseFilesBtn')}</span>
-                </button>
-                <button type="button" disabled={discovering} className="mt-3 text-sm text-main" onClick={async event => {
-                  event.stopPropagation();
-                  try {
-                    const folder = await window.electronAPI.openDirectoryDialog();
-                    if (folder) await addPaths([folder]);
-                  } catch { setOperationError(true); }
-                }}>{t('browseImportFolder')}</button>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    disabled={discovering}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleBrowseFiles();
+                    }}
+                    className="px-5 py-2.5 rounded-2xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 shadow-md shadow-pale-sky-500/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>{t('browseFilesBtn')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={discovering}
+                    onClick={async (event) => {
+                      event.stopPropagation();
+                      try {
+                        const folder = await window.electronAPI?.openDirectoryDialog?.();
+                        if (folder) await addPaths([folder]);
+                      } catch {
+                        setOperationError(true);
+                      }
+                    }}
+                    className="px-5 py-2.5 rounded-2xl bg-surface border border-pale-sky-500/40 text-pale-sky-600 dark:text-pale-sky-400 text-xs font-bold hover:bg-pale-sky-500/10 shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                    <span>{t('browseImportFolder')}</span>
+                  </button>
+                </div>
                 <p className="mt-3 text-xs text-muted">{t('bulkImportResourceNote')}</p>
                 {discovering && <p role="status" className="mt-2 text-sm">{t('discoveringImportFiles')}</p>}
                 {discoveryErrors > 0 && <p role="alert" className="mt-2 text-sm text-red-500">{t('importDiscoveryErrors', { count: discoveryErrors })}</p>}
