@@ -141,7 +141,7 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
   const [targetKhatmah, setTargetKhatmah] = useState<string | undefined>();
   const [intro, setIntro] = useState<QuranSurahIntro | null>(null);
   const [showIntro, setShowIntro] = useState(false);
-  const api = () => window.electronAPI.quran;
+  const api = () => (typeof window !== "undefined" ? window.electronAPI?.quran : undefined);
   const identity = useRef('');
   const customized = useRef(new Set<string>());
   const profile = catalog.sources.find(source => source.id === selection.script)?.profile;
@@ -157,8 +157,13 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
   useEffect(() => {
     let alive = true;
     const refresh = async () => {
+      const client = api();
+      if (!client) {
+        if (alive) setError('quranDesktopRequired');
+        return;
+      }
       try {
-        const result = await api().readerCatalog();
+        const result = await client.readerCatalog();
         if (!alive) return;
         if (!result.ok) throw new Error(result.error);
         const next = JSON.stringify(result.data);
@@ -185,8 +190,9 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
     };
     void refresh();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const unsubscribe = api().onChanged(() => { if (!timer) timer = setTimeout(() => { timer = undefined; void refresh(); }, 300); });
-    return () => { alive = false; clearTimeout(timer); unsubscribe(); };
+    const client = api();
+    const unsubscribe = client?.onChanged(() => { if (!timer) timer = setTimeout(() => { timer = undefined; void refresh(); }, 300); });
+    return () => { alive = false; clearTimeout(timer); unsubscribe?.(); };
   }, []);
 
   useEffect(() => {
@@ -195,7 +201,7 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
     const timer = setTimeout(() => {
     setLoading(true);
     setError(null);
-    void api().mushafPage({ pack: layout.id, page: pageNumber, script: selection.script }).then(result => {
+    void api()?.mushafPage({ pack: layout.id, page: pageNumber, script: selection.script }).then(result => {
       if (!alive) return;
       if (!result.ok) throw new Error(result.error);
       setPage(result.data);
@@ -208,16 +214,20 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
   useEffect(() => {
     if (!selection.script) return;
     let alive = true;
-    void api().read({ script: selection.script, surah: 1, from: 1 }).then(result => { if (alive && result.ok) setSurahs(result.data.surahs); }).catch(() => {});
+    const client = api();
+    if (!client) return;
+    void client.read({ script: selection.script, surah: 1, from: 1 }).then(result => { if (alive && result.ok) setSurahs(result.data.surahs); }).catch(() => {});
     return () => { alive = false; };
   }, [selection.script]);
 
   useEffect(() => {
     if (!inspected) return;
     let alive = true;
+    const client = api();
+    if (!client) return;
     const timer = setTimeout(() => {
     setDetails(null); setInspectionError(false);
-    void api().inspectAyah({ script: selection.script, layout: svgLayoutId, ...inspected }).then(result => {
+    void client.inspectAyah({ script: selection.script, layout: svgLayoutId, ...inspected }).then(result => {
       if (!alive) return;
       if (result.ok) setDetails(result.data); else setInspectionError(true);
     }).catch(() => { if (alive) setInspectionError(true); });
@@ -236,8 +246,10 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
   }, []);
   const jump = useCallback(async (surah: number, ayah: number) => {
     if (!layout) return;
+    const client = api();
+    if (!client) return;
     try {
-      const result = await api().mushafPageForAyah({ pack: layout.id, surah, ayah, script: selection.script });
+      const result = await client.mushafPageForAyah({ pack: layout.id, surah, ayah, script: selection.script });
       if (!result.ok) throw new Error(result.error);
       setPageNumber(result.data.pageNumber);
     } catch (cause) { setError(quranActionError(cause)); }
@@ -280,7 +292,9 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
       return () => clearTimeout(timer);
     }
     let alive = true;
-    void api().mushafPageForAyah({ pack: layout.id, surah: pendingTarget.surah, ayah: pendingTarget.ayah, script: selection.script }).then(result => {
+    const client = api();
+    if (!client) return;
+    void client.mushafPageForAyah({ pack: layout.id, surah: pendingTarget.surah, ayah: pendingTarget.ayah, script: selection.script }).then(result => {
       if (!alive) return;
       if (result.ok) {
         setPageNumber(result.data.pageNumber);
@@ -294,11 +308,17 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
   useEffect(() => {
     if (!pageSurah || !showIntro) return;
     let alive = true;
-    void api().surahIntro({ surah: pageSurah }).then(result => { if (alive) setIntro(result.ok ? result.data : null); }).catch(() => { if (alive) setIntro(null); });
+    const client = api();
+    if (!client) return;
+    void client.surahIntro({ surah: pageSurah }).then(result => { if (alive) setIntro(result.ok ? result.data : null); }).catch(() => { if (alive) setIntro(null); });
     return () => { alive = false; };
   }, [pageSurah, showIntro]);
 
-  const copy = (text: string) => { void api().copyText(text).then(result => { if (result.ok) setNotice('quranCopied'); else setError('quranReaderError'); }).catch(() => setError('quranReaderError')); };
+  const copy = (text: string) => {
+    const client = api();
+    if (!client) return;
+    void client.copyText(text).then(result => { if (result.ok) setNotice('quranCopied'); else setError('quranReaderError'); }).catch(() => setError('quranReaderError'));
+  };
   const changeScript = (script: string) => {
     setAudioOpen(false); setAudioState(null); setInspected(null); setPage(null); setPageNumber(1); setLayoutId('');
     const selectedProfile = catalog.sources.find(source => source.id === script)?.profile;
@@ -340,9 +360,9 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
       <button type="button" aria-label={t('quranClosePanel')} onClick={() => setSetup(false)} className="p-2"><X className="size-4" /></button>
       <p className="text-sm leading-loose">{t('quranSetupPickerHint')}</p>
       <div className="space-y-2 my-3">{catalog.presets.filter(preset => preset.id !== 'mushaf-layout/warsh-svg').map(preset => <p key={preset.id} dir="auto" className="text-sm">{preset.title} · {t(preset.installed ? 'quranInstalled' : 'quranNotInstalled')}</p>)}</div>
-      <button type="button" className="rounded-lg border border-subtle p-2 text-sm" disabled={!missing.length} onClick={() => void api().downloadBatch(missing.map(preset => preset.id)).then(result => { if (!result.ok) setError('quranReaderError'); }).catch(() => setError('quranReaderError'))}>{t('quranDownload')}</button>
-      <button type="button" className="rounded-lg border border-subtle p-2 text-sm ms-2" onClick={() => void api().signIn().then(result => { if (!result.ok) setError(quranActionError(new Error(result.error))); }).catch(() => setError('quranNetworkError'))}>{t('quranSignIn')}</button>
-      <button type="button" className="rounded-lg border border-subtle p-2 text-sm mt-2" onClick={() => void api().setup(catalog.presets.filter(preset => preset.id !== 'mushaf-layout/warsh-svg').map(preset => preset.id)).then(result => { if (!result.ok || result.data?.failed.length) setError('quranReaderError'); }).catch(() => setError('quranReaderError'))}>{t('quranImportSelected')}</button>
+      <button type="button" className="rounded-lg border border-subtle p-2 text-sm" disabled={!missing.length} onClick={() => { const client = api(); if (client) void client.downloadBatch(missing.map(preset => preset.id)).then(result => { if (!result.ok) setError('quranReaderError'); }).catch(() => setError('quranReaderError')); }}>{t('quranDownload')}</button>
+      <button type="button" className="rounded-lg border border-subtle p-2 text-sm ms-2" onClick={() => { const client = api(); if (client) void client.signIn().then(result => { if (!result.ok) setError(quranActionError(new Error(result.error))); }).catch(() => setError('quranNetworkError')); }}>{t('quranSignIn')}</button>
+      <button type="button" className="rounded-lg border border-subtle p-2 text-sm mt-2" onClick={() => { const client = api(); if (client) void client.setup(catalog.presets.filter(preset => preset.id !== 'mushaf-layout/warsh-svg').map(preset => preset.id)).then(result => { if (!result.ok || result.data?.failed.length) setError('quranReaderError'); }).catch(() => setError('quranReaderError')); }}>{t('quranImportSelected')}</button>
     </aside>}
     {showIntro && intro && <aside data-quran-popup className="absolute start-3 sm:start-14 top-16 z-40 w-96 max-w-[85%] max-h-[calc(100%-5rem)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] bg-surface rounded-2xl border border-subtle shadow-xl"><QuranSurahIntroCard intro={intro} t={t} onClose={() => setShowIntro(false)} /></aside>}
     {inspected && <QuranAyahInspector floating reference={inspected} details={details} error={inspectionError} surahName={(lang === 'ar' ? surahs.find(surah => surah.number === inspected.surah)?.arabic : surahs.find(surah => surah.number === inspected.surah)?.name) || t('quranSurahNumber', { number: inspected.surah })} t={t} dir={dir} onClose={() => setInspected(null)} onCopy={copy} onStudy={() => { setStudyTarget(inspected); setInspected(null); }} />}

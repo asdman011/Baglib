@@ -76,9 +76,11 @@ export function QuranKhatmah() {
   const [catalogError, setCatalogError] = useState(false);
   useEffect(() => {
     let alive = true;
-    const load = () => { void window.electronAPI.quran.readerCatalog().then(result => { if (!alive) return; if (result.ok) { setCatalog(result.data); setCatalogError(false); } else setCatalogError(true); }).catch(() => { if (alive) setCatalogError(true); }); };
-    load(); const unsubscribe = window.electronAPI.quran.onChanged(load);
-    return () => { alive = false; unsubscribe(); };
+    const client = typeof window !== "undefined" ? window.electronAPI?.quran : undefined;
+    if (!client) return;
+    const load = () => { void client.readerCatalog().then(result => { if (!alive) return; if (result.ok) { setCatalog(result.data); setCatalogError(false); } else setCatalogError(true); }).catch(() => { if (alive) setCatalogError(true); }); };
+    load(); const unsubscribe = client.onChanged(load);
+    return () => { alive = false; unsubscribe?.(); };
   }, []);
   return <section dir={dir} aria-label={t('khatmahTitle')} className="flex-1 min-h-0 min-w-0 overflow-auto text-main bg-canvas p-4 sm:p-6 space-y-5">
     <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="font-display text-2xl leading-relaxed font-bold">{t('khatmahTitle')}</h1><p className="text-sm text-muted leading-loose">{t('khatmahSubtitle')}</p></div><button type="button" disabled={khatmah.busy || khatmah.plans.length >= 20} onClick={() => setEditing('new')} className="inline-flex gap-2 items-center bg-emerald-700 text-white px-4 py-2.5 rounded-xl disabled:opacity-40"><Plus className="size-4" />{t('khatmahNew')}</button></header>

@@ -36,8 +36,12 @@ function StudyContent({ tool, reference, page, selection, t, onNavigateAyah }: P
   const key = JSON.stringify([tool, reference, page.pageNumber, selection]);
   useEffect(() => {
     let alive = true;
-    const api = window.electronAPI.quran;
+    const api = typeof window !== "undefined" ? window.electronAPI?.quran : undefined;
     const load = async () => {
+      if (!api) {
+        if (alive) setFailed(true);
+        return;
+      }
       if (page.profile !== 'hafs') {
         if (alive) { setContent(<p>{t('quranCompatibleStudyUnavailable')}</p>); setFailed(false); setLoadedKey(key); }
         return;
@@ -143,6 +147,7 @@ export function QuranMushafWorkspace(props: Props) {
     if (!showThemes || page.profile !== 'hafs') return;
     let alive = true;
     const surahs = [...new Set(page.words.map(word => word.surah))];
+    if (!window.electronAPI?.quran) return;
     void Promise.all(surahs.map(surah => window.electronAPI.quran.ayahThemes({ surah }))).then(results => {
       if (!alive) return;
       setThemes(groupThemeLabels(results.flatMap(result => result.ok ? result.data : [])));
