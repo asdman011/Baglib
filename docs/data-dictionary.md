@@ -17,7 +17,7 @@ This document defines the comprehensive data models, schemas, entities, fields, 
 
 ## 1. Core Personal Library Database (`baglib.db`)
 
-Managed via SQLite with automated schema migrations (`src/main/database/migrator.ts`, migrations 1–15). Adheres to the canonical **Work → Edition → Source** domain model.
+Managed via SQLite with automated schema migrations (`src/main/database/migrator.ts`, migrations 1–17). Adheres to the canonical **Work → Edition → Source** domain model.
 
 ```mermaid
 erDiagram
@@ -50,6 +50,7 @@ The canonical intellectual creation (independent of physical or digital manifest
 | `metadata_json` | TEXT | NULL | Extensible JSON object storing volume metadata, DOI, journal, and specific diagnostics (see 1.1.1) |
 | `created_at` | TEXT | NOT NULL | ISO-8601 creation timestamp |
 | `updated_at` | TEXT | NOT NULL | ISO-8601 last update timestamp |
+| `deleted_at` | TEXT | NULL | Soft-deletion ISO-8601 timestamp for Trash Bin and restore workflow (Migration 016) |
 
 #### 1.1.1 `work.metadata_json` Schema
 ```json
@@ -205,6 +206,22 @@ SQLite FTS5 full-text search index for indexed ebook contents.
 | `work_id` | UNINDEXED | Reference to parent `work.id` |
 | `page_number` | UNINDEXED | Document page number |
 | `content` | TEXT | Extracted plain-text page content for full-text queries |
+
+### 1.13 `poetry_narration` (Migration 017)
+User-provided human voice narrations (recordings, local audio files, and online providers) for Ashaar corpus poems. Computer-generated speech is never stored here. Audio bytes live under `userData/poetry-narrations/` with strict UUID-based managed filenames; online narrations store validated provider URLs.
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | TEXT | PRIMARY KEY | Unique UUID identifier |
+| `poem_id` | INTEGER | NOT NULL, CHECK(`poem_id > 0`) | Stable identifier referencing poem in read-only partition |
+| `kind` | TEXT | NOT NULL, CHECK(`kind IN ('recording', 'file', 'online')`) | Narration source type |
+| `provider` | TEXT | NOT NULL, CHECK(`provider IN ('local', 'youtube', 'soundcloud', 'vimeo', 'url')`) | Audio provider or platform |
+| `label` | TEXT | NULL | Optional reciter name or user description (max 200 chars) |
+| `file_name` | TEXT | NULL | Managed filename under `userData/poetry-narrations/` for local files/recordings |
+| `url` | TEXT | NULL | Validated external player/media URL for online narrations |
+| `mime_type` | TEXT | NULL | Detected audio container MIME type (e.g. `audio/webm`, `audio/mpeg`) |
+| `duration_seconds` | REAL | NULL | Recorded audio duration in seconds |
+| `created_at` | TEXT | NOT NULL | ISO-8601 creation timestamp |
 
 ---
 
@@ -417,3 +434,37 @@ Every hadith entry is partitioned into an immutable JSON file per chapter:
 - **Grading Suppression:** For Bukhari and Muslim collections, individual grades are suppressed in the UI by default as their entire contents are canonical Sahih.
 - **Shortened Chain Export:** When exporting with "Reference off", Arabic text shortens dynamically to `عن ` followed by the final narrator and matn, while preserving diacritics and context.
 - **Personal Reflections:** User comments are stored in local storage keyed by stable record ID (`bukhari-1-1`), strictly isolated from the immutable corpus JSON files.
+
+---
+
+## 4. Al-Bayan Arabic Poetry Corpus Store (`userData/partitions/bayan_poetry.sqlite`)
+
+Isolated read-only partition containing the complete classical and modern Arabic poetry corpus (254,630 poems across 8,184 poets) from the official `arbml/ashaar` dataset, managed with WAL, NORMAL synchronous, MEMORY temp_store, 256MB mmap, and 64MB cache pragmas.
+
+### 4.1 `poets`
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | INTEGER | PRIMARY KEY | Canonical poet ID |
+| `name` | TEXT | NOT NULL | Vocalized canonical poet name |
+| `bio` | TEXT | NULL | Biographical sketch |
+| `era` | TEXT | NULL | Literary era (e.g., العصر الجاهلي, العصر العباسي) |
+| `location` | TEXT | NULL | Geographic origin/homeland |
+| `external_url` | TEXT | NULL | Canonical poet source URL |
+
+### 4.2 `poems`
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | INTEGER | PRIMARY KEY | Canonical poem ID |
+| `title` | TEXT | NOT NULL | Vocalized title (empty string if untitled in source) |
+| `meter` | TEXT | NULL | Classical prosodic meter (e.g. بحر الطويل, بحر البسيط) |
+| `verses_json` | TEXT | NOT NULL | JSON array of canonical verse strings (paired hemistichs) |
+| `poet_id` | INTEGER | NOT NULL, FK(`poets.id`) | Foreign key to `poets` |
+| `theme` | TEXT | NULL | Poetic theme/genre (e.g. مدح, غزل, رثاء) |
+| `language` | TEXT | NOT NULL | Language code (`'ar'` or `'en'`) |
+| `layout_type` | TEXT | NOT NULL | Effective layout (`'bayt'`, `'free_verse'`, `'stanza'`) |
+| `source_url` | TEXT | NULL | Canonical poem source URL |
+| `description_json` | TEXT | NULL | Structured poem commentary/description JSON |
+| `language_variant` | TEXT | NULL | Language variant metadata |
+
+### 4.3 `poems_fts` (Virtual FTS5 Table)
+FTS5 full-text index on normalized title, poet name, and poem verse content for instant diacritic-insensitive search.

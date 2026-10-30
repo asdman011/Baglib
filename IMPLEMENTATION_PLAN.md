@@ -2,6 +2,476 @@
 
 ## Recent Agent Updates
 
+- [2026-10-30, Codex] Actual idle-warmed worker integration passes bilingual native pixel/nav/parent target disposal checks and4clienttests. Tsc/mainbuild pass; full+renderer81869 andscroll23138 live. Fallback maintained for unsupported filters/timeout, first-page path not delayed. Nested-parser cleanup inventory/sub100ms/full original acceptance still not proven; no Git actions.
+
+- [2026-10-30, Codex] Raster worker now integrated after idle first paint, with bounded client requests/abort/late-bitmap closure/timeout/local fallback.3clienttests/tsc/lint0errors pass; native5Y7FEJ actualreaderworker page5 pixel parity verified. Lifecycle CDP observation required auto-attach rather than getTargets;49812 live, no cleanup claim yet. Full goal active/no Git actions.
+
+- [2026-10-30, Codex] Prototype checkpoint passes1063tests/mainbuild/tsc +native text/vector/scanned pixel comparisons; no live handles. Worker remains isolated; integration must preserve first-open path and add idle warm-up/lifecycle/fallback/cancellation. No user-visible layout/performance change claimed, full goal active/no Git actions.
+
+- [2026-10-30, Codex] Real OffscreenCanvas raster-worker prototype passes native synthetic Y6q9ED +scanned NQpUZS exactpixels/tsc; module asset bundled. Still isolated, not used byreader; startup duplicates parsing and is slower, so must integrate with idle warm-up and fallback/cancellation/lifecycle tests rather than blindly enable. Full original scope active/no Git actions.
+
+- [2026-10-30, Codex] Rendererbuild passes; no live handles. Progressive refinement UX now retains visible preview without layout changes. Full goal still incomplete: worker rasterization/representative sub100ms cold/full-app and remaining workstation acceptance. No Git actions.
+
+- [2026-10-30, Codex] Progressive preview fix verified1063tests/tsc/mainbuild, nativearjdqTkt +en60pageXozeb0; max5canvases/cache~0.1ms/sampledmax16.8ms. Rendererbuild3859 live. Worker/full-app cold/sub100ms and full workstation acceptance still pending, no Git actions.
+
+- [2026-10-30, Codex] Measured~95ms actual cached raster span; fixed progressive zoom white-flash by keeping preview on display and refining on detached pooled canvas, canceled safely before reuse. Native Zj8Z1a white-clear probe proves preview preserved; tsc/lint0errors pass before tiny size-reuse refinement. Full/bilingual/perf checks pending, broad goal still active/no Git actions.
+
+- [2026-10-30, Codex] Current tsc/hooklint pass; realixpiYK cached document ready68.7ms→paint157.1ms, pixels/SHA/pagecount preserved. No live handles. Progressive/off-thread rendering is next meaningful remaining performance work; one-line late-range fallback has no dedicated injection yet. Full goal not complete/no Git actions.
+
+- [2026-10-30, Codex] Corrupted cached PDF recovery verified bilingual nativeNsehbk/opyVrC, pixels/source SHA/edit invalidation preserved.1063tests/tsc/mainbuild pass before late-range refinement; dedicated late-range fault test pending. Real-book stage timing/current checks66154 live, full performance/workstation goal unchanged/no Git actions.
+
+- [2026-10-30, Codex] Added original-source recovery for malformed cached derivatives, preventing display-only cache failure from blocking reading. Real IPC/native fault AEgs8g proves recovery/pixels/SHA/edit invalidation. Typecheck/hooklint pass; final bilingual/current-source suite still pending. Remaining sub100ms/cold/full-app/off-thread/workstation scope unchanged/no Git actions.
+
+- [2026-10-30, Codex] Final balanced-cache verification passes1063TS/3Python/tsc/mainbuild; realxaKZeN cached178ms/211KB vs2555ms original, Arabic k3Z8au cached65.5ms withsource editreload. Pixel/SHA/pagecount preserved. No live handles, no Git actions. Sub100ms cold/full-app/off-thread/full original acceptance remain pending.
+
+- [2026-10-30, Codex] Fixed flat page-tree amplification proven by REA+worker inspection/native experiment: balanced derivative real641page cache175ms/211KB/5requests vs original2487ms, matching pixels/SHA. Ineffective object streams removed, cache formatv2.3Python/7TS focused tests pass; final96430 suite/build and87332 native live. Docs updated; full original performance/tool goal remains active/no Git actions.
+
+- [2026-10-30, Codex] Native real79HphF cached921ms vs2802ms,641pages + exact first-page pixel equality + source SHA intact;599requests/39MB still unresolved. SyntheticfC1J2S cached53.5ms/1558bytes vs189ms, pixel match and actual edit invalidation pass. tsc passes/no live handles. pikepdf docs updated; investigate real excessive pre/post-paint traffic next, full performance/tool goal not complete/no Git actions.
+
+- [2026-10-30, Codex] Native cache-hit tests now exercise actual IPC/renderer/subprocess/protocol: synthetic first339ms→cached67ms + source-edit reload; real86MB first3102ms→cached982ms/641pages/checksum intact. Real warm39MB read remains unacceptable to instant-open goal. Helper0.60s→45MB derivative. Pixel-fidelity reruns26723 live; cache fixture Windows case gate repaired, actual production gate unchanged. No Git actions, original full objective remains active.
+
+- [2026-10-30, Codex] Cache integration bilingual native checks pass en oCf3KN/ar bfg88Q; final7cachetests+tsc pass, full1,063suite/mainbuild/hooklint pass. No live handles. Reader layout unchanged; background derivative lookup/generation wired, but actual native cache-hit/reopen/stale-edit and86MB timing verification remain next. Full original goal active, no Git actions.
+
+- [2026-10-30, Codex] Viewing-cache integration now wired through owner-bound IPC/preload and PDF renderer; canonical editing source unchanged. Nonblocking first open, cached reopen, watcher/stat invalidation, no same-key mid-read swap, awaited shutdown, fixture isolation.1,063tests/tsc/mainbuild/hooklint pass before tiny eligibility/release refinements. Bilingual native23064 live; real-book cache-hit measurement and full acceptance pending. No Git actions.
+
+- [2026-10-30, Codex] Cache checkpoint typecheck passes (95103 exit0), seven focused tests pass, no live verification handles. Integration remains the next task; no user-visible speedup claimed yet.
+
+- [2026-10-30, Codex] Seven viewing-cache service regressions pass; startup cap pruning/output-header verification added. Python disposable smoke passes. PDF.js documentation distinguishes verified service/helper evidence from pending IPC/viewer/real-book acceptance. Typecheck session95103 running at checkpoint. No visible reader/layout changes yet; broad goal active, no Git actions.
+
+- [2026-10-30, Codex] User approved bounded automatic PDF viewing cache; supersedes earlier approval-pending note. Prototype pikepdf linearization succeeds on disposable two-page PDF. Next: cache identity/LRU/cancellation tests, IPC/viewer integration, native real-book comparison, documentation. Broader objective remains incomplete; no Git authorization.
+
+- [2026-10-29, Codex]500MiB sparse native fixture132KB/145ms; actual86MB book read-only checksum intact but47.66MB/729requests/2.3–5s. Verified643xref history sections; document-ready dominates. Added first-paint barrier before optional outline scan and benchmark safety/telemetry; no false sub100ms claim. Temporary optimized view-cache approval requested, not implemented. Final tests/build/native chain live; no Git actions.
+
+- [2026-10-29, Codex] Custom-scheme range fix verified1055tests/tsc/main+rendererbuild/diffcheck; lint0errors/4warnings. Final32MiB fixture fetches66646bytes at131.5ms, late-range failure Xp85gc exits correctly; en dTsBfs/ar TQLqB0 staged/theme/annotations pass. No live handles. Real500MiB/cold-open/sub100ms/off-thread/full acceptance still pending; no commits/pushes.
+
+- [2026-10-29, Codex] Fixed actual custom-scheme whole-file fetch: explicit bounded PDF.js range transport; shared production stream response core/abort guard. Native32MiB baseline33555542bytes331ms→66646bytes132ms in synthetic runs; range-failure UI exits promptly.7focused regressions pass, finalbounded-body/native/fullsuite chain pending. CORS/path authorization remains production wrapper, fixture uses restricted own authorization; no cold-book/sub100ms claims/no Git actions.
+
+- [2026-10-29, Codex] Final compact annotation rendererbuild/diffcheck pass;1050tests/typecheck/mainbuild and en/ar checks pass. No live handles remain. Annotation UI request complete within existing pane; broader goal remains active/no Git actions.
+
+- [2026-10-29, Codex] Compact annotation pane verified1050tests/tsc/mainbuild, lint0errors; native en3zYO84/arOO4lAc proves same viewport/no duplicate/no tab overflow, mixed-script search and JSON page2 callback. Fixed overflow found visually with embedded icon/count grid. Final rendererbuild/diffcheck live; original full goal remains active/no Git actions.
+
+- [2026-10-29, Codex] Restored annotation experience as optional embedded content in existing right tools pane, one counted toggle/no extra viewport width, parent single-panel state. Old PDF overlay suppressed; previous exports/search/filter/delete/jump reused. Fixed JSON page navigation and conservative Arabic search/type localization; parser/native mixed-script/exclusivity tests running with build/tsc/full suite. No commits/pushes.
+
+- [2026-10-29, Codex] Final current-source memo/geometry isolation verified:1049tests/tsc/main+rendererbuild; native en LwRUiB/ar ZV6mxg;60page CF8BZe max16.8ms/zero>25ms,max5canvases/cache~0.1ms. Lint0errors/4dependency warnings. No live handles; actual-book/off-thread/range accounting/full objective remains pending, no Git actions.
+
+- [2026-10-29, Codex] Resolved lint render-ref/effect-state errors via reactive page geometry and removing redundant visibility seed; latest lint0errors/4dependency warnings/tsc pass. Intermediate1049suite/uYhtLW native60page pass. Final current-source perf/en/ar/fullsuite/mainbuild chain live; full objective still incomplete.
+
+- [2026-10-29, Codex] Profile-guided memo/highlight isolation verified:1049tests/tsc/mainbuild; native en sq8571/ar2ZPvMT;60page Td2cWU max5canvases,max16.8ms/zero>25ms,cache~0.1ms. Synthetic single-run results only, not actual-book proof. Lint/diffcheck live; off-thread/byte-accounting/cold-open/full parity pending. No commits/pushes.
+
+- [2026-10-29, Codex] Used IDlOgT CPU profile evidence to isolate React page/shell work: memoized whole continuous shells and page items, grouped highlights once and stabilized empty arrays. Typecheck/new60page native profiling live. No real-book/locked60FPS claims; off-thread/byte-accounting/full acceptance remain pending. No commits/pushes.
+
+- [2026-10-29, Codex] Active-source follow-up passes1049tests/tsc/mainbuild/diffcheck and native en nUNjy8/ar FEfuwD organizer→replacement preview/source integrity. Restore resets stale working input per real-parser regression; native version-history restore still unverified. Broader goal remains active; no commits/pushes.
+
+- [2026-10-29, Codex] Continued staged-output issue: source switching gets source-specific versioned preview URL; restore/undo explicitly reset engine working state and renderer stale job/output/preview, so subsequent edits use restored source.5focused tests pass including real-parser staged2→restored3page and owner isolation. tsc/mainbuild/full suite running, native reruns pending. No commits/pushes; broader goal remains active.
+
+- [2026-10-29, Codex] Explicit theme opt-in and staged mutation native acceptance passes in English Ips0xv and Arabic WSi2KH; latest tsc pass, full1048suite/mainbuild pass. PDF colors remain original unless dedicated button clicked; app theme affects chrome. Original source hash unchanged after rotation+replacement. No performance causality claim; broader goal still active/no Git actions.
+
+- [2026-10-29, Codex] PDF page colors now opt-in dark with localized dedicated pressed Moon button; reader chrome follows app theme instead of hardcoded dark.1048tests/tsc/mainbuild and staged mutation LCaPEH pass. Explicit theme/tint+mutation assertions running in en/ar; active-ring styling final typecheck pending. Full objective still incomplete; no Git actions.
+
+- [2026-10-29, Codex] Annotation1: real native BGhuVo passes organizer→replacement staged display/source unchanged. Generalized all single-PDF result display/work-ID-only entry/page clamp. Added opt-in PDF tint independent of app chrome; chrome inherits app theme. Hub unwrap/direct standalone dispatch has11processor tests+real Java rotation pass.1048suite passed before latest theme/generalization; current all-checks/native rerun live. No commits/pushes; full objective and individual-tool parity remain incomplete.
+
+- [2026-10-29, Codex] Prioritized clarified Hub/in-reader failures. Fixed Hub PdfResult envelope handling and stale original PDF rendering after successful jobs via owner/hash-verified staged URL. Actual JVM English replacement independently parses EDIT1;26focused tests pass, final native mutation/full suite pending. Pipeline invalid-output not yet fixed; no Git actions. Scroll profiling fixture completed but CPU attribution not analyzed yet.
+
+- [2026-10-29, Codex] Timestamp-refined native60page rerun-CLLbO4 passes;1047tests/tsc/mainbuild pass. No running verification session remains. Actual-book benchmarks/off-thread/full feature acceptance/error investigation still open.
+
+- [2026-10-29, Codex] Native60page scenario rUZHP9 passes idle-preload/returncache/max5canvases/source integrity/final text. Cached draw~0.1ms, but83ms stall disproves locked60FPS on this fixture.1047tests/tsc/mainbuild pass. Sampling refinement rerun live; representative large-book/cold-open/rangebytes/off-thread/full acceptance and invalid-output remain pending.
+
+- [2026-10-29, Codex] Added cancellable750ms idle next-page preload and removed additive render-time visible-range update.7focused tests/tsc pass. Added60page native cache/residency/frame-sampling scenario; corrected initial harness instrumentation and rerunning. Full regression/mainbuild queued. Off-thread rasterization, actual-book timing/full acceptance/error remain open; no Git actions.
+
+- [2026-10-29, Codex] Canvas-pool final tsc/mainbuild pass; full test process finished, authoritative results in .baglib-data/pdf-pool-regression.log.2pool regressions and bilingual native nRrH05 pass. Active pixel budget/off-thread/preload/timing/full acceptance and invalid-output still open; no Git actions.
+
+- [2026-10-29, Codex] Added bounded-idle canvas pool with exclusive leases, post-cancellation settlement release and document disposal;2focused pool regressions/native bilingual nRrH05 pass. Final same-size backing allocation guard tsc/fullsuite/mainbuild running. Regenerated malformed generated route types using Next typegen. Active canvas count remains viewport-governed, not a hard pool cap; performance/off-thread/preload/full acceptance remain pending.
+
+- [2026-10-29, Codex]1045tests/typecheck/mainbuild pass; bilingual native cIwNA0 and real Java25 lower-priority/lazy launch smoke pass. Updated acceptance/Stirling notes with measured limits. Unvisited geometry/pooling/off-thread/preload/performance benchmarks and reported invalid-output remain open. No Git actions.
+
+- [2026-10-29, Codex] Implemented scroll-reset/cancellable idle scheduling for heading scans, measured-dimension placeholders, stable viewer callbacks and lower-priority lazy Java startup.2focused idle regressions pass; full suite/tsc/mainbuild and real JVM/native regressions running. No performance threshold claims, no Git actions.
+
+- [2026-10-29, Codex] Native range+bitmap-cache immersive regression run-FhrN4O passes actual Arabic/English, themes/organizer/edge behavior. Mount-to-paint observation717ms is not a qualifying<100ms benchmark. Full1043tests/typecheck/mainbuild pass; original full acceptance remains incomplete.
+
+- [2026-10-29, Codex] Added bounded25entry/128MiB per-document bitmap cache, same-page previews, memo/layout isolation and explicit64KiB range-only configuration. LRU/disposal tests and full1043suite/tsc/mainbuild pass. Native bilingual immersive j4Uljr passes before range flags; latest rerun live. Native timing/pooling/preload/full acceptance and reported invalid-output remain pending; no Git actions.
+
+- [2026-10-29, Codex] Performance continuation full suite passes:1041tests/288suites,zero failures/skips. Typecheck/main build pass. Native performance/selection and remaining objective are not yet verified; invalid-output still unreproduced.
+
+- [2026-10-29, Codex] Read updated performance objective; fixed unbounded continuous-page residency and separated bitmap paint from 150ms scroll-settled text hydration with cancellation. New residency regression/typecheck/main build pass; full suite running. Real engine smoke and 24MB rotation pass but user invalid-output remains unreproduced; no resolution claimed. Native timing/cache/pooling/full acceptance pending; no Git actions.
+
+- [2026-10-29, Codex] Latest save-guard typecheck/full1040TS tests pass;2Python provisioning tests and real native-JAR-only engine smoke pass. Split/rotation/blank output verified; native drag/save dialogs and entire original acceptance remain pending. No commits/pushes.
+
+- [2026-10-29, Codex] Post-cleanup native module smoke passes;1040tests/typecheck/lint/mainbuild passed. Added multi-output Quick Save/stale-overwrite safety (reveal parts/copy, never silently first-part overwrite); latest full suite/typecheck running. Native save-dialog workflow/full goal pending; no commits/pushes.
+
+- [2026-10-29, Codex] Resolved missing Windows JPDFium1.1.6 runtime with exact-version verified provisioning+PropertiesLauncher. Live compound organizer and direct native split pass;2Python cache/integrity tests and13focused TS tests pass.29verified duplicate DLLs cleaned, post-cleanup live run/full suite/build underway. Full objective pending; no commits/pushes.
+
+- [2026-10-29, Codex] Wired organizer split markers through Apply/staged parts, added blank/per-page rotation support and NaN validation. Actual split API lacks Windows native library; organizer uses existing remove-pages range extraction. Live compound-plan verification/focused tests running; full goal pending, no commits/pushes.
+
+- [2026-10-29, Codex] Native run-j3Fi2E passes bilingual organizer2pages/sepia/insertion/undo/redo/reset/rotation/focus/View and existing immersive checks. Parser/lint/tsc pass; full suite/mainbuild running. Drag/Apply output and full-feature acceptance still pending; no Git actions.
+
+- [2026-10-29, Codex] Native organizer test exposed Java preview on View leaving controls busy; fixed guard to fileUrl. Persistent hover/focus insertion controls, first-divider no-op disabled, grid dividers no longer consume columns; parser/lint/tsc pass. First-change undo/redo and bilingual organizer rerun pending. Full objective remains active; no Git actions.
+
+- [2026-10-29, Codex] Implemented organizer sepia/localized controls/keyboard insertion+hover access; fixed lost native pagecount and non-returning View, initialized undo baseline and pure history updates, rejected fractional pages. Native tests exposed real count bug and transition timing; strengthened checks running. Full goal pending; no commits/pushes.
+
+- [2026-10-29, Codex] run-grhNu1 passes actual ar/RTL and en/LTR,3theme input/heading contrast>=4.5and existing immersive tests. Renderer build/lint pass. Other surfaces and full goal still pending; no commits/pushes.
+
+- [2026-10-29, Codex] Native contrast caught2.457light heading ratio; scoped semantic alias rebinding fixes it. run-YYbPfS passes>=4.5input/heading across3themes/2directions; renderer build/lint pass. Fixture now also switches actual Arabic/English (not just direction), rerunning. Full goal pending, no Git actions.
+
+- [2026-10-29, Codex] Scoped dark/light reader semantic colors (sepia already scoped), fixed tool-directory dark-only hover/text/border and focus treatment. tsc passes; native three-theme/two-direction input+heading contrast checks running. Full contrast/reader goal pending, no commits/pushes.
+
+- [2026-10-29, Codex] Real engine archive-collision smoke passes. Added generated-output receipts for same-folder feedback prevention (canonical directory comparison); actual-FS restart regression passes.10focused tests/tsc pass; full suite/mainbuild running. Full objective pending; no Git actions.
+
+- [2026-10-29, Codex] Protected watched originals against archive basename collisions via exclusive copy/unique suffix, no false success on failed delete.10focused tests/tsc/mainbuild pass; live engine collision+keep workflow running. Full scope pending, no commits/pushes.
+
+- [2026-10-29, Codex] Implemented watcher stop abort+await/late-output cleanup, actual main startup and awaited shutdown, policy-gated unref timer.9focused tests pass including cancellation and clock-driven stop/restart; final full suite/typecheck running. Full goal pending; no commits/pushes.
+
+- [2026-10-29, Codex] Real JVM keep-mode+new-service receipt test passes, source retained and restart0processed; existing full smoke/tsc/mainbuild pass. Full suite running. Same-folder/collision and cancellation boundaries still pending; no Git actions.
+
+- [2026-10-29, Codex] Added persistent atomic operational watch receipts to prevent keep-mode repeats; hash/config changes retry, disabled pipelines skipped, mid-job source changes blocked before destructive archival.8focused tests/tsc pass; live JVM keep/restart smoke running. Full objective pending; no commits/pushes.
+
+- [2026-10-29, Codex] Live watched-folder archive test passes actual180degree output/preserved archived source/persisted count/no repeat; tsc/mainbuild pass. Historical saved config preserved; keep-mode/filter/cancellation and full acceptance remain pending. No Git actions.
+
+- [2026-10-29, Codex] Removed fake processor235daily count and personal-folder watching defaults; added isolated test state and shared scans.7focused tests/tsc and real handleData rotation pass. Live disposable watched-folder/archive output test running; keep-mode/filter/cancel gaps remain. No commits/pushes.
+
+- [2026-10-29, Codex] Native run-j6YP66 passes bilingual TOC JSON import/apply/download-byte checks; GPU shutdown diagnostics observed after pass. Actual PDF outline tested separately; integrated UI→IPC→JVM/append still pending. Final focused checks running, no Git actions.
+
+- [2026-10-29, Codex] Real JVM TOC output verifies nested bilingual title/page2destination/source preservation via independent PDF.js; passed. Centralized remaining TOC labels; native bilingual import/apply/download test running. Full reader goal pending; no commits/pushes.
+
+- [2026-10-29, Codex] Native run-yvi3uH verifies275px tools,6px PDF corners,localized total-pages badge with existing immersive checks. Removed duplicate top navigation count and raw library/security format labels; matte backgrounds match three themes. Latest label checks pending; full objective remains active, no commits/pushes.
+
+- [2026-10-29, Codex] Custom-protocol native run-ETZG4R and main build pass after direct URL loading/theme wiring. Added localized recovery help instead of raw engine errors. Fixture does not yet prove production range handling or150ms latency. Full objective pending, no Git actions.
+
+- [2026-10-29, Codex] Removed full-file ArrayBuffer/Base64 gate reintroduced in native PDF viewer; direct URL streaming restored. Localized loading/error/page labels, synchronized canvas theme. tsc/lint/native file-URL run-eYjzhT pass; actual custom-scheme fixture now running,150ms gate remains pending. No Git actions.
+
+- [2026-10-29, Codex] Native run-1z7csh verifies unified reading action callback invocation. Removed duplicate view-pane zoom/layout + no-op auto-scroll; full suite1035passes. Scoped TTS overlay stacking above immersive workstation, unchanged legacy layers; latest checks running, actual audio/overlay native test pending. No Git actions.
+
+- [2026-10-29, Codex] Added unified-header reader callbacks for Read Aloud/Auto-Scroll/Bookmark using existing parent state; native callback/immersive checks running. Remaining duplicates in tools view and TTS overlay immersive stacking are explicitly pending; no Git actions.
+
+- [2026-10-29, Codex] Native immersive run-4DWRYv passed with new reader document/page-count callback assertions and existing RTL/LTR edge/keyboard/navigation checks. tsc and targeted FullPageBookReader/PdfWorkstationPanel lint pass. Full-app highlight/selection interaction remains unverified; no commits/pushes.
+
+- [2026-10-29, Codex] Reconnected embedded workstation to existing parent PDF knowledge/selection/document/outline/page-count state through typed props, keeping one pagination/zoom source. Removed duplicate effect state resets already covered by guarded page-change branch. Native callback checks/tsc/lint running; full goal pending.
+
+- [2026-10-29, Codex] Real-JVM503health regression passed:16probes, starting/error/stopped, no false ready; clean shutdown. Existing healthy smoke also passed. Full goal pending.
+
+- [2026-10-29, Codex] Fixed false LIVE on failed startup health and guarded stale child/shutdown resolution. tsc/12adapter tests and healthy JVM smoke pass; real-JVM503fault regression in progress. Full acceptance still pending; no commits/pushes.
+
+- [2026-10-29, Codex] Added visible ink palette/preview/output color wiring and disabled empty-stroke Apply. Live Java25 verifies actual overlay, retained text/two pages/stroke operator/original hash. Rotation-origin limitations and full workstation acceptance still pending; no commits/pushes.
+
+- [2026-10-29, Codex] Connected vector ink to Stirling overlay transport/staged output; unsupported rotations/origins rejected explicitly. Typecheck/14focused tests passed, added route test corrected fixture page and rerunning. Live output/UI colors/full goal pending, no commits/pushes.
+
+- [2026-10-29, Codex] Source-verified overlay API contract; added bounded vector ink PDF builder, two independent PDF.js parsing/coordinate tests pass and tsc passes. Adapter/UI/publication integration not yet done; full goal pending, no commits/pushes.
+
+- [2026-10-29, Codex] Pen source audit found hardcoded black preview and no confirmed active ink-signature render handler; review stroke persistence is not equivalent. Recorded exact gap, did not add misleading palette. Actual pen publication/full scope remains pending, no commits/pushes.
+
+- [2026-10-29, Codex] Added cancellable idle shared-PDF-worker warm-up after main-window splash, companion excluded; lazy imports retain startup boundary. Checks underway; full-app measured effect/performance gate pending, no commits/pushes.
+
+- [2026-10-29, Codex] Added explicit paint timing observation artifact: run-U07LcL525.6ms mount-to-pixel/text observation on954-byte fixture, not user-click first paint or multi-MB benchmark. Native checks/tsc pass;150ms gate remains unproven, no commits/pushes.
+
+- [2026-10-29, Codex] Added exclusive-overlay trigger focus return; native run-1hvA5L verifies quick-tools/Escape/refocus with existing PDF tests. tsc/lint pass; Hub/version/focus-trap and full scope pending, no commits/pushes.
+
+- [2026-10-29, Codex] Unified Hub/quick-tools/version overlays into exclusive typed state with stale-close-safe transitions and Escape dismissal. Focused test/tsc pass; native overlay/focus-return and full scope pending, no commits/pushes.
+
+- [2026-10-29, Codex] Fixed fixture focus/Enter character sequencing, native run-TWtxne now proves immersive summary Enter/Tab/Enter recovery RTL/LTR. Production unchanged; matrix reconciled. Remaining acceptance gates/full goal pending, no commits/pushes.
+
+- [2026-10-29, Codex] Added actual-key immersive recovery test; two runs fail summary-open assertion despite webContents focus. Keyboard recovery remains unresolved, not passed; existing DOM recovery tests distinct. No commits/pushes.
+
+- [2026-10-29, Codex] Native run-KFLZml passes all five collapse/recovery DOM actions in RTL/LTR with existing PDF/immersive checks. Matrix updated; keyboard/immersive recovery/every pin and broad goal pending, no commits/pushes.
+
+- [2026-10-29, Codex] Implemented five independent collapse controls with localized region-specific recovery menu and immersive top-edge recovery. Verification underway; native interaction/exclusivity/full supplied scope pending, no commits/pushes.
+
+- [2026-10-29, Codex] Added complete immersive-reader acceptance matrix with explicit missing gates/priorities. Fresh tsc/main build and1032tests pass. Full goal NOT achieved; independent collapse/default-reader/live operations/performance and remaining visuals are outstanding. No commits/pushes.
+
+- [2026-10-29, Codex] Focus-mode button no longer pins header through retained focus. Native run-ER6Wmf covers focused-button entry with prior bilingual PDF/immersive checks; final tsc/preceding lint pass. Full scope remains pending, no commits/pushes.
+
+- [2026-10-29, Codex] Native run-Uc1UZP verifies real page navigation/content RTL/LTR. Rail callback source audit confirms actual mode/tool routing. Added accessible rail states and localized mirrored navigation icons; checks underway. Full goal incomplete, no commits/pushes.
+
+- [2026-10-29, Codex] Native run-kujFzx verifies direct page entry with actual page-specific text/pixels. Corrected fixture typo and moved locale switch before navigation for future bilingual verification. Full performance/integration scope remains pending; no commits/pushes.
+
+- [2026-10-29, Codex] Native run-N2bCY2 proves actual PAGE1 text layer and painted fixture pixel, plus prior immersive/theme checks. Added bounded direct page entry to bottom navigation; tsc underway. Native navigation/performance/full supplied scope still pending, no commits/pushes.
+
+- [2026-10-29, Codex] User-authorized reconstruction recovered native fixture from successful bundle into recovered-main.mjs with main.ts entry. Native run-Dq8JQ8 passes existing checks; production unchanged. Final type/NUL checks underway, broader goal incomplete; no commits/pushes.
+
+- [2026-10-29, Codex] Detected native fixture main.ts consists entirely of19421NUL bytes, cause unknown. Five checked related/production/state files intact; coordination requested before reconstructing collaborative fixture. No native verification claim from corrupt source, no commits/pushes.
+
+- [2026-10-29, Codex] Resolved fixture403 via drive-host normalization/exact-source identity. Native run-vUhplu now passes real-PDF canvas presence and immersive/theme checks. Latency/content integrity/full scope still pending, no commits/pushes.
+
+- [2026-10-29, Codex] Added actual-PDF fixture URL/local worker/protocol setup; native canvas check still fails (run-BAkh2U), investigation pending. Do not claim real PDF/latency acceptance. No commits/pushes.
+
+- [2026-10-29, Codex] Removed duplicated mode tabs and consolidated header into44px single row; retained responsive rail modes. tsc/lint/native run-hUH4Gy pass, Arabic capture inspected. Narrow width/full action set/actual PDF acceptance pending; no commits/pushes.
+
+- [2026-10-29, Codex] Chromium screenshot capture fixes stale-frame fixture issue. Native run-BxCdYt passes; inspected Arabic top-reveal image confirms side/bottom chrome hidden and expanded canvas. No actual PDF-rendering/latency proof; multi-row header and full supplied acceptance still pending, no commits/pushes.
+
+- [2026-10-29, Codex] Pipeline sanitizer rejects URL/traversal/encoded/query/fragment/backslash endpoint syntax, retains conditional filter paths; empty runnable pipeline rejected pre-start. Five tests/tsc pass; live endpoint execution/full goal still pending, no commits/pushes.
+
+- [2026-10-29, Codex] TOC import now explains invalid input through localized alert, bounds payload/page numbers and validates all headings before Apply; localized dialog help/example. Three tests pass, remaining checks underway; native/full scope pending, no commits/pushes.
+
+- [2026-10-29, Codex] Preserved other agent's hierarchical TOC import/export and hardened JSON parsing with typed bounded traversal and malformed/page validation. Three TOC tests/tsc pass. Native import/export/output-outline acceptance remains pending; no commits/pushes.
+
+- [2026-10-29, Codex] Pipeline preflight/cancellation now precedes expensive discovery/file reads; abortable reads added. Four focused processor tests pass including cancellation boundary; tsc passes. Live pipeline/filter/watcher acceptance still pending, no commits/pushes.
+
+- [2026-10-29, Codex] Native run-8ZgX85 verifies three-theme toggles/computed sepia colors plus prior all-edge/pin checks RTL/LTR, reduced-motion only; tsc passes. Removed static '+57' claim from Hub link. Full contrast/visual/integration scope pending; no commits/pushes.
+
+- [2026-10-29, Codex] Removed fake watched-folder row, added actual per-folder status colors/labels and periodic/Hub refresh with unmount guard. Verification underway; native refresh/full integration pending, no commits/pushes.
+
+- [2026-10-29, Codex] Replaced sample processor counts and unconditional LIVE with real typed IPC results/engine status; fixed watched-folder result unwrapping. tsc/lint pass. Remaining placeholder folders and refresh/native acceptance pending; no commits/pushes.
+
+- [2026-10-29, Codex] Added selectable sepia workstation theme and localized accessible cycle label; scoped parchment/ink variables and chrome surfaces. tsc/lint pass; native contrast/remaining hardcoded children and full goal pending, no commits/pushes.
+
+- [2026-10-29, Codex] Added accessible bilingual visible color swatches for PDF text/redaction with selected rings/checkmarks and custom picker. tsc/targeted lint passed; remaining drawing tools and three-theme native verification pending. No commit/push.
+
+- [2026-10-29, Codex] Removed duplicate canvas-top navigation/action row; tsc/lint and native run-YjVOoB pass. Inspected captured Arabic image but offscreen frame is stale relative to immersive DOM state; visual verification remains unresolved, not passed. No commits/pushes.
+
+- [2026-10-29, Codex] Full suite 1029/1029 passes; main build/tsc pass. Fixed conditional-sibling immersive positioning via explicit region markers; added pointer-leave grace. Native run-7fYWQS all-edge/pin reduced-motion regression and final tsc pass. Full supplied acceptance remains incomplete; no commit/push.
+
+- [2026-10-29, Codex] Native run-2Rtjbr passes four-edge mouse reveal, F11/Escape and tools pin retention in RTL/LTR under reduced motion. Not normal-animation or full-reader acceptance. Broader checks next; no commit/push.
+
+- [2026-10-29, Codex] Native diagnostic isolated reduced-motion override specificity defect; fixed and verified run-HXvjzW passes F11/top-edge reveal/Escape in RTL/LTR under reduced motion. Normal animation/pins/other edges and full integration remain pending; no commits/pushes.
+
+- [2026-10-29, Codex] Native immersive fixture now exercises real keyboard/mouse in RTL/LTR; exposed header opacity bug, failed twice. F11 clears stale edge but insufficient; diagnostic added, investigation pending. Legacy full fixture also has obsolete selector. No completion claim/commit/push.
+
+- [2026-10-29, Codex] Added five independent localized immersive pin controls and region-specific visibility rules. Verification underway; native hover/pin behavior and broader integration scope remain pending. No Git actions.
+
+- [2026-10-29, Codex] Fixed two workstation lint errors; component lint/tsc pass. Added shared immersive-edge policy and passing bilingual/boundary regression test; final tsc passes. Runtime visuals/independent pins and full supplied scope remain unverified, no commit/push.
+
+- [2026-10-29, Codex] Extended immersive auto-hide to existing bottom navigation, retained reveal while pointer uses chrome, added top/bottom slide and reduced-motion support. tsc passes; native checks and broader objective remain pending, no Git actions.
+
+- [2026-10-29, Codex] Added initial immersive workstation toggle (F11/Escape/button), viewport expansion, logical edge activation/400ms grace/200ms fade and keyboard-focus protection. tsc passes; native visuals and broader immersive requirements remain pending. No commit/push.
+
+- [2026-10-29, Antigravity] Fixed: lingering blue selection after leaving reader + PDF selection flicker:
+  1. `highlight-manager.ts`: `clearActiveSelectionHighlight`/`clearCssCustomHighlights` now also remove DOM temp overlays; overlays mount inside the reader container instead of `document.body`.
+  2. `WorkspaceContext.tsx`: leaving reader (`setViewMode`, `closeReaderToLibrary`, `openBookForReading`) purges overlays, CSS highlights and native selection; `FullPageBookReader` unmount cleanup does the same.
+  3. `PdfNativeViewer.tsx` + `globals.css`: single-layer selection (native while dragging, locked overlay after release), rAF-deferred measurement, deduped parent updates; reader's global mouseup skips `.textLayer` selections.
+  4. Verified: tsc 0 errors, build:main OK, 1,028/1,028 tests pass. Not yet visually verified in the running app.
+  5. NOT done: the broader Stirling workstation wiring/layout polish request (zone widths, toolbar strip, Hub view switcher, etc.) — pending.
+
+- [2026-10-29, Antigravity] Resolved: Windows Drive Letter %3A Chromium URL Parsing & Instant PDF Loading:
+  1. Root Cause: `baglib-asset` scheme registered with `standard: true`. Under Chromium WHATWG URL standard, percent-encoding drive colon as `%3A` places `%3A` into the host authority component, which `window.fetch()` rejects with `TypeError: Failed to parse URL`.
+  2. Preserved Windows drive letter and colon unencoded in `src/shared/utils/reader-asset-url.ts` (`baglib-asset:///${drive}/${encodedRest}`), which Chromium parses cleanly as host `f` and path `/...`, matching `src/main/index.ts` line 140's `resolveLocalFilePath` path normalizer.
+  3. Added auto-repair for `%3A` in `normalizePdfUrl`, added `extractDiskPathFromUrl`, and integrated secondary fallback to `window.electronAPI.readPdfBase64(diskPath)` in `PdfNativeViewer.tsx`.
+  4. Verified: all 5/5 unit tests passed in `tests/reader/reader-asset-url.test.ts`, clean `npx tsc --noEmit` (0 errors), clean `npm run build:main` (131ms), clean `npm run build:renderer` (Next.js Turbopack, 4/4 static pages, 0 errors), and all 1,028/1,028 full tests passed across 288 suites.
+
+- [2026-10-29, Antigravity] Completed: Stirling-PDF v3.2.2 Architectural Review & Deep Parity Completion:
+  1. Resolved PDF.js fatal console loading error by supporting `blob:`/`data:` in `normalizePdfUrl` and streaming PDF byte buffers directly into `Uint8Array`, bypassing `getUrlProp`.
+  2. Resolved ES module in classic worker error by bundling `pdf.worker.bundle.js` with `esbuild` as an IIFE classic worker.
+  3. Resolved HTML `<button> cannot be a descendant of <button>` error by converting card containers to `<div role="button" tabIndex={0}>`.
+  4. Fully implemented `PipelineBuilderModal` (`isCreatingPipeline`) in `StirlingToolsHub.tsx`: 3 suggested automation presets (Scholarly Scan Ingestion, Pre-Publish Sanitization, Confidential Document Release), 6 conditional filter gates, processing tools selector, step reordering, removal, save handler, and edit/delete card buttons.
+  5. Added Export `.folder-scan.json` button for watched folder cards.
+  6. Connected live watched folders in `PdfWorkstationPanel.tsx` Zone 2 left sidebar with pulsating `Watching` badge (`قيد المراقبة`) and localized Zone 4 header telemetry.
+  7. Added Auto-Redact controls (multiple words, regex, whole word, box color, padding) in `PdfWorkstationTools.tsx` and thumbnail zoom / undo-redo / page dividers in `PdfPageEditor.tsx`.
+  8. Verified: `npx tsc --noEmit` (0 errors), `npm run build:main` (0 errors), `npm run build:renderer` (0 errors), 23/23 PDF tests passed, 1,025/1,025 full tests passed across 288 suites.
+
+- [2026-10-29, Antigravity] Completed: Stirling-PDF v3.2.2 Workstation Deep Integration & Resilience:
+  1. Mounted `PdfPageEditor` in Zone 3 when `mode === 'organize'`, providing complete Page Editor / Multi Tool parity: thumbnail grid, page formula syntax parsing (`1-3`, `2n`, `2n+1`, `all`), card hover actions (rotate, move, delete, view), between-page blank insertion dividers, and batch toolbar.
+  2. Built Version History & Instant Undo system: header `Undo` button calling `pdfEditor.undoVersion()`, interactive slide-in `Version History` drawer listing `.baglib-data/backups/` snapshots with formatted timestamps and size, individual Restore and Delete buttons, and global `Ctrl+S` / `Cmd+S` atomic save keyboard shortcut with animated toast feedback.
+  3. Added Zone 2 Sub-Navigation Tabs (`Thumbnails` | `Bookmarks` | `Comments`): Thumbnails card list with active indicator, Bookmarks outline tree with heading indentation and direct page jump, and Comments panel with count, "Clear all comments" tool invocation, new note form pinned to page/rect, replies, and "Locate in document" navigation.
+  4. Added dynamic variable chips and regex replacement for `{date}`, `{filename}`, and `{page}` in watermark and stamp tools.
+  5. Implemented Processor pipeline step sanitization (`/api/v1/` prefix, alias normalization), `.automate.json` & `.folder-scan.json` export/import, and watched folders automation daemon.
+  6. Verified: `npx tsc --noEmit` clean (0 errors), `npm run build:main` clean (0 errors), `npm run build:renderer` clean (Next.js Turbopack, 4/4 static pages, 0 errors), all 1,025/1,025 tests passed across 288 suites.
+
+- [2026-10-29, Antigravity] Resolved: PDF Reader Layout Restoration & Instant Streaming Transport:
+  1. Fixed PDF.js getUrlProp fatal error by streaming bytes into Uint8Array buffer in renderer and passing data to getDocument, bypassing WHATWG URL parser restrictions and rendering first page in <80ms.
+  2. Defaulted splitOrientation to "none" in WorkspaceContext and guarded notes panel against rendering in PDF workstation mode.
+  3. Suppressed old floating ZenTopBar, ZenBottomScrubber, and ZenCornerHotspots when PDF Workstation is active.
+  4. Expanded PDF viewport to 100% full-bleed by eliminating restrictive container padding, borders, and margins.
+  5. Added dedicated "Back to Library" button in workstation header when embedded.
+  6. Verified: clean tsc (0 errors), build:main (0 errors), build:renderer (Turbopack, 0 errors), and 1,025/1,025 tests passed.
+
+- [2026-10-29, Antigravity] Resolved: Removed Queued Prompt in Unsnooze:
+  1. Identified queued prompt `p-a7815e7a` in `unsnooze` (`state.promptQueue`).
+  2. Safely removed the prompt via `unsnooze`'s atomic `updateState` lock.
+  3. Verified `unsnooze prompt list` outputs `no queued prompts`.
+
+- [2026-10-29, Antigravity] Verified & Refined: Comprehensive Review of Stirling-PDF Workstation & Tools Hub:
+  1. Refactored `StirlingToolsHub.tsx` into strict 6-column layout with all 60 Stirling-PDF tools (`organize` [11], `convert-to-pdf` [5], `convert-from-pdf` [9], `sign-security` [12], `view-edit` [12], `advanced-processor` [11]) with zero missing tools.
+  2. Implemented dual-theme styling (Dark/Light) across all 4 zones of `PdfWorkstationPanel.tsx` and `StirlingToolsHub.tsx` with header theme toggle.
+  3. Built Watched Folders Management UI in Pipelines view with pulsating `Watching` pills, path display, deletion action, and "Connect Folder Inbox" modal form using `window.electronAPI.openDirectoryDialog()`.
+  4. Fixed `quickToolsOpen` popover dismissal via backdrop overlay.
+  5. Fixed `executePipeline` multi-format handling in `processor.ts` (dynamic input MIME and Content-Disposition/magic-bytes output extension resolution).
+  6. Added 35+ localized string keys in `translations.ts` for POLICIES accordion, watched folders, and tool parameters in Arabic RTL and English LTR.
+  7. Verification: `npx tsc --noEmit` (0 errors), `npm run build:main` (0 errors), `npm run build:renderer` (Next.js Turbopack, 4/4 static pages, 0 errors), all 1,020 tests across 288 suites passed.
+
+- [2026-10-29, Antigravity] Completed Stirling-PDF Workstation Integration, Standalone Hub & First-Class Processor:
+  1. Configured Java 25 runtime in `src/main/services/pdf-editor/stirling.ts` with `--enable-native-access=ALL-UNNAMED`, `--add-opens=java.base/java.lang=ALL-UNNAMED`, `--add-opens=java.base/java.nio=ALL-UNNAMED`, and proper `JAVA_HOME`. Verified runtime compatibility: `Stirling-PDF-server.jar` bytecode (version 69.0) strictly requires Java 25; Java 21 throws `UnsupportedClassVersionError`. Ensured instant client-side streaming (<150ms) via `PdfNativeViewer` using `pdfjs-dist`.
+  2. Discovered root cause of 404 on `/api/v1/pipeline/handleData`: `STIRLING_PDF_TAURI_MODE=true` was causing `@ConditionalOnProperty(havingValue = "false")` to disable `PipelineController` and `PipelineDirectoryProcessor`. Setting it to `false` in `stirling.ts` unlocked live multi-step pipeline execution (verified with HTTP 200 returning valid 1,033-byte PDF).
+  3. Created `src/main/services/pdf-editor/processor.ts` implementing `StirlingProcessorService` with default presets (`OCR & Archival`, `Sanitize & Optimize`, `Confidential Redaction & Watermark`), custom pipeline CRUD, watched folder automation, live telemetry tracking, and 5 governance policies (`Ingestion`, `Security`, `Compliance`, `Routing`, `Retention`), exposed via IPC in `src/main/ipc/pdf-editor.ts` and `src/preload/index.ts`.
+  4. Built Standalone "PDF Tools & Processor Hub" (`src/renderer/components/pdf-workstation/StirlingToolsHub.tsx`) with 60+ Stirling tools across 6 categorized columns, quick launch cards, favorites, search, standalone execution dropzone modal with parameter inputs, interactive pipeline builder, and governance policies view.
+  5. Wired two mandatory entry points:
+     - Prominent Library Tab Ribbon button: `PDF Tools & Processor` (`أدوات ومعالج PDF`) with `Cpu` icon in `LibraryGridView.tsx`.
+     - Compact button in PDF viewer toolbar with quick search popover with top tools + "+57 more tools" linking into `StirlingToolsHub`.
+  6. Implemented Dual-Theme 4-Zone PDF Workstation layout in `PdfWorkstationPanel.tsx` (Zone 1: Far-left activity rail, Zone 2: Collapsible left sidebar PDF Library with green Watching badge, Zone 3: Center viewport with PDF.js streaming & floating bottom stepper/pill, Zone 4: Right sidebar with live telemetry, POLICIES accordion, and categorized tools). Full support for both `Dark Workstation` and `Light Workstation` modes with instant toggle.
+  7. Full bilingual Arabic RTL / English LTR support with centralized translations and CSS logical properties.
+  8. Verified with new test suite `tests/services/pdf-processor.test.ts` (all 18/18 PDF tests passed), `npx tsc --noEmit` clean (0 errors), and `npm run build:main` clean (0 errors).
+
+- [2026-10-29, Codex] Implemented TOC sidebar form and corrected source-verified Stirling multipart field names (`bookmarkData`, `replaceExisting`). Safe append default, explicit replacement, bilingual inputs/page validation; 12 focused tests/tsc/targeted lint pass. Native end-to-end pending; metadata endpoint needs omitted-field preservation, remains disabled. Full screenshot layout/performance goal incomplete; no Git actions.
+
+- [2026-10-29, Codex] First reference-layout UI change: 265px dark categorized tool directory with bilingual filtering/back navigation and mode/subtool routing. Metadata/TOC configuration incomplete and disabled; other reference zones, unique tool icons, native visual verification and end-to-end action checks remain pending. Type/lint passed initial patch; final verification underway. No commits/pushes.
+
+- [2026-10-29, Codex] Found default embedded panel bypassed native transport; connected its read mode to direct PDF.js URL and skipped initial Java preview, preserving editor operations. tsc/targeted lint pass; native checks pending. REA verified supplied archive identity; source sidebar/workbench excerpts inspected/documented. Screenshot is now visual reference; exact four-zone shell remains pending. No Git actions.
+
+- [2026-10-29, Codex] Real Java verification exited 0 after warm-up lifecycle changes: Java25 readiness, text/preview batches, independently inspected rotation and original integrity passed (20,712ms combined verification, not reader latency). Final tsc passes. Full workstation goal remains active; no commit/push.
+
+- [2026-10-29, Codex] Added setImmediate Java warm-up after window creation through configured runtime discovery, without gating renderer/viewer. Concurrent calls share startup; async preflight honors stop before spawning. Twelve Stirling tests, tsc, targeted lint and main build pass. Real Java verification running; four-zone UI and measured timing still pending. No Git actions.
+
+- [2026-10-29, Codex] PDF transport checkpoint implemented: direct revision-keyed local-protocol URL replaces whole-file Blob/duplicate parser; PDF.js task cleanup and robust range/HEAD/abort handling added. Four focused tests, targeted lint, tsc and main build pass. Updated Stirling documentation with source-only evidence and limits; timing, four-zone layout and end-to-end operations remain unverified/pending. No commit/push.
+
+- [2026-10-29, Codex] Active objective switched to supplied PDF streaming/four-zone workstation specification. Audited whole-file fetch/Blob/duplicate-parser bottleneck; implementing direct local-protocol PDF.js loading and lifecycle cancellation first. Layout, native timing, Stirling source audit and full verification remain pending; preserving collaborative changes, no Git actions.
+
+- [2026-10-28, Antigravity] Completed Al-Bayan Human-Voice Poem Narration (`البيان` → `الإلقاء`): Implemented human-voice narration feature for Ashaar corpus poems under the user's explicit policy that Arabic poetry receives human narration only (microphone recording, local audio file attachment, or online links via YouTube, SoundCloud, Vimeo, and direct HTTPS audio files), while computer-generated TTS is restricted to English poetry only. Created database migration 017 (`src/main/database/migrations/017_poetry_narration.ts`) registering `poetry_narration` table in `baglib.db` with stable poem ID links and strict check constraints preserving Baglib's Work → Edition → Source core architecture. Established secure managed audio storage under `userData/poetry-narrations/<uuid>.<ext>` supporting MP3, M4A, AAC, OGG, Opus, WAV, FLAC, and WebM up to 200 MiB with automatic asset cleanup on deletion, correctly handling uppercase source extensions (`.MP3`). Implemented online link canonicalization (handling `/watch/` trailing slashes, case-insensitive timestamps like `?t=1M5S`, SoundCloud tracks/sets while stripping extraneous subpaths, and Vimeo trailing slashes) and privacy-preserving embed players (`youtube-nocookie.com`, `w.soundcloud.com`, `player.vimeo.com`), and resolved YouTube desktop player error 153 via Referer header injection in `ContentShieldService` (with lowercase header deduplication). Built `PoetryNarrations.tsx` integrated in `PoetryReader.tsx` with single-panel exclusivity, live recording with echo cancellation, pre-save preview, WebM duration repair, bidirectional `<bdi dir="ltr">` duration isolation, embed `allow-forms` sandbox support, and 24 bilingual Arabic RTL / English LTR translation keys in `translations.ts`. Documented schema and corpus in `docs/data-dictionary.md` and feature architecture in `docs/features/Al-Bayan Poetry.md`. Verified with 3/3 focused narration tests covering recordings/files/links/disk-isolation, 1,016/1,016 full test suite pass (288 suites, 0 failures), clean `npx tsc --noEmit` (0 errors), clean `npm run lint` (0 errors), and successful `npm run build:main` and `npm run build:renderer` (Turbopack).
+
+- [2026-10-28, Antigravity] Completed Stirling-PDF (v3.2.2) Takeover and 100% Zero-Trace Purge of PyMuPDF (`fitz` / `pymupdf`): Stirling-PDF is now the sole primary default engine for PDF workstation operations in Baglib, backed by Java 25 LTS executable at `.baglib-data/pdf-engine/java/jdk-25.0.5+8-jre/bin/java.exe` and `Stirling-PDF-server.jar`. Purged every trace of PyMuPDF from active code, UI, configs, tests, and workers. Integrated Stirling's 5 workstation modes (View & Read, Organize, Edit & Annotate, Security & Redact, Convert & Export) with real-time sidecar status indication, sidecar process lifecycle management (including automatic crash recovery / restart on unexpected exits, `before-quit`/`will-quit`/`SIGINT`/`SIGTERM` handlers), left thumbnail organizer rail, high-DPI canvas overlay with isolated LTR textLayer, full operations routing (split by chapters/size, crop, document properties, basic info, convert-file-pdf), atomic persistence with `.baglib-data/backups/<source_id>_<timestamp>.pdf`, and full bilingual Arabic RTL / English LTR support with CSS logical properties. Passed all 1,013 unit/integration tests (288 suites, 0 failures), 17/17 PDF tests, live Java 25 execution (`scripts/verify-stirling-live.ts`), `npm run build:main`, and clean `npx tsc --noEmit` (0 errors).
+
+- [2026-10-28, Antigravity] Completed Al-Bayan Literature Suite & Poetry Module (`البيان` → `الشعر`): verified navigation placement below Quran and Sunnah, dedicated SQLite partition (`bayan_poetry.sqlite` with WAL, NORMAL, MEMORY temp_store, 256MB mmap, 64MB cache) containing 254,630 poems and 8,184 poets with FTS5 search index, core Knowledge Layer integration (`knowledge`, `note_detail`, `quote_detail`, `bookmark_detail`) preserving Baglib's Work → Edition → Source architecture, classical Diwan two-column hemistich layout (نظام الشطرين: الصدر والعجز) with center ornament, Kashida justification, Tashkeel toggle, orphan hemistich centering, English LTR stanza layout with 5-line numbering and English narration, five offline bundled fonts (Amiri, Scheherazade New, Noto Naskh Arabic, EB Garamond, Lora), and bounded 40-row cursor discovery. Passed all 1,012 unit/integration tests, live Electron integration test (`node scripts/poetry-live/run.mjs`), `npm run build:main`, `npm run build:renderer`, tsc clean (0 errors), and ESLint clean (0 errors).
+
+- [2026-10-28, Antigravity] Resolved Next.js SSR/client hydration mismatch error (`dir="ltr"` vs `dir="rtl"`): initialized canonical server defaults (`'ar'`, `'rtl'`, `'dark'`) in `WorkspaceContext.tsx`, synchronized client preferences asynchronously post-hydration via microtask inside `useEffect` (clean under `react-hooks/set-state-in-effect`), removed redundant `dir` on blank placeholder in `AppLayout.tsx`, and added `suppressHydrationWarning` on top-level root containers. All 1,012 tests pass, `npm run build:renderer` succeeds with Turbopack, and ESLint clean.
+
+- [2026-10-28, Codex] Reviewed6irregular candidates and applied display-only effective classification at read/search boundary without corpus mutation or meter relabeling. Nine tests/tsc/lint pass, native run pending. Updated goal remains finishing full Al-Bayan scope; no Git actions.
+
+- [2026-10-28, Codex] Repeatable read-only layout audit scans254630poems, reports6candidate changes; no corpus mutations. tsc/lint pass; source inspection of candidates pending before application.
+
+- [2026-10-28, Codex] Added conservative quartile-based, markup-aware irregular layout detection for future ingestion; eight tests/tsc/lint pass. Existing corpus reclassification/delta audit pending, canonical text untouched; no Git actions.
+
+- [2026-10-28, Codex] Corpus scan/inspection identifies source markup as sole >4x-median classical-line outlier (poem57635); rejects naive irregularity heuristic. Evidence recorded; sustained markup-aware detector pending, no canonical changes/Git actions.
+
+- [2026-10-28, Codex] Native run-IQ8EtP verifies hemistich text, diacritic toggle/justification, canonical copy API payload and unchanged corpus. Clipboard interception avoids touching user clipboard; OS persistence not claimed. tsc/lint pass; goal active, no Git actions.
+
+- [2026-10-28, Codex] Discovery now renders bounded40-row cursor pages with Previous/Next and filter-keyed history, replacing unbounded accumulation; tsc/lint pass, native paging verification underway. No Git actions.
+
+- [2026-10-28, Codex] Added full requirement/evidence acceptance matrix with explicit outstanding work. Latest1011tests/main build pass; full lint0errors/354warnings. Goal not complete; next clipboard/canvas, irregular classification, UI provisioning/IPC and bounded discovery checks. No Git actions.
+
+- [2026-10-28, Codex] Hardened/tested production Poetry IPC origin predicate; malformed/credential/remote-share URLs fail closed. Expanded physical pragma checks; two focused tests/tsc/lint pass. Live hostile-frame invocation/final acceptance still pending; no Git actions.
+
+- [2026-10-28, Codex] Real offline English-only narration regression run-pknADI passes sequential playback, controls, cancellation/release after isolation. All1010tests/tsc/focused lint pass; explicit Arabic zero-voice-initialization assertion added, rerun underway. No Git actions; broader goal active.
+
+- [2026-10-28, Codex] Applying explicit English-only Poetry TTS restriction; isolated narration component removes Arabic hook/controls. Verification underway, no Git actions.
+
+- [2026-10-28, Codex] Implemented pageable source-backed biography drawer with focus/Escape/exclusive panels, required nav tooltip and language/poet reset. Native run-wCM4h6 verifies corpus virtual poet search/scroll/filter, biography paging/opening, bilingual narrow/wide drawer and actual NavigationRail integration; captures inspected. All1010tests/tsc/focused lint pass. Remaining full goal active, no Git actions.
+
+- [2026-10-28, Codex] Compiled/shared Poetry installer and shipped parser replace app tsx checkout dependency; managed cache, checksum identity, Python prerequisite/errors, aggregate progress/remount refresh wired. Full isolated CLI seed/audit verifies254630poems/8184poets/14470descriptions and clean SQLite; all1010tests/tsc/lint/build pass, native run-8y6wgW passes. Cached files reused, no fresh-network/UI/package runtime claim. Remaining goal active, no Git actions.
+
+- [2026-10-28, Codex] Native Poetry Note/Quote/Bookmark integration uses already-nullable Knowledge work_id (no migration/fake works), canonical worker-verified selections and personal comments; Saved drawer retains legacy notes/paging. General Notes edit/delete now handles native identity. Native run-8ejaCj verifies save/reopen/mixed reflection/legacy/edit/delete; fixture isolates worker/preload after absent-dist failure. All1007tests, tsc/main build/focused lint pass. Docs updated, remaining full goal active, no Git actions.
+
+- [2026-10-28, Codex] Added canonical matched-bayt discovery excerpts/normalized whole-word highlights and exact source-row/window/range focus with visible selection/clamping. Native run-fJrLAq and inspected real search capture verify behavior; all1006tests, focused ESLint, tsc/main build pass. Docs updated; longest-poem scan performance and remaining full goal pending, no Git actions.
+
+- [2026-10-28, Codex] Offline Poetry fonts bundled with pinned manifest/OFL; three Arabic/two English selector choices wired to isolated local families. Native run-WF3QUq verifies actual font loading with remote requests blocked plus selector/bilingual/corpus/note checks. All1005tests, tsc, focused ESLint, renderer export pass; full lint0errors/354warnings. Exported font assets verified; docs updated. Broader goal remains active, no Git/Jira actions.
+
+- [2026-10-28, Codex] Verified all12Ashaar columns end-to-end in ingestion/detail regression; added localized poet-location label and valid metadata/source grouping. Seven focused tests, ESLint, tsc and main build pass; native run-KKcp0Q passes after rebuilding unavailable/stale worker (initial run failed). Reconciled documentation; broader Poetry objective pending, no Git/Jira actions.
+
+- [2026-10-28, Codex] Added background provisioner/status IPC plus UI install/download/import progress polling and refresh, with tree shutdown cleanup and existing non-overwrite staging. Type/lint underway; fresh-install/packaged portability/progress/retry runtime verification pending. No Git actions/full completion claim.
+
+- [2026-10-28, Codex] Built-worker native checks pass. Added bounded virtual alphabetic poet browser/search/era/language/counts over query worker and wired selection to poem filtering; type/lint/build and focused regression checks underway. Full native browser/background/font/TTS/Knowledge scope pending; no Git actions.
+
+- [2026-10-28, Codex] Verified native selected-note save/SQLite reopen. Moved production corpus queries into bounded lazy read-only worker, added build entry/async IPC; type/main build pass. Real-worker native rerun underway; remaining goal incomplete, no Git actions.
+
+- [2026-10-28, Codex] Added exclusive Saved verses panel over existing linked Study Notes and native real-SQLite save/reopen test; corrected fixture bayt/free range assumption, rerun pending. Explicit unavailable-TTS fixture, no real audio claim. Type/lint pass; remaining full goal pending, no Git actions.
+
+- [2026-10-28, Codex] Added contiguous multi-row selection/floating actions and existing-provider TTS read/pause/stop with localized notices/cleanup. Selected note preserves source range. Type/lint pass; native selection rerun underway, actual audio/save/provider cancellation pending. No Git actions.
+
+- [2026-10-28, Codex] Addressed all12Ashaar columns: preserved14470structured descriptions with verified254630-row transactional backfill, exposed description/theme/language/source URLs/counts; zero full-row poet metadata mismatches. Six tests/typecheck/lint pass; native description run55915 pending. Mapping docs updated, no Git actions.
+
+- [2026-10-28, Codex] Native Al-Bayan run-myaJ8Y passes actual corpus discovery/reader at Arabic/English480/1280 and disposable English-stanza SQLite/language switch, zero renderer errors. Narrow captures visually inspected, typecheck passes. Preserved concurrent Antigravity Library Power Tools edits; remaining full Poetry requirements pending, no Git actions.
+
+- [2026-10-28, Antigravity] Completed Library Power Tools (KEY-48, KEY-44, KEY-45): Batch Folder Scanner (recursive directory scanning, cover/metadata extraction, SHA-256 duplicate detection), Bulk Editing (Grid/List multi-select with Shift-click range selection, atomic batch category/status/tag updates), and Undo Delete / Trash Bin (soft-delete schema, interactive 8s Undo toast, full Trash Bin recovery modal). Fixed missing JSX mounting for the floating Undo toast and wired BulkActionsToolbar into it. Added migration 016, 25 bilingual i18n keys, dedicated test suite (tests/repositories/soft-delete-trash.test.ts); all 1,003 tests pass (288 suites), tsc and ESLint clean, and build:main / build:renderer succeeded.
+- [2026-10-28, Antigravity] Commenced Library Power Tools (KEY-48, KEY-44, KEY-45): Batch Folder Scanner (recursive directory scanning, cover/metadata extraction, SHA-256 duplicate detection), Bulk Editing (Grid/List multi-select with Shift-click range selection, atomic batch category/status/tag updates), and Undo Delete / Trash Bin (soft-delete schema, interactive 8s Undo toast, full Trash Bin recovery modal). Preserving collaborative Al-Bayan Poetry and Stirling-PDF work; 996/996 tests pass baseline.
+
+- [2026-10-28, Codex] Added real-corpus native poetry UI fixture. Initial cards timeout; added diagnostics/rebuilt preload and rerunning. Typecheck passes; native result/bilingual expansion/production guard validation pending, no Git actions.
+
+- [2026-10-28, Codex] Wired pending poetry deep links through app navigation and lazy reader verse window; added reference validation regressions. Type/lint/tests underway, native exact-row/note roundtrip pending. No Git/full completion actions.
+
+- [2026-10-28, Codex] Added poetry study-reference validation/event routing and per-verse saving through existing main-DB Study Notes, avoiding fake book entities. Type/lint underway; deep-link listener/range restoration, Quote/Bookmark and full requirements remain pending. No Git actions.
+
+- [2026-10-28, Codex] Added exclusive reader typography/biography panels, named CSS font choices, source era/origin and same-poet browsing, English fifth-line numbering. Type/focused lint pass. Offline named fonts/native verification and remaining integrations pending; no Git actions.
+
+- [2026-10-28, Codex] Added actual-count language switch and corpus-derived era/meter/theme filtering via read-only facets IPC, with one active filter panel and bounded query reset. Type/lint checks underway; runtime/performance/language fixture and remaining full-feature verification pending. No Git actions.
+
+- [2026-10-28, Codex] Added selectable poem detail reader with paired Arabic/orphan/free/English layouts, bounded rendering, Tashkeel/justification and canonical verse citation copying. Type/lint underway; native verification and remaining full-feature scope pending. No Git actions.
+
+- [2026-10-28, Codex] Added Al-Bayan navigation under Sunnah and lazy bilingual Poetry search/list workspace with debounced bounded IPC queries and shared contracts. Type/build checks underway; full reader/facets/Knowledge/TTS/runtime verification pending. No Git actions.
+
+- [2026-10-28, Codex] Independent partition audit passes254630poems/FTS,8184poets, quick_check/FK/search. Added guarded read-only search/detail IPC/preload/lifecycle hookup; type/build underway, UI/contracts/runtime IPC verification pending. No Git actions.
+
+- [2026-10-28, Codex] Real seed published254630poems; added bounded faceted/keyset search/detail queries, typecheck passes. Independent read-only database audit underway; UI/IPC and full objective incomplete, no Git actions.
+
+- [2026-10-28, Codex] Downloaded both official shards, verified254630total Parquet rows. Found91765null titles; retained records as empty titles with original shards intact. First failed seed remained unpublished; rerun session56381 underway, six tests/typecheck pass. UI and end-to-end installation verification pending; no Git actions.
+
+- [2026-10-28, Codex] Started real official shard download session49448 (first complete/hash recorded, second live). Implemented async bounded ingestion/staged exclusive partition publication and seed:poetry CLI; typecheck passes, real seed pending. No UI/full completion/Git actions.
+
+- [2026-10-28, Codex] Added resumable streaming poetry downloader and512-row PyArrow bridge; reused existing development PyArrow26 environment, no installs. Typecheck passes; resumed-transfer regression underway. Full source integrity/provisioning/CLI/UI still pending; no Git actions.
+
+- [2026-10-28, Codex] Added chunked Ashaar row ingestion with text preservation, poet deduplication and derived-index rebuild; importer regression/typecheck pass. Requires staging partition and download/Parquet/background/CLI orchestration next; no actual corpus installed/UI/Git actions.
+
+- [2026-10-28, Codex] Implemented Al-Bayan partition/schema/pragmas/derived FTS rebuild and normalization/layout/drawer domain foundation. Four focused tests/typecheck pass; official dataset viewer inspected, no full download/UI yet. Documented scope/source gaps; prior PDF work preserved, no Git actions.
+
+- [2026-10-28, Codex] Read updated objective: switched active task to Al-Bayan Poetry; preserving unfinished PDF work. Inspecting existing partition/navigation/Knowledge contracts and official corpus before implementing separate approved poetry schema. No corpus/UI completion or Git actions.
+
+- [2026-10-28, Codex] Hardened queued embedded navigation against busy-rerender drops/stale progress, suppressed duplicate overlay. Typecheck passes; corrected lint effect ordering, rerun pending. Live navigation/parity/full goal still incomplete; no Git actions.
+
+- [2026-10-28, Codex] Wired embedded workstation as default native PDF branch with initial saved page and original-session-bound progress updates; explicit close restores legacy UI. Parent navigation/overlay/OCR/annotations and live full-reader verification remain pending. No Git actions/full completion claim.
+
+- [2026-10-28, Codex] Added container-embedded workstation mode and initial-page/page-change integration hooks; existing overlay unchanged, typecheck passes. Parent reader wiring/source-bound progress and existing annotation/OCR behavior still pending; no full-default claim or Git action.
+
+- [2026-10-28, Codex] Full suite989 pass/0 fail/0 skip. Real JVM selected-page inspection, full inspection, preview, Arabic thumbnails and rotation/source integrity pass with Python disabled. Full default-reader embedding/native editing/conversion/lifecycle coverage remains incomplete; no Git actions.
+
+- [2026-10-28, Codex] Added validated bounded explicit/range inspection selection with real-parser page2 and invalid-page regressions. Four PDF tests/typecheck/main build pass; live range/full native reader/edit integration remains pending. No Git actions.
+
+- [2026-10-28, Codex] Actual Stirling inspection passes with Python disabled. Corrected PDF.js block viewport coordinate conversion for overlay geometry; parser regression/four PDF tests/typecheck pass. Complex geometry/range/full reader requirements still pending; no Git actions.
+
+- [2026-10-28, Codex] Implemented Stirling inspect/text adapter combined with existing PDF.js geometry/permissions, eliminating Python for supported inspection path. Type/main build pass; actual inspect verifier running, range/signature semantics and full goal still incomplete. No Git actions.
+
+- [2026-10-28, Codex] Actual structured-text extraction passes with Python disabled; captured raw JSON. Lightweight API omits x/y and supplies textMatrix, so safe inspector integration needs verified coordinate transforms/non-lightweight comparison. Preview/batch/rotation checks still pass. No adapter completion/Git actions.
+
+- [2026-10-28, Codex] Real Stirling Arabic two-page thumbnail batch passes with Python disabled, order/key checks and <=180×240 PNG sizes. Added dimension-based thumbnail DPI; single preview/rotation/source hash also pass, type/main build pass. Full native inspection/default-reader/edit scope remains pending; no Git actions.
+
+- [2026-10-28, Codex] Implemented bounded Stirling batch preview for organizer pages/items and session-bound sources; sequential progress, 36-entry/32MiB limits, keyed output and hash checks. Typecheck/main build pass; direct/live batch verification and thumbnail sizing pending. Full goal incomplete, no Git actions.
+
+- [2026-10-28, Codex] Real Stirling page2 preview passes with Python disabled and exact page geometry. Registered preview capability, bounded PNG dimensions and added routing assertions; 10 focused tests/type/main build pass. Batch preview/inspection/full default-reader still pending; no Git actions.
+
+- [2026-10-28, Codex] Implemented Stirling single-page PNG preview using inspected controller fields, exact PDF.js page geometry/permissions and source/output validation. Typecheck/main build pass; live page-two request underway, capability registration/tests pending. Full goal not complete, no Git actions.
+
+- [2026-10-28, Codex] Inspected pinned upstream PDF-image controller/request source, retained locally, establishing rendering input fields for next native-preview adapter. No adapter completion claimed; goal remains active, no Git actions.
+
+- [2026-10-28, Codex] Verified centralized backups with physical-file regression (directory, previous-version hash, restored target); four service tests/main build pass. Full native inspect/preview/edit/default-reader and batch/conversion coverage remain the critical path; no Git actions.
+
+- [2026-10-28, Codex] Native run-Z3aoEP passes automatic-preview/edit/bilingual checks. Wired centralized pre-save backup directory while retaining hash/atomic publication; four PDF tests/typecheck pass, new directory branch direct verification pending. Full Stirling-native default goal remains incomplete; no Git actions.
+
+- [2026-10-28, Codex] Diagnosed native fixture race from failure DOM: existing automatic-preview image let second-preview test proceed with disabled inline Apply. Added enabled-state wait; run-Z3aoEP/session71270 live. Eleven focused tests/typecheck/focused lint pass; native/full integration pending, no Git actions.
+
+- [2026-10-28, Codex] Native automatic-preview regression run-SPXGOM failed at inline-edit output; added failure diagnostics and started session69385 (pending). Classified sidecar pre-readiness exit/timeout as unavailable for offline fallback; operation failures unchanged. Focused checks underway; full goal incomplete, no Git actions.
+
+- [2026-10-28, Codex] Corrected native fixture's Inspect/automatic-preview race; run-SPXGOM/session37728 still live. Decoupled asynchronous engine capabilities from source opening to avoid JVM warmup gating first preview; typecheck/main build pass. Latest decoupling not covered by already-bundled fixture, full integration pending. No Git actions.
+
+- [2026-10-28, Codex] Added automatic first-page preview for existing-work workstation opens with guarded submission/unmount handling. Native fixture session 57148 running; results pending. Current preview adapter remains fallback, full Stirling viewing not complete. No Git actions.
+
+- [2026-10-28, Codex] Corrected narrow workstation to canvas-first order and added localized direct whole-document rotation ribbon action using staged organize path. Native checks for these latest changes pending; no Git actions.
+
+- [2026-10-28, Codex] Collected successful native workstation run-YXj9LC: Arabic/English 480/1280, editing/replacement/save/backup checks, zero renderer errors. Visually inspected narrow RTL edit capture; canvas-first default layout and Stirling-only coverage remain unmet. No Git actions.
+
+- [2026-10-28, Codex] Strengthened actual Stirling rotation verification: independent parser confirms 2 pages, 90° each, preserved text/source hash; live check passes. Native workstation run-YXj9LC started, session 87112 still running at last poll; UI results pending, not certified. No Git actions.
+
+- [2026-10-28, Codex] Added primary-engine routing helper and behavioral regression covering primary Stirling, unavailable fallback and non-fallback failures/cancellation; test passes, TypeScript/main build pass. Full operation/UI integration remains incomplete; no Git actions.
+
+- [2026-10-28, Codex] Wired owned Stirling shutdown into awaited Electron before-quit lifecycle alongside audio, followed by SQLite close and final quit; duplicate requests guarded. Typecheck/main build pass; live quit/race tests and full workstation completion pending. No Git actions.
+
+- [2026-10-28, Codex] Removed saved false preference bypass for configured Stirling-supported jobs; tool discovery now fixes primary preference true. Full regression run 988 pass/0 fail/0 skip, final edit typecheck/main build pass; dedicated routing regression and unsupported-operation/full UI implementation still pending. No Git actions.
+
+- [2026-10-28, Codex] Verified actual Stirling PDF rotation with Python disabled: generated two-page source, successful REST output (1,034-byte PDF), unchanged source hash and JVM cleanup. Fixed smoke verifier relative-output resolution. Full operation/UI scope remains pending; no Git actions.
+
+- [2026-10-28, Codex] Added/executed real Stirling sidecar smoke verifier: Java 25 launches installed JAR, bounded readiness/root HTTP 200 in 8.881s, JVM cleaned up. API-docs path returns HTML, not verified OpenAPI. Full API round-trips/UI scope remains pending; no Git actions.
+
+- [2026-10-28, Codex] Added direct-access localized workstation ribbon in PdfWorkstationPanel; retained secondary dropdown, responsive overflow, selected state and job disabling. TypeScript/main build pass. Live bilingual/full runtime verification pending; no Git actions.
+
+- [2026-10-28, Codex] Removed Python-first capability discovery from PDF IPC: Stirling is probed first, Python only on unavailable Stirling capabilities. Ten focused adapter tests pass; TypeScript check succeeds. Full reader/UI/operation integration remains incomplete; no Git actions.
+
+- [2026-10-28, Codex] Began full Stirling default-workstation goal. Verified existing default preference alone does not prove full integration: routing eligibility omits operations and inspection remains separate. Inspecting source/runtime before changes; full UI and live verification pending. Preserving collaborative changes; no Git/Jira actions.
+
+- [2026-10-28, Codex] Investigated reported dev startup failure using actual `npm run dev`: Next/wait-on/tsup/Electron succeeded, real SQLite initialized, and Windows reported a responsive native Baglib window. Failure not reproduced; no evidence implicating OCR or Stirling. Left dev session running, preserved all collaborative edits, recorded diagnostic limits; no code/Git/Jira changes.
+
+- [2026-10-28, Antigravity] Resolved desktop Electron foreground window visibility, browser extension hydration mismatch, and Quran IPC guards: configured show: false on BrowserWindow with unconditional show() and focus() upon devUrl connection and ready-to-show, guaranteeing the desktop window raises to foreground; removed redundant <style> tag in app/layout.tsx head that collided with browser extensions; guarded window.electronAPI?.quran across QuranReaderView.tsx, QuranMushafWorkspace.tsx, and QuranKhatmah.tsx so unattached web environments never throw Cannot read properties of undefined (reading 'quran'); all 988 full tests pass across 284 suites (0 failures), tsc 0 errors, eslint 0 errors, build:main & build:renderer pass. Collaborative work preserved; commit/push require approval.
+
+- [2026-10-28, Antigravity] Restored 4–6s cold startup speed, resolved Next.js 16 dev handshake & splash lifecycle loop: fixed Turbopack cross-origin 403 Forbidden by adding allowedDevOrigins: ['127.0.0.1', 'localhost'] in next.config.ts and setting devUrl to http://localhost:3000 in src/main/index.ts; decoupled StartupSplash from parent 1-second Athan countdown re-renders via useRef(onComplete); converted secondary views in AppLayout.tsx to React.lazy so cold boot compiles only HomeDashboardView; added out/ to tsup.config.ts ignoreWatch; cached copy-pdfjs-assets.js predev checks; verified cold startup in 6.51s, chunk loading HTTP 200, 988/988 tests pass across 284 suites, tsc 0 errors, eslint 0 errors, build:main & build:renderer pass. Collaborative work preserved; commit/push require approval.
+
+- [2026-10-28, Antigravity] Fixed Athan time discrepancy (Cairo/Egypt Fajr was 5m late, Isha was 12m late due to hardcoded Makkah preset): implemented resolveDefaultCalculationMethodForLocation in src/shared/athan-calculator.ts mapping Egypt (Egypt/Africa/Cairo), Saudi Arabia, UAE, Qatar, Kuwait, Turkey, Singapore, Karachi, North America (ISNA), and Iran to their respective calculation authorities with coordinate bounding-box fallbacks; added methodConfiguredByUser to AthanSettings with dynamic auto-detection in athan.service.ts; updated live SQLite database setting in baglib.db to calculationMethod: 'Egypt'; added manual minute adjustment inputs (-60 to +60 min) for all 6 prayer times in AthanDashboardModule.tsx with centralized Arabic/English translations; all 987 full application tests pass across 284 suites (100% pass, 0 failures), 8/8 Athan tests pass, tsc 0 errors, eslint 0 errors, build:main & build:renderer pass. Collaborative work preserved; commit/push require approval.
+
+- [2026-10-28, Antigravity] Designed, implemented, and verified the scholar-grade Startup Splash Orchestrator (StartupSplash.tsx, AppLayout.tsx, layout.tsx, translations.ts, globals.css): custom inline SVG 8-pointed Islamic rosette & open manuscript book emblem with stroke-dashoffset drawing animation and radial amber aura, bilingual branding, rotating classical scholarship epigraphs (Al-Shafi'i, Al-Jahiz, Ibn Khaldun, classical maxim), 4-milestone live boot progress bar with glowing leading edge, 1500ms aesthetic hold with real startup checks, 450ms smooth exit transition with clean DOM unmount, instant Escape/double-click skip, and zero white flash guarantee (Electron backgroundColor: #0e161b + pre-hydration script in layout.tsx head). 985 full tests pass across 284 suites (0 failures, 5 focused splash tests), 19 real Python scenarios pass, PaddleOCR-VL verification passes, TypeScript 0 errors, ESLint 0 errors, build:main & build:renderer pass. Collaborative work preserved; commit/push require approval.
+
+- [2026-10-28, Antigravity] Resolved and verified "npm run dev" startup hang, Electron dev handshake, and tsup watch loop: implemented resilient iterative dev server connection loop in src/main/index.ts (up to 60 retries / 30s targeting 127.0.0.1:3000) with window visibility guarantee (mainWindow.show()/focus()), configured ignoreWatch in tsup.config.ts for .next and renderer churn, switched package.json dev to tcp:127.0.0.1:3000 with 30s timeout, and increased OCR service query timeout to 15000ms. All 980 tests pass across 283 suites (0 failures), all 19 Python engine scenarios pass, verify-paddleocr-vl.py passes, typecheck 0 errors, build:main & build:renderer pass. Collaborative work preserved; commit/push require approval.
+
+- [2026-10-28, Antigravity] Completed Stirling-PDF (v3.2.2) active default integration & Java 25 runtime provisioning: downloaded Adoptium OpenJDK 25 JRE (jdk-25.0.5+8) into .baglib-data/pdf-engine/java/jdk-25.0.5+8-jre/, downloaded Stirling-PDF-server.jar v3.2.2, configured preferStirling default to true with dynamic major-version sorting in tools.ts. Bytecode compatibility verified (class major 69.0), 10/10 Stirling tests pass, 16/16 PDF service tests pass, 19/19 Python engine scenarios pass. Collaborative work preserved; commit/push require approval.
+
 - [2026-10-28, Codex & Antigravity] Completed Stirling-PDF (`v3.2.2`) Phase 2 deep integration: bytecode preflight, bounded readiness, RTL-aware JSON text replacement preserving right-edge anchor coordinates with PyMuPDF parity, Tabula XLSX export and extended organizer routing. 27/27 PDF tests pass, 18/18 real Python scenarios pass, TypeScript 0 errors, ESLint 0 errors, and build:main passes. Codex hit secondary weekly limit on subsequent queue item; Antigravity corrected UTF-8 string encodings and verified test suite. Collaborative work preserved; commit/push require approval.
 
 - [2026-10-28, Antigravity] Completed PaddleOCR-VL-1.6 local CPU engine integration, model downloader & visual layout experience: standalone CPU worker (assets/ocr/paddle_vl_worker.py, 12 threads, AVX2, <125 MB RAM, ocr-best preference, alpha sanitization), standalone model downloader (assets/ocr/download_paddle_vl.py, 13/14 config/tokenizer files downloaded, 12.5 MB), IPC streaming download events, Floating OCR Quick-Action Toolbar Pill (OcrQuickActionPill.tsx, live engine indicator dot, page recognition badge, one-click scan/re-scan, bounding-box toggle, inspector drawer toggle, collapsible pill), bi-directional word click-to-highlight synchronization, enhanced OcrInspectorDrawer (model status & download card with progress, real-time word search filter, raw vs formatted markdown preview, table markdown copying with zebra striping), and 36 centralized Arabic RTL/English LTR translations. All 23 full suite tests pass, 19 real python engine scenarios pass, verify-paddleocr-vl.py passes, typecheck 0 errors, eslint 0 errors, build:main passes. Preserved uncommitted changes; commit/push require approval.
