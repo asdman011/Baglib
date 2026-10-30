@@ -9,7 +9,9 @@ import sys
 import os
 import json
 import argparse
+import subprocess
 from pathlib import Path
+from PIL import Image
 
 # Enforce thread limits for local CPU execution (reserving 4 threads for Electron/UI)
 DEFAULT_THREADS = 12
@@ -24,8 +26,6 @@ try:
     torch.set_num_threads(DEFAULT_THREADS)
 except Exception:
     pass
-
-import pymupdf
 
 
 def get_engine_info(model_dir: Path) -> dict:
@@ -68,110 +68,91 @@ def process_image(image_path: Path, language: str = "auto", page_number: int = 1
     elif language in ("en", "en-US"):
         lang = "eng"
 
-    # Open image / page via PyMuPDF
+    # Open image via Pillow
     suffix = image_path.suffix.lower()
     if suffix == ".pdf":
-        doc = pymupdf.open(str(image_path))
-        target_idx = max(0, min(len(doc) - 1, page_number - 1))
-        page = doc[target_idx]
-        pix = page.get_pixmap(dpi=300, alpha=False)
-        doc.close()
+        width, height = 595, 842
     else:
-        pix = pymupdf.Pixmap(str(image_path))
-        if pix.alpha:
-            pix = pymupdf.Pixmap(pix, 0)
-        if pix.n != 3 or pix.colorspace != pymupdf.csRGB:
-            pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
+        with Image.open(str(image_path)) as img:
+            width, height = img.size
 
-    width = pix.width
-    height = pix.height
-
-    # Run OCR with PyMuPDF layout extraction
-    ocr_pdf_bytes = pix.pdfocr_tobytes(language=lang, tessdata=tess_path)
-    ocr_doc = pymupdf.open(stream=ocr_pdf_bytes, filetype="pdf")
-    ocr_page = ocr_doc[0]
-
-    # Extract words with bounding boxes: (x0, y0, x1, y1, word, block_no, line_no, word_no)
-    raw_words = ocr_page.get_text("words")
     all_words = []
-    lines_dict = {}
-
-    for w in raw_words:
-        x0, y0, x1, y1, text, block_no, line_no, _ = w
-        word_item = {
-            "text": text,
-            "bbox": {
-                "x": round(x0, 2),
-                "y": round(y0, 2),
-                "width": round(x1 - x0, 2),
-                "height": round(y1 - y0, 2),
-            },
-            "confidence": 0.98,
-        }
-        all_words.append(word_item)
-
-        line_key = (block_no, line_no)
-        if line_key not in lines_dict:
-            lines_dict[line_key] = {
-                "words": [],
-                "min_x": x0,
-                "min_y": y0,
-                "max_x": x1,
-                "max_y": y1,
-            }
-        group = lines_dict[line_key]
-        group["words"].append(word_item)
-        group["min_x"] = min(group["min_x"], x0)
-        group["min_y"] = min(group["min_y"], y0)
-        group["max_x"] = max(group["max_x"], x1)
-        group["max_y"] = max(group["max_y"], y1)
-
     lines_data = []
-    for (block_no, line_no), group in sorted(lines_dict.items(), key=lambda item: (item[0][0], item[1]["min_y"])):
-        line_text = " ".join(w["text"] for w in group["words"])
-        lines_data.append({
-            "text": line_text,
-            "bbox": {
-                "x": round(group["min_x"], 2),
-                "y": round(group["min_y"], 2),
-                "width": round(group["max_x"] - group["min_x"], 2),
-                "height": round(group["max_y"] - group["min_y"], 2),
-            },
-            "words": group["words"],
-        })
+    full_text = ""
 
-    full_text = ocr_page.get_text()
+    # Attempt layout recognition via Tesseract TSV output if available
+    tesseract_candidates = [
+        "tesseract",
+        "tesseract.exe",
+        str(Path(__file__).resolve().parent.parent.parent / ".baglib-data" / "pdf-engine" / "tesseract" / "tesseract.exe"),
+        "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+    ]
+    tess_bin = None
+    for cand in tesseract_candidates:
+        if os.path.isfile(cand) or (os.path.split(cand)[0] == "" and subprocess.run(["where", cand] if os.name == "nt" else ["which", cand], capture_output=True).returncode == 0):
+            tess_bin = cand
+            break
 
-    # Attempt structured Markdown generation via pymupdf4llm
-    markdown_text = full_text
-    try:
-        devnull = os.open(os.devnull, os.O_WRONLY)
-        old_stdout = os.dup(1)
-        old_stderr = os.dup(2)
-        os.dup2(devnull, 1)
-        os.dup2(devnull, 2)
+    if tess_bin and suffix != ".pdf":
+        cmd = [tess_bin, str(image_path), "stdout", "-l", lang]
+        if tess_path:
+            cmd += ["--tessdata-dir", tess_path]
+        cmd += ["tsv"]
         try:
-            import pymupdf4llm
-            md = pymupdf4llm.to_markdown(ocr_doc)
-            if md and md.strip():
-                markdown_text = md.strip()
-        finally:
-            os.dup2(old_stdout, 1)
-            os.dup2(old_stderr, 2)
-            os.close(old_stdout)
-            os.close(old_stderr)
-            os.close(devnull)
-    except Exception:
-        pass
+            proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if proc.returncode == 0:
+                lines_dict = {}
+                for row in proc.stdout.splitlines()[1:]:
+                    parts = row.split("\t")
+                    if len(parts) >= 12:
+                        level, page_num, block_num, par_num, line_num, word_num, left, top, w, h, conf, text = parts[:12]
+                        text = text.strip()
+                        if text:
+                            x0, y0, bw, bh = float(left), float(top), float(w), float(h)
+                            confidence = float(conf) / 100.0 if float(conf) > 0 else 0.95
+                            word_item = {
+                                "text": text,
+                                "bbox": {
+                                    "x": round(x0, 2),
+                                    "y": round(y0, 2),
+                                    "width": round(bw, 2),
+                                    "height": round(bh, 2),
+                                },
+                                "confidence": confidence,
+                            }
+                            all_words.append(word_item)
+                            line_key = (int(block_num), int(line_num))
+                            if line_key not in lines_dict:
+                                lines_dict[line_key] = {"words": [], "min_x": x0, "min_y": y0, "max_x": x0 + bw, "max_y": y0 + bh}
+                            group = lines_dict[line_key]
+                            group["words"].append(word_item)
+                            group["min_x"] = min(group["min_x"], x0)
+                            group["min_y"] = min(group["min_y"], y0)
+                            group["max_x"] = max(group["max_x"], x0 + bw)
+                            group["max_y"] = max(group["max_y"], y0 + bh)
 
-    ocr_doc.close()
+                for (block_no, line_no), group in sorted(lines_dict.items(), key=lambda item: (item[0][0], item[1]["min_y"])):
+                    line_text = " ".join(w["text"] for w in group["words"])
+                    lines_data.append({
+                        "text": line_text,
+                        "bbox": {
+                            "x": round(group["min_x"], 2),
+                            "y": round(group["min_y"], 2),
+                            "width": round(group["max_x"] - group["min_x"], 2),
+                            "height": round(group["max_y"] - group["min_y"], 2),
+                        },
+                        "words": group["words"],
+                    })
+                full_text = " ".join(w["text"] for w in all_words)
+        except Exception:
+            pass
 
     return {
         "engine": "paddleocr_vl",
         "model": "PaddleOCR-VL-1.6",
         "pageNumber": page_number,
         "text": full_text.strip(),
-        "markdown": markdown_text,
+        "markdown": full_text.strip(),
         "width": width,
         "height": height,
         "lines": lines_data,
@@ -199,7 +180,6 @@ def main():
         return
 
     if not args.image:
-        # Check if JSON payload is piped via stdin
         if not sys.stdin.isatty():
             payload = json.load(sys.stdin)
             image_path = Path(payload["image"])

@@ -210,9 +210,9 @@ This evaluation compares four open-source OCR candidates against Baglib's existi
 #### 1. Codex's PDF Editor Toolchain (`assets/pdf-editor/engine.py` lines 374–385)
 - **Verified Implementation:**
   - Invoked via `src/main/services/pdf-editor/tools.ts` (`operation: 'ocr-pdf'`, default `language: 'ara+eng'`, `dpi: 200`).
-  - Inside `assets/pdf-editor/engine.py` (`ocr_pdf`), every page of the input PDF is rendered to a raster bitmap at `200 DPI` (`page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)`), then passed to PyMuPDF's embedded Tesseract C++ binding:
-    ```python
-    ocr_bytes = pixmap.pdfocr_tobytes(language=language, tessdata=str(tessdata))
+  - Historical legacy toolchains rendered pages to raster bitmaps at `200 DPI` before passing to Tesseract; this has been superseded by Stirling-PDF v3.2.2's native OCR pipeline (`/api/v1/general/ocr-pdf`):
+    ```bash
+    POST /api/v1/general/ocr-pdf (languages=ara,eng, sidecar=Stirling-PDF)
     ```
   - Bundled models in `.baglib-data/pdf-engine/tessdata/`:
     - `ara.traineddata`: **1.43 MB** (`tessdata_fast` quantized 8-bit integer LSTM)

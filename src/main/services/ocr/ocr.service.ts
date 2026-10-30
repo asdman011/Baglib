@@ -152,7 +152,7 @@ export class OcrService {
     if (this.isPaddleOcrSupported()) {
       try {
         const output = await new Promise<string>((resolve, reject) => {
-          execFile(python, [worker, '--info'], { windowsHide: true, timeout: 5000 }, (err, stdout) => {
+          execFile(python, [worker, '--info'], { windowsHide: true, timeout: 15000 }, (err, stdout) => {
             if (err) reject(err); else resolve(stdout);
           });
         });
