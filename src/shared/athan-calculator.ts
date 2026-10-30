@@ -120,6 +120,182 @@ export const CALCULATION_METHOD_PRESETS: Record<CalculationMethodId, Calculation
   },
 };
 
+/**
+ * Resolves the recommended calculation method preset for a given location
+ * using country names, timezones, city names, and coordinate boundaries.
+ */
+export function resolveDefaultCalculationMethodForLocation(
+  coords?: Partial<CoordinatesConfig> | null
+): CalculationMethodId {
+  if (!coords) return 'MWL';
+
+  const tz = (coords.timezone || '').toLowerCase();
+  const country = (coords.countryName || '').toLowerCase();
+  const city = (coords.cityName || '').toLowerCase();
+
+  // 1. Egypt (Egyptian General Authority of Survey / الهيئة المصرية العامة للمساحة)
+  if (
+    country.includes('egypt') ||
+    country.includes('مصر') ||
+    tz.includes('cairo') ||
+    city.includes('cairo') ||
+    city.includes('alexandria') ||
+    city.includes('giza') ||
+    city.includes('القاهرة') ||
+    city.includes('الإسكندرية')
+  ) {
+    return 'Egypt';
+  }
+
+  // 2. Saudi Arabia (Umm Al-Qura / جامعة أم القرى)
+  if (
+    country.includes('saudi') ||
+    country.includes('سعودي') ||
+    country === 'sa' ||
+    tz.includes('riyadh') ||
+    city.includes('makkah') ||
+    city.includes('mecca') ||
+    city.includes('medina') ||
+    city.includes('madinah') ||
+    city.includes('riyadh') ||
+    city.includes('jeddah') ||
+    city.includes('مكة') ||
+    city.includes('المدينة') ||
+    city.includes('الرياض')
+  ) {
+    return 'Makkah';
+  }
+
+  // 3. United Arab Emirates (Dubai / دبي)
+  if (
+    country.includes('united arab emirates') ||
+    country.includes('emirates') ||
+    country.includes('uae') ||
+    country.includes('إمارات') ||
+    tz.includes('dubai') ||
+    city.includes('dubai') ||
+    city.includes('abu dhabi') ||
+    city.includes('sharjah') ||
+    city.includes('دبي') ||
+    city.includes('أبوظبي')
+  ) {
+    return 'Dubai';
+  }
+
+  // 4. Qatar (Calendar House / دار التقويم القطري)
+  if (
+    country.includes('qatar') ||
+    country.includes('قطر') ||
+    tz.includes('qatar') ||
+    city.includes('doha') ||
+    city.includes('الدوحة')
+  ) {
+    return 'Qatar';
+  }
+
+  // 5. Kuwait (Ministry of Awqaf / وزارة الأوقاف - الكويت)
+  if (
+    country.includes('kuwait') ||
+    country.includes('كويت') ||
+    tz.includes('kuwait') ||
+    city.includes('الكويت')
+  ) {
+    return 'Kuwait';
+  }
+
+  // 6. Turkey (Diyanet / رئاسة الشؤون الدينية التركية)
+  if (
+    country.includes('turkey') ||
+    country.includes('türkiye') ||
+    country.includes('تركيا') ||
+    tz.includes('istanbul') ||
+    city.includes('istanbul') ||
+    city.includes('ankara')
+  ) {
+    return 'Turkey';
+  }
+
+  // 7. Singapore / Malaysia / Indonesia / Brunei (MUIS / المجلس الإسلامي بسنغافورة)
+  if (
+    country.includes('singapore') ||
+    country.includes('malaysia') ||
+    country.includes('indonesia') ||
+    country.includes('brunei') ||
+    country.includes('سنغافورة') ||
+    country.includes('ماليزيا') ||
+    country.includes('إندونيسيا') ||
+    tz.includes('singapore') ||
+    tz.includes('kuala_lumpur') ||
+    tz.includes('jakarta')
+  ) {
+    return 'Singapore';
+  }
+
+  // 8. Pakistan / India / Bangladesh / Afghanistan (University of Islamic Sciences, Karachi)
+  if (
+    country.includes('pakistan') ||
+    country.includes('india') ||
+    country.includes('bangladesh') ||
+    country.includes('afghanistan') ||
+    country.includes('باكستان') ||
+    country.includes('الهند') ||
+    country.includes('بنغلاديش') ||
+    tz.includes('karachi') ||
+    tz.includes('kolkata') ||
+    tz.includes('calcutta') ||
+    tz.includes('dhaka') ||
+    tz.includes('kabul')
+  ) {
+    return 'Karachi';
+  }
+
+  // 9. North America (ISNA / الجمعية الإسلامية لأمريكا الشمالية)
+  if (
+    country.includes('united states') ||
+    country.includes('usa') ||
+    country.includes('canada') ||
+    country.includes('أمريكا') ||
+    country.includes('كندا') ||
+    tz.startsWith('america/')
+  ) {
+    return 'ISNA';
+  }
+
+  // 10. Iran (Institute of Geophysics, Tehran)
+  if (
+    country.includes('iran') ||
+    country.includes('إيران') ||
+    tz.includes('tehran') ||
+    city.includes('tehran')
+  ) {
+    return 'Tehran';
+  }
+
+  // 11. Coordinate-based bounding boxes fallback
+  const lat = coords.latitude;
+  const lng = coords.longitude;
+  if (typeof lat === 'number' && typeof lng === 'number' && Number.isFinite(lat) && Number.isFinite(lng)) {
+    // Egypt: 21.9°N to 32.0°N, 24.5°E to 37.0°E
+    if (lat >= 21.9 && lat <= 32.0 && lng >= 24.5 && lng <= 37.0) {
+      return 'Egypt';
+    }
+    // Arabian Peninsula (Saudi Arabia): 16.0°N to 32.5°N, 34.5°E to 55.7°E
+    if (lat >= 16.0 && lat <= 32.5 && lng >= 34.5 && lng <= 55.7) {
+      return 'Makkah';
+    }
+    // North America: 24.0°N to 72.0°N, -170.0°W to -50.0°W
+    if (lat >= 24.0 && lat <= 72.0 && lng >= -170.0 && lng <= -50.0) {
+      return 'ISNA';
+    }
+    // South Asia: 6.0°N to 37.0°N, 60.0°E to 98.0°E
+    if (lat >= 6.0 && lat <= 37.0 && lng >= 60.0 && lng <= 98.0) {
+      return 'Karachi';
+    }
+  }
+
+  return 'MWL';
+}
+
 export const HIJRI_MONTHS_AR = [
   'محرم',
   'صفر',

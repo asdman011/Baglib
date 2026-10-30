@@ -620,6 +620,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
                 onChange={(e) =>
                   void onUpdateSettings({
                     calculationMethod: e.target.value as CalculationMethodId,
+                    methodConfiguredByUser: true,
                   })
                 }
                 className="w-full rounded-xl border border-subtle bg-surface px-2.5 py-1.5 text-main"
@@ -762,6 +763,45 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
                 className="w-full accent-emerald-600"
               />
             </label>
+          </div>
+
+          {/* 4. Manual Minute Adjustments (± Minutes) */}
+          <div className="space-y-2 pt-2 border-t border-subtle">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <span className="text-sm font-semibold text-main">{tr.athanAdjustmentsTitle}</span>
+              <span className="text-xs text-muted">{tr.athanAdjustmentsSubtitle}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+              {(['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).map((p) => {
+                const curVal = settings.adjustments?.[p] || 0;
+                return (
+                  <label key={p} className="flex flex-col items-center gap-1 p-2 rounded-xl border border-subtle bg-surface">
+                    <span className="text-xs font-medium text-muted">{PRAYER_LABELS[p][effectiveLang]}</span>
+                    <div className="flex items-center gap-1 w-full justify-center">
+                      <input
+                        type="number"
+                        min={-60}
+                        max={60}
+                        step={1}
+                        data-athan-adjust={p}
+                        value={curVal}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10) || 0;
+                          void onUpdateSettings({
+                            adjustments: {
+                              ...settings.adjustments,
+                              [p]: val,
+                            },
+                          });
+                        }}
+                        className="w-16 text-center rounded-lg border border-subtle bg-background px-1 py-1 text-xs text-main font-mono"
+                      />
+                      <span className="text-[10px] text-muted">{tr.athanAdjustmentsMinute}</span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

@@ -12,8 +12,10 @@ import {
   evaluatePrayerScheduleStatus,
   parseHHMMToMinutes,
   resolveIqamahTimes,
+  resolveDefaultCalculationMethodForLocation,
 } from '../../src/shared/athan-calculator';
 import {
+  type FetchLike,
   parseMawaqitPayload,
   fetchMawaqitMosqueTimes,
 } from '../../src/main/services/athan/location-mawaqit.service';
@@ -334,5 +336,153 @@ test('scheduled Athan uses the configured timezone and audio remains independent
   assert.equal(notifications, 0);
   const snapshot = service.getState();
   assert.equal(snapshot.activeWindow?.prayer, 'asr');
+  db.close();
+});
+
+test('Calculation Method Auto-Resolver: maps regions and coordinates to regional authority presets', () => {
+  // Egypt (Cairo / Africa/Cairo)
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'Egypt', timezone: 'Africa/Cairo', cityName: 'Cairo' }),
+    'Egypt'
+  );
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ timezone: 'Africa/Cairo' }),
+    'Egypt'
+  );
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'مصر' }),
+    'Egypt'
+  );
+
+  // Saudi Arabia (Makkah / Asia/Riyadh)
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'Saudi Arabia', timezone: 'Asia/Riyadh' }),
+    'Makkah'
+  );
+
+  // UAE (Dubai)
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'United Arab Emirates', timezone: 'Asia/Dubai' }),
+    'Dubai'
+  );
+
+  // Qatar
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'Qatar', timezone: 'Asia/Qatar' }),
+    'Qatar'
+  );
+
+  // Kuwait
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'Kuwait', timezone: 'Asia/Kuwait' }),
+    'Kuwait'
+  );
+
+  // Turkey (Diyanet)
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'Turkey', timezone: 'Europe/Istanbul' }),
+    'Turkey'
+  );
+
+  // Singapore / Malaysia (MUIS)
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'Singapore', timezone: 'Asia/Singapore' }),
+    'Singapore'
+  );
+
+  // Pakistan / India (Karachi)
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'Pakistan', timezone: 'Asia/Karachi' }),
+    'Karachi'
+  );
+
+  // North America (ISNA)
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'United States', timezone: 'America/New_York' }),
+    'ISNA'
+  );
+
+  // Iran (Tehran)
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'Iran', timezone: 'Asia/Tehran' }),
+    'Tehran'
+  );
+
+  // Geographic bounding box fallback (e.g. lat/lng in Egypt without country name)
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ latitude: 30.0626, longitude: 31.2497 }),
+    'Egypt'
+  );
+
+  // Default fallback for general Europe/unmapped
+  assert.equal(
+    resolveDefaultCalculationMethodForLocation({ countryName: 'United Kingdom', timezone: 'Europe/London' }),
+    'MWL'
+  );
+  assert.equal(resolveDefaultCalculationMethodForLocation(null), 'MWL');
+});
+
+test('AthanService: auto-detecting Cairo automatically adopts Egypt method, resolving 12m/5m discrepancies', async () => {
+  const db = new Database(':memory:');
+  db.exec('CREATE TABLE app_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)');
+  const repo = new SqliteSettingsRepository(db);
+
+  const mockCairoFetch: FetchLike = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      status: 'success',
+      country: 'Egypt',
+      country_name: 'Egypt',
+      city: 'Cairo',
+      lat: 30.06263,
+      lon: 31.24967,
+      timezone: 'Africa/Cairo',
+    }),
+    text: async () => '',
+  });
+
+  const now = new Date('2026-10-28T07:00:00Z');
+  const service = new AthanService(repo, () => now, mockCairoFetch);
+
+  // Initial settings without location detection
+  const initial = service.getSettings();
+  assert.equal(initial.calculationMethod, 'Makkah', 'Initial Makkah default for Makkah coords');
+
+  // Trigger auto-location detection for Cairo
+  const result = await service.detectAutoLocation();
+  assert.ok(result.ok);
+  assert.equal(result.location?.cityName, 'Cairo');
+
+  // State should now automatically use 'Egypt' calculation method!
+  const state = service.getState();
+  assert.equal(state.settings.calculationMethod, 'Egypt', 'Auto-detected Cairo adopts Egypt method');
+  assert.equal(state.times.fajr, '05:38', 'Fajr matches official Egyptian Survey (05:38, not 05:43)');
+  assert.equal(state.times.isha, '19:30', 'Isha matches official Egyptian Survey (19:30, not 19:42)');
+  assert.equal(state.times.sunrise, '07:06');
+  assert.equal(state.times.dhuhr, '12:39');
+
+  // Manual minute adjustments: verify fine-tuning offsets work as expected
+  const adjustedState = service.updateSettings({
+    adjustments: {
+      ...state.settings.adjustments,
+      asr: -1,
+      maghrib: -1,
+    },
+  });
+  assert.equal(adjustedState.times.asr, '15:47', 'Asr offset by -1 min yields 15:47');
+  assert.equal(adjustedState.times.maghrib, '18:11', 'Maghrib offset by -1 min yields 18:11');
+
+  // Explicit user override: if user explicitly sets calculationMethod, methodConfiguredByUser prevents overwrite
+  service.updateSettings({
+    calculationMethod: 'ISNA',
+    methodConfiguredByUser: true,
+  });
+  assert.equal(service.getSettings().calculationMethod, 'ISNA');
+
+  // Re-detecting auto-location should NOT overwrite user's explicit choice
+  await service.detectAutoLocation();
+  assert.equal(service.getSettings().calculationMethod, 'ISNA', 'Preserves explicit user choice');
+
   db.close();
 });

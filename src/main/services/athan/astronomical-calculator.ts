@@ -4,6 +4,7 @@
 
 export {
   CALCULATION_METHOD_PRESETS,
+  resolveDefaultCalculationMethodForLocation,
   HIJRI_MONTHS_AR,
   HIJRI_MONTHS_EN,
   PRAYER_LABELS,

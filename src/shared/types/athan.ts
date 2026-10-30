@@ -92,6 +92,7 @@ export interface AthanSettings {
   autoLocationCache?: CoordinatesConfig & { fetchedAt: string };
   mawaqit: MawaqitConfig;
   calculationMethod: CalculationMethodId;
+  methodConfiguredByUser?: boolean;
   customFajrAngle: number;
   customIshaAngle: number;
   asrMethod: AsrJuristicMethod;

@@ -22,6 +22,7 @@ import {
   PRAYER_LABELS,
   buildPrayerStatusSnapshot,
   parseHHMMToMinutes,
+  resolveDefaultCalculationMethodForLocation,
 } from './astronomical-calculator';
 export { PRAYER_LABELS };
 import {
@@ -71,9 +72,27 @@ export class AthanService {
     if (!stored || typeof stored !== 'object') {
       return structuredClone(DEFAULT_ATHAN_SETTINGS);
     }
+
+    const methodConfiguredByUser = stored.methodConfiguredByUser ?? false;
+    let calculationMethod = stored.calculationMethod || DEFAULT_ATHAN_SETTINGS.calculationMethod;
+
+    // If calculation method has not been explicitly locked in by user,
+    // dynamically resolve the standard authority preset for the active location.
+    if (!methodConfiguredByUser) {
+      const activeCoords =
+        stored.locationMode === 'auto' && stored.autoLocationCache
+          ? stored.autoLocationCache
+          : stored.manualLocation;
+      if (activeCoords) {
+        calculationMethod = resolveDefaultCalculationMethodForLocation(activeCoords);
+      }
+    }
+
     return {
       ...DEFAULT_ATHAN_SETTINGS,
       ...stored,
+      calculationMethod,
+      methodConfiguredByUser,
       manualLocation: {
         ...DEFAULT_ATHAN_SETTINGS.manualLocation,
         ...(stored.manualLocation || {}),
@@ -115,9 +134,17 @@ export class AthanService {
 
   updateSettings(partial: Partial<AthanSettings>): PrayerStatusSnapshot {
     const current = this.getSettings();
+    const explicitMethodConfigured =
+      partial.methodConfiguredByUser !== undefined
+        ? partial.methodConfiguredByUser
+        : partial.calculationMethod !== undefined
+        ? true
+        : current.methodConfiguredByUser;
+
     const merged: AthanSettings = {
       ...current,
       ...partial,
+      methodConfiguredByUser: explicitMethodConfigured,
       manualLocation: {
         ...current.manualLocation,
         ...(partial.manualLocation || {}),
@@ -177,13 +204,18 @@ export class AthanService {
   }> {
     const result = await detectAutomaticLocation(this.fetchFn);
     if (result.ok && result.location) {
-      const state = this.updateSettings({
+      const current = this.getSettings();
+      const partial: Partial<AthanSettings> = {
         locationMode: 'auto',
         autoLocationCache: {
           ...result.location,
           fetchedAt: this.now().toISOString(),
         },
-      });
+      };
+      if (!current.methodConfiguredByUser) {
+        partial.calculationMethod = resolveDefaultCalculationMethodForLocation(result.location);
+      }
+      const state = this.updateSettings(partial);
       return { ok: true, location: result.location, state };
     }
     return {
