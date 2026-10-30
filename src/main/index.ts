@@ -1,10 +1,8 @@
 import { errorMessage } from '../shared/errors';
-import { app, BrowserWindow, protocol, net } from "electron";
+import { app, BrowserWindow, protocol } from "electron";
 import path from "path";
 import serve from "electron-serve";
-import { pathToFileURL } from "url";
 import fs from "fs";
-import { Readable } from "stream";
 import { setupSystemIPC } from "./ipc/system";
 import { setupDatabaseIPC } from "./ipc/database";
 import { setupMetadataIPC } from "./ipc/metadata";
@@ -28,11 +26,16 @@ import { registerSunnahIpc } from "./ipc/sunnah";
 import { registerQuranIpc } from "./ipc/quran";
 import { registerAthanIpc, startAthanScheduler } from "./ipc/athan";
 import { registerStudyNotesIpc } from "./ipc/study-notes";
-import { registerPdfEditorIpc } from "./ipc/pdf-editor";
+import { registerPdfEditorIpc, shutdownPdfViewCaches } from "./ipc/pdf-editor";
+import { registerPoetryIpc } from './ipc/poetry';
+import { defaultStirlingSidecar, resolveStirlingEndpoint } from './services/pdf-editor/stirling';
+import { pdfEngineTools } from './services/pdf-editor/tools';
+import { stirlingProcessor } from './services/pdf-editor/processor';
 import { startKhatmahReminders } from './services/quran/khatmah-reminders';
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 import { installPdfDiagnosticFilter } from "./services/digital/pdf-diagnostics";
+import { streamAssetResponse } from './services/digital/asset-range';
 
 // Register privileged custom schemes before app.whenReady()
 // Grants standard, secure, fetch, streaming, CORS, and CSP privileges to reader assets.
@@ -113,6 +116,13 @@ const MIME_BY_EXT: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
   '.m4b': 'audio/mp4',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.ogg': 'audio/ogg',
+  '.oga': 'audio/ogg',
+  '.opus': 'audio/ogg',
+  '.flac': 'audio/flac',
+  '.webm': 'audio/webm',
 };
 
 function resolveLocalFilePath(rawUrlPath: string): string | null {
@@ -144,7 +154,7 @@ function resolveLocalFilePath(rawUrlPath: string): string | null {
 
 async function handleAssetProtocolRequest(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
-  const allowedOrigin = origin === 'http://localhost:3000' || origin === 'app://-';
+  const allowedOrigin = origin === 'http://localhost:3000' || origin === 'http://127.0.0.1:3000' || origin === 'app://-';
   if (origin && origin !== 'null' && !allowedOrigin) return new Response(null, { status: 403 });
   const corsHeaders: Record<string, string> = allowedOrigin ? {
     'Access-Control-Allow-Origin': origin!,
@@ -154,6 +164,7 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
     'Vary': 'Origin',
   } : {};
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
+  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405, headers: { ...corsHeaders, Allow: 'GET, HEAD, OPTIONS' } });
   try {
     let rawPath = request.url.replace(/^(baglib-asset|local-pdf):\/\//, '');
     const questionIndex = rawPath.indexOf('?');
@@ -168,43 +179,7 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
 
     const ext = path.extname(filePath).toLowerCase();
     const mimeType = MIME_BY_EXT[ext] || 'application/octet-stream';
-    const stat = fs.statSync(filePath);
-    const fileSize = stat.size;
-
-    const rangeHeader = request.headers.get('range');
-    if (rangeHeader) {
-      const parts = rangeHeader.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-
-      if (start >= fileSize || end >= fileSize) {
-        return new Response('Requested range not satisfiable', {
-          status: 416,
-          headers: { 'Content-Range': `bytes */${fileSize}` },
-        });
-      }
-
-      const chunksize = end - start + 1;
-      const nodeStream = fs.createReadStream(filePath, { start, end });
-      const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
-
-      return new Response(webStream, {
-        status: 206,
-        headers: {
-          ...corsHeaders,
-          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': chunksize.toString(),
-          'Content-Type': mimeType,
-        },
-      });
-    }
-
-    const response = await net.fetch(pathToFileURL(filePath).toString());
-    const headers = new Headers(response.headers);
-    for (const [name, value] of Object.entries(corsHeaders)) headers.set(name, value);
-    headers.set('Content-Type', mimeType);
-    return new Response(response.body, { status: response.status, headers });
+    return await streamAssetResponse(request, filePath, mimeType, corsHeaders);
   } catch (err: unknown) {
     console.error('[baglib:protocol] Error streaming asset:', err);
     return new Response('Internal asset streaming error', { status: 500 });
@@ -213,8 +188,10 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
+    show: false,
     width: 1200,
     height: 800,
+    backgroundColor: '#0e161b',
     webPreferences: {
       autoplayPolicy: 'no-user-gesture-required',
       preload: path.join(__dirname, "../preload/index.js"),
@@ -225,18 +202,45 @@ async function createWindow() {
     },
   });
 
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    if (errorCode !== -3) {
+      console.warn(`[baglib:renderer] Navigation failed (${errorCode}: ${errorDescription}) on ${validatedURL}`);
+    }
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[baglib:renderer] Render process crashed/gone:', details.reason, details.exitCode);
+  });
+
   if (isDev) {
-    try {
-      await mainWindow.loadURL("http://localhost:3000");
-    } catch (err) {
-      console.warn("[baglib] Failed to connect to dev server on first attempt, retrying in 1s...", err);
-      setTimeout(() => {
+    const devUrl = "http://localhost:3000";
+    let loaded = false;
+    const maxRetries = 60;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (!mainWindow || mainWindow.isDestroyed()) break;
+      try {
+        await mainWindow.loadURL(devUrl);
+        loaded = true;
+        console.log(`[baglib] Successfully connected to dev server on attempt ${attempt}.`);
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.loadURL("http://localhost:3000").catch((retryErr) => {
-            console.error("[baglib] Secondary dev server loadURL error:", retryErr);
-          });
+          mainWindow.show();
+          mainWindow.focus();
         }
-      }, 1000);
+        break;
+      } catch {
+        if (attempt === 1 || attempt % 5 === 0) {
+          console.log(`[baglib] Dev server not ready yet (attempt ${attempt}/${maxRetries}), retrying in 500ms...`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    if (!loaded && mainWindow && !mainWindow.isDestroyed()) {
+      console.error(`[baglib] Could not connect to dev server at ${devUrl} after ${maxRetries} attempts.`);
     }
   } else {
     await loadApp(mainWindow);
@@ -249,6 +253,7 @@ app.setAsDefaultProtocolClient('baglib');
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
+  process.exit(0);
 } else {
   app.on('second-instance', (_event, argv) => {
     if (mainWindow) {
@@ -296,6 +301,7 @@ registerQuranIpc();
 registerAthanIpc();
 registerStudyNotesIpc();
 registerPdfEditorIpc();
+registerPoetryIpc();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection
@@ -320,12 +326,34 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+  setImmediate(() => {
+    if (shutdownStarted || !mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      const tools = pdfEngineTools();
+      stirlingProcessor.startWatchedFoldersDaemon(tools);
+      void resolveStirlingEndpoint(tools).catch(error => {
+        if (!shutdownStarted) console.warn('[baglib:pdf] Background engine warm-up unavailable:', errorMessage(error));
+      });
+    } catch (error) {
+      console.warn('[baglib:pdf] Background engine configuration unavailable:', errorMessage(error));
+    }
+  });
 });
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on('before-quit', () => {
-  void shutdownAudioIpc();
+let shutdownComplete = false;
+let shutdownStarted = false;
+app.on('before-quit', event => {
+  if (shutdownComplete) return;
+  event.preventDefault();
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  void Promise.allSettled([shutdownAudioIpc(), shutdownPdfViewCaches(), stirlingProcessor.stopWatchedFoldersDaemon(), defaultStirlingSidecar.stop()]).finally(() => {
+    closeDatabase();
+    shutdownComplete = true;
+    app.quit();
+  });
 });

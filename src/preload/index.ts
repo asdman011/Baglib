@@ -78,6 +78,21 @@ export const API = {
   athan,
   quran,
   sunnah,
+  poetry: {
+    saveKnowledge: (input: import('../shared/types/poetry').PoetrySaveInput): ReturnType<import('../shared/types/poetry').PoetryAPI['saveKnowledge']> => ipcRenderer.invoke('poetry:save-knowledge', input),
+    saved: (offset?: number): ReturnType<import('../shared/types/poetry').PoetryAPI['saved']> => ipcRenderer.invoke('poetry:saved', offset),
+    provision: (): ReturnType<import('../shared/types/poetry').PoetryAPI['provision']> => ipcRenderer.invoke('poetry:provision'),
+    status: (): ReturnType<import('../shared/types/poetry').PoetryAPI['status']> => ipcRenderer.invoke('poetry:status'),
+    poets: (query: import('../shared/types/poetry').PoetQuery): ReturnType<import('../shared/types/poetry').PoetryAPI['poets']> => ipcRenderer.invoke('poetry:poets', query),
+    facets: (): ReturnType<import('../shared/types/poetry').PoetryAPI['facets']> => ipcRenderer.invoke('poetry:facets'),
+    search: (query: import('../shared/types/poetry').PoetryQuery): ReturnType<import('../shared/types/poetry').PoetryAPI['search']> => ipcRenderer.invoke('poetry:search', query),
+    detail: (id: number): ReturnType<import('../shared/types/poetry').PoetryAPI['detail']> => ipcRenderer.invoke('poetry:detail', id),
+    narrations: (poemId: number): ReturnType<import('../shared/types/poetry').PoetryAPI['narrations']> => ipcRenderer.invoke('poetry:narrations', poemId),
+    importNarrationFile: (input: Parameters<import('../shared/types/poetry').PoetryAPI['importNarrationFile']>[0]): ReturnType<import('../shared/types/poetry').PoetryAPI['importNarrationFile']> => ipcRenderer.invoke('poetry:narration-import-file', input),
+    saveNarrationRecording: (input: Parameters<import('../shared/types/poetry').PoetryAPI['saveNarrationRecording']>[0]): ReturnType<import('../shared/types/poetry').PoetryAPI['saveNarrationRecording']> => ipcRenderer.invoke('poetry:narration-save-recording', input),
+    addNarrationLink: (input: Parameters<import('../shared/types/poetry').PoetryAPI['addNarrationLink']>[0]): ReturnType<import('../shared/types/poetry').PoetryAPI['addNarrationLink']> => ipcRenderer.invoke('poetry:narration-add-link', input),
+    deleteNarration: (id: string): ReturnType<import('../shared/types/poetry').PoetryAPI['deleteNarration']> => ipcRenderer.invoke('poetry:narration-delete', id),
+  },
   getSystemInfo: () => ipcRenderer.invoke('system:get-info'),
   openFileDialog: () => ipcRenderer.invoke('system:open-file-dialog'),
   openFilesDialog: () => ipcRenderer.invoke('system:open-files-dialog'),
@@ -105,7 +120,12 @@ export const API = {
   getAllBooks: () => ipcRenderer.invoke('library:get-all-books'),
   addBook: (bookData: unknown) => ipcRenderer.invoke('library:add-book', bookData),
   updateBook: (bookData: unknown) => ipcRenderer.invoke('library:update-book', bookData),
-  deleteBook: (bookId: string) => ipcRenderer.invoke('library:delete-book', bookId),
+  deleteBook: (bookId: string, permanent?: boolean) => ipcRenderer.invoke('library:delete-book', bookId, permanent),
+  restoreBook: (bookId: string) => ipcRenderer.invoke('library:restore-book', bookId),
+  permanentlyDeleteBook: (bookId: string) => ipcRenderer.invoke('library:permanently-delete', bookId),
+  getTrashWorks: () => ipcRenderer.invoke('library:get-trash-works'),
+  getTrashCount: () => ipcRenderer.invoke('library:get-trash-count'),
+  emptyTrash: () => ipcRenderer.invoke('library:empty-trash'),
   updateReadingStatus: (bookId: string, status: string, progress?: number) =>
     ipcRenderer.invoke('library:update-reading-status', bookId, status, progress),
 
@@ -164,8 +184,10 @@ export const API = {
     ipcRenderer.invoke('library:bulk-update-reading-status', input),
   bulkAddTags: (input: { workIds: string[]; tags: string[] }) =>
     ipcRenderer.invoke('library:bulk-add-tags', input),
-  bulkDelete: (input: { workIds: string[] }) =>
+  bulkDelete: (input: { workIds: string[]; permanent?: boolean }) =>
     ipcRenderer.invoke('library:bulk-delete', input),
+  bulkRestore: (input: { workIds: string[] }) =>
+    ipcRenderer.invoke('library:bulk-restore', input),
 
   // Lending Management
   recordLoan: (workId: string, loanData: unknown) => ipcRenderer.invoke('library:record-loan', workId, loanData),
@@ -556,7 +578,20 @@ export const API = {
 
   // Core Knowledge Layer (highlights, notes, quotes, bookmarks, questions)
   pdfEditor: {
+    viewSource: input => ipcRenderer.invoke('pdf-editor:view-source', input),
+    releaseViewSource: id => ipcRenderer.invoke('pdf-editor:release-view-source', id),
+    onViewSourceChanged: callback => {
+      const listener = (_: unknown, id: string) => callback(id);
+      ipcRenderer.on('pdf-editor:view-source-changed', listener);
+      return () => { ipcRenderer.removeListener('pdf-editor:view-source-changed', listener); };
+    },
     capabilities: () => ipcRenderer.invoke('pdf-editor:capabilities'),
+    engineStatus: () => ipcRenderer.invoke('pdf-editor:engine-status'),
+    onEngineStatusChanged: (callback: (info: import('../shared/types/pdf-editor').StirlingEngineInfo) => void) => {
+      const listener = (_: unknown, info: unknown) => callback(info as import('../shared/types/pdf-editor').StirlingEngineInfo);
+      ipcRenderer.on('pdf-editor:engine-status-changed', listener);
+      return () => { ipcRenderer.removeListener('pdf-editor:engine-status-changed', listener); };
+    },
     open: input => ipcRenderer.invoke('pdf-editor:open', input),
     sources: workId => ipcRenderer.invoke('pdf-editor:sources', workId),
     start: input => ipcRenderer.invoke('pdf-editor:start', input),
@@ -570,6 +605,23 @@ export const API = {
     saveCopy: id => ipcRenderer.invoke('pdf-editor:save-copy', id),
     close: id => ipcRenderer.invoke('pdf-editor:close', id),
     audit: () => ipcRenderer.invoke('pdf-editor:audit'),
+    listPipelines: () => ipcRenderer.invoke('pdf-editor:pipelines:list'),
+    savePipeline: (pipeline: unknown) => ipcRenderer.invoke('pdf-editor:pipelines:save', pipeline),
+    deletePipeline: (id: string) => ipcRenderer.invoke('pdf-editor:pipelines:delete', id),
+    executePipeline: (input: unknown) => ipcRenderer.invoke('pdf-editor:pipelines:execute', input),
+    getProcessorTelemetry: () => ipcRenderer.invoke('pdf-editor:processor:telemetry'),
+    getPolicies: () => ipcRenderer.invoke('pdf-editor:processor:policies'),
+    savePolicies: (policies: unknown) => ipcRenderer.invoke('pdf-editor:processor:save-policies', policies),
+    getWatchedFolders: () => ipcRenderer.invoke('pdf-editor:processor:folders'),
+    saveWatchedFolders: (folders: unknown) => ipcRenderer.invoke('pdf-editor:processor:save-folders', folders),
+    exportPipelineAutomate: (pipeline: unknown) => ipcRenderer.invoke('pdf-editor:pipelines:export-automate', pipeline),
+    exportPipelineFolderScan: (folder: unknown, pipeline: unknown) => ipcRenderer.invoke('pdf-editor:pipelines:export-folder-scan', folder, pipeline),
+    importPipeline: (jsonContent: string) => ipcRenderer.invoke('pdf-editor:pipelines:import', jsonContent),
+    checkWatchedFolders: () => ipcRenderer.invoke('pdf-editor:processor:check-folders'),
+    listVersions: (sessionId: string) => ipcRenderer.invoke('pdf-editor:versions:list', sessionId),
+    restoreVersion: (sessionId: string, versionFilename: string) => ipcRenderer.invoke('pdf-editor:versions:restore', sessionId, versionFilename),
+    undoVersion: (sessionId: string) => ipcRenderer.invoke('pdf-editor:versions:undo', sessionId),
+    deleteVersion: (versionFilename: string) => ipcRenderer.invoke('pdf-editor:versions:delete', versionFilename),
     onSourceChanged: callback => {
       const listener = (_: unknown, source: { workId: string | null; sourceId: string | null }) => callback(source);
       ipcRenderer.on('pdf-editor:source-changed', listener);

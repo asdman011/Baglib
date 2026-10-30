@@ -10,6 +10,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { detectDominantLanguage } from '../../../shared/utils/tts-language-segmenter';
 
 interface TTSLyricsViewProps {
+  aboveWorkstation?: boolean;
   isOpen: boolean;
   onClose: () => void;
   sentences: string[];
@@ -20,6 +21,7 @@ interface TTSLyricsViewProps {
 }
 
 export const TTSLyricsView: React.FC<TTSLyricsViewProps> = ({
+  aboveWorkstation = false,
   isOpen,
   onClose,
   sentences,
@@ -45,7 +47,7 @@ export const TTSLyricsView: React.FC<TTSLyricsViewProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-xl flex flex-col animate-in fade-in duration-200">
+    <div className={`fixed inset-0 ${aboveWorkstation ? 'z-[110]' : 'z-40'} bg-background/80 backdrop-blur-xl flex flex-col animate-in fade-in duration-200`}>
       {/* Header Bar */}
       <div className="h-16 border-b border-subtle px-6 flex items-center justify-between shrink-0 bg-surface/50">
         <div className="flex items-center gap-3">

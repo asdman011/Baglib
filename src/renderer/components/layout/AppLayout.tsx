@@ -6,12 +6,6 @@ import { CommandPalette } from './CommandPalette';
 import { StatusBar } from './StatusBar';
 import { NavigationRail } from './NavigationRail';
 import { HomeDashboardView, CompanionMiniWidget } from '../dashboard';
-import { LibraryGridView } from '../library/LibraryGridView';
-import { FullPageBookReader } from '../reader/FullPageBookReader';
-import { SunnahView } from '../sunnah/SunnahView';
-import { QuranView } from '../quran/QuranView';
-import { NotesOverviewView } from '../notes/NotesOverviewView';
-import { CategoriesOverviewView } from '../categories/CategoriesOverviewView';
 import { QuotaWarningBanner } from './QuotaWarningBanner';
 import { SearchHubModal } from '../search/SearchHubModal';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -19,15 +13,55 @@ import { useAthan } from '../../hooks/useAthan';
 import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
 import { STUDY_NOTE_OPEN } from '../../utils/study-navigation';
 import { Settings } from 'lucide-react';
+import { StartupSplash } from '../StartupSplash';
+
+// Lazy-loaded secondary views to dramatically accelerate initial application boot time (<1.5s cold compilation)
+const LibraryGridView = React.lazy(() =>
+  import('../library/LibraryGridView').then((m) => ({ default: m.LibraryGridView }))
+);
+const FullPageBookReader = React.lazy(() =>
+  import('../reader/FullPageBookReader').then((m) => ({ default: m.FullPageBookReader }))
+);
+const SunnahView = React.lazy(() =>
+  import('../sunnah/SunnahView').then((m) => ({ default: m.SunnahView }))
+);
+const BayanView = React.lazy(() => import('../poetry/BayanView').then(module => ({ default: module.BayanView })));
+const QuranView = React.lazy(() =>
+  import('../quran/QuranView').then((m) => ({ default: m.QuranView }))
+);
+const NotesOverviewView = React.lazy(() =>
+  import('../notes/NotesOverviewView').then((m) => ({ default: m.NotesOverviewView }))
+);
+const CategoriesOverviewView = React.lazy(() =>
+  import('../categories/CategoriesOverviewView').then((m) => ({ default: m.CategoriesOverviewView }))
+);
 
 const subscribeWindowMode = () => () => {};
 const readWindowMode = () => new URLSearchParams(window.location.search).get('widget') === 'companion';
 const serverWindowMode = () => null;
 
 export const AppLayout: React.FC = () => {
-  const { dir, viewMode, setViewMode, t } = useWorkspace();
+  const { dir, viewMode, setViewMode, t, theme, lang } = useWorkspace();
+  const [showSplash, setShowSplash] = React.useState<boolean>(true);
+  const handleSplashComplete = React.useCallback(() => setShowSplash(false), []);
   const isCompanionWindow = React.useSyncExternalStore(subscribeWindowMode, readWindowMode, serverWindowMode);
   const athanState = useAthan(isCompanionWindow === false);
+  React.useEffect(() => {
+    if (isCompanionWindow !== false || showSplash) return;
+    let cancelled = false;
+    const warm = () => {
+      if (cancelled) return;
+      void import('../reader/PdfNativeViewer').then(module => {
+        if (!cancelled) return module.ensurePdfWorker();
+      }).catch(() => undefined);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const idle = window.requestIdleCallback(warm, { timeout: 3000 });
+      return () => { cancelled = true; window.cancelIdleCallback(idle); };
+    }
+    const timer = setTimeout(warm, 1500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [isCompanionWindow, showSplash]);
   const [widgetStreak, setWidgetStreak] = React.useState(0);
   React.useEffect(() => {
     if (!isCompanionWindow) return;
@@ -48,25 +82,28 @@ export const AppLayout: React.FC = () => {
     };
     const handleNoteOpen = () => setViewMode('notes');
     const handleSunnahOpen = () => setViewMode('sunnah');
+    const handlePoetryOpen = () => setViewMode('bayan');
 
     window.addEventListener('dragover', handleWindowDragOver);
     window.addEventListener('drop', handleWindowDrop);
     window.addEventListener(QURAN_OPEN_EVENT, handleQuranOpen as EventListener);
     window.addEventListener(STUDY_NOTE_OPEN, handleNoteOpen);
     window.addEventListener('baglib:sunnah-open', handleSunnahOpen);
+    window.addEventListener('baglib:poetry-open', handlePoetryOpen);
     return () => {
       window.removeEventListener('dragover', handleWindowDragOver);
       window.removeEventListener('drop', handleWindowDrop);
       window.removeEventListener(QURAN_OPEN_EVENT, handleQuranOpen as EventListener);
       window.removeEventListener(STUDY_NOTE_OPEN, handleNoteOpen);
       window.removeEventListener('baglib:sunnah-open', handleSunnahOpen);
+      window.removeEventListener('baglib:poetry-open', handlePoetryOpen);
     };
   }, [setViewMode]);
 
-  if (isCompanionWindow === null || !athanState.ready) return <div className="h-screen w-screen bg-canvas" dir={dir} />;
+  if (isCompanionWindow === null) return <div className="h-screen w-screen bg-canvas" suppressHydrationWarning />;
   if (isCompanionWindow) {
     return (
-      <div className="h-screen w-screen overflow-hidden bg-canvas text-main p-2 flex flex-col justify-center select-none font-sans" dir={dir}>
+      <div className="h-screen w-screen overflow-hidden bg-canvas text-main p-2 flex flex-col justify-center select-none font-sans" dir={dir} suppressHydrationWarning>
         <CompanionMiniWidget
           prayerSnapshot={athanState.snapshot}
           readingStreakDays={widgetStreak}
@@ -80,7 +117,16 @@ export const AppLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-main select-none font-sans relative" dir={dir}>
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-main select-none font-sans relative" dir={dir} suppressHydrationWarning>
+      {/* Scholar-Grade Startup Splash Orchestrator */}
+      {showSplash && (
+        <StartupSplash
+          onComplete={handleSplashComplete}
+          initialTheme={theme}
+          initialLang={lang}
+        />
+      )}
+
       {/* Subtle Arabesque Pattern Texture Overlay */}
       <div className="absolute inset-0 bg-arabesque-pattern pointer-events-none z-0" />
 
@@ -97,20 +143,23 @@ export const AppLayout: React.FC = () => {
           {/* Quota-Saver & Search Limit Banner */}
           <QuotaWarningBanner />
 
-          {viewMode === 'dashboard' && <HomeDashboardView athanState={athanState} />}
-          {viewMode === 'quran' && <QuranView />}
-          {viewMode === 'sunnah' && <SunnahView />}
-          {viewMode === 'library' && <LibraryGridView />}
-          {viewMode === 'categories' && <CategoriesOverviewView />}
-          {viewMode === 'reader' && <FullPageBookReader />}
-          {viewMode === 'notes' && <NotesOverviewView />}
-          {viewMode === 'settings' && (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted font-sans space-y-3">
-              <Settings className="w-10 h-10 text-pale-sky-500" />
-              <h2 className="font-bold text-lg text-main font-display">{t('settingsTitle')}</h2>
-              <p className="text-xs text-muted max-w-sm">{t('settingsDesc')}</p>
-            </div>
-          )}
+          <React.Suspense fallback={<div className="flex-1 bg-canvas" />}>
+            {viewMode === 'dashboard' && <HomeDashboardView athanState={athanState} />}
+            {viewMode === 'quran' && <QuranView />}
+            {viewMode === 'sunnah' && <SunnahView />}
+            {viewMode === 'bayan' && <BayanView />}
+            {viewMode === 'library' && <LibraryGridView />}
+            {viewMode === 'categories' && <CategoriesOverviewView />}
+            {viewMode === 'reader' && <FullPageBookReader />}
+            {viewMode === 'notes' && <NotesOverviewView />}
+            {viewMode === 'settings' && (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted font-sans space-y-3">
+                <Settings className="w-10 h-10 text-pale-sky-500" />
+                <h2 className="font-bold text-lg text-main font-display">{t('settingsTitle')}</h2>
+                <p className="text-xs text-muted max-w-sm">{t('settingsDesc')}</p>
+              </div>
+            )}
+          </React.Suspense>
         </main>
       </div>
 

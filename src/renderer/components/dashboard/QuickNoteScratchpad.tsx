@@ -98,12 +98,12 @@ export const QuickNoteScratchpad: React.FC<{ initialNote?: StudyNote; initialCon
       noteId.current = id;
       const note = { id, title: title.trim() || studyNoteHeading(content), content: content.trim(), aliases: split(aliasesInput), tags: split(tagsInput), workId: workId || undefined };
       // Keep existing book notes visible in their reader, with link metadata in private settings.
-      if (workId) {
+      if (workId || initialNote?.knowledgeId) {
         if (!api.knowledge?.save) throw new Error('desktop-required');
-        const existing = initialNote ? (await api.knowledge.getByWork(workId, 'note')).find((item: { id: string }) => item.id === id) : undefined;
+        const existing = initialNote ? (await (workId ? api.knowledge.getByWork(workId, 'note') : api.knowledge.getAll())).find((item: { id: string }) => item.id === (initialNote.knowledgeId || id)) : undefined;
         const tagIds: string[] = [];
         for (const tag of note.tags) { const saved = await api.tags.create(tag); if (saved?.id) tagIds.push(saved.id); }
-        await api.knowledge.save({ id, workId, editionId: existing?.editionId, sourceId: existing?.sourceId, knowledgeType: 'note', location: existing?.location || '1', createdAt: existing?.createdAt, noteContent: note.content, tagIds });
+        await api.knowledge.save({ id, workId: workId || null, editionId: existing?.editionId, sourceId: existing?.sourceId, knowledgeType: 'note', location: existing?.location || '1', createdAt: existing?.createdAt, noteContent: note.content, tagIds });
       }
       await api.studyNotes.save(note);
       if (!initialNote) { await api.settings.set(draftKey, { content: '', title: '', tagsInput: '', aliasesInput: '', workId: '' }); pendingDraft.current = null; clear(); noteId.current = undefined; }
@@ -129,7 +129,7 @@ export const QuickNoteScratchpad: React.FC<{ initialNote?: StudyNote; initialCon
       <input data-scratchpad-tags aria-label={t('dashScratchpadTagsPlaceholder')} value={tagsInput} onChange={event => setTagsInput(event.target.value)} placeholder={t('dashScratchpadTagsPlaceholder')} className="rounded-lg border border-subtle bg-canvas px-3 py-2 text-xs min-w-0" />
       <input aria-label={t('studyAliases')} value={aliasesInput} onChange={event => setAliasesInput(event.target.value)} placeholder={t('studyAliases')} className="rounded-lg border border-subtle bg-canvas px-3 py-2 text-xs min-w-0" />
     </div>
-    <select aria-label={t('dashScratchpadAttachBook')} value={workId} disabled={!!initialNote?.workId} onChange={event => setWorkId(event.target.value)} className="w-full rounded-lg border border-subtle bg-canvas px-3 py-2 text-xs"><option value="">{t('dashScratchpadGeneralNote')}</option>{books.map(book => <option key={book.id} value={book.id}>{book.title}</option>)}</select>
+    <select aria-label={t('dashScratchpadAttachBook')} value={workId} disabled={!!initialNote?.workId || !!initialNote?.knowledgeId} onChange={event => setWorkId(event.target.value)} className="w-full rounded-lg border border-subtle bg-canvas px-3 py-2 text-xs"><option value="">{t('dashScratchpadGeneralNote')}</option>{books.map(book => <option key={book.id} value={book.id}>{book.title}</option>)}</select>
     {status && <p role={status === 'studySaveFailed' ? 'alert' : 'status'} className="text-xs leading-relaxed">{t(status)}</p>}
     <div className="flex flex-wrap gap-2"><button type="button" data-scratchpad-save disabled={!ready || !content.trim() || saving} onClick={() => void save()} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 text-white px-4 py-2 text-sm disabled:opacity-40"><Save size={15} />{t('dashScratchpadSaveToKb')}</button><button type="button" data-scratchpad-clear onClick={clear} className="rounded-lg border border-subtle px-3 py-2 text-xs">{t('dashScratchpadClear')}</button></div>
   </section>;

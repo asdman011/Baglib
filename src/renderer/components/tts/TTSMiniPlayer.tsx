@@ -27,6 +27,7 @@ import type { TTSVoice, TTSPlaybackState, AudiobookPairingData } from '../../../
 import { useWorkspace } from '../../components/context/WorkspaceContext';
 
 interface TTSMiniPlayerProps {
+  aboveWorkstation?: boolean;
   bookTitle?: string;
   playbackState: TTSPlaybackState;
   playbackMode: 'tts' | 'audiobook' | 'smil';
@@ -62,6 +63,7 @@ const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 const SLEEP_OPTIONS = [null, 5, 15, 30, 45, 60];
 
 export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
+  aboveWorkstation = false,
   bookTitle,
   playbackState,
   playbackMode,
@@ -159,7 +161,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
         setIsHovered(true);
         }}
       onMouseLeave={() => setIsHovered(false)}
-      className={`fixed bottom-6 start-1/2 -translate-x-1/2 z-50 transition-all duration-300 ease-out select-none ${
+      className={`fixed bottom-6 start-1/2 -translate-x-1/2 ${aboveWorkstation ? 'z-[120]' : 'z-50'} transition-all duration-300 ease-out select-none ${
         isVisible
           ? 'opacity-100 translate-y-0 scale-100'
           : 'opacity-40 hover:opacity-100 translate-y-4 hover:translate-y-0 scale-95'

@@ -14,6 +14,7 @@ export interface StudyNote {
   aliases: string[];
   tags: string[];
   workId?: string;
+  knowledgeId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,6 +27,8 @@ export interface StudyNotesAPI {
 export interface StudyLink { target: string; label: string; embed: boolean; start: number; end: number }
 
 export function validStudyTarget(target: string): boolean {
+  const poetry = /^poetry:ashaar:(\d+):(\d+):(\d+)$/u.exec(target);
+  if (poetry) return Number.isSafeInteger(+poetry[1]) && +poetry[1] > 0 && +poetry[2] >= 0 && +poetry[3] >= +poetry[2] && +poetry[3] <= 100000;
   if (/^(note|book):[^\s\[\]|:]{1,180}$/u.test(target)) return true;
   const quran = /^quran:(hafs|warsh):(\d+):(\d+)$/u.exec(target);
   if (quran) return +quran[2] >= 1 && +quran[2] <= 114 && +quran[3] >= 1 && +quran[3] <= 300;

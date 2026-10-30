@@ -13,6 +13,7 @@ import {
   BookOpenText,
   BookMarked,
   LayoutDashboard,
+  Feather,
 } from 'lucide-react';
 import { useWorkspace, type WorkspaceViewMode } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
@@ -33,6 +34,7 @@ export const NavigationRail: React.FC = () => {
   const navItems: Array<{
     id: WorkspaceViewMode | 'search';
     label: string;
+    tooltip?: string;
     icon: React.ComponentType<{ className?: string }>;
     count: number;
     disabled: boolean;
@@ -56,6 +58,14 @@ export const NavigationRail: React.FC = () => {
       id: 'sunnah',
       label: t('navSunnah'),
       icon: BookOpenText,
+      count: 0,
+      disabled: false,
+    },
+    {
+      id: 'bayan',
+      label: t('navBayan'),
+      tooltip: t('navBayanTooltip'),
+      icon: Feather,
       count: 0,
       disabled: false,
     },
@@ -151,7 +161,7 @@ export const NavigationRail: React.FC = () => {
                   setViewMode(item.id);
                 }
               }}
-              title={item.label}
+              title={item.tooltip || item.label}
               aria-label={item.label}
               className={`w-full flex items-center gap-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 item.disabled

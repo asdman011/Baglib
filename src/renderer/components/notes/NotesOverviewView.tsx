@@ -42,7 +42,7 @@ export const NotesOverviewView: React.FC = () => {
   const shown = useMemo(() => notes.filter(note => (!selected || note.id === selected) && (!anchor || studyBacklinks([note], anchor).length) && matchesStudyQuery(`${note.title} ${note.content} ${note.aliases.join(' ')} ${note.tags.join(' ')} ${books.find(book => book.id === note.workId)?.title || ''}`, query)), [notes, selected, anchor, query, books]);
   const remove = async (note: StudyNote) => {
     try {
-      if (note.workId) await window.electronAPI.knowledge.delete(note.id);
+      if (note.workId || note.knowledgeId) await window.electronAPI.knowledge.delete(note.knowledgeId || note.id);
       await window.electronAPI.studyNotes.remove(note.id);
       window.dispatchEvent(new CustomEvent('baglib:notes-changed'));
       setSelected(null); await refresh();

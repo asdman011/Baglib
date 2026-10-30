@@ -1,6 +1,42 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@font-face {
+  font-family: 'Baglib Poetry Amiri';
+  src: url('/assets/poetry-fonts/amiri.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Baglib Poetry Scheherazade New';
+  src: url('/assets/poetry-fonts/scheherazadenew.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Baglib Poetry Noto Naskh Arabic';
+  src: url('/assets/poetry-fonts/notonaskharabic.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Baglib Poetry EB Garamond';
+  src: url('/assets/poetry-fonts/ebgaramond.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Baglib Poetry Lora';
+  src: url('/assets/poetry-fonts/lora.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 @theme {
   /* Dynamic Surface & Semantic Design System Tokens */
   --color-canvas: var(--bg-canvas);
@@ -245,4 +281,183 @@ mark.baglib-highlight-violet, mark.baglib-highlight-purple {
   scrollbar-width: thin;
   scrollbar-color: var(--text-muted) transparent;
 }
+/* Startup Splash Orchestrator Animations */
+@keyframes splash-draw {
+  0% {
+    stroke-dashoffset: 800;
+    opacity: 0.1;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
 
+@keyframes splash-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
+@keyframes splash-glow {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes splash-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-splash-draw {
+  stroke-dasharray: 800;
+  stroke-dashoffset: 800;
+  animation: splash-draw 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-splash-pulse {
+  animation: splash-pulse 3.5s ease-in-out infinite;
+}
+
+.animate-splash-glow {
+  animation: splash-glow 2.8s ease-in-out infinite;
+}
+
+.animate-splash-shimmer {
+  background-size: 200% 100%;
+  animation: splash-shimmer 2.5s infinite linear;
+}
+
+@keyframes undo-shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+/* Single-layer PDF selection: native selection while dragging, locked overlay after release (no double-blue flicker) */
+.pdf-native-viewer-container:not(.pdf-selection-locked) .pdf-active-selection-rect {
+  display: none !important;
+}
+.pdf-selection-locked .textLayer ::selection {
+  background: transparent !important;
+}
+/* Immersive workstation chrome remains keyboard reachable. */
+[data-pdf-workstation][data-immersive] { position: fixed !important; inset: 0 !important; z-index: 100; max-width: none; border-radius: 0; }
+[data-pdf-workstation][data-immersive] > header { position: absolute; inset-block-start: 0; inset-inline: 0; z-index: 40; }
+[data-pdf-workstation][data-immersive] > div > aside { position: absolute; inset-block: 0; z-index: 30; border-radius: 12px; }
+[data-pdf-workstation][data-immersive] [data-reader-chrome="rail"] { inset-inline-start: 0; }
+[data-pdf-workstation][data-immersive] [data-reader-chrome="library"] { inset-inline-start: 44px; }
+[data-pdf-workstation][data-immersive] [data-reader-chrome="tools"] { inset-inline-end: 0; }
+[data-pdf-workstation][data-immersive] > header,
+[data-pdf-workstation][data-immersive] > div > aside { opacity: 0; pointer-events: none; transition: opacity 200ms cubic-bezier(.2,.8,.2,1); }
+[data-immersive][data-revealed-edge="top"] > header,
+[data-immersive] > header:focus-within,
+[data-immersive] > div > aside:focus-within,
+[data-immersive][data-revealed-edge="start"] [data-reader-chrome="rail"],
+[data-immersive][data-revealed-edge="start"] [data-reader-chrome="library"],
+[data-immersive][data-revealed-edge="end"] [data-reader-chrome="tools"] { opacity: 1; pointer-events: auto; }
+[data-immersive][data-pinned-chrome~="top"] > header,
+[data-immersive][data-pinned-chrome~="rail"] [data-reader-chrome="rail"],
+[data-immersive][data-pinned-chrome~="library"] [data-reader-chrome="library"],
+[data-immersive][data-pinned-chrome~="tools"] [data-reader-chrome="tools"] { opacity: 1; pointer-events: auto; transform: none; }
+[data-immersive] [data-pdf-bottom-navigation] { opacity: 0; pointer-events: none; transform: translateY(12px); transition: opacity 200ms cubic-bezier(.2,.8,.2,1), transform 200ms cubic-bezier(.2,.8,.2,1); }
+[data-immersive][data-revealed-edge="bottom"] [data-pdf-bottom-navigation],
+[data-immersive] [data-pdf-bottom-navigation]:focus-within { opacity: 1; pointer-events: auto; transform: translateY(0); }
+[data-immersive][data-pinned-chrome~="bottom"] [data-pdf-bottom-navigation] { opacity: 1; pointer-events: auto; transform: none; }
+[data-immersive] > header { transform: translateY(-12px); transition: opacity 200ms cubic-bezier(.2,.8,.2,1), transform 200ms cubic-bezier(.2,.8,.2,1); }
+[data-immersive][data-revealed-edge="top"] > header,
+[data-immersive] > header:focus-within { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  [data-immersive] > header, [data-immersive] > div > aside, [data-immersive] [data-pdf-bottom-navigation] { transition: none !important; }
+}
+[data-pdf-workstation] {
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-sidebar: var(--bg-sidebar);
+  --color-subtle: var(--border-subtle);
+  --color-main: var(--text-main);
+  --color-muted: var(--text-muted);
+}
+[data-workstation-theme="dark"] {
+  --bg-canvas: #0f1115;
+  --bg-surface: #171b22;
+  --bg-sidebar: #131519;
+  --border-subtle: #475569;
+  --text-main: #e2e8f0;
+  --text-muted: #a0aec0;
+}
+[data-workstation-theme="light"] {
+  --bg-canvas: #f8f9fa;
+  --bg-surface: #ffffff;
+  --bg-sidebar: #f1f5f9;
+  --border-subtle: #94a3b8;
+  --text-main: #111827;
+  --text-muted: #475569;
+}
+[data-workstation-theme="sepia"] {
+  --bg-canvas: #efece4;
+  --bg-surface: #f8f6f0;
+  --bg-sidebar: #e5dfd0;
+  --border-subtle: #b9ac94;
+  --text-main: #2c221a;
+  --text-muted: #655340;
+  background-color: #efece4 !important;
+  color: #2c221a !important;
+}
+[data-workstation-theme="sepia"] [data-reader-chrome],
+[data-workstation-theme="sepia"] > header,
+[data-workstation-theme="sepia"] [data-pdf-bottom-navigation] {
+  background-color: #f8f6f0 !important;
+  color: #2c221a !important;
+  border-color: #b9ac94 !important;
+}
+[data-workstation-theme="sepia"] main { background-color: #e5dfd0 !important; }
+[data-pdf-page-editor][data-editor-theme="sepia"] {
+  background-color: #efece4;
+  color: #2c221a;
+}
+[data-pdf-page-editor][data-editor-theme="sepia"] [data-page-editor-toolbar],
+[data-pdf-page-editor][data-editor-theme="sepia"] [data-page-editor-card] {
+  background-color: #f8f6f0;
+  border-color: #b9ac94;
+}
+[data-pdf-page-editor][data-editor-theme="sepia"] [data-page-editor-card][data-selected] {
+  background-color: #d9eadc;
+  border-color: #047857;
+}
+[data-pdf-page-editor][data-editor-theme="sepia"] input:not([type="checkbox"]) {
+  background-color: #f8f6f0;
+  color: #2c221a;
+  border-color: #b9ac94;
+}
+[data-collapsed-chrome~="top"] > header,
+[data-collapsed-chrome~="rail"] [data-reader-chrome="rail"],
+[data-collapsed-chrome~="library"] [data-reader-chrome="library"],
+[data-collapsed-chrome~="tools"] [data-reader-chrome="tools"],
+[data-collapsed-chrome~="bottom"] [data-pdf-bottom-navigation] { display: none !important; }
+[data-immersive] [data-reader-recovery] { opacity: 0; pointer-events: none; }
+[data-immersive][data-revealed-edge="top"] [data-reader-recovery],
+[data-immersive] [data-reader-recovery]:focus-within { opacity: 1; pointer-events: auto; }
+[data-reader-chrome="rail"] > div:first-child { flex-direction: column; }
+[data-immersive][data-collapsed-chrome~="rail"] [data-reader-chrome="library"] { inset-inline-start: 0; }

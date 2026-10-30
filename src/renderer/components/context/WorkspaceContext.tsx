@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BookItem } from '../../types/library';
 import { translations, TranslationKey } from '../../translations';
+import { removeTempSelectionOverlay, clearActiveSelectionHighlight } from '../../libs/reader/highlight-manager';
 
 import type { CategoryNode } from '../../../shared/types/category';
 import type { TagWithCount } from '../../../shared/types/tag';
@@ -11,7 +12,7 @@ export type LayoutDirection = 'rtl' | 'ltr';
 export type ThemeMode = 'dark' | 'light';
 export type LanguageMode = 'ar' | 'en';
 export type SplitOrientationMode = 'vertical' | 'horizontal' | 'none' | 'full_notes';
-export type WorkspaceViewMode = 'dashboard' | 'quran' | 'sunnah' | 'library' | 'categories' | 'reader' | 'notes' | 'settings';
+export type WorkspaceViewMode = 'dashboard' | 'quran' | 'sunnah' | 'bayan' | 'library' | 'categories' | 'reader' | 'notes' | 'settings';
 
 export interface PageNote {
   id: string;
@@ -88,9 +89,27 @@ interface WorkspaceContextType extends WorkspaceState {
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Initialize with canonical server defaults to guarantee 100% hydration match with SSR
   const [lang, setLang] = useState<LanguageMode>('ar');
   const [dir, setDir] = useState<LayoutDirection>('rtl');
   const [theme, setTheme] = useState<ThemeMode>('dark');
+
+  // Synchronize client-persisted preferences from localStorage after initial hydration
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      try {
+        const savedLang = localStorage.getItem('baglib-lang');
+        if (savedLang === 'en' || savedLang === 'ar') {
+          setLang(savedLang);
+          setDir(savedLang === 'ar' ? 'rtl' : 'ltr');
+        }
+        const savedTheme = localStorage.getItem('baglib-theme');
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+          setTheme(savedTheme);
+        }
+      } catch {}
+    });
+  }, []);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isSearchHubOpen, setIsSearchHubOpen] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
@@ -107,7 +126,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [activeBook, setActiveBook] = useState<BookItem | null>(null);
   const [readingPage, setReadingPage] = useState<number>(1);
   const [totalPages] = useState<number>(100);
-  const [splitOrientation, setSplitOrientation] = useState<SplitOrientationMode>('vertical');
+  const [splitOrientation, setSplitOrientation] = useState<SplitOrientationMode>('none');
 
   const [bookNotes, setBookNotes] = useState<PageNote[]>([]);
   useEffect(() => {
@@ -123,7 +142,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const toggleLanguage = () => {
     setLang((prev) => {
       const nextLang = prev === 'ar' ? 'en' : 'ar';
-      setDir(nextLang === 'ar' ? 'rtl' : 'ltr');
+      const nextDir = nextLang === 'ar' ? 'rtl' : 'ltr';
+      setDir(nextDir);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        try { localStorage.setItem('baglib-lang', nextLang); } catch {}
+      }
+      if (typeof document !== 'undefined') {
+        document.documentElement.setAttribute('lang', nextLang);
+        document.documentElement.setAttribute('dir', nextDir);
+      }
       return nextLang;
     });
   };
@@ -145,6 +172,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const toggleTheme = () => {
     setTheme((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        try { localStorage.setItem('baglib-theme', next); } catch {}
+      }
       if (typeof document !== 'undefined') {
         if (next === 'dark') {
           document.documentElement.classList.add('dark');
@@ -412,13 +442,41 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const safeSetViewMode = (mode: WorkspaceViewMode) => {
+    if (viewMode === 'reader' && mode !== 'reader') {
+      try {
+        removeTempSelectionOverlay();
+        clearActiveSelectionHighlight();
+        if (typeof window !== 'undefined') {
+          window.getSelection()?.removeAllRanges();
+        }
+      } catch {}
+    }
+    setViewMode(mode);
+  };
+
   const openBookForReading = (book: BookItem) => {
+    try {
+      removeTempSelectionOverlay();
+      clearActiveSelectionHighlight();
+      if (typeof window !== 'undefined') {
+        window.getSelection()?.removeAllRanges();
+      }
+    } catch {}
     setActiveBook(book);
     setViewMode('reader');
     setReadingPage(1);
+    setSplitOrientation('none');
   };
 
   const closeReaderToLibrary = () => {
+    try {
+      removeTempSelectionOverlay();
+      clearActiveSelectionHighlight();
+      if (typeof window !== 'undefined') {
+        window.getSelection()?.removeAllRanges();
+      }
+    } catch {}
     setViewMode('library');
   };
 
@@ -511,7 +569,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setCommandPaletteOpen: setIsCommandPaletteOpen,
         isSearchHubOpen,
         setSearchHubOpen: setIsSearchHubOpen,
-        setViewMode,
+        setViewMode: safeSetViewMode,
         activeLibraryCategory,
         setActiveLibraryCategory,
         refreshBooks,

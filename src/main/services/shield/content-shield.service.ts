@@ -150,10 +150,22 @@ export class ContentShieldService {
             '*://*.libgen.gs/*',
             '*://*.libgen.vg/*',
             '*://*.booksdl.lc/*',
+            // Al-Bayan human-narration embeds: packaged app:// and file:// pages send no Referer,
+            // which YouTube rejects with player configuration error 153.
+            '*://www.youtube-nocookie.com/embed/*',
           ],
         },
         (details, callback) => {
           const requestHeaders = { ...details.requestHeaders };
+          if (details.url.startsWith('https://www.youtube-nocookie.com/embed/')) {
+            const referer = requestHeaders['Referer'] ?? requestHeaders['referer'];
+            if (!referer || !/^https?:\/\//iu.test(referer)) {
+              delete requestHeaders['referer'];
+              requestHeaders['Referer'] = 'https://www.youtube-nocookie.com/';
+            }
+            callback({ requestHeaders });
+            return;
+          }
           if (!requestHeaders['Referer'] || requestHeaders['Referer'] === 'about:blank') {
             requestHeaders['Referer'] = 'https://libgen.li/';
           }

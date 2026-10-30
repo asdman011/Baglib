@@ -2,6 +2,10 @@ appId: com.Baglib.app
 productName: Baglib
 npmRebuild: false
 extraResources:
+  - from: assets/poetry
+    to: poetry
+    filter:
+      - "**/*.py"
   - from: assets/pdf-editor
     to: pdf-editor
     filter:
