@@ -1,56 +1,97 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, type IpcMainInvokeEvent } from 'electron';
 import fs from 'node:fs';
-import { mkdir, writeFile, unlink, stat } from 'node:fs/promises';
+import { mkdir, writeFile, unlink, stat, readdir, copyFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { readerAssetUrl } from '../../shared/utils/reader-asset-url';
 import { getDatabase } from '../database/connection';
 import { PdfEditorJobs } from '../services/pdf-editor/jobs';
 import { runPdfWorker } from '../services/pdf-editor/process';
 import { publishPdfOutput } from '../services/pdf-editor/publication';
-import { pdfCapabilities, type PdfError, type PdfResult } from '../../shared/types/pdf-editor';
+import { fileSha256 } from '../services/pdf-editor/source';
+import { pdfCapabilities, type PdfError, type PdfResult, type PdfVersionItem } from '../../shared/types/pdf-editor';
 import { registerPdfCloudIpc } from './pdf-cloud';
 import { registerPdfCollaborationIpc } from './pdf-collaboration';
 import { pdfEngineTools } from '../services/pdf-editor/tools';
-import { runPythonPdf, pythonInspection, type PdfEngineTools } from '../services/pdf-editor/python';
-import { canStirlingHandle, runStirlingPdf } from '../services/pdf-editor/stirling';
+import { PdfViewCache } from '../services/pdf-editor/view-cache';
+import { pdfViewOptimizer } from '../services/pdf-editor/view-cache-runtime';
+import { stirlingInspection, type PdfEngineTools } from '../services/pdf-editor/python';
+import { runStirlingPdf, defaultStirlingSidecar } from '../services/pdf-editor/stirling';
 import { SqliteWorkRepository } from '../database/repositories/work.repository';
 import type { PdfSaveRequest } from '../../shared/types/pdf-editor';
 import { PdfAudit } from '../services/pdf-editor/audit';
 import { settingsRepository } from '../database/repositories/settings.repository';
+import {
+  stirlingProcessor,
+  type StirlingPipeline,
+  type StirlingGovernancePolicies,
+  type WatchedFolderSource,
+  exportPipelineAutomateJson,
+  exportPipelineFolderScanJson,
+  importPipelineJson,
+} from '../services/pdf-editor/processor';
 
 function isStirlingConfigured(tools: PdfEngineTools): boolean {
   return Boolean(tools.stirlingUrl || (tools.java && tools.stirlingJar && fs.existsSync(tools.java) && fs.existsSync(tools.stirlingJar)));
 }
 
-export function registerPdfEditorIpc(): void {
+let lifecycleHooksRegistered = false;
+const viewCaches = new Set<PdfViewCache>();
+export async function shutdownPdfViewCaches(): Promise<void> {
+  await Promise.allSettled([...viewCaches].map(cache => cache.dispose()));
+  viewCaches.clear();
+}
+
+export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = {}): void {
   let jobs: PdfEditorJobs | undefined;
   const owners = new Set<number>();
+  const viewCache = new PdfViewCache(options.viewCacheDirectory || path.join(app.isPackaged ? app.getPath('userData') : path.join(app.getAppPath(), '.baglib-data'), 'cache', 'pdf-view'), async (...args) => {
+    const tools = pdfEngineTools();
+    await pdfViewOptimizer(tools.python, path.join(path.dirname(tools.script), 'view_cache.py'))(...args);
+  }, { onChanged: (ownerId, id) => {
+    const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.id === ownerId);
+    if (window && !window.isDestroyed()) window.webContents.send('pdf-editor:view-source-changed', id);
+  } });
+  viewCaches.add(viewCache);
+
+  if (!lifecycleHooksRegistered) {
+    lifecycleHooksRegistered = true;
+    defaultStirlingSidecar.onStatusChange(info => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          if (!win.isDestroyed()) {
+            win.webContents.send('pdf-editor:engine-status-changed', info);
+          }
+        } catch { /* ignore */ }
+      }
+    });
+    const cleanup = () => { void defaultStirlingSidecar.stop(); };
+    app.once('before-quit', cleanup);
+    app.once('will-quit', cleanup);
+    process.once('SIGINT', cleanup);
+    process.once('SIGTERM', cleanup);
+  }
+
   const controller = () => jobs ||= new PdfEditorJobs(getDatabase(), path.join(app.getPath('userData'), 'pdf-editor', 'jobs'), async (input, signal, progress) => {
     const tools = pdfEngineTools();
-    const hasPython = fs.existsSync(tools.python);
-    const useStirling = isStirlingConfigured(tools) && canStirlingHandle(input.operation, input.payload);
-    if (!hasPython && !useStirling) return runPdfWorker(input, signal, progress);
+    const useStirling = isStirlingConfigured(tools);
+    if (!useStirling) return runPdfWorker(input, signal, progress);
     const audit = new PdfAudit(settingsRepository, safeStorage);
     if (['sign', 'prepare-signature'].includes(input.operation) && !audit.verify().valid) throw new Error('invalid-output');
-    const result = useStirling && (tools.preferStirling || !hasPython)
-      ? await runStirlingPdf(tools, input, signal, progress).catch(async error => {
-        if (hasPython && (error as Error).message === 'engine-missing') return runPythonPdf(tools, input, signal, progress);
-        throw error;
-      })
-      : await runPythonPdf(tools, input, signal, progress);
+    const result = await runStirlingPdf(tools, input, signal, progress);
     if (input.operation === 'sign' || input.operation === 'prepare-signature' || input.operation === 'verify-signatures') {
       const signature = input.operation === 'sign' || input.operation === 'prepare-signature' ? result.signature : result;
       const record = signature as { status?: string; signatures?: { fingerprint?: string; subject?: string }[] };
       getDatabase().transaction(() => audit.append({ operation: input.operation, sourceHash: input.expectedHash, outputHash: result.outputs?.[0]?.sha256 || input.expectedHash, status: record.status || 'Draft', certificateFingerprint: record.signatures?.at(-1)?.fingerprint, signer: record.signatures?.at(-1)?.subject }))();
     }
-    return input.operation === 'inspect' ? pythonInspection(result) : result;
+    return input.operation === 'inspect' ? stirlingInspection(result) : result;
   });
   const owner = (event: IpcMainInvokeEvent) => {
     const url = new URL(event.sender.getURL());
     if (event.senderFrame !== event.sender.mainFrame || !(url.protocol === 'file:' || url.protocol === 'app:' && url.hostname === '-' || url.origin === 'http://localhost:3000')) throw new Error('permission-denied');
     if (!owners.has(event.sender.id)) {
       const id = event.sender.id; owners.add(id);
-      event.sender.once('destroyed', () => { owners.delete(id); void jobs?.closeOwner(id); });
+      event.sender.once('destroyed', () => { owners.delete(id); viewCache.closeOwner(id); void jobs?.closeOwner(id); });
     }
     return event.sender.id;
   };
@@ -61,24 +102,23 @@ export function registerPdfEditorIpc(): void {
       return { ok: false, error: (['invalid-request', 'invalid-source', 'source-required', 'source-changed', 'encrypted', 'permission-denied', 'unsupported', 'busy', 'cancelled', 'engine-missing', 'signed-document-locked', 'owner-password-required', 'invalid-output'].includes(code) ? code : 'storage') as PdfError };
     }
   };
+  ipcMain.handle('pdf-editor:engine-status', event => result(event, () => defaultStirlingSidecar.getStatus()));
+  ipcMain.handle('pdf-editor:view-source', (event, input) => result(event, ownerId => {
+    if (!input || typeof input.path !== 'string' || input.path.length > 32768 || !path.isAbsolute(input.path) || input.id !== undefined && (typeof input.id !== 'string' || input.id.length > 100)) throw new Error('invalid-request');
+    return viewCache.acquire(ownerId, input.path, input.id);
+  }));
+  ipcMain.handle('pdf-editor:release-view-source', (event, id) => result(event, ownerId => {
+    if (typeof id !== 'string' || id.length > 100) throw new Error('invalid-request');
+    viewCache.release(ownerId, id); return null;
+  }));
   ipcMain.handle('pdf-editor:capabilities', async event => {
     owner(event); const tools = pdfEngineTools();
-    const hasPython = fs.existsSync(tools.python);
     const hasStirling = isStirlingConfigured(tools);
-    if (!hasPython && !hasStirling) return pdfCapabilities();
+    if (!hasStirling) return pdfCapabilities();
     try {
       const featureSet = new Set<string>(['review', 'summarize']);
-      if (hasPython) {
-        const pyResult = await runPythonPdf(tools, { filename: '', output: path.join(app.getPath('temp'), 'capabilities.json'), operation: 'capabilities', language: 'en', expectedHash: '' }, new AbortController().signal, () => {});
-        if (Array.isArray(pyResult.features)) for (const f of pyResult.features) if (typeof f === 'string') featureSet.add(f);
-      }
-      if (hasStirling) {
-        const stirlingResult = await runStirlingPdf(tools, { filename: '', output: path.join(app.getPath('temp'), 'capabilities.json'), operation: 'capabilities', language: 'en', expectedHash: '' }, new AbortController().signal, () => {}).catch(error => {
-          if (hasPython && (error as Error).message === 'engine-missing') return { features: [] };
-          throw error;
-        });
-        if (Array.isArray(stirlingResult.features)) for (const f of stirlingResult.features) if (typeof f === 'string') featureSet.add(f);
-      }
+      const stirlingResult = await runStirlingPdf(tools, { filename: '', output: path.join(app.getPath('temp'), 'capabilities.json'), operation: 'capabilities', language: 'en', expectedHash: '' }, new AbortController().signal, () => {}).catch(() => ({ features: [] }));
+      if (Array.isArray(stirlingResult.features)) for (const f of stirlingResult.features) if (typeof f === 'string') featureSet.add(f);
       return pdfCapabilities([...featureSet]);
     } catch { return pdfCapabilities(); }
   });
@@ -92,7 +132,14 @@ export function registerPdfEditorIpc(): void {
     return rows.map(row => ({ id: row.id, filename: path.basename(row.filename) }));
   }));
   ipcMain.handle('pdf-editor:start', (event, input) => result(event, owner => controller().start(owner, input)));
-  ipcMain.handle('pdf-editor:status', (event, id) => result(event, owner => controller().status(owner, id)));
+  ipcMain.handle('pdf-editor:status', (event, id) => result(event, async owner => {
+    const job = controller().status(owner, id);
+    if (job.state === 'completed' && job.outputs?.length === 1 && job.outputs[0].format === 'pdf') {
+      const output = await controller().output(owner, id);
+      job.previewUrl = readerAssetUrl(output.filename);
+    }
+    return job;
+  }));
   ipcMain.handle('pdf-editor:cancel', (event, id) => result(event, owner => { controller().cancel(owner, id); return null; }));
   ipcMain.handle('pdf-editor:close', (event, id) => result(event, async owner => { await controller().close(owner, id); return null; }));
   ipcMain.handle('pdf-editor:blank-session', event => result(event, owner => controller().blank(owner)));
@@ -120,7 +167,9 @@ export function registerPdfEditorIpc(): void {
     const source = controller().source(owner, output.job.sessionId);
     if (input.mode === 'overwrite') {
       if (!source.path || output.format !== 'pdf') throw new Error('invalid-request');
-      const publication = await publishPdfOutput({ staged: output.filename, target: source.path, stagedSha256: output.sha256, expectedTargetSha256: source.sha256 });
+      const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
+      const backupFilename = `${source.sourceId || randomUUID()}_${Date.now()}.pdf`;
+      const publication = await publishPdfOutput({ staged: output.filename, target: source.path, stagedSha256: output.sha256, expectedTargetSha256: source.sha256, backupDirectory, backupFilename });
       try {
         if (source.sourceId) {
           const size = (await stat(source.path)).size, db = getDatabase();
@@ -164,4 +213,121 @@ export function registerPdfEditorIpc(): void {
   };
   ipcMain.handle('pdf-editor:save', (event, input) => result(event, owner => save(event, owner, input)));
   ipcMain.handle('pdf-editor:save-copy', (event, id) => result(event, owner => save(event, owner, { jobId: id, mode: 'copy' })));
+  ipcMain.handle('pdf-editor:pipelines:list', event => result(event, () => stirlingProcessor.listPipelines()));
+  ipcMain.handle('pdf-editor:pipelines:save', (event, input) => result(event, () => stirlingProcessor.savePipeline(input as StirlingPipeline)));
+  ipcMain.handle('pdf-editor:pipelines:delete', (event, id) => result(event, () => stirlingProcessor.deletePipeline(id)));
+  ipcMain.handle('pdf-editor:pipelines:execute', (event, input) => result(event, async () => {
+    const tools = pdfEngineTools();
+    return stirlingProcessor.executePipeline(tools, input.filePaths, input.pipelineConfig, new AbortController().signal);
+  }));
+  ipcMain.handle('pdf-editor:pipelines:export-automate', (event, pipeline) => result(event, () => exportPipelineAutomateJson(pipeline as StirlingPipeline)));
+  ipcMain.handle('pdf-editor:pipelines:export-folder-scan', (event, folder, pipeline) => result(event, () => exportPipelineFolderScanJson(folder as WatchedFolderSource, pipeline as StirlingPipeline)));
+  ipcMain.handle('pdf-editor:pipelines:import', (event, jsonContent: string) => result(event, () => stirlingProcessor.savePipeline(importPipelineJson(jsonContent))));
+  ipcMain.handle('pdf-editor:processor:check-folders', event => result(event, async () => {
+    const tools = pdfEngineTools();
+    return stirlingProcessor.checkWatchedFolders(tools);
+  }));
+  ipcMain.handle('pdf-editor:processor:telemetry', event => result(event, () => stirlingProcessor.getTelemetry()));
+  ipcMain.handle('pdf-editor:processor:policies', event => result(event, () => stirlingProcessor.getPolicies()));
+  ipcMain.handle('pdf-editor:processor:save-policies', (event, input) => result(event, () => stirlingProcessor.savePolicies(input as Partial<StirlingGovernancePolicies>)));
+  ipcMain.handle('pdf-editor:processor:folders', event => result(event, () => stirlingProcessor.getWatchedFolders()));
+  ipcMain.handle('pdf-editor:processor:save-folders', (event, input) => result(event, () => stirlingProcessor.saveWatchedFolders(input as WatchedFolderSource[])));
+
+  ipcMain.handle('pdf-editor:versions:list', (event, sessionId: string) => result(event, async owner => {
+    const source = controller().source(owner, sessionId);
+    const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
+    await mkdir(backupDirectory, { recursive: true });
+    const files = await readdir(backupDirectory).catch(() => []);
+    const prefix = source.sourceId ? `${source.sourceId}_` : '';
+    const matching = files.filter(f => f.endsWith('.pdf') && (prefix ? f.startsWith(prefix) : true));
+    const items: PdfVersionItem[] = [];
+    for (const file of matching) {
+      try {
+        const filePath = path.join(backupDirectory, file);
+        const s = await stat(filePath);
+        const match = /_(\d+)\.pdf$/u.exec(file);
+        const timestamp = match ? Number.parseInt(match[1], 10) : s.mtimeMs;
+        items.push({
+          filename: file,
+          timestamp,
+          dateStr: new Date(timestamp).toLocaleString(),
+          size: s.size,
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    items.sort((a, b) => b.timestamp - a.timestamp);
+    return items;
+  }));
+
+  ipcMain.handle('pdf-editor:versions:restore', (event, sessionId: string, versionFilename: string) => result(event, async owner => {
+    const safeFilename = path.basename(versionFilename);
+    const source = controller().source(owner, sessionId);
+    if (!source.path) throw new Error('invalid-source');
+    const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
+    const backupPath = path.join(backupDirectory, safeFilename);
+    if (!fs.existsSync(backupPath)) throw new Error('invalid-request');
+
+    const newBackupFilename = `${source.sourceId || randomUUID()}_${Date.now()}.pdf`;
+    await copyFile(source.path, path.join(backupDirectory, newBackupFilename)).catch(() => {});
+
+    await copyFile(backupPath, source.path);
+    const newHash = await fileSha256(source.path);
+    const size = (await stat(source.path)).size;
+
+    if (source.sourceId) {
+      const db = getDatabase();
+      db.transaction(() => {
+        db.prepare('UPDATE file_source_detail SET file_hash=?,file_size_bytes=?,last_verified_at=? WHERE source_id=?').run(newHash, size, new Date().toISOString(), source.sourceId);
+        db.prepare('DELETE FROM book_content_fts WHERE book_id=?').run(source.workId);
+      })();
+    }
+    const session = controller().rebase(owner, sessionId, newHash, true);
+    event.sender.send('pdf-editor:source-changed', { workId: source.workId, sourceId: source.sourceId });
+    return { restored: true, session };
+  }));
+
+  ipcMain.handle('pdf-editor:versions:undo', (event, sessionId: string) => result(event, async owner => {
+    const source = controller().source(owner, sessionId);
+    if (!source.path) throw new Error('invalid-source');
+    const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
+    const files = await readdir(backupDirectory).catch(() => []);
+    const prefix = source.sourceId ? `${source.sourceId}_` : '';
+    const matching = files.filter(f => f.endsWith('.pdf') && (prefix ? f.startsWith(prefix) : true));
+    if (!matching.length) throw new Error('invalid-request');
+    const sorted = matching.map(f => {
+      const m = /_(\d+)\.pdf$/u.exec(f);
+      return { file: f, ts: m ? Number.parseInt(m[1], 10) : 0 };
+    }).sort((a, b) => b.ts - a.ts);
+    const latest = sorted[0]?.file;
+    if (!latest) throw new Error('invalid-request');
+    const backupPath = path.join(backupDirectory, latest);
+
+    const newBackupFilename = `${source.sourceId || randomUUID()}_${Date.now()}.pdf`;
+    await copyFile(source.path, path.join(backupDirectory, newBackupFilename)).catch(() => {});
+
+    await copyFile(backupPath, source.path);
+    const newHash = await fileSha256(source.path);
+    const size = (await stat(source.path)).size;
+
+    if (source.sourceId) {
+      const db = getDatabase();
+      db.transaction(() => {
+        db.prepare('UPDATE file_source_detail SET file_hash=?,file_size_bytes=?,last_verified_at=? WHERE source_id=?').run(newHash, size, new Date().toISOString(), source.sourceId);
+        db.prepare('DELETE FROM book_content_fts WHERE book_id=?').run(source.workId);
+      })();
+    }
+    const session = controller().rebase(owner, sessionId, newHash, true);
+    event.sender.send('pdf-editor:source-changed', { workId: source.workId, sourceId: source.sourceId });
+    return { restored: true, session };
+  }));
+
+  ipcMain.handle('pdf-editor:versions:delete', (event, versionFilename: string) => result(event, async () => {
+    const safeFilename = path.basename(versionFilename);
+    const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
+    const target = path.join(backupDirectory, safeFilename);
+    await unlink(target);
+    return true;
+  }));
 }

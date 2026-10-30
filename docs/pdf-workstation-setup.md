@@ -20,7 +20,7 @@ Discovery in `src/main/services/pdf-editor/tools.ts`:
 - Stirling-PDF (optional sidecar or loopback server):
   - JAR discovery: `stirling/Stirling-PDF-server*.jar` or `libs/Stirling-PDF-server*.jar` under the runtime root (selected via Stirling Desktop's `version_key` semver/prerelease ordering in `src/main/services/pdf-editor/stirling.ts`); `BAGLIB_STIRLING_JAR` overrides the JAR path.
   - Loopback URL: `BAGLIB_STIRLING_URL` (e.g. `http://127.0.0.1:8080`) connects to a running local Stirling-PDF server; non-loopback hosts and URLs containing credentials are rejected.
-  - Note on Stirling-PDF `v3.2.2`: building or running the MIT-licensed `core` JAR (`./gradlew :stirling-pdf:bootJar -PstirlingFlavor=core -PdisableAdditional=true`) requires **JDK 25** (`-Xmx2g`). When Stirling-PDF is not provisioned or for coordinate-level `inspect`/`preview`/`create`, Baglib automatically uses the local Python `PyMuPDF` worker.
+  - Note on Stirling-PDF `v3.2.2`: runs on Java 25 LTS (`.baglib-data/pdf-engine/java/jdk-25.0.5+8-jre/bin/java.exe`) with `Stirling-PDF-server.jar` under `.baglib-data/pdf-engine/stirling/`. PyMuPDF has been 100% purged; all operations route via Stirling-PDF v3.2.2 and PDF.js.
 
 Existing settings key `pdf-editor.engine.v1` can override `python`, `tessdata`, `java`, `veraPdfJar`, `stirlingJar`, `stirlingUrl`, and `preferStirling`. The worker script is fixed by the application. Never set these paths from untrusted documents. Capabilities probe the installed runtime; unavailable tools remain labeled unavailable. PDF.js still supports inspection/text HTML fallback when the Python engine is absent.
 

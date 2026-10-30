@@ -11,8 +11,7 @@ import { PdfCloudConnector } from '../services/pdf-editor/cloud-connector';
 import { resolvePdfSource } from '../services/pdf-editor/source';
 import type { PdfEditorJobs } from '../services/pdf-editor/jobs';
 import { cloudProvider, type PdfCloudError, type PdfCloudResult } from '../../shared/types/pdf-cloud';
-import { runPythonPdf } from '../services/pdf-editor/python';
-import { pdfEngineTools } from '../services/pdf-editor/tools';
+import { inspectPdfFile } from '../services/pdf-editor/inspection';
 
 export function registerPdfCloudIpc(jobs: () => PdfEditorJobs, owner: (event: IpcMainInvokeEvent) => number): void {
   let connector: PdfCloudConnector | undefined;
@@ -28,8 +27,8 @@ export function registerPdfCloudIpc(jobs: () => PdfEditorJobs, owner: (event: Ip
         const hash = createHash('sha256').update(bytes).digest('hex');
         await writeFile(filename, bytes, { flag: 'wx', mode: 0o600 });
         try {
-          // Validate with the real parser in a subprocess before creating canonical records.
-          await runPythonPdf(pdfEngineTools(), { filename, expectedHash: hash, output: path.join(directory, 'unused.json'), operation: 'inspect', language: 'en', payload: { pages: [1] } }, new AbortController().signal, () => {});
+          // Validate with the real parser before creating canonical records.
+          await inspectPdfFile(filename, undefined, () => {});
           const db = getDatabase(), repository = new SqliteWorkRepository(db);
           const row = db.transaction(() => {
             if (existingWorkId) { if (!repository.addEditionToWork(workId, { filePath: filename, fileHash: hash, digitalFormat: 'PDF' })) throw new Error('invalid-request'); }

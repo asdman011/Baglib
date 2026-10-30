@@ -6,8 +6,6 @@ import { randomUUID } from 'node:crypto';
 import { getDatabase } from '../database/connection';
 import { PdfReviews } from '../services/pdf-editor/reviews';
 import type { PdfEditorJobs } from '../services/pdf-editor/jobs';
-import { runPythonPdf, pythonInspection } from '../services/pdf-editor/python';
-import { pdfEngineTools } from '../services/pdf-editor/tools';
 import { inspectPdfFile, htmlEscape } from '../services/pdf-editor/inspection';
 import { fileSha256 } from '../services/pdf-editor/source';
 import { AIResearchService } from '../services/ai/ai-research.service';
@@ -52,8 +50,8 @@ export function registerPdfCollaborationIpc(jobs: () => PdfEditorJobs, owner: (e
     if (!local && !allowRemote) throw new Error('permission-denied');
     aiOwners.add(id);
     try {
-      const source = jobs().source(id, session), tools = pdfEngineTools();
-      const inspection = existsSync(tools.python) ? pythonInspection(await runPythonPdf(tools, { filename: source.path, expectedHash: source.sha256, output: path.join(app.getPath('temp'), 'inspection.json'), operation: 'text', language, password, payload: requested ? { fromPage: query.fromPage || 1, ...(query.toPage ? { toPage: query.toPage } : {}) } : undefined }, new AbortController().signal, () => {})) : await inspectPdfFile(source.path, password, () => {});
+      const source = jobs().source(id, session);
+      const inspection = await inspectPdfFile(source.path, password, () => {}, requested);
       let budget = 60000;
       const pages = inspection.pages.filter(page => !requested || requested.includes(page.page)).flatMap(page => { if (budget <= 0) return []; const text = page.text.slice(0, budget); budget -= text.length; return [{ ...page, text }]; });
       const bounded = { ...inspection, pages, extraction: pages.reduce((sum, page) => sum + page.text.length, 0) < inspection.pages.reduce((sum, page) => sum + page.text.length, 0) ? 'limited' as const : inspection.extraction };

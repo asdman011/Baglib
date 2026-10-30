@@ -103,6 +103,8 @@ test('Stirling-PDF JAR version selector matches Tauri backend.rs semver and prer
 });
 
 test('Stirling-PDF loopback validator enforces local-only HTTP origins without credentials', () => {
+  assert.equal(canStirlingHandle('preview', { page: 2 }), true);
+  assert.equal(canStirlingHandle('preview', { pages: [1, 2] }), true);
   assert.equal(validateStirlingLoopbackUrl('http://127.0.0.1:8080/api/v1'), 'http://127.0.0.1:8080');
   assert.equal(validateStirlingLoopbackUrl('http://localhost:19090'), 'http://localhost:19090');
   assert.throws(() => validateStirlingLoopbackUrl('https://stirlingpdf.io'), /permission-denied/u);
@@ -126,6 +128,12 @@ test('Stirling-PDF loopback REST v1 adapter executes bilingual text edits, split
       requests.push({ url: reqUrl, body: rawBody });
 
       if (reqUrl === '/api/v1/info/status') { res.writeHead(200); res.end('UP'); return; }
+      if (reqUrl === '/api/v1/general/overlay-pdfs') { res.writeHead(200, { 'Content-Type': 'application/pdf' }); res.end(pdf2); return; }
+      if (reqUrl === '/api/v1/general/edit-table-of-contents') {
+        res.writeHead(200, { 'Content-Type': 'application/pdf' });
+        res.end(pdf2);
+        return;
+      }
 
       if (reqUrl === '/api/v1/general/edit-text' || reqUrl === '/api/v1/general/rotate-pdf' || reqUrl === '/api/v1/security/add-password' || reqUrl === '/api/v1/security/redact' || reqUrl === '/api/v1/security/auto-redact') {
         res.writeHead(200, { 'Content-Type': 'application/pdf' });
@@ -222,6 +230,28 @@ test('Stirling-PDF loopback REST v1 adapter executes bilingual text edits, split
     assert.equal(editRes.outputs?.length, 1);
     assert.equal(editRes.outputs?.[0].sha256, await fileSha256(path.join(editOutDir, 'document.pdf')));
     assert.ok(requests.some(item => item.url === '/api/v1/general/edit-text' && item.body.includes('نسخة محققة — Verified Edition')));
+    const inkResult = await runStirlingPdf(tools, { filename: sourcePath, output: path.join(directory, 'ink-output', 'document.pdf'), operation: 'edit-content', language: 'en', expectedHash: sourceHash, payload: { edits: [{ kind: 'ink-signature', page: 1, rect: [10, 20, 110, 70], strokes: [[[0, 0], [1, 1]]], color: '#3b82f6' }] } }, new AbortController().signal, () => {});
+    assert.equal(inkResult.outputs?.length, 1);
+    const inkRequest = requests.find(item => item.url === '/api/v1/general/overlay-pdfs')!;
+    assert.ok(inkRequest.body.includes('name="overlayFiles"'));
+    assert.ok(inkRequest.body.includes('SequentialOverlay'));
+    assert.ok(inkRequest.body.includes('10.0000 980.0000 m'));
+
+    for (const replaceExisting of [false, true]) {
+      const toc = [{ title: 'المقدمة — Introduction', pageNumber: 1 }];
+      const result = await runStirlingPdf(tools, {
+        filename: sourcePath,
+        output: path.join(directory, `toc-${replaceExisting}`, 'document.pdf'),
+        operation: 'edit-toc', language: 'ar', expectedHash: sourceHash,
+        payload: { toc, ...(replaceExisting ? { replaceExisting: true } : {}) },
+      }, new AbortController().signal, () => {});
+      assert.equal(result.outputs?.length, 1);
+      const request = requests.filter(item => item.url === '/api/v1/general/edit-table-of-contents').at(-1)!;
+      assert.ok(request.body.includes('name="bookmarkData"'));
+      assert.ok(request.body.includes(JSON.stringify(toc)));
+      assert.ok(request.body.includes(`name="replaceExisting"\r\n\r\n${replaceExisting}`));
+      assert.equal(request.body.includes('name="toc"'), false);
+    }
 
     // 3. Split with streaming ZIP Central Directory extraction (/api/v1/general/split-pages)
     const splitOutDir = path.join(directory, 'out-split');
@@ -310,6 +340,30 @@ test('extractZipEntries unpacks stored and deflated entries using Central Direct
   assert.equal(extracted[0].data.toString('utf8'), '%PDF-1.4 stored');
   assert.equal(extracted[1].name, 'second.pdf');
   assert.equal(extracted[1].data.toString('utf8'), '%PDF-1.4 deflated بِسْمِ اللَّهِ');
+});
+
+test('background Java warm-up cancelled during preflight never creates a runtime or starts a child', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'baglib-pdf-stirling-cancel-'));
+  const sidecar = new StirlingSidecarService();
+  try {
+    const javaRoot = path.join(directory, 'java');
+    await mkdir(path.join(javaRoot, 'bin'), { recursive: true });
+    const javaPath = path.join(javaRoot, 'bin', 'java.exe');
+    await writeFile(javaPath, 'must never execute');
+    await writeFile(path.join(javaRoot, 'release'), 'JAVA_VERSION="25.0.1"\n');
+    const jarPath = path.join(directory, 'server.jar');
+    await writeFile(jarPath, buildTestZip([{ name: 'META-INF/MANIFEST.MF', data: Buffer.from('Build-Jdk-Spec: 25\n') }]));
+    const workDir = path.join(directory, 'must-not-start');
+    const startup = sidecar.ensureStarted({ javaPath, jarPath, workDir });
+    const rejected = assert.rejects(startup, /^Error: cancelled$/u);
+    await sidecar.stop();
+    await rejected;
+    assert.equal(sidecar.getStatus().status, 'stopped');
+    await assert.rejects(access(workDir));
+  } finally {
+    await sidecar.stop();
+    await cleanup(directory);
+  }
 });
 
 test('Java preflight reads release and application bytecode, ignoring nested libraries and older Boot launcher', async t => {
@@ -430,7 +484,10 @@ test('organizer routes deletion, reorder, crop and ordered source-range merges w
     await assert.rejects(run({ pages: [{ page: 99 }] }), /invalid-request/u);
     await assert.rejects(run({ crop: { x: 0, y: 0, width: -1, height: 5 } }), /invalid-request/u);
     assert.equal(canStirlingHandle('organize', { pages: [{ page: 1, sessionId: 'imported' }] }), true);
-    assert.equal(canStirlingHandle('organize', { pages: [{ blank: true }] }), false);
+    assert.equal(canStirlingHandle('organize', { pages: [{ blank: true }] }), true);
+    assert.equal(canStirlingHandle('organize', { pages: [{ page: 1, rotation: 90 }] }), true);
+    assert.equal(canStirlingHandle('organize', { pages: [{ page: 1, rotation: 45 }] }), false);
+    await assert.rejects(run({ pages: [{ page: Number.NaN }] }), /invalid-request/u);
     assert.equal(canStirlingHandle('edit-content', { textReplacements: [{ find: 'a', replace: 'b' }], images: [{}] }), false);
   } finally {
     server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await cleanup(directory);
@@ -543,3 +600,127 @@ test('RTL JSON endpoints round-trip and only missing endpoints fall back to lega
     assert.deepEqual(requests.map(item => item.url), ['/api/v1/general/edit-text']);
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await cleanup(directory); }
 });
+
+test('Stirling-PDF extended endpoints: chapters/size split, crop, document-properties, basic-info, and convert-file-pdf', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'baglib-pdf-stirling-'));
+  const requests: { url: string; body: string }[] = [];
+  const pdf = makePagePdf(1, Buffer.alloc(0));
+  const server = http.createServer((req, res) => {
+    if (req.url === '/api/v1/info/status') { res.writeHead(200); res.end(); return; }
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      requests.push({ url: req.url || '', body: Buffer.concat(chunks).toString('utf8') });
+      if (req.url === '/api/v1/analysis/document-properties') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ title: 'كتاب الفقه', author: 'البخاري' }));
+        return;
+      }
+      if (req.url === '/api/v1/analysis/basic-info') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ pageCount: 1, pdfVersion: 1.4 }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/pdf' });
+      res.end(pdf);
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const filename = path.join(directory, 'source.pdf');
+    await writeFile(filename, pdf);
+    const expectedHash = await fileSha256(filename);
+    const tools = { python: '', script: '', tessdata: '', stirlingUrl: 'http://127.0.0.1:' + (server.address() as { port: number }).port };
+
+    // 1. Chapter Split
+    requests.length = 0;
+    const splitChapters = await runStirlingPdf(tools, {
+      filename,
+      output: path.join(directory, 'out', 'chapter.pdf'),
+      expectedHash,
+      operation: 'split' as const,
+      language: 'ar' as const,
+      payload: { splitType: 'chapters', bookmarkLevel: 1 },
+    }, new AbortController().signal, () => {});
+    assert.equal(requests[0].url, '/api/v1/general/split-pdf-by-chapters');
+    assert.ok(requests[0].body.includes('name="bookmarkLevel"'));
+    assert.equal(splitChapters.outputs?.length, 1);
+
+    // 2. Size / Count Split
+    requests.length = 0;
+    const splitSize = await runStirlingPdf(tools, {
+      filename,
+      output: path.join(directory, 'out', 'part.pdf'),
+      expectedHash,
+      operation: 'split' as const,
+      language: 'en' as const,
+      payload: { splitType: 'count', splitValue: '2' },
+    }, new AbortController().signal, () => {});
+    assert.equal(requests[0].url, '/api/v1/general/split-by-size-or-count');
+    assert.ok(requests[0].body.includes('name="splitType"\r\n\r\n1'));
+    assert.ok(requests[0].body.includes('name="splitValue"\r\n\r\n2'));
+    assert.equal(splitSize.outputs?.length, 1);
+
+    // 3. Standalone Crop
+    requests.length = 0;
+    const cropResult = await runStirlingPdf(tools, {
+      filename,
+      output: path.join(directory, 'out', 'cropped.pdf'),
+      expectedHash,
+      operation: 'crop' as const,
+      language: 'en' as const,
+      payload: { x: 10, y: 20, width: 300, height: 400 },
+    }, new AbortController().signal, () => {});
+    assert.equal(requests[0].url, '/api/v1/general/crop');
+    assert.ok(requests[0].body.includes('name="x"\r\n\r\n10'));
+    assert.ok(requests[0].body.includes('name="height"\r\n\r\n400'));
+    assert.equal(cropResult.outputs?.length, 1);
+
+    // 4. Document Properties & Basic Info
+    requests.length = 0;
+    const docProps = await runStirlingPdf(tools, {
+      filename,
+      output: path.join(directory, 'out', 'props.pdf'),
+      expectedHash,
+      operation: 'document-properties' as const,
+      language: 'ar' as const,
+    }, new AbortController().signal, () => {});
+    assert.equal(requests[0].url, '/api/v1/analysis/document-properties');
+    assert.equal((docProps.properties as Record<string, unknown>).title, 'كتاب الفقه');
+
+    requests.length = 0;
+    const basicInfo = await runStirlingPdf(tools, {
+      filename,
+      output: path.join(directory, 'out', 'info.pdf'),
+      expectedHash,
+      operation: 'basic-info' as const,
+      language: 'en' as const,
+    }, new AbortController().signal, () => {});
+    assert.equal(requests[0].url, '/api/v1/analysis/basic-info');
+    assert.equal((basicInfo.info as Record<string, unknown>).pageCount, 1);
+
+    // 5. Convert File to PDF
+    requests.length = 0;
+    const convertFile = await runStirlingPdf(tools, {
+      filename,
+      output: path.join(directory, 'out', 'converted.pdf'),
+      expectedHash,
+      operation: 'convert-file-pdf' as const,
+      language: 'en' as const,
+      payload: { fileType: 'html' },
+    }, new AbortController().signal, () => {});
+    assert.equal(requests[0].url, '/api/v1/convert/html/pdf');
+    assert.equal(convertFile.outputs?.length, 1);
+
+    // Verify canStirlingHandle returns true for all of them
+    assert.equal(canStirlingHandle('crop'), true);
+    assert.equal(canStirlingHandle('document-properties'), true);
+    assert.equal(canStirlingHandle('basic-info'), true);
+    assert.equal(canStirlingHandle('convert-file-pdf'), true);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await cleanup(directory);
+  }
+});
+

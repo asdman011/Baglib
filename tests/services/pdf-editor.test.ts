@@ -26,6 +26,13 @@ test('PDF inspection uses the real parser and HTML safely preserves multilingual
     const progress: number[] = [];
     const inspection = await inspectPdfFile(filename, undefined, current => progress.push(current));
     assert.equal(inspection.totalPages, 2);
+    assert.ok(inspection.pages[0].blocks[0].y < 150);
+    assert.ok(inspection.pages[0].blocks[0].y >= 0);
+    const selected = await inspectPdfFile(filename, undefined, () => {}, [2]);
+    assert.equal(selected.totalPages, 2);
+    assert.deepEqual(selected.pages.map(page => page.page), [2]);
+    assert.match(selected.pages[0].text, /PAGE 2/u);
+    await assert.rejects(inspectPdfFile(filename, undefined, () => {}, [3]), /invalid-request/u);
     assert.match(inspection.pages[0].text, /PAGE 1/u);
     assert.deepEqual(progress, [1, 2]);
     assert.equal(inspection.signatureValidation, 'not-performed');
@@ -82,6 +89,11 @@ test('publication preserves originals/backups and refuses stale or unconfirmed t
     const copy = path.join(directory, 'copy.pdf');
     await publishPdfOutput({ staged, target: copy, stagedSha256: output });
     assert.equal(await fileSha256(copy), output);
+    const backupDirectory = path.join(directory, '.baglib-data', 'backups');
+    const restored = await publishPdfOutput({ staged: result.backup!, target: source, stagedSha256: expected, expectedTargetSha256: output, backupDirectory });
+    assert.equal(path.dirname(restored.backup!), backupDirectory);
+    assert.equal(await fileSha256(restored.backup!), output);
+    assert.deepEqual(await readFile(source), original);
   } finally { await cleanup(directory); }
 });
 
@@ -90,4 +102,43 @@ test('approved security/conversion operations are typed, while injected worker p
   assert.throws(() => validatePdfJob({ sessionId: 'a', language: 'en', operation: 'inspect', filename: 'secret.pdf' }));
   assert.deepEqual(pdfCapabilities().filter(capability => capability.available).map(capability => capability.feature), ['inspect', 'export-html', 'cloud']);
   assert.throws(() => validatePdfJob({ sessionId: 'a', language: 'en', operation: 'redact', payload: { regions: [{ path: 'secret.pdf' }] } }));
+});
+
+test('restored PDF sessions abandon staged edits and expose a versioned active-source preview', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'baglib-pdf-restored-'));
+  const db = createTestDatabase();
+  try {
+    const source = path.join(directory, 'source.pdf');
+    await writeFile(source, makePagePdf(1, Buffer.alloc(0)));
+    const inputs: string[] = [];
+    const controller = new PdfEditorJobs(db, path.join(directory, 'jobs'), async (input, signal, progress) => {
+      inputs.push(input.filename);
+      if (input.operation === 'inspect') return inspectPdfFile(input.filename, undefined, progress);
+      const filename = path.join(path.dirname(input.output), 'document.pdf');
+      await writeFile(filename, makePagePdf(2, Buffer.alloc(0)));
+      return { outputs: [{ filename: 'document.pdf', format: 'pdf', bytes: 0, sha256: await fileSha256(filename) }] };
+    });
+    const session = await controller.openPath(10, source);
+    const complete = async (operation: 'organize' | 'inspect') => {
+      const job = await controller.start(10, { sessionId: session.id, operation, language: 'en', ...(operation === 'organize' ? { payload: { angle: 90 } } : {}) });
+      for (let attempt = 0; attempt < 100 && controller.status(10, job.id).state === 'running'; attempt++) await new Promise(resolve => setTimeout(resolve, 5));
+      const status = controller.status(10, job.id);
+      assert.equal(status.state, 'completed', status.error);
+      return status;
+    };
+    assert.ok(session.previewUrl?.includes(session.sha256));
+    await complete('organize');
+    const staged = await complete('inspect');
+    assert.equal(staged.inspection?.totalPages, 2);
+    assert.notEqual(inputs.at(-1), source);
+    await writeFile(source, makePagePdf(3, Buffer.alloc(0)));
+    const restoredHash = await fileSha256(source);
+    assert.throws(() => controller.rebase(11, session.id, restoredHash, true), /invalid-source/);
+    const restored = controller.rebase(10, session.id, restoredHash, true);
+    assert.notEqual(restored.previewUrl, session.previewUrl);
+    assert.ok(restored.previewUrl?.includes(restoredHash));
+    assert.equal((await complete('inspect')).inspection?.totalPages, 3);
+    assert.equal(inputs.at(-1), source);
+    await controller.close(10, session.id);
+  } finally { db.close(); await cleanup(directory); }
 });

@@ -10,8 +10,16 @@ export function pdfEngineTools(): PdfEngineTools {
   const root = app.isPackaged ? path.join(app.getPath('userData'), 'pdf-editor', 'runtime') : path.join(app.getAppPath(), '.baglib-data', 'pdf-engine');
   const python = path.join(root, 'venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
   const javaRoot = path.join(root, 'java');
-  const javaFolder = fs.existsSync(javaRoot) ? fs.readdirSync(javaRoot).find(name => fs.existsSync(path.join(javaRoot, name, 'bin', process.platform === 'win32' ? 'java.exe' : 'java'))) : undefined;
-  const java = javaFolder ? path.join(javaRoot, javaFolder, 'bin', process.platform === 'win32' ? 'java.exe' : 'java') : undefined;
+  const javaFolders = fs.existsSync(javaRoot)
+    ? fs.readdirSync(javaRoot).filter(name => fs.existsSync(path.join(javaRoot, name, 'bin', process.platform === 'win32' ? 'java.exe' : 'java')))
+    : [];
+  // Sort descending by major version so that Java 25 is preferred over Java 21
+  javaFolders.sort((a, b) => {
+    const numA = parseInt(a.match(/\d+/)?.[0] || '0', 10);
+    const numB = parseInt(b.match(/\d+/)?.[0] || '0', 10);
+    return numB - numA;
+  });
+  const java = javaFolders[0] ? path.join(javaRoot, javaFolders[0], 'bin', process.platform === 'win32' ? 'java.exe' : 'java') : undefined;
   const validator = path.join(root, 'verapdf');
   let veraPdfJar: string | undefined;
   if (fs.existsSync(path.join(validator, 'bin'))) veraPdfJar = fs.readdirSync(path.join(validator, 'bin')).find(name => /^(greenfield-apps|cli-).*\.jar$/u.test(name));
@@ -24,6 +32,6 @@ export function pdfEngineTools(): PdfEngineTools {
     veraPdfJar: config.veraPdfJar || (veraPdfJar ? path.join(validator, 'bin', veraPdfJar) : undefined),
     stirlingJar: config.stirlingJar || process.env.BAGLIB_STIRLING_JAR || discoveredStirlingJar,
     stirlingUrl: config.stirlingUrl || process.env.BAGLIB_STIRLING_URL,
-    preferStirling: config.preferStirling ?? Boolean(config.stirlingUrl || process.env.BAGLIB_STIRLING_URL),
+    preferStirling: true,
   };
 }

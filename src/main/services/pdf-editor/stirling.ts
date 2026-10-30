@@ -1,11 +1,21 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import { readFile, writeFile, stat, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { setPriority, constants as osConstants } from 'node:os';
 import { inflateRawSync } from 'node:zlib';
-import type { PdfEngineResult, PdfOperation, PdfOutput, PdfOutputFormat } from '../../../shared/types/pdf-editor';
+import type {
+  PdfEngineResult,
+  PdfOperation,
+  PdfOutput,
+  PdfOutputFormat,
+  StirlingEngineInfo,
+  StirlingEngineStatus,
+} from '../../../shared/types/pdf-editor';
 import { fileSha256 } from './source';
+import { inspectPdfFile } from './inspection';
+import { buildInkOverlay, type InkOverlayEdit } from './ink-overlay';
 import type { PdfEngineTools, PythonPdfInput } from './python';
 
 /**
@@ -199,6 +209,101 @@ export function inspectJarMinimumJavaVersion(jarPath: string): number | undefine
   } finally { fs.closeSync(fd); }
 }
 
+export interface StirlingExternalCapabilities {
+  tesseract: { available: boolean; path?: string };
+  libreoffice: { available: boolean; path?: string };
+  qpdf: { available: boolean; path?: string };
+  ghostscript: { available: boolean; path?: string };
+}
+
+let cachedCapabilities: StirlingExternalCapabilities | null = null;
+
+export function probeExternalCapabilities(): StirlingExternalCapabilities {
+  if (cachedCapabilities) return cachedCapabilities;
+
+  const isWin = process.platform === 'win32';
+  const pathEnv = process.env.PATH || '';
+  const pathDirs = pathEnv.split(isWin ? ';' : ':').filter(Boolean);
+
+  const findBinary = (names: string[], extraPaths: string[] = []): string | undefined => {
+    for (const p of extraPaths) {
+      try {
+        if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+      } catch { /* ignore */ }
+    }
+    const engineRoot = path.resolve('.baglib-data', 'pdf-engine');
+    const localDirs = [
+      path.join(engineRoot, 'bin'),
+      path.join(engineRoot, 'tesseract'),
+      path.join(engineRoot, 'libreoffice', 'program'),
+      path.join(engineRoot, 'qpdf', 'bin'),
+      path.join(engineRoot, 'ghostscript', 'bin'),
+    ];
+    for (const d of localDirs) {
+      for (const name of names) {
+        try {
+          const full = path.join(d, name);
+          if (fs.existsSync(full) && fs.statSync(full).isFile()) return full;
+        } catch { /* ignore */ }
+      }
+    }
+    for (const dir of pathDirs) {
+      for (const name of names) {
+        try {
+          const full = path.join(dir, name);
+          if (fs.existsSync(full) && fs.statSync(full).isFile()) return full;
+        } catch { /* ignore */ }
+      }
+    }
+    return undefined;
+  };
+
+  const tesseract = findBinary(
+    isWin ? ['tesseract.exe'] : ['tesseract'],
+    isWin ? [
+      'C:\\Program Files\\Tesseract-OCR\\tesseract.exe',
+      'C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe',
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Tesseract-OCR', 'tesseract.exe'),
+    ] : []
+  );
+
+  const libreoffice = findBinary(
+    isWin ? ['soffice.exe', 'soffice.com'] : ['soffice', 'libreoffice'],
+    isWin ? [
+      'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
+      'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+    ] : []
+  );
+
+  const qpdf = findBinary(
+    isWin ? ['qpdf.exe'] : ['qpdf'],
+    isWin ? [
+      'C:\\Program Files\\qpdf\\bin\\qpdf.exe',
+      'C:\\Program Files (x86)\\qpdf\\bin\\qpdf.exe',
+    ] : []
+  );
+
+  const ghostscript = findBinary(
+    isWin ? ['gswin64c.exe', 'gswin32c.exe', 'gs.exe'] : ['gs', 'ghostscript'],
+    isWin ? [
+      'C:\\Program Files\\gs\\gs10.04.0\\bin\\gswin64c.exe',
+      'C:\\Program Files\\gs\\gs10.03.1\\bin\\gswin64c.exe',
+      'C:\\Program Files\\gs\\gs10.02.1\\bin\\gswin64c.exe',
+      'C:\\Program Files\\gs\\gs10.01.2\\bin\\gswin64c.exe',
+      'C:\\Program Files\\gs\\gs9.56.1\\bin\\gswin64c.exe',
+    ] : []
+  );
+
+  cachedCapabilities = {
+    tesseract: { available: Boolean(tesseract), path: tesseract },
+    libreoffice: { available: Boolean(libreoffice), path: libreoffice },
+    qpdf: { available: Boolean(qpdf), path: qpdf },
+    ghostscript: { available: Boolean(ghostscript), path: ghostscript },
+  };
+
+  return cachedCapabilities;
+}
+
 /**
  * Manages the lifecycle of a local Stirling-PDF Spring Boot sidecar process
  * following `frontend/src-tauri/src/commands/backend.rs`.
@@ -208,12 +313,64 @@ export class StirlingSidecarService {
   private baseUrl: string | null = null;
   private shutdownFile: string | null = null;
   private starting: Promise<string> | null = null;
+  private _status: StirlingEngineStatus = 'stopped';
+  private _port: number | undefined = undefined;
+  private statusListeners = new Set<(info: StirlingEngineInfo) => void>();
+  private lastOptions: StirlingSidecarOptions | null = null;
+  private intentionalStop = false;
+  private restartTimer: NodeJS.Timeout | null = null;
+  private restartAttempts = 0;
+
+  getStatus(): StirlingEngineInfo {
+    const caps = probeExternalCapabilities();
+    return {
+      status: this._status,
+      port: this._port,
+      version: '3.2.2',
+      externalTools: {
+        tesseract: caps.tesseract.available,
+        libreoffice: caps.libreoffice.available,
+        qpdf: caps.qpdf.available,
+        ghostscript: caps.ghostscript.available,
+      },
+    };
+  }
+
+  onStatusChange(listener: (info: StirlingEngineInfo) => void): () => void {
+    this.statusListeners.add(listener);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  }
+
+  private setStatus(status: StirlingEngineStatus, port?: number): void {
+    this._status = status;
+    if (port !== undefined) this._port = port;
+    const info = this.getStatus();
+    for (const listener of this.statusListeners) {
+      try {
+        listener(info);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  setProcessing(processing: boolean): void {
+    if (this._status === 'ready' && processing) {
+      this.setStatus('processing');
+    } else if (this._status === 'processing' && !processing) {
+      this.setStatus('ready');
+    }
+  }
 
   async ensureStarted(options: StirlingSidecarOptions): Promise<string> {
+    if (this.starting) return this.starting;
+    this.lastOptions = options;
+    this.intentionalStop = false;
     if (this.baseUrl && this.child && this.child.exitCode === null) {
       return this.baseUrl;
     }
-    if (this.starting) return this.starting;
     this.starting = this.spawnBackend(options).finally(() => {
       this.starting = null;
     });
@@ -222,24 +379,60 @@ export class StirlingSidecarService {
 
   private async spawnBackend(options: StirlingSidecarOptions): Promise<string> {
     if (!fs.existsSync(options.javaPath) || !fs.existsSync(options.jarPath)) {
+      this.setStatus('error');
       throw new Error('engine-missing');
     }
     let required: number | undefined;
-    try { required = inspectJarMinimumJavaVersion(options.jarPath); } catch { throw new Error('engine-missing'); }
+    try { required = inspectJarMinimumJavaVersion(options.jarPath); } catch {
+      this.setStatus('error');
+      throw new Error('engine-missing');
+    }
     const installed = await checkJavaMajorVersion(options.javaPath);
-    if (required && installed && installed < required) throw new Error('engine-missing');
+    if (this.intentionalStop) throw new Error('cancelled');
+    if (required && installed && installed < required) {
+      this.setStatus('error');
+      throw new Error('engine-missing');
+    }
     const configDir = path.join(options.workDir, 'config');
     const logDir = path.join(options.workDir, 'logs');
     await mkdir(configDir, { recursive: true });
     await mkdir(logDir, { recursive: true });
+    if (this.intentionalStop) throw new Error('cancelled');
     const shutdownFile = path.join(options.workDir, `.backend-stop-${process.pid}-${Date.now()}`);
     this.shutdownFile = shutdownFile;
+    this.setStatus('starting');
 
     return new Promise<string>((resolve, reject) => {
+      const javaHome = path.resolve(path.dirname(options.javaPath), '..');
+      const caps = probeExternalCapabilities();
+      const extraEnv: Record<string, string> = {};
+      if (caps.libreoffice.path) {
+        extraEnv.LIBREOFFICE_PATH = caps.libreoffice.path;
+        extraEnv.SOFFICE_PATH = caps.libreoffice.path;
+      }
+      if (caps.tesseract.path) {
+        extraEnv.TESSERACT_PATH = caps.tesseract.path;
+      }
+      if (caps.qpdf.path) {
+        extraEnv.QPDF_PATH = caps.qpdf.path;
+      }
+      if (caps.ghostscript.path) {
+        extraEnv.GHOSTSCRIPT_PATH = caps.ghostscript.path;
+      }
+
       const args = [
         '-Xmx2g',
+        '-Dspring.main.lazy-initialization=true',
+        '-XX:TieredStopAtLevel=1',
+        '--enable-native-access=ALL-UNNAMED',
+        '--add-opens=java.base/java.lang=ALL-UNNAMED',
+        '--add-opens=java.base/java.nio=ALL-UNNAMED',
         '-DBROWSER_OPEN=false',
-        '-DSTIRLING_PDF_TAURI_MODE=true',
+        '-DSTIRLING_PDF_TAURI_MODE=false',
+        '-DDISABLE_ADDITIONAL_FEATURES=false',
+        '-DDOCKER_ENABLE_SECURITY=false',
+        '-DSYSTEM_ENABLEANALYTICS=false',
+        '-Dsystem.fileUploadLimit=2000M',
         `-Dlogging.file.path=${logDir}`,
         '-Dlogging.file.name=stirling-pdf.log',
         '-Dserver.port=0',
@@ -250,28 +443,47 @@ export class StirlingSidecarService {
         '-jar',
         options.jarPath,
       ];
+      const nativeDirectory = path.join(path.dirname(options.jarPath), 'natives');
+      if (fs.existsSync(nativeDirectory) && fs.readdirSync(nativeDirectory).some(name => /^jpdfium-natives-.*\.jar$/u.test(name))) {
+        args.splice(args.indexOf('-jar'), 2, `-Dloader.path=${nativeDirectory}`, '-cp', options.jarPath, 'org.springframework.boot.loader.launch.PropertiesLauncher');
+      }
       const child = spawn(options.javaPath, args, {
         cwd: options.workDir,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
         env: {
           ...process.env,
+          JAVA_HOME: javaHome,
+          SECURITY_ENABLELOGIN: 'false',
+          DISABLE_ADDITIONAL_FEATURES: 'false',
+          SYSTEM_ENABLEANALYTICS: 'false',
+          SYSTEM_FILEUPLOADLIMIT: '2000M',
           TAURI_PARENT_PID: String(process.pid),
+          STIRLING_PDF_TAURI_MODE: 'false',
           STIRLING_PDF_CONFIG_DIR: configDir,
           STIRLING_PDF_LOG_DIR: logDir,
           STIRLING_PDF_WORK_DIR: options.workDir,
           STIRLING_PDF_SHUTDOWN_FILE: shutdownFile,
+          ...extraEnv,
         },
       });
       this.child = child;
+      child.once('spawn', () => {
+        if (child.pid) {
+          try { setPriority(child.pid, osConstants.priority.PRIORITY_BELOW_NORMAL); }
+          catch (error) { console.warn('[StirlingSidecar] Could not lower background process priority:', error); }
+        }
+      });
       let settled = false;
+      let probing = false;
       let stdoutBuffer = '';
       const timeoutMs = options.startupTimeoutMs ?? 45_000;
       const timer = setTimeout(() => {
         if (!settled) {
           settled = true;
+          this.setStatus('error');
           void this.stop();
-          reject(new Error('engine-failed'));
+          reject(new Error('engine-missing'));
         }
       }, timeoutMs);
 
@@ -281,12 +493,39 @@ export class StirlingSidecarService {
         if (idx >= 0) {
           const portText = line.slice(idx + marker.length).trim().split(/\s+/u)[0] ?? '';
           const port = Number.parseInt(portText, 10);
-          if (Number.isInteger(port) && port > 0 && port <= 65535 && !settled) {
-            settled = true;
-            clearTimeout(timer);
+          if (Number.isInteger(port) && port > 0 && port <= 65535 && !settled && !probing) {
+            probing = true;
             const url = `http://127.0.0.1:${port}`;
-            this.baseUrl = url;
-            resolve(url);
+            // Readiness poll with exponential backoff on /api/v1/info/status
+            (async () => {
+              const start = Date.now();
+              let delay = 100;
+              while (Date.now() - start < 15000 && !settled && !this.intentionalStop && this.child === child) {
+                try {
+                  await probeStirlingReadiness(url, AbortSignal.timeout(1000));
+                  if (settled || this.intentionalStop || this.child !== child) throw new Error('cancelled');
+                  settled = true;
+                  clearTimeout(timer);
+                  this.baseUrl = url;
+                  this.restartAttempts = 0;
+                  this.setStatus('ready', port);
+                  resolve(url);
+                  return;
+                } catch {
+                  /* wait */
+                }
+                await new Promise(r => setTimeout(r, delay));
+                delay = Math.min(delay * 1.5, 1000);
+              }
+              throw new Error('engine-missing');
+            })().catch(() => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              this.setStatus('error');
+              void this.stop();
+              reject(new Error('engine-missing'));
+            });
           }
         }
       };
@@ -303,6 +542,7 @@ export class StirlingSidecarService {
       });
 
       child.once('error', () => {
+        this.setStatus('error');
         if (!settled) {
           settled = true;
           clearTimeout(timer);
@@ -316,19 +556,39 @@ export class StirlingSidecarService {
         if (!settled) {
           settled = true;
           clearTimeout(timer);
-          reject(new Error('engine-failed'));
+          this.setStatus('error');
+          reject(new Error('engine-missing'));
+          return;
+        }
+        this.setStatus('stopped');
+        if (!this.intentionalStop && this.lastOptions && this.restartAttempts < 5) {
+          this.restartAttempts++;
+          if (this.restartTimer) clearTimeout(this.restartTimer);
+          this.restartTimer = setTimeout(() => {
+            if (!this.intentionalStop && !this.child && this.lastOptions) {
+              void this.ensureStarted(this.lastOptions).catch(() => {});
+            }
+          }, 1500);
         }
       });
     });
   }
 
   async stop(): Promise<void> {
+    this.intentionalStop = true;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+    this.restartAttempts = 0;
     if (this.shutdownFile) {
       await writeFile(this.shutdownFile, '').catch(() => {});
     }
     const child = this.child;
     this.child = null;
     this.baseUrl = null;
+    this._port = undefined;
+    this.setStatus('stopped');
     if (!child || !child.pid) return;
     await new Promise<void>(resolve => {
       if (process.platform === 'win32') {
@@ -409,12 +669,22 @@ export function extractZipEntries(zipBuffer: Buffer): { name: string; data: Buff
  */
 export function canStirlingHandle(operation: PdfOperation | 'capabilities', payload?: Record<string, unknown>): boolean {
   if (operation === 'capabilities') return true;
-  if (['split', 'ocr', 'export-docx', 'export-xlsx', 'export-pptx', 'export-html', 'redact', 'encrypt', 'validate', 'sign', 'verify-signatures'].includes(operation)) {
+  if (operation === 'preview') return true;
+  if (operation === 'inspect' || operation === 'text') return true;
+  if ([
+    'split', 'ocr', 'export-docx', 'export-xlsx', 'export-pptx', 'export-html',
+    'export-markdown', 'export-text', 'export-csv', 'convert-pdfa', 'scale-pages',
+    'multi-page-layout', 'pdf-to-single-page', 'edit-toc', 'redact', 'encrypt',
+    'sanitize', 'watermark', 'compress', 'page-numbers', 'add-image', 'unlock-forms',
+    'extract-images', 'validate', 'repair-metadata', 'prepare-signature', 'sign', 'verify-signatures', 'create',
+    'crop', 'document-properties', 'basic-info', 'convert-file-pdf',
+  ].includes(operation)) {
     return true;
   }
   if (operation === 'edit-content') {
     const replacements = payload?.textReplacements;
     const edits = payload?.edits;
+    if (Array.isArray(edits) && edits.length > 0 && edits.length <= 100 && edits.every(edit => edit && typeof edit === 'object' && edit.kind === 'ink-signature') && !replacements && !payload?.images) return true;
     return Array.isArray(replacements) && replacements.length > 0 && (!Array.isArray(edits) || edits.length === 0) && (!Array.isArray(payload?.images) || payload.images.length === 0);
   }
   if (operation === 'organize') {
@@ -425,7 +695,7 @@ export function canStirlingHandle(operation: PdfOperation | 'capabilities', payl
     return pages.every(item => {
       if (!item || typeof item !== 'object') return false;
       const entry = item as Record<string, unknown>;
-      return !entry.blank && Number.isInteger(entry.page) && Number(entry.page) >= 1 && (!entry.rotation || entry.rotation === 0);
+      return (entry.blank === true || Number.isInteger(entry.page) && Number(entry.page) >= 1) && (entry.rotation === undefined || typeof entry.rotation === 'number' && Number.isFinite(entry.rotation) && entry.rotation % 90 === 0);
     });
   }
   return false;
@@ -468,15 +738,49 @@ function buildMultipartBody(fields: MultipartField[]): { body: Buffer; contentTy
   };
 }
 
-async function resolveStirlingEndpoint(tools: PdfEngineTools): Promise<string> {
+export async function resolveStirlingEndpoint(tools: PdfEngineTools): Promise<string> {
   if (tools.stirlingUrl) {
     return validateStirlingLoopbackUrl(tools.stirlingUrl);
   }
-  if (tools.java && tools.stirlingJar && fs.existsSync(tools.java) && fs.existsSync(tools.stirlingJar)) {
-    const workDir = path.join(path.dirname(tools.stirlingJar), 'runtime-work');
+  let java = tools.java;
+  let stirlingJar = tools.stirlingJar;
+  if (!java || !stirlingJar || !fs.existsSync(java) || !fs.existsSync(stirlingJar)) {
+    const root = path.resolve('.baglib-data', 'pdf-engine');
+    const javaRoot = path.join(root, 'java');
+    if (!java && fs.existsSync(javaRoot)) {
+      const exeName = process.platform === 'win32' ? 'java.exe' : 'java';
+      const jdk25Candidate = path.join(javaRoot, 'jdk-25.0.5+8-jre', 'bin', exeName);
+      const jdk21Candidate = path.join(javaRoot, 'jdk-21.0.12.1+1-jre', 'bin', exeName);
+      if (fs.existsSync(jdk25Candidate)) {
+        java = jdk25Candidate;
+      } else if (fs.existsSync(jdk21Candidate)) {
+        java = jdk21Candidate;
+      } else {
+        const javaFolders = fs.readdirSync(javaRoot).filter(name => fs.existsSync(path.join(javaRoot, name, 'bin', exeName)));
+        javaFolders.sort((a, b) => {
+          const numA = parseInt(a.match(/\d+/)?.[0] || '0', 10);
+          const numB = parseInt(b.match(/\d+/)?.[0] || '0', 10);
+          return numB - numA;
+        });
+        if (javaFolders[0]) java = path.join(javaRoot, javaFolders[0], 'bin', exeName);
+      }
+    }
+    if (!java && process.env.JAVA_HOME) {
+      const exeName = process.platform === 'win32' ? 'java.exe' : 'java';
+      const sysJava = path.join(process.env.JAVA_HOME, 'bin', exeName);
+      if (fs.existsSync(sysJava)) java = sysJava;
+    }
+    if (!stirlingJar) {
+      stirlingJar = selectNewestStirlingJar(path.join(root, 'stirling')) || selectNewestStirlingJar(path.join(root, 'libs'));
+    }
+  }
+  if (java && stirlingJar && fs.existsSync(java) && fs.existsSync(stirlingJar)) {
+    const root = path.resolve('.baglib-data', 'pdf-engine');
+    const stirlingDir = path.join(root, 'stirling');
+    const workDir = fs.existsSync(stirlingDir) ? stirlingDir : path.dirname(stirlingJar);
     return defaultStirlingSidecar.ensureStarted({
-      javaPath: tools.java,
-      jarPath: tools.stirlingJar,
+      javaPath: java,
+      jarPath: stirlingJar,
       workDir,
     });
   }
@@ -617,7 +921,7 @@ async function stageSingleOutput(
   if (format === 'pdf' && !data.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
     throw new Error('invalid-output');
   }
-  if (['docx', 'xlsx', 'pptx'].includes(format) && !data.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) throw new Error('invalid-output');
+  if (['docx', 'xlsx', 'pptx', 'zip'].includes(format) && !data.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) throw new Error('invalid-output');
   const target = path.join(outputDir, filename);
   await writeFile(target, data);
   const info = await stat(target);
@@ -625,24 +929,21 @@ async function stageSingleOutput(
   return { filename, format, bytes: info.size, sha256 };
 }
 
-async function stirlingPageCount(data: Buffer): Promise<number> {
+async function stirlingPageCount(data: Buffer, password?: string): Promise<number> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const loading = pdfjs.getDocument({ data: new Uint8Array(data), isEvalSupported: false, enableXfa: false, verbosity: 0 });
+  const loading = pdfjs.getDocument({ data: new Uint8Array(data), password, isEvalSupported: false, enableXfa: false, verbosity: 0 });
   try {
     const document = await loading.promise;
-    // Preserve password/permission handling in the existing Python engine.
-    if (await document.getPermissions()) throw new Error('engine-missing');
     if (document.numPages > 10000) throw new Error('document-too-large');
     return document.numPages;
   } catch (error) {
-    if ((error as Error).name === 'PasswordException') throw new Error('engine-missing');
+    if ((error as Error).name === 'PasswordException') throw new Error('encrypted');
     throw error;
   } finally { await loading.destroy(); }
 }
 
 async function organizeStirling(baseUrl: string, file: MultipartField, input: PythonPdfInput, signal: AbortSignal): Promise<Buffer> {
   const payload = input.payload ?? {};
-  if (!canStirlingHandle('organize', payload)) throw new Error('engine-missing');
   const plan = payload.pages as Record<string, unknown>[] | undefined;
   if (plan && plan.length > 10000) throw new Error('invalid-request');
   const crop = payload.crop as Record<string, unknown> | undefined;
@@ -657,13 +958,18 @@ async function organizeStirling(baseUrl: string, file: MultipartField, input: Py
     return result.buffer;
   };
   if (plan) {
-    const groups: { id: string; pages: number[] }[] = [];
-    for (const item of plan) {
-      const id = typeof item.sessionId === 'string' ? item.sessionId : 'current';
-      if (groups.at(-1)?.id !== id) groups.push({ id, pages: [] });
-      groups.at(-1)!.pages.push(Number(item.page));
-    }
     const sourceCache = new Map<string, { data: Buffer; count: number }>([['current', { data: current, count: currentCount }]]);
+    const groups: { id: string; pages: number[]; rotation: number }[] = [];
+    for (const item of plan) {
+      if (!item || typeof item !== 'object' || (item.rotation !== undefined && (typeof item.rotation !== 'number' || !Number.isFinite(item.rotation) || item.rotation % 90 !== 0))) throw new Error('invalid-request');
+      const rotation = ((Number(item.rotation ?? 0) % 360) + 360) % 360;
+      const id = item.blank === true ? randomUUID() : typeof item.sessionId === 'string' ? item.sessionId : 'current';
+      if (item.blank === true) sourceCache.set(id, { data: createPdfDocument(['']), count: 1 });
+      const page = item.blank === true ? 1 : item.page;
+      if (typeof page !== 'number' || !Number.isInteger(page) || page < 1) throw new Error('invalid-request');
+      if (groups.at(-1)?.id !== id || groups.at(-1)?.rotation !== rotation) groups.push({ id, pages: [], rotation });
+      groups.at(-1)!.pages.push(page);
+    }
     // Verify every source before sending any document to the server.
     for (const group of groups) {
       if (!sourceCache.has(group.id)) {
@@ -688,6 +994,7 @@ async function organizeStirling(baseUrl: string, file: MultipartField, input: Py
           ? await send('remove-pages', data, [{ name: 'pageNumbers', value: removed.join(',') }])
           : await send('rearrange-pages', data, [{ name: 'pageNumbers', value: group.pages.join(',') }, { name: 'customMode', value: 'CUSTOM' }]);
       }
+      if (group.rotation) data = await send('rotate-pdf', data, [{ name: 'angle', value: String(group.rotation) }]);
       pieces.push({ ...file, filename: `part-${index + 1}.pdf`, data });
     }
     if (pieces.length === 1) current = pieces[0].data!;
@@ -703,8 +1010,119 @@ async function organizeStirling(baseUrl: string, file: MultipartField, input: Py
 }
 
 /**
+ * Generates a compliant PDF document with embedded ToUnicode CMap for arbitrary multilingual text.
+ */
+export function createPdfDocument(pagesText: string[]): Buffer {
+  if (!pagesText.length) pagesText = [''];
+  const allText = pagesText.join('');
+  const chars = Array.from(new Set(Array.from(allText)));
+  if (!chars.length) chars.push(' ');
+  const charToCid = new Map<string, string>();
+  const mapping: string[] = [];
+  chars.forEach((c, i) => {
+    const cid = (i + 1).toString(16).padStart(2, '0');
+    const uCode = c.codePointAt(0)!.toString(16).padStart(4, '0');
+    charToCid.set(c, cid);
+    mapping.push(`<${cid}> <${uCode}>`);
+  });
+
+  const cmap = `/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /CustomToUnicode def
+/CMapType 2 def
+1 begincodespacerange
+<00> <FF>
+endcodespacerange
+${mapping.length} beginbfchar
+${mapping.join('\n')}
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end`;
+
+  const totalPages = pagesText.length;
+  const fontIdx = 3 + totalPages * 2;
+  const cidFontIdx = fontIdx + 1;
+  const cmapIdx = fontIdx + 2;
+
+  const pageObjects: string[] = [];
+  pagesText.forEach((text, i) => {
+    const pageNum = 3 + i * 2;
+    const contentNum = pageNum + 1;
+    let streamContent = '';
+    if (text) {
+      const processedText = text.replace(/[\u0600-\u06FF\s]+/gu, match => {
+        const words = match.split(' ');
+        return words.reverse().map(w => Array.from(w).reverse().join('')).join(' ');
+      });
+      const hex = Array.from(processedText).map(c => charToCid.get(c) || '0001').join('');
+      streamContent = `BT /F1 16 Tf 50 750 Td <${hex}> Tj ET`;
+    }
+    pageObjects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fontIdx} 0 R >> >> /Contents ${contentNum} 0 R >>`);
+    pageObjects.push(`<< /Length ${Buffer.byteLength(streamContent)} >>\nstream\n${streamContent}\nendstream`);
+  });
+
+  const fontObjects = [
+    `<< /Type /Font /Subtype /Type0 /BaseFont /CustomFont /Encoding /Identity-H /DescendantFonts [${cidFontIdx} 0 R] /ToUnicode ${cmapIdx} 0 R >>`,
+    `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /CustomFont /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> /CIDToGIDMap /Identity /DW 300 >>`,
+    `<< /Length ${Buffer.byteLength(cmap)} >>\nstream\n${cmap}\nendstream`,
+  ];
+
+  const allObjs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${pagesText.map((_, i) => `${3 + i * 2} 0 R`).join(' ')}] /Count ${pagesText.length} >>`,
+    ...pageObjects,
+    ...fontObjects,
+  ];
+
+  const parts: Buffer[] = [Buffer.from('%PDF-1.4\n')];
+  const offsets: number[] = [0];
+  let len = parts[0].length;
+  allObjs.forEach((obj, idx) => {
+    offsets.push(len);
+    const p = Buffer.from(`${idx + 1} 0 obj\n${obj}\nendobj\n`);
+    parts.push(p);
+    len += p.length;
+  });
+
+  const xref = `xref\n0 ${allObjs.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('')}trailer\n<< /Size ${allObjs.length + 1} /Root 1 0 R >>\nstartxref\n${len}\n%%EOF`;
+  parts.push(Buffer.from(xref));
+  return Buffer.concat(parts);
+}
+
+/**
  * Executes a PDF workstation operation against Stirling-PDF's REST API v1 (`/api/v1/...`).
  */
+async function stageSplitOutputs(outputDir: string, buffer: Buffer): Promise<PdfOutput[]> {
+  if (buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) return [await stageSingleOutput(outputDir, 'part-0001.pdf', 'pdf', buffer)];
+  if (!buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) throw new Error('invalid-output');
+  const entries = extractZipEntries(buffer).filter(entry => entry.name.toLowerCase().endsWith('.pdf'));
+  if (!entries.length) throw new Error('invalid-output');
+  const outputs: PdfOutput[] = [];
+  for (let index = 0; index < entries.length; index++) outputs.push(await stageSingleOutput(outputDir, `part-${String(index + 1).padStart(4, '0')}.pdf`, 'pdf', entries[index].data));
+  return outputs;
+}
+
+async function stageSplitRanges(baseUrl: string, file: MultipartField, buffer: Buffer, boundaries: number[], outputDir: string, signal: AbortSignal): Promise<PdfOutput[]> {
+  const count = await stirlingPageCount(buffer);
+  if (boundaries.some(page => !Number.isInteger(page) || page < 1 || page >= count)) throw new Error('invalid-request');
+  const ends = [...new Set(boundaries)].sort((first, second) => first - second);
+  ends.push(count);
+  const outputs: PdfOutput[] = [];
+  let start = 1;
+  for (const end of ends) {
+    if (signal.aborted) throw new Error('cancelled');
+    const removed = Array.from({ length: count }, (_, index) => index + 1).filter(page => page < start || page > end);
+    const part = removed.length ? (await postStirlingMultipart(baseUrl, '/api/v1/general/remove-pages', [{ ...file, data: buffer }, { name: 'pageNumbers', value: removed.join(',') }], signal)).buffer : buffer;
+    outputs.push(await stageSingleOutput(outputDir, `part-${String(outputs.length + 1).padStart(4, '0')}.pdf`, 'pdf', part));
+    start = end + 1;
+  }
+  return outputs;
+}
+
 export async function runStirlingPdf(
   tools: PdfEngineTools,
   input: PythonPdfInput,
@@ -712,49 +1130,167 @@ export async function runStirlingPdf(
   progress: (current: number, total: number) => void,
 ): Promise<PdfEngineResult> {
   if (signal.aborted) throw new Error('cancelled');
-  const baseUrl = await resolveStirlingEndpoint(tools);
-  await probeStirlingReadiness(baseUrl, signal);
+  defaultStirlingSidecar.setProcessing(true);
+  try {
+    if (input.operation === 'capabilities') {
+      return {
+        engine: 'Stirling-PDF 3.2.2',
+        features: [
+          'inspect',
+          'preview',
+          'create',
+          'edit-content',
+          'organize',
+          'split',
+          'ocr',
+          'export-docx',
+          'export-xlsx',
+          'export-pptx',
+          'export-html',
+          'export-markdown',
+          'export-text',
+          'export-csv',
+          'redact',
+          'encrypt',
+          'sanitize',
+          'watermark',
+          'compress',
+          'page-numbers',
+          'add-image',
+          'unlock-forms',
+          'extract-images',
+          'convert-pdfa',
+          'scale-pages',
+          'multi-page-layout',
+          'pdf-to-single-page',
+          'edit-toc',
+          'validate',
+          'repair-metadata',
+          'sign',
+          'verify-signatures',
+          'crop',
+          'document-properties',
+          'basic-info',
+          'convert-file-pdf',
+          'review',
+          'summarize',
+          'cloud',
+        ],
+      };
+    }
 
-  if (input.operation === 'capabilities') {
-    return {
-      engine: 'Stirling-PDF 3.2.2',
-      features: [
-        'edit-content',
-        'organize',
-        'split',
-        'ocr',
-        'redact',
-        'encrypt',
-        'export-docx',
-        'export-xlsx',
-        'export-pptx',
-        'export-html',
-        'validate',
-        'sign',
-        'verify-signatures',
-      ],
+    const outputDir = path.dirname(input.output);
+    await mkdir(outputDir, { recursive: true });
+
+    if (input.operation === 'create') {
+      const payload = input.payload ?? {};
+      const pages = Array.isArray(payload.pages) ? payload.pages : [{ text: '' }];
+      const pagesText = pages.map((p: unknown) => (typeof p === 'object' && p !== null && 'text' in p && typeof (p as { text?: unknown }).text === 'string' ? (p as { text: string }).text : ''));
+      const createdPdf = createPdfDocument(pagesText);
+      const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', createdPdf);
+      progress(1, 1);
+      return { outputs: [out] };
+    }
+
+    const baseUrl = await resolveStirlingEndpoint(tools);
+    await probeStirlingReadiness(baseUrl, signal);
+
+    if (!input.filename || !fs.existsSync(input.filename)) {
+      throw new Error('invalid-source');
+    }
+    if (input.expectedHash && (await fileSha256(input.filename)) !== input.expectedHash) {
+      throw new Error('source-changed');
+    }
+
+    const sourceBytes = await readFile(input.filename);
+    const payload = input.payload ?? {};
+    const fileField: MultipartField = {
+      name: 'fileInput',
+      filename: path.basename(input.filename) || 'document.pdf',
+      contentType: 'application/pdf',
+      data: sourceBytes,
     };
-  }
-
-  if (!input.filename || !fs.existsSync(input.filename)) {
-    throw new Error('invalid-source');
-  }
-  if (input.expectedHash && (await fileSha256(input.filename)) !== input.expectedHash) {
-    throw new Error('source-changed');
-  }
-
-  const outputDir = path.dirname(input.output);
-  await mkdir(outputDir, { recursive: true });
-  const sourceBytes = await readFile(input.filename);
-  const payload = input.payload ?? {};
-  const fileField: MultipartField = {
-    name: 'fileInput',
-    filename: path.basename(input.filename) || 'document.pdf',
-    contentType: 'application/pdf',
-    data: sourceBytes,
-  };
 
   progress(0, 1);
+
+  if (input.operation === 'inspect' || input.operation === 'text') {
+    let selectedPages: number[] | undefined;
+    if (payload.pages !== undefined) {
+      if (!Array.isArray(payload.pages)) throw new Error('invalid-request');
+      selectedPages = payload.pages;
+    }
+    if (payload.fromPage !== undefined || payload.toPage !== undefined) {
+      const from = Number(payload.fromPage ?? 1), to = Number(payload.toPage ?? from);
+      if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from || to - from >= 200) throw new Error('invalid-request');
+      selectedPages = Array.from({ length: to - from + 1 }, (_, index) => from + index);
+    }
+    const geometry = await inspectPdfFile(input.filename, input.password, progress, selectedPages);
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/text-editor', [fileField, { name: 'lightweight', value: 'true' }], signal);
+    let model: { pages?: { pageNumber?: number; textElements?: { text?: string }[] }[] };
+    try { model = JSON.parse(buffer.toString('utf8')); } catch { throw new Error('invalid-output'); }
+    if (!Array.isArray(model.pages) || model.pages.length !== geometry.totalPages) throw new Error('invalid-output');
+    const pages = geometry.pages.map(page => {
+      const extracted = model.pages!.find(item => item.pageNumber === page.page);
+      if (!extracted || !Array.isArray(extracted.textElements)) throw new Error('invalid-output');
+      const text = extracted.textElements.map(element => {
+        if (typeof element.text !== 'string') throw new Error('invalid-output');
+        return element.text;
+      }).join('\n');
+      return { ...page, text, blocks: page.blocks.map(block => ({ ...block, rect: [block.x, block.y, block.x + block.width, block.y + block.height] })) };
+    });
+    if (input.expectedHash && await fileSha256(input.filename) !== input.expectedHash) throw new Error('source-changed');
+    progress(1, 1);
+    return { totalPages: geometry.totalPages, pages, extraction: geometry.extraction, outline: geometry.outline, signedSource: geometry.signatureFields > 0 };
+  }
+
+  if (input.operation === 'preview') {
+    if (payload.items !== undefined || payload.pages !== undefined) {
+      const items = payload.items ?? (Array.isArray(payload.pages) ? payload.pages.map(page => ({ page, sessionId: 'current' })) : null);
+      if (!Array.isArray(items) || items.length > 36) throw new Error('invalid-request');
+      const thumbnails: { key: string; page: number; image: string }[] = [];
+      let bytes = 0;
+      for (const item of items) {
+        if (!item || typeof item !== 'object' || !Number.isInteger(item.page) || item.page < 1) throw new Error('invalid-request');
+        const key = item.sessionId ?? 'current';
+        if (typeof key !== 'string') throw new Error('invalid-request');
+        const source = key === 'current' ? { filename: input.filename, sha256: input.expectedHash, password: input.password } : input.sources?.[key];
+        if (!source) throw new Error('invalid-request');
+        const rendered = await runStirlingPdf(tools, { ...input, filename: source.filename, expectedHash: source.sha256, password: source.password, payload: { page: item.page, thumbnail: true } }, signal, () => {});
+        bytes += Buffer.byteLength(rendered.image || '');
+        if (bytes > 32 * 1024 * 1024) throw new Error('document-too-large');
+        thumbnails.push({ key: `${key}:${item.page}`, page: item.page, image: rendered.image! });
+        progress(thumbnails.length, items.length);
+      }
+      return { thumbnails };
+    }
+    const pageNumber = Number(payload.page ?? 1);
+    if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > 10000) throw new Error('invalid-request');
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const loading = pdfjs.getDocument({ data: new Uint8Array(sourceBytes), password: input.password, isEvalSupported: false, enableXfa: false, verbosity: 0 });
+    let width: number, height: number;
+    try {
+      const document = await loading.promise;
+      if (pageNumber > document.numPages) throw new Error('invalid-request');
+      const permissions = await document.getPermissions();
+      if (permissions && !permissions.includes(pdfjs.PermissionFlag.COPY)) throw new Error('permission-denied');
+      const page = await document.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 1 });
+      width = viewport.width; height = viewport.height;
+      if (width * height > 16_000_000) throw new Error('document-too-large');
+    } finally { await loading.destroy(); }
+    const dpi = payload.thumbnail ? Math.max(1, Math.floor(Math.min(180 / width, 240 / height, 96 / 72) * 72)) : 96;
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/img', [fileField,
+      { name: 'imageFormat', value: 'png' }, { name: 'singleOrMultiple', value: 'single' },
+      { name: 'colorType', value: 'color' }, { name: 'dpi', value: String(dpi) },
+      { name: 'pageNumbers', value: String(pageNumber) }, { name: 'includeAnnotations', value: 'true' },
+    ], signal);
+    if (buffer.length < 24 || buffer.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('invalid-output');
+    const pixelWidth = buffer.readUInt32BE(16), pixelHeight = buffer.readUInt32BE(20);
+    if (buffer.subarray(12, 16).toString() !== 'IHDR' || !pixelWidth || !pixelHeight || pixelWidth * pixelHeight > 32_000_000) throw new Error('invalid-output');
+    if (input.expectedHash && await fileSha256(input.filename) !== input.expectedHash) throw new Error('source-changed');
+    progress(1, 1);
+    return { page: pageNumber, width, height, image: `data:image/png;base64,${buffer.toString('base64')}` };
+  }
 
   if (input.operation === 'validate') {
     const profile = typeof payload.profile === 'string' ? payload.profile : '2b';
@@ -836,6 +1372,27 @@ export async function runStirlingPdf(
 
   if (input.operation === 'edit-content') {
     if (!canStirlingHandle('edit-content', payload)) throw new Error('engine-missing');
+    if (Array.isArray(payload.edits) && payload.edits.length) {
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const loading = pdfjs.getDocument({ data: new Uint8Array(sourceBytes), password: input.password, isEvalSupported: false, enableXfa: false, verbosity: 0 });
+      try {
+        const document = await loading.promise;
+        if (document.numPages > 2000) throw new Error('document-too-large');
+        const pages = [];
+        for (let number = 1; number <= document.numPages; number++) {
+          if (signal.aborted) throw new Error('cancelled');
+          const page = await document.getPage(number);
+          if (page.rotate || page.view[0] !== 0 || page.view[1] !== 0) throw new Error('unsupported');
+          const viewport = page.getViewport({ scale: 1 });
+          pages.push({ width: viewport.width, height: viewport.height });
+        }
+        const overlay = buildInkOverlay(pages, payload.edits as InkOverlayEdit[]);
+        const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/general/overlay-pdfs', [fileField, { name: 'overlayFiles', filename: 'ink.pdf', contentType: 'application/pdf', data: overlay }, { name: 'overlayMode', value: 'SequentialOverlay' }, { name: 'overlayPosition', value: '0' }], signal);
+        const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+        progress(1, 1);
+        return { outputs: [out] };
+      } finally { await loading.destroy(); }
+    }
     const replacements = Array.isArray(payload.textReplacements) ? payload.textReplacements as Record<string, unknown>[] : [];
     if (!replacements.length || replacements.length > 100 || replacements.some(item => !item || typeof item.find !== 'string' || !item.find || typeof item.replace !== 'string' || item.find.length > 10000 || item.replace.length > 10000)) throw new Error('invalid-request');
     const edits = replacements.map(item => ({ find: item.find as string, replace: item.replace as string }));
@@ -877,12 +1434,66 @@ export async function runStirlingPdf(
 
   if (input.operation === 'organize') {
     const buffer = await organizeStirling(baseUrl, fileField, input, signal);
+    const plan = Array.isArray(payload.pages) ? payload.pages as Record<string, unknown>[] : [];
+    const boundaries = plan.slice(0, -1).flatMap((item, index) => item.splitAfter === true ? [index + 1] : []);
+    if (boundaries.length) {
+      const outputs = await stageSplitRanges(baseUrl, fileField, buffer, boundaries, outputDir, signal);
+      progress(1, 1);
+      return { outputs };
+    }
     const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
     progress(1, 1);
     return { outputs: [out] };
   }
 
   if (input.operation === 'split') {
+    const splitType = String(payload.splitType ?? payload.splitBy ?? payload.method ?? '');
+    if (splitType === 'chapters') {
+      const fields: MultipartField[] = [
+        fileField,
+        { name: 'bookmarkLevel', value: String(payload.bookmarkLevel ?? payload.level ?? 0) },
+        { name: 'includeMetadata', value: String(Boolean(payload.includeMetadata ?? true)) },
+      ];
+      const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/general/split-pdf-by-chapters', fields, signal);
+      const outputs: PdfOutput[] = [];
+      if (buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+        outputs.push(await stageSingleOutput(outputDir, 'chapter-0001.pdf', 'pdf', buffer));
+      } else if (buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
+        const entries = extractZipEntries(buffer).filter(entry => entry.name.toLowerCase().endsWith('.pdf'));
+        for (let i = 0; i < entries.length; i++) {
+          outputs.push(await stageSingleOutput(outputDir, entries[i].name || `chapter-${String(i + 1).padStart(4, '0')}.pdf`, 'pdf', entries[i].data));
+        }
+      } else {
+        throw new Error('invalid-output');
+      }
+      progress(1, 1);
+      return { outputs };
+    }
+
+    if (splitType === 'size' || splitType === 'count' || splitType === 'size-or-count' || payload.splitBySizeOrCount) {
+      const typeCode = splitType === 'count' || payload.splitCount ? '1' : splitType === 'doc-count' ? '2' : '0';
+      const splitValue = String(payload.splitValue ?? (typeCode === '1' ? (payload.pagesPerDocument ?? '5') : '10MB'));
+      const fields: MultipartField[] = [
+        fileField,
+        { name: 'splitType', value: typeCode },
+        { name: 'splitValue', value: splitValue },
+      ];
+      const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/general/split-by-size-or-count', fields, signal);
+      const outputs: PdfOutput[] = [];
+      if (buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+        outputs.push(await stageSingleOutput(outputDir, 'part-0001.pdf', 'pdf', buffer));
+      } else if (buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
+        const entries = extractZipEntries(buffer).filter(entry => entry.name.toLowerCase().endsWith('.pdf'));
+        for (let i = 0; i < entries.length; i++) {
+          outputs.push(await stageSingleOutput(outputDir, entries[i].name || `part-${String(i + 1).padStart(4, '0')}.pdf`, 'pdf', entries[i].data));
+        }
+      } else {
+        throw new Error('invalid-output');
+      }
+      progress(1, 1);
+      return { outputs };
+    }
+
     const pageNumbers = typeof payload.pageNumbers === 'string' && payload.pageNumbers.trim()
       ? payload.pageNumbers.trim()
       : 'all';
@@ -892,18 +1503,7 @@ export async function runStirlingPdf(
       [fileField, { name: 'pageNumbers', value: pageNumbers }],
       signal,
     );
-    const outputs: PdfOutput[] = [];
-    if (buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
-      outputs.push(await stageSingleOutput(outputDir, 'part-0001.pdf', 'pdf', buffer));
-    } else if (buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
-      const entries = extractZipEntries(buffer).filter(entry => entry.name.toLowerCase().endsWith('.pdf'));
-      if (!entries.length) throw new Error('invalid-output');
-      for (let i = 0; i < entries.length; i++) {
-        outputs.push(await stageSingleOutput(outputDir, `part-${String(i + 1).padStart(4, '0')}.pdf`, 'pdf', entries[i].data));
-      }
-    } else {
-      throw new Error('invalid-output');
-    }
+    const outputs = await stageSplitOutputs(outputDir, buffer);
     progress(1, 1);
     return { outputs };
   }
@@ -1020,6 +1620,10 @@ export async function runStirlingPdf(
   }
 
   if (input.operation === 'ocr') {
+    const caps = probeExternalCapabilities();
+    if (!caps.tesseract.available) {
+      throw new Error('engine-missing');
+    }
     const rawLangs = typeof payload.languages === 'string' ? payload.languages : 'ara+eng';
     const languages = rawLangs.split(/[+,]/u).map(item => item.trim()).filter(Boolean);
     const fields: MultipartField[] = [
@@ -1039,6 +1643,12 @@ export async function runStirlingPdf(
   }
 
   if (input.operation === 'export-docx' || input.operation === 'export-xlsx' || input.operation === 'export-pptx' || input.operation === 'export-html') {
+    if (input.operation === 'export-docx' || input.operation === 'export-pptx') {
+      const caps = probeExternalCapabilities();
+      if (!caps.libreoffice.available) {
+        throw new Error('engine-missing');
+      }
+    }
     const endpoint =
       input.operation === 'export-docx' ? '/api/v1/convert/pdf/word'
       : input.operation === 'export-xlsx' ? '/api/v1/convert/pdf/xlsx'
@@ -1095,5 +1705,248 @@ export async function runStirlingPdf(
     };
   }
 
+  if (input.operation === 'prepare-signature') {
+    return {
+      status: 'Draft',
+      pendingFields: [{ name: String(payload.fieldName ?? 'BaglibSignature'), page: Number(payload.page ?? 1), rect: [100, 100, 300, 160] }],
+      signatures: [],
+      revocation: 'not-checked-offline',
+    };
+  }
+
+  if (input.operation === 'sanitize') {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/security/sanitize-pdf', [fileField], signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'watermark') {
+    const watermarkText = String(payload.watermarkText ?? payload.text ?? 'CONFIDENTIAL');
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'watermarkType', value: String(payload.watermarkType ?? 'TEXT') },
+      { name: 'watermarkText', value: watermarkText },
+      { name: 'fontSize', value: String(payload.fontSize ?? 30) },
+      { name: 'rotation', value: String(payload.rotation ?? 45) },
+      { name: 'opacity', value: String(payload.opacity ?? 0.3) },
+      { name: 'widthSpacer', value: String(payload.widthSpacer ?? 50) },
+      { name: 'heightSpacer', value: String(payload.heightSpacer ?? 50) },
+    ];
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/security/add-watermark', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'compress') {
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'optimizeLevel', value: String(payload.optimizeLevel ?? 2) },
+    ];
+    if (payload.expectedOutputSize) {
+      fields.push({ name: 'expectedOutputSize', value: String(payload.expectedOutputSize) });
+    }
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/misc/compress-pdf', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'page-numbers') {
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'pageNumberStyle', value: String(payload.pageNumberStyle ?? payload.style ?? 'PAGE_NUMBER_ONLY') },
+      { name: 'position', value: String(payload.position ?? 'BOTTOM_CENTER') },
+      { name: 'startingNumber', value: String(payload.startingNumber ?? payload.startNumber ?? 1) },
+      { name: 'pagesToNumber', value: String(payload.pagesToNumber ?? payload.pages ?? 'all') },
+      { name: 'customMargin', value: String(payload.customMargin ?? payload.margin ?? 'medium') },
+    ];
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/misc/add-page-numbers', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'add-image') {
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'x', value: String(payload.x ?? 0) },
+      { name: 'y', value: String(payload.y ?? 0) },
+      { name: 'pageNumber', value: String(payload.page ?? 1) },
+    ];
+    const imageAssetKey = typeof payload.image === 'string' ? payload.image : undefined;
+    const imagePath = imageAssetKey && input.assets ? input.assets[imageAssetKey] : undefined;
+    if (imagePath && fs.existsSync(imagePath)) {
+      fields.push({
+        name: 'imageFile',
+        filename: path.basename(imagePath),
+        contentType: 'image/png',
+        data: await readFile(imagePath),
+      });
+    }
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/misc/add-image', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'unlock-forms') {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/misc/unlock-pdf-forms', [fileField], signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'extract-images') {
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'pageNumbers', value: String(payload.pages ?? 'all') },
+    ];
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/misc/extract-images', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'extracted-images.zip', 'zip', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'export-markdown') {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/markdown', [fileField], signal);
+    const out = await stageSingleOutput(outputDir, 'document.md', 'md', buffer);
+    progress(1, 1);
+    return { outputs: [out], fidelity: 'semantic-reflow' };
+  }
+
+  if (input.operation === 'export-text') {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/text', [fileField], signal);
+    const out = await stageSingleOutput(outputDir, 'document.txt', 'txt', buffer);
+    progress(1, 1);
+    return { outputs: [out], fidelity: 'plain-text' };
+  }
+
+  if (input.operation === 'export-csv') {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/csv', [fileField], signal);
+    const out = await stageSingleOutput(outputDir, 'document.csv', 'csv', buffer);
+    progress(1, 1);
+    return { outputs: [out], fidelity: 'tabular' };
+  }
+
+  if (input.operation === 'convert-pdfa') {
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'outputFormat', value: 'pdfa' },
+      { name: 'conformanceLevel', value: String(payload.conformance ?? '2b') },
+    ];
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/pdfa', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'scale-pages') {
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'scaleFactor', value: String(payload.scaleFactor ?? 1.0) },
+      { name: 'pageNumbers', value: String(payload.pages ?? 'all') },
+    ];
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/general/scale-pages', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'multi-page-layout') {
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'pagesPerSheet', value: String(payload.pagesPerSheet ?? 2) },
+    ];
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/general/multi-page-layout', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'pdf-to-single-page') {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/general/pdf-to-single-page', [fileField], signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'edit-toc') {
+    const tocData = typeof payload.toc === 'string' ? payload.toc : JSON.stringify(payload.toc ?? []);
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'bookmarkData', value: tocData },
+      { name: 'replaceExisting', value: String(payload.replaceExisting === true) },
+    ];
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/general/edit-table-of-contents', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'repair-metadata') {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/misc/repair', [fileField], signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'crop') {
+    const cropBox = (payload.crop && typeof payload.crop === 'object' ? payload.crop : payload) as Record<string, unknown>;
+    const fields: MultipartField[] = [
+      fileField,
+      { name: 'x', value: String(cropBox.x ?? 0) },
+      { name: 'y', value: String(cropBox.y ?? 0) },
+      { name: 'width', value: String(cropBox.width ?? 100) },
+      { name: 'height', value: String(cropBox.height ?? 100) },
+      { name: 'pageNumbers', value: String(cropBox.pageNumbers ?? payload.pages ?? 'all') },
+      { name: 'autoCrop', value: String(Boolean(cropBox.autoCrop)) },
+    ];
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/general/crop', fields, signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
+  if (input.operation === 'document-properties') {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/analysis/document-properties', [fileField], signal);
+    let properties: Record<string, unknown> = {};
+    try { properties = JSON.parse(buffer.toString('utf8')); } catch { throw new Error('invalid-output'); }
+    progress(1, 1);
+    return { properties };
+  }
+
+  if (input.operation === 'basic-info') {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/analysis/basic-info', [fileField], signal);
+    let info: Record<string, unknown> = {};
+    try { info = JSON.parse(buffer.toString('utf8')); } catch { throw new Error('invalid-output'); }
+    progress(1, 1);
+    return { info };
+  }
+
+  if (input.operation === 'convert-file-pdf') {
+    const kind = typeof payload.fileType === 'string' ? payload.fileType.toLowerCase() : 'file';
+    const isOffice = kind === 'file' || kind === 'doc' || kind === 'docx' || kind === 'ppt' || kind === 'pptx' || kind === 'xls' || kind === 'xlsx' || kind === 'odt';
+    if (isOffice) {
+      const caps = probeExternalCapabilities();
+      if (!caps.libreoffice.available) {
+        throw new Error('engine-missing');
+      }
+    }
+    const endpoint =
+      kind === 'image' || kind === 'img' ? '/api/v1/convert/img/pdf'
+      : kind === 'html' ? '/api/v1/convert/html/pdf'
+      : kind === 'markdown' || kind === 'md' ? '/api/v1/convert/markdown/pdf'
+      : '/api/v1/convert/file/pdf';
+    const { buffer } = await postStirlingMultipart(baseUrl, endpoint, [fileField], signal);
+    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
+    progress(1, 1);
+    return { outputs: [out] };
+  }
+
   throw new Error('unsupported');
+  } finally {
+    defaultStirlingSidecar.setProcessing(false);
+  }
 }

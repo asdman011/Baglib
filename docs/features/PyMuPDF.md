@@ -1,5 +1,8 @@
 # PyMuPDF / MuPDF — local PDF workstation
 
+> [!WARNING] **DEPRECATED & PURGED (2026-10-28)**
+> PyMuPDF has been 100% purged from Baglib (zero active code, UI, worker, or dependency traces remain). Stirling-PDF v3.2.2 is now the sole primary default PDF engine across the application. The notes below are preserved solely for historical reverse-engineering and research reference.
+
 Investigated and exercised 2026-10-26 using installed PyMuPDF 2.0 / MuPDF 1.28.5. The user explicitly approved the AGPL-compatible local Python toolchain. This records public API documentation and runtime experiments; no external binary reverse engineering or complete source audit is claimed.
 
 Primary references: [page operations](https://pymupdf.readthedocs.io/en/latest/page.html), [licensing](https://pymupdf.io/licensing).

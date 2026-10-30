@@ -5,13 +5,14 @@ import type { Database } from 'better-sqlite3';
 import type { PdfEngineResult, PdfInspection, PdfJob, PdfJobRequest, PdfSession, PdfAsset, PdfOutput } from '../../../shared/types/pdf-editor';
 import { validatePdfJob } from '../../../shared/types/pdf-editor';
 import { fileSha256, resolvePdfSource, type PdfSource } from './source';
+import { readerAssetUrl } from '../../../shared/utils/reader-asset-url';
 
 export interface PdfWorkerInput { filename: string; output: string; operation: PdfJobRequest['operation']; password?: string; language: 'ar' | 'en'; expectedHash: string; payload?: Record<string, unknown>; sources?: Record<string, { filename: string; sha256: string }>; assets?: Record<string, string> }
 export type PdfWorkerRunner = (input: PdfWorkerInput, signal: AbortSignal, progress: (current: number, total: number) => void) => Promise<PdfInspection | PdfEngineResult>;
 interface SessionRecord { owner: number; source: PdfSource; session: PdfSession; working?: { path: string; sha256: string } }
 interface JobRecord { owner: number; job: PdfJob; controller: AbortController; directory: string; settled: Promise<void> }
 interface AssetRecord { owner: number; value: PdfAsset; filename: string }
-const formats = new Set(['pdf', 'docx', 'xlsx', 'pptx', 'html', 'json']);
+const formats = new Set(['pdf', 'docx', 'xlsx', 'pptx', 'html', 'json', 'txt', 'md', 'csv', 'zip']);
 const safeErrors = new Set(['source-changed', 'encrypted', 'permission-denied', 'unsupported', 'invalid-source', 'engine-missing', 'engine-failed', 'signed-document-locked', 'text-does-not-fit', 'owner-password-required', 'no-tables', 'no-redactions', 'certificate-invalid', 'invalid-output', 'document-too-large', 'invalid-request']);
 export class PdfEditorJobs {
   private sessions = new Map<string, SessionRecord>();
@@ -20,6 +21,7 @@ export class PdfEditorJobs {
   constructor(private db: Database, private root: string, private runner: PdfWorkerRunner) {}
   private storeSession(owner: number, source: PdfSource): PdfSession {
     const session: PdfSession = { id: randomUUID(), workId: source.workId, sourceId: source.sourceId, editionId: source.editionId, filename: source.path ? path.basename(source.path) : 'document.pdf', sha256: source.sha256 };
+    if (source.path) session.previewUrl = `${readerAssetUrl(source.path)}?v=${source.sha256}`;
     this.sessions.set(session.id, { owner, source, session }); return structuredClone(session);
   }
   async open(owner: number, workId: string, sourceId?: string): Promise<PdfSession> {
@@ -51,7 +53,14 @@ export class PdfEditorJobs {
     const record = this.sessions.get(id); if (!record || record.owner !== owner) throw new Error('invalid-source'); return record;
   }
   source(owner: number, id: string): PdfSource { return structuredClone(this.session(owner, id).source); }
-  rebase(owner: number, id: string, sha256: string): PdfSession { const record = this.session(owner, id); record.source.sha256 = sha256; record.session.sha256 = sha256; return structuredClone(record.session); }
+  rebase(owner: number, id: string, sha256: string, resetWorking = false): PdfSession {
+    const record = this.session(owner, id);
+    record.source.sha256 = sha256;
+    record.session.sha256 = sha256;
+    if (record.source.path) record.session.previewUrl = `${readerAssetUrl(record.source.path)}?v=${sha256}`;
+    if (resetWorking) record.working = undefined;
+    return structuredClone(record.session);
+  }
   private ownedJob(owner: number, id: string): JobRecord {
     const record = this.jobs.get(id); if (!record || record.owner !== owner) throw new Error('invalid-request'); return record;
   }
