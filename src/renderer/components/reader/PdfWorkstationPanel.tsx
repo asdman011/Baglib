@@ -1,21 +1,207 @@
 'use client';
-import React, { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
-import type { PdfCapability, PdfJob, PdfSession, PdfOperation, PdfFeature, PdfInspection, PdfEditorAPI, PdfTextBlock } from '../../../shared/types/pdf-editor';
+import { readerEdge } from '../../../shared/reader-immersive';
+import { setReaderOverlay, type ReaderOverlay } from '../../../shared/reader-overlay';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  X,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  RotateCcw,
+  History,
+  Bookmark,
+  MessageSquare,
+  Plus,
+  Trash2,
+  Save,
+  Check,
+  CornerDownRight,
+  ExternalLink,
+  FileText,
+  Layers,
+  Shield,
+  ArrowRightLeft,
+  PenTool,
+  Cpu,
+  Folder,
+  FolderInput,
+  FolderOutput,
+  Search,
+  Sliders,
+  Sun,
+  Moon,
+  Maximize2,
+  Pin,
+  Minimize2,
+  ChevronFirst,
+  ChevronLast,
+  CheckCircle2,
+  ShieldCheck,
+  Eye,
+  BookOpen,
+  Sparkles,
+  Columns3,
+  LayoutGrid,
+} from 'lucide-react';
+import type {
+  PdfCapability,
+  PdfJob,
+  PdfSession,
+  PdfOperation,
+  PdfFeature,
+  PdfInspection,
+  PdfEditorAPI,
+  PdfTextBlock,
+  StirlingEngineInfo,
+  StirlingProcessorTelemetry,
+  PdfVersionItem,
+  WatchedFolderSource,
+} from '../../../shared/types/pdf-editor';
+import type { PdfReview } from '../../../shared/types/pdf-collaboration';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { TranslationKey } from '../../translations';
 import { PdfInlineEditor } from './PdfInlineEditor';
-import { PdfWorkstationTools } from './PdfWorkstationTools';
+import { PdfNativeViewer } from './PdfNativeViewer';
+import { PdfToolDirectory } from './PdfToolDirectory';
+import { PdfWorkstationTools, type StirlingWorkstationMode } from './PdfWorkstationTools';
+import { StirlingToolsHub } from '../pdf-workstation/StirlingToolsHub';
+import { PdfPageEditor } from './PdfPageEditor';
 
 const featureKeys: Record<PdfCapability['feature'], TranslationKey> = {
-  preview: 'pdfSuitePreview', split: 'pdfSuiteSplit', 'repair-metadata': 'pdfSuiteRepair', 'verify-signatures': 'pdfSuiteVerifySignatures',
-  inspect: 'pdfSuiteInspect', 'export-html': 'pdfSuiteHtml', create: 'pdfSuiteCreate', 'edit-content': 'pdfSuiteEdit', organize: 'pdfSuiteOrganize', ocr: 'pdfSuiteOcr', 'export-docx': 'pdfSuiteDocx', 'export-xlsx': 'pdfSuiteXlsx', 'export-pptx': 'pdfSuitePptx', redact: 'pdfSuiteRedact', encrypt: 'pdfSuiteEncrypt', validate: 'pdfSuiteValidate', sign: 'pdfSuiteSign', review: 'pdfSuiteReview', summarize: 'pdfSuiteSummary', cloud: 'pdfSuiteCloud',
+  preview: 'pdfSuitePreview',
+  split: 'pdfSuiteSplit',
+  'repair-metadata': 'pdfSuiteRepair',
+  'verify-signatures': 'pdfSuiteVerifySignatures',
+  inspect: 'pdfSuiteInspect',
+  'export-html': 'pdfSuiteHtml',
+  create: 'pdfSuiteCreate',
+  'edit-content': 'pdfSuiteEdit',
+  organize: 'pdfSuiteOrganize',
+  ocr: 'pdfSuiteOcr',
+  'export-docx': 'pdfSuiteDocx',
+  'export-xlsx': 'pdfSuiteXlsx',
+  'export-pptx': 'pdfSuitePptx',
+  'export-markdown': 'stirlingExportMarkdown',
+  'export-text': 'stirlingExportTxt',
+  'export-csv': 'stirlingExportCsv',
+  'convert-pdfa': 'stirlingExportPdfa',
+  'scale-pages': 'stirlingScalePages',
+  'multi-page-layout': 'stirlingMultiPageLayout',
+  'pdf-to-single-page': 'stirlingSingleLongPage',
+  'edit-toc': 'stirlingEditToc',
+  sanitize: 'stirlingSanitize',
+  watermark: 'stirlingWatermark',
+  compress: 'stirlingCompress',
+  'page-numbers': 'stirlingPageNumbering',
+  'add-image': 'stirlingInsertImage',
+  'unlock-forms': 'stirlingUnlockForms',
+  'extract-images': 'stirlingExtractImages',
+  redact: 'pdfSuiteRedact',
+  encrypt: 'pdfSuiteEncrypt',
+  validate: 'pdfSuiteValidate',
+  sign: 'pdfSuiteSign',
+  review: 'pdfSuiteReview',
+  summarize: 'pdfSuiteSummary',
+  cloud: 'pdfSuiteCloud',
+  crop: 'stirlingCrop',
+  'document-properties': 'stirlingDocProperties',
+  'basic-info': 'stirlingBasicInfo',
+  'convert-file-pdf': 'stirlingConvertFile',
 };
-export function PdfWorkstationPanel({ workId, onClose }: { workId?: string; onClose: () => void }) {
-  const { lang, dir, t } = useWorkspace();
+
+const MODE_TABS: { id: StirlingWorkstationMode; labelKey: TranslationKey; defaultTool: PdfFeature }[] = [
+  { id: 'view', labelKey: 'stirlingModeView', defaultTool: 'inspect' },
+  { id: 'organize', labelKey: 'stirlingModeOrganize', defaultTool: 'organize' },
+  { id: 'edit', labelKey: 'stirlingModeEdit', defaultTool: 'edit-content' },
+  { id: 'security', labelKey: 'stirlingModeSecurity', defaultTool: 'redact' },
+  { id: 'convert', labelKey: 'stirlingModeConvert', defaultTool: 'export-docx' },
+];
+
+export function PdfWorkstationPanel({
+  workId,
+  onClose,
+  embedded = false,
+  initialPage = 1,
+  onPageChange,
+  fileUrl,
+  readerIntegration,
+  readingActions,
+  annotationPanel,
+}: {
+  workId?: string;
+  onClose: () => void;
+  embedded?: boolean;
+  initialPage?: number;
+  onPageChange?: (page: number) => void;
+  fileUrl?: string;
+  readingActions?: { onReadAloud: () => void; onAutoScroll: () => void; autoScrolling: boolean; onBookmark: () => void; bookmarked: boolean };
+  annotationPanel?: { open: boolean; content: React.ReactNode; onToggle: () => void; onClose: () => void; count: number };
+  readerIntegration?: Pick<React.ComponentProps<typeof PdfNativeViewer>, 'highlights' | 'activeSelectionInfo' | 'onSelectionChange' | 'onHighlightClick' | 'onPdfDocLoaded' | 'onOutlineLoaded' | 'onTotalPagesLoaded' | 'contentContainerRef' | 'autoCropMargins' | 'direction'>;
+}) {
+  const { lang, dir, t, theme: appTheme } = useWorkspace();
+  const [immersive, setImmersive] = useState(false);
+  const [activeOverlay, setActiveOverlay] = useState<ReaderOverlay>(null);
+  useEffect(() => {
+    if (activeOverlay && annotationPanel?.open) annotationPanel.onClose();
+  }, [activeOverlay, annotationPanel]);
+  const previousOverlay = useRef<ReaderOverlay>(null);
+  const overlayTrigger = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (activeOverlay && !previousOverlay.current) {
+      overlayTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    } else if (!activeOverlay && previousOverlay.current) {
+      if (overlayTrigger.current?.isConnected) overlayTrigger.current.focus();
+      overlayTrigger.current = null;
+    }
+    previousOverlay.current = activeOverlay;
+  }, [activeOverlay]);
+  const [pinnedChrome, setPinnedChrome] = useState<string[]>([]);
+  const [collapsedChrome, setCollapsedChrome] = useState<string[]>([]);
+  const chromeLabels = { top: 'pdfChromeTop', rail: 'pdfChromeRail', library: 'pdfChromeLibrary', tools: 'pdfDirectoryTitle', bottom: 'pdfChromeBottom' } as const;
+  const pinChrome = (zone: keyof typeof chromeLabels) => <div className="flex shrink-0 items-center"><button type="button" aria-pressed={pinnedChrome.includes(zone)} title={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} aria-label={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} onClick={() => setPinnedChrome(previous => previous.includes(zone) ? previous.filter(item => item !== zone) : [...previous, zone])} className="rounded-lg p-2 hover:bg-emerald-500/20"><Pin size={14} className={pinnedChrome.includes(zone) ? 'text-emerald-500' : ''} /></button><button type="button" aria-label={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} title={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} onClick={() => setCollapsedChrome(previous => [...previous.filter(item => item !== zone), zone])} className="rounded-lg p-1 hover:bg-emerald-500/20"><X size={12} /></button></div>;
+  const [revealedEdge, setRevealedEdge] = useState('');
+  const hideChromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'F11') { event.preventDefault(); setRevealedEdge(''); setImmersive(value => !value); }
+      if (event.key === 'Escape') { setActiveOverlay(null); setImmersive(false); }
+    };
+    window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('keydown', key); if (hideChromeTimer.current) clearTimeout(hideChromeTimer.current); };
+  }, []);
+  const initialLanguage = useRef(lang);
   const [session, setSession] = useState<PdfSession | null>(null);
+  const [mode, setMode] = useState<StirlingWorkstationMode>('view');
+  const isToolsHubOpen = activeOverlay === 'hub';
+  const quickToolsOpen = activeOverlay === 'quick-tools';
+  const setIsToolsHubOpen = (open: boolean) => setActiveOverlay(current => setReaderOverlay(current, 'hub', open));
+  const setQuickToolsOpen = (open: boolean) => setActiveOverlay(current => setReaderOverlay(current, 'quick-tools', open));
+  const [quickToolsSearch, setQuickToolsSearch] = useState('');
+  const [themeOverride, setWorkstationTheme] = useState<'dark' | 'light' | 'sepia' | null>(null);
+  const workstationTheme = themeOverride || appTheme;
+  const [tintPdfPages, setTintPdfPages] = useState(false);
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
+  const [activeRailTab, setActiveRailTab] = useState<'view' | 'organize' | 'edit' | 'security' | 'convert' | 'processor'>('view');
+  const [fileFilter, setFileFilter] = useState('');
+  const [processorTelemetry, setProcessorTelemetry] = useState<StirlingProcessorTelemetry>({
+    activePipelines: 0,
+    totalPipelines: 0,
+    processedToday: 0,
+    watchedFolders: 0,
+  });
+  const [watchedFoldersList, setWatchedFoldersList] = useState<WatchedFolderSource[]>([]);
+  const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
+  const [toolDirectoryOpen, setToolDirectoryOpen] = useState(true);
+  const [engineStatus, setEngineStatus] = useState<StirlingEngineInfo>({ status: 'stopped', version: '3.2.2' });
+  const [viewMode, setViewMode] = useState<'single' | 'double' | 'scroll'>('single');
+  const [zoom, setZoom] = useState(100);
   const [inlineBlock, setInlineBlock] = useState<PdfTextBlock | null>(null);
-  const [selectedImage, setSelectedImage] = useState<{ xref: number; originalRect: number[] } | null>(null), [imageCrop, setImageCrop] = useState('');
+  const [selectedImage, setSelectedImage] = useState<{ xref: number; originalRect: number[] } | null>(null);
+  const [imageCrop, setImageCrop] = useState('');
   const [sources, setSources] = useState<{ id: string; filename: string }[]>([]);
   const [capabilities, setCapabilities] = useState<PdfCapability[]>([]);
   const [job, setJob] = useState<PdfJob | null>(null);
@@ -28,37 +214,218 @@ export function PdfWorkstationPanel({ workId, onClose }: { workId?: string; onCl
   const [preview, setPreview] = useState<{ page: number; image: string; width: number; height: number } | null>(null);
   const [output, setOutput] = useState<PdfJob | null>(null);
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
-  const [page, setPage] = useState(1), [rect, setRect] = useState([36, 36, 400, 180]), [text, setText] = useState('');
-  const [saveMode, setSaveMode] = useState<'copy' | 'overwrite' | 'edition' | 'new-work'>('copy'), [title, setTitle] = useState('');
-  const extraSessions = useRef<string[]>([]), drag = useRef<number[] | null>(null);
+  const [page, setPage] = useState(initialPage);
+  const [nativeTotalPages, setNativeTotalPages] = useState(1);
+  const [workingFileUrl, setWorkingFileUrl] = useState<string | null>(null);
+  const displayFileUrl = workingFileUrl || fileUrl;
+  const handleNativePageChange = useCallback((value: number) => {
+    setPage(value);
+    onPageChange?.(value);
+  }, [onPageChange]);
+  const handleNativePageCount = useCallback((total: number) => {
+    setNativeTotalPages(total);
+    setPage(current => Math.max(1, Math.min(total, current)));
+    readerIntegration?.onTotalPagesLoaded?.(total);
+  }, [readerIntegration?.onTotalPagesLoaded]);
+  const nativeReading = Boolean(displayFileUrl) && mode === 'view';
+  const [rect, setRect] = useState([36, 36, 400, 180]);
+  const [text, setText] = useState('');
+  const openingPage = useRef(initialPage);
+  const originalSession = useRef<string | null>(null);
+  const [saveMode, setSaveMode] = useState<'copy' | 'overwrite' | 'edition' | 'new-work'>('copy');
+  const effectiveSaveMode = (output?.outputs?.length || 0) > 1 && saveMode === 'overwrite' ? 'copy' : saveMode;
+  const [title, setTitle] = useState('');
+  const isVersionHistoryOpen = activeOverlay === 'versions';
+  const setIsVersionHistoryOpen = (open: boolean) => setActiveOverlay(current => setReaderOverlay(current, 'versions', open));
+  const [versions, setVersions] = useState<PdfVersionItem[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [versionActionMessage, setVersionActionMessage] = useState<string | null>(null);
+  const [zone2Tab, setZone2Tab] = useState<'thumbnails' | 'bookmarks' | 'comments'>('thumbnails');
+  const [comments, setComments] = useState<PdfReview[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [newCommentAuthor, setNewCommentAuthor] = useState('');
+  const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
+  const [commentReplyText, setCommentReplyText] = useState('');
+  const [quickSaveFeedback, setQuickSaveFeedback] = useState<string | null>(null);
+  const extraSessions = useRef<string[]>([]);
+  const drag = useRef<number[] | null>(null);
   const replacementJob = useRef<string | null>(null);
   const api = (): PdfEditorAPI => window.electronAPI.pdfEditor;
-  const signatureResult = (job?.result?.signature || (job?.operation === 'verify-signatures' ? job.result : null)) as { status: string; pendingFields?: string[]; signatures?: { subject: string; fingerprint: string }[] } | null;
+  const signatureResult = (job?.result?.signature || (job?.operation === 'verify-signatures' ? job.result : null)) as {
+    status: string;
+    pendingFields?: string[];
+    signatures?: { subject: string; fingerprint: string }[];
+  } | null;
   const jobId = job?.id;
   const jobState = job?.state;
+  const observedPage = useRef(initialPage);
+  const pendingPage = useRef<number | null>(null);
+  const mounted = useRef(false);
+  const stagedOutputs = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  // Subscribe to engine status
+  useEffect(() => {
+    const editor = window.electronAPI?.pdfEditor;
+    if (!editor) return;
+    void editor.engineStatus?.().then(res => {
+      if (res?.ok && res.data) setEngineStatus(res.data);
+    });
+    const unsub = editor.onEngineStatusChanged?.(info => {
+      setEngineStatus(info);
+    });
+    return () => {
+      unsub?.();
+    };
+  }, []);
+
+  // Listen to source change for hot reloading
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const editor = window.electronAPI?.pdfEditor;
+      try {
+        const [telemetry, folders] = await Promise.all([editor?.getProcessorTelemetry?.(), editor?.getWatchedFolders?.()]);
+        if (!alive) return;
+        if (telemetry?.ok) setProcessorTelemetry(telemetry.data);
+        if (folders?.ok) setWatchedFoldersList(folders.data);
+      } catch {}
+    };
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 5000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [isToolsHubOpen]);
+
+  useEffect(() => {
+    const editor = window.electronAPI?.pdfEditor;
+    if (!editor?.onSourceChanged) return;
+    const unsub = editor.onSourceChanged(changed => {
+      if (changed.workId === workId || (session?.workId && changed.workId === session.workId)) {
+        if (session && !nativeReading) {
+          void window.electronAPI.pdfEditor.start({
+            sessionId: session.id,
+            operation: 'preview',
+            payload: { page },
+            language: initialLanguage.current,
+          }).then(result => {
+            if (result.ok) setJob(result.data);
+          });
+        }
+      }
+    });
+    return unsub;
+  }, [workId, session, page, nativeReading]);
+
+  useEffect(() => {
+    if (nativeReading) {
+      const timer = setTimeout(() => setPage(initialPage), 0);
+      return () => clearTimeout(timer);
+    }
+    if (observedPage.current !== initialPage) {
+      observedPage.current = initialPage;
+      if (initialPage !== preview?.page) pendingPage.current = initialPage;
+    }
+    if (!embedded || !session || session.id !== originalSession.current || starting || jobState === 'running' || pendingPage.current === null)
+      return;
+    const requested = pendingPage.current;
+    const timer = setTimeout(() => {
+      pendingPage.current = null;
+      setPage(requested);
+      setStarting(true);
+      void window.electronAPI.pdfEditor
+        .start({ sessionId: session.id, operation: 'preview', payload: { page: requested }, language: initialLanguage.current })
+        .then(result => {
+          if (!mounted.current) return;
+          if (result.ok) setJob(result.data);
+          else setError(result.error);
+        })
+        .catch(() => {
+          if (mounted.current) setError('storage');
+        })
+        .finally(() => {
+          if (mounted.current) setStarting(false);
+        });
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [initialPage, embedded, session, starting, jobState, preview?.page, nativeReading]);
+
+  useEffect(() => {
+    if (preview && preview.page === page && observedPage.current === initialPage && pendingPage.current === null && session?.id === originalSession.current)
+      onPageChange?.(preview.page);
+  }, [preview, page, initialPage, session?.id, onPageChange]);
+
   useEffect(() => {
     let alive = true;
     let opened: PdfSession | null = null;
-    const api = window.electronAPI?.pdfEditor;
+    const editorApi = window.electronAPI?.pdfEditor;
     const timer = setTimeout(() => {
-      if (!api) { setError('unavailable'); return; }
+      if (!editorApi) {
+        setError('unavailable');
+        return;
+      }
       void (async () => {
-        const [features, result] = await Promise.all([api.capabilities(), workId ? api.open({ workId }) : api.blankSession()]);
+        void editorApi
+          .capabilities()
+          .then(features => {
+            if (alive) setCapabilities(features);
+          })
+          .catch(() => {
+            if (alive) setError('unavailable');
+          });
+        const result = await (workId ? editorApi.open({ workId }) : editorApi.blankSession());
         if (result.ok === true) opened = result.data;
-        if (!alive) { if (opened) await api.close(opened.id); return; }
-        setCapabilities(features);
-        if (result.ok === true) setSession(result.data);
-        else {
+        if (!alive) {
+          if (opened) await editorApi.close(opened.id);
+          return;
+        }
+        if (result.ok === true) {
+          originalSession.current = result.data.id;
+          setSession(result.data);
+          if (workId && !fileUrl) {
+            setStarting(true);
+            try {
+              const initialPreview = await editorApi.start({
+                sessionId: result.data.id,
+                operation: 'preview',
+                payload: { page: openingPage.current },
+                language: initialLanguage.current,
+              });
+              if (!alive) return;
+              if (initialPreview.ok === true) setJob(initialPreview.data);
+              else setError(initialPreview.error);
+            } finally {
+              if (alive) setStarting(false);
+            }
+          }
+        } else {
           setError(result.error);
           if (result.error === 'source-required' && workId) {
-            const available = await api.sources(workId);
+            const available = await editorApi.sources(workId);
             if (alive && available.ok === true) setSources(available.data);
           }
         }
-      })().catch(() => { if (alive) setError('storage'); });
+      })().catch(() => {
+        if (alive) setError('storage');
+      });
     }, 0);
-    return () => { alive = false; clearTimeout(timer); if (opened) void api?.close(opened.id); for (const id of extraSessions.current) void api?.close(id); extraSessions.current = []; };
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      if (opened) void editorApi?.close(opened.id);
+      for (const id of extraSessions.current) void editorApi?.close(id);
+      extraSessions.current = [];
+    };
   }, [workId]);
+
   useEffect(() => {
     if (!jobId || jobState !== 'running') return;
     let alive = true;
@@ -72,67 +439,1721 @@ export function PdfWorkstationPanel({ workId, onClose }: { workId?: string; onCl
           if (result.data.state === 'running') timer = setTimeout(() => void poll(), 350);
           else if (result.data.state === 'completed') {
             if (replacementJob.current === result.data.id) {
-              // Global edits can invalidate every old text box and preview.
-              setInspection(null); setPreview(null); setThumbnails({});
-              setInlineBlock(null); setSelectedImage(null); replacementJob.current = null;
+              setInspection(null);
+              setPreview(null);
+              setThumbnails({});
+              setInlineBlock(null);
+              setSelectedImage(null);
+              replacementJob.current = null;
             }
             if (result.data.inspection) setInspection(result.data.inspection);
             if (result.data.result?.image) setPreview(result.data.result as unknown as NonNullable<typeof preview>);
             if (result.data.outputs?.length) setOutput(result.data);
-            if (Array.isArray(result.data.result?.thumbnails)) setThumbnails(previous => ({ ...previous, ...Object.fromEntries((result.data.result!.thumbnails as { key?: string; page: number; image: string }[]).map(item => [item.key || item.page, item.image])) }));
+            if (result.data.previewUrl) {
+              setWorkingFileUrl(result.data.previewUrl);
+              setInspection(null);
+              setPreview(null);
+              setThumbnails({});
+              setMode('view');
+              setToolDirectoryOpen(true);
+              if (result.data.operation === 'organize') setPage(1);
+            }
+            if (Array.isArray(result.data.result?.thumbnails))
+              setThumbnails(prev => ({
+                ...prev,
+                ...Object.fromEntries(
+                  (result.data.result!.thumbnails as { key?: string; page: number; image: string }[]).map(item => [item.key || item.page, item.image]),
+                ),
+              }));
           }
-        }
-        else setError(result.error);
-      } catch { if (alive) setError('storage'); }
+        } else setError(result.error);
+      } catch {
+        if (alive) setError('storage');
+      }
     };
     timer = setTimeout(() => void poll(), 250);
-    return () => { alive = false; clearTimeout(timer); };
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   }, [jobId, jobState]);
+
   const start = async (operation: PdfOperation, payload?: Record<string, unknown>) => {
+    if (operation === 'preview' && nativeReading) {
+      const requestedPage = Math.max(1, Math.min(nativeTotalPages, Number(payload?.page) || page));
+      setPage(requestedPage);
+      onPageChange?.(requestedPage);
+      return;
+    }
     if (!session || starting || job?.state === 'running') return;
-    setStarting(true); setError(null); setSaved(false);
+    setStarting(true);
+    setError(null);
+    setSaved(false);
     try {
-      const result = await api().start({ sessionId: session.id, operation, payload, language: lang, ...(password ? { password } : {}) });
+      const result = await api().start({
+        sessionId: session.id,
+        operation,
+        payload,
+        language: lang,
+        ...(password ? { password } : {}),
+      });
       if (result.ok === true) {
         if (operation === 'edit-content' && Array.isArray(payload?.textReplacements)) replacementJob.current = result.data.id;
         setJob(result.data);
       } else setError(result.error);
-    } catch { setError('storage'); }
-    finally { setStarting(false); }
+    } catch {
+      setError('storage');
+    } finally {
+      setStarting(false);
+    }
   };
-  const point = (event: React.PointerEvent<HTMLDivElement>) => { const area = event.currentTarget.getBoundingClientRect(); return [(event.clientX - area.left) / area.width * preview!.width, (event.clientY - area.top) / area.height * preview!.height]; };
-  const switchSource = (value: PdfSession) => { extraSessions.current.push(value.id); setSession(value); setInspection(null); setPreview(null); setOutput(null); setPage(1); setError(null); setSaveMode('copy'); setInlineBlock(null); setSelectedImage(null); };
-  return <aside role="region" aria-label={t('pdfSuiteTitle')} dir={dir} data-pdf-workstation className="fixed top-20 bottom-12 inset-x-3 mx-auto z-50 max-w-6xl rounded-2xl border border-subtle bg-surface shadow-xl flex flex-col">
-    <header className="flex items-center justify-between gap-2 border-b border-subtle p-4"><div><h2 className="font-bold leading-relaxed">{t('pdfSuiteTitle')}</h2><p dir="auto" className="text-xs text-muted break-all">{session?.filename}</p></div><button type="button" aria-label={t('studyClose')} onClick={onClose}><X size={18} /></button></header>
-    <div className="overflow-y-auto p-4 space-y-4 min-h-0 text-sm">
-      <p className="text-xs text-muted leading-relaxed">{t('pdfSuiteCheckpoint')}</p>
-      {sources.length > 0 && workId && <label className="block">{t('pdfChooseSource')}<select defaultValue="" onChange={event => { void api().open({ workId, sourceId: event.target.value }).then(result => { if (result.ok === true) switchSource(result.data); else setError(result.error); }); }} className="block w-full rounded border border-subtle bg-canvas p-2"><option value="" disabled>{t('pdfChooseSource')}</option>{sources.map(source => <option key={source.id} value={source.id}>{source.filename} · {source.id.slice(0, 8)}</option>)}</select></label>}
-      <div className="flex flex-wrap gap-2"><button type="button" disabled={starting || job?.state === 'running'} className="rounded border border-subtle p-2" onClick={() => { void api().chooseSource().then(response => { if (response.ok === true && response.data) switchSource(response.data); }); }}>{t('pdfOpenSource')}</button><button type="button" disabled={starting || job?.state === 'running'} className="rounded border border-subtle p-2" onClick={() => { void api().blankSession().then(response => { if (response.ok === true) { switchSource(response.data); setTool('create'); } }); }}>{t('pdfNewBlank')}</button><label>{t('pdfTool')}<select className="rounded border border-subtle bg-canvas p-2 max-w-full" value={tool} onChange={event => setTool(event.target.value as PdfFeature)}>{Object.entries(featureKeys).map(([feature, key]) => <option key={feature} value={feature}>{t(key)}</option>)}</select></label></div>
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(16rem,23rem)] gap-4">
-      <section className="min-w-0 space-y-3 order-2 md:order-1"><div className="flex flex-wrap gap-2 items-center"><label>{t('page')}<input type="number" min={1} max={inspection?.totalPages || 10000} value={page} onChange={event => setPage(Math.max(1, Number(event.target.value)))} className="w-20 rounded border border-subtle bg-canvas p-2" /></label><button type="button" disabled={!session || starting || job?.state === 'running'} onClick={() => void start('inspect')} className="rounded border border-subtle p-2">{t('pdfSuiteInspect')}</button><button type="button" disabled={!session || starting || job?.state === 'running'} onClick={() => void start('preview', { page })} className="rounded border border-subtle p-2">{t('pdfSuitePreview')}</button></div><p className="text-xs text-muted">{t('pdfSelectArea')}</p>
-      {preview && <div dir="ltr" data-pdf-page-preview className="relative bg-white w-full overflow-hidden select-none touch-none" style={{ aspectRatio: `${preview.width}/${preview.height}` }} onPointerDown={event => { drag.current = point(event); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={event => { const end = point(event), begin = drag.current; drag.current = null; if (begin && Math.abs(end[0] - begin[0]) > 3 && Math.abs(end[1] - begin[1]) > 3) { setPage(preview.page); setRect([Math.max(0, Math.min(begin[0], end[0])), Math.max(0, Math.min(begin[1], end[1])), Math.min(preview.width, Math.max(begin[0], end[0])), Math.min(preview.height, Math.max(begin[1], end[1]))]); } }}>
-      {/* Physical PDF coordinates remain independent of interface direction. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={preview.image} alt={t('pdfPagePreview', { page: preview.page })} draggable={false} className="w-full h-full pointer-events-none" />
-      {tool === 'edit-content' && inspection?.pages.find(item => item.page === preview.page)?.images?.flatMap(image => image.rects.map((area, index) => <button key={`${image.xref}-${index}`} type="button" aria-label={t('pdfSelectEmbeddedImage')} onPointerDown={event => event.stopPropagation()} onClick={() => { setPage(preview.page); setRect(area); setSelectedImage({ xref: image.xref, originalRect: area }); setInlineBlock(null); }} className="absolute z-10 border border-violet-500/30 hover:bg-violet-500/10" style={{ left: `${area[0] / preview.width * 100}%`, top: `${area[1] / preview.height * 100}%`, width: `${(area[2] - area[0]) / preview.width * 100}%`, height: `${(area[3] - area[1]) / preview.height * 100}%` }} />))}
-      {tool === 'edit-content' && inlineBlock && <textarea data-pdf-inline-text autoFocus aria-label={t('pdfText')} dir={inlineBlock.direction} value={text} onChange={event => setText(event.target.value)} onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} className="absolute z-20 bg-white text-black border-2 border-emerald-600 leading-relaxed resize" style={{ left: `${rect[0] / preview.width * 100}%`, top: `${rect[1] / preview.height * 100}%`, width: `${(rect[2] - rect[0]) / preview.width * 100}%`, height: `${(rect[3] - rect[1]) / preview.height * 100}%`, minHeight: '3rem' }} />}
-      <div className="absolute border-2 border-emerald-600 bg-emerald-500/10 pointer-events-none" style={{ left: `${rect[0] / preview.width * 100}%`, top: `${rect[1] / preview.height * 100}%`, width: `${(rect[2] - rect[0]) / preview.width * 100}%`, height: `${(rect[3] - rect[1]) / preview.height * 100}%` }} />
-      {tool === 'edit-content' && inspection?.pages.find(item => item.page === preview.page)?.blocks.map((block, index) => <button key={index} type="button" aria-label={t('pdfEditBlock', { text: block.text.slice(0, 80) })} title={block.text} onPointerDown={event => event.stopPropagation()} onClick={() => { setPage(preview.page); setText(block.text); setInlineBlock(block); setSelectedImage(null); setRect([Math.max(0, block.x - 2), Math.max(0, block.y - 2), Math.min(preview.width, block.x + block.width + 8), Math.min(preview.height, block.y + block.height + (block.fontSize || 12))]); }} className="absolute z-10 border border-transparent hover:border-blue-500 hover:bg-blue-500/10" style={{ left: `${block.x / preview.width * 100}%`, top: `${block.y / preview.height * 100}%`, width: `${block.width / preview.width * 100}%`, height: `${block.height / preview.height * 100}%` }} />)}</div>}
-      {tool === 'edit-content' && inlineBlock && <PdfInlineEditor key={`${preview?.page}-${inlineBlock.x}-${inlineBlock.y}`} block={inlineBlock} value={text} setValue={setText} busy={starting || job?.state === 'running'} onApply={style => { void start('edit-content', { edits: [{ kind: 'replace-text', page, rect, text, ...style }] }); setInlineBlock(null); }} onCancel={() => setInlineBlock(null)} />}
-      {tool === 'edit-content' && selectedImage && <div className="space-y-2 rounded border border-subtle p-3"><p>{t('pdfMoveImageHint')}</p><label>{t('pdfCropPixels')}<input dir="ltr" value={imageCrop} onChange={event => setImageCrop(event.target.value)} className="block w-full rounded border border-subtle bg-canvas p-2" /></label><button type="button" disabled={starting || job?.state === 'running'} onClick={() => { const crop = imageCrop ? imageCrop.split(',').map(Number) : undefined; if (crop && (crop.length !== 4 || crop.some(value => !Number.isFinite(value)))) { setError('invalid-request'); return; } void start('edit-content', { edits: [{ kind: 'move-image', page, rect, xref: selectedImage.xref, originalRect: selectedImage.originalRect, ...(crop ? { crop } : {}) }] }); setSelectedImage(null); }} className="rounded border border-subtle p-2">{t('pdfMoveImageApply')}</button></div>}
-      {inspection && <details><summary>{t('pdfSuitePageCount', { count: inspection.totalPages })}</summary>{inspection.pages.map(item => <details key={item.page}><summary>{t('page')} {item.page}</summary><p dir="auto" className="whitespace-pre-wrap break-words leading-loose select-text p-2">{item.text || t('pdfSuiteNoText')}</p></details>)}</details>}</section>
-      <section className="min-w-0 space-y-3 order-1 md:order-2"><h3 className="font-semibold">{t(featureKeys[tool])}</h3>
-      {capabilities.some(item => item.feature === tool && !item.available) && <p role="status" className="text-xs text-muted">{t('pdfSuitePending')}</p>}
-      {!['cloud', 'summarize', 'review', 'create'].includes(tool) && <label className="block space-y-1 text-xs"><span>{t('pdfSuitePassword')}</span><input type="password" autoComplete="off" value={password} onChange={event => setPassword(event.target.value)} className="w-full rounded-lg border border-subtle bg-canvas p-2" /></label>}
-      {['edit-content', 'redact', 'sign', 'review'].includes(tool) && <fieldset><legend>{t('pdfAreaPoints')}</legend><div dir="ltr" className="grid grid-cols-4 gap-1">{rect.map((value, index) => <input type="number" key={index} step="0.1" aria-label={t((['pdfXStart', 'pdfYStart', 'pdfXEnd', 'pdfYEnd'] as const)[index])} value={Math.round(value * 10) / 10} onChange={event => setRect(previous => previous.map((value, current) => current === index ? Number(event.target.value) : value))} className="w-full rounded border border-subtle bg-canvas p-1" />)}</div></fieldset>}
-      {session && <PdfWorkstationTools key={session.id} tool={tool} session={session} page={page} rect={rect} inspection={inspection} output={output} thumbnails={thumbnails} text={text} setText={setText} busy={starting || job?.state === 'running'} run={(operation, payload) => void start(operation, payload)} onPage={number => { setPage(number); void start('preview', { page: number }); }} onSource={source => extraSessions.current.push(source.id)} />}
-      {(error || job?.error) && <p role="alert">{t(job?.error === 'text-does-not-fit' ? 'pdfTextDoesNotFit' : job?.error === 'signed-document-locked' ? 'pdfSignedLocked' : error === 'source-required' ? 'pdfSuiteSourceRequired' : error === 'encrypted' || job?.error === 'encrypted' ? 'pdfSuiteEncrypted' : error === 'source-changed' || job?.error === 'source-changed' ? 'pdfSuiteSourceChanged' : 'pdfSuiteFailure')}</p>}
-      {job?.state === 'running' && <div role="status"><p>{t('pdfSuiteProgress', { current: job.current, total: job.total })}</p><button type="button" onClick={() => { void window.electronAPI.pdfEditor.cancel(job.id).then(() => window.electronAPI.pdfEditor.status(job.id)).then(result => { if (result.ok === true) setJob(result.data); }).catch(() => setError('storage')); }} className="underline py-2">{t('pdfSuiteCancel')}</button></div>}
-      {signatureResult && <div className="space-y-2 rounded border border-subtle p-3"><p role="status">{t(signatureResult.status === 'Pending Signature' ? 'pdfSignaturePending' : signatureResult.status === 'Verified' ? 'pdfSignatureVerified' : signatureResult.status === 'Tampered' ? 'pdfSignatureTampered' : signatureResult.status === 'Signed' ? 'pdfSignatureSigned' : 'pdfSignatureDraft')}</p>{signatureResult.pendingFields?.map(name => <p key={name} dir="auto">{name}</p>)}{signatureResult.signatures?.map((item, index) => <p key={index} dir="auto">{item.subject}<br /><span dir="ltr" className="break-all text-xs">{item.fingerprint}</span></p>)}</div>}
-      {job?.result && !signatureResult && !job.result.image && !job.result.outputs && <div className="text-xs space-y-2">{typeof job.result.compliant === 'boolean' && <p role="status">{t(job.result.compliant ? 'pdfCompliant' : 'pdfNotCompliant')}</p>}{Array.isArray(job.result.failures) && (job.result.failures as { clause: string; description: string }[]).map((item, index) => <p key={index} dir="auto">{item.clause}: {item.description}</p>)}{typeof job.result.status === 'string' && <p role="status">{t(job.result.status === 'Pending Signature' ? 'pdfSignaturePending' : job.result.status === 'Verified' ? 'pdfSignatureVerified' : job.result.status === 'Tampered' ? 'pdfSignatureTampered' : job.result.status === 'Signed' ? 'pdfSignatureSigned' : 'pdfSignatureDraft')}</p>}{Array.isArray(job.result.signatures) && (job.result.signatures as { subject: string; fingerprint: string }[]).map((item, index) => <p key={index} dir="auto">{item.subject}<br /><span dir="ltr">{item.fingerprint}</span></p>)}</div>}
-      {output?.outputs && <section className="space-y-2 border-t border-subtle pt-3"><p className="text-xs text-muted">{t('pdfStagedHint')}</p><label>{t('pdfSaveMode')}<select value={saveMode} onChange={event => setSaveMode(event.target.value as typeof saveMode)} className="block w-full rounded border border-subtle bg-canvas p-2"><option value="copy">{t('pdfSuiteSaveCopy')}</option>{output.output?.format === 'pdf' && <>{session?.sha256 && <option value="overwrite">{t('pdfSafeSave')}</option>}{session?.workId && <option value="edition">{t('pdfSaveEdition')}</option>}<option value="new-work">{t('pdfSaveWork')}</option></>}</select></label>{(saveMode === 'edition' || saveMode === 'new-work') && <label>{t('pdfDocumentTitle')}<input dir="auto" value={title} onChange={event => setTitle(event.target.value)} className="block w-full rounded border border-subtle bg-canvas p-2" /></label>}{saveMode === 'overwrite' && <p className="text-xs text-muted">{t('pdfBackupWarning')}</p>}{output.outputs.map((item, index) => <button type="button" key={item.filename} className="rounded-lg bg-emerald-700 text-white px-3 py-2 w-full break-all" disabled={starting || job?.state === 'running' || (saveMode === 'edition' || saveMode === 'new-work') && !title.trim()} onClick={() => { void api().save({ jobId: output.id, outputIndex: index, mode: saveMode, title }).then(result => { if (result.ok === true) { setSaved(result.data.saved); if (result.data.session) { if (result.data.session.id !== session?.id) { setSources([]); switchSource(result.data.session); setJob(null); } else setSession(result.data.session); } } else setError(result.error); }).catch(() => setError('storage')); }}>{t('pdfSaveOutput', { name: item.filename })}</button>)}</section>}
-      {saved && <p role="status">{t('pdfSuiteSaved')}</p>}
-      </section></div>
-    </div>
-  </aside>;
+
+  const point = (event: React.PointerEvent<HTMLDivElement>) => {
+    const area = event.currentTarget.getBoundingClientRect();
+    return [((event.clientX - area.left) / area.width) * preview!.width, ((event.clientY - area.top) / area.height) * preview!.height];
+  };
+
+  const switchSource = (value: PdfSession) => {
+    setWorkingFileUrl(value.previewUrl || null);
+    extraSessions.current.push(value.id);
+    setSession(value);
+    setInspection(null);
+    setPreview(null);
+    setOutput(null);
+    setPage(1);
+    setError(null);
+    setSaveMode('copy');
+    setInlineBlock(null);
+    setSelectedImage(null);
+  };
+
+  const loadVersions = async () => {
+    if (!session?.id) return;
+    setLoadingVersions(true);
+    try {
+      const res = await window.electronAPI.pdfEditor.listVersions(session.id);
+      if (res?.ok && Array.isArray(res.data)) {
+        setVersions(res.data);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
+
+  const handleUndo = async () => {
+    if (!session || starting || job?.state === 'running') return;
+    setStarting(true);
+    try {
+      const res = await window.electronAPI.pdfEditor.undoVersion(session.id);
+      if (res?.ok && res.data.restored) {
+        if (res.data.session) setSession(res.data.session);
+        setWorkingFileUrl(res.data.session?.previewUrl || null);
+        setOutput(null);
+        setJob(null);
+        setInspection(null);
+        setPreview(null);
+        setThumbnails({});
+        setMode('view');
+        setQuickSaveFeedback(t('pdfUndoSuccess'));
+        setTimeout(() => setQuickSaveFeedback(null), 3500);
+      } else {
+        setError(res?.error || 'failure');
+      }
+    } catch {
+      setError('storage');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const handleRestoreVersion = async (versionFilename: string) => {
+    if (!session || starting || job?.state === 'running') return;
+    setStarting(true);
+    try {
+      const res = await window.electronAPI.pdfEditor.restoreVersion(session.id, versionFilename);
+      if (res?.ok && res.data.restored) {
+        if (res.data.session) setSession(res.data.session);
+        setWorkingFileUrl(res.data.session?.previewUrl || null);
+        setOutput(null);
+        setJob(null);
+        setInspection(null);
+        setPreview(null);
+        setThumbnails({});
+        setMode('view');
+        setVersionActionMessage(t('pdfVersionRestored'));
+        setTimeout(() => setVersionActionMessage(null), 3000);
+        void loadVersions();
+      } else {
+        setError(res?.error || 'failure');
+      }
+    } catch {
+      setError('storage');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const handleDeleteVersion = async (versionFilename: string) => {
+    try {
+      const res = await window.electronAPI.pdfEditor.deleteVersion(versionFilename);
+      if (res?.ok) {
+        setVersionActionMessage(t('pdfVersionDeleted'));
+        setTimeout(() => setVersionActionMessage(null), 3000);
+        void loadVersions();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const loadComments = async () => {
+    if (!session?.id) return;
+    setLoadingComments(true);
+    try {
+      const res = await window.electronAPI.pdfCollaboration.reviews(session.id);
+      if (res?.ok && Array.isArray(res.data)) {
+        setComments(res.data);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  useEffect(() => {
+    if (zone2Tab === 'comments' && session?.id) {
+      const timer = setTimeout(() => { void loadComments(); }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [zone2Tab, session?.id]);
+
+  const handleAddComment = async () => {
+    if (!session?.id || !newCommentText.trim()) return;
+    try {
+      const res = await window.electronAPI.pdfCollaboration.saveReview(session.id, {
+        page,
+        rect,
+        kind: 'sticky',
+        author: newCommentAuthor.trim() || (lang === 'ar' ? 'ملاحظة' : 'Note'),
+        text: newCommentText.trim(),
+        status: 'open',
+      });
+      if (res?.ok) {
+        setNewCommentText('');
+        void loadComments();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleClearAllComments = async () => {
+    if (!session) return;
+    void start('sanitize');
+    setComments([]);
+  };
+
+  const handleLocateComment = (comment: PdfReview) => {
+    setPage(comment.page);
+    setRect(comment.rect || [36, 36, 400, 180]);
+    if (!nativeReading) void start('preview', { page: comment.page });
+    onPageChange?.(comment.page);
+  };
+
+  const handleReplyComment = async (comment: PdfReview) => {
+    if (!commentReplyText.trim() || !session) return;
+    try {
+      const res = await window.electronAPI.pdfCollaboration.reply(
+        session.id,
+        comment.id,
+        newCommentAuthor.trim() || (lang === 'ar' ? 'مستخدم' : 'User'),
+        commentReplyText.trim(),
+        comment.updatedAt,
+      );
+      if (res?.ok) {
+        setCommentReplyText('');
+        setReplyingToCommentId(null);
+        void loadComments();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleQuickSave = async () => {
+    if (!session) return;
+    if ((output?.outputs?.length || 0) > 1) {
+      setSaveMode('copy');
+      setCollapsedChrome(previous => previous.filter(zone => zone !== 'tools'));
+      setRevealedEdge('end');
+      setQuickSaveFeedback(t('pdfChooseSplitOutput'));
+      requestAnimationFrame(() => {
+        if (!mounted.current) return;
+        stagedOutputs.current?.scrollIntoView({ block: 'nearest' });
+        stagedOutputs.current?.querySelector<HTMLButtonElement>('button')?.focus();
+      });
+      return;
+    }
+    if (output?.outputs?.length) {
+      try {
+        const res = await api().save({
+          jobId: output.id,
+          outputIndex: 0,
+          mode: session?.sha256 && output.outputs[0].format === 'pdf' ? 'overwrite' : 'copy',
+        });
+        if (res.ok) {
+          setSaved(true);
+          setQuickSaveFeedback(t('pdfDocumentSaved'));
+          setTimeout(() => setQuickSaveFeedback(null), 3000);
+          if (res.data.session) setSession(res.data.session);
+        }
+      } catch {
+        setError('storage');
+      }
+    } else {
+      setQuickSaveFeedback(t('pdfDocumentUpToDate'));
+      setTimeout(() => setQuickSaveFeedback(null), 2500);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        void handleQuickSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [session, output]);
+
+  return (
+    <aside
+      role="region"
+      aria-label={t('pdfSuiteTitle')}
+      dir={dir}
+      data-pdf-workstation
+      data-reader-overlay={activeOverlay || undefined}
+      data-workstation-theme={workstationTheme}
+      data-immersive={immersive || undefined}
+      data-pinned-chrome={pinnedChrome.join(' ')}
+      data-collapsed-chrome={collapsedChrome.join(' ')}
+      onPointerLeave={() => {
+        if (hideChromeTimer.current) clearTimeout(hideChromeTimer.current);
+        hideChromeTimer.current = setTimeout(() => setRevealedEdge(''), 400);
+      }}
+      data-revealed-edge={revealedEdge}
+      onPointerMove={event => {
+        if (!immersive) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const x = event.clientX - bounds.left;
+        const target = event.target as HTMLElement;
+        if (target.closest('header, [data-pdf-bottom-navigation]') || target.closest('aside') !== event.currentTarget) {
+          if (hideChromeTimer.current) clearTimeout(hideChromeTimer.current);
+          return;
+        }
+        const edge = readerEdge(x, event.clientY - bounds.top, bounds.width, bounds.height, dir);
+        if (hideChromeTimer.current) clearTimeout(hideChromeTimer.current);
+        if (edge) setRevealedEdge(edge);
+        else hideChromeTimer.current = setTimeout(() => setRevealedEdge(''), 400);
+      }}
+      className={
+        embedded
+          ? `relative w-full h-full min-h-0 ${workstationTheme === 'dark' ? 'bg-[#0f1115] text-[#e1e4ea]' : 'bg-[#f8f9fa] text-[#111827]'} flex flex-col overflow-hidden`
+          : `fixed top-12 bottom-6 inset-x-3 mx-auto z-50 max-w-[1600px] rounded-2xl border ${workstationTheme === 'dark' ? 'border-[#232733] bg-[#0f1115] text-[#e1e4ea]' : 'border-[#e5e7eb] bg-[#f8f9fa] text-[#111827]'} shadow-2xl flex flex-col overflow-hidden`
+      }
+    >
+      {/* HEADER RIBBON */}
+      {collapsedChrome.length > 0 && <details data-reader-recovery className="absolute end-2 top-2 z-[60] rounded-xl border border-subtle bg-surface p-2 text-main shadow-xl"><summary className="cursor-pointer text-xs">{t('pdfChromeRestore')}</summary><div className="mt-2 flex flex-col gap-1">{collapsedChrome.map(zone => <button key={zone} type="button" className="rounded-lg px-2 py-1 text-start text-xs hover:bg-canvas" onClick={() => setCollapsedChrome(previous => previous.filter(item => item !== zone))}>{t(chromeLabels[zone as keyof typeof chromeLabels])}</button>)}</div></details>}
+      <header className="flex h-11 min-h-11 flex-nowrap items-center justify-between gap-1 border-b border-subtle px-2 bg-canvas/60 shrink-0">
+        {pinChrome('top')}
+        <button type="button" aria-pressed={immersive} title={t('zenModePurePage')} aria-label={t('zenModePurePage')} onClick={event => { event.currentTarget.blur(); setRevealedEdge(''); setImmersive(value => !value); }} className="rounded-lg p-2"><Maximize2 size={16} /></button>
+        <div className="flex items-center gap-3 min-w-0">
+          {embedded && (
+            <button
+              type="button"
+              onClick={onClose}
+              title={t('backToLibrary') || 'Back to Library'}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-subtle bg-surface hover:bg-canvas text-xs font-semibold text-main transition-all cursor-pointer shrink-0"
+            >
+              <ArrowLeft size={14} className="rtl:rotate-180 text-muted" />
+              <span>{t('backToLibrary') || 'Back to Library'}</span>
+            </button>
+          )}
+          <div className="size-8 rounded-xl bg-emerald-600/10 text-emerald-600 flex items-center justify-center shrink-0">
+            <FileText size={18} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="font-bold text-sm leading-tight truncate">{session?.filename || t('pdfSuiteTitle')}</h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              {/* Stirling-PDF Engine Status Pill */}
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-subtle bg-surface text-[10px] font-medium">
+                <span
+                  className={`inline-block size-2 rounded-full ${
+                    engineStatus.status === 'ready'
+                      ? 'bg-emerald-500'
+                      : engineStatus.status === 'starting'
+                      ? 'bg-amber-500 animate-pulse'
+                      : engineStatus.status === 'processing'
+                      ? 'bg-sky-500 animate-pulse'
+                      : engineStatus.status === 'error'
+                      ? 'bg-red-500'
+                      : 'bg-gray-400'
+                  }`}
+                />
+                <span className="text-muted">
+                  {t(
+                    engineStatus.status === 'ready'
+                      ? 'stirlingEngineReady'
+                      : engineStatus.status === 'starting'
+                      ? 'stirlingEngineStarting'
+                      : engineStatus.status === 'processing'
+                      ? 'stirlingEngineProcessing'
+                      : engineStatus.status === 'error'
+                      ? 'stirlingEngineError'
+                      : 'stirlingEngineStatus',
+                  )}
+                </span>
+              </div>
+              {(inspection || nativeReading) && (
+                <span data-pdf-document-page-count className="text-[11px] text-muted">
+                  {t('pdfDocumentPageCount', { count: inspection?.totalPages || nativeTotalPages })}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Compact PDF Tools & Processor Button + Popover */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setQuickToolsOpen(!quickToolsOpen)}
+              title={t('pdfCompactToolsBtn')}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 text-xs text-emerald-500 dark:text-emerald-400 font-semibold transition-all cursor-pointer"
+            >
+              <Cpu size={14} />
+              <span className="hidden md:inline">{t('pdfCompactToolsBtn')}</span>
+            </button>
+
+            {quickToolsOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setQuickToolsOpen(false)}
+                />
+                <div
+                  className={`absolute end-0 top-full mt-2 w-72 rounded-xl border shadow-2xl p-3 space-y-3 z-50 ${
+                    workstationTheme === 'dark'
+                      ? 'bg-[#14161c] border-[#262c3b] text-[#e1e4ea]'
+                      : 'bg-white border-[#e2e8f0] text-[#0f172a] shadow-xl'
+                  }`}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="relative">
+                    <Search className={`absolute inset-y-0 start-2.5 my-auto size-3.5 ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`} />
+                    <input
+                      type="search"
+                      placeholder={t('pdfQuickFilterPlaceholder')}
+                      value={quickToolsSearch}
+                      onChange={e => setQuickToolsSearch(e.target.value)}
+                      className={`w-full ${
+                        workstationTheme === 'dark'
+                          ? 'bg-[#181a20] border-[#262a34] text-white'
+                          : 'bg-[#f1f5f9] border-[#cbd5e1] text-[#0f172a]'
+                      } border rounded-lg ps-8 pe-2 py-1 text-xs outline-none focus:border-emerald-500`}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    {[
+                      { id: 'manual-redact', name: lang === 'ar' ? 'الحجب البصري اليدوي' : 'Manual Redaction', mode: 'security' as const, tool: 'redact' as const },
+                      { id: 'compress-pdf', name: lang === 'ar' ? 'ضغط وتحسين الحجم' : 'Compress & Optimize', mode: 'convert' as const, tool: 'compress' as const },
+                      { id: 'ocr-pdf', name: lang === 'ar' ? 'التعرف الضوئي (OCR)' : 'Arabic & English OCR', mode: 'convert' as const, tool: 'ocr' as const },
+                      { id: 'cert-sign', name: lang === 'ar' ? 'التوقيع الرقمي' : 'Digital Cert Sign', mode: 'security' as const, tool: 'sign' as const },
+                      { id: 'split', name: lang === 'ar' ? 'تقسيم الصفحات' : 'Split Pages', mode: 'organize' as const, tool: 'split' as const },
+                      { id: 'merge', name: lang === 'ar' ? 'دمج مستندات PDF' : 'Merge PDFs', mode: 'organize' as const, tool: 'organize' as const },
+                    ]
+                      .filter(t => !quickToolsSearch || t.name.toLowerCase().includes(quickToolsSearch.toLowerCase()))
+                      .map(item => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setMode(item.mode);
+                            setTool(item.tool);
+                            setToolDirectoryOpen(false);
+                            setQuickToolsOpen(false);
+                          }}
+                          className={`w-full text-start px-2 py-1.5 rounded-lg ${
+                            workstationTheme === 'dark'
+                              ? 'hover:bg-[#1e222d] text-[#a0a6b7] hover:text-white'
+                              : 'hover:bg-[#f1f5f9] text-[#475569] hover:text-[#0f172a]'
+                          } text-xs transition-all flex items-center justify-between cursor-pointer`}
+                        >
+                          <span>{item.name}</span>
+                          <ChevronRight size={12} className="rtl:rotate-180 text-[#686e80]" />
+                        </button>
+                      ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickToolsOpen(false);
+                      setIsToolsHubOpen(true);
+                    }}
+                    className="w-full py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold text-center block transition-all cursor-pointer"
+                  >
+                    {t('pdfMoreToolsLink')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {readingActions && (
+            <>
+              <button type="button" onClick={readingActions.onReadAloud} aria-label={t('ttsReadAloud')} title={t('ttsReadAloud')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><BookOpen size={14} /></button>
+              <button type="button" onClick={readingActions.onAutoScroll} aria-pressed={readingActions.autoScrolling} aria-label={t(readingActions.autoScrolling ? 'autoScrollPause' : 'autoScrollPlay')} title={t(readingActions.autoScrolling ? 'autoScrollPause' : 'autoScrollPlay')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><ChevronDown size={14} /></button>
+              <button type="button" onClick={readingActions.onBookmark} aria-pressed={readingActions.bookmarked} aria-label={t('addBookmarkBtn')} title={t('addBookmarkBtn')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><Bookmark size={14} fill={readingActions.bookmarked ? 'currentColor' : 'none'} /></button>
+            </>
+          )}
+          {annotationPanel && <button
+            type="button"
+            data-pdf-annotations-toggle
+            aria-pressed={annotationPanel.open}
+            aria-label={t('annotationsDrawerTitle')}
+            title={t('annotationsDrawerTitle')}
+            onClick={() => {
+              setActiveOverlay(null);
+              setCollapsedChrome(previous => previous.filter(region => region !== 'tools'));
+              setRevealedEdge('end');
+              annotationPanel.onToggle();
+            }}
+            className={`rounded-lg border border-subtle p-1.5 flex items-center gap-1 text-main hover:bg-surface ${annotationPanel.open ? 'ring-1 ring-emerald-500 bg-emerald-500/10' : ''}`}
+          ><MessageSquare size={14} />{annotationPanel.count > 0 && <span className="text-[10px] tabular-nums">{annotationPanel.count}</span>}</button>}
+          <button
+            type="button"
+            disabled={!session || starting || job?.state === 'running'}
+            onClick={() => void handleUndo()}
+            className="flex items-center gap-1 rounded-lg border border-subtle px-2.5 py-1.5 text-xs text-muted hover:text-main hover:bg-surface disabled:opacity-40 transition-all cursor-pointer"
+            title={t('pdfUndo')}
+          >
+            <RotateCcw size={13} />
+            <span className="hidden sm:inline">{t('pdfUndo')}</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={!session}
+            onClick={() => {
+              setIsVersionHistoryOpen(true);
+              void loadVersions();
+            }}
+            className="flex items-center gap-1 rounded-lg border border-subtle px-2.5 py-1.5 text-xs text-muted hover:text-main hover:bg-surface disabled:opacity-40 transition-all cursor-pointer"
+            title={t('pdfVersionHistory')}
+          >
+            <History size={13} />
+            <span className="hidden sm:inline">{t('pdfVersionHistory')}</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={!session || starting || job?.state === 'running'}
+            onClick={() => void handleQuickSave()}
+            className="flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold disabled:opacity-40 transition-all cursor-pointer"
+            title={t('pdfSaveDocument')}
+          >
+            <Save size={13} />
+            <span className="hidden md:inline">{t('save')}</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={!session || starting || job?.state === 'running'}
+            onClick={() => void start('organize', { angle: 90 })}
+            className="flex items-center gap-1 rounded-lg border border-subtle px-2.5 py-1.5 text-xs text-muted hover:text-main hover:bg-surface disabled:opacity-40"
+            title={t('pdfRotateDocument')}
+          >
+            <RotateCw size={13} />
+            <span className="hidden sm:inline">{t('pdfRotateDocument')}</span>
+          </button>
+          <button
+            type="button"
+            aria-label={t('studyClose')}
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-muted hover:text-main hover:bg-canvas"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      </header>
+
+      {/* Floating Quick-Save / Undo Toast Feedback */}
+      {quickSaveFeedback && (
+        <div className="fixed top-14 inset-x-0 mx-auto w-fit z-50 flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xl animate-bounce">
+          <Check size={14} />
+          <span>{quickSaveFeedback}</span>
+        </div>
+      )}
+
+      {/* WORKSPACE BODY: 4-ZONE WORKSTATION LAYOUT */}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        {/* ZONE 1: FAR-LEFT ACTIVITY RAIL (44px) */}
+        <aside data-reader-chrome="rail" className="w-11 shrink-0 border-e border-[#1f2229] bg-[#101216] flex flex-col items-center py-3 space-y-2 z-10">
+          {pinChrome('rail')}
+          {[
+            { id: 'view' as const, icon: Eye, title: t('stirlingModeView') },
+            { id: 'organize' as const, icon: Layers, title: t('stirlingModeOrganize') },
+            { id: 'edit' as const, icon: PenTool, title: t('stirlingModeEdit') },
+            { id: 'security' as const, icon: Shield, title: t('stirlingModeSecurity') },
+            { id: 'convert' as const, icon: ArrowRightLeft, title: t('stirlingModeConvert') },
+          ].map(tab => {
+            const isActive = mode === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                title={tab.title}
+                aria-label={tab.title}
+                aria-pressed={isActive}
+                onClick={() => {
+                  setMode(tab.id);
+                  const def = MODE_TABS.find(m => m.id === tab.id)?.defaultTool || 'inspect';
+                  setTool(def);
+                  setToolDirectoryOpen(false);
+                }}
+                className={`size-8 rounded-xl flex items-center justify-center transition-all ${
+                  isActive
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                    : 'text-[#8b92a5] hover:text-white hover:bg-[#181a20]'
+                }`}
+              >
+                <Icon size={16} />
+              </button>
+            );
+          })}
+
+          <div className="w-5 border-b border-[#222631] my-1" />
+
+          {/* Processor Pipeline Trigger */}
+          <button
+            type="button"
+            title={t('pdfProcessorLiveTitle')}
+            onClick={() => setIsToolsHubOpen(true)}
+            className="size-8 rounded-xl flex items-center justify-center text-amber-400 hover:bg-amber-500/10 transition-all"
+          >
+            <Cpu size={16} />
+          </button>
+
+          {/* Stirling Hub Sparkles Trigger */}
+          <button
+            type="button"
+            title={t('pdfToolsHubTitle')}
+            onClick={() => setIsToolsHubOpen(true)}
+            className="size-8 rounded-xl flex items-center justify-center text-emerald-400 hover:bg-emerald-500/10 transition-all"
+          >
+            <Sparkles size={16} />
+          </button>
+
+          <div className="flex-1" />
+
+          {/* Workstation Theme Toggle */}
+          <button
+            type="button"
+            data-pdf-page-tint
+            aria-pressed={tintPdfPages}
+            title={t(tintPdfPages ? 'pdfOriginalPageColors' : 'pdfEnableDarkPages')}
+            aria-label={t(tintPdfPages ? 'pdfOriginalPageColors' : 'pdfEnableDarkPages')}
+            onClick={() => setTintPdfPages(value => !value)}
+            className={`size-8 rounded-lg flex items-center justify-center hover:bg-emerald-500/20 focus-visible:outline-2 focus-visible:outline-emerald-500 ${tintPdfPages ? 'bg-emerald-500/20 text-emerald-500 ring-1 ring-inset ring-emerald-500' : 'text-main'}`}
+          ><Moon size={15} /></button>
+          <button
+            type="button"
+            title={t(workstationTheme === 'dark' ? 'pdfThemeLight' : workstationTheme === 'light' ? 'pdfThemeSepia' : 'pdfThemeDark')}
+            aria-label={t(workstationTheme === 'dark' ? 'pdfThemeLight' : workstationTheme === 'light' ? 'pdfThemeSepia' : 'pdfThemeDark')}
+            onClick={() => setWorkstationTheme(workstationTheme === 'dark' ? 'light' : workstationTheme === 'light' ? 'sepia' : 'dark')}
+            className="size-8 rounded-xl flex items-center justify-center text-[#8b92a5] hover:text-white hover:bg-[#181a20] transition-all"
+          >
+            {workstationTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+        </aside>
+
+        {/* ZONE 2: COLLAPSIBLE LEFT SIDEBAR (PDF Library / Active Files - 250px) */}
+        {!leftSidebarCollapsed && (
+          <aside data-reader-chrome="library" className={`w-[250px] shrink-0 border-e ${
+            workstationTheme === 'dark'
+              ? 'border-[#1f2229] bg-[#131519] text-[#e1e4ea]'
+              : 'border-[#e2e8f0] bg-white text-[#111827]'
+          } flex flex-col min-h-0 overflow-hidden hidden md:flex`}>
+            {/* Header & Search */}
+            {pinChrome('library')}
+            <div className={`p-3 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-2`}>
+              <div className="flex items-center justify-between">
+                <span className={`font-bold text-xs uppercase tracking-wider ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfChromeLibrary')}</span>
+                <span className="text-[10px] font-mono text-emerald-500 dark:text-emerald-400">
+                  {t('pdfDocumentPageCount', { count: inspection?.totalPages || (nativeReading ? nativeTotalPages : 0) })}
+                </span>
+              </div>
+              <div className="relative">
+                <Search className={`absolute inset-y-0 start-2.5 my-auto size-3.5 ${workstationTheme === 'dark' ? 'text-[#686e80]' : 'text-[#94a3b8]'}`} />
+                <input
+                  type="search"
+                  placeholder={lang === 'ar' ? 'بحث في الصفحات...' : 'Search pages...'}
+                  value={fileFilter}
+                  onChange={e => setFileFilter(e.target.value)}
+                  className={`w-full ${
+                    workstationTheme === 'dark'
+                      ? 'bg-[#181a20] border-[#222631] text-white placeholder-[#686e80]'
+                      : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a] placeholder-[#94a3b8]'
+                  } border rounded-lg ps-8 pe-2 py-1 text-xs outline-none focus:border-emerald-500`}
+                />
+              </div>
+            </div>
+
+            {/* FOLDERS with live Watching badge & Dynamic Watched Folders */}
+            <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-1.5 text-[11px]`}>
+              <div className={`flex items-center justify-between ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+                <span className="font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+                  <FolderInput size={11} className="text-blue-500" />
+                  <span>{t('pdfWatchedFoldersTitle')}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsToolsHubOpen(true)}
+                  className="text-[10px] text-blue-500 hover:underline flex items-center gap-0.5 font-semibold cursor-pointer"
+                  title={t('pdfWatchedFolderAdd')}
+                >
+                  <Plus size={10} />
+                  <span>{t('pdfWatchedFolderAdd')}</span>
+                </button>
+              </div>
+
+              {watchedFoldersList.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setIsToolsHubOpen(true)}
+                  className={`flex items-center justify-between p-1 rounded-md cursor-pointer transition-colors ${
+                    workstationTheme === 'dark' ? 'hover:bg-[#181c24]' : 'hover:bg-slate-100'
+                  }`}
+                >
+                  <div className={`flex items-center gap-1.5 text-xs ${workstationTheme === 'dark' ? 'text-[#a0a6b7]' : 'text-[#475569]'}`}>
+                    <FolderInput size={13} className="text-blue-400" />
+                    <span className="truncate">{t('pdfNoWatchedFolders')}</span>
+                  </div>
+                </button>
+              ) : (
+                <div className="space-y-1 max-h-[85px] overflow-y-auto">
+                  {watchedFoldersList.map(folder => (
+                    <div
+                      key={folder.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setIsToolsHubOpen(true)}
+                      className={`flex items-center justify-between p-1 rounded-md cursor-pointer transition-colors ${
+                        workstationTheme === 'dark' ? 'hover:bg-[#181c24]' : 'hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className={`flex items-center gap-1.5 text-xs min-w-0 ${workstationTheme === 'dark' ? 'text-[#a0a6b7]' : 'text-[#475569]'}`}>
+                        <FolderInput size={13} className="text-blue-400 shrink-0" />
+                        <span className="truncate font-medium">{folder.name}</span>
+                      </div>
+                      <span className={`flex items-center gap-1 text-[10px] font-bold shrink-0 ${folder.status === 'watching' ? 'text-emerald-600 dark:text-emerald-400' : folder.status === 'paused' ? 'text-amber-700 dark:text-amber-300' : 'text-red-600 dark:text-red-400'}`}>
+                        <span className={`size-1.5 rounded-full bg-current ${folder.status === 'watching' ? 'animate-pulse' : ''}`} />
+                        {t(folder.status === 'watching' ? 'pdfWatchedFolderStatusWatching' : folder.status === 'paused' ? 'pdfWatchedFolderPaused' : 'pdfWatchedFolderError')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Zone 2 Sub-Navigation Tabs: Thumbnails | Bookmarks | Comments */}
+            <div className={`flex items-center border-b ${workstationTheme === 'dark' ? 'border-[#1f2229] bg-[#101216]' : 'border-[#e2e8f0] bg-[#f8fafc]'} text-xs font-semibold p-1 gap-1 shrink-0`}>
+              {[
+                { id: 'thumbnails' as const, label: t('pdfThumbnailsTab'), icon: LayoutGrid },
+                { id: 'bookmarks' as const, label: t('pdfBookmarksTab'), icon: Bookmark },
+                { id: 'comments' as const, label: t('pdfCommentsTab'), icon: MessageSquare },
+              ].map(tabItem => {
+                const isActive = zone2Tab === tabItem.id;
+                const Icon = tabItem.icon;
+                return (
+                  <button
+                    key={tabItem.id}
+                    type="button"
+                    onClick={() => setZone2Tab(tabItem.id)}
+                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                      isActive
+                        ? workstationTheme === 'dark'
+                          ? 'bg-[#1e222d] text-white shadow-xs'
+                          : 'bg-white text-emerald-600 shadow-xs'
+                        : workstationTheme === 'dark'
+                        ? 'text-[#8b92a5] hover:text-white'
+                        : 'text-[#64748b] hover:text-[#0f172a]'
+                    }`}
+                  >
+                    <Icon size={12} />
+                    <span>{tabItem.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* TAB 1: THUMBNAILS LIST */}
+            {zone2Tab === 'thumbnails' && (
+              <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                {Array.from({ length: nativeReading ? nativeTotalPages : (inspection?.totalPages || 1) }, (_, i) => i + 1)
+                  .filter(p => !fileFilter || String(p).includes(fileFilter))
+                  .map(p => {
+                    const isCurrent = page === p;
+                    const thumbUrl = thumbnails[`current:${p}`] || thumbnails[p];
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          setPage(p);
+                          if (!nativeReading) void start('preview', { page: p });
+                          onPageChange?.(p);
+                        }}
+                        className={`w-full rounded-xl border p-1.5 text-center transition-all flex items-center gap-3 cursor-pointer ${
+                          isCurrent
+                            ? 'border-emerald-500 bg-emerald-500/10 shadow-sm'
+                            : workstationTheme === 'dark'
+                            ? 'border-[#222631] bg-[#171a21] hover:border-[#32384a]'
+                            : 'border-[#e2e8f0] bg-[#f8fafc] hover:border-[#cbd5e1]'
+                        }`}
+                      >
+                        <div className={`w-14 aspect-[3/4] bg-white rounded border ${workstationTheme === 'dark' ? 'border-[#282d3b]' : 'border-[#e2e8f0]'} flex items-center justify-center overflow-hidden shrink-0`}>
+                          {thumbUrl ? (
+                            <img src={thumbUrl} alt={`Page ${p}`} className="w-full h-full object-contain" />
+                          ) : (
+                            <span className="text-xs font-mono text-neutral-400">{p}</span>
+                          )}
+                        </div>
+                        <div className="text-start min-w-0">
+                          <span className={`text-xs block font-bold ${isCurrent ? 'text-emerald-500 dark:text-emerald-400' : workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'}`}>
+                            {t('page')} {p}
+                          </span>
+                          <span className={`text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} block truncate`}>
+                            {isCurrent ? (lang === 'ar' ? 'الصفحة النشطة' : 'Active Page') : ''}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+
+            {/* TAB 2: BOOKMARKS (OUTLINE JUMP) */}
+            {zone2Tab === 'bookmarks' && (
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {inspection?.outline && inspection.outline.length > 0 ? (
+                  inspection.outline
+                    .filter(item => !fileFilter || item.title.toLowerCase().includes(fileFilter.toLowerCase()))
+                    .map((item, idx) => {
+                      const isCurrent = page === item.page;
+                      return (
+                        <button
+                          key={`${item.title}-${item.page}-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setPage(item.page);
+                            if (!nativeReading) void start('preview', { page: item.page });
+                            onPageChange?.(item.page);
+                          }}
+                          style={{ marginInlineStart: `${item.level * 12}px` }}
+                          className={`w-full text-start p-2 rounded-lg border text-xs transition-all flex items-center justify-between cursor-pointer ${
+                            isCurrent
+                              ? 'border-emerald-500 bg-emerald-500/10 font-bold text-emerald-500 dark:text-emerald-400'
+                              : workstationTheme === 'dark'
+                              ? 'border-[#222631] bg-[#171a21] hover:border-[#32384a] text-[#e1e4ea]'
+                              : 'border-[#e2e8f0] bg-[#f8fafc] hover:border-[#cbd5e1] text-[#0f172a]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Bookmark size={12} className="shrink-0 text-emerald-500" />
+                            <span className="truncate">{item.title}</span>
+                          </div>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-subtle/20 shrink-0 ms-2">
+                            p. {item.page}
+                          </span>
+                        </button>
+                      );
+                    })
+                ) : (
+                  <div className="text-center py-8 px-2 space-y-3">
+                    <Bookmark className="size-7 mx-auto text-muted/50" />
+                    <p className="text-xs text-muted">{t('pdfNoBookmarks')}</p>
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        disabled={!session || starting || job?.state === 'running'}
+                        onClick={() => void start('inspect')}
+                        className="w-full py-1.5 rounded-lg border border-subtle bg-surface hover:bg-canvas text-xs font-semibold"
+                      >
+                        {t('pdfSuiteInspect')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode('view');
+                          setTool('edit-toc');
+                          setToolDirectoryOpen(false);
+                        }}
+                        className="w-full py-1.5 rounded-lg bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 text-emerald-500 dark:text-emerald-400 text-xs font-bold"
+                      >
+                        {t('stirlingEditToc')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: COMMENTS & ANNOTATIONS */}
+            {zone2Tab === 'comments' && (
+              <div className="flex-1 overflow-y-auto p-3 flex flex-col space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-muted">{comments.length} {t('pdfCommentsTab')}</span>
+                  {comments.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void handleClearAllComments()}
+                      className="text-[11px] text-red-400 hover:text-red-500 underline cursor-pointer"
+                    >
+                      {t('pdfClearAllComments')}
+                    </button>
+                  )}
+                </div>
+
+                {/* Add Comment Input */}
+                <div className={`p-2.5 rounded-xl border ${workstationTheme === 'dark' ? 'bg-[#171a21] border-[#262c3b]' : 'bg-[#f8fafc] border-[#e2e8f0]'} space-y-2`}>
+                  <span className="text-[11px] font-bold block">{t('pdfAddComment')} ({t('page')} {page})</span>
+                  <textarea
+                    dir="auto"
+                    rows={2}
+                    placeholder={t('pdfCommentTextPlaceholder')}
+                    value={newCommentText}
+                    onChange={e => setNewCommentText(e.target.value)}
+                    className={`w-full text-xs p-2 rounded-lg border outline-none ${
+                      workstationTheme === 'dark' ? 'bg-[#101216] border-[#282d3b] text-white' : 'bg-white border-[#cbd5e1] text-[#0f172a]'
+                    }`}
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      dir="auto"
+                      placeholder={t('pdfCommentAuthorPlaceholder')}
+                      value={newCommentAuthor}
+                      onChange={e => setNewCommentAuthor(e.target.value)}
+                      className={`flex-1 text-[11px] px-2 py-1 rounded border outline-none ${
+                        workstationTheme === 'dark' ? 'bg-[#101216] border-[#282d3b] text-white' : 'bg-white border-[#cbd5e1] text-[#0f172a]'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      disabled={!newCommentText.trim() || !session?.id}
+                      onClick={() => void handleAddComment()}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold disabled:opacity-40 cursor-pointer"
+                    >
+                      <Plus size={13} className="inline me-0.5" />
+                      {t('pdfAddComment')}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Comments List */}
+                {loadingComments ? (
+                  <div className="text-center py-6 text-xs text-muted">
+                    <div className="inline-block size-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-1" />
+                  </div>
+                ) : comments.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-muted border border-dashed border-subtle rounded-xl p-4">
+                    <MessageSquare className="size-6 mx-auto mb-2 text-muted/50" />
+                    <p>{t('pdfNoComments')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {comments.map(c => (
+                      <article
+                        key={c.id}
+                        className={`p-2.5 rounded-xl border text-xs space-y-2 ${
+                          page === c.page
+                            ? 'border-emerald-500/60 bg-emerald-500/5'
+                            : workstationTheme === 'dark'
+                            ? 'border-[#222631] bg-[#161820]'
+                            : 'border-[#e2e8f0] bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[11px] text-emerald-500">{c.author || 'User'}</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-subtle/30 text-muted">
+                            p. {c.page}
+                          </span>
+                        </div>
+                        <p dir="auto" className="leading-relaxed whitespace-pre-wrap">{c.text}</p>
+
+                        {/* Replies list */}
+                        {c.replies?.map(r => (
+                          <div key={r.id} className="border-s-2 border-emerald-500/40 ps-2 py-0.5 space-y-0.5">
+                            <span className="text-[10px] font-semibold text-muted block">{r.author}</span>
+                            <p dir="auto" className="text-[11px]">{r.text}</p>
+                          </div>
+                        ))}
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-between pt-1 border-t border-subtle/30 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => handleLocateComment(c)}
+                            className="text-emerald-500 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <ExternalLink size={11} />
+                            <span>{t('pdfLocateInDocument')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReplyingToCommentId(replyingToCommentId === c.id ? null : c.id)}
+                            className="text-muted hover:text-main underline cursor-pointer"
+                          >
+                            {lang === 'ar' ? 'رد' : 'Reply'}
+                          </button>
+                        </div>
+
+                        {/* Reply Input Form */}
+                        {replyingToCommentId === c.id && (
+                          <div className="pt-2 space-y-1.5">
+                            <input
+                              dir="auto"
+                              placeholder={lang === 'ar' ? 'اكتب ردك...' : 'Type reply...'}
+                              value={commentReplyText}
+                              onChange={e => setCommentReplyText(e.target.value)}
+                              className={`w-full text-xs p-1.5 rounded border outline-none ${
+                                workstationTheme === 'dark' ? 'bg-[#101216] border-[#282d3b] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                              }`}
+                            />
+                            <button
+                              type="button"
+                              disabled={!commentReplyText.trim()}
+                              onClick={() => void handleReplyComment(c)}
+                              className="w-full py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold disabled:opacity-40 cursor-pointer"
+                            >
+                              <CornerDownRight size={11} className="inline me-1" />
+                              {lang === 'ar' ? 'إرسال الرد' : 'Send Reply'}
+                            </button>
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </aside>
+        )}
+
+        {/* CENTER HIGH-DPI CANVAS VIEWPORT OR MULTI-TOOL PAGE EDITOR */}
+        <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden relative" style={{ backgroundColor: workstationTheme === 'dark' ? '#0b0c0e' : workstationTheme === 'sepia' ? '#efece4' : '#f1f5f9' }}>
+          {mode === 'organize' && session ? (
+            <div className="w-full h-full overflow-hidden flex flex-col">
+              <PdfPageEditor
+                session={session}
+                totalPages={inspection?.totalPages || nativeTotalPages || 1}
+                thumbnails={thumbnails}
+                busy={starting || job?.state === 'running'}
+                theme={workstationTheme}
+                onViewPage={p => {
+                  setPage(p);
+                  setMode('view');
+                  setToolDirectoryOpen(true);
+                  if (!fileUrl) void start('preview', { page: p });
+                  onPageChange?.(p);
+                }}
+                onApply={plan => {
+                  const sanitizedPlan = plan.map(item => ({
+                    page: item.page,
+                    sessionId: item.sessionId || session.id,
+                    rotation: item.rotation || 0,
+                    blank: item.blank || false,
+                    splitAfter: item.splitAfter === true,
+                  }));
+                  void start('organize', { pages: sanitizedPlan });
+                }}
+              />
+            </div>
+          ) : (
+            <>
+          {/* Central Scrollable Canvas */}
+          <div className="flex-1 min-h-0 overflow-auto p-4 flex items-center justify-center">
+            {nativeReading && displayFileUrl ? (
+              <div className="pdf-viewport-container w-full h-full" dir="ltr">
+                <PdfNativeViewer
+                  {...readerIntegration}
+                  theme={workstationTheme}
+                  tintPages={tintPdfPages}
+                  fileUrl={displayFileUrl}
+                  currentPage={page}
+                  totalPages={nativeTotalPages}
+                  onTotalPagesLoaded={handleNativePageCount}
+                  onPageChange={handleNativePageChange}
+                  viewMode={viewMode === 'double' ? 'two-column' : viewMode === 'scroll' ? 'scrolled' : 'single'}
+                  zoom={zoom / 100}
+                />
+              </div>
+            ) : preview ? (
+              <div
+                dir="ltr"
+                data-pdf-page-preview
+                className="relative bg-white shadow-2xl rounded-sm overflow-hidden select-none touch-none max-w-full"
+                style={{
+                  width: `${preview.width * (zoom / 100)}px`,
+                  aspectRatio: `${preview.width}/${preview.height}`,
+                }}
+                onPointerDown={event => {
+                  drag.current = point(event);
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerUp={event => {
+                  const end = point(event);
+                  const begin = drag.current;
+                  drag.current = null;
+                  if (begin && Math.abs(end[0] - begin[0]) > 3 && Math.abs(end[1] - begin[1]) > 3) {
+                    setPage(preview.page);
+                    setRect([
+                      Math.max(0, Math.min(begin[0], end[0])),
+                      Math.max(0, Math.min(begin[1], end[1])),
+                      Math.min(preview.width, Math.max(begin[0], end[0])),
+                      Math.min(preview.height, Math.max(begin[1], end[1])),
+                    ]);
+                  }
+                }}
+              >
+                {/* High-DPI rendered page */}
+                <img
+                  src={preview.image}
+                  alt={t('pdfPagePreview', { page: preview.page })}
+                  draggable={false}
+                  className="w-full h-full pointer-events-none block"
+                />
+
+                {/* Embedded Images selection */}
+                {tool === 'edit-content' &&
+                  inspection?.pages
+                    .find(item => item.page === preview.page)
+                    ?.images?.flatMap(image =>
+                      image.rects.map((area, index) => (
+                        <button
+                          key={`${image.xref}-${index}`}
+                          type="button"
+                          aria-label={t('pdfSelectEmbeddedImage')}
+                          onPointerDown={event => event.stopPropagation()}
+                          onClick={() => {
+                            setPage(preview.page);
+                            setRect(area);
+                            setSelectedImage({ xref: image.xref, originalRect: area });
+                            setInlineBlock(null);
+                          }}
+                          className="absolute z-10 border border-violet-500/30 hover:bg-violet-500/10"
+                          style={{
+                            left: `${(area[0] / preview.width) * 100}%`,
+                            top: `${(area[1] / preview.height) * 100}%`,
+                            width: `${((area[2] - area[0]) / preview.width) * 100}%`,
+                            height: `${((area[3] - area[1]) / preview.height) * 100}%`,
+                          }}
+                        />
+                      )),
+                    )}
+
+                {/* Inline Text Replacement Input */}
+                {tool === 'edit-content' && inlineBlock && (
+                  <textarea
+                    data-pdf-inline-text
+                    autoFocus
+                    aria-label={t('pdfText')}
+                    dir={inlineBlock.direction}
+                    value={text}
+                    onChange={event => setText(event.target.value)}
+                    onPointerDown={event => event.stopPropagation()}
+                    onPointerUp={event => event.stopPropagation()}
+                    className="absolute z-20 bg-white text-black border-2 border-emerald-600 leading-relaxed resize text-xs p-1"
+                    style={{
+                      left: `${(rect[0] / preview.width) * 100}%`,
+                      top: `${(rect[1] / preview.height) * 100}%`,
+                      width: `${((rect[2] - rect[0]) / preview.width) * 100}%`,
+                      height: `${((rect[3] - rect[1]) / preview.height) * 100}%`,
+                      minHeight: '2.5rem',
+                    }}
+                  />
+                )}
+
+                {/* Bounding box selection overlay */}
+                <div
+                  className="absolute border-2 border-emerald-600 bg-emerald-500/15 pointer-events-none"
+                  style={{
+                    left: `${(rect[0] / preview.width) * 100}%`,
+                    top: `${(rect[1] / preview.height) * 100}%`,
+                    width: `${((rect[2] - rect[0]) / preview.width) * 100}%`,
+                    height: `${((rect[3] - rect[1]) / preview.height) * 100}%`,
+                  }}
+                />
+
+                {/* Text Blocks highlighting */}
+                {tool === 'edit-content' &&
+                  inspection?.pages
+                    .find(item => item.page === preview.page)
+                    ?.blocks.map((block, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        aria-label={t('pdfEditBlock', { text: block.text.slice(0, 80) })}
+                        title={block.text}
+                        onPointerDown={event => event.stopPropagation()}
+                        onClick={() => {
+                          setPage(preview.page);
+                          setText(block.text);
+                          setInlineBlock(block);
+                          setSelectedImage(null);
+                          setRect([
+                            Math.max(0, block.x - 2),
+                            Math.max(0, block.y - 2),
+                            Math.min(preview.width, block.x + block.width + 8),
+                            Math.min(preview.height, block.y + block.height + (block.fontSize || 12)),
+                          ]);
+                        }}
+                        className="absolute z-10 border border-transparent hover:border-blue-500 hover:bg-blue-500/10 cursor-pointer"
+                        style={{
+                          left: `${(block.x / preview.width) * 100}%`,
+                          top: `${(block.y / preview.height) * 100}%`,
+                          width: `${(block.width / preview.width) * 100}%`,
+                          height: `${(block.height / preview.height) * 100}%`,
+                        }}
+                      />
+                    ))}
+              </div>
+            ) : (
+              <div className="text-center text-muted p-8 space-y-3">
+                <p className="text-sm">{t('loadingNativePdf')}</p>
+                <button
+                  type="button"
+                  onClick={() => void start('preview', { page })}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold"
+                >
+                  {t('pdfSuitePreview')}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Floating Bottom Stepper / Pill */}
+          <div data-pdf-bottom-navigation className={`absolute bottom-4 inset-x-0 mx-auto w-fit z-30 flex items-center gap-3 px-4 py-2 rounded-2xl ${
+            workstationTheme === 'dark'
+              ? 'bg-[#14161c]/95 border-[#262c3b] text-[#e1e4ea]'
+              : 'bg-white/95 border-[#cbd5e1] text-[#0f172a] shadow-xl'
+          } border shadow-2xl backdrop-blur-md text-xs`}>
+            {/* Stepper |< < page > >| */}
+            {pinChrome('bottom')}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => {
+                  setPage(1);
+                  if (!nativeReading) void start('preview', { page: 1 });
+                  onPageChange?.(1);
+                }}
+                className={`p-1 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} disabled:opacity-30 cursor-pointer`}
+              >
+                <ChevronFirst size={15} aria-label={t('pdfNavFirst')} role="img" className="rtl:rotate-180" />
+              </button>
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => {
+                  const p = Math.max(1, page - 1);
+                  setPage(p);
+                  if (!nativeReading) void start('preview', { page: p });
+                  onPageChange?.(p);
+                }}
+                className={`p-1 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} disabled:opacity-30 cursor-pointer`}
+              >
+                <ChevronLeft size={15} aria-label={t('pdfNavPrevious')} role="img" className="rtl:rotate-180" />
+              </button>
+              <span className="font-mono font-bold px-2">
+                <input aria-label={t('page')} type="number" min={1} max={nativeReading ? nativeTotalPages : inspection?.totalPages || 1} value={page} onChange={event => {
+                  const requested = Number(event.target.value);
+                  const total = nativeReading ? nativeTotalPages : inspection?.totalPages || 1;
+                  if (!Number.isInteger(requested) || requested < 1 || requested > total) return;
+                  setPage(requested);
+                  if (!nativeReading) void start('preview', { page: requested });
+                  onPageChange?.(requested);
+                }} className="w-12 rounded border border-subtle bg-canvas px-1 py-0.5 text-center text-main" /> / {nativeReading ? nativeTotalPages : (inspection?.totalPages || 1)}
+              </span>
+              <button
+                type="button"
+                disabled={page >= (nativeReading ? nativeTotalPages : (inspection?.totalPages || 1))}
+                onClick={() => {
+                  const p = Math.min(nativeReading ? nativeTotalPages : (inspection?.totalPages || 1), page + 1);
+                  setPage(p);
+                  if (!nativeReading) void start('preview', { page: p });
+                  onPageChange?.(p);
+                }}
+                className={`p-1 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} disabled:opacity-30 cursor-pointer`}
+              >
+                <ChevronRight size={15} aria-label={t('pdfNavNext')} role="img" className="rtl:rotate-180" />
+              </button>
+              <button
+                type="button"
+                disabled={page >= (nativeReading ? nativeTotalPages : (inspection?.totalPages || 1))}
+                onClick={() => {
+                  const p = nativeReading ? nativeTotalPages : (inspection?.totalPages || 1);
+                  setPage(p);
+                  if (!nativeReading) void start('preview', { page: p });
+                  onPageChange?.(p);
+                }}
+                className={`p-1 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} disabled:opacity-30 cursor-pointer`}
+              >
+                <ChevronLast size={15} aria-label={t('pdfNavLast')} role="img" className="rtl:rotate-180" />
+              </button>
+            </div>
+
+            <div className={`h-4 border-e ${workstationTheme === 'dark' ? 'border-[#282d3b]' : 'border-[#e2e8f0]'}`} />
+
+            {/* Layout Toggle */}
+            <div className={`flex items-center gap-1 ${workstationTheme === 'dark' ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f1f5f9] border-[#cbd5e1]'} p-0.5 rounded-lg border`}>
+              <button
+                type="button"
+                onClick={() => setViewMode('single')}
+                title={t('pdfLayoutSingle')}
+                className={`p-1 rounded text-[11px] cursor-pointer ${viewMode === 'single' ? (workstationTheme === 'dark' ? 'bg-[#262a34] text-white' : 'bg-white text-[#0f172a] shadow-xs') : (workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]')}`}
+              >
+                1-p
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('double')}
+                title={t('pdfLayoutSpread')}
+                className={`p-1 rounded text-[11px] cursor-pointer ${viewMode === 'double' ? (workstationTheme === 'dark' ? 'bg-[#262a34] text-white' : 'bg-white text-[#0f172a] shadow-xs') : (workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]')}`}
+              >
+                2-p
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('scroll')}
+                title={t('pdfLayoutScroll')}
+                className={`p-1 rounded text-[11px] cursor-pointer ${viewMode === 'scroll' ? (workstationTheme === 'dark' ? 'bg-[#262a34] text-white' : 'bg-white text-[#0f172a] shadow-xs') : (workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]')}`}
+              >
+                Scroll
+              </button>
+            </div>
+
+            <div className={`h-4 border-e ${workstationTheme === 'dark' ? 'border-[#282d3b]' : 'border-[#e2e8f0]'}`} />
+
+            {/* Zoom Slider */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setZoom(Math.max(50, zoom - 10))}
+                className={`p-1 rounded ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} cursor-pointer`}
+              >
+                <ZoomOut size={13} />
+              </button>
+              <input
+                type="range"
+                min="50"
+                max="300"
+                step="10"
+                value={zoom}
+                onChange={e => setZoom(Number(e.target.value))}
+                className={`w-16 h-1 ${workstationTheme === 'dark' ? 'bg-[#282d3b]' : 'bg-[#cbd5e1]'} rounded-lg appearance-none cursor-pointer accent-emerald-500`}
+              />
+              <button
+                type="button"
+                onClick={() => setZoom(Math.min(300, zoom + 10))}
+                className={`p-1 rounded ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} cursor-pointer`}
+              >
+                <ZoomIn size={13} />
+              </button>
+              <span className={`font-mono text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} w-9 text-end`}>{zoom}%</span>
+            </div>
+          </div>
+            </>
+          )}
+        </main>
+
+        <aside data-reader-chrome="tools" className={`w-[275px] shrink-0 border-s ${
+          workstationTheme === 'dark'
+            ? 'border-[#1f2229] bg-[#131519] text-[#e5e7eb]'
+            : 'border-[#e2e8f0] bg-white text-[#111827]'
+        } flex flex-col min-h-0 overflow-y-auto p-3 space-y-3.5 text-sm`}>
+          {/* PDF Processor LIVE Header */}
+          {pinChrome('tools')}
+          {annotationPanel?.open ? <div data-pdf-annotations-panel className="flex-1 min-h-0 overflow-hidden">{annotationPanel.content}</div> : <>
+          <div className={`p-3 rounded-xl ${
+            workstationTheme === 'dark'
+              ? 'bg-gradient-to-br from-[#181c25] to-[#141b18] border-[#232c3c]'
+              : 'bg-gradient-to-br from-[#f8fafc] to-[#f0fdf4] border-[#e2e8f0]'
+          } border shadow-sm space-y-1.5`}>
+            <div className="flex items-center justify-between">
+              <span className={`font-bold text-xs ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} flex items-center gap-1.5`}>
+                <Cpu size={14} className="text-emerald-500 dark:text-emerald-400" />
+                {t('pdfProcessorLiveTitle')}
+              </span>
+              <span role="status" className={`px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider ${engineStatus.status === 'ready' || engineStatus.status === 'processing' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'}`}>
+                {t(engineStatus.status === 'ready' || engineStatus.status === 'processing' ? 'pdfEngineLive' : engineStatus.status === 'starting' ? 'stirlingEngineStarting' : 'pdfEngineOffline')}
+              </span>
+            </div>
+            <p className={`text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} font-mono`}>
+              {t('pdfProcessorTelemetry', {
+                pipelines: processorTelemetry.activePipelines,
+                today: processorTelemetry.processedToday,
+                folders: processorTelemetry.watchedFolders ?? watchedFoldersList.length,
+              })}
+            </p>
+          </div>
+
+          {/* Collapsible POLICIES Accordion */}
+          <div className={`rounded-xl border ${
+            workstationTheme === 'dark'
+              ? 'border-[#222631] bg-[#161921]'
+              : 'border-[#e2e8f0] bg-[#f8fafc]'
+          } overflow-hidden`}>
+            <button
+              type="button"
+              onClick={() => setIsPoliciesOpen(!isPoliciesOpen)}
+              className={`w-full flex items-center justify-between p-2.5 text-start font-bold text-xs ${
+                workstationTheme === 'dark' ? 'text-white hover:bg-[#1a1e27]' : 'text-[#0f172a] hover:bg-[#f1f5f9]'
+              } transition-all cursor-pointer`}
+            >
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck size={14} className="text-emerald-500 dark:text-emerald-400" />
+                POLICIES
+              </span>
+              <ChevronDown size={14} className={`transition-transform ${isPoliciesOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isPoliciesOpen && (
+              <div className={`p-2.5 border-t ${
+                workstationTheme === 'dark' ? 'border-[#222631] text-[#a0a6b7]' : 'border-[#e2e8f0] text-[#475569]'
+              } space-y-2 text-[11px]`}>
+                <div>
+                  <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicyIngestion')}</span>
+                  <span className="text-[10px]">{t('pdfPolicyIngestionRule1')}, {t('pdfPolicyIngestionRule2')}</span>
+                </div>
+                <div>
+                  <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicySecurity')}</span>
+                  <span className="text-[10px]">{t('pdfPolicySecurityRule1')} &amp; {t('pdfPolicySecurityRule3')}</span>
+                </div>
+                <div>
+                  <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicyCompliance')}</span>
+                  <span className="text-[10px]">{t('pdfPolicyComplianceRule1')} &amp; {t('pdfPolicyComplianceRule2')}</span>
+                </div>
+                <div>
+                  <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicyRouting')} &amp; {t('pdfPolicyRetention')}</span>
+                  <span className="text-[10px]">{t('pdfPolicyRetentionRule2')} &amp; {t('pdfPolicyRoutingRule2')}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tool Directory / Tools View */}
+          {toolDirectoryOpen ? (
+            <PdfToolDirectory
+              capabilities={capabilities}
+              labels={featureKeys}
+              disabled={!session || starting || job?.state === 'running'}
+              onSelect={(selected, selectedMode) => {
+                setTool(selected);
+                setMode(selectedMode);
+                setToolDirectoryOpen(false);
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="flex items-center gap-2 text-start text-xs text-[#a0a6b7] hover:text-white"
+              onClick={() => setToolDirectoryOpen(true)}
+            >
+              <ChevronLeft size={14} className="rtl:rotate-180" />
+              {t('pdfDirectoryBack')}
+            </button>
+          )}
+          {session && !toolDirectoryOpen && (
+            <PdfWorkstationTools
+              key={`${session.id}:${tool}`}
+              tool={tool}
+              mode={mode}
+              session={session}
+              page={page}
+              rect={rect}
+              inspection={inspection}
+              output={output}
+              thumbnails={thumbnails}
+              text={text}
+              setText={setText}
+              busy={starting || job?.state === 'running'}
+              run={(op, pl) => void start(op, pl)}
+              onPage={p => {
+                setPage(p);
+                void start('preview', { page: p });
+              }}
+              onSource={src => extraSessions.current.push(src.id)}
+            />
+          )}
+
+          {/* Job State & Diagnostics */}
+          {(error || job?.error) && (
+            <p role="alert" className="text-xs text-red-500">
+              {t(
+                job?.error === 'text-does-not-fit'
+                  ? 'pdfTextDoesNotFit'
+                  : job?.error === 'signed-document-locked'
+                  ? 'pdfSignedLocked'
+                  : error === 'source-required'
+                  ? 'pdfSuiteSourceRequired'
+                  : error === 'encrypted' || job?.error === 'encrypted'
+                  ? 'pdfSuiteEncrypted'
+                  : error === 'source-changed' || job?.error === 'source-changed'
+                  ? 'pdfSuiteSourceChanged'
+                  : 'pdfSuiteFailure',
+              )}
+            </p>
+          )}
+
+          {job?.state === 'running' && (
+            <div role="status" className="p-3 rounded-xl border border-sky-500/30 bg-sky-500/10 space-y-2">
+              <p className="text-xs text-sky-900 dark:text-sky-200">
+                {t('pdfSuiteProgress', { current: job.current, total: job.total })}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  void window.electronAPI.pdfEditor
+                    .cancel(job.id)
+                    .then(() => window.electronAPI.pdfEditor.status(job.id))
+                    .then(res => {
+                      if (res.ok) setJob(res.data);
+                    })
+                    .catch(() => setError('storage'));
+                }}
+                className="text-xs underline text-sky-700 dark:text-sky-300"
+              >
+                {t('pdfSuiteCancel')}
+              </button>
+            </div>
+          )}
+
+          {/* Save Output Controls */}
+          {output?.outputs && (
+            <section ref={stagedOutputs} data-pdf-staged-outputs className="space-y-3 border-t border-subtle pt-3">
+              <p className="text-xs text-muted">{t('pdfStagedHint')}</p>
+              <label className="block text-xs space-y-1">
+                <span>{t('pdfSaveMode')}</span>
+                <select
+                  value={effectiveSaveMode}
+                  onChange={event => setSaveMode(event.target.value as typeof saveMode)}
+                  className="block w-full rounded border border-subtle bg-canvas p-2 text-xs"
+                >
+                  <option value="copy">{t('pdfSuiteSaveCopy')}</option>
+                  {output.output?.format === 'pdf' && (
+                    <>
+                      {session?.sha256 && <option value="overwrite">{t('pdfSafeSave')}</option>}
+                      {session?.workId && <option value="edition">{t('pdfSaveEdition')}</option>}
+                      <option value="new-work">{t('pdfSaveWork')}</option>
+                    </>
+                  )}
+                </select>
+              </label>
+              {(effectiveSaveMode === 'edition' || effectiveSaveMode === 'new-work') && (
+                <label className="block text-xs space-y-1">
+                  <span>{t('pdfDocumentTitle')}</span>
+                  <input
+                    dir="auto"
+                    value={title}
+                    onChange={event => setTitle(event.target.value)}
+                    className="block w-full rounded border border-subtle bg-canvas p-2 text-xs"
+                  />
+                </label>
+              )}
+              {effectiveSaveMode === 'overwrite' && <p className="text-xs text-muted">{t('pdfBackupWarning')}</p>}
+              {output.outputs.map((item, index) => (
+                <button
+                  type="button"
+                  key={item.filename}
+                  className="rounded-lg bg-emerald-700 text-white px-3 py-2 w-full text-xs font-semibold break-all hover:bg-emerald-800 transition-colors"
+                  disabled={starting || job?.state === 'running' || ((effectiveSaveMode === 'edition' || effectiveSaveMode === 'new-work') && !title.trim())}
+                  onClick={() => {
+                    void api()
+                      .save({ jobId: output.id, outputIndex: index, mode: effectiveSaveMode, title })
+                      .then(result => {
+                        if (result.ok === true) {
+                          setSaved(result.data.saved);
+                          if (result.data.session) {
+                            if (result.data.session.id !== session?.id) {
+                              setSources([]);
+                              switchSource(result.data.session);
+                              setJob(null);
+                            } else setSession(result.data.session);
+                          }
+                        } else setError(result.error);
+                      })
+                      .catch(() => setError('storage'));
+                  }}
+                >
+                  {t('pdfSaveOutput', { name: item.filename })}
+                </button>
+              ))}
+            </section>
+          )}
+
+          {saved && <p role="status" className="text-xs text-emerald-600 font-bold">{t('pdfSuiteSaved')}</p>}
+
+          <button
+            type="button"
+            onClick={() => setIsToolsHubOpen(true)}
+            className="w-full py-2 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 text-xs font-bold transition-all text-center block mt-3"
+          >
+            {t('pdfMoreToolsLink')}
+          </button>
+          </>}
+        </aside>
+      </div>
+
+      {/* Standalone Stirling-PDF Tools & Processor Hub Modal */}
+      {isToolsHubOpen && (
+        <StirlingToolsHub
+          onClose={() => setIsToolsHubOpen(false)}
+          onOpenInWorkstation={() => {
+            setIsToolsHubOpen(false);
+          }}
+        />
+      )}
+
+      {/* Version History Drawer */}
+      {isVersionHistoryOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 transition-opacity"
+            onClick={() => setIsVersionHistoryOpen(false)}
+          />
+          <aside
+            dir={dir}
+            className={`fixed top-0 bottom-0 end-0 z-50 w-80 sm:w-96 shadow-2xl border-s flex flex-col ${
+              workstationTheme === 'dark'
+                ? 'bg-[#14161c] border-[#262c3b] text-[#e1e4ea]'
+                : 'bg-white border-[#cbd5e1] text-[#0f172a]'
+            }`}
+          >
+            {/* Drawer Header */}
+            <div className={`p-4 border-b ${workstationTheme === 'dark' ? 'border-[#262c3b]' : 'border-[#e2e8f0]'} flex items-center justify-between`}>
+              <div className="flex items-center gap-2">
+                <History className="size-5 text-emerald-500" />
+                <div>
+                  <h3 className="text-sm font-bold">{t('pdfVersionHistory')}</h3>
+                  <p className={`text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+                    {session?.filename || 'PDF Document'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsVersionHistoryOpen(false)}
+                className={`p-1.5 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631] text-[#8b92a5]' : 'hover:bg-[#f1f5f9] text-[#64748b]'} transition-colors cursor-pointer`}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Notification Banner */}
+            {versionActionMessage && (
+              <div className="mx-4 mt-3 p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">
+                <Check size={14} />
+                <span>{versionActionMessage}</span>
+              </div>
+            )}
+
+            <div className="p-4 text-[11px] text-muted">
+              {t('pdfVersionHistoryDesc')}
+            </div>
+
+            {/* Versions List */}
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
+              {loadingVersions ? (
+                <div className="text-center py-10 text-xs text-muted">
+                  <div className="inline-block size-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-2" />
+                  <p>{lang === 'ar' ? 'جارٍ تحميل الإصدارات...' : 'Loading versions...'}</p>
+                </div>
+              ) : versions.length === 0 ? (
+                <div className="text-center py-12 px-4 rounded-xl border border-dashed border-subtle space-y-2">
+                  <History className="size-8 mx-auto text-muted/50" />
+                  <p className="text-xs text-muted">{t('pdfVersionEmpty')}</p>
+                </div>
+              ) : (
+                versions.map((ver, idx) => {
+                  const sizeFormatted = ver.size > 1024 * 1024
+                    ? `${(ver.size / (1024 * 1024)).toFixed(2)} MB`
+                    : `${Math.round(ver.size / 1024)} KB`;
+                  return (
+                    <div
+                      key={ver.filename}
+                      className={`p-3 rounded-xl border transition-all ${
+                        workstationTheme === 'dark'
+                          ? 'bg-[#181a20] border-[#262a34] hover:border-[#383e4e]'
+                          : 'bg-[#f8fafc] border-[#cbd5e1] hover:border-[#94a3b8]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs">
+                              {idx === 0 ? (lang === 'ar' ? 'الإصدار الأخير' : 'Latest Backup') : `${lang === 'ar' ? 'إصدار' : 'Version'} #${versions.length - idx}`}
+                            </span>
+                            {idx === 0 && (
+                              <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-500 text-[9px] font-bold">
+                                Current
+                              </span>
+                            )}
+                          </div>
+                          <span className={`text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} block font-mono mt-0.5`}>
+                            {ver.dateStr || new Date(ver.timestamp).toLocaleString(lang)}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-subtle/20 text-muted">
+                          {sizeFormatted}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2 border-t border-subtle/40">
+                        <button
+                          type="button"
+                          disabled={starting}
+                          onClick={() => void handleRestoreVersion(ver.filename)}
+                          className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-40"
+                        >
+                          <RotateCcw size={12} />
+                          <span>{t('pdfVersionRestore')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteVersion(ver.filename)}
+                          className={`p-1.5 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer`}
+                          title={t('pdfVersionDelete')}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+        </>
+      )}
+    </aside>
+  );
 }

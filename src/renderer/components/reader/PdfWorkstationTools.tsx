@@ -4,81 +4,1020 @@ import React, { useState } from 'react';
 import type { PdfAsset, PdfEditorAPI, PdfFeature, PdfInspection, PdfOperation, PdfSession, PdfJob } from '../../../shared/types/pdf-editor';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { TranslationKey } from '../../translations';
+import { AlertTriangle, Plus, Trash2, Eye, ShieldAlert, Sparkles, Check, Layers, Image as ImageIcon } from 'lucide-react';
 import { PdfInkPad } from './PdfInkPad';
 import { PdfCloudPanel } from './PdfCloudPanel';
 import { PdfReviewPanel } from './PdfReviewPanel';
 import { PdfAuditViewer } from './PdfAuditViewer';
+import { PdfTocEditor } from './PdfTocEditor';
+import { PdfColorSwatches } from './PdfColorSwatches';
 
-export interface PdfToolProps { tool: PdfFeature; session: PdfSession; busy: boolean; page: number; rect: number[]; inspection: PdfInspection | null; output: PdfJob | null; thumbnails: Record<string, string>; text: string; setText: (value: string) => void; run: (operation: PdfOperation, payload?: Record<string, unknown>) => void; onPage: (value: number) => void; onSource: (value: PdfSession) => void }
-export function PdfWorkstationTools({ tool, session, busy, page, rect, inspection, output, thumbnails, text, setText, run, onPage, onSource }: PdfToolProps) {
+export const REDACTION_PRESETS = [
+  { id: 'email', nameKey: 'pdfRedactionEmail' as const, pattern: '[\\w.-]+@[\\w.-]+\\.\\w+', desc: '[\\w.-]+@[\\w.-]+\\.\\w+' },
+  { id: 'credit-card', nameKey: 'stirlingPresetCreditCard' as const, pattern: '\\d{4}[ -]?\\d{4}[ -]?\\d{4}[ -]?\\d{4}', desc: '\\d{4}[ -]?\\d{4}[ -]?\\d{4}[ -]?\\d{4}' },
+  { id: 'iban', nameKey: 'stirlingPresetIban' as const, pattern: '[A-Z]{2}\\d{2}[A-Z0-9]{1,30}', desc: '[A-Z]{2}\\d{2}[A-Z0-9]{1,30}' },
+  { id: 'phone', nameKey: 'pdfRedactionPhone' as const, pattern: '\\(\\d{3}\\)\\s*\\d{3}-\\d{4}', desc: '\\(\\d{3}\\)\\s*\\d{3}-\\d{4}' },
+  { id: 'ssn', nameKey: 'stirlingPresetSsn' as const, pattern: '\\d{3}-\\d{2}-\\d{4}', desc: '\\d{3}-\\d{2}-\\d{4}' },
+  { id: 'account', nameKey: 'stirlingPresetAccount' as const, pattern: '[Aa]ccount\\s*#?\\s*\\d{6,}', desc: '[Aa]ccount\\s*#?\\s*\\d{6,}' },
+  { id: 'date', nameKey: 'stirlingPresetDate' as const, pattern: '\\d{4}-\\d{2}-\\d{2}', desc: 'YYYY-MM-DD (\\d{4}-\\d{2}-\\d{2})' },
+];
+
+export type StirlingWorkstationMode = 'view' | 'organize' | 'edit' | 'security' | 'convert';
+
+export interface PdfToolProps {
+  tool: PdfFeature;
+  session: PdfSession;
+  busy: boolean;
+  page: number;
+  rect: number[];
+  inspection: PdfInspection | null;
+  output: PdfJob | null;
+  thumbnails: Record<string, string>;
+  text: string;
+  setText: (value: string) => void;
+  run: (operation: PdfOperation, payload?: Record<string, unknown>) => void;
+  onPage: (value: number) => void;
+  onSource: (value: PdfSession) => void;
+  mode?: StirlingWorkstationMode;
+}
+
+export function PdfWorkstationTools({
+  tool,
+  session,
+  busy,
+  page,
+  rect,
+  inspection,
+  output,
+  thumbnails,
+  text,
+  setText,
+  run,
+  onPage,
+  onSource,
+  mode,
+}: PdfToolProps) {
   const { t, lang } = useWorkspace();
-  const [asset, setAsset] = useState<PdfAsset | null>(null), [images, setImages] = useState<PdfAsset[]>([]), [certificate, setCertificate] = useState<PdfAsset | null>(null), [trustRoot, setTrustRoot] = useState<PdfAsset | null>(null);
-  const [kind, setKind] = useState('text'), [size, setSize] = useState(12), [color, setColor] = useState('#111111'), [direction, setDirection] = useState('auto'), [layer, setLayer] = useState('over'), [alignment, setAlignment] = useState('start'), [fontFamily, setFontFamily] = useState('sans-serif'), [crop, setCrop] = useState('');
-  const [plan, setPlan] = useState<{ page?: number; sessionId?: string; blank?: boolean; rotation?: number }[] | null>(null), [selected, setSelected] = useState<number[]>([]), [split, setSplit] = useState(1), [external, setExternal] = useState(false);
+  const [asset, setAsset] = useState<PdfAsset | null>(null);
+  const [images, setImages] = useState<PdfAsset[]>([]);
+  const [certificate, setCertificate] = useState<PdfAsset | null>(null);
+  const [trustRoot, setTrustRoot] = useState<PdfAsset | null>(null);
+  const [kind, setKind] = useState('text');
+  const [size, setSize] = useState(12);
+  const [color, setColor] = useState('#111111');
+  const [direction, setDirection] = useState('auto');
+  const [layer, setLayer] = useState('over');
+  const [alignment, setAlignment] = useState('start');
+  const [fontFamily, setFontFamily] = useState('sans-serif');
+  const [crop, setCrop] = useState('');
+  const [plan, setPlan] = useState<{ page?: number; sessionId?: string; blank?: boolean; rotation?: number }[] | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [split, setSplit] = useState(1);
+  const [external, setExternal] = useState(false);
   const [organizerStart, setOrganizerStart] = useState(0);
   const [replacements, setReplacements] = useState([{ find: '', replace: '' }]);
   const [wholeWordSearch, setWholeWordSearch] = useState(false);
-  const [pattern, setPattern] = useState(''), [confirmed, setConfirmed] = useState(false), [profile, setProfile] = useState('2b');
-  const [user, setUser] = useState(''), [owner, setOwner] = useState(''), [certificatePassword, setCertificatePassword] = useState(''), [bits, setBits] = useState(256), [permissions, setPermissions] = useState({ copy: true, print: true, modify: true, annotate: true, forms: true });
-  const [fieldName, setFieldName] = useState('BaglibSignature'), [existingField, setExistingField] = useState('');
-  const [sign, setSign] = useState('certificate'), [strokes, setStrokes] = useState<number[][][]>([]), [failure, setFailure] = useState(false);
+  const [pattern, setPattern] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [profile, setProfile] = useState('2b');
+  const [user, setUser] = useState('');
+  const [owner, setOwner] = useState('');
+  const [certificatePassword, setCertificatePassword] = useState('');
+  const [bits, setBits] = useState(256);
+  const [permissions, setPermissions] = useState({ copy: true, print: true, modify: true, annotate: true, forms: true });
+  const [fieldName, setFieldName] = useState('BaglibSignature');
+  const [existingField, setExistingField] = useState('');
+  const [sign, setSign] = useState('certificate');
+  const [strokes, setStrokes] = useState<number[][][]>([]);
+  const [inkColor, setInkColor] = useState('#000000');
+  const [failure, setFailure] = useState(false);
+
+  // New Stirling-PDF capability states
+  const [watermarkText, setWatermarkText] = useState('CONFIDENTIAL');
+  const [watermarkFontSize, setWatermarkFontSize] = useState(36);
+  const [watermarkOpacity, setWatermarkOpacity] = useState(0.25);
+  const [watermarkRotation, setWatermarkRotation] = useState(45);
+  const [optimizeLevel, setOptimizeLevel] = useState(2);
+  const [scaleFactor, setScaleFactor] = useState(1.0);
+  const [pagesPerSheet, setPagesPerSheet] = useState(2);
+  const [pageNumberStyle, setPageNumberStyle] = useState('PAGE_NUMBER_ONLY');
+  const [pageNumberPosition, setPageNumberPosition] = useState('BOTTOM_CENTER');
+  const [pageNumberStart, setPageNumberStart] = useState(1);
+  const [activeEditSubtool, setActiveEditSubtool] = useState<'find-replace' | 'text' | 'ink' | 'image' | 'numbers' | 'forms'>(tool === 'add-image' ? 'image' : tool === 'unlock-forms' ? 'forms' : 'find-replace');
+  const [activeSecuritySubtool, setActiveSecuritySubtool] = useState<'redact' | 'sanitize' | 'watermark' | 'encrypt' | 'sign' | 'validate'>(tool === 'sanitize' || tool === 'watermark' || tool === 'encrypt' || tool === 'sign' ? tool : tool === 'verify-signatures' ? 'sign' : tool === 'validate' ? 'validate' : 'redact');
+  const [redactMode, setRedactMode] = useState<'manual' | 'auto'>('manual');
+  const [pendingRedactionMarks, setPendingRedactionMarks] = useState<{ id: string; page: number; rect: number[] }[]>([]);
+  const [convertPdfToImage, setConvertPdfToImage] = useState(false);
+  const [selectedRegexPreset, setSelectedRegexPreset] = useState('');
+  const [useRegex, setUseRegex] = useState(true);
+  const [wholeWordSearchAuto, setWholeWordSearchAuto] = useState(true);
+  const [boxColor, setBoxColor] = useState('#000000');
+  const [customPadding, setCustomPadding] = useState(2);
+  const [wordsToRedact, setWordsToRedact] = useState('');
+
   const api = (): PdfEditorAPI => window.electronAPI.pdfEditor;
-  const field = 'block w-full rounded border border-subtle bg-canvas p-2';
-  const button = (label: TranslationKey, action: () => void, disabled = false) => <button type="button" disabled={busy || external || disabled} onClick={action} className="rounded-lg border border-subtle p-2 text-start disabled:opacity-40">{t(label)}</button>;
-  const input = (label: TranslationKey, value: string, update: (value: string) => void, type = 'text') => <label className="block">{t(label)}<input type={type} autoComplete="off" dir={type === 'password' ? undefined : 'auto'} value={value} onChange={event => update(event.target.value)} className={field} /></label>;
-  const select = (label: TranslationKey, value: string, update: (value: string) => void, values: [string, TranslationKey][]) => <label className="block">{t(label)}<select value={value} onChange={event => update(event.target.value)} className={field}>{values.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>;
-  const choose = async (kind: PdfAsset['kind'], update: (value: PdfAsset) => void) => { try { const response = await api().chooseAsset(kind); if (response.ok === false) throw new Error(); if (response.data) update(response.data); } catch { setFailure(true); } };
-  const apply = (operation: PdfOperation, payload?: Record<string, unknown>) => { setFailure(false); run(operation, payload); setCertificatePassword(''); setUser(''); setOwner(''); };
-  const currentPlan: { page?: number; sessionId?: string; blank?: boolean; rotation?: number }[] = plan ?? Array.from({ length: inspection?.totalPages || 0 }, (_, index) => ({ page: index + 1, sessionId: 'current', rotation: 0 }));
+  const field = 'block w-full rounded-lg border border-subtle bg-canvas p-2 text-start text-sm';
+  const button = (label: TranslationKey, action: () => void, disabled = false, primary = false) => (
+    <button
+      type="button"
+      disabled={busy || external || disabled}
+      onClick={action}
+      className={`rounded-lg border px-3 py-2 text-start text-xs font-semibold transition-colors disabled:opacity-40 ${
+        primary
+          ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
+          : 'border-subtle hover:bg-surface'
+      }`}
+    >
+      {t(label)}
+    </button>
+  );
+
+  const input = (label: TranslationKey, value: string, update: (value: string) => void, type = 'text') => (
+    <label className="block text-xs font-medium space-y-1">
+      <span>{t(label)}</span>
+      <input
+        type={type}
+        autoComplete="off"
+        dir={type === 'password' ? undefined : 'auto'}
+        value={value}
+        onChange={event => update(event.target.value)}
+        className={field}
+      />
+    </label>
+  );
+
+  const select = (label: TranslationKey, value: string, update: (value: string) => void, values: [string, TranslationKey][]) => (
+    <label className="block text-xs font-medium space-y-1">
+      <span>{t(label)}</span>
+      <select value={value} onChange={event => update(event.target.value)} className={field}>
+        {values.map(([val, lbl]) => (
+          <option key={val} value={val}>
+            {t(lbl)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
+  const choose = async (kind: PdfAsset['kind'], update: (value: PdfAsset) => void) => {
+    try {
+      const response = await api().chooseAsset(kind);
+      if (response.ok === false) throw new Error();
+      if (response.data) update(response.data);
+    } catch {
+      setFailure(true);
+    }
+  };
+
+  const apply = (operation: PdfOperation, payload?: Record<string, unknown>) => {
+    setFailure(false);
+    run(operation, payload);
+    setCertificatePassword('');
+    setUser('');
+    setOwner('');
+  };
+
+  const currentPlan: { page?: number; sessionId?: string; blank?: boolean; rotation?: number }[] =
+    plan ?? Array.from({ length: inspection?.totalPages || 0 }, (_, index) => ({ page: index + 1, sessionId: 'current', rotation: 0 }));
   const firstVisible = Math.min(organizerStart, Math.max(0, Math.floor((currentPlan.length - 1) / 36) * 36));
-  const reorder = (from: number, to: number) => { const next = [...currentPlan]; const [item] = next.splice(from, 1); next.splice(to, 0, item); setPlan(next); setSelected([]); };
+
+  const reorder = (from: number, to: number) => {
+    const next = [...currentPlan];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    setPlan(next);
+    setSelected([]);
+  };
+
   const edit = () => {
     const values = crop.trim() ? crop.split(',').map(Number) : undefined;
-    if (values && (values.length !== 4 || values.some(value => !Number.isFinite(value)))) { setFailure(true); return; }
-    apply('edit-content', { edits: [{ kind, text, page, rect, fontSize: size, color, direction, layer, align: alignment, fontFamily, ...(asset ? { asset: asset.id } : {}), ...(values ? { crop: values } : {}) }] });
+    if (values && (values.length !== 4 || values.some(value => !Number.isFinite(value)))) {
+      setFailure(true);
+      return;
+    }
+    apply('edit-content', {
+      edits: [
+        {
+          kind,
+          text,
+          page,
+          rect,
+          fontSize: size,
+          color,
+          direction,
+          layer,
+          align: alignment,
+          fontFamily,
+          ...(asset ? { asset: asset.id } : {}),
+          ...(values ? { crop: values } : {}),
+        },
+      ],
+    });
   };
+
   if (tool === 'cloud') return <PdfCloudPanel session={session} output={output} />;
+  if (tool === 'edit-toc') return <PdfTocEditor busy={busy} totalPages={inspection?.totalPages} initialOutline={inspection?.outline} onApply={payload => apply('edit-toc', payload)} />;
   if (tool === 'review' || tool === 'summarize') return <PdfReviewPanel session={session} page={page} rect={rect} ai={tool === 'summarize'} onPage={onPage} run={run} />;
-  return <section className="space-y-3">
-    {tool === 'edit-content' && <fieldset data-pdf-find-replace disabled={busy || external} className="min-w-0 space-y-3 rounded-lg border border-subtle p-3 text-start disabled:opacity-60">
-      <legend className="px-1 font-semibold leading-relaxed">{t('pdfFindReplace')}</legend>
-      <p className="text-xs text-muted leading-relaxed">{t('pdfFindReplaceHint')}</p>
-      {replacements.map((replacement, index) => <div key={index} className="min-w-0 space-y-2 border-b border-subtle pb-3">
-        <label className="block leading-relaxed">{t('pdfFindText')}<input data-pdf-find type="text" dir="auto" autoComplete="off" maxLength={4096} value={replacement.find} onChange={event => setReplacements(previous => previous.map((item, current) => current === index ? { ...item, find: event.target.value } : item))} className={field + ' min-w-0 text-start leading-loose'} /></label>
-        <label className="block leading-relaxed">{t('pdfReplaceText')}<input data-pdf-replacement type="text" dir="auto" autoComplete="off" maxLength={4096} value={replacement.replace} onChange={event => setReplacements(previous => previous.map((item, current) => current === index ? { ...item, replace: event.target.value } : item))} className={field + ' min-w-0 text-start leading-loose'} /></label>
-        {replacements.length > 1 && <button type="button" onClick={() => setReplacements(previous => previous.filter((_, current) => current !== index))} className="py-1 text-start text-xs underline leading-relaxed">{t('pdfRemoveReplacement')}</button>}
-      </div>)}
-      <label className="flex items-start gap-2 leading-relaxed"><input type="checkbox" checked={wholeWordSearch} onChange={event => setWholeWordSearch(event.target.checked)} className="mt-1 shrink-0" />{t('pdfWholeWord')}</label>
-      <div className="flex flex-wrap gap-2">
-        {button('pdfAddReplacement', () => setReplacements(previous => [...previous, { find: '', replace: '' }]), replacements.length >= 100)}
-        {button('pdfApplyReplacements', () => apply('edit-content', { textReplacements: replacements, wholeWordSearch }), replacements.some(item => !item.find.length))}
-      </div>
-    </fieldset>}
-    {tool === 'create' && <><p>{t('pdfCreateHint')}</p>{select('pdfTemplate', '', value => setText(value === 'notes' ? t('pdfTemplateNotes') : value === 'meeting' ? t('pdfTemplateMeeting') : ''), [['', 'pdfNewBlank'], ['notes', 'pdfNotesTemplate'], ['meeting', 'pdfMeetingTemplate']])}<label>{t('pdfText')}<textarea dir="auto" maxLength={100000} value={text} onChange={event => setText(event.target.value)} className={field + ' min-h-32 leading-loose'} /></label>{button('pdfAddImagePage', () => { void choose('image', value => setImages(previous => [...previous, value])); })}{button('pdfClipboard', () => { void api().clipboard().then(response => { if (response.ok === true) { if (response.data.text) setText(response.data.text); if (response.data.asset) setImages(previous => [...previous, response.data.asset!]); } else setFailure(true); }); })}{images.map((image, index) => <div key={image.id} dir="auto">{image.filename}<button type="button" aria-label={t('pdfRemoveImage')} onClick={() => setImages(previous => previous.filter((_, current) => current !== index))} className="p-2">×</button></div>)}{button('pdfSuiteCreate', () => apply('create', { pages: [...(text || !images.length ? [{ text, direction: lang === 'ar' ? 'rtl' : 'ltr' }] : []), ...images.map(image => ({ image: image.id }))] }))}</>}
-    {tool === 'edit-content' && <><p className="text-xs text-muted">{t('pdfFontSubstitution')}</p>{select('pdfEditKind', kind, setKind, [['text', 'pdfAddText'], ['replace-text', 'pdfReplaceText'], ['image', 'pdfAddImage'], ['replace-image', 'pdfReplaceImage']])}<label>{t('pdfText')}<textarea dir="auto" maxLength={100000} value={text} onChange={event => setText(event.target.value)} className={field + ' min-h-28 leading-loose'} /></label><label>{t('pdfFontSize')}<input type="number" min={5} max={144} value={size} onChange={event => setSize(Number(event.target.value))} className={field} /></label><label>{t('pdfTextColor')}<input type="color" value={color} onChange={event => setColor(event.target.value)} className="block h-9 w-full" /></label>{select('pdfTextDirection', direction, setDirection, [['auto', 'pdfAutoDirection'], ['rtl', 'pdfRtl'], ['ltr', 'pdfLtr']])}{select('pdfTextAlignment', alignment, setAlignment, [['start', 'pdfAlignStart'], ['center', 'pdfAlignCenter'], ['end', 'pdfAlignEnd'], ['justify', 'pdfAlignJustify']])}{select('pdfFontFamily', fontFamily, setFontFamily, [['sans-serif', 'pdfFontSans'], ['serif', 'pdfFontSerif'], ['monospace', 'pdfFontMono'], ['cursive', 'pdfFontCursive']])}{select('pdfLayer', layer, setLayer, [['over', 'pdfLayerOver'], ['under', 'pdfLayerUnder']])}{button('pdfChooseImage', () => { void choose('image', setAsset); })}{asset && <p dir="auto">{asset.filename}</p>}{input('pdfCropPixels', crop, setCrop)}{button('pdfApplyStaged', edit)}</>}
-    {(tool === 'organize' || tool === 'split') && <><p className="text-xs text-muted">{t('pdfPagePlanHint')}</p><div className="flex flex-wrap gap-2">{button('pdfLoadThumbnails', () => apply('preview', { items: currentPlan.slice(firstVisible, firstVisible + 36).filter(item => !item.blank) }))}{button('pdfSelectAll', () => setSelected(currentPlan.map((_, index) => index)))}{button('pdfClearSelection', () => setSelected([]))}{button('pdfInsertBlank', () => setPlan([...currentPlan, { blank: true }]))}{button('pdfDeleteSelected', () => { setPlan(currentPlan.filter((_, index) => !selected.includes(index))); setSelected([]); })}{button('pdfRotateSelected', () => setPlan(currentPlan.map((item, index) => selected.includes(index) ? { ...item, rotation: ((item.rotation || 0) + 90) % 360 } : item)))}{button('pdfMergeSource', () => { setExternal(true); void (async () => { try { const response = await api().chooseSource(); if (response.ok === false) throw new Error(); if (!response.data) return; const source = response.data; onSource(source); const started = await api().start({ sessionId: source.id, operation: 'inspect', language: lang }); if (started.ok === false) throw new Error(); let value = started.data; while (value.state === 'running') { await new Promise(resolve => setTimeout(resolve, 250)); const status = await api().status(value.id); if (status.ok === false) throw new Error(); value = status.data; } if (!value.inspection) throw new Error(); setPlan(previous => [...(previous?.length ? previous : currentPlan), ...Array.from({ length: value.inspection!.totalPages }, (_, index) => ({ page: index + 1, sessionId: source.id, rotation: 0 }))]); } catch { setFailure(true); } finally { setExternal(false); } })(); })}</div><div className="grid grid-cols-3 gap-2 max-h-80 overflow-auto">{currentPlan.slice(firstVisible, firstVisible + 36).map((item, offset) => { const index = firstVisible + offset; return <div key={`${index}-${item.sessionId}-${item.page}`} draggable onDragStart={event => event.dataTransfer.setData('text/plain', String(index))} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const from = Number(event.dataTransfer.getData('text/plain')); if (Number.isInteger(from) && from >= 0 && from < currentPlan.length) reorder(from, index); }} className="rounded border border-subtle p-2"><label><input type="checkbox" checked={selected.includes(index)} onChange={event => setSelected(previous => event.target.checked ? [...previous, index] : previous.filter(value => value !== index))} /> {index + 1}{item.page && (thumbnails[`${item.sessionId || 'current'}:${item.page}`] || thumbnails[item.page]) && <img src={thumbnails[`${item.sessionId || 'current'}:${item.page}`] || thumbnails[item.page]} alt={t('pdfPagePreview', { page: item.page })} className="w-full bg-white" style={{ transform: `rotate(${item.rotation || 0}deg)` }} />}<span className="block text-xs">{item.blank ? t('pdfBlankPage') : `${t('page')} ${item.page}`} · {item.rotation || 0}°</span></label><div className="flex justify-between"><button type="button" disabled={!index} aria-label={t('pdfMoveEarlier')} onClick={() => reorder(index, index - 1)}>−</button><button type="button" disabled={index >= currentPlan.length - 1} aria-label={t('pdfMoveLater')} onClick={() => reorder(index, index + 1)}>+</button></div></div>; })}</div><div className="flex justify-between gap-2">{button('pdfThumbnailsPrevious', () => setOrganizerStart(Math.max(0, firstVisible - 36)), firstVisible === 0)}<span>{t('pdfThumbnailsRange', { from: currentPlan.length ? firstVisible + 1 : 0, to: Math.min(currentPlan.length, firstVisible + 36), total: currentPlan.length })}</span>{button('pdfThumbnailsNext', () => setOrganizerStart(firstVisible + 36), firstVisible + 36 >= currentPlan.length)}</div>{button('pdfApplyPagePlan', () => { apply('organize', { pages: currentPlan }); setPlan(null); setSelected([]); }, !currentPlan.length)}{button('pdfExtractSelected', () => { apply('organize', { pages: currentPlan.filter((_, index) => selected.includes(index)) }); setPlan(null); setSelected([]); }, !selected.length)}<label>{t('pdfPagesPerFile')}<input type="number" min={1} max={1000} value={split} onChange={event => setSplit(Number(event.target.value))} className={field} /></label>{button('pdfSuiteSplit', () => apply('split', { pages: currentPlan, pagesPerFile: split }), !currentPlan.length)}</>}
-    {tool === 'redact' && <><p className="text-xs text-muted">{t('pdfRedactionWarning')}</p>{input('pdfRedactionPattern', pattern, setPattern)}{select('pdfRedactionPreset', ['email', 'phone', 'id'].includes(pattern) ? pattern : '', setPattern, [['', 'pdfRedactionLiteral'], ['email', 'pdfRedactionEmail'], ['phone', 'pdfRedactionPhone'], ['id', 'pdfRedactionId']])}<label className="flex gap-2"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />{t('pdfRedactionConfirm')}</label>{button('pdfSuiteRedact', () => apply('redact', pattern ? { pattern } : { regions: [{ page, rect }] }), !confirmed)}</>}
-    {tool === 'encrypt' && <><p className="text-xs text-muted">{t('pdfPermissionsWarning')}</p>{input('pdfUserPassword', user, setUser, 'password')}{input('pdfOwnerPassword', owner, setOwner, 'password')}<label>{t('pdfEncryptionStrength')}<select value={bits} onChange={event => setBits(Number(event.target.value))} className={field}><option value={256}>AES-256</option><option value={128}>AES-128</option></select></label>{(Object.keys(permissions) as (keyof typeof permissions)[]).map(key => <label key={key} className="flex gap-2"><input type="checkbox" checked={permissions[key]} onChange={event => setPermissions(previous => ({ ...previous, [key]: event.target.checked }))} />{t(({ copy: 'pdfPermissionCopy', print: 'pdfPermissionPrint', modify: 'pdfPermissionModify', annotate: 'pdfPermissionAnnotate', forms: 'pdfPermissionForms' } as const)[key])}</label>)}{button('pdfSuiteEncrypt', () => apply('encrypt', { bits, ownerPassword: owner, userPassword: user, permissions }), owner.length < 8 || !user || owner === user)}{button('pdfDecrypt', () => apply('encrypt', { mode: 'decrypt' }))}</>}
-    {tool === 'ocr' && <div className="space-y-3">
-      <div className="flex items-center gap-2 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs">
-        <span className="relative flex h-2.5 w-2.5 shrink-0">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-        </span>
-        <div className="min-w-0 flex-1">
-          <span className="font-bold text-emerald-950 dark:text-emerald-200 block truncate">{t('ocrEngineBadge')}</span>
-          <span className="text-[11px] text-muted block">{t('ocrEngineLocalCpu')}</span>
+
+  // Determine active effective mode
+  const effectiveMode: StirlingWorkstationMode =
+    mode ??
+    (tool === 'organize' || tool === 'split'
+      ? 'organize'
+      : tool === 'edit-content' || tool === 'create'
+      ? 'edit'
+      : tool === 'redact' || tool === 'encrypt' || tool === 'sign' || tool === 'verify-signatures' || tool === 'validate'
+      ? 'security'
+      : tool.startsWith('export-') || tool === 'ocr'
+      ? 'convert'
+      : 'view');
+
+  return (
+    <section className="space-y-4">
+      {/* MODE 1: VIEW & READ */}
+      {effectiveMode === 'view' && (
+        <div className="space-y-4">
+
+          {inspection && (
+            <div className="rounded-xl border border-subtle p-3 space-y-2 text-xs">
+              <div className="flex justify-between text-muted">
+                <span>{t('pdfSuitePageCount', { count: inspection.totalPages })}</span>
+                <span>{inspection.signedSource ? t('pdfSignatureSigned') : t('pdfSignatureDraft')}</span>
+              </div>
+              {inspection.outline && inspection.outline.length > 0 && (
+                <details className="mt-2">
+                  <summary className="font-semibold cursor-pointer py-1">{t('stirlingEditToc')}</summary>
+                  <div className="max-h-48 overflow-y-auto space-y-1 mt-1 pe-1">
+                    {inspection.outline.map((item, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => onPage(item.page)}
+                        className="block w-full text-start truncate py-0.5 text-muted hover:text-main"
+                        style={{ paddingInlineStart: `${item.level * 0.75}rem` }}
+                      >
+                        {item.title} ({item.page})
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
         </div>
-      </div>
-      <p className="text-xs text-muted leading-relaxed">{t('pdfOcrWarning')}</p>
-      {button('pdfRunOcr', () => apply('ocr', { languages: 'ara+eng' }))}
-    </div>}
-    {tool.startsWith('export-') && <><p className="text-xs text-muted">{t('pdfConversionLimit')}</p>{button('pdfExport', () => apply(tool as PdfOperation))}</>}
-    {tool === 'validate' && <><p className="text-xs text-muted">{t('pdfComplianceLimit')}</p><label>{t('pdfProfile')}<select value={profile} onChange={event => setProfile(event.target.value)} className={field}><option value="1b">PDF/A-1b</option><option value="2b">PDF/A-2b</option><option value="ua1">PDF/UA-1</option></select></label>{button('pdfSuiteValidate', () => apply('validate', { profile }))}</>}
-    {tool === 'repair-metadata' && <><p className="text-xs text-muted">{t('pdfMetadataLimit')}</p>{input('pdfDocumentTitle', text, setText)}{button('pdfSuiteRepair', () => apply('repair-metadata', { title: text, language: lang }))}</>}
-    {tool === 'sign' && <><p className="text-xs text-muted">{t('pdfSignatureWarning')}</p>{select('pdfSignatureMethod', sign, setSign, [['certificate', 'pdfCertificateSign'], ['prepare-signature', 'pdfPrepareSignature'], ['initials-field', 'pdfInitialsField'], ['date-field', 'pdfDateField'], ['typed-signature', 'pdfTypedSign'], ['signature-image', 'pdfImageSign'], ['ink-signature', 'pdfDrawSign'], ['initials', 'pdfInitials'], ['date', 'pdfDate'], ['stamp', 'pdfStamp']])}{['certificate', 'prepare-signature', 'initials-field', 'date-field'].includes(sign) && input('pdfFieldName', fieldName, setFieldName)}{sign === 'certificate' ? <>{input('pdfExistingField', existingField, setExistingField)}{button('pdfChooseCertificate', () => { void choose('certificate', setCertificate); })}{certificate && <p dir="auto">{certificate.filename}</p>}{input('pdfCertificatePassword', certificatePassword, setCertificatePassword, 'password')}</> : sign === 'ink-signature' ? <PdfInkPad strokes={strokes} onChange={setStrokes} /> : sign === 'signature-image' ? <>{button('pdfChooseImage', () => { void choose('image', setAsset); })}{asset && <p dir="auto">{asset.filename}</p>}</> : input('pdfSignatureText', text, setText, sign === 'date' ? 'date' : 'text')}{button('pdfApplySignature', () => sign === 'certificate' ? apply('sign', { certificate: certificate!.id, certificatePassword, page, rect, fieldName, ...(existingField ? { existingField } : {}) }) : sign === 'prepare-signature' ? apply('prepare-signature', { fieldName, page, rect }) : apply('edit-content', { edits: [{ kind: sign, text, page, rect, strokes, fieldName, fontSize: 16, direction: 'auto', fontFamily: 'serif', signatureStyle: 'italic', ...(asset ? { asset: asset.id } : {}) }] }), sign === 'certificate' && !certificate)}</>}
-    {tool === 'verify-signatures' && <><p className="text-xs text-muted">{t('pdfOfflineTrust')}</p>{button('pdfChooseTrustRoot', () => { void choose('trust-root', setTrustRoot); })}{trustRoot && <p dir="auto">{trustRoot.filename}</p>}{button('pdfSuiteVerifySignatures', () => apply('verify-signatures', trustRoot ? { trustRoot: trustRoot.id } : {}))}</>}
-    {failure && <p role="alert">{t('pdfSuiteFailure')}</p>}
-    {(tool === 'sign' || tool === 'verify-signatures') && <PdfAuditViewer />}
-  </section>;
+      )}
+
+      {/* MODE 2: ORGANIZE */}
+      {effectiveMode === 'organize' && (
+        <div className="space-y-4">
+          <p className="text-xs text-muted">{t('pdfPagePlanHint')}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {button('pdfSelectAll', () => setSelected(currentPlan.map((_, index) => index)))}
+            {button('stirlingSelectEven', () => setSelected(currentPlan.map((_, index) => index).filter(i => (i + 1) % 2 === 0)))}
+            {button('stirlingSelectOdd', () => setSelected(currentPlan.map((_, index) => index).filter(i => (i + 1) % 2 !== 0)))}
+            {button('pdfClearSelection', () => setSelected([]))}
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-subtle">
+            {button('stirlingRotateLeft', () =>
+              setPlan(currentPlan.map((item, index) => (selected.includes(index) || !selected.length ? { ...item, rotation: ((item.rotation || 0) + 270) % 360 } : item))),
+            )}
+            {button('stirlingRotateRight', () =>
+              setPlan(currentPlan.map((item, index) => (selected.includes(index) || !selected.length ? { ...item, rotation: ((item.rotation || 0) + 90) % 360 } : item))),
+            )}
+            {button('stirlingInsertBlank', () => setPlan([...currentPlan, { blank: true }]))}
+            {button('stirlingDeleteSelected', () => {
+              setPlan(currentPlan.filter((_, index) => !selected.includes(index)));
+              setSelected([]);
+            }, !selected.length)}
+            {button('stirlingExtractSelected', () => {
+              apply('organize', { pages: currentPlan.filter((_, index) => selected.includes(index)) });
+              setPlan(null);
+              setSelected([]);
+            }, !selected.length)}
+          </div>
+
+          {/* Page Plan Grid */}
+          <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto p-1 border border-subtle rounded-xl bg-canvas">
+            {currentPlan.slice(firstVisible, firstVisible + 36).map((item, offset) => {
+              const index = firstVisible + offset;
+              const isSel = selected.includes(index);
+              return (
+                <div
+                  key={`${index}-${item.sessionId}-${item.page}`}
+                  draggable
+                  onDragStart={event => event.dataTransfer.setData('text/plain', String(index))}
+                  onDragOver={event => event.preventDefault()}
+                  onDrop={event => {
+                    event.preventDefault();
+                    const from = Number(event.dataTransfer.getData('text/plain'));
+                    if (Number.isInteger(from) && from >= 0 && from < currentPlan.length) reorder(from, index);
+                  }}
+                  className={`rounded-lg border p-1.5 transition-all text-xs ${isSel ? 'border-emerald-600 bg-emerald-600/10' : 'border-subtle bg-surface'}`}
+                >
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isSel}
+                      onChange={event => setSelected(prev => (event.target.checked ? [...prev, index] : prev.filter(v => v !== index)))}
+                      className="rounded"
+                    />
+                    <span className="font-bold">{index + 1}</span>
+                  </label>
+                  {item.page && (thumbnails[`${item.sessionId || 'current'}:${item.page}`] || thumbnails[item.page]) && (
+                    <img
+                      src={thumbnails[`${item.sessionId || 'current'}:${item.page}`] || thumbnails[item.page]}
+                      alt={t('pdfPagePreview', { page: item.page })}
+                      className="w-full h-20 object-contain my-1 bg-white rounded shadow-sm"
+                      style={{ transform: `rotate(${item.rotation || 0}deg)` }}
+                    />
+                  )}
+                  <div className="flex items-center justify-between text-[10px] text-muted">
+                    <span>{item.blank ? t('pdfBlankPage') : `${item.page}`}</span>
+                    <span className="font-mono bg-subtle/20 px-1 rounded">{item.rotation || 0}°</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {button('pdfApplyPagePlan', () => {
+              apply('organize', { pages: currentPlan });
+              setPlan(null);
+              setSelected([]);
+            }, !currentPlan.length, true)}
+            {button('stirlingMergePdfs', () => {
+              setExternal(true);
+              void (async () => {
+                try {
+                  const response = await api().chooseSource();
+                  if (response.ok === false || !response.data) return;
+                  const source = response.data;
+                  onSource(source);
+                  const started = await api().start({ sessionId: source.id, operation: 'inspect', language: lang });
+                  if (started.ok === false) throw new Error();
+                  let val = started.data;
+                  while (val.state === 'running') {
+                    await new Promise(r => setTimeout(r, 200));
+                    const res = await api().status(val.id);
+                    if (res.ok === false) throw new Error();
+                    val = res.data;
+                  }
+                  if (val.inspection) {
+                    setPlan(prev => [
+                      ...(prev?.length ? prev : currentPlan),
+                      ...Array.from({ length: val.inspection!.totalPages }, (_, i) => ({ page: i + 1, sessionId: source.id, rotation: 0 })),
+                    ]);
+                  }
+                } catch {
+                  setFailure(true);
+                } finally {
+                  setExternal(false);
+                }
+              })();
+            })}
+          </div>
+
+          {/* Advanced Transformations */}
+          <details className="border border-subtle rounded-xl p-3 space-y-3 text-xs">
+            <summary className="font-semibold cursor-pointer">{t('stirlingMultiPageLayout')} & {t('stirlingScalePages')}</summary>
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-2">
+                <label className="flex-1">{t('stirlingScalePages')}: {scaleFactor}x
+                  <input type="range" min="0.5" max="2.0" step="0.1" value={scaleFactor} onChange={e => setScaleFactor(Number(e.target.value))} className="w-full" />
+                </label>
+                {button('stirlingScalePages', () => apply('scale-pages', { scaleFactor }))}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="flex-1">{t('stirlingMultiPageLayout')}
+                  <select value={pagesPerSheet} onChange={e => setPagesPerSheet(Number(e.target.value))} className={field}>
+                    {[2, 4, 6, 8, 9, 16].map(n => <option key={n} value={n}>{n} {t('page')}</option>)}
+                  </select>
+                </label>
+                {button('stirlingMultiPageLayout', () => apply('multi-page-layout', { pagesPerSheet }))}
+              </div>
+              {button('stirlingSingleLongPage', () => apply('pdf-to-single-page'))}
+              <div className="flex items-center gap-2">
+                <label className="flex-1">{t('stirlingSplitPages')}
+                  <input type="number" min={1} max={1000} value={split} onChange={e => setSplit(Number(e.target.value))} className={field} />
+                </label>
+                {button('stirlingSplitPages', () => apply('split', { pages: currentPlan, pagesPerFile: split }))}
+              </div>
+            </div>
+          </details>
+        </div>
+      )}
+
+      {/* MODE 3: EDIT & ANNOTATE */}
+      {effectiveMode === 'edit' && (
+        <div className="space-y-4">
+          <div className="flex gap-1 overflow-x-auto pb-1 border-b border-subtle">
+            {(
+              [
+                ['find-replace', 'stirlingInplaceText'],
+                ['text', 'pdfAddText'],
+                ['ink', 'stirlingFreehandInk'],
+                ['image', 'stirlingInsertImage'],
+                ['numbers', 'stirlingPageNumbering'],
+                ['forms', 'stirlingUnlockForms'],
+              ] as const
+            ).map(([sub, lbl]) => (
+              <button
+                key={sub}
+                type="button"
+                onClick={() => setActiveEditSubtool(sub)}
+                className={`px-2.5 py-1 text-xs rounded-lg whitespace-nowrap font-medium transition-colors ${
+                  activeEditSubtool === sub ? 'bg-emerald-600 text-white' : 'border border-subtle hover:bg-surface'
+                }`}
+              >
+                {t(lbl)}
+              </button>
+            ))}
+          </div>
+
+          {activeEditSubtool === 'find-replace' && (
+            <fieldset data-pdf-find-replace disabled={busy || external} className="min-w-0 space-y-3 rounded-lg border border-subtle p-3 text-start disabled:opacity-60">
+              <div className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 dark:text-amber-400 text-xs flex items-start gap-2">
+                <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <span className="font-bold block">{t('stirlingTextEditorAlphaTitle')}</span>
+                  <p className="text-[11px] leading-relaxed opacity-90">{t('stirlingTextEditorAlphaWarning')}</p>
+                </div>
+              </div>
+              <legend className="px-1 font-semibold leading-relaxed">{t('pdfFindReplace')}</legend>
+              <p className="text-xs text-muted leading-relaxed">{t('pdfFindReplaceHint')}</p>
+              {replacements.map((replacement, index) => (
+                <div key={index} className="min-w-0 space-y-2 border-b border-subtle pb-3">
+                  <label className="block leading-relaxed">
+                    {t('pdfFindText')}
+                    <input
+                      data-pdf-find
+                      type="text"
+                      dir="auto"
+                      autoComplete="off"
+                      maxLength={4096}
+                      value={replacement.find}
+                      onChange={event => setReplacements(prev => prev.map((item, cur) => (cur === index ? { ...item, find: event.target.value } : item)))}
+                      className={field + ' min-w-0 text-start leading-loose'}
+                    />
+                  </label>
+                  <label className="block leading-relaxed">
+                    {t('pdfReplaceText')}
+                    <input
+                      data-pdf-replacement
+                      type="text"
+                      dir="auto"
+                      autoComplete="off"
+                      maxLength={4096}
+                      value={replacement.replace}
+                      onChange={event => setReplacements(prev => prev.map((item, cur) => (cur === index ? { ...item, replace: event.target.value } : item)))}
+                      className={field + ' min-w-0 text-start leading-loose'}
+                    />
+                  </label>
+                  {replacements.length > 1 && (
+                    <button type="button" onClick={() => setReplacements(prev => prev.filter((_, cur) => cur !== index))} className="py-1 text-start text-xs underline leading-relaxed">
+                      {t('pdfRemoveReplacement')}
+                    </button>
+                  )}
+                </div>
+              ))}
+              <label className="flex items-start gap-2 leading-relaxed text-xs">
+                <input type="checkbox" checked={wholeWordSearch} onChange={event => setWholeWordSearch(event.target.checked)} className="mt-0.5 shrink-0" />
+                {t('pdfWholeWord')}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {button('pdfAddReplacement', () => setReplacements(prev => [...prev, { find: '', replace: '' }]), replacements.length >= 100)}
+                {button('pdfApplyReplacements', () => apply('edit-content', { textReplacements: replacements, wholeWordSearch }), replacements.some(item => !item.find.length), true)}
+              </div>
+            </fieldset>
+          )}
+
+          {activeEditSubtool === 'text' && (
+            <div className="space-y-3">
+              <div className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 dark:text-amber-400 text-xs flex items-start gap-2">
+                <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <span className="font-bold block">{t('stirlingTextEditorAlphaTitle')}</span>
+                  <p className="text-[11px] leading-relaxed opacity-90">{t('stirlingTextEditorAlphaWarning')}</p>
+                </div>
+              </div>
+              <label className="block text-xs font-medium space-y-1">
+                <span>{t('pdfText')}</span>
+                <textarea dir="auto" maxLength={100000} value={text} onChange={event => setText(event.target.value)} className={field + ' min-h-24'} />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  {t('pdfFontSize')}
+                  <input type="number" min={5} max={144} value={size} onChange={e => setSize(Number(e.target.value))} className={field} />
+                </label>
+                <div className="text-xs">
+                  {t('pdfTextColor')}
+                  <PdfColorSwatches value={color} onChange={setColor} label={t('pdfTextColor')} />
+                </div>
+              </div>
+              {select('pdfTextDirection', direction, setDirection, [['auto', 'pdfAutoDirection'], ['rtl', 'pdfRtl'], ['ltr', 'pdfLtr']])}
+              {select('pdfTextAlignment', alignment, setAlignment, [['start', 'pdfAlignStart'], ['center', 'pdfAlignCenter'], ['end', 'pdfAlignEnd'], ['justify', 'pdfAlignJustify']])}
+              {select('pdfFontFamily', fontFamily, setFontFamily, [['sans-serif', 'pdfFontSans'], ['serif', 'pdfFontSerif'], ['monospace', 'pdfFontMono'], ['cursive', 'pdfFontCursive']])}
+              {button('pdfApplyStaged', edit, false, true)}
+            </div>
+          )}
+
+          {activeEditSubtool === 'ink' && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted">{t('stirlingFreehandInk')}</p>
+              <PdfColorSwatches value={inkColor} onChange={setInkColor} label={t('pdfTextColor')} />
+              <PdfInkPad strokes={strokes} onChange={setStrokes} color={inkColor} />
+              {button('pdfApplySignature', () => apply('edit-content', { edits: [{ kind: 'ink-signature', page, rect, strokes: strokes.filter(stroke => stroke.length >= 2), color: inkColor }] }), !strokes.some(stroke => stroke.length >= 2) || strokes.length > 100, true)}
+            </div>
+          )}
+
+          {activeEditSubtool === 'image' && (
+            <div className="space-y-3">
+              {button('pdfChooseImage', () => { void choose('image', setAsset); })}
+              {asset && <p dir="auto" className="text-xs font-mono">{asset.filename}</p>}
+              {button('stirlingInsertImage', () => apply('add-image', { image: asset?.id, page, x: rect[0], y: rect[1] }), !asset, true)}
+            </div>
+          )}
+
+          {activeEditSubtool === 'numbers' && (
+            <div className="space-y-3">
+              {select('stirlingPageNumbering', pageNumberStyle, setPageNumberStyle, [
+                ['PAGE_NUMBER_ONLY', 'stirlingPageNumbering'],
+                ['PAGE_NUMBER_WITH_TOTAL', 'pdfSuitePageCount'],
+              ])}
+              <label className="text-xs">
+                {t('stirlingPageNumbering')} (Start)
+                <input type="number" min={1} value={pageNumberStart} onChange={e => setPageNumberStart(Number(e.target.value))} className={field} />
+              </label>
+              {button('stirlingPageNumbering', () => apply('page-numbers', { style: pageNumberStyle, position: pageNumberPosition, startNumber: pageNumberStart }), false, true)}
+            </div>
+          )}
+
+          {activeEditSubtool === 'forms' && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted">{t('stirlingUnlockForms')}</p>
+              {button('stirlingUnlockForms', () => apply('unlock-forms'), false, true)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODE 4: SECURITY & REDACT */}
+      {effectiveMode === 'security' && (
+        <div className="space-y-4">
+          <div className="flex gap-1 overflow-x-auto pb-1 border-b border-subtle">
+            {(
+              [
+                ['redact', 'pdfSuiteRedact'],
+                ['sanitize', 'stirlingSanitize'],
+                ['watermark', 'stirlingWatermark'],
+                ['encrypt', 'stirlingPasswordEncrypt'],
+                ['sign', 'stirlingCertSign'],
+                ['validate', 'pdfSuiteValidate'],
+              ] as const
+            ).map(([sub, lbl]) => (
+              <button
+                key={sub}
+                type="button"
+                onClick={() => setActiveSecuritySubtool(sub)}
+                className={`px-2.5 py-1 text-xs rounded-lg whitespace-nowrap font-medium transition-colors ${
+                  activeSecuritySubtool === sub ? 'bg-emerald-600 text-white' : 'border border-subtle hover:bg-surface'
+                }`}
+              >
+                {t(lbl)}
+              </button>
+            ))}
+          </div>
+
+          {activeSecuritySubtool === 'redact' && (
+            <div className="space-y-3.5">
+              {/* Segmented Mode Selector: Manual vs Auto */}
+              <div className="flex rounded-lg border border-subtle bg-surface p-0.5 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setRedactMode('manual')}
+                  className={`flex-1 py-1.5 rounded-md transition-all cursor-pointer ${
+                    redactMode === 'manual'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-muted hover:text-main'
+                  }`}
+                >
+                  {t('stirlingManualRedactMode')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRedactMode('auto')}
+                  className={`flex-1 py-1.5 rounded-md transition-all cursor-pointer ${
+                    redactMode === 'auto'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-muted hover:text-main'
+                  }`}
+                >
+                  {t('stirlingAutoRedactMode')}
+                </button>
+              </div>
+
+              {/* MANUAL REDACTION MODE */}
+              {redactMode === 'manual' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted leading-relaxed">
+                    {lang === 'ar'
+                      ? 'حدد مناطق الحجب بالماوس على صفحة المستند، ثم أضفها إلى قائمة العلامات.'
+                      : 'Draw or select boxes on the page canvas, then add them as pending redaction marks.'}
+                  </p>
+
+                  {/* Add Current Box Button */}
+                  <button
+                    type="button"
+                    disabled={busy || !rect || rect.length < 4}
+                    onClick={() => {
+                      const newMark = {
+                        id: `mark-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                        page,
+                        rect: [...rect],
+                      };
+                      setPendingRedactionMarks(prev => [...prev, newMark]);
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-subtle hover:bg-surface text-xs font-semibold cursor-pointer"
+                  >
+                    <Plus size={13} />
+                    <span>{t('stirlingAddCurrentBox')} ({t('page')} {page})</span>
+                  </button>
+
+                  {/* Pending Marks List */}
+                  {pendingRedactionMarks.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-[11px] uppercase tracking-wider text-muted">
+                          {t('stirlingPendingMarks')} ({pendingRedactionMarks.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setPendingRedactionMarks([])}
+                          className="text-[10px] text-red-500 hover:underline cursor-pointer"
+                        >
+                          {t('stirlingClearAllMarks')}
+                        </button>
+                      </div>
+
+                      <div className="space-y-1 max-h-36 overflow-y-auto pe-1">
+                        {pendingRedactionMarks.map((mark, idx) => (
+                          <div
+                            key={mark.id}
+                            className="flex items-center justify-between p-1.5 rounded-lg border border-subtle bg-canvas text-xs"
+                          >
+                            <span className="font-mono text-[11px]">
+                              #{idx + 1} {t('page')} {mark.page} · [{Math.round(mark.rect[0])}, {Math.round(mark.rect[1])}, {Math.round(mark.rect[2])}, {Math.round(mark.rect[3])}]
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setPendingRedactionMarks(prev => prev.filter(m => m.id !== mark.id))}
+                              className="text-red-500 hover:bg-red-500/10 p-1 rounded cursor-pointer"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Rasterize PDF to PDF-Image Toggle */}
+                  <div className="rounded-xl border border-subtle bg-surface/50 p-2.5 space-y-1">
+                    <label className="flex items-start gap-2 text-xs font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={convertPdfToImage}
+                        onChange={e => setConvertPdfToImage(e.target.checked)}
+                        className="mt-0.5 rounded accent-emerald-600 cursor-pointer"
+                      />
+                      <span>{t('stirlingRasterizeRedact')}</span>
+                    </label>
+                    <p className="text-[10px] text-muted leading-relaxed ps-5">
+                      {t('stirlingRasterizeRedactDesc')}
+                    </p>
+                  </div>
+
+                  <label className="flex gap-2 text-xs cursor-pointer select-none">
+                    <input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />
+                    {t('pdfRedactionConfirm')}
+                  </label>
+
+                  {button(
+                    'stirlingApplyAllRedactions',
+                    () =>
+                      apply('redact', {
+                        regions:
+                          pendingRedactionMarks.length > 0
+                            ? pendingRedactionMarks.map(m => ({ page: m.page, rect: m.rect }))
+                            : [{ page, rect }],
+                        convertPdfToImage,
+                      }),
+                    !confirmed || (pendingRedactionMarks.length === 0 && (!rect || rect.length < 4)),
+                    true
+                  )}
+                </div>
+              )}
+
+              {/* AUTOMATIC REDACTION MODE */}
+              {redactMode === 'auto' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted leading-relaxed">{t('pdfRedactionWarning')}</p>
+
+                  {/* 1-Click Regex Presets */}
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted block">
+                      {lang === 'ar' ? 'أنماط الحجب الجاهزة (نقرة واحدة)' : '1-Click Regex Presets'}
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {REDACTION_PRESETS.map(preset => {
+                        const isSelected = pattern === preset.pattern;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => {
+                              setPattern(preset.pattern);
+                              setSelectedRegexPreset(preset.id);
+                            }}
+                            className={`p-2 rounded-lg border text-start transition-all cursor-pointer ${
+                              isSelected
+                                ? 'border-emerald-500 bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 font-bold'
+                                : 'border-subtle hover:bg-surface text-xs'
+                            }`}
+                          >
+                            <span className="block text-xs font-semibold leading-tight">{t(preset.nameKey)}</span>
+                            <span className="block text-[10px] text-muted font-mono truncate">{preset.desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Words to Redact (Multiple Words / Phrases) */}
+                  <label className="block text-xs font-medium space-y-1">
+                    <span>{lang === 'ar' ? 'كلمات / عبارات للحجب (سطر لكل كلمة):' : 'Words to Redact (One per line):'}</span>
+                    <textarea
+                      rows={2}
+                      value={wordsToRedact}
+                      onChange={e => setWordsToRedact(e.target.value)}
+                      placeholder={lang === 'ar' ? 'أدخل الكلمات المراد حجبها...' : 'e.g. Confidential\nInternal only\nJohn Doe'}
+                      className={field + ' font-mono text-xs'}
+                    />
+                  </label>
+
+                  {/* Custom Regex Pattern Input */}
+                  {input('pdfRedactionPattern', pattern, setPattern)}
+
+                  {/* Advanced Toggles Grid */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={useRegex}
+                        onChange={e => setUseRegex(e.target.checked)}
+                        className="rounded accent-emerald-600 cursor-pointer"
+                      />
+                      <span>{lang === 'ar' ? 'تعبير نمطي (Regex)' : 'Use Regex'}</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={wholeWordSearchAuto}
+                        onChange={e => setWholeWordSearchAuto(e.target.checked)}
+                        className="rounded accent-emerald-600 cursor-pointer"
+                      />
+                      <span>{t('pdfWholeWord')}</span>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="text-xs font-medium space-y-1">
+                      <span>{t('pdfRedactionColor')}</span>
+                      <PdfColorSwatches value={boxColor} onChange={setBoxColor} label={t('pdfRedactionColor')} />
+                    </div>
+                    <label className="text-xs font-medium space-y-1">
+                      <span>{lang === 'ar' ? 'الهامش الإضافي (px):' : 'Extra Padding (px):'}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={30}
+                        value={customPadding}
+                        onChange={e => setCustomPadding(Number(e.target.value) || 0)}
+                        className={field + ' py-1'}
+                      />
+                    </label>
+                  </div>
+
+                  {/* Rasterize PDF to PDF-Image Toggle */}
+                  <div className="rounded-xl border border-subtle bg-surface/50 p-2.5 space-y-1">
+                    <label className="flex items-start gap-2 text-xs font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={convertPdfToImage}
+                        onChange={e => setConvertPdfToImage(e.target.checked)}
+                        className="mt-0.5 rounded accent-emerald-600 cursor-pointer"
+                      />
+                      <span>{t('stirlingRasterizeRedact')}</span>
+                    </label>
+                    <p className="text-[10px] text-muted leading-relaxed ps-5">
+                      {t('stirlingRasterizeRedactDesc')}
+                    </p>
+                  </div>
+
+                  <label className="flex gap-2 text-xs cursor-pointer select-none">
+                    <input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />
+                    {t('pdfRedactionConfirm')}
+                  </label>
+
+                  {button(
+                    'pdfSuiteRedact',
+                    () => {
+                      const wordsList = wordsToRedact
+                        ? wordsToRedact.split(/[\r\n]+/).map(w => w.trim()).filter(Boolean)
+                        : [];
+                      apply('redact', {
+                        pattern: pattern.trim() || undefined,
+                        words: wordsList.length > 0 ? wordsList : (pattern.trim() ? [pattern.trim()] : undefined),
+                        useRegex,
+                        wholeWordSearch: wholeWordSearchAuto,
+                        boxColor,
+                        customPadding,
+                        convertPdfToImage,
+                      });
+                    },
+                    !confirmed || (!pattern.trim() && !wordsToRedact.trim()),
+                    true
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSecuritySubtool === 'sanitize' && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted">{t('stirlingSanitize')}</p>
+              {button('stirlingSanitize', () => apply('sanitize'), false, true)}
+            </div>
+          )}
+
+          {activeSecuritySubtool === 'watermark' && (
+            <div className="space-y-3">
+              {input('stirlingWatermarkText', watermarkText, setWatermarkText)}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[10px] text-muted">{lang === 'ar' ? 'متغيرات ديناميكية:' : 'Variables:'}</span>
+                {[
+                  { label: '{date}', val: '{date}' },
+                  { label: '{filename}', val: '{filename}' },
+                  { label: '{page}', val: '{page}' },
+                ].map(item => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => setWatermarkText(prev => `${prev} ${item.val}`.trim())}
+                    className="px-1.5 py-0.5 rounded bg-subtle/30 hover:bg-subtle/60 text-[10px] font-mono transition-colors"
+                  >
+                    + {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  {t('pdfFontSize')}
+                  <input type="number" min={10} max={120} value={watermarkFontSize} onChange={e => setWatermarkFontSize(Number(e.target.value))} className={field} />
+                </label>
+                <label className="text-xs">
+                  Rotation (°)
+                  <input type="number" min={0} max={360} value={watermarkRotation} onChange={e => setWatermarkRotation(Number(e.target.value))} className={field} />
+                </label>
+              </div>
+              <label className="text-xs">
+                Opacity: {watermarkOpacity}
+                <input type="range" min="0.05" max="1.0" step="0.05" value={watermarkOpacity} onChange={e => setWatermarkOpacity(Number(e.target.value))} className="w-full" />
+              </label>
+              {button('stirlingWatermark', () => {
+                const resolvedText = watermarkText
+                  .replace(/\{date\}/gi, new Date().toISOString().slice(0, 10))
+                  .replace(/\{filename\}/gi, session.filename || 'document.pdf')
+                  .replace(/\{page\}/gi, String(page));
+                apply('watermark', { watermarkText: resolvedText, fontSize: watermarkFontSize, rotation: watermarkRotation, opacity: watermarkOpacity });
+              }, false, true)}
+            </div>
+          )}
+
+          {activeSecuritySubtool === 'encrypt' && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted">{t('pdfPermissionsWarning')}</p>
+              {input('pdfUserPassword', user, setUser, 'password')}
+              {input('pdfOwnerPassword', owner, setOwner, 'password')}
+              <label className="text-xs block">
+                {t('pdfEncryptionStrength')}
+                <select value={bits} onChange={e => setBits(Number(e.target.value))} className={field}>
+                  <option value={256}>{t('pdfEncryptionAes256')}</option>
+                  <option value={128}>{t('pdfEncryptionAes128')}</option>
+                </select>
+              </label>
+              {(Object.keys(permissions) as (keyof typeof permissions)[]).map(key => (
+                <label key={key} className="flex gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={permissions[key]}
+                    onChange={event => setPermissions(prev => ({ ...prev, [key]: event.target.checked }))}
+                  />
+                  {t(({ copy: 'pdfPermissionCopy', print: 'pdfPermissionPrint', modify: 'pdfPermissionModify', annotate: 'pdfPermissionAnnotate', forms: 'pdfPermissionForms' } as const)[key])}
+                </label>
+              ))}
+              <div className="flex gap-2">
+                {button('pdfSuiteEncrypt', () => apply('encrypt', { bits, ownerPassword: owner, userPassword: user, permissions }), owner.length < 8 || !user || owner === user, true)}
+                {button('pdfDecrypt', () => apply('encrypt', { mode: 'decrypt' }))}
+              </div>
+            </div>
+          )}
+
+          {activeSecuritySubtool === 'sign' && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted">{t('pdfSignatureWarning')}</p>
+              {input('pdfFieldName', fieldName, setFieldName)}
+              {button('pdfChooseCertificate', () => { void choose('certificate', setCertificate); })}
+              {certificate && <p dir="auto" className="text-xs font-mono">{certificate.filename}</p>}
+              {input('pdfCertificatePassword', certificatePassword, setCertificatePassword, 'password')}
+              {button('stirlingCertSign', () => apply('sign', { certificate: certificate!.id, certificatePassword, page, rect, fieldName }), !certificate, true)}
+              <div className="pt-2 border-t border-subtle">
+                {button('pdfChooseTrustRoot', () => { void choose('trust-root', setTrustRoot); })}
+                {trustRoot && <p dir="auto" className="text-xs font-mono">{trustRoot.filename}</p>}
+                {button('pdfSuiteVerifySignatures', () => apply('verify-signatures', trustRoot ? { trustRoot: trustRoot.id } : {}))}
+              </div>
+              <PdfAuditViewer />
+            </div>
+          )}
+
+          {activeSecuritySubtool === 'validate' && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted">{t('pdfComplianceLimit')}</p>
+              <label className="text-xs block">
+                {t('pdfProfile')}
+                <select value={profile} onChange={e => setProfile(e.target.value)} className={field}>
+                  <option value="1b">{t('pdfFormatA1b')}</option>
+                  <option value="2b">{t('pdfFormatA2b')}</option>
+                  <option value="ua1">{t('pdfFormatUa1')}</option>
+                </select>
+              </label>
+              {button('pdfSuiteValidate', () => apply('validate', { profile }), false, true)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODE 5: CONVERT & EXPORT */}
+      {effectiveMode === 'convert' && (
+        <div className="space-y-4">
+          <p className="text-xs text-muted">{t('pdfConversionLimit')}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {button('stirlingExportDocx', () => apply('export-docx'))}
+            {button('stirlingExportPptx', () => apply('export-pptx'))}
+            {button('stirlingExportCsv', () => apply('export-csv'))}
+            {button('stirlingExportHtml', () => apply('export-html'))}
+            {button('stirlingExportMarkdown', () => apply('export-markdown'))}
+            {button('stirlingExportTxt', () => apply('export-text'))}
+            {button('stirlingConvertPdfa', () => apply('convert-pdfa'))}
+            {button('stirlingCompress', () => apply('compress', { optimizeLevel }))}
+            {button('stirlingExtractImages', () => apply('extract-images'))}
+          </div>
+
+          <div className="p-3 rounded-xl border border-subtle bg-surface space-y-2">
+            <span className="text-xs font-semibold block">{t('stirlingCompress')}</span>
+            <div className="flex gap-2">
+              {[1, 2, 3].map(lvl => (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => setOptimizeLevel(lvl)}
+                  className={`flex-1 py-1 text-xs rounded border ${optimizeLevel === lvl ? 'border-emerald-600 bg-emerald-600/10 text-emerald-600' : 'border-subtle'}`}
+                >
+                  Level {lvl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2 border-t border-subtle">
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <div className="min-w-0 flex-1">
+                <span className="font-bold text-emerald-950 dark:text-emerald-200 block truncate">{t('ocrEngineBadge')}</span>
+                <span className="text-[11px] text-muted block">{t('ocrEngineLocalCpu')}</span>
+              </div>
+            </div>
+            {button('pdfRunOcr', () => apply('ocr', { languages: 'ara+eng' }), false, true)}
+          </div>
+        </div>
+      )}
+
+      {failure && <p role="alert" className="text-xs text-red-500">{t('pdfSuiteFailure')}</p>}
+    </section>
+  );
 }

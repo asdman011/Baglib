@@ -8,10 +8,48 @@ import { Loader2, AlertCircle } from 'lucide-react';
 import type { ReaderTheme, TOCItem } from '../../libs/reader/types';
 import type { KnowledgeItemDTO } from '../../../shared/types/knowledge';
 import { getPdfThemeFilter } from '../../libs/reader/typography';
+import { readerAssetUrl } from '../../../shared/utils/reader-asset-url';
+import { nearbyPdfPages } from '../../../shared/pdf-visible-pages';
+import { PdfBitmapCache } from '../../../shared/pdf-bitmap-cache';
+import { waitForReaderIdle } from '../../../shared/reader-idle';
+import { PdfCanvasPool } from '../../../shared/pdf-canvas-pool';
+import { openPdfByteSource, type PdfByteSource } from '../../../shared/pdf-byte-source';
+import { useWorkspace } from '../context/WorkspaceContext';
+import { usePdfViewSource } from '../../hooks/usePdfViewSource';
+import { PdfRasterClient } from '../../../shared/pdf-raster-client';
 
 // Shared worker instance & initialization promise
 let pdfWorkerInstance: Worker | null = null;
 let pdfWorkerInitPromise: Promise<Worker | null> | null = null;
+const pageBitmapCaches = new WeakMap<pdfjsLib.PDFDocumentProxy, PdfBitmapCache<ImageBitmap>>();
+const pageCanvasPools = new WeakMap<pdfjsLib.PDFDocumentProxy, PdfCanvasPool<HTMLCanvasElement>>();
+const pageRasterClients = new WeakMap<pdfjsLib.PDFDocumentProxy, PdfRasterClient>();
+const pageRasterWarmers = new WeakMap<pdfjsLib.PDFDocumentProxy, () => void>();
+const EMPTY_HIGHLIGHTS: KnowledgeItemDTO[] = [];
+
+class LocalPdfRangeTransport extends pdfjsLib.PDFDataRangeTransport {
+  constructor(private source: PdfByteSource, private signal: AbortSignal, private cancel: () => void, private fail: (error: unknown) => void) {
+    super(source.length, source.initialData, false);
+  }
+  requestDataRange(begin: number, end: number): void {
+    void this.source.read(begin, end).then(data => {
+      if (!this.signal.aborted) this.onDataRange(begin, data);
+    }).catch(error => { if (!this.signal.aborted) this.fail(error); });
+  }
+  abort(): void { this.cancel(); }
+}
+
+function canvasPool(doc: pdfjsLib.PDFDocumentProxy): PdfCanvasPool<HTMLCanvasElement> {
+  let pool = pageCanvasPools.get(doc);
+  if (!pool) { pool = new PdfCanvasPool(() => document.createElement('canvas')); pageCanvasPools.set(doc, pool); }
+  return pool;
+}
+
+function bitmapCache(doc: pdfjsLib.PDFDocumentProxy): PdfBitmapCache<ImageBitmap> {
+  let cache = pageBitmapCaches.get(doc);
+  if (!cache) { cache = new PdfBitmapCache<ImageBitmap>(); pageBitmapCaches.set(doc, cache); }
+  return cache;
+}
 
 /**
  * Instantiates a Blob-backed ES module Web Worker for PDF.js attached directly to workerPort.
@@ -34,22 +72,27 @@ export async function ensurePdfWorker(): Promise<Worker | null> {
 
   pdfWorkerInitPromise = (async () => {
     try {
-      const workerUrl = '/vendor/pdfjs/pdf.worker.min.mjs';
-      const response = await fetch(workerUrl);
+      const bundleUrl = '/vendor/pdfjs/pdf.worker.bundle.js';
+      const mjsUrl = '/vendor/pdfjs/pdf.worker.min.mjs';
+      // First preference: classic IIFE bundle which never fails with module syntax errors
+      const testBundle = await fetch(bundleUrl, { method: 'HEAD' }).catch(() => null);
+      const chosenUrl = testBundle?.ok ? bundleUrl : mjsUrl;
+
+      const response = await fetch(chosenUrl);
       if (!response.ok) {
-        throw new Error(`Failed to fetch PDF worker from ${workerUrl}: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to fetch PDF worker from ${chosenUrl}: ${response.status} ${response.statusText}`);
       }
       const workerScript = await response.text();
       const blob = new Blob([workerScript], { type: 'text/javascript' });
       const blobUrl = URL.createObjectURL(blob);
-      const worker = new Worker(blobUrl, { type: 'module' });
+      const worker = chosenUrl.endsWith('.mjs') ? new Worker(blobUrl, { type: 'module' }) : new Worker(blobUrl);
       pdfjsLib.GlobalWorkerOptions.workerPort = worker;
       pdfWorkerInstance = worker;
       return worker;
     } catch (err) {
-      console.warn('[PdfNativeViewer] Blob-backed module worker initialization fallback:', err);
-      // Fallback to workerSrc if blob worker instantiation fails
-      pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+      console.warn('[PdfNativeViewer] Blob worker initialization fallback:', err);
+      // Fallback to classic IIFE workerSrc so it executes safely in classic worker context without import/export errors
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.bundle.js';
       return null;
     }
   })();
@@ -78,6 +121,7 @@ export interface PdfSelectionInfo {
 
 interface PdfNativeViewerProps {
   fileUrl: string;
+  useViewCache?: boolean;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -86,6 +130,7 @@ interface PdfNativeViewerProps {
   onPdfDocLoaded?: (doc: pdfjsLib.PDFDocumentProxy) => void;
   viewMode?: 'single' | 'two-column' | 'scrolled';
   theme?: ReaderTheme;
+  tintPages?: boolean;
   zoom?: number; // scale multiplier e.g. 1.0, 1.25
   autoCropMargins?: boolean;
   direction?: 'rtl' | 'ltr';
@@ -172,10 +217,11 @@ interface PdfPageItemProps {
   pageHighlights: KnowledgeItemDTO[];
   activeSelectionRects?: NormalizedRect[];
   onHighlightClick?: (highlight: KnowledgeItemDTO, e: React.MouseEvent) => void;
-  onPageMeasured?: (pageNum: number, height: number) => void;
+  onPageMeasured?: (pageNum: number, width: number, height: number) => void;
+  onPagePainted?: (doc: pdfjsLib.PDFDocumentProxy) => void;
 }
 
-const PdfPageItem: React.FC<PdfPageItemProps> = ({
+const PdfPageItem = React.memo(function PdfPageItem({
   pdfDoc,
   pageNumber,
   scale,
@@ -185,24 +231,52 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
   activeSelectionRects,
   onHighlightClick,
   onPageMeasured,
-}) => {
+  onPagePainted,
+}: PdfPageItemProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasHostRef = useRef<HTMLDivElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const [isRendering, setIsRendering] = useState(true);
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
-  const renderTaskRef = useRef<pdfjsLib.RenderTask | null>(null);
 
   const isDarkTheme = ['dark', 'night', 'midnight', 'dusk'].includes(theme);
 
   useEffect(() => {
     let isCancelled = false;
+    const renderingAbort = new AbortController();
+    let renderTask: pdfjsLib.RenderTask | undefined;
+    let refinementCanvas: HTMLCanvasElement | undefined;
+    const pool = canvasPool(pdfDoc);
+    const canvas = pool.acquire();
+    delete canvas.dataset.pdfPaintedAt;
+    canvas.dataset.pdfRenderScale = String(scale);
+    for (const key of ['pdfPageRequestedAt', 'pdfPageReadyAt', 'pdfRasterStartedAt', 'pdfRasterFinishedAt', 'pdfPreviewPaintedAt']) delete canvas.dataset[key];
+    canvas.className = 'pdf-canvas block absolute inset-0 w-full h-full pointer-events-none';
+    canvasHostRef.current?.appendChild(canvas);
+    let textTimer: ReturnType<typeof setTimeout> | undefined;
+    let textLayer: pdfjsLib.TextLayer | undefined;
+    let textGeneration = 0;
+    let hydrateText: (() => Promise<void>) | undefined;
+    let textReady = false;
+    const scheduleText = () => {
+      if (textReady || isCancelled) return;
+      textGeneration++;
+      textLayer?.cancel();
+      clearTimeout(textTimer);
+      textTimer = setTimeout(() => { void hydrateText?.(); }, 150);
+    };
+    const handleScroll = (event: Event) => {
+      if (event.target instanceof Element && event.target.contains(containerRef.current)) scheduleText();
+    };
+    document.addEventListener('scroll', handleScroll, true);
 
     const renderPage = async () => {
       try {
         setIsRendering(true);
+        canvas.dataset.pdfPageRequestedAt = String(performance.now());
         const page = await pdfDoc.getPage(pageNumber);
         if (isCancelled) return;
+        canvas.dataset.pdfPageReadyAt = String(performance.now());
 
         // Base viewport at 1.0 to get native aspect ratio
         const unscaledViewport = page.getViewport({ scale: 1.0 });
@@ -214,13 +288,13 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
         const displayHeight = Math.round(viewport.height);
 
         setDimensions({ width: displayWidth, height: displayHeight });
-        onPageMeasured?.(pageNumber, displayHeight);
+        onPageMeasured?.(pageNumber, unscaledViewport.width, unscaledViewport.height);
 
         // 1. Layer 1: Render Canvas (HiDPI)
-        const canvas = canvasRef.current;
         if (canvas) {
-          canvas.width = Math.floor(viewport.width * dpr);
-          canvas.height = Math.floor(viewport.height * dpr);
+          const pixelWidth = Math.floor(viewport.width * dpr), pixelHeight = Math.floor(viewport.height * dpr);
+          if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+          if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
           canvas.style.width = `${displayWidth}px`;
           canvas.style.height = `${displayHeight}px`;
 
@@ -228,26 +302,62 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
           if (ctx) {
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-            if (renderTaskRef.current) {
-              try {
-                renderTaskRef.current.cancel();
-              } catch {
-                // Ignore cancel errors
+            const cache = bitmapCache(pdfDoc);
+            const cacheKey = `${pageNumber}@${scale}@${dpr}`;
+            const cached = cache.get(cacheKey);
+            const preview = cached || cache.preview(`${pageNumber}@`);
+            const drawStarted = performance.now();
+            if (preview) {
+              ctx.drawImage(preview, 0, 0, displayWidth, displayHeight);
+              canvas.dataset.pdfPreviewPaintedAt = String(performance.now());
+              setIsRendering(false);
+            }
+            canvas.dataset.pdfPaintSource = cached ? 'cache' : 'raster';
+            if (cached) canvas.dataset.pdfCacheDrawMs = String(performance.now() - drawStarted);
+            else delete canvas.dataset.pdfCacheDrawMs;
+            if (!cached) {
+              const raster = pageRasterClients.get(pdfDoc);
+              canvas.dataset.pdfRasterStartedAt = String(performance.now());
+              const bitmap = raster?.ready ? await raster.render(pageNumber, scale, dpr, renderingAbort.signal) : null;
+              if (isCancelled) { bitmap?.close(); return; }
+              if (bitmap) {
+                ctx.drawImage(bitmap, 0, 0, displayWidth, displayHeight);
+                cache.set(cacheKey, bitmap);
+                canvas.dataset.pdfPaintSource = 'worker';
+                canvas.dataset.pdfRasterFinishedAt = String(performance.now());
+              } else {
+                let rasterContext = ctx;
+                if (preview) {
+                  refinementCanvas = pool.acquire();
+                  if (refinementCanvas.width !== pixelWidth) refinementCanvas.width = pixelWidth;
+                  if (refinementCanvas.height !== pixelHeight) refinementCanvas.height = pixelHeight;
+                  const context = refinementCanvas.getContext('2d');
+                  if (!context) throw new Error('engine-failed');
+                  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+                  rasterContext = context;
+                }
+                canvas.dataset.pdfRasterStartedAt = String(performance.now());
+                renderTask = page.render({ canvasContext: rasterContext, viewport });
+                await renderTask.promise;
+                canvas.dataset.pdfRasterFinishedAt = String(performance.now());
+                if (isCancelled) return;
+                if (refinementCanvas) ctx.drawImage(refinementCanvas, 0, 0, displayWidth, displayHeight);
+                if (!isCancelled && typeof createImageBitmap === 'function') {
+                  void createImageBitmap(canvas).then(bitmap => {
+                    if (isCancelled) bitmap.close();
+                    else cache.set(cacheKey, bitmap);
+                  }).catch(() => {});
+                }
               }
             }
-
-            renderTaskRef.current = page.render({
-              canvasContext: ctx,
-              viewport,
-            });
-
-            await renderTaskRef.current.promise;
           }
         }
 
         if (isCancelled) return;
 
-        // 2. Layer 3: Render TextLayer
+        canvas.dataset.pdfPaintedAt = String(performance.now());
+        onPagePainted?.(pdfDoc);
+        setIsRendering(false);
         const textLayerDiv = textLayerRef.current;
         if (textLayerDiv) {
           textLayerDiv.innerHTML = '';
@@ -256,16 +366,20 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
           textLayerDiv.style.setProperty('--scale-factor', `${viewport.scale}`);
           textLayerDiv.style.setProperty('--total-scale-factor', `${viewport.scale}`);
 
-          const textContent = await page.getTextContent();
-          if (isCancelled) return;
-
-          const textLayer = new pdfjsLib.TextLayer({
-            textContentSource: textContent,
-            container: textLayerDiv,
-            viewport,
-          });
-
-          await textLayer.render();
+          hydrateText = async () => {
+            const generation = textGeneration;
+            try {
+              const textContent = await page.getTextContent();
+              if (isCancelled || generation !== textGeneration || textReady) return;
+              textLayerDiv.replaceChildren();
+              textLayer = new pdfjsLib.TextLayer({ textContentSource: textContent, container: textLayerDiv, viewport });
+              await textLayer.render();
+              if (!isCancelled && generation === textGeneration) textReady = true;
+            } catch (error) {
+              if (!isCancelled && generation === textGeneration) console.warn('[PdfNativeViewer] Text layer hydration failed:', error);
+            }
+          };
+          scheduleText();
         }
 
         setIsRendering(false);
@@ -274,6 +388,8 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
           console.error(`[PdfNativeViewer] Error rendering page ${pageNumber}:`, err);
         }
         if (!isCancelled) setIsRendering(false);
+      } finally {
+        if (refinementCanvas) pool.release(refinementCanvas);
       }
     };
 
@@ -281,15 +397,16 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
 
     return () => {
       isCancelled = true;
-      if (renderTaskRef.current) {
-        try {
-          renderTaskRef.current.cancel();
-        } catch {
-          // ignore
-        }
-      }
+      renderingAbort.abort();
+      textGeneration++;
+      clearTimeout(textTimer);
+      textLayer?.cancel();
+      document.removeEventListener('scroll', handleScroll, true);
+      canvas.remove();
+      renderTask?.cancel();
+      void Promise.resolve(renderTask?.promise).catch(() => {}).then(() => pool.release(canvas));
     };
-  }, [pdfDoc, pageNumber, scale]);
+  }, [pdfDoc, pageNumber, scale, onPageMeasured, onPagePainted]);
 
   // Compute theme filter for PDF canvas
   const canvasFilter = useMemo(() => {
@@ -301,12 +418,13 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
       ref={containerRef}
       data-page-number={pageNumber}
       dir="ltr"
-      className="pdf-page-container relative mx-auto my-3 bg-white shadow-2xl transition-transform duration-200 select-text rounded-xs overflow-hidden"
+      className="pdf-page-container relative mx-auto my-3 bg-white shadow-2xl transition-transform duration-200 select-text rounded-[6px] overflow-hidden"
       style={{
         direction: 'ltr',
         unicodeBidi: 'normal',
         textAlign: 'left',
         position: 'relative',
+        contain: 'layout style paint',
         display: 'block',
         marginBottom: '24px',
         width: dimensions.width ? `${dimensions.width}px` : 'auto',
@@ -318,18 +436,11 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
     >
       {/* Layer 1: Visual Canvas */}
       <div
+        ref={canvasHostRef}
         className="canvasWrapper absolute inset-0 w-full h-full pointer-events-none overflow-hidden"
         dir="ltr"
-        style={{ direction: 'ltr', unicodeBidi: 'normal' }}
-      >
-        <canvas
-          ref={canvasRef}
-          className="pdf-canvas block absolute inset-0 w-full h-full pointer-events-none"
-          style={{
-            filter: canvasFilter,
-          }}
-        />
-      </div>
+        style={{ direction: 'ltr', unicodeBidi: 'normal', filter: canvasFilter }}
+      />
 
       {/* Layer 2: Persistent Highlight Overlay & Active Transient Selection */}
       <div
@@ -412,6 +523,7 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
           overflow: 'hidden',
           opacity: 1,
           lineHeight: 1,
+          contain: 'layout style paint',
         }}
       />
 
@@ -423,10 +535,109 @@ const PdfPageItem: React.FC<PdfPageItemProps> = ({
       )}
     </div>
   );
-};
+});
 
-export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
+interface PdfScrolledPageProps extends PdfPageItemProps {
+  active: boolean;
+  placeholderWidth: number;
+  placeholderHeight: number;
+}
+
+const PdfScrolledPage = React.memo(function PdfScrolledPage({ active, placeholderWidth, placeholderHeight, ...props }: PdfScrolledPageProps) {
+  return <div data-page-number={props.pageNumber} className="pdf-page-holder w-full flex justify-center">
+    {active ? <PdfPageItem {...props} /> : <div
+      data-page-number={props.pageNumber}
+      dir="ltr"
+      className="pdf-page-container relative mx-auto my-3 bg-white/5 border border-subtle/30 rounded-xs flex items-center justify-center text-muted text-xs font-mono select-none"
+      style={{ direction: 'ltr', unicodeBidi: 'normal', width: `${placeholderWidth}px`, height: `${placeholderHeight}px` }}
+    />}
+  </div>;
+});
+
+/**
+ * Extracts a local filesystem path from a baglib-asset, local-pdf, or file URL.
+ */
+export function extractDiskPathFromUrl(urlStr: string): string | null {
+  try {
+    let clean = urlStr.split('?')[0].split('#')[0];
+    clean = clean.replace(/^(?:baglib-asset|local-pdf|file):\/\/?/i, '');
+    clean = decodeURIComponent(clean);
+    clean = clean.replace(/^\/+/, '');
+    if (/^[a-zA-Z]:[\\/]/.test(clean)) {
+      return clean;
+    }
+    if (/^[a-zA-Z][\\/]/.test(clean)) {
+      return `${clean[0]}:${clean.slice(1)}`;
+    }
+    if (clean.startsWith('/') || clean.startsWith('\\')) {
+      return clean;
+    }
+    return clean || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalizes any PDF file URL or local path to a string that pdfjsLib.getDocument's
+ * getUrlProp can safely parse without throwing "Invalid PDF url data".
+ */
+export function normalizePdfUrl(rawUrl: unknown): string | null {
+  if (!rawUrl) return null;
+  if (rawUrl instanceof URL) return rawUrl.href;
+  if (typeof rawUrl !== 'string') return null;
+  let trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  // Auto-repair any incoming %3A drive letter in baglib-asset or local-pdf URLs
+  // e.g. baglib-asset:///F%3A/... -> baglib-asset:///F:/...
+  trimmed = trimmed.replace(/^((?:baglib-asset|local-pdf):\/\/\/??)([a-zA-Z])%3A(\/.*)?$/i, '$1$2:$3');
+
+  // Blob and Data URIs
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+
+  // Recognized URL schemes supported directly in the browser/Electron
+  if (/^(https?|baglib-asset|local-pdf):\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Handle file:// protocol (extract path and convert to readerAssetUrl)
+  if (trimmed.startsWith('file://')) {
+    const withoutScheme = trimmed.replace(/^file:\/\/\/?/i, '');
+    let decoded = withoutScheme;
+    try {
+      decoded = decodeURIComponent(withoutScheme);
+    } catch {}
+    return readerAssetUrl(decoded);
+  }
+
+  // Handle Windows paths: e.g. D:\... or C:/... or \\server\share\...
+  if (/^[a-zA-Z]:[\\/]/i.test(trimmed) || trimmed.startsWith('\\\\')) {
+    return readerAssetUrl(trimmed);
+  }
+
+  // Handle absolute POSIX paths: /var/...
+  if (trimmed.startsWith('/')) {
+    return readerAssetUrl(trimmed);
+  }
+
+  // Fallback: try new URL relative to window.location
+  try {
+    if (typeof window !== 'undefined' && window.location?.href) {
+      return new URL(trimmed, window.location.href).href;
+    }
+  } catch {
+    /* fallback to readerAssetUrl */
+  }
+
+  return readerAssetUrl(trimmed);
+}
+
+const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
   fileUrl,
+  useViewCache = true,
   currentPage,
   totalPages,
   onPageChange,
@@ -434,25 +645,40 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
   onOutlineLoaded,
   onPdfDocLoaded,
   viewMode = 'single',
-  theme = 'paper',
+  tintPages = false,
   zoom = 1.0,
   autoCropMargins = false,
   direction = 'ltr',
-  highlights = [],
+  highlights = EMPTY_HIGHLIGHTS,
   activeSelectionInfo = null,
   onSelectionChange,
   onHighlightClick,
   contentContainerRef,
 }) => {
+  const { t } = useWorkspace();
+  const { url: viewingUrl, rejectCachedSource } = usePdfViewSource(fileUrl, extractDiskPathFromUrl(fileUrl), useViewCache);
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const paintBarrier = useRef<{ document: pdfjsLib.PDFDocumentProxy; finish: () => void } | null>(null);
+  const onPagePainted = useCallback((doc: pdfjsLib.PDFDocumentProxy) => {
+    pageRasterWarmers.get(doc)?.();
+    if (paintBarrier.current?.document === doc) paintBarrier.current.finish();
+  }, []);
   const [isLoadingDoc, setIsLoadingDoc] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [calculatedScale, setCalculatedScale] = useState<number>(1.2);
+  const [isSelecting, setIsSelecting] = useState(false);
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = contentContainerRef || internalContainerRef;
 
   // Track page heights in scrolled mode
-  const pageHeightsRef = useRef<Map<number, number>>(new Map());
+  const [pageDimensions, setPageDimensions] = useState<Map<number, { width: number; height: number }>>(() => new Map());
+  const onPageMeasured = useCallback((page: number, width: number, height: number) => {
+    setPageDimensions(previous => {
+      const existing = previous.get(page);
+      if (existing?.width === width && existing.height === height) return previous;
+      return new Map(previous).set(page, { width, height });
+    });
+  }, []);
 
   // Visible pages tracking for smooth pre-rendering in Continuous Scroll mode
   const [visiblePages, setVisiblePages] = useState<Set<number>>(() => {
@@ -463,26 +689,9 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
     return s;
   });
 
-  const [previousVisiblePageRange, setPreviousVisiblePageRange] = useState<readonly unknown[] | null>(null);
-  const inputsVisiblePageRange = [currentPage, totalPages];
-  if (previousVisiblePageRange === null || inputsVisiblePageRange.some((value, index) => !Object.is(value, previousVisiblePageRange[index]))) {
-    setPreviousVisiblePageRange(inputsVisiblePageRange);
-    setVisiblePages((prev) => {
-      let updated = false;
-      const next = new Set(prev);
-      for (let p = Math.max(1, currentPage - 2); p <= Math.min(totalPages || 1000, currentPage + 3); p++) {
-        if (!next.has(p)) {
-          next.add(p);
-          updated = true;
-        }
-      }
-      return updated ? next : prev;
-    });
-
-  }
 
   const [previousPdfSource, setPreviousPdfSource] = useState<readonly unknown[] | null>(null);
-  const inputsPdfSource = [fileUrl];
+  const inputsPdfSource = [fileUrl, viewingUrl];
   if (previousPdfSource === null || inputsPdfSource.some((value, index) => !Object.is(value, previousPdfSource[index]))) {
     setPreviousPdfSource(inputsPdfSource);
     setIsLoadingDoc(true);
@@ -491,30 +700,74 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
   // 1. Load PDF Document via pdfjsLib
   useEffect(() => {
     let isCancelled = false;
+    let loadingTask: ReturnType<typeof pdfjsLib.getDocument> | undefined;
+    let loadedDoc: pdfjsLib.PDFDocumentProxy | undefined;
+    const backgroundWork = new AbortController();
 
 
     const loadDoc = async () => {
-      if (!fileUrl || typeof fileUrl !== 'string' || fileUrl.trim() === '') {
+      if (!viewingUrl) return;
+      const targetUrl = normalizePdfUrl(viewingUrl);
+      if (!targetUrl) {
         setIsLoadingDoc(false);
         return;
       }
 
       try {
-        await ensurePdfWorker();
-        const loadingTask = pdfjsLib.getDocument({
-          url: fileUrl,
+        const [, byteSource] = await Promise.all([
+          ensurePdfWorker(),
+          /^(baglib-asset|local-pdf):/i.test(targetUrl) ? openPdfByteSource(targetUrl, backgroundWork.signal) : Promise.resolve(undefined),
+        ]);
+        if (isCancelled) return;
+        const docSource = { url: targetUrl };
+        let rejectRange: ((error: unknown) => void) | undefined;
+        const rangeFailure = new Promise<never>((_, reject) => { rejectRange = reject; });
+        const range = byteSource ? new LocalPdfRangeTransport(byteSource, backgroundWork.signal, () => backgroundWork.abort(), error => {
+          rejectRange?.(error);
+          if (loadedDoc && !isCancelled && !rejectCachedSource()) setLoadError(t('pdfDocumentLoadFailed'));
+          void loadingTask?.destroy().catch(() => undefined);
+        }) : undefined;
+
+        loadingTask = pdfjsLib.getDocument({
+          ...docSource,
+          ...(range ? { range, length: byteSource!.length } : {}),
+          rangeChunkSize: 65536,
+          disableAutoFetch: true,
+          disableStream: true,
           cMapUrl: '/vendor/pdfjs/cmaps/',
           cMapPacked: true,
           standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
         });
 
-        const doc = await loadingTask.promise;
+        const doc = await Promise.race([loadingTask.promise, rangeFailure]);
+        loadedDoc = doc;
         if (isCancelled) return;
-
+        let warmStarted = false;
+        pageRasterWarmers.set(doc, () => {
+          if (warmStarted || typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined' || !/^(baglib-asset|local-pdf):/iu.test(targetUrl)) return;
+          warmStarted = true;
+          void waitForReaderIdle(document, backgroundWork.signal, 750).then(() => {
+            if (isCancelled) return;
+            const assets = new URL('./vendor/pdfjs/', window.location.href);
+            const client = new PdfRasterClient(new Worker(new URL('pdf.raster.worker.mjs', assets), { type: 'module' }), targetUrl, assets.href);
+            pageRasterClients.set(doc, client);
+          }).catch(() => undefined);
+        });
+        const firstPaint = onOutlineLoaded ? new Promise<void>(resolve => {
+          const finish = () => { backgroundWork.signal.removeEventListener('abort', finish); resolve(); };
+          backgroundWork.signal.addEventListener('abort', finish, { once: true });
+          paintBarrier.current = { document: doc, finish };
+        }) : undefined;
+        setPageDimensions(new Map());
         setPdfDoc(doc);
         setIsLoadingDoc(false);
         onTotalPagesLoaded?.(doc.numPages);
         onPdfDocLoaded?.(doc);
+
+        if (!onOutlineLoaded) return;
+        await firstPaint;
+        if (isCancelled) return;
+        await waitForReaderIdle(document, backgroundWork.signal, 300);
 
         // Extract PDF Table of Contents (Outline)
         try {
@@ -552,10 +805,13 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
             const parsedToc = await traverseOutline(rawOutline);
             onOutlineLoaded?.(parsedToc);
           } else {
+            await waitForReaderIdle(document, backgroundWork.signal, 1500);
             // Smart scan of first 15 pages for headings when document outline is absent
             const smartHeadings: TOCItem[] = [];
             const scanLimit = Math.min(doc.numPages, 15);
             for (let pNum = 1; pNum <= scanLimit; pNum++) {
+              await waitForReaderIdle(document, backgroundWork.signal);
+              if (isCancelled) return;
               try {
                 const page = await doc.getPage(pNum);
                 const content = await page.getTextContent();
@@ -594,7 +850,7 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
               for (let i = 1; i <= Math.min(doc.numPages, 30); i++) {
                 fallbackToc.push({
                   id: `page-${i}`,
-                  label: `Page ${i}`,
+                  label: `${t('page')} ${i}`,
                   href: `#page=${i}`,
                   index: i - 1,
                 });
@@ -603,10 +859,11 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
             }
           }
         } catch (tocErr) {
-          console.warn('[PdfNativeViewer] Outline extraction notice:', tocErr);
+          if (!isCancelled) console.warn('[PdfNativeViewer] Outline extraction notice:', tocErr);
         }
       } catch (err: unknown) {
         if (!isCancelled) {
+          if (rejectCachedSource()) return;
           const isInvalidPdf =
             (err instanceof Error ? err.name : undefined) === 'InvalidPDFException' ||
             errorMessage(err)?.includes('Invalid PDF structure') ||
@@ -616,7 +873,7 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
           } else {
             console.error('[PdfNativeViewer] Document load error:', err);
           }
-          setLoadError(errorMessage(err) || 'Failed to load PDF document.');
+          setLoadError(errorMessage(err) || t('pdfDocumentLoadFailed'));
           setIsLoadingDoc(false);
         }
       }
@@ -626,8 +883,53 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
 
     return () => {
       isCancelled = true;
+      backgroundWork.abort();
+      if (paintBarrier.current?.document === loadedDoc) paintBarrier.current = null;
+      if (loadedDoc) { pageRasterWarmers.delete(loadedDoc); pageRasterClients.get(loadedDoc)?.dispose(); pageRasterClients.delete(loadedDoc); }
+      if (loadedDoc) { pageBitmapCaches.get(loadedDoc)?.dispose(); pageBitmapCaches.delete(loadedDoc); }
+      if (loadedDoc) { pageCanvasPools.get(loadedDoc)?.dispose(); pageCanvasPools.delete(loadedDoc); }
+      void loadingTask?.destroy().catch(() => undefined);
     };
-  }, [fileUrl]);
+  }, [fileUrl, viewingUrl, rejectCachedSource]);
+
+  useEffect(() => {
+    if (!pdfDoc || viewMode === 'scrolled' || typeof createImageBitmap !== 'function') return;
+    const nextPage = currentPage + (viewMode === 'two-column' ? 2 : 1);
+    if (nextPage > pdfDoc.numPages) return;
+    const controller = new AbortController();
+    const cache = bitmapCache(pdfDoc), pool = canvasPool(pdfDoc);
+    const dpr = window.devicePixelRatio || 1;
+    const key = `${nextPage}@${calculatedScale}@${dpr}`;
+    let renderTask: pdfjsLib.RenderTask | undefined;
+    const preload = async () => {
+      let canvas: HTMLCanvasElement | undefined;
+      try {
+        await waitForReaderIdle(document, controller.signal, 750);
+        if (cache.get(key)) return;
+        const page = await pdfDoc.getPage(nextPage);
+        if (controller.signal.aborted) return;
+        const viewport = page.getViewport({ scale: calculatedScale });
+        canvas = pool.acquire();
+        canvas.width = Math.floor(viewport.width * dpr);
+        canvas.height = Math.floor(viewport.height * dpr);
+        const context = canvas.getContext('2d');
+        if (!context) return;
+        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+        renderTask = page.render({ canvasContext: context, viewport });
+        await renderTask.promise;
+        if (controller.signal.aborted) return;
+        const bitmap = await createImageBitmap(canvas);
+        if (controller.signal.aborted) bitmap.close();
+        else cache.set(key, bitmap);
+      } catch (error) {
+        if (!controller.signal.aborted) console.warn('[PdfNativeViewer] Idle page preload failed:', error);
+      } finally {
+        if (canvas) pool.release(canvas);
+      }
+    };
+    void preload();
+    return () => { controller.abort(); renderTask?.cancel(); };
+  }, [pdfDoc, currentPage, calculatedScale, viewMode]);
 
   // 2. Responsive Fit Calculation
   const updateScale = useCallback((container: HTMLElement | null) => {
@@ -737,6 +1039,7 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
     const container = scrollContainerRef.current;
     const pageHolders = container.querySelectorAll('.pdf-page-holder');
     if (pageHolders.length === 0) return;
+    const intersections = new Map<number, number>();
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -747,29 +1050,19 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
         let maxRatio = 0;
         let mostVisiblePage = -1;
 
-        setVisiblePages((prev) => {
-          let updated = false;
-          const next = new Set(prev);
-
           for (const entry of entries) {
             const pageNum = parseInt(entry.target.getAttribute('data-page-number') || '0', 10);
             if (pageNum <= 0) continue;
 
             if (entry.isIntersecting) {
-              if (!next.has(pageNum)) {
-                next.add(pageNum);
-                if (pageNum > 1) next.add(pageNum - 1);
-                if (pageNum < (pdfDoc?.numPages || 1000)) next.add(pageNum + 1);
-                updated = true;
-              }
-              if (entry.intersectionRatio > maxRatio) {
-                maxRatio = entry.intersectionRatio;
-                mostVisiblePage = pageNum;
-              }
-            }
+              intersections.set(pageNum, entry.intersectionRatio);
+            } else intersections.delete(pageNum);
           }
-          return updated ? next : prev;
-        });
+        const next = nearbyPdfPages(intersections, pdfDoc.numPages);
+        setVisiblePages(prev => prev.size === next.size && [...next].every(page => prev.has(page)) ? prev : next);
+        for (const [page, ratio] of intersections) {
+          if (ratio > maxRatio) { maxRatio = ratio; mostVisiblePage = page; }
+        }
 
         if (
           !isPositioningScrollRef.current &&
@@ -782,7 +1075,7 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
       },
       {
         root: container,
-        rootMargin: '150% 0px 150% 0px',
+        rootMargin: '75% 0px',
         threshold: [0, 0.25, 0.5, 0.75],
       }
     );
@@ -792,11 +1085,13 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
   }, [viewMode, pdfDoc, totalPages, calculatedScale, onPageChange, scrollContainerRef]);
 
   // 3. Selection & MouseUp Text Rect Calculation
+  const lastSelectionKeyRef = useRef<string>('');
   const handleMouseUp = useCallback(() => {
     if (!onSelectionChange) return;
 
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      lastSelectionKeyRef.current = '';
       onSelectionChange(null);
       return;
     }
@@ -848,6 +1143,11 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
 
     const merged = mergeNormalizedRects(normalizedRects);
 
+    // Skip redundant parent updates (prevents re-render flicker on repeated mouseups)
+    const selectionKey = `${pageNum}|${text}|${merged.length}`;
+    if (selectionKey === lastSelectionKeyRef.current) return;
+    lastSelectionKeyRef.current = selectionKey;
+
     const minTop = Math.min(...validClientRects.map((r) => r.top));
     const maxBottom = Math.max(...validClientRects.map((r) => r.bottom));
     const minLeft = Math.min(...validClientRects.map((r) => r.left));
@@ -867,21 +1167,23 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
   }, [onSelectionChange]);
 
   // Filter highlights per page
-  const getHighlightsForPage = useCallback(
-    (pageNum: number) => {
-      return highlights.filter((h) => {
-        const { page } = parseHighlightLocation(h.location);
-        return page === pageNum;
-      });
-    },
-    [highlights]
-  );
+  const pageHighlights = useMemo(() => {
+    const grouped = new Map<number, KnowledgeItemDTO[]>();
+    for (const highlight of highlights) {
+      const { page } = parseHighlightLocation(highlight.location);
+      const existing = grouped.get(page);
+      if (existing) existing.push(highlight);
+      else grouped.set(page, [highlight]);
+    }
+    return grouped;
+  }, [highlights]);
+  const getHighlightsForPage = useCallback((page: number) => pageHighlights.get(page) || EMPTY_HIGHLIGHTS, [pageHighlights]);
 
   if (isLoadingDoc) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center text-muted gap-3 select-none">
         <Loader2 className="w-8 h-8 animate-spin text-pale-sky-500" />
-        <span className="text-xs font-bold tracking-wide">جاري تحميل المستند عبر محرك PDF المدمج...</span>
+        <span className="text-xs font-bold tracking-wide">{t('loadingNativePdf')}</span>
       </div>
     );
   }
@@ -890,8 +1192,8 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
     return (
       <div className="w-full h-full flex flex-col items-center justify-center text-rose-500 gap-3 p-6 text-center select-none">
         <AlertCircle className="w-10 h-10" />
-        <h3 className="font-bold text-sm">تعذر فتح ملف PDF</h3>
-        <p className="text-xs text-muted max-w-md">{loadError}</p>
+        <h3 className="font-bold text-sm">{t('pdfDocumentLoadFailed')}</h3>
+        <p className="text-xs text-muted max-w-md">{t('pdfDocumentLoadHelp')}</p>
       </div>
     );
   }
@@ -901,9 +1203,16 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
   return (
     <div
       ref={scrollContainerRef}
-      onMouseUp={handleMouseUp}
+      onMouseDown={(e) => {
+        if (e.button === 0) setIsSelecting(true);
+      }}
+      onMouseUp={() => {
+        setIsSelecting(false);
+        // Defer to next frame so the browser finalizes the Selection before we measure it
+        requestAnimationFrame(handleMouseUp);
+      }}
       dir="ltr"
-      className="pdf-native-viewer-container pdf-viewer-workspace w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center p-4 sm:p-6 select-text"
+      className={`pdf-native-viewer-container pdf-viewer-workspace${!isSelecting && activeSelectionInfo ? ' pdf-selection-locked' : ''} w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center p-4 sm:p-6 select-text`}
       style={{
         direction: 'ltr',
         unicodeBidi: 'isolate',
@@ -920,24 +1229,22 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
         >
           {Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => {
             const shouldRender =
-              numPages <= 25 ||
               visiblePages.has(pageNum) ||
               Math.abs(pageNum - currentPage) <= 2;
 
             return (
-              <div
+              <PdfScrolledPage
                 key={pageNum}
-                data-page-number={pageNum}
-                className="pdf-page-holder w-full flex justify-center"
-              >
-                {shouldRender ? (
-                  <PdfPageItem
-                    key={pageNum}
+                    active={shouldRender}
+                    placeholderWidth={Math.round((pageDimensions.get(pageNum)?.width ?? 595) * calculatedScale)}
+                    placeholderHeight={Math.round((pageDimensions.get(pageNum)?.height ?? 842) * calculatedScale)}
                     pdfDoc={pdfDoc}
                     pageNumber={pageNum}
                     scale={calculatedScale}
-                    theme={theme}
+                    theme={tintPages ? 'dark' : 'paper'}
                     autoCropMargins={autoCropMargins}
+                    onPageMeasured={onPageMeasured}
+                    onPagePainted={onPagePainted}
                     pageHighlights={getHighlightsForPage(pageNum)}
                     activeSelectionRects={
                       activeSelectionInfo && activeSelectionInfo.pageNumber === pageNum
@@ -946,20 +1253,6 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
                     }
                     onHighlightClick={onHighlightClick}
                   />
-                ) : (
-                  <div
-                    data-page-number={pageNum}
-                    dir="ltr"
-                    className="pdf-page-container relative mx-auto my-3 bg-white/5 border border-subtle/30 rounded-xs flex items-center justify-center text-muted text-xs font-mono select-none"
-                    style={{
-                      direction: 'ltr',
-                      unicodeBidi: 'normal',
-                      width: `${Math.round(595 * calculatedScale)}px`,
-                      height: `${Math.round(842 * calculatedScale)}px`,
-                    }}
-                  />
-                )}
-              </div>
             );
           })}
         </div>
@@ -978,8 +1271,9 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
             pdfDoc={pdfDoc}
             pageNumber={currentPage}
             scale={calculatedScale}
-            theme={theme}
+            theme={tintPages ? 'dark' : 'paper'}
             autoCropMargins={autoCropMargins}
+            onPagePainted={onPagePainted}
             pageHighlights={getHighlightsForPage(currentPage)}
             activeSelectionRects={
               activeSelectionInfo && activeSelectionInfo.pageNumber === currentPage
@@ -996,8 +1290,9 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
               pdfDoc={pdfDoc}
               pageNumber={currentPage + 1}
               scale={calculatedScale}
-              theme={theme}
+              theme={tintPages ? 'dark' : 'paper'}
               autoCropMargins={autoCropMargins}
+              onPagePainted={onPagePainted}
               pageHighlights={getHighlightsForPage(currentPage + 1)}
               activeSelectionRects={
                 activeSelectionInfo && activeSelectionInfo.pageNumber === currentPage + 1
@@ -1022,8 +1317,9 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
             pdfDoc={pdfDoc}
             pageNumber={currentPage}
             scale={calculatedScale}
-            theme={theme}
+            theme={tintPages ? 'dark' : 'paper'}
             autoCropMargins={autoCropMargins}
+            onPagePainted={onPagePainted}
             pageHighlights={getHighlightsForPage(currentPage)}
             activeSelectionRects={
               activeSelectionInfo && activeSelectionInfo.pageNumber === currentPage
@@ -1037,3 +1333,5 @@ export const PdfNativeViewer: React.FC<PdfNativeViewerProps> = ({
     </div>
   );
 };
+
+export const PdfNativeViewer = React.memo(PdfNativeViewerComponent);

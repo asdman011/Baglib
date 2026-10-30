@@ -22,6 +22,8 @@ import type { BookBibliographicInfo, BookWithAnnotations } from '../../../shared
 import { HIGHLIGHT_COLORS } from '../../libs/reader/highlight-manager';
 import { TranslationKey } from '../../translations';
 import { ExportModal } from './ExportModal';
+import { annotationPage } from '../../../shared/annotation-location';
+import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
 
 interface AnnotationsDrawerProps {
   isOpen: boolean;
@@ -38,6 +40,7 @@ interface AnnotationsDrawerProps {
   onDeleteAnnotation: (id: string) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   direction?: 'rtl' | 'ltr';
+  embedded?: boolean;
 }
 
 type TabType = 'all' | 'highlight' | 'note' | 'bookmark' | 'ink';
@@ -57,6 +60,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
   onDeleteAnnotation,
   t,
   direction = 'ltr',
+  embedded = false,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,7 +92,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
 
       // Scope filter (current page vs all)
       if (scopeFilter === 'current') {
-        const pageNum = parseInt(annot.locationCfiOrPage, 10);
+        const pageNum = annotationPage(annot.locationCfiOrPage);
         if (pageNum !== currentPage) return false;
       }
 
@@ -99,11 +103,12 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
 
       // Search query
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const textMatch = annot.selectedText?.toLowerCase().includes(q);
-        const noteMatch = annot.noteContent?.toLowerCase().includes(q);
-        const tagMatch = annot.tags?.some((tag) => tag.toLowerCase().includes(q));
-        const pageMatch = annot.locationCfiOrPage.includes(q);
+        const normalize = (value: unknown) => normalizeArabicText(value, { normalizeTaaMarbuta: false });
+        const q = normalize(searchQuery).trim();
+        const textMatch = normalize(annot.selectedText).includes(q);
+        const noteMatch = normalize(annot.noteContent).includes(q);
+        const tagMatch = annot.tags?.some(tag => normalize(tag).includes(q));
+        const pageMatch = String(annotationPage(annot.locationCfiOrPage) ?? '').includes(q);
         if (!textMatch && !noteMatch && !tagMatch && !pageMatch) return false;
       }
 
@@ -121,8 +126,9 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
   return (
     <>
       <aside
+        data-reader-annotations
         dir={direction}
-        className="absolute top-0 bottom-0 inset-inline-end-0 w-80 sm:w-96 bg-surface/95 backdrop-blur-md border-s border-subtle z-30 shadow-2xl flex flex-col font-sans animate-in slide-in-from-right duration-200"
+        className={embedded ? 'flex min-h-0 h-full w-full flex-col overflow-hidden rounded-xl bg-surface font-sans' : 'absolute top-0 bottom-0 end-0 w-80 sm:w-96 bg-surface/95 backdrop-blur-md border-s border-subtle z-30 shadow-2xl flex flex-col font-sans animate-in duration-200'}
       >
         {/* Header */}
         <div className="p-3.5 border-b border-subtle flex items-center justify-between bg-canvas/30 shrink-0">
@@ -145,6 +151,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
             </button>
             <button
               onClick={onClose}
+              aria-label={t('close')}
               className="p-1.5 rounded-lg hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
@@ -153,63 +160,67 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
         </div>
 
       {/* Tabs */}
-      <div className="flex items-center border-b border-subtle bg-canvas/40 p-1 gap-1 text-[11px] shrink-0 overflow-x-auto">
+      <div data-annotation-tabs className={`${embedded ? 'grid grid-cols-5' : 'flex items-center overflow-x-auto'} border-b border-subtle bg-canvas/40 p-1 gap-1 text-[11px] shrink-0`}>
         <button
           onClick={() => setActiveTab('all')}
-          className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all text-center whitespace-nowrap cursor-pointer ${
+          className={`flex-1 min-w-0 py-1.5 ${embedded ? 'px-1' : 'px-2'} rounded-lg font-bold transition-all text-center whitespace-nowrap cursor-pointer ${
             activeTab === 'all'
               ? 'bg-pale-sky-500 text-white shadow-sm'
               : 'text-muted hover:text-main'
           }`}
         >
-          {t('allNotesTab') || 'All'} ({counts.all})
+          {t('allNotesTab')} ({counts.all})
         </button>
         <button
           onClick={() => setActiveTab('highlight')}
-          className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
+          title={t('tabHighlights')}
+          className={`flex-1 min-w-0 py-1.5 ${embedded ? 'px-1' : 'px-2'} rounded-lg font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
             activeTab === 'highlight'
               ? 'bg-pale-sky-500 text-white shadow-sm'
               : 'text-muted hover:text-main'
           }`}
         >
           <Highlighter className="w-3 h-3" />
-          <span>{t('tabHighlights')}</span>
+          <span className={embedded ? 'sr-only' : undefined}>{t('tabHighlights')}</span>
           <span className="opacity-75 text-[10px]">({counts.highlight})</span>
         </button>
         <button
           onClick={() => setActiveTab('note')}
-          className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
+          title={t('tabNotes')}
+          className={`flex-1 min-w-0 py-1.5 ${embedded ? 'px-1' : 'px-2'} rounded-lg font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
             activeTab === 'note'
               ? 'bg-pale-sky-500 text-white shadow-sm'
               : 'text-muted hover:text-main'
           }`}
         >
           <MessageSquare className="w-3 h-3" />
-          <span>{t('tabNotes')}</span>
+          <span className={embedded ? 'sr-only' : undefined}>{t('tabNotes')}</span>
           <span className="opacity-75 text-[10px]">({counts.note})</span>
         </button>
         <button
           onClick={() => setActiveTab('bookmark')}
-          className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
+          title={t('tabBookmarks')}
+          className={`flex-1 min-w-0 py-1.5 ${embedded ? 'px-1' : 'px-2'} rounded-lg font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
             activeTab === 'bookmark'
               ? 'bg-pale-sky-500 text-white shadow-sm'
               : 'text-muted hover:text-main'
           }`}
         >
           <BookMarked className="w-3 h-3" />
-          <span>{t('tabBookmarks')}</span>
+          <span className={embedded ? 'sr-only' : undefined}>{t('tabBookmarks')}</span>
           <span className="opacity-75 text-[10px]">({counts.bookmark})</span>
         </button>
         <button
           onClick={() => setActiveTab('ink')}
-          className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
+          title={t('tabInk')}
+          className={`flex-1 min-w-0 py-1.5 ${embedded ? 'px-1' : 'px-2'} rounded-lg font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
             activeTab === 'ink'
               ? 'bg-pale-sky-500 text-white shadow-sm'
               : 'text-muted hover:text-main'
           }`}
         >
           <PenTool className="w-3 h-3" />
-          <span>{t('tabInk')}</span>
+          <span className={embedded ? 'sr-only' : undefined}>{t('tabInk')}</span>
           <span className="opacity-75 text-[10px]">({counts.ink})</span>
         </button>
       </div>
@@ -217,7 +228,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
       {/* Filter and Search Bar */}
       <div className="p-2.5 border-b border-subtle bg-canvas/20 space-y-2 shrink-0">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-muted absolute inset-inline-start-2.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-muted absolute start-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
@@ -228,7 +239,8 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute inset-inline-end-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-main p-0.5"
+              aria-label={t('close')}
+              className="absolute end-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-main p-0.5"
             >
               <X className="w-3 h-3" />
             </button>
@@ -300,7 +312,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
           </div>
         ) : (
           filteredAnnotations.map((item) => {
-            const pageNum = parseInt(item.locationCfiOrPage, 10) || 1;
+            const pageNum = annotationPage(item.locationCfiOrPage) || 1;
             return (
               <div
                 key={item.id}
@@ -333,13 +345,13 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
 
                     {/* Type indicator */}
                     <span className="text-[10px] text-muted uppercase font-mono">
-                      {item.type}
+                      {t(item.type === 'highlight' || item.type === 'underline' ? 'tabHighlights' : item.type === 'note' ? 'tabNotes' : item.type === 'bookmark' ? 'tabBookmarks' : 'tabInk')}
                     </span>
                   </div>
 
                   <button
                     onClick={() => onDeleteAnnotation(item.id)}
-                    className="opacity-0 group-hover:opacity-100 hover:text-rose-500 transition-opacity p-1 cursor-pointer"
+                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-rose-500 transition-opacity p-1 cursor-pointer"
                     title={t('deleteNote')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />

@@ -1,14 +1,105 @@
-/** Source-bound, dependency-neutral PDF workstation contracts. */
-export const PDF_FEATURES = ['inspect', 'preview', 'export-html', 'create', 'edit-content', 'organize', 'split', 'ocr', 'export-docx', 'export-xlsx', 'export-pptx', 'redact', 'encrypt', 'validate', 'repair-metadata', 'sign', 'verify-signatures', 'review', 'summarize', 'cloud'] as const;
+export const PDF_FEATURES = [
+  'inspect',
+  'preview',
+  'export-html',
+  'create',
+  'edit-content',
+  'organize',
+  'split',
+  'ocr',
+  'export-docx',
+  'export-xlsx',
+  'export-pptx',
+  'export-markdown',
+  'export-text',
+  'export-csv',
+  'redact',
+  'encrypt',
+  'sanitize',
+  'watermark',
+  'compress',
+  'page-numbers',
+  'add-image',
+  'unlock-forms',
+  'extract-images',
+  'convert-pdfa',
+  'scale-pages',
+  'multi-page-layout',
+  'pdf-to-single-page',
+  'edit-toc',
+  'validate',
+  'repair-metadata',
+  'sign',
+  'verify-signatures',
+  'review',
+  'summarize',
+  'cloud',
+  'crop',
+  'document-properties',
+  'basic-info',
+  'convert-file-pdf',
+] as const;
 export type PdfFeature = typeof PDF_FEATURES[number];
-export const PDF_ENGINE_OPERATIONS = ['inspect', 'preview', 'create', 'edit-content', 'organize', 'split', 'ocr', 'export-docx', 'export-xlsx', 'export-pptx', 'export-html', 'redact', 'encrypt', 'validate', 'repair-metadata', 'prepare-signature', 'sign', 'verify-signatures', 'text'] as const;
+
+export const PDF_ENGINE_OPERATIONS = [
+  'inspect',
+  'preview',
+  'create',
+  'edit-content',
+  'organize',
+  'split',
+  'ocr',
+  'export-docx',
+  'export-xlsx',
+  'export-pptx',
+  'export-html',
+  'export-markdown',
+  'export-text',
+  'export-csv',
+  'redact',
+  'encrypt',
+  'sanitize',
+  'watermark',
+  'compress',
+  'page-numbers',
+  'add-image',
+  'unlock-forms',
+  'extract-images',
+  'convert-pdfa',
+  'scale-pages',
+  'multi-page-layout',
+  'pdf-to-single-page',
+  'edit-toc',
+  'validate',
+  'repair-metadata',
+  'prepare-signature',
+  'sign',
+  'verify-signatures',
+  'text',
+  'crop',
+  'document-properties',
+  'basic-info',
+  'convert-file-pdf',
+] as const;
 export type PdfOperation = typeof PDF_ENGINE_OPERATIONS[number];
-export type PdfOutputFormat = 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'html' | 'json';
+export type PdfOutputFormat = 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'html' | 'json' | 'txt' | 'md' | 'csv' | 'zip';
 export interface PdfOutput { filename: string; format: PdfOutputFormat; bytes: number; sha256: string }
 export type PdfError = 'invalid-request' | 'invalid-source' | 'source-required' | 'source-changed' | 'encrypted' | 'permission-denied' | 'unsupported' | 'busy' | 'cancelled' | 'storage' | 'engine-missing' | 'engine-failed' | 'signed-document-locked' | 'text-does-not-fit' | 'owner-password-required' | 'no-tables' | 'no-redactions' | 'certificate-invalid' | 'invalid-output' | 'document-too-large';
 export type PdfResult<T> = { ok: true; data: T } | { ok: false; error: PdfError };
 export interface PdfCapability { feature: PdfFeature; available: boolean; reason?: 'engine-missing' | 'text-only' | 'credentials-required' }
-export interface PdfSession { id: string; workId: string | null; sourceId: string | null; editionId: string | null; filename: string; sha256: string }
+export type StirlingEngineStatus = 'stopped' | 'starting' | 'ready' | 'processing' | 'error';
+export interface StirlingEngineInfo {
+  status: StirlingEngineStatus;
+  port?: number;
+  version?: string;
+  externalTools?: {
+    tesseract: boolean;
+    libreoffice: boolean;
+    qpdf: boolean;
+    ghostscript: boolean;
+  };
+}
+export interface PdfSession { id: string; workId: string | null; sourceId: string | null; editionId: string | null; filename: string; sha256: string; previewUrl?: string }
 export interface PdfTextBlock { text: string; x: number; y: number; width: number; height: number; direction: 'rtl' | 'ltr'; rect?: number[]; fontSize?: number; font?: string; color?: string }
 export interface PdfInspectedPage { page: number; width: number; height: number; rotation: number; text: string; blocks: PdfTextBlock[]; images?: { xref: number; rects: number[][] }[] }
 export interface PdfInspection { pages: PdfInspectedPage[]; totalPages: number; signatureFields: number; signatureValidation: 'not-performed'; signedSource?: boolean; outline?: { level: number; title: string; page: number }[]; pendingFields?: { name: string; page: number; rect: number[] }[]; extraction: 'complete' | 'limited'; permissions: number[] | null }
@@ -17,13 +108,21 @@ export interface PdfJob {
   id: string; sessionId: string; operation: PdfOperation; state: PdfJobState;
   current: number; total: number; inspection?: PdfInspection; error?: PdfError;
   output?: PdfOutput; outputs?: PdfOutput[]; result?: PdfEngineResult;
+  previewUrl?: string;
 }
 export interface PdfJobRequest { sessionId: string; operation: PdfOperation; password?: string; language: 'ar' | 'en'; payload?: Record<string, unknown> }
 export interface PdfEngineResult { inspection?: PdfInspection; outputs?: PdfOutput[]; page?: number; width?: number; height?: number; image?: string; [key: string]: unknown }
 export interface PdfAsset { id: string; filename: string; kind: 'image' | 'certificate' | 'trust-root' }
 export interface PdfSaveRequest { jobId: string; outputIndex?: number; mode: 'copy' | 'overwrite' | 'edition' | 'new-work'; title?: string } 
+export interface PdfVersionItem { filename: string; timestamp: number; dateStr: string; size: number; operation?: string }
+export interface PdfViewSource { id: string; key: string; url: string; cached: boolean; pending: boolean }
 export interface PdfEditorAPI {
+  viewSource(input: { path: string; id?: string }): Promise<PdfResult<PdfViewSource>>;
+  releaseViewSource(id: string): Promise<PdfResult<null>>;
+  onViewSourceChanged(callback: (id: string) => void): () => void;
   capabilities(): Promise<PdfCapability[]>;
+  engineStatus(): Promise<PdfResult<StirlingEngineInfo>>;
+  onEngineStatusChanged(callback: (info: StirlingEngineInfo) => void): () => void;
   open(input: { workId: string; sourceId?: string }): Promise<PdfResult<PdfSession>>;
   sources(workId: string): Promise<PdfResult<{ id: string; filename: string }[]>>;
   start(input: PdfJobRequest): Promise<PdfResult<PdfJob>>;
@@ -38,6 +137,92 @@ export interface PdfEditorAPI {
   close(sessionId: string): Promise<PdfResult<null>>;
   audit(): Promise<PdfResult<{ valid: boolean; records: { id: string; at: string; operation: string; sourceHash: string; outputHash: string; certificateFingerprint?: string; signer?: string; status: string }[] }>>;
   onSourceChanged(callback: (source: { workId: string | null; sourceId: string | null }) => void): () => void;
+  listVersions?(sessionId: string): Promise<PdfResult<PdfVersionItem[]>>;
+  restoreVersion?(sessionId: string, versionFilename: string): Promise<PdfResult<{ restored: boolean; session?: PdfSession }>>;
+  undoVersion?(sessionId: string): Promise<PdfResult<{ restored: boolean; session?: PdfSession }>>;
+  deleteVersion?(versionFilename: string): Promise<PdfResult<boolean>>;
+  listPipelines?(): Promise<PdfResult<StirlingPipeline[]>>;
+  savePipeline?(pipeline: StirlingPipeline): Promise<PdfResult<StirlingPipeline>>;
+  deletePipeline?(id: string): Promise<PdfResult<boolean>>;
+  executePipeline?(input: { filePaths: string[]; pipelineConfig: { name: string; pipeline: { operation: string; parameters: Record<string, unknown> }[]; singleTool?: boolean } }): Promise<PdfResult<{ outputPath: string; format: string; bytes: number; sha256: string }>>;
+  getProcessorTelemetry?(): Promise<PdfResult<StirlingProcessorTelemetry>>;
+  getPolicies?(): Promise<PdfResult<StirlingGovernancePolicies>>;
+  savePolicies?(policies: Partial<StirlingGovernancePolicies>): Promise<PdfResult<StirlingGovernancePolicies>>;
+  getWatchedFolders?(): Promise<PdfResult<WatchedFolderSource[]>>;
+  saveWatchedFolders?(folders: WatchedFolderSource[]): Promise<PdfResult<WatchedFolderSource[]>>;
+  exportPipelineAutomate?(pipeline: StirlingPipeline): Promise<PdfResult<string>>;
+  exportPipelineFolderScan?(folder: WatchedFolderSource, pipeline: StirlingPipeline): Promise<PdfResult<string>>;
+  importPipeline?(jsonContent: string): Promise<PdfResult<StirlingPipeline>>;
+  checkWatchedFolders?(): Promise<PdfResult<{ processed: number; errors: string[] }>>;
+}
+
+export interface StirlingPipelineStep {
+  id: string;
+  operation: string;
+  name: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface StirlingPipeline {
+  id: string;
+  name: string;
+  description?: string;
+  trigger: 'editor' | 'folder' | 'manual';
+  inputFolder?: string;
+  outputFolder?: string;
+  afterProcessing?: 'keep' | 'archive' | 'delete';
+  steps: StirlingPipelineStep[];
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WatchedFolderSource {
+  id: string;
+  name: string;
+  inputPath: string;
+  outputPath: string;
+  pipelineId: string;
+  status: 'watching' | 'paused' | 'error';
+  lastProcessedAt?: string;
+  processedCount: number;
+}
+
+export interface StirlingProcessorTelemetry {
+  activePipelines: number;
+  totalPipelines: number;
+  processedToday: number;
+  watchedFolders: number;
+}
+
+export interface StirlingGovernancePolicies {
+  ingestion: {
+    folderWatchEnabled: boolean;
+    autoOcrArabic: boolean;
+    autoOcrEnglish: boolean;
+    maxFileSizeMb: number;
+  };
+  security: {
+    autoSanitize: boolean;
+    removeMetadata: boolean;
+    stripJavascript: boolean;
+    defaultPasswordProtect: boolean;
+  };
+  compliance: {
+    enforcePdfA: boolean;
+    pdfAConformance: '2b' | '3b' | '1b';
+    validateDigitalSignatures: boolean;
+  };
+  routing: {
+    outputDirectory: string;
+    namingPattern: string;
+    separateOutputFolder: boolean;
+  };
+  retention: {
+    backupOriginal: boolean;
+    backupDir: string;
+    retentionDays: number;
+  };
 }
 
 export function pdfCapabilities(engines: string[] = []): PdfCapability[] {

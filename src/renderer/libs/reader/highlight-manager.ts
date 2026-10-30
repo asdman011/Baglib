@@ -253,28 +253,30 @@ export function setActiveSelectionHighlight(range: Range | null, doc?: Document)
     injectHighlightStyles(targetDoc);
   }
 
-  const CSSObj = CSS;
-  const HighlightClass = (window).Highlight;
+  const CSSObj = CSS as any;
+  const HighlightClass = (window as any).Highlight;
 
   if (range && !range.collapsed) {
     try {
       const hl = new HighlightClass(range);
-      CSSObj.highlights.set('baglib-active-selection', hl);
+      CSSObj.highlights?.set?.('baglib-active-selection', hl);
     } catch (err) {
       console.warn('[highlight-manager] setActiveSelectionHighlight error:', err);
     }
   } else {
-    CSSObj.highlights.delete('baglib-active-selection');
+    CSSObj.highlights?.delete?.('baglib-active-selection');
   }
 }
 
 /**
  * Clears the active transient selection highlight.
+ * Always purges both W3C CSS Highlights and DOM temporary selection overlays.
  */
-export function clearActiveSelectionHighlight(): void {
+export function clearActiveSelectionHighlight(doc?: Document): void {
+  removeTempSelectionOverlay(doc);
   if (!isCustomHighlightSupported()) return;
-  const CSSObj = CSS;
-  CSSObj.highlights.delete('baglib-active-selection');
+  const CSSObj = CSS as any;
+  CSSObj.highlights?.delete?.('baglib-active-selection');
 }
 
 export function setActiveTtsHighlight(ranges: Range[], doc?: Document): void {
@@ -296,11 +298,12 @@ export function clearActiveTtsHighlight(): void {
 }
 
 /**
- * Clears all Baglib highlights from CSS.highlights
+ * Clears all Baglib highlights from CSS.highlights and removes any lingering selection overlays.
  */
 export function clearCssCustomHighlights(): void {
+  removeTempSelectionOverlay();
   if (!isCustomHighlightSupported()) return;
-  const CSSObj = CSS;
+  const CSSObj = CSS as any;
   const groups = [
     'baglib-highlight-amber',
     'baglib-highlight-emerald',
@@ -312,7 +315,7 @@ export function clearCssCustomHighlights(): void {
     'baglib-tts-active',
   ];
   for (const g of groups) {
-    CSSObj.highlights.delete(g);
+    CSSObj.highlights?.delete?.(g);
   }
 }
 
@@ -321,33 +324,58 @@ export function clearCssCustomHighlights(): void {
  * directly over the exact selected client rects. This guarantees selection rects
  * remain visible on mouseup even when focus transfers to the floating toolbar or
  * when an iframe collapses its native Selection.
+ *
+ * Supports mounting inside a specific reader container (HTMLElement) or Document.
  */
-export function renderTempSelectionOverlay(range: Range, doc?: Document): void {
-  const targetDoc =
-    doc || range.startContainer?.ownerDocument || (typeof document !== 'undefined' ? document : null);
-  if (!targetDoc || !targetDoc.body) return;
+export function renderTempSelectionOverlay(range: Range, docOrContainer?: Document | HTMLElement | null): void {
+  let targetDoc: Document | null = null;
+  let mountParent: HTMLElement | null = null;
+
+  if (docOrContainer && typeof HTMLElement !== 'undefined' && docOrContainer instanceof HTMLElement) {
+    mountParent = docOrContainer;
+    targetDoc = docOrContainer.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  } else if (docOrContainer && 'body' in (docOrContainer as any)) {
+    targetDoc = docOrContainer as Document;
+    mountParent = (docOrContainer as Document).body;
+  } else {
+    targetDoc = range.startContainer?.ownerDocument || (typeof document !== 'undefined' ? document : null);
+    mountParent = targetDoc?.body || null;
+  }
+
+  if (!targetDoc || !mountParent) return;
 
   removeTempSelectionOverlay(targetDoc);
 
   const rects = Array.from(range.getClientRects()).filter((r) => r.width >= 3 && r.height >= 3);
   if (rects.length === 0) return;
 
-  const scrollX = targetDoc.defaultView?.scrollX || targetDoc.documentElement.scrollLeft || 0;
-  const scrollY = targetDoc.defaultView?.scrollY || targetDoc.documentElement.scrollTop || 0;
+  const isBody = mountParent === targetDoc.body;
+  const parentRect = isBody ? null : mountParent.getBoundingClientRect();
+
+  const scrollX = isBody
+    ? (targetDoc.defaultView?.scrollX || targetDoc.documentElement?.scrollLeft || 0)
+    : mountParent.scrollLeft;
+  const scrollY = isBody
+    ? (targetDoc.defaultView?.scrollY || targetDoc.documentElement?.scrollTop || 0)
+    : mountParent.scrollTop;
 
   const overlayContainer = targetDoc.createElement('div');
   overlayContainer.className = 'baglib-temp-selection-overlay';
+  overlayContainer.setAttribute('data-baglib-overlay', 'selection');
   overlayContainer.style.cssText =
     'position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999;';
 
   rects.forEach((r) => {
-    const rectDiv = targetDoc.createElement('div');
+    const left = isBody ? r.left + scrollX : (parentRect ? r.left - parentRect.left + scrollX : r.left + scrollX);
+    const top = isBody ? r.top + scrollY : (parentRect ? r.top - parentRect.top + scrollY : r.top + scrollY);
+
+    const rectDiv = targetDoc!.createElement('div');
     rectDiv.className = 'baglib-temp-selection-rect';
-    rectDiv.style.cssText = `position: absolute; left: ${r.left + scrollX}px; top: ${r.top + scrollY}px; width: ${r.width}px; height: ${r.height}px; background: rgba(59, 130, 246, 0.32); pointer-events: none; mix-blend-mode: multiply; border-radius: 2px;`;
+    rectDiv.style.cssText = `position: absolute; left: ${left}px; top: ${top}px; width: ${r.width}px; height: ${r.height}px; background: rgba(59, 130, 246, 0.32); pointer-events: none; mix-blend-mode: multiply; border-radius: 2px;`;
     overlayContainer.appendChild(rectDiv);
   });
 
-  targetDoc.body.appendChild(overlayContainer);
+  mountParent.appendChild(overlayContainer);
 }
 
 /**
@@ -371,10 +399,10 @@ export function removeTempSelectionOverlay(doc?: Document): void {
 
   docs.forEach((d) => {
     try {
-      const existing = d.querySelectorAll('.baglib-temp-selection-overlay');
-      existing.forEach((el) => el.remove());
+      const existingOverlays = d.querySelectorAll('.baglib-temp-selection-overlay, [data-baglib-overlay="selection"]');
+      existingOverlays.forEach((el) => el.remove());
+      const existingRects = d.querySelectorAll('.baglib-temp-selection-rect');
+      existingRects.forEach((el) => el.remove());
     } catch {}
   });
 }
-
-

@@ -141,6 +141,7 @@ export const FullPageBookReader: React.FC = () => {
   const [newNoteText, setNewNoteText] = useState('');
   const [filterMode, setFilterMode] = useState<'current_page' | 'all_pages'>('current_page');
   const [viewType, setViewType] = useState<'text_manuscript' | 'native_pdf'>('native_pdf');
+  const [legacyPdfWork, setLegacyPdfWork] = useState<string | null>(null);
   const [assetUrl, setAssetUrl] = useState<string | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfSourceRevision, setPdfSourceRevision] = useState(0);
@@ -156,6 +157,7 @@ export const FullPageBookReader: React.FC = () => {
     return activeBook?.filePath ? detectFormat(activeBook.filePath) : 'PDF';
   });
   const effectiveFormat = activeBook?.filePath ? detectFormat(activeBook.filePath) : detectedFormat;
+  const isPdfWorkstationActive = effectiveFormat === 'PDF' && legacyPdfWork !== activeBook?.id;
   const isComic = ['CBZ', 'CBR', 'CBT', 'CB7'].includes(effectiveFormat);
   const isReflowable = [
     'EPUB',
@@ -214,7 +216,17 @@ export const FullPageBookReader: React.FC = () => {
   const topHoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const bottomHoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sessionStartTimeRef = useRef<number>(0);
-  useEffect(() => { sessionStartTimeRef.current = Date.now(); }, []);
+  useEffect(() => {
+    sessionStartTimeRef.current = Date.now();
+    return () => {
+      removeTempSelectionOverlay();
+      clearActiveSelectionHighlight();
+      clearCssCustomHighlights();
+      if (typeof window !== 'undefined') {
+        window.getSelection()?.removeAllRanges();
+      }
+    };
+  }, []);
   const startPageRef = useRef<number>(readingPage);
 
   // EPUB & Reflowable Pagination State
@@ -338,7 +350,10 @@ export const FullPageBookReader: React.FC = () => {
     setActiveRange(null);
     setActiveOcrWordIndex(null);
   }
-  useEffect(() => { clearActiveSelectionHighlight(); }, [readingPage, maxBookPages]);
+  useEffect(() => {
+    clearActiveSelectionHighlight();
+    removeTempSelectionOverlay();
+  }, [readingPage, maxBookPages]);
 
   // Load custom plugin CSS styles dynamically
   useEffect(() => {
@@ -1324,7 +1339,6 @@ export const FullPageBookReader: React.FC = () => {
   // Load Document & Initialize Unified Reader Pipeline
   useEffect(() => {
     let isCancelled = false;
-    let activeObjectUrl: string | null = null;
     let loadedBook: BookDoc | null = null;
     const fetchController = new AbortController();
 
@@ -1358,12 +1372,16 @@ export const FullPageBookReader: React.FC = () => {
       setDetectedFormat(format);
 
       // Construct privileged streaming URL
-      const streamUrl = readerAssetUrl(filePath);
+      const streamUrl = `${readerAssetUrl(filePath)}?revision=${pdfSourceRevision}`;
       setAssetUrl(streamUrl);
 
       const windowAPI = (window).electronAPI;
 
-      try {
+      if (format === 'PDF') {
+        setPdfBlobUrl(streamUrl);
+        setViewType('native_pdf');
+        setIsLoadingFile(false);
+      } else try {
         // Fetch raw bytes for parser engine
         let bytes: Uint8Array | null = null;
         try {
@@ -1391,15 +1409,6 @@ export const FullPageBookReader: React.FC = () => {
         }
 
         if (bytes && !isCancelled) {
-          // If PDF, construct authentic Blob URL for native iframe rendering
-          if (format === 'PDF') {
-            const pdfBlob = new Blob([new Uint8Array(bytes)], { type: 'application/pdf' });
-            activeObjectUrl = URL.createObjectURL(pdfBlob);
-            setPdfBlobUrl(activeObjectUrl);
-            setViewType('native_pdf');
-            setIsLoadingFile(false);
-          }
-
           // Open via DocumentLoader
           const loader = new DocumentLoader(bytes, filePath, {
             theme: readerTheme,
@@ -1423,7 +1432,7 @@ export const FullPageBookReader: React.FC = () => {
                 const imgUrl = await firstSec.load();
                 setComicPageUrl(imgUrl);
               }
-            } else if (format !== 'PDF') {
+            } else {
               // Paginate reflowable EPUB/MOBI/FB2/HTML/TXT sections into screen-sized pages
               setIsPaginating(true);
               try {
@@ -1503,7 +1512,6 @@ export const FullPageBookReader: React.FC = () => {
     return () => {
       isCancelled = true;
       fetchController.abort();
-      if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
       loadedBook?.destroy?.();
     };
   }, [activeBook?.filePath, pdfSourceRevision]);
@@ -2572,7 +2580,7 @@ export const FullPageBookReader: React.FC = () => {
     const range = selection.getRangeAt(0).cloneRange();
     setActiveRange(range);
     setActiveSelectionHighlight(range);
-    renderTempSelectionOverlay(range, document);
+    renderTempSelectionOverlay(range, contentContainerRef.current);
 
     if (isInstantHighlightMode) {
       handleApplyHighlight(activeHighlightColor, text);
@@ -2603,12 +2611,15 @@ export const FullPageBookReader: React.FC = () => {
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
 
       if (contentContainerRef.current && contentContainerRef.current.contains(selection.anchorNode)) {
+        // PDF text layers are handled by PdfNativeViewer's own locked overlay; avoid stacking a second one
+        const anchorEl = selection.anchorNode instanceof Element ? selection.anchorNode : selection.anchorNode?.parentElement;
+        if (anchorEl?.closest('.textLayer')) return;
         const text = selection.toString().trim();
         if (text && text !== selectedText) {
           const range = selection.getRangeAt(0).cloneRange();
           setActiveRange(range);
           setActiveSelectionHighlight(range);
-          renderTempSelectionOverlay(range, document);
+          renderTempSelectionOverlay(range, contentContainerRef.current);
           setSelectedText(text);
         }
       }
@@ -3068,7 +3079,8 @@ export const FullPageBookReader: React.FC = () => {
       )}
 
       {/* Floating Zen Top Bar */}
-      {isDocumentPanelOpen && effectiveFormat === 'PDF' && <PdfWorkstationPanel key={activeBook.id} workId={activeBook.id} onClose={() => setIsDocumentPanelOpen(false)} />}
+      {isDocumentPanelOpen && effectiveFormat === 'PDF' && legacyPdfWork === activeBook.id && <PdfWorkstationPanel key={activeBook.id} workId={activeBook.id} onClose={() => setIsDocumentPanelOpen(false)} />}
+      {!isPdfWorkstationActive && (
       <ZenTopBar
         onReadAloud={() => startReadAloud()}
         isVisible={isTopBarVisible || isSettingsOpen || isTocPinned || isKnowledgePinned || isDocumentPanelOpen}
@@ -3123,8 +3135,10 @@ export const FullPageBookReader: React.FC = () => {
         }}
         t={t}
       />
+      )}
 
       {/* Floating Zen Bottom Scrubber */}
+      {!isPdfWorkstationActive && (
       <ZenBottomScrubber
         isVisible={isBottomBarVisible || isSettingsOpen}
         readingPage={readingPage}
@@ -3151,8 +3165,10 @@ export const FullPageBookReader: React.FC = () => {
         }}
         t={t}
       />
+      )}
 
       {/* Zen Corner Hotspots */}
+      {!isPdfWorkstationActive && (
       <ZenCornerHotspots
         isCurrentPageBookmarked={isCurrentPageBookmarked}
         onToggleBookmark={handleToggleBookmark}
@@ -3163,6 +3179,7 @@ export const FullPageBookReader: React.FC = () => {
         canGoNext={readingPage < maxBookPages}
         t={t}
       />
+      )}
 
       {/* Main Content Area */}
       <div
@@ -3247,7 +3264,7 @@ export const FullPageBookReader: React.FC = () => {
 
         {/* Slide-out Annotations & Highlights Drawer (KEY-137 / KEY-138) */}
         <AnnotationsDrawer
-          isOpen={isAnnotationsDrawerOpen}
+          isOpen={isAnnotationsDrawerOpen && !isPdfWorkstationActive}
           onClose={() => setIsAnnotationsDrawerOpen(false)}
           annotations={annotations}
           currentPage={readingPage}
@@ -3330,6 +3347,7 @@ export const FullPageBookReader: React.FC = () => {
         {/* TTS & Audiobook Mini Player (KEY-145) */}
         {isTTSPlayerActive && (
           <TTSMiniPlayer
+            aboveWorkstation={isPdfWorkstationActive}
             bookTitle={activeBook?.title}
             playbackState={ttsAudio.playbackState}
             playbackMode={ttsAudio.playbackMode}
@@ -3379,6 +3397,7 @@ export const FullPageBookReader: React.FC = () => {
 
         {/* Synchronized Read-Along Karaoke Lyrics Overlay (KEY-145) */}
         <TTSLyricsView
+          aboveWorkstation={isPdfWorkstationActive}
           isOpen={isTTSLyricsOpen}
           onClose={() => setIsTTSLyricsOpen(false)}
           sentences={ttsAudio.sentences}
@@ -3558,7 +3577,7 @@ export const FullPageBookReader: React.FC = () => {
         <div
           ref={contentContainerRef}
           onClick={handleContentClick}
-          className="flex-1 flex flex-col items-center justify-start p-3 sm:p-6 overflow-y-auto relative w-full h-full select-text"
+          className={`flex-1 flex flex-col items-center justify-start relative w-full h-full select-text ${isPdfWorkstationActive ? 'p-0 overflow-hidden' : 'p-3 sm:p-6 overflow-y-auto'}`}
           style={{
             filter: `brightness(${brightness}%) contrast(${contrast}%)`,
           }}
@@ -3990,7 +4009,7 @@ export const FullPageBookReader: React.FC = () => {
           ) : (
             /* NATIVE PRIVILEGED ASSET STREAMING PDF VIEW VIA PDFJS-DIST */
             <div
-              className="pdf-viewer-workspace w-full h-full bg-surface border border-subtle rounded-2xl overflow-hidden shadow-2xl relative flex flex-col justify-center items-center"
+              className={`pdf-viewer-workspace w-full h-full relative flex flex-col justify-center items-center overflow-hidden ${isPdfWorkstationActive ? '' : 'bg-surface border border-subtle rounded-2xl shadow-2xl'}`}
               dir="ltr"
               style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
             >
@@ -3999,6 +4018,64 @@ export const FullPageBookReader: React.FC = () => {
                   <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
                   <span className="text-xs font-bold">{t('loadingNativePdf')}</span>
                 </div>
+              ) : effectiveFormat === 'PDF' && legacyPdfWork !== activeBook.id ? (
+                <PdfWorkstationPanel
+                  key={`embedded-${activeBook.id}`}
+                  embedded
+                  workId={activeBook.id}
+                  fileUrl={pdfBlobUrl || undefined}
+                  initialPage={readingPage}
+                  onPageChange={setReadingPage}
+                  onClose={handleCloseReader}
+                  readingActions={{ onReadAloud: () => startReadAloud(), onAutoScroll: handleToggleAutoScroll, autoScrolling: isAutoScrolling, onBookmark: () => { void handleToggleBookmark(); }, bookmarked: isCurrentPageBookmarked }}
+                  annotationPanel={{
+                    open: isAnnotationsDrawerOpen,
+                    count: annotations.length,
+                    onToggle: () => setIsAnnotationsDrawerOpen(!isAnnotationsDrawerOpen),
+                    onClose: () => setIsAnnotationsDrawerOpen(false),
+                    content: <AnnotationsDrawer
+                      embedded
+                      isOpen={isAnnotationsDrawerOpen}
+                      onClose={() => setIsAnnotationsDrawerOpen(false)}
+                      annotations={annotations}
+                      currentPage={readingPage}
+                      bookTitle={activeBook.title}
+                      bookAuthor={activeBook.author}
+                      bookIsbn={activeBook.isbn}
+                      bookFormat={detectedFormat}
+                      activeBookInfo={activeBookInfo}
+                      allBooksWithNotes={allBooksWithNotes}
+                      onJumpToPage={value => setReadingPage(Math.min(maxBookPages, Math.max(1, value)))}
+                      onDeleteAnnotation={handleDeleteAnnotation}
+                      t={t}
+                      direction={readerDirection}
+                    />,
+                  }}
+                  readerIntegration={{
+                    highlights: knowledgeItems,
+                    activeSelectionInfo: pdfSelectionInfo,
+                    onTotalPagesLoaded: setPdfTotalPages,
+                    onOutlineLoaded: setPdfToc,
+                    onPdfDocLoaded: setPdfDocProxy,
+                    contentContainerRef,
+                    autoCropMargins,
+                    direction: readerDirection,
+                    onSelectionChange: info => {
+                      if (info) {
+                        setPdfSelectionInfo(info);
+                        setPendingSelection(info);
+                        setSelectedText(info.text);
+                        setNoteTargetPage(info.pageNumber);
+                      } else if (!selectedText) {
+                        setPdfSelectionInfo(null);
+                        setPendingSelection(null);
+                      }
+                    },
+                    onHighlightClick: (highlight, event) => {
+                      setActiveHighlightPopover({ highlight, position: { x: event.clientX, y: event.clientY } });
+                    },
+                  }}
+                />
               ) : pdfBlobUrl ? (
                 <div
                   className="pdf-viewport-container relative w-full h-full overflow-hidden flex items-center justify-center"
@@ -4085,7 +4162,7 @@ export const FullPageBookReader: React.FC = () => {
         </div>
 
         {/* Optional Split-Screen Notes Panel */}
-        {splitOrientation !== 'none' && renderNotesPanel()}
+        {splitOrientation !== 'none' && !isPdfWorkstationActive && renderNotesPanel()}
       </div>
 
       {/* Floating Selection Action Pill */}
