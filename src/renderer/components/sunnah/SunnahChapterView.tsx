@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { Focus } from 'lucide-react';
 import type { SunnahChapter, SunnahHadith, SunnahLanguage, SunnahPassage, SunnahText } from '../../../shared/types/sunnah';
 import type { TranslationKey } from '../../translations';
@@ -44,6 +44,7 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
   t: SunnahTranslate;
   onFocus: (id: string) => void;
 }) {
+  const [gradingRequest, setGradingRequest] = useState({ id: 0, count: 0 });
   return <div className="sunnah-chapter select-text" data-testid="sunnah-chapter">
     <ParallelRow showEnglish={showEnglish} className="sunnah-chapter-heading"
       arabic={<h2><NumberedTitle number={String(chapter.number)} title={chapter.title} language="ar" fallback={t('sunnahUntitledChapter')} /></h2>}
@@ -72,11 +73,20 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
           {!['Bukhari', 'Muslim'].includes(chapter.collection) && (hadith.grade.ar || (showEnglish && hadith.grade.en)) && <ParallelRow showEnglish={showEnglish} className="sunnah-grade"
             arabic={hadith.grade.ar && <p><span className="text-muted">{t('sunnahGrade')}: </span>{hadith.grade.ar}</p>}
             english={hadith.grade.en && <p><span className="text-muted">{t('sunnahGrade')}: </span>{hadith.grade.en}</p>} />}
+          {hadith.sourceBook && hadith.sourceBook.kind !== 'collection' && <p className={`sunnah-grading-flag ${hadith.sourceBook.kind === 'review' ? 'is-opposed' : ''}`} role="note">{t(hadith.sourceBook.kind === 'review' ? 'sunnahReviewNotice' : 'sunnahSourceOnlyNotice')}</p>}
+          {hadith.gradingSummary && <p className="sunnah-grading-line">
+            <button type="button" className="sunnah-button" onClick={event => {
+              setGradingRequest(current => ({ id: hadith.researchId!, count: current.count + 1 }));
+              event.currentTarget.closest('article')?.querySelector('.sunnah-research')?.scrollIntoView({ block: 'start' });
+            }}>{t('sunnahGradingLine', { count: hadith.gradingSummary.count })}</button>
+            {hadith.gradingSummary.opposed ? <span className="is-opposed">{t('sunnahGradingOpposed')}</span> : hadith.gradingSummary.wordingDiffers && <span>{t('sunnahGradingDiffers')}</span>}
+          </p>}
+          {hadith.translation && showEnglish && <p className="sunnah-research-caption" dir="ltr" lang="en">{t('sunnahVariantEnglishUsed')}{hadith.translation.partial && <> {t('sunnahVariantEnglishPartial')}</>}</p>}
           {hadith.comment && <details className="mt-5 border-t border-subtle pt-3 text-sm">
             <summary className="cursor-pointer text-muted font-sans">{t('sunnahComment')}</summary>
             <p className="font-reading text-lg leading-loose mt-2 whitespace-pre-wrap" dir="rtl" lang="ar">{hadith.comment}</p>
           </details>}
-          {hadith.researchId !== undefined && <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} initialOpen={single} t={t} />}
+          {hadith.researchId !== undefined && <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} initialOpen={single} showGrading={gradingRequest.id === hadith.researchId ? gradingRequest.count : undefined} sourceBook={Boolean(hadith.sourceBook)} t={t} />}
           <HadithActions chapter={chapter} hadith={hadith} showEnglish={showEnglish} t={t} />
         </article>
       </div>;

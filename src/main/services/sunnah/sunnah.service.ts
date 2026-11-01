@@ -36,6 +36,12 @@ export class SunnahService {
     return this.researchCorpus.research(id);
   }
 
+  async narrator(id: string) {
+    await this.catalog();
+    if (!this.researchCorpus) throw new Error('Research corpus unavailable');
+    return this.researchCorpus.narrator(id);
+  }
+
   async search(query: SunnahResearchQuery) {
     await this.catalog();
     if (!this.researchCorpus) throw new Error('Research corpus unavailable');

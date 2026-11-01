@@ -1,4 +1,4 @@
-import { SUNNAH_COLLECTION_IDS } from './types/sunnah';
+import { SUNNAH_COLLECTION_IDS, SUNNAH_SOURCE_BOOK_IDS } from './types/sunnah';
 import { normalizeArabicText } from './utils/text-normalizer';
 
 export function matchesStudyQuery(text: string, query: string): boolean {
@@ -33,7 +33,7 @@ export function validStudyTarget(target: string): boolean {
   const quran = /^quran:(hafs|warsh):(\d+):(\d+)$/u.exec(target);
   if (quran) return +quran[2] >= 1 && +quran[2] <= 114 && +quran[3] >= 1 && +quran[3] <= 300;
   const sunnah = /^sunnah:([^:]+):(\d+):([^\s\[\]|]{1,180})$/u.exec(target);
-  return !!sunnah && [...SUNNAH_COLLECTION_IDS, 'MuwattaMalik', 'MusnadAhmad', 'SunanDarimi'].includes(sunnah[1]) && +sunnah[2] >= 0 && +sunnah[2] <= 1000;
+  return !!sunnah && [...SUNNAH_COLLECTION_IDS, ...SUNNAH_SOURCE_BOOK_IDS, 'MuwattaMalik', 'MusnadAhmad', 'SunanDarimi'].includes(sunnah[1]) && +sunnah[2] >= 0 && +sunnah[2] <= 1000;
 }
 
 export function studyLinks(content: string): StudyLink[] {

@@ -10,8 +10,8 @@ export function registerSunnahIpc(): void {
   const getService = () => service ??= new SunnahService(path.join(app.getPath('userData'), 'sunnah'), app.isPackaged ? [] : [
     path.join(app.getAppPath(), 'repos', 'Hadith', 'LK-Hadith-Corpus-master.zip'),
     path.join(app.getAppPath(), 'repos', 'LK-Hadith-Corpus-master.zip'),
-  ], [path.join(app.getPath('userData'), 'sunnah', 'sunnah_kutub_tisah_itqan.sqlite'),
-    ...(!app.isPackaged ? [path.join(app.getAppPath(), 'tools', 'hadith-alignment', 'data', 'output', 'sunnah_kutub_tisah_itqan.sqlite')] : [])]);
+  ], ['sunnah_merged_quranlab_v1.sqlite', 'sunnah_kutub_tisah_itqan.sqlite'].flatMap(name => [path.join(app.getPath('userData'), 'sunnah', name),
+    ...(!app.isPackaged ? [path.join(app.getAppPath(), 'tools', 'hadith-alignment', 'data', 'output', name)] : [])]));
   app.once('before-quit', () => service?.close());
   const result = async <Value>(action: () => Promise<Value>, error: 'invalid-corpus' | 'read-failed'): Promise<SunnahResult<Value>> => {
     try { return { ok: true, data: await action() }; } catch (cause) {
@@ -21,10 +21,12 @@ export function registerSunnahIpc(): void {
   };
   ipcMain.handle('sunnah:catalog', () => result(() => getService().catalog(), 'read-failed'));
   ipcMain.handle('sunnah:research', (_event, id: number) => result(() => getService().research(id), 'read-failed'));
-  ipcMain.handle('sunnah:source', (_event, id: number) => result(async () => {
-    const { sourceUrl } = await getService().research(id);
-    if (!/^https:\/\/shamela\.ws\/book\/\d+$/.test(sourceUrl)) throw new Error('Invalid Shamela source');
-    await shell.openExternal(sourceUrl);
+  ipcMain.handle('sunnah:narrator', (_event, id: string) => result(() => getService().narrator(id), 'read-failed'));
+  ipcMain.handle('sunnah:source', (_event, id: number, kind?: 'commentary' | 'matn') => result(async () => {
+    const research = await getService().research(id);
+    const url = kind === 'matn' ? research.matnUrl : research.sourceUrl;
+    if (!/^https:\/\/shamela\.ws\/book\/\d+$/.test(url)) throw new Error('Invalid Shamela source');
+    await shell.openExternal(url);
     return null;
   }, 'read-failed'));
   ipcMain.handle('sunnah:search', (_event, query: SunnahResearchQuery) => result(() => getService().search(query), 'read-failed'));

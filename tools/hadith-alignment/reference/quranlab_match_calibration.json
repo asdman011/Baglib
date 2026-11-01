@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "crosswalk_version": "quranlab-crosswalk-v1",
+  "review_note": "Real pairs read in full by Claude Code on 2026-11-01. They set the thresholds in src/quranlab_match.py and are rechecked by verify_quranlab_merge.py. This is a text-identity review, not a scholar's review. The score distribution is not a probability.",
+  "independent_check": "For the six LK collections the English text was not used in matching, so it was used to look for false links. Low similarity on exact Arabic matches traced to misaligned LK English, not to wrong links; see english_misalignment_candidates.csv.",
+  "positives": [
+    {"source_key": "tirmidhi:3249", "hadith_id": 23246, "note": "Source record adds a second chain after the report; full 0.904"},
+    {"source_key": "tirmidhi:3798", "hadith_id": 23836, "note": "Spelling of هانئ and a dropped قال; full 0.907"},
+    {"source_key": "abudawud:4909", "hadith_id": 19432, "note": "Broken word in the source; full 0.945"},
+    {"source_key": "abudawud:3561", "hadith_id": 18083, "note": "Broken word in the source"},
+    {"source_key": "nasai:1425", "hadith_id": 25440, "note": "LK drops الزهري from the chain; same record, recorded as a variant"},
+    {"source_key": "nasai:3317", "hadith_id": 27324, "note": "Broken word in the source"},
+    {"source_key": "ibnmajah:4312", "hadith_id": 34057, "note": "Source runs longer at the end; same chain and report"},
+    {"source_key": "ibnmajah:2420", "hadith_id": 32123, "note": "Source adds the closing remark"},
+    {"source_key": "malik:716", "hadith_id": 34792, "note": "Opening formula differs only"},
+    {"source_key": "malik:688", "hadith_id": 34762, "note": "Same chain; corpus edition lacks one clause, so the wording differs"},
+    {"source_key": "malik:1288", "hadith_id": 35352, "note": "Corpus row adds Malik's gloss"},
+    {"source_key": "ibnmajah:3570", "hadith_id": 33307, "note": "Corpus row is the opening of the source record"},
+    {"source_key": "tirmidhi:3160", "hadith_id": 23144, "note": "Source record continues with a second chain"},
+    {"source_key": "malik:205", "hadith_id": 34289, "note": "Report opens a corpus row that holds a second report"},
+    {"source_key": "malik:75", "hadith_id": 34163, "note": "Report opens a corpus row that holds a second report"}
+  ],
+  "hard_negatives": [
+    {"source_key": "abudawud:935", "hadith_id": 15457, "note": "Shared chain and closing words, different report"},
+    {"source_key": "abudawud:390", "hadith_id": 17026, "note": "Same chain with بمثله; the matn is elsewhere"},
+    {"source_key": "malik:879", "hadith_id": 34957, "note": "Source record holds two reports and this row is only the second"},
+    {"source_key": "nasai:4470", "hadith_id": 28399, "note": "Same matn, different chain"},
+    {"source_key": "nasai:1731", "hadith_id": 25744, "note": "Same matn, different chain"},
+    {"source_key": "nasai:5486", "hadith_id": 29466, "note": "Same matn, different chain"},
+    {"source_key": "tirmidhi:2311", "hadith_id": 21478, "note": "Same matn, chain differs in one name form, at another place in the book"},
+    {"source_key": "tirmidhi:3322", "hadith_id": 22486, "note": "Same matn, near-identical chain, other location"},
+    {"source_key": "tirmidhi:1066", "hadith_id": 22195, "note": "Same matn, different chain"},
+    {"source_key": "ibnmajah:399", "hadith_id": 30084, "note": "Same matn, different chain"},
+    {"source_key": "ibnmajah:59", "hadith_id": 33916, "note": "Same matn, chain differs in one link, other location"},
+    {"source_key": "ibnmajah:68", "hadith_id": 33431, "note": "Same matn, near-identical chain, other location"}
+  ]
+}

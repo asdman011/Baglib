@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "review_note": "Reviewed by Claude Code on 2026-11-01 against the listed references. This is an evidence check of name spelling and role, not a scholar's review. Identity is limited to the exact upstream string; no expanded name is added without a reference.",
+  "status_values": {
+    "verified": "Arabic form attested by the cited reference for this same person and work.",
+    "needs_review": "Arabic form is plausible but no reliable reference was found; the UI keeps the upstream Latin name.",
+    "not_a_person": "Institution or board; never shown as an individual muhaddith."
+  },
+  "graders": [
+    {
+      "raw": "Al-Albani",
+      "name_ar": "الألباني",
+      "role": "scholar",
+      "status": "verified",
+      "evidence": [
+        {"type": "local_corpus", "reference": "sunnah_kutub_tisah_itqan.sqlite hadiths.id=37467, Shamela:25794:v3:p102:s2303491", "note": "الشيخ ناصر الألباني"},
+        {"type": "url", "reference": "https://shamela.ws/book/829", "note": "catalogue search surfaced Sunan al-Nasa'i with al-Albani's rulings (Maktabat al-Ma'arif)"}
+      ]
+    },
+    {
+      "raw": "Zubair Ali Zai",
+      "name_ar": "زبير علي زئي",
+      "role": "scholar",
+      "status": "verified",
+      "evidence": [
+        {"type": "url", "reference": "https://forum.mohaddis.com/threads/3065/", "note": "Mohaddis forum bibliography names him and lists أنوار الصحيفة في الأحاديث الضعيفة من السنن الأربعة; a forum, not a catalogue"}
+      ]
+    },
+    {
+      "raw": "Shuaib Al Arnaut",
+      "name_ar": "شعيب الأرنؤوط",
+      "role": "scholar",
+      "status": "verified",
+      "evidence": [
+        {"type": "local_registry", "reference": "tools/hadith-alignment/src/master_registry.py MusnadAhmad author", "note": "شعيب الأرنؤوط؛ عادل مرشد وآخرون"},
+        {"type": "url", "reference": "https://www.goodreads.com/book/show/17410545", "note": "Sunan Abi Dawud, Muassasat al-Risala edition credited to him"}
+      ]
+    },
+    {
+      "raw": "Muhammad Muhyi Al-Din Abdul Hamid",
+      "name_ar": "محمد محيي الدين عبد الحميد",
+      "role": "editor",
+      "status": "verified",
+      "evidence": [
+        {"type": "url", "reference": "https://research.kwaretech.com/Record/in00000449762/Versions?print=1", "note": "catalogue record for his edition of Sunan Abi Dawud"}
+      ],
+      "caution": "Identified as the editor of a Sunan Abi Dawud edition. Upstream labels these values as his grades; the wording was not compared with that printed edition."
+    },
+    {
+      "raw": "Abu Ghuddah",
+      "name_ar": "أبو غدة",
+      "role": "editor",
+      "status": "verified",
+      "evidence": [
+        {"type": "url", "reference": "https://shamela.ws/book/829", "note": "catalogue credits Abd al-Fattah Abu Ghuddah with the numbering of the Aleppo edition"},
+        {"type": "local_corpus", "reference": "sunnah_kutub_tisah_itqan.sqlite hadiths.id=38885, Shamela:25794:v5:p87:s2304481", "note": "الشيخ العلامة عبد الفتاح أبو غدة"}
+      ],
+      "caution": "The upstream string gives the family name only, so the short form is kept. His role for Sunan al-Nasa'i is numbering/editing; attributing a verdict to him rests on upstream alone."
+    },
+    {
+      "raw": "Muhammad Fouad Abd al-Baqi",
+      "name_ar": "محمد فؤاد عبد الباقي",
+      "role": "editor",
+      "status": "verified",
+      "evidence": [
+        {"type": "local_corpus", "reference": "sunnah_kutub_tisah_itqan.sqlite hadiths.id=517, Shamela:1673:v1:p594:s2881214", "note": "رقم كتبه وأبوابه وأحاديثه : محمد فؤاد عبد الباقي [ ت 1388 هـ ]"},
+        {"type": "url", "reference": "https://shamela.ws/book/1198", "note": "numbering of Sunan Ibn Majah follows his printed edition"}
+      ],
+      "caution": "Known as an editor and numberer. Upstream labels these values as his grades; that attribution was not confirmed against the printed edition."
+    },
+    {
+      "raw": "Ahmad Muhammad Shakir",
+      "name_ar": "أحمد محمد شاكر",
+      "role": "scholar",
+      "status": "verified",
+      "evidence": [
+        {"type": "url", "reference": "https://shamela.ws/author/217", "note": "Shamela catalogue search surfaced سنن الترمذي تحقيق وتعليق أحمد محمد شاكر (جـ 1، 2)"},
+        {"type": "local_corpus", "reference": "sunnah_kutub_tisah_itqan.sqlite hadiths.id=35935, Shamela:25794:v1:p193:s2302551", "note": "الشيخ أحمد شاكر"}
+      ],
+      "caution": "The catalogue describes his Tirmidhi work as volumes 1-2. Upstream carries this name on far more of the book, so coverage is an open question."
+    },
+    {
+      "raw": "Bashar Awad Maarouf",
+      "name_ar": "بشار عواد معروف",
+      "role": "scholar",
+      "status": "verified",
+      "evidence": [
+        {"type": "url", "reference": "https://www.goodreads.com/book/show/57919072", "note": "الجامع الكبير - سنن الترمذي, Dar al-Gharb al-Islami edition credited to him"},
+        {"type": "local_corpus", "reference": "sunnah_kutub_tisah_itqan.sqlite hadiths.id=58761, Shamela:25794:v37:p182:s2321106", "note": "الدكتور بشار عواد"}
+      ]
+    },
+    {
+      "raw": "Salim al-Hilali",
+      "name_ar": null,
+      "name_ar_suggestion": "سليم الهلالي",
+      "role": "scholar",
+      "status": "needs_review",
+      "evidence": [],
+      "caution": "Three searches found no reliable reference tying this name to a Muwatta edition, and the local corpus has no such attestation. The Latin name stays raw."
+    },
+    {
+      "raw": "HadeethEnc (IslamHouse / Saudi MoIA) editorial board",
+      "name_ar": "موسوعة الأحاديث النبوية المترجمة (هيئة التحرير)",
+      "role": "institution",
+      "status": "not_a_person",
+      "evidence": [
+        {"type": "source_metadata", "reference": "quranlab/hadith metadata/collections.csv hadeethenc name_ar", "note": "موسوعة الأحاديث النبوية المترجمة"}
+      ],
+      "caution": "An editorial body, not an individually identified muhaddith. Some of its grades quote a named scholar; that scholar is kept inside the raw wording."
+    }
+  ]
+}

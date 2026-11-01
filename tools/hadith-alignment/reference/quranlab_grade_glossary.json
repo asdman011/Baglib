@@ -1,0 +1,631 @@
+{
+  "schema_version": 1,
+  "version": "quranlab-grade-glossary-v1",
+  "review_note": "Reviewed by Claude Code on 2026-11-01. Each Arabic form is the standard term of hadith science for the listed Latin label. This is a terminology check, not a scholar's review. The Arabic is a localization of an English transliteration; it is not presented as the grader's exact printed wording. `family` only detects differing wording and is not a strength scale.",
+  "scope_values": {
+    "hadith": "A ruling on the report.",
+    "isnad": "A ruling on the chain only; it says nothing about the matn.",
+    "narrator": "A ruling on a narrator.",
+    "collection_status": "A status of a collection, not of one report.",
+    "transmission_attribution": "Says where a report is found, such as متفق عليه or a Sahih reference. The grader named beside it is the person who noted it.",
+    "mixed_isnad_and_attribution": "A chain ruling followed by a Sahih reference.",
+    "unresolved": "Scope could not be determined from the wording."
+  },
+  "terms": [
+    {
+      "en": "Sahih",
+      "ar": "صحيح",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih Hadith",
+      "ar": "حديث صحيح",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih Matn",
+      "ar": "صحيح المتن",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih Mutawatir",
+      "ar": "صحيح متواتر",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih Lighairihi",
+      "ar": "صحيح لغيره",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Hasan",
+      "ar": "حسن",
+      "scope": "hadith",
+      "family": "hasan"
+    },
+    {
+      "en": "Hasan Sahih",
+      "ar": "حسن صحيح",
+      "scope": "hadith",
+      "family": "hasan_sahih"
+    },
+    {
+      "en": "Hasan Lighairihi",
+      "ar": "حسن لغيره",
+      "scope": "hadith",
+      "family": "hasan"
+    },
+    {
+      "en": "Daif",
+      "ar": "ضعيف",
+      "scope": "hadith",
+      "family": "daif"
+    },
+    {
+      "en": "Very Daif",
+      "ar": "ضعيف جدًا",
+      "scope": "hadith",
+      "family": "daif_jiddan"
+    },
+    {
+      "en": "Mawdu",
+      "ar": "موضوع",
+      "scope": "hadith",
+      "family": "mawdu"
+    },
+    {
+      "en": "Batil",
+      "ar": "باطل",
+      "scope": "hadith",
+      "family": "batil"
+    },
+    {
+      "en": "Munkar",
+      "ar": "منكر",
+      "scope": "hadith",
+      "family": "munkar"
+    },
+    {
+      "en": "Shadh",
+      "ar": "شاذ",
+      "scope": "hadith",
+      "family": "shadh"
+    },
+    {
+      "en": "Daif Munkar",
+      "ar": "ضعيف منكر",
+      "scope": "hadith",
+      "family": "munkar"
+    },
+    {
+      "en": "Munkar Daif",
+      "ar": "منكر ضعيف",
+      "scope": "hadith",
+      "family": "munkar"
+    },
+    {
+      "en": "Mursal",
+      "ar": "مرسل",
+      "scope": "hadith",
+      "family": "mursal"
+    },
+    {
+      "en": "Mauquf",
+      "ar": "موقوف",
+      "scope": "hadith",
+      "family": "mawquf"
+    },
+    {
+      "en": "Maqtu",
+      "ar": "مقطوع",
+      "scope": "hadith",
+      "family": "maqtu"
+    },
+    {
+      "en": "Mauquf Sahih",
+      "ar": "موقوف صحيح",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih Muquf",
+      "ar": "صحيح موقوف",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Maqtu Sahih",
+      "ar": "مقطوع صحيح",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih Maqtu",
+      "ar": "صحيح مقطوع",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Mauquf Hasan",
+      "ar": "موقوف حسن",
+      "scope": "hadith",
+      "family": "hasan"
+    },
+    {
+      "en": "Hasan Maqtu",
+      "ar": "حسن مقطوع",
+      "scope": "hadith",
+      "family": "hasan"
+    },
+    {
+      "en": "Maqtu Hasan",
+      "ar": "مقطوع حسن",
+      "scope": "hadith",
+      "family": "hasan"
+    },
+    {
+      "en": "Mauquf Daif",
+      "ar": "موقوف ضعيف",
+      "scope": "hadith",
+      "family": "daif"
+    },
+    {
+      "en": "Daif Muquf",
+      "ar": "ضعيف موقوف",
+      "scope": "hadith",
+      "family": "daif"
+    },
+    {
+      "en": "Maqtu Daif",
+      "ar": "مقطوع ضعيف",
+      "scope": "hadith",
+      "family": "daif"
+    },
+    {
+      "en": "Daif Maqtu",
+      "ar": "ضعيف مقطوع",
+      "scope": "hadith",
+      "family": "daif"
+    },
+    {
+      "en": "Mauquf Sahih Lighairihi",
+      "ar": "موقوف صحيح لغيره",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Maqtu Sahih Lighairihi",
+      "ar": "مقطوع صحيح لغيره",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Mauquf Hasan Lighairihi",
+      "ar": "موقوف حسن لغيره",
+      "scope": "hadith",
+      "family": "hasan"
+    },
+    {
+      "en": "Mauquf Munkar",
+      "ar": "موقوف منكر",
+      "scope": "hadith",
+      "family": "munkar"
+    },
+    {
+      "en": "Isnaad Sahih",
+      "ar": "إسناده صحيح",
+      "scope": "isnad",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih Isnaad",
+      "ar": "صحيح الإسناد",
+      "scope": "isnad",
+      "family": "sahih"
+    },
+    {
+      "en": "Isnaad Hasan",
+      "ar": "إسناده حسن",
+      "scope": "isnad",
+      "family": "hasan"
+    },
+    {
+      "en": "Hasan Isnaad",
+      "ar": "حسن الإسناد",
+      "scope": "isnad",
+      "family": "hasan"
+    },
+    {
+      "en": "Hasan Sahih Isnaad",
+      "ar": "حسن صحيح الإسناد",
+      "scope": "isnad",
+      "family": "hasan_sahih"
+    },
+    {
+      "en": "Daif Isnaad",
+      "ar": "ضعيف الإسناد",
+      "scope": "isnad",
+      "family": "daif"
+    },
+    {
+      "en": "Isnaad Daif",
+      "ar": "إسناده ضعيف",
+      "scope": "isnad",
+      "family": "daif"
+    },
+    {
+      "en": "Sanad Daif",
+      "ar": "سنده ضعيف",
+      "scope": "isnad",
+      "family": "daif"
+    },
+    {
+      "en": "Very Daif Isnaad",
+      "ar": "ضعيف الإسناد جدًا",
+      "scope": "isnad",
+      "family": "daif_jiddan"
+    },
+    {
+      "en": "Sahih Isnaad Maqtu",
+      "ar": "صحيح الإسناد مقطوع",
+      "scope": "isnad",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih Isnaad Mauquf",
+      "ar": "صحيح الإسناد موقوف",
+      "scope": "isnad",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih Isnaad Mursal",
+      "ar": "صحيح الإسناد مرسل",
+      "scope": "isnad",
+      "family": "sahih"
+    },
+    {
+      "en": "Mursal Sahih Isnaad",
+      "ar": "مرسل صحيح الإسناد",
+      "scope": "isnad",
+      "family": "sahih"
+    },
+    {
+      "en": "Daif Isnaad Maqtu",
+      "ar": "ضعيف الإسناد مقطوع",
+      "scope": "isnad",
+      "family": "daif"
+    },
+    {
+      "en": "Isnaad Malool",
+      "ar": "إسناده معلول",
+      "scope": "isnad",
+      "family": "muallal"
+    },
+    {
+      "en": "Sahih - Agreed Upon",
+      "ar": "صحيح، متفق عليه",
+      "scope": "transmission_attribution",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih - Bukhari And Muslim",
+      "ar": "صحيح، البخاري ومسلم",
+      "scope": "transmission_attribution",
+      "family": "sahih"
+    },
+    {
+      "en": "Isnaad Sahih Agreed Upon",
+      "ar": "إسناده صحيح، متفق عليه",
+      "scope": "mixed_isnad_and_attribution",
+      "family": "sahih"
+    },
+    {
+      "en": "Isnaad Sahih Bukhari And Muslim",
+      "ar": "إسناده صحيح، البخاري ومسلم",
+      "scope": "mixed_isnad_and_attribution",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih - Authentic",
+      "ar": "صحيح",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Sahih-Authentic",
+      "ar": "صحيح",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "en": "Hasan - Good",
+      "ar": "حسن",
+      "scope": "hadith",
+      "family": "hasan"
+    },
+    {
+      "en": "Daif - Weak",
+      "ar": "ضعيف",
+      "scope": "hadith",
+      "family": "daif"
+    },
+    {
+      "en": "Maudu - Fabricated",
+      "ar": "موضوع",
+      "scope": "hadith",
+      "family": "mawdu"
+    },
+    {
+      "en": "Da'if in chain",
+      "ar": "ضعيف الإسناد",
+      "scope": "isnad",
+      "family": "daif"
+    },
+    {
+      "en": "Sahih in chain",
+      "ar": "صحيح الإسناد",
+      "scope": "isnad",
+      "family": "sahih"
+    },
+    {
+      "en": "Hasan in chain",
+      "ar": "حسن الإسناد",
+      "scope": "isnad",
+      "family": "hasan"
+    }
+  ],
+  "arabic_only": [
+    {
+      "ar": "صحيحان",
+      "scope": "hadith",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "الحديثان صحيحان",
+      "scope": "hadith",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "صحيحة",
+      "scope": "hadith",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "صحيح بشواهده",
+      "scope": "hadith",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "صحيح بمجموع طرقه",
+      "scope": "hadith",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "صحيح بطرقه وشواهده",
+      "scope": "hadith",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حسن بشواهده",
+      "scope": "hadith",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حسن بمجموع طرقه",
+      "scope": "hadith",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حسن لطرقه",
+      "scope": "hadith",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حسن لشواهده",
+      "scope": "hadith",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حسن غريب",
+      "scope": "hadith",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "إسناده صحيح",
+      "scope": "isnad",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "صحيح الإسناد",
+      "scope": "isnad",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "سنده صحيح",
+      "scope": "isnad",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "إسناده حسن",
+      "scope": "isnad",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "ضعيف جدا",
+      "scope": "hadith",
+      "family": "daif_jiddan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "ضعيف جدًا",
+      "scope": "hadith",
+      "family": "daif_jiddan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "إسناده صحيح على شرط الشيخين",
+      "scope": "isnad",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "إسناده صحيح على شرط البخاري",
+      "scope": "isnad",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "إسناده صحيح على شرط مسلم",
+      "scope": "isnad",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "إسناده قوي",
+      "scope": "isnad",
+      "family": "qawi",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "إسناده قوي على شرط مسلم",
+      "scope": "isnad",
+      "family": "qawi",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "إسناده قوي على شرط الشيخين",
+      "scope": "isnad",
+      "family": "qawi",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "إسناده قوي على شرط البخاري",
+      "scope": "isnad",
+      "family": "qawi",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حديث منكر",
+      "scope": "hadith",
+      "family": "munkar",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حديث مرسل",
+      "scope": "hadith",
+      "family": "mursal",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حسن موقوف",
+      "scope": "hadith",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "ضعيف مرسل",
+      "scope": "hadith",
+      "family": "daif",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "صحيح مرفوع",
+      "scope": "hadith",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "صحيح لغيره",
+      "scope": "hadith",
+      "family": "sahih",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حسن لغيره",
+      "scope": "hadith",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حسن الإسناد",
+      "scope": "isnad",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "ضعيف الإسناد",
+      "scope": "isnad",
+      "family": "daif",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "حسن الإسناد موقوف",
+      "scope": "isnad",
+      "family": "hasan",
+      "status": "source_arabic"
+    },
+    {
+      "ar": "ضعيف الإسناد موقوف",
+      "scope": "isnad",
+      "family": "daif",
+      "status": "source_arabic"
+    }
+  ],
+  "hadeethenc_english": [
+    {
+      "raw": "Authentic hadith",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "raw": "Authentic",
+      "scope": "hadith",
+      "family": "sahih"
+    },
+    {
+      "raw": "Good hadith",
+      "scope": "hadith",
+      "family": "hasan"
+    },
+    {
+      "raw": "Hasan",
+      "scope": "hadith",
+      "family": "hasan"
+    },
+    {
+      "raw": "Good chain of narrators",
+      "scope": "isnad",
+      "family": "hasan"
+    },
+    {
+      "raw": "Its chain of narrators is Sahih/Authentic",
+      "scope": "isnad",
+      "family": "sahih"
+    },
+    {
+      "raw": "Its chain of narrators is Hasan/Sound",
+      "scope": "isnad",
+      "family": "hasan"
+    }
+  ]
+}

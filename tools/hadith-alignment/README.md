@@ -1,5 +1,9 @@
 # Hadith commentary alignment
 
+## QuranLab merge
+
+`quranlab_download.py`, `quranlab_merge.py` and `verify_quranlab_merge.py` build `data/output/sunnah_merged_quranlab_v1.sqlite` and `data/output/quranlab-reports/`. The merge reads the existing database as input and never changes it. Commands, audit, rollback and limits are in [QuranLab Hadith](../../docs/features/QuranLab-Hadith.md). The glossary, grader mapping and match calibration are in `reference/`. No new dependency was added.
+
 ## 34-column Itqan master pipeline
 
 The database is now available in Baglib's **Sunnah** view. Development discovers the generated file automatically. In an installed app, use **Choose Hadith source** to select `data/output/sunnah_kutub_tisah_itqan.sqlite` (or place it under `userData/sunnah/`). Selection persists; the file is read-only and stays separate from `baglib.db`. Restart Baglib after updating the main/preload code. The source picker still accepts the original six-book ZIP. Research tabs expose commentary/citations, narrator identities and lookup, roots/ayah navigation and similar-Hadith targets. This change does not bundle the large corpus into release installers or certify scholarly links. Close Baglib before regenerating an attached database on Windows.

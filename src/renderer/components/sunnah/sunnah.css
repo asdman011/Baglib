@@ -85,6 +85,14 @@
 .sunnah-chain-list span, .sunnah-chain-list button { font-family:var(--font-amiri),serif; font-size:1.2rem; line-height:1.9; }
 .sunnah-chain-list button { text-decoration:underline; text-underline-offset:.25rem; }
 .sunnah-chain-list p, .sunnah-chain-list small { font-size:.8rem; line-height:1.9; color:var(--text-muted); }
+.sunnah-chain-list button.sunnah-narrator-open { font-family:inherit; font-size:.8rem; }
+.sunnah-narrator-card { align-self:stretch; display:grid; gap:.5rem; margin-block-start:.4rem; padding:.8rem; border:1px solid var(--border-subtle); border-radius:.6rem; background:var(--bg-surface); font-size:.85rem; line-height:1.9; }
+.sunnah-narrator-card dl { display:grid; grid-template-columns:minmax(0,auto) minmax(0,1fr); gap:.2rem .9rem; }
+.sunnah-narrator-card dt { color:var(--text-muted); font-size:.75rem; }
+.sunnah-narrator-card dd { overflow-wrap:anywhere; }
+.sunnah-narrator-card h5 { font-size:.8rem; font-weight:600; margin-block-start:.4rem; }
+.sunnah-narrator-card .sunnah-root-chips { margin-block:.3rem; }
+.sunnah-narrator-card .sunnah-root-chips button { font-family:var(--font-amiri),serif; font-size:1rem; text-decoration:none; max-inline-size:17rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sunnah-root-chips { display:flex; flex-wrap:wrap; gap:.5rem; margin-block:.8rem 1.3rem; }
 .sunnah-root-chips button { padding:.4rem .8rem; border:1px solid var(--border-subtle); border-radius:.6rem; background:var(--bg-surface); line-height:1.9; }
 .sunnah-research-results { display:grid; gap:.65rem; margin-block-start:.75rem; }
@@ -102,3 +110,20 @@
  .sunnah-toolbar-actions { gap:.4rem; }
  .sunnah-research-body { padding-inline:.7rem; }
 }
+.sunnah-grading-line { display:flex; flex-wrap:wrap; gap:.4rem .7rem; align-items:center; margin-block-start:1rem; font-size:.8rem; color:var(--text-muted); }
+.sunnah-grading-line .is-opposed, .sunnah-grading-flag.is-opposed { color:#c9832e; }
+.sunnah-grading-flag { padding-block:.4rem; font-size:.85rem; line-height:1.9; }
+.sunnah-judgments, .sunnah-field-sources { list-style:none; margin:0; padding:0; display:grid; gap:.75rem; }
+.sunnah-judgment { padding:.7rem .85rem; border:1px solid var(--border-subtle); border-radius:.55rem; font-size:.85rem; line-height:1.9; overflow-wrap:anywhere; }
+.sunnah-judgment-head { display:flex; flex-wrap:wrap; gap:.3rem .7rem; align-items:baseline; }
+.sunnah-judgment-head small, .sunnah-judgment-meta, .sunnah-judgment-part { color:var(--text-muted); font-size:.75rem; }
+.sunnah-judgment-grade { font-size:1.05rem; line-height:2; margin-block:.15rem; }
+.sunnah-judgment-meta { display:flex; flex-wrap:wrap; gap:.15rem .9rem; }
+.sunnah-judgment .is-unresolved, .sunnah-field-sources .is-unresolved { color:#c9832e; }
+.sunnah-judgment details { margin-block-start:.35rem; font-size:.75rem; }
+.sunnah-judgment dl { display:grid; grid-template-columns:minmax(4.5rem,max-content) 1fr; gap:.1rem .8rem; margin-block-start:.35rem; }
+.sunnah-judgment dt { color:var(--text-muted); }
+.sunnah-sources section + section { margin-block-start:1.1rem; }
+.sunnah-source-text { display:grid; gap:.3rem; padding-block:.5rem; line-height:1.9; overflow-wrap:anywhere; }
+.sunnah-source-text small, .sunnah-field-sources small { display:block; color:var(--text-muted); font-size:.72rem; }
+.sunnah-field-sources li { font-size:.8rem; overflow-wrap:anywhere; }

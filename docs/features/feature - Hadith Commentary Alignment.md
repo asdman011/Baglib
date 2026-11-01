@@ -1,5 +1,7 @@
 # Hadith Commentary Alignment
 
+QuranLab extension, 2026-11-01: `quranlab_merge.py` adds grading, translations and field provenance in a new database and leaves this corpus unchanged. See [QuranLab Hadith](QuranLab-Hadith.md). HadeethEnc explanations are stored as explanations, not commentary, and do not touch `Arabic_Tafseel`.
+
 Final integration checks: **971 application tests pass**, standalone TypeScript/full production build/diff pass, lint **0 errors** (369 non-blocking warnings). Native final evidence: `.baglib-data/sunnah-research-live/run-cSXHax/results.json` and captured screenshots; actual corpus, Arabic/English 480/1280, zero renderer errors. No commit/push/Jira authorization/actions.
 
 ## User-facing reader integration — 2026-10-27, Codex

@@ -2,6 +2,16 @@
 
 Implemented: 2026-10-24. Research: [LK-Hadith-Corpus](LK-Hadith-Corpus.md), [RQHT paper review](RQHT.md).
 
+## Attributed rulings and sources — 2026-11-01
+
+With the merged database from [QuranLab Hadith](QuranLab-Hadith.md), a hadith that has rulings shows a compact **Scholars' rulings** line. It says when rulings disagree and opens the rulings tab. The tab lists each ruling with its grader, its scope (hadith, chain only, or where the report is found), whether the Arabic is a glossary rendering or the source's wording, and which part of the record it covers. **Source details** gives the raw wording, record and upstream. Nothing combines rulings into one verdict, and a missing ruling is not presented as weakness.
+
+An unverified grader name stays in Latin, and an unreviewed term stays raw with a review note. The **Sources** tab shows HadeethEnc explanations, other English translations and field lineage. Muwatta rows that have no English use an attributed translation, labelled under the text and included in search; rows with English keep it unchanged.
+
+Six more books appear with the merged database: the three forty collections, HadeethEnc, unmatched QuranLab records and records under review. The last two group records by their original collection. Unmatched and review records say so on the record, and review records link to their possible matches under similar hadiths.
+
+Bukhari and Muslim keep the earlier preference: no grade badge and no rulings line. The rulings tab there lists only HadeethEnc's own rulings on a report it cites. The legacy grade row keeps its original source fields. Without a merged database none of this appears, and chapter navigation, record IDs and saved reflections are unchanged. Sunnah TTS is still not offered.
+
 ## Experience
 
 - **Sunnah** is the first item in the main navigation rail, above Library. The rail follows Baglib's direction setting: right in Arabic RTL, left in English LTR.
