@@ -3,52 +3,52 @@
  */
 
 import { ipcMain, BrowserWindow } from 'electron';
-import { appLockSecurityService } from '../services/security/app-lock.service';
+import { getAppLockSecurityService } from '../services/security/app-lock.service';
 import type { AppLockConfig } from '../../shared/types/app-lock';
 
 export function registerSecurityIpc(): void {
   ipcMain.handle('security:get-biometric-capability', async () => {
-    return appLockSecurityService.getBiometricCapability();
+    return getAppLockSecurityService().getBiometricCapability();
   });
 
   ipcMain.handle('security:prompt-biometric-auth', async (event, promptMessage?: string) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    return appLockSecurityService.promptBiometricAuth(promptMessage, win);
+    return getAppLockSecurityService().promptBiometricAuth(promptMessage, win);
   });
 
   ipcMain.handle('security:verify-master-pin', (_event, pin: string) => {
-    return appLockSecurityService.verifyMasterPin(pin);
+    return getAppLockSecurityService().verifyMasterPin(pin);
   });
 
   ipcMain.handle('security:set-master-pin', (_event, pin: string) => {
-    return appLockSecurityService.setMasterPin(pin);
+    return getAppLockSecurityService().setMasterPin(pin);
   });
 
   ipcMain.handle('security:clear-master-pin', () => {
-    return appLockSecurityService.clearMasterPin();
+    return getAppLockSecurityService().clearMasterPin();
   });
 
   ipcMain.handle('security:get-lock-config', () => {
-    return appLockSecurityService.getLockConfig();
+    return getAppLockSecurityService().getLockConfig();
   });
 
   ipcMain.handle('security:set-lock-config', (_event, partialConfig: Partial<AppLockConfig>) => {
-    return appLockSecurityService.setLockConfig(partialConfig);
+    return getAppLockSecurityService().setLockConfig(partialConfig);
   });
 
   ipcMain.handle('security:get-lock-state', () => {
-    return appLockSecurityService.getLockState();
+    return getAppLockSecurityService().getLockState();
   });
 
   ipcMain.handle('security:lock', (_event, reason?: 'app_launch' | 'idle_timeout' | 'private_shelf' | 'manual') => {
-    return appLockSecurityService.lock(reason);
+    return getAppLockSecurityService().lock(reason);
   });
 
   ipcMain.handle('security:unlock', () => {
-    return appLockSecurityService.unlock();
+    return getAppLockSecurityService().unlock();
   });
 
   ipcMain.handle('security:check-idle-timeout', () => {
-    return appLockSecurityService.checkIdleTimeout();
+    return getAppLockSecurityService().checkIdleTimeout();
   });
 }

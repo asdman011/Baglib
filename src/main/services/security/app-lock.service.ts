@@ -443,4 +443,12 @@ try {
   }
 }
 
-export const appLockSecurityService = new AppLockSecurityService();
+let appLockSecurityServiceInstance: AppLockSecurityService | null = null;
+
+// Created on first use: the constructor reads settings, which do not exist until migrations have run.
+export function getAppLockSecurityService(): AppLockSecurityService {
+  if (!appLockSecurityServiceInstance) {
+    appLockSecurityServiceInstance = new AppLockSecurityService();
+  }
+  return appLockSecurityServiceInstance;
+}

@@ -8,7 +8,7 @@
  */
 
 import { ipcMain } from 'electron';
-import { koSyncService } from '../services/sync/ko-sync.service';
+import { getKOSyncService } from '../services/sync/ko-sync.service';
 import { storageManagerService } from '../services/sync/storage-manager.service';
 import { librarySnapshotService } from '../services/sync/library-snapshot.service';
 import type { CloudConfig, KOSyncConfig } from '../../shared/types/cloud-sync';
@@ -16,25 +16,25 @@ import type { CloudConfig, KOSyncConfig } from '../../shared/types/cloud-sync';
 export function registerCloudSyncIpc(): void {
   // --- KOReader Progress Sync ---
   ipcMain.handle('sync:koreader-get-config', async () => {
-    return koSyncService.getConfig();
+    return getKOSyncService().getConfig();
   });
 
   ipcMain.handle('sync:koreader-save-config', async (_, config: Partial<KOSyncConfig>) => {
-    return koSyncService.saveConfig(config);
+    return getKOSyncService().saveConfig(config);
   });
 
   ipcMain.handle('sync:koreader-test', async (_, customConfig?: KOSyncConfig) => {
-    return await koSyncService.testConnection(customConfig);
+    return await getKOSyncService().testConnection(customConfig);
   });
 
   ipcMain.handle('sync:koreader-pull', async (_, bookId: string, customDigest?: string) => {
-    return await koSyncService.pullProgress(bookId, customDigest);
+    return await getKOSyncService().pullProgress(bookId, customDigest);
   });
 
   ipcMain.handle(
     'sync:koreader-push',
     async (_, bookId: string, progress: string, percentage: number, customDigest?: string) => {
-      return await koSyncService.pushProgress(bookId, progress, percentage, customDigest);
+      return await getKOSyncService().pushProgress(bookId, progress, percentage, customDigest);
     },
   );
 

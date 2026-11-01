@@ -181,4 +181,12 @@ export class KOSyncService {
   }
 }
 
-export const koSyncService = new KOSyncService();
+let koSyncServiceInstance: KOSyncService | null = null;
+
+// Created on first use: the constructor reads settings, which do not exist until migrations have run.
+export function getKOSyncService(): KOSyncService {
+  if (!koSyncServiceInstance) {
+    koSyncServiceInstance = new KOSyncService();
+  }
+  return koSyncServiceInstance;
+}

@@ -62,20 +62,25 @@ export function setupSearchIPC(): { orchestrator: SearchOrchestratorService } {
   orchestrator.registerProvider(internetArchiveProvider);
   orchestrator.registerProvider(gutenbergProvider);
 
-  // Restore saved provider enablement settings
-  try {
-    const db = getDatabase();
-    const settingsRepo = new SqliteSettingsRepository(db);
-    const providers = orchestrator.getProviders();
-    for (const p of providers) {
-      const savedEnabled = settingsRepo.get<boolean>(`search.providers.${p.id}.enabled`);
-      if (savedEnabled !== undefined) {
-        orchestrator.setProviderEnabled(p.id, Boolean(savedEnabled));
+  // Restore saved provider enablement settings on first use: this setup runs before migrations
+  let providerSettingsRestored = false;
+  const restoreProviderSettings = () => {
+    if (providerSettingsRestored) return;
+    try {
+      const db = getDatabase();
+      const settingsRepo = new SqliteSettingsRepository(db);
+      const providers = orchestrator.getProviders();
+      for (const p of providers) {
+        const savedEnabled = settingsRepo.get<boolean>(`search.providers.${p.id}.enabled`);
+        if (savedEnabled !== undefined) {
+          orchestrator.setProviderEnabled(p.id, Boolean(savedEnabled));
+        }
       }
+      providerSettingsRestored = true;
+    } catch (err) {
+      console.warn('[baglib/search-ipc] Could not restore provider settings:', err);
     }
-  } catch (err) {
-    console.warn('[baglib/search-ipc] Could not restore provider settings:', err);
-  }
+  };
 
   /**
    * Search Query Handler:
@@ -86,6 +91,7 @@ export function setupSearchIPC(): { orchestrator: SearchOrchestratorService } {
     'search:query',
     async (event, query: UnifiedSearchQuery, options?: { timeoutMs?: number; searchId?: string }) => {
       try {
+        restoreProviderSettings();
         const controller = new AbortController();
         const searchKey = options?.searchId || `search-${Date.now()}`;
         activeSearchControllers.set(searchKey, controller);
@@ -149,6 +155,7 @@ export function setupSearchIPC(): { orchestrator: SearchOrchestratorService } {
    * Returns metadata and active state of all registered discovery providers.
    */
   ipcMain.handle('search:get-providers', () => {
+    restoreProviderSettings();
     return orchestrator.getProviders();
   });
 
@@ -157,6 +164,7 @@ export function setupSearchIPC(): { orchestrator: SearchOrchestratorService } {
    */
   ipcMain.handle('search:set-provider-enabled', (_, id: SearchProviderId, enabled: boolean) => {
     try {
+      restoreProviderSettings();
       orchestrator.setProviderEnabled(id, enabled);
       const db = getDatabase();
       const settingsRepo = new SqliteSettingsRepository(db);

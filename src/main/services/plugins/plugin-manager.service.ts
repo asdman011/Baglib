@@ -196,4 +196,12 @@ export class ReaderPluginManager {
   }
 }
 
-export const readerPluginManager = new ReaderPluginManager();
+let readerPluginManagerInstance: ReaderPluginManager | null = null;
+
+// Created on first use: the constructor reads settings, which do not exist until migrations have run.
+export function getReaderPluginManager(): ReaderPluginManager {
+  if (!readerPluginManagerInstance) {
+    readerPluginManagerInstance = new ReaderPluginManager();
+  }
+  return readerPluginManagerInstance;
+}
