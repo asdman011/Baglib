@@ -2,6 +2,7 @@
 
 ## Recent Agent Updates
 
+- [2026-11-01, Claude Code] KEY-232 implemented, not committed: real Knowledge Cards from selection, hover and the reader menu, saved cards in Notes, memorization flag. KEY-231 approved (tables, FSRS, `ts-fsrs` 5.3.1). Migration 019 keeps all knowledge when a book is deleted, and Notes lists it. Real Quran and Sunnah data in the card were not exercised live. See CURRENT_TASK. No Git actions.
 - [2026-11-01, Claude Code] Installer is now an assisted Arabic and English wizard (language, who it is for, folder, shortcuts, Open with, start now) with Baglib's icon. Disposable build 16/16 through the real windows, including update and uninstall. All-users mode and the production file types are not verified. Part of KEY-230. See CURRENT_TASK. No Git or Jira actions.
 - [2026-11-01, Claude Code] Wave 2 started with a proposed `docs/ADR-006-knowledge-cards-and-spaced-repetition.md` for KEY-231. Not approved, so no migration or dependency was added. KEY-230 code is complete at 18/18 packaged checks with a 668 MB installer, but stays open for commit approval, the installer run and setup from empty. No Git actions.
 - [2026-11-01, Claude Code] Dataset delivery planned in `docs/features/Dataset Delivery Plan.md`. The user confirmed owner authorization, so rights no longer limit delivery. Quran basic packs and the Sunnah database go in the installer; poetry is a prebuilt optional pack. Tasks KEY-264 to KEY-267. Plan only. No Git actions.
