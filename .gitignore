@@ -60,11 +60,43 @@ repos/
 /tools/hadith-alignment/output.previous-*/
 /tools/hadith-alignment/.venv/
 .pytest_cache/
+/tools/hadith-alignment/data/.master-build-*/
 docs/*
 !docs/*.md
+!docs/*.dbml
+!docs/*.docx
 !docs/features/
 libgen-calibre-store-plugin-main/
 
 # pdf.js vendor assets (generated via copy:pdfjs)
 public/vendor/pdfjs/
 src/renderer/public/vendor/pdfjs/
+
+# build output and caches anywhere in the tree
+src/renderer/out/
+.covers_cache/
+*.log
+*.tmp
+
+# raw datasets and packed archives must never be tracked
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.7z
+*.rar
+*.parquet
+*.jsonl
+*.arrow
+*.feather
+*.csv
+
+# local databases and their journals
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
