@@ -221,19 +221,6 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
     };
   }, [onProviderNotice]);
 
-  useEffect(() => {
-    const voiceId = config.voiceEn;
-    if (!voiceId?.startsWith('pocket:') || !window.electronAPI?.audio?.tts) return;
-    const normalizedLanguage = language.toLowerCase().split('-')[0];
-    const languageMap: Record<string, PocketTTSLanguage> = {
-      en: 'english', fr: 'french', de: 'german', pt: 'portuguese', it: 'italian', es: 'spanish', nl: 'dutch',
-    };
-    window.electronAPI.audio.tts.loadVoice({
-      voiceId,
-      language: languageMap[normalizedLanguage] || 'english',
-    }).catch((error) => onProviderNotice?.(error instanceof Error ? error.message : String(error)));
-  }, [config.voiceEn, language, onProviderNotice]);
-
   // Handle SpeechSynthesis segment execution
   const speakSegment = useCallback(
     function speakSegment(segments: TTSUtteranceSegment[], segIdx: number, sentenceIdx: number) {

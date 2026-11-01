@@ -1,6 +1,6 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Bounded local data-URI thumbnails run offline in Electron; no image optimization server is available. */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { PdfAsset, PdfEditorAPI, PdfFeature, PdfInspection, PdfOperation, PdfSession, PdfJob } from '../../../shared/types/pdf-editor';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { TranslationKey } from '../../translations';
@@ -23,6 +23,8 @@ export const REDACTION_PRESETS = [
 ];
 
 export type StirlingWorkstationMode = 'view' | 'organize' | 'edit' | 'security' | 'convert';
+/** How a tool uses the page: drawing a box on it, picking its text, or not at all. */
+export type PdfCanvasUse = 'none' | 'box' | 'text';
 
 export interface PdfToolProps {
   tool: PdfFeature;
@@ -33,6 +35,8 @@ export interface PdfToolProps {
   inspection: PdfInspection | null;
   output: PdfJob | null;
   thumbnails: Record<string, string>;
+  boxDrawn: boolean;
+  onCanvasUse: (value: PdfCanvasUse) => void;
   text: string;
   setText: (value: string) => void;
   run: (operation: PdfOperation, payload?: Record<string, unknown>) => void;
@@ -50,6 +54,8 @@ export function PdfWorkstationTools({
   inspection,
   output,
   thumbnails,
+  boxDrawn,
+  onCanvasUse,
   text,
   setText,
   run,
@@ -107,13 +113,22 @@ export function PdfWorkstationTools({
   const [activeSecuritySubtool, setActiveSecuritySubtool] = useState<'redact' | 'sanitize' | 'watermark' | 'encrypt' | 'sign' | 'validate'>(tool === 'sanitize' || tool === 'watermark' || tool === 'encrypt' || tool === 'sign' ? tool : tool === 'verify-signatures' ? 'sign' : tool === 'validate' ? 'validate' : 'redact');
   const [redactMode, setRedactMode] = useState<'manual' | 'auto'>('manual');
   const [pendingRedactionMarks, setPendingRedactionMarks] = useState<{ id: string; page: number; rect: number[] }[]>([]);
-  const [convertPdfToImage, setConvertPdfToImage] = useState(false);
+  const [convertPdfToImage, setConvertPdfToImage] = useState(true);
   const [selectedRegexPreset, setSelectedRegexPreset] = useState('');
   const [useRegex, setUseRegex] = useState(true);
   const [wholeWordSearchAuto, setWholeWordSearchAuto] = useState(true);
   const [boxColor, setBoxColor] = useState('#000000');
   const [customPadding, setCustomPadding] = useState(2);
   const [wordsToRedact, setWordsToRedact] = useState('');
+
+  const editing = mode === 'edit' || tool === 'edit-content' || tool === 'add-image';
+  const securing = mode === 'security' || tool === 'redact';
+  const canvasUse: PdfCanvasUse = securing && activeSecuritySubtool === 'redact' && redactMode === 'manual' || editing && (activeEditSubtool === 'image' || activeEditSubtool === 'ink') ? 'box'
+    : editing && (activeEditSubtool === 'find-replace' || activeEditSubtool === 'text') ? 'text' : 'none';
+  useEffect(() => {
+    onCanvasUse(canvasUse);
+    return () => onCanvasUse('none');
+  }, [canvasUse, onCanvasUse]);
 
   const api = (): PdfEditorAPI => window.electronAPI.pdfEditor;
   const field = 'block w-full rounded-lg border border-subtle bg-canvas p-2 text-start text-sm';
@@ -622,15 +637,13 @@ export function PdfWorkstationTools({
               {redactMode === 'manual' && (
                 <div className="space-y-3">
                   <p className="text-xs text-muted leading-relaxed">
-                    {lang === 'ar'
-                      ? 'حدد مناطق الحجب بالماوس على صفحة المستند، ثم أضفها إلى قائمة العلامات.'
-                      : 'Draw or select boxes on the page canvas, then add them as pending redaction marks.'}
+                    {t('pdfRedactManualHint')}
                   </p>
 
                   {/* Add Current Box Button */}
                   <button
                     type="button"
-                    disabled={busy || !rect || rect.length < 4}
+                    disabled={busy || !boxDrawn}
                     onClick={() => {
                       const newMark = {
                         id: `mark-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -714,7 +727,7 @@ export function PdfWorkstationTools({
                             : [{ page, rect }],
                         convertPdfToImage,
                       }),
-                    !confirmed || (pendingRedactionMarks.length === 0 && (!rect || rect.length < 4)),
+                    !confirmed || (pendingRedactionMarks.length === 0 && !boxDrawn),
                     true
                   )}
                 </div>
@@ -728,7 +741,7 @@ export function PdfWorkstationTools({
                   {/* 1-Click Regex Presets */}
                   <div className="space-y-1.5">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-muted block">
-                      {lang === 'ar' ? 'أنماط الحجب الجاهزة (نقرة واحدة)' : '1-Click Regex Presets'}
+                      {t('pdfRedactRegexPresets')}
                     </span>
                     <div className="grid grid-cols-2 gap-1.5">
                       {REDACTION_PRESETS.map(preset => {
@@ -757,12 +770,12 @@ export function PdfWorkstationTools({
 
                   {/* Words to Redact (Multiple Words / Phrases) */}
                   <label className="block text-xs font-medium space-y-1">
-                    <span>{lang === 'ar' ? 'كلمات / عبارات للحجب (سطر لكل كلمة):' : 'Words to Redact (One per line):'}</span>
+                    <span>{t('pdfRedactWordsLabel')}</span>
                     <textarea
                       rows={2}
                       value={wordsToRedact}
                       onChange={e => setWordsToRedact(e.target.value)}
-                      placeholder={lang === 'ar' ? 'أدخل الكلمات المراد حجبها...' : 'e.g. Confidential\nInternal only\nJohn Doe'}
+                      placeholder={t('pdfRedactWordsPlaceholder')}
                       className={field + ' font-mono text-xs'}
                     />
                   </label>
@@ -779,7 +792,7 @@ export function PdfWorkstationTools({
                         onChange={e => setUseRegex(e.target.checked)}
                         className="rounded accent-emerald-600 cursor-pointer"
                       />
-                      <span>{lang === 'ar' ? 'تعبير نمطي (Regex)' : 'Use Regex'}</span>
+                      <span>{t('pdfRedactUseRegex')}</span>
                     </label>
                     <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
                       <input
@@ -798,7 +811,7 @@ export function PdfWorkstationTools({
                       <PdfColorSwatches value={boxColor} onChange={setBoxColor} label={t('pdfRedactionColor')} />
                     </div>
                     <label className="text-xs font-medium space-y-1">
-                      <span>{lang === 'ar' ? 'الهامش الإضافي (px):' : 'Extra Padding (px):'}</span>
+                      <span>{t('pdfRedactExtraPadding')}</span>
                       <input
                         type="number"
                         min={0}
@@ -866,7 +879,7 @@ export function PdfWorkstationTools({
             <div className="space-y-3">
               {input('stirlingWatermarkText', watermarkText, setWatermarkText)}
               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                <span className="text-[10px] text-muted">{lang === 'ar' ? 'متغيرات ديناميكية:' : 'Variables:'}</span>
+                <span className="text-[10px] text-muted">{t('pdfDynamicVariablesLabel')}</span>
                 {[
                   { label: '{date}', val: '{date}' },
                   { label: '{filename}', val: '{filename}' },
@@ -980,7 +993,6 @@ export function PdfWorkstationTools({
             {button('stirlingExportHtml', () => apply('export-html'))}
             {button('stirlingExportMarkdown', () => apply('export-markdown'))}
             {button('stirlingExportTxt', () => apply('export-text'))}
-            {button('stirlingConvertPdfa', () => apply('convert-pdfa'))}
             {button('stirlingCompress', () => apply('compress', { optimizeLevel }))}
             {button('stirlingExtractImages', () => apply('extract-images'))}
           </div>
@@ -1002,16 +1014,6 @@ export function PdfWorkstationTools({
           </div>
 
           <div className="space-y-3 pt-2 border-t border-subtle">
-            <div className="flex items-center gap-2 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
-              <div className="min-w-0 flex-1">
-                <span className="font-bold text-emerald-950 dark:text-emerald-200 block truncate">{t('ocrEngineBadge')}</span>
-                <span className="text-[11px] text-muted block">{t('ocrEngineLocalCpu')}</span>
-              </div>
-            </div>
             {button('pdfRunOcr', () => apply('ocr', { languages: 'ara+eng' }), false, true)}
           </div>
         </div>

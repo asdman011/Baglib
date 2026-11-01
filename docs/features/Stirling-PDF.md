@@ -349,3 +349,126 @@ The native reader also continued displaying its original file URL after successf
 
 Baglib's sidecar launcher now requests OS BELOW_NORMAL priority after the child spawns and passes `-Dspring.main.lazy-initialization=true` / `-XX:TieredStopAtLevel=1`. Failed priority changes log a diagnostic but do not prevent processing. Actual Java25 live regression passes with these flags: text extraction/preview, rotation, blank+rotation+split organizer, native split, ink, bilingual TOC and pipelines/watchers. Total live suite19108ms is not a renderer latency or startup-only measurement. No shared-class archive flag was enabled without verifying the necessary archive configuration. No new upstream reverse-engineering claim is made by this own-source scheduling change.
 
+## Live API contract and tool audit (2026-10-31, Claude Code)
+
+`scripts/pdf-workstation-live/stirling-audit.mts` compares Baglib's endpoints with the running v3.2.2 OpenAPI document. `stirling-tools-live.mts` runs every Hub tool and built-in pipeline against the real JVM. `stirling-availability.mts` prints why endpoints are disabled.
+
+**Verified root causes of pipeline `invalid-output`:**
+- `handleData` answers 200 with an empty body or empty ZIP when a step fails or a filter rejects the file; Baglib treated that as corrupt output.
+- 18 Hub endpoints did not exist in v3.2.2. Real mappings now live in `src/shared/stirling-contract.ts`; interactive tools open the workstation instead of posting.
+- Presets used wrong parameters (`conformance`, `words`, `pages`) and omitted fields the controllers dereference without a null check (`alphabet`, `customColor`, `splitValue`).
+- Single-file `handleData` responses are always `application/octet-stream`, so format must come from magic bytes first.
+
+**Now:** `classifyStirlingOutput` handles PDF, ZIP, Office, HTML, Markdown, CSV, JSON, XML, RTF and images. A filtered file is `no-output`, a missing external tool is `engine-missing`, a table-free document is `no-tables`. Steps needing extra files run as direct multipart calls between `handleData` segments. Stirling has no annotation remover, so `/api/v1/misc/remove-annotations` is a local pikepdf step.
+
+**Live audit result (development machine):** 39 of 67 runs pass. The other 28 are:
+- 15 tools and the Pre-Publish pipeline disabled by missing external tools. OCR & Archival and Scholarly Scan stop at their image filter on this image-free sample, and also need Tesseract. Stirling's own log names `gs`, `weasyprint`, `tesseract`, `rar`, `soffice`, `qpdf`, `unoconvert` and OpenCV; `url-to-pdf` is off by configuration.
+- Expected results for this audit's input: `no-output` from filters and `extract-images`, `no-tables`, `split-pdf-by-chapters` on a PDF without bookmarks, and `add-image` and `cert-sign` without their extra file. The `pipeline-processor` Hub entry opens the Pipeline view rather than posting.
+
+**Not verified:** tools disabled by missing components have not been run; their parameters are checked against the OpenAPI document only.
+
+## Export and redaction findings (2026-11-01, verified on the v3.2.2 jar with a real book)
+
+- `system.stirlingOfficeConversion` (env `SYSTEM_STIRLINGOFFICECONVERSION=true`) enables `/convert/pdf/word` and `/convert/pdf/presentation` with the converter inside the jar. No LibreOffice is needed.
+- `/convert/pdf/text` returns 400 without `outputFormat`. `/convert/pdf/csv` returns an empty archive without `pageNumbers`.
+- `/convert/pdf/html` and `/convert/pdf/markdown` are listed as disabled without `pdftohtml`. Baglib reflows the extracted text when the HTML or Markdown call reports the endpoint disabled. The reflow keeps no layout, tables or images. Markdown came back with engine-style headings through Baglib's multipart call even though a direct `FormData` call got 403; the reason is **unexplained**.
+- `/security/redact`: sending `pageNumbers: all` with `pageRedactionColor` blacks out **every whole page**. Baglib must not send it, although the OpenAPI document marks it required.
+- `convertPDFToImage=false` only paints a box: the text under it is still extractable. `true` removes it but rasterizes every page of the file (5 MB to 121 MB, about 70 s), and all text in the file stops being selectable.
+- Box position is correct on upright pages (top-left origin, points). Rotated pages are handled by the per-page flow below.
+
+## Per-page redaction (2026-11-01)
+
+**Verified on the real engine.** `redact_pages.py prepare` copies only the chosen pages to a temporary PDF, upright and starting at the origin. `redaction-plan.ts` remaps pages and converts boxes from displayed to stored coordinates. The engine redacts that file, then `merge` replaces content in the original page objects, so bookmarks and links stay valid, and saves one clean revision.
+
+`egypt-inequality-book.pdf`, 2 pages redacted: 4.76 MB in about 10 s, against 121 MB and about 70 s for the whole file. The other 153 pages keep identical text and decoded content. Rotations 0, 90, 180 and 270 were verified by rendering.
+
+**Failure rule:** the output is reopened and checked for page geometry, unchanged other pages, no fonts or forms on rasterized pages, no original stream of a redacted page, one `%%EOF`, and unchanged bookmarks. Text extraction must also return nothing on those pages. Any failure gives `redaction-unverified`; there is no fallback.
+
+**Limits:** rasterizing removes `/StructTreeRoot`, `/MarkInfo` and `/XFA` for the whole file, because they can hold page text. Fields and annotations overlapping a box are removed; others stay. Bookmark titles, metadata and comments outside a box are not altered, so text repeated there survives. A stream shared with an unredacted page stays. Files with an applied signature are refused with `signed-document-locked`. Selecting every page still costs about 122 MB and 81 s on this book.
+
+## Tool options and reverse-engineering scope (2026-11-01)
+
+**Verified:** the 0.26.1 server from `Stirling-PDF.exe` renders tool forms at `localhost:8080`; 35 pages and 121 fields were read. Option names were then checked against the 3.2.2 API and run live. Acrobat's `.aapp` descriptors, `Mobile.optimize` and `.joboptions` informed option grouping only.
+
+**Superseded limit:** this section first said no disassembly had been done. The second pass below did it, within the limits it states.
+
+**Findings:** Stirling has no fonts for Japanese, Korean or Chinese stamps, and its Arabic and Thai fonts have no Latin glyphs, so the alphabet choice was removed and Arabic is detected from the text. Mixed Arabic and Latin stamp text is refused by the engine. WebP output needs `pdf2image`, so that choice was removed. Update-metadata clears empty fields, and the form says so.
+
+## Tool options, second pass (2026-11-01)
+
+**Method.** `Stirling-PDF.exe` is a native launcher with a Spring Boot JAR from offset 77824. REA opened the extracted JAR (SHA-256 `87e9c613...`, 1,731 entries, evidence `ev_4582c870...`), and its templates and `messages_*.properties` were read. Every Hub tool was then compared by script with the live 3.2.2 API document: field names, enum values and defaults. Uncertain behaviour was run on the real engine (`scripts/pdf-workstation-live/tool-options-probe.mts`).
+
+Acrobat: REA with Ghidra 12.1.4 analysed `Acrobat.exe`, a launcher. REA's PE parser mapped `AcrobatRes.dll` (evidence `ev_bdb52bd1...`), which has only 44 string blocks and 17 dialogs. `Acrobat.dll` is 109 MB and was **not disassembled**; its text and that of `AcrobatRes.dll` and the plug-ins came from a raw string scan outside REA. `PDF Optimizer/Mobile.optimize`, `Settings/*.joboptions` and `DocSettings/Redaction/ENU/SearchRedactPatterns.xml` were read directly. Acrobat findings are wording and defaults, not traced logic.
+
+**Verified on the real engine, against the API text:**
+- `add-page-numbers` selects pages with `pagesToNumber`. `pageNumbers` is accepted and ignored, so Baglib numbered every page whatever was chosen. Both accept `2n+1`.
+- Position 1 is top left and 9 bottom right, for stamps and page numbers. The API says 1 is bottom left.
+- `overrideX` and `overrideY` must be sent as -1 to use a position; omitting them puts every stamp at the corner. They measure from the bottom left in points.
+- `update-metadata` deletes `CreationDate`, `ModDate` and `Trapped` when they are omitted or malformed. The date format is `yyyy/MM/dd HH:mm:ss`.
+- `stampType=qr` renders `stampText` as a QR image sized by `fontSize`.
+- `/convert/pdf/word` with `doc` returns RTF bytes, so it is not offered. `docx`, `odt`, `pptx`, `ppt` and `odp` are real files.
+- `alias` is ignored for keystore files: a non-existent alias still signs.
+- Restricting actions needs a separate permissions password. `removeAll` with only the opening password returns 403. Replacing the permissions password while keeping others needs both current passwords.
+- `cert-sign` throws without a `password` field, even for an unencrypted key, and PEM accepts only traditional keys (`BEGIN RSA PRIVATE KEY`). PKCS#8 fails with a class cast.
+- Compression on this machine: levels 1 and 2 return the file unchanged, level 4 took a 3.24 MB book to 2.56 MB, levels 6 and 9 and target size need Ghostscript, line art needs ImageMagick, and linearize changes nothing. The cause of the linearize result (assumed qpdf) is a **hypothesis**. These results predate the Ghostscript install below, and compression has not been rerun.
+- Ghostscript detection (verified 2026-11-01, Stirling 3.2.2 on Windows): `ExternalAppDepConfig` checks for a command named `gs` on PATH. `GHOSTSCRIPT_PATH` did not satisfy it, and neither did `gswin64c.exe` on PATH. A `gs.exe` copy beside `gswin64c.exe`, with that folder on PATH, enabled `repair`, `replace-invert-pdf`, `scanner-effect`, `pdf-to-vector` and `vector-to-pdf`. Disabled endpoints went from 17 to 12 of 99. `repair` belongs to both the Ghostscript and qpdf groups, and either one is enough (verified with Ghostscript only). The sidecar now adds the Ghostscript and qpdf folders to PATH. That qpdf needs the same PATH route is a **hypothesis**, because qpdf was not installed.
+- The three endpoints reported as `CONFIG` (verified 2026-11-01, jar plus v3.2.2 source of `EndpointConfiguration`): `CONFIG` is only the default reason, so it does not prove a setting exists. `pdf-to-ua` and `accessibility-report` are disabled when no `PdfaLevelAServiceInterface` bean exists. The source says that tagger and the endpoints ship in the proprietary module, which this jar does not contain, and neither route is in its 148 OpenAPI routes, so no setting can enable them here. `url-to-pdf` has a real setting. The sidecar now sets `SYSTEM_ENABLEURLTOPDF=true`, which moved its reason from `CONFIG` to `DEPENDENCY` without editing `settings.yml`. With WeasyPrint on PATH it turned on, then failed on every request (see below). `settings.yml` describes the feature as internal only with known security issues.
+- WeasyPrint (verified 2026-11-01, v70.0 Windows onedir build, SHA-256 matches the release digest, executable not code-signed): in `.baglib-data/pdf-engine/weasyprint`, on the sidecar PATH, and provisioned by `scripts/setup-pdf-engine.ps1`. Disabled endpoints went from 12 to 9 of 99 (`html-to-pdf`, `eml-to-pdf`, `url-to-pdf`). Live: HTML, Markdown and EML with Arabic text return PDFs.
+- `url-to-pdf` is broken in Stirling 3.2.2 (verified): `ConvertWebsiteToPDF` line 76 calls `ServletUriComponentsBuilder.fromCurrentContextPath()` inside the virtual-thread job, which throws `No current ServletRequestAttributes` before the URL is read. Baglib's Hub therefore bypasses it and runs `weasyprint.ts` directly. Each redirect hop is resolved and refused if it is loopback, private or link-local, and WeasyPrint gets `--no-http-redirects`. Stirling's `urlSecurity` is not involved in that path. A page's subresources are not checked hop by hop, and DNS rebinding is not defended against.
+- WeasyPrint sandbox (verified): without a limit, `<link rel="attachment" href="file:///...">` embedded a local file in the PDF, and a `file:` image rendered. `--allowed-protocols data` blocks both, so every clipped or reader render uses it with HTML on stdin. stdin needs `--encoding utf-8`; without it, one run produced a nearly empty PDF. The Windows build has no CA list, so HTTPS needs `SSL_CERT_FILE`; Baglib writes Node's root certificates to a temp file.
+- Clipped and reader PDFs use `--pdf-variant pdf/ua-1`. veraPDF passed all checked outputs as PDF/UA-1 (Arabic book, English article, reader exports, annotation export). This is PDF/UA for documents Baglib generates. It is not a conversion of an existing PDF, so `pdf-to-ua` stays unavailable.
+
+**Auto-redact.** Matches on simple (non-composite) fonts fail closed. On a non-embedded Helvetica fixture and an embedded simple TrueType fixture, the JVM dies with an access violation in `harfbuzz.dll` under `jpdfium_redact_words_ex`, leaving `hs_err_pid*.log` in the engine folder. On a real book with Type 1C fonts the engine answers 500, "Redaction could not be verified". Composite fonts work, and rasterized output had no match left. No output is returned in any failing case, and the engine restarts on the next job. Box redaction worked on the non-embedded fixture. The exact font condition is a **hypothesis** from about ten files.
+
+**Now in the Hub.** Coverage: every API field is exposed, fixed by Baglib, or deliberately left out. Left out: `doc`, `alias`, 40-bit keys, the `PKCS11`, `WINDOWS_STORE` and `SERVER` certificate types, `webp` (needs `pdf2image`), and rotate by 0.
+
+Added: exact and QR stamps, five page-order modes, sheet margins, Word, slide and text output formats, password modes, metadata dates, target-size compression, line-art edge, PDF/UA, redaction presets, and links and form fields kept when removing comments. `remove_annotations.py` previously deleted links and form fields too. Modelled on Acrobat: the two passwords must differ, the opening password is not enough to lift restrictions, and search presets, rewritten with Arabic digits. Balanced is now the default compression, because Light does nothing here.
+
+**Not exposed because the engine has no such option:** Acrobat's odd or even page rotation, watermark behind the page, and Word export layout modes.
+
+**Unverified:** `pdfUa`, target size, Strong and Maximum compression, and line art need components missing here, so they were never run. `repair-pdf` answers 422 on a healthy book; the cause is unknown. Over 30 engine endpoints have no Hub entry, including `split-pdf-by-sections`, `decompress-pdf`, `auto-rotate-pdf`, `scanner-effect` and the attachment tools.
+
+## OCR through Tesseract and OCRmyPDF (verified 2026-11-01 on the v3.2.2 jar)
+
+Supersedes the OCR parts of the live audit above and the "tesseract on PATH" note in the runtime footprint.
+
+**What Stirling needs, tested by hiding each tool from a real sidecar and running real jobs:**
+
+| Available to Stirling | `ocr-pdf` reported | Real job | Path taken |
+|---|---|---|---|
+| Tesseract and OCRmyPDF | enabled | passes | `processWithOcrMyPdf` |
+| Tesseract only | enabled | passes | `processWithTesseract` |
+| OCRmyPDF only | enabled | **fails, HTTP 500** (OCRmyPDF exits 3, no Tesseract) | `processWithOcrMyPdf` |
+| Neither | disabled, `DEPENDENCY` | not run | none |
+
+So Tesseract is required and OCRmyPDF is the preferred optional layer. `/api/v1/config/endpoints-availability` says `enabled` for OCRmyPDF alone, so that flag does not prove a job can run. `auto-rotate-pdf` also turns on with Tesseract and goes off without it.
+
+**Setup in `stirling.ts`:** Stirling finds both tools on PATH. The sidecar PATH gets the Tesseract folder first and the venv `Scripts` folder last, so the venv's `python.exe` cannot shadow anything. `TESSDATA_PREFIX` and `SYSTEM_TESSDATADIR` point at `ocr-best`.
+
+**`ocr-best` needed more than language files.** With only `ara` and `eng`, OCRmyPDF stopped with `read_params_file: Can't open hocr`, because Tesseract reads `configs/hocr` from the language folder. `configs`, `tessconfigs`, `osd.traineddata` and `pdf.ttf` are now copied in from the Tesseract install. `ocr-best/ara.traineddata` is the real `tessdata_best` file (SHA-256 `ab9d157d...`, 12.6 MB). `ocr-best/eng.traineddata` is the same file as `tessdata_fast`, despite the folder name.
+
+**Availability:** `stirling-availability.mts` reports 7 of 99 disabled: `accessibility-report` and `pdf-to-ua` (CONFIG, proprietary module), `pdf-to-xml`, `extract-image-scans`, `form-detection`, `pdf-to-pdfa`, `pdf-to-cbr` (DEPENDENCY). This work turned on `ocr-pdf` and `auto-rotate-pdf`; without Tesseract the same machine reports 9.
+
+**Dependency groups of the remaining 7 (verified 2026-11-01 from `EndpointConfiguration.class` in the 3.2.2 jar and the live availability call):** `pdf-to-pdfa` and `pdf-to-xml` need LibreOffice, `extract-image-scans` needs OpenCV and is also in the Python group, and `pdf-to-cbr` needs `rar`. `form-detection` is only in the Java group, which is present, so why it is off is **unknown**. These were not installed and retested.
+
+**Removed from the layout (2026-11-01, user decision):** Baglib no longer offers PDF/A, PDF to XML or scanned-photo split. The Hub entries, the PDF/A pipeline step, the reader's `convert-pdfa` feature and the PDF/A policy rule are gone. The built-in OCR and Pre-Publish pipelines no longer end in PDF/A. The other four endpoints never had a UI entry. Earlier notes about these tools are history. The engine contract still resolves `/api/v1/convert/pdf/pdfa`, so a saved custom pipeline with that step loads, and it fails while the engine reports the endpoint disabled.
+
+**Hub jobs through the real UI, throwaway profile, one image-only page each:**
+
+| Page | UI | Languages | Time | Peak memory* | Independent check (`pdftotext`) |
+|---|---|---|---|---|---|
+| English | Arabic | `ara,eng` (default) | 4.5 s | 135 MB | 374 of 376 words; search finds `Inequality`, `Republic`, `project` |
+| English | English | `eng` | 3.4 s | 130 MB | 374 of 376 words, same searches pass |
+| Arabic verse | Arabic | `ara,eng` (default) | 15.3 s | 272 MB | letter CER 59.3%, 53 of 285 marks; `الأولى` found, `عليكم`, `فإنها`, `الرحمن` not |
+| Arabic verse | English | `ara` | 6.9 s | 256 MB | letter CER 46.2%, 145 of 285 marks; same searches |
+
+*Python, OCRmyPDF, Tesseract and Ghostscript processes, sampled about once a second. The JVM is excluded.
+
+Both pages had no text layer before the job. Output is staged under `.baglib-data/pdf-engine/staged`; source hashes were unchanged after every job.
+
+**Hub limits:**
+- Stirling exposes no page segmentation option, so the Hub cannot use the `--psm 4` setting the reader uses. On two-column Arabic verse the Hub reads far worse than the reader (46% against 27%). `ocrRenderType=sandwich` is only slightly better (43.8%, 177 words against 151), so the default stays `hocr`.
+- The default `ara,eng` is worse than `ara` on Arabic pages.
+- OCRmyPDF warns that no installed font has Arabic glyphs, so the layer is invisible when selected in a viewer. Text stays extractable by `pdftotext`. No font was added.
+- `jbig2` and `pngquant` are absent, so OCRmyPDF skips those optimizers. `unpaper` is absent, so the Hub's clean options are unverified.
+- PaddleOCR-VL was not added to the Hub.

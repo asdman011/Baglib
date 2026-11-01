@@ -20,7 +20,7 @@ interface ZenTocDrawerProps {
   bookmarkedPages: number[];
   onJumpToPage: (page: number) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  pdfDoc?: import('pdfjs-dist').PDFDocumentProxy | null;
+  pdfDoc?: import('../../libs/reader/pdf-view-document').PdfViewDocument | null;
   paginatedPages?: Array<{ pageNumber: number; text?: string; html?: string }>;
 }
 
@@ -52,6 +52,7 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
     if (activeTab !== 'thumbnails' || !pdfDoc) return;
 
     let isCancelled = false;
+    const controller = new AbortController();
 
     const generateThumbnails = async () => {
       const pageCount = Math.min(pdfDoc.numPages || totalPages, totalPages || 100);
@@ -61,31 +62,20 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
         if (thumbnails.has(pNum)) continue;
 
         try {
-          const page = await pdfDoc.getPage(pNum);
-          if (isCancelled) break;
-
-          const viewport = page.getViewport({ scale: 0.2 });
+          const bitmap = await pdfDoc.render(pNum, 0.2, 1, controller.signal);
+          if (!bitmap) break;
           const canvas = document.createElement('canvas');
-          canvas.width = Math.max(1, Math.floor(viewport.width));
-          canvas.height = Math.max(1, Math.floor(viewport.height));
-          const ctx = canvas.getContext('2d', { alpha: false });
-
-          if (ctx) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            await page.render({
-              canvasContext: ctx,
-              viewport,
-            }).promise;
-
-            if (isCancelled) break;
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-            setThumbnails((prev) => {
-              const next = new Map(prev);
-              next.set(pNum, dataUrl);
-              return next;
-            });
-          }
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          canvas.getContext('2d', { alpha: false })?.drawImage(bitmap, 0, 0);
+          bitmap.close();
+          if (isCancelled) break;
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setThumbnails((prev) => {
+            const next = new Map(prev);
+            next.set(pNum, dataUrl);
+            return next;
+          });
         } catch (e) {
           console.warn(`[ZenTocDrawer] Failed generating thumbnail for page ${pNum}:`, e);
         }
@@ -99,6 +89,7 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
 
     return () => {
       isCancelled = true;
+      controller.abort();
     };
   }, [activeTab, pdfDoc, totalPages]);
 

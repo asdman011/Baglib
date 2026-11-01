@@ -14,9 +14,10 @@ import { registerPdfCloudIpc } from './pdf-cloud';
 import { registerPdfCollaborationIpc } from './pdf-collaboration';
 import { pdfEngineTools } from '../services/pdf-editor/tools';
 import { PdfViewCache } from '../services/pdf-editor/view-cache';
+import { deletePdfVersion, listPdfVersions, restorePdfVersion, selectUndoVersion } from '../services/pdf-editor/versions';
 import { pdfViewOptimizer } from '../services/pdf-editor/view-cache-runtime';
 import { stirlingInspection, type PdfEngineTools } from '../services/pdf-editor/python';
-import { runStirlingPdf, defaultStirlingSidecar } from '../services/pdf-editor/stirling';
+import { runStirlingPdf, defaultStirlingSidecar, resolveStirlingEndpoint } from '../services/pdf-editor/stirling';
 import { SqliteWorkRepository } from '../database/repositories/work.repository';
 import type { PdfSaveRequest } from '../../shared/types/pdf-editor';
 import { PdfAudit } from '../services/pdf-editor/audit';
@@ -48,7 +49,7 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
   const viewCache = new PdfViewCache(options.viewCacheDirectory || path.join(app.isPackaged ? app.getPath('userData') : path.join(app.getAppPath(), '.baglib-data'), 'cache', 'pdf-view'), async (...args) => {
     const tools = pdfEngineTools();
     await pdfViewOptimizer(tools.python, path.join(path.dirname(tools.script), 'view_cache.py'))(...args);
-  }, { onChanged: (ownerId, id) => {
+  }, { optimizeDelayMs: options.viewCacheDirectory ? 0 : 20_000, onChanged: (ownerId, id) => {
     const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.id === ownerId);
     if (window && !window.isDestroyed()) window.webContents.send('pdf-editor:view-source-changed', id);
   } });
@@ -99,13 +100,25 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
     try { return { ok: true, data: await run(owner(event)) }; }
     catch (error) {
       const code = (error as Error).message;
-      return { ok: false, error: (['invalid-request', 'invalid-source', 'source-required', 'source-changed', 'encrypted', 'permission-denied', 'unsupported', 'busy', 'cancelled', 'engine-missing', 'signed-document-locked', 'owner-password-required', 'invalid-output'].includes(code) ? code : 'storage') as PdfError };
+      return { ok: false, error: (['invalid-request', 'invalid-source', 'source-required', 'source-changed', 'encrypted', 'permission-denied', 'unsupported', 'busy', 'cancelled', 'engine-missing', 'signed-document-locked', 'owner-password-required', 'invalid-output', 'no-output', 'no-tables', 'no-text', 'no-bookmarks', 'redaction-unverified', 'certificate-invalid'].includes(code) ? code : 'storage') as PdfError };
     }
   };
   ipcMain.handle('pdf-editor:engine-status', event => result(event, () => defaultStirlingSidecar.getStatus()));
+  ipcMain.handle('pdf-editor:warm-engine', event => result(event, () => {
+    void resolveStirlingEndpoint(pdfEngineTools()).catch(error => console.warn('[baglib:pdf] Engine warm-up unavailable:', (error as Error).message));
+    return null;
+  }));
   ipcMain.handle('pdf-editor:view-source', (event, input) => result(event, ownerId => {
     if (!input || typeof input.path !== 'string' || input.path.length > 32768 || !path.isAbsolute(input.path) || input.id !== undefined && (typeof input.id !== 'string' || input.id.length > 100)) throw new Error('invalid-request');
-    return viewCache.acquire(ownerId, input.path, input.id);
+    return viewCache.acquire(ownerId, input.path, input.id, input.page);
+  }));
+  ipcMain.handle('pdf-editor:evict-view-source', (event, id) => result(event, async ownerId => {
+    if (typeof id !== 'string' || id.length > 100) throw new Error('invalid-request');
+    await viewCache.evict(ownerId, id); return null;
+  }));
+  ipcMain.handle('pdf-editor:save-view-preview', (event, id, page, preview) => result(event, async ownerId => {
+    if (typeof id !== 'string' || id.length > 100 || !preview || typeof preview !== 'object') throw new Error('invalid-request');
+    await viewCache.savePreview(ownerId, id, page, preview); return null;
   }));
   ipcMain.handle('pdf-editor:release-view-source', (event, id) => result(event, ownerId => {
     if (typeof id !== 'string' || id.length > 100) throw new Error('invalid-request');
@@ -153,6 +166,11 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
     const selection = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: extensions.join(', '), extensions }] });
     return selection.canceled || !selection.filePaths[0] ? null : controller().asset(owner, selection.filePaths[0], kind);
   }));
+  ipcMain.handle('pdf-editor:choose-tool-files', (event, extensions, multiple) => result(event, async () => {
+    if (!Array.isArray(extensions) || !extensions.length || extensions.some(item => typeof item !== 'string' || !/^[a-z0-9]{1,8}$/u.test(item))) throw new Error('invalid-request');
+    const selection = await dialog.showOpenDialog({ properties: multiple === true ? ['openFile', 'multiSelections'] : ['openFile'], filters: [{ name: extensions.join(', '), extensions }] });
+    return selection.canceled ? [] : selection.filePaths;
+  }));
   ipcMain.handle('pdf-editor:clipboard', event => result(event, async owner => {
     const image = clipboard.readImage();
     if (image.isEmpty()) return { text: clipboard.readText().slice(0, 100000) };
@@ -167,9 +185,8 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
     const source = controller().source(owner, output.job.sessionId);
     if (input.mode === 'overwrite') {
       if (!source.path || output.format !== 'pdf') throw new Error('invalid-request');
-      const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
       const backupFilename = `${source.sourceId || randomUUID()}_${Date.now()}.pdf`;
-      const publication = await publishPdfOutput({ staged: output.filename, target: source.path, stagedSha256: output.sha256, expectedTargetSha256: source.sha256, backupDirectory, backupFilename });
+      const publication = await publishPdfOutput({ staged: output.filename, target: source.path, stagedSha256: output.sha256, expectedTargetSha256: source.sha256, backupDirectory: backupDirectory(), backupFilename });
       try {
         if (source.sourceId) {
           const size = (await stat(source.path)).size, db = getDatabase();
@@ -233,101 +250,41 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
   ipcMain.handle('pdf-editor:processor:folders', event => result(event, () => stirlingProcessor.getWatchedFolders()));
   ipcMain.handle('pdf-editor:processor:save-folders', (event, input) => result(event, () => stirlingProcessor.saveWatchedFolders(input as WatchedFolderSource[])));
 
+  const backupDirectory = () => app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
+  const applyRestoredVersion = async (event: IpcMainInvokeEvent, owner: number, sessionId: string, select: (source: ReturnType<ReturnType<typeof controller>['source']>) => Promise<string>) => {
+    const source = controller().source(owner, sessionId);
+    if (!source.path || !source.sourceId) throw new Error('invalid-source');
+    const filename = await select(source);
+    const restored = await restorePdfVersion({ directory: backupDirectory(), sourceId: source.sourceId, filename, target: source.path, expectedSha256: source.sha256 });
+    const size = (await stat(source.path)).size;
+    try {
+      const db = getDatabase();
+      db.transaction(() => {
+        db.prepare('UPDATE file_source_detail SET file_hash=?,file_size_bytes=?,last_verified_at=? WHERE source_id=?').run(restored.sha256, size, new Date().toISOString(), source.sourceId);
+        db.prepare('DELETE FROM book_content_fts WHERE book_id=?').run(source.workId);
+      })();
+    } catch (error) {
+      await publishPdfOutput({ staged: restored.restorePoint, target: source.path, stagedSha256: source.sha256, expectedTargetSha256: restored.sha256 });
+      throw error;
+    }
+    const session = controller().rebase(owner, sessionId, restored.sha256, true);
+    event.sender.send('pdf-editor:source-changed', { workId: source.workId, sourceId: source.sourceId });
+    return { restored: true, session };
+  };
   ipcMain.handle('pdf-editor:versions:list', (event, sessionId: string) => result(event, async owner => {
     const source = controller().source(owner, sessionId);
-    const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
-    await mkdir(backupDirectory, { recursive: true });
-    const files = await readdir(backupDirectory).catch(() => []);
-    const prefix = source.sourceId ? `${source.sourceId}_` : '';
-    const matching = files.filter(f => f.endsWith('.pdf') && (prefix ? f.startsWith(prefix) : true));
-    const items: PdfVersionItem[] = [];
-    for (const file of matching) {
-      try {
-        const filePath = path.join(backupDirectory, file);
-        const s = await stat(filePath);
-        const match = /_(\d+)\.pdf$/u.exec(file);
-        const timestamp = match ? Number.parseInt(match[1], 10) : s.mtimeMs;
-        items.push({
-          filename: file,
-          timestamp,
-          dateStr: new Date(timestamp).toLocaleString(),
-          size: s.size,
-        });
-      } catch {
-        /* ignore */
-      }
-    }
-    items.sort((a, b) => b.timestamp - a.timestamp);
-    return items;
+    return source.sourceId ? listPdfVersions(backupDirectory(), source.sourceId) : [];
   }));
-
-  ipcMain.handle('pdf-editor:versions:restore', (event, sessionId: string, versionFilename: string) => result(event, async owner => {
-    const safeFilename = path.basename(versionFilename);
+  ipcMain.handle('pdf-editor:versions:restore', (event, sessionId: string, versionFilename: string) => result(event, owner => applyRestoredVersion(event, owner, sessionId, async () => versionFilename)));
+  ipcMain.handle('pdf-editor:versions:undo', (event, sessionId: string) => result(event, owner => applyRestoredVersion(event, owner, sessionId, async source => {
+    const filename = await selectUndoVersion(backupDirectory(), source.sourceId!, source.sha256);
+    if (!filename) throw new Error('invalid-request');
+    return filename;
+  })));
+  ipcMain.handle('pdf-editor:versions:delete', (event, sessionId: string, versionFilename: string) => result(event, async owner => {
     const source = controller().source(owner, sessionId);
-    if (!source.path) throw new Error('invalid-source');
-    const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
-    const backupPath = path.join(backupDirectory, safeFilename);
-    if (!fs.existsSync(backupPath)) throw new Error('invalid-request');
-
-    const newBackupFilename = `${source.sourceId || randomUUID()}_${Date.now()}.pdf`;
-    await copyFile(source.path, path.join(backupDirectory, newBackupFilename)).catch(() => {});
-
-    await copyFile(backupPath, source.path);
-    const newHash = await fileSha256(source.path);
-    const size = (await stat(source.path)).size;
-
-    if (source.sourceId) {
-      const db = getDatabase();
-      db.transaction(() => {
-        db.prepare('UPDATE file_source_detail SET file_hash=?,file_size_bytes=?,last_verified_at=? WHERE source_id=?').run(newHash, size, new Date().toISOString(), source.sourceId);
-        db.prepare('DELETE FROM book_content_fts WHERE book_id=?').run(source.workId);
-      })();
-    }
-    const session = controller().rebase(owner, sessionId, newHash, true);
-    event.sender.send('pdf-editor:source-changed', { workId: source.workId, sourceId: source.sourceId });
-    return { restored: true, session };
-  }));
-
-  ipcMain.handle('pdf-editor:versions:undo', (event, sessionId: string) => result(event, async owner => {
-    const source = controller().source(owner, sessionId);
-    if (!source.path) throw new Error('invalid-source');
-    const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
-    const files = await readdir(backupDirectory).catch(() => []);
-    const prefix = source.sourceId ? `${source.sourceId}_` : '';
-    const matching = files.filter(f => f.endsWith('.pdf') && (prefix ? f.startsWith(prefix) : true));
-    if (!matching.length) throw new Error('invalid-request');
-    const sorted = matching.map(f => {
-      const m = /_(\d+)\.pdf$/u.exec(f);
-      return { file: f, ts: m ? Number.parseInt(m[1], 10) : 0 };
-    }).sort((a, b) => b.ts - a.ts);
-    const latest = sorted[0]?.file;
-    if (!latest) throw new Error('invalid-request');
-    const backupPath = path.join(backupDirectory, latest);
-
-    const newBackupFilename = `${source.sourceId || randomUUID()}_${Date.now()}.pdf`;
-    await copyFile(source.path, path.join(backupDirectory, newBackupFilename)).catch(() => {});
-
-    await copyFile(backupPath, source.path);
-    const newHash = await fileSha256(source.path);
-    const size = (await stat(source.path)).size;
-
-    if (source.sourceId) {
-      const db = getDatabase();
-      db.transaction(() => {
-        db.prepare('UPDATE file_source_detail SET file_hash=?,file_size_bytes=?,last_verified_at=? WHERE source_id=?').run(newHash, size, new Date().toISOString(), source.sourceId);
-        db.prepare('DELETE FROM book_content_fts WHERE book_id=?').run(source.workId);
-      })();
-    }
-    const session = controller().rebase(owner, sessionId, newHash, true);
-    event.sender.send('pdf-editor:source-changed', { workId: source.workId, sourceId: source.sourceId });
-    return { restored: true, session };
-  }));
-
-  ipcMain.handle('pdf-editor:versions:delete', (event, versionFilename: string) => result(event, async () => {
-    const safeFilename = path.basename(versionFilename);
-    const backupDirectory = app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
-    const target = path.join(backupDirectory, safeFilename);
-    await unlink(target);
+    if (!source.sourceId) throw new Error('invalid-source');
+    await deletePdfVersion(backupDirectory(), source.sourceId, versionFilename);
     return true;
   }));
 }

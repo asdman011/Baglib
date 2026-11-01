@@ -17,7 +17,7 @@ import { writeSparsePagePdf } from '../../tests/helpers/sparse-pdf';
 var root = process.cwd();
 var directory = process.env.BAGLIB_PDF_LIVE_DIRECTORY;
 const externalSource = process.env.BAGLIB_TEST_READONLY_PDF ? path.resolve(process.env.BAGLIB_TEST_READONLY_PDF) : null;
-if (externalSource && process.env.BAGLIB_TEST_RANGE !== '1') throw new Error('Read-only source requires range-only verification');
+if (externalSource && process.env.BAGLIB_TEST_RANGE !== '1' && process.env.BAGLIB_TEST_FIRST_PAINT !== '1') throw new Error('Read-only source requires range-only verification');
 electron.protocol.registerSchemesAsPrivileged([{ scheme: "baglib-asset", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 electron.app.setPath("userData", path.join(directory, "profile"));
 electron.app.setAppPath(root);
@@ -41,6 +41,7 @@ electron.app.whenReady().then(async () => {
       console.error('[fixture-asset-denied]', { target, cacheRoot });
       return new Response(null, { status: 403 });
     }
+    if (cached && globalThis.failCachedRanges && request.headers.get('range')) return new Response(null, { status: 500 });
     let response = await streamAssetResponse(request, target, 'application/pdf');
     if (process.env.BAGLIB_TEST_RANGE_FAILURE === '1' && request.headers.get('range') && !request.headers.get('range').startsWith('bytes=0-')) response = new Response(response.body, { status: 200, headers: response.headers });
     servedRequests.push({ cached, method: request.method, range: request.headers.get('range'), status: response.status });
@@ -83,12 +84,78 @@ electron.app.whenReady().then(async () => {
     throw new Error(`Timed out ${code}`);
   };
   try {
-    await window.loadFile(path.join(directory, "index.html"), { query: process.env.BAGLIB_TEST_PERFORMANCE === '1' || process.env.BAGLIB_TEST_RANGE === '1' ? { performance: '1', pdf: readerAssetUrl(filename), ...(process.env.BAGLIB_TEST_VIEW_CACHE === '1' ? { viewCache: '1' } : {}) } : process.env.BAGLIB_TEST_TOC === '1' ? { toc: '1' } : process.env.BAGLIB_TEST_IMMERSIVE === "1" ? { pdf: readerAssetUrl(filename) } : {} });
+    await window.loadFile(path.join(directory, "index.html"), { query: process.env.BAGLIB_TEST_FIRST_PAINT === '1' ? { performance: '1', delayedOpen: '1', viewCache: '1', pdf: readerAssetUrl(filename) } : process.env.BAGLIB_TEST_PERFORMANCE === '1' || process.env.BAGLIB_TEST_RANGE === '1' ? { performance: '1', pdf: readerAssetUrl(filename), ...(process.env.BAGLIB_TEST_VIEW_CACHE === '1' ? { viewCache: '1' } : {}) } : process.env.BAGLIB_TEST_TOC === '1' ? { toc: '1' } : process.env.BAGLIB_TEST_IMMERSIVE === "1" ? { pdf: readerAssetUrl(filename) } : {} });
     await until('Boolean(window.pdfLive && (document.querySelector("[data-pdf-performance]") || document.querySelector("[data-pdf-workstation]") || document.querySelector("[data-pdf-toc-editor]")))');
     if (process.env.BAGLIB_TEST_LANGUAGE) {
       const language = process.env.BAGLIB_TEST_LANGUAGE;
       if (await evaluate('window.pdfLive.lang') !== language) await evaluate('window.pdfLive.toggleLanguage()');
       await until(`window.pdfLive.lang === ${JSON.stringify(language)}`);
+    }
+    if (process.env.BAGLIB_TEST_FIRST_PAINT === '1') {
+      const sourceBefore = await fileSha256(filename);
+      const page = Number(process.env.BAGLIB_TEST_FIRST_PAINT_PAGE ?? 1);
+      await evaluate(`window.pdfFirstPaintPage = ${page}`);
+      const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+      const open = async label => {
+        await sleep(1500);
+        await evaluate('window.pdfPerformance.open()');
+        await until(`Boolean(document.querySelector('canvas')?.dataset.pdfPaintedAt)`);
+        const sample = await evaluate(`({ preview: window.pdfPreviewPresentedAt ? window.pdfPreviewPresentedAt - window.pdfOpenAt : null, crisp: Number(document.querySelector('canvas').dataset.pdfPaintedAt) - window.pdfOpenAt, source: document.querySelector('canvas').dataset.pdfPaintSource })`);
+        await sleep(1200);
+        await evaluate('window.pdfPerformance.close()');
+        return { label, ...sample };
+      };
+      const results = [await open('cold: no preview yet'), await open('warm: preview'), await open('warm: preview')];
+      const lookup = `window.electronAPI.pdfEditor.viewSource({path:${JSON.stringify(filename)},...(window.pdfCacheLease?{id:window.pdfCacheLease}:{})}).then(result=>{if(!result.ok)throw new Error(result.error);window.pdfCacheLease=result.data.id;return result.data.cached;})`;
+      await until(lookup);
+      results.push(await open('warm: optimized cache'), await open('warm: optimized cache'));
+      assert.equal(await fileSha256(filename), sourceBefore);
+      if (process.env.BAGLIB_TEST_REAL_SCROLL === '1') {
+        await sleep(1500);
+        await evaluate('window.pdfPerformance.open()');
+        await until(`Boolean(document.querySelector('canvas')?.dataset.pdfPaintedAt)`);
+        await evaluate(`window.pdfPerformance.setMode('scrolled')`);
+        await until(`document.querySelectorAll('.pdf-page-holder').length > 1`);
+        await sleep(2500);
+        const scroll = await evaluate(`new Promise(resolve => {
+          const container = document.querySelector('.pdf-native-viewer-container');
+          const longTasks = [];
+          const observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(entry => Math.round(entry.duration))));
+          observer.observe({ type: 'longtask', buffered: false });
+          const deltas = []; let previous, step = 0, maxCanvases = 0;
+          function frame(now) {
+            if (previous !== undefined) deltas.push(now - previous); previous = now;
+            container.scrollTop += 60;
+            maxCanvases = Math.max(maxCanvases, container.querySelectorAll('canvas').length);
+            if (++step <= 360) requestAnimationFrame(frame);
+            else { observer.disconnect(); resolve({ deltas, maxCanvases, longTasks, page: container.scrollTop }); }
+          }
+          requestAnimationFrame(frame);
+        })`);
+        const sorted = scroll.deltas.slice(1).sort((first, second) => first - second);
+        console.log(JSON.stringify({ realScroll: { frames: sorted.length, over17ms: sorted.filter(value => value > 17).length, over25ms: sorted.filter(value => value > 25).length, p50: sorted[Math.floor(sorted.length / 2)], p95: sorted[Math.floor(sorted.length * 0.95)], p99: sorted[Math.floor(sorted.length * 0.99)], max: sorted.at(-1), longTasks: scroll.longTasks, maxCanvases: scroll.maxCanvases } }));
+        await evaluate(`window.pdfPerformance.setMode('single')`);
+        await evaluate('window.pdfPerformance.close()');
+      }
+      if (process.env.BAGLIB_TEST_LATE_FAILURE === '1') {
+        await sleep(1500);
+        await evaluate('window.pdfPerformance.open()');
+        await until(`Boolean(document.querySelector('canvas')?.dataset.pdfPaintedAt)`);
+        const before = servedRequests.filter(item => item.cached).length;
+        assert.ok(before > 0, 'Reader did not use the cached derivative');
+        globalThis.failCachedRanges = true;
+        const target = Number(process.env.BAGLIB_TEST_LATE_FAILURE_PAGE ?? 400);
+        await evaluate(`window.pdfPerformance.setPage(${target})`);
+        await until(`document.querySelector('[data-page-number="${target}"] canvas')?.dataset.pdfPaintedAt`);
+        const recovered = await evaluate(`Boolean(document.querySelector('[data-page-number="${target}"] canvas'))`);
+        const after = servedRequests.slice(-5).map(item => item.cached);
+        console.log(JSON.stringify({ lateFailure: { recovered, page: target, lastRequestsCached: after } }));
+        assert.equal(await evaluate(`window.electronAPI.pdfEditor.viewSource({path:${JSON.stringify(filename)},id:window.pdfCacheLease}).then(result=>result.ok&&result.data.cached)`), false);
+        assert.equal(await fileSha256(filename), sourceBefore);
+      }
+      console.log(JSON.stringify({ firstPaint: results, errors: errors.filter(message => !/Failed to load resource|Error rendering page/u.test(message)) }));
+      electron.app.quit();
+      return;
     }
     if (process.env.BAGLIB_TEST_PAINT_BARRIER === '1') {
       await until(`Boolean(document.querySelector('canvas')?.dataset.pdfPaintedAt)`);
@@ -240,6 +307,7 @@ electron.app.whenReady().then(async () => {
       const cacheDrawMs = await evaluate(`Number(document.querySelector('canvas').dataset.pdfCacheDrawMs)`);
       await evaluate(`window.pdfPerformance.setMode('scrolled')`);
       await until(`document.querySelectorAll('.pdf-page-holder').length === 60`);
+      await new Promise(resolve => setTimeout(resolve, Number(process.env.BAGLIB_TEST_SCROLL_SETTLE ?? 1000)));
       window.webContents.debugger.attach('1.3');
       await window.webContents.debugger.sendCommand('Profiler.enable');
       await window.webContents.debugger.sendCommand('Profiler.start');
@@ -303,7 +371,42 @@ electron.app.whenReady().then(async () => {
       await until(`Boolean(document.querySelector('.pdf-viewport-container canvas'))`);
       await until(`document.querySelector('.pdf-viewport-container .textLayer')?.textContent.includes('PAGE 1')`);
       await until('window.pdfReaderPageCount === 2 && window.pdfReaderDocumentPages === 2');
-      const annotationViewportWidth = await evaluate(`document.querySelector('.pdf-viewport-container').getBoundingClientRect().width`);
+      if (process.env.BAGLIB_TEST_WORKBENCH === '1') {
+        const openMode = key => evaluate(`document.querySelector('button[title="'+window.pdfLive.t(${JSON.stringify(key)})+'"]').click()`);
+        const noLoader = `!document.querySelector('[data-pdf-workstation]').textContent.includes(window.pdfLive.t('loadingNativePdf'))`;
+        const viewerShown = `getComputedStyle(document.querySelector('.pdf-viewport-container')).visibility === 'visible' && Boolean(document.querySelector('.pdf-viewport-container canvas'))`;
+        await until(`document.querySelectorAll('aside img[src^="data:image/jpeg"]').length === 2`);
+        assert.equal(await evaluate(`Boolean(document.querySelector('[data-pdf-workstation] .border-2.border-emerald-600'))`), false);
+        await openMode('stirlingModeOrganize');
+        await until(`document.querySelectorAll('[data-page-editor-card] img[src^="data:image/jpeg"]').length === 2`);
+        assert.equal(await evaluate(noLoader), true);
+        assert.equal(await evaluate(`Boolean(document.querySelector('.pdf-viewport-container canvas'))`), true);
+        await fs.writeFile(path.join(directory, 'organize.png'), (await window.capturePage()).toPNG());
+        await openMode('stirlingModeSecurity');
+        assert.equal(await evaluate(noLoader), true);
+        await until(viewerShown);
+        await until(`Boolean(document.querySelector('[data-pdf-page-preview] img')) || document.querySelector('[data-pdf-workstation] [role="alert"]') !== null`);
+        assert.equal(await evaluate(noLoader), true);
+        const hasPreview = await evaluate(`Boolean(document.querySelector('[data-pdf-page-preview] img'))`);
+        if (hasPreview) {
+          const box = `document.querySelector('[data-pdf-page-preview] .border-emerald-600')`;
+          assert.equal(await evaluate(`Boolean(${box})`), false);
+          const area = await evaluate(`(()=>{const r=document.querySelector('[data-pdf-page-preview]').getBoundingClientRect();return {x:r.left,y:r.top}})()`);
+          const send = (type, x, y) => window.webContents.sendInputEvent({ type, x: Math.round(area.x + x), y: Math.round(area.y + y), button: 'left', clickCount: 1 });
+          send('mouseMove', 40, 40); send('mouseDown', 40, 40); send('mouseMove', 120, 90); send('mouseUp', 120, 90);
+          await until(`Boolean(${box})`);
+          await new Promise(resolve => setTimeout(resolve, 400));
+          const drawn = await evaluate(`(()=>{const r=${box}.getBoundingClientRect(),p=document.querySelector('[data-pdf-page-preview]').getBoundingClientRect(),hit=document.elementFromPoint(p.left+5,p.top+5);return {width:r.width,height:r.height,left:r.left-p.left,top:r.top-p.top,overlayOnTop:Boolean(hit?.closest('[data-pdf-page-preview]'))}})()`);
+          console.log('drawn box', JSON.stringify(drawn));
+          assert.ok(drawn.width > 60 && drawn.height > 30 && drawn.overlayOnTop, JSON.stringify(drawn));
+        }
+        await fs.writeFile(path.join(directory, 'security.png'), (await window.capturePage()).toPNG());
+        assert.equal(errors.length, 0, errors.join('\n'));
+        console.log(`Workbench checks passed (engine page image: ${hasPreview}): ${directory}`);
+        electron.app.quit();
+        return;
+      }
+      const annotationViewportWidth =await evaluate(`document.querySelector('.pdf-viewport-container').getBoundingClientRect().width`);
       await evaluate(`document.querySelector('[data-pdf-annotations-toggle]').click()`);
       await until(`Boolean(document.querySelector('[data-pdf-annotations-panel] [data-reader-annotations]'))`);
       assert.equal(await evaluate(`document.querySelectorAll('[data-reader-annotations]').length`), 1);
@@ -335,6 +438,22 @@ electron.app.whenReady().then(async () => {
       await until(`getComputedStyle(document.querySelector('.canvasWrapper')).filter !== 'none'`);
       await evaluate(`document.querySelector('[data-pdf-page-tint]').click()`);
       await until(`getComputedStyle(document.querySelector('.canvasWrapper')).filter === 'none'`);
+      if (process.env.BAGLIB_TEST_SHOT === '1') {
+        await until(`Boolean(document.querySelector('.pdf-native-viewer-container canvas')?.dataset.pdfPaintedAt)`);
+        for (const [language, shots] of [['ar', 2], ['en', 2]]) {
+          if (await evaluate('window.pdfLive.lang') !== language) await evaluate('window.pdfLive.toggleLanguage()');
+          await until(`window.pdfLive.lang === '${language}'`);
+          for (let shot = 0; shot < shots; shot++) {
+            await new Promise(resolve => setTimeout(resolve, 700));
+            const theme = await evaluate(`document.querySelector('[data-pdf-workstation]').dataset.workstationTheme`);
+            await fs.writeFile(path.join(directory, `shot-${language}-${theme}.png`), (await window.webContents.capturePage()).toPNG());
+            await evaluate(`[...document.querySelectorAll('[data-reader-chrome="rail"] button')].at(-1).click()`);
+          }
+        }
+        console.log(`Screenshots: ${directory}`);
+        electron.app.quit();
+        return;
+      }
       if (process.env.BAGLIB_TEST_MUTATIONS === '1') {
         const sourceHash = await fileSha256(filename);
         await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
@@ -354,6 +473,20 @@ electron.app.whenReady().then(async () => {
         await until(`document.querySelector('.textLayer')?.textContent.includes('EDIT 1')`);
         assert.equal(await evaluate(`document.querySelector('.pdf-native-viewer-container canvas').width > document.querySelector('.pdf-native-viewer-container canvas').height`), true);
         assert.equal(await fileSha256(filename), sourceHash);
+        assert.equal(await evaluate(`document.querySelector('[data-pdf-save-state]').dataset.pdfSaveState`), 'staged');
+        await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('pdfSaveDocument')+'"]').click()`);
+        await until(`document.querySelector('[data-pdf-save-state]').dataset.pdfSaveState === 'saved'`);
+        assert.notEqual(await fileSha256(filename), sourceHash);
+        await evaluate(`document.querySelector('[data-pdf-workstation] header button[title="'+window.pdfLive.t('pdfVersionHistory')+'"]').click()`);
+        await until(`[...document.querySelectorAll('button')].some(button=>button.textContent.includes(window.pdfLive.t('pdfVersionRestore')))`);
+        await evaluate(`[...document.querySelectorAll('button')].find(button=>button.textContent.includes(window.pdfLive.t('pdfVersionRestore'))).click()`);
+        await until(`document.querySelector('.textLayer')?.textContent.includes('PAGE 1')`);
+        await until(`(()=>{const canvas=document.querySelector('.pdf-native-viewer-container canvas');return canvas&&canvas.width<canvas.height;})()`);
+        assert.equal(await fileSha256(filename), sourceHash);
+        const fixtureSource = db2.prepare('SELECT source_id id FROM file_source_detail WHERE file_path=?').get(filename);
+        const backups = path.join(root, '.baglib-data', 'backups');
+        for (const name of await fs.readdir(backups)) if (name.startsWith(`${fixtureSource.id}_`)) await fs.unlink(path.join(backups, name));
+        console.log('[restore-test] Saved edit restored through version history; viewer reloaded the original');
         assert.equal(errors.length, 0, errors.join('\n'));
         console.log(`Native organizer/apply/replacement staged preview checks passed: ${directory}`);
         electron.app.quit();

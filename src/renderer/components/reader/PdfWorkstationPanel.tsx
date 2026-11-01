@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ZoomIn,
   ZoomOut,
-  RotateCw,
   RotateCcw,
   History,
   Bookmark,
@@ -22,16 +21,11 @@ import {
   CornerDownRight,
   ExternalLink,
   FileText,
-  Layers,
   Shield,
-  ArrowRightLeft,
-  PenTool,
   Cpu,
   Folder,
   FolderInput,
-  FolderOutput,
   Search,
-  Sliders,
   Sun,
   Moon,
   Maximize2,
@@ -39,12 +33,9 @@ import {
   Minimize2,
   ChevronFirst,
   ChevronLast,
-  CheckCircle2,
   ShieldCheck,
   Eye,
   BookOpen,
-  Sparkles,
-  Columns3,
   LayoutGrid,
 } from 'lucide-react';
 import type {
@@ -63,13 +54,16 @@ import type {
 } from '../../../shared/types/pdf-editor';
 import type { PdfReview } from '../../../shared/types/pdf-collaboration';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { outputAfterFailedJob } from '../../libs/reader/pdf-output-state';
 import type { TranslationKey } from '../../translations';
 import { PdfInlineEditor } from './PdfInlineEditor';
 import { PdfNativeViewer } from './PdfNativeViewer';
 import { PdfToolDirectory } from './PdfToolDirectory';
-import { PdfWorkstationTools, type StirlingWorkstationMode } from './PdfWorkstationTools';
+import { PdfWorkstationTools, type PdfCanvasUse, type StirlingWorkstationMode } from './PdfWorkstationTools';
 import { StirlingToolsHub } from '../pdf-workstation/StirlingToolsHub';
 import { PdfPageEditor } from './PdfPageEditor';
+import { PdfPageThumbnail } from './PdfPageThumbnail';
+import type { PdfViewDocument } from '../../libs/reader/pdf-view-document';
 
 const featureKeys: Record<PdfCapability['feature'], TranslationKey> = {
   preview: 'pdfSuitePreview',
@@ -88,7 +82,6 @@ const featureKeys: Record<PdfCapability['feature'], TranslationKey> = {
   'export-markdown': 'stirlingExportMarkdown',
   'export-text': 'stirlingExportTxt',
   'export-csv': 'stirlingExportCsv',
-  'convert-pdfa': 'stirlingExportPdfa',
   'scale-pages': 'stirlingScalePages',
   'multi-page-layout': 'stirlingMultiPageLayout',
   'pdf-to-single-page': 'stirlingSingleLongPage',
@@ -112,6 +105,8 @@ const featureKeys: Record<PdfCapability['feature'], TranslationKey> = {
   'basic-info': 'stirlingBasicInfo',
   'convert-file-pdf': 'stirlingConvertFile',
 };
+
+const PDF_TYPE_LABELS: Record<string, TranslationKey> = { book: 'pdfTypeBook', research_paper: 'pdfTypeResearch', article: 'pdfTypeArticle', lecture: 'pdfTypeLecture' };
 
 const MODE_TABS: { id: StirlingWorkstationMode; labelKey: TranslationKey; defaultTool: PdfFeature }[] = [
   { id: 'view', labelKey: 'stirlingModeView', defaultTool: 'inspect' },
@@ -138,11 +133,11 @@ export function PdfWorkstationPanel({
   initialPage?: number;
   onPageChange?: (page: number) => void;
   fileUrl?: string;
-  readingActions?: { onReadAloud: () => void; onAutoScroll: () => void; autoScrolling: boolean; onBookmark: () => void; bookmarked: boolean };
+  readingActions?: { onReadAloud: () => void; onAutoScroll: () => void; autoScrolling: boolean; onBookmark: () => void; bookmarked: boolean; onSearch?: () => void };
   annotationPanel?: { open: boolean; content: React.ReactNode; onToggle: () => void; onClose: () => void; count: number };
   readerIntegration?: Pick<React.ComponentProps<typeof PdfNativeViewer>, 'highlights' | 'activeSelectionInfo' | 'onSelectionChange' | 'onHighlightClick' | 'onPdfDocLoaded' | 'onOutlineLoaded' | 'onTotalPagesLoaded' | 'contentContainerRef' | 'autoCropMargins' | 'direction'>;
 }) {
-  const { lang, dir, t, theme: appTheme } = useWorkspace();
+  const { lang, dir, t, theme: appTheme, books, openBookForReading } = useWorkspace();
   const [immersive, setImmersive] = useState(false);
   const [activeOverlay, setActiveOverlay] = useState<ReaderOverlay>(null);
   useEffect(() => {
@@ -163,7 +158,8 @@ export function PdfWorkstationPanel({
   const [collapsedChrome, setCollapsedChrome] = useState<string[]>([]);
   const chromeLabels = { top: 'pdfChromeTop', rail: 'pdfChromeRail', library: 'pdfChromeLibrary', tools: 'pdfDirectoryTitle', bottom: 'pdfChromeBottom' } as const;
   const pinChrome = (zone: keyof typeof chromeLabels) => <div className="flex shrink-0 items-center"><button type="button" aria-pressed={pinnedChrome.includes(zone)} title={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} aria-label={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} onClick={() => setPinnedChrome(previous => previous.includes(zone) ? previous.filter(item => item !== zone) : [...previous, zone])} className="rounded-lg p-2 hover:bg-emerald-500/20"><Pin size={14} className={pinnedChrome.includes(zone) ? 'text-emerald-500' : ''} /></button><button type="button" aria-label={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} title={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} onClick={() => setCollapsedChrome(previous => [...previous.filter(item => item !== zone), zone])} className="rounded-lg p-1 hover:bg-emerald-500/20"><X size={12} /></button></div>;
-  const [revealedEdge, setRevealedEdge] = useState('');
+  const workstationRoot = useRef<HTMLElement | null>(null);
+  const setRevealedEdge = useCallback((edge: string) => { workstationRoot.current?.setAttribute('data-revealed-edge', edge); }, []);
   const hideChromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -172,7 +168,7 @@ export function PdfWorkstationPanel({
     };
     window.addEventListener('keydown', key);
     return () => { window.removeEventListener('keydown', key); if (hideChromeTimer.current) clearTimeout(hideChromeTimer.current); };
-  }, []);
+  }, [setRevealedEdge]);
   const initialLanguage = useRef(lang);
   const [session, setSession] = useState<PdfSession | null>(null);
   const [mode, setMode] = useState<StirlingWorkstationMode>('view');
@@ -181,6 +177,9 @@ export function PdfWorkstationPanel({
   const setIsToolsHubOpen = (open: boolean) => setActiveOverlay(current => setReaderOverlay(current, 'hub', open));
   const setQuickToolsOpen = (open: boolean) => setActiveOverlay(current => setReaderOverlay(current, 'quick-tools', open));
   const [quickToolsSearch, setQuickToolsSearch] = useState('');
+  const [hubView, setHubView] = useState<'columns' | 'pipelines'>('columns');
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const pageSearch = useRef<HTMLInputElement | null>(null);
   const [themeOverride, setWorkstationTheme] = useState<'dark' | 'light' | 'sepia' | null>(null);
   const workstationTheme = themeOverride || appTheme;
   const [tintPdfPages, setTintPdfPages] = useState(false);
@@ -227,8 +226,21 @@ export function PdfWorkstationPanel({
     setPage(current => Math.max(1, Math.min(total, current)));
     readerIntegration?.onTotalPagesLoaded?.(total);
   }, [readerIntegration?.onTotalPagesLoaded]);
-  const nativeReading = Boolean(displayFileUrl) && mode === 'view';
+  const nativeReading = Boolean(displayFileUrl);
+  const [canvasUse, setCanvasUse] = useState<PdfCanvasUse>('none');
+  const showPagePreview = Boolean(preview) && preview?.page === page && (canvasUse !== 'none' || !displayFileUrl);
+  const [pdfDocument, setPdfDocument] = useState<PdfViewDocument | null>(null);
+  const handlePdfDocument = useCallback((document: PdfViewDocument) => {
+    setPdfDocument(document);
+    readerIntegration?.onPdfDocLoaded?.(document);
+  }, [readerIntegration?.onPdfDocLoaded]);
+  const totalPages = inspection?.totalPages || nativeTotalPages;
   const [rect, setRect] = useState([36, 36, 400, 180]);
+  const [boxPage, setBoxPage] = useState<number | null>(null);
+  const handleCanvasUse = useCallback((value: PdfCanvasUse) => {
+    setCanvasUse(value);
+    if (value === 'none') setBoxPage(null);
+  }, []);
   const [text, setText] = useState('');
   const openingPage = useRef(initialPage);
   const originalSession = useRef<string | null>(null);
@@ -252,6 +264,19 @@ export function PdfWorkstationPanel({
   const drag = useRef<number[] | null>(null);
   const replacementJob = useRef<string | null>(null);
   const api = (): PdfEditorAPI => window.electronAPI.pdfEditor;
+  const pdfBooks = React.useMemo(() => books.filter(book => /\.pdf$/iu.test(book.filePath || '')), [books]);
+  const pdfTypeCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const book of pdfBooks) {
+      const type = String(book.workType || 'other');
+      counts.set(type, (counts.get(type) ?? 0) + 1);
+    }
+    return [...counts].sort((first, second) => second[1] - first[1]);
+  }, [pdfBooks]);
+  const recentPdfBooks = React.useMemo(() => pdfBooks
+    .filter(book => book.id === workId || !typeFilter || String(book.workType || 'other') === typeFilter)
+    .sort((first, second) => Number(second.id === workId) - Number(first.id === workId) || Number(Boolean(second.lastReadLocation)) - Number(Boolean(first.lastReadLocation)) || String(second.createdAt || '').localeCompare(String(first.createdAt || '')))
+    .slice(0, 5), [pdfBooks, typeFilter, workId]);
   const signatureResult = (job?.result?.signature || (job?.operation === 'verify-signatures' ? job.result : null)) as {
     status: string;
     pendingFields?: string[];
@@ -294,14 +319,18 @@ export function PdfWorkstationPanel({
       try {
         const [telemetry, folders] = await Promise.all([editor?.getProcessorTelemetry?.(), editor?.getWatchedFolders?.()]);
         if (!alive) return;
-        if (telemetry?.ok) setProcessorTelemetry(telemetry.data);
-        if (folders?.ok) setWatchedFoldersList(folders.data);
+        if (telemetry?.ok) setProcessorTelemetry(previous => JSON.stringify(previous) === JSON.stringify(telemetry.data) ? previous : telemetry.data);
+        if (folders?.ok) setWatchedFoldersList(previous => JSON.stringify(previous) === JSON.stringify(folders.data) ? previous : folders.data);
       } catch {}
     };
     void refresh();
-    const timer = setInterval(() => { void refresh(); }, 5000);
+    const timer = isToolsHubOpen ? setInterval(() => { void refresh(); }, 5000) : undefined;
     return () => { alive = false; clearInterval(timer); };
   }, [isToolsHubOpen]);
+
+  useEffect(() => {
+    if (mode !== 'view' || isToolsHubOpen) void window.electronAPI?.pdfEditor?.warmEngine?.();
+  }, [mode, isToolsHubOpen]);
 
   useEffect(() => {
     const editor = window.electronAPI?.pdfEditor;
@@ -465,6 +494,9 @@ export function PdfWorkstationPanel({
                   (result.data.result!.thumbnails as { key?: string; page: number; image: string }[]).map(item => [item.key || item.page, item.image]),
                 ),
               }));
+          } else if (result.data.state === 'failed') {
+            const failed = result.data;
+            setOutput(current => outputAfterFailedJob(current, failed));
           }
         } else setError(result.error);
       } catch {
@@ -479,7 +511,7 @@ export function PdfWorkstationPanel({
   }, [jobId, jobState]);
 
   const start = async (operation: PdfOperation, payload?: Record<string, unknown>) => {
-    if (operation === 'preview' && nativeReading) {
+    if (operation === 'preview' && nativeReading && canvasUse === 'none') {
       const requestedPage = Math.max(1, Math.min(nativeTotalPages, Number(payload?.page) || page));
       setPage(requestedPage);
       onPageChange?.(requestedPage);
@@ -507,6 +539,18 @@ export function PdfWorkstationPanel({
       setStarting(false);
     }
   };
+
+  // Tools that draw on the page get a page image in the background; the viewer stays on screen until it arrives.
+  const requestPreview = useRef(start);
+  const requestedPreview = useRef('');
+  useEffect(() => { requestPreview.current = start; });
+  useEffect(() => {
+    if (canvasUse === 'none' || !session || starting || jobState === 'running') return;
+    const key = `${session.sha256}:${displayFileUrl}:${page}`;
+    if (preview?.page === page || requestedPreview.current === key) return;
+    requestedPreview.current = key;
+    void requestPreview.current('preview', { page });
+  }, [canvasUse, session, starting, jobState, displayFileUrl, page, preview?.page]);
 
   const point = (event: React.PointerEvent<HTMLDivElement>) => {
     const area = event.currentTarget.getBoundingClientRect();
@@ -596,8 +640,9 @@ export function PdfWorkstationPanel({
   };
 
   const handleDeleteVersion = async (versionFilename: string) => {
+    if (!session) return;
     try {
-      const res = await window.electronAPI.pdfEditor.deleteVersion(versionFilename);
+      const res = await window.electronAPI.pdfEditor.deleteVersion(session.id, versionFilename);
       if (res?.ok) {
         setVersionActionMessage(t('pdfVersionDeleted'));
         setTimeout(() => setVersionActionMessage(null), 3000);
@@ -637,7 +682,7 @@ export function PdfWorkstationPanel({
         page,
         rect,
         kind: 'sticky',
-        author: newCommentAuthor.trim() || (lang === 'ar' ? 'ملاحظة' : 'Note'),
+        author: newCommentAuthor.trim() || t('pdfCommentDefaultAuthor'),
         text: newCommentText.trim(),
         status: 'open',
       });
@@ -669,7 +714,7 @@ export function PdfWorkstationPanel({
       const res = await window.electronAPI.pdfCollaboration.reply(
         session.id,
         comment.id,
-        newCommentAuthor.trim() || (lang === 'ar' ? 'مستخدم' : 'User'),
+        newCommentAuthor.trim() || t('pdfReplyDefaultAuthor'),
         commentReplyText.trim(),
         comment.updatedAt,
       );
@@ -706,6 +751,7 @@ export function PdfWorkstationPanel({
         });
         if (res.ok) {
           setSaved(true);
+          setOutput(null);
           setQuickSaveFeedback(t('pdfDocumentSaved'));
           setTimeout(() => setQuickSaveFeedback(null), 3000);
           if (res.data.session) setSession(res.data.session);
@@ -745,7 +791,7 @@ export function PdfWorkstationPanel({
         if (hideChromeTimer.current) clearTimeout(hideChromeTimer.current);
         hideChromeTimer.current = setTimeout(() => setRevealedEdge(''), 400);
       }}
-      data-revealed-edge={revealedEdge}
+      ref={workstationRoot}
       onPointerMove={event => {
         if (!immersive) return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -768,66 +814,40 @@ export function PdfWorkstationPanel({
     >
       {/* HEADER RIBBON */}
       {collapsedChrome.length > 0 && <details data-reader-recovery className="absolute end-2 top-2 z-[60] rounded-xl border border-subtle bg-surface p-2 text-main shadow-xl"><summary className="cursor-pointer text-xs">{t('pdfChromeRestore')}</summary><div className="mt-2 flex flex-col gap-1">{collapsedChrome.map(zone => <button key={zone} type="button" className="rounded-lg px-2 py-1 text-start text-xs hover:bg-canvas" onClick={() => setCollapsedChrome(previous => previous.filter(item => item !== zone))}>{t(chromeLabels[zone as keyof typeof chromeLabels])}</button>)}</div></details>}
-      <header className="flex h-11 min-h-11 flex-nowrap items-center justify-between gap-1 border-b border-subtle px-2 bg-canvas/60 shrink-0">
-        {pinChrome('top')}
-        <button type="button" aria-pressed={immersive} title={t('zenModePurePage')} aria-label={t('zenModePurePage')} onClick={event => { event.currentTarget.blur(); setRevealedEdge(''); setImmersive(value => !value); }} className="rounded-lg p-2"><Maximize2 size={16} /></button>
-        <div className="flex items-center gap-3 min-w-0">
-          {embedded && (
-            <button
-              type="button"
-              onClick={onClose}
-              title={t('backToLibrary') || 'Back to Library'}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-subtle bg-surface hover:bg-canvas text-xs font-semibold text-main transition-all cursor-pointer shrink-0"
-            >
-              <ArrowLeft size={14} className="rtl:rotate-180 text-muted" />
-              <span>{t('backToLibrary') || 'Back to Library'}</span>
-            </button>
-          )}
-          <div className="size-8 rounded-xl bg-emerald-600/10 text-emerald-600 flex items-center justify-center shrink-0">
-            <FileText size={18} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="font-bold text-sm leading-tight truncate">{session?.filename || t('pdfSuiteTitle')}</h2>
-            <div className="flex items-center gap-2 mt-0.5">
-              {/* Stirling-PDF Engine Status Pill */}
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-subtle bg-surface text-[10px] font-medium">
-                <span
-                  className={`inline-block size-2 rounded-full ${
-                    engineStatus.status === 'ready'
-                      ? 'bg-emerald-500'
-                      : engineStatus.status === 'starting'
-                      ? 'bg-amber-500 animate-pulse'
-                      : engineStatus.status === 'processing'
-                      ? 'bg-sky-500 animate-pulse'
-                      : engineStatus.status === 'error'
-                      ? 'bg-red-500'
-                      : 'bg-gray-400'
-                  }`}
-                />
-                <span className="text-muted">
-                  {t(
-                    engineStatus.status === 'ready'
-                      ? 'stirlingEngineReady'
-                      : engineStatus.status === 'starting'
-                      ? 'stirlingEngineStarting'
-                      : engineStatus.status === 'processing'
-                      ? 'stirlingEngineProcessing'
-                      : engineStatus.status === 'error'
-                      ? 'stirlingEngineError'
-                      : 'stirlingEngineStatus',
-                  )}
-                </span>
-              </div>
-              {(inspection || nativeReading) && (
-                <span data-pdf-document-page-count className="text-[11px] text-muted">
-                  {t('pdfDocumentPageCount', { count: inspection?.totalPages || nativeTotalPages })}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+      <header className="flex h-11 min-h-11 flex-nowrap items-center gap-1.5 border-b border-subtle px-2 bg-canvas/60 shrink-0">
+        {embedded && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('backToLibrary')}
+            title={t('backToLibrary')}
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-subtle bg-surface hover:bg-canvas text-xs font-semibold text-main transition-all cursor-pointer shrink-0"
+          >
+            <ArrowLeft size={14} className="rtl:rotate-180 text-muted" />
+            <span className="hidden lg:inline">{t('backToLibrary')}</span>
+          </button>
+        )}
+        <h2 className="min-w-0 truncate font-bold text-sm" dir="auto">{session?.filename || t('pdfSuiteTitle')}</h2>
+        {(inspection || nativeReading) && (
+          <span data-pdf-document-page-count className="hidden shrink-0 text-[11px] text-muted xl:inline">
+            {t('pdfDocumentPageCount', { count: totalPages })}
+          </span>
+        )}
+        <span
+          data-pdf-save-state={output?.outputs?.length ? 'staged' : 'saved'}
+          className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${output?.outputs?.length ? `bg-amber-500/15 ${workstationTheme === 'dark' ? 'text-amber-300' : 'text-amber-900'}` : `bg-emerald-500/15 ${workstationTheme === 'dark' ? 'text-emerald-300' : 'text-emerald-900'}`}`}
+        >
+          {!output?.outputs?.length && <Check size={11} aria-hidden="true" />}
+          {t(output?.outputs?.length ? 'pdfUnsavedPill' : 'pdfSavedPill')}
+        </span>
+        <span
+          role="status"
+          title={t(engineStatus.status === 'ready' ? 'stirlingEngineReady' : engineStatus.status === 'starting' ? 'stirlingEngineStarting' : engineStatus.status === 'processing' ? 'stirlingEngineProcessing' : engineStatus.status === 'error' ? 'stirlingEngineError' : 'stirlingEngineStatus')}
+          aria-label={t(engineStatus.status === 'ready' ? 'stirlingEngineReady' : engineStatus.status === 'starting' ? 'stirlingEngineStarting' : engineStatus.status === 'processing' ? 'stirlingEngineProcessing' : engineStatus.status === 'error' ? 'stirlingEngineError' : 'stirlingEngineStatus')}
+          className={`inline-block size-2 shrink-0 rounded-full ${engineStatus.status === 'ready' ? 'bg-emerald-500' : engineStatus.status === 'starting' ? 'bg-amber-500 animate-pulse' : engineStatus.status === 'processing' ? 'bg-sky-500 animate-pulse' : engineStatus.status === 'error' ? 'bg-red-500' : 'bg-gray-400'}`}
+        />
 
-        <div className="flex items-center gap-2">
+        <div className="ms-auto flex shrink-0 items-center gap-1">
           {/* Compact PDF Tools & Processor Button + Popover */}
           <div className="relative">
             <button
@@ -837,7 +857,7 @@ export function PdfWorkstationPanel({
               className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 text-xs text-emerald-500 dark:text-emerald-400 font-semibold transition-all cursor-pointer"
             >
               <Cpu size={14} />
-              <span className="hidden md:inline">{t('pdfCompactToolsBtn')}</span>
+              <span className="hidden lg:inline">{t('pdfCompactToolsBtn')}</span>
             </button>
 
             {quickToolsOpen && (
@@ -871,14 +891,14 @@ export function PdfWorkstationPanel({
 
                   <div className="space-y-1">
                     {[
-                      { id: 'manual-redact', name: lang === 'ar' ? 'الحجب البصري اليدوي' : 'Manual Redaction', mode: 'security' as const, tool: 'redact' as const },
-                      { id: 'compress-pdf', name: lang === 'ar' ? 'ضغط وتحسين الحجم' : 'Compress & Optimize', mode: 'convert' as const, tool: 'compress' as const },
-                      { id: 'ocr-pdf', name: lang === 'ar' ? 'التعرف الضوئي (OCR)' : 'Arabic & English OCR', mode: 'convert' as const, tool: 'ocr' as const },
-                      { id: 'cert-sign', name: lang === 'ar' ? 'التوقيع الرقمي' : 'Digital Cert Sign', mode: 'security' as const, tool: 'sign' as const },
-                      { id: 'split', name: lang === 'ar' ? 'تقسيم الصفحات' : 'Split Pages', mode: 'organize' as const, tool: 'split' as const },
-                      { id: 'merge', name: lang === 'ar' ? 'دمج مستندات PDF' : 'Merge PDFs', mode: 'organize' as const, tool: 'organize' as const },
+                      { id: 'manual-redact', name: t(featureKeys.redact), mode: 'security' as const, tool: 'redact' as const },
+                      { id: 'compress-pdf', name: t(featureKeys.compress), mode: 'convert' as const, tool: 'compress' as const },
+                      { id: 'ocr-pdf', name: t(featureKeys.ocr), mode: 'convert' as const, tool: 'ocr' as const },
+                      { id: 'cert-sign', name: t(featureKeys.sign), mode: 'security' as const, tool: 'sign' as const },
+                      { id: 'split', name: t(featureKeys.split), mode: 'organize' as const, tool: 'split' as const },
+                      { id: 'merge', name: t(featureKeys.organize), mode: 'organize' as const, tool: 'organize' as const },
                     ]
-                      .filter(t => !quickToolsSearch || t.name.toLowerCase().includes(quickToolsSearch.toLowerCase()))
+                      .filter(item => !quickToolsSearch || item.name.toLowerCase().includes(quickToolsSearch.toLowerCase()))
                       .map(item => (
                         <button
                           key={item.id}
@@ -945,7 +965,7 @@ export function PdfWorkstationPanel({
             title={t('pdfUndo')}
           >
             <RotateCcw size={13} />
-            <span className="hidden sm:inline">{t('pdfUndo')}</span>
+            <span className="hidden 2xl:inline">{t('pdfUndo')}</span>
           </button>
 
           <button
@@ -959,7 +979,7 @@ export function PdfWorkstationPanel({
             title={t('pdfVersionHistory')}
           >
             <History size={13} />
-            <span className="hidden sm:inline">{t('pdfVersionHistory')}</span>
+            <span className="hidden 2xl:inline">{t('pdfVersionHistory')}</span>
           </button>
 
           <button
@@ -973,24 +993,11 @@ export function PdfWorkstationPanel({
             <span className="hidden md:inline">{t('save')}</span>
           </button>
 
-          <button
-            type="button"
-            disabled={!session || starting || job?.state === 'running'}
-            onClick={() => void start('organize', { angle: 90 })}
-            className="flex items-center gap-1 rounded-lg border border-subtle px-2.5 py-1.5 text-xs text-muted hover:text-main hover:bg-surface disabled:opacity-40"
-            title={t('pdfRotateDocument')}
-          >
-            <RotateCw size={13} />
-            <span className="hidden sm:inline">{t('pdfRotateDocument')}</span>
-          </button>
-          <button
-            type="button"
-            aria-label={t('studyClose')}
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-muted hover:text-main hover:bg-canvas"
-          >
-            <X size={18} />
-          </button>
+          <button type="button" aria-pressed={immersive} title={t('zenModePurePage')} aria-label={t('zenModePurePage')} onClick={event => { event.currentTarget.blur(); setRevealedEdge(''); setImmersive(value => !value); }} className="rounded-lg p-1.5 text-main hover:bg-surface"><Maximize2 size={14} /></button>
+          {pinChrome('top')}
+          {!embedded && (
+            <button type="button" aria-label={t('studyClose')} title={t('studyClose')} onClick={onClose} className="rounded-lg p-1.5 text-muted hover:text-main hover:bg-canvas"><X size={16} /></button>
+          )}
         </div>
       </header>
 
@@ -1005,14 +1012,15 @@ export function PdfWorkstationPanel({
       {/* WORKSPACE BODY: 4-ZONE WORKSTATION LAYOUT */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* ZONE 1: FAR-LEFT ACTIVITY RAIL (44px) */}
-        <aside data-reader-chrome="rail" className="w-11 shrink-0 border-e border-[#1f2229] bg-[#101216] flex flex-col items-center py-3 space-y-2 z-10">
+        <aside data-reader-chrome="rail" className="w-11 shrink-0 border-e border-subtle bg-canvas flex flex-col items-center py-3 space-y-2 z-10">
           {pinChrome('rail')}
+          <button type="button" title={t('pdfRailLibrary')} aria-label={t('pdfRailLibrary')} onClick={onClose} className="size-8 rounded-xl flex items-center justify-center text-main hover:bg-surface transition-all">
+            <BookOpen size={16} />
+          </button>
           {[
+            { id: 'organize' as const, icon: LayoutGrid, title: t('stirlingModeOrganize') },
             { id: 'view' as const, icon: Eye, title: t('stirlingModeView') },
-            { id: 'organize' as const, icon: Layers, title: t('stirlingModeOrganize') },
-            { id: 'edit' as const, icon: PenTool, title: t('stirlingModeEdit') },
             { id: 'security' as const, icon: Shield, title: t('stirlingModeSecurity') },
-            { id: 'convert' as const, icon: ArrowRightLeft, title: t('stirlingModeConvert') },
           ].map(tab => {
             const isActive = mode === tab.id;
             const Icon = tab.icon;
@@ -1032,34 +1040,32 @@ export function PdfWorkstationPanel({
                 className={`size-8 rounded-xl flex items-center justify-center transition-all ${
                   isActive
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                    : 'text-[#8b92a5] hover:text-white hover:bg-[#181a20]'
+                    : 'text-main hover:bg-surface'
                 }`}
               >
                 <Icon size={16} />
               </button>
             );
           })}
-
-          <div className="w-5 border-b border-[#222631] my-1" />
-
-          {/* Processor Pipeline Trigger */}
-          <button
-            type="button"
-            title={t('pdfProcessorLiveTitle')}
-            onClick={() => setIsToolsHubOpen(true)}
-            className="size-8 rounded-xl flex items-center justify-center text-amber-400 hover:bg-amber-500/10 transition-all"
-          >
+          <button type="button" title={t('pdfRailFiles')} aria-label={t('pdfRailFiles')} aria-pressed={!leftSidebarCollapsed && !collapsedChrome.includes('library')} onClick={() => { setCollapsedChrome(previous => previous.filter(zone => zone !== 'library')); setLeftSidebarCollapsed(value => !value); }} className="size-8 rounded-xl flex items-center justify-center text-main hover:bg-surface transition-all">
+            <Folder size={16} />
+          </button>
+          <button type="button" title={t('pdfRailPipelines')} aria-label={t('pdfRailPipelines')} onClick={() => { setHubView('pipelines'); setIsToolsHubOpen(true); }} className="size-8 rounded-xl flex items-center justify-center text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 transition-all">
             <Cpu size={16} />
           </button>
-
-          {/* Stirling Hub Sparkles Trigger */}
           <button
             type="button"
-            title={t('pdfToolsHubTitle')}
-            onClick={() => setIsToolsHubOpen(true)}
-            className="size-8 rounded-xl flex items-center justify-center text-emerald-400 hover:bg-emerald-500/10 transition-all"
+            title={t('pdfRailSearch')}
+            aria-label={t('pdfRailSearch')}
+            onClick={() => {
+              if (readingActions?.onSearch) { readingActions.onSearch(); return; }
+              setCollapsedChrome(previous => previous.filter(zone => zone !== 'library'));
+              setLeftSidebarCollapsed(false);
+              requestAnimationFrame(() => pageSearch.current?.focus());
+            }}
+            className="size-8 rounded-xl flex items-center justify-center text-main hover:bg-surface transition-all"
           >
-            <Sparkles size={16} />
+            <Search size={16} />
           </button>
 
           <div className="flex-1" />
@@ -1079,7 +1085,7 @@ export function PdfWorkstationPanel({
             title={t(workstationTheme === 'dark' ? 'pdfThemeLight' : workstationTheme === 'light' ? 'pdfThemeSepia' : 'pdfThemeDark')}
             aria-label={t(workstationTheme === 'dark' ? 'pdfThemeLight' : workstationTheme === 'light' ? 'pdfThemeSepia' : 'pdfThemeDark')}
             onClick={() => setWorkstationTheme(workstationTheme === 'dark' ? 'light' : workstationTheme === 'light' ? 'sepia' : 'dark')}
-            className="size-8 rounded-xl flex items-center justify-center text-[#8b92a5] hover:text-white hover:bg-[#181a20] transition-all"
+            className="size-8 rounded-xl flex items-center justify-center text-main hover:bg-surface transition-all"
           >
             {workstationTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
@@ -1098,14 +1104,16 @@ export function PdfWorkstationPanel({
               <div className="flex items-center justify-between">
                 <span className={`font-bold text-xs uppercase tracking-wider ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfChromeLibrary')}</span>
                 <span className="text-[10px] font-mono text-emerald-500 dark:text-emerald-400">
-                  {t('pdfDocumentPageCount', { count: inspection?.totalPages || (nativeReading ? nativeTotalPages : 0) })}
+                  {t('pdfDocumentPageCount', { count: totalPages })}
                 </span>
               </div>
               <div className="relative">
                 <Search className={`absolute inset-y-0 start-2.5 my-auto size-3.5 ${workstationTheme === 'dark' ? 'text-[#686e80]' : 'text-[#94a3b8]'}`} />
                 <input
+                  ref={pageSearch}
                   type="search"
-                  placeholder={lang === 'ar' ? 'بحث في الصفحات...' : 'Search pages...'}
+                  aria-label={t('pdfSearchPages')}
+                  placeholder={t('pdfSearchPages')}
                   value={fileFilter}
                   onChange={e => setFileFilter(e.target.value)}
                   className={`w-full ${
@@ -1116,6 +1124,43 @@ export function PdfWorkstationPanel({
                 />
               </div>
             </div>
+
+            {/* RECENT PDFs with the active document as a blue pill */}
+            <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-1 text-[11px]`}>
+              <span className={`block font-bold uppercase tracking-wider text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfSidebarRecent')}</span>
+              {recentPdfBooks.map(book => (
+                <button
+                  key={book.id}
+                  type="button"
+                  dir="auto"
+                  aria-current={book.id === workId ? 'true' : undefined}
+                  onClick={() => { if (book.id !== workId) openBookForReading(book); }}
+                  className={`block w-full truncate rounded-full px-2.5 py-1 text-start text-xs transition-colors ${book.id === workId ? 'bg-blue-600 font-semibold text-white' : workstationTheme === 'dark' ? 'text-[#c3c8d4] hover:bg-[#181c24]' : 'text-[#334155] hover:bg-slate-100'}`}
+                >
+                  {book.title}
+                </button>
+              ))}
+            </div>
+
+            {/* TYPES with document counts */}
+            {pdfTypeCounts.length > 0 && (
+              <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-1`}>
+                <span className={`block font-bold uppercase tracking-wider text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfSidebarTypes')}</span>
+                <div className="flex flex-wrap gap-1">
+                  {pdfTypeCounts.map(([type, count]) => (
+                    <button
+                      key={type}
+                      type="button"
+                      aria-pressed={typeFilter === type}
+                      onClick={() => setTypeFilter(current => current === type ? null : type)}
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${typeFilter === type ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : workstationTheme === 'dark' ? 'border-[#2a2f3c] text-[#c3c8d4]' : 'border-[#cbd5e1] text-[#334155]'}`}
+                    >
+                      {t(PDF_TYPE_LABELS[type] ?? 'pdfTypeOther')} <span className="tabular-nums opacity-80">{count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* FOLDERS with live Watching badge & Dynamic Watched Folders */}
             <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-1.5 text-[11px]`}>
@@ -1174,6 +1219,25 @@ export function PdfWorkstationPanel({
               )}
             </div>
 
+            {/* FILES: the open document and its restorable versions */}
+            <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-1`}>
+              <span className={`block font-bold uppercase tracking-wider text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfSidebarFiles')}</span>
+              <div className="flex items-center gap-1.5 text-xs">
+                <FileText size={13} className="shrink-0 text-emerald-500" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate" dir="auto">{session?.filename || t('pdfSuiteTitle')}</span>
+                <button
+                  type="button"
+                  disabled={!session}
+                  aria-label={t('pdfVersionHistory')}
+                  title={t('pdfVersionHistory')}
+                  onClick={() => { setIsVersionHistoryOpen(true); void loadVersions(); }}
+                  className="shrink-0 rounded-md p-1 text-emerald-600 hover:bg-emerald-500/15 disabled:opacity-40 dark:text-emerald-400"
+                >
+                  <History size={13} />
+                </button>
+              </div>
+            </div>
+
             {/* Zone 2 Sub-Navigation Tabs: Thumbnails | Bookmarks | Comments */}
             <div className={`flex items-center border-b ${workstationTheme === 'dark' ? 'border-[#1f2229] bg-[#101216]' : 'border-[#e2e8f0] bg-[#f8fafc]'} text-xs font-semibold p-1 gap-1 shrink-0`}>
               {[
@@ -1208,7 +1272,7 @@ export function PdfWorkstationPanel({
             {/* TAB 1: THUMBNAILS LIST */}
             {zone2Tab === 'thumbnails' && (
               <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-                {Array.from({ length: nativeReading ? nativeTotalPages : (inspection?.totalPages || 1) }, (_, i) => i + 1)
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
                   .filter(p => !fileFilter || String(p).includes(fileFilter))
                   .map(p => {
                     const isCurrent = page === p;
@@ -1231,18 +1295,14 @@ export function PdfWorkstationPanel({
                         }`}
                       >
                         <div className={`w-14 aspect-[3/4] bg-white rounded border ${workstationTheme === 'dark' ? 'border-[#282d3b]' : 'border-[#e2e8f0]'} flex items-center justify-center overflow-hidden shrink-0`}>
-                          {thumbUrl ? (
-                            <img src={thumbUrl} alt={`Page ${p}`} className="w-full h-full object-contain" />
-                          ) : (
-                            <span className="text-xs font-mono text-neutral-400">{p}</span>
-                          )}
+                          <PdfPageThumbnail document={pdfDocument} page={p} image={thumbUrl} alt={`${t('page')} ${p}`} fallback={<span className="text-xs font-mono text-neutral-400">{p}</span>} />
                         </div>
                         <div className="text-start min-w-0">
                           <span className={`text-xs block font-bold ${isCurrent ? 'text-emerald-500 dark:text-emerald-400' : workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'}`}>
                             {t('page')} {p}
                           </span>
                           <span className={`text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} block truncate`}>
-                            {isCurrent ? (lang === 'ar' ? 'الصفحة النشطة' : 'Active Page') : ''}
+                            {isCurrent ? t('pdfActivePage') : ''}
                           </span>
                         </div>
                       </button>
@@ -1422,7 +1482,7 @@ export function PdfWorkstationPanel({
                             onClick={() => setReplyingToCommentId(replyingToCommentId === c.id ? null : c.id)}
                             className="text-muted hover:text-main underline cursor-pointer"
                           >
-                            {lang === 'ar' ? 'رد' : 'Reply'}
+                            {t('pdfCommentReply')}
                           </button>
                         </div>
 
@@ -1431,7 +1491,7 @@ export function PdfWorkstationPanel({
                           <div className="pt-2 space-y-1.5">
                             <input
                               dir="auto"
-                              placeholder={lang === 'ar' ? 'اكتب ردك...' : 'Type reply...'}
+                              placeholder={t('pdfCommentReplyPlaceholder')}
                               value={commentReplyText}
                               onChange={e => setCommentReplyText(e.target.value)}
                               className={`w-full text-xs p-1.5 rounded border outline-none ${
@@ -1445,7 +1505,7 @@ export function PdfWorkstationPanel({
                               className="w-full py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold disabled:opacity-40 cursor-pointer"
                             >
                               <CornerDownRight size={11} className="inline me-1" />
-                              {lang === 'ar' ? 'إرسال الرد' : 'Send Reply'}
+                              {t('pdfCommentSendReply')}
                             </button>
                           </div>
                         )}
@@ -1460,12 +1520,14 @@ export function PdfWorkstationPanel({
 
         {/* CENTER HIGH-DPI CANVAS VIEWPORT OR MULTI-TOOL PAGE EDITOR */}
         <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden relative" style={{ backgroundColor: workstationTheme === 'dark' ? '#0b0c0e' : workstationTheme === 'sepia' ? '#efece4' : '#f1f5f9' }}>
-          {mode === 'organize' && session ? (
+          {mode === 'organize' && session && (
             <div className="w-full h-full overflow-hidden flex flex-col">
               <PdfPageEditor
+                key={`${session.id}:${totalPages}`}
                 session={session}
-                totalPages={inspection?.totalPages || nativeTotalPages || 1}
+                totalPages={totalPages}
                 thumbnails={thumbnails}
+                document={pdfDocument}
                 busy={starting || job?.state === 'running'}
                 theme={workstationTheme}
                 onViewPage={p => {
@@ -1487,14 +1549,15 @@ export function PdfWorkstationPanel({
                 }}
               />
             </div>
-          ) : (
-            <>
+          )}
+          <div className={mode === 'organize' && session ? 'absolute inset-0 invisible pointer-events-none flex flex-col' : 'contents'}>
           {/* Central Scrollable Canvas */}
-          <div className="flex-1 min-h-0 overflow-auto p-4 flex items-center justify-center">
-            {nativeReading && displayFileUrl ? (
-              <div className="pdf-viewport-container w-full h-full" dir="ltr">
+          <div className="relative flex-1 min-h-0 overflow-auto p-4 flex items-center justify-center">
+            {displayFileUrl && (
+              <div className={`pdf-viewport-container w-full h-full${showPagePreview ? ' invisible' : ''}`} dir="ltr">
                 <PdfNativeViewer
                   {...readerIntegration}
+                  onPdfDocLoaded={handlePdfDocument}
                   theme={workstationTheme}
                   tintPages={tintPdfPages}
                   fileUrl={displayFileUrl}
@@ -1506,25 +1569,30 @@ export function PdfWorkstationPanel({
                   zoom={zoom / 100}
                 />
               </div>
-            ) : preview ? (
+            )}
+            {showPagePreview && preview && (
+              <div className="absolute inset-0 overflow-auto p-4 flex">
               <div
                 dir="ltr"
                 data-pdf-page-preview
-                className="relative bg-white shadow-2xl rounded-sm overflow-hidden select-none touch-none max-w-full"
+                className={`relative m-auto shrink-0 bg-white shadow-2xl rounded-sm overflow-hidden select-none touch-none max-w-full${canvasUse === 'box' ? ' cursor-crosshair' : ''}`}
                 style={{
                   width: `${preview.width * (zoom / 100)}px`,
                   aspectRatio: `${preview.width}/${preview.height}`,
                 }}
                 onPointerDown={event => {
+                  if (canvasUse !== 'box') return;
                   drag.current = point(event);
                   event.currentTarget.setPointerCapture(event.pointerId);
                 }}
                 onPointerUp={event => {
-                  const end = point(event);
                   const begin = drag.current;
+                  if (!begin) return;
+                  const end = point(event);
                   drag.current = null;
-                  if (begin && Math.abs(end[0] - begin[0]) > 3 && Math.abs(end[1] - begin[1]) > 3) {
+                  if (Math.abs(end[0] - begin[0]) > 3 && Math.abs(end[1] - begin[1]) > 3) {
                     setPage(preview.page);
+                    setBoxPage(preview.page);
                     setRect([
                       Math.max(0, Math.min(begin[0], end[0])),
                       Math.max(0, Math.min(begin[1], end[1])),
@@ -1592,16 +1660,18 @@ export function PdfWorkstationPanel({
                   />
                 )}
 
-                {/* Bounding box selection overlay */}
-                <div
-                  className="absolute border-2 border-emerald-600 bg-emerald-500/15 pointer-events-none"
-                  style={{
-                    left: `${(rect[0] / preview.width) * 100}%`,
-                    top: `${(rect[1] / preview.height) * 100}%`,
-                    width: `${((rect[2] - rect[0]) / preview.width) * 100}%`,
-                    height: `${((rect[3] - rect[1]) / preview.height) * 100}%`,
-                  }}
-                />
+                {/* Box drawn for a tool that places something on the page */}
+                {canvasUse === 'box' && boxPage === preview.page && (
+                  <div
+                    className="absolute border-2 border-emerald-600 bg-emerald-500/15 pointer-events-none"
+                    style={{
+                      left: `${(rect[0] / preview.width) * 100}%`,
+                      top: `${(rect[1] / preview.height) * 100}%`,
+                      width: `${((rect[2] - rect[0]) / preview.width) * 100}%`,
+                      height: `${((rect[3] - rect[1]) / preview.height) * 100}%`,
+                    }}
+                  />
+                )}
 
                 {/* Text Blocks highlighting */}
                 {tool === 'edit-content' &&
@@ -1636,16 +1706,6 @@ export function PdfWorkstationPanel({
                       />
                     ))}
               </div>
-            ) : (
-              <div className="text-center text-muted p-8 space-y-3">
-                <p className="text-sm">{t('loadingNativePdf')}</p>
-                <button
-                  type="button"
-                  onClick={() => void start('preview', { page })}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold"
-                >
-                  {t('pdfSuitePreview')}
-                </button>
               </div>
             )}
           </div>
@@ -1685,20 +1745,20 @@ export function PdfWorkstationPanel({
                 <ChevronLeft size={15} aria-label={t('pdfNavPrevious')} role="img" className="rtl:rotate-180" />
               </button>
               <span className="font-mono font-bold px-2">
-                <input aria-label={t('page')} type="number" min={1} max={nativeReading ? nativeTotalPages : inspection?.totalPages || 1} value={page} onChange={event => {
+                <input aria-label={t('page')} type="number" min={1} max={totalPages} value={page} onChange={event => {
                   const requested = Number(event.target.value);
-                  const total = nativeReading ? nativeTotalPages : inspection?.totalPages || 1;
+                  const total = totalPages;
                   if (!Number.isInteger(requested) || requested < 1 || requested > total) return;
                   setPage(requested);
                   if (!nativeReading) void start('preview', { page: requested });
                   onPageChange?.(requested);
-                }} className="w-12 rounded border border-subtle bg-canvas px-1 py-0.5 text-center text-main" /> / {nativeReading ? nativeTotalPages : (inspection?.totalPages || 1)}
+                }} className="w-12 rounded border border-subtle bg-canvas px-1 py-0.5 text-center text-main" /> / {totalPages}
               </span>
               <button
                 type="button"
-                disabled={page >= (nativeReading ? nativeTotalPages : (inspection?.totalPages || 1))}
+                disabled={page >= totalPages}
                 onClick={() => {
-                  const p = Math.min(nativeReading ? nativeTotalPages : (inspection?.totalPages || 1), page + 1);
+                  const p = Math.min(totalPages, page + 1);
                   setPage(p);
                   if (!nativeReading) void start('preview', { page: p });
                   onPageChange?.(p);
@@ -1709,9 +1769,9 @@ export function PdfWorkstationPanel({
               </button>
               <button
                 type="button"
-                disabled={page >= (nativeReading ? nativeTotalPages : (inspection?.totalPages || 1))}
+                disabled={page >= totalPages}
                 onClick={() => {
-                  const p = nativeReading ? nativeTotalPages : (inspection?.totalPages || 1);
+                  const p = totalPages;
                   setPage(p);
                   if (!nativeReading) void start('preview', { page: p });
                   onPageChange?.(p);
@@ -1782,8 +1842,7 @@ export function PdfWorkstationPanel({
               <span className={`font-mono text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} w-9 text-end`}>{zoom}%</span>
             </div>
           </div>
-            </>
-          )}
+          </div>
         </main>
 
         <aside data-reader-chrome="tools" className={`w-[275px] shrink-0 border-s ${
@@ -1804,7 +1863,7 @@ export function PdfWorkstationPanel({
                 <Cpu size={14} className="text-emerald-500 dark:text-emerald-400" />
                 {t('pdfProcessorLiveTitle')}
               </span>
-              <span role="status" className={`px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider ${engineStatus.status === 'ready' || engineStatus.status === 'processing' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'}`}>
+              <span role="status" className={`px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider ${engineStatus.status === 'ready' || engineStatus.status === 'processing' ? `bg-emerald-500/20 ${workstationTheme === 'dark' ? 'text-emerald-300' : 'text-emerald-900'}` : `bg-amber-500/20 ${workstationTheme === 'dark' ? 'text-amber-300' : 'text-amber-900'}`}`}>
                 {t(engineStatus.status === 'ready' || engineStatus.status === 'processing' ? 'pdfEngineLive' : engineStatus.status === 'starting' ? 'stirlingEngineStarting' : 'pdfEngineOffline')}
               </span>
             </div>
@@ -1850,7 +1909,7 @@ export function PdfWorkstationPanel({
                 </div>
                 <div>
                   <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicyCompliance')}</span>
-                  <span className="text-[10px]">{t('pdfPolicyComplianceRule1')} &amp; {t('pdfPolicyComplianceRule2')}</span>
+                  <span className="text-[10px]">{t('pdfPolicyComplianceRule2')}</span>
                 </div>
                 <div>
                   <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicyRouting')} &amp; {t('pdfPolicyRetention')}</span>
@@ -1893,6 +1952,8 @@ export function PdfWorkstationPanel({
               inspection={inspection}
               output={output}
               thumbnails={thumbnails}
+              boxDrawn={boxPage === page}
+              onCanvasUse={handleCanvasUse}
               text={text}
               setText={setText}
               busy={starting || job?.state === 'running'}
@@ -1919,6 +1980,14 @@ export function PdfWorkstationPanel({
                   ? 'pdfSuiteEncrypted'
                   : error === 'source-changed' || job?.error === 'source-changed'
                   ? 'pdfSuiteSourceChanged'
+                  : error === 'engine-missing' || job?.error === 'engine-missing'
+                  ? 'pdfEngineComponentMissing'
+                  : job?.error === 'no-tables'
+                  ? 'pdfNoTablesFound'
+                  : job?.error === 'no-text'
+                  ? 'pdfNoTextFound'
+                  : job?.error === 'redaction-unverified'
+                  ? 'pdfRedactionUnverified'
                   : 'pdfSuiteFailure',
               )}
             </p>
@@ -2026,7 +2095,8 @@ export function PdfWorkstationPanel({
       {/* Standalone Stirling-PDF Tools & Processor Hub Modal */}
       {isToolsHubOpen && (
         <StirlingToolsHub
-          onClose={() => setIsToolsHubOpen(false)}
+          initialView={hubView}
+          onClose={() => { setHubView('columns'); setIsToolsHubOpen(false); }}
           onOpenInWorkstation={() => {
             setIsToolsHubOpen(false);
           }}
@@ -2085,7 +2155,7 @@ export function PdfWorkstationPanel({
               {loadingVersions ? (
                 <div className="text-center py-10 text-xs text-muted">
                   <div className="inline-block size-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-2" />
-                  <p>{lang === 'ar' ? 'جارٍ تحميل الإصدارات...' : 'Loading versions...'}</p>
+                  <p>{t('pdfVersionsLoading')}</p>
                 </div>
               ) : versions.length === 0 ? (
                 <div className="text-center py-12 px-4 rounded-xl border border-dashed border-subtle space-y-2">
@@ -2110,7 +2180,7 @@ export function PdfWorkstationPanel({
                         <div>
                           <div className="flex items-center gap-1.5">
                             <span className="font-bold text-xs">
-                              {idx === 0 ? (lang === 'ar' ? 'الإصدار الأخير' : 'Latest Backup') : `${lang === 'ar' ? 'إصدار' : 'Version'} #${versions.length - idx}`}
+                              {idx === 0 ? t('pdfVersionLatest') : t('pdfVersionNumber', { number: versions.length - idx })}
                             </span>
                             {idx === 0 && (
                               <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-500 text-[9px] font-bold">

@@ -1,11 +1,14 @@
 import { app } from 'electron';
 import fs from 'node:fs';
-import { mkdir, readFile, writeFile, unlink, readdir, stat, copyFile, rename, realpath } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile, unlink, readdir, stat, copyFile, rename, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import type { PdfEngineTools } from './python';
-import { resolveStirlingEndpoint, validateStirlingLoopbackUrl } from './stirling';
+import { extractZipEntries, resolveStirlingEndpoint, validateStirlingLoopbackUrl } from './stirling';
 import { fileSha256 } from './source';
+import { runPdfHelper } from './view-cache-runtime';
+import { renderUrlToPdf } from './weasyprint';
+import { STIRLING_DISABLED_ENDPOINT, STIRLING_FILE_PARAMETERS, STIRLING_INTERACTIVE_ENDPOINTS, STIRLING_LOCAL_ENDPOINTS, classifyStirlingOutput, isEmptyZipBytes, resolveStirlingOperation, stirlingFilename } from '../../../shared/stirling-contract';
 
 export interface StirlingPipelineStep {
   id: string;
@@ -106,6 +109,7 @@ const DEFAULT_POLICIES: StirlingGovernancePolicies = {
   },
 };
 
+const URL_TO_PDF_ENDPOINT = '/api/v1/convert/url/pdf';
 const INTERACTIVE_OPERATIONS = new Set([
   '/api/v1/edit/pdf-text-editor',
   '/api/v1/security/sign',
@@ -117,17 +121,16 @@ const INTERACTIVE_OPERATIONS = new Set([
   'compare',
 ]);
 
-const DEFAULT_PIPELINES: StirlingPipeline[] = [
+export const DEFAULT_PIPELINES: StirlingPipeline[] = [
   {
     id: 'pipe-ocr-archive',
-    name: 'OCR & Archival Pipeline',
-    description: 'Auto-detect scanned pages, run Arabic/English OCR with text-skipping, and convert to PDF/A',
+    name: 'OCR Pipeline',
+    description: 'Auto-detect scanned pages and run Arabic/English OCR with text-skipping',
     trigger: 'folder',
     active: true,
     steps: [
       { id: 's1', operation: '/api/v1/filter/filter-contains-image', name: 'Contains Image Filter', parameters: { pageNumbers: 'all' } },
       { id: 's2', operation: '/api/v1/misc/ocr-pdf', name: 'OCR / Cleanup Scans', parameters: { languages: ['ara', 'eng'], ocrType: 'skip-text' } },
-      { id: 's3', operation: '/api/v1/convert/pdf/pdfa', name: 'Convert to PDF/A', parameters: { conformance: '2b' } },
     ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -189,14 +192,13 @@ const DEFAULT_PIPELINES: StirlingPipeline[] = [
   {
     id: 'pipe-prepublish-sanitization',
     name: 'Pre-Publish Sanitization',
-    description: 'Sanitize JS/metadata, strip annotations, flatten form fields, and convert to PDF/A',
+    description: 'Sanitize JS/metadata, strip annotations, and flatten form fields',
     trigger: 'manual',
     active: true,
     steps: [
       { id: 's1', operation: '/api/v1/security/sanitize-pdf', name: 'Sanitize PDF', parameters: {} },
       { id: 's2', operation: '/api/v1/misc/remove-annotations', name: 'Remove Annotations', parameters: {} },
       { id: 's3', operation: '/api/v1/misc/flatten', name: 'Flatten Forms', parameters: {} },
-      { id: 's4', operation: '/api/v1/convert/pdf/pdfa', name: 'Convert to PDF/A', parameters: { conformance: '2b' } },
     ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -235,7 +237,7 @@ export function sanitizePipelineSteps(steps: StirlingPipelineStep[]): { operatio
   const result: { operation: string; parameters: Record<string, unknown> }[] = [];
   for (const step of steps) {
     let op = (step.operation || '').trim();
-    if (!op || INTERACTIVE_OPERATIONS.has(op)) {
+    if (!op || INTERACTIVE_OPERATIONS.has(op) || STIRLING_INTERACTIVE_ENDPOINTS.has(op)) {
       continue;
     }
     if (!op.startsWith('/api/v1/')) {
@@ -259,9 +261,102 @@ export function sanitizePipelineSteps(steps: StirlingPipelineStep[]): { operatio
         params[key] = val;
       }
     }
-    result.push({ operation: op, parameters: params });
+    result.push(resolveStirlingOperation(op, params));
   }
   return result;
+}
+
+type PipelineStep = { operation: string; parameters: Record<string, unknown> };
+interface PipelineFile { name: string; data: Buffer }
+interface PipelineResponse { data: Buffer; contentType: string | null; disposition: string | null }
+
+const INPUT_MIME_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.html': 'text/html', '.htm': 'text/html', '.md': 'text/markdown', '.txt': 'text/plain',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+const stepRunsAlone = (step: PipelineStep) => STIRLING_LOCAL_ENDPOINTS.has(step.operation) || Object.keys(step.parameters).some(name => STIRLING_FILE_PARAMETERS.has(name));
+
+/** Groups neighbouring JSON-only steps for handleData; steps needing extra files or local tools run on their own. */
+export function pipelineSegments(steps: PipelineStep[], singleTool: boolean): { steps: PipelineStep[]; direct: boolean }[] {
+  const segments: { steps: PipelineStep[]; direct: boolean }[] = [];
+  for (const step of steps) {
+    const direct = singleTool || stepRunsAlone(step), last = segments.at(-1);
+    if (!direct && last && !last.direct) last.steps.push(step);
+    else segments.push({ steps: [step], direct });
+  }
+  return segments;
+}
+
+function appendFiles(form: FormData, files: PipelineFile[]): void {
+  for (const file of files) {
+    const type = INPUT_MIME_TYPES[path.extname(file.name).toLowerCase()] ?? 'application/pdf';
+    form.append('fileInput', new Blob([new Uint8Array(file.data)], { type }), file.name);
+  }
+}
+
+async function readPipelineResponse(url: string, form: FormData, signal: AbortSignal): Promise<PipelineResponse> {
+  const res = await fetch(url, { method: 'POST', body: form, signal, redirect: 'error' }).catch((error: Error) => {
+    // The native redactor takes the whole engine down on some font types; no file comes back either way.
+    if (!signal.aborted && url.endsWith('/security/auto-redact')) throw new Error('redaction-unverified');
+    throw error;
+  });
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => '')).slice(0, 400);
+    console.warn('[pdf-processor] Step rejected:', new URL(url).pathname, res.status, detail);
+    if (STIRLING_DISABLED_ENDPOINT.test(detail)) throw new Error('engine-missing');
+    if (/No PDF bookmarks/iu.test(detail)) throw new Error('no-bookmarks');
+    if (/requires the permissions password|separate permissions password|permissions password is incorrect/iu.test(detail)) throw new Error('owner-password-required');
+    if (/password was not provided or was incorrect|with its opening password/iu.test(detail)) throw new Error('encrypted');
+    if (/Redaction could not be verified/iu.test(detail)) throw new Error('redaction-unverified');
+    if (/PEMKeyPair/u.test(detail)) throw new Error('certificate-invalid');
+    throw new Error(res.status === 400 ? 'invalid-request' : 'engine-failed');
+  }
+  return { data: Buffer.from(await res.arrayBuffer()), contentType: res.headers.get('content-type'), disposition: res.headers.get('content-disposition') };
+}
+
+async function postHandleData(origin: string, name: string, steps: PipelineStep[], files: PipelineFile[], signal: AbortSignal): Promise<PipelineResponse> {
+  const form = new FormData();
+  appendFiles(form, files);
+  form.append('json', JSON.stringify({ name, pipeline: steps }));
+  return readPipelineResponse(`${origin}/api/v1/pipeline/handleData`, form, signal);
+}
+
+async function postDirectStep(origin: string, step: PipelineStep, files: PipelineFile[], signal: AbortSignal): Promise<PipelineResponse> {
+  const form = new FormData();
+  appendFiles(form, files);
+  for (const [name, value] of Object.entries(step.parameters)) {
+    if (name === 'fileInput' || value === undefined || value === null) continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (STIRLING_FILE_PARAMETERS.has(name)) {
+        const filename = String(item);
+        if (!fs.existsSync(filename)) throw new Error('invalid-source');
+        form.append(name, new Blob([new Uint8Array(await readFile(filename, { signal }))]), path.basename(filename));
+      } else form.append(name, typeof item === 'object' ? JSON.stringify(item) : String(item));
+    }
+  }
+  return readPipelineResponse(`${origin}${step.operation}`, form, signal);
+}
+
+async function assertStepsAvailable(origin: string, steps: PipelineStep[], files: PipelineFile[], signal: AbortSignal): Promise<void> {
+  for (const step of steps) {
+    await postDirectStep(origin, step, files, signal);
+    files = files.slice();
+  }
+}
+
+async function removeAnnotationsLocally(tools: PdfEngineTools, step: PipelineStep, files: PipelineFile[], signal: AbortSignal): Promise<PipelineResponse> {
+  if (files.length !== 1) throw new Error('invalid-request');
+  const directory = path.join(app?.isPackaged ? app.getPath('temp') : path.resolve('.baglib-data', 'pdf-engine', 'staged'), `annotations-${randomUUID()}`);
+  await mkdir(directory, { recursive: true });
+  try {
+    const input = path.join(directory, 'input.pdf'), output = path.join(directory, 'output.pdf');
+    await writeFile(input, files[0].data);
+    const removed = [...(step.parameters.keepLinks === false ? ['--links'] : []), ...(step.parameters.keepFormFields === false ? ['--form-fields'] : [])];
+    await runPdfHelper(tools, 'remove_annotations.py', [input, output, ...removed], signal);
+    return { data: await readFile(output), contentType: 'application/pdf', disposition: null };
+  } finally { await rm(directory, { recursive: true, force: true }); }
 }
 
 export function exportPipelineAutomateJson(pipeline: StirlingPipeline): string {
@@ -283,6 +378,8 @@ export function exportPipelineFolderScanJson(folder: WatchedFolderSource, pipeli
   }, null, 2);
 }
 
+interface ImportedPipelineStep { operation?: string; endpoint?: string; name?: string; parameters?: Record<string, unknown>; params?: Record<string, unknown> }
+
 export function importPipelineJson(jsonContent: string): StirlingPipeline {
   const parsed = JSON.parse(jsonContent);
   const name = parsed.name || parsed.folderName || 'Imported Pipeline';
@@ -294,7 +391,7 @@ export function importPipelineJson(jsonContent: string): StirlingPipeline {
     ? parsed.pipeline.pipeline
     : [];
 
-  const steps: StirlingPipelineStep[] = rawSteps.map((s: any, idx: number) => ({
+  const steps: StirlingPipelineStep[] = rawSteps.map((s: ImportedPipelineStep, idx: number) => ({
     id: `s-${idx + 1}-${randomUUID().slice(0, 4)}`,
     operation: s.operation || s.endpoint || '',
     name: s.name || s.operation || `Step ${idx + 1}`,
@@ -506,108 +603,61 @@ export class StirlingProcessorService {
     signal: AbortSignal,
     onProgress?: (progress: number) => void
   ): Promise<{ outputPath: string; format: string; bytes: number; sha256: string }> {
-    if (!filePaths.length) throw new Error('invalid-request');
     if (signal.aborted) throw new Error('cancelled');
+    const [urlStep] = pipelineConfig.pipeline;
+    if (pipelineConfig.singleTool && pipelineConfig.pipeline.length === 1 && urlStep.operation === URL_TO_PDF_ENDPOINT) {
+      onProgress?.(30);
+      const rendered = await renderUrlToPdf(String(urlStep.parameters?.urlInput ?? ''), { signal });
+      return this.stagePipelineOutput(rendered, 'pdf', 1, onProgress);
+    }
+    if (!filePaths.length) throw new Error('invalid-request');
     const sanitizedSteps = sanitizePipelineSteps(
       pipelineConfig.pipeline.map((step, index) => ({ id: `s${index}`, operation: step.operation, name: step.operation, parameters: step.parameters || {} }))
     );
     if (!sanitizedSteps.length) throw new Error('invalid-request');
+    if (pipelineConfig.singleTool && sanitizedSteps.length !== 1) throw new Error('invalid-request');
     const baseUrl = await resolveStirlingEndpoint(tools);
     const origin = validateStirlingLoopbackUrl(baseUrl);
 
-    const form = new FormData();
+    let files: PipelineFile[] = [];
     for (const filePath of filePaths) {
       if (signal.aborted) throw new Error('cancelled');
       if (!fs.existsSync(filePath)) throw new Error('invalid-source');
-      const fileBytes = await readFile(filePath, { signal });
-      const ext = path.extname(filePath).toLowerCase();
-      let mimeType = 'application/pdf';
-      if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
-      else if (ext === '.png') mimeType = 'image/png';
-      else if (ext === '.html' || ext === '.htm') mimeType = 'text/html';
-      else if (ext === '.md') mimeType = 'text/markdown';
-      else if (ext === '.txt') mimeType = 'text/plain';
-      else if (ext === '.docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      else if (ext === '.xlsx') mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      else if (ext === '.pptx') mimeType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-      form.append('fileInput', new Blob([fileBytes], { type: mimeType }), path.basename(filePath));
+      files.push({ name: path.basename(filePath), data: await readFile(filePath, { signal }) });
     }
-
-    if (pipelineConfig.singleTool && sanitizedSteps.length !== 1) throw new Error('invalid-request');
-    if (pipelineConfig.singleTool) {
-      for (const [name, value] of Object.entries(sanitizedSteps[0].parameters)) {
-        if (name === 'fileInput' || value === undefined || value === null) continue;
-        for (const item of Array.isArray(value) ? value : [value]) {
-          form.append(name, typeof item === 'object' ? JSON.stringify(item) : String(item));
-        }
-      }
-    } else form.append('json', JSON.stringify({
-      name: pipelineConfig.name,
-      pipeline: sanitizedSteps,
-    }));
-
     onProgress?.(30);
 
-    const endpoint = pipelineConfig.singleTool ? sanitizedSteps[0].operation : '/api/v1/pipeline/handleData';
-    const res = await fetch(`${origin}${endpoint}`, {
-      method: 'POST',
-      body: form,
-      signal,
-      redirect: 'error',
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(res.status === 400 ? 'invalid-request' : 'engine-failed');
+    const hasFilter = sanitizedSteps.some(step => step.operation.startsWith('/api/v1/filter/'));
+    let response: PipelineResponse | undefined;
+    for (const segment of pipelineSegments(sanitizedSteps, Boolean(pipelineConfig.singleTool))) {
+      if (signal.aborted) throw new Error('cancelled');
+      const [first] = segment.steps;
+      if (STIRLING_LOCAL_ENDPOINTS.has(first.operation)) response = await removeAnnotationsLocally(tools, first, files, signal);
+      else if (segment.direct) response = await postDirectStep(origin, first, files, signal);
+      else response = await postHandleData(origin, pipelineConfig.name, segment.steps, files, signal);
+      if (!response.data.length || isEmptyZipBytes(response.data)) {
+        // handleData hides a failed step behind an empty body, so name the unavailable step instead of blaming the output.
+        if (!segment.direct && !hasFilter) await assertStepsAvailable(origin, segment.steps, files, signal);
+        if (segment.direct && /\/convert\/pdf\/(?:csv|xlsx)$/u.test(first.operation)) throw new Error('no-tables');
+        throw new Error(hasFilter || segment.direct ? 'no-output' : 'invalid-output');
+      }
+      files = classifyStirlingOutput(response.data, response.contentType, response.disposition) === 'zip'
+        ? extractZipEntries(response.data)
+        : [{ name: stirlingFilename(response.disposition) || files[0].name, data: response.data }];
     }
-
     onProgress?.(80);
 
-    const responseBytes = Buffer.from(await res.arrayBuffer());
-    if (responseBytes.length < 4) throw new Error('invalid-output');
+    const responseBytes = response!.data;
+    const ext = classifyStirlingOutput(responseBytes, response!.contentType, response!.disposition);
+    return this.stagePipelineOutput(responseBytes, ext, filePaths.length, onProgress);
+  }
 
-    // Parse extension from Content-Disposition header
-    let ext = '';
-    const disposition = res.headers.get('content-disposition');
-    if (disposition) {
-      const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-      if (match && match[1]) {
-        try {
-          const decoded = decodeURIComponent(match[1].trim());
-          const matchExt = path.extname(decoded).toLowerCase();
-          if (matchExt) ext = matchExt.replace(/^\./, '');
-        } catch {
-          const matchExt = path.extname(match[1].trim()).toLowerCase();
-          if (matchExt) ext = matchExt.replace(/^\./, '');
-        }
-      }
-    }
-
-    // Fallback to Content-Type header
-    if (!ext) {
-      const contentType = (res.headers.get('content-type') || '').toLowerCase();
-      if (contentType.includes('application/pdf')) ext = 'pdf';
-      else if (contentType.includes('application/json')) ext = 'json';
-      else if (contentType.includes('wordprocessingml') || contentType.includes('msword')) ext = 'docx';
-      else if (contentType.includes('presentationml') || contentType.includes('powerpoint')) ext = 'pptx';
-      else if (contentType.includes('spreadsheetml') || contentType.includes('excel')) ext = 'xlsx';
-      else if (contentType.includes('text/csv')) ext = 'csv';
-      else if (contentType.includes('text/html')) ext = 'html';
-      else if (contentType.includes('text/plain')) ext = 'txt';
-      else if (contentType.includes('text/markdown')) ext = 'md';
-      else if (contentType.includes('xml')) ext = 'xml';
-      else if (contentType.includes('image/png')) ext = 'png';
-      else if (contentType.includes('image/jpeg')) ext = 'jpg';
-      else if (contentType.includes('zip') || contentType.includes('octet-stream')) ext = 'zip';
-    }
-
-    // Fallback to magic bytes
-    if (!ext) {
-      const isPdf = responseBytes.subarray(0, 5).toString('ascii') === '%PDF-';
-      const isZip = responseBytes.readUInt32LE(0) === 0x04034b50;
-      ext = isPdf ? 'pdf' : isZip ? 'zip' : 'pdf';
-    }
-
+  private async stagePipelineOutput(
+    responseBytes: Uint8Array,
+    ext: string,
+    fileCount: number,
+    onProgress?: (progress: number) => void
+  ): Promise<{ outputPath: string; format: string; bytes: number; sha256: string }> {
     const format = ext;
 
     const outDir = app?.isPackaged
@@ -619,7 +669,7 @@ export class StirlingProcessorService {
     await writeFile(outputPath, responseBytes);
 
     const sha256 = await fileSha256(outputPath);
-    await this.incrementTelemetryCount(filePaths.length);
+    await this.incrementTelemetryCount(fileCount);
 
     onProgress?.(100);
 
@@ -684,6 +734,13 @@ export class StirlingProcessorService {
             const fingerprint = createHash('sha256').update(JSON.stringify([sourceHash, pipeline.steps, pipeline.afterProcessing])).digest('hex');
             if (receipts[receiptKey] === fingerprint) continue;
 
+            const saveReceipts = async () => {
+              const temporaryReceipts = `${this.watchReceiptsFile}.${randomUUID()}.tmp`;
+              try {
+                await writeFile(temporaryReceipts, JSON.stringify(receipts), 'utf8');
+                await rename(temporaryReceipts, this.watchReceiptsFile);
+              } finally { await unlink(temporaryReceipts).catch(() => {}); }
+            };
             const res = await this.executePipeline(
               tools,
               [filePath],
@@ -692,7 +749,14 @@ export class StirlingProcessorService {
                 pipeline: sanitizePipelineSteps(pipeline.steps),
               },
               signal
-            );
+            ).catch(async (error: Error) => {
+              // A conditional gate rejecting a file is a decision, not a failure: remember it and leave the file alone.
+              if (error.message !== 'no-output') throw error;
+              receipts[receiptKey] = fingerprint;
+              await saveReceipts();
+              return null;
+            });
+            if (!res) continue;
 
             if (signal.aborted || await fileSha256(filePath) !== sourceHash) {
               await unlink(res.outputPath).catch(() => {});
@@ -725,22 +789,18 @@ export class StirlingProcessorService {
               const outputKey = createHash('sha256').update(JSON.stringify(['generated', folder.id, path.resolve(generatedInputPath)])).digest('hex');
               receipts[outputKey] = await fileSha256(destPath);
             }
-            const temporaryReceipts = `${this.watchReceiptsFile}.${randomUUID()}.tmp`;
-            try {
-              await writeFile(temporaryReceipts, JSON.stringify(receipts), 'utf8');
-              await rename(temporaryReceipts, this.watchReceiptsFile);
-            } finally { await unlink(temporaryReceipts).catch(() => {}); }
+            await saveReceipts();
 
             folder.processedCount = (folder.processedCount || 0) + 1;
             folder.lastProcessedAt = new Date().toISOString();
             processed++;
-          } catch (err: any) {
+          } catch (err) {
             if (signal.aborted) break;
-            errors.push(`File ${file}: ${err?.message || err}`);
+            errors.push(`File ${file}: ${err instanceof Error ? err.message : err}`);
           }
         }
-      } catch (err: any) {
-        errors.push(`Folder ${folder.name}: ${err?.message || err}`);
+      } catch (err) {
+        errors.push(`Folder ${folder.name}: ${err instanceof Error ? err.message : err}`);
       }
     }
 

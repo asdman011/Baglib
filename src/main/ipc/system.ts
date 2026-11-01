@@ -5,22 +5,18 @@ import { ipcMain, app, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
-import pdfParse from 'pdf-parse';
+import { Worker } from 'node:worker_threads';
 
-// Custom page renderer to accurately capture page boundaries
-function renderPageText(pageData: import('pdf-parse').PdfParsePage) {
-  return pageData.getTextContent().then(function (textContent: import('pdf-parse').PdfTextContent) {
-    let lastY: number | undefined;
-    let text = '';
-    for (const item of textContent.items) {
-      if (lastY === item.transform[5] || lastY === undefined) {
-        text += item.str;
-      } else {
-        text += '\n' + item.str;
-      }
-      lastY = item.transform[5];
-    }
-    return '\n---PAGE_SPLIT_MARKER---\n' + text;
+function extractPdfTextInWorker(filename: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, 'pdf-text-worker.js'), { workerData: { filename } });
+    worker.once('message', (message: { result?: unknown; error?: string }) => {
+      void worker.terminate();
+      if (message.error) reject(new Error(message.error));
+      else resolve(message.result ?? null);
+    });
+    worker.once('error', reject);
+    worker.once('exit', code => reject(new Error(`pdf text worker exited with code ${code}`)));
   });
 }
 
@@ -155,51 +151,7 @@ export function setupSystemIPC() {
         else if (fs.existsSync(candidate3)) resolvedPath = candidate3;
       }
 
-      if (resolvedPath && fs.existsSync(resolvedPath)) {
-        const dataBuffer = fs.readFileSync(resolvedPath);
-        if (dataBuffer.length < 10 || !dataBuffer.slice(0, 1024).toString('latin1').includes('%PDF-')) {
-          console.warn('[baglib:pdf-text] Skipped non-PDF or corrupt file:', path.basename(resolvedPath));
-          return null;
-        }
-
-        const pdfFn = pdfParse;
-        
-        if (typeof pdfFn === 'function') {
-          // Suppress verbose internal pdf.js font warnings that flood dev terminal
-          const origWarn = console.warn;
-          console.warn = (...args: unknown[]) => {
-            const first = args[0];
-            if (typeof first === 'string' && first.includes('Ran out of space in font private use area')) {
-              return;
-            }
-            origWarn.apply(console, args);
-          };
-
-          let pdfData: import('pdf-parse').PdfParseResult;
-          try {
-            pdfData = await pdfFn(new Uint8Array(dataBuffer), { pagerender: renderPageText });
-          } finally {
-            console.warn = origWarn;
-          }
-
-          const rawText = pdfData.text || '';
-          const cleanText = rawText.replace(/---PAGE_SPLIT_MARKER---/g, '').trim();
-          const numPages = pdfData.numpages || 1;
-          const avgCharsPerPage = cleanText.length / numPages;
-
-          // Check if average text per page is less than 50 characters (Watermark/ID-only scanned PDF)
-          const isScannedImagePdf = avgCharsPerPage < 50;
-
-          return {
-            text: isScannedImagePdf ? '' : rawText,
-            numpages: numPages,
-            info: pdfData.info || {},
-            isScannedImagePdf,
-            avgCharsPerPage,
-            totalChars: cleanText.length,
-          };
-        }
-      }
+      if (resolvedPath && fs.existsSync(resolvedPath)) return await extractPdfTextInWorker(resolvedPath);
       return null;
     } catch (err: unknown) {
       console.warn('[baglib:pdf-text] Could not extract text from PDF:', errorMessage(err) || err);

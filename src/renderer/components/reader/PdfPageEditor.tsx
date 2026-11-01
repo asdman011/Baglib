@@ -22,7 +22,9 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import type { PdfSession } from '../../../shared/types/pdf-editor';
+import type { PdfViewDocument } from '../../libs/reader/pdf-view-document';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { PdfPageThumbnail } from './PdfPageThumbnail';
 
 export interface PagePlanItem {
   id: string;
@@ -73,6 +75,7 @@ interface PdfPageEditorProps {
   session: PdfSession;
   totalPages: number;
   thumbnails: Record<string, string>;
+  document?: PdfViewDocument | null;
   onApply: (plan: PagePlanItem[]) => void;
   onViewPage?: (page: number) => void;
   busy?: boolean;
@@ -83,6 +86,7 @@ export function PdfPageEditor({
   session,
   totalPages,
   thumbnails,
+  document = null,
   onApply,
   onViewPage,
   busy = false,
@@ -575,18 +579,20 @@ export function PdfPageEditor({
                         <FilePlus size={22} className="mx-auto mb-1 opacity-40" />
                         <span className="text-[10px] block font-medium">{t('pdfPageEditorBlankPage')}</span>
                       </div>
-                    ) : thumbUrl ? (
-                      <img
-                        src={thumbUrl}
-                        alt={`Page ${item.page}`}
-                        style={{ transform: `rotate(${rot}deg)` }}
-                        className="w-full h-full object-contain transition-transform"
-                      />
                     ) : (
-                      <div className="text-center text-muted">
-                        <Layers size={22} className="mx-auto mb-1 opacity-30" />
-                        <span className="font-mono text-xs">{item.page}</span>
-                      </div>
+                      <PdfPageThumbnail
+                        document={document}
+                        page={item.page!}
+                        image={thumbUrl}
+                        alt={`${t('page')} ${item.page}`}
+                        rotation={rot}
+                        fallback={(
+                          <div className="text-center text-muted">
+                            <Layers size={22} className="mx-auto mb-1 opacity-30" />
+                            <span className="font-mono text-xs">{item.page}</span>
+                          </div>
+                        )}
+                      />
                     )}
 
                     {/* Hover Actions Overlay */}

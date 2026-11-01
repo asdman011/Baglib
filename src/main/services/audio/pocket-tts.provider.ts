@@ -1,4 +1,4 @@
-import { spawn, spawnSync, type ChildProcess } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -265,7 +265,7 @@ export class PocketTTSProvider implements TTSProvider {
     if (existing && !existing.process.killed) existing.process.kill();
 
     const port = await this.findFreePort();
-    const command = this.resolveCommand();
+    const command = await this.resolveCommand();
     const args = ['serve', '--host', '127.0.0.1', '--port', String(port), '--language', language];
     if (quantize) args.push('--quantize');
     const child = spawn(command.command, [...command.args, ...args], {
@@ -300,7 +300,18 @@ export class PocketTTSProvider implements TTSProvider {
     }
   }
 
-  private resolveCommand(): { command: string; args: string[]; cwd?: string } {
+  /** Probing Python takes seconds, so it must never block the main process. */
+  private probe(command: string, args: string[]): Promise<{ status: number | null; stdout: string }> {
+    return new Promise((resolve) => {
+      const child = spawn(command, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+      let stdout = '';
+      child.stdout?.on('data', (data) => { stdout += data; });
+      child.once('error', () => resolve({ status: null, stdout: '' }));
+      child.once('close', (status) => resolve({ status, stdout }));
+    });
+  }
+
+  private async resolveCommand(): Promise<{ command: string; args: string[]; cwd?: string }> {
     const configured = process.env.BAGLIB_POCKET_TTS_BIN;
     if (configured) return { command: configured, args: [], cwd: process.cwd() };
     const packagedCandidates = [
@@ -311,10 +322,7 @@ export class PocketTTSProvider implements TTSProvider {
     if (packaged) return { command: packaged, args: [], cwd: process.cwd() };
 
     const pathCommand = process.platform === 'win32' ? 'where.exe' : 'which';
-    const pocketTtsOnPath = spawnSync(pathCommand, ['pocket-tts'], {
-      encoding: 'utf8',
-      windowsHide: true,
-    });
+    const pocketTtsOnPath = await this.probe(pathCommand, ['pocket-tts']);
     const resolvedPocketTts = pocketTtsOnPath.status === 0
       ? pocketTtsOnPath.stdout.trim().split(/\r?\n/)[0]
       : '';
@@ -328,10 +336,7 @@ export class PocketTTSProvider implements TTSProvider {
         : [{ command: 'python3', args: [] }, { command: 'python', args: [] }];
 
     for (const candidate of pythonCandidates) {
-      const moduleCheck = spawnSync(candidate.command, [...candidate.args, '-c', 'import pocket_tts'], {
-        encoding: 'utf8',
-        windowsHide: true,
-      });
+      const moduleCheck = await this.probe(candidate.command, [...candidate.args, '-c', 'import pocket_tts']);
       if (moduleCheck.status === 0) {
         return {
           command: candidate.command,

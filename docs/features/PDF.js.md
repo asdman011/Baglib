@@ -97,3 +97,30 @@ The user approved background optimization of large or fragmented PDFs into dispo
 The combined focused regression run passed 109 tests; Arabic/English UI tests exercise localized page choices and selection. TypeScript and main/preload/worker builds passed. This does not certify every font, encrypted/malformed PDF, a packaged installer, every OS drop source, or the complete application test suite. Old library artwork is not mass-overwritten. A failed page render is reported rather than silently substituting an embedded image. The earlier 301-book import benchmark predates this page-rendering change and is not a performance measurement of the new cover path.
 
 See [Cover Retrieval](feature%20-%20Cover%20Retrieval.md), [pdf-parse](pdf-parse.md) and [Digital Library Import](feature%20-%20Digital%20Library%20Import%20and%20Deduplication.md).
+
+## Single worker-hosted pipeline (2026-10-31, Claude Code)
+
+**Verified parser inventory before this change:** opening a book created a renderer `getDocument` with its own transport, and after idle a second `getDocument`, transport and nested core worker inside `pdf.raster.worker.mjs`, so the file was parsed twice. PDF.js display objects cannot be shared across threads, so the two could not be merged while the renderer kept a `PDFDocumentProxy`.
+
+**Design now in place:** `src/renderer/libs/reader/pdf-view-document.ts` (`PdfViewDocument`) is the only document object the reader sees. Parsing and painting live in the raster host; the renderer receives transferred `ImageBitmap`s, plain page geometry, text content and a resolved outline. A renderer-side `getDocument` opens only if the host is unavailable, or lazily for a page the host cannot draw (for example SVG-filter content, which throws `unsupported-worker-filter`), and it is destroyed with the document. `AppLayout` keeps one started spare host; closing a book terminates that book's host, which is the deterministic cleanup. Other `getDocument` callers are unrelated: the isolated cover frame and short-lived main-process inspections that destroy their own task.
+
+**Kept unchanged:** `PDFDataRangeTransport` over `baglib-asset://`, the 2 GiB view cache and the `ImageBitmap` LRU.
+
+**First paint:** the view cache stores a small WebP per `(path, mtime, size, page)` beside the derivatives (64 MiB LRU), returned with the first `viewSource` call.
+
+**Late range failure:** a range error after opening reports `source-failed`; the view cache evicts the derivative (metadata first, so it stays invalid even if Windows holds the PDF open), blocks regeneration for the session, and the reader reopens the canonical file at the current page.
+
+**Text layer:** `idlePdfTextStream` feeds PDF.js `TextLayer` 48 items per idle slice instead of one synchronous page build.
+
+**Measured, 2026-10-31.** Native offscreen Electron fixture on the development machine, nothing else running, warmed host. Real 641-page, 45 MB linearized PDF (`.baglib-data/pdf-engine/diagnostic-large/`):
+
+| Measurement | Result |
+|---|---|
+| Reopen, preview presented | 23–42 ms |
+| Reopen, crisp page | 175–240 ms |
+| First-ever open (no preview) | 914–1054 ms; the sub-100 ms target is **not met** here |
+| Late range failure at page 400 | recovered from the original, later requests avoid the cache |
+| Scroll, 60-page synthetic | 2 runs, 0 of 89 frames over 17 ms, 0 long tasks, max 5 canvases |
+| Scroll, real book at 60 px/frame | 356 of 359 frames at 16.8 ms or less, 3 frames over 25 ms (max 50 ms), 0 long tasks |
+
+**Limits of this evidence:** `requestAnimationFrame` deltas quantize to the 60 Hz grid, so "under 16.6 ms" reads as 16.6–16.8 ms. Switching into continuous mode can still drop frames (33–83 ms seen) before scrolling settles; the benchmarks start after a settle. The fixture is offscreen, and the original 86 MB unoptimized book was not available for this run.

@@ -1,7 +1,7 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import { readFile, writeFile, stat, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, stat, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { setPriority, constants as osConstants } from 'node:os';
 import { inflateRawSync } from 'node:zlib';
@@ -211,9 +211,13 @@ export function inspectJarMinimumJavaVersion(jarPath: string): number | undefine
 
 export interface StirlingExternalCapabilities {
   tesseract: { available: boolean; path?: string };
+  ocrmypdf: { available: boolean; path?: string };
+  tessdata: { available: boolean; path?: string };
   libreoffice: { available: boolean; path?: string };
   qpdf: { available: boolean; path?: string };
   ghostscript: { available: boolean; path?: string };
+  weasyprint: { available: boolean; path?: string };
+  pdftohtml: { available: boolean; path?: string };
 }
 
 let cachedCapabilities: StirlingExternalCapabilities | null = null;
@@ -238,6 +242,8 @@ export function probeExternalCapabilities(): StirlingExternalCapabilities {
       path.join(engineRoot, 'libreoffice', 'program'),
       path.join(engineRoot, 'qpdf', 'bin'),
       path.join(engineRoot, 'ghostscript', 'bin'),
+      path.join(engineRoot, 'weasyprint'),
+      ...(fs.existsSync(path.join(engineRoot, 'poppler')) ? fs.readdirSync(path.join(engineRoot, 'poppler')).map(name => path.join(engineRoot, 'poppler', name, 'Library', 'bin')) : []),
     ];
     for (const d of localDirs) {
       for (const name of names) {
@@ -294,11 +300,25 @@ export function probeExternalCapabilities(): StirlingExternalCapabilities {
     ] : []
   );
 
+  const weasyprint = findBinary(isWin ? ['weasyprint.exe'] : ['weasyprint']);
+
+  const pdftohtml = findBinary(isWin ? ['pdftohtml.exe'] : ['pdftohtml']);
+
+  const engineRoot = path.resolve('.baglib-data', 'pdf-engine');
+  const ocrmypdf = findBinary(isWin ? ['ocrmypdf.exe'] : ['ocrmypdf'], [path.join(engineRoot, 'venv', isWin ? 'Scripts/ocrmypdf.exe' : 'bin/ocrmypdf')]);
+
+  // Tesseract also reads its hocr config from this folder, so language files alone are not enough.
+  const tessdata = fs.existsSync(path.join(engineRoot, 'ocr-best', 'configs', 'hocr')) ? path.join(engineRoot, 'ocr-best') : undefined;
+
   cachedCapabilities = {
     tesseract: { available: Boolean(tesseract), path: tesseract },
+    ocrmypdf: { available: Boolean(ocrmypdf), path: ocrmypdf },
+    tessdata: { available: Boolean(tessdata), path: tessdata },
+    pdftohtml: { available: Boolean(pdftohtml), path: pdftohtml },
     libreoffice: { available: Boolean(libreoffice), path: libreoffice },
     qpdf: { available: Boolean(qpdf), path: qpdf },
     ghostscript: { available: Boolean(ghostscript), path: ghostscript },
+    weasyprint: { available: Boolean(weasyprint), path: weasyprint },
   };
 
   return cachedCapabilities;
@@ -329,9 +349,11 @@ export class StirlingSidecarService {
       version: '3.2.2',
       externalTools: {
         tesseract: caps.tesseract.available,
+        ocrmypdf: caps.ocrmypdf.available,
         libreoffice: caps.libreoffice.available,
         qpdf: caps.qpdf.available,
         ghostscript: caps.ghostscript.available,
+        weasyprint: caps.weasyprint.available,
       },
     };
   }
@@ -419,6 +441,17 @@ export class StirlingSidecarService {
       if (caps.ghostscript.path) {
         extraEnv.GHOSTSCRIPT_PATH = caps.ghostscript.path;
       }
+      if (caps.tessdata.path) {
+        extraEnv.TESSDATA_PREFIX = caps.tessdata.path;
+        extraEnv.SYSTEM_TESSDATADIR = caps.tessdata.path;
+      }
+      const pathTools = [caps.pdftohtml.path, caps.ghostscript.path, caps.qpdf.path, caps.weasyprint.path, caps.tesseract.path].filter((tool): tool is string => Boolean(tool));
+      if (pathTools.length > 0 || caps.ocrmypdf.path) {
+        // Stirling finds these tools only on PATH (`gs`, not gswin64c), and Windows stores that variable as `Path`.
+        // The venv goes last so its python.exe cannot shadow anything else Stirling looks up.
+        const pathKey = Object.keys(process.env).find(key => key.toUpperCase() === 'PATH') ?? 'PATH';
+        extraEnv[pathKey] = [...new Set(pathTools.map(tool => path.dirname(tool))), process.env[pathKey], caps.ocrmypdf.path && path.dirname(caps.ocrmypdf.path)].filter(Boolean).join(path.delimiter);
+      }
 
       const args = [
         '-Xmx2g',
@@ -458,6 +491,10 @@ export class StirlingSidecarService {
           DISABLE_ADDITIONAL_FEATURES: 'false',
           SYSTEM_ENABLEANALYTICS: 'false',
           SYSTEM_FILEUPLOADLIMIT: '2000M',
+          // Word and PowerPoint exports use the converter inside the jar, so they need no LibreOffice.
+          SYSTEM_STIRLINGOFFICECONVERSION: 'true',
+          // Stirling's settings keep urlSecurity at MEDIUM.
+          SYSTEM_ENABLEURLTOPDF: 'true',
           TAURI_PARENT_PID: String(process.pid),
           STIRLING_PDF_TAURI_MODE: 'false',
           STIRLING_PDF_CONFIG_DIR: configDir,
@@ -610,6 +647,10 @@ export const defaultStirlingSidecar = new StirlingSidecarService();
  * Extracts entries from a standard ZIP archive buffer using the Central Directory
  * so streaming `java.util.zip.ZipOutputStream` archives (with bit 3 Data Descriptors) work reliably.
  */
+import { STIRLING_DISABLED_ENDPOINT, isEmptyZipBytes, isPdfBytes, isZipBytes } from '../../../shared/stirling-contract';
+import { markdownHasText, textToHtml, textToMarkdown } from './text-export';
+import { engineRedactionBoxes, planRedaction, type RedactionPageGeometry, type RedactionRegion } from '../../../shared/redaction-plan';
+import { runPdfHelper } from './view-cache-runtime';
 export function extractZipEntries(zipBuffer: Buffer): { name: string; data: Buffer }[] {
   let eocdOffset = -1;
   const minOffset = Math.max(0, zipBuffer.length - 65557);
@@ -673,7 +714,7 @@ export function canStirlingHandle(operation: PdfOperation | 'capabilities', payl
   if (operation === 'inspect' || operation === 'text') return true;
   if ([
     'split', 'ocr', 'export-docx', 'export-xlsx', 'export-pptx', 'export-html',
-    'export-markdown', 'export-text', 'export-csv', 'convert-pdfa', 'scale-pages',
+    'export-markdown', 'export-text', 'export-csv', 'scale-pages',
     'multi-page-layout', 'pdf-to-single-page', 'edit-toc', 'redact', 'encrypt',
     'sanitize', 'watermark', 'compress', 'page-numbers', 'add-image', 'unlock-forms',
     'extract-images', 'validate', 'repair-metadata', 'prepare-signature', 'sign', 'verify-signatures', 'create',
@@ -895,7 +936,8 @@ async function postStirlingMultipart(
     redirect: 'error',
   });
   if (!response.ok) {
-    await response.body?.cancel();
+    const detail = (await response.text().catch(() => '')).slice(0, 400);
+    if (STIRLING_DISABLED_ENDPOINT.test(detail)) throw new Error('engine-missing');
     if (response.status === 401 || response.status === 403) throw new Error('permission-denied');
     if (response.status === 400 || response.status === 422) throw new Error('invalid-request');
     if (response.status === 404 || response.status === 405 || response.status === 501) throw new StirlingEndpointUnavailable('engine-missing');
@@ -918,15 +960,51 @@ async function stageSingleOutput(
   format: PdfOutputFormat,
   data: Buffer,
 ): Promise<PdfOutput> {
-  if (format === 'pdf' && !data.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
-    throw new Error('invalid-output');
+  if (!data.length || format === 'pdf' && !isPdfBytes(data)) throw new Error('invalid-output');
+  const zipFormat = ['docx', 'odt', 'xlsx', 'pptx', 'odp', 'zip'].includes(format);
+  if (zipFormat && !isZipBytes(data)) throw new Error('invalid-output');
+  // Multi-page HTML, CSV and Markdown conversions arrive as an archive rather than one document.
+  if (!zipFormat && format !== 'pdf' && isZipBytes(data)) {
+    format = 'zip';
+    filename = `${path.parse(filename).name}.zip`;
   }
-  if (['docx', 'xlsx', 'pptx', 'zip'].includes(format) && !data.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) throw new Error('invalid-output');
   const target = path.join(outputDir, filename);
   await writeFile(target, data);
   const info = await stat(target);
   const sha256 = createHash('sha256').update(data).digest('hex');
   return { filename, format, bytes: info.size, sha256 };
+}
+
+/**
+ * Redacts only the pages holding boxes: they go through the engine alone, upright, and come back into their
+ * original places. The helper verifies the result, and any doubt fails the job rather than weakening it.
+ */
+async function redactPagesInPlace(tools: PdfEngineTools, source: string, password: string | undefined, baseUrl: string, outputDir: string, regions: RedactionRegion[], rasterize: boolean, signal: AbortSignal): Promise<Buffer> {
+  if (!tools.python || !fs.existsSync(tools.python)) throw new Error('engine-missing');
+  const plan = planRedaction(regions);
+  const work = await mkdtemp(path.join(outputDir, 'redact-'));
+  const env = password ? { BAGLIB_PDF_PASSWORD: password } : undefined;
+  try {
+    const temporary = path.join(work, 'pages.pdf'), geometryFile = path.join(work, 'geometry.json'), redacted = path.join(work, 'redacted.pdf'), output = path.join(work, 'output.pdf'), report = path.join(work, 'report.json');
+    await runPdfHelper(tools, 'redact_pages.py', ['prepare', source, JSON.stringify(plan.pages), temporary, geometryFile], signal, env);
+    const geometry = JSON.parse(await readFile(geometryFile, 'utf8')) as { pages: RedactionPageGeometry[] };
+    const boxes = engineRedactionBoxes(plan, geometry.pages);
+    const response = await postStirlingMultipart(baseUrl, '/api/v1/security/redact', [
+      { name: 'fileInput', filename: 'document.pdf', contentType: 'application/pdf', data: await readFile(temporary) },
+      { name: 'redactions', value: JSON.stringify(boxes) },
+      { name: 'convertPDFToImage', value: String(rasterize) },
+    ], signal);
+    if (!isPdfBytes(response.buffer)) throw new Error('redaction-unverified');
+    await writeFile(redacted, response.buffer);
+    await runPdfHelper(tools, 'redact_pages.py', ['merge', source, redacted, JSON.stringify(plan.pages), JSON.stringify(boxes), String(rasterize), output, report], signal, env);
+    if (rasterize) {
+      for (let index = 0; index < plan.pages.length; index += 200) {
+        const inspected = await inspectPdfFile(output, password, () => {}, plan.pages.slice(index, index + 200));
+        if (inspected.pages.some(page => page.blocks.some(block => block.text.trim()))) throw new Error('redaction-unverified');
+      }
+    }
+    return await readFile(output);
+  } finally { await rm(work, { recursive: true, force: true }); }
 }
 
 async function stirlingPageCount(data: Buffer, password?: string): Promise<number> {
@@ -1159,7 +1237,6 @@ export async function runStirlingPdf(
           'add-image',
           'unlock-forms',
           'extract-images',
-          'convert-pdfa',
           'scale-pages',
           'multi-page-layout',
           'pdf-to-single-page',
@@ -1193,7 +1270,8 @@ export async function runStirlingPdf(
     }
 
     const baseUrl = await resolveStirlingEndpoint(tools);
-    await probeStirlingReadiness(baseUrl, signal);
+    // A JVM that has only just started answers its first requests slowly, without being unhealthy.
+    await probeStirlingReadiness(baseUrl, signal, 20_000);
 
     if (!input.filename || !fs.existsSync(input.filename)) {
       throw new Error('invalid-source');
@@ -1212,6 +1290,18 @@ export async function runStirlingPdf(
     };
 
   progress(0, 1);
+
+  const plainText = async (): Promise<string> => {
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/text', [fileField, { name: 'outputFormat', value: 'txt' }], signal);
+    const extracted = buffer.toString('utf8');
+    if (!extracted.trim()) throw new Error('no-text');
+    return extracted;
+  };
+  // HTML and Markdown need the engine's pdftohtml; without it they are reflowed from the extracted text.
+  const reflowFallback = (build: (text: string) => string) => async (error: unknown): Promise<Buffer> => {
+    if ((error as Error).message !== 'engine-missing') throw error;
+    return Buffer.from(build(await plainText()));
+  };
 
   if (input.operation === 'inspect' || input.operation === 'text') {
     let selectedPages: number[] | undefined;
@@ -1516,29 +1606,8 @@ export async function runStirlingPdf(
     let totalCount = 0;
 
     if (regions.length > 0) {
-      const redactions = regions.map(region => {
-        const rect = Array.isArray(region.rect) ? region.rect.map(Number) : [0, 0, 0, 0];
-        return {
-          page: Number(region.page ?? 1),
-          x: rect[0] ?? 0,
-          y: rect[1] ?? 0,
-          width: Math.max(1, (rect[2] ?? 0) - (rect[0] ?? 0)),
-          height: Math.max(1, (rect[3] ?? 0) - (rect[1] ?? 0)),
-          color: '#000000',
-        };
-      });
-      const response = await postStirlingMultipart(
-        baseUrl,
-        '/api/v1/security/redact',
-        [
-          { name: 'fileInput', filename: 'document.pdf', contentType: 'application/pdf', data: currentBuffer },
-          { name: 'redactions', value: JSON.stringify(redactions) },
-          { name: 'convertPDFToImage', value: 'true' },
-        ],
-        signal,
-      );
-      currentBuffer = response.buffer;
-      totalCount += redactions.length;
+      currentBuffer = await redactPagesInPlace(tools, input.filename, input.password, baseUrl, outputDir, regions.map(region => ({ page: Number(region.page), rect: Array.isArray(region.rect) ? region.rect.map(Number) : [] })), payload.convertPdfToImage !== false, signal);
+      totalCount += regions.length;
     }
 
     if (pattern) {
@@ -1643,12 +1712,6 @@ export async function runStirlingPdf(
   }
 
   if (input.operation === 'export-docx' || input.operation === 'export-xlsx' || input.operation === 'export-pptx' || input.operation === 'export-html') {
-    if (input.operation === 'export-docx' || input.operation === 'export-pptx') {
-      const caps = probeExternalCapabilities();
-      if (!caps.libreoffice.available) {
-        throw new Error('engine-missing');
-      }
-    }
     const endpoint =
       input.operation === 'export-docx' ? '/api/v1/convert/pdf/word'
       : input.operation === 'export-xlsx' ? '/api/v1/convert/pdf/xlsx'
@@ -1665,7 +1728,8 @@ export async function runStirlingPdf(
     } else if (format !== 'html') {
       fields.push({ name: 'outputFormat', value: format });
     }
-    const { buffer } = await postStirlingMultipart(baseUrl, endpoint, fields, signal);
+    const converted = postStirlingMultipart(baseUrl, endpoint, fields, signal).then(response => response.buffer);
+    const buffer = await (format === 'html' ? converted.catch(reflowFallback(text => textToHtml(text, input.language))) : converted);
     const out = await stageSingleOutput(outputDir, `document.${format}`, format, buffer);
     progress(1, 1);
     return {
@@ -1810,36 +1874,26 @@ export async function runStirlingPdf(
   }
 
   if (input.operation === 'export-markdown') {
-    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/markdown', [fileField], signal);
+    const buffer = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/markdown', [fileField], signal)
+      .then(response => response.buffer, reflowFallback(textToMarkdown));
+    if (!markdownHasText(buffer.toString('utf8'))) throw new Error('no-text');
     const out = await stageSingleOutput(outputDir, 'document.md', 'md', buffer);
     progress(1, 1);
     return { outputs: [out], fidelity: 'semantic-reflow' };
   }
 
   if (input.operation === 'export-text') {
-    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/text', [fileField], signal);
-    const out = await stageSingleOutput(outputDir, 'document.txt', 'txt', buffer);
+    const out = await stageSingleOutput(outputDir, 'document.txt', 'txt', Buffer.from(await plainText()));
     progress(1, 1);
     return { outputs: [out], fidelity: 'plain-text' };
   }
 
   if (input.operation === 'export-csv') {
-    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/csv', [fileField], signal);
+    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/csv', [fileField, { name: 'pageNumbers', value: 'all' }], signal);
+    if (isEmptyZipBytes(buffer)) throw new Error('no-tables');
     const out = await stageSingleOutput(outputDir, 'document.csv', 'csv', buffer);
     progress(1, 1);
     return { outputs: [out], fidelity: 'tabular' };
-  }
-
-  if (input.operation === 'convert-pdfa') {
-    const fields: MultipartField[] = [
-      fileField,
-      { name: 'outputFormat', value: 'pdfa' },
-      { name: 'conformanceLevel', value: String(payload.conformance ?? '2b') },
-    ];
-    const { buffer } = await postStirlingMultipart(baseUrl, '/api/v1/convert/pdf/pdfa', fields, signal);
-    const out = await stageSingleOutput(outputDir, 'document.pdf', 'pdf', buffer);
-    progress(1, 1);
-    return { outputs: [out] };
   }
 
   if (input.operation === 'scale-pages') {

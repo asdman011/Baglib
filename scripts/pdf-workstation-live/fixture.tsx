@@ -7,6 +7,9 @@ import type { AnnotationDTO } from '../../src/shared/types/annotation';
 import { PdfTocEditor } from '../../src/renderer/components/reader/PdfTocEditor';
 import { PdfNativeViewer } from '../../src/renderer/components/reader/PdfNativeViewer';
 import * as pdfjs from 'pdfjs-dist';
+import { warmPdfRasterHost } from '../../src/renderer/libs/reader/pdf-view-document';
+
+declare global { interface Window { pdfFirstPaintPage?: number } }
 const nativeUrl = new URLSearchParams(window.location.search).get('pdf');
 function PdfWorkstationPanel(props: React.ComponentProps<typeof Workstation>) {
   const { t, dir } = useWorkspace();
@@ -22,9 +25,21 @@ function PerformanceProbe() {
   const [page, setPage] = useState(1), [total, setTotal] = useState(0);
   const [mode, setMode] = useState<'single' | 'scrolled'>('single');
   const [zoom, setZoom] = useState(1);
-  const [active, setActive] = useState(true);
-  useEffect(() => { Object.assign(window, { pdfLive: workspace, pdfPerformance: { setPage, setMode, setZoom, close: () => setActive(false) } }); }, [workspace]);
-  if (!active) return null;
+  const params = new URLSearchParams(window.location.search);
+  const [active, setActive] = useState(!params.has('delayedOpen'));
+  useEffect(() => {
+    if (!params.has('delayedOpen')) return;
+    warmPdfRasterHost();
+    const stamp = (name: string) => { Object.assign(window, { [name]: performance.now() }); };
+    const observer = new MutationObserver(() => {
+      const scope = window as unknown as { pdfPreviewShownAt?: number; pdfOpenAt?: number };
+      if (!scope.pdfPreviewShownAt && document.querySelector('[data-pdf-instant-preview]')) { stamp('pdfPreviewShownAt'); requestAnimationFrame(() => requestAnimationFrame(() => stamp('pdfPreviewPresentedAt'))); }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => { Object.assign(window, { pdfLive: workspace, pdfPerformance: { setPage, setMode, setZoom, close: () => setActive(false), open: () => { Object.assign(window, { pdfOpenAt: performance.now(), pdfPreviewShownAt: 0, pdfPreviewPresentedAt: 0 }); setPage(window.pdfFirstPaintPage ?? 1); setActive(true); } } }); }, [workspace]);
+  if (!active) return <div data-pdf-performance />;
   return <div data-pdf-performance style={{ width: '100vw', height: '100vh' }}><PdfNativeViewer zoom={zoom} useViewCache={new URLSearchParams(window.location.search).has('viewCache')} fileUrl={nativeUrl!} currentPage={page} totalPages={total} onPageChange={setPage} onTotalPagesLoaded={setTotal} onPdfDocLoaded={doc => Object.assign(window, { pdfDocumentReadyAt: performance.now(), pdfDocumentPages: doc.numPages, pdfTestDocument: doc })} onOutlineLoaded={() => Object.assign(window, { pdfOutlineLoadedAt: performance.now() })} viewMode={mode} /></div>;
 }
 createRoot(document.getElementById('root')!).render(<WorkspaceProvider>{new URLSearchParams(window.location.search).has('performance') ? <PerformanceProbe /> : <Probe />}</WorkspaceProvider>);

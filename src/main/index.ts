@@ -28,18 +28,49 @@ import { registerAthanIpc, startAthanScheduler } from "./ipc/athan";
 import { registerStudyNotesIpc } from "./ipc/study-notes";
 import { registerPdfEditorIpc, shutdownPdfViewCaches } from "./ipc/pdf-editor";
 import { registerPoetryIpc } from './ipc/poetry';
-import { defaultStirlingSidecar, resolveStirlingEndpoint } from './services/pdf-editor/stirling';
+import { defaultStirlingSidecar } from './services/pdf-editor/stirling';
 import { pdfEngineTools } from './services/pdf-editor/tools';
 import { stirlingProcessor } from './services/pdf-editor/processor';
+import { ocrService } from './services/ocr/ocr.service';
 import { startKhatmahReminders } from './services/quran/khatmah-reminders';
 import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 import { installPdfDiagnosticFilter } from "./services/digital/pdf-diagnostics";
 import { streamAssetResponse } from './services/digital/asset-range';
 
+installPdfDiagnosticFilter();
+
+// Global process error boundary to intercept uncaught exceptions and unhandled promise rejections,
+// preventing abrupt Node process exits or terminal crash artifacts during transient network failures.
+process.on('unhandledRejection', (reason: unknown) => {
+  const message = errorMessage(reason);
+  console.warn('[baglib:process] Intercepted unhandled async rejection:', message);
+});
+
+process.on('uncaughtException', (error: Error) => {
+  console.error('[baglib:process] Intercepted uncaught exception:', error?.message || error);
+});
+
+const isDev = !app.isPackaged;
+const loadApp = serve({ directory: path.join(__dirname, "../../out") });
+
 // Register privileged custom schemes before app.whenReady()
 // Grants standard, secure, fetch, streaming, CORS, and CSP privileges to reader assets.
-protocol.registerSchemesAsPrivileged([
+// Each registration replaces the last one in renderer processes, and electron-serve registers `app`
+// in a microtask, so this one runs after it and repeats that scheme with the same privileges.
+queueMicrotask(() => protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,
+      secure: true,
+      allowServiceWorkers: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+      codeCache: true,
+    },
+  },
   {
     scheme: 'baglib-asset',
     privileges: {
@@ -62,23 +93,7 @@ protocol.registerSchemesAsPrivileged([
       bypassCSP: true,
     },
   },
-]);
-
-installPdfDiagnosticFilter();
-
-// Global process error boundary to intercept uncaught exceptions and unhandled promise rejections,
-// preventing abrupt Node process exits or terminal crash artifacts during transient network failures.
-process.on('unhandledRejection', (reason: unknown) => {
-  const message = errorMessage(reason);
-  console.warn('[baglib:process] Intercepted unhandled async rejection:', message);
-});
-
-process.on('uncaughtException', (error: Error) => {
-  console.error('[baglib:process] Intercepted uncaught exception:', error?.message || error);
-});
-
-const isDev = !app.isPackaged;
-const loadApp = serve({ directory: path.join(__dirname, "../../out") });
+]));
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -331,9 +346,6 @@ app.whenReady().then(async () => {
     try {
       const tools = pdfEngineTools();
       stirlingProcessor.startWatchedFoldersDaemon(tools);
-      void resolveStirlingEndpoint(tools).catch(error => {
-        if (!shutdownStarted) console.warn('[baglib:pdf] Background engine warm-up unavailable:', errorMessage(error));
-      });
     } catch (error) {
       console.warn('[baglib:pdf] Background engine configuration unavailable:', errorMessage(error));
     }
@@ -351,6 +363,7 @@ app.on('before-quit', event => {
   event.preventDefault();
   if (shutdownStarted) return;
   shutdownStarted = true;
+  ocrService.shutdown();
   void Promise.allSettled([shutdownAudioIpc(), shutdownPdfViewCaches(), stirlingProcessor.stopWatchedFoldersDaemon(), defaultStirlingSidecar.stop()]).finally(() => {
     closeDatabase();
     shutdownComplete = true;

@@ -51,8 +51,8 @@ export const AppLayout: React.FC = () => {
     let cancelled = false;
     const warm = () => {
       if (cancelled) return;
-      void import('../reader/PdfNativeViewer').then(module => {
-        if (!cancelled) return module.ensurePdfWorker();
+      void import('../../libs/reader/pdf-view-document').then(module => {
+        if (!cancelled) module.warmPdfRasterHost();
       }).catch(() => undefined);
     };
     if (typeof window.requestIdleCallback === 'function') {

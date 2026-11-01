@@ -58,7 +58,12 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
+import { StirlingToolOptionsForm } from './StirlingToolOptionsForm';
+import { ADDITIONAL_FILES, TOOLS_WITHOUT_INPUT_FILE, TOOL_INPUT_TYPES, defaultToolValues, invalidToolOption, missingToolOption, toolParameters, type ToolOptionValues } from './stirling-tool-options';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { translations, type TranslationKey } from '../../translations';
+import { resolveDroppedFilePath } from '../../utils/file-path-helper';
+import { STIRLING_INTERACTIVE_ENDPOINTS } from '../../../shared/stirling-contract';
 import type {
   StirlingEngineInfo,
   StirlingPipeline,
@@ -79,11 +84,10 @@ export type StirlingCategory =
 export interface StirlingToolDef {
   id: string;
   category: StirlingCategory;
-  nameKey: string;
-  nameEn: string;
-  nameAr: string;
-  descEn: string;
-  descAr: string;
+  nameKey: TranslationKey;
+  descKey: TranslationKey;
+  /** User pipelines carry their own text instead of catalog keys. */
+  custom?: { name: string; desc: string };
   endpoint: string;
   icon: React.ComponentType<{ className?: string; size?: number }>;
   isNew?: boolean;
@@ -98,11 +102,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'scale-pages',
     category: 'organize',
-    nameKey: 'toolScalePages',
-    nameEn: 'Adjust page size/scale',
-    nameAr: 'تعديل حجم وقياس الصفحة',
-    descEn: 'Fit pages to A4, Letter, or apply custom scaling proportions',
-    descAr: 'ملاءمة الصفحات لقياسات A4 أو Letter أو تطبيق نسبة تحجيم مخصصة',
+    nameKey: 'hubToolScalePages',
+    descKey: 'hubToolScalePagesDesc',
     endpoint: '/api/v1/general/scale-pages',
     icon: Maximize2,
     colorScheme: 'blue',
@@ -110,11 +111,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'crop',
     category: 'organize',
-    nameKey: 'toolCrop',
-    nameEn: 'Crop PDF',
-    nameAr: 'قص هوامش PDF',
-    descEn: 'Trim document margins or select a custom bounding box area',
-    descAr: 'قص هوامش المستند أو تحديد منطقة قص مخصصة بدقة',
+    nameKey: 'hubToolCrop',
+    descKey: 'hubToolCropDesc',
     endpoint: '/api/v1/general/crop',
     icon: Scissors,
     colorScheme: 'blue',
@@ -122,11 +120,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'extract-pages',
     category: 'organize',
-    nameKey: 'toolExtractPages',
-    nameEn: 'Extract page(s)',
-    nameAr: 'استخراج صفحات',
-    descEn: 'Save specific selected pages as a brand new PDF document',
-    descAr: 'استخراج وحفظ صفحات مختارة كمستند PDF جديد ومستقل',
+    nameKey: 'hubToolExtractPages',
+    descKey: 'hubToolExtractPagesDesc',
     endpoint: '/api/v1/general/extract-pages',
     icon: FileText,
     colorScheme: 'blue',
@@ -134,11 +129,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'merge',
     category: 'organize',
-    nameKey: 'toolMerge',
-    nameEn: 'Merge',
-    nameAr: 'دمج المستندات',
-    descEn: 'Combine multiple PDF documents into a single sequential file',
-    descAr: 'دمج عدة مستندات PDF في ملف متسلسل واحد',
+    nameKey: 'hubToolMerge',
+    descKey: 'hubToolMergeDesc',
     endpoint: '/api/v1/general/merge-pdfs',
     icon: Combine,
     isPopular: true,
@@ -147,11 +139,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'multi-page-layout',
     category: 'organize',
-    nameKey: 'toolMultiPageLayout',
-    nameEn: 'Multi-Page Layout',
-    nameAr: 'تخطيط صفحات متعددة (N-up)',
-    descEn: 'Print 2, 4, or 8 pages onto a single sheet of paper',
-    descAr: 'طباعة 2 أو 4 أو 8 صفحات على ورقة واحدة متقابلة',
+    nameKey: 'hubToolMultiPageLayout',
+    descKey: 'hubToolMultiPageLayoutDesc',
     endpoint: '/api/v1/general/multi-page-layout',
     icon: LayoutGrid,
     colorScheme: 'blue',
@@ -159,11 +148,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'reorder',
     category: 'organize',
-    nameKey: 'toolOrganise',
-    nameEn: 'Organise',
-    nameAr: 'تنظيم الصفحات',
-    descEn: 'Reorganize page order visually or by custom sequence list',
-    descAr: 'إعادة تنظيم تسلسل الصفحات بصرياً أو بنمط مخصص',
+    nameKey: 'hubToolReorder',
+    descKey: 'hubToolReorderDesc',
     endpoint: '/api/v1/general/rearrange-pages',
     icon: ArrowRightLeft,
     colorScheme: 'blue',
@@ -171,11 +157,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'multi-tool',
     category: 'organize',
-    nameKey: 'toolMultiTool',
-    nameEn: 'PDF Multi Tool',
-    nameAr: 'أداة PDF المتعددة',
-    descEn: 'Rotate, delete, reorder, and extract all in one visual workspace',
-    descAr: 'تدوير، حذف، إعادة ترتيب، واستخراج الصفحات في واجهة بصرية واحدة',
+    nameKey: 'hubToolMultiTool',
+    descKey: 'hubToolMultiToolDesc',
     endpoint: '/api/v1/general/multi-tool',
     icon: Layers,
     isPopular: true,
@@ -184,11 +167,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'pdf-to-single-page',
     category: 'organize',
-    nameKey: 'toolSinglePage',
-    nameEn: 'PDF to Single Large Page',
-    nameAr: 'تحويل PDF إلى صفحة واحدة ممتدة',
-    descEn: 'Merge all pages vertically into a continuous long single page',
-    descAr: 'دمج جميع الصفحات رأسياً في صفحة واحدة ممتدة وطويلة للطباعة',
+    nameKey: 'hubToolPdfToSinglePage',
+    descKey: 'hubToolPdfToSinglePageDesc',
     endpoint: '/api/v1/general/pdf-to-single-page',
     icon: FileText,
     colorScheme: 'blue',
@@ -196,11 +176,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'remove-pages',
     category: 'organize',
-    nameKey: 'toolRemove',
-    nameEn: 'Remove',
-    nameAr: 'حذف صفحات',
-    descEn: 'Strip out unwanted or blank pages permanently',
-    descAr: 'إزالة الصفحات غير المرغوبة نهائياً من المستند',
+    nameKey: 'hubToolRemovePages',
+    descKey: 'hubToolRemovePagesDesc',
     endpoint: '/api/v1/general/remove-pages',
     icon: Trash2,
     colorScheme: 'blue',
@@ -208,11 +185,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'rotate',
     category: 'organize',
-    nameKey: 'toolRotate',
-    nameEn: 'Rotate',
-    nameAr: 'تدوير الصفحات',
-    descEn: 'Rotate selected pages or entire document by 90°, 180°, or 270°',
-    descAr: 'تدوير صفحات محددة أو المستند بالكامل بزوايا 90° أو 180° أو 270°',
+    nameKey: 'hubToolRotate',
+    descKey: 'hubToolRotateDesc',
     endpoint: '/api/v1/general/rotate-pdf',
     icon: RotateCw,
     colorScheme: 'blue',
@@ -220,11 +194,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'split',
     category: 'organize',
-    nameKey: 'toolSplit',
-    nameEn: 'Split',
-    nameAr: 'تقسيم الصفحات',
-    descEn: 'Split document by page ranges, odd/even, or into single pages',
-    descAr: 'تقسيم المستند حسب نطاق الصفحات، فردي/زوجي، أو صفحات مفردة',
+    nameKey: 'hubToolSplit',
+    descKey: 'hubToolSplitDesc',
     endpoint: '/api/v1/general/split-pages',
     icon: Split,
     isPopular: true,
@@ -237,11 +208,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'convert-file-to-pdf',
     category: 'convert-to-pdf',
-    nameKey: 'toolConvertFileToPdf',
-    nameEn: 'Convert file to PDF',
-    nameAr: 'تحويل ملف إلى PDF',
-    descEn: 'Convert Office docs (DOCX, XLSX, PPTX), TXT, and images into PDF',
-    descAr: 'تحويل مستندات أوفيس (وورد، إكسل، باوربوينت) والنصوص والصور إلى PDF',
+    nameKey: 'hubToolConvertFileToPdf',
+    descKey: 'hubToolConvertFileToPdfDesc',
     endpoint: '/api/v1/convert/file/pdf',
     icon: FileSpreadsheet,
     isPopular: true,
@@ -250,23 +218,26 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'html-to-pdf',
     category: 'convert-to-pdf',
-    nameKey: 'toolHtmlToPdf',
-    nameEn: 'HTML to PDF',
-    nameAr: 'تحويل HTML إلى PDF',
-    descEn: 'Render styled HTML web pages or ZIP archives into print-ready PDF',
-    descAr: 'تحويل صفحات HTML المنسقة أو أرشيفات ZIP إلى مستند PDF عالي الجودة',
+    nameKey: 'hubToolHtmlToPdf',
+    descKey: 'hubToolHtmlToPdfDesc',
     endpoint: '/api/v1/convert/html/pdf',
     icon: FileCode,
     colorScheme: 'emerald',
   },
   {
+    id: 'eml-to-pdf',
+    category: 'convert-to-pdf',
+    nameKey: 'hubToolEmlToPdf',
+    descKey: 'hubToolEmlToPdfDesc',
+    endpoint: '/api/v1/convert/eml/pdf',
+    icon: FileText,
+    colorScheme: 'emerald',
+  },
+  {
     id: 'img-to-pdf',
     category: 'convert-to-pdf',
-    nameKey: 'toolImageToPdf',
-    nameEn: 'Image to PDF',
-    nameAr: 'تحويل الصور إلى PDF',
-    descEn: 'Convert JPG, PNG, WebP, TIFF, and BMP images into PDF pages',
-    descAr: 'تحويل صور JPG و PNG و WebP و TIFF و BMP إلى صفحات مستند PDF',
+    nameKey: 'hubToolImgToPdf',
+    descKey: 'hubToolImgToPdfDesc',
     endpoint: '/api/v1/convert/img/pdf',
     icon: ImageIcon,
     isPopular: true,
@@ -275,11 +246,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'markdown-to-pdf',
     category: 'convert-to-pdf',
-    nameKey: 'toolMarkdownToPdf',
-    nameEn: 'Markdown to PDF',
-    nameAr: 'تحويل ماركداون إلى PDF',
-    descEn: 'Convert formatted Markdown documents with GitHub-flavored styling',
-    descAr: 'تحويل مستندات ماركداون المنسقة بنمط GitHub إلى ملفات PDF جاهزة',
+    nameKey: 'hubToolMarkdownToPdf',
+    descKey: 'hubToolMarkdownToPdfDesc',
     endpoint: '/api/v1/convert/markdown/pdf',
     icon: FileText,
     colorScheme: 'emerald',
@@ -287,27 +255,21 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'url-to-pdf',
     category: 'convert-to-pdf',
-    nameKey: 'toolUrlToPdf',
-    nameEn: 'URL/Website To PDF',
-    nameAr: 'تحويل رابط موقع إلى PDF',
-    descEn: 'Fetch any live webpage by URL and capture as complete PDF',
-    descAr: 'جلب أي صفحة ويب مباشرة من خلال الرابط وتحويلها إلى مستند PDF كامل',
+    nameKey: 'hubToolUrlToPdf',
+    descKey: 'hubToolUrlToPdfDesc',
     endpoint: '/api/v1/convert/url/pdf',
     icon: Globe,
     colorScheme: 'emerald',
   },
 
   // =========================================================================
-  // 3. Convert from PDF (Cyan/Teal Icons) - 9 tools
+  // 3. Convert from PDF (Cyan/Teal Icons) - 7 tools
   // =========================================================================
   {
     id: 'pdf-to-csv',
     category: 'convert-from-pdf',
-    nameKey: 'toolPdfToCsv',
-    nameEn: 'PDF to CSV',
-    nameAr: 'تحويل PDF إلى CSV / جداول',
-    descEn: 'Extract structured tables from PDF into CSV or Excel spreadsheet',
-    descAr: 'استخراج الجداول والبيانات المنظمة من مستندات PDF إلى ملفات CSV وإكسل',
+    nameKey: 'hubToolPdfToCsv',
+    descKey: 'hubToolPdfToCsvDesc',
     endpoint: '/api/v1/convert/pdf/csv',
     icon: FileSpreadsheet,
     colorScheme: 'cyan',
@@ -315,11 +277,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'pdf-to-html',
     category: 'convert-from-pdf',
-    nameKey: 'toolPdfToHtml',
-    nameEn: 'PDF to HTML',
-    nameAr: 'تحويل PDF إلى HTML',
-    descEn: 'Convert PDF document into responsive HTML with embedded images',
-    descAr: 'تحويل مستندات PDF إلى صفحات ويب تفاعلية HTML مع كافة الأصول والصور',
+    nameKey: 'hubToolPdfToHtml',
+    descKey: 'hubToolPdfToHtmlDesc',
     endpoint: '/api/v1/convert/pdf/html',
     icon: FileCode,
     colorScheme: 'cyan',
@@ -327,11 +286,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'pdf-to-img',
     category: 'convert-from-pdf',
-    nameKey: 'toolPdfToImage',
-    nameEn: 'PDF to Image',
-    nameAr: 'تحويل PDF إلى صور',
-    descEn: 'Export PDF pages as high-resolution PNG, JPG, or TIFF image files',
-    descAr: 'تصدير صفحات PDF كصور منفصلة عالية الدقة بصيغ PNG أو JPG أو TIFF',
+    nameKey: 'hubToolPdfToImg',
+    descKey: 'hubToolPdfToImgDesc',
     endpoint: '/api/v1/convert/pdf/img',
     icon: ImageIcon,
     isPopular: true,
@@ -340,35 +296,17 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'pdf-to-markdown',
     category: 'convert-from-pdf',
-    nameKey: 'toolPdfToMarkdown',
-    nameEn: 'PDF to Markdown',
-    nameAr: 'تحويل PDF إلى ماركداون',
-    descEn: 'Convert headings, paragraphs, and lists into clean Markdown syntax',
-    descAr: 'استخراج العناوين والفقرات والجداول من PDF إلى صيغة Markdown النظيفة',
+    nameKey: 'hubToolPdfToMarkdown',
+    descKey: 'hubToolPdfToMarkdownDesc',
     endpoint: '/api/v1/convert/pdf/markdown',
     icon: FileText,
     colorScheme: 'cyan',
   },
   {
-    id: 'pdf-to-pdfa',
-    category: 'convert-from-pdf',
-    nameKey: 'toolPdfToPdfA',
-    nameEn: 'PDF to PDF/A',
-    nameAr: 'تحويل PDF إلى صيغة الأرشفة PDF/A',
-    descEn: 'Convert standard PDF to ISO-compliant PDF/A-1b, 2b, or 3b archival',
-    descAr: 'تحويل مستند PDF إلى المعيار الدولي للأرشفة طويلة الأجل ISO PDF/A',
-    endpoint: '/api/v1/convert/pdf/pdfa',
-    icon: FileArchive,
-    colorScheme: 'cyan',
-  },
-  {
     id: 'pdf-to-presentation',
     category: 'convert-from-pdf',
-    nameKey: 'toolPdfToPresentation',
-    nameEn: 'PDF to Presentation',
-    nameAr: 'تحويل PDF إلى عرض تقديمي (PPTX)',
-    descEn: 'Convert PDF slides into editable Microsoft PowerPoint PPTX deck',
-    descAr: 'تحويل شرائح وصفحات PDF إلى عرض بوربوينت PPTX قابل للتعديل بالكامل',
+    nameKey: 'hubToolPdfToPresentation',
+    descKey: 'hubToolPdfToPresentationDesc',
     endpoint: '/api/v1/convert/pdf/presentation',
     icon: FileText,
     colorScheme: 'cyan',
@@ -376,11 +314,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'pdf-to-rtf',
     category: 'convert-from-pdf',
-    nameKey: 'toolPdfToRtf',
-    nameEn: 'PDF to RTF (Text)',
-    nameAr: 'تحويل PDF إلى RTF (نص منسق)',
-    descEn: 'Export formatted text into Rich Text Format (RTF) or plain text',
-    descAr: 'تصدير النصوص المنسقة إلى صيغة Rich Text Format (RTF) أو نصوص عادية',
+    nameKey: 'hubToolPdfToRtf',
+    descKey: 'hubToolPdfToRtfDesc',
     endpoint: '/api/v1/convert/pdf/rtf',
     icon: FileText,
     colorScheme: 'cyan',
@@ -388,26 +323,11 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'pdf-to-word',
     category: 'convert-from-pdf',
-    nameKey: 'toolPdfToWord',
-    nameEn: 'PDF to Word',
-    nameAr: 'تحويل PDF إلى وورد (DOCX)',
-    descEn: 'Convert PDF into fully editable Microsoft Word DOCX document',
-    descAr: 'تحويل مستندات PDF إلى ملفات مايكروسوفت وورد DOCX قابلة للتحرير',
+    nameKey: 'hubToolPdfToWord',
+    descKey: 'hubToolPdfToWordDesc',
     endpoint: '/api/v1/convert/pdf/word',
     icon: FileText,
     isPopular: true,
-    colorScheme: 'cyan',
-  },
-  {
-    id: 'pdf-to-xml',
-    category: 'convert-from-pdf',
-    nameKey: 'toolPdfToXml',
-    nameEn: 'PDF to XML',
-    nameAr: 'تحويل PDF إلى XML',
-    descEn: 'Extract vector elements, text layout, and structural tree into XML',
-    descAr: 'استخراج الأشكال المتجهية وشجرة العناصر وهيكل المستند إلى ملف XML',
-    endpoint: '/api/v1/convert/pdf/xml',
-    icon: FileCode,
     colorScheme: 'cyan',
   },
 
@@ -417,11 +337,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'add-password',
     category: 'sign-security',
-    nameKey: 'toolAddPassword',
-    nameEn: 'Add Password',
-    nameAr: 'إضافة كلمة مرور وتشفير',
-    descEn: 'Encrypt PDF with AES-256 and restrict unauthorized opening',
-    descAr: 'تشفير مستندات PDF بمعيار التشفير المتقدم AES-256 وحمايتها بكلمة سر',
+    nameKey: 'hubToolAddPassword',
+    descKey: 'hubToolAddPasswordDesc',
     endpoint: '/api/v1/security/add-password',
     icon: Lock,
     colorScheme: 'rose',
@@ -429,11 +346,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'add-stamp',
     category: 'sign-security',
-    nameKey: 'toolAddStamp',
-    nameEn: 'Add Stamp to PDF',
-    nameAr: 'إضافة ختم إلى PDF',
-    descEn: 'Overlay an official approved digital stamp, seal, or approval badge',
-    descAr: 'إضافة أختام وشارات الاعتماد الرقمية الرسمية على صفحات المستند',
+    nameKey: 'hubToolAddStamp',
+    descKey: 'hubToolAddStampDesc',
     endpoint: '/api/v1/misc/add-stamp',
     icon: Stamp,
     colorScheme: 'rose',
@@ -441,11 +355,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'watermark',
     category: 'sign-security',
-    nameKey: 'toolAddWatermark',
-    nameEn: 'Add Watermark',
-    nameAr: 'إضافة علامة مائية',
-    descEn: 'Stamp custom text or diagonal watermark across pages with opacity control',
-    descAr: 'إضافة علامة مائية نصية مائلة عبر الصفحات مع التحكم الكامل بالشفافية',
+    nameKey: 'hubToolWatermark',
+    descKey: 'hubToolWatermarkDesc',
     endpoint: '/api/v1/misc/watermark',
     icon: Stamp,
     colorScheme: 'rose',
@@ -453,11 +364,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'auto-redact',
     category: 'sign-security',
-    nameKey: 'toolAutoRedact',
-    nameEn: 'Auto Redact',
-    nameAr: 'حجب آلي بالأنماط والبيانات الشخصية',
-    descEn: 'Automatically black out names, emails, phone numbers, and regex patterns',
-    descAr: 'حجب الأسماء، البريد الإلكتروني، الهواتف، والبيانات الحساسة آلياً',
+    nameKey: 'hubToolAutoRedact',
+    descKey: 'hubToolAutoRedactDesc',
     endpoint: '/api/v1/security/auto-redact',
     icon: Eraser,
     colorScheme: 'rose',
@@ -465,11 +373,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'change-permissions',
     category: 'sign-security',
-    nameKey: 'toolChangePermissions',
-    nameEn: 'Change Permissions',
-    nameAr: 'تغيير صلاحيات المستند',
-    descEn: 'Control printing, text copying, annotation, and form modification rights',
-    descAr: 'التحكم بصلاحيات الطباعة، ونسخ النصوص، والتعليق، وتعديل النماذج',
+    nameKey: 'hubToolChangePermissions',
+    descKey: 'hubToolChangePermissionsDesc',
     endpoint: '/api/v1/security/change-permissions',
     icon: Key,
     colorScheme: 'rose',
@@ -477,11 +382,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'manual-redact',
     category: 'sign-security',
-    nameKey: 'toolManualRedaction',
-    nameEn: 'Manual Redaction',
-    nameAr: 'حجب بصري يدوي',
-    descEn: 'Draw exact pixel redaction rectangles to sanitize sensitive information',
-    descAr: 'رسم مستطيلات حجب بصرية دقيقة لإخفاء المعلومات الحساسة نهائياً',
+    nameKey: 'hubToolManualRedact',
+    descKey: 'hubToolManualRedactDesc',
     endpoint: '/api/v1/security/manual-redaction',
     icon: Eraser,
     isNew: true,
@@ -491,11 +393,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'remove-cert-sign',
     category: 'sign-security',
-    nameKey: 'toolRemoveCertSign',
-    nameEn: 'Remove Certificate Sign',
-    nameAr: 'إزالة التوقيع الرقمي بالشهادة',
-    descEn: 'Strip digital certificate signatures to unlock document editing',
-    descAr: 'إزالة تواقيع الشهادات الرقمية لإعادة فتح المستند للتحرير والتعديل',
+    nameKey: 'hubToolRemoveCertSign',
+    descKey: 'hubToolRemoveCertSignDesc',
     endpoint: '/api/v1/security/remove-cert-sign',
     icon: Shield,
     colorScheme: 'rose',
@@ -503,11 +402,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'remove-password',
     category: 'sign-security',
-    nameKey: 'toolRemovePassword',
-    nameEn: 'Remove Password',
-    nameAr: 'إزالة كلمة المرور وفك التشفير',
-    descEn: 'Decrypt password-protected PDF files permanently',
-    descAr: 'فك تشفير ملفات PDF المحمية بكلمة مرور نهائياً وإلغاء قيود الحماية',
+    nameKey: 'hubToolRemovePassword',
+    descKey: 'hubToolRemovePasswordDesc',
     endpoint: '/api/v1/security/remove-password',
     icon: Unlock,
     colorScheme: 'rose',
@@ -515,11 +411,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'sanitize-pdf',
     category: 'sign-security',
-    nameKey: 'toolSanitize',
-    nameEn: 'Sanitize',
-    nameAr: 'تعقيم وتطهير المستند',
-    descEn: 'Remove JavaScript, embedded scripts, actions, and metadata vectors',
-    descAr: 'إزالة رموز جافاسكريبت، والبرمجيات المضمنة، والإجراءات الخفية لضمان الأمان',
+    nameKey: 'hubToolSanitizePdf',
+    descKey: 'hubToolSanitizePdfDesc',
     endpoint: '/api/v1/security/sanitize-pdf',
     icon: ShieldCheck,
     colorScheme: 'rose',
@@ -527,11 +420,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'sign',
     category: 'sign-security',
-    nameKey: 'toolSign',
-    nameEn: 'Sign',
-    nameAr: 'توقيع يدوي (رسم)',
-    descEn: 'Draw handwritten signature or paste signature stamp onto pages',
-    descAr: 'رسم توقيع يدوي بالقلم أو لصق توقيع ممسوح على صفحات المستند',
+    nameKey: 'hubToolSign',
+    descKey: 'hubToolSignDesc',
     endpoint: '/api/v1/security/sign',
     icon: PenTool,
     colorScheme: 'rose',
@@ -539,11 +429,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'cert-sign',
     category: 'sign-security',
-    nameKey: 'toolSignWithCertificate',
-    nameEn: 'Sign with Certificate',
-    nameAr: 'توقيع رقمي بشهادة معتمدة',
-    descEn: 'Sign with PKCS#12 (.p12/.pfx) cryptographic certificate and timestamp',
-    descAr: 'توقيع المستند بشهادة تشفير رقمية PKCS#12 (.p12/.pfx) وختم زمني موثق',
+    nameKey: 'hubToolCertSign',
+    descKey: 'hubToolCertSignDesc',
     endpoint: '/api/v1/security/cert-sign',
     icon: ShieldCheck,
     isPopular: true,
@@ -552,11 +439,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'validate-signature',
     category: 'sign-security',
-    nameKey: 'toolValidateSignature',
-    nameEn: 'Validate PDF Signature',
-    nameAr: 'التحقق من صحة التواقيع الرقمية',
-    descEn: 'Inspect certificate authenticity, signer identity, and document tampering',
-    descAr: 'فحص موثوقية الشهادات وهوية الموقعين وعدم التلاعب بمحتوى المستند',
+    nameKey: 'hubToolValidateSignature',
+    descKey: 'hubToolValidateSignatureDesc',
     endpoint: '/api/v1/security/validate-signature',
     icon: ShieldCheck,
     isPopular: true,
@@ -569,11 +453,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'add-image',
     category: 'view-edit',
-    nameKey: 'toolAddImage',
-    nameEn: 'Add image',
-    nameAr: 'إدراج صورة في الصفحة',
-    descEn: 'Insert custom images, diagrams, or graphics into designated page coordinates',
-    descAr: 'إدراج صور أو رسوم بيانية في إحداثيات محددة على صفحات المستند',
+    nameKey: 'hubToolAddImage',
+    descKey: 'hubToolAddImageDesc',
     endpoint: '/api/v1/misc/add-image',
     icon: ImageIcon,
     colorScheme: 'lime',
@@ -581,11 +462,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'add-page-numbers',
     category: 'view-edit',
-    nameKey: 'toolAddPageNumbers',
-    nameEn: 'Add Page Numbers',
-    nameAr: 'ترقيم الصفحات',
-    descEn: 'Insert custom page numbering at header, footer, margin, or center',
-    descAr: 'إدراج ترقيم الصفحات في الترويسة أو التذييل أو الهامش مع تنسيقات متعددة',
+    nameKey: 'hubToolAddPageNumbers',
+    descKey: 'hubToolAddPageNumbersDesc',
     endpoint: '/api/v1/misc/add-page-numbers',
     icon: Heading,
     colorScheme: 'lime',
@@ -593,11 +471,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'adjust-colors',
     category: 'view-edit',
-    nameKey: 'toolAdvancedColourOptions',
-    nameEn: 'Advanced Colour options',
-    nameAr: 'خيارات الألوان المتقدمة والتباين',
-    descEn: 'Invert colors, convert to grayscale, adjust brightness and gamma curves',
-    descAr: 'عكس الألوان، التحويل للرمادي، وضبط السطوع ومنحنيات التباين لتحسين القراءة',
+    nameKey: 'hubToolAdjustColors',
+    descKey: 'hubToolAdjustColorsDesc',
     endpoint: '/api/v1/misc/adjust-colors',
     icon: Palette,
     colorScheme: 'lime',
@@ -605,11 +480,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'edit-metadata',
     category: 'view-edit',
-    nameKey: 'toolChangeMetadata',
-    nameEn: 'Change Metadata',
-    nameAr: 'تعديل بيانات المستند (Metadata)',
-    descEn: 'Edit title, author, subject, keywords, creator, and producer metadata',
-    descAr: 'تعديل العنوان، المؤلف، الموضوع، الكلمات المفتاحية وبيانات النشر والإنشاء',
+    nameKey: 'hubToolEditMetadata',
+    descKey: 'hubToolEditMetadataDesc',
     endpoint: '/api/v1/misc/metadata',
     icon: FileText,
     colorScheme: 'lime',
@@ -617,11 +489,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'compare-pdfs',
     category: 'view-edit',
-    nameKey: 'toolCompare',
-    nameEn: 'Compare',
-    nameAr: 'مقارنة مستندين',
-    descEn: 'Visually compare two PDF versions and highlight page/text changes',
-    descAr: 'مقارنة نسختين بصرياً وإبراز الفروقات والتغييرات في النصوص والصفحات',
+    nameKey: 'hubToolComparePdfs',
+    descKey: 'hubToolComparePdfsDesc',
     endpoint: '/api/v1/misc/compare',
     icon: ArrowRightLeft,
     colorScheme: 'lime',
@@ -629,11 +498,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'extract-images',
     category: 'view-edit',
-    nameKey: 'toolExtractImages',
-    nameEn: 'Extract Images',
-    nameAr: 'استخراج الصور المضمنة',
-    descEn: 'Extract all embedded photos and raster assets from the document',
-    descAr: 'استخراج كافة الصور والرسومات النقطية المضمنة داخل المستند إلى مجلد مستقل',
+    nameKey: 'hubToolExtractImages',
+    descKey: 'hubToolExtractImagesDesc',
     endpoint: '/api/v1/misc/extract-images',
     icon: ImageIcon,
     colorScheme: 'lime',
@@ -641,11 +507,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'flatten-forms',
     category: 'view-edit',
-    nameKey: 'toolFlatten',
-    nameEn: 'Flatten',
-    nameAr: 'تسطيح النماذج والطبقات',
-    descEn: 'Flatten interactive form fields and annotations into static document content',
-    descAr: 'تسطيح حقول النماذج التفاعلية والملاحظات لتصبح جزءاً ثابتاً من محتوى الصفحة',
+    nameKey: 'hubToolFlattenForms',
+    descKey: 'hubToolFlattenFormsDesc',
     endpoint: '/api/v1/misc/flatten',
     icon: FileCheck2,
     colorScheme: 'lime',
@@ -653,11 +516,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'doc-properties',
     category: 'view-edit',
-    nameKey: 'toolGetAllInfoOnPdf',
-    nameEn: 'Get ALL Info on PDF',
-    nameAr: 'تشخيص وفحص كافة معلومات PDF',
-    descEn: 'Inspect PDF specification, font embeddings, encryption, and conformance',
-    descAr: 'فحص إصدار ومواصفات PDF، الخطوط المضمنة، التشفير وتفاصيل المطابقة',
+    nameKey: 'hubToolDocProperties',
+    descKey: 'hubToolDocPropertiesDesc',
     endpoint: '/api/v1/misc/document-properties',
     icon: Eye,
     colorScheme: 'lime',
@@ -665,11 +525,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'ocr-pdf',
     category: 'view-edit',
-    nameKey: 'toolOcrCleanupScans',
-    nameEn: 'OCR / Cleanup scans',
-    nameAr: 'التعرف الضوئي ومعالجة المخطوطات والماسح',
-    descEn: 'Run Arabic & English OCR and deskew/cleanup scanned pages into searchable text',
-    descAr: 'تشغيل التعرف الضوئي على النصوص العربية والإنجليزية وتنظيف صفحات المخطوطات',
+    nameKey: 'hubToolOcrPdf',
+    descKey: 'hubToolOcrPdfDesc',
     endpoint: '/api/v1/misc/ocr-pdf',
     icon: FileText,
     isPopular: true,
@@ -678,11 +535,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'remove-annotations',
     category: 'view-edit',
-    nameKey: 'toolRemoveAnnotations',
-    nameEn: 'Remove Annotations',
-    nameAr: 'إزالة التعليقات والتحديدات',
-    descEn: 'Clean all highlights, comments, and stamp annotations from document',
-    descAr: 'إزالة جميع التحديدات والملاحظات والتعليقات والرسوم من المستند نهائياً',
+    nameKey: 'hubToolRemoveAnnotations',
+    descKey: 'hubToolRemoveAnnotationsDesc',
     endpoint: '/api/v1/misc/remove-annotations',
     icon: Eraser,
     colorScheme: 'lime',
@@ -690,11 +544,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'remove-blanks',
     category: 'view-edit',
-    nameKey: 'toolRemoveBlankPages',
-    nameEn: 'Remove Blank pages',
-    nameAr: 'إزالة الصفحات الفارغة',
-    descEn: 'Automatically detect and purge blank scanned pages from the PDF',
-    descAr: 'اكتشاف وحذف الصفحات البيضاء الفارغة الناتجة عن المسح الضوئي تلقائياً',
+    nameKey: 'hubToolRemoveBlanks',
+    descKey: 'hubToolRemoveBlanksDesc',
     endpoint: '/api/v1/misc/remove-blanks',
     icon: Trash2,
     colorScheme: 'lime',
@@ -702,27 +553,21 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'remove-images',
     category: 'view-edit',
-    nameKey: 'toolRemoveImage',
-    nameEn: 'Remove image',
-    nameAr: 'إزالة الصور من الصفحات',
-    descEn: 'Strip out photos and bitmap illustrations while preserving text layout',
-    descAr: 'إزالة الصور والرسوم النقطية مع الحفاظ الكامل على تسلسل ونصوص المستند',
+    nameKey: 'hubToolRemoveImages',
+    descKey: 'hubToolRemoveImagesDesc',
     endpoint: '/api/v1/misc/remove-images',
     icon: ImageIcon,
     colorScheme: 'lime',
   },
 
   // =========================================================================
-  // 6. Advanced & Processor (Orange/Coral Icons) - 11 tools
+  // 6. Advanced & Processor (Orange/Coral Icons) - 10 tools
   // =========================================================================
   {
     id: 'adjust-contrast',
     category: 'advanced-processor',
-    nameKey: 'toolAdjustColoursContrast',
-    nameEn: 'Adjust Colours/Contrast',
-    nameAr: 'ضبط الألوان والتباين',
-    descEn: 'Fine-tune contrast and sharpness for pale or aged manuscript scans',
-    descAr: 'ضبط التباين والحدة لتحسين قراءة المخطوطات القديمة والوثائق الباهتة',
+    nameKey: 'hubToolAdjustContrast',
+    descKey: 'hubToolAdjustContrastDesc',
     endpoint: '/api/v1/misc/adjust-colors',
     icon: Palette,
     colorScheme: 'orange',
@@ -730,11 +575,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'auto-rename',
     category: 'advanced-processor',
-    nameKey: 'toolAutoRenamePdfFile',
-    nameEn: 'Auto Rename PDF File',
-    nameAr: 'إعادة التسمية التلقائية بالذكاء',
-    descEn: 'Extract document title, header, or first section text to rename file cleanly',
-    descAr: 'استخراج عنوان المستند أو الترويسة الأولى لإعادة تسمية الملف بدقة',
+    nameKey: 'hubToolAutoRename',
+    descKey: 'hubToolAutoRenameDesc',
     endpoint: '/api/v1/misc/auto-rename',
     icon: Heading,
     isNew: true,
@@ -743,11 +585,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'split-by-size',
     category: 'advanced-processor',
-    nameKey: 'toolAutoSplitBySizeCount',
-    nameEn: 'Auto Split by Size/Count',
-    nameAr: 'تقسيم تلقائي بالحجم أو العدد',
-    descEn: 'Divide large PDF files into fixed megabyte sizes or page counts',
-    descAr: 'تقسيم ملفات PDF الضخمة إلى أحجام محددة بالميجابايت أو عدد الصفحات',
+    nameKey: 'hubToolSplitBySize',
+    descKey: 'hubToolSplitBySizeDesc',
     endpoint: '/api/v1/general/split-by-size-or-count',
     icon: Scissors,
     colorScheme: 'orange',
@@ -755,11 +594,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'auto-split',
     category: 'advanced-processor',
-    nameKey: 'toolAutoSplitPages',
-    nameEn: 'Auto Split Pages',
-    nameAr: 'تقسيم الصفحات والمسح التلقائي',
-    descEn: 'Detect two-page book spreads and split into single portrait pages',
-    descAr: 'اكتشاف الصفحات المزدوجة وتقسيمها إلى صفحات طولية مفردة ومستقلة',
+    nameKey: 'hubToolAutoSplit',
+    descKey: 'hubToolAutoSplitDesc',
     endpoint: '/api/v1/general/auto-split-pdf',
     icon: Split,
     colorScheme: 'orange',
@@ -767,36 +603,18 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'compress-pdf',
     category: 'advanced-processor',
-    nameKey: 'toolCompress',
-    nameEn: 'Compress',
-    nameAr: 'ضغط وتحسين الحجم',
-    descEn: 'Reduce file size intelligently with JBIG2, Deflate, and resolution tuning',
-    descAr: 'تقليل حجم الملف بذكاء باستخدام ضغط متقدم وضبط دقة الصور بدون فقد الجودة',
+    nameKey: 'hubToolCompressPdf',
+    descKey: 'hubToolCompressPdfDesc',
     endpoint: '/api/v1/misc/compress-pdf',
     icon: Minimize2,
     isPopular: true,
     colorScheme: 'orange',
   },
   {
-    id: 'scanner-image-split',
-    category: 'advanced-processor',
-    nameKey: 'toolDetectSplitScannedPhotos',
-    nameEn: 'Detect/Split Scanned photos',
-    nameAr: 'اكتشاف وفصل الصور الممسوحة',
-    descEn: 'Isolate individual photos from multi-photo flatbed scanner scans',
-    descAr: 'فصل واقتصاص الصور الفردية من مسحة ضوئية مسطحة متعددة الصور تلقائياً',
-    endpoint: '/api/v1/misc/extract-image-scans',
-    icon: Scissors,
-    colorScheme: 'orange',
-  },
-  {
     id: 'overlay-pdfs',
     category: 'advanced-processor',
-    nameKey: 'toolOverlayPdfs',
-    nameEn: 'Overlay PDFs',
-    nameAr: 'تراكب ودمج الطبقات (Overlay)',
-    descEn: 'Layer one PDF over another as transparent stationery, letterhead, or seal',
-    descAr: 'تراكب مستند PDF فوق آخر كترويسة رسمية أو ورق خطابات أو خلفية شفافة',
+    nameKey: 'hubToolOverlayPdfs',
+    descKey: 'hubToolOverlayPdfsDesc',
     endpoint: '/api/v1/general/overlay-pdf',
     icon: Layers,
     colorScheme: 'orange',
@@ -804,11 +622,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'pipeline-processor',
     category: 'advanced-processor',
-    nameKey: 'toolPipelineStirlingProcessor',
-    nameEn: 'Pipeline (Stirling Processor)',
-    nameAr: 'أنابيب المعالجة الآلية (Stirling Processor)',
-    descEn: 'Chain multiple tools into automated pipelines with watched folders & policies',
-    descAr: 'ربط أدوات متعددة في أنابيب معالجة متسلسلة مع مراقبة المجلدات والسياسات',
+    nameKey: 'hubToolPipelineProcessor',
+    descKey: 'hubToolPipelineProcessorDesc',
     endpoint: '/api/v1/pipeline/handleData',
     icon: Cpu,
     isPopular: true,
@@ -817,11 +632,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'repair-pdf',
     category: 'advanced-processor',
-    nameKey: 'toolRepair',
-    nameEn: 'Repair',
-    nameAr: 'إصلاح ملفات PDF المعطوبة',
-    descEn: 'Recover corrupt xref tables, rebuild trailers, and rescue unreadable PDFs',
-    descAr: 'إصلاح جداول xref التالفة وإعادة بناء الهيكل لإنقاذ الملفات غير القابلة للفتح',
+    nameKey: 'hubToolRepairPdf',
+    descKey: 'hubToolRepairPdfDesc',
     endpoint: '/api/v1/misc/repair',
     icon: AlertTriangle,
     colorScheme: 'orange',
@@ -829,11 +641,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'show-javascript',
     category: 'advanced-processor',
-    nameKey: 'toolShowJavascript',
-    nameEn: 'Show Javascript',
-    nameAr: 'فحص واستعراض أكواد جافاسكريبت',
-    descEn: 'Inspect, export, or audit all embedded scripts and form actions for security',
-    descAr: 'استعراض وفحص وتصدير كافة أكواد جافاسكريبت والإجراءات المضمنة في المستند',
+    nameKey: 'hubToolShowJavascript',
+    descKey: 'hubToolShowJavascriptDesc',
     endpoint: '/api/v1/misc/show-javascript',
     icon: FileCode,
     colorScheme: 'orange',
@@ -841,11 +650,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'split-by-chapters',
     category: 'advanced-processor',
-    nameKey: 'toolSplitPdfByChapters',
-    nameEn: 'Split PDF by Chapters',
-    nameAr: 'تقسيم الكتاب حسب الفصول والفهرس',
-    descEn: 'Automatically split book into separate chapter files using bookmarks/TOC',
-    descAr: 'تقسيم الكتاب تلقائياً إلى ملفات فصول مستقلة بالاعتماد على الفهرس والمخطط',
+    nameKey: 'hubToolSplitByChapters',
+    descKey: 'hubToolSplitByChaptersDesc',
     endpoint: '/api/v1/general/split-pdf-by-chapters',
     icon: BookmarkCheck,
     colorScheme: 'orange',
@@ -853,11 +659,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'filter-contains-text',
     category: 'advanced-processor',
-    nameKey: 'stirlingFilterContainsText',
-    nameEn: 'Filter: Contains Text',
-    nameAr: 'فلترة: يحتوي على نص',
-    descEn: 'Conditional gate: only proceed if document contains specified text',
-    descAr: 'بوابة شرطية: تمرير الملف فقط إذا كان يحتوي على النص المطلوب',
+    nameKey: 'hubToolFilterContainsText',
+    descKey: 'hubToolFilterContainsTextDesc',
     endpoint: '/api/v1/filter/filter-contains-text',
     icon: FileText,
     colorScheme: 'orange',
@@ -865,11 +668,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'filter-contains-image',
     category: 'advanced-processor',
-    nameKey: 'stirlingFilterContainsImage',
-    nameEn: 'Filter: Contains Image',
-    nameAr: 'فلترة: يحتوي على صور',
-    descEn: 'Conditional gate: detect scanned documents containing images for OCR routing',
-    descAr: 'بوابة شرطية: كشف المستندات الممسوحة ضوئياً وتوجيهها لمعالجة OCR',
+    nameKey: 'hubToolFilterContainsImage',
+    descKey: 'hubToolFilterContainsImageDesc',
     endpoint: '/api/v1/filter/filter-contains-image',
     icon: ImageIcon,
     colorScheme: 'orange',
@@ -877,11 +677,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'filter-page-count',
     category: 'advanced-processor',
-    nameKey: 'stirlingFilterPageCount',
-    nameEn: 'Filter: Page Count',
-    nameAr: 'فلترة: عدد الصفحات',
-    descEn: 'Conditional gate: match documents within minimum and maximum page count bounds',
-    descAr: 'بوابة شرطية: مطابقة المستندات بحسب نطاق عدد الصفحات المسموح به',
+    nameKey: 'hubToolFilterPageCount',
+    descKey: 'hubToolFilterPageCountDesc',
     endpoint: '/api/v1/filter/filter-page-count',
     icon: Layers,
     colorScheme: 'orange',
@@ -889,11 +686,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'filter-page-size',
     category: 'advanced-processor',
-    nameKey: 'stirlingFilterPageSize',
-    nameEn: 'Filter: Page Dimensions',
-    nameAr: 'فلترة: أبعاد الصفحة',
-    descEn: 'Conditional gate: verify standard sheet dimensions (A4, Letter, Custom)',
-    descAr: 'بوابة شرطية: التحقق من قياسات الصفحات القياسية (A4، Letter، مخصص)',
+    nameKey: 'hubToolFilterPageSize',
+    descKey: 'hubToolFilterPageSizeDesc',
     endpoint: '/api/v1/filter/filter-page-size',
     icon: Maximize2,
     colorScheme: 'orange',
@@ -901,11 +695,8 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'filter-file-size',
     category: 'advanced-processor',
-    nameKey: 'stirlingFilterFileSize',
-    nameEn: 'Filter: File Size',
-    nameAr: 'فلترة: حجم الملف',
-    descEn: 'Conditional gate: filter documents exceeding or below target file size threshold',
-    descAr: 'بوابة شرطية: فرز المستندات بناءً على الحد الأقصى لحجم الملف بالميغابايت',
+    nameKey: 'hubToolFilterFileSize',
+    descKey: 'hubToolFilterFileSizeDesc',
     endpoint: '/api/v1/filter/filter-file-size',
     icon: SlidersHorizontal,
     colorScheme: 'orange',
@@ -913,59 +704,61 @@ export const STIRLING_TOOLS: StirlingToolDef[] = [
   {
     id: 'filter-page-rotation',
     category: 'advanced-processor',
-    nameKey: 'stirlingFilterPageRotation',
-    nameEn: 'Filter: Page Rotation',
-    nameAr: 'فلترة: اتجاه التدوير',
-    descEn: 'Conditional gate: detect rotated or landscape pages requiring orientation fix',
-    descAr: 'بوابة شرطية: كشف الصفحات الأفقية أو المقلوبة التي تتطلب تصحيح الاتجاه',
+    nameKey: 'hubToolFilterPageRotation',
+    descKey: 'hubToolFilterPageRotationDesc',
     endpoint: '/api/v1/filter/filter-page-rotation',
     icon: RotateCw,
     colorScheme: 'orange',
   },
 ];
 
+const toolName = (tool: StirlingToolDef, locale: 'ar' | 'en') => tool.custom?.name ?? translations[locale][tool.nameKey];
+const toolDesc = (tool: StirlingToolDef, locale: 'ar' | 'en') => tool.custom?.desc ?? translations[locale][tool.descKey];
+
+const newPipelineId = () => `pipe-${Date.now()}`;
+
 const QUICK_LAUNCH_TOOLS = ['manual-redact', 'multi-tool', 'compress-pdf', 'pipeline-processor', 'validate-signature'];
 
 const AVAILABLE_PIPELINE_STEPS: {
   operation: string;
-  nameEn: string;
-  nameAr: string;
+  labelKey: TranslationKey;
   defaultParams: Record<string, unknown>;
   category: 'filter' | 'tool';
 }[] = [
   // 6 Conditional Filter Gates
-  { operation: '/api/v1/filter/filter-contains-text', nameEn: 'Filter: Contains Text', nameAr: 'تصفية: يحتوي على نصوص', defaultParams: { inverted: false }, category: 'filter' },
-  { operation: '/api/v1/filter/filter-contains-image', nameEn: 'Filter: Contains Image', nameAr: 'تصفية: يحتوي على صور', defaultParams: { inverted: false, pageNumbers: 'all' }, category: 'filter' },
-  { operation: '/api/v1/filter/filter-page-count', nameEn: 'Filter: Page Count', nameAr: 'تصفية: عدد الصفحات', defaultParams: { comparator: 'greater-than', count: 5 }, category: 'filter' },
-  { operation: '/api/v1/filter/filter-page-size', nameEn: 'Filter: Page Size', nameAr: 'تصفية: أبعاد الصفحة', defaultParams: { pageSize: 'A4', comparator: 'equals' }, category: 'filter' },
-  { operation: '/api/v1/filter/filter-file-size', nameEn: 'Filter: File Size', nameAr: 'تصفية: حجم الملف (MB)', defaultParams: { comparator: 'less-than', sizeMb: 20 }, category: 'filter' },
-  { operation: '/api/v1/filter/filter-page-rotation', nameEn: 'Filter: Page Rotation', nameAr: 'تصفية: زاوية دوران الصفحة', defaultParams: { rotation: 0, comparator: 'equals' }, category: 'filter' },
+  { operation: '/api/v1/filter/filter-contains-text', labelKey: 'hubStepFilterContainsText', defaultParams: { inverted: false }, category: 'filter' },
+  { operation: '/api/v1/filter/filter-contains-image', labelKey: 'hubStepFilterContainsImage', defaultParams: { inverted: false, pageNumbers: 'all' }, category: 'filter' },
+  { operation: '/api/v1/filter/filter-page-count', labelKey: 'hubStepFilterPageCount', defaultParams: { comparator: 'greater-than', count: 5 }, category: 'filter' },
+  { operation: '/api/v1/filter/filter-page-size', labelKey: 'hubStepFilterPageSize', defaultParams: { pageSize: 'A4', comparator: 'equals' }, category: 'filter' },
+  { operation: '/api/v1/filter/filter-file-size', labelKey: 'hubStepFilterFileSize', defaultParams: { comparator: 'less-than', sizeMb: 20 }, category: 'filter' },
+  { operation: '/api/v1/filter/filter-page-rotation', labelKey: 'hubStepFilterPageRotation', defaultParams: { rotation: 0, comparator: 'equals' }, category: 'filter' },
   // Core Processing Tools
-  { operation: '/api/v1/misc/ocr-pdf', nameEn: 'OCR / Scan Text Recognition', nameAr: 'التعرف الضوئي على النصوص (OCR)', defaultParams: { languages: ['ara', 'eng'], ocrType: 'skip-text' }, category: 'tool' },
-  { operation: '/api/v1/misc/compress-pdf', nameEn: 'Compress & Optimize', nameAr: 'ضغط وتقليص حجم PDF', defaultParams: { optimizeLevel: 2 }, category: 'tool' },
-  { operation: '/api/v1/security/sanitize-pdf', nameEn: 'Sanitize PDF', nameAr: 'تعقيم وتنظيف ملف PDF', defaultParams: {}, category: 'tool' },
-  { operation: '/api/v1/security/auto-redact', nameEn: 'Auto-Redact Sensitive Data', nameAr: 'الحجب التلقائي للبيانات الحساسة', defaultParams: { words: ['[\\w.-]+@[\\w.-]+\\.\\w+'], useRegex: true, wholeWordSearch: true }, category: 'tool' },
-  { operation: '/api/v1/security/add-watermark', nameEn: 'Add Watermark', nameAr: 'إضافة علامة مائية', defaultParams: { watermarkText: 'CONFIDENTIAL', fontSize: 36, opacity: 0.25, rotation: 45 }, category: 'tool' },
-  { operation: '/api/v1/convert/pdf/pdfa', nameEn: 'Convert to PDF/A', nameAr: 'تحويل إلى أرشيف PDF/A', defaultParams: { conformance: '2b' }, category: 'tool' },
-  { operation: '/api/v1/misc/flatten', nameEn: 'Flatten Forms & Layers', nameAr: 'تسطيح النماذج والطبقات', defaultParams: {}, category: 'tool' },
-  { operation: '/api/v1/misc/remove-annotations', nameEn: 'Remove Annotations', nameAr: 'إزالة التعليقات والتحشيات', defaultParams: {}, category: 'tool' },
-  { operation: '/api/v1/general/rotate-pdf', nameEn: 'Rotate PDF', nameAr: 'تدوير الصفحات', defaultParams: { angle: 90 }, category: 'tool' },
-  { operation: '/api/v1/misc/repair', nameEn: 'Repair PDF', nameAr: 'إصلاح ملف PDF', defaultParams: {}, category: 'tool' },
-  { operation: '/api/v1/misc/linearize', nameEn: 'Linearize (Fast Web View)', nameAr: 'تهيئة للعرض السريع عبر الويب', defaultParams: {}, category: 'tool' },
+  { operation: '/api/v1/misc/ocr-pdf', labelKey: 'hubStepOcrPdf', defaultParams: { languages: ['ara', 'eng'], ocrType: 'skip-text' }, category: 'tool' },
+  { operation: '/api/v1/misc/compress-pdf', labelKey: 'hubStepCompressPdf', defaultParams: { optimizeLevel: 2 }, category: 'tool' },
+  { operation: '/api/v1/security/sanitize-pdf', labelKey: 'hubStepSanitizePdf', defaultParams: {}, category: 'tool' },
+  { operation: '/api/v1/security/auto-redact', labelKey: 'hubStepAutoRedact', defaultParams: { words: ['[\\w.-]+@[\\w.-]+\\.\\w+'], useRegex: true, wholeWordSearch: true }, category: 'tool' },
+  { operation: '/api/v1/security/add-watermark', labelKey: 'hubStepAddWatermark', defaultParams: { watermarkText: 'CONFIDENTIAL', fontSize: 36, opacity: 0.25, rotation: 45 }, category: 'tool' },
+  { operation: '/api/v1/misc/flatten', labelKey: 'hubStepFlatten', defaultParams: {}, category: 'tool' },
+  { operation: '/api/v1/misc/remove-annotations', labelKey: 'hubStepRemoveAnnotations', defaultParams: {}, category: 'tool' },
+  { operation: '/api/v1/general/rotate-pdf', labelKey: 'hubStepRotatePdf', defaultParams: { angle: 90 }, category: 'tool' },
+  { operation: '/api/v1/misc/repair', labelKey: 'hubStepRepair', defaultParams: {}, category: 'tool' },
+  { operation: '/api/v1/misc/linearize', labelKey: 'hubStepLinearize', defaultParams: {}, category: 'tool' },
 ];
 
 export function StirlingToolsHub({
   onClose,
   onOpenInWorkstation,
+  initialView = 'columns',
 }: {
   onClose: () => void;
   onOpenInWorkstation?: (fileUrlOrWorkId: string) => void;
+  initialView?: 'columns' | 'pipelines';
 }) {
   const { t, lang, dir, books, theme, toggleTheme } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sortMode, setSortMode] = useState<'category' | 'alpha'>('category');
-  const [viewMode, setViewMode] = useState<'columns' | 'grid' | 'pipelines'>('columns');
+  const [viewMode, setViewMode] = useState<'columns' | 'grid' | 'pipelines'>(initialView);
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('baglib_stirling_favorites');
@@ -1009,13 +802,7 @@ export function StirlingToolsHub({
   } | null>(null);
 
   // Standalone Tool Parameters
-  const [toolCompressLevel, setToolCompressLevel] = useState(2);
-  const [toolWatermarkText, setToolWatermarkText] = useState('CONFIDENTIAL');
-  const [toolPassword, setToolPassword] = useState('');
-  const [toolRotateAngle, setToolRotateAngle] = useState(90);
-  const [toolPagesRange, setToolPagesRange] = useState('1');
-  const [toolOcrLang, setToolOcrLang] = useState<'ara' | 'eng' | 'ara,eng'>('ara,eng');
-  const [toolPdfaConformance, setToolPdfaConformance] = useState<'2b' | '3b' | '1b'>('2b');
+  const [toolValues, setToolValues] = useState<ToolOptionValues>({});
 
   // Pipeline Builder State
   const [isCreatingPipeline, setIsCreatingPipeline] = useState(false);
@@ -1029,33 +816,32 @@ export function StirlingToolsHub({
 
   const handleApplySuggestedAutomation = (type: 'scholarly' | 'prepublish' | 'confidential') => {
     if (type === 'scholarly') {
-      setPipelineName(lang === 'ar' ? 'معالجة المخطوطات والمسوح الأكاديمية' : 'Scholarly Scan Ingestion');
-      setPipelineDesc(lang === 'ar' ? 'تصفية المستندات المصورة، واستخراج النصوص باللغتين العربية والإنجليزية، ثم ضغط الحجم' : 'Filter PDFs with images, run Arabic/English OCR with text-skipping, and compress');
+      setPipelineName(t('hubAutomationScholarly'));
+      setPipelineDesc(t('hubAutomationScholarlyDesc'));
       setPipelineTrigger('folder');
       setPipelineSteps([
-        { id: `s-${Date.now()}-1`, operation: '/api/v1/filter/filter-contains-image', name: lang === 'ar' ? 'تصفية: يحتوي على صور' : 'Contains Image Filter', parameters: { pageNumbers: 'all' } },
-        { id: `s-${Date.now()}-2`, operation: '/api/v1/misc/ocr-pdf', name: lang === 'ar' ? 'التعرف الضوئي (OCR)' : 'OCR / Cleanup Scans', parameters: { languages: ['ara', 'eng'], ocrType: 'skip-text' } },
-        { id: `s-${Date.now()}-3`, operation: '/api/v1/misc/compress-pdf', name: lang === 'ar' ? 'ضغط وتقليص الحجم' : 'Compress & Optimize', parameters: { optimizeLevel: 3 } },
+        { id: `s-${Date.now()}-1`, operation: '/api/v1/filter/filter-contains-image', name: t('hubPresetContainsImage'), parameters: { pageNumbers: 'all' } },
+        { id: `s-${Date.now()}-2`, operation: '/api/v1/misc/ocr-pdf', name: t('hubPresetOcr'), parameters: { languages: ['ara', 'eng'], ocrType: 'skip-text' } },
+        { id: `s-${Date.now()}-3`, operation: '/api/v1/misc/compress-pdf', name: t('hubPresetCompress'), parameters: { optimizeLevel: 3 } },
       ]);
     } else if (type === 'prepublish') {
-      setPipelineName(lang === 'ar' ? 'التعقيم والتجهيز قبل النشر' : 'Pre-Publish Sanitization');
-      setPipelineDesc(lang === 'ar' ? 'تعقيم النصوص وحذف السكربتات والتحشيات وتسطيح النماذج والتحويل إلى PDF/A' : 'Sanitize JS/metadata, strip annotations, flatten form fields, and convert to PDF/A');
+      setPipelineName(t('hubAutomationPrepublish'));
+      setPipelineDesc(t('hubAutomationPrepublishDesc'));
       setPipelineTrigger('manual');
       setPipelineSteps([
-        { id: `s-${Date.now()}-1`, operation: '/api/v1/security/sanitize-pdf', name: lang === 'ar' ? 'تعقيم وتنظيف PDF' : 'Sanitize PDF', parameters: {} },
-        { id: `s-${Date.now()}-2`, operation: '/api/v1/misc/remove-annotations', name: lang === 'ar' ? 'إزالة التحشيات' : 'Remove Annotations', parameters: {} },
-        { id: `s-${Date.now()}-3`, operation: '/api/v1/misc/flatten', name: lang === 'ar' ? 'تسطيح النماذج' : 'Flatten Forms', parameters: {} },
-        { id: `s-${Date.now()}-4`, operation: '/api/v1/convert/pdf/pdfa', name: lang === 'ar' ? 'تحويل إلى PDF/A' : 'Convert to PDF/A', parameters: { conformance: '2b' } },
+        { id: `s-${Date.now()}-1`, operation: '/api/v1/security/sanitize-pdf', name: t('hubPresetSanitize'), parameters: {} },
+        { id: `s-${Date.now()}-2`, operation: '/api/v1/misc/remove-annotations', name: t('hubPresetRemoveAnnotations'), parameters: {} },
+        { id: `s-${Date.now()}-3`, operation: '/api/v1/misc/flatten', name: t('hubPresetFlatten'), parameters: {} },
       ]);
     } else if (type === 'confidential') {
-      setPipelineName(lang === 'ar' ? 'إصدار الوثائق السرية والمحجوبة' : 'Confidential Document Release');
-      setPipelineDesc(lang === 'ar' ? 'الحجب التلقائي للهويات والأرقام الحساسة والبريد الإلكتروني، والتعقيم وإضافة علامة مائية سرية' : 'Auto-redact emails, phone numbers, and IDs, sanitize scripts, and stamp with confidentiality watermark');
+      setPipelineName(t('hubAutomationConfidential'));
+      setPipelineDesc(t('hubAutomationConfidentialDesc'));
       setPipelineTrigger('folder');
       setPipelineSteps([
         {
           id: `s-${Date.now()}-1`,
           operation: '/api/v1/security/auto-redact',
-          name: lang === 'ar' ? 'حجب البيانات الحساسة' : 'Auto-Redact Sensitive Data',
+          name: t('hubPresetAutoRedact'),
           parameters: {
             words: [
               '[\\w.-]+@[\\w.-]+\\.\\w+',
@@ -1067,8 +853,8 @@ export function StirlingToolsHub({
             wholeWordSearch: true,
           },
         },
-        { id: `s-${Date.now()}-2`, operation: '/api/v1/security/sanitize-pdf', name: lang === 'ar' ? 'تعقيم وتنظيف PDF' : 'Sanitize PDF', parameters: {} },
-        { id: `s-${Date.now()}-3`, operation: '/api/v1/security/add-watermark', name: lang === 'ar' ? 'إضافة علامة مائية' : 'Add Watermark', parameters: { watermarkText: 'CONFIDENTIAL', fontSize: 36, opacity: 0.25, rotation: 45 } },
+        { id: `s-${Date.now()}-2`, operation: '/api/v1/security/sanitize-pdf', name: t('hubPresetSanitize'), parameters: {} },
+        { id: `s-${Date.now()}-3`, operation: '/api/v1/security/add-watermark', name: t('hubPresetWatermark'), parameters: { watermarkText: 'CONFIDENTIAL', fontSize: 36, opacity: 0.25, rotation: 45 } },
       ]);
     }
   };
@@ -1081,7 +867,7 @@ export function StirlingToolsHub({
       {
         id: `s-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         operation: found.operation,
-        name: lang === 'ar' ? found.nameAr : found.nameEn,
+        name: t(found.labelKey),
         parameters: { ...found.defaultParams },
       },
     ]);
@@ -1107,7 +893,7 @@ export function StirlingToolsHub({
     e.preventDefault();
     if (!pipelineName.trim() || pipelineSteps.length === 0) return;
     const newPipeline: StirlingPipeline = {
-      id: editingPipeline?.id || `pipe-${Date.now()}`,
+      id: editingPipeline?.id || newPipelineId(),
       name: pipelineName.trim(),
       description: pipelineDesc.trim(),
       trigger: pipelineTrigger,
@@ -1154,7 +940,7 @@ export function StirlingToolsHub({
       if (pRes?.ok === true) setPipelines(pRes.data);
       if (fRes?.ok === true) setWatchedFolders(fRes.data);
       if (polRes?.ok === true) setPolicies(polRes.data);
-      if (eRes && (eRes as any).ok) setEngineStatus((eRes as any).data);
+      if (eRes?.ok === true) setEngineStatus(eRes.data);
     } catch {
       /* ignore */
     }
@@ -1186,17 +972,14 @@ export function StirlingToolsHub({
       const q = searchQuery.trim().toLowerCase();
       list = list.filter(
         t =>
-          t.nameEn.toLowerCase().includes(q) ||
-          t.nameAr.toLowerCase().includes(q) ||
-          t.descEn.toLowerCase().includes(q) ||
-          t.descAr.toLowerCase().includes(q) ||
+          (['ar', 'en'] as const).some(locale => toolName(t, locale).toLowerCase().includes(q) || toolDesc(t, locale).toLowerCase().includes(q)) ||
           t.id.toLowerCase().includes(q)
       );
     }
     if (sortMode === 'alpha') {
       list = [...list].sort((a, b) => {
-        const nameA = lang === 'ar' ? a.nameAr : a.nameEn;
-        const nameB = lang === 'ar' ? b.nameAr : b.nameEn;
+        const nameA = toolName(a, lang);
+        const nameB = toolName(b, lang);
         return nameA.localeCompare(nameB);
       });
     }
@@ -1224,8 +1007,12 @@ export function StirlingToolsHub({
       return;
     }
     setSelectedTool(tool);
+    setToolValues(defaultToolValues(tool.id));
     setExecutionResult(null);
   };
+
+  const missingOption = selectedTool ? missingToolOption(selectedTool.id, toolValues) : undefined;
+  const invalidOption = selectedTool ? invalidToolOption(selectedTool.id, toolValues) : undefined;
 
   const handleExecuteTool = async () => {
     if (!selectedTool) return;
@@ -1233,42 +1020,29 @@ export function StirlingToolsHub({
     setExecutionResult(null);
 
     try {
+      if (STIRLING_INTERACTIVE_ENDPOINTS.has(selectedTool.endpoint)) throw new Error(t('pdfInteractiveToolHint'));
       let targetPath = localFilePath;
       if (!targetPath && selectedBookId) {
         const book = books.find(b => b.id === selectedBookId);
         if (book?.filePath) targetPath = book.filePath;
       }
 
-      if (!targetPath) {
-        throw new Error(lang === 'ar' ? 'يرجى اختيار ملف PDF للتنفيذ عليه' : 'Please select a PDF file to process');
+      const needsNoFile = TOOLS_WITHOUT_INPUT_FILE.has(selectedTool.id);
+      if (!targetPath && !needsNoFile) {
+        throw new Error(t('pdfSelectFileToProcess'));
       }
 
-      const params: Record<string, unknown> = {};
-      if (selectedTool.id === 'compress-pdf') params.optimizeLevel = toolCompressLevel;
-      if (selectedTool.id === 'watermark') {
-        params.watermarkText = toolWatermarkText;
-        params.fontSize = 36;
-        params.opacity = 0.25;
-        params.rotation = 45;
-      }
-      if (selectedTool.id === 'add-password') params.password = toolPassword;
-      if (selectedTool.id === 'rotate') params.angle = toolRotateAngle;
-      if (selectedTool.id === 'split') params.pages = toolPagesRange;
-      if (selectedTool.id === 'ocr-pdf') {
-        params.languages = toolOcrLang.split(',');
-        params.ocrType = 'skip-text';
-      }
-      if (selectedTool.id === 'pdf-to-pdfa') params.conformance = toolPdfaConformance;
+      const params = toolParameters(selectedTool.id, toolValues);
 
       const editor = window.electronAPI?.pdfEditor;
       if (!editor?.executePipeline) {
-        throw new Error('PDF Engine is not accessible');
+        throw new Error(t('pdfSuiteOperationFailed'));
       }
 
       const res = await editor.executePipeline({
-        filePaths: [targetPath],
+        filePaths: needsNoFile ? [] : [targetPath, ...((toolValues[ADDITIONAL_FILES] as string[] | undefined) ?? [])],
         pipelineConfig: {
-          name: `Standalone: ${selectedTool.nameEn}`,
+          name: `Standalone: ${toolName(selectedTool, 'en')}`,
           singleTool: true,
           pipeline: [{ operation: selectedTool.endpoint, parameters: params }],
         },
@@ -1283,12 +1057,13 @@ export function StirlingToolsHub({
         });
         void refreshData();
       } else {
-        throw new Error(res?.ok === false ? res.error : t('pdfSuiteOperationFailed'));
+        const reason = res?.ok === false ? res.error : undefined;
+        throw new Error(t(reason === 'no-output' ? 'pdfPipelineNoOutput' : reason === 'engine-missing' ? 'pdfEngineComponentMissing' : reason === 'no-tables' ? 'pdfNoTablesFound' : reason === 'no-bookmarks' ? 'pdfNoBookmarksFound' : reason === 'redaction-unverified' ? 'pdfAutoRedactUnverified' : reason === 'certificate-invalid' ? 'pdfPrivateKeyFormat' : reason === 'owner-password-required' ? 'pdfPermissionsPasswordRequired' : reason === 'encrypted' ? 'pdfWrongPassword' : reason === 'invalid-request' ? 'pdfToolNeedsInput' : 'pdfSuiteOperationFailed'));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setExecutionResult({
         success: false,
-        error: err?.message || t('pdfSuiteOperationFailed'),
+        error: err instanceof Error && err.message ? err.message : t('pdfSuiteOperationFailed'),
       });
     } finally {
       setIsExecuting(false);
@@ -1405,6 +1180,17 @@ export function StirlingToolsHub({
                   <span className={`size-1 rounded-full ${engineStatus.externalTools?.ghostscript ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
                   Ghostscript
                 </span>
+                <span
+                  title={engineStatus.externalTools?.weasyprint ? t('stirlingToolAvailable') : t('stirlingToolMissing')}
+                  className={`flex items-center gap-1 px-1.5 py-0.2 rounded-full border ${
+                    engineStatus.externalTools?.weasyprint
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 font-bold'
+                      : 'border-neutral-500/20 bg-neutral-500/10 text-neutral-400 opacity-60'
+                  }`}
+                >
+                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.weasyprint ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
+                  WeasyPrint
+                </span>
               </div>
             </div>
             <p className={`text-[11px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfToolsHubSubtitle')}</p>
@@ -1416,11 +1202,11 @@ export function StirlingToolsHub({
           isDark ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f1f5f9] border-[#cbd5e1]'
         } p-1 rounded-xl border`}>
           {[
-            { id: 'multi-tool', label: 'Multi Tool' },
-            { id: 'pipelines', label: 'Pipeline / Processor' },
-            { id: 'compress-pdf', label: 'Compress' },
-            { id: 'split', label: 'Split' },
-            { id: 'merge', label: 'Merge' },
+            { id: 'multi-tool', labelKey: 'hubToolMultiTool' as const },
+            { id: 'pipelines', labelKey: 'hubToolPipelineProcessor' as const },
+            { id: 'compress-pdf', labelKey: 'hubToolCompressPdf' as const },
+            { id: 'split', labelKey: 'hubToolSplit' as const },
+            { id: 'merge', labelKey: 'hubToolMerge' as const },
           ].map(pill => (
             <button
               key={pill.id}
@@ -1437,7 +1223,7 @@ export function StirlingToolsHub({
                 isDark ? 'text-[#a0a6b7] hover:text-white hover:bg-[#222631]' : 'text-[#475569] hover:text-[#0f172a] hover:bg-white'
               } transition-all cursor-pointer`}
             >
-              {pill.label}
+              {t(pill.labelKey)}
             </button>
           ))}
         </div>
@@ -1608,7 +1394,7 @@ export function StirlingToolsHub({
                       if (file) {
                         const text = await file.text();
                         const res = await window.electronAPI?.pdfEditor?.importPipeline?.(text);
-                        if (res && (res as any).ok) {
+                        if (res?.ok === true) {
                           await refreshData();
                         }
                       }
@@ -1703,8 +1489,8 @@ export function StirlingToolsHub({
                             onClick={async () => {
                               const pipe = pipelines.find(p => p.id === folder.pipelineId) || pipelines[0];
                               const res = await window.electronAPI?.pdfEditor?.exportPipelineFolderScan?.(folder, pipe);
-                              if (res && (res as any).ok) {
-                                const blob = new Blob([(res as any).data], { type: 'application/json' });
+                              if (res?.ok === true) {
+                                const blob = new Blob([res.data], { type: 'application/json' });
                                 const url = URL.createObjectURL(blob);
                                 const a = document.createElement('a');
                                 a.href = url;
@@ -1759,7 +1545,7 @@ export function StirlingToolsHub({
                         required
                         value={newFolderName}
                         onChange={e => setNewFolderName(e.target.value)}
-                        placeholder="e.g. Scans Inbox"
+                        placeholder={t('hubFolderNamePlaceholder')}
                         className={`w-full p-2 rounded-lg border outline-none ${
                           isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
                         }`}
@@ -1795,7 +1581,7 @@ export function StirlingToolsHub({
                       <label className="font-bold block mb-1">{t('pdfWatchedFolderAfter')}</label>
                       <select
                         value={newFolderRule}
-                        onChange={e => setNewFolderRule(e.target.value as any)}
+                        onChange={e => setNewFolderRule(e.target.value as typeof newFolderRule)}
                         className={`w-full p-2 rounded-lg border outline-none ${
                           isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
                         }`}
@@ -1830,7 +1616,7 @@ export function StirlingToolsHub({
                 <div>
                   <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>{t('pdfPipelineSteps')}</h3>
                   <p className={`text-xs ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
-                    {lang === 'ar' ? 'سلسلة عمليات Stirling-PDF التلقائية المحفوظة' : 'Configured multi-step automated sequences'}
+                    {t('hubPipelinesSubtitle')}
                   </p>
                 </div>
               </div>
@@ -1895,8 +1681,8 @@ export function StirlingToolsHub({
                           title={t('stirlingExportAutomateJson')}
                           onClick={async () => {
                             const res = await window.electronAPI?.pdfEditor?.exportPipelineAutomate?.(pipe);
-                            if (res && (res as any).ok) {
-                              const blob = new Blob([(res as any).data], { type: 'application/json' });
+                            if (res?.ok === true) {
+                              const blob = new Blob([res.data], { type: 'application/json' });
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement('a');
                               a.href = url;
@@ -1913,7 +1699,7 @@ export function StirlingToolsHub({
                         </button>
                         <button
                           type="button"
-                          title={lang === 'ar' ? 'تعديل الأنبوب' : 'Edit Pipeline'}
+                          title={t('hubPipelineEdit')}
                           onClick={() => {
                             setEditingPipeline(pipe);
                             setPipelineName(pipe.name);
@@ -1942,11 +1728,9 @@ export function StirlingToolsHub({
                             setSelectedTool({
                               id: `pipe-${pipe.id}`,
                               category: 'advanced-processor',
-                              nameKey: 'toolPipelineStirlingProcessor',
-                              nameEn: pipe.name,
-                              nameAr: pipe.name,
-                              descEn: pipe.description || '',
-                              descAr: pipe.description || '',
+                              nameKey: 'hubToolPipelineProcessor',
+                              descKey: 'hubToolPipelineProcessorDesc',
+                              custom: { name: pipe.name, desc: pipe.description || '' },
                               endpoint: '/api/v1/pipeline/handleData',
                               icon: Cpu,
                               colorScheme: 'orange',
@@ -2018,7 +1802,6 @@ export function StirlingToolsHub({
                     {t('pdfPolicyCompliance')}
                   </h4>
                   <ul className={`text-[11px] ${isDark ? 'text-[#a0a6b7]' : 'text-[#475569]'} space-y-1`}>
-                    <li>✓ {t('pdfPolicyComplianceRule1')}</li>
                     <li>✓ {t('pdfPolicyComplianceRule2')}</li>
                     <li>✓ {t('pdfPolicyComplianceRule3')}</li>
                   </ul>
@@ -2114,10 +1897,10 @@ export function StirlingToolsHub({
                         </div>
                         <div className="mt-2">
                           <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} group-hover:text-emerald-500 transition-colors line-clamp-1`}>
-                            {lang === 'ar' ? tool.nameAr : tool.nameEn}
+                            {toolName(tool, lang)}
                           </h4>
                           <p className={`text-[10px] ${isDark ? 'text-[#686e80]' : 'text-[#64748b]'} mt-0.5 line-clamp-1`}>
-                            {lang === 'ar' ? tool.descAr : tool.descEn}
+                            {toolDesc(tool, lang)}
                           </p>
                         </div>
                       </div>
@@ -2321,10 +2104,10 @@ export function StirlingToolsHub({
                       </div>
                       <div className="mt-2.5">
                         <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} group-hover:text-emerald-500 transition-colors line-clamp-1`}>
-                          {lang === 'ar' ? tool.nameAr : tool.nameEn}
+                          {toolName(tool, lang)}
                         </h4>
                         <p className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} mt-0.5 line-clamp-2`}>
-                          {lang === 'ar' ? tool.descAr : tool.descEn}
+                          {toolDesc(tool, lang)}
                         </p>
                       </div>
                     </div>
@@ -2367,10 +2150,10 @@ export function StirlingToolsHub({
                 </div>
                 <div>
                   <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
-                    {lang === 'ar' ? selectedTool.nameAr : selectedTool.nameEn}
+                    {toolName(selectedTool, lang)}
                   </h3>
                   <p className={`text-[11px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
-                    {lang === 'ar' ? selectedTool.descAr : selectedTool.descEn}
+                    {toolDesc(selectedTool, lang)}
                   </p>
                 </div>
               </div>
@@ -2388,7 +2171,7 @@ export function StirlingToolsHub({
               {/* File Selection Dropzone */}
               <div className="space-y-3">
                 <label className={`block text-xs font-bold ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
-                  {lang === 'ar' ? 'اختر ملف PDF للمعالجة' : 'Select Target PDF'}
+                  {t('hubSelectTarget')}
                 </label>
 
                 {/* Option A: Select from Library */}
@@ -2404,7 +2187,7 @@ export function StirlingToolsHub({
                       isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
                     }`}
                   >
-                    <option value="">{lang === 'ar' ? '— اختر كتاباً من مكتبتك —' : '— Select a book from your library —'}</option>
+                    <option value="">{t('hubSelectBook')}</option>
                     {books.filter(b => b.filePath).map(book => (
                       <option key={book.id} value={book.id}>
                         {book.title} ({book.author || '—'})
@@ -2415,22 +2198,24 @@ export function StirlingToolsHub({
 
                 {/* Option B: Local File Dropzone */}
                 <div className="space-y-1.5">
-                  <span className="text-[11px] text-[#8b92a5] block">{lang === 'ar' ? 'أو اختر ملفاً من جهازك:' : 'Or choose file from computer:'}</span>
+                  <span className="text-[11px] text-[#8b92a5] block">{t('hubChooseLocalFile')}</span>
                   <div
                     onDragOver={e => e.preventDefault()}
-                    onDrop={e => {
+                    onDrop={async e => {
                       e.preventDefault();
+                      // The Hub renders inside the library, whose own drop handler would import this file.
+                      e.stopPropagation();
                       const file = e.dataTransfer.files[0];
-                      if (file && (file as any).path) {
-                        setLocalFilePath((file as any).path);
+                      if (file) {
+                        setLocalFilePath(await resolveDroppedFilePath(file));
                         setSelectedBookId('');
                       }
                     }}
                     onClick={async () => {
                       try {
-                        const filePath = await window.electronAPI?.openFileDialog?.();
-                        if (filePath) {
-                          setLocalFilePath(filePath);
+                        const chosen = await window.electronAPI?.pdfEditor?.chooseToolFiles?.(TOOL_INPUT_TYPES[selectedTool.id] ?? ['pdf'], false);
+                        if (chosen?.ok === true && chosen.data[0]) {
+                          setLocalFilePath(chosen.data[0]);
                           setSelectedBookId('');
                         }
                       } catch {
@@ -2452,86 +2237,7 @@ export function StirlingToolsHub({
                 </div>
               </div>
 
-              {/* Dynamic Tool Parameters */}
-              {selectedTool.id === 'compress-pdf' && (
-                <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f8fafc] border-[#e2e8f0]'} space-y-2`}>
-                  <label className={`block text-xs font-bold ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
-                    {t('pdfParamOptimizeLevel')}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { level: 1, label: lang === 'ar' ? 'منخفض (أسرع)' : 'Low (Fast)' },
-                      { level: 2, label: lang === 'ar' ? 'متوسط (موصى به)' : 'Medium (Balanced)' },
-                      { level: 3, label: lang === 'ar' ? 'أقصى (أصغر حجم)' : 'High (Smallest)' },
-                    ].map(item => (
-                      <button
-                        key={item.level}
-                        type="button"
-                        onClick={() => setToolCompressLevel(item.level)}
-                        className={`p-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                          toolCompressLevel === item.level
-                            ? 'bg-emerald-600 border-emerald-500 text-white'
-                            : isDark ? 'bg-[#14161c] border-[#222631] text-[#8b92a5]' : 'bg-white border-[#cbd5e1] text-[#64748b]'
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {selectedTool.id === 'watermark' && (
-                <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f8fafc] border-[#e2e8f0]'} space-y-2`}>
-                  <label className={`block text-xs font-bold ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
-                    {t('pdfParamWatermarkText')}
-                  </label>
-                  <input
-                    type="text"
-                    value={toolWatermarkText}
-                    onChange={e => setToolWatermarkText(e.target.value)}
-                    className={`w-full ${isDark ? 'bg-[#121418] border-[#282d3b] text-white' : 'bg-white border-[#cbd5e1] text-[#0f172a]'} border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-emerald-500`}
-                  />
-                </div>
-              )}
-
-              {selectedTool.id === 'rotate' && (
-                <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f8fafc] border-[#e2e8f0]'} space-y-2`}>
-                  <label className={`block text-xs font-bold ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
-                    {t('pdfParamRotateAngle')}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[90, 180, 270].map(angle => (
-                      <button
-                        key={angle}
-                        type="button"
-                        onClick={() => setToolRotateAngle(angle)}
-                        className={`p-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                          toolRotateAngle === angle
-                            ? 'bg-blue-600 border-blue-500 text-white'
-                            : isDark ? 'bg-[#14161c] border-[#222631] text-[#8b92a5]' : 'bg-white border-[#cbd5e1] text-[#64748b]'
-                        }`}
-                      >
-                        {angle}°
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {selectedTool.id === 'split' && (
-                <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f8fafc] border-[#e2e8f0]'} space-y-2`}>
-                  <label className={`block text-xs font-bold ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
-                    {t('pdfParamPagesRange')} (e.g. 1-3, 5, 8)
-                  </label>
-                  <input
-                    type="text"
-                    value={toolPagesRange}
-                    onChange={e => setToolPagesRange(e.target.value)}
-                    className={`w-full ${isDark ? 'bg-[#121418] border-[#282d3b] text-white' : 'bg-white border-[#cbd5e1] text-[#0f172a]'} border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-blue-500`}
-                  />
-                </div>
-              )}
+              <StirlingToolOptionsForm toolId={selectedTool.id} values={toolValues} onChange={setToolValues} isDark={isDark} />
 
               {/* Execution Feedback */}
               {isExecuting && (
@@ -2585,6 +2291,7 @@ export function StirlingToolsHub({
 
             {/* Modal Footer */}
             <div className={`p-4 border-t ${isDark ? 'border-[#1f2229] bg-[#121418]' : 'border-[#e2e8f0] bg-[#f8fafc]'} flex items-center justify-end gap-2`}>
+              {(missingOption || invalidOption) && <span role="status" className="me-auto text-[11px] text-amber-600 dark:text-amber-400">{missingOption ? t('stirlingOptRequired', { name: t(missingOption.label) }) : t(invalidOption!)}</span>}
               <button
                 type="button"
                 onClick={() => setSelectedTool(null)}
@@ -2594,7 +2301,7 @@ export function StirlingToolsHub({
               </button>
               <button
                 type="button"
-                disabled={isExecuting || (!selectedBookId && !localFilePath)}
+                disabled={isExecuting || Boolean(missingOption) || Boolean(invalidOption) || (!selectedBookId && !localFilePath && !TOOLS_WITHOUT_INPUT_FILE.has(selectedTool.id))}
                 onClick={() => void handleExecuteTool()}
                 className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
               >
@@ -2624,10 +2331,10 @@ export function StirlingToolsHub({
                 </div>
                 <div>
                   <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
-                    {editingPipeline ? (lang === 'ar' ? 'تعديل أنبوب المعالجة' : 'Edit Pipeline') : t('pdfPipelineNew')}
+                    {editingPipeline ? t('hubPipelineEditShort') : t('pdfPipelineNew')}
                   </h3>
                   <p className={`text-[11px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
-                    {lang === 'ar' ? 'تسلسل بوابات التصفية الشرطية وعمليات المعالجة التلقائية' : 'Sequence conditional filter gates and automated processing tools'}
+                    {t('hubPipelineBuilderHint')}
                   </p>
                 </div>
               </div>
@@ -2648,7 +2355,7 @@ export function StirlingToolsHub({
               {/* 1-Click Suggested Presets */}
               <div className="space-y-1.5">
                 <span className={`font-bold text-[11px] uppercase tracking-wider ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
-                  {lang === 'ar' ? 'أنابيب مقترحة بضغطة زر' : 'Suggested Automations (1-Click)'}:
+                  {t('hubAutomationsTitle')}:
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
@@ -2661,10 +2368,10 @@ export function StirlingToolsHub({
                     }`}
                   >
                     <span className="font-bold block text-emerald-500 text-[11px]">
-                      {lang === 'ar' ? 'المخطوطات والمسوح الأكاديمية' : 'Scholarly Scan Ingestion'}
+                      {t('hubAutomationScholarlyShort')}
                     </span>
                     <span className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} line-clamp-1`}>
-                      {lang === 'ar' ? 'صور ← OCR عربى/إنجليزى ← ضغط' : 'Image Filter → OCR → Compress'}
+                      {t('hubAutomationScholarlyFlow')}
                     </span>
                   </button>
                   <button
@@ -2677,10 +2384,10 @@ export function StirlingToolsHub({
                     }`}
                   >
                     <span className="font-bold block text-blue-500 text-[11px]">
-                      {lang === 'ar' ? 'التعقيم قبل النشر' : 'Pre-Publish Sanitization'}
+                      {t('hubAutomationPrepublishShort')}
                     </span>
                     <span className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} line-clamp-1`}>
-                      {lang === 'ar' ? 'تعقيم ← حذف التحشيات ← PDF/A' : 'Sanitize → Strip Annotations → PDF/A'}
+                      {t('hubAutomationPrepublishFlow')}
                     </span>
                   </button>
                   <button
@@ -2693,10 +2400,10 @@ export function StirlingToolsHub({
                     }`}
                   >
                     <span className="font-bold block text-rose-500 text-[11px]">
-                      {lang === 'ar' ? 'إصدار الوثائق السرية' : 'Confidential Release'}
+                      {t('hubAutomationConfidentialShort')}
                     </span>
                     <span className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} line-clamp-1`}>
-                      {lang === 'ar' ? 'حجب أرقام وإيميلات ← علامة مائية' : 'Auto-Redact → Sanitize → Watermark'}
+                      {t('hubAutomationConfidentialFlow')}
                     </span>
                   </button>
                 </div>
@@ -2711,7 +2418,7 @@ export function StirlingToolsHub({
                     required
                     value={pipelineName}
                     onChange={e => setPipelineName(e.target.value)}
-                    placeholder="e.g. Ingestion Pipeline"
+                    placeholder={t('hubPipelineNamePlaceholder')}
                     className={`w-full p-2 rounded-lg border outline-none ${
                       isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
                     }`}
@@ -2721,7 +2428,7 @@ export function StirlingToolsHub({
                   <label className="font-bold block mb-1">{t('pdfPipelineTrigger')}</label>
                   <select
                     value={pipelineTrigger}
-                    onChange={e => setPipelineTrigger(e.target.value as any)}
+                    onChange={e => setPipelineTrigger(e.target.value as typeof pipelineTrigger)}
                     className={`w-full p-2 rounded-lg border outline-none ${
                       isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
                     }`}
@@ -2739,7 +2446,7 @@ export function StirlingToolsHub({
                   type="text"
                   value={pipelineDesc}
                   onChange={e => setPipelineDesc(e.target.value)}
-                  placeholder="Optional brief description of what this pipeline accomplishes..."
+                  placeholder={t('hubPipelineDescPlaceholder')}
                   className={`w-full p-2 rounded-lg border outline-none ${
                     isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
                   }`}
@@ -2758,7 +2465,7 @@ export function StirlingToolsHub({
                   <div className={`p-4 rounded-xl border border-dashed text-center ${
                     isDark ? 'border-[#262a34] text-[#8b92a5]' : 'border-[#cbd5e1] text-[#64748b]'
                   }`}>
-                    <p className="text-xs font-semibold">{lang === 'ar' ? 'لم تتم إضافة أي خطوات بعد. اختر خطوة من القائمة أدناه واضغط إضافة.' : 'No steps added yet. Select a filter gate or processing tool below.'}</p>
+                    <p className="text-xs font-semibold">{t('hubPipelineNoSteps')}</p>
                   </div>
                 ) : (
                   <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
@@ -2789,7 +2496,7 @@ export function StirlingToolsHub({
                             disabled={idx === 0}
                             onClick={() => handleMoveStep(idx, 'up')}
                             className="p-1 text-[#8b92a5] hover:text-white disabled:opacity-20 cursor-pointer"
-                            title={lang === 'ar' ? 'تحريك للأعلى' : 'Move up'}
+                            title={t('hubStepMoveUp')}
                           >
                             <ArrowUp size={12} />
                           </button>
@@ -2798,7 +2505,7 @@ export function StirlingToolsHub({
                             disabled={idx === pipelineSteps.length - 1}
                             onClick={() => handleMoveStep(idx, 'down')}
                             className="p-1 text-[#8b92a5] hover:text-white disabled:opacity-20 cursor-pointer"
-                            title={lang === 'ar' ? 'تحريك للأدنى' : 'Move down'}
+                            title={t('hubStepMoveDown')}
                           >
                             <ArrowDown size={12} />
                           </button>
@@ -2825,17 +2532,17 @@ export function StirlingToolsHub({
                       isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
                     }`}
                   >
-                    <optgroup label={lang === 'ar' ? 'بوابات التصفية الشرطية (Filter Gates)' : 'Conditional Filter Gates'}>
+                    <optgroup label={t('hubFilterGatesGroup')}>
                       {AVAILABLE_PIPELINE_STEPS.filter(s => s.category === 'filter').map(s => (
                         <option key={s.operation} value={s.operation}>
-                          {lang === 'ar' ? s.nameAr : s.nameEn}
+                          {t(s.labelKey)}
                         </option>
                       ))}
                     </optgroup>
-                    <optgroup label={lang === 'ar' ? 'عمليات المعالجة التلقائية (Processing Tools)' : 'Processing Tools'}>
+                    <optgroup label={t('hubProcessingToolsGroup')}>
                       {AVAILABLE_PIPELINE_STEPS.filter(s => s.category === 'tool').map(s => (
                         <option key={s.operation} value={s.operation}>
-                          {lang === 'ar' ? s.nameAr : s.nameEn}
+                          {t(s.labelKey)}
                         </option>
                       ))}
                     </optgroup>
@@ -2892,7 +2599,7 @@ function ToolCard({
   isFavorite: boolean;
   onFavorite: (e: React.MouseEvent) => void;
   onClick: () => void;
-  lang: string;
+  lang: 'ar' | 'en';
   isDark: boolean;
 }) {
   const Icon = tool.icon;
@@ -2926,7 +2633,7 @@ function ToolCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1">
           <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} group-hover:text-emerald-500 transition-colors truncate`}>
-            {lang === 'ar' ? tool.nameAr : tool.nameEn}
+            {toolName(tool, lang)}
           </h4>
           <button
             type="button"
@@ -2939,7 +2646,7 @@ function ToolCard({
           </button>
         </div>
         <p className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} line-clamp-1 mt-0.5`}>
-          {lang === 'ar' ? tool.descAr : tool.descEn}
+          {toolDesc(tool, lang)}
         </p>
       </div>
     </div>

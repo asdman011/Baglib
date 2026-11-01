@@ -1,9 +1,10 @@
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { watch, type FSWatcher } from 'node:fs';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { mkdir, realpath, stat, lstat, readFile, writeFile, readdir, rename, unlink, open, utimes } from 'node:fs/promises';
 import { readerAssetUrl } from '../../../shared/utils/reader-asset-url';
-import type { PdfViewSource } from '../../../shared/types/pdf-editor';
+import type { PdfViewPreview, PdfViewSource } from '../../../shared/types/pdf-editor';
 
 interface Fingerprint { path: string; mtimeMs: number; size: number }
 interface Lease { owner: number; path: string; key: string; cached: boolean; watcher?: FSWatcher }
@@ -19,14 +20,16 @@ export class PdfViewCache {
   private initialized?: Promise<void>;
   private closed = false;
 
-  constructor(private root: string, private optimizer: PdfViewOptimizer, private options: { maxBytes?: number; largeBytes?: number; onChanged?: (owner: number, id: string) => void } = {}) {}
+  constructor(private root: string, private optimizer: PdfViewOptimizer, private options: { maxBytes?: number; largeBytes?: number; previewBytes?: number; optimizeDelayMs?: number; onChanged?: (owner: number, id: string) => void } = {}) {}
   private get cap(): number { return this.options.maxBytes ?? 2 * 1024 * 1024 * 1024; }
   private get workRoot(): string { return this.root + '-work'; }
+  private get previewRoot(): string { return this.root + '-preview'; }
+  private previewFile(key: string, page: number): string { return path.join(this.previewRoot, `${key}-${page}.json`); }
   private key(source: Fingerprint): string { return createHash('sha256').update(JSON.stringify({ version: 2, ...source, path: process.platform === 'win32' ? source.path.toLowerCase() : source.path })).digest('hex'); }
   private filename(key: string, extension: string): string { return path.join(this.root, `${key}.${extension}`); }
   private async initialize(): Promise<void> {
     this.initialized ||= (async () => {
-      for (const directory of [this.root, this.workRoot]) {
+      for (const directory of [this.root, this.workRoot, this.previewRoot]) {
         await mkdir(directory, { recursive: true, mode: 0o700 });
         if ((await lstat(directory)).isSymbolicLink()) throw new Error('invalid-source');
       }
@@ -103,6 +106,10 @@ export class PdfViewCache {
       const output = path.join(this.workRoot, `${key}-${process.pid}-${randomUUID()}.pdf`);
       try {
         if (this.closed) return;
+        if (this.options.optimizeDelayMs) {
+          await sleep(this.options.optimizeDelayMs, undefined, { signal: this.controller.signal });
+          if (![...this.leases.values()].some(lease => lease.key === key)) return;
+        }
         if (this.key(await this.fingerprint(source.path)) !== key) return;
         await this.optimizer(source.path, output, this.cap, this.controller.signal);
         if (this.closed || this.key(await this.fingerprint(source.path)) !== key) return;
@@ -137,7 +144,7 @@ export class PdfViewCache {
       }
     });
   }
-  async acquire(owner: number, filename: string, id?: string): Promise<PdfViewSource> {
+  async acquire(owner: number, filename: string, id?: string, previewPage?: number): Promise<PdfViewSource> {
     if (this.closed) throw new Error('cancelled');
     const source = await this.fingerprint(filename), key = this.key(source);
     await this.initialize();
@@ -163,7 +170,49 @@ export class PdfViewCache {
       if (cached && (firstAcquire || !lease.cached || lease.key !== key)) await utimes(this.filename(key, 'pdf'), new Date(), new Date());
       lease.key = key; lease.cached = cached;
       if (!cached && eligible) this.enqueue(source, key);
-      return { id: id!, key, url: `${readerAssetUrl(cached ? this.filename(key, 'pdf') : source.path)}?view=${key}`, cached, pending: this.pending.has(key) };
+      const preview = previewPage ? await this.readPreview(key, previewPage) : null;
+      return { id: id!, key, url: `${readerAssetUrl(cached ? this.filename(key, 'pdf') : source.path)}?view=${key}`, cached, pending: this.pending.has(key), ...(preview ? { preview } : {}) };
+    });
+  }
+  private async readPreview(key: string, page: number): Promise<PdfViewPreview | null> {
+    if (!Number.isInteger(page) || page < 1) return null;
+    try {
+      const value = JSON.parse(await readFile(this.previewFile(key, page), 'utf8')) as PdfViewPreview;
+      return typeof value.image === 'string' && value.image.startsWith('data:image/') && value.width > 0 && value.height > 0 && value.pages >= page ? value : null;
+    } catch { return null; }
+  }
+  /** Stores a small first-paint image for a page, keyed like the view cache by path, mtime and size. */
+  async savePreview(owner: number, id: string, page: number, preview: PdfViewPreview): Promise<void> {
+    const lease = this.leases.get(id);
+    if (!lease || lease.owner !== owner || !Number.isInteger(page) || page < 1) throw new Error('invalid-request');
+    if (typeof preview.image !== 'string' || !/^data:image\/(?:webp|jpeg);base64,/u.test(preview.image) || preview.image.length > 2 * 1024 * 1024) throw new Error('invalid-request');
+    if (![preview.width, preview.height, preview.pages].every(value => Number.isFinite(value) && value > 0)) throw new Error('invalid-request');
+    await this.initialize();
+    await this.exclusive(async () => {
+      const target = this.previewFile(lease.key, page), temporary = `${target}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporary, JSON.stringify(preview), { mode: 0o600 });
+        await rename(temporary, target);
+      } finally { await unlink(temporary).catch(() => undefined); }
+      const files = await Promise.all((await readdir(this.previewRoot)).map(async name => ({ name, info: await lstat(path.join(this.previewRoot, name)) })));
+      let total = files.reduce((sum, file) => sum + file.info.size, 0);
+      for (const file of files.sort((first, second) => first.info.mtimeMs - second.info.mtimeMs)) {
+        if (total <= (this.options.previewBytes ?? 64 * 1024 * 1024)) break;
+        if (path.join(this.previewRoot, file.name) === target) continue;
+        await unlink(path.join(this.previewRoot, file.name)).catch(() => undefined);
+        total -= file.info.size;
+      }
+    });
+  }
+  /** Drops a derivative that failed while reading. The metadata goes first so it stays invalid even if Windows keeps the PDF open. */
+  async evict(owner: number, id: string): Promise<void> {
+    const lease = this.leases.get(id);
+    if (!lease || lease.owner !== owner) return;
+    await this.exclusive(async () => {
+      this.failed.add(lease.key);
+      lease.cached = false;
+      await unlink(this.filename(lease.key, 'json')).catch(() => undefined);
+      await unlink(this.filename(lease.key, 'pdf')).catch(() => undefined);
     });
   }
   release(owner: number, id: string): void {

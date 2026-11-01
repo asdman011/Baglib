@@ -13,7 +13,7 @@ interface SessionRecord { owner: number; source: PdfSource; session: PdfSession;
 interface JobRecord { owner: number; job: PdfJob; controller: AbortController; directory: string; settled: Promise<void> }
 interface AssetRecord { owner: number; value: PdfAsset; filename: string }
 const formats = new Set(['pdf', 'docx', 'xlsx', 'pptx', 'html', 'json', 'txt', 'md', 'csv', 'zip']);
-const safeErrors = new Set(['source-changed', 'encrypted', 'permission-denied', 'unsupported', 'invalid-source', 'engine-missing', 'engine-failed', 'signed-document-locked', 'text-does-not-fit', 'owner-password-required', 'no-tables', 'no-redactions', 'certificate-invalid', 'invalid-output', 'document-too-large', 'invalid-request']);
+const safeErrors = new Set(['source-changed', 'encrypted', 'permission-denied', 'unsupported', 'invalid-source', 'engine-missing', 'engine-failed', 'signed-document-locked', 'text-does-not-fit', 'owner-password-required', 'no-tables', 'no-text', 'redaction-unverified', 'no-redactions', 'certificate-invalid', 'invalid-output', 'document-too-large', 'invalid-request']);
 export class PdfEditorJobs {
   private sessions = new Map<string, SessionRecord>();
   private jobs = new Map<string, JobRecord>();
