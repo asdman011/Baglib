@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-01, Codex] User-authorized Wave 3 commit f492e12 pushed and remote-verified. Updated KEY-221/236–239 with commit, 1223 passing tests, native bilingual evidence and explicit remaining acceptance limits; all stay In Progress. Unrelated untracked delivery plan excluded. Handoff-only update follows publication.
+
 - [2026-11-01, Codex] Wave 3 working tree implemented across KEY-236–239 with approved ADR-007/migration020 only; goals/order/rhythm reuse settings. Planner calendar/source links, measured subject hours/order, real-data dashboard/word counts and opt-in progress-safe pauses/intention are wired. User supplied exact bilingual intention, off by default. 1223/1223 tests (concurrency4), tsc, main build, changed-file lint0errors and real app ar/en disposable-profile checks pass; source/calendar/media limits recorded in CURRENT_TASK and feature doc. Servers stopped, port3000 free. Tickets remain In Progress, no commit/push or new dependencies/downloads. Pre-existing delivery plan untouched.
 
 - [2026-11-01, Codex] User continued after ADR-007 approval request: implementing approved KEY-236 storage/calendar first, then dependent Wave 3 scope. Recheck: branch correct, other code now committed, no active repository test/dev process detected. No package/download approval or Git authorization inferred.
