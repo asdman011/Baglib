@@ -3,6 +3,7 @@
 import React from 'react';
 import { Titlebar } from './Titlebar';
 import { CommandPalette } from './CommandPalette';
+import { KnowledgeCardLayer } from '../knowledge/KnowledgeCardLayer';
 import { StatusBar } from './StatusBar';
 import { NavigationRail } from './NavigationRail';
 import { HomeDashboardView, CompanionMiniWidget } from '../dashboard';
@@ -173,6 +174,7 @@ export const AppLayout: React.FC = () => {
 
       {/* Global Search Command Palette (Cmd + K) */}
       <CommandPalette />
+      <KnowledgeCardLayer />
 
       {/* Global Book Discovery & Search Hub (Story 11) */}
       <SearchHubModal />

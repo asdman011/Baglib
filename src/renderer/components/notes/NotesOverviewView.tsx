@@ -5,6 +5,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { QuickNoteScratchpad } from '../dashboard/QuickNoteScratchpad';
 import { StudyNoteContent } from './StudyNoteContent';
+import { SavedCardsPanel } from '../knowledge/SavedCardsPanel';
 import { studyBacklinks, studyLinks, type StudyNote } from '../../../shared/study-notes';
 import { matchesStudyQuery } from '../../../shared/study-notes';
 import { consumeStudyNote, navigateStudyReference, STUDY_NOTE_OPEN } from '../../utils/study-navigation';
@@ -70,5 +71,6 @@ export const NotesOverviewView: React.FC = () => {
       })}
     </div>
     {!shown.length && <p className="py-8 text-center text-sm text-muted">{t('studyNoResults')}</p>}
+    <SavedCardsPanel />
   </section>;
 };

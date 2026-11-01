@@ -239,7 +239,7 @@ export function QuranMushafWorkspace(props: Props) {
       [data-immersive] [data-quran-mushaf]>div:nth-child(2) { opacity:0; }
       [data-immersive] [data-quran-mushaf]>div:nth-child(2):hover,[data-immersive] [data-quran-mushaf]>div:nth-child(2):focus-within { opacity:1; }
     `}</style>
-    <QuranMushafView {...props} onContextAyah={(reference, point) => setMenu({ reference, ...point })} onExploreAyah={reference => open('explore', reference, 'left')} />
+    <QuranMushafView {...props} cardSource={props.selection} onContextAyah={(reference, point) => setMenu({ reference, ...point })} onExploreAyah={reference => open('explore', reference, 'left')} />
     <nav aria-label={t('quranReadingOptions')} className="quran-edge absolute right-0 top-1/3 z-20 flex flex-col gap-2 p-3 rounded-s-2xl bg-surface/95 border border-subtle shadow-lg">
       {([['tafsir', BookOpen], ['translation', Languages], ['meanings', Type], ['topics', Layers], ['themes', ListTree]] as const).map(([tool, Icon]) => <button key={tool} type="button" title={t(labels[tool])} aria-label={t(labels[tool])} onClick={() => open(tool, { ...pageStart, wholePage: true }, 'right')} className="p-2 rounded-xl hover:bg-emerald-500/15"><Icon className="size-5" /></button>)}
       <button type="button" title={t('quranCatTheme')} aria-label={t('quranCatTheme')} aria-pressed={showThemes} onClick={() => setShowThemes(value => !value)} className="p-2 rounded-xl hover:bg-emerald-500/15"><Lightbulb className="size-5" /></button>

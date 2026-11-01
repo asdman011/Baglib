@@ -29,6 +29,7 @@ import { registerAthanIpc, startAthanScheduler } from "./ipc/athan";
 import { registerStudyNotesIpc } from "./ipc/study-notes";
 import { registerPdfEditorIpc, shutdownPdfViewCaches } from "./ipc/pdf-editor";
 import { registerPoetryIpc } from './ipc/poetry';
+import { registerKnowledgeCardIpc } from './ipc/knowledge-cards';
 import { defaultStirlingSidecar } from './services/pdf-editor/stirling';
 import { pdfEngineTools } from './services/pdf-editor/tools';
 import { stirlingProcessor } from './services/pdf-editor/processor';
@@ -319,6 +320,7 @@ registerAthanIpc();
 registerStudyNotesIpc();
 registerPdfEditorIpc();
 registerPoetryIpc();
+registerKnowledgeCardIpc();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection

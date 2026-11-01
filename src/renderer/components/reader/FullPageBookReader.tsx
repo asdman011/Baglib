@@ -51,6 +51,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { DocumentLoader, detectFormat } from '../../libs/reader/document-loader';
 import { paginateBookSections, type FormattedPage } from '../../libs/reader/epub-paginator';
 import { chaptersFromPages, inlineBlobImages } from '../../libs/reader/book-pdf-export';
+import { openKnowledgeCard } from '../../libs/knowledge-card-context';
 import type {
   BookDoc,
   BookFormat,
@@ -2846,6 +2847,16 @@ export const FullPageBookReader: React.FC = () => {
         onSaveQuestion={(questionText) =>
           handleSaveKnowledge('question', undefined, questionText)
         }
+        onOpenKnowledgeCard={() => {
+          const selection = window.getSelection();
+          const bounds = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null;
+          openKnowledgeCard({
+            text: selectedText,
+            context: { kind: 'book', ref: activeBook ? `book:${activeBook.id}` : undefined, label: activeBook?.title, workId: activeBook?.id },
+            x: bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2,
+            y: bounds?.bottom ?? window.innerHeight / 3,
+          });
+        }}
         onOpenDictionary={() => {
           closeAllPanelsExcept();
           setDictionaryLookupWord(selectedText);

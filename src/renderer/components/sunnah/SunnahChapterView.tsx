@@ -24,7 +24,7 @@ const Passage = memo(function Passage({ passage, language, t }: { passage: Sunna
   if (!isnad && !matn) return <p className="text-muted text-sm italic leading-relaxed">{t(language === 'ar' ? 'sunnahMissingArabic' : 'sunnahMissingEnglish')}</p>;
   return <p className="sunnah-passage">
     {isnad && <span className="text-muted" data-isnad="true">{language === 'ar'
-      ? isnadTokens(isnad).map((token, index) => <span key={index} className={token.narrator ? 'sunnah-narrator' : undefined}>{token.text}</span>)
+      ? isnadTokens(isnad).map((token, index) => <span key={index} data-card-hover={token.narrator || undefined} className={token.narrator ? 'sunnah-narrator' : undefined}>{token.text}</span>)
       : <span className="sunnah-narrator">{isnad}</span>}</span>}
     {!passage.full && isnad && matn && ' '}
     <span className="font-semibold text-main" data-matn="true">{matn}</span>
@@ -54,7 +54,7 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
       const section = hadith.section;
       const showSection = index === 0 || previous.number !== section.number || previous.title.ar !== section.title.ar || previous.title.en !== section.title.en;
       const hasSection = section.number || section.title.ar || section.title.en;
-      return <div key={hadith.id} className="sunnah-entry" data-hadith-id={hadith.id}>
+      return <div key={hadith.id} className="sunnah-entry" data-hadith-id={hadith.id} data-card-kind="hadith" data-card-ref={`hadith:${chapter.collection}:${hadith.id}`} data-card-label={`${chapter.collection} ${hadith.number}`} data-card-research={hadith.researchId}>
         {showSection && hasSection && <ParallelRow showEnglish={showEnglish} className="sunnah-section-heading"
           arabic={<h3><NumberedTitle number={section.number} title={section.title} language="ar" fallback="" /></h3>}
           english={<h3><NumberedTitle number={section.number} title={section.title} language="en" fallback="" /></h3>} />}

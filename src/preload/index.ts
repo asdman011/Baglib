@@ -669,6 +669,13 @@ export const API = {
     exportReviews: (session, language) => ipcRenderer.invoke('pdf-collab:export', session, language),
     ask: (session, question, language, allowRemote, password, options) => ipcRenderer.invoke('pdf-collab:ask', session, question, language, allowRemote, password, options),
   } satisfies PdfCollaborationAPI,
+  knowledgeCards: {
+    list: query => ipcRenderer.invoke('knowledge-cards:list', query),
+    save: input => ipcRenderer.invoke('knowledge-cards:save', input),
+    listPreserved: () => ipcRenderer.invoke('knowledge-cards:preserved'),
+    remove: id => ipcRenderer.invoke('knowledge-cards:remove', id),
+    setMemorizing: (id, memorizing) => ipcRenderer.invoke('knowledge-cards:set-memorizing', id, memorizing),
+  } satisfies import('../shared/types/knowledge-cards').KnowledgeCardsAPI,
   studyNotes: {
     list: () => ipcRenderer.invoke('study-notes:list') as Promise<import('../shared/study-notes').StudyNote[]>,
     save: (input: StudyNoteInput) => ipcRenderer.invoke('study-notes:save', input) as Promise<import('../shared/study-notes').StudyNote>,

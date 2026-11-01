@@ -18,6 +18,7 @@ interface QuranMushafViewProps {
   onNavigatePage: (page: number) => void;
   onOpenInStudyReader?: (surah: number, ayah: number) => void;
   onCopyText: (text: string) => void;
+  cardSource?: { script: string; tafsir: string };
   activeAudio?: Location & { isPlaying: boolean; activeWordIndex: number | null } | null;
   onPlayAyah?: (surah: number, ayah: number) => void;
   loading?: boolean;
@@ -34,7 +35,7 @@ export function svgWordLocation(element: Element | null): Location | null {
   return Number.isInteger(surah) && surah >= 1 && surah <= 114 && Number.isInteger(ayah) && ayah >= 1 && ayah <= 300 ? { surah, ayah } : null;
 }
 
-export function QuranMushafView({ page, t, lang, dir, selectedAyah, onSelectAyah, onNavigatePage, onCopyText, activeAudio, loading = false, onContextAyah, onExploreAyah }: QuranMushafViewProps) {
+export function QuranMushafView({ page, t, lang, dir, selectedAyah, onSelectAyah, onNavigatePage, onCopyText, cardSource, activeAudio, loading = false, onContextAyah, onExploreAyah }: QuranMushafViewProps) {
   const [zoom, setZoom] = useState(100);
   const surface = useRef<HTMLDivElement>(null);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -117,7 +118,7 @@ export function QuranMushafView({ page, t, lang, dir, selectedAyah, onSelectAyah
     return nearest;
   };
   const number = (value: number) => new Intl.NumberFormat(lang).format(value);
-  return <div dir={dir} data-quran-mushaf className="flex flex-col min-h-0 h-full" style={{ containerType: 'size' }}>
+  return <div dir={dir} data-quran-mushaf data-card-script={cardSource?.script} data-card-tafsir={cardSource?.tafsir} className="flex flex-col min-h-0 h-full" style={{ containerType: 'size' }}>
     <style>{`
       .mushaf-svg-surface svg { width:100%; height:auto; display:block; }
       .mushaf-svg-surface path { fill:currentColor; transition:fill 120ms ease,filter 120ms ease; }

@@ -27,6 +27,7 @@ import migration014 from './014_reading_statistics';
 import migration015 from './015_reading_location_and_knowledge_enhancements';
 import migration016 from './016_soft_delete_and_trash';
 import migration017 from './017_poetry_narration';
+import migration018 from './018_knowledge_cards';
 
 
 /** All migrations in chronological order. */
@@ -48,6 +49,7 @@ export const migrations: Migration[] = [
   migration015,
   migration016,
   migration017,
+  migration018,
 ];
 
 

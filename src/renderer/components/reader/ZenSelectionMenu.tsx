@@ -8,6 +8,7 @@ import {
   Tag,
   Copy,
   BookA,
+  Library,
   Sparkles,
   Headphones,
   X,
@@ -28,6 +29,7 @@ export interface ZenSelectionMenuProps {
   onSaveQuote: (contextNote?: string) => void;
   onSaveQuestion: (questionText: string) => void;
   onOpenDictionary: () => void;
+  onOpenKnowledgeCard: () => void;
   onOpenAI: () => void;
   onPlayTTS: () => void;
   onClose: () => void;
@@ -45,6 +47,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   onSaveQuote,
   onSaveQuestion,
   onOpenDictionary,
+  onOpenKnowledgeCard,
   onOpenAI,
   onPlayTTS,
   onClose,
@@ -170,6 +173,22 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 className="p-1.5 rounded-xl hover:bg-canvas text-pale-sky-600 dark:text-pale-sky-400 hover:text-pale-sky-700 transition-colors cursor-pointer"
               >
                 <BookA className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Knowledge Card */}
+              <button
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenKnowledgeCard();
+                }}
+                title={t('knowledgeCardOpen')}
+                className="p-1.5 rounded-xl hover:bg-canvas text-amber-600 dark:text-amber-400 transition-colors"
+              >
+                <Library className="w-3.5 h-3.5" />
               </button>
 
               {/* AI Research Assistant */}
