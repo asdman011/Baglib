@@ -151,6 +151,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       LEFT JOIN quote_detail qd     ON k.id = qd.knowledge_id
       LEFT JOIN bookmark_detail bd  ON k.id = bd.knowledge_id
       LEFT JOIN question_detail qud ON k.id = qud.knowledge_id
+      WHERE k.knowledge_type IS NOT 'card' AND k.former_work_title IS NULL
       ORDER BY k.created_at ASC
     `;
 

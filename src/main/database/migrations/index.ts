@@ -28,6 +28,7 @@ import migration015 from './015_reading_location_and_knowledge_enhancements';
 import migration016 from './016_soft_delete_and_trash';
 import migration017 from './017_poetry_narration';
 import migration018 from './018_knowledge_cards';
+import migration019 from './019_knowledge_preservation';
 
 
 /** All migrations in chronological order. */
@@ -50,6 +51,7 @@ export const migrations: Migration[] = [
   migration016,
   migration017,
   migration018,
+  migration019,
 ];
 
 

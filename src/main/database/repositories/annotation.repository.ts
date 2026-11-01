@@ -63,7 +63,7 @@ export class SqliteAnnotationRepository {
   getAll(): AnnotationDTO[] {
     const rows = this.db
       .prepare(
-        `SELECT * FROM annotations ORDER BY book_id ASC, CAST(location_cfi_or_page AS INTEGER) ASC, created_at ASC`
+        `SELECT * FROM annotations WHERE book_id IS NOT NULL ORDER BY book_id ASC, CAST(location_cfi_or_page AS INTEGER) ASC, created_at ASC`
       )
       .all() as AnnotationRow[];
 
