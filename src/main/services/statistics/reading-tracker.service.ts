@@ -33,6 +33,18 @@ export interface ActiveReadingSession {
 
 export class ReadingTrackerService {
   private activeSession: ActiveReadingSession | null = null;
+  private paused = false;
+
+  setPaused(paused: boolean): void {
+    if (this.paused === paused) return;
+    const now = Math.floor(Date.now() / 1000);
+    if (paused) this.flushCurrentPage(now);
+    this.paused = paused;
+    if (this.activeSession) {
+      this.activeSession.pageStartTime = now;
+      this.activeSession.lastHeartbeatTime = now;
+    }
+  }
 
   constructor(
     private readonly statsRepo: IReadingStatisticsRepository = readingStatisticsRepository
@@ -85,6 +97,7 @@ export class ReadingTrackerService {
    * Updates last heartbeat time.
    */
   heartbeat(): void {
+    if (this.paused) return;
     if (!this.activeSession) return;
     const now = Math.floor(Date.now() / 1000);
     this.activeSession.lastHeartbeatTime = now;
@@ -120,6 +133,7 @@ export class ReadingTrackerService {
    * Flushes time spent on current page into repository with dwell capping.
    */
   private flushCurrentPage(now: number): void {
+    if (this.paused) return;
     if (!this.activeSession) return;
 
     // Elapsed time since page started, but capped if user became idle without heartbeats
@@ -145,6 +159,7 @@ export class ReadingTrackerService {
 
   /** Directly records reading progress from renderer or external sources */
   recordReadingProgress(payload: RecordReadingProgressPayload): void {
+    if (this.paused) return;
     this.statsRepo.recordPageReading(payload);
   }
 

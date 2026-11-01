@@ -11,6 +11,8 @@ import { useAthan } from '../../hooks/useAthan';
 import { ActiveReadsModule } from './ActiveReadsModule';
 import { KhatmahDashboardModule, CompanionMiniWidget } from './KhatmahDashboardModule';
 import { ReadingAnalyticsModule } from './ReadingAnalyticsModule';
+import { StudyInsightsModule } from './StudyInsightsModule';
+import { StudyRhythmSettings } from './StudyRhythm';
 import { QuickNoteScratchpad } from './QuickNoteScratchpad';
 import { AthanDashboardModule } from './AthanDashboardModule';
 import { ReadingStatisticsModal } from '../statistics/ReadingStatisticsModal';
@@ -129,6 +131,8 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
         </div>
       </div>
       <ReadingAnalyticsModule onStreakLoaded={setCurrentStreak} onOpenFullStatsModal={() => setIsStatsModalOpen(true)} />
+      <StudyInsightsModule />
+      <StudyRhythmSettings />
 
       {/* Full Reading Statistics Modal */}
       {isStatsModalOpen && (

@@ -282,6 +282,11 @@ export const FullPageBookReader: React.FC = () => {
 
   // Hands-Free Auto-Scrolling / Auto-Reader Mode State
   const [isAutoScrolling, setIsAutoScrolling] = useState<boolean>(false);
+  useEffect(() => {
+    const pause = () => setIsAutoScrolling(false);
+    window.addEventListener('baglib:study-pause', pause);
+    return () => window.removeEventListener('baglib:study-pause', pause);
+  }, []);
   const [autoScrollSpeed, setAutoScrollSpeed] = useState<number>(1);
   const lastWheelTimeRef = useRef<number>(0);
   const isPositioningEpubScrollRef = useRef<boolean>(false);

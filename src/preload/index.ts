@@ -669,6 +669,18 @@ export const API = {
     exportReviews: (session, language) => ipcRenderer.invoke('pdf-collab:export', session, language),
     ask: (session, question, language, allowRemote, password, options) => ipcRenderer.invoke('pdf-collab:ask', session, question, language, allowRemote, password, options),
   } satisfies PdfCollaborationAPI,
+  planner: {
+    list: (): Promise<import('../shared/study-planner').StudyTask[]> => ipcRenderer.invoke('study-planner:list'),
+    save: input => ipcRenderer.invoke('study-planner:save', input),
+    remove: (id, expected) => ipcRenderer.invoke('study-planner:remove', id, expected),
+  } satisfies import('../shared/study-planner').PlannerAPI,
+  studyInsights: {
+    setPaused: paused => ipcRenderer.invoke('study-planner:pause', paused),
+    summary: (): Promise<import('../shared/study-insights').StudyInsights> => ipcRenderer.invoke('study-planner:summary'),
+    preferences: (): Promise<import('../shared/study-insights').StudyPreferences> => ipcRenderer.invoke('study-planner:preferences'),
+    savePreferences: input => ipcRenderer.invoke('study-planner:save-preferences', input),
+    words: bookId => ipcRenderer.invoke('study-planner:words', bookId),
+  } satisfies import('../shared/study-insights').StudyInsightsAPI,
   knowledgeCards: {
     list: query => ipcRenderer.invoke('knowledge-cards:list', query),
     save: input => ipcRenderer.invoke('knowledge-cards:save', input),

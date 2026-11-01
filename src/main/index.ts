@@ -30,6 +30,7 @@ import { registerStudyNotesIpc } from "./ipc/study-notes";
 import { registerPdfEditorIpc, shutdownPdfViewCaches } from "./ipc/pdf-editor";
 import { registerPoetryIpc } from './ipc/poetry';
 import { registerKnowledgeCardIpc } from './ipc/knowledge-cards';
+import { registerStudyPlannerIpc } from './ipc/study-planner';
 import { defaultStirlingSidecar } from './services/pdf-editor/stirling';
 import { pdfEngineTools } from './services/pdf-editor/tools';
 import { stirlingProcessor } from './services/pdf-editor/processor';
@@ -321,6 +322,7 @@ registerStudyNotesIpc();
 registerPdfEditorIpc();
 registerPoetryIpc();
 registerKnowledgeCardIpc();
+registerStudyPlannerIpc();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection

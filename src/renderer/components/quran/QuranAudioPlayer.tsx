@@ -124,8 +124,17 @@ export function QuranAudioPlayer({
   }, [playbackSpeed, volume, isMuted, surah, ayah, surahCount, repeatMode, repeatCountSetting, repeatCountRemaining, gapDuration, activeReciterId, onAyahChange, onAudioStateChange]);
 
   const api = () => window.electronAPI?.quran;
+  useEffect(() => {
+    const pause = () => {
+      if (gapTimerRef.current) clearTimeout(gapTimerRef.current);
+      audioRef.current?.pause();
+    };
+    window.addEventListener('baglib:study-pause', pause);
+    return () => window.removeEventListener('baglib:study-pause', pause);
+  }, []);
 
   const safePlay = useCallback(async () => {
+    if (document.documentElement.dataset.studyPaused === 'true') return;
     const audio = audioRef.current;
     if (!audio) return;
     try {

@@ -4,6 +4,7 @@ import React from 'react';
 import { Titlebar } from './Titlebar';
 import { CommandPalette } from './CommandPalette';
 import { KnowledgeCardLayer } from '../knowledge/KnowledgeCardLayer';
+import { StudyRhythmLayer } from '../dashboard/StudyRhythm';
 import { StatusBar } from './StatusBar';
 import { NavigationRail } from './NavigationRail';
 import { HomeDashboardView, CompanionMiniWidget } from '../dashboard';
@@ -27,6 +28,7 @@ const SunnahView = React.lazy(() =>
   import('../sunnah/SunnahView').then((m) => ({ default: m.SunnahView }))
 );
 const BayanView = React.lazy(() => import('../poetry/BayanView').then(module => ({ default: module.BayanView })));
+const StudyPlannerView = React.lazy(() => import('../dashboard/StudyPlannerView').then(module => ({ default: module.StudyPlannerView })));
 const QuranView = React.lazy(() =>
   import('../quran/QuranView').then((m) => ({ default: m.QuranView }))
 );
@@ -146,6 +148,7 @@ export const AppLayout: React.FC = () => {
 
           <React.Suspense fallback={<div className="flex-1 bg-canvas" />}>
             {viewMode === 'dashboard' && <HomeDashboardView athanState={athanState} />}
+            {viewMode === 'planner' && <StudyPlannerView adjustment={athanState.snapshot?.settings.hijriAdjustmentDays || 0} />}
             {viewMode === 'quran' && <QuranView />}
             {viewMode === 'sunnah' && <SunnahView />}
             {viewMode === 'bayan' && <BayanView />}
@@ -171,6 +174,7 @@ export const AppLayout: React.FC = () => {
         {athanState.audioFailed && <button type="button" className="underline p-2" onClick={athanState.retryAudio}>{t('athanRetryAudio')}</button>}
       </div>}
       <StatusBar />
+      <StudyRhythmLayer snapshot={athanState.snapshot} />
 
       {/* Global Search Command Palette (Cmd + K) */}
       <CommandPalette />

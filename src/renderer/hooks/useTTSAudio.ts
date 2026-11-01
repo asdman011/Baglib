@@ -16,6 +16,7 @@ import { segmentMixedTextForTTS, detectDominantLanguage } from '../../shared/uti
 import type { PocketTTSLanguage, TTSProviderAudioChunk } from '../../shared/types/tts-provider';
 import { POCKET_TTS_LANGUAGES } from '../../shared/types/tts-provider';
 import { segmentTextIntoSentences } from '../../shared/utils/tts-text';
+import { STUDY_PAUSE_EVENT } from '../../shared/study-rhythm';
 
 export type TTSProviderNoticeKind = 'unavailable' | 'arabicUnsupported' | 'playbackFallback';
 
@@ -656,6 +657,12 @@ export function useTTSAudio(options: UseTTSAudioOptions = {}) {
   }, [playbackMode]);
 
   // Toggle play/pause
+  useEffect(() => {
+    const onStudyPause = () => { if (isPlayingRef.current) pause(); };
+    window.addEventListener(STUDY_PAUSE_EVENT, onStudyPause);
+    return () => window.removeEventListener(STUDY_PAUSE_EVENT, onStudyPause);
+  }, [pause]);
+
   const togglePlay = useCallback(() => {
     if (playbackState === 'playing' || playbackState === 'buffering') {
       pause();

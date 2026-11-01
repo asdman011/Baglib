@@ -2,6 +2,10 @@
 
 ## Recent Agent Updates
 
+- [2026-11-01, Codex] Wave 3 working tree implemented across KEY-236–239 with approved ADR-007/migration020 only; goals/order/rhythm reuse settings. Planner calendar/source links, measured subject hours/order, real-data dashboard/word counts and opt-in progress-safe pauses/intention are wired. User supplied exact bilingual intention, off by default. 1223/1223 tests (concurrency4), tsc, main build, changed-file lint0errors and real app ar/en disposable-profile checks pass; source/calendar/media limits recorded in CURRENT_TASK and feature doc. Servers stopped, port3000 free. Tickets remain In Progress, no commit/push or new dependencies/downloads. Pre-existing delivery plan untouched.
+
+- [2026-11-01, Codex] User continued after ADR-007 approval request: implementing approved KEY-236 storage/calendar first, then dependent Wave 3 scope. Recheck: branch correct, other code now committed, no active repository test/dev process detected. No package/download approval or Git authorization inferred.
+
 - [2026-11-01, Codex] Wave 3 started with full KEY-221/236–239 ticket reads and source/concurrency audit. Proposed ADR-007 for KEY-236's single study_task table; awaiting explicit schema approval before any migration or implementation. Other sessions/test processes and unfinished 018/019 knowledge-card changes detected; no shared product files touched. Next: approved planner → subject hours/order → real-data dashboard statistics → opt-in snooze/intention. No dependencies/downloads/tests/app/server/Git/Jira writes performed. Launch wording and exclusive edit handoff remain pending.
 
 - [2026-11-01, Claude Code] KEY-232 pushed (`f204437`), still In Progress: real Knowledge Cards from selection, hover and the reader menu, saved cards in Notes, memorization flag. KEY-231 approved (tables, FSRS, `ts-fsrs` 5.3.1). Migration 019 keeps all knowledge when a book is deleted, and Notes lists it. Real Quran and Sunnah data in the card were not exercised live. See CURRENT_TASK. No Git actions.
