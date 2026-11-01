@@ -230,8 +230,8 @@ export class WebClipperService {
 
               let chapContent = chapArticle.content;
               if (options.downloadImages && format !== 'markdown') {
-                const bundleRes = await this.bundler.bundleAssets(chapArticle.content, chapUrl);
-                // Bundled paths repeat between chapters, so a PDF resolves them chapter by chapter.
+                // Numbering restarts in each chapter, so the prefix keeps every EPUB image path unique.
+                const bundleRes = await this.bundler.bundleAssets(chapArticle.content, chapUrl, undefined, `ch${index}_img`);
                 chapContent = format === 'pdf' ? inlineClippedImages(bundleRes.rewrittenHtml, bundleRes.images) : bundleRes.rewrittenHtml;
                 totalImages.push(...bundleRes.images);
               }

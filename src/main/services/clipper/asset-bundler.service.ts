@@ -36,7 +36,8 @@ export class AssetBundlerService {
   public async bundleAssets(
     htmlContent: string,
     refererUrl: string,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    namePrefix = 'img'
   ): Promise<{ rewrittenHtml: string; images: ClippedImage[] }> {
     const { document } = parseHTML(`<div>${htmlContent}</div>`);
     const imgEls = Array.from(document.querySelectorAll('img'));
@@ -66,7 +67,7 @@ export class AssetBundlerService {
           if (totalBytes >= MAX_TOTAL_ASSET_BYTES) return;
 
           const imageIndex = i + batchIdx + 1;
-          const asset = await this.fetchImage(imgUrl, refererUrl, imageIndex);
+          const asset = await this.fetchImage(imgUrl, refererUrl, imageIndex, namePrefix);
           if (asset && asset.data.byteLength <= MAX_ASSET_BYTES) {
             if (totalBytes + asset.data.byteLength <= MAX_TOTAL_ASSET_BYTES) {
               totalBytes += asset.data.byteLength;
@@ -104,7 +105,8 @@ export class AssetBundlerService {
   public async fetchImage(
     url: string,
     referer: string,
-    index: number
+    index: number,
+    namePrefix = 'img'
   ): Promise<ClippedImage | null> {
     try {
       const controller = new AbortController();
@@ -131,7 +133,7 @@ export class AssetBundlerService {
       const arrayBuffer = await res.arrayBuffer();
       const data = Buffer.from(arrayBuffer);
 
-      const localPath = `images/img_${index}.${ext}`;
+      const localPath = `images/${namePrefix}_${index}.${ext}`;
 
       return {
         src: url,

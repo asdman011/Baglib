@@ -2,10 +2,31 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fflate from 'fflate';
 import { EpubPackagerService } from '../../src/main/services/clipper/epub-packager.service';
+import { AssetBundlerService } from '../../src/main/services/clipper/asset-bundler.service';
 import type { ClippedArticle, ClippedImage } from '../../src/shared/types/web-clipper';
 
 describe('EpubPackagerService (Task 5.2 / KEY-148)', () => {
   const packager = EpubPackagerService.getInstance();
+
+  it('keeps every chapter image when chapters use their own name prefix', async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string) => new Response(String(url), { headers: { 'content-type': 'image/png' } })) as typeof fetch;
+    try {
+      const bundler = AssetBundlerService.getInstance();
+      const first = await bundler.bundleAssets('<img src="https://example.com/a.png">', 'https://example.com/1', undefined, 'ch1_img');
+      const second = await bundler.bundleAssets('<img src="https://example.com/b.png">', 'https://example.com/2', undefined, 'ch2_img');
+      const epub = packager.packageSerializedNovelToEpub(
+        [{ title: 'one', contentHtml: first.rewrittenHtml, index: 1 }, { title: 'two', contentHtml: second.rewrittenHtml, index: 2 }],
+        { title: 'book', author: 'author' },
+        [...first.images, ...second.images],
+      );
+      const files = fflate.unzipSync(new Uint8Array(epub));
+      assert.equal(fflate.strFromU8(files['OEBPS/images/ch1_img_1.png']), 'https://example.com/a.png');
+      assert.equal(fflate.strFromU8(files['OEBPS/images/ch2_img_1.png']), 'https://example.com/b.png');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
 
   it('builds a valid EPUB container archive with spec-compliant files', () => {
     const article: ClippedArticle = {
