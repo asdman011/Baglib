@@ -13,7 +13,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import type { OcrPageResult } from '../../../shared/types/ocr';
+import type { OcrEngineId, OcrEngineInfo, OcrPageResult } from '../../../shared/types/ocr';
+import { OCR_ENGINE_ORDER, ocrEngineBlocker, ocrEngineInfo, ocrEngineName, ocrFallbackMessage } from './ocr-status';
 
 interface OcrQuickActionPillProps {
   pageResult: OcrPageResult | null;
@@ -24,6 +25,11 @@ interface OcrQuickActionPillProps {
   onToggleBoundingBoxes: () => void;
   isInspectorOpen: boolean;
   onToggleInspector: () => void;
+  engines: OcrEngineInfo[];
+  selectedEngine: OcrEngineId;
+  onSelectEngine: (engine: OcrEngineId) => void;
+  /** Icon-only tool buttons, for hosts narrower than the viewport. */
+  compact?: boolean;
   className?: string;
 }
 
@@ -36,6 +42,10 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
   onToggleBoundingBoxes,
   isInspectorOpen,
   onToggleInspector,
+  engines,
+  selectedEngine,
+  onSelectEngine,
+  compact = false,
   className = '',
 }) => {
   const { t, dir } = useWorkspace();
@@ -43,30 +53,59 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
 
   const wordCount = pageResult?.words?.length || 0;
   const isRecognized = !!pageResult && (wordCount > 0 || !!pageResult.text);
+  const engineInfo = ocrEngineInfo(engines, selectedEngine);
+  const engineBlocker = pageResult?.fallbackReason ?? ocrEngineBlocker(engineInfo);
+  const blockerPackages = pageResult?.missingPackages ?? engineInfo?.missingPackages;
+  const blockedEngine = pageResult?.requestedEngine ?? selectedEngine;
+  const otherEngineRan = !!pageResult && pageResult.engine !== selectedEngine;
 
   return (
     <div
       role="toolbar"
       aria-label={t('ocrInspectorTitle')}
       dir={dir}
-      className={`ocr-quick-action-pill absolute bottom-5 start-1/2 -translate-x-1/2 z-20 transition-all duration-300 select-none ${className}`}
+      className={`ocr-quick-action-pill absolute bottom-5 left-1/2 -translate-x-1/2 z-20 transition-all duration-300 select-none ${className}`}
     >
       <div className="flex items-center gap-1.5 p-1.5 px-3 rounded-full backdrop-blur-md bg-surface/90 border border-subtle/80 shadow-xl hover:shadow-2xl transition-all duration-200">
         {/* Engine Status Badge */}
         <div
-          title={`${t('ocrEngineBadge')} — ${t('ocrEngineLocalCpu')}`}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold font-mono bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20 shrink-0"
+          title={
+            engineBlocker
+              ? ocrFallbackMessage(t, engineBlocker, blockerPackages, blockedEngine)
+              : t(selectedEngine === 'ocrmypdf' ? 'ocrEngineOcrmypdfHint' : 'ocrEnginePaddleHint')
+          }
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold font-mono border shrink-0 ${
+            engineBlocker
+              ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30'
+              : 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/20'
+          }`}
         >
           <span className="relative flex h-2 w-2">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-              isOcrRunning ? 'bg-amber-400' : 'bg-emerald-400'
-            }`} />
+            {!engineBlocker && (
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                isOcrRunning ? 'bg-amber-400' : 'bg-emerald-400'
+              }`} />
+            )}
             <span className={`relative inline-flex rounded-full h-2 w-2 ${
-              isOcrRunning ? 'bg-amber-500' : 'bg-emerald-500'
+              isOcrRunning || engineBlocker ? 'bg-amber-500' : 'bg-emerald-500'
             }`} />
           </span>
-          <span className="hidden sm:inline font-sans font-bold">PaddleOCR-VL</span>
-          <span className="sm:hidden font-mono text-[10px]">VL-1.6</span>
+          <select
+            aria-label={t('ocrEngineLabel')}
+            value={selectedEngine}
+            disabled={isOcrRunning}
+            onChange={event => onSelectEngine(event.target.value as OcrEngineId)}
+            className="max-w-28 bg-transparent font-sans font-bold cursor-pointer outline-none disabled:cursor-wait"
+          >
+            {OCR_ENGINE_ORDER.map(engine => {
+              const blocked = ocrEngineBlocker(ocrEngineInfo(engines, engine));
+              return (
+                <option key={engine} value={engine} disabled={!!blocked} className="bg-surface text-main">
+                  {blocked ? `${ocrEngineName(t, engine)} (${t('ocrEngineUnavailableOption')})` : ocrEngineName(t, engine)}
+                </option>
+              );
+            })}
+          </select>
           <Cpu className="w-3 h-3 text-pale-sky-500 opacity-80" />
         </div>
 
@@ -116,7 +155,7 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
                     {t('page')} {readingPage}
                   </span>
                   <span className="text-muted text-[10px]">
-                    ({wordCount} {t('ocrMetricWords')})
+                    ({wordCount} {t('ocrMetricWords')}{otherEngineRan ? ` · ${ocrEngineName(t, pageResult.engine)}` : ''})
                   </span>
                 </>
               ) : (
@@ -168,6 +207,7 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
               onClick={onToggleBoundingBoxes}
               aria-pressed={showBoundingBoxes}
               title={showBoundingBoxes ? t('ocrHideBoxes') : t('ocrToggleBoxes')}
+              aria-label={showBoundingBoxes ? t('ocrHideBoxes') : t('ocrToggleBoxes')}
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer border shrink-0 ${
                 showBoundingBoxes
                   ? 'bg-amber-400/20 border-amber-500/50 text-amber-900 dark:text-amber-200 shadow-xs'
@@ -175,9 +215,11 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
               }`}
             >
               <Crosshair className={`w-3.5 h-3.5 ${showBoundingBoxes ? 'text-amber-500' : ''}`} />
-              <span className="hidden sm:inline">
-                {showBoundingBoxes ? t('ocrHideBoxes') : t('ocrToggleBoxes')}
-              </span>
+              {!compact && (
+                <span className="hidden sm:inline">
+                  {showBoundingBoxes ? t('ocrHideBoxes') : t('ocrToggleBoxes')}
+                </span>
+              )}
             </button>
 
             {/* Layout & OCR Inspector Drawer Toggle */}
@@ -186,6 +228,7 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
               onClick={onToggleInspector}
               aria-pressed={isInspectorOpen}
               title={t('ocrOpenInspector')}
+              aria-label={t('ocrOpenInspector')}
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer border shrink-0 ${
                 isInspectorOpen
                   ? 'bg-pale-sky-500/20 border-pale-sky-500/50 text-pale-sky-700 dark:text-pale-sky-300 shadow-xs'
@@ -193,7 +236,7 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">{t('ocrOpenInspector')}</span>
+              {!compact && <span className="hidden md:inline">{t('ocrOpenInspector')}</span>}
             </button>
 
             {/* Collapse Button */}

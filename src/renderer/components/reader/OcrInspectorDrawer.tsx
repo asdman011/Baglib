@@ -20,7 +20,8 @@ import {
   HardDrive,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import type { OcrPageResult, OcrWord, OcrEngineInfo } from '../../../shared/types/ocr';
+import type { OcrEngineId, OcrPageResult, OcrWord, OcrEngineInfo } from '../../../shared/types/ocr';
+import { OCR_ENGINE_ORDER, ocrEngineBlocker, ocrEngineInfo, ocrEngineName, ocrFallbackMessage } from './ocr-status';
 
 interface OcrInspectorDrawerProps {
   isOpen: boolean;
@@ -33,6 +34,10 @@ interface OcrInspectorDrawerProps {
   onToggleBoundingBoxes?: () => void;
   activeWordIndex?: number | null;
   onSelectWord?: (index: number | null) => void;
+  engines: OcrEngineInfo[];
+  selectedEngine: OcrEngineId;
+  onSelectEngine: (engine: OcrEngineId) => void;
+  onEnginesChanged: () => void;
 }
 
 export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
@@ -46,6 +51,10 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
   onToggleBoundingBoxes,
   activeWordIndex = null,
   onSelectWord,
+  engines,
+  selectedEngine,
+  onSelectEngine,
+  onEnginesChanged,
 }) => {
   const { t, dir } = useWorkspace();
   const [activeTab, setActiveTab] = useState<'markdown' | 'text' | 'tables' | 'bboxes'>('markdown');
@@ -53,15 +62,12 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
   const [copiedTableIdx, setCopiedTableIdx] = useState<number | null>(null);
   const [wordFilter, setWordFilter] = useState<string>('');
-  const [engineInfo, setEngineInfo] = useState<OcrEngineInfo | null>(null);
   const [isDownloadingModel, setIsDownloadingModel] = useState<boolean>(false);
   const [downloadProgress, setDownloadProgress] = useState<{ percent: number; speedMb: number; file: string } | null>(null);
 
   React.useEffect(() => {
-    if (isOpen && window.electronAPI?.ocrGetEngineInfo) {
-      window.electronAPI.ocrGetEngineInfo().then((info) => setEngineInfo(info)).catch(console.warn);
-    }
-  }, [isOpen]);
+    if (isOpen) onEnginesChanged();
+  }, [isOpen, onEnginesChanged]);
 
   const handleDownloadModel = async () => {
     if (!window.electronAPI?.ocrDownloadModel || isDownloadingModel) return;
@@ -79,8 +85,8 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
     });
 
     try {
-      const info = await window.electronAPI.ocrDownloadModel();
-      setEngineInfo(info);
+      await window.electronAPI.ocrDownloadModel();
+      onEnginesChanged();
     } catch (err) {
       console.warn('[handleDownloadModel] Error:', err);
     } finally {
@@ -90,6 +96,10 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
     }
   };
 
+  const engineInfo = ocrEngineInfo(engines, selectedEngine);
+  const engineBlocker = ocrEngineBlocker(engineInfo);
+  const isPaddle = selectedEngine === 'paddleocr_vl';
+  const engineName = ocrEngineName(t, selectedEngine);
   const wordCount = pageResult?.words?.length || 0;
   const lineCount = pageResult?.lines?.length || 0;
   const tablesCount = pageResult?.tables?.length || 0;
@@ -171,29 +181,65 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
       </div>
 
       {/* Engine Status Banner */}
-      <div className="p-4 border-b border-subtle bg-emerald-500/5 space-y-3">
+      <div className={`p-4 border-b border-subtle space-y-3 ${engineBlocker ? 'bg-amber-500/10' : 'bg-emerald-500/5'}`}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              {!engineBlocker && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              )}
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${engineBlocker ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
             </span>
-            <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-              {t('ocrEngineBadge')}
+            <span className={`text-xs font-bold ${engineBlocker ? 'text-amber-800 dark:text-amber-300' : 'text-emerald-800 dark:text-emerald-300'}`}>
+              {engineBlocker ? t('ocrEngineNotReady', { engine: engineName }) : t(isPaddle ? 'ocrEngineBadge' : 'ocrEngineBadgeOcrmypdf')}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] text-muted font-mono bg-surface px-2 py-0.5 rounded-md border border-subtle">
-            <Cpu className="w-3.5 h-3.5 text-pale-sky-500" />
-            <span>AVX2 · 12T</span>
-          </div>
+          {isPaddle && (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted font-mono bg-surface px-2 py-0.5 rounded-md border border-subtle">
+              <Cpu className="w-3.5 h-3.5 text-pale-sky-500" />
+              <span>AVX2 · 8T</span>
+            </div>
+          )}
         </div>
 
-        <p className="text-[11px] text-muted leading-relaxed">
-          {t('ocrEngineLocalCpu')}
+        {/* Engine Choice */}
+        <div role="radiogroup" aria-label={t('ocrEngineLabel')} className="grid grid-cols-2 gap-2">
+          {OCR_ENGINE_ORDER.map(engine => {
+            const info = ocrEngineInfo(engines, engine);
+            const blocked = ocrEngineBlocker(info);
+            const isSelected = engine === selectedEngine;
+            return (
+              <button
+                key={engine}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                disabled={!!blocked || isOcrRunning}
+                onClick={() => onSelectEngine(engine)}
+                className={`p-2 rounded-lg border text-start text-[11px] transition-all cursor-pointer disabled:cursor-not-allowed ${
+                  isSelected ? 'border-pale-sky-500 bg-pale-sky-500/10' : 'border-subtle bg-surface hover:bg-canvas'
+                } ${blocked ? 'opacity-70' : ''}`}
+              >
+                <span className="block font-bold text-main">{ocrEngineName(t, engine)}</span>
+                <span className="block mt-0.5 leading-relaxed text-muted">
+                  {blocked
+                    ? ocrFallbackMessage(t, blocked, info?.missingPackages, engine)
+                    : t(engine === 'ocrmypdf' ? 'ocrEngineOcrmypdfHint' : 'ocrEnginePaddleHint')}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p role={engineBlocker ? 'alert' : undefined} className="text-[11px] text-muted leading-relaxed">
+          {engineBlocker
+            ? ocrFallbackMessage(t, engineBlocker, engineInfo?.missingPackages, selectedEngine)
+            : isPaddle ? `${t('ocrEngineLocalCpu')} · ${t('ocrCpuSlowHint')}` : t('ocrEngineOcrmypdfLocal')}
         </p>
 
         {/* Local Model Files Card */}
+        {isPaddle && (
         <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-surface border border-subtle text-xs">
           <div className="flex items-center gap-2 min-w-0">
             <HardDrive className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
@@ -202,9 +248,9 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                 {engineInfo?.isDownloaded
                   ? t('ocrModelReady')
                   : t('ocrModelFilesCount', {
-                      existing: engineInfo?.existingFilesCount || 13,
+                      existing: engineInfo?.existingFilesCount || 0,
                       total: engineInfo?.totalExpectedFiles || 14,
-                      size: engineInfo?.downloadedMb || 12.5,
+                      size: engineInfo?.downloadedMb || 0,
                     })}
               </span>
             </div>
@@ -233,6 +279,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
             </button>
           )}
         </div>
+        )}
 
         {/* Toolbar Controls */}
         <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -270,6 +317,13 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
           )}
         </div>
       </div>
+
+      {/* Which engine produced this result */}
+      {pageResult && (
+        <p className="px-4 pt-2 text-[11px] font-bold text-muted">
+          {t('ocrRanWithEngine', { engine: ocrEngineName(t, pageResult.engine) })}
+        </p>
+      )}
 
       {/* Metrics Row */}
       {pageResult && (

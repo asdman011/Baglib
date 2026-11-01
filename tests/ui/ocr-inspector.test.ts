@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert';
-import { translations } from '../../src/renderer/translations';
-import type { OcrPageResult } from '../../src/shared/types/ocr';
+import { translations, type TranslationKey } from '../../src/renderer/translations';
+import { OCR_ENGINE_ORDER, ocrEngineBlocker, ocrEngineInfo, ocrEngineName, ocrFallbackMessage } from '../../src/renderer/components/reader/ocr-status';
+import type { OcrEngineInfo, OcrPageResult } from '../../src/shared/types/ocr';
 
 describe('PaddleOCR-VL-1.6 Visual Layout & Inspector UI Tests', () => {
   it('contains centralized localization keys in Arabic and English for all OCR elements', () => {
@@ -42,6 +43,13 @@ describe('PaddleOCR-VL-1.6 Visual Layout & Inspector UI Tests', () => {
       'ocrDownloadingModel',
       'ocrModelReady',
       'ocrModelFilesCount',
+      'ocrEngineWindowsBadge',
+      'ocrEngineNotReady',
+      'ocrRuntimeMissing',
+      'ocrModelMissing',
+      'ocrEngineFailed',
+      'ocrEmptyResult',
+      'ocrCpuSlowHint',
     ] as const;
 
     for (const key of requiredKeys) {
@@ -55,6 +63,65 @@ describe('PaddleOCR-VL-1.6 Visual Layout & Inspector UI Tests', () => {
     assert.ok(translations.en.ocrEngineBadge.includes('PaddleOCR-VL-1.6'));
     assert.ok(translations.ar.ocrEngineLocalCpu.includes('AVX2'));
     assert.ok(translations.en.ocrEngineLocalCpu.includes('AVX2'));
+  });
+
+  it('names what blocks the engine instead of showing it as ready', () => {
+    const ready: OcrEngineInfo = {
+      id: 'paddleocr_vl',
+      name: 'PaddleOCR-VL-1.6',
+      version: '1.6.0',
+      parameters: '0.9B',
+      device: 'CPU',
+      modelPath: '',
+      isDownloaded: true,
+      runtimeReady: true,
+      missingPackages: [],
+      supportedLanguages: [],
+    };
+    assert.equal(ocrEngineBlocker(null), null);
+    assert.equal(ocrEngineBlocker(ready), null);
+    assert.equal(ocrEngineBlocker({ ...ready, isDownloaded: false }), 'model-missing');
+    assert.equal(ocrEngineBlocker({ ...ready, runtimeReady: false }), 'runtime-missing');
+
+    for (const lang of ['ar', 'en'] as const) {
+      const t = (key: TranslationKey, params?: Record<string, string | number>) =>
+        translations[lang][key].replace('{packages}', String(params?.packages)).replace('{engine}', String(params?.engine));
+      const message = ocrFallbackMessage(t, 'runtime-missing', ['torch', 'transformers'], 'paddleocr_vl');
+      assert.ok(message.includes('torch, transformers'));
+      assert.ok(message.includes('PaddleOCR-VL'));
+      assert.ok(!message.includes('{'));
+
+      // A failure names the engine the reader chose, and the OS engine that stood in for it
+      const failed = ocrFallbackMessage(t, 'engine-failed', [], 'ocrmypdf');
+      assert.ok(failed.includes('OCRmyPDF'));
+      assert.ok(failed.includes(translations[lang].ocrEngineWindowsBadge));
+
+      const noLanguage = ocrFallbackMessage(t, 'model-missing', ['ara'], 'ocrmypdf');
+      assert.ok(noLanguage.includes('ara'));
+      assert.notEqual(noLanguage, ocrFallbackMessage(t, 'model-missing', ['ara'], 'paddleocr_vl'));
+    }
+  });
+
+  it('shows the engine that actually ran', () => {
+    const t = (key: TranslationKey) => translations.en[key];
+    assert.equal(ocrEngineName(t, 'ocrmypdf'), 'OCRmyPDF');
+    assert.equal(ocrEngineName(t, 'paddleocr_vl'), 'PaddleOCR-VL');
+    assert.equal(ocrEngineName(t, 'windows_media_ocr'), translations.en.ocrEngineWindowsBadge);
+  });
+
+  it('offers OCRmyPDF first and finds each engine by id', () => {
+    assert.deepEqual(OCR_ENGINE_ORDER, ['ocrmypdf', 'paddleocr_vl']);
+    const info = { id: 'ocrmypdf' } as OcrEngineInfo;
+    assert.equal(ocrEngineInfo([info], 'ocrmypdf'), info);
+    assert.equal(ocrEngineInfo([info], 'paddleocr_vl'), null);
+  });
+
+  it('localizes the engine choice in both languages', () => {
+    for (const key of ['ocrEngineLabel', 'ocrEngineUnavailableOption', 'ocrRanWithEngine', 'ocrEngineOcrmypdfHint', 'ocrEnginePaddleHint', 'ocrEngineBadgeOcrmypdf', 'ocrEngineOcrmypdfLocal', 'ocrLanguageDataMissing'] as const) {
+      assert.ok(translations.ar[key].length > 0, `Missing Arabic translation for: ${key}`);
+      assert.ok(translations.en[key].length > 0, `Missing English translation for: ${key}`);
+      assert.notEqual(translations.ar[key], translations.en[key]);
+    }
   });
 
   it('structures OcrPageResult correctly for side-by-side inspection', () => {

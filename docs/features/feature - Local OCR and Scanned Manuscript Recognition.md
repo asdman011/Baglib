@@ -527,6 +527,8 @@ In addition to asynchronous Google Drive batch processing, Colab Pro can serve a
 
 ## 8. Integrated PaddleOCR-VL-1.6 Local Engine & Visible Layout Experience
 
+> **Superseded 2026-11-01.** Parts A and B below describe a worker that never loaded the model: it wrapped a Tesseract binary that is not installed, the verify script asserted only image dimensions, and the "124.3 MB" figure measured the verify script itself. Section 9 records what was measured with the real model; where they disagree, section 9 is correct.
+
 ### A. Dedicated Local CPU Architecture (`assets/ocr/paddle_vl_worker.py`)
 To establish `PaddleOCR-VL-1.6` (`0.9B` parameters) as the default and primary local OCR engine across Baglib without impacting memory or requiring GPU hardware:
 1. **Isolated Virtualenv Execution**: Uses the self-contained `.baglib-data/pdf-engine/venv/Scripts/python.exe` environment, completely isolated from global system Python.
@@ -550,3 +552,93 @@ The OCR engine is deeply integrated into the reader workspace rather than remain
      - **Word Bounding Boxes (`ocrTabBboxes`)**: Interactive coordinate inspector showing each word's bounding box `(x, y, width, height)` and confidence score.
 4. **Bilingual Localization & Logical CSS**: All UI strings are centralized in `src/renderer/translations.ts` in Arabic RTL and English LTR using CSS logical properties (`margin-inline-start`, `border-inline-start`, `text-start`).
 
+
+---
+
+## 9. Real PaddleOCR-VL-1.6 Measurements & Working Integration (Verified 2026-11-01)
+
+### A. How the worker runs the model
+- `transformers` 5.22.1 native `PaddleOCRVLForConditionalGeneration`, with `torch` 2.15.0+cpu in `.baglib-data/pdf-engine/venv`. `trust_remote_code` is not used, so the `.py` files in the model folder never execute. The model folder has no chat template; the worker builds the prompt itself.
+- Pages are rendered by Poppler `pdftoppm` at 200 DPI. PyMuPDF stays purged. `extractPdfImage` is only a fallback: it selects an embedded image by index, not a document page.
+- The processor limits any crop to about 1 megapixel, so pages are cut first with an ink projection (no new dependency). Arabic: one crop per printed row. Latin: full-resolution blocks, columns separated at a detected gutter. `auto` reads one row to choose.
+- The model returns no usable coordinates here, so word boxes are **estimated** from the cropped rows in proportion to word length. They locate the right row and approximate position, not exact glyphs. The `Spotting:` prompt looped on repeated digits on an Arabic crop and is not used.
+- Each page starts a new process, about 2-11 s of load time, and releases its memory afterward. Pages run one at a time.
+
+### B. Measured results (Ryzen 7 PRO 5750G, 15.4 GB RAM, CPU only)
+
+| Test | Precision | Time | Peak memory | Quality |
+| :--- | :--- | :---: | :---: | :--- |
+| English page, image-only copy, 2 blocks | bfloat16 | 326 s | 2.4 GB | No recognition errors against the embedded text; differences were rejoined hyphens and straight apostrophes |
+| English same page, whole page | float32 | 106 s | 3.9 GB | Same text; footer order differs from the PDF's internal order |
+| Arabic vocalized verse, 22 row crops | bfloat16 | 405 s | 2.2 GB | Letter CER 12.5%, WER 32.2%, CER with marks 29.8%; 122 of 285 marks present |
+| Arabic same page, whole page | float32 | 228 s | 4.1 GB | Letter CER 73.6%; left column before right; invented text |
+| One Arabic row | float32 / bfloat16 | 8.5 s / 17.9 s | 3.9 / 2.1 GB | Same model, same crop |
+
+Arabic reference: a hand transcription of page 12 of a vocalized scan, digits excluded, so it is one page and one reader's transcription, not a benchmark. Threads: 8 and 12 measured the same (9.5 s and 10.0 s). The published 4-8 s/page and 1.5-2.2 GB estimates in section 7E do not hold for float32 on this machine.
+
+float32 is used when at least 6 GB is available, otherwise bfloat16 (twice as slow on this AVX2 CPU). Every timed run above that used bfloat16 did so because under 6 GB was free.
+
+### C. Known limits
+- Arabic-Indic numerals come back as Latin look-alikes (١٦١ as 171); none of the 21 verse numbers on the test page was right.
+- Diacritics are under-recognized and sometimes wrong; do not treat output as vocalized text without review.
+- Clean printed Arabic is not exact either: a drawn Arial line returned `الترثية` for `التراثية` and `الاسلامية` for `الإسلامية`.
+- On the test page, row 168 lost its second hemistich and row 173 came out with hemistichs reversed. Splitting rows at the gutter fixed 168 but produced more invented words and was rejected.
+- The framed page header returned only the page number, and the ornament at the foot of the page returned stray digits.
+- Two-column Arabic prose is read straight across rows, because it cannot be told apart from verse by layout. Not tested.
+- Tables, formulas and handwriting were not tested. `tables` is always empty.
+- Decorative calligraphy fails: the cover page of the same scan returned invented text, including a line of Tibetan script, and its estimated boxes do not fit the artwork.
+- A running page cannot be cancelled, and reloading the reader while it runs discards the result. There is no per-line progress, only the running state and the "a few minutes" notice.
+
+### D. Reader integration
+- `PdfWorkstationPanel` is the default view for PDFs, and the OCR pill, inspector and overlay existed only in the legacy viewer branch, so the action could not be reached. The pill now sits over the workstation viewer, and `OcrPageOverlay` portals the overlay into the page element.
+- The service used `__dirname/../../../..`, which points above the repo once tsup bundles to `dist/main`, so the real app never found the worker. It now walks up to the folder holding the OCR assets.
+- `--info` reports `runtimeReady` and `missingPackages` without importing torch. When PaddleOCR-VL cannot run, the OS engine answers and the result carries `fallbackReason`; the pill names the engine actually used and the reader shows a localized reason.
+- The workstation's "OCR text layer" tool uses Stirling and Tesseract, not this engine, so the PaddleOCR-VL badge was removed from it.
+
+## 10. OCRmyPDF as the Default Reader Engine (Verified 2026-11-01)
+
+The reader now offers OCRmyPDF (default) and PaddleOCR-VL. Windows OCR stays a fallback and is never selectable. Hub results are in `docs/features/Stirling-PDF.md`.
+
+### A. How the worker runs
+
+`assets/ocr/ocrmypdf_worker.py` receives a temporary page image rendered by `pdftoppm` at 300 DPI, so it never opens the source PDF. OCRmyPDF's output PDF stays in a temporary folder that is deleted after the page.
+
+- **Verified:** the PDF text layer stores each Arabic word reversed in `pdftotext -bbox` output, while plain `pdftotext` is correct. The worker therefore reads Tesseract's hOCR from OCRmyPDF's kept temporary files. This depends on OCRmyPDF's temporary layout, so the version is pinned.
+- **Verified:** Tesseract's default segmentation splits this book's verse into hemistich blocks (letter CER about 70%). `--psm 4` at 300 DPI brought it to about 30%. The worker uses it for Arabic only, so two-column Arabic prose would read across columns (assumption, not tested). English keeps the default so columns still split.
+- `auto` asks Tesseract's OSD for the script: Arabic gives `ara`, Latin gives `eng`, anything else gives `ara+eng`.
+- OCRmyPDF refuses images with an alpha channel, so the worker flattens them first.
+
+### B. Measured in the real app (throwaway profile, Ryzen 7 PRO 5750G, CPU only)
+
+Each engine ran the same two image-only pages in both UI languages; text was identical across UI languages for each engine. Arabic scores use the hand transcription of page 12, numerals removed.
+
+| Engine | Page | Time | Peak memory | Quality |
+|---|---|---|---|---|
+| OCRmyPDF | English | 5.6 s | 133 MB | 376 of 376 words, no recognition errors found; running header placed last |
+| OCRmyPDF | Arabic verse | 7.3-8.6 s | 188 MB | letter CER 27.3%, WER 68.2%, 189 of 285 marks, 148 of 211 words (words run together) |
+| PaddleOCR-VL | English | 290-310 s | 2.4 GB | 374 of 376 words |
+| PaddleOCR-VL | Arabic verse | 379-394 s | 2.2 GB | letter CER 25.9%, WER 55.0%, 158 of 285 marks, 212 of 211 words |
+
+Memory is the sampled total for Python and Tesseract processes. The PaddleOCR-VL figures match its earlier bfloat16 runs; the precision used was not logged here.
+
+**Superseded in part:** section 9 reports 12.5% letter CER for PaddleOCR-VL from a direct worker run on a PyMuPDF-rendered image. This run through the real app scored 25.9%, and its text contains repeated invented number rows such as `1VV`, which the scorer does not remove. The cause of the difference is **not established**. Treat Arabic accuracy for PaddleOCR-VL as 13-26% on this page. Reading order was right to left, row by row, with both engines.
+
+### C. Differences between the engines
+
+| | OCRmyPDF | PaddleOCR-VL |
+|---|---|---|
+| Word boxes | Real, from hOCR | Estimated |
+| Confidence | Per word | None |
+| Tables | None | Detected |
+| Markdown tab | Plain text | Formatted |
+| Model card and download | Not shown | Shown |
+
+### D. Behaviour
+
+- The choice is stored in `app_settings` under `ocr.engine.v1`. Unknown values fall back to OCRmyPDF. Verified across an app restart.
+- An unavailable engine is disabled in the pill and the inspector with a localized reason. Verified with a venv lacking both engines, in both UI languages.
+- A failed or unavailable engine falls back only to Windows OCR, never to the other engine. The toast names the chosen engine, the pill shows Windows OCR beside the word count, and the inspector shows which engine read the page.
+
+### E. Not verified
+
+Packaged build (engine paths resolve under the project folder only); tables, formulas and handwriting; two-column pages in OCRmyPDF; a missing `tesseract` or language file in the real app (covered by unit tests only); the whole-book action with OCRmyPDF.

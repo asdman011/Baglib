@@ -1,8 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execFile, spawn } from 'child_process';
+import { execFile, spawn, ChildProcess } from 'child_process';
 import {
+  DEFAULT_OCR_ENGINE,
+  OcrEngineId,
+  OcrFallbackReason,
   OcrPageResult,
   OcrDocumentResult,
   OcrLanguage,
@@ -19,9 +22,24 @@ import { EmbeddedMetadataExtractor } from '../metadata/embedded-metadata.extract
 import { getDatabase } from '../../database/connection';
 import { ContentFtsRepository } from '../../database/repositories/content-fts.repository';
 
+// A dense page takes minutes on CPU; this only stops a hung worker.
+const PADDLE_PAGE_TIMEOUT_MS = 20 * 60 * 1000;
+const OCRMYPDF_PAGE_TIMEOUT_MS = 5 * 60 * 1000;
+// Tesseract reads Arabic far better at 300 DPI; PaddleOCR-VL resizes its input to about 1 MP anyway.
+const OCR_RENDER_DPI: Record<OcrEngineId, number> = { ocrmypdf: 300, paddleocr_vl: 200 };
+
+class OcrEngineUnavailableError extends Error {
+  constructor(public readonly reason: OcrFallbackReason, public readonly missingPackages: string[] = []) {
+    super(reason);
+  }
+}
+
 export class OcrService {
   private static instance: OcrService;
   private tempDir: string;
+  // A PaddleOCR-VL worker holds about 4 GB, so pages run one at a time.
+  private workerQueue: Promise<unknown> = Promise.resolve();
+  private activeWorker: ChildProcess | null = null;
 
   private constructor() {
     this.tempDir = path.join(os.tmpdir(), 'baglib-ocr');
@@ -49,10 +67,25 @@ export class OcrService {
   }
 
   /**
+   * Finds the folder holding the OCR assets. The depth of __dirname differs between
+   * the tsup bundle (dist/main) and the sources tests run from.
+   */
+  private getProjectRoot(): string {
+    let dir = __dirname;
+    for (;;) {
+      if (fs.existsSync(path.join(dir, 'assets', 'ocr', 'paddle_vl_worker.py'))) return dir;
+      const parent = path.dirname(dir);
+      if (parent === dir) return process.cwd();
+      dir = parent;
+    }
+  }
+
+  /**
    * Resolves the isolated Python executable for Baglib PDF/OCR tools.
    */
   private getPythonPath(): string {
-    const root = path.resolve(__dirname, '../../../..');
+    if (process.env.BAGLIB_OCR_PYTHON) return process.env.BAGLIB_OCR_PYTHON;
+    const root = this.getProjectRoot();
     const venvPythonWin = path.join(root, '.baglib-data', 'pdf-engine', 'venv', 'Scripts', 'python.exe');
     if (fs.existsSync(venvPythonWin)) return venvPythonWin;
     const venvPythonUnix = path.join(root, '.baglib-data', 'pdf-engine', 'venv', 'bin', 'python');
@@ -64,16 +97,59 @@ export class OcrService {
    * Resolves the path to the PaddleOCR-VL-1.6 inference worker script.
    */
   private getPaddleWorkerPath(): string {
-    const root = path.resolve(__dirname, '../../../..');
-    return path.join(root, 'assets', 'ocr', 'paddle_vl_worker.py');
+    return path.join(this.getProjectRoot(), 'assets', 'ocr', 'paddle_vl_worker.py');
+  }
+
+  private getOcrmypdfWorkerPath(): string {
+    return path.join(this.getProjectRoot(), 'assets', 'ocr', 'ocrmypdf_worker.py');
+  }
+
+  private getEngineRoot(): string {
+    return path.join(this.getProjectRoot(), '.baglib-data', 'pdf-engine');
   }
 
   /**
    * Resolves the path to the PaddleOCR-VL-1.6 downloader script.
    */
   private getPaddleDownloaderPath(): string {
-    const root = path.resolve(__dirname, '../../../..');
-    return path.join(root, 'assets', 'ocr', 'download_paddle_vl.py');
+    return path.join(this.getProjectRoot(), 'assets', 'ocr', 'download_paddle_vl.py');
+  }
+
+  /**
+   * Resolves Poppler's page rasterizer from the PDF engine, or PATH on other setups.
+   */
+  private getPdftoppmPath(): string | null {
+    const popplerRoot = path.join(this.getProjectRoot(), '.baglib-data', 'pdf-engine', 'poppler');
+    if (fs.existsSync(popplerRoot)) {
+      for (const version of fs.readdirSync(popplerRoot)) {
+        const candidate = path.join(popplerRoot, version, 'Library', 'bin', 'pdftoppm.exe');
+        if (fs.existsSync(candidate)) return candidate;
+      }
+    }
+    return process.platform === 'win32' ? null : 'pdftoppm';
+  }
+
+  /**
+   * Renders one document page to a temporary PNG, or null when it cannot be rendered.
+   */
+  private renderPdfPage(pdfPath: string, pageNumber: number, dpi: number): Promise<string | null> {
+    const pdftoppm = this.getPdftoppmPath();
+    if (!pdftoppm) return Promise.resolve(null);
+
+    const prefix = path.join(this.tempDir, `page-${process.pid}-${Date.now()}-${pageNumber}`);
+    const page = String(pageNumber);
+    return new Promise(resolve => {
+      execFile(
+        pdftoppm,
+        ['-png', '-r', String(dpi), '-f', page, '-l', page, '-singlefile', pdfPath, prefix],
+        { windowsHide: true, timeout: 120000 },
+        error => {
+          const output = `${prefix}.png`;
+          if (error) console.warn('[OcrService] pdftoppm failed:', error.message);
+          resolve(!error && fs.existsSync(output) ? output : null);
+        }
+      );
+    });
   }
 
   /**
@@ -138,9 +214,47 @@ export class OcrService {
    * Checks whether the PaddleOCR-VL-1.6 local runtime is available.
    */
   public isPaddleOcrSupported(): boolean {
-    const worker = this.getPaddleWorkerPath();
+    return this.canStartWorker(this.getPaddleWorkerPath());
+  }
+
+  private canStartWorker(worker: string): boolean {
     const python = this.getPythonPath();
     return fs.existsSync(worker) && (python === 'python' || fs.existsSync(python));
+  }
+
+  /**
+   * Both selectable engines, with what each still needs before it can run.
+   */
+  public getEngines(): Promise<OcrEngineInfo[]> {
+    return Promise.all([this.getOcrmypdfInfo(), this.getEngineInfo()]);
+  }
+
+  public async getOcrmypdfInfo(): Promise<OcrEngineInfo> {
+    const worker = this.getOcrmypdfWorkerPath();
+    if (this.canStartWorker(worker)) {
+      try {
+        const output = await new Promise<string>((resolve, reject) => {
+          execFile(this.getPythonPath(), [worker, '--info', '--engine-root', this.getEngineRoot()], { windowsHide: true, timeout: 15000 }, (err, stdout) => {
+            if (err) reject(err); else resolve(stdout);
+          });
+        });
+        return JSON.parse(output.trim()) as OcrEngineInfo;
+      } catch (e) {
+        console.warn('[OcrService] Could not query OCRmyPDF worker info:', e);
+      }
+    }
+    return {
+      id: 'ocrmypdf',
+      name: 'OCRmyPDF',
+      version: '',
+      parameters: 'Tesseract 5',
+      device: 'CPU',
+      modelPath: path.join(this.getEngineRoot(), 'ocr-best'),
+      isDownloaded: false,
+      runtimeReady: false,
+      missingPackages: ['python'],
+      supportedLanguages: ['ar', 'en', 'ar-SA', 'en-US', 'auto'],
+    };
   }
 
   /**
@@ -162,39 +276,93 @@ export class OcrService {
         console.warn('[OcrService] Could not query PaddleOCR-VL worker info:', e);
       }
     }
+    return this.getUnavailableEngineInfo();
+  }
+
+  /**
+   * Engine details for when the worker cannot be reached at all.
+   */
+  public getUnavailableEngineInfo(): OcrEngineInfo {
     return {
       id: 'paddleocr_vl',
       name: 'PaddleOCR-VL-1.6',
       version: '1.6.0',
       parameters: '0.9B',
-      device: 'CPU (AVX2, 12 Threads)',
+      device: 'CPU (AVX2, 8 Threads)',
       modelPath: '.baglib-data/models/paddleocr-vl',
       isDownloaded: false,
+      runtimeReady: false,
+      missingPackages: ['python'],
       supportedLanguages: ['ar', 'en', 'ar-SA', 'en-US', 'auto'],
     };
   }
 
   /**
-   * Executes PaddleOCR-VL-1.6 via the local Python CPU worker.
+   * Stops the worker in flight so it does not outlive the app.
    */
-  private executePaddleOcr(
+  public shutdown(): void {
+    this.activeWorker?.kill();
+    this.activeWorker = null;
+  }
+
+  /**
+   * Executes the chosen engine via its local Python worker, one page at a time.
+   */
+  private executeWorker(
+    engine: OcrEngineId,
     imagePath: string,
     language: OcrLanguage,
-    pageNumber: number
+    pageNumber: number,
+    dpi: number
+  ): Promise<OcrPageResult> {
+    const run = () => this.runWorker(engine, imagePath, language, pageNumber, dpi);
+    const result = this.workerQueue.then(run, run);
+    this.workerQueue = result.catch(() => undefined);
+    return result;
+  }
+
+  private getWorkerArguments(
+    engine: OcrEngineId,
+    imagePath: string,
+    language: OcrLanguage,
+    pageNumber: number,
+    dpi: number
+  ): string[] {
+    const common = ['--image', imagePath, '--language', language, '--page', String(pageNumber)];
+    return engine === 'ocrmypdf'
+      ? [this.getOcrmypdfWorkerPath(), ...common, '--dpi', String(dpi), '--engine-root', this.getEngineRoot()]
+      : [this.getPaddleWorkerPath(), ...common];
+  }
+
+  private runWorker(
+    engine: OcrEngineId,
+    imagePath: string,
+    language: OcrLanguage,
+    pageNumber: number,
+    dpi: number
   ): Promise<OcrPageResult> {
     return new Promise((resolve, reject) => {
-      const python = this.getPythonPath();
-      const worker = this.getPaddleWorkerPath();
-      execFile(
-        python,
-        [worker, '--image', imagePath, '--language', language, '--page', String(pageNumber)],
+      this.activeWorker = execFile(
+        this.getPythonPath(),
+        this.getWorkerArguments(engine, imagePath, language, pageNumber, dpi),
         {
           windowsHide: true,
-          timeout: 60000,
-          maxBuffer: 10 * 1024 * 1024,
+          timeout: engine === 'ocrmypdf' ? OCRMYPDF_PAGE_TIMEOUT_MS : PADDLE_PAGE_TIMEOUT_MS,
+          maxBuffer: 20 * 1024 * 1024,
         },
         (error, stdout, stderr) => {
+          this.activeWorker = null;
           if (error) {
+            let code: { error?: string; missingPackages?: string[] } = {};
+            try {
+              code = JSON.parse(stdout.trim());
+            } catch {
+              // The worker died before it could report a reason
+            }
+            if (code.error === 'runtime-missing' || code.error === 'model-missing') {
+              reject(new OcrEngineUnavailableError(code.error, code.missingPackages));
+              return;
+            }
             reject(new Error(stderr || stdout || error.message));
             return;
           }
@@ -209,12 +377,12 @@ export class OcrService {
               words: data.words || [],
               width: data.width || 800,
               height: data.height || 1100,
-              engine: 'paddleocr_vl',
+              engine,
               durationMs: 0,
               tables: data.tables || [],
             });
           } catch (err) {
-            reject(new Error(`Failed to parse PaddleOCR-VL output: ${err}`));
+            reject(new Error(`Failed to parse ${engine} output: ${err}`));
           }
         }
       );
@@ -287,10 +455,10 @@ $langs | ForEach-Object { $_.LanguageTag }
   }
 
   /**
-   * Checks if native OS OCR or local PaddleOCR-VL is supported on the current machine.
+   * Checks if native OS OCR or a local engine is supported on the current machine.
    */
   public isSupported(): boolean {
-    return this.isPaddleOcrSupported() || process.platform === 'win32' || process.platform === 'darwin';
+    return this.canStartWorker(this.getOcrmypdfWorkerPath()) || this.isPaddleOcrSupported() || process.platform === 'win32' || process.platform === 'darwin';
   }
 
   /**
@@ -299,7 +467,9 @@ $langs | ForEach-Object { $_.LanguageTag }
   public async recognizeImage(
     imageInput: string | Buffer,
     pageNumber: number = 1,
-    language: OcrLanguage = 'auto'
+    language: OcrLanguage = 'auto',
+    engine: OcrEngineId = DEFAULT_OCR_ENGINE,
+    dpi: number = OCR_RENDER_DPI[engine]
   ): Promise<OcrPageResult> {
     const startTime = Date.now();
     let tempFilePath: string | null = null;
@@ -327,30 +497,38 @@ $langs | ForEach-Object { $_.LanguageTag }
         resolvedPath = tempFilePath;
       }
 
-      // Priority 1: PaddleOCR-VL-1.6 (Sole/Default Local CPU Engine)
-      if (this.isPaddleOcrSupported()) {
+      // Priority 1: the engine the reader chose. Only the OS engine stands in for it,
+      // and the result always says so.
+      let fallbackReason: OcrFallbackReason = 'runtime-missing';
+      let missingPackages: string[] = ['python'];
+      const workerPath = engine === 'ocrmypdf' ? this.getOcrmypdfWorkerPath() : this.getPaddleWorkerPath();
+      if (this.canStartWorker(workerPath)) {
         try {
-          const result = await this.executePaddleOcr(resolvedPath, language, pageNumber);
+          const result = await this.executeWorker(engine, resolvedPath, language, pageNumber, dpi);
           if (result.words.length > 0 || result.text.trim().length > 0) {
             result.durationMs = Date.now() - startTime;
             return result;
           }
-          console.warn('[OcrService] PaddleOCR-VL returned empty text, falling back to OS engine');
-        } catch (paddleErr) {
-          console.warn('[OcrService] PaddleOCR-VL execution error, falling back to OS engine:', paddleErr);
+          fallbackReason = 'empty-result';
+          missingPackages = [];
+          console.warn(`[OcrService] ${engine} returned empty text, falling back to OS engine`);
+        } catch (workerErr) {
+          fallbackReason = workerErr instanceof OcrEngineUnavailableError ? workerErr.reason : 'engine-failed';
+          missingPackages = workerErr instanceof OcrEngineUnavailableError ? workerErr.missingPackages : [];
+          console.warn(`[OcrService] ${engine} execution error, falling back to OS engine:`, workerErr);
         }
       }
 
       if (process.platform === 'win32') {
         const result = await this.executeWindowsOcr(resolvedPath, language, pageNumber);
         result.durationMs = Date.now() - startTime;
-        return result;
+        return { ...result, requestedEngine: engine, fallbackReason, missingPackages };
       }
 
       if (process.platform === 'darwin') {
         const result = await this.executeMacosOcr(resolvedPath, language, pageNumber);
         result.durationMs = Date.now() - startTime;
-        return result;
+        return { ...result, requestedEngine: engine, fallbackReason, missingPackages };
       }
 
       // Fallback
@@ -363,6 +541,9 @@ $langs | ForEach-Object { $_.LanguageTag }
         height: 1100,
         engine: 'fallback_ocr',
         durationMs: Date.now() - startTime,
+        requestedEngine: engine,
+        fallbackReason,
+        missingPackages,
       };
     } finally {
       if (tempFilePath && fs.existsSync(tempFilePath)) {
@@ -535,17 +716,28 @@ try {
   public async recognizePdfPage(
     pdfPath: string,
     pageNumber: number,
-    language: OcrLanguage = 'auto'
+    language: OcrLanguage = 'auto',
+    engine: OcrEngineId = DEFAULT_OCR_ENGINE
   ): Promise<OcrPageResult> {
     if (!fs.existsSync(pdfPath)) {
       throw new Error(`PDF file not found: ${pdfPath}`);
     }
 
-    // Extract page image from PDF
+    // Every engine reads a temporary render, so nothing can write to the PDF itself.
+    const renderedPage = await this.renderPdfPage(pdfPath, pageNumber, OCR_RENDER_DPI[engine]);
+    if (renderedPage) {
+      try {
+        return await this.recognizeImage(renderedPage, pageNumber, language, engine);
+      } finally {
+        fs.rmSync(renderedPage, { force: true });
+      }
+    }
+
+    // Without Poppler, the nearest thing is the embedded image with this index
     const coverDetails = EmbeddedMetadataExtractor.extractPdfImage(pdfPath, pageNumber);
 
     if (coverDetails && coverDetails.coverBuffer && coverDetails.coverBuffer.length > 500) {
-      return this.recognizeImage(coverDetails.coverBuffer, pageNumber, language);
+      return this.recognizeImage(coverDetails.coverBuffer, pageNumber, language, engine);
     }
 
     return {
@@ -567,7 +759,7 @@ try {
     params: OcrRecognizeDocumentParams,
     onProgress?: (payload: OcrProgressPayload) => void
   ): Promise<OcrDocumentResult> {
-    const { filePath, bookId, startPage = 1, endPage = 10, language = 'auto', autoIndexFts = true } = params;
+    const { filePath, bookId, startPage = 1, endPage = 10, language = 'auto', autoIndexFts = true, engine = DEFAULT_OCR_ENGINE } = params;
     const startTime = Date.now();
 
     if (!fs.existsSync(filePath)) {
@@ -582,9 +774,9 @@ try {
       try {
         let pageResult: OcrPageResult;
         if (filePath.toLowerCase().endsWith('.pdf')) {
-          pageResult = await this.recognizePdfPage(filePath, current, language);
+          pageResult = await this.recognizePdfPage(filePath, current, language, engine);
         } else {
-          pageResult = await this.recognizeImage(filePath, current, language);
+          pageResult = await this.recognizeImage(filePath, current, language, engine);
         }
 
         pages.push(pageResult);

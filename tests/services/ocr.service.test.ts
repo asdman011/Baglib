@@ -5,6 +5,8 @@ import fs from 'fs';
 import os from 'os';
 import { execFile } from 'child_process';
 import { ocrService } from '../../src/main/services/ocr/ocr.service';
+import { readPreferredEngine, savePreferredEngine } from '../../src/main/services/ocr/ocr-preference';
+import { DEFAULT_OCR_ENGINE } from '../../src/shared/types/ocr';
 
 const runPowerShellScript = (script: string, timeout = 30000): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -47,6 +49,101 @@ describe('KEY-141 OcrService Integration & Recognition Engine', () => {
     assert.ok(Array.isArray(info.supportedLanguages));
     assert.ok(info.existingFilesCount !== undefined && info.existingFilesCount >= 13);
     assert.ok(info.downloadedMb !== undefined && info.downloadedMb > 0);
+  });
+
+  it('does not report the engine ready when the Python packages are absent', async () => {
+    const worker = path.resolve(__dirname, '../../assets/ocr/paddle_vl_worker.py');
+    const python = path.resolve(__dirname, '../../.baglib-data/pdf-engine/venv/Scripts/python.exe');
+    if (!fs.existsSync(python)) return;
+
+    // -S leaves site-packages off the import path, as on a venv without torch
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(python, ['-S', worker, '--info'], (error, out) => (error ? reject(error) : resolve(out)));
+    });
+    const info = JSON.parse(stdout);
+    assert.equal(info.runtimeReady, false);
+    assert.ok(info.missingPackages.includes('torch'));
+    assert.ok(info.missingPackages.includes('transformers'));
+  });
+
+  it('labels the OS engine and the reason when the worker cannot run', async () => {
+    if (process.platform !== 'win32') return;
+
+    const testImgPath = path.join(os.tmpdir(), `ocr_service_fallback_${Date.now()}.png`);
+    const safeImgPath = testImgPath.replace(/'/g, "''");
+    const previousPython = process.env.BAGLIB_OCR_PYTHON;
+    process.env.BAGLIB_OCR_PYTHON = path.join(os.tmpdir(), 'baglib-no-such-python.exe');
+
+    try {
+      await runPowerShellScript(`
+Add-Type -AssemblyName System.Drawing
+$bmp = New-Object System.Drawing.Bitmap 500, 150
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.Clear([System.Drawing.Color]::White)
+$font = New-Object System.Drawing.Font('Arial', 24, [System.Drawing.FontStyle]::Bold)
+$g.DrawString('Baglib OCR Engine', $font, [System.Drawing.Brushes]::Black, 20.0, 40.0)
+$bmp.Save('${safeImgPath}', [System.Drawing.Imaging.ImageFormat]::Png)
+$g.Dispose()
+$bmp.Dispose()
+`);
+      const info = await ocrService.getEngineInfo();
+      assert.equal(info.runtimeReady, false);
+      assert.deepEqual(info.missingPackages, ['python']);
+
+      const result = await ocrService.recognizeImage(testImgPath, 1, 'en-US');
+      assert.equal(result.engine, 'windows_media_ocr');
+      assert.equal(result.requestedEngine, 'ocrmypdf');
+      assert.equal(result.fallbackReason, 'runtime-missing');
+      assert.deepEqual(result.missingPackages, ['python']);
+      assert.ok(result.text.includes('Baglib'));
+
+      // Choosing PaddleOCR-VL must name PaddleOCR-VL, not move on to OCRmyPDF
+      const paddle = await ocrService.recognizeImage(testImgPath, 1, 'en-US', 'paddleocr_vl');
+      assert.equal(paddle.engine, 'windows_media_ocr');
+      assert.equal(paddle.requestedEngine, 'paddleocr_vl');
+    } finally {
+      if (previousPython === undefined) delete process.env.BAGLIB_OCR_PYTHON;
+      else process.env.BAGLIB_OCR_PYTHON = previousPython;
+      fs.rmSync(testImgPath, { force: true });
+    }
+  });
+
+  it('offers OCRmyPDF first and reports each engine separately', async () => {
+    const previousPython = process.env.BAGLIB_OCR_PYTHON;
+    process.env.BAGLIB_OCR_PYTHON = path.join(os.tmpdir(), 'baglib-no-such-python.exe');
+    try {
+      const engines = await ocrService.getEngines();
+      assert.deepEqual(engines.map(engine => engine.id), ['ocrmypdf', 'paddleocr_vl']);
+      assert.ok(engines.every(engine => !engine.runtimeReady));
+      assert.ok(engines.every(engine => engine.missingPackages.includes('python')));
+    } finally {
+      if (previousPython === undefined) delete process.env.BAGLIB_OCR_PYTHON;
+      else process.env.BAGLIB_OCR_PYTHON = previousPython;
+    }
+  });
+
+  it('defaults to OCRmyPDF and keeps a saved choice', () => {
+    const store = new Map<string, unknown>();
+    const settings = {
+      get: <T,>(key: string) => store.get(key) as T | undefined,
+      set: <T,>(key: string, value: T) => { store.set(key, value); },
+    };
+
+    assert.equal(DEFAULT_OCR_ENGINE, 'ocrmypdf');
+    assert.equal(readPreferredEngine(settings), 'ocrmypdf');
+
+    savePreferredEngine(settings, 'paddleocr_vl');
+    assert.equal(readPreferredEngine(settings), 'paddleocr_vl');
+
+    assert.throws(() => savePreferredEngine(settings, 'tesseract'));
+    assert.equal(readPreferredEngine(settings), 'paddleocr_vl');
+
+    store.set('ocr.engine.v1', 'retired-engine');
+    assert.equal(readPreferredEngine(settings), 'ocrmypdf');
+  });
+
+  it('falls back to the default when settings cannot be read', () => {
+    assert.equal(readPreferredEngine({ get: () => { throw new Error('no database'); } }), 'ocrmypdf');
   });
 
   it('detects OS support correctly', () => {
@@ -97,7 +194,7 @@ Write-Output 'OK'
       const result = await ocrService.recognizeImage(testImgPath, 1, 'en-US');
 
       assert.equal(result.pageNumber, 1);
-      assert.ok(result.engine === 'paddleocr_vl' || result.engine === 'windows_media_ocr');
+      assert.ok(result.engine === 'ocrmypdf' || result.engine === 'windows_media_ocr');
       assert.ok(result.width >= 500);
       assert.ok(result.height >= 150);
       assert.ok(result.text.includes('Baglib'), `Expected 'Baglib' in '${result.text}'`);
@@ -156,7 +253,7 @@ Write-Output 'OK'
       const result = await ocrService.recognizeImage(testImgPath, 1, 'ar-SA');
 
       assert.equal(result.pageNumber, 1);
-      assert.ok(result.engine === 'paddleocr_vl' || result.engine === 'windows_media_ocr');
+      assert.ok(result.engine === 'ocrmypdf' || result.engine === 'windows_media_ocr');
       assert.ok(result.text.includes('مكتبة') || result.text.includes('بغداد'));
       assert.ok(result.words.length >= 1);
     } finally {

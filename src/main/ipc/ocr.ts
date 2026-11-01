@@ -1,9 +1,10 @@
 import { ipcMain } from 'electron';
 import { ocrService } from '../services/ocr/ocr.service';
+import { isOcrEngine, readPreferredEngine, savePreferredEngine } from '../services/ocr/ocr-preference';
+import { settingsRepository } from '../database/repositories/settings.repository';
 import {
   OcrRecognizePageParams,
   OcrRecognizeDocumentParams,
-  OcrLanguage,
 } from '../../shared/types/ocr';
 
 export function registerOcrIpc(): void {
@@ -21,18 +22,16 @@ export function registerOcrIpc(): void {
     try {
       return await ocrService.getEngineInfo();
     } catch {
-      return {
-        id: 'paddleocr_vl',
-        name: 'PaddleOCR-VL-1.6',
-        version: '1.6.0',
-        parameters: '0.9B',
-        device: 'CPU (AVX2, 12 Threads)',
-        modelPath: '.baglib-data/models/paddleocr-vl',
-        isDownloaded: false,
-        supportedLanguages: ['ar', 'en', 'ar-SA', 'en-US', 'auto'],
-      };
+      return ocrService.getUnavailableEngineInfo();
     }
   });
+
+  // Every selectable engine, with what each still needs
+  ipcMain.handle('ocr:get-engines', () => ocrService.getEngines());
+
+  ipcMain.handle('ocr:get-preferred-engine', () => readPreferredEngine(settingsRepository));
+
+  ipcMain.handle('ocr:set-preferred-engine', (_, engine: unknown) => savePreferredEngine(settingsRepository, engine));
 
   // Download PaddleOCR-VL-1.6 model weights with streaming progress events
   ipcMain.handle('ocr:download-model', async (event) => {
@@ -63,17 +62,18 @@ export function registerOcrIpc(): void {
     async (_, params: OcrRecognizePageParams) => {
       try {
         const { imageBufferOrBase64, filePath, pageNumber = 1, language = 'auto' } = params;
+        const engine = isOcrEngine(params.engine) ? params.engine : readPreferredEngine(settingsRepository);
 
         if (imageBufferOrBase64) {
-          return await ocrService.recognizeImage(imageBufferOrBase64, pageNumber, language);
+          return await ocrService.recognizeImage(imageBufferOrBase64, pageNumber, language, engine);
         }
 
         if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
-          return await ocrService.recognizePdfPage(filePath, pageNumber, language);
+          return await ocrService.recognizePdfPage(filePath, pageNumber, language, engine);
         }
 
         if (filePath) {
-          return await ocrService.recognizeImage(filePath, pageNumber, language);
+          return await ocrService.recognizeImage(filePath, pageNumber, language, engine);
         }
 
         throw new Error('Neither imageBufferOrBase64 nor filePath was provided');
@@ -98,7 +98,8 @@ export function registerOcrIpc(): void {
     'ocr:recognize-document',
     async (event, params: OcrRecognizeDocumentParams) => {
       try {
-        return await ocrService.recognizeDocument(params, payload => {
+        const engine = isOcrEngine(params.engine) ? params.engine : readPreferredEngine(settingsRepository);
+        return await ocrService.recognizeDocument({ ...params, engine }, payload => {
           if (!event.sender.isDestroyed()) {
             event.sender.send('ocr:progress', payload);
           }
