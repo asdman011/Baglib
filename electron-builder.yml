@@ -73,9 +73,28 @@ mac:
     - dmg
     - zip
 win:
+  icon: assets/installer/icon.ico
   target:
     - nsis
     - zip
+nsis:
+  oneClick: false
+  # Leaving perMachine unset is what shows the "only me or all users" page.
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  multiLanguageInstaller: true
+  displayLanguageSelector: true
+  installerLanguages:
+    - en_US
+    - ar_SA
+  runAfterFinish: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Baglib
+  deleteAppDataOnUninstall: false
+  include: assets/installer/installer.nsh
+  # The Arabic for the template's install-mode page replaces its English, which NSIS reports as a warning.
+  warningsAsErrors: false
 
 fileAssociations:
   - ext: epub
