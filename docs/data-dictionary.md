@@ -489,3 +489,46 @@ Isolated read-only partition containing the complete classical and modern Arabic
 
 ### 4.3 `poems_fts` (Virtual FTS5 Table)
 FTS5 full-text index on normalized title, poet name, and poem verse content for instant diacritic-insensitive search.
+
+## 5. Knowledge Cards and Spaced Repetition (ADR-006, migrations 018 and 019)
+
+These tables live in the main library database. A card is a `knowledge` row with `knowledge_type = 'card'`. `work_id` is set only for cards from a library book.
+
+Deleting a book never deletes knowledge. A `BEFORE DELETE` trigger on `work` detaches `knowledge` and `annotations` rows and copies the title into `former_work_title`. `annotations.book_id` is nullable from migration 019, and notes, highlights and cards keep their details, tags, comments and review history.
+
+### 5.1 `card_detail`
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `knowledge_id` | TEXT | PK, FK(`knowledge.id`) ON DELETE CASCADE | Parent knowledge row |
+| `front` | TEXT | NOT NULL | Card prompt. Sacred text is a verbatim copy |
+| `back` | TEXT | NOT NULL | Card answer. Sacred text is a verbatim copy |
+| `source_kind` | TEXT | NOT NULL | `book`, `quran`, `hadith`, `poetry`, `note`, `term` or `person` |
+| `source_ref` | TEXT | NULL | Stable reference, such as `quran:2:255` |
+| `source_label` | TEXT | NULL | Attribution shown on the card |
+| `language` | TEXT | NULL | Language code |
+
+### 5.2 `srs_state`
+Exists only for cards added to memorization.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `knowledge_id` | TEXT | PK, FK(`knowledge.id`) ON DELETE CASCADE | Scheduled card |
+| `state` | TEXT | NOT NULL | `new`, `learning`, `review`, `relearning` or `suspended` |
+| `due_at` | TEXT | NOT NULL, indexed | Next review time |
+| `stability` | REAL | NULL | FSRS stability |
+| `difficulty` | REAL | NULL | FSRS difficulty |
+| `reps` | INTEGER | NOT NULL, default 0 | Completed reviews |
+| `lapses` | INTEGER | NOT NULL, default 0 | Times forgotten |
+| `last_review` | TEXT | NULL | Latest review time |
+
+### 5.3 `srs_review_log`
+Append-only review history.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | TEXT | PK | Review id |
+| `knowledge_id` | TEXT | NOT NULL, FK(`knowledge.id`) ON DELETE CASCADE, indexed | Reviewed card |
+| `reviewed_at` | TEXT | NOT NULL, indexed | Review time |
+| `rating` | INTEGER | NOT NULL | 1 again, 2 hard, 3 good, 4 easy |
+| `duration_ms` | INTEGER | NULL | Time spent |
+| `state_before` | TEXT | NULL | State before this review |
