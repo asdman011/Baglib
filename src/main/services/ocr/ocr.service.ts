@@ -21,6 +21,7 @@ import { cleanOcrText, resolveOcrLanguage } from '../../../shared/utils/ocr-clea
 import { EmbeddedMetadataExtractor } from '../metadata/embedded-metadata.extractor';
 import { getDatabase } from '../../database/connection';
 import { ContentFtsRepository } from '../../database/repositories/content-fts.repository';
+import { bundledPdfEngineRoot, pdfEnginePython } from '../pdf-editor/engine-root';
 
 // A dense page takes minutes on CPU; this only stops a hung worker.
 const PADDLE_PAGE_TIMEOUT_MS = 20 * 60 * 1000;
@@ -85,41 +86,43 @@ export class OcrService {
    */
   private getPythonPath(): string {
     if (process.env.BAGLIB_OCR_PYTHON) return process.env.BAGLIB_OCR_PYTHON;
-    const root = this.getProjectRoot();
-    const venvPythonWin = path.join(root, '.baglib-data', 'pdf-engine', 'venv', 'Scripts', 'python.exe');
-    if (fs.existsSync(venvPythonWin)) return venvPythonWin;
-    const venvPythonUnix = path.join(root, '.baglib-data', 'pdf-engine', 'venv', 'bin', 'python');
-    if (fs.existsSync(venvPythonUnix)) return venvPythonUnix;
-    return 'python';
+    const python = pdfEnginePython(this.getEngineRoot());
+    return fs.existsSync(python) ? python : 'python';
+  }
+
+  /** Installed apps carry the workers in resources, outside the asar archive. */
+  private getOcrAssetPath(name: string): string {
+    const bundled = path.join(process.resourcesPath ?? '', 'ocr', name);
+    return process.resourcesPath && fs.existsSync(bundled) ? bundled : path.join(this.getProjectRoot(), 'assets', 'ocr', name);
   }
 
   /**
    * Resolves the path to the PaddleOCR-VL-1.6 inference worker script.
    */
   private getPaddleWorkerPath(): string {
-    return path.join(this.getProjectRoot(), 'assets', 'ocr', 'paddle_vl_worker.py');
+    return this.getOcrAssetPath('paddle_vl_worker.py');
   }
 
   private getOcrmypdfWorkerPath(): string {
-    return path.join(this.getProjectRoot(), 'assets', 'ocr', 'ocrmypdf_worker.py');
+    return this.getOcrAssetPath('ocrmypdf_worker.py');
   }
 
   private getEngineRoot(): string {
-    return path.join(this.getProjectRoot(), '.baglib-data', 'pdf-engine');
+    return bundledPdfEngineRoot() ?? path.join(this.getProjectRoot(), '.baglib-data', 'pdf-engine');
   }
 
   /**
    * Resolves the path to the PaddleOCR-VL-1.6 downloader script.
    */
   private getPaddleDownloaderPath(): string {
-    return path.join(this.getProjectRoot(), 'assets', 'ocr', 'download_paddle_vl.py');
+    return this.getOcrAssetPath('download_paddle_vl.py');
   }
 
   /**
    * Resolves Poppler's page rasterizer from the PDF engine, or PATH on other setups.
    */
   private getPdftoppmPath(): string | null {
-    const popplerRoot = path.join(this.getProjectRoot(), '.baglib-data', 'pdf-engine', 'poppler');
+    const popplerRoot = path.join(this.getEngineRoot(), 'poppler');
     if (fs.existsSync(popplerRoot)) {
       for (const version of fs.readdirSync(popplerRoot)) {
         const candidate = path.join(popplerRoot, version, 'Library', 'bin', 'pdftoppm.exe');

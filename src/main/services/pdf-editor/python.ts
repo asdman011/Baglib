@@ -10,6 +10,7 @@ export interface PdfEngineTools {
   veraPdfJar?: string;
   stirlingJar?: string;
   stirlingUrl?: string;
+  stirlingWorkDir?: string;
   preferStirling?: boolean;
 }
 

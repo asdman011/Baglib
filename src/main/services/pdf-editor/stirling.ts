@@ -235,7 +235,7 @@ export function probeExternalCapabilities(): StirlingExternalCapabilities {
         if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
       } catch { /* ignore */ }
     }
-    const engineRoot = path.resolve('.baglib-data', 'pdf-engine');
+    const engineRoot = pdfEngineRoot();
     const localDirs = [
       path.join(engineRoot, 'bin'),
       path.join(engineRoot, 'tesseract'),
@@ -304,8 +304,8 @@ export function probeExternalCapabilities(): StirlingExternalCapabilities {
 
   const pdftohtml = findBinary(isWin ? ['pdftohtml.exe'] : ['pdftohtml']);
 
-  const engineRoot = path.resolve('.baglib-data', 'pdf-engine');
-  const ocrmypdf = findBinary(isWin ? ['ocrmypdf.exe'] : ['ocrmypdf'], [path.join(engineRoot, 'venv', isWin ? 'Scripts/ocrmypdf.exe' : 'bin/ocrmypdf')]);
+  const engineRoot = pdfEngineRoot();
+  const ocrmypdf = findBinary(isWin ? ['ocrmypdf.exe'] : ['ocrmypdf'], [path.join(engineRoot, 'venv', isWin ? 'Scripts/ocrmypdf.exe' : 'bin/ocrmypdf'), path.join(engineRoot, 'python', 'ocrmypdf.exe')]);
 
   // Tesseract also reads its hocr config from this folder, so language files alone are not enough.
   const tessdata = fs.existsSync(path.join(engineRoot, 'ocr-best', 'configs', 'hocr')) ? path.join(engineRoot, 'ocr-best') : undefined;
@@ -648,6 +648,7 @@ export const defaultStirlingSidecar = new StirlingSidecarService();
  * so streaming `java.util.zip.ZipOutputStream` archives (with bit 3 Data Descriptors) work reliably.
  */
 import { STIRLING_DISABLED_ENDPOINT, isEmptyZipBytes, isPdfBytes, isZipBytes } from '../../../shared/stirling-contract';
+import { pdfEngineRoot } from './engine-root';
 import { markdownHasText, textToHtml, textToMarkdown } from './text-export';
 import { engineRedactionBoxes, planRedaction, type RedactionPageGeometry, type RedactionRegion } from '../../../shared/redaction-plan';
 import { runPdfHelper } from './view-cache-runtime';
@@ -818,7 +819,7 @@ export async function resolveStirlingEndpoint(tools: PdfEngineTools): Promise<st
   if (java && stirlingJar && fs.existsSync(java) && fs.existsSync(stirlingJar)) {
     const root = path.resolve('.baglib-data', 'pdf-engine');
     const stirlingDir = path.join(root, 'stirling');
-    const workDir = fs.existsSync(stirlingDir) ? stirlingDir : path.dirname(stirlingJar);
+    const workDir = tools.stirlingWorkDir ?? (fs.existsSync(stirlingDir) ? stirlingDir : path.dirname(stirlingJar));
     return defaultStirlingSidecar.ensureStarted({
       javaPath: java,
       jarPath: stirlingJar,

@@ -13,6 +13,47 @@ extraResources:
       - "!**/__pycache__/**"
   - from: assets/native-share.ps1
     to: native-share.ps1
+  - from: assets/ocr
+    to: ocr
+    filter:
+      - "**/*.py"
+      - "!**/__pycache__/**"
+  # Engine tools come from scripts/setup-pdf-engine.ps1. Each one runs from any folder.
+  - from: .baglib-data/pdf-engine/java/jdk-25.0.5+8-jre
+    to: pdf-engine/java/jdk-25.0.5+8-jre
+  - from: .baglib-data/pdf-engine/stirling
+    to: pdf-engine/stirling
+    filter:
+      - Stirling-PDF-server.jar
+  - from: .baglib-data/pdf-engine/verapdf
+    to: pdf-engine/verapdf
+  - from: .baglib-data/pdf-engine/poppler
+    to: pdf-engine/poppler
+  - from: .baglib-data/pdf-engine/ghostscript
+    to: pdf-engine/ghostscript
+    filter:
+      - "**/*"
+      - "!uninstgs.exe"
+      - "!doc/**"
+      - "!examples/**"
+  - from: .baglib-data/pdf-engine/tesseract
+    to: pdf-engine/tesseract
+    filter:
+      - "**/*"
+      - "!tessdata/**"
+      - "!doc/**"
+      - "!*-training.exe"
+      - "!*train*.exe"
+      - "!winpath.exe"
+      - "!tesseract-uninstall.exe"
+  - from: .baglib-data/pdf-engine/ocr-best
+    to: pdf-engine/ocr-best
+  - from: .baglib-data/pdf-engine/tessdata
+    to: pdf-engine/tessdata
+  - from: .baglib-data/pdf-engine/weasyprint
+    to: pdf-engine/weasyprint
+  - from: .baglib-data/pdf-engine/python
+    to: pdf-engine/python
 directories:
   output: release
 files:

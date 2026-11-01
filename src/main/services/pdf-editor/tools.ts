@@ -4,11 +4,12 @@ import { app } from 'electron';
 import { settingsRepository } from '../../database/repositories/settings.repository';
 import type { PdfEngineTools } from './python';
 import { selectNewestStirlingJar } from './stirling';
+import { bundledPdfEngineRoot, pdfEnginePython } from './engine-root';
 
 export function pdfEngineTools(): PdfEngineTools {
   const config = settingsRepository.get<Partial<PdfEngineTools>>('pdf-editor.engine.v1') || {};
-  const root = app.isPackaged ? path.join(app.getPath('userData'), 'pdf-editor', 'runtime') : path.join(app.getAppPath(), '.baglib-data', 'pdf-engine');
-  const python = path.join(root, 'venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+  const root = bundledPdfEngineRoot() ?? (app.isPackaged ? path.join(app.getPath('userData'), 'pdf-editor', 'runtime') : path.join(app.getAppPath(), '.baglib-data', 'pdf-engine'));
+  const python = pdfEnginePython(root);
   const javaRoot = path.join(root, 'java');
   const javaFolders = fs.existsSync(javaRoot)
     ? fs.readdirSync(javaRoot).filter(name => fs.existsSync(path.join(javaRoot, name, 'bin', process.platform === 'win32' ? 'java.exe' : 'java')))
@@ -32,6 +33,8 @@ export function pdfEngineTools(): PdfEngineTools {
     veraPdfJar: config.veraPdfJar || (veraPdfJar ? path.join(validator, 'bin', veraPdfJar) : undefined),
     stirlingJar: config.stirlingJar || process.env.BAGLIB_STIRLING_JAR || discoveredStirlingJar,
     stirlingUrl: config.stirlingUrl || process.env.BAGLIB_STIRLING_URL,
+    // An installed app's resources may be read-only, and Stirling writes config and logs beside itself.
+    stirlingWorkDir: app.isPackaged ? path.join(app.getPath('userData'), 'pdf-editor', 'stirling') : undefined,
     preferStirling: true,
   };
 }
