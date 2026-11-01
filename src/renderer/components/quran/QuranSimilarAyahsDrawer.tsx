@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { CopyCheck, X, BookOpen, Copy, ArrowRight, ArrowLeft, Layers, Percent } from 'lucide-react';
+import { CopyCheck, X, BookOpen, Copy } from 'lucide-react';
 import type { QuranSimilarAyah } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 
@@ -90,7 +90,9 @@ export function QuranSimilarAyahsDrawer({
       role="dialog"
       aria-modal="true"
       aria-label={t('quranSimilarAyahs')}
-      className="fixed inset-y-0 end-0 z-50 w-full sm:w-96 md:w-[460px] bg-surface/95 backdrop-blur-md border-s border-subtle shadow-2xl flex flex-col transition-transform duration-300"
+      dir={dir}
+      data-quran-similar-drawer
+      className="absolute inset-y-0 end-0 z-50 w-full sm:w-96 md:w-[460px] bg-surface/95 backdrop-blur-md border-s border-subtle shadow-2xl flex flex-col transition-transform duration-300"
       onKeyDown={e => {
         if (e.key === 'Escape') {
           e.stopPropagation();

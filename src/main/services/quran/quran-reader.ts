@@ -3,13 +3,18 @@ import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, mkdir, rename, rm, realpath, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseHTML } from 'linkedom';
-import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit, QuranSimilarAyah, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
+import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranDivision, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit, QuranSimilarAyah, QuranStructure, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
 import { normalizeQuranSearch } from './qul-catalog';
 import { readerPreset, readerPresets } from './reader-resources';
 import { buildWarshLayout, type WarshLayout, type WarshLayoutWord } from './warsh-layout';
 
 type Word = { id: number; surah: number; ayah: number; word: number; text: string };
 const marker = (text: string) => /^[\u0660-\u0669]+$/.test(text.trim());
+type TopicRow = {
+  topic_id: number; name: string; arabic_name: string; parent_id: number | null; thematic_parent_id: number | null; ontology_parent_id: number | null;
+  description: string; wiki_link: string; thematic: number; ontology: number; ayahs: string | null; related_topics: string | null;
+};
+const topicColumns = 'topic_id, name, arabic_name, parent_id, thematic_parent_id, ontology_parent_id, description, wiki_link, thematic, ontology, ayahs, related_topics';
 
 export function inlineTranslation(value: string) {
   const decoded = JSON.parse(value);
@@ -38,7 +43,7 @@ export function richText(value: string): QuranRichNode[] {
     const name = node.nodeName.toLowerCase();
     if (['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math', 'form', 'input', 'img', 'link', 'meta'].includes(name)) return [];
     const children = [...node.childNodes].flatMap(child => walk(child as typeof document.body, depth + 1));
-    const tag = ({ strong: 'b', em: 'i', p: 'p', div: 'div', br: 'br', b: 'b', i: 'i', u: 'u', sup: 'sup' } as Record<string, QuranRichNode['tag']>)[name];
+    const tag = ({ strong: 'b', em: 'i', p: 'p', div: 'div', br: 'br', b: 'b', i: 'i', u: 'u', sup: 'sup', h1: 'h2', h2: 'h2', h3: 'h3', h4: 'h3' } as Record<string, QuranRichNode['tag']>)[name];
     return tag ? [{ tag, children }] : children;
   };
   return [...document.body.childNodes].flatMap(node => walk(node as typeof document.body, 0));
@@ -49,7 +54,7 @@ export class QuranReader {
   private warshLayouts = new Map<string, Promise<WarshLayout>>();
   constructor(private readonly root: string, private readonly packs: QuranPack[]) {}
   catalog(): QuranReaderCatalog {
-    return { sources: this.packs.flatMap(pack => { const preset = readerPreset(pack); return preset ? [{ id: pack.id, title: pack.resource.title, kind: preset.kind, profile: preset.profile }] : []; }), presets: readerPresets.map(preset => ({ id: preset.id, title: preset.title, kind: preset.kind, installed: this.packs.some(pack => readerPreset(pack)?.id === preset.id) })) };
+    return { sources: this.packs.flatMap(pack => { const preset = readerPreset(pack); return preset ? [{ id: pack.id, title: pack.resource.title, kind: preset.kind, profile: preset.profile, language: preset.language }] : []; }), presets: readerPresets.map(preset => ({ id: preset.id, title: preset.title, kind: preset.kind, installed: this.packs.some(pack => readerPreset(pack)?.id === preset.id), importOnly: preset.importOnly })) };
   }
   private source(id: string, kind: string) {
     const pack = this.packs.find(value => value.id === id);
@@ -185,6 +190,7 @@ export class QuranReader {
                 tafsir: 'CREATE INDEX baglib_tafsir ON tafsir(ayah_key)',
                 'word-translation': 'CREATE INDEX baglib_meanings ON word_translation(surah_number, ayah_number)',
                 'word-transliteration': 'CREATE INDEX baglib_transliteration ON word_transliteration(surah_number, ayah_number)',
+                'ayah-transliteration': 'CREATE INDEX baglib_ayah_transliteration ON transliterations(sura, ayah)',
                 surahs: 'CREATE INDEX baglib_surahs ON chapters(id)',
                 recitation: 'CREATE INDEX baglib_recitation ON verses(surah_number, ayah_number)',
                 'surah-info': 'CREATE INDEX baglib_surah_info ON surah_infos(surah_number)',
@@ -216,13 +222,14 @@ export class QuranReader {
     if (query.translation && this.source(query.translation, 'translation').preset.profile !== preset.profile) throw new Error('invalid-resource');
     if (query.meanings && this.source(query.meanings, 'word-translation').preset.profile !== preset.profile) throw new Error('invalid-resource');
     if (query.transliteration && this.source(query.transliteration, 'word-transliteration').preset.profile !== preset.profile) throw new Error('invalid-resource');
+    if (query.ayahTransliteration && this.source(query.ayahTransliteration, 'ayah-transliteration').preset.profile !== preset.profile) throw new Error('invalid-resource');
     const database = await this.database(query.script, 'script');
     const surahs = database.prepare('SELECT surah AS number, COUNT(DISTINCT ayah) AS count FROM words GROUP BY surah ORDER BY surah').all() as QuranPassage['surahs'];
     let basmala: string | undefined;
     const metadata = this.catalog().sources.find(source => source.kind === 'surahs' && source.profile === preset.profile);
     if (metadata) {
-      const names = (await this.database(metadata.id, 'surahs')).prepare('SELECT id, name_arabic, name_simple, bismillah_pre FROM chapters').all() as { id: number; name_arabic: string; name_simple: string; bismillah_pre: number }[];
-      for (const surah of surahs) { const name = names.find(value => value.id === surah.number); if (name) { surah.arabic = name.name_arabic; surah.name = name.name_simple; } }
+      const names = (await this.database(metadata.id, 'surahs')).prepare('SELECT * FROM chapters').all() as { id: number; name_arabic: string; name_simple: string; bismillah_pre: number; revelation_place?: string; revelation_order?: number }[];
+      for (const surah of surahs) { const name = names.find(value => value.id === surah.number); if (name) { surah.arabic = name.name_arabic; surah.name = name.name_simple; surah.revelationPlace = name.revelation_place; surah.revelationOrder = name.revelation_order; } }
       if (query.from === 1 && names.find(value => value.id === query.surah)?.bismillah_pre === 1) {
         const opening = database.prepare('SELECT text FROM words WHERE surah=1 AND ayah=1 ORDER BY word').all() as { text: string }[];
         basmala = opening.filter(word => !marker(word.text)).map(word => word.text).join(' ');
@@ -246,6 +253,10 @@ export class QuranReader {
         const rows = words.prepare(`SELECT word_number, text FROM ${table} WHERE surah_number=? AND ayah_number=?`).all(query.surah, ayah.number) as { word_number: string; text: string }[];
         for (const word of ayah.words) { const row = rows.find(value => Number(value.word_number) === word.position); if (!word.marker && row) word[property] = row.text; }
       }
+    }
+    if (query.ayahTransliteration) {
+      const lines = await this.database(query.ayahTransliteration, 'ayah-transliteration');
+      for (const ayah of ayahs) { const row = lines.prepare('SELECT text FROM transliterations WHERE sura=? AND ayah=?').get(query.surah, ayah.number) as { text: string } | undefined; if (row) ayah.transliteration = richText(row.text); }
     }
     return { profile: preset.profile, surah: query.surah, surahs, basmala, ayahs, next: references[20]?.ayah ?? null };
   }
@@ -499,7 +510,8 @@ export class QuranReader {
       this.source(packId, kind);
       return packId;
     }
-    const match = this.catalog().sources.find(s => s.kind === kind);
+    const sources = this.catalog().sources.filter(s => s.kind === kind);
+    const match = sources.find(s => !s.language) || sources[0];
     if (!match) throw new Error('invalid-resource');
     return match.id;
   }
@@ -519,6 +531,7 @@ export class QuranReader {
       surahName: row.surah_name,
       text: row.text,
       shortText: row.short_text,
+      nodes: richText(row.text),
     };
   }
   async ayahThemes(packId: string | undefined, surah: number, ayah?: number): Promise<QuranAyahTheme[]> {
@@ -547,6 +560,27 @@ export class QuranReader {
       totalAyahs: r.total_ayahs,
     }));
   }
+  private topic(row: TopicRow): QuranTopic {
+    const ayahs: { surah: number; ayah: number }[] = [];
+    for (const item of (row.ayahs || '').split(',').map(value => value.trim()).filter(Boolean)) {
+      const [surah, ayah] = item.split(':').map(Number);
+      if (surah && ayah) ayahs.push({ surah, ayah });
+    }
+    return {
+      topicId: row.topic_id,
+      name: row.name,
+      arabicName: row.arabic_name,
+      parentId: row.parent_id ?? null,
+      thematicParentId: row.thematic_parent_id ?? null,
+      ontologyParentId: row.ontology_parent_id ?? null,
+      description: row.description || '',
+      wikiLink: row.wiki_link || '',
+      thematic: Boolean(row.thematic),
+      ontology: Boolean(row.ontology),
+      ayahs,
+      relatedTopics: (row.related_topics || '').split(',').map(value => Number(value.trim())).filter(value => Number.isInteger(value) && value > 0),
+    };
+  }
   async ayahTopics(packId: string | undefined, surah: number, ayah: number): Promise<QuranTopic[]> {
     if (!Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
     const id = this.resolvePack('ayah-topics', packId);
@@ -554,55 +588,20 @@ export class QuranReader {
     if (preset.profile !== 'hafs') throw new Error('invalid-resource');
     const database = await this.database(id, 'ayah-topics');
     const rows = database.prepare(`
-      SELECT t.topic_id, t.name, t.arabic_name, t.parent_id, t.thematic_parent_id, t.ontology_parent_id, t.description, t.wiki_link, t.thematic, t.ontology, t.ayahs, t.related_topics
+      SELECT ${topicColumns.split(', ').map(column => `t.${column}`).join(', ')}
       FROM topic_ayahs ta
       JOIN topics t ON ta.topic_id = t.topic_id
       WHERE ta.surah = ? AND ta.ayah = ?
       ORDER BY t.name ASC
-    `).all(surah, ayah) as {
-      topic_id: number;
-      name: string;
-      arabic_name: string;
-      parent_id: number | null;
-      thematic_parent_id: number | null;
-      ontology_parent_id: number | null;
-      description: string;
-      wiki_link: string;
-      thematic: number;
-      ontology: number;
-      ayahs: string | null;
-      related_topics: string | null;
-    }[];
-    return rows.map(row => {
-      const ayahsList: { surah: number; ayah: number }[] = [];
-      if (row.ayahs) {
-        for (const item of row.ayahs.split(',').map(s => s.trim()).filter(Boolean)) {
-          const [s, a] = item.split(':').map(Number);
-          if (s && a) ayahsList.push({ surah: s, ayah: a });
-        }
-      }
-      const relatedTopics: number[] = [];
-      if (row.related_topics) {
-        for (const r of row.related_topics.split(',').map(s => s.trim()).filter(Boolean)) {
-          const num = Number(r);
-          if (Number.isInteger(num)) relatedTopics.push(num);
-        }
-      }
-      return {
-        topicId: row.topic_id,
-        name: row.name,
-        arabicName: row.arabic_name,
-        parentId: row.parent_id ?? null,
-        thematicParentId: row.thematic_parent_id ?? null,
-        ontologyParentId: row.ontology_parent_id ?? null,
-        description: row.description || '',
-        wikiLink: row.wiki_link || '',
-        thematic: Boolean(row.thematic),
-        ontology: Boolean(row.ontology),
-        ayahs: ayahsList,
-        relatedTopics,
-      };
-    });
+    `).all(surah, ayah) as TopicRow[];
+    return rows.map(row => this.topic(row));
+  }
+  async topics(packId: string | undefined, ids: number[]): Promise<QuranTopic[]> {
+    if (!Array.isArray(ids) || ids.length > 100 || ids.some(id => !Number.isSafeInteger(id) || id < 1)) throw new Error('invalid-resource');
+    if (!ids.length) return [];
+    const database = await this.database(this.resolvePack('ayah-topics', packId), 'ayah-topics');
+    const rows = database.prepare(`SELECT ${topicColumns} FROM topics WHERE topic_id IN (${ids.map(() => '?').join(',')})`).all(...ids) as TopicRow[];
+    return rows.map(row => this.topic(row));
   }
   async searchTopics(packId: string | undefined, text: string): Promise<QuranTopic[]> {
     if (typeof text !== 'string' || text.length > 200) throw new Error('invalid-resource');
@@ -612,66 +611,35 @@ export class QuranReader {
     const database = await this.database(id, 'ayah-topics');
     const terms = query.split(/\s+/).filter(Boolean);
     const match = terms.map(term => `"${term.replaceAll('"', '""')}"*`).join(' AND ');
-    let rows: {
-      topic_id: number;
-      name: string;
-      arabic_name: string;
-      parent_id: number | null;
-      thematic_parent_id: number | null;
-      ontology_parent_id: number | null;
-      description: string;
-      wiki_link: string;
-      thematic: number;
-      ontology: number;
-      ayahs: string | null;
-      related_topics: string | null;
-    }[] = [];
+    let rows: TopicRow[] = [];
     try {
       rows = database.prepare(`
-        SELECT t.topic_id, t.name, t.arabic_name, t.parent_id, t.thematic_parent_id, t.ontology_parent_id, t.description, t.wiki_link, t.thematic, t.ontology, t.ayahs, t.related_topics
+        SELECT ${topicColumns.split(', ').map(column => `t.${column}`).join(', ')}
         FROM baglib_topics_search s
         JOIN topics t ON s.topic_id = t.topic_id
         WHERE baglib_topics_search MATCH ?
         LIMIT 30
-      `).all(match) as typeof rows;
+      `).all(match) as TopicRow[];
     } catch {
-      rows = database.prepare(`
-        SELECT topic_id, name, arabic_name, parent_id, thematic_parent_id, ontology_parent_id, description, wiki_link, thematic, ontology, ayahs, related_topics
-        FROM topics
-        WHERE name LIKE ? OR arabic_name LIKE ?
-        LIMIT 30
-      `).all(`%${query}%`, `%${query}%`) as typeof rows;
+      rows = database.prepare(`SELECT ${topicColumns} FROM topics WHERE name LIKE ? OR arabic_name LIKE ? LIMIT 30`).all(`%${query}%`, `%${query}%`) as TopicRow[];
     }
-    return rows.map(row => {
-      const ayahsList: { surah: number; ayah: number }[] = [];
-      if (row.ayahs) {
-        for (const item of row.ayahs.split(',').map(s => s.trim()).filter(Boolean)) {
-          const [s, a] = item.split(':').map(Number);
-          if (s && a) ayahsList.push({ surah: s, ayah: a });
-        }
-      }
-      const relatedTopics: number[] = [];
-      if (row.related_topics) {
-        for (const r of row.related_topics.split(',').map(s => s.trim()).filter(Boolean)) {
-          const num = Number(r);
-          if (Number.isInteger(num)) relatedTopics.push(num);
-        }
-      }
-      return {
-        topicId: row.topic_id,
-        name: row.name,
-        arabicName: row.arabic_name,
-        parentId: row.parent_id ?? null,
-        thematicParentId: row.thematic_parent_id ?? null,
-        ontologyParentId: row.ontology_parent_id ?? null,
-        description: row.description || '',
-        wikiLink: row.wiki_link || '',
-        thematic: Boolean(row.thematic),
-        ontology: Boolean(row.ontology),
-        ayahs: ayahsList,
-        relatedTopics,
-      };
-    });
+    return rows.map(row => this.topic(row));
+  }
+  async structure(): Promise<QuranStructure> {
+    const rows = async <Row>(kind: 'juz' | 'hizb' | 'rub' | 'ruku' | 'manzil' | 'sajda', sql: string): Promise<Row[]> => {
+      const source = this.catalog().sources.find(item => item.kind === kind);
+      return source ? (await this.database(source.id, kind)).prepare(sql).all() as Row[] : [];
+    };
+    const divisions = (kind: 'juz' | 'hizb' | 'rub' | 'manzil', table: string, column = `${kind}_number`) =>
+      rows<QuranDivision>(kind, `SELECT ${column} AS number, first_verse_key AS first, last_verse_key AS last FROM ${table} ORDER BY ${column}`);
+    return {
+      juz: await divisions('juz', 'juz'),
+      hizb: await divisions('hizb', 'hizbs'),
+      rub: await divisions('rub', 'rub'),
+      manzil: await divisions('manzil', 'manzil'),
+      ruku: await rows<QuranDivision>('ruku', 'SELECT ruku_number AS number, first_verse_key AS first, last_verse_key AS last, surah_ruku_number AS surahRuku FROM ruku ORDER BY ruku_number'),
+      sajdah: await rows<QuranStructure['sajdah'][number]>('sajda', 'SELECT sajdah_number AS number, verse_key AS reference, sajdah_type AS type FROM sajdah ORDER BY sajdah_number'),
+    };
   }
   async similarAyahs(packId: string | undefined, surah: number, ayah: number): Promise<QuranSimilarAyah[]> {
     if (!Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');

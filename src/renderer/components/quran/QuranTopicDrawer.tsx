@@ -1,15 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Layers, Search, X, BookOpen, ExternalLink, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Layers, Search, X, BookOpen, ExternalLink } from 'lucide-react';
 import type { QuranTopic } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
+import { quranHtmlText } from './QuranRichText';
+import { quranWikiUrl } from '../../../shared/quran-structure';
 
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
-
-const cleanHtml = (html: string): string => {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-};
 
 export function QuranTopicDrawer({
   topics,
@@ -21,6 +19,7 @@ export function QuranTopicDrawer({
   lang,
   dir,
   onSearch,
+  onLoadTopics,
 }: {
   topics: QuranTopic[];
   activeTopic: QuranTopic | null;
@@ -31,6 +30,7 @@ export function QuranTopicDrawer({
   lang: 'ar' | 'en';
   dir: 'rtl' | 'ltr';
   onSearch?: (query: string) => Promise<QuranTopic[]>;
+  onLoadTopics?: (ids: number[]) => Promise<QuranTopic[]>;
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<QuranTopic[]>([]);
@@ -64,11 +64,31 @@ export function QuranTopicDrawer({
   }, [searchQuery, onSearch]);
 
   const displayTopic = activeTopic || (topics.length > 0 ? topics[0] : null);
+  const topicName = (topic: QuranTopic) => lang === 'ar' && topic.arabicName ? topic.arabicName : topic.name;
+  const parentId = displayTopic ? displayTopic.parentId ?? displayTopic.thematicParentId ?? displayTopic.ontologyParentId : null;
+  const linkedKey = displayTopic ? JSON.stringify([parentId, displayTopic.relatedTopics]) : '';
+  const [linked, setLinked] = useState<{ key: string; topics: QuranTopic[] }>({ key: '', topics: [] });
+  useEffect(() => {
+    if (!linkedKey || !onLoadTopics) return;
+    const [parent, related] = JSON.parse(linkedKey) as [number | null, number[]];
+    const ids = [...(parent ? [parent] : []), ...related];
+    if (!ids.length) return;
+    let alive = true;
+    void onLoadTopics(ids.slice(0, 100)).then(result => { if (alive) setLinked({ key: linkedKey, topics: result }); }).catch(() => {});
+    return () => { alive = false; };
+  }, [linkedKey, onLoadTopics]);
+  const linkedTopics = linked.key === linkedKey ? linked.topics : [];
+  const parentTopic = linkedTopics.find(topic => topic.topicId === parentId);
+  const relatedTopics = linkedTopics.filter(topic => displayTopic?.relatedTopics.includes(topic.topicId));
+  const wikiUrl = displayTopic ? quranWikiUrl(displayTopic.wikiLink) : null;
 
   return (
     <aside
       aria-label={t('quranTopics')}
-      className="fixed inset-y-0 end-0 z-50 w-full sm:w-96 md:w-[440px] bg-surface/95 backdrop-blur-md border-s border-subtle shadow-2xl flex flex-col transition-transform duration-300"
+      data-quran-topic-drawer
+      dir={dir}
+      onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }}
+      className="absolute inset-y-0 end-0 z-50 w-full sm:w-96 md:w-[440px] bg-surface/95 backdrop-blur-md border-s border-subtle shadow-2xl flex flex-col transition-transform duration-300"
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-subtle">
@@ -78,7 +98,7 @@ export function QuranTopicDrawer({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-foreground">{t('quranTopics')}</h2>
-            <p className="text-xs text-muted">{displayTopic ? (lang === 'ar' ? displayTopic.arabicName || displayTopic.name : displayTopic.name) : t('quranTopics')}</p>
+            <p dir="auto" className="text-xs text-muted">{displayTopic ? topicName(displayTopic) : t('quranTopics')}</p>
           </div>
         </div>
         <button
@@ -102,6 +122,8 @@ export function QuranTopicDrawer({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder={t('quranTopicSearch')}
+              aria-label={t('quranTopicSearch')}
+              dir="auto"
               className="w-full rounded-xl border border-subtle bg-surface pe-3 ps-9 py-2 text-xs text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
@@ -131,7 +153,7 @@ export function QuranTopicDrawer({
                   className="w-full text-start p-3 rounded-xl border border-subtle bg-surface hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all"
                 >
                   <div className="flex justify-between items-center gap-2">
-                    <span className="text-sm font-medium text-foreground">{topic.name}</span>
+                    <span dir="auto" className="text-sm font-medium text-foreground">{topic.name}</span>
                     {topic.arabicName && (
                       <span dir="rtl" className="font-reading text-base text-emerald-600 dark:text-emerald-400">
                         {topic.arabicName}
@@ -139,7 +161,7 @@ export function QuranTopicDrawer({
                     )}
                   </div>
                   {topic.description && (
-                    <p className="text-xs text-muted line-clamp-2 mt-1">{cleanHtml(topic.description)}</p>
+                    <p dir="auto" className="text-xs text-muted line-clamp-2 mt-1">{quranHtmlText(topic.description)}</p>
                   )}
                 </button>
               ))}
@@ -163,7 +185,7 @@ export function QuranTopicDrawer({
                           : 'bg-surface border-subtle text-foreground hover:bg-pale-sky-500/10'
                       }`}
                     >
-                      {lang === 'ar' && topic.arabicName ? topic.arabicName : topic.name}
+                      {topicName(topic)}
                     </button>
                   );
                 })}
@@ -175,7 +197,7 @@ export function QuranTopicDrawer({
                 {/* Topic Header Card */}
                 <div className="rounded-xl border border-subtle bg-surface p-4 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-base font-bold text-foreground">{displayTopic.name}</h3>
+                    <h3 dir="auto" className="text-base font-bold text-foreground">{displayTopic.name}</h3>
                     {displayTopic.arabicName && (
                       <span dir="rtl" className="font-reading text-xl text-emerald-600 dark:text-emerald-400">
                         {displayTopic.arabicName}
@@ -185,21 +207,43 @@ export function QuranTopicDrawer({
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {displayTopic.thematic && (
                       <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium border border-amber-500/20">
-                        Thematic
+                        {t('quranTopicThematic')}
                       </span>
                     )}
                     {displayTopic.ontology && (
                       <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 font-medium border border-blue-500/20">
-                        Ontology
+                        {t('quranTopicOntology')}
                       </span>
                     )}
                   </div>
                   {displayTopic.description && (
-                    <p className="text-xs text-foreground/85 leading-relaxed pt-2 border-t border-subtle">
-                      {cleanHtml(displayTopic.description)}
+                    <p dir="auto" className="text-xs text-foreground/85 leading-relaxed pt-2 border-t border-subtle">
+                      {quranHtmlText(displayTopic.description)}
                     </p>
                   )}
+                  {wikiUrl && (
+                    <button type="button" onClick={() => void window.electronAPI?.openExternal?.(wikiUrl)} className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 hover:underline">
+                      <ExternalLink className="size-3.5" />
+                      <span>{t('quranTopicWiki')}</span>
+                    </button>
+                  )}
                 </div>
+
+                {parentTopic && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t('quranTopicParent')}</h4>
+                    <button type="button" dir="auto" onClick={() => onSelectTopic(parentTopic)} className="text-xs px-2.5 py-1 rounded-lg border border-subtle bg-surface hover:bg-pale-sky-500/10">{topicName(parentTopic)}</button>
+                  </div>
+                )}
+
+                {relatedTopics.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t('quranTopicRelated')}</h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {relatedTopics.map(topic => <button key={topic.topicId} type="button" dir="auto" onClick={() => onSelectTopic(topic)} className="text-xs px-2.5 py-1 rounded-lg border border-subtle bg-surface hover:bg-pale-sky-500/10">{topicName(topic)}</button>)}
+                    </div>
+                  </div>
+                )}
 
                 {/* Related Ayahs List */}
                 {displayTopic.ayahs.length > 0 && (

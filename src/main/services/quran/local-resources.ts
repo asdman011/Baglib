@@ -2,12 +2,6 @@ import path from 'node:path';
 import { readerPresets } from '../../../shared/quran-resource-presets';
 
 const additionalLocalFiles: Record<string, string> = {
-  'quran-metadata/63': '5-Quran metadata/quran-metadata-rub.sqlite.zip',
-  'quran-metadata/64': '5-Quran metadata/quran-metadata-sajda.sqlite.zip',
-  'quran-metadata/65': '5-Quran metadata/quran-metadata-ruku.sqlite.zip',
-  'quran-metadata/66': '5-Quran metadata/quran-metadata-manzil.sqlite.zip',
-  'quran-metadata/67': '5-Quran metadata/quran-metadata-hizb.sqlite.zip',
-  'quran-metadata/68': '5-Quran metadata/quran-metadata-juz.sqlite.zip',
   'quran-metadata/69': '5-Quran metadata/quran-metadata-ayah.sqlite.zip',
   'morphology/481': 'Quranic Grammar and Morphology/ayah-stem.db.zip',
   'morphology/482': 'Quranic Grammar and Morphology/ayah-root.db.zip',

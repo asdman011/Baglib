@@ -18,6 +18,8 @@ type Action =
   | { action: 'ayah-themes'; pack?: string; surah: number; ayah?: number }
   | { action: 'ayah-topics'; pack?: string; surah: number; ayah: number }
   | { action: 'search-topics'; pack?: string; text: string }
+  | { action: 'topics'; pack?: string; ids: number[] }
+  | { action: 'structure' }
   | { action: 'similar-ayahs'; pack?: string; surah: number; ayah: number };
 export type QuranReaderRequest = Action & { id: number; root: string; packs: QuranPack[] };
 

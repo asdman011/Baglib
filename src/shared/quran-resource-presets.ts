@@ -1,6 +1,6 @@
 import type { QuranReaderKind } from './types/quran';
 
-export const readerPresets: { id: string; aliases?: string[]; title: string; kind: QuranReaderKind; filename: string; relative: string; profile: 'hafs' | 'warsh' }[] = [
+export const readerPresets: { id: string; aliases?: string[]; title: string; kind: QuranReaderKind; filename: string; relative: string; profile: 'hafs' | 'warsh'; language?: 'ar'; importOnly?: boolean }[] = [
   { id: 'mutashabihat/73', title: 'Mutashabihat ul Quran', kind: 'mutashabihat', filename: 'Mutashabihat ul Quran.json.bz2', relative: 'Mutashabihat ul Quran', profile: 'hafs' },
   { id: 'quran-script/47', title: 'V4 Glyphs (With Tajweed)', kind: 'glyph-script', filename: 'qpc-v4.db.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Script', profile: 'hafs' },
   { id: 'mushaf-layout/19', title: 'KFGQPC V4 layout (1441H print)', kind: 'glyph-layout', filename: 'qpc-v4-tajweed-15-lines.db.zip', relative: '1-Quran Script, Font & Mushaf Layouts/Hafs/Layout', profile: 'hafs' },
@@ -23,4 +23,16 @@ export const readerPresets: { id: string; aliases?: string[]; title: string; kin
   { id: 'ayah-theme/62', aliases: ['ayah-theme/default'], title: 'Ayah Themes', kind: 'ayah-theme', filename: 'ayah-themes.db.zip', relative: 'Ayah theme', profile: 'hafs' },
   { id: 'ayah-topics/45', aliases: ['ayah-topics/default'], title: 'Quran Topics & Concepts', kind: 'ayah-topics', filename: 'topics.db.zip', relative: 'Topics and concepts in the Quran', profile: 'hafs' },
   { id: 'similar-ayah/74', aliases: ['similar-ayah/matching', 'similar-ayah/default'], title: 'Similar Ayah (Mutashabihat)', kind: 'similar-ayah', filename: 'matching-ayah.db.zip', relative: 'Similiar ayahs', profile: 'hafs' },
+  { id: 'tafsir/251', title: 'المختصر في تفسير القرآن الكريم', kind: 'tafsir', filename: 'arabic-mukhtasar-tafsir-sqlite.zip', relative: '../../../.baglib-data/qul-phase1', profile: 'hafs' },
+  { id: 'transliteration/en-transliteration-rtf-markup', title: 'English Transliteration (RTF markup)', kind: 'ayah-transliteration', filename: 'en-transliteration-rtf.db.zip', relative: '4-Translation & Transliteration/Transliteration', profile: 'hafs' },
+  { id: 'quran-metadata/68', title: 'Juz', kind: 'juz', filename: 'quran-metadata-juz.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
+  { id: 'quran-metadata/67', title: 'Hizb', kind: 'hizb', filename: 'quran-metadata-hizb.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
+  { id: 'quran-metadata/63', title: 'Rub', kind: 'rub', filename: 'quran-metadata-rub.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
+  { id: 'quran-metadata/65', title: 'Ruku', kind: 'ruku', filename: 'quran-metadata-ruku.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
+  { id: 'quran-metadata/66', title: 'Manzil', kind: 'manzil', filename: 'quran-metadata-manzil.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
+  { id: 'quran-metadata/64', title: 'Sajda', kind: 'sajda', filename: 'quran-metadata-sajda.sqlite.zip', relative: '5-Quran metadata', profile: 'hafs' },
+  // Baglib-derived Arabic copies of QUL metadata. QUL does not publish them, so they can only be imported.
+  { id: 'surah-info/ar-baglib', title: 'معلومات السور (نسخة عربية مشتقة)', kind: 'surah-info', filename: 'surah-info-ar.db', relative: 'Arabic metadata - Baglib', profile: 'hafs', language: 'ar', importOnly: true },
+  { id: 'ayah-theme/ar-baglib', title: 'محاور الآيات (نسخة عربية مشتقة)', kind: 'ayah-theme', filename: 'ayah-themes-ar.db', relative: 'Arabic metadata - Baglib', profile: 'hafs', language: 'ar', importOnly: true },
+  { id: 'ayah-topics/ar-baglib', title: 'موضوعات القرآن ومفاهيمه (نسخة عربية مشتقة)', kind: 'ayah-topics', filename: 'topics-ar.db', relative: 'Arabic metadata - Baglib', profile: 'hafs', language: 'ar', importOnly: true },
 ];

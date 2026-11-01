@@ -3,7 +3,7 @@ import { readerPresets } from './quran-resource-presets';
 
 export const quranResourceBundles = [
   { id: 'hafs-reader', resources: ['quran-script/312', 'mushaf-layout/569', 'quran-metadata/70'] },
-  { id: 'hafs-study', resources: ['quran-script/312', 'mushaf-layout/569', 'quran-metadata/70', 'translation/193', 'tafsir/22', 'translation/92', 'transliteration/71', 'morphology/quran-word-roots', 'morphology/75', 'morphology/77', 'surah-info/3', 'ayah-theme/62', 'ayah-topics/45', 'mutashabihat/73', 'similar-ayah/74'] },
+  { id: 'hafs-study', resources: ['quran-script/312', 'mushaf-layout/569', 'quran-metadata/70', 'translation/193', 'tafsir/22', 'translation/92', 'transliteration/71', 'morphology/quran-word-roots', 'morphology/75', 'morphology/77', 'surah-info/3', 'ayah-theme/62', 'ayah-topics/45', 'mutashabihat/73', 'similar-ayah/74', 'tafsir/251', 'transliteration/en-transliteration-rtf-markup', 'quran-metadata/68', 'quran-metadata/67', 'quran-metadata/63', 'quran-metadata/65', 'quran-metadata/66', 'quran-metadata/64'] },
   { id: 'hafs-v4', resources: ['quran-script/312', 'quran-script/47', 'mushaf-layout/19', 'font/240', 'quran-metadata/70'] },
   { id: 'warsh-reader', resources: ['quran-script/qpc-warsh-script-wbw', 'font/qpc-warsh-font', 'mushaf-layout/569'] },
 ] as const;
@@ -20,15 +20,15 @@ export function quranResourceGuidance(resource: Pick<QuranResource, 'id' | 'form
     if (preset.kind === 'glyph-script' || preset.kind === 'glyph-layout' || resource.id === 'font/240') { requirements.push('quran-script/312', 'quran-script/47', 'mushaf-layout/19', 'font/240'); features.push('glyphs'); }
     if (preset.kind === 'mushaf-layout') features.push('vectors');
     if (preset.profile === 'warsh') requirements.push('quran-script/qpc-warsh-script-wbw', 'font/qpc-warsh-font', 'mushaf-layout/569');
-    if (['translation', 'tafsir', 'word-translation', 'word-transliteration', 'recitation', 'word-root', 'word-lemma', 'word-stem', 'ayah-topics', 'ayah-theme', 'similar-ayah', 'mutashabihat'].includes(preset.kind)) requirements.push('quran-script/312');
+    if (['translation', 'tafsir', 'word-translation', 'word-transliteration', 'ayah-transliteration', 'recitation', 'word-root', 'word-lemma', 'word-stem', 'ayah-topics', 'ayah-theme', 'similar-ayah', 'mutashabihat'].includes(preset.kind)) requirements.push('quran-script/312');
     if (resource.id === 'translation/193') features.push('footnotes');
     if (preset.kind === 'tafsir') features.push('tafsir');
     if (preset.kind === 'word-translation') features.push('words');
-    if (preset.kind === 'word-transliteration') features.push('transliteration');
+    if (preset.kind === 'word-transliteration' || preset.kind === 'ayah-transliteration') features.push('transliteration');
     if (preset.kind === 'recitation') features.push('recitation', 'timings');
     if (preset.kind.startsWith('word-') && ['word-root', 'word-lemma', 'word-stem'].includes(preset.kind)) features.push('morphology');
     if (['ayah-topics', 'ayah-theme', 'similar-ayah', 'mutashabihat', 'surah-info'].includes(preset.kind)) features.push('topics');
-    if (preset.kind === 'surahs') features.push('metadata');
+    if (['surahs', 'juz', 'hizb', 'rub', 'ruku', 'manzil', 'sajda'].includes(preset.kind)) features.push('metadata');
   }
   return {
     supported: Boolean(preset),
@@ -37,6 +37,7 @@ export function quranResourceGuidance(resource: Pick<QuranResource, 'id' | 'form
     requirements: [...new Set(requirements)].filter(id => id !== preset?.id),
     features,
     audioMetadataOnly: preset?.kind === 'recitation',
+    importOnly: Boolean(preset?.importOnly),
   };
 }
 

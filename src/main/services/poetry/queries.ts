@@ -9,7 +9,7 @@ export function searchPoetry(database: Database.Database, input: PoetryQuery) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(after) || after < 0 || (input.language !== undefined && !['ar', 'en'].includes(input.language))) throw new Error('invalid-poetry-query');
   const conditions = ['p.id > ?'];
   const values: (number | string)[] = [after];
-  const filters = [[input.language ?? 'ar', 'p.language'], [input.poetId, 'p.poet_id'], [input.meter, 'p.meter'], [input.theme, 'p.theme'], [input.era, 'a.era']] as const;
+  const filters = [[input.language ?? 'ar', 'p.language'], [input.poetId, 'p.poet_id'], [input.meter, 'p.meter'], [input.theme, 'p.theme'], [input.era, 'a.era'], [input.variant, 'p.language_variant'], [input.location, 'a.location']] as const;
   for (const [value, column] of filters) {
     if (value === undefined) continue;
     if (typeof value === 'string' && value.length > 300) throw new Error('invalid-poetry-query');
@@ -51,8 +51,13 @@ export function poetryFacets(database: Database.Database) {
   const values = (table: string, column: string) => (database.prepare(`SELECT DISTINCT ${column} AS value FROM ${table} WHERE ${column} IS NOT NULL AND ${column} != '' ORDER BY ${column} LIMIT 300`).all() as { value: string }[]).map(row => row.value);
   return {
     languages: database.prepare('SELECT language,COUNT(*) AS count FROM poems GROUP BY language').all(),
-    eras: values('poets', 'era'), meters: values('poems', 'meter'), themes: values('poems', 'theme'),
+    eras: values('poets', 'era'), meters: values('poems', 'meter'), themes: values('poems', 'theme'), locations: values('poets', 'location'),
   };
+}
+
+/** Kept out of poetryFacets: this column has no index, so it scans every poem (seconds on a cold start). */
+export function poetryVariants(database: Database.Database): string[] {
+  return (database.prepare("SELECT DISTINCT language_variant AS value FROM poems WHERE language_variant IS NOT NULL AND language_variant NOT IN ('', '-') ORDER BY language_variant LIMIT 300").all() as { value: string }[]).map(row => row.value);
 }
 
 export function searchPoets(database: Database.Database, input: PoetQuery) {
@@ -66,8 +71,12 @@ export function searchPoets(database: Database.Database, input: PoetQuery) {
     if (typeof input.era !== 'string' || input.era.length > 300) throw new Error('invalid-poetry-query');
     where.push('era = ?'); values.push(input.era);
   }
+  if (input.location !== undefined) {
+    if (typeof input.location !== 'string' || input.location.length > 300) throw new Error('invalid-poetry-query');
+    where.push('location = ?'); values.push(input.location);
+  }
   const clause = where.join(' AND ');
   const total = (database.prepare(`SELECT COUNT(*) AS n FROM poets WHERE ${clause}`).get(...values) as { n: number }).n;
-  const items = database.prepare(`SELECT id,name,era,poem_count AS poemCount FROM poets WHERE ${clause} ORDER BY name_normalized,id LIMIT 40 OFFSET ?`).all(...values, offset);
+  const items = database.prepare(`SELECT id,name,era,location,poem_count AS poemCount FROM poets WHERE ${clause} ORDER BY name_normalized,id LIMIT 40 OFFSET ?`).all(...values, offset);
   return { items, total, offset };
 }

@@ -60,10 +60,17 @@ export function BayanView() {
   const [initialTo, setInitialTo] = useState<number | undefined>();
   const [language, setLanguage] = useState<'ar' | 'en'>('ar');
   const [facets, setFacets] = useState<PoetryFacets | null>(null);
-  const [era, setEra] = useState(''), [meter, setMeter] = useState(''), [theme, setTheme] = useState('');
+  const [era, setEra] = useState(''), [meter, setMeter] = useState(''), [theme, setTheme] = useState(''), [variant, setVariant] = useState(''), [location, setLocation] = useState('');
   const [panel, setPanel] = useState<PoetryPanel>(null);
+  const [variants, setVariants] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (panel !== 'filters' || variants) return;
+    let alive = true;
+    void window.electronAPI?.poetry?.variants().then(result => { if (alive && result.ok) setVariants(result.data); }).catch(() => {});
+    return () => { alive = false; };
+  }, [panel, variants, revision]);
   const [poetId, setPoetId] = useState<number | undefined>();
-  const cursorKey = JSON.stringify([query, language, era, meter, theme, poetId]);
+  const cursorKey = JSON.stringify([query, language, era, meter, theme, variant, location, poetId]);
   useEffect(() => {
     let alive = true;
     void window.electronAPI?.poetry?.facets().then(result => { if (alive && result.ok) setFacets(result.data); }).catch(() => {});
@@ -90,7 +97,7 @@ export function BayanView() {
       setLoading(true);
       const api = window.electronAPI?.poetry;
       if (!api) { setFailed(true); return; }
-      void api.search({ query, after, limit: 40, language, poetId, era: era || undefined, meter: meter || undefined, theme: theme || undefined }).then(result => {
+      void api.search({ query, after, limit: 40, language, poetId, era: era || undefined, meter: meter || undefined, theme: theme || undefined, variant: variant || undefined, location: location || undefined }).then(result => {
         if (!alive) return;
         setLoading(false);
         if (!result.ok) { setFailed(true); return; }
@@ -101,8 +108,8 @@ export function BayanView() {
       }).catch(() => { if (alive) { setFailed(true); setLoading(false); } });
     }, 250);
     return () => { alive = false; clearTimeout(timer); };
-  }, [query, after, language, era, meter, theme, poetId, revision]);
-  if (poem) return <PoetryReader key={`${poem.id}:${initialVerse}:${initialTo}`} initialVerse={initialVerse} initialTo={initialTo} poem={poem} onBack={() => setPoem(null)} onPoet={id => { setPoem(null); setPoetId(id); setQuery(''); setEra(''); setMeter(''); setTheme(''); setAfter(0); }} />;
+  }, [query, after, language, era, meter, theme, variant, location, poetId, revision]);
+  if (poem) return <PoetryReader key={`${poem.id}:${initialVerse}:${initialTo}`} initialVerse={initialVerse} initialTo={initialTo} poem={poem} onBack={() => setPoem(null)} onPoet={id => { setPoem(null); setPoetId(id); setQuery(''); setEra(''); setMeter(''); setTheme(''); setVariant(''); setLocation(''); setAfter(0); }} />;
   return <section dir={dir} className="flex h-full min-h-0 flex-col bg-canvas p-4">
     <h1 className="text-xl font-semibold leading-loose">{t('navBayan')}</h1>
     {failed && <button type="button" disabled={installing} onClick={() => void install()} className="rounded border border-subtle p-3">{t('bayanInstall')}</button>}
@@ -111,18 +118,18 @@ export function BayanView() {
     <nav className="border-b border-subtle py-3" aria-label={t('navBayan')}><span aria-current="page">{t('bayanPoetry')}</span></nav>
     <div className="flex flex-wrap gap-3 py-3">
       {poetId !== undefined && <button type="button" onClick={() => { setPoetId(undefined); setAfter(0); }}>{t('bayanAll')}</button>}
-      {(['ar', 'en'] as const).map(value => { const count = facets?.languages.find(item => item.language === value)?.count ?? 0; return <button type="button" key={value} aria-pressed={language === value} onClick={() => { setLanguage(value); setPoetId(undefined); setAfter(0); setEra(''); setMeter(''); setTheme(''); }} className="rounded-lg border border-subtle px-3 py-2">{t(value === 'ar' ? 'bayanArabic' : 'bayanEnglish')} · {count || t('bayanComingSoon')}</button>; })}
+      {(['ar', 'en'] as const).map(value => { const count = facets?.languages.find(item => item.language === value)?.count ?? 0; return <button type="button" key={value} aria-pressed={language === value} onClick={() => { setLanguage(value); setPoetId(undefined); setAfter(0); setEra(''); setMeter(''); setTheme(''); setVariant(''); setLocation(''); }} className="rounded-lg border border-subtle px-3 py-2">{t(value === 'ar' ? 'bayanArabic' : 'bayanEnglish')} · {count || t('bayanComingSoon')}</button>; })}
       <button type="button" aria-expanded={panel === 'filters'} onClick={() => setPanel(current => togglePoetryPanel(current, 'filters'))}>{t('bayanFilters')}</button>
       <button type="button" aria-expanded={panel === 'poet'} onClick={() => setPanel(current => togglePoetryPanel(current, 'poet'))}>{t('bayanPoets')}</button>
     </div>
-    {panel === 'filters' && <aside aria-label={t('bayanFilters')} className="grid gap-3 rounded-xl border border-subtle bg-surface p-3 sm:grid-cols-3">
-      {([{ key: 'bayanEra', value: era, update: setEra, options: facets?.eras }, { key: 'bayanMeter', value: meter, update: setMeter, options: facets?.meters }, { key: 'bayanTheme', value: theme, update: setTheme, options: facets?.themes }] as const).map(filter => <label key={filter.key}>{t(filter.key)}<select value={filter.value} onChange={event => { filter.update(event.target.value); setAfter(0); }} className="block w-full rounded border border-subtle bg-canvas p-2"><option value="">{t('bayanAll')}</option>{filter.options?.map(option => <option key={option} value={option}>{option}</option>)}</select></label>)}
+    {panel === 'filters' && <aside aria-label={t('bayanFilters')} className="grid gap-3 rounded-xl border border-subtle bg-surface p-3 sm:grid-cols-3 lg:grid-cols-5">
+      {([{ key: 'bayanEra', value: era, update: setEra, options: facets?.eras }, { key: 'bayanMeter', value: meter, update: setMeter, options: facets?.meters }, { key: 'bayanTheme', value: theme, update: setTheme, options: facets?.themes }, { key: 'bayanLanguageType', value: variant, update: setVariant, options: variants ?? undefined }, { key: 'bayanLocation', value: location, update: setLocation, options: facets?.locations }] as const).map(filter => <label key={filter.key}>{t(filter.key)}<select value={filter.value} onChange={event => { filter.update(event.target.value); setAfter(0); }} className="block w-full rounded border border-subtle bg-canvas p-2"><option value="">{t('bayanAll')}</option>{filter.options?.map(option => <option key={option} value={option}>{option}</option>)}</select></label>)}
     </aside>}
-    {panel === 'poet' && <PoetBrowser key={`${language}:${era}`} language={language} era={era} onPoet={id => { setPoetId(id); setAfter(0); setPanel(null); }} />}
+    {panel === 'poet' && <PoetBrowser key={`${language}:${era}:${location}`} language={language} era={era} location={location} onPoet={id => { setPoetId(id); setAfter(0); setPanel(null); }} />}
     <input type="search" dir="auto" aria-label={t('bayanSearch')} placeholder={t('bayanSearch')} value={query} onChange={event => { setQuery(event.target.value); setAfter(0); }} className="my-4 rounded-lg border border-subtle bg-surface p-3 text-start" />
     <div ref={resultsElement} aria-busy={loading} className="min-h-0 flex-1 overflow-y-auto space-y-3">
       {failed ? <p role="alert">{t('bayanUnavailable')}</p> : !items.length ? <p role="status">{t('bayanEmpty')}</p> : items.map(item => <article key={item.id} dir={item.language === 'ar' ? 'rtl' : 'ltr'} className="rounded-xl border border-subtle bg-surface p-4 text-start leading-loose">
-        <h2 className="font-semibold"><button type="button" onClick={() => void openPoem(item.id)}>{item.title || item.poetName}</button></h2><p>{item.poetName}</p><p className="text-sm text-muted">{[item.meter, item.theme].filter(Boolean).join(' · ')}</p>
+        <h2 className="font-semibold"><button type="button" onClick={() => void openPoem(item.id)}>{item.title || item.poetName}</button></h2><p>{item.poetName}</p><p className="text-sm text-muted">{[item.meter, item.theme, t('bayanVerseCountShort', { count: item.verseCount.toLocaleString(lang) })].filter(Boolean).join(' · ')}</p>
         {item.match && <PoetryExcerpt lines={item.match.lines} query={matchedQuery} onOpen={() => void openPoem(item.id, item.match!.from, item.match!.from + item.match!.lines.length - 1)} />}
       </article>)}
       {!failed && <div className="flex justify-between gap-3"><button type="button" disabled={loading || !after || history.key !== cursorKey || !history.cursors.length} onClick={() => { setLoading(true); setAfter(history.cursors.at(-1)!); setHistory(value => ({ ...value, cursors: value.cursors.slice(0, -1) })); }}>{t('bayanPrevious')}</button><button type="button" disabled={loading || next === null} onClick={() => { if (next === null) return; setLoading(true); setHistory(value => ({ key: cursorKey, cursors: [...(value.key === cursorKey ? value.cursors : []), after] })); setAfter(next); }}>{t('bayanNext')}</button></div>}

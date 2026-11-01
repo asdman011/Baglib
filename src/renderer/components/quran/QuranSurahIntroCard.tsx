@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronUp, X, Sparkles } from 'lucide-react';
-import type { QuranSurahIntro } from '../../../shared/types/quran';
+import { BookOpen, ChevronDown, ChevronUp, X } from 'lucide-react';
+import type { QuranPassage, QuranSurahIntro } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
+import { QuranRichText } from './QuranRichText';
 
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
@@ -11,10 +12,14 @@ export function QuranSurahIntroCard({
   intro,
   t,
   onClose,
+  surah,
+  derived = false,
 }: {
   intro: QuranSurahIntro;
   t: Translate;
   onClose?: () => void;
+  surah?: QuranPassage['surahs'][number];
+  derived?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -51,6 +56,12 @@ export function QuranSurahIntroCard({
         )}
       </div>
 
+      {surah?.revelationPlace && (
+        <p className="mt-3 text-xs text-muted" data-quran-surah-facts>
+          {[t(surah.revelationPlace === 'madinah' ? 'quranRevelationMadinah' : 'quranRevelationMakkah'), surah.revelationOrder ? t('quranRevelationOrder', { order: surah.revelationOrder }) : '', t('quranSurahAyahCount', { count: surah.count })].filter(Boolean).join(' · ')}
+        </p>
+      )}
+
       {intro.shortText && (
         <div className="mt-3 text-sm text-foreground/90 leading-relaxed font-sans bg-pale-sky-500/5 dark:bg-pale-sky-900/10 p-3 rounded-xl border border-subtle">
           <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">
@@ -61,10 +72,12 @@ export function QuranSurahIntroCard({
       )}
 
       {expanded && intro.text && (
-        <div className="mt-3 pt-3 border-t border-subtle text-sm text-foreground/85 leading-relaxed font-sans space-y-3 whitespace-pre-line">
-          <p>{intro.text}</p>
+        <div dir="auto" className="mt-3 pt-3 border-t border-subtle text-sm text-foreground/85 leading-relaxed font-sans space-y-3">
+          {intro.nodes ? <QuranRichText nodes={intro.nodes} /> : <p className="whitespace-pre-line">{intro.text}</p>}
         </div>
       )}
+
+      {derived && <p className="mt-3 text-xs text-muted">{t('quranArabicCopyNotice')}</p>}
 
       {intro.text && (
         <button

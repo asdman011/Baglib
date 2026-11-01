@@ -4,7 +4,7 @@ export class PoetryQueryProcess {
   private sequence = 0;
   private pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   constructor(private entry: string, private filename: string) {}
-  query(operation: 'search' | 'detail' | 'facets' | 'poets', input?: unknown): Promise<unknown> {
+  query(operation: 'search' | 'detail' | 'facets' | 'variants' | 'poets', input?: unknown): Promise<unknown> {
     if (this.pending.size >= 32) return Promise.reject(new Error('poetry-busy'));
     if (!this.worker) {
       const worker = new Worker(this.entry, { workerData: { filename: this.filename } });

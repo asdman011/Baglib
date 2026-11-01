@@ -33,6 +33,7 @@ export function registerPoetryIpc(): void {
   });
   register('poetry:detail', input => getDatabase().query('detail', input));
   register('poetry:facets', () => getDatabase().query('facets'));
+  register('poetry:variants', () => getDatabase().query('variants'));
   register('poetry:poets', input => getDatabase().query('poets', input));
   register('poetry:provision', () => provisioning().start());
   register('poetry:status', () => provisioning().getStatus());

@@ -41,6 +41,10 @@ const run = async (request: QuranReaderRequest) => {
         ? await reader!.ayahTopics(request.pack, request.surah, request.ayah)
         : request.action === 'search-topics'
         ? await reader!.searchTopics(request.pack, request.text)
+        : request.action === 'topics'
+        ? await reader!.topics(request.pack, request.ids)
+        : request.action === 'structure'
+        ? await reader!.structure()
         : await reader!.similarAyahs(request.pack, request.surah, request.ayah);
     port.postMessage({ id: request.id, ok: true, data });
   } catch (error) {

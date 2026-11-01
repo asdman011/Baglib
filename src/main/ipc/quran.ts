@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { QuranLibraryService, type QuranInstaller } from '../services/quran/quran-library.service';
 import { category, QUL_ORIGIN, validateSourceUrl } from '../services/quran/qul-catalog';
-import type { QuranAPI, QuranAyahAudio, QuranAyahTheme, QuranError, QuranLibrary, QuranPack, QuranResult, QuranSimilarAyah, QuranSurahIntro, QuranTopic } from '../../shared/types/quran';
+import type { QuranAPI, QuranAyahAudio, QuranAyahTheme, QuranError, QuranLibrary, QuranPack, QuranResult, QuranSimilarAyah, QuranStructure, QuranSurahIntro, QuranTopic } from '../../shared/types/quran';
 import { QuranReaderProcess } from '../services/quran/quran-reader-process';
 import { canonicalResourceId, presetResource, readerPreset, readerPresets } from '../services/quran/reader-resources';
 import { downloadToFile, selectedExport } from '../services/quran/resource-download';
@@ -275,7 +275,7 @@ export function registerQuranIpc(): void {
     return null;
   }));
   ipcMain.handle('quran:read', (event, query) => result(event, async () => {
-    if (!query || typeof query.script !== 'string' || ['translation', 'meanings', 'transliteration'].some(key => query[key] !== undefined && typeof query[key] !== 'string')) throw new Error('invalid-resource');
+    if (!query || typeof query.script !== 'string' || ['translation', 'meanings', 'transliteration', 'ayahTransliteration'].some(key => query[key] !== undefined && typeof query[key] !== 'string')) throw new Error('invalid-resource');
     return readRequest({ action: 'read', query });
   }));
   ipcMain.handle('quran:search-ayahs', (event, query) => result(event, async () => {
@@ -388,6 +388,11 @@ export function registerQuranIpc(): void {
     if (!query || typeof query.text !== 'string' || query.text.length > 200 || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
     return readRequest<QuranTopic[]>({ action: 'search-topics', pack: query.pack, text: query.text });
   }));
+  ipcMain.handle('quran:topics', (event, query) => result(event, async () => {
+    if (!query || !Array.isArray(query.ids) || query.ids.length > 100 || query.ids.some((id: unknown) => !Number.isSafeInteger(id) || (id as number) < 1) || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
+    return readRequest<QuranTopic[]>({ action: 'topics', pack: query.pack, ids: query.ids });
+  }));
+  ipcMain.handle('quran:structure', event => result(event, () => readRequest<QuranStructure>({ action: 'structure' })));
   ipcMain.handle('quran:similar-ayahs', (event, query) => result(event, async () => {
     if (!query || !Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.ayah) || query.ayah < 1 || query.ayah > 300 || (query.pack !== undefined && typeof query.pack !== 'string')) throw new Error('invalid-resource');
     return readRequest<QuranSimilarAyah[]>({ action: 'similar-ayahs', pack: query.pack, surah: query.surah, ayah: query.ayah });

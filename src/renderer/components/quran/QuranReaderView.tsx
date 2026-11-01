@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Copy, CopyCheck, Download, Layers, Play, Pause, Settings2, X, Maximize2, Minimize2 } from 'lucide-react';
-import type { QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranPassage, QuranReaderCatalog, QuranRichNode, QuranSurahIntro } from '../../../shared/types/quran';
+import type { QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranPassage, QuranReaderCatalog, QuranStructure, QuranSurahIntro } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { QuranMushafWorkspace } from './QuranMushafWorkspace';
@@ -10,6 +10,9 @@ import { QuranAudioPlayer, type QuranAudioState } from './QuranAudioPlayer';
 import { QuranSurahIntroCard } from './QuranSurahIntroCard';
 import { QuranAyahInspector } from './QuranAyahInspector';
 import { QuranTranslationText } from './QuranTranslationText';
+import { QuranRichText } from './QuranRichText';
+import { QuranStructureNav } from './QuranStructureNav';
+import { quranLocalizedSource } from '../../../shared/quran-structure';
 import type { QuranAyahDetails } from '../../../shared/types/quran';
 import { consumeQuranAyah, QURAN_OPEN_EVENT, type QuranTarget } from '../../utils/quran-navigation';
 import { QuranKhatmahDock } from './QuranKhatmah';
@@ -18,10 +21,7 @@ import { quranPageKeyDelta, quranReadingKeyTarget } from './quran-page-keys';
 
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 const emptyCatalog: QuranReaderCatalog = { sources: [], presets: [] };
-
-function RichText({ nodes }: { nodes: QuranRichNode[] }) {
-  return <>{nodes.map((node, index) => node.tag === 'text' ? <React.Fragment key={index}>{node.text}</React.Fragment> : React.createElement(node.tag, { key: index }, node.tag === 'br' ? undefined : <RichText nodes={node.children || []} />))}</>;
-}
+const emptySelection = { script: '', translation: '', meanings: '', transliteration: '', ayahTransliteration: '', tafsir: '' };
 
 export function QuranPassageView({
   passage,
@@ -106,7 +106,7 @@ export function QuranPassageView({
             </div>
           </div>
           {selected === ayah.number && <aside className="mt-4 border-t border-subtle pt-4" aria-label={t('quranCatTafsir')}>
-            {commentary ? <><p dir="ltr" className="text-sm text-muted mb-3">{commentary.from} – {commentary.to}</p><div dir="rtl" lang="ar" className="font-reading text-xl leading-[2.2] break-words space-y-3"><RichText nodes={commentary.nodes} /></div></> : <p role="status">{t('quranLoading')}</p>}
+            {commentary ? <><p dir="ltr" className="text-sm text-muted mb-3">{commentary.from} – {commentary.to}</p><div dir="rtl" lang="ar" className="font-reading text-xl leading-[2.2] break-words space-y-3"><QuranRichText nodes={commentary.nodes} /></div></> : <p role="status">{t('quranLoading')}</p>}
           </aside>}
         </article>
       </React.Fragment>;
@@ -118,7 +118,8 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
   const { t, lang, dir } = useWorkspace();
   const root = useRef<HTMLElement>(null);
   const [catalog, setCatalog] = useState(emptyCatalog);
-  const [selection, setSelection] = useState({ script: '', translation: '', meanings: '', transliteration: '', tafsir: '' });
+  const [selection, setSelection] = useState(emptySelection);
+  const [structure, setStructure] = useState<QuranStructure | null>(null);
   const [layoutId, setLayoutId] = useState('');
   const [pageNumber, setPageNumber] = useState(1);
   const [page, setPage] = useState<QuranMushafPage | null>(null);
@@ -149,10 +150,14 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
   const layout = layouts.find(source => source.id === layoutId) || layouts.find(source => source.kind === 'mushaf-layout') || layouts[0];
   const svgLayoutId = catalog.sources.find(source => source.kind === 'mushaf-layout' && source.profile === profile)?.id;
   const reciters = catalog.sources.filter(source => source.kind === 'recitation' && source.profile === profile);
-  const missing = catalog.presets.filter(preset => !preset.installed);
+  const missing = catalog.presets.filter(preset => !preset.installed && !preset.importOnly);
+  const surahInfo = quranLocalizedSource(catalog.sources, 'surah-info', lang);
+  const topicSource = quranLocalizedSource(catalog.sources, 'ayah-topics', lang);
+  const themeSource = quranLocalizedSource(catalog.sources, 'ayah-theme', lang);
+  const metadata = useMemo(() => ({ topics: topicSource?.id, themes: themeSource?.id, derived: topicSource?.language === 'ar' || themeSource?.language === 'ar' }), [topicSource, themeSource]);
   const queryKey = JSON.stringify([layout?.id, pageNumber, selection.script]);
   const [loadedKey, setLoadedKey] = useState('');
-  const selectors = [['script', 'script', 'quranScriptChoice'], ['translation', 'translation', 'quranTranslationChoice'], ['meanings', 'word-translation', 'quranMeaningsChoice'], ['transliteration', 'word-transliteration', 'quranTransliterationChoice'], ['tafsir', 'tafsir', 'quranTafsirChoice']] as const;
+  const selectors = [['script', 'script', 'quranScriptChoice'], ['translation', 'translation', 'quranTranslationChoice'], ['meanings', 'word-translation', 'quranMeaningsChoice'], ['transliteration', 'word-transliteration', 'quranTransliterationChoice'], ['ayahTransliteration', 'ayah-transliteration', 'quranAyahTransliterationChoice'], ['tafsir', 'tafsir', 'quranTafsirChoice']] as const;
 
   useEffect(() => {
     let alive = true;
@@ -175,7 +180,7 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
           if (sources.some(source => source.id === previous.script)) {
             const profile = sources.find(source => source.id === previous.script)?.profile;
             const next = { ...previous };
-            for (const [field, kind] of [['translation', 'translation'], ['tafsir', 'tafsir'], ['meanings', 'word-translation'], ['transliteration', 'word-transliteration']] as const) {
+            for (const [field, kind] of [['translation', 'translation'], ['tafsir', 'tafsir'], ['meanings', 'word-translation'], ['transliteration', 'word-transliteration'], ['ayahTransliteration', 'ayah-transliteration']] as const) {
               if (!customized.current.has(field) && !next[field]) next[field] = sources.find(source => source.kind === kind && source.profile === profile)?.id || '';
               if (next[field] && !sources.some(source => source.id === next[field])) next[field] = '';
             }
@@ -183,7 +188,7 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
           }
           const script = sources.find(source => source.kind === 'script' && source.profile === 'hafs') || sources.find(source => source.kind === 'script');
           const find = (kind: string) => sources.find(source => source.kind === kind && source.profile === script?.profile)?.id || '';
-          return { script: script?.id || '', translation: find('translation'), tafsir: find('tafsir'), meanings: find('word-translation'), transliteration: find('word-transliteration') };
+          return { script: script?.id || '', translation: find('translation'), tafsir: find('tafsir'), meanings: find('word-translation'), transliteration: find('word-transliteration'), ayahTransliteration: find('ayah-transliteration') };
         });
         setActiveReciterId(previous => result.data.sources.some(source => source.id === previous) ? previous : result.data.sources.find(source => source.kind === 'recitation')?.id || '');
       } catch (cause) { if (alive) setError(quranActionError(cause)); }
@@ -219,6 +224,13 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
     void client.read({ script: selection.script, surah: 1, from: 1 }).then(result => { if (alive && result.ok) setSurahs(result.data.surahs); }).catch(() => {});
     return () => { alive = false; };
   }, [selection.script]);
+
+  useEffect(() => {
+    if (profile !== 'hafs') return;
+    let alive = true;
+    void api()?.structure().then(result => { if (alive && result.ok) setStructure(result.data); }).catch(() => {});
+    return () => { alive = false; };
+  }, [profile, catalog]);
 
   useEffect(() => {
     if (!inspected) return;
@@ -275,7 +287,7 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
     const open = () => {
       const target = consumeQuranAyah();
       if (!target) return;
-      setSelection(previous => previous.script === target.script ? previous : { script: target.script, translation: '', meanings: '', transliteration: '', tafsir: '' });
+      setSelection(previous => previous.script === target.script ? previous : { ...emptySelection, script: target.script });
       setPendingTarget(target);
       if ('page' in target) { setLayoutId(target.layout); setTargetKhatmah(target.khatmah); }
       setAudioOpen(false); setAudioState(null);
@@ -310,9 +322,9 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
     let alive = true;
     const client = api();
     if (!client) return;
-    void client.surahIntro({ surah: pageSurah }).then(result => { if (alive) setIntro(result.ok ? result.data : null); }).catch(() => { if (alive) setIntro(null); });
+    void client.surahIntro({ surah: pageSurah, pack: surahInfo?.id }).then(result => { if (alive) setIntro(result.ok ? result.data : null); }).catch(() => { if (alive) setIntro(null); });
     return () => { alive = false; };
-  }, [pageSurah, showIntro]);
+  }, [pageSurah, showIntro, surahInfo?.id]);
 
   const copy = (text: string) => {
     const client = api();
@@ -323,7 +335,7 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
     setAudioOpen(false); setAudioState(null); setInspected(null); setPage(null); setPageNumber(1); setLayoutId('');
     const selectedProfile = catalog.sources.find(source => source.id === script)?.profile;
     const find = (kind: string) => catalog.sources.find(source => source.kind === kind && source.profile === selectedProfile)?.id || '';
-    setSelection({ script, translation: find('translation'), tafsir: find('tafsir'), meanings: find('word-translation'), transliteration: find('word-transliteration') });
+    setSelection({ script, translation: find('translation'), tafsir: find('tafsir'), meanings: find('word-translation'), transliteration: find('word-transliteration'), ayahTransliteration: find('ayah-transliteration') });
   };
   const startAudio = (reference: { surah: number; ayah: number }) => { setAudioAyah(reference); setAudioOpen(true); };
   return <section ref={root} dir={dir} data-quran-reader data-immersive={immersive || undefined} className={immersive ? 'fixed inset-0 z-[100] bg-canvas text-main overflow-hidden' : 'relative flex-1 min-h-0 min-w-0 h-full overflow-hidden text-main'} aria-label={t('quranRead')}>
@@ -336,15 +348,16 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
       <button type="button" aria-label={t('quranChooseResources')} title={t('quranChooseResources')} onClick={() => setSetup(value => !value)} className="p-2"><Download className="size-5" /></button>
       <button type="button" data-quran-fullscreen={immersive ? 'exit' : 'enter'} aria-label={t(immersive ? 'quranExitFullscreen' : 'quranEnterFullscreen')} title={t(immersive ? 'quranExitFullscreen' : 'quranEnterFullscreen')} onClick={() => { if (immersive) leaveFullscreen(); else { setImmersive(true); void root.current?.requestFullscreen?.().catch(() => {}); } }} className="p-2">{immersive ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}</button>
     </nav>
-    <nav className="quran-side-controls absolute left-0 top-0 z-20 w-36 rounded-ee-2xl border border-subtle bg-surface/95 p-2" aria-label={t('quranSurah')}>
+    <nav className="quran-side-controls absolute left-0 top-0 z-20 w-48 rounded-ee-2xl border border-subtle bg-surface/95 p-2" aria-label={t('quranSurah')}>
       <select aria-label={t('quranSurah')} value={page?.surahStart || 1} onChange={event => jumpReference({ surah: Number(event.target.value), ayah: 1 })} className="w-full min-w-0 bg-surface border border-subtle rounded-lg p-2 text-xs">{surahs.map(surah => <option key={surah.number} value={surah.number}>{surah.number} · {(lang === 'ar' ? surah.arabic : surah.name) || t('quranSurahNumber', { number: surah.number })}</option>)}</select>
       <button type="button" onClick={() => setShowIntro(value => !value)} className="w-full p-2 text-xs">{t('quranSurahIntro')}</button>
+      {structure && page?.profile === 'hafs' && <QuranStructureNav structure={structure} page={page} t={t} lang={lang} onNavigate={jumpReference} />}
     </nav>
     {error && <p role="alert" className="absolute top-16 inset-x-3 mx-auto z-50 w-fit max-w-[90%] rounded-xl bg-surface border border-red-500 p-3 text-sm">{t(error)}<button type="button" aria-label={t('quranClosePanel')} onClick={() => setError(null)} className="ms-2"><X className="size-4" /></button></p>}
     {notice && <p role="status" className="sr-only">{t(notice)}</p>}
     {page && loadedKey === queryKey && layout && <QuranKhatmahDock key={targetKhatmah} script={selection.script} layout={layout.id} page={page.pageNumber} visible={visible && !loading} targetPlan={targetKhatmah} />}
     {page && loadedKey === queryKey && layout && page.profile === profile ? <QuranMushafWorkspace
-      page={page} selection={selection} surahs={surahs} t={t} lang={lang} dir={dir} immersive={immersive} loading={loading}
+      page={page} selection={selection} metadata={metadata} surahs={surahs} t={t} lang={lang} dir={dir} immersive={immersive} loading={loading}
       selectedAyah={inspected} onSelectAyah={setInspected} onNavigatePage={navigatePage}
       onCopyText={copy} activeAudio={audioState} canPlay={reciters.length > 0} onStartAudio={startAudio}
       studyTarget={studyTarget} onStudyTargetConsumed={clearStudyTarget} onNavigateAyah={jumpReference}
@@ -364,7 +377,7 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
       <button type="button" className="rounded-lg border border-subtle p-2 text-sm ms-2" onClick={() => { const client = api(); if (client) void client.signIn().then(result => { if (!result.ok) setError(quranActionError(new Error(result.error))); }).catch(() => setError('quranNetworkError')); }}>{t('quranSignIn')}</button>
       <button type="button" className="rounded-lg border border-subtle p-2 text-sm mt-2" onClick={() => { const client = api(); if (client) void client.setup(catalog.presets.filter(preset => preset.id !== 'mushaf-layout/warsh-svg').map(preset => preset.id)).then(result => { if (!result.ok || result.data?.failed.length) setError('quranReaderError'); }).catch(() => setError('quranReaderError')); }}>{t('quranImportSelected')}</button>
     </aside>}
-    {showIntro && intro && <aside data-quran-popup className="absolute start-3 sm:start-14 top-16 z-40 w-96 max-w-[85%] max-h-[calc(100%-5rem)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] bg-surface rounded-2xl border border-subtle shadow-xl"><QuranSurahIntroCard intro={intro} t={t} onClose={() => setShowIntro(false)} /></aside>}
+    {showIntro && intro && <aside data-quran-popup className="absolute start-3 sm:start-14 top-16 z-40 w-96 max-w-[85%] max-h-[calc(100%-5rem)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] bg-surface rounded-2xl border border-subtle shadow-xl"><QuranSurahIntroCard intro={intro} t={t} surah={surahs.find(surah => surah.number === intro.surahNumber)} derived={surahInfo?.language === 'ar'} onClose={() => setShowIntro(false)} /></aside>}
     {inspected && <QuranAyahInspector floating reference={inspected} details={details} error={inspectionError} surahName={(lang === 'ar' ? surahs.find(surah => surah.number === inspected.surah)?.arabic : surahs.find(surah => surah.number === inspected.surah)?.name) || t('quranSurahNumber', { number: inspected.surah })} t={t} dir={dir} onClose={() => setInspected(null)} onCopy={copy} onStudy={() => { setStudyTarget(inspected); setInspected(null); }} />}
     {audioOpen && <div data-quran-audio-dock className="absolute bottom-3 inset-x-0 mx-auto z-40 w-[min(34rem,calc(100%-1.5rem))] max-h-[70%] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [&>div]:!relative [&>div]:!inset-auto [&>div]:!m-0 [&>div]:!max-w-none"><QuranAudioPlayer surah={audioAyah.surah} ayah={audioAyah.ayah} surahCount={surahs.find(surah => surah.number === audioAyah.surah)?.count || 300} reciters={reciters} activeReciterId={activeReciterId} onSelectReciter={setActiveReciterId} t={t} lang={lang} dir={dir} onAyahChange={(surah, ayah) => { setAudioAyah({ surah, ayah }); void jump(surah, ayah); }} onAudioStateChange={setAudioState} onClose={() => { setAudioOpen(false); setAudioState(null); }} /></div>}
   </section>;
