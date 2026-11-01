@@ -33,6 +33,11 @@ export interface OcrLine {
   bbox: OcrBoundingBox;
 }
 
+/** The engines a reader can choose. Windows OCR is only ever a fallback. */
+export type OcrEngineId = 'ocrmypdf' | 'paddleocr_vl';
+
+export const DEFAULT_OCR_ENGINE: OcrEngineId = 'ocrmypdf';
+
 export interface OcrPageResult {
   pageNumber: number;
   text: string;
@@ -40,20 +45,30 @@ export interface OcrPageResult {
   words: OcrWord[];
   width: number;
   height: number;
-  engine: 'windows_media_ocr' | 'macos_vision' | 'fallback_ocr' | 'paddleocr_vl';
+  /** The engine that actually produced this text. */
+  engine: 'windows_media_ocr' | 'macos_vision' | 'fallback_ocr' | OcrEngineId;
   durationMs: number;
   markdown?: string;
   tables?: Array<{ headers: string[]; rows: string[][] }>;
+  /** The chosen engine, and why the OS engine answered in its place. */
+  requestedEngine?: OcrEngineId;
+  fallbackReason?: OcrFallbackReason;
+  missingPackages?: string[];
 }
 
+export type OcrFallbackReason = 'runtime-missing' | 'model-missing' | 'engine-failed' | 'empty-result';
+
 export interface OcrEngineInfo {
-  id: 'paddleocr_vl';
+  id: OcrEngineId;
   name: string;
   version: string;
   parameters: string;
   device: string;
   modelPath: string;
   isDownloaded: boolean;
+  /** False until the engine's programs and Python packages are all present. */
+  runtimeReady: boolean;
+  missingPackages: string[];
   existingFilesCount?: number;
   totalExpectedFiles?: number;
   downloadedMb?: number;
@@ -87,6 +102,8 @@ export interface OcrRecognizePageParams {
   filePath?: string;
   pageNumber?: number;
   language?: OcrLanguage;
+  /** Defaults to the reader's saved choice. */
+  engine?: OcrEngineId;
 }
 
 export interface OcrRecognizeDocumentParams {
@@ -96,6 +113,8 @@ export interface OcrRecognizeDocumentParams {
   endPage?: number;
   language?: OcrLanguage;
   autoIndexFts?: boolean;
+  /** Defaults to the reader's saved choice. */
+  engine?: OcrEngineId;
 }
 
 export interface OcrProgressPayload {

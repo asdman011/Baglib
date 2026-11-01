@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Hourglass, AlertCircle, X, ShieldAlert, Sparkles } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { translations } from '../../translations';
 
 export interface QuotaWarningPayload {
   level: 'warning' | 'depleted';
@@ -27,18 +28,16 @@ export const QuotaWarningBanner: React.FC = () => {
             level: 'depleted',
             remainingPercentage: 0,
             resetsAt: status.resetsAt,
-            messageEn: "Daily search limit reached. We'll use alternative book sources until tomorrow.",
-            messageAr: 'اكتمل الحد اليومي للبحث لهذا اليوم. سنعتمد على مصادر الكتب البديلة حتى يوم غد.',
+            messageEn: translations.en.quotaDepletedDefault,
+            messageAr: translations.ar.quotaDepletedDefault,
           });
         } else if (status.mode === 'conservation') {
           setWarning({
             level: 'warning',
             remainingPercentage: status.remainingPercentage || 25,
             resetsAt: status.resetsAt,
-            messageEn:
-              'Daily search limit is running low. Lookups may take a brief moment longer as Baglib spaces out requests and checks secondary catalogs. Full speed will refresh tomorrow.',
-            messageAr:
-              'قارب الحد اليومي للبحث السريع عن الكتب على الانتهاء. قد يستغرق البحث لحظات إضافية لتنظيم الاستخدام والاعتماد على فهارس بديلة، وسيتجدد الحد بالكامل غدًا.',
+            messageEn: translations.en.quotaWarningDefault,
+            messageAr: translations.ar.quotaWarningDefault,
           });
         }
       }).catch((err) => {

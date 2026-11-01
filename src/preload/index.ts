@@ -52,6 +52,8 @@ const quran: QuranAPI = {
   mutashabihat: query => ipcRenderer.invoke('quran:mutashabihat', query),
   ayahTopics: query => ipcRenderer.invoke('quran:ayah-topics', query),
   searchTopics: query => ipcRenderer.invoke('quran:search-topics', query),
+  topics: query => ipcRenderer.invoke('quran:topics', query),
+  structure: () => ipcRenderer.invoke('quran:structure'),
   similarAyahs: query => ipcRenderer.invoke('quran:similar-ayahs', query),
   setup: ids => ipcRenderer.invoke('quran:setup', ids),
   library: query => ipcRenderer.invoke('quran:library', query),
@@ -68,7 +70,8 @@ const sunnah: SunnahAPI = {
   share: text => ipcRenderer.invoke('sunnah:share', text),
   catalog: () => ipcRenderer.invoke('sunnah:catalog'),
   research: id => ipcRenderer.invoke('sunnah:research', id),
-  openSource: id => ipcRenderer.invoke('sunnah:source', id),
+  openSource: (id, kind) => ipcRenderer.invoke('sunnah:source', id, kind),
+  narrator: id => ipcRenderer.invoke('sunnah:narrator', id),
   search: query => ipcRenderer.invoke('sunnah:search', query),
   importCorpus: language => ipcRenderer.invoke('sunnah:import', language),
   chapter: (collection, number) => ipcRenderer.invoke('sunnah:chapter', collection, number),
@@ -85,6 +88,7 @@ export const API = {
     status: (): ReturnType<import('../shared/types/poetry').PoetryAPI['status']> => ipcRenderer.invoke('poetry:status'),
     poets: (query: import('../shared/types/poetry').PoetQuery): ReturnType<import('../shared/types/poetry').PoetryAPI['poets']> => ipcRenderer.invoke('poetry:poets', query),
     facets: (): ReturnType<import('../shared/types/poetry').PoetryAPI['facets']> => ipcRenderer.invoke('poetry:facets'),
+    variants: (): ReturnType<import('../shared/types/poetry').PoetryAPI['variants']> => ipcRenderer.invoke('poetry:variants'),
     search: (query: import('../shared/types/poetry').PoetryQuery): ReturnType<import('../shared/types/poetry').PoetryAPI['search']> => ipcRenderer.invoke('poetry:search', query),
     detail: (id: number): ReturnType<import('../shared/types/poetry').PoetryAPI['detail']> => ipcRenderer.invoke('poetry:detail', id),
     narrations: (poemId: number): ReturnType<import('../shared/types/poetry').PoetryAPI['narrations']> => ipcRenderer.invoke('poetry:narrations', poemId),
@@ -146,6 +150,9 @@ export const API = {
   // Local OCR Engine for Scanned Documents & Manuscripts (Story 3.2 / KEY-141)
   ocrIsSupported: () => ipcRenderer.invoke('ocr:is-supported'),
   ocrGetEngineInfo: () => ipcRenderer.invoke('ocr:get-engine-info'),
+  ocrGetEngines: () => ipcRenderer.invoke('ocr:get-engines'),
+  ocrGetPreferredEngine: () => ipcRenderer.invoke('ocr:get-preferred-engine'),
+  ocrSetPreferredEngine: (engine: import('../shared/types/ocr').OcrEngineId) => ipcRenderer.invoke('ocr:set-preferred-engine', engine),
   ocrDownloadModel: () => ipcRenderer.invoke('ocr:download-model'),
   onOcrDownloadProgress: (callback: (payload: import('../shared/types/ocr').OcrModelDownloadProgress) => void) => {
     const subscription = (_: unknown, value: Parameters<typeof callback>[0]) => callback(value);
@@ -535,7 +542,13 @@ export const API = {
     clipHtml: (options: unknown) => ipcRenderer.invoke('clipper:clip-html', options),
     scrapeNovel: (options: unknown) => ipcRenderer.invoke('clipper:scrape-novel', options),
     openBrowser: (initialUrl?: string) => ipcRenderer.invoke('clipper:open-browser', initialUrl),
-    clipBrowser: () => ipcRenderer.invoke('clipper:clip-browser'),
+    clipBrowser: (targetFormat?: string, contentsLabel?: string) => ipcRenderer.invoke('clipper:clip-browser', targetFormat, contentsLabel),
+  },
+
+  // WeasyPrint PDF export from the reader
+  pdfExport: {
+    saveBook: (input: unknown) => ipcRenderer.invoke('pdf-export:book', input),
+    saveHtml: (input: unknown) => ipcRenderer.invoke('pdf-export:html', input),
   },
 
   // Reading Statistics & Analytics Dashboard (KEY-149)
@@ -580,6 +593,8 @@ export const API = {
   pdfEditor: {
     viewSource: input => ipcRenderer.invoke('pdf-editor:view-source', input),
     releaseViewSource: id => ipcRenderer.invoke('pdf-editor:release-view-source', id),
+    evictViewSource: id => ipcRenderer.invoke('pdf-editor:evict-view-source', id),
+    saveViewPreview: (id, page, preview) => ipcRenderer.invoke('pdf-editor:save-view-preview', id, page, preview),
     onViewSourceChanged: callback => {
       const listener = (_: unknown, id: string) => callback(id);
       ipcRenderer.on('pdf-editor:view-source-changed', listener);
@@ -600,6 +615,8 @@ export const API = {
     chooseSource: () => ipcRenderer.invoke('pdf-editor:choose-source'),
     blankSession: () => ipcRenderer.invoke('pdf-editor:blank-session'),
     chooseAsset: kind => ipcRenderer.invoke('pdf-editor:choose-asset', kind),
+    warmEngine: () => ipcRenderer.invoke('pdf-editor:warm-engine'),
+    chooseToolFiles: (extensions, multiple) => ipcRenderer.invoke('pdf-editor:choose-tool-files', extensions, multiple),
     clipboard: () => ipcRenderer.invoke('pdf-editor:clipboard'),
     save: input => ipcRenderer.invoke('pdf-editor:save', input),
     saveCopy: id => ipcRenderer.invoke('pdf-editor:save-copy', id),
@@ -621,7 +638,7 @@ export const API = {
     listVersions: (sessionId: string) => ipcRenderer.invoke('pdf-editor:versions:list', sessionId),
     restoreVersion: (sessionId: string, versionFilename: string) => ipcRenderer.invoke('pdf-editor:versions:restore', sessionId, versionFilename),
     undoVersion: (sessionId: string) => ipcRenderer.invoke('pdf-editor:versions:undo', sessionId),
-    deleteVersion: (versionFilename: string) => ipcRenderer.invoke('pdf-editor:versions:delete', versionFilename),
+    deleteVersion: (sessionId: string, versionFilename: string) => ipcRenderer.invoke('pdf-editor:versions:delete', sessionId, versionFilename),
     onSourceChanged: callback => {
       const listener = (_: unknown, source: { workId: string | null; sourceId: string | null }) => callback(source);
       ipcRenderer.on('pdf-editor:source-changed', listener);

@@ -1,6 +1,6 @@
 export interface PoetryQuery {
   language?: 'ar' | 'en'; query?: string; poetId?: number;
-  meter?: string; theme?: string; era?: string; after?: number; limit?: number;
+  meter?: string; theme?: string; era?: string; variant?: string; location?: string; after?: number; limit?: number;
 }
 export interface PoetrySummary {
   id: number; title: string; language: 'ar' | 'en'; layoutType: 'bayt' | 'free_verse' | 'stanza';
@@ -15,6 +15,7 @@ export interface PoetryAPI {
   status(): Promise<PoetryResult<PoetryProvisionStatus>>;
   poets(query: PoetQuery): Promise<PoetryResult<{ items: PoetSummary[]; total: number; offset: number }>>;
   facets(): Promise<PoetryResult<PoetryFacets>>;
+  variants(): Promise<PoetryResult<string[]>>;
   search(query: PoetryQuery): Promise<PoetryResult<{ items: PoetrySummary[]; next: number | null }>>;
   detail(id: number): Promise<PoetryResult<PoetryDetail | null>>;
   narrations(poemId: number): Promise<PoetryResult<PoetryNarration[]>>;
@@ -34,11 +35,11 @@ export interface PoetryNarration {
 export interface PoetrySaveInput { poemId: number; from: number; to: number; type: 'note' | 'quote' | 'bookmark'; note?: string }
 export interface PoetrySavedItem { id: string; type: 'note' | 'quote' | 'bookmark'; reference: string; label: string; text: string | null; note: string | null; createdAt: string }
 export interface PoetryProvisionStatus { phase: 'idle' | 'downloading' | 'importing' | 'ready' | 'error'; downloaded: number; total: number | null; imported: number; error?: 'python' | 'integrity' | 'failed' }
-export interface PoetQuery { language: 'ar' | 'en'; query?: string; era?: string; offset?: number }
-export interface PoetSummary { id: number; name: string; era: string | null; poemCount: number }
+export interface PoetQuery { language: 'ar' | 'en'; query?: string; era?: string; location?: string; offset?: number }
+export interface PoetSummary { id: number; name: string; era: string | null; location: string | null; poemCount: number }
 export interface PoetryFacets {
   languages: { language: 'ar' | 'en'; count: number }[];
-  eras: string[]; meters: string[]; themes: string[];
+  eras: string[]; meters: string[]; themes: string[]; locations: string[];
 }
 export interface PoetryDetail {
   id: number; title: string; language: 'ar' | 'en'; layout_type: 'bayt' | 'free_verse' | 'stanza';

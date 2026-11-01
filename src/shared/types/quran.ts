@@ -126,6 +126,8 @@ export interface QuranAPI {
   mutashabihat: (query: { script: string; surah: number; ayah: number }) => Promise<QuranResult<QuranPhraseMatch[]>>;
   ayahTopics: (query: { surah: number; ayah: number; pack?: string }) => Promise<QuranResult<QuranTopic[]>>;
   searchTopics: (query: { text: string; pack?: string }) => Promise<QuranResult<QuranTopic[]>>;
+  topics: (query: { ids: number[]; pack?: string }) => Promise<QuranResult<QuranTopic[]>>;
+  structure: () => Promise<QuranResult<QuranStructure>>;
   similarAyahs: (query: { surah: number; ayah: number; pack?: string }) => Promise<QuranResult<QuranSimilarAyah[]>>;
   setup: (ids: string[]) => Promise<QuranResult<{ installed: string[]; missing: string[]; failed: string[] } | null>>;
   library: (query?: { category?: QuranCategory; search?: string; offset?: number; view?: 'all' | 'installed' | 'downloads' }) => Promise<QuranResult<QuranLibrary>>;
@@ -138,14 +140,14 @@ export interface QuranAPI {
   onChanged: (listener: () => void) => () => void;
 }
 
-export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs' | 'mushaf-layout' | 'recitation' | 'surah-info' | 'ayah-theme' | 'ayah-topics' | 'similar-ayah' | 'word-root' | 'word-lemma' | 'word-stem' | 'mutashabihat' | 'glyph-script' | 'glyph-layout' | 'font';
-export interface QuranReaderSource { id: string; title: string; kind: QuranReaderKind; profile: 'hafs' | 'warsh'; }
-export interface QuranReaderCatalog { sources: QuranReaderSource[]; presets: { id: string; title: string; kind: QuranReaderKind; installed: boolean }[]; }
-export interface QuranReadQuery { script: string; surah: number; from: number; translation?: string; meanings?: string; transliteration?: string; }
-export interface QuranRichNode { tag: 'text' | 'p' | 'div' | 'br' | 'b' | 'i' | 'u' | 'sup'; text?: string; children?: QuranRichNode[]; }
-export interface QuranAyah { number: number; words: { position: number; text: string; marker: boolean; meaning?: string; transliteration?: string }[]; translation?: QuranTranslation; }
+export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs' | 'mushaf-layout' | 'recitation' | 'surah-info' | 'ayah-theme' | 'ayah-topics' | 'similar-ayah' | 'word-root' | 'word-lemma' | 'word-stem' | 'mutashabihat' | 'glyph-script' | 'glyph-layout' | 'font' | 'ayah-transliteration' | 'juz' | 'hizb' | 'rub' | 'ruku' | 'manzil' | 'sajda';
+export interface QuranReaderSource { id: string; title: string; kind: QuranReaderKind; profile: 'hafs' | 'warsh'; language?: 'ar'; }
+export interface QuranReaderCatalog { sources: QuranReaderSource[]; presets: { id: string; title: string; kind: QuranReaderKind; installed: boolean; importOnly?: boolean }[]; }
+export interface QuranReadQuery { script: string; surah: number; from: number; translation?: string; meanings?: string; transliteration?: string; ayahTransliteration?: string; }
+export interface QuranRichNode { tag: 'text' | 'p' | 'div' | 'br' | 'b' | 'i' | 'u' | 'sup' | 'h2' | 'h3'; text?: string; children?: QuranRichNode[]; }
+export interface QuranAyah { number: number; words: { position: number; text: string; marker: boolean; meaning?: string; transliteration?: string }[]; translation?: QuranTranslation; transliteration?: QuranRichNode[]; }
 export interface QuranTranslation { text: string; notes: string[]; anchors?: { offset: number; note: number }[]; }
-export interface QuranPassage { profile: 'hafs' | 'warsh'; surah: number; surahs: { number: number; count: number; arabic?: string; name?: string }[]; basmala?: string; ayahs: QuranAyah[]; next: number | null; }
+export interface QuranPassage { profile: 'hafs' | 'warsh'; surah: number; surahs: { number: number; count: number; arabic?: string; name?: string; revelationPlace?: string; revelationOrder?: number }[]; basmala?: string; ayahs: QuranAyah[]; next: number | null; }
 export interface QuranSearchHit { surah: number; ayah: number; text: string; }
 export interface QuranCommentary { from: string; to: string; nodes: QuranRichNode[]; }
 export interface QuranAyahDetails { surah: number; ayah: number; profile: 'hafs' | 'warsh'; canonical: string; imlaey: string | null; }
@@ -155,7 +157,10 @@ export interface QuranMushafWord { id: string; surah: number; ayah: number; word
 export interface QuranMushafPage { pageNumber: number; totalPages: number; surahStart: number; ayahStart: number; surahEnd: number; ayahEnd: number; svg: string; profile: 'hafs' | 'warsh'; layoutMode?: 'adapted'; words: QuranMushafWord[]; fontUrl?: string; basmala?: string; glyphLines?: { number: number; type: string; centered: boolean; surah: number; words: { surah: number; ayah: number; position: number; glyph: string; text: string; marker?: boolean }[] }[]; }
 export type QuranAudioSegment = [fromWord: number, toWord: number, startMs: number, endMs: number];
 export interface QuranAyahAudio { surah: number; ayah: number; audioUrl: string; duration: number | null; segments: QuranAudioSegment[]; localUrl?: string; cached?: boolean; profile?: 'hafs' | 'warsh'; }
-export interface QuranSurahIntro { surahNumber: number; surahName: string; text: string; shortText: string; }
+export interface QuranSurahIntro { surahNumber: number; surahName: string; text: string; shortText: string; nodes?: QuranRichNode[]; }
+export interface QuranDivision { number: number; first: string; last: string; surahRuku?: number; }
+export interface QuranSajdah { number: number; reference: string; type: string; }
+export interface QuranStructure { juz: QuranDivision[]; hizb: QuranDivision[]; rub: QuranDivision[]; ruku: QuranDivision[]; manzil: QuranDivision[]; sajdah: QuranSajdah[]; }
 export interface QuranAyahTheme { theme: string; surahNumber: number; ayahFrom: number; ayahTo: number; keywords: string[]; totalAyahs: number; }
 export interface QuranTopic { topicId: number; name: string; arabicName: string; parentId: number | null; thematicParentId: number | null; ontologyParentId: number | null; description: string; wikiLink: string; thematic: boolean; ontology: boolean; ayahs: { surah: number; ayah: number }[]; relatedTopics: number[]; }
 export interface QuranSimilarAyah {

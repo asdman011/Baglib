@@ -26,15 +26,19 @@ export interface ClippedArticle {
   images: string[];
 }
 
+export type ClipFormat = 'epub' | 'markdown' | 'pdf';
+
 export interface ClipOptions {
   url: string;
   html?: string;
-  targetFormat?: 'epub' | 'markdown';
+  targetFormat?: ClipFormat;
   downloadImages?: boolean;
   customTitle?: string;
   customAuthor?: string;
   language?: string;
   importToLibrary?: boolean;
+  /** Heading of a PDF contents page, in the interface language. */
+  contentsLabel?: string;
 }
 
 export interface SerializedChapterItem {
@@ -55,7 +59,25 @@ export interface SerializedNovelOptions {
   concurrency?: number;
   downloadImages?: boolean;
   importToLibrary?: boolean;
+  targetFormat?: ClipFormat;
+  contentsLabel?: string;
 }
+
+export interface PdfExportBookInput {
+  title: string;
+  author?: string;
+  language?: string;
+  direction?: 'rtl' | 'ltr';
+  contentsLabel?: string;
+  chapters: EpubChapterInput[];
+}
+
+export interface PdfExportHtmlInput {
+  fileName: string;
+  html: string;
+}
+
+export type PdfExportResult = { ok: true; filePath: string } | { ok: false; error: 'cancelled' | 'engine-missing' | 'engine-failed' };
 
 export interface ClipProgressEvent {
   stage: 'fetching' | 'extracting' | 'assets' | 'packaging' | 'importing' | 'completed' | 'error';
@@ -76,6 +98,6 @@ export interface ClipResult {
   fileSizeBytes?: number;
   chapterCount: number;
   imageCount: number;
-  format: 'epub' | 'markdown';
+  format: ClipFormat;
   error?: string;
 }

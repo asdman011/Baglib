@@ -1174,7 +1174,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* ================================================================= */}
         <div className="px-4 py-2.5 bg-canvas/50 border-b border-subtle overflow-x-auto scrollbar-none flex items-center gap-1.5">
           <span className="text-[11px] font-bold text-muted uppercase tracking-wider shrink-0 me-1">
-            {lang === 'ar' ? 'نوع المصنف:' : 'Work Type:'}
+            {t('workTypeLabel')}
           </span>
           {(Object.keys(WORK_TYPES) as WorkTypeKey[]).map((key) => {
             const info = WORK_TYPES[key];
@@ -1382,7 +1382,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   {isDiscoveringFile ? (
                     <div className="flex flex-col items-center justify-center text-pale-sky-500 p-1 text-center animate-pulse">
                       <RefreshCw className="w-5 h-5 animate-spin mb-1" />
-                      <span className="text-[9px] font-bold">{lang === 'ar' ? 'جاري البحث...' : 'Searching...'}</span>
+                      <span className="text-[9px] font-bold">{t('providerStatusRunning')}</span>
                     </div>
                   ) : formData.coverImage ? (
                     <img

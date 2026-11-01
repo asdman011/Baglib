@@ -10,6 +10,7 @@ import {
   Clock,
   Sparkles,
 } from 'lucide-react';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { RSVPController } from '../../libs/reader/rsvp-controller';
 import { RSVPState, RSVPWordToken, ReaderTheme } from '../../libs/reader/types';
 
@@ -28,6 +29,7 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
   direction = 'ltr',
   theme = 'light',
 }) => {
+  const { t } = useWorkspace();
   const [state, setState] = useState<RSVPState>({
     words: [],
     currentIndex: 0,
@@ -147,7 +149,7 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
         <div className="flex items-center justify-between text-xs font-bold text-muted border-b border-subtle/30 pb-3">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-pale-sky-500" />
-            <span>Speed Reader (RSVP)</span>
+            <span>{t('speedReaderBtn')}</span>
           </div>
 
           <div className="flex items-center gap-4">

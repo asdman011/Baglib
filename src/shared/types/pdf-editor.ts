@@ -22,7 +22,6 @@ export const PDF_FEATURES = [
   'add-image',
   'unlock-forms',
   'extract-images',
-  'convert-pdfa',
   'scale-pages',
   'multi-page-layout',
   'pdf-to-single-page',
@@ -65,7 +64,6 @@ export const PDF_ENGINE_OPERATIONS = [
   'add-image',
   'unlock-forms',
   'extract-images',
-  'convert-pdfa',
   'scale-pages',
   'multi-page-layout',
   'pdf-to-single-page',
@@ -82,9 +80,9 @@ export const PDF_ENGINE_OPERATIONS = [
   'convert-file-pdf',
 ] as const;
 export type PdfOperation = typeof PDF_ENGINE_OPERATIONS[number];
-export type PdfOutputFormat = 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'html' | 'json' | 'txt' | 'md' | 'csv' | 'zip';
+export type PdfOutputFormat = 'pdf' | 'docx' | 'odt' | 'xlsx' | 'pptx' | 'ppt' | 'odp' | 'html' | 'json' | 'txt' | 'md' | 'csv' | 'zip' | 'xml' | 'rtf' | 'png' | 'jpg';
 export interface PdfOutput { filename: string; format: PdfOutputFormat; bytes: number; sha256: string }
-export type PdfError = 'invalid-request' | 'invalid-source' | 'source-required' | 'source-changed' | 'encrypted' | 'permission-denied' | 'unsupported' | 'busy' | 'cancelled' | 'storage' | 'engine-missing' | 'engine-failed' | 'signed-document-locked' | 'text-does-not-fit' | 'owner-password-required' | 'no-tables' | 'no-redactions' | 'certificate-invalid' | 'invalid-output' | 'document-too-large';
+export type PdfError = 'invalid-request' | 'invalid-source' | 'source-required' | 'source-changed' | 'encrypted' | 'permission-denied' | 'unsupported' | 'busy' | 'cancelled' | 'storage' | 'engine-missing' | 'engine-failed' | 'signed-document-locked' | 'text-does-not-fit' | 'owner-password-required' | 'no-tables' | 'no-text' | 'no-bookmarks' | 'redaction-unverified' | 'no-redactions' | 'certificate-invalid' | 'invalid-output' | 'document-too-large' | 'no-output';
 export type PdfResult<T> = { ok: true; data: T } | { ok: false; error: PdfError };
 export interface PdfCapability { feature: PdfFeature; available: boolean; reason?: 'engine-missing' | 'text-only' | 'credentials-required' }
 export type StirlingEngineStatus = 'stopped' | 'starting' | 'ready' | 'processing' | 'error';
@@ -94,9 +92,11 @@ export interface StirlingEngineInfo {
   version?: string;
   externalTools?: {
     tesseract: boolean;
+    ocrmypdf?: boolean;
     libreoffice: boolean;
     qpdf: boolean;
     ghostscript: boolean;
+    weasyprint: boolean;
   };
 }
 export interface PdfSession { id: string; workId: string | null; sourceId: string | null; editionId: string | null; filename: string; sha256: string; previewUrl?: string }
@@ -114,11 +114,15 @@ export interface PdfJobRequest { sessionId: string; operation: PdfOperation; pas
 export interface PdfEngineResult { inspection?: PdfInspection; outputs?: PdfOutput[]; page?: number; width?: number; height?: number; image?: string; [key: string]: unknown }
 export interface PdfAsset { id: string; filename: string; kind: 'image' | 'certificate' | 'trust-root' }
 export interface PdfSaveRequest { jobId: string; outputIndex?: number; mode: 'copy' | 'overwrite' | 'edition' | 'new-work'; title?: string } 
-export interface PdfVersionItem { filename: string; timestamp: number; dateStr: string; size: number; operation?: string }
-export interface PdfViewSource { id: string; key: string; url: string; cached: boolean; pending: boolean }
+export interface PdfVersionItem {
+  restorePoint?: boolean; filename: string; timestamp: number; dateStr: string; size: number; operation?: string }
+export interface PdfViewPreview { image: string; width: number; height: number; pages: number }
+export interface PdfViewSource { id: string; key: string; url: string; cached: boolean; pending: boolean; preview?: PdfViewPreview }
 export interface PdfEditorAPI {
-  viewSource(input: { path: string; id?: string }): Promise<PdfResult<PdfViewSource>>;
+  viewSource(input: { path: string; id?: string; page?: number }): Promise<PdfResult<PdfViewSource>>;
   releaseViewSource(id: string): Promise<PdfResult<null>>;
+  evictViewSource(id: string): Promise<PdfResult<null>>;
+  saveViewPreview(id: string, page: number, preview: PdfViewPreview): Promise<PdfResult<null>>;
   onViewSourceChanged(callback: (id: string) => void): () => void;
   capabilities(): Promise<PdfCapability[]>;
   engineStatus(): Promise<PdfResult<StirlingEngineInfo>>;
@@ -131,6 +135,8 @@ export interface PdfEditorAPI {
   chooseSource(): Promise<PdfResult<PdfSession | null>>;
   blankSession(): Promise<PdfResult<PdfSession>>;
   chooseAsset(kind: PdfAsset['kind']): Promise<PdfResult<PdfAsset | null>>;
+  chooseToolFiles(extensions: string[], multiple: boolean): Promise<PdfResult<string[]>>;
+  warmEngine(): Promise<PdfResult<null>>;
   clipboard(): Promise<PdfResult<{ text?: string; asset?: PdfAsset }>>;
   save(input: PdfSaveRequest): Promise<PdfResult<{ saved: boolean; backup?: string; session?: PdfSession }>>;
   saveCopy(jobId: string): Promise<PdfResult<{ saved: boolean }>>;
@@ -140,7 +146,7 @@ export interface PdfEditorAPI {
   listVersions?(sessionId: string): Promise<PdfResult<PdfVersionItem[]>>;
   restoreVersion?(sessionId: string, versionFilename: string): Promise<PdfResult<{ restored: boolean; session?: PdfSession }>>;
   undoVersion?(sessionId: string): Promise<PdfResult<{ restored: boolean; session?: PdfSession }>>;
-  deleteVersion?(versionFilename: string): Promise<PdfResult<boolean>>;
+  deleteVersion?(sessionId: string, versionFilename: string): Promise<PdfResult<boolean>>;
   listPipelines?(): Promise<PdfResult<StirlingPipeline[]>>;
   savePipeline?(pipeline: StirlingPipeline): Promise<PdfResult<StirlingPipeline>>;
   deletePipeline?(id: string): Promise<PdfResult<boolean>>;

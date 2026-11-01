@@ -637,7 +637,7 @@ export const LibraryGridView: React.FC = () => {
     const newBook: BookItem = {
       id: `work-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       title: lang === 'ar' ? 'مادة جديدة في المكتبة' : 'New Library Material',
-      author: lang === 'ar' ? 'مؤلف جديد' : 'New Author',
+      author: t('newMaterialDefaultAuthor'),
       language: lang === 'ar' ? 'العربية' : 'English',
       categories: [],
       tags: ['#جديد'],
