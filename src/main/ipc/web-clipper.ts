@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { WebClipperService } from '../services/clipper/web-clipper.service';
 import { WebBrowserService } from '../services/clipper/web-browser.service';
-import type { ClipOptions, SerializedNovelOptions } from '../../shared/types/web-clipper';
+import type { ClipFormat, ClipOptions, SerializedNovelOptions } from '../../shared/types/web-clipper';
 
 export function registerWebClipperIpcHandlers(): void {
   const clipper = WebClipperService.getInstance();
@@ -23,7 +23,7 @@ export function registerWebClipperIpcHandlers(): void {
     return browser.openBrowserWindow(initialUrl);
   });
 
-  ipcMain.handle('clipper:clip-browser', async () => {
-    return browser.clipCurrentPage();
+  ipcMain.handle('clipper:clip-browser', async (_event, targetFormat?: ClipFormat, contentsLabel?: string) => {
+    return browser.clipCurrentPage(targetFormat, contentsLabel);
   });
 }

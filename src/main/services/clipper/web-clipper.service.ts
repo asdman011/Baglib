@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import { parseHTML } from 'linkedom';
 import type {
+  ClipFormat,
   ClipOptions,
   ClipProgressEvent,
   ClipResult,
@@ -14,7 +15,10 @@ import type {
 import { ReadabilityExtractorService } from './readability-extractor.service';
 import { AssetBundlerService } from './asset-bundler.service';
 import { EpubPackagerService } from './epub-packager.service';
+import { PdfPackagerService, inlineClippedImages } from './pdf-packager.service';
 import { DigitalImportPipelineService } from '../digital/digital-import-pipeline.service';
+
+const CLIP_EXTENSIONS: Record<ClipFormat, string> = { epub: 'epub', markdown: 'md', pdf: 'pdf' };
 
 function sanitizeFilename(title: string): string {
   const clean = title.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, ' ').trim();
@@ -26,15 +30,18 @@ export class WebClipperService {
   private extractor: ReadabilityExtractorService;
   private bundler: AssetBundlerService;
   private packager: EpubPackagerService;
+  private pdfPackager: PdfPackagerService;
 
   constructor(
     extractor?: ReadabilityExtractorService,
     bundler?: AssetBundlerService,
-    packager?: EpubPackagerService
+    packager?: EpubPackagerService,
+    pdfPackager?: PdfPackagerService
   ) {
     this.extractor = extractor || ReadabilityExtractorService.getInstance();
     this.bundler = bundler || AssetBundlerService.getInstance();
     this.packager = packager || EpubPackagerService.getInstance();
+    this.pdfPackager = pdfPackager || PdfPackagerService.getInstance();
   }
 
   public static getInstance(): WebClipperService {
@@ -45,7 +52,7 @@ export class WebClipperService {
   }
 
   /**
-   * Clip a single web article and package into EPUB or Markdown
+   * Clip a single web article and package into EPUB, Markdown or PDF
    */
   public async clipArticle(
     options: ClipOptions,
@@ -95,13 +102,15 @@ export class WebClipperService {
         fs.mkdirSync(clipsDir, { recursive: true });
       }
 
-      const fileName = `${sanitizeFilename(article.title)}.${format === 'markdown' ? 'md' : 'epub'}`;
+      const fileName = `${sanitizeFilename(article.title)}.${CLIP_EXTENSIONS[format]}`;
       const filePath = path.join(clipsDir, fileName);
 
       let fileBuffer: Buffer;
       if (format === 'markdown') {
         const mdText = this.packager.packageToMarkdown(article);
         fileBuffer = Buffer.from(mdText, 'utf-8');
+      } else if (format === 'pdf') {
+        fileBuffer = await this.pdfPackager.packageArticle(article, bundledHtml, images, options.contentsLabel);
       } else {
         fileBuffer = this.packager.packageArticleToEpub(article, bundledHtml, images);
       }
@@ -147,12 +156,13 @@ export class WebClipperService {
 
   /**
    * Scrapes serialized chapters (e.g. online novel, multi-part essay, documentation)
-   * and compiles them into a unified multi-chapter EPUB book.
+   * and compiles them into a unified multi-chapter EPUB, Markdown or PDF book.
    */
   public async scrapeSerializedNovel(
     options: SerializedNovelOptions,
     onProgress?: (event: ClipProgressEvent) => void
   ): Promise<ClipResult> {
+    const format = options.targetFormat || 'epub';
     try {
       onProgress?.({ stage: 'fetching', message: 'Discovering chapters...' });
 
@@ -219,9 +229,10 @@ export class WebClipperService {
               }
 
               let chapContent = chapArticle.content;
-              if (options.downloadImages) {
+              if (options.downloadImages && format !== 'markdown') {
                 const bundleRes = await this.bundler.bundleAssets(chapArticle.content, chapUrl);
-                chapContent = bundleRes.rewrittenHtml;
+                // Bundled paths repeat between chapters, so a PDF resolves them chapter by chapter.
+                chapContent = format === 'pdf' ? inlineClippedImages(bundleRes.rewrittenHtml, bundleRes.images) : bundleRes.rewrittenHtml;
                 totalImages.push(...bundleRes.images);
               }
 
@@ -251,27 +262,27 @@ export class WebClipperService {
       // Sort chapters by index
       chapters.sort((a, b) => a.index - b.index);
 
-      onProgress?.({ stage: 'packaging', message: 'Packaging multi-chapter EPUB...' });
+      onProgress?.({ stage: 'packaging', message: 'Packaging multi-chapter book...' });
 
       const clipsDir = path.join(os.tmpdir(), 'baglib-clips');
       if (!fs.existsSync(clipsDir)) {
         fs.mkdirSync(clipsDir, { recursive: true });
       }
 
-      const fileName = `${sanitizeFilename(novelTitle)}.epub`;
+      const fileName = `${sanitizeFilename(novelTitle)}.${CLIP_EXTENSIONS[format]}`;
       const filePath = path.join(clipsDir, fileName);
 
-      const epubBuffer = this.packager.packageSerializedNovelToEpub(
-        chapters,
-        {
-          title: novelTitle,
-          author: novelAuthor,
-          sourceUrl: options.url,
-        },
-        totalImages
-      );
+      const metadata = { title: novelTitle, author: novelAuthor, sourceUrl: options.url };
+      let fileBuffer: Buffer;
+      if (format === 'markdown') {
+        fileBuffer = Buffer.from(this.packager.packageSerializedNovelToMarkdown(chapters, metadata), 'utf-8');
+      } else if (format === 'pdf') {
+        fileBuffer = await this.pdfPackager.packageChapters(chapters, { ...metadata, contentsLabel: options.contentsLabel });
+      } else {
+        fileBuffer = this.packager.packageSerializedNovelToEpub(chapters, metadata, totalImages);
+      }
 
-      fs.writeFileSync(filePath, epubBuffer);
+      fs.writeFileSync(filePath, fileBuffer);
 
       let workId: string | undefined;
       if (options.importToLibrary !== false) {
@@ -292,10 +303,10 @@ export class WebClipperService {
         author: novelAuthor,
         filePath,
         fileName,
-        fileSizeBytes: epubBuffer.byteLength,
+        fileSizeBytes: fileBuffer.byteLength,
         chapterCount: chapters.length,
         imageCount: totalImages.length,
-        format: 'epub',
+        format,
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? errorMessage(err) : String(err);
@@ -304,7 +315,7 @@ export class WebClipperService {
         success: false,
         chapterCount: 0,
         imageCount: 0,
-        format: 'epub',
+        format,
         error: msg,
       };
     }

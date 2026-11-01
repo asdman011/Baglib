@@ -23,6 +23,7 @@ import {
   Pause,
   FilePenLine,
   ScanText,
+  FileDown,
 } from 'lucide-react';
 import type { BookItem } from '../../types/library';
 import type { BookFormat, ReaderViewMode } from '../../libs/reader/types';
@@ -58,6 +59,8 @@ interface ZenTopBarProps {
   onToggleKnowledge?: () => void;
   isKnowledgeOpen?: boolean;
   onTogglePlugins: () => void;
+  onSavePdf?: () => void;
+  isSavingPdf?: boolean;
   onReadAloud?: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -98,6 +101,8 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
   onToggleKnowledge,
   isKnowledgeOpen,
   onTogglePlugins,
+  onSavePdf,
+  isSavingPdf = false,
   onReadAloud,
   onMouseEnter,
   onMouseLeave,
@@ -325,6 +330,20 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
         >
           <Search className="w-4 h-4" />
         </button>
+
+        {/* Save a reflowable book as PDF */}
+        {onSavePdf && (
+          <button
+            type="button"
+            onClick={onSavePdf}
+            disabled={isSavingPdf}
+            aria-label={isSavingPdf ? t('readerSavePdfBusy') : t('readerSavePdf')}
+            title={isSavingPdf ? t('readerSavePdfBusy') : t('readerSavePdf')}
+            className="p-1.5 rounded-xl bg-canvas/80 border border-subtle text-muted hover:text-main transition-all cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+          >
+            <FileDown className={`w-4 h-4 ${isSavingPdf ? 'animate-pulse' : ''}`} />
+          </button>
+        )}
 
         {/* PDF Workstation & OCR Inspector Controls */}
         {detectedFormat === 'PDF' && onOpenWorkstation && <button type="button" onClick={onOpenWorkstation} aria-pressed={!!isWorkstationOpen} aria-label={t('pdfSuiteTitle')} title={t('pdfSuiteTitle')} className="p-1.5 rounded-xl bg-canvas/80 border border-subtle text-muted hover:text-main"><FilePenLine className="w-4 h-4" /></button>}

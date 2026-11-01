@@ -63,6 +63,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSyncingAnki, setIsSyncingAnki] = useState(false);
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
   const [ankiFeedback, setAnkiFeedback] = useState<{ message: string; isError: boolean } | null>(null);
 
   // Available formats list
@@ -100,6 +101,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       ext: '.html',
       icon: FileCode,
       descKey: 'formatHtmlDesc',
+    },
+    {
+      id: 'pdf',
+      label: t('clipFormatPdf'),
+      ext: '.pdf',
+      icon: FileDown,
+      descKey: 'formatPdfDesc',
     },
     {
       id: 'txt',
@@ -147,8 +155,30 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   }, [activeBook, annotations, allBooksWithNotes, exportOptions, scope]);
 
 
+  const handleSavePdf = async () => {
+    const result = exportSingleBook(activeBook, annotations, exportOptions);
+    setIsSavingPdf(true);
+    setAnkiFeedback(null);
+    try {
+      const saved = await window.electronAPI?.pdfExport?.saveHtml({
+        fileName: result.fileName.replace(/\.html$/u, ''),
+        html: result.content,
+      });
+      if (saved?.ok) setAnkiFeedback({ message: t('readerSavePdfDone'), isError: false });
+      else if (saved?.error !== 'cancelled') {
+        setAnkiFeedback({ message: t(saved?.error === 'engine-missing' ? 'clipPdfEngineMissing' : 'readerSavePdfFailed'), isError: true });
+      }
+    } finally {
+      setIsSavingPdf(false);
+    }
+  };
+
   // Handle Download File
   const handleDownload = () => {
+    if (selectedFormat === 'pdf' && scope !== 'all_books') {
+      void handleSavePdf();
+      return;
+    }
     if (scope === 'all_books' && allBooksWithNotes.length > 0) {
       const zipBytes = packageMultiBookZip(allBooksWithNotes, selectedFormat, exportOptions);
       const blob = new Blob([zipBytes as BlobPart], { type: 'application/zip' });
@@ -268,7 +298,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setScope('all_books')}
+                  onClick={() => {
+                    setScope('all_books');
+                    if (selectedFormat === 'pdf') setSelectedFormat('html');
+                  }}
                   className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold transition-all cursor-pointer ${
                     scope === 'all_books'
                       ? 'border-pale-sky-500 bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-300 shadow-xs'
@@ -288,7 +321,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               {t('exportFormatLabel')}
             </span>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {formatList.map((fmt) => {
+              {formatList.filter((fmt) => fmt.id !== 'pdf' || scope !== 'all_books').map((fmt) => {
                 const Icon = fmt.icon;
                 const isSelected = selectedFormat === fmt.id;
                 return (
@@ -429,10 +462,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             <button
               type="button"
               onClick={handleDownload}
-              className="px-4 py-2 rounded-xl bg-pale-sky-500 hover:bg-pale-sky-600 text-white font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer text-xs"
+              disabled={isSavingPdf}
+              className="px-4 py-2 rounded-xl bg-pale-sky-500 hover:bg-pale-sky-600 text-white font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer text-xs disabled:opacity-50 disabled:cursor-wait"
             >
               <Download className="w-4 h-4" />
-              <span>{t('downloadExportBtn')}</span>
+              <span>{isSavingPdf ? t('readerSavePdfBusy') : t('downloadExportBtn')}</span>
             </button>
           </div>
         </div>

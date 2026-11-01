@@ -101,6 +101,27 @@ ${body}
   }
 
   /**
+   * Package serialized chapters into one Markdown document with YAML frontmatter
+   */
+  public packageSerializedNovelToMarkdown(chapters: EpubChapterInput[], metadata: EpubPackageMetadata): string {
+    const isRtl = metadata.language === 'ar' || /[؀-ۿ]/.test(metadata.title);
+    const body = chapters.map((ch) => `## ${ch.title}\n\n${this.htmlToSimpleMarkdown(ch.contentHtml)}`).join('\n\n');
+
+    return `---
+title: "${metadata.title.replace(/"/g, '\\"')}"
+author: "${(metadata.author || '').replace(/"/g, '\\"')}"
+source: "${metadata.sourceUrl || ''}"
+language: "${metadata.language || (isRtl ? 'ar' : 'en')}"
+dir: "${isRtl ? 'rtl' : 'ltr'}"
+---
+
+# ${metadata.title}
+
+${body}
+`;
+  }
+
+  /**
    * Build complete EPUB archive using fflate.zipSync
    */
   public buildEpub(

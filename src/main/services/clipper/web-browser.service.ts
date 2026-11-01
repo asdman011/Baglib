@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain, app } from 'electron';
 import path from 'path';
 import { WebClipperService } from './web-clipper.service';
-import type { ClipResult } from '../../../shared/types/web-clipper';
+import type { ClipFormat, ClipResult } from '../../../shared/types/web-clipper';
 
 export class WebBrowserService {
   private static instance: WebBrowserService;
@@ -57,7 +57,7 @@ export class WebBrowserService {
   /**
    * Captures the current DOM and URL from the active browser window and clips it into the library
    */
-  public async clipCurrentPage(): Promise<ClipResult> {
+  public async clipCurrentPage(targetFormat: ClipFormat = 'epub', contentsLabel?: string): Promise<ClipResult> {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) {
       throw new Error('No active browser window to clip from');
     }
@@ -70,7 +70,8 @@ export class WebBrowserService {
     return this.clipper.clipArticle({
       url: currentUrl,
       html: currentHtml,
-      targetFormat: 'epub',
+      targetFormat,
+      contentsLabel,
       downloadImages: true,
       importToLibrary: true,
     });

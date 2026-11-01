@@ -50,6 +50,7 @@ import {
 import { useWorkspace } from '../context/WorkspaceContext';
 import { DocumentLoader, detectFormat } from '../../libs/reader/document-loader';
 import { paginateBookSections, type FormattedPage } from '../../libs/reader/epub-paginator';
+import { chaptersFromPages, inlineBlobImages } from '../../libs/reader/book-pdf-export';
 import type {
   BookDoc,
   BookFormat,
@@ -112,10 +113,15 @@ import { useReaderPanels } from './useReaderPanels';
 import { PdfWorkstationPanel } from './PdfWorkstationPanel';
 import { OcrInspectorDrawer } from './OcrInspectorDrawer';
 import { OcrQuickActionPill } from './OcrQuickActionPill';
+import { OcrPageOverlay } from './OcrPageOverlay';
+import { ocrEngineName, ocrFallbackMessage } from './ocr-status';
+import { useOcrEngines } from './useOcrEngines';
 import { PdfNativeViewer, type PdfSelectionInfo, type NormalizedRect } from './PdfNativeViewer';
 import { HighlightActionPopover } from './HighlightActionPopover';
 import { segmentTextIntoSentences } from '../../../shared/utils/tts-text';
 import { readerAssetUrl } from '../../../shared/utils/reader-asset-url';
+
+const PDF_TEXT_DELAY_MS = 2500;
 
 export const FullPageBookReader: React.FC = () => {
   const {
@@ -233,7 +239,7 @@ export const FullPageBookReader: React.FC = () => {
   const [paginatedPages, setPaginatedPages] = useState<FormattedPage[]>([]);
   const [tocPageMap, setTocPageMap] = useState<Map<string | number, number>>(new Map());
   const [isPaginating, setIsPaginating] = useState<boolean>(false);
-  const [pdfDocProxy, setPdfDocProxy] = useState<import('pdfjs-dist').PDFDocumentProxy | null>(null);
+  const [pdfDocProxy, setPdfDocProxy] = useState<import('../../libs/reader/pdf-view-document').PdfViewDocument | null>(null);
 
   // View Modes & Typography State
   const [viewMode, setViewMode] = useState<ReaderViewMode>('single');
@@ -270,6 +276,7 @@ export const FullPageBookReader: React.FC = () => {
   const [isInstantHighlightMode, setIsInstantHighlightMode] = useState<boolean>(false);
   const [activeHighlightColor, setActiveHighlightColor] = useState<string>('amber');
   const [showToast, setShowToast] = useState<string | null>(null);
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
   const [showCopiedToast, setShowCopiedToast] = useState<boolean>(false);
 
   // Hands-Free Auto-Scrolling / Auto-Reader Mode State
@@ -287,6 +294,7 @@ export const FullPageBookReader: React.FC = () => {
   const [ocrPages, setOcrPages] = useState<Map<number, OcrPageResult>>(new Map());
   const [isOcrRunning, setIsOcrRunning] = useState<boolean>(false);
   const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('auto');
+  const { engines: ocrEngines, selectedEngine: ocrEngine, selectEngine: selectOcrEngine, refreshEngines: refreshOcrEngines } = useOcrEngines();
   const [showOcrDebug, setShowOcrDebug] = useState<boolean>(false);
   const isOcrMenuOpen = panels.activePanel === 'ocr';
   const setIsOcrMenuOpen = panels.setters['ocr'];
@@ -1457,6 +1465,9 @@ export const FullPageBookReader: React.FC = () => {
       if (isCancelled) return;
       if (format === 'PDF' && windowAPI?.extractPdfText) {
         try {
+          // Search and read-aloud use this text; the page itself never waits for it.
+          await new Promise(resolve => setTimeout(resolve, PDF_TEXT_DELAY_MS));
+          if (isCancelled) return;
           const result = await windowAPI.extractPdfText(filePath);
           if (!isCancelled) {
             if (result && result.numpages) {
@@ -1753,6 +1764,34 @@ export const FullPageBookReader: React.FC = () => {
     setIsTTSLyricsOpen(false);
     setIsTTSPlayerActive(true);
     ttsAudio.playSentence(startIndex);
+  };
+
+  const handleSaveBookAsPdf = async () => {
+    if (!activeBook || isSavingPdf) return;
+    setIsSavingPdf(true);
+    setShowToast(t('readerSavePdfBusy'));
+    try {
+      const chapters = await Promise.all(chaptersFromPages(paginatedPages).map(async chapter => ({
+        ...chapter,
+        contentHtml: await inlineBlobImages(chapter.contentHtml),
+      })));
+      const saved = await window.electronAPI?.pdfExport?.saveBook({
+        title: activeBook.title,
+        author: activeBook.author,
+        language: activeBook.language,
+        direction: readerDirection,
+        contentsLabel: t('tableOfContents'),
+        chapters,
+      });
+      if (saved?.ok) setShowToast(t('readerSavePdfDone'));
+      else if (saved?.error === 'cancelled') setShowToast(null);
+      else setShowToast(t(saved?.error === 'engine-missing' ? 'clipPdfEngineMissing' : 'readerSavePdfFailed'));
+    } catch (error) {
+      console.warn('[baglib:reader] PDF export failed:', error);
+      setShowToast(t('readerSavePdfFailed'));
+    } finally {
+      setIsSavingPdf(false);
+    }
   };
 
   useEffect(() => {
@@ -2465,11 +2504,13 @@ export const FullPageBookReader: React.FC = () => {
     if (!windowAPI?.ocrRecognizePage) return;
 
     setIsOcrRunning(true);
+    setShowToast(ocrEngine === 'paddleocr_vl' ? t('ocrCpuSlowHint') : t('ocrRunningText'));
     try {
       const res: OcrPageResult = await windowAPI.ocrRecognizePage({
         filePath: activeBook.filePath,
         pageNumber: pageToScan,
         language: ocrLanguage,
+        engine: ocrEngine,
       });
 
       if (res && res.text) {
@@ -2494,12 +2535,14 @@ export const FullPageBookReader: React.FC = () => {
         }
 
         setShowToast(
-          t('ocrSuccessPage', { count: res.words?.length || res.text.split(/\s+/).length })
+          res.fallbackReason
+            ? ocrFallbackMessage(t, res.fallbackReason, res.missingPackages, res.requestedEngine)
+            : `${t('ocrSuccessPage', { count: res.words?.length || res.text.split(/\s+/).length })} ${t('ocrRanWithEngine', { engine: ocrEngineName(t, res.engine) })}`
         );
-        setTimeout(() => setShowToast(null), 3000);
+        setTimeout(() => setShowToast(null), res.fallbackReason ? 8000 : 3000);
       } else {
-        setShowToast(t('ocrFailedText'));
-        setTimeout(() => setShowToast(null), 2500);
+        setShowToast(res?.fallbackReason ? ocrFallbackMessage(t, res.fallbackReason, res.missingPackages, res.requestedEngine) : t('ocrFailedText'));
+        setTimeout(() => setShowToast(null), res?.fallbackReason ? 8000 : 2500);
       }
     } catch (err) {
       console.warn('[handleRunOcrPage] Error:', err);
@@ -2534,6 +2577,7 @@ export const FullPageBookReader: React.FC = () => {
         endPage: Math.min(maxBookPages, 20),
         language: ocrLanguage,
         autoIndexFts: true,
+        engine: ocrEngine,
       });
 
       unsub?.();
@@ -2554,10 +2598,16 @@ export const FullPageBookReader: React.FC = () => {
         setExtractedPages(newExtracted);
 
         const totalWords = res.pages.reduce((s, p) => s + (p.words?.length || 0), 0);
+        const fallback = res.pages.find((p) => p.fallbackReason);
         setShowToast(
-          t('ocrSuccessBook', { pages: res.pages.length, words: totalWords })
+          fallback?.fallbackReason
+            ? ocrFallbackMessage(t, fallback.fallbackReason, fallback.missingPackages, fallback.requestedEngine)
+            : `${t('ocrSuccessBook', { pages: res.pages.length, words: totalWords })} ${t('ocrRanWithEngine', { engine: ocrEngineName(t, ocrEngine) })}`
         );
-        setTimeout(() => setShowToast(null), 3500);
+        setTimeout(() => setShowToast(null), fallback ? 8000 : 3500);
+      } else {
+        setShowToast(t('ocrFailedText'));
+        setTimeout(() => setShowToast(null), 2500);
       }
     } catch (err) {
       console.warn('[handleRunOcrDocument] Error:', err);
@@ -3119,6 +3169,8 @@ export const FullPageBookReader: React.FC = () => {
           closeAllPanelsExcept();
           setIsPluginsModalOpen(true);
         }}
+        onSavePdf={paginatedPages.length > 0 ? () => void handleSaveBookAsPdf() : undefined}
+        isSavingPdf={isSavingPdf}
         isAutoScrolling={isAutoScrolling}
         onToggleAutoScroll={handleToggleAutoScroll}
         autoScrollSpeed={autoScrollSpeed}
@@ -3322,7 +3374,7 @@ export const FullPageBookReader: React.FC = () => {
           t={t}
         />
 
-        {/* PaddleOCR-VL-1.6 Layout & OCR Inspector Drawer */}
+        {/* Layout & OCR Inspector Drawer */}
         <OcrInspectorDrawer
           isOpen={isOcrMenuOpen}
           onClose={() => {
@@ -3342,6 +3394,10 @@ export const FullPageBookReader: React.FC = () => {
               setShowOcrDebug(true);
             }
           }}
+          engines={ocrEngines}
+          selectedEngine={ocrEngine}
+          onSelectEngine={selectOcrEngine}
+          onEnginesChanged={refreshOcrEngines}
         />
 
         {/* TTS & Audiobook Mini Player (KEY-145) */}
@@ -4019,6 +4075,7 @@ export const FullPageBookReader: React.FC = () => {
                   <span className="text-xs font-bold">{t('loadingNativePdf')}</span>
                 </div>
               ) : effectiveFormat === 'PDF' && legacyPdfWork !== activeBook.id ? (
+                <>
                 <PdfWorkstationPanel
                   key={`embedded-${activeBook.id}`}
                   embedded
@@ -4027,7 +4084,7 @@ export const FullPageBookReader: React.FC = () => {
                   initialPage={readingPage}
                   onPageChange={setReadingPage}
                   onClose={handleCloseReader}
-                  readingActions={{ onReadAloud: () => startReadAloud(), onAutoScroll: handleToggleAutoScroll, autoScrolling: isAutoScrolling, onBookmark: () => { void handleToggleBookmark(); }, bookmarked: isCurrentPageBookmarked }}
+                  readingActions={{ onReadAloud: () => startReadAloud(), onAutoScroll: handleToggleAutoScroll, autoScrolling: isAutoScrolling, onBookmark: () => { void handleToggleBookmark(); }, bookmarked: isCurrentPageBookmarked, onSearch: () => panels.setters['search'](true) }}
                   annotationPanel={{
                     open: isAnnotationsDrawerOpen,
                     count: annotations.length,
@@ -4076,6 +4133,38 @@ export const FullPageBookReader: React.FC = () => {
                     },
                   }}
                 />
+                {ocrPages.get(readingPage) && (
+                  <OcrPageOverlay pageNumber={readingPage}>
+                    <OcrTextOverlay
+                      pageResult={ocrPages.get(readingPage)!}
+                      showVisualDebug={showOcrDebug}
+                      activeWordIndex={activeOcrWordIndex}
+                      onWordClick={(word, idx) => {
+                        setActiveOcrWordIndex(idx);
+                        if (!isOcrMenuOpen) setIsOcrMenuOpen(true);
+                      }}
+                    />
+                  </OcrPageOverlay>
+                )}
+                <OcrQuickActionPill
+                  compact
+                  className="!bottom-20 !z-40"
+                  pageResult={ocrPages.get(readingPage) || null}
+                  readingPage={readingPage}
+                  isOcrRunning={isOcrRunning}
+                  onRunOcrPage={() => handleRunOcrPage(readingPage)}
+                  showBoundingBoxes={showOcrDebug}
+                  onToggleBoundingBoxes={() => setShowOcrDebug(prev => !prev)}
+                  isInspectorOpen={isOcrMenuOpen}
+                  onToggleInspector={() => {
+                    setIsInkModeActive(false);
+                    setIsOcrMenuOpen(prev => !prev);
+                  }}
+                  engines={ocrEngines}
+                  selectedEngine={ocrEngine}
+                  onSelectEngine={selectOcrEngine}
+                />
+                </>
               ) : pdfBlobUrl ? (
                 <div
                   className="pdf-viewport-container relative w-full h-full overflow-hidden flex items-center justify-center"
@@ -4149,6 +4238,9 @@ export const FullPageBookReader: React.FC = () => {
                       setIsInkModeActive(false);
                       setIsOcrMenuOpen(prev => !prev);
                     }}
+                    engines={ocrEngines}
+                    selectedEngine={ocrEngine}
+                    onSelectEngine={selectOcrEngine}
                   />
                 </div>
               ) : (

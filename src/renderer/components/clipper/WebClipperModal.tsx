@@ -6,6 +6,7 @@ import {
   Compass,
   BookOpen,
   Download,
+  FileDown,
   CheckCircle2,
   AlertCircle,
   RefreshCw,
@@ -16,7 +17,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import type { ClippedArticle, ClipProgressEvent, ClipResult } from '../../../shared/types/web-clipper';
+import type { ClipFormat, ClippedArticle, ClipResult } from '../../../shared/types/web-clipper';
 
 interface WebClipperModalProps {
   isOpen: boolean;
@@ -35,7 +36,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
 
   // Single Article State
   const [url, setUrl] = useState<string>('');
-  const [targetFormat, setTargetFormat] = useState<'epub' | 'markdown'>('epub');
+  const [targetFormat, setTargetFormat] = useState<ClipFormat>('epub');
   const [downloadImages, setDownloadImages] = useState<boolean>(true);
   const [importToLibrary, setImportToLibrary] = useState<boolean>(true);
   const [previewArticle, setPreviewArticle] = useState<ClippedArticle | null>(null);
@@ -53,6 +54,41 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   if (!isOpen) return null;
+
+  const clipErrorText = (error: string | undefined, fallback: string) =>
+    error === 'engine-missing' ? t('clipPdfEngineMissing') : error || fallback;
+
+  const formatOptions: { id: ClipFormat; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: 'epub', label: t('clipFormatEpub'), icon: BookOpen },
+    { id: 'markdown', label: t('clipFormatMarkdown'), icon: FileText },
+    { id: 'pdf', label: t('clipFormatPdf'), icon: FileDown },
+  ];
+
+  const formatPicker = (
+    <div className="space-y-2">
+      <label className="text-xs font-semibold text-text-secondary">
+        {t('clipFormatLabel')}
+      </label>
+      <div className="grid grid-cols-3 gap-2">
+        {formatOptions.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={targetFormat === id}
+            onClick={() => setTargetFormat(id)}
+            className={`p-3 rounded-xl border text-xs font-medium leading-relaxed flex flex-col items-center justify-center gap-1.5 text-center transition-all ${
+              targetFormat === id
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-white/10 bg-surface-raised text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   const handleFetchPreview = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -100,6 +136,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
       const res: ClipResult = await window.electronAPI?.clipper?.clipUrl({
         url: url.trim(),
         targetFormat,
+        contentsLabel: t('tableOfContents'),
         downloadImages,
         importToLibrary,
       });
@@ -111,7 +148,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
           onClose();
         }, 1500);
       } else {
-        setStatusMessage({ type: 'error', text: res?.error || 'Clipping failed' });
+        setStatusMessage({ type: 'error', text: clipErrorText(res?.error, 'Clipping failed') });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? errorMessage(err) : String(err);
@@ -135,12 +172,12 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
     setIsClipping(true);
     setStatusMessage(null);
     try {
-      const res: ClipResult = await window.electronAPI?.clipper?.clipBrowser();
+      const res: ClipResult = await window.electronAPI?.clipper?.clipBrowser(targetFormat, t('tableOfContents'));
       if (res?.success) {
         setStatusMessage({ type: 'success', text: t('clipSuccessToast') });
         onBookClipped?.();
       } else {
-        setStatusMessage({ type: 'error', text: res?.error || 'Failed to clip browser' });
+        setStatusMessage({ type: 'error', text: clipErrorText(res?.error, 'Failed to clip browser') });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? errorMessage(err) : String(err);
@@ -162,6 +199,8 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
         url: novelUrl.trim(),
         title: novelTitle.trim() || undefined,
         author: novelAuthor.trim() || undefined,
+        targetFormat,
+        contentsLabel: t('tableOfContents'),
         downloadImages,
         importToLibrary: true,
       });
@@ -173,7 +212,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
           onClose();
         }, 1500);
       } else {
-        setStatusMessage({ type: 'error', text: res?.error || 'Scraping failed' });
+        setStatusMessage({ type: 'error', text: clipErrorText(res?.error, 'Scraping failed') });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? errorMessage(err) : String(err);
@@ -312,37 +351,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
 
               {/* Configuration Options */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-white/5">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-text-secondary">
-                    {t('clipFormatLabel')}
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setTargetFormat('epub')}
-                      className={`p-3 rounded-xl border text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-                        targetFormat === 'epub'
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-white/10 bg-surface-raised text-text-secondary hover:text-text-primary'
-                      }`}
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      <span>{t('clipFormatEpub')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTargetFormat('markdown')}
-                      className={`p-3 rounded-xl border text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-                        targetFormat === 'markdown'
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-white/10 bg-surface-raised text-text-secondary hover:text-text-primary'
-                      }`}
-                    >
-                      <FileText className="w-4 h-4" />
-                      <span>{t('clipFormatMarkdown')}</span>
-                    </button>
-                  </div>
-                </div>
+                {formatPicker}
 
                 <div className="space-y-3 pt-6">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -408,6 +417,8 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
                   {t('clipBrowserDesc')}
                 </p>
               </div>
+
+              <div className="max-w-md mx-auto text-start">{formatPicker}</div>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto pt-4">
                 <button
@@ -475,6 +486,8 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
                   />
                 </div>
               </div>
+
+              {formatPicker}
 
               <div className="pt-4 border-t border-white/10">
                 <button
