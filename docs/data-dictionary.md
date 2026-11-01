@@ -371,6 +371,27 @@ Deep linguistic decomposition of Quranic vocabulary.
 
 The Sunnah reader can attach `sunnah_kutub_tisah_itqan.sqlite` read-only through `SunnahResearchCorpus`, exposing the existing 34-column derived `hadiths`, narrator, chain, root bridge and FTS tables. These are the standalone research pipeline's existing tables, not additions to `baglib.db` or canonical sources. Dev discovery uses `tools/hadith-alignment/data/output/`; installed apps can choose a local database file. `userData/sunnah/research-source.json` records `{ filename: absolutePath }` or `{ legacy: true }`; it is source-selection configuration, not a domain entity. The transient catalog has `research: true` and nine collection entries; its `sha256` is a metadata fingerprint, not a claim of a fresh whole-file content hash. Optional `researchId` on reader records addresses derived row identity. The original six-book source and saved chapter/ordinal identities remain compatible. See [Hadith Commentary Alignment](features/feature%20-%20Hadith%20Commentary%20Alignment.md).
 
+### Optional merged QuranLab research corpus (2026-11-01)
+
+`sunnah_merged_quranlab_v1.sqlite` is a separate artifact built from a copy of the corpus above. It is not part of `baglib.db`. All original `hadiths`, narrator, chain, root and FTS rows are unchanged, and `id` values stay the same; separate source books are appended after them with their own `book_key`. `SunnahResearchCorpus` reads it only when `merge_metadata.schema_kind` is `baglib-sunnah-merged` and `merge_schema_version` is `1`; any other file reads as the base corpus. Optional reader fields: `SunnahHadith.gradingSummary`, `SunnahHadith.translation`, `SunnahCatalog.merged`, `SunnahResearch.merged`.
+
+| Addition | Purpose |
+|---|---|
+| `hadiths.source_datasets_json` | Datasets behind the row |
+| `hadiths.field_provenance_json` | Field groups with source, record, transformation and 16-hex value hash, plus `missing` and `added` entries |
+| `hadiths.grading_judgments_json` | Row copy of its judgments |
+| `merge_metadata` | Capability and version values |
+| `source_registry` | Every input with revision, hash, license and attribution |
+| `quranlab_records` | One row per source record and language. Arabic and English keep text; other languages keep hash and length only |
+| `hadith_crosswalk` | Decision for each source record: `verified_match`, `candidate_review`, `source_only` or `conflicting_identity`. `hadith_id` is set only for `verified_match` |
+| `grading_judgments` | One attributed judgment, with scope, assessed part, review state and lineage. Staged when `hadith_id` is null |
+| `hadith_grading_summary` | Per-row counts and flags for the reader. Holds no verdict |
+| `source_book_rows` | Rows appended after the base rows for separate source books, with kind and review candidates |
+| `grade_terms`, `grader_mappings` | Every raw grade and grader with its localization and evidence |
+| `variant_translation_fts` | Search over attributed English used for rows that have none |
+
+Legacy `Arabic_Grade` and `English_Grade` stay the original fields and keep their display policy; structured judgments are authoritative for attribution. See [QuranLab Hadith](features/QuranLab-Hadith.md).
+
 The legacy six-book store below remains the fallback and ZIP import format.
 
 Managed via `SunnahService` under `userData/sunnah/` containing authenticated chapter partitions and an authoritative integrity manifest. Derived from the authenticated LK-Hadith-Corpus archive (**34,088 hadiths across 335 chapters and six canonical collections**).
