@@ -1,7 +1,8 @@
 ## Publication: note engine work and the Next.js upgrade — 2026-11-05, Claude Code
 
 - User request: "solve this first then continue to S5, commit and push if necessary, but be careful of any conflicts" (merge the npm audit session's Next.js upgrade, branch `claude/silly-feynman-29068d`, commit e4a6db9).
-- Committed this session's note-engine work as a2572e1 (code) and the docs commit that follows, staging only this session's files. Left uncommitted for the Sunnah session: `src/main/services/sunnah/research-corpus.ts`, `tests/services/sunnah-research.test.ts`, `tools/hadith-alignment/*`, `scripts/sunnah-names-live/`, `docs/features/feature - Sunnah Chapter Names.md`; also `docs/features/Dataset Delivery Plan.md` and `.claude/`. No Jira change (not requested).
+- Committed this session's note-engine work as a2572e1 (code) and the docs commit that follows, staging only this session's files.
+- Merged `claude/silly-feynman-29068d` (Next.js 16.4.5, `agentRules: false`, dev server on 127.0.0.1) into `feature/library-domain`. Only the two task docs conflicted (both sides kept); `package.json` and `package-lock.json` merged cleanly with both sides (CodeMirror, d3-force, docx and Next 16.4.5). `npm install --ignore-scripts --offline` from the local cache: no download, lockfile unchanged, 0 vulnerabilities. Verified on the merged tree: tsc, `npm run build` (full renderer build, no dev server running), npm test 1335/1335, live `scripts/note-paragraphs-live` and `scripts/honorifics-questions-live` in ar and en against the loopback dev server; no `src/renderer/AGENTS.md` created. Left uncommitted for the Sunnah session: `src/main/services/sunnah/research-corpus.ts`, `tests/services/sunnah-research.test.ts`, `tools/hadith-alignment/*`, `scripts/sunnah-names-live/`, `docs/features/feature - Sunnah Chapter Names.md`; also `docs/features/Dataset Delivery Plan.md` and `.claude/`. No Jira change (not requested).
 
 ## S10 companion note pane — 2026-11-05, Claude Code
 
@@ -124,6 +125,40 @@
 - User request: fill missing Sunnah pieces and chapter names from the archived datasets or online. Approved downloads: hadith-json v1.2.0 (darimi, malik, ahmed; 8.7 MB) and Shamela tables of contents (about 1.2 MB). Patched `tools/hadith-alignment/data/output/sunnah_merged_quranlab_v1.sqlite` in place, as asked, after a verified backup to `_archive_datasets/sunnah-backups/`.
 - Done: Darimi regrouped into the Muqaddima plus 23 kitabs with Arabic names (2,539 rows, by Shamela printed page), and 61 Muwatta English kitab names. Provenance recorded per row and in source_registry. New `patch_chapter_names.py`, 3 tests, full tool suite 147 passed, live `scripts/sunnah-names-live` passed in Arabic and English.
 - Not done, needs approval: bab names for Ibn Majah, Tirmidhi, Nasai, Bukhari and Muslim (about one Shamela page per bab, or the gated HF page dataset); Musnad Ahmad's chapter rebuild and junk front-matter records; English for Darimi (no source). Details in docs/features/feature - Sunnah Chapter Names.md. Nothing committed.
+
+## npm audit assessment — 2026-11-05, Claude Code
+
+- Request from the session that installed d3-force and docx: assess the five pre-existing `npm audit --omit=dev` findings and find the smallest safe upgrade. Runs in its own worktree (branch `claude/silly-feynman-29068d`, reset to feature/library-domain db7e8a2) because the main checkout has uncommitted note-editor work. Nothing installed or upgraded yet; waiting for the user to approve. No commit, push or Jira.
+- How the renderer is served: the packaged app serves the static export `out/` via electron-serve as `app://-` (`src/main/index.ts:65`), with `output: 'export'` and `images.unoptimized`. No Next server runs, and the main bundle never loads next, sharp, nanoid or postcss. In dev, `next dev src/renderer -p 3000` listens on 0.0.0.0 by default (Next CLI docs).
+- Findings:
+  - next 16.2.12, critical. Windows path-traversal RCE GHSA-p293-qw3h-jr36 plus ten more. Packaged app: not exposed. Dev server: exposed to p293 (Windows host, all interfaces, no workaround) and to the low-severity `/_next/mcp` info leak. Image optimizer, next/og, 'use cache', Server Actions and ISR advisories do not apply, because none of those features are used. Fix: next and eslint-config-next 16.4.5.
+  - sharp 0.34.5 (libvips, libheif, librsvg): not exposed. Only Next's disabled image optimizer would use it. Fixed by next 16.4.x (sharp ^0.35.5).
+  - postcss 8.4.31 inside next: not exposed. Build-time only, on our own CSS. Fixed by next 16.4.x (8.5.23).
+  - source-map-js 1.2.1: not exposed. Build-time only. Lockfile bump to 1.2.2.
+  - nanoid 3.3.16: not exposed. Its only user, postcss, calls `nanoid/non-secure` with a size of 6, and the code has no custom generators. docx uses nanoid 6 (not affected). Lockfile bump to 3.3.20.
+- Side finding: the packaged asar (built 2026-11-01) contains all of node_modules/next (7234 files), sharp and its libvips DLLs, and SWC, none of which is ever loaded. Follow-up: move next to devDependencies.
+- Download about 85 MB (next 41.6, SWC win32 34.5, sharp-win32 8.2, the rest under 1 MB). Interim dev mitigation: `-H 127.0.0.1` on `dev:next`.
+- Full evidence: side-session note `npm-audit-assessment.md`.
+- Upgrade applied, approved by the user ("Yes, upgrade 16.4.5"): `package.json` now has next and eslint-config-next 16.4.5 (exact). The lockfile now resolves postcss 8.5.23 inside next, sharp 0.35.5, nanoid 3.3.20 and source-map-js 1.2.2. `npm audit --omit=dev`: 0 vulnerabilities. Not committed.
+  - Install note: a plain `npm install` fails because better-sqlite3 11.5.0 has no prebuilt binary for Node 24 and the MSBuild compile fails; npm then rolls back. Used `--ignore-scripts` instead, and copied the Electron 32.2.0 binary and the Electron-built `better_sqlite3.node` from the main checkout's node_modules.
+- Verified in the worktree:
+  - tsc clean. `npm run build` (main plus renderer, including copy:pdfjs) passes. Next 16.4.5 accepts `distDir: '../../out'` under its new distDir safety check.
+  - npm test on throwaway `.baglib-data/next-upgrade-tests-CG1f4J`: 1276 pass, 18 fail, 3 skipped, out of 1297. All 18 failures are environment-only, and none involves Next:
+    - fixtures in gitignored folders that only the main checkout has (`repos/readest` dictionaries, the PaddleOCR model under `.baglib-data`, the sample PDF in `docs/`);
+    - one font licence checked out with CRLF line endings (4483 vs 4389 bytes).
+  - Live, real main process, preload and IPC, with BAGLIB_DATA_DIR plus --user-data-dir (`.baglib-data/next-upgrade-live-BN2uFc`, harness `scripts/next-upgrade-live/`): static export at `app://-` in Arabic (rtl, lang ar) and English (ltr). All 13 navigation pages render with no console errors, and the screenshots were inspected. An earlier run showed a missing `pdf.raster.worker.mjs` because only `build:renderer` had run; `npm run build` copies it.
+  - Dev server: 16.4.5 on 127.0.0.1:3001 serves `/` (200). `/_next/mcp` with a foreign Origin now returns 403.
+- New in 16.4: `next dev` writes `src/renderer/AGENTS.md` by default (`agentRules`).
+- Finishing pass, user request: "finish the Next.js upgrade" (agentRules off, loopback dev server, verify, commit without push or Jira).
+  - `next.config.ts` sets `agentRules: false`; no `src/renderer/AGENTS.md` remains after `next dev`.
+  - `dev:next` is `next dev src/renderer -p 3000 -H 127.0.0.1`, and `dev` waits on `http://127.0.0.1:3000`, because `localhost` may resolve to `::1`, which no longer answers.
+  - Electron still loads `http://localhost:3000`; Chromium falls back to 127.0.0.1, and IPC keeps trusting that origin.
+  - README notes the loopback binding. The `ensure-port-free.js` comment was updated.
+  - Re-verified: tsc clean, `npm run build` passes, `npm audit --omit=dev` 0.
+  - Dev server: 127.0.0.1:3000 and localhost:3000 return 200. The LAN address 192.168.100.221:3000 and `[::1]:3000` refuse connections. netstat shows `127.0.0.1:3000 LISTENING` only.
+  - Live dev renderer inside Electron on a throwaway profile (`.baglib-data/next-upgrade-live-Xjf3uO`): Arabic rtl and English ltr, all 13 navigation pages render, 0 console errors. The harness now ignores 304 cache responses.
+  - The dev server was stopped afterwards; port 3000 is free.
+- Open: dev-only audit findings remain (xmldom, axios, brace-expansion in the build toolchain), a separate follow-up. The main checkout needs `npm install` after merging, because its lockfile has uncommitted edits. Not pushed; Jira untouched.
 
 ## Waves 4a to 7 publication — 2026-11-05, Claude Code
 

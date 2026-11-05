@@ -4,7 +4,7 @@
  * Baglib Dev Port & Process Sanitizer
  *
  * Ensures port 3000 is clear before `next dev` starts, preventing
- * `Error: listen EADDRINUSE: address already in use :::3000` when a
+ * `Error: listen EADDRINUSE: address already in use 127.0.0.1:3000` when a
  * previous dev session or background process didn't terminate cleanly.
  */
 
