@@ -82,7 +82,8 @@ The implementation is the TypeScript `ts-fsrs` package, version 5.3.1, pinned ex
 - Deleting a book never deletes knowledge. The user decided on 2026-11-01 that cards, review history and all connected knowledge stay. Migration 019 detaches them through a `BEFORE DELETE` trigger on `work`, keeps the book title in `former_work_title`, and rebuilds `annotations` so `book_id` can be empty. Migration 018 holds the card and review tables.
 - Snapshots copy the whole database, so cards and reviews are already included.
 - Study notes stay where they are. "Export Notes to our SRS" creates cards from them.
-- Anki export needs a stable GUID per card, and the `knowledge.id` can serve as that.
+- Anki export needs a stable GUID per card, and the `knowledge.id` serves as that.
+- A deck is a `collection` row with `collection_type = 'deck'` and its cards in `knowledge_collection`, so decks add no table. Anki receives a tab-separated import file with `#guid column:1`, not an `.apkg`, so re-importing updates cards rather than duplicating them. Text longer than a card allows is left out, never shortened.
 
 ## Decisions for the user
 

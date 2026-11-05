@@ -1,5 +1,19 @@
 # Baglib — Unified Data Dictionary
 
+## Wave4a persistence extension — 2026-11-02
+
+Approved ADR008/migration021 adds knowledge-owned study_note_detail (title, exact content, aliases_json) and reading_reflection_detail (entry_date, mood, optional difficulty/rating 1–5, review, recommendations, lessons). Both share knowledge_id with knowledge and inherit its tags, comments, collections and deleted-book preservation. No study_document store exists. knowledge.deleted_at is recoverable trash; annotations is a projection removed on trash and rebuilt on restore.
+
+entity_version records entity_type/id, monotonic revision, snapshot_hash, action/actor, batch_id, optional restored_from_revision, schema_version and created_at. Unique entity/type/revision, entity/time, blob and batch indexes support bounded history pages. history_blob stores SHA256-keyed exact JSON, UTF8 byte_length and creation time. Full snapshots include knowledge/details, reader projection (including PDF review anchors/replies), tags/collections with IDs/names, comments, source title and retained raw legacy note JSON. No source FK cascades into history. event_log stays unused; this explicitly supersedes the historical ADR001 reference whose document was not found.
+
+reading_session retains existing fields/indexes but work_id becomes nullable SET NULL; original_work_id and former_work_title preserve identity on Work deletion. Migration019's preservation trigger is extended for sessions. New knowledge detail tables have no independent Work FK. The first newly observed transition to completed is recorded in existing app_settings key reading.log.completed:<workId>; no retrospective completion date is inferred. Session and page-dwell totals remain separate.
+
+question_detail gains status (open/answered/dismissed), answered_at, source_ref and capture_hash. A partial unique source_ref/capture_hash index applies only when both are non-null. There is no occurrence table. Capture is opt-in via knowledge.questions.enabled. It does not normalize stored content, inspect canonical corpora or schedule cards.
+
+Legacy study.note.v1:<id> values remain for at least one release. Successful conversion markers use study.note.converted:<id>; bounded error descriptions/keys are in study.note.conversion-report. Invalid/conflicting records remain untouched; valid missing Work links become null. The unified knowledge reader supplies recent notes rather than stale retained JSON. Ordinary snapshots retain history until explicit erasure; erase removes versions and unreferenced blobs, legacy copies, owned captures and drafts, with separate explicit consent to delete all managed local library backups. External/cloud/independent copies remain outside that guarantee.
+
+Pre-migration recovery uses verified plain database copies in data/migration-backups, not the ZIP snapshot service. Exclusive locking and a successful WAL checkpoint precede the copy; streaming hashes and integrity_check verify it. Backups are protected from automatic pruning. Failure exits before the first application window with a localized native error. See [Wave4a implementation and verification](features/Wave4a%20History%20and%20Reading%20Log.md).
+
 ## PDF workstation persistence extension — 2026-10-26
 
 No database migration or new canonical entity is introduced. PDF files still belong to **Work → Edition → Source → file_source_detail**. Safe Save updates the exact source's `file_hash`, `file_size_bytes`, `last_verified_at` and invalidates its work's existing FTS rows. New edition saves and cloud pulls use the existing edition/source repository path; they do not create translated duplicate titles.
@@ -17,7 +31,7 @@ This document defines the comprehensive data models, schemas, entities, fields, 
 
 ## 1. Core Personal Library Database (`baglib.db`)
 
-Managed via SQLite with automated schema migrations (`src/main/database/migrator.ts`, migrations 1–17). Adheres to the canonical **Work → Edition → Source** domain model.
+Managed via SQLite with automated schema migrations (`src/main/database/migrator.ts`, migrations 1–21). Adheres to the canonical **Work → Edition → Source** domain model.
 
 ```mermaid
 erDiagram
@@ -532,6 +546,10 @@ Append-only review history.
 | `rating` | INTEGER | NOT NULL | 1 again, 2 hard, 3 good, 4 easy |
 | `duration_ms` | INTEGER | NULL | Time spent |
 | `state_before` | TEXT | NULL | State before this review |
+
+## Pathways — ADR-009 / migration 022
+
+A pathway is a `collection` row whose `collection_type` is `research` or `curriculum`. `pathway_item` holds its ordered contents, approved by the user on 2026-11-02. Its ten columns are `id`, `collection_id`, `section`, `kind`, `reference`, `title`, `url`, `pinned`, `sort_order` and `created_at`, with one index on `(collection_id, sort_order)`. `kind` is `resource`, `link` or `step`. A step points at `study_task` through `reference` as `task:<id>`, so the planner owns its status. Personal templates are an `app_settings` row, `pathways.templates.v1`.
 
 ## Study planner — ADR-007 / migration 020
 

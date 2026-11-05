@@ -81,13 +81,15 @@ Table wishlist_source_detail {
 
 Table knowledge {
   id uuid [pk, note: 'Surrogate primary key.']
-  work_id uuid [ref: > work.id, note: 'The Work this item is about. Conceptually required — every Knowledge item belongs to exactly one Work, even when also scoped to an Edition or Source.']
+  work_id uuid [ref: > work.id, note: 'Optional Work link. Standalone notes and sacred-corpus cards have none; migration019 detaches knowledge before deleting its Work.']
   edition_id uuid [ref: > edition.id, note: 'Optional — which specific Edition this refers to, relevant when page numbers or translation-specific wording matter.']
   source_id uuid [ref: > source.id, note: 'Optional — which specific Source (file or physical copy) this was captured from.']
-  knowledge_type varchar(50) [note: 'note, highlight, quote, bookmark, or question. Determines which _detail table applies.']
+  knowledge_type varchar(50) [note: 'note, highlight, quote, bookmark, question, card, study_note or reading_reflection. Determines its detail table.']
   location varchar(255) [note: 'Where in the Work this is anchored — page, chapter, or reader position. Free text, since "position" differs across PDF, EPUB, and physical books.']
   created_at timestamp [note: 'When this item was created.']
-  updated_at timestamp [note: 'Last-modified time. Full version history, if built, lives in event_log rather than as extra columns here (see ADR-001, Event-Driven History).']
+  updated_at timestamp [note: 'Last-modified time. ADR008 supersedes the historical ADR001 reference: entity_version and history_blob hold note/reflection history; event_log remains unused.']
+  former_work_title text
+  deleted_at timestamp
 }
 
 Table note_detail {
@@ -114,7 +116,11 @@ Table bookmark_detail {
 
 Table question_detail {
   knowledge_id uuid [pk, ref: > knowledge.id, note: 'Shared primary key with knowledge — one row per Knowledge item where knowledge_type is question.']
-  question_text text [note: 'The question itself. No answered/open status or answer field yet — see data-dictionary.md Open Questions.']
+  question_text text
+  status text [not null, default: 'open']
+  answered_at timestamp
+  source_ref text
+  capture_hash text
 }
 
 Table comment {
@@ -135,6 +141,54 @@ Table reading_session {
   ended_at timestamp [note: 'When this session ended.']
   pages_read int [note: 'Pages covered in this session, for reading-progress and streak tracking.']
   mood varchar(100) [note: 'Free-text reflection on how the session felt, supporting the reading-journal side of Baglib rather than pure tracking.']
+  original_work_id text
+  former_work_title text
+}
+
+Table study_note_detail {
+  knowledge_id uuid [pk, ref: > knowledge.id]
+  title text [not null]
+  content text [not null]
+  aliases_json text [not null, default: '[]']
+}
+
+Table reading_reflection_detail {
+  knowledge_id uuid [pk, ref: > knowledge.id]
+  entry_date text [not null]
+  mood text
+  difficulty int
+  rating int
+  review text [not null]
+  recommendations text [not null]
+  lessons text [not null]
+  indexes { entry_date }
+}
+
+Table history_blob {
+  hash text [pk]
+  content text [not null]
+  byte_length int [not null]
+  created_at timestamp [not null]
+}
+
+Table entity_version {
+  id uuid [pk]
+  entity_type text [not null]
+  entity_id text [not null]
+  revision int [not null]
+  snapshot_hash text [not null, ref: > history_blob.hash]
+  action text [not null]
+  actor text
+  batch_id text
+  restored_from_revision int
+  schema_version int [not null]
+  created_at timestamp [not null]
+  indexes {
+    (entity_type,entity_id,revision) [unique]
+    (entity_type,entity_id,created_at)
+    snapshot_hash
+    batch_id
+  }
 }
 
 Table tag {
@@ -148,8 +202,24 @@ Table collection {
   id uuid [pk, note: 'Surrogate primary key.']
   name varchar(255) [note: 'Display name.']
   description text [note: 'Free-text description of the collection purpose.']
-  collection_type varchar(20) [not null, default: 'manual', note: 'manual (explicit membership via work_collection/knowledge_collection) or smart (membership computed from filter_rules at query time).']
+  collection_type varchar(20) [not null, default: 'manual', note: 'manual (explicit membership via work_collection/knowledge_collection), smart (membership computed from filter_rules at query time), deck (ADR-006), or research and curriculum (Pathways, ADR-009).']
   filter_rules json [note: 'The rule set defining membership when collection_type is smart, e.g. {"tags": ["science"], "work_type": "book"}. Unused for manual collections. No fixed schema of its own yet — validated in application code, not the database.']
+}
+
+Table pathway_item {
+  id uuid [pk, note: 'Generated item identity.']
+  collection_id uuid [not null, ref: > collection.id, note: 'The owning pathway. Deleting the pathway deletes its items, not its planner tasks.']
+  section varchar(200) [not null, default: '', note: 'Subject or stage heading as typed.']
+  kind varchar(10) [not null, note: 'resource, link or step.']
+  reference varchar(200) [note: 'A study target for a resource, or task:<id> for a step. A soft reference: deleting a book keeps the item.']
+  title text [not null, note: 'Saved label, kept if the target is later deleted.']
+  url varchar(2000) [note: 'http or https address of a link.']
+  pinned integer [not null, default: 0, note: '0 or 1.']
+  sort_order integer [not null, default: 0, note: 'User-controlled order.']
+  created_at datetime [not null, note: 'UTC ISO timestamp.']
+  indexes {
+    (collection_id, sort_order) [name: 'idx_pathway_item_order']
+  }
 }
 
 Table work_tag {

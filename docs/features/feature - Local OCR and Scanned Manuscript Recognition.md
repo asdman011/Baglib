@@ -597,6 +597,8 @@ float32 is used when at least 6 GB is available, otherwise bfloat16 (twice as sl
 
 ## 10. OCRmyPDF as the Default Reader Engine (Verified 2026-11-01)
 
+**Update 2026-11-02:** the Arabic page segmentation is now a reader choice, Lines (psm 6, the new default) or Columns (psm 3), replacing the fixed psm 4 below. The 12.5% and 25.9% PaddleOCR-VL gap is explained by unstable hemistich order. See [Lectures, OCR Benchmark and Modular Install](feature%20-%20Lectures,%20OCR%20Benchmark%20and%20Modular%20Install.md).
+
 The reader now offers OCRmyPDF (default) and PaddleOCR-VL. Windows OCR stays a fallback and is never selectable. Hub results are in `docs/features/Stirling-PDF.md`.
 
 ### A. How the worker runs
