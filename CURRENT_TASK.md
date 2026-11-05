@@ -1,3 +1,10 @@
+## Waves 4a to 7 publication — 2026-11-05, Claude Code
+
+- User request: "commit push jira". Committed and pushed to origin/feature/library-domain (01b04a8..fcf7b85, remote verified): 9a783a1 code, tests, scripts and assets for Waves 4a to 7; fcf7b85 ADRs, schema, data dictionary, feature docs and state checkpoints. Shared files (translations, preload, main index) span every wave, so the work went in as one implementation commit rather than one per wave. The untracked Dataset Delivery Plan was left out and untouched.
+- Before commit: npm test 1297/1297 on a throwaway BAGLIB_DATA_DIR, tsc clean, git diff --check clean.
+- Jira: evidence comments 10164 to 10186 on KEY-232 to KEY-235, KEY-240 to KEY-242, KEY-246 to KEY-261. In Review: KEY-234, 235, 240, 241, 242, 246, 247, 248, 249, 250, 251, 253, 254, 255, 256, 259. In Progress: KEY-232, 233, 252, 257, 258, 260 (unmet parts named in each comment). KEY-261 stays To Do. Nothing marked Done; every ticket already had a label and parent epic.
+- Earlier checkpoints below that say nothing is committed describe the state before this publication.
+
 ## Waves 6 and 7 implementation checkpoint — 2026-11-02, Claude Code
 
 - User request: start Wave 6 and Wave 7 and finish them. Scope KEY-255 to KEY-261, on top of the uncommitted Wave 4a and Wave 5 work. No commit, push or Jira write was approved or made.
