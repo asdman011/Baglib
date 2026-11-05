@@ -1,3 +1,130 @@
+## Publication: note engine work and the Next.js upgrade — 2026-11-05, Claude Code
+
+- User request: "solve this first then continue to S5, commit and push if necessary, but be careful of any conflicts" (merge the npm audit session's Next.js upgrade, branch `claude/silly-feynman-29068d`, commit e4a6db9).
+- Committed this session's note-engine work as a2572e1 (code) and the docs commit that follows, staging only this session's files. Left uncommitted for the Sunnah session: `src/main/services/sunnah/research-corpus.ts`, `tests/services/sunnah-research.test.ts`, `tools/hadith-alignment/*`, `scripts/sunnah-names-live/`, `docs/features/feature - Sunnah Chapter Names.md`; also `docs/features/Dataset Delivery Plan.md` and `.claude/`. No Jira change (not requested).
+
+## S10 companion note pane — 2026-11-05, Claude Code
+
+- User request: "Note pane (S10)".
+- Implemented, no schema: a side note pane in the reader, Quran, Sunnah, Al-Bayan and Lectures that keeps its note across views; insert selection with a link back, link to the current place, lecture lines stamped with the playback time; over the full-window reader the pane is fixed at the end edge and the reader narrows.
+- Verified: npm test 1335/1335, tsc, eslint, main build, live `scripts/companion-live` 3 passes in ar and en, `scripts/pdf-markup-live` rerun passed. Dev server stopped.
+- Not checked live: Quran and Al-Bayan contexts. Nothing committed; Jira unchanged. The npm audit session committed its Next.js upgrade as e4a6db9 on its own branch (not merged here, not pushed).
+
+## S1 honorifics and S2 Investigating status — 2026-11-05, Claude Code
+
+- User request: "Honorifics + status (S1, S2)".
+- S1: honorifics expand while typing, on by default, with a toolbar toggle saved in app_settings; one Undo restores the typed trigger.
+- S2: ADR-011 and migration 024 (approved schema change) add the Investigating question status; questions list updated.
+- Verified: npm test 1335/1335, tsc, eslint, main build, live `scripts/honorifics-questions-live` 2/2 in ar and en. Dev server stopped; D: 50 GB free.
+- Nothing committed; Jira unchanged. Note: the npm audit session (`check-and-fix-npm-audit`) is waiting on the user about committing its Next.js upgrade.
+
+## S3 paragraph links — 2026-11-05, Claude Code
+
+- User request: "Paragraph links (S3)", to the user's own specification (see the plan doc's decisions table).
+- Implemented, no schema: paragraph search in `[[` and `/notes`, `note:<id>#^<anchor>` links, anchors saved into the target note through the history-guarded save path, hidden when reading, faint and atomic when editing, scroll-and-highlight on click, paragraph-only hover and embeds, whole-note fallback.
+- Also fixed: a stuck paragraph highlight, and the remaining cause of "Enter adds a new line instead of the link" (CodeMirror's 75 ms interaction delay after late corpus results; now 0).
+- Verified: npm test 1333/1333, tsc, eslint, main build, live paragraph check 3/3 in ar and en, editor check 2/2 with real-data copies, cards check 2/2.
+- Disk: today's test profiles (about 630 MB each, from bundled Quran packs) were trimmed to screenshots and results; live scripts now trim themselves. D: has 50 GB free.
+- Nothing committed; Jira unchanged.
+
+## d3-force and docx installed — 2026-11-05, Claude Code
+
+- User approved: "Download both" (sizes stated before: d3-force about 117 KB, docx about 23 MB).
+- Installed with exact versions: `d3-force` 3.0.1 (ISC) with `d3-dispatch`, `d3-quadtree`, `d3-timer` (about 180 KB on disk); `docx` 9.15.2 (MIT, 23 MB on disk, including its own nested `@types/node` 26, `nanoid` 6 and `undici-types`); dev-only `@types/d3-force` 3.0.10 (57 KB, type definitions). Nothing uses them yet (S5 graph, S8 Word export).
+- Verified: tsc, main build, both load, npm test 1327/1327.
+- npm audit (production) lists 5 existing vulnerabilities, none from the new packages: next (critical, remote code execution on Windows-hosted servers), sharp, postcss inside next, source-map-js, and the project's older nanoid 3. Not addressed here.
+- Nothing committed; Jira unchanged. Still needed: sample OneNote and iCloud exports (S9).
+
+## Poetry in notes and two editor bugs — 2026-11-05, Claude Code
+
+- Request relayed from the user: poetry is installed, so note search must find poems; fix "Enter added a new line instead of the link" and "comment and link in quote style".
+- Poetry was installed all along (`%APPDATA%/baglib/partitions/bayan_poetry.sqlite`); my earlier note was wrong. Note search reaches it; ranking now puts the poem itself first. The two bugs were fixed earlier today and are re-verified. Added an editor guard against stale React echoes undoing keystrokes.
+- Verified: npm test 1327/1327, tsc, eslint, live note-editor check passed 3 times in a row in ar and en with poetry, Quran and Sunnah data copies (deleted after). Test copies had filled 35 GB of disk; removed, and the script now cleans up.
+- Nothing committed; Jira unchanged. Pending from before: download go-ahead for d3-force and docx, sample OneNote and iCloud exports.
+
+## Decisions S1 to S10 answered — 2026-11-05, Claude Code
+
+- The user answered all ten decisions; the table is in `docs/features/PDF and Notes Experience Plan.md`. Approved: S1 auto-expanding honorifics on by default; S2 migration 024 for an Investigating question status (ADR to write); S3 paragraph links with anchors in note text, as the user specified in detail; S4 relationships inside link text; S5 d3-force graph with local and global views; S6 own simple board, JSON storage; S7 one-way Markdown export; S8 docx library; S9 OneNote and iCloud importers (samples needed); S10 companion note pane in all views.
+- Waiting on the user: go-ahead for the two downloads with their sizes (d3-force about 117 KB; docx about 23 MB with its own @types/node and nanoid), and sample OneNote and iCloud exports for S9. Nothing installed, nothing committed, Jira unchanged.
+
+## Wave 10 fifth slice: Ctrl+Shift+N and /card — 2026-11-05, Claude Code
+
+- User request: "Continue Wave 10".
+- Implemented: `Ctrl+Shift+N` opens a focused new note from anywhere; `/card` makes FSRS review cards from a note line (cloze, `question :: answer`, or a question line plus its answer), tags the line `#card`, and explains the formats when the line has none. No schema or dependency.
+- Verified: npm test 1327/1327, tsc, eslint, main build, live `scripts/note-cards-live` in ar and en. Dev server stopped.
+- Not done: per-line lecture timestamps (needs the companion pane, decision S10). Nothing committed; Jira unchanged.
+
+## Quran search: small alif — 2026-11-05, Claude Code
+
+- User request: do "Quran search misses words with the small alif" in this session.
+- Fixed: the search index now holds each Uthmani word in its ordinary spellings (small alif kept or dropped, waw with small alif as alif, small waw and yeh as letters), so العالمين, الكتاب, الصلاة and إبراهيم are found while الرحمن and هذا still are. Script derived files move to `reader-v2` and rebuild from installed packs on first use; the v1 file is removed after, or kept if the rebuild fails. No download, no schema change in baglib.db.
+- Verified: npm test 1326/1326, tsc, eslint, live on a disposable pack copy in ar and en (copy deleted). Details in `docs/features/feature - Quran Experience.md`.
+- Nothing committed; Jira unchanged.
+
+## Wave 10 fourth slice: corpus in notes, hover preview, callouts — 2026-11-05, Claude Code
+
+- User request: "Yes, do those next" (the no-schema items from the spec v2 mapping).
+- Implemented: Quran, Sunnah and poetry results in `[[`; `/quran`, `/hadith`, `/poem` insert the text with its link; hover cards on links in rendered notes; callouts and footnotes render; note-from-annotations format fixed. No schema or dependency.
+- Verified: npm test 1319/1319, tsc, eslint, main build, live `scripts/note-editor-live` in ar and en (`.baglib-data/note-editor-live-bL8uZH`) on a disposable Quran pack copy (deleted after) and the read-only Sunnah corpus. Dev server stopped.
+- Found: Quran search misses words written with a full alif where the Uthmani text has a small alif (العالمين). Existing limit; needs an index normalisation change and rebuild.
+- Open: poetry not checked live; drag single highlight, lecture timestamps per line, Ctrl+Shift+N, cloze and #card. Nothing committed; Jira unchanged.
+
+## Wave 10 third slice and spec v2 mapping — 2026-11-05, Claude Code
+
+- User request: "Continue Wave 10". Done: note from a book's annotations (`src/shared/annotation-note.ts`, button in the annotations panel); unit-tested, not checked live yet. Hover preview not started.
+- The user then pasted a longer design (unified note engine: slash corpus commands, blocks, transclusion, graph, canvas, file mirror, importers). Mapped item by item in `docs/features/PDF and Notes Experience Plan.md` ("Spec v2 mapping"), with decisions S1 to S10. It names new tables that overlap the existing knowledge schema; nothing from it is approved yet.
+- Nothing committed; Jira unchanged.
+
+## Wave 10 second slice: ranges, page links, slash commands, link preview — 2026-11-05, Claude Code
+
+- User request: "more Wave 10 note-editor work" (resumed after a usage-limit pause).
+- Implemented, no schema or dependency: ayah ranges and `book:<id>#p=N` page links with navigation, range and page suggestions, slash commands with honorifics and a Gregorian/Hijri date, link labels shown on lines without the cursor, numbers-only lines keep the note direction.
+- Verified: npm test 1318/1318, tsc, eslint, live `scripts/note-editor-live` in ar and en (`.baglib-data/note-editor-live-N8nSyt`), including a page link opening the PDF at page 3.
+- Open: Hijri adjustment not applied to `/date`; rest of Wave 10. Nothing committed; Jira unchanged. No dev server left running.
+
+## Wave 9 first slice: comment threads — 2026-11-05, Claude Code
+
+- User request: "Start Wave 9 comments". Schema approved earlier as D3 (ADR-010).
+- Implemented: migration 023 (`comment.resolved_at`, `comment.anchor_json`, `idx_comment_open`), `CommentThreadService`, IPC and preload actions, `CommentThreads` UI inside `NoteHistory` (notes, saved cards, ayah and hadith commentary), open-comment badge and filter in Notes. Data dictionary, DBML and ADR-010 updated.
+- Verified: npm test 1311/1311, tsc, eslint, main build, live `scripts/comments-live` passed in ar and en (`.baglib-data/comments-live-vevuiW`). Dev server I started was stopped.
+- Open: comment mode with pins, unified annotations list, remaining filters, new annotation types, PDF export of study annotations. Nothing committed; Jira unchanged.
+
+## D1: CodeMirror note editor — 2026-11-05, Claude Code
+
+- User approved the CodeMirror download ("Yes, download it"). Installed exact versions of six @codemirror packages plus @lezer/highlight listed directly; 22 packages in the lock file, MIT, matching the size stated before download.
+- Implemented: `StudyNoteEditor` replaces the note textarea in `QuickNoteScratchpad` (dashboard and Notes), Markdown highlighting, per-line direction with `dir="auto"`, `[[` suggestions for notes, books and ayahs (`src/shared/study-link-completion.ts`), Ctrl+B, Ctrl+I, Ctrl+S, textarea fallback for linkedom tests, Save reads the latest editor text. No schema change.
+- Verified: npm test 1307/1307, tsc, eslint, main build, live `scripts/note-editor-live` passed in ar and en (`.baglib-data/note-editor-live-Gcu4sU`).
+- Found: `scripts/dashboard-live` fails at its book-note edit check with the old textarea too, so it predates this work. `poetry-live` updated, not run. The dev server I started was stopped; another session's dev server on port 3000 stopped on its own during the run.
+- Open: rest of Wave 10 and Waves 9, 11 to 13. Nothing committed; Jira unchanged.
+
+## Wave 8 slice: PDF markup bar — 2026-11-05, Claude Code
+
+- User request: "Approve as recommended" for the PDF and Notes Experience Plan (D1 to D7). ADR-010 written for D3; migration 023 waits for Wave 9. CodeMirror 6 (D1) waits for the user to confirm the download size (22 packages, about 4.5 MB unpacked per npm metadata); nothing downloaded.
+- Found that most of Wave 8 already existed in `PdfWorkstationPanel`; the plan doc's Progress section records the correction.
+- Implemented (no schema or dependency): `ReaderMarkupBar` and `ReaderShortcutSheet` (`src/renderer/components/reader/ReaderMarkupBar.tsx`), `readerShortcut` (`src/renderer/libs/reader/reader-shortcuts.ts`), keep-highlighter-on for PDFs and single-key shortcuts in `FullPageBookReader`, a `markupBar` slot in `PdfWorkstationPanel`, a correct save toast, 20 strings per language.
+- Verified: new unit test 5/5, tsc, eslint on new files, live `scripts/pdf-markup-live` passed in ar and en (`.baglib-data/pdf-markup-live-z6qTgM`), screenshots at 1280 and 480 inspected. Full suite 1302/1302 (concurrency 4, throwaway data dir).
+- Open: header clipping at 480 px (existing), bar only in the PDF workstation, rest of Wave 8, Waves 9 to 13. Nothing committed; Jira unchanged.
+
+## Sunnah bab names and Ahmad notes — 2026-11-05, Claude Code
+
+- User supplied an HF token and approved the nine Shamela books from `mhaamh19/shamela_books_text_full` (Ahmad, about 25 MB, approved separately). Pages archived in `_archive_datasets/online-2026-11-05/shamela-pages/` with a manifest; the token was used only as an environment variable.
+- Filled in place, after a backup per step in `_archive_datasets/sunnah-backups/`: 3,412 Ibn Majah, 1,196 Tirmidhi and 234 Bukhari bab names (text-matched, est. 1.5–2.9% error; Muslim, Nasai and Bukhari's Tafsir left out), and 19,339 Musnad Ahmad takhrij notes plus 6,617 grades from the Arnaut footnotes. Reader fix: section numbers no longer show the source's literal «nan».
+- Verified: integrity checks, tool suite 150 passed, app Sunnah tests 19 passed, tsc, main build, live `scripts/sunnah-names-live` in Arabic and English. Follow-up (user approved): 5,990 of those 6,039 older Ahmad notes replaced, 1,100 grades reset, 68 cleared; live check passed again. Open: Nasai and Muslim gaps. Nothing committed. Details in docs/features/feature - Sunnah Chapter Names.md.
+
+## PDF and notes experience plan — 2026-11-05, Claude Code
+
+- User request (relayed by another session): plan, do not implement, Acrobat Pro's PDF experience tailored to BagLib, and the most natural note-taking experience learned from Obsidian, Maktabook, Zotero, Logseq, OneNote, NotebookLM and Figma, for notes, SRS, PDF annotations and comments.
+- Done: REA on the installed Acrobat (desktop inventory, `AcrobatRes.dll` resources) plus read-only parsing of its 46 tool manifests, themes, plug-in strings and shipped web UI strings; REA on OneNote's language DLL. Obsidian's folder is empty and Zotero, Logseq are not installed, so those and the web products come from public docs. Nothing downloaded, installed, launched or modified.
+- Docs: `docs/features/PDF and Notes Experience Plan.md` (combined plan, waves 8 to 13, decisions D1 to D7) and research files Adobe Acrobat Pro, OneNote, Obsidian, Zotero, Logseq, NotebookLM, Figma, Maktabook.
+- User approved the plan "as recommended" (D1 to D7), 2026-11-05. D1: CodeMirror 6 is approved in principle, but the download still needs the user to confirm the stated size (22 packages, about 4.5 MB unpacked per npm metadata; nothing downloaded). D3: ADR-010 written; migration 023 waits for Wave 9. D7: Jira placement is decided at publication time. Started Wave 8 (PDF shell, no schema or dependency).
+- Earlier line, kept for history: waiting on the user: approval of the plan and decisions D1 (CodeMirror 6 dependency), D3 (migration 023 for comment resolve and anchors, ADR-010), D4 and D5 syntax, D6 scope, D7 Jira placement. No code, schema, Git or Jira change made.
+
+## Sunnah chapter names — 2026-11-05, Claude Code
+
+- User request: fill missing Sunnah pieces and chapter names from the archived datasets or online. Approved downloads: hadith-json v1.2.0 (darimi, malik, ahmed; 8.7 MB) and Shamela tables of contents (about 1.2 MB). Patched `tools/hadith-alignment/data/output/sunnah_merged_quranlab_v1.sqlite` in place, as asked, after a verified backup to `_archive_datasets/sunnah-backups/`.
+- Done: Darimi regrouped into the Muqaddima plus 23 kitabs with Arabic names (2,539 rows, by Shamela printed page), and 61 Muwatta English kitab names. Provenance recorded per row and in source_registry. New `patch_chapter_names.py`, 3 tests, full tool suite 147 passed, live `scripts/sunnah-names-live` passed in Arabic and English.
+- Not done, needs approval: bab names for Ibn Majah, Tirmidhi, Nasai, Bukhari and Muslim (about one Shamela page per bab, or the gated HF page dataset); Musnad Ahmad's chapter rebuild and junk front-matter records; English for Darimi (no source). Details in docs/features/feature - Sunnah Chapter Names.md. Nothing committed.
+
 ## Waves 4a to 7 publication — 2026-11-05, Claude Code
 
 - User request: "commit push jira". Committed and pushed to origin/feature/library-domain (01b04a8..fcf7b85, remote verified): 9a783a1 code, tests, scripts and assets for Waves 4a to 7; fcf7b85 ADRs, schema, data dictionary, feature docs and state checkpoints. Shared files (translations, preload, main index) span every wave, so the work went in as one implementation commit rather than one per wave. The untracked Dataset Delivery Plan was left out and untouched.

@@ -558,3 +558,13 @@ A pathway is a `collection` row whose `collection_type` is `research` or `curric
 Dates are local civil Gregorian YYYY-MM-DD values, projected into the existing adjusted Hijri calendar for display. Audit timestamps use UTC ISO values. References retain existing book/note/Quran-profile/hadith target patterns and saved labels; optional surah scope navigates to the first ayah. There is no foreign-key cascade to a Work: task data and source pointers survive linked-book deletion. Migration 019 remains unchanged.
 
 Existing `app_settings` rows `dashboard.study.preferences.v1` and `dashboard.study.rhythm.v1` store small validated configuration objects: daily goals/user reading order, and opt-in pause/launch-reminder preferences respectively. These are not new database fields or entities. The approved launch wording is supplied through centralized translations, remains editable and is disabled by default. No table is added for synthetic research hours, word counts or purported learning scores.
+
+
+## Comment threads — ADR-010 / migration 023
+
+Approved by the user on 2026-11-05 ("Approve as recommended", decision D3). `comment` gains two nullable columns: `resolved_at` (set on a thread's root comment when resolved; NULL means open; a new reply clears it) and `anchor_json` (where a root comment sits inside its item: `{"kind":"page","page":12,"rect":[x,y,w,h]}` with page-relative values between 0 and 1, `{"kind":"paragraph","anchor":"^a1b2"}`, or `{"kind":"ref","target":"quran:hafs:2:255"}`; validated in main; NULL means the whole item). One partial index `idx_comment_open ON comment(knowledge_id) WHERE resolved_at IS NULL`. Threads use the existing `parent_comment_id`. Every comment write is versioned with its knowledge item's history; restoring an older version restores its comments, and older snapshots restore with both columns NULL.
+
+
+## Question status: Investigating — ADR-011 / migration 024
+
+Approved by the user on 2026-11-05 (decision S2). `question_detail.status` now accepts `open`, `investigating`, `answered` or `dismissed`; the interface orders them Open → Investigating → Answered, with Dismissed apart. SQLite cannot change a CHECK constraint, so migration 024 rebuilds `question_detail` with the same six columns (`knowledge_id`, `question_text`, `status`, `answered_at`, `source_ref`, `capture_hash`), the same data and the `idx_question_capture` partial unique index. `answered_at` is set only on Answered. The down migration restores the old constraint and turns `investigating` into `open`.

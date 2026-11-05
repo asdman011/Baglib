@@ -117,7 +117,7 @@ Table bookmark_detail {
 Table question_detail {
   knowledge_id uuid [pk, ref: > knowledge.id, note: 'Shared primary key with knowledge — one row per Knowledge item where knowledge_type is question.']
   question_text text
-  status text [not null, default: 'open']
+  status text [not null, default: 'open', note: 'open, investigating, answered or dismissed. investigating added by ADR-011 / migration 024.']
   answered_at timestamp
   source_ref text
   capture_hash text
@@ -131,6 +131,12 @@ Table comment {
   actor varchar(100) [note: 'Who wrote it, e.g. Ammar or Monzer. Free text — there is no formal User table yet in this schema.']
   created_at timestamp [note: 'When this comment was posted.']
   updated_at timestamp [note: 'Last-edited time.']
+  resolved_at timestamp [note: 'ADR-010 / migration 023. Set on a thread root when resolved; NULL means open. A reply reopens the thread.']
+  anchor_json text [note: 'ADR-010 / migration 023. Position of a root comment inside its item: page (with optional page-relative rect), paragraph anchor (^id) or a study reference. NULL means the whole item.']
+
+  indexes {
+    (knowledge_id) [name: 'idx_comment_open', note: 'Partial index WHERE resolved_at IS NULL.']
+  }
 }
 
 Table reading_session {
