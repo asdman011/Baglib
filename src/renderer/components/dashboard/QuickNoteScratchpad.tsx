@@ -1,5 +1,6 @@
 'use client';
 
+import { KnowledgeGraphButton } from '../notes/KnowledgeGraph';
 import React, { useEffect, useRef, useState } from 'react';
 import { Bold, Italic, Heading2, Quote, List, Code, Eye, Link, Save } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -177,7 +178,7 @@ export const QuickNoteScratchpad: React.FC<{
     <div className="flex flex-wrap items-center gap-1 border-b border-subtle pb-2">
       {tools.map(([Icon, label, prefix, suffix]) => <button type="button" key={label} title={t(label)} aria-label={t(label)} className="p-2 rounded hover:bg-canvas" onClick={() => insert(prefix, suffix)}><Icon size={14} /></button>)}
       <button type="button" aria-label={t('studyInsertLink')} title={t('studyInsertLink')} aria-expanded={linksOpen} onClick={() => setLinksOpen(value => !value)} className="p-2 rounded hover:bg-canvas"><Link size={14} /></button>
-      <button type="button" data-honorifics-toggle aria-pressed={honorificsOn} title={t(honorificsOn ? 'honorificsOnHint' : 'honorificsOffHint')} aria-label={t(honorificsOn ? 'honorificsOnHint' : 'honorificsOffHint')} onClick={toggleHonorifics} className={`rounded px-2 py-0.5 text-2xl leading-none ${honorificsOn ? 'bg-amber-500/15' : 'text-muted line-through'}`}>ﷺ</button><button type="button" data-scratchpad-dir-toggle onClick={() => setDirection(value => value === 'auto' ? 'rtl' : value === 'rtl' ? 'ltr' : 'auto')} className="text-xs p-2">{direction === 'auto' ? t('dashScratchpadDirAuto', { dir: effectiveDir.toUpperCase() }) : direction.toUpperCase()}</button>
+      {initialNote && <KnowledgeGraphButton noteId={initialNote.id} notes={notes} />}<button type="button" data-honorifics-toggle aria-pressed={honorificsOn} title={t(honorificsOn ? 'honorificsOnHint' : 'honorificsOffHint')} aria-label={t(honorificsOn ? 'honorificsOnHint' : 'honorificsOffHint')} onClick={toggleHonorifics} className={`rounded px-2 py-0.5 text-2xl leading-none ${honorificsOn ? 'bg-amber-500/15' : 'text-muted line-through'}`}>ﷺ</button><button type="button" data-scratchpad-dir-toggle onClick={() => setDirection(value => value === 'auto' ? 'rtl' : value === 'rtl' ? 'ltr' : 'auto')} className="text-xs p-2">{direction === 'auto' ? t('dashScratchpadDirAuto', { dir: effectiveDir.toUpperCase() }) : direction.toUpperCase()}</button>
       <button type="button" onClick={() => setPreview(value => !value)} className="ms-auto text-xs inline-flex items-center gap-1 p-2"><Eye size={14} />{t(preview ? 'dashScratchpadEdit' : 'dashScratchpadPreview')}</button>
     </div>
     {linksOpen && <StudyLinkPicker notes={notes} onInsert={text => { insert(text); setLinksOpen(false); }} />}

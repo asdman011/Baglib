@@ -1,3 +1,10 @@
+## S5 knowledge graph — 2026-11-05, Claude Code
+
+- User request: after the merge, "continue to S5, commit and push if necessary".
+- Implemented: local graph button on notes (greyed without links) with a Whole library option off by default, d3-force layout, click to open, text list of links. No schema.
+- Verified: npm test 1338/1338, tsc, eslint, main build, live `scripts/graph-live` in ar and en. Dev server stopped.
+- Committed and pushed with only this session's files; the Sunnah session's files stay uncommitted. No Jira change.
+
 ## Publication: note engine work and the Next.js upgrade — 2026-11-05, Claude Code
 
 - User request: "solve this first then continue to S5, commit and push if necessary, but be careful of any conflicts" (merge the npm audit session's Next.js upgrade, branch `claude/silly-feynman-29068d`, commit e4a6db9).

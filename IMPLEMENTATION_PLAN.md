@@ -2,6 +2,7 @@
 
 ## Recent Agent Updates
 
+- [2026-11-05, Claude Code] S5 knowledge graph: local map button on notes (greyed without links), whole-library option off by default, d3-force layout, click to open. npm test 1338/1338; live ar/en pass. Committed and pushed. No Jira change.
 - [2026-11-05, Claude Code] Committed the note-engine work (a2572e1 code, then docs) on feature/library-domain, only this session's files; merged the Next.js 16.4.5 upgrade (e4a6db9; only task docs conflicted, both kept); offline install, 0 vulnerabilities, tsc, full build, 1335/1335 tests and live ar/en checks pass. Sunnah session files left uncommitted. No Jira change.
 - [2026-11-05, Claude Code] S10 companion note pane beside the reader, Quran, Sunnah, Al-Bayan and Lectures (selection quotes with links, link to here, lecture line stamps). npm test 1335/1335; live ar/en pass 3 times. No schema, Git or Jira change.
 - [2026-11-05, Claude Code] S1 honorifics auto-expansion (on by default, toggle) and S2 Investigating question status (ADR-011, migration 024). npm test 1335/1335; live ar/en pass. No Git or Jira change.
