@@ -59,7 +59,7 @@ export function StudyPlannerView({ adjustment = 0 }: { adjustment?: number }) {
   };
   const edit = (task: StudyTask) => setDraft({ ...task, expectedUpdatedAt: task.updatedAt });
   const openReference = async (target: string) => {
-    try { await navigateStudyReference(target, books, openBookForReading, id => openStudyNote({ id })); } catch { setError(true); }
+    try { await navigateStudyReference(target, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })); } catch { setError(true); }
   };
   return <section data-study-planner dir={dir} className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-4 text-main">
     <header className="flex flex-wrap items-center justify-between gap-3">

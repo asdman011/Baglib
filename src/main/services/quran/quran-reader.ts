@@ -4,7 +4,7 @@ import { copyFile, mkdir, rename, rm, realpath, readFile } from 'node:fs/promise
 import path from 'node:path';
 import { parseHTML } from 'linkedom';
 import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranDivision, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit, QuranSimilarAyah, QuranStructure, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
-import { normalizeQuranSearch } from './qul-catalog';
+import { normalizeQuranSearch, quranSearchText } from './qul-catalog';
 import type { QuranFrequency, QuranFrequencyFamily, QuranFrequencyPlace, QuranFrequencyQuery } from '../../../shared/types/quran';
 import { readerPreset, readerPresets } from './reader-resources';
 import { buildWarshLayout, type WarshLayout, type WarshLayoutWord } from './warsh-layout';
@@ -74,8 +74,12 @@ export class QuranReader {
     if (path.dirname(parent) !== await realpath(path.join(this.root, 'packs'))) throw new Error('invalid-resource');
     const directory = path.join(this.root, 'derived');
     await mkdir(directory, { recursive: true });
-    const key = createHash('sha256').update(`${pack.digest}:reader-v1:${kind}`).digest('hex');
+    // Script databases moved to v2 when the search index gained ordinary-spelling forms (small alif, small yeh and waw).
+    // The v1 file is rebuilt from the installed pack, nothing is downloaded, and it stays in use if that rebuild fails.
+    const version = kind === 'script' ? 'reader-v2' : 'reader-v1';
+    const key = createHash('sha256').update(`${pack.digest}:${version}:${kind}`).digest('hex');
     const filename = path.join(directory, `${key}.sqlite`);
+    const previous = kind === 'script' ? path.join(directory, `${createHash('sha256').update(`${pack.digest}:reader-v1:${kind}`).digest('hex')}.sqlite`) : null;
     let database: Database.Database | undefined;
     try {
       database = new Database(filename, { readonly: true, fileMustExist: true });
@@ -161,7 +165,7 @@ export class QuranReader {
               const insert = working.prepare('INSERT INTO baglib_search VALUES (?, ?, ?, ?)');
               const verses = working.prepare("SELECT surah, ayah, group_concat(text, ' ') AS text FROM (SELECT surah, ayah, text FROM words ORDER BY surah, ayah, word) GROUP BY surah, ayah").all() as { surah: number; ayah: number; text: string }[];
               if (!verses.length || verses.length > 7000) throw new Error('invalid-package');
-              working.transaction(() => { for (const verse of verses) insert.run(verse.surah, verse.ayah, verse.text, normalizeQuranSearch(verse.text)); })();
+              working.transaction(() => { for (const verse of verses) insert.run(verse.surah, verse.ayah, verse.text, quranSearchText(verse.text)); })();
             } else if (kind === 'ayah-topics') {
               working.exec(`
                 CREATE INDEX IF NOT EXISTS baglib_topics_id ON topics(topic_id);
@@ -212,8 +216,16 @@ export class QuranReader {
           } finally { working.close(); }
         }
         await rename(temporary, filename);
+      } catch (error) {
+        // Keep searching with the older index rather than losing the script.
+        if (!previous) throw error;
+        try { database = new Database(previous, { readonly: true, fileMustExist: true }); } catch { throw error; }
+        if (database.pragma('user_version', { simple: true }) !== 1) { database.close(); throw error; }
       } finally { await rm(temporary, { force: true }); }
-      database = new Database(filename, { readonly: true });
+      if (!database?.open) {
+        database = new Database(filename, { readonly: true });
+        if (previous) await rm(previous, { force: true });
+      }
     }
     database.pragma('trusted_schema = OFF');
     if (this.databases.size >= 12) { const [oldId, old] = this.databases.entries().next().value!; old.close(); this.databases.delete(oldId); }

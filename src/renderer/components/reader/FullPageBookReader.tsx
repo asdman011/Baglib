@@ -69,6 +69,9 @@ import {
 import { ZenTopBar } from './ZenTopBar';
 import { ZenBottomScrubber } from './ZenBottomScrubber';
 import { ZenCornerHotspots } from './ZenCornerHotspots';
+import { ReaderMarkupBar, ReaderShortcutSheet } from './ReaderMarkupBar';
+import { consumePendingPage } from '../../utils/study-navigation';
+import { readerShortcut } from '../../libs/reader/reader-shortcuts';
 import { ZenSelectionMenu } from './ZenSelectionMenu';
 import { ZenKnowledgeDrawer } from './ZenKnowledgeDrawer';
 import { ZenTocDrawer } from './ZenTocDrawer';
@@ -121,6 +124,7 @@ import { PdfNativeViewer, type PdfSelectionInfo, type NormalizedRect } from './P
 import { HighlightActionPopover } from './HighlightActionPopover';
 import { segmentTextIntoSentences } from '../../../shared/utils/tts-text';
 import { readerAssetUrl } from '../../../shared/utils/reader-asset-url';
+import { useCompanionContext } from '../../utils/companion-context';
 
 const PDF_TEXT_DELAY_MS = 2500;
 
@@ -276,6 +280,7 @@ export const FullPageBookReader: React.FC = () => {
   const [isInkModeActive, setIsInkModeActive] = useState<boolean>(false);
   const [isInstantHighlightMode, setIsInstantHighlightMode] = useState<boolean>(false);
   const [activeHighlightColor, setActiveHighlightColor] = useState<string>('amber');
+  const [showReaderShortcuts, setShowReaderShortcuts] = useState(false);
   const [showToast, setShowToast] = useState<string | null>(null);
   const [isSavingPdf, setIsSavingPdf] = useState(false);
   const [showCopiedToast, setShowCopiedToast] = useState<boolean>(false);
@@ -1279,6 +1284,24 @@ export const FullPageBookReader: React.FC = () => {
     return [];
   }, [paginatedPages, extractedPages, ocrPages]);
 
+  // Single-key markup shortcuts for the PDF workstation: H keeps the highlighter on, 1-5 pick a colour, ? lists shortcuts.
+  useEffect(() => {
+    if (!isPdfWorkstationActive) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const action = readerShortcut(e, isInstantHighlightMode);
+      if (!action) return;
+      if (action.kind === 'toggle-highlighter') setIsInstantHighlightMode(value => !value);
+      else if (action.kind === 'stop-highlighter') setIsInstantHighlightMode(false);
+      else if (action.kind === 'color') setActiveHighlightColor(action.color);
+      else setShowReaderShortcuts(true);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPdfWorkstationActive, isInstantHighlightMode]);
+
+  // The companion note pane links to the page being read.
+  useCompanionContext('reader', () => activeBook ? { kind: 'book', target: `book:${activeBook.id}#p=${Math.max(1, readingPage)}`, label: `${activeBook.title} (${Math.max(1, readingPage)})` } : null, [activeBook?.id, activeBook?.title, readingPage]);
+
   // Global Ctrl+F / Cmd+F shortcut to open in-book search drawer
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1995,9 +2018,11 @@ export const FullPageBookReader: React.FC = () => {
     }
   };
 
-  // Restore Last Read Location on mount
+  // Restore Last Read Location on mount; a page link (book:<id>#p=N) wins over the saved location.
   useEffect(() => {
     if (!activeBook?.id) return;
+    const linkedPage = consumePendingPage(activeBook.id);
+    if (linkedPage) { setReadingPage(linkedPage); return; }
     const api = (window).electronAPI;
     if (api?.reader?.getLastLocation) {
       api.reader
@@ -2162,7 +2187,7 @@ export const FullPageBookReader: React.FC = () => {
     removeTempSelectionOverlay();
     setActiveRange(null);
     setSelectedText('');
-    setShowToast(t('bookmarkAdded', { page: safePage }) || 'Saved to Knowledge Base');
+    setShowToast(t(type === 'highlight' ? 'highlightSavedToast' : type === 'bookmark' ? 'bookmarkAdded' : 'knowledgeSavedToast', { page: safePage }));
     setTimeout(() => setShowToast(null), 2500);
     setTimeout(() => renderSavedEpubHighlights(), 50);
   };
@@ -2624,6 +2649,15 @@ export const FullPageBookReader: React.FC = () => {
       setOcrProgress(null);
     }
   };
+
+  // Keep-highlighter-on for PDFs: the viewer reports the selection, then it is saved in the chosen colour without the menu.
+  useEffect(() => {
+    if (!isInstantHighlightMode || !isPdfWorkstationActive || !pendingSelection?.rects?.length || !selectedText) return;
+    // Saved on the next tick, outside the effect body, so the save's state updates do not cascade renders.
+    const timer = setTimeout(() => { void handleSaveKnowledge('highlight', activeHighlightColor); }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInstantHighlightMode, isPdfWorkstationActive, pendingSelection, selectedText]);
 
   // Handle Text Selection in Manuscript / Reflowable View (Supports Instant Mode & Standard Mode)
   const handleMouseUp = () => {
@@ -3118,10 +3152,10 @@ export const FullPageBookReader: React.FC = () => {
       role="region"
       aria-label={t('a11yReaderLandmark') || 'Digital Book Reader'}
       onClick={handleViewportClick}
-      className={`fixed inset-0 z-50 w-screen h-screen overflow-hidden bg-canvas text-main font-sans select-none flex flex-col ${
+      className={`fixed inset-y-0 start-0 z-50 h-screen overflow-hidden bg-canvas text-main font-sans select-none flex flex-col ${
         isIdle ? 'cursor-none' : 'cursor-auto'
       }`}
-      style={getViewportCssVariables({
+      style={{ ...(getViewportCssVariables({
         theme: readerTheme,
         fontSize: readerFontSize,
         lineSpacing,
@@ -3130,7 +3164,8 @@ export const FullPageBookReader: React.FC = () => {
         brightness,
         contrast,
         fontFamily: getFontFamilyStyle(),
-      })}
+      // The companion note pane, when open, takes the end edge; the reader ends where it starts.
+      }) as React.CSSProperties), insetInlineEnd: 'var(--companion-width, 0px)' }}
     >
       {/* Dynamic Screen-Reader Live Region for Page Transitions (KEY-149) */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -4101,6 +4136,14 @@ export const FullPageBookReader: React.FC = () => {
                   onPageChange={setReadingPage}
                   onClose={handleCloseReader}
                   readingActions={{ onReadAloud: () => startReadAloud(), onAutoScroll: handleToggleAutoScroll, autoScrolling: isAutoScrolling, onBookmark: () => { void handleToggleBookmark(); }, bookmarked: isCurrentPageBookmarked, onSearch: () => panels.setters['search'](true) }}
+                  markupBar={<ReaderMarkupBar
+                    color={activeHighlightColor}
+                    onColor={setActiveHighlightColor}
+                    locked={isInstantHighlightMode}
+                    onToggleLock={() => setIsInstantHighlightMode(value => !value)}
+                    onShowShortcuts={() => setShowReaderShortcuts(true)}
+                    t={t}
+                  />}
                   annotationPanel={{
                     open: isAnnotationsDrawerOpen,
                     count: annotations.length,
@@ -4275,6 +4318,7 @@ export const FullPageBookReader: React.FC = () => {
 
       {/* Floating Selection Action Pill */}
       {renderSelectionPopover()}
+      {showReaderShortcuts && <ReaderShortcutSheet onClose={() => setShowReaderShortcuts(false)} t={t} />}
 
       {/* Existing Highlight Options Popover */}
       {activeHighlightPopover && (

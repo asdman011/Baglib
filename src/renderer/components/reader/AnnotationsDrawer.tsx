@@ -16,6 +16,7 @@ import {
   Tag,
   Clock,
   Sparkles,
+  NotebookPen,
 } from 'lucide-react';
 import type { AnnotationDTO, AnnotationType } from '../../../shared/types/annotation';
 import type { BookBibliographicInfo, BookWithAnnotations } from '../../../shared/types/export';
@@ -24,6 +25,8 @@ import { TranslationKey } from '../../translations';
 import { ExportModal } from './ExportModal';
 import { annotationPage } from '../../../shared/annotation-location';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
+import { annotationsToNote } from '../../../shared/annotation-note';
+import { openStudyNote } from '../../utils/study-navigation';
 
 interface AnnotationsDrawerProps {
   isOpen: boolean;
@@ -142,6 +145,17 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              data-annotations-to-note
+              disabled={filteredAnnotations.length === 0}
+              onClick={() => openStudyNote({ content: annotationsToNote(filteredAnnotations, { id: filteredAnnotations[0].bookId, title: bookTitle }) })}
+              title={t('annotationsToNote')}
+              aria-label={t('annotationsToNote')}
+              className="p-1.5 rounded-lg hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer disabled:opacity-40"
+            >
+              <NotebookPen className="w-4 h-4" />
+            </button>
             <button
               onClick={handleOpenExport}
               title={t('exportAnnotationsTitle')}

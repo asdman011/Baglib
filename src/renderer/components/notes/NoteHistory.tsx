@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { KnowledgeVersion,VersionSnapshot } from '../../../shared/knowledge-history';
+import { CommentThreads } from './CommentThreads';
 function text(snapshot:VersionSnapshot):string {
   const details=snapshot.details;
   return String(details.study_note_detail?.content ?? details.note_detail?.content ?? details.reading_reflection_detail?.review ?? details.question_detail?.question_text ?? details.card_detail?.front ?? snapshot.annotation?.note_content ?? '');
@@ -14,14 +15,12 @@ export function NoteHistory({id,onChanged}:{id:string;onChanged:()=>void}) {
   const [failed,setFailed]=useState(false);
   const [busy,setBusy]=useState(false);
   const [keep,setKeep]=useState(false);
-  const [comment,setComment]=useState('');
   const [more,setMore]=useState(false);
-  const [comments,setComments]=useState<Record<string,unknown>[]>([]);
   const logicalRevision=versions[0]?.restoredFrom ?? versions[0]?.revision ?? 0;
   const undoTarget=versions.find(version=>version.revision<logicalRevision&&version.action!=='restore');
   const redoTarget=[...versions].reverse().find(version=>version.revision>logicalRevision&&version.action!=='restore');
   const load=async()=>{
-    try {const page=await window.electronAPI.knowledgeHistory.versions(id);setVersions(page);setMore(page.length===200);if(page[0]){const latest=await window.electronAPI.knowledgeHistory.snapshot(id,page[0].revision);setComments(latest.comments);}setFailed(false);} catch {setFailed(true);}
+    try {const page=await window.electronAPI.knowledgeHistory.versions(id);setVersions(page);setMore(page.length===200);setFailed(false);} catch {setFailed(true);}
   };
   const choose=async(revision:number)=>{
     try {
@@ -38,8 +37,7 @@ export function NoteHistory({id,onChanged}:{id:string;onChanged:()=>void}) {
     <summary>{t('waveHistory')}</summary>
     {failed && <p role="alert" className="leading-loose">{t('waveConflict')}</p>}
     <p className="leading-loose text-muted">{t('waveRestoreHint')}</p>
-    <ul className="space-y-2 max-h-48 overflow-auto">{comments.map(row=><li key={String(row.id)} dir="auto" className="whitespace-pre-wrap leading-loose border border-subtle rounded p-2">{String(row.content||'')}</li>)}</ul>
-    <label className="block">{t('waveComment')}<textarea rows={2} dir="auto" value={comment} onChange={event=>setComment(event.target.value)} className="w-full bg-canvas border border-subtle p-2 rounded leading-loose"/></label><button disabled={!comment.trim()} onClick={()=>void window.electronAPI.knowledgeHistory.addComment(id,comment).then(()=>{setComment('');void load();onChanged();}).catch(()=>setFailed(true))}>{t('waveSaveComment')}</button>
+    <CommentThreads id={id} onChanged={()=>{void load();onChanged();}}/>
     <label className="flex gap-2 items-start leading-loose"><input type="checkbox" checked={keep} onChange={event=>setKeep(event.target.checked)}/>{t('waveAssociationConsent')}</label>
     <div className="flex flex-wrap gap-2 my-2">
       <button disabled={busy||!undoTarget} onClick={()=>undoTarget&&void restore(undoTarget.revision)}>{t('waveUndo')}</button>

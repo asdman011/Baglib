@@ -7,6 +7,35 @@ export function normalizeQuranSearch(text: string): string {
   return text.normalize('NFKC').replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').toLowerCase();
 }
 
+// Vowel marks and Quranic annotation signs, but not the small alif (U+0670) or the small waw and yeh (U+06E5 to U+06E7),
+// which stand for letters that ordinary spelling sometimes writes.
+const QURAN_MARKS = /[ؐ-ًؚ-ٟۖ-ۤۨ-ۭـ]/gu;
+
+/**
+ * Every ordinary spelling a Uthmani word may be searched by, for the search index (queries use `normalizeQuranSearch`).
+ * The small alif is written as alif in some words (ٱلۡعَٰلَمِينَ → العالمين, ٱلۡكِتَٰبُ → الكتاب) and dropped in others
+ * (ٱلرَّحۡمَٰنِ → الرحمن, هَٰذَا → هذا); waw with a small alif is read as alif (ٱلصَّلَوٰةَ → الصلاة); small yeh and waw
+ * can be full letters (إِبۡرَٰهِـۧمَ → ابراهيم). Indexing each form lets either spelling match.
+ */
+export function quranSearchForms(word: string): string[] {
+  const base = word.normalize('NFKC').replace(QURAN_MARKS, '');
+  const full = base.replace(/ۥ/gu, 'و').replace(/[ۦۧ]/gu, 'ي');
+  const forms = new Set<string>();
+  for (const source of [base, full]) {
+    forms.add(normalizeQuranSearch(source));
+    forms.add(normalizeQuranSearch(source.replace(/ٰ/gu, 'ا')));
+    const wawAlif = source.replace(/وٰ/gu, 'ا');
+    forms.add(normalizeQuranSearch(wawAlif));
+    forms.add(normalizeQuranSearch(wawAlif.replace(/ٰ/gu, 'ا')));
+  }
+  return [...forms].filter(Boolean);
+}
+
+/** Text for the `normalized` column of the Quran search index: each word with all its search forms. */
+export function quranSearchText(text: string): string {
+  return text.split(/\s+/u).filter(Boolean).flatMap(quranSearchForms).join(' ');
+}
+
 export function category(value: unknown): QuranCategory {
   if (!QURAN_CATEGORIES.includes(value as QuranCategory)) throw new Error('invalid-resource');
   return value as QuranCategory;

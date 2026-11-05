@@ -1,5 +1,6 @@
 'use client';
 
+import { openStudyNote } from '../../utils/study-navigation';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BookItem } from '../../types/library';
 import { translations, TranslationKey } from '../../translations';
@@ -523,6 +524,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Shift+N anywhere: a new note, ready to type.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        openStudyNote({ content: '' });
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);

@@ -13,6 +13,8 @@ import { SunnahInsightsPanel } from './SunnahInsightsPanel';
 import { consumeSunnahReference } from '../../utils/study-navigation';
 
 import { collectionKeys } from '../../utils/sunnah-collections';
+import { useCompanionContext } from '../../utils/companion-context';
+import { validStudyTarget } from '../../../shared/study-notes';
 export { collectionKeys };
 
 interface Position {
@@ -142,6 +144,12 @@ export function SunnahView() {
   const chapterIndex = collection?.chapters.findIndex(item => item.number === position.chapter) ?? -1;
   const hadithIndex = Math.max(0, chapter?.hadiths.findIndex(item => item.id === position.hadith) ?? 0);
   const hadith = chapter?.hadiths[hadithIndex];
+  // The companion note pane links to the hadith on screen.
+  useCompanionContext('sunnah', () => {
+    if (!hadith) return null;
+    const target = `sunnah:${position.collection}:${position.chapter}:${hadith.id}`;
+    return validStudyTarget(target) ? { kind: 'hadith', target, label: `${t(collectionKeys[position.collection])} ${hadith.number}` } : null;
+  }, [hadith?.id, position.collection, position.chapter, t]);
   const results = useMemo(() => {
     if (!chapter) return [];
     const terms = normalizeSunnahSearch(query).split(' ').filter(Boolean);

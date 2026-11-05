@@ -1,5 +1,6 @@
 'use client';
 
+import { CompanionNotePane, CompanionToggle, useCompanionPane } from '../notes/CompanionNotePane';
 import React from 'react';
 import { Titlebar } from './Titlebar';
 import { CommandPalette } from './CommandPalette';
@@ -48,6 +49,16 @@ const serverWindowMode = () => null;
 
 export const AppLayout: React.FC = () => {
   const { dir, viewMode, setViewMode, t, theme, lang } = useWorkspace();
+  // The companion note pane (decision S10) sits beside these views and keeps its note while you move between them.
+  const companion = useCompanionPane();
+  const companionViews: string[] = ['reader', 'quran', 'sunnah', 'bayan', 'lectures'];
+  React.useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'm' && companionViews.includes(viewMode)) { event.preventDefault(); companion.toggle(); }
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  });
   const [showSplash, setShowSplash] = React.useState<boolean>(true);
   const handleSplashComplete = React.useCallback(() => setShowSplash(false), []);
   const isCompanionWindow = React.useSyncExternalStore(subscribeWindowMode, readWindowMode, serverWindowMode);
@@ -172,7 +183,9 @@ export const AppLayout: React.FC = () => {
               </div>
             )}
           </React.Suspense>
+          {companionViews.includes(viewMode) && <CompanionToggle open={companion.open} onToggle={companion.toggle} />}
         </main>
+        {companionViews.includes(viewMode) && companion.open && <CompanionNotePane onClose={companion.close} overlay={viewMode === 'reader'} />}
       </div>
 
       {/* Bottom Status Bar */}

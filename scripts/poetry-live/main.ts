@@ -295,7 +295,7 @@ app.whenReady().then(async () => {
     await until(`document.querySelector('[data-study-note="${nativeNote.id}"]')!==null`);
     await evaluate(`document.querySelector('[data-study-note="${nativeNote.id}"] button[aria-label="'+window.poetryLive.t('studyEdit')+'"]').click()`);
     await until('document.querySelector("[data-scratchpad-textarea]")!==null');
-    await evaluate(`(()=>{const input=document.querySelector('[data-scratchpad-textarea]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,input.value+'\\nEdited native reflection');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    await evaluate(`(()=>{const input=document.querySelector('[data-scratchpad-textarea]');input.value=input.value+'\\nEdited native reflection';})()`);
     await evaluate('document.querySelector("[data-scratchpad-save]").click()');
     await until('document.querySelector("[data-scratchpad-textarea]")===null');
     assert.ok(knowledge.list().items.find(item => item.id === nativeNote.id)?.note?.includes('Edited native reflection'));

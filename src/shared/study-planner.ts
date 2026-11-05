@@ -5,7 +5,7 @@ export type PlannerCalendar = 'gregorian' | 'hijri';
 export type PlannerPeriod = 'week' | 'month' | 'year';
 export interface PlannerReference { target: string; label: string; scope?: 'surah' }
 export function plannerReferenceTarget(reference: PlannerReference): string {
-  return reference.scope === 'surah' && reference.target.startsWith('quran:') ? reference.target.replace(/:\d+$/u, ':1') : reference.target;
+  return reference.scope === 'surah' && reference.target.startsWith('quran:') ? reference.target.replace(/:\d+(?:-\d+)?$/u, ':1') : reference.target;
 }
 export interface StudyTask {
   id: string;

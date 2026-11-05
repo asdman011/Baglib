@@ -1,11 +1,11 @@
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { getDatabase } from '../database/connection';
 import { KnowledgeHistoryService, withKnowledgeHistory, headRevision } from '../services/knowledge-history';
 import { ReadingLogService } from '../services/reading-log';
 import { PersonalCommentaryService } from '../services/personal-commentary';
+import { CommentThreadService } from '../services/comment-threads';
 import { validCommentaryReference, validateCommentary } from '../../shared/personal-commentary';
 import { SqliteKnowledgeRepository } from '../database/repositories/knowledge.repository';
 import { StudyPlannerRepository } from '../database/repositories/study-planner.repository';
@@ -55,7 +55,7 @@ export function registerKnowledgeHistoryIpc():void {
       });
       case 'question-set': {
         const target=id(),status=input.status;
-        if(!['open','answered','dismissed'].includes(String(status))) throw new Error('invalid-request');
+        if(!['open','investigating','answered','dismissed'].includes(String(status))) throw new Error('invalid-request');
         withKnowledgeHistory(db,[target],'question-status',()=>db.prepare('UPDATE question_detail SET status=?,answered_at=? WHERE knowledge_id=?').run(status,status==='answered'?new Date().toISOString():null,target));changed();return;
       }
       case 'commentary-list': if(!validCommentaryReference(input.reference)) throw new Error('invalid-request');return new PersonalCommentaryService(db).list(input.reference);
@@ -78,11 +78,14 @@ export function registerKnowledgeHistoryIpc():void {
         new SqliteKnowledgeRepository(db).saveKnowledge({workId:source.work_id,knowledgeType:'quote',location:`note:${target}`,quotedText:text,contextNote:`[[note:${target}]]`,projectToReader:false});changed();return;
       }
       case 'comment': {
-        const target=id(),text=input.text;
-        if(typeof text!=='string'||!text.trim()||text.length>100000) throw new Error('invalid-request');
-        if(!db.prepare('SELECT 1 FROM knowledge WHERE id=? AND deleted_at IS NULL').get(target)) throw new Error('invalid-request');
-        withKnowledgeHistory(db,[target],'comment',()=>db.prepare("INSERT INTO comment(id,knowledge_id,content,actor,created_at,updated_at) VALUES(?,?,?,'local',?,?)").run(randomUUID(),target,text,new Date().toISOString(),new Date().toISOString()));changed();return;
+        if(Object.keys(input).some(key=>!['id','text','parentId','anchor'].includes(key))) throw new Error('invalid-request');
+        const created=new CommentThreadService(db).add({knowledgeId:id(),text:input.text as string,parentId:input.parentId===undefined?undefined:identifier(input.parentId),anchor:input.anchor as never});changed();return created;
       }
+      case 'comments': return new CommentThreadService(db).list(id());
+      case 'comment-counts': return new CommentThreadService(db).openCounts();
+      case 'comment-edit': new CommentThreadService(db).edit(identifier(input.commentId),input.text as string);changed();return;
+      case 'comment-resolve': if(typeof input.resolved!=='boolean') throw new Error('invalid-request');new CommentThreadService(db).setResolved(identifier(input.commentId),input.resolved);changed();return;
+      case 'comment-remove': new CommentThreadService(db).remove(identifier(input.commentId));changed();return;
       default: throw new Error('invalid-request');
     }
   });

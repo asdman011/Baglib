@@ -56,7 +56,7 @@ app.whenReady().then(async () => {
   owner.webContents.on('console-message', (_, level, message) => { if (level >= 3) errors.push(message); });
   const evaluate = <T = unknown>(code: string): Promise<T> => owner.webContents.executeJavaScript(code);
   const until = async (code: string) => { for (let i = 0; i < 150; i++) { if (await evaluate(code)) return; await new Promise(resolve => setTimeout(resolve, 50)); } throw new Error(`Timed out: ${code}`); };
-  const fill = async (selector: string, value: string) => evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  const fill = async (selector: string, value: string) => evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(el.hasAttribute('data-study-note-editor')){el.value=${JSON.stringify(value)};return;}Object.getOwnPropertyDescriptor(el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   try {
     await owner.loadURL(url);
     await until("Boolean(window.dashboardTest && document.querySelector('[data-dashboard-view]'))");

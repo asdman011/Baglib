@@ -23,11 +23,38 @@ export const NotesOverviewView: React.FC = () => {
   const [actionError, setActionError] = useState(false);
   const [readingWork,setReadingWork]=useState('');
   const [anchor, setAnchor] = useState<string | null>(null);
+  // A paragraph link scrolls to its paragraph and highlights it briefly; without that paragraph, the note stays at its top.
+  const [focusParagraph, setFocusParagraph] = useState<{ id: string; anchor: string; at: number } | null>(null);
+  useEffect(() => {
+    if (!focusParagraph) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let element: Element | null = null;
+    const clear = () => { element?.classList.remove('bg-amber-400/30'); element?.removeAttribute('data-paragraph-focused'); };
+    const frame = requestAnimationFrame(() => {
+      element = document.querySelector(`[data-study-note="${CSS.escape(focusParagraph.id)}"] [data-paragraph="${CSS.escape(focusParagraph.anchor)}"]`);
+      if (!element) return;
+      element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      element.classList.add('bg-amber-400/30');
+      element.setAttribute('data-paragraph-focused', 'true');
+      timer = setTimeout(clear, 2200);
+    });
+    // A new navigation (or leaving) ends the highlight at once, instead of leaving it on.
+    return () => { cancelAnimationFrame(frame); if (timer) clearTimeout(timer); clear(); };
+  }, [focusParagraph, notes]);
+  const [openComments, setOpenComments] = useState<Record<string, number>>({});
+  const [onlyOpenComments, setOnlyOpenComments] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const load = () => window.electronAPI?.knowledgeHistory?.commentCounts?.().then(counts => { if (alive) setOpenComments(counts); }, () => {});
+    void load();
+    const off = window.electronAPI?.studyNotes?.onChanged?.(() => { void load(); });
+    return () => { alive = false; off?.(); };
+  }, [notes]);
   useEffect(() => {
     const consume = () => {
       const pending = consumeStudyNote();
       if (!pending) return;
-      if (pending.id) { setSelected(pending.id); setQuery(''); }
+      if (pending.id) { setSelected(pending.id); setQuery(''); setFocusParagraph(pending.anchor ? { id: pending.id, anchor: pending.anchor, at: Date.now() } : null); }
       else {
         setEditor({ content: pending.content || '', key: Date.now() });
         setAnchor(studyLinks(pending.content || '')[0]?.target || null);
@@ -39,13 +66,14 @@ export const NotesOverviewView: React.FC = () => {
   const open = async (target: string) => {
     setActionError(false);
     try {
-      await navigateStudyReference(target, books, openBookForReading, id => {
+      await navigateStudyReference(target, books, openBookForReading, (id, paragraph) => {
         if (!notes.some(note => note.id === id)) throw new Error('missing-note');
         setSelected(id); setQuery(''); setAnchor(null); setEditor(null);
+        setFocusParagraph(paragraph ? { id, anchor: paragraph, at: Date.now() } : null);
       });
     } catch { setActionError(true); }
   };
-  const shown = useMemo(() => notes.filter(note => (!selected || note.id === selected) && (!anchor || studyBacklinks([note], anchor).length) && matchesStudyQuery(`${note.title} ${note.content} ${note.aliases.join(' ')} ${note.tags.join(' ')} ${books.find(book => book.id === note.workId)?.title || ''}`, query)), [notes, selected, anchor, query, books]);
+  const shown = useMemo(() => notes.filter(note => (!selected || note.id === selected) && (!onlyOpenComments || (openComments[note.id] ?? 0) > 0) && (!anchor || studyBacklinks([note], anchor).length) && matchesStudyQuery(`${note.title} ${note.content} ${note.aliases.join(' ')} ${note.tags.join(' ')} ${books.find(book => book.id === note.workId)?.title || ''}`, query)), [notes, selected, anchor, query, books, onlyOpenComments, openComments]);
   const remove = async (note: StudyNote) => {
     try {
       if (note.workId || note.knowledgeId) await window.electronAPI.knowledge.delete(note.knowledgeId || note.id);
@@ -67,16 +95,17 @@ export const NotesOverviewView: React.FC = () => {
     <label className="flex items-center gap-2 rounded-xl border border-subtle bg-surface px-3 py-2"><Search size={17} /><input type="search" aria-label={t('studySearchNotes')} placeholder={t('studySearchNotes')} value={query} onChange={event => { setQuery(event.target.value); setSelected(null); }} className="w-full min-w-0 bg-transparent outline-none text-sm leading-loose" /></label>
     <label className="block text-sm">{t('waveReadingLog')}<select data-reading-log-book aria-label={t('waveReadingLog')} value={readingWork} onChange={event=>setReadingWork(event.target.value)} className="w-full bg-surface border border-subtle rounded p-2"><option value="">{t('dashScratchpadAttachBook')}</option>{books.map(book=><option key={book.id} value={book.id}>{book.title}</option>)}</select></label>
     {readingWork&&<ReadingLogPanel key={readingWork} workId={readingWork}/>}
+    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" data-notes-open-comments checked={onlyOpenComments} onChange={event => setOnlyOpenComments(event.target.checked)} />{t('commentsOnlyOpen', { count: Object.values(openComments).reduce((sum, count) => sum + count, 0) })}</label>
     {(selected || anchor) && <button type="button" onClick={() => { setSelected(null); setAnchor(null); }} className="text-xs flex items-center gap-1"><X size={14} />{t('studyLinkedNotes')}</button>}
     {(error || actionError) && <p role="alert">{t('studyActionFailed')}</p>}
-    {editor && <div className="max-w-3xl"><div className="flex justify-end mb-1"><button type="button" aria-label={t('studyClose')} onClick={() => setEditor(null)}><X size={18} /></button></div><QuickNoteScratchpad key={editor.key} initialNote={editor.note} initialContent={editor.content} onSaved={() => { setEditor(null); void refresh(); }} /></div>}
+    {editor && <div className="max-w-3xl"><div className="flex justify-end mb-1"><button type="button" aria-label={t('studyClose')} onClick={() => setEditor(null)}><X size={18} /></button></div><QuickNoteScratchpad key={editor.key} initialNote={editor.note} initialContent={editor.content} autoFocus onSaved={() => { setEditor(null); void refresh(); }} /></div>}
     <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
       {shown.map(note => {
         const backlinks = studyBacklinks(notes, `note:${note.id}`);
         const refs = [...new Map(studyLinks(note.content).map(link => [link.target, link])).values()];
         const book = books.find(book => book.id === note.workId);
         return <article key={note.id} data-study-note={note.id} className="rounded-xl border border-subtle bg-surface p-4 space-y-3 min-w-0">
-          <header className="flex items-start justify-between gap-2"><div className="min-w-0"><h2 dir="auto" className="font-bold leading-loose break-words">{note.title || t('dashScratchpadGeneralNote')}</h2>{note.aliases.length > 0 && <p className="text-xs text-muted leading-loose" dir="auto">{note.aliases.join(' · ')}</p>}</div><div className="flex shrink-0 gap-1"><button type="button" aria-label={t('studyEdit')} onClick={() => note.kind==='reading_reflection'?setReadingWork(note.workId || note.sourceRef?.replace(/^book:/u,'') || ''):setEditor({ note, key: Date.now() })} className="p-1.5"><Pencil size={15} /></button><button type="button" aria-label={t('deleteNote')} onClick={() => void remove(note)} className="p-1.5 text-red-500"><Trash2 size={15} /></button></div></header>
+          <header className="flex items-start justify-between gap-2"><div className="min-w-0"><h2 dir="auto" className="font-bold leading-loose break-words">{note.title || t('dashScratchpadGeneralNote')}</h2>{(openComments[note.id] ?? 0) > 0 && <span data-note-open-comments className="inline-flex items-center rounded-full bg-amber-500/15 px-2 text-[11px]">{t('commentsOpenCount', { count: openComments[note.id] })}</span>}{note.aliases.length > 0 && <p className="text-xs text-muted leading-loose" dir="auto">{note.aliases.join(' · ')}</p>}</div><div className="flex shrink-0 gap-1"><button type="button" aria-label={t('studyEdit')} onClick={() => note.kind==='reading_reflection'?setReadingWork(note.workId || note.sourceRef?.replace(/^book:/u,'') || ''):setEditor({ note, key: Date.now() })} className="p-1.5"><Pencil size={15} /></button><button type="button" aria-label={t('deleteNote')} onClick={() => void remove(note)} className="p-1.5 text-red-500"><Trash2 size={15} /></button></div></header>
           <StudyNoteContent content={note.content} notes={notes} onOpen={target => void open(target)} t={t} />
           <NoteHistory id={note.id} onChanged={()=>void refresh()}/>
           <button type="button" onClick={() => void memorize(note)} className="text-xs underline">{t('srsFromNote')}</button>

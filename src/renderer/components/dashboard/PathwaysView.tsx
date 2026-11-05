@@ -123,7 +123,7 @@ function Detail({ pathway, onChange, onRemoved, onError }: { pathway: PathwayDet
   };
   const open = (item: PathwayItem) => {
     if (item.url) { void window.electronAPI.openExternal(item.url); return; }
-    void navigateStudyReference(item.reference!, books, openBookForReading, id => openStudyNote({ id })).catch(onError);
+    void navigateStudyReference(item.reference!, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(onError);
   };
   const addResource = (text: string) => {
     const link = studyLinks(text)[0];

@@ -7,6 +7,7 @@ import { EnglishPoetryNarration } from './EnglishPoetryNarration';
 import { PoetryNarrations } from './PoetryNarrations';
 import { SavedPoetryNotes } from './SavedPoetryNotes';
 import { PoetBiography } from './PoetBiography';
+import { useCompanionContext } from '../../utils/companion-context';
 
 export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: { poem: PoetryDetail; onBack: () => void; onPoet?: (id: number) => void; initialVerse?: number; initialTo?: number }) {
   const { t, dir, lang } = useWorkspace();
@@ -28,6 +29,12 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
     targetElement.current?.focus({ preventScroll: true });
   }, [initialVerse]);
   const [diacritics, setDiacritics] = useState(true);
+  // The companion note pane links to the open poem, at the verses it was opened on.
+  useCompanionContext('bayan', () => {
+    const from = Math.max(0, Math.min(Number.isSafeInteger(initialVerse) ? initialVerse! : 0, Math.max(verses.length - 1, 0)));
+    const to = Math.max(from, Math.min(Number.isSafeInteger(initialTo) ? initialTo! : from + (paired ? 1 : 0), Math.max(verses.length - 1, 0)));
+    return { kind: 'poem', target: `poetry:ashaar:${poem.id}:${from}:${to}`, label: [poem.poet_name, poem.title].filter(Boolean).join(' — ') };
+  }, [poem.id, initialVerse, initialTo, verses.length, paired]);
   const [justify, setJustify] = useState(false);
   const [offset, setOffset] = useState(() => Math.floor(targetRow / 100) * 100);
   const [copied, setCopied] = useState(false);

@@ -19,6 +19,7 @@ import { consumeQuranAyah, QURAN_OPEN_EVENT, type QuranTarget } from '../../util
 import { QuranKhatmahDock } from './QuranKhatmah';
 import { quranActionError } from '../../utils/quran-errors';
 import { quranPageKeyDelta, quranReadingKeyTarget } from './quran-page-keys';
+import { useCompanionContext } from '../../utils/companion-context';
 
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 const emptyCatalog: QuranReaderCatalog = { sources: [], presets: [] };
@@ -147,6 +148,12 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
   const identity = useRef('');
   const customized = useRef(new Set<string>());
   const profile = catalog.sources.find(source => source.id === selection.script)?.profile;
+  // The companion note pane links to the selected ayah.
+  useCompanionContext('quran', () => {
+    if (!inspected || !profile) return null;
+    const name = (lang === 'ar' ? surahs.find(surah => surah.number === inspected.surah)?.arabic : surahs.find(surah => surah.number === inspected.surah)?.name) || '';
+    return { kind: 'quran', target: `quran:${profile}:${inspected.surah}:${inspected.ayah}`, label: `${name} ${inspected.surah}:${inspected.ayah}`.trim() };
+  }, [inspected?.surah, inspected?.ayah, profile, lang, surahs]);
   const layouts = catalog.sources.filter(source => source.kind === 'mushaf-layout' || (source.kind === 'glyph-layout' && source.profile === profile && profile === 'hafs'));
   const layout = layouts.find(source => source.id === layoutId) || layouts.find(source => source.kind === 'mushaf-layout') || layouts[0];
   const svgLayoutId = catalog.sources.find(source => source.kind === 'mushaf-layout' && source.profile === profile)?.id;

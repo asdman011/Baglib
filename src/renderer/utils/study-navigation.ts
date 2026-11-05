@@ -1,13 +1,19 @@
 import type { SunnahCollectionId } from '../../shared/types/sunnah';
 import type { BookItem } from '../../shared/types/work';
-import { validStudyTarget } from '../../shared/study-notes';
+import { parseBookTarget, parseNoteTarget, parseQuranTarget, validStudyTarget } from '../../shared/study-notes';
 import { openQuranAyah } from './quran-navigation';
 import { openPoetryReference } from './poetry-navigation';
 import { openLecture } from './lecture-navigation';
 export const STUDY_NOTE_OPEN = 'baglib:study-note-open';
-let pendingNote: { id?: string; content?: string } | null = null;
+let pendingNote: { id?: string; content?: string; anchor?: string } | null = null;
+let pendingPage: { workId: string; page: number } | null = null;
+/** The page a `book:<id>#p=N` link asked for; read once by the reader when that book opens. */
+export function consumePendingPage(workId: string): number | null {
+  if (!pendingPage || pendingPage.workId !== workId) return null;
+  const page = pendingPage.page; pendingPage = null; return page;
+}
 let pendingSunnah: { collection: SunnahCollectionId; chapter: number; hadith: string } | null = null;
-export function openStudyNote(target: { id?: string; content?: string }): void {
+export function openStudyNote(target: { id?: string; content?: string; anchor?: string }): void {
   pendingNote = target;
   window.dispatchEvent(new CustomEvent(STUDY_NOTE_OPEN));
 }
@@ -18,16 +24,19 @@ export function openSunnahReference(target: NonNullable<typeof pendingSunnah>): 
 }
 export function consumeSunnahReference() { const value = pendingSunnah; pendingSunnah = null; return value; }
 
-export async function navigateStudyReference(target: string, books: BookItem[], onBook: (book: BookItem) => void, onNote: (id: string) => void): Promise<void> {
+export async function navigateStudyReference(target: string, books: BookItem[], onBook: (book: BookItem) => void, onNote: (id: string, anchor?: string) => void): Promise<void> {
   if (!validStudyTarget(target)) throw new Error('invalid-reference');
-  if (target.startsWith('note:')) { onNote(target.slice(5)); return; }
+  if (target.startsWith('note:')) { const parsed = parseNoteTarget(target)!; onNote(parsed.id, parsed.anchor); return; }
   if (target.startsWith('book:')) {
-    const book = books.find(book => book.id === target.slice(5));
+    const parsed = parseBookTarget(target);
+    const book = parsed && books.find(book => book.id === parsed.id);
     if (!book) throw new Error('missing-book');
+    pendingPage = parsed.page ? { workId: book.id, page: parsed.page } : null;
     onBook(book); return;
   }
   if (target.startsWith('quran:')) {
-    const [, profile, surah, ayah] = target.split(':');
+    const parsed = parseQuranTarget(target)!;
+    const { profile, surah, from: ayah } = parsed;
     const catalog = await window.electronAPI.quran.readerCatalog();
     if (!catalog.ok) throw new Error('missing-source');
     const source = catalog.data.sources.find(source => source.kind === 'script' && source.profile === profile);

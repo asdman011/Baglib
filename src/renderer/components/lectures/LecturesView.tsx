@@ -9,6 +9,7 @@ import { consumeLecture, LECTURE_OPEN_EVENT, lectureTarget } from '../../utils/l
 import { studyLinkText, studyLinks } from '../../../shared/study-notes';
 import { clockTime, PLAYBACK_RATES, type Lecture } from '../../../shared/lectures';
 import { localAssetUrl } from '../../utils/file-path-helper';
+import { useCompanionContext } from '../../utils/companion-context';
 
 const button = 'inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-sm disabled:opacity-50';
 const control = 'rounded-lg border border-subtle bg-surface p-2 text-sm text-main min-w-0';
@@ -46,6 +47,11 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
 
   const go = (seconds: number) => { if (media.current) { media.current.currentTime = seconds; void media.current.play().catch(() => {}); } };
   const label = (seconds: number) => `${lecture.title} · ${clockTime(seconds)}`;
+  // The companion note pane reads the playback time when it needs it, so links and line stamps are exact.
+  useCompanionContext('lectures', () => {
+    const at = media.current?.currentTime ?? 0;
+    return { kind: 'lecture', target: lectureTarget(lecture.id, at), label: label(at) };
+  }, [lecture.id, lecture.title]);
   const note = () => { const at = media.current?.currentTime ?? 0; openStudyNote({ content: `${studyLinkText(lectureTarget(lecture.id, at), label(at))}\n\n` }); };
   const shot = async () => {
     const element = media.current;

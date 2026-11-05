@@ -126,6 +126,7 @@ export function PdfWorkstationPanel({
   readerIntegration,
   readingActions,
   annotationPanel,
+  markupBar,
 }: {
   workId?: string;
   onClose: () => void;
@@ -135,6 +136,7 @@ export function PdfWorkstationPanel({
   fileUrl?: string;
   readingActions?: { onReadAloud: () => void; onAutoScroll: () => void; autoScrolling: boolean; onBookmark: () => void; bookmarked: boolean; onSearch?: () => void };
   annotationPanel?: { open: boolean; content: React.ReactNode; onToggle: () => void; onClose: () => void; count: number };
+  markupBar?: React.ReactNode;
   readerIntegration?: Pick<React.ComponentProps<typeof PdfNativeViewer>, 'highlights' | 'activeSelectionInfo' | 'onSelectionChange' | 'onHighlightClick' | 'onPdfDocLoaded' | 'onOutlineLoaded' | 'onTotalPagesLoaded' | 'contentContainerRef' | 'autoCropMargins' | 'direction'>;
 }) {
   const { lang, dir, t, theme: appTheme, books, openBookForReading } = useWorkspace();
@@ -936,6 +938,7 @@ export function PdfWorkstationPanel({
             )}
           </div>
 
+          {markupBar}
           {readingActions && (
             <>
               <button type="button" onClick={readingActions.onReadAloud} aria-label={t('ttsReadAloud')} title={t('ttsReadAloud')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><BookOpen size={14} /></button>

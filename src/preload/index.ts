@@ -758,7 +758,12 @@ export const API = {
     saveReflection: input=>ipcRenderer.invoke('knowledge-history:request','reflection-save',input),
     addAction: (id,title)=>ipcRenderer.invoke('knowledge-history:request','action',{id,title}),
     addQuote: (id,text)=>ipcRenderer.invoke('knowledge-history:request','quote',{id,text}),
-    addComment: (id,text)=>ipcRenderer.invoke('knowledge-history:request','comment',{id,text}),
+    addComment: (id,text,options?)=>ipcRenderer.invoke('knowledge-history:request','comment',{id,text,...(options?.parentId?{parentId:options.parentId}:{}),...(options?.anchor?{anchor:options.anchor}:{})}),
+    comments: id=>ipcRenderer.invoke('knowledge-history:request','comments',{id}),
+    commentCounts: ()=>ipcRenderer.invoke('knowledge-history:request','comment-counts'),
+    editComment: (commentId,text)=>ipcRenderer.invoke('knowledge-history:request','comment-edit',{commentId,text}),
+    resolveComment: (commentId,resolved)=>ipcRenderer.invoke('knowledge-history:request','comment-resolve',{commentId,resolved}),
+    removeComment: commentId=>ipcRenderer.invoke('knowledge-history:request','comment-remove',{commentId}),
   } satisfies import('../shared/knowledge-history').HistoryAPI,
   commentary: {
     list: reference=>ipcRenderer.invoke('knowledge-history:request','commentary-list',{reference}),
