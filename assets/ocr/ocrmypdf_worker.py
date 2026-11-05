@@ -23,9 +23,10 @@ from pathlib import Path
 LANGUAGE_FILES = ("ara", "eng")
 LINE_CLASSES = {"ocr_line", "ocr_header", "ocr_footer", "ocr_caption", "ocr_textfloat"}
 BIDI_MARKS = re.compile("[‎‏‪-‮⁦-⁩]")
-# Treats a page as one column of lines. Without it Tesseract splits Arabic verse
-# into hemistich blocks and reads almost none of it.
-ARABIC_PAGE_SEGMENTATION = 4
+# Page segmentation per layout, from scripts/ocr-benchmark on Arabic print. "lines" (6)
+# reads verse and single-column prose; automatic segmentation splits verse into
+# hemistich blocks. "columns" (3) is the only mode that keeps two columns apart.
+PAGE_SEGMENTATION = {"lines": 6, "columns": 3}
 
 
 class WorkerError(Exception):
@@ -189,11 +190,11 @@ def flatten_transparency(image: Path, work: Path) -> Path:
         return flat
 
 
-def run_ocrmypdf(image: Path, language: str, dpi: int, work: Path) -> Path:
+def run_ocrmypdf(image: Path, language: str, dpi: int, work: Path, layout: str = "lines") -> Path:
     import ocrmypdf
     from ocrmypdf.exceptions import MissingDependencyError
 
-    options ={"tesseract_pagesegmode": ARABIC_PAGE_SEGMENTATION} if language == "ara" else {}
+    options = {"tesseract_pagesegmode": PAGE_SEGMENTATION[layout]} if language == "ara" else {}
     tempfile.tempdir = str(work)
     try:
         ocrmypdf.ocr(
@@ -216,7 +217,7 @@ def run_ocrmypdf(image: Path, language: str, dpi: int, work: Path) -> Path:
     return found[0]
 
 
-def process_image(image: Path, root: Path, language: str = "auto", page_number: int = 1, dpi: int = 300) -> dict:
+def process_image(image: Path, root: Path, language: str = "auto", page_number: int = 1, dpi: int = 300, layout: str = "lines") -> dict:
     missing_packages = find_missing_packages(root)
     if missing_packages:
         raise WorkerError("runtime-missing", missingPackages=missing_packages)
@@ -229,7 +230,7 @@ def process_image(image: Path, root: Path, language: str = "auto", page_number: 
     chosen = tesseract_language(language, image, root)
 
     with tempfile.TemporaryDirectory(prefix="baglib-ocrmypdf-") as folder:
-        hocr = run_ocrmypdf(image, chosen, dpi, Path(folder))
+        hocr = run_ocrmypdf(image, chosen, dpi, Path(folder), layout)
         page = parse_hocr(hocr.read_text(encoding="utf-8"))
 
     text = "\n".join(line["text"] for line in page["lines"])
@@ -256,6 +257,7 @@ def main():
     parser.add_argument("--language", default="auto")
     parser.add_argument("--page", type=int, default=1)
     parser.add_argument("--dpi", type=int, default=300)
+    parser.add_argument("--layout", choices=sorted(PAGE_SEGMENTATION), default="lines")
     args = parser.parse_args()
     root = Path(args.engine_root)
 
@@ -266,7 +268,7 @@ def main():
         parser.error("--image is required")
 
     try:
-        result = process_image(Path(args.image), root, args.language, args.page, args.dpi)
+        result = process_image(Path(args.image), root, args.language, args.page, args.dpi, args.layout)
     except WorkerError as error:
         print(json.dumps({"error": error.code, **error.details}, ensure_ascii=False))
         sys.exit(3)

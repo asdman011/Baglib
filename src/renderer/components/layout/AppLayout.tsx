@@ -13,6 +13,7 @@ import { SearchHubModal } from '../search/SearchHubModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAthan } from '../../hooks/useAthan';
 import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
+import { LECTURE_OPEN_EVENT } from '../../utils/lecture-navigation';
 import { STUDY_NOTE_OPEN } from '../../utils/study-navigation';
 import { Settings } from 'lucide-react';
 import { StartupSplash } from '../StartupSplash';
@@ -28,6 +29,8 @@ const SunnahView = React.lazy(() =>
   import('../sunnah/SunnahView').then((m) => ({ default: m.SunnahView }))
 );
 const BayanView = React.lazy(() => import('../poetry/BayanView').then(module => ({ default: module.BayanView })));
+const LecturesView = React.lazy(() => import('../lectures/LecturesView').then(module => ({ default: module.LecturesView })));
+const PathwaysView = React.lazy(() => import('../dashboard/PathwaysView').then(module => ({ default: module.PathwaysView })));
 const StudyPlannerView = React.lazy(() => import('../dashboard/StudyPlannerView').then(module => ({ default: module.StudyPlannerView })));
 const QuranView = React.lazy(() =>
   import('../quran/QuranView').then((m) => ({ default: m.QuranView }))
@@ -92,6 +95,8 @@ export const AppLayout: React.FC = () => {
     window.addEventListener(QURAN_OPEN_EVENT, handleQuranOpen as EventListener);
     window.addEventListener(STUDY_NOTE_OPEN, handleNoteOpen);
     window.addEventListener('baglib:sunnah-open', handleSunnahOpen);
+    const handleLectureOpen = () => setViewMode('lectures');
+    window.addEventListener(LECTURE_OPEN_EVENT, handleLectureOpen);
     window.addEventListener('baglib:poetry-open', handlePoetryOpen);
     return () => {
       window.removeEventListener('dragover', handleWindowDragOver);
@@ -99,6 +104,7 @@ export const AppLayout: React.FC = () => {
       window.removeEventListener(QURAN_OPEN_EVENT, handleQuranOpen as EventListener);
       window.removeEventListener(STUDY_NOTE_OPEN, handleNoteOpen);
       window.removeEventListener('baglib:sunnah-open', handleSunnahOpen);
+      window.removeEventListener(LECTURE_OPEN_EVENT, handleLectureOpen);
       window.removeEventListener('baglib:poetry-open', handlePoetryOpen);
     };
   }, [setViewMode]);
@@ -149,6 +155,8 @@ export const AppLayout: React.FC = () => {
           <React.Suspense fallback={<div className="flex-1 bg-canvas" />}>
             {viewMode === 'dashboard' && <HomeDashboardView athanState={athanState} />}
             {viewMode === 'planner' && <StudyPlannerView adjustment={athanState.snapshot?.settings.hijriAdjustmentDays || 0} />}
+            {viewMode === 'pathways' && <PathwaysView />}
+            {viewMode === 'lectures' && <LecturesView />}
             {viewMode === 'quran' && <QuranView />}
             {viewMode === 'sunnah' && <SunnahView />}
             {viewMode === 'bayan' && <BayanView />}

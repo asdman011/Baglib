@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { ocrService } from '../services/ocr/ocr.service';
-import { isOcrEngine, readPreferredEngine, savePreferredEngine } from '../services/ocr/ocr-preference';
+import { isOcrEngine, readPageLayout, readPreferredEngine, savePageLayout, savePreferredEngine } from '../services/ocr/ocr-preference';
 import { settingsRepository } from '../database/repositories/settings.repository';
 import {
   OcrRecognizePageParams,
@@ -28,6 +28,8 @@ export function registerOcrIpc(): void {
 
   // Every selectable engine, with what each still needs
   ipcMain.handle('ocr:get-engines', () => ocrService.getEngines());
+  ipcMain.handle('ocr:get-layout', () => readPageLayout(settingsRepository));
+  ipcMain.handle('ocr:set-layout', (_, layout: unknown) => savePageLayout(settingsRepository, layout));
 
   ipcMain.handle('ocr:get-preferred-engine', () => readPreferredEngine(settingsRepository));
 

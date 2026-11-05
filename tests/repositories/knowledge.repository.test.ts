@@ -57,7 +57,7 @@ describe('SqliteKnowledgeRepository', () => {
       assert.ok(note.createdAt);
     });
 
-    it('deletes a note and cascades from knowledge to note_detail', () => {
+    it('trashes a note without deleting its recoverable detail', () => {
       repo.addNote({
         id: 'note-del-1',
         bookId: 'work-note-1',
@@ -72,7 +72,8 @@ describe('SqliteKnowledgeRepository', () => {
 
       // Verify cascade in SQLite detail table
       const details = db.prepare('SELECT * FROM note_detail WHERE knowledge_id = ?').all('note-del-1');
-      assert.strictEqual(details.length, 0);
+      assert.strictEqual(details.length, 1);
+      assert.ok((db.prepare('SELECT deleted_at FROM knowledge WHERE id=?').get('note-del-1') as {deleted_at:string}).deleted_at);
     });
   });
 });

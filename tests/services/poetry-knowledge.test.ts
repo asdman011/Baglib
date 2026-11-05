@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createTestDatabase } from '../helpers/test-db';
 import { PoetryKnowledgeService, validatePoetrySave } from '../../src/main/services/poetry/knowledge';
 import type { PoetryDetail } from '../../src/shared/types/poetry';
+import { headRevision } from '../../src/main/services/knowledge-history';
 
 test('Poetry persists native notes, quotes and bookmarks in existing Knowledge tables without fake works', () => {
   const database = createTestDatabase();
@@ -13,6 +14,7 @@ test('Poetry persists native notes, quotes and bookmarks in existing Knowledge t
     const tables = database.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
     for (const type of ['note', 'quote', 'bookmark'] as const) {
       const saved = service.save({ poemId: 42, from: 0, to: 1, type, note: 'تأمل شخصي' }, poem);
+      assert.equal(headRevision(database,saved.id),1);
       assert.equal(saved.reference, 'poetry:ashaar:42:0:1');
       assert.equal(saved.type, type);
       const row = database.prepare('SELECT work_id,edition_id,source_id FROM knowledge WHERE id=?').get(saved.id);

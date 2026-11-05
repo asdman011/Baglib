@@ -15,6 +15,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { withKnowledgeHistory, trashKnowledge, headRevision } from '../../services/knowledge-history';
 import type { Database } from 'better-sqlite3';
 import type {
   IKnowledgeRepository,
@@ -38,10 +39,11 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
     const rows = this.db
       .prepare(
         `
-      SELECT k.id, k.work_id as bookId, k.location as pageNumber, k.created_at as createdAt, n.content
+      SELECT k.id, k.work_id as bookId, k.location as pageNumber, k.created_at as createdAt, COALESCE(s.content,n.content) AS content
       FROM knowledge k
-      JOIN note_detail n ON k.id = n.knowledge_id
-      WHERE k.knowledge_type = 'note'
+      LEFT JOIN note_detail n ON k.id = n.knowledge_id
+      LEFT JOIN study_note_detail s ON k.id = s.knowledge_id
+      WHERE k.knowledge_type IN ('note','study_note') AND k.deleted_at IS NULL AND k.work_id IS NOT NULL
       ORDER BY k.created_at DESC
     `
       )
@@ -99,7 +101,8 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
         k.updated_at AS updatedAt,
         hd.quoted_text AS highlightText,
         hd.color AS highlightColor,
-        nd.content AS noteContent,
+        COALESCE(sd.content,rd.review,nd.content) AS noteContent,
+        sd.title AS title,
         qd.quoted_text AS quoteText,
         qd.context_note AS contextNote,
         bd.label AS bookmarkLabel,
@@ -107,10 +110,12 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       FROM knowledge k
       LEFT JOIN highlight_detail hd ON k.id = hd.knowledge_id
       LEFT JOIN note_detail nd      ON k.id = nd.knowledge_id
+      LEFT JOIN study_note_detail sd ON k.id = sd.knowledge_id
+      LEFT JOIN reading_reflection_detail rd ON k.id = rd.knowledge_id
       LEFT JOIN quote_detail qd     ON k.id = qd.knowledge_id
       LEFT JOIN bookmark_detail bd  ON k.id = bd.knowledge_id
       LEFT JOIN question_detail qud ON k.id = qud.knowledge_id
-      WHERE k.work_id = ?
+      WHERE k.work_id = ? AND k.deleted_at IS NULL
     `;
 
     const params: unknown[] = [workId];
@@ -140,7 +145,8 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
         k.updated_at AS updatedAt,
         hd.quoted_text AS highlightText,
         hd.color AS highlightColor,
-        nd.content AS noteContent,
+        COALESCE(sd.content,rd.review,nd.content) AS noteContent,
+        sd.title AS title,
         qd.quoted_text AS quoteText,
         qd.context_note AS contextNote,
         bd.label AS bookmarkLabel,
@@ -148,10 +154,12 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       FROM knowledge k
       LEFT JOIN highlight_detail hd ON k.id = hd.knowledge_id
       LEFT JOIN note_detail nd      ON k.id = nd.knowledge_id
+      LEFT JOIN study_note_detail sd ON k.id = sd.knowledge_id
+      LEFT JOIN reading_reflection_detail rd ON k.id = rd.knowledge_id
       LEFT JOIN quote_detail qd     ON k.id = qd.knowledge_id
       LEFT JOIN bookmark_detail bd  ON k.id = bd.knowledge_id
       LEFT JOIN question_detail qud ON k.id = qud.knowledge_id
-      WHERE k.knowledge_type IS NOT 'card' AND k.former_work_title IS NULL
+      WHERE k.knowledge_type IS NOT 'card' AND (k.former_work_title IS NULL OR k.knowledge_type IN('study_note','reading_reflection')) AND k.deleted_at IS NULL
       ORDER BY k.created_at ASC
     `;
 
@@ -167,12 +175,16 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
     const now = new Date().toISOString();
     const createdAt = payload.createdAt || now;
     const updatedAt = now;
-    const knowledgeType: KnowledgeType = payload.knowledgeType || payload.type || 'highlight';
+    const previous = this.db.prepare('SELECT knowledge_type,deleted_at FROM knowledge WHERE id=?').get(id) as {knowledge_type:KnowledgeType;deleted_at:string|null}|undefined;
+    if (previous?.deleted_at) throw new Error('history-conflict');
+    const knowledgeType: KnowledgeType = previous?.knowledge_type === 'study_note' && (payload.knowledgeType === 'note' || payload.type === 'note') ? 'study_note' : payload.knowledgeType || payload.type || 'highlight';
 
     const upsertKnowledge = this.db.prepare(`
       INSERT INTO knowledge (id, work_id, edition_id, source_id, knowledge_type, location, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
+        work_id = excluded.work_id,
+        former_work_title = CASE WHEN excluded.work_id IS NOT NULL THEN NULL ELSE knowledge.former_work_title END,
         edition_id = excluded.edition_id,
         source_id = excluded.source_id,
         knowledge_type = excluded.knowledge_type,
@@ -180,7 +192,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
         updated_at = excluded.updated_at
     `);
 
-    this.db.transaction(() => {
+    withKnowledgeHistory(this.db,[id],'save',() => {
       upsertKnowledge.run(
         id,
         payload.workId,
@@ -213,6 +225,15 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
               content = excluded.content
           `);
           stmt.run(id, payload.noteContent || '');
+          break;
+        }
+        case 'study_note': {
+          const old = this.db.prepare('SELECT title,aliases_json FROM study_note_detail WHERE knowledge_id=?').get(id) as {title:string;aliases_json:string}|undefined;
+          this.db.prepare('INSERT INTO study_note_detail(knowledge_id,title,content,aliases_json) VALUES(?,?,?,?) ON CONFLICT(knowledge_id) DO UPDATE SET title=excluded.title,content=excluded.content,aliases_json=excluded.aliases_json').run(id,payload.title ?? old?.title ?? '',payload.noteContent || '',payload.aliases ? JSON.stringify(payload.aliases) : old?.aliases_json || '[]');
+          break;
+        }
+        case 'reading_reflection': {
+          this.db.prepare('INSERT INTO reading_reflection_detail(knowledge_id,entry_date,mood,difficulty,rating,review,recommendations,lessons) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(knowledge_id) DO UPDATE SET entry_date=excluded.entry_date,mood=excluded.mood,difficulty=excluded.difficulty,rating=excluded.rating,review=excluded.review,recommendations=excluded.recommendations,lessons=excluded.lessons').run(id,payload.entryDate || now.slice(0,10),payload.mood ?? null,payload.difficulty ?? null,payload.rating ?? null,payload.noteContent || '',payload.recommendations || '',payload.lessons || '');
           break;
         }
         case 'quote': {
@@ -271,13 +292,18 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       }
 
       // Sync to annotations table as well if table exists (for dual compatibility)
-      try {
+      {
         const hasAnnotationsTable = this.db
           .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='annotations'`)
           .get();
-        if (hasAnnotationsTable) {
+        const projection = hasAnnotationsTable ? this.db.prepare('SELECT former_work_title FROM annotations WHERE id=?').get(id) as {former_work_title:string|null}|undefined : undefined;
+        // With no book the reader cannot show it; only a deleted book's kept row stays.
+        const unlinked = !payload.workId && !projection?.former_work_title;
+        if (unlinked && projection) this.db.prepare('DELETE FROM annotations WHERE id=?').run(id);
+        const readerCompatible = !unlinked && (payload.projectToReader !== false && !['reading_reflection','study_note'].includes(knowledgeType) || payload.projectToReader || Boolean(projection));
+        if (hasAnnotationsTable && readerCompatible) {
           const annotType =
-            knowledgeType === 'question' || knowledgeType === 'quote'
+            knowledgeType === 'question' || knowledgeType === 'quote' || knowledgeType === 'study_note'
               ? 'note'
               : knowledgeType;
           const annotContent =
@@ -290,6 +316,8 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
             INSERT INTO annotations (id, book_id, type, location_cfi_or_page, selected_text, note_content, color, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
+              book_id = excluded.book_id,
+              type = excluded.type,
               location_cfi_or_page = excluded.location_cfi_or_page,
               selected_text = excluded.selected_text,
               note_content = excluded.note_content,
@@ -309,12 +337,10 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
               updatedAt
             );
         }
-      } catch (err) {
-        // Non-blocking sync
       }
-    })();
+    },payload.expectedRevision === undefined ? undefined : {id,revision:payload.expectedRevision});
 
-    const result = this.getKnowledgeByWork(payload.workId).find((k) => k.id === id);
+    const result = (payload.workId?this.getKnowledgeByWork(payload.workId):this.getAllKnowledge()).find((k) => k.id === id);
     if (!result) {
       return {
         id,
@@ -340,15 +366,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
    * Deletes a knowledge record by ID. Foreign keys CASCADE to all detail and join tables.
    */
   deleteKnowledge(knowledgeId: string): boolean {
-    const stmt = this.db.prepare(`DELETE FROM knowledge WHERE id = ?`);
-    const res = stmt.run(knowledgeId);
-
-    // Also remove from annotations table if it exists
-    try {
-      this.db.prepare(`DELETE FROM annotations WHERE id = ?`).run(knowledgeId);
-    } catch {}
-
-    return res.changes > 0;
+    return trashKnowledge(this.db,knowledgeId);
   }
 
   /**
@@ -451,7 +469,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       const tagRows = this.db
         .prepare(
           `
-        SELECT kt.knowledge_id, t.id, t.name, t.color
+        SELECT kt.knowledge_id, t.id, t.name
         FROM knowledge_tag kt
         JOIN tag t ON kt.tag_id = t.id
         WHERE kt.knowledge_id IN (${placeholders})
@@ -494,6 +512,8 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       location: r.location,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
+      title: r.title,
+      revision: headRevision(this.db,r.id),
       quotedText: r.highlightText || r.quoteText || undefined,
       color: r.highlightColor || undefined,
       noteContent: r.noteContent || undefined,

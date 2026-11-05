@@ -17,6 +17,15 @@ export function StudyInsightsModule() {
   const [busy, setBusy] = useState(false);
   const [frequency, setFrequency] = useState<WordFrequency | null>(null);
   const [bookId, setBookId] = useState('');
+  const [reviews, setReviews] = useState<{ due: number; reviewedToday: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const update = () => { void window.electronAPI?.knowledgeCards?.reviewQueue?.().then(value => { if (alive) setReviews(value); }).catch(() => {}); };
+    update();
+    window.addEventListener('baglib:srs-reviewed', update);
+    window.addEventListener('baglib:knowledge-card-saved', update);
+    return () => { alive = false; window.removeEventListener('baglib:srs-reviewed', update); window.removeEventListener('baglib:knowledge-card-saved', update); };
+  }, []);
   useEffect(() => {
     let alive = true;
     const api = window.electronAPI;
@@ -36,6 +45,7 @@ export function StudyInsightsModule() {
   const today = summary?.days.find(day => day.date === civilDate(new Date()));
   return <section data-study-insights className="border border-subtle rounded-xl bg-surface p-4 space-y-4 min-w-0">
     <h2 className="text-lg font-bold">{t('studyInsightsTitle')}</h2>
+    {reviews && <button type="button" onClick={() => setViewMode('notes')} className="text-sm underline">{t('srsCounts', { due: reviews.due, reviewed: reviews.reviewedToday })}</button>}
     {error && <p role="alert">{t('plannerError')}</p>}
     {!summary ? <p>{error ? unavailable : t('plannerLoading')}</p> : <>
       <p className="text-xs text-muted">{t(summary.timeSource === 'sessions' ? 'studySessionSource' : summary.timeSource === 'dwell' ? 'studyDwellSource' : 'studyNoTimeSource')}</p>

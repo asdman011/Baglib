@@ -14,7 +14,12 @@ export interface DictionaryItem {
   entryCount: number;
   isEnabled: boolean;
   createdAt: string;
+  /** A category id, or BIOGRAPHY_SCIENCE. Empty for a general dictionary. */
+  science?: string;
 }
+
+/** A dictionary of people, consulted alongside any science. */
+export const BIOGRAPHY_SCIENCE = 'biography';
 
 export interface HeadwordRecord {
   id?: number;

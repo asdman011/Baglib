@@ -1,5 +1,7 @@
 import { errorMessage } from '../shared/errors';
-import { app, BrowserWindow, protocol } from "electron";
+import { app, BrowserWindow, protocol, dialog } from "electron";
+import { translations } from '../renderer/translations';
+import { registerKnowledgeHistoryIpc } from './ipc/knowledge-history';
 import path from "path";
 import serve from "electron-serve";
 import fs from "fs";
@@ -31,6 +33,11 @@ import { registerPdfEditorIpc, shutdownPdfViewCaches } from "./ipc/pdf-editor";
 import { registerPoetryIpc } from './ipc/poetry';
 import { registerKnowledgeCardIpc } from './ipc/knowledge-cards';
 import { registerStudyPlannerIpc } from './ipc/study-planner';
+import { registerPathwayIpc } from './ipc/pathways';
+import { registerLectureIpc } from './ipc/lectures';
+import { registerCourseIpc } from './ipc/courses';
+import { registerCoverPhotoIpc } from './ipc/cover-photo';
+import { registerSourceUrlIpc } from './ipc/source-urls';
 import { defaultStirlingSidecar } from './services/pdf-editor/stirling';
 import { pdfEngineTools } from './services/pdf-editor/tools';
 import { stirlingProcessor } from './services/pdf-editor/processor';
@@ -141,6 +148,11 @@ const MIME_BY_EXT: Record<string, string> = {
   '.opus': 'audio/ogg',
   '.flac': 'audio/flac',
   '.webm': 'audio/webm',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  // Chromium reads QuickTime and Matroska through its MP4 and WebM demuxers.
+  '.mov': 'video/mp4',
+  '.mkv': 'video/webm',
 };
 
 function resolveLocalFilePath(rawUrlPath: string): string | null {
@@ -322,7 +334,13 @@ registerStudyNotesIpc();
 registerPdfEditorIpc();
 registerPoetryIpc();
 registerKnowledgeCardIpc();
+registerKnowledgeHistoryIpc();
 registerStudyPlannerIpc();
+registerPathwayIpc();
+registerLectureIpc();
+registerCourseIpc();
+registerCoverPhotoIpc();
+registerSourceUrlIpc();
 
 app.whenReady().then(async () => {
   // Initialize Content Shield for ad & redirect protection
@@ -336,6 +354,10 @@ app.whenReady().then(async () => {
     console.log("[baglib] Database initialized successfully.");
   } catch (e) {
     console.error("[baglib] Database initialization failed:", e);
+    const language = app.getLocale().startsWith('ar') ? 'ar' : 'en';
+    dialog.showErrorBox(translations[language].waveBackupTitle,translations[language].waveBackupFailed);
+    app.exit(1);
+    return;
   }
 
   // Register privileged custom streaming protocols

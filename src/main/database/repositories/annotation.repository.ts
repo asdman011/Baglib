@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3';
 import { randomUUID } from 'crypto';
+import { withKnowledgeHistory, trashKnowledge } from '../../services/knowledge-history';
 import type {
   AnnotationDTO,
   AnnotationPayload,
@@ -106,6 +107,26 @@ export class SqliteAnnotationRepository {
   }
 
   save(payload: AnnotationPayload): AnnotationDTO {
+    const id = payload.id || randomUUID();
+    return withKnowledgeHistory(this.db,[id],'save',()=>{
+      const existingKnowledge = this.db.prepare('SELECT knowledge_type,deleted_at FROM knowledge WHERE id=?').get(id) as {knowledge_type:string;deleted_at:string|null}|undefined;
+      if(existingKnowledge?.deleted_at)throw new Error('history-conflict');
+      const result = this.saveRaw({...payload,id});
+      if (payload.type === 'note') {
+        const old = existingKnowledge;
+        if (!old) {
+          this.db.prepare("INSERT INTO knowledge(id,work_id,knowledge_type,location,created_at,updated_at) VALUES(?,?,'note',?,?,?)").run(id,payload.bookId,payload.locationCfiOrPage,result.createdAt,result.updatedAt);
+          this.db.prepare('INSERT INTO note_detail(knowledge_id,content) VALUES(?,?)').run(id,payload.noteContent || '');
+        } else {
+          this.db.prepare('UPDATE knowledge SET work_id=?,location=?,updated_at=? WHERE id=?').run(payload.bookId,payload.locationCfiOrPage,result.updatedAt,id);
+          const target = old.knowledge_type === 'study_note' ? ['study_note_detail','content'] : old.knowledge_type === 'question' ? ['question_detail','question_text'] : old.knowledge_type === 'quote' ? ['quote_detail','context_note'] : ['note_detail','content'];
+          this.db.prepare(`UPDATE ${target[0]} SET ${target[1]}=? WHERE knowledge_id=?`).run(payload.noteContent || '',id);
+        }
+      }
+      return result;
+    });
+  }
+  private saveRaw(payload: AnnotationPayload): AnnotationDTO {
     const now = new Date().toISOString();
     const id = payload.id || randomUUID();
     const strokeDataStr = payload.strokeData ? JSON.stringify(payload.strokeData) : null;
@@ -120,6 +141,7 @@ export class SqliteAnnotationRepository {
         .prepare(
           `UPDATE annotations SET
             type = ?,
+            book_id = ?,
             location_cfi_or_page = ?,
             selected_text = ?,
             note_content = ?,
@@ -131,6 +153,7 @@ export class SqliteAnnotationRepository {
         )
         .run(
           payload.type,
+          payload.bookId,
           payload.locationCfiOrPage,
           payload.selectedText || null,
           payload.noteContent || null,
@@ -194,13 +217,14 @@ export class SqliteAnnotationRepository {
   }
 
   delete(id: string): boolean {
+    if (this.db.prepare('SELECT 1 FROM knowledge WHERE id=?').get(id)) return trashKnowledge(this.db,id);
     const res = this.db.prepare(`DELETE FROM annotations WHERE id = ?`).run(id);
     return res.changes > 0;
   }
 
   deleteByBookId(bookId: string): number {
-    const res = this.db.prepare(`DELETE FROM annotations WHERE book_id = ?`).run(bookId);
-    return res.changes;
+    const rows = this.db.prepare('SELECT id FROM annotations WHERE book_id=?').all(bookId) as {id:string}[];
+    return this.db.transaction(()=>rows.filter(row=>this.delete(row.id)).length)();
   }
 }
 

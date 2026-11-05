@@ -86,7 +86,7 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
             <summary className="cursor-pointer text-muted font-sans">{t('sunnahComment')}</summary>
             <p className="font-reading text-lg leading-loose mt-2 whitespace-pre-wrap" dir="rtl" lang="ar">{hadith.comment}</p>
           </details>}
-          {hadith.researchId !== undefined && <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} initialOpen={single} showGrading={gradingRequest.id === hadith.researchId ? gradingRequest.count : undefined} sourceBook={Boolean(hadith.sourceBook)} t={t} />}
+          {hadith.researchId !== undefined && <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} matn={hadith.text.ar.matn || hadith.text.ar.full} initialOpen={single} showGrading={gradingRequest.id === hadith.researchId ? gradingRequest.count : undefined} sourceBook={Boolean(hadith.sourceBook)} t={t} />}
           <HadithActions chapter={chapter} hadith={hadith} showEnglish={showEnglish} t={t} />
         </article>
       </div>;

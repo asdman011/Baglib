@@ -8,6 +8,7 @@ import { extractZipEntries, resolveStirlingEndpoint, validateStirlingLoopbackUrl
 import { fileSha256 } from './source';
 import { runPdfHelper } from './view-cache-runtime';
 import { renderUrlToPdf } from './weasyprint';
+import { OCR_LAYOUTS, ocrWithLayout, type OcrLayout } from './layout-ocr';
 import { STIRLING_DISABLED_ENDPOINT, STIRLING_FILE_PARAMETERS, STIRLING_INTERACTIVE_ENDPOINTS, STIRLING_LOCAL_ENDPOINTS, classifyStirlingOutput, isEmptyZipBytes, resolveStirlingOperation, stirlingFilename } from '../../../shared/stirling-contract';
 
 export interface StirlingPipelineStep {
@@ -110,6 +111,7 @@ const DEFAULT_POLICIES: StirlingGovernancePolicies = {
 };
 
 const URL_TO_PDF_ENDPOINT = '/api/v1/convert/url/pdf';
+const OCR_PDF_ENDPOINT = '/api/v1/misc/ocr-pdf';
 const INTERACTIVE_OPERATIONS = new Set([
   '/api/v1/edit/pdf-text-editor',
   '/api/v1/security/sign',
@@ -611,6 +613,26 @@ export class StirlingProcessorService {
       return this.stagePipelineOutput(rendered, 'pdf', 1, onProgress);
     }
     if (!filePaths.length) throw new Error('invalid-request');
+    const ocrLayout = urlStep.parameters?.layout;
+    if (pipelineConfig.singleTool && pipelineConfig.pipeline.length === 1 && filePaths.length === 1 && urlStep.operation === OCR_PDF_ENDPOINT && ocrLayout === 'lines') {
+      // Stirling cannot pass a page layout to Tesseract, which is what Arabic verse needs.
+      onProgress?.(20);
+      const languages = urlStep.parameters?.languages;
+      const read = await ocrWithLayout(await readFile(filePaths[0]), {
+        languages: (Array.isArray(languages) ? languages : String(languages ?? 'ara,eng').split(/[+,]/u)).map(String),
+        layout: ocrLayout as OcrLayout,
+        force: urlStep.parameters?.ocrType === 'force-ocr',
+        deskew: urlStep.parameters?.deskew !== false,
+        signal,
+      });
+      return this.stagePipelineOutput(read, 'pdf', 1, onProgress);
+    }
+    for (const step of pipelineConfig.pipeline) {
+      if (step.operation === OCR_PDF_ENDPOINT && step.parameters) {
+        if (step.parameters.layout !== undefined && !(OCR_LAYOUTS as readonly unknown[]).includes(step.parameters.layout)) throw new Error('invalid-request');
+        delete step.parameters.layout;
+      }
+    }
     const sanitizedSteps = sanitizePipelineSteps(
       pipelineConfig.pipeline.map((step, index) => ({ id: `s${index}`, operation: step.operation, name: step.operation, parameters: step.parameters || {} }))
     );

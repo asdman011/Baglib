@@ -26,8 +26,10 @@ export interface KnowledgeCollection {
 }
 
 export interface KnowledgeItemDTO {
+  title?: string;
+  revision?: number;
   id: string;
-  workId: string;
+  workId: string | null;
   editionId?: string | null;
   sourceId?: string | null;
   knowledgeType: KnowledgeType;
@@ -49,8 +51,18 @@ export interface KnowledgeItemDTO {
 }
 
 export interface SaveKnowledgePayload {
+  title?: string;
+  aliases?: string[];
+  entryDate?: string;
+  mood?: string;
+  difficulty?: number;
+  rating?: number;
+  recommendations?: string;
+  lessons?: string;
+  projectToReader?: boolean;
+  expectedRevision?: number;
   id?: string;
-  workId: string;
+  workId: string | null;
   editionId?: string | null;
   sourceId?: string | null;
   knowledgeType?: KnowledgeType;

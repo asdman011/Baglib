@@ -9,6 +9,7 @@ import { normalizeSunnahSearch } from '../../libs/sunnah/text';
 import { SunnahChapterView } from './SunnahChapterView';
 import './sunnah.css';
 import { SunnahSearch, type SunnahSearchScope, type SunnahSearchTarget } from './SunnahSearch';
+import { SunnahInsightsPanel } from './SunnahInsightsPanel';
 import { consumeSunnahReference } from '../../utils/study-navigation';
 
 import { collectionKeys } from '../../utils/sunnah-collections';
@@ -58,6 +59,7 @@ export function SunnahView() {
     viewport.current?.scrollTo({ top: 0 });
   };
   const [retry, setRetry] = useState(0);
+  const [insights, setInsights] = useState(false);
   const [visibleCount, setVisibleCount] = useState(24);
   const viewport = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
@@ -229,6 +231,7 @@ export function SunnahView() {
         <button type="button" className="sunnah-button" aria-pressed={position.english} onClick={() => setPosition(previous => ({ ...previous, english: !previous.english }))}>
           <Languages size={17} /><span>{t('sunnahEnglish')}</span>{position.english && <Check size={14} />}
         </button>
+        {catalog?.research && <button type="button" className="sunnah-button" aria-pressed={insights} onClick={() => setInsights(value => !value)}><span>{t('sunnahInsights')}</span></button>}
         <label className="sunnah-size"><span>{t('sunnahFontSize')}</span><input type="range" min={20} max={34} step={2} value={position.size}
           onChange={event => setPosition(previous => ({ ...previous, size: Number(event.target.value) }))} /></label>
       </div>
@@ -250,6 +253,11 @@ export function SunnahView() {
     </div>}
 
     <div className="sunnah-scroll flex-1 min-h-0 overflow-auto" ref={viewport} style={{ '--sunnah-font-size': `${position.size}px` } as React.CSSProperties}>
+      {catalog?.research && insights && <SunnahInsightsPanel catalog={catalog} lang={lang} t={t} onChapter={(id, number) => {
+        setPosition(previous => ({ ...previous, collection: id, chapter: number, hadith: '' }));
+        setQuery('');
+        setInsights(false);
+      }} />}
       {catalog && <div className="sunnah-navigation">
         <div className="flex items-center gap-2 flex-wrap">
           <button type="button" className="sunnah-icon-button" disabled={previousDisabled} onClick={() => move(-1)} aria-label={t(position.mode === 'single' ? 'sunnahPreviousHadith' : 'sunnahPreviousChapter')}><ArrowLeft className="rtl:rotate-180" size={18} /></button>

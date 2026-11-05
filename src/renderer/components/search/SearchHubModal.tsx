@@ -29,6 +29,7 @@ import {
 import type { LibraryFtsResult } from '../../../shared/types/full-text-search';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { SearchResultCard } from './SearchResultCard';
+import { StudySourcesSearch } from './StudySourcesSearch';
 
 export const SearchHubModal: React.FC = () => {
   const {
@@ -136,6 +137,7 @@ export const SearchHubModal: React.FC = () => {
   const executeSearch = useCallback(
     async (searchTerm: string, targetScope: SearchScope, providers: SearchProviderId[]) => {
       const trimmed = searchTerm.trim();
+      if (targetScope === 'sources') return; // StudySourcesSearch runs its own queries.
       if (!trimmed) {
         setResults([]);
         setFtsResults([]);
@@ -391,6 +393,16 @@ export const SearchHubModal: React.FC = () => {
                 {t('searchScopeOnline')}
               </button>
               <button
+                onClick={() => handleScopeChange('sources')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  scope === 'sources'
+                    ? 'bg-pale-sky-500 text-white shadow-xs'
+                    : 'text-muted hover:text-main'
+                }`}
+              >
+                {t('searchScopeSources')}
+              </button>
+              <button
                 onClick={() => handleScopeChange('fulltext')}
                 className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   scope === 'fulltext'
@@ -404,7 +416,7 @@ export const SearchHubModal: React.FC = () => {
             </div>
 
             {/* Provider Filter Badges */}
-            {scope !== 'fulltext' && (
+            {scope !== 'fulltext' && scope !== 'sources' && (
               <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[11px] text-muted font-bold px-1 hidden md:inline">
                 {t('providersHeader')}:
@@ -558,7 +570,9 @@ export const SearchHubModal: React.FC = () => {
 
         {/* 4. Results List Zone */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 relative z-10">
-          {scope === 'fulltext' ? (
+          {scope === 'sources' ? (
+            <StudySourcesSearch query={query} onLeave={() => setSearchHubOpen(false)} />
+          ) : scope === 'fulltext' ? (
             ftsResults.length > 0 ? (
               <div className="space-y-3">
                 {ftsResults.map((r, idx) => (

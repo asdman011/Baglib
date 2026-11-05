@@ -73,3 +73,8 @@ export function formatCoverUrl(coverUrl?: string | null): string {
   }
   return trimmed;
 }
+
+/** A local file as a baglib-asset URL. Each segment is encoded, but a drive letter keeps its colon, which the protocol needs. */
+export function localAssetUrl(filename: string): string {
+  return `baglib-asset:///${filename.replace(/\\/gu, '/').split('/').map((part, index) => index === 0 && /^[A-Za-z]:$/u.test(part) ? part : encodeURIComponent(part)).join('/')}`;
+}

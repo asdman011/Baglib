@@ -59,6 +59,11 @@ export function cardContextFrom(element: Element | null): CardContext | null {
   };
 }
 
+const KIND_SCIENCE: Partial<Record<CardSourceKind, string>> = { quran: 'islamic-tafsir', hadith: 'islamic-hadith', poetry: 'islamic-arabic' };
+
+/** A book's science comes from its category, so the main process resolves it from workId. */
+export const cardScience = (context: CardContext): { science?: string; workId?: string } => ({ science: KIND_SCIENCE[context.kind], workId: context.workId });
+
 export function hoverCardText(element: Element): string {
   return (element.getAttribute('data-canonical') || element.getAttribute('data-hafs') || element.textContent || '').trim();
 }

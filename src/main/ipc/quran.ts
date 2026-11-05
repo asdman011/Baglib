@@ -376,6 +376,14 @@ export function registerQuranIpc(): void {
     if (!query || typeof query.script !== 'string' || !Number.isInteger(query.surah) || !Number.isInteger(query.ayah)) throw new Error('invalid-resource');
     return readRequest({ action: 'morphology', script: query.script, surah: query.surah, ayah: query.ayah });
   }));
+  ipcMain.handle('quran:frequency', (event, query) => result(event, async () => {
+    if (!query || !['root', 'lemma'].includes(query.family) || (query.surah !== undefined && (!Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114)) || (query.text !== undefined && (typeof query.text !== 'string' || query.text.length > 100)) || (query.limit !== undefined && (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 500))) throw new Error('invalid-resource');
+    return readRequest({ action: 'frequency', query: { family: query.family, surah: query.surah, text: query.text, limit: query.limit } });
+  }));
+  ipcMain.handle('quran:frequency-places', (event, query) => result(event, async () => {
+    if (!query || !['root', 'lemma'].includes(query.family) || typeof query.text !== 'string' || !query.text || query.text.length > 100) throw new Error('invalid-resource');
+    return readRequest({ action: 'frequency-places', family: query.family, text: query.text });
+  }));
   ipcMain.handle('quran:mutashabihat', (event, query) => result(event, async () => {
     if (!query || typeof query.script !== 'string' || !Number.isInteger(query.surah) || !Number.isInteger(query.ayah)) throw new Error('invalid-resource');
     return readRequest({ action: 'mutashabihat', script: query.script, surah: query.surah, ayah: query.ayah });

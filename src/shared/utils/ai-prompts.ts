@@ -101,6 +101,17 @@ Keep it structured, insightful, and suitable to be saved directly as a permanent
 /**
  * Builds prompt for Biographical Queries (Tarajim / تراجم الأعلام والشخصيات).
  */
+/** Topics only: naming a book or scholar here would be an unchecked citation. */
+export function buildCurriculumDraftPrompt(subject: string, language: 'ar' | 'en'): { systemPrompt: string; userPrompt: string; temperature: number } {
+  return {
+    systemPrompt: `You draft study outlines the learner will edit. Reply only with the outline, in ${language === 'ar' ? 'Arabic' : 'English'}.
+A line starting with # opens a stage. Every other line is one study step. Use 3 to 6 stages and at most 30 steps.
+Describe topics and skills only. Do not name books, authors or scholars, and do not quote or cite any text.`,
+    userPrompt: subject,
+    temperature: 0.4,
+  };
+}
+
 export function buildBiographicalTarajimPrompt(
   personName: string,
   contextText?: string

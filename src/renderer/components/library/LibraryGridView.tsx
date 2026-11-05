@@ -31,6 +31,7 @@ import {
   Cloud,
   Globe,
   Scissors,
+  Camera,
   BarChart2,
   ShieldCheck,
   Sparkles,
@@ -60,7 +61,7 @@ import { MetadataAuditModal } from './MetadataAuditModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { matchesSearchQuery } from '../../utils/search';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
-import { resolveDroppedFilePath, formatCoverUrl } from '../../utils/file-path-helper';
+import { resolveDroppedFilePath, formatCoverUrl, localAssetUrl } from '../../utils/file-path-helper';
 import { routeBookDrop } from '../../utils/book-drop';
 import type {
   CardDensity,
@@ -655,6 +656,40 @@ export const LibraryGridView: React.FC = () => {
   };
 
 
+  /** KEY-259: the cover photo proposes the entry; the reader reviews it in the usual form before saving. */
+  const handleAddFromCover = async () => {
+    try {
+      const proposal = await window.electronAPI.coverPhoto.propose();
+      if (!proposal) return;
+      const match = proposal.match;
+      const newBook: BookItem = {
+        id: `work-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        title: match?.title || proposal.title || t('coverPhotoUntitled'),
+        author: match?.authors?.join('، ') || proposal.author || t('newMaterialDefaultAuthor'),
+        publisher: match?.publisher || undefined,
+        language: /[\u0600-\u06FF]/u.test(proposal.title) ? 'العربية' : 'English',
+        categories: [],
+        tags: [],
+        workType: 'book',
+        workTypeId: 'wt-book',
+        bookType: 'physical',
+        readingStatus: 'unread',
+        lendingHistory: [],
+        shelf: '',
+        room: '',
+        coverImage: localAssetUrl(proposal.cover),
+      };
+      setSelectedBook(newBook);
+      setIsNewBook(true);
+      setIsDetailModalOpen(true);
+      setSaveToast(t(proposal.title ? 'coverPhotoReview' : 'coverPhotoNoText'));
+      setTimeout(() => setSaveToast(null), 5000);
+    } catch {
+      setSaveToast(t('coverPhotoFailed'));
+      setTimeout(() => setSaveToast(null), 3500);
+    }
+  };
+
   // Reusable Digital File Ingestion with Offline Metadata Discovery
   const importDigitalBookFromFile = async (fullPath: string, fileNameWithExt: string, fileSize?: number): Promise<BookItem | null> => {
     const ext = fileNameWithExt.split('.').pop()?.toUpperCase() || 'PDF';
@@ -1233,6 +1268,17 @@ export const LibraryGridView: React.FC = () => {
             >
               <Globe className="w-3.5 h-3.5 text-sky-400" />
               <span className="hidden sm:inline">{t('tabOpdsCatalogs')}</span>
+            </button>
+
+            {/* Physical book from a cover photo (KEY-259) */}
+            <button
+              onClick={() => void handleAddFromCover()}
+              title={t('coverPhotoButton')}
+              data-cover-photo
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
+            >
+              <Camera className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="hidden sm:inline">{t('coverPhotoButton')}</span>
             </button>
 
             {/* Web Article & Novel Clipper (KEY-148) */}

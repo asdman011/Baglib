@@ -5,6 +5,10 @@ import { Repeat2, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { CARD_HOVER_SETTING, cardHoverEnabled, KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import type { KnowledgeCard, PreservedKnowledge } from '../../../shared/types/knowledge-cards';
+import { NoteHistory } from '../notes/NoteHistory';
+import { CardDecksPanel } from './CardDecksPanel';
+import { DictionariesPanel } from './DictionariesPanel';
+import { PersonalCommentary } from './PersonalCommentary';
 
 export function SavedCardsPanel() {
   const { t } = useWorkspace();
@@ -39,7 +43,7 @@ export function SavedCardsPanel() {
     try { localStorage.setItem(CARD_HOVER_SETTING, enabled ? 'on' : 'off'); } catch { /* The choice lasts for this session. */ }
   };
   const act = async (action: () => Promise<unknown>) => {
-    try { await action(); await refresh(); } catch { setFailed(true); }
+    try { await action(); window.dispatchEvent(new CustomEvent(KNOWLEDGE_CARD_SAVED)); await refresh(); } catch { setFailed(true); }
   };
 
   return <section data-saved-cards className="rounded-2xl border border-subtle bg-surface p-4 space-y-3">
@@ -66,14 +70,19 @@ export function SavedCardsPanel() {
           </div>
         </div>
         {card.back && <p dir="auto" className="mt-2 border-t border-subtle pt-2 text-sm text-muted whitespace-pre-line line-clamp-4 break-words">{card.back}</p>}
+        <NoteHistory id={card.id} onChanged={()=>void refresh()}/>
       </li>)}
     </ul>
+    <CardDecksPanel />
+    <DictionariesPanel />
+    <PersonalCommentary />
     {preserved.length > 0 && <details data-preserved-knowledge className="border-t border-subtle pt-3">
       <summary className="cursor-pointer text-sm font-semibold text-main">{t('savedCardsPreserved', { count: preserved.length })}</summary>
       <ul className="mt-2 space-y-2">
         {preserved.map(item => <li key={item.id} className="rounded-xl border border-subtle p-3">
           <p dir="auto" className="text-xs text-muted">{item.bookTitle}</p>
           <p dir="auto" className="mt-1 text-sm whitespace-pre-line break-words">{item.text}</p>
+          <NoteHistory id={item.id} onChanged={()=>void refresh()}/>
         </li>)}
       </ul>
     </details>}

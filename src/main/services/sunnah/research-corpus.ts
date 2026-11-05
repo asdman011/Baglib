@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import type { SunnahCatalog, SunnahChapter, SunnahCollectionId, SunnahExplanation, SunnahFieldSource, SunnahGradingJudgment, SunnahHadith, SunnahLanguage, SunnahMergedResearch, SunnahNarrator, SunnahNarratorLink, SunnahResearch, SunnahResearchNode, SunnahResearchQuery, SunnahSearchHit, SunnahVariantText } from '../../../shared/types/sunnah';
+import type { SunnahStatistics, SunnahCatalog, SunnahChapter, SunnahCollectionId, SunnahExplanation, SunnahFieldSource, SunnahGradingJudgment, SunnahHadith, SunnahLanguage, SunnahMergedResearch, SunnahNarrator, SunnahNarratorLink, SunnahResearch, SunnahResearchNode, SunnahResearchQuery, SunnahSearchHit, SunnahVariantText } from '../../../shared/types/sunnah';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
 
 const collections: Record<string, SunnahCollectionId> = { Bukhari: 'Bukhari', Muslim: 'Muslim', AbuDaud: 'AbuDaud', Tirmidhi: 'Tirmizi', Nesai: 'Nesai', IbnMajah: 'IbnMaja', MuwattaMalik: 'MuwattaMalik', MusnadAhmad: 'MusnadAhmad', SunanDarimi: 'SunanDarimi', Nawawi40: 'Nawawi40', Qudsi40: 'Qudsi40', Dehlawi40: 'Dehlawi40', HadeethEnc: 'HadeethEnc', SourceOnly: 'SourceOnly', ReviewQueue: 'ReviewQueue' };
@@ -27,6 +27,7 @@ export class SunnahResearchCorpus {
   private hasRootWords = false;
   private merged = false;
   private hasSourceBooks = false;
+  private stats?: Promise<SunnahStatistics>;
   readonly catalog: SunnahCatalog;
   constructor(filename: string) {
     this.db = new Database(filename, { readonly: true, fileMustExist: true });
@@ -104,6 +105,36 @@ export class SunnahResearchCorpus {
     const collection = collections[String(row.book_key)], number = Number(row.Chapter_Number || 0);
     const summary = this.catalog.collections.find(item => item.id === collection)!.chapters.find(item => item.number === number)!;
     return { chapter: { ...summary, collection }, hadith: this.record(row) };
+  }
+  /** The hadith rows hold full text, so a cold scan takes seconds: it yields between batches and runs once. */
+  statistics(): Promise<SunnahStatistics> {
+    return this.stats ??= this.computeStatistics().catch(error => { this.stats = undefined; throw error; });
+  }
+  private async computeStatistics(): Promise<SunnahStatistics> {
+    const counts = new Map<SunnahCollectionId, { commentary: number; corroborated: number }>();
+    const batch = this.db.prepare(`SELECT id,book_key,Arabic_Tafseel,Itqan_Corroborating_Hadiths_JSON AS corroborated FROM hadiths WHERE id>? ORDER BY id LIMIT 500`);
+    for (let last = 0; ;) {
+      const rows = batch.all(last) as Row[];
+      if (!rows.length) break;
+      for (const row of rows) {
+        const id = collections[String(row.book_key)];
+        const count = counts.get(id) ?? { commentary: 0, corroborated: 0 };
+        if (value(row.Arabic_Tafseel)) count.commentary++;
+        if (!['', '[]'].includes(value(row.corroborated))) count.corroborated++;
+        counts.set(id, count);
+      }
+      last = Number(rows[rows.length - 1].id);
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    const total = (table: string) => (this.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count;
+    const narrators = this.db.prepare(`SELECT n.rijal_id AS id,r.primary_name_ar AS name,n.mentions FROM
+      (SELECT rijal_id,COUNT(*) AS mentions FROM hadith_narrators WHERE rijal_id IS NOT NULL GROUP BY rijal_id ORDER BY mentions DESC LIMIT 20) n
+      LEFT JOIN rijal_narrators r ON r.rijal_id=n.rijal_id ORDER BY n.mentions DESC`).all() as { id: string; name: string | null; mentions: number }[];
+    return {
+      collections: this.catalog.collections.map(item => ({ id: item.id, hadiths: item.hadithCount, chapters: item.chapters.length, commentary: counts.get(item.id)?.commentary ?? 0, corroborated: counts.get(item.id)?.corroborated ?? 0 })),
+      totals: { hadiths: this.catalog.hadithCount, narratorProfiles: total('rijal_narrators'), chainLinks: total('hadith_narrators'), rootLinks: total('quran_hadith_root_bridge') },
+      topNarrators: narrators.map(row => ({ id: String(row.id), name: row.name ?? String(row.id), mentions: row.mentions })),
+    };
   }
   search(query: SunnahResearchQuery): SunnahSearchHit[] {
     if (!query || typeof query !== 'object') throw new Error('Invalid search');

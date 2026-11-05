@@ -30,6 +30,7 @@ export function registerSunnahIpc(): void {
     return null;
   }, 'read-failed'));
   ipcMain.handle('sunnah:search', (_event, query: SunnahResearchQuery) => result(() => getService().search(query), 'read-failed'));
+  ipcMain.handle('sunnah:statistics', () => result(() => getService().statistics(), 'read-failed'));
   ipcMain.handle('sunnah:share', (event, text: string) => result(async () => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window || event.senderFrame !== event.sender.mainFrame) throw new Error('Invalid share sender');

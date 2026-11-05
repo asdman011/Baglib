@@ -15,6 +15,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { SourceUrlsPanel } from './SourceUrlsPanel';
 
 export interface ProviderConfigItem {
   id: string;
@@ -297,6 +298,8 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
               );
             })
           )}
+
+          <SourceUrlsPanel />
 
           {/* Helpful Explanatory Banner */}
           <div className="p-3.5 rounded-2xl bg-canvas border border-subtle flex items-start gap-3 text-xs text-muted leading-relaxed">

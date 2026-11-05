@@ -38,13 +38,15 @@ export type SourceType =
 export type SourceStatus = "active" | "missing" | "wishlist";
 
 export type KnowledgeType =
+  | "study_note"
+  | "reading_reflection"
   | "note"
   | "highlight"
   | "quote"
   | "bookmark"
   | "question";
 
-export type CollectionType = "manual" | "smart";
+export type CollectionType = "manual" | "smart" | "deck" | "research" | "curriculum";
 
 export type ContributorRole =
   | "author"

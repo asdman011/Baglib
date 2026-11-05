@@ -129,6 +129,8 @@ export interface QuranAPI {
   topics: (query: { ids: number[]; pack?: string }) => Promise<QuranResult<QuranTopic[]>>;
   structure: () => Promise<QuranResult<QuranStructure>>;
   similarAyahs: (query: { surah: number; ayah: number; pack?: string }) => Promise<QuranResult<QuranSimilarAyah[]>>;
+  frequency: (query: QuranFrequencyQuery) => Promise<QuranResult<QuranFrequency>>;
+  frequencyPlaces: (query: { family: QuranFrequencyFamily; text: string }) => Promise<QuranResult<QuranFrequencyPlace[]>>;
   setup: (ids: string[]) => Promise<QuranResult<{ installed: string[]; missing: string[]; failed: string[] } | null>>;
   library: (query?: { category?: QuranCategory; search?: string; offset?: number; view?: 'all' | 'installed' | 'downloads' }) => Promise<QuranResult<QuranLibrary>>;
   refresh: (category: QuranCategory) => Promise<QuranResult<null>>;
@@ -152,6 +154,10 @@ export interface QuranSearchHit { surah: number; ayah: number; text: string; }
 export interface QuranCommentary { from: string; to: string; nodes: QuranRichNode[]; }
 export interface QuranAyahDetails { surah: number; ayah: number; profile: 'hafs' | 'warsh'; canonical: string; imlaey: string | null; }
 export interface QuranMorphology { location: string; root?: string; lemma?: string; stem?: string; }
+export type QuranFrequencyFamily = 'root' | 'lemma';
+export interface QuranFrequencyQuery { family: QuranFrequencyFamily; surah?: number; text?: string; limit?: number }
+export interface QuranFrequency { family: QuranFrequencyFamily; total: number; distinct: number; rows: { text: string; count: number; stated?: number }[] }
+export interface QuranFrequencyPlace { surah: number; ayah: number; count: number }
 export interface QuranPhraseMatch { id: number; text: string; source: string; ranges: [number, number][]; references: string[]; total: number; }
 export interface QuranMushafWord { id: string; surah: number; ayah: number; wordIndex: number; type?: 'text' | 'aya-mark'; line?: number; textHafs?: string; canonicalText?: string; imlaey?: string; }
 export interface QuranMushafPage { pageNumber: number; totalPages: number; surahStart: number; ayahStart: number; surahEnd: number; ayahEnd: number; svg: string; profile: 'hafs' | 'warsh'; layoutMode?: 'adapted'; words: QuranMushafWord[]; fontUrl?: string; basmala?: string; glyphLines?: { number: number; type: string; centered: boolean; surah: number; words: { surah: number; ayah: number; position: number; glyph: string; text: string; marker?: boolean }[] }[]; }

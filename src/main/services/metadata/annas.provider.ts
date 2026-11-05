@@ -1,4 +1,5 @@
 import * as electron from 'electron';
+import { sourceUrls } from '../source-urls';
 import { errorMessage } from '../../../shared/errors';
 /**
  * Anna's Archive Provider for Baglib
@@ -37,17 +38,12 @@ export interface AnnasSearchResult {
   md5?: string;
 }
 
-const ANNAS_MIRRORS = [
-  'https://annas-archive.gl',
-  'https://annas-archive.pk',
-  'https://annas-archive.gd',
-];
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
 export class AnnasProvider {
-  private activeMirror: string = ANNAS_MIRRORS[0]!;
+  private activeMirror: string = sourceUrls.mirrors('annas')[0]!;
   private lastMirrorCheck: number = 0;
   private readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
   private cookiesInitialized: boolean = false;
@@ -138,7 +134,7 @@ export class AnnasProvider {
       return this.activeMirror;
     }
 
-    for (const mirror of ANNAS_MIRRORS) {
+    for (const mirror of sourceUrls.mirrors('annas')) {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3500);
@@ -161,7 +157,7 @@ export class AnnasProvider {
       }
     }
 
-    this.activeMirror = ANNAS_MIRRORS[0]!;
+    this.activeMirror = sourceUrls.mirrors('annas')[0]!;
     return this.activeMirror;
   }
 

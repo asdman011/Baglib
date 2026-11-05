@@ -9,6 +9,7 @@ import { QuranMushafWorkspace } from './QuranMushafWorkspace';
 import { QuranAudioPlayer, type QuranAudioState } from './QuranAudioPlayer';
 import { QuranSurahIntroCard } from './QuranSurahIntroCard';
 import { QuranAyahInspector } from './QuranAyahInspector';
+import { PersonalCommentary } from '../knowledge/PersonalCommentary';
 import { QuranTranslationText } from './QuranTranslationText';
 import { QuranRichText } from './QuranRichText';
 import { QuranStructureNav } from './QuranStructureNav';
@@ -378,7 +379,7 @@ export function QuranReaderView({ visible = true }: { visible?: boolean }) {
       <button type="button" className="rounded-lg border border-subtle p-2 text-sm mt-2" onClick={() => { const client = api(); if (client) void client.setup(catalog.presets.filter(preset => preset.id !== 'mushaf-layout/warsh-svg').map(preset => preset.id)).then(result => { if (!result.ok || result.data?.failed.length) setError('quranReaderError'); }).catch(() => setError('quranReaderError')); }}>{t('quranImportSelected')}</button>
     </aside>}
     {showIntro && intro && <aside data-quran-popup className="absolute start-3 sm:start-14 top-16 z-40 w-96 max-w-[85%] max-h-[calc(100%-5rem)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] bg-surface rounded-2xl border border-subtle shadow-xl"><QuranSurahIntroCard intro={intro} t={t} surah={surahs.find(surah => surah.number === intro.surahNumber)} derived={surahInfo?.language === 'ar'} onClose={() => setShowIntro(false)} /></aside>}
-    {inspected && <QuranAyahInspector floating reference={inspected} details={details} error={inspectionError} surahName={(lang === 'ar' ? surahs.find(surah => surah.number === inspected.surah)?.arabic : surahs.find(surah => surah.number === inspected.surah)?.name) || t('quranSurahNumber', { number: inspected.surah })} t={t} dir={dir} onClose={() => setInspected(null)} onCopy={copy} onStudy={() => { setStudyTarget(inspected); setInspected(null); }} />}
+    {inspected && <QuranAyahInspector floating reference={inspected} details={details} error={inspectionError} surahName={(lang === 'ar' ? surahs.find(surah => surah.number === inspected.surah)?.arabic : surahs.find(surah => surah.number === inspected.surah)?.name) || t('quranSurahNumber', { number: inspected.surah })} t={t} dir={dir} onClose={() => setInspected(null)} onCopy={copy} onStudy={() => { setStudyTarget(inspected); setInspected(null); }} commentary={<PersonalCommentary key={`${inspected.surah}:${inspected.ayah}`} reference={`quran:${inspected.surah}:${inspected.ayah}`} />} />}
     {audioOpen && <div data-quran-audio-dock className="absolute bottom-3 inset-x-0 mx-auto z-40 w-[min(34rem,calc(100%-1.5rem))] max-h-[70%] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [&>div]:!relative [&>div]:!inset-auto [&>div]:!m-0 [&>div]:!max-w-none"><QuranAudioPlayer surah={audioAyah.surah} ayah={audioAyah.ayah} surahCount={surahs.find(surah => surah.number === audioAyah.surah)?.count || 300} reciters={reciters} activeReciterId={activeReciterId} onSelectReciter={setActiveReciterId} t={t} lang={lang} dir={dir} onAyahChange={(surah, ayah) => { setAudioAyah({ surah, ayah }); void jump(surah, ayah); }} onAudioStateChange={setAudioState} onClose={() => { setAudioOpen(false); setAudioState(null); }} /></div>}
   </section>;
 }

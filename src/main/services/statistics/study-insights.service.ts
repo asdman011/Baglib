@@ -48,7 +48,9 @@ export class StudyInsightsService {
     }
     const count = (sql: string) => Number((this.db.prepare(sql).get() as { count: number }).count);
     const reflections: StudyInsights['reflections'] = [];
-    const noteRows = this.db.prepare("SELECT key,value FROM app_settings WHERE key LIKE 'study.note.v1:%' ORDER BY updated_at DESC LIMIT 10").all() as { key: string; value: string }[];
+    const modern = this.db.prepare('SELECT k.id,s.title,s.content FROM knowledge k JOIN study_note_detail s ON s.knowledge_id=k.id WHERE k.deleted_at IS NULL ORDER BY k.updated_at DESC LIMIT 10').all() as {id:string;title:string;content:string}[];
+    reflections.push(...modern.map(note=>({...note,content:note.content.slice(0,300)})));
+    const noteRows = this.db.prepare("SELECT key,value FROM app_settings WHERE key LIKE 'study.note.v1:%' AND NOT EXISTS(SELECT 1 FROM app_settings marker WHERE marker.key='study.note.converted:' || substr(app_settings.key,15)) ORDER BY updated_at DESC LIMIT 10").all() as { key: string; value: string }[];
     for (const row of noteRows) {
       try {
         const note = JSON.parse(row.value) as Record<string, unknown>;
@@ -61,11 +63,11 @@ export class StudyInsightsService {
       secondsPerPage: pages ? seconds / pages : null,
       secondsPerSession: sessions.length ? seconds / rows.length : null,
       subjects: [...subjects.values()].sort((first, second) => second.seconds - first.seconds), days,
-      knowledge: count('SELECT COUNT(*) AS count FROM knowledge'),
-      ideas: count("SELECT COUNT(*) AS count FROM knowledge WHERE knowledge_type='question'"),
+      knowledge: count('SELECT COUNT(*) AS count FROM knowledge WHERE deleted_at IS NULL'),
+      ideas: count("SELECT COUNT(*) AS count FROM knowledge WHERE knowledge_type='question' AND deleted_at IS NULL"),
       completedTasks: count("SELECT COUNT(*) AS count FROM study_task WHERE status='completed'"),
       totalTasks: count('SELECT COUNT(*) AS count FROM study_task'), reflections,
-      edits: this.db.prepare('SELECT id,knowledge_type AS kind,updated_at AS updatedAt FROM knowledge WHERE updated_at IS NOT NULL ORDER BY updated_at DESC LIMIT 10').all() as StudyInsights['edits'],
+      edits: this.db.prepare('SELECT id,knowledge_type AS kind,updated_at AS updatedAt FROM knowledge WHERE updated_at IS NOT NULL AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10').all() as StudyInsights['edits'],
       partial: source.length > 100000,
     };
   }

@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { withKnowledgeHistory } from '../knowledge-history';
 import { SqliteAnnotationRepository } from '../../database/repositories/annotation.repository';
 import type { PdfReview } from '../../../shared/types/pdf-collaboration';
 import type { PdfSource } from './source';
@@ -19,6 +20,9 @@ export class PdfReviews {
     });
   }
   private persist(source: PdfSource, review: PdfReview): PdfReview {
+    return withKnowledgeHistory(this.db,[review.id],'review',()=>this.persistRaw(source,review));
+  }
+  private persistRaw(source: PdfSource, review: PdfReview): PdfReview {
     const { id, text: body, updatedAt: _updated, ...anchor } = review;
     const now = new Date(Math.max(Date.now(), Date.parse(_updated || '') + 1 || 0)).toISOString();
     this.repository.save({ id, bookId: source.workId!, type: review.kind === 'ink' ? 'ink' : 'note', locationCfiOrPage: JSON.stringify({ marker, ...anchor }), noteContent: body });

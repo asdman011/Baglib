@@ -5,8 +5,12 @@ import path from 'node:path';
 import { parseHTML } from 'linkedom';
 import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranDivision, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit, QuranSimilarAyah, QuranStructure, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
 import { normalizeQuranSearch } from './qul-catalog';
+import type { QuranFrequency, QuranFrequencyFamily, QuranFrequencyPlace, QuranFrequencyQuery } from '../../../shared/types/quran';
 import { readerPreset, readerPresets } from './reader-resources';
 import { buildWarshLayout, type WarshLayout, type WarshLayoutWord } from './warsh-layout';
+
+/** Roots are stored spaced, as in "ر ح م"; a reader types them joined. */
+const frequencyText = (value: string) => normalizeQuranSearch(value).replace(/\s/gu, '');
 
 type Word = { id: number; surah: number; ayah: number; word: number; text: string };
 const marker = (text: string) => /^[\u0660-\u0669]+$/.test(text.trim());
@@ -427,6 +431,35 @@ export class QuranReader {
       }
     }
     return [...values.values()].sort((first, second) => Number(first.location.split(':')[2]) - Number(second.location.split(':')[2]));
+  }
+  private async frequencySource(family: QuranFrequencyFamily) {
+    const kind = `word-${family}`;
+    const source = this.catalog().sources.find(item => item.kind === kind);
+    if (!source) throw new Error('missing-resource');
+    return { database: await this.database(source.id, kind), field: family === 'root' ? 'arabic_trilateral' : 'text' };
+  }
+  /** Counts come from the installed morphology pack's word links, never from matching text. */
+  async frequency(query: QuranFrequencyQuery): Promise<QuranFrequency> {
+    const { family, surah } = query;
+    const { database, field } = await this.frequencySource(family);
+    const within = surah ? 'WHERE link.word_location GLOB ?' : '';
+    // The pack's own total agrees with the Quranic Arabic Corpus. Its word links run wider for 14 roots: they
+    // also tie names and compounds such as محمد and يومئذ to a root. The total covers the whole Quran only.
+    const hasTotal = !surah && (database.pragma(`table_info(${family}s)`) as { name: string }[]).some(column => column.name === 'words_count');
+    const rows = database.prepare(`SELECT entry.${field} AS text, COUNT(*) AS count${hasTotal ? ', entry.words_count AS stated' : ''} FROM ${family}_words link JOIN ${family}s entry ON entry.id=link.${family}_id ${within} GROUP BY entry.id ORDER BY count DESC, text`).all(...(surah ? [`${surah}:*`] : [])) as { text: string; count: number; stated?: number }[];
+    const wanted = frequencyText(query.text ?? '');
+    return { family, total: rows.reduce((sum, row) => sum + row.count, 0), distinct: rows.length, rows: rows.filter(row => frequencyText(row.text).includes(wanted)).slice(0, query.limit ?? 100) };
+  }
+  async frequencyPlaces(family: QuranFrequencyFamily, text: string): Promise<QuranFrequencyPlace[]> {
+    const { database, field } = await this.frequencySource(family);
+    const rows = database.prepare(`SELECT link.word_location AS location FROM ${family}_words link JOIN ${family}s entry ON entry.id=link.${family}_id WHERE entry.${field}=?`).all(text) as { location: string }[];
+    const places = new Map<string, QuranFrequencyPlace>();
+    for (const { location } of rows) {
+      const [surah, ayah] = location.split(':').map(Number);
+      const key = `${surah}:${ayah}`;
+      places.set(key, { surah, ayah, count: (places.get(key)?.count ?? 0) + 1 });
+    }
+    return [...places.values()].sort((first, second) => first.surah - second.surah || first.ayah - second.ayah);
   }
   private warshLayout(packId: string, scriptId: string): Promise<WarshLayout> {
     this.source(packId, 'mushaf-layout');

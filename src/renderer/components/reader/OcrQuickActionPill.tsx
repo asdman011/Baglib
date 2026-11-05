@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ScanText,
   Cpu,
@@ -50,6 +50,8 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
 }) => {
   const { t, dir } = useWorkspace();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [layout, setLayout] = useState<'lines' | 'columns'>('lines');
+  useEffect(() => { void window.electronAPI?.ocrGetLayout?.().then(setLayout).catch(() => {}); }, []);
 
   const wordCount = pageResult?.words?.length || 0;
   const isRecognized = !!pageResult && (wordCount > 0 || !!pageResult.text);
@@ -108,6 +110,21 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
           </select>
           <Cpu className="w-3 h-3 text-pale-sky-500 opacity-80" />
         </div>
+
+        {/* Arabic page layout for OCRmyPDF; PaddleOCR-VL reads rows itself. */}
+        {selectedEngine === 'ocrmypdf' && (
+          <select
+            aria-label={t('ocrLayoutLabel')}
+            title={t('ocrLayoutHint')}
+            value={layout}
+            disabled={isOcrRunning}
+            onChange={event => { const next = event.target.value as 'lines' | 'columns'; setLayout(next); void window.electronAPI?.ocrSetLayout?.(next); }}
+            className="max-w-28 rounded-full border border-subtle bg-transparent px-2 py-1 text-[11px] font-bold cursor-pointer disabled:cursor-wait"
+          >
+            <option value="lines" className="bg-surface text-main">{t('ocrLayoutLines')}</option>
+            <option value="columns" className="bg-surface text-main">{t('ocrLayoutColumns')}</option>
+          </select>
+        )}
 
         {/* When Collapsed, show compact trigger */}
         {isCollapsed ? (

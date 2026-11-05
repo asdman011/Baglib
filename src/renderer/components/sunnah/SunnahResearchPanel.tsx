@@ -7,6 +7,7 @@ import { collectionKeys } from '../../utils/sunnah-collections';
 import { openSunnahReference, navigateStudyReference } from '../../utils/study-navigation';
 import type { TranslationKey } from '../../translations';
 import { SunnahNarratorCard, tierKeys } from './SunnahNarratorCard';
+import { PersonalCommentary } from '../knowledge/PersonalCommentary';
 import { SunnahGradingList, SunnahSourcesList } from './SunnahGradingPanel';
 
 const matchMethodKeys: Record<string, TranslationKey> = { shamela_inline_footnote: 'sunnahMatchInline', exact_hadith_num: 'sunnahMatchNumber', exact_window: 'sunnahMatchWindow', tfidf_window: 'sunnahMatchSimilar', sub_narration_ffill: 'sunnahMatchSubNarration' };
@@ -18,13 +19,14 @@ function ResultLinks({ hits, t }: { hits: SunnahSearchHit[]; t: SunnahTranslate 
   </button>)}</div>;
 }
 
-export function SunnahResearchPanel({ id, initialOpen, showGrading, sourceBook, t }: { id: number; initialOpen: boolean; showGrading?: number; sourceBook?: boolean; t: SunnahTranslate }) {
+export function SunnahResearchPanel({ id, initialOpen, showGrading, sourceBook, matn, t }: { id: number; initialOpen: boolean; showGrading?: number; sourceBook?: boolean; matn?: string; t: SunnahTranslate }) {
   const [open, setOpen] = useState(initialOpen);
   const [data, setData] = useState<SunnahResearch | null>(null);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const [tab, setTab] = useState<'grading' | 'commentary' | 'chain' | 'roots' | 'related' | 'sources'>('commentary');
   const [expanded, setExpanded] = useState(false);
+  const [beside, setBeside] = useState(false);
   const [related, setRelated] = useState<{ label: string; words?: string[]; hits: SunnahSearchHit[] } | null>(null);
   const [narrator, setNarrator] = useState<string | null>(null);
   const [relatedBusy, setRelatedBusy] = useState(false);
@@ -64,6 +66,7 @@ export function SunnahResearchPanel({ id, initialOpen, showGrading, sourceBook, 
     <summary>{t('sunnahResearch')}{!sourceBook && <span>{t('sunnahResearchSource')}</span>}</summary>
     {open && <div className="sunnah-research-body">
       <p className="sunnah-research-notice">{t('sunnahResearchNotice')}</p>
+      <PersonalCommentary reference={`hadith:${id}`} />
       {failed && <p role="alert">{t('sunnahResearchError')} <button type="button" className="sunnah-button" onClick={() => { setFailed(false); setRetry(n => n + 1); }}>{t('sunnahRetry')}</button></p>}
       {!data && !failed && <p role="status">{t('sunnahLoading')}</p>}
       {data && <>
@@ -81,7 +84,11 @@ export function SunnahResearchPanel({ id, initialOpen, showGrading, sourceBook, 
             <p className="sunnah-research-caption">{t('sunnahTextMatchScore', { score: Math.round(data.score * 100) })}{matchMethodKeys[data.method] && <> · {t(matchMethodKeys[data.method])}</>}</p>
             {data.sourceUrl && <button type="button" className="sunnah-button" onClick={() => void openSource('commentary')}>{t('sunnahOpenSource')}</button>}{' '}
             <button type="button" className="sunnah-button" aria-pressed={expanded} onClick={() => setExpanded(value => !value)}>{t(expanded ? 'sunnahCollapseText' : 'sunnahExpandText')}</button>
-            <div className={`sunnah-research-text ${expanded ? 'is-expanded' : ''}`} tabIndex={0} dir="rtl" lang="ar">{data.commentary}</div>
+            {matn && <>{' '}<button type="button" className="sunnah-button" aria-pressed={beside} onClick={() => setBeside(value => !value)}>{t('sunnahBesideHadith')}</button></>}
+            <div className={beside ? 'sunnah-beside' : undefined}>
+              {beside && <div className="sunnah-research-text is-expanded" tabIndex={0} dir="rtl" lang="ar">{matn}</div>}
+              <div className={`sunnah-research-text ${expanded || beside ? 'is-expanded' : ''}`} tabIndex={0} dir="rtl" lang="ar">{data.commentary}</div>
+            </div>
           </> : <p className="sunnah-research-empty">{t('sunnahNoTafseel')}</p>}
           {data.matnUrl && <p className="mt-3"><button type="button" className="sunnah-button" onClick={() => void openSource('matn')}>{t('sunnahOpenMatnSource')}</button></p>}
         </div>}

@@ -53,13 +53,14 @@ test('saving the same text from the same source returns the same card', () => {
   assert.equal(cards.list().length, 2);
 });
 
-test('deleting removes the card and its review history', () => {
+test('trashing removes the card from lists but preserves review history', () => {
   const { db, cards } = open();
   const card = cards.save(ayah);
   cards.setMemorizing(card.id, true);
   db.prepare(`INSERT INTO srs_review_log (id, knowledge_id, reviewed_at, rating) VALUES ('r', ?, 'now', 3)`).run(card.id);
   assert.equal(cards.remove(card.id), true);
-  for (const table of ['knowledge', 'card_detail', 'srs_state', 'srs_review_log']) assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0);
+  for (const table of ['knowledge', 'card_detail', 'srs_state', 'srs_review_log']) assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 1);
+  assert.equal(cards.list().length,0);
 });
 
 test('a card cannot delete another kind of knowledge', () => {

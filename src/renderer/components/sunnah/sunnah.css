@@ -127,3 +127,14 @@
 .sunnah-source-text { display:grid; gap:.3rem; padding-block:.5rem; line-height:1.9; overflow-wrap:anywhere; }
 .sunnah-source-text small, .sunnah-field-sources small { display:block; color:var(--text-muted); font-size:.72rem; }
 .sunnah-field-sources li { font-size:.8rem; overflow-wrap:anywhere; }
+
+.sunnah-beside { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:1rem; margin-block-start:.75rem; }
+.sunnah-insights { max-width:60rem; margin-inline:auto; padding:1rem; border:1px solid var(--border-subtle); border-radius:.75rem; margin-block-end:1rem; }
+.sunnah-insights-heading { font-size:.85rem; font-weight:700; margin-block:1rem .5rem; }
+.sunnah-subjects { display:grid; gap:.3rem; margin-block-start:.75rem; }
+.sunnah-subjects > li > button { display:flex; justify-content:space-between; align-items:center; gap:1rem; width:100%; text-align:start; padding:.5rem .7rem; border:1px solid var(--border-subtle); border-radius:.55rem; line-height:1.9; }
+.sunnah-subjects small { color:var(--text-muted); white-space:nowrap; }
+.sunnah-table-scroll { overflow-x:auto; }
+.sunnah-stats { width:100%; border-collapse:collapse; font-size:.8rem; }
+.sunnah-stats th, .sunnah-stats td { padding:.4rem .6rem; border-block-end:1px solid var(--border-subtle); text-align:start; white-space:nowrap; }
+@media (max-width:700px) { .sunnah-beside { grid-template-columns:minmax(0,1fr); } }

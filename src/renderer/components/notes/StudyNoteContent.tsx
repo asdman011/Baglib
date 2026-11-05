@@ -1,7 +1,8 @@
 'use client';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { studyLinks, type StudyNote } from '../../../shared/study-notes';
 import type { TranslationKey } from '../../translations';
+import { localAssetUrl } from '../../utils/file-path-helper';
 
 function formatted(text: string): React.ReactNode {
   return text.split('\n').map((line, index) => {
@@ -21,6 +22,15 @@ function formatted(text: string): React.ReactNode {
   });
 }
 
+let shots: Promise<string> | null = null;
+/** A lecture screenshot embed: media:<lecture>:<seconds>:<shot>. */
+function LectureShot({ shot }: { shot: string }) {
+  const [directory, setDirectory] = useState<string | null>(null);
+  useEffect(() => { void (shots ??= window.electronAPI.lectures.shotsDirectory()).then(setDirectory).catch(() => {}); }, []);
+  if (!directory) return null;
+  return <img src={localAssetUrl(`${directory}/${shot}.png`)} alt="" data-lecture-shot={shot} className="block my-2 max-h-72 max-w-full rounded-lg border border-subtle" />;
+}
+
 export function StudyNoteContent({ content, notes, onOpen, t }: { content: string; notes: StudyNote[]; onOpen: (target: string) => void; t: (key: TranslationKey) => string }) {
   const pieces: React.ReactNode[] = [];
   let end = 0;
@@ -29,7 +39,8 @@ export function StudyNoteContent({ content, notes, onOpen, t }: { content: strin
     const embedded = link.embed && link.target.startsWith('note:') ? notes.find(note => note.id === link.target.slice(5)) : undefined;
     pieces.push(<span key={link.start} className={link.embed ? 'block my-2 border-s-2 border-amber-500 ps-3' : ''}>
       <button type="button" dir="auto" className="text-emerald-700 dark:text-emerald-300 underline underline-offset-2 text-start break-words" onClick={() => onOpen(link.target)}>{link.label}</button>
-      {link.embed && <span dir="auto" className="block text-sm text-muted whitespace-pre-wrap leading-loose">{embedded ? embedded.content.slice(0, 1200) : t('studyEmbedUnavailable')}</span>}
+      {link.embed && link.target.startsWith('media:') && link.target.split(':').length === 4 ? <LectureShot shot={link.target.split(':')[3]} />
+        : link.embed && <span dir="auto" className="block text-sm text-muted whitespace-pre-wrap leading-loose">{embedded ? embedded.content.slice(0, 1200) : t('studyEmbedUnavailable')}</span>}
     </span>);
     end = link.end;
   }

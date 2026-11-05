@@ -24,6 +24,9 @@ import crypto from 'crypto';
 import * as fflate from 'fflate';
 import { getDatabase, getDatabasePath, closeDatabase } from '../../database/connection';
 import { settingsRepository } from '../../database/repositories/settings.repository';
+import { runMigrations } from '../../database/migrator';
+import { migrations } from '../../database/migrations';
+import { StudyNotesService } from '../study-notes';
 import type {
   LibrarySnapshotMetadata,
   LibrarySnapshotStats,
@@ -297,6 +300,12 @@ export class LibrarySnapshotService {
 
       if (!isOk) {
         throw new Error(`Restored database failed integrity check: ${JSON.stringify(integrityRows)}`);
+      }
+
+      // A snapshot may predate the current schema; any failure here rolls back below.
+      if (reopenedDb.prepare(`SELECT 1 FROM sqlite_master WHERE name = '_migrations'`).get()) {
+        runMigrations(reopenedDb, migrations);
+        new StudyNotesService(settingsRepository, reopenedDb).convertLegacy();
       }
 
       // Clean up rollback backups on success

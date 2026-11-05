@@ -27,6 +27,7 @@ import {
 import { INITIAL_RSS_FEEDS } from '../../data/libraryMockData';
 import { BookItem } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { SourceUrlsPanel } from './SourceUrlsPanel';
 
 interface OnlineLibraryHubProps {
   isOpen: boolean;
@@ -757,6 +758,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                         ? t('libgenInitialPrompt')
                         : t('annasInitialPrompt')}
                     </p>
+                    <div className="w-full max-w-xl pt-4 text-start"><SourceUrlsPanel /></div>
                   </div>
                 )}
             </div>

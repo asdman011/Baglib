@@ -2,7 +2,7 @@
  * Baglib — Dictionary and Encyclopedia IPC Handlers (KEY-142)
  */
 
-import { ipcMain } from 'electron';
+import { BrowserWindow, dialog, ipcMain } from 'electron';
 import { getDatabase } from '../database/connection';
 import { DictionaryService } from '../services/dictionary/dictionary.service';
 import { WikipediaService } from '../services/dictionary/wikipedia.service';
@@ -29,7 +29,7 @@ export function registerDictionaryIpc(): void {
   // Aggregate Lookup across enabled local dictionaries and Wikipedia
   ipcMain.handle(
     'dictionary:lookup',
-    async (_, word: string, options?: { lang?: string; includeWikipedia?: boolean }) => {
+    async (_, word: string, options?: { lang?: string; includeWikipedia?: boolean; science?: string; workId?: string }) => {
       try {
         const service = getDictService();
         return await service.lookup(word, options);
@@ -73,6 +73,20 @@ export function registerDictionaryIpc(): void {
     const service = getDictService();
     return await service.importDictionary(options);
   });
+
+  // The user picks a dictionary file they hold; nothing is fetched
+  ipcMain.handle('dictionary:choose-import', async (event, science: unknown) => {
+    const options = { properties: ['openFile' as const], filters: [{ name: 'Dictionary', extensions: ['ifo', 'mdx', 'bgl', 'slob'] }] };
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const choice = await (owner ? dialog.showOpenDialog(owner, options) : dialog.showOpenDialog(options));
+    if (choice.canceled || !choice.filePaths[0]) return null;
+    const service = getDictService();
+    const item = await service.importDictionary({ sourcePath: choice.filePaths[0] });
+    if (typeof science === 'string' && science) service.setScience(item.id, science);
+    return service.listDictionaries().find(dictionary => dictionary.id === item.id) ?? item;
+  });
+
+  ipcMain.handle('dictionary:set-science', async (_, id: string, science: string | null) => getDictService().setScience(id, science));
 
   // Toggle dictionary enablement
   ipcMain.handle('dictionary:toggle', async (_, id: string, isEnabled: boolean) => {

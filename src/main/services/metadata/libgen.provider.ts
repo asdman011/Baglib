@@ -1,4 +1,5 @@
 import { errorMessage } from '../../../shared/errors';
+import { sourceUrls } from '../source-urls';
 /**
  * Baglib — Library Genesis (LibGen / libgen.li) Metadata Provider
  *
@@ -49,14 +50,6 @@ export interface LibgenSearchResult {
   series?: string;
 }
 
-export const LIBGEN_MIRRORS = [
-  'https://libgen.li',
-  'https://libgen.bz',
-  'https://libgen.is',
-  'https://libgen.rs',
-  'https://libgen.vg',
-  'https://libgen.gs',
-];
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -83,7 +76,7 @@ export class LibgenProvider {
       return this.activeMirror;
     }
 
-    for (const mirror of LIBGEN_MIRRORS) {
+    for (const mirror of sourceUrls.mirrors('libgen')) {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3500);
@@ -120,7 +113,7 @@ export class LibgenProvider {
       }
     }
 
-    this.activeMirror = LIBGEN_MIRRORS[0];
+    this.activeMirror = sourceUrls.mirrors('libgen')[0];
     return this.activeMirror;
   }
 

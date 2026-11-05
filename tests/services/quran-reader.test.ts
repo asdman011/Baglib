@@ -56,6 +56,9 @@ test('reader uses immutable source packs, indexed search, explicit gaps and grou
     assert.equal(reader.catalog().sources.length, 8);
     assert.deepEqual(await reader.morphology(script.id, 1, 1), [{ location: '1:1:1', root: 'سمو', lemma: 'ٱسْم', stem: 'بِسْم' }]);
     assert.deepEqual(await reader.morphology(script.id, 1, 2), []);
+    assert.deepEqual(await reader.frequency({ family: 'root' }), { family: 'root', total: 1, distinct: 1, rows: [{ text: 'سمو', count: 1 }] });
+    assert.deepEqual((await reader.frequency({ family: 'lemma', surah: 2 })).rows, []);
+    assert.deepEqual(await reader.frequencyPlaces('root', 'سمو'), [{ surah: 1, ayah: 1, count: 1 }]);
     await assert.rejects(reader.morphology(warsh.id, 1, 1));
     await assert.rejects(reader.morphology(script.id, 0, 1));
     const passage = await reader.read({ script: script.id, surah: 1, from: 1, translation: translation.id, meanings: meanings.id });

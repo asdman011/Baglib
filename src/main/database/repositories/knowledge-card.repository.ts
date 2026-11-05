@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { trashKnowledge } from '../../services/knowledge-history';
 import type { Database } from 'better-sqlite3';
 import type { CardSourceKind, KnowledgeCard, PreservedKnowledge, SaveCardInput } from '../../../shared/types/knowledge-cards';
 
@@ -39,7 +40,7 @@ export class KnowledgeCardRepository {
   list({ search = '', offset = 0 }: { search?: string; offset?: number } = {}): KnowledgeCard[] {
     const term = `%${search.trim().replace(/[\\%_]/gu, '\\$&')}%`;
     const rows = this.db.prepare(`${CARD_SELECT}
-      WHERE c.front LIKE @term ESCAPE '\\' OR c.back LIKE @term ESCAPE '\\' OR c.source_label LIKE @term ESCAPE '\\'
+      WHERE k.deleted_at IS NULL AND (c.front LIKE @term ESCAPE '\\' OR c.back LIKE @term ESCAPE '\\' OR c.source_label LIKE @term ESCAPE '\\')
       ORDER BY k.created_at DESC LIMIT ${PAGE_SIZE} OFFSET @offset`).all({ term, offset: Math.max(0, Math.trunc(offset)) }) as CardRow[];
     return rows.map(toCard);
   }
@@ -48,7 +49,7 @@ export class KnowledgeCardRepository {
   save(input: SaveCardInput): KnowledgeCard {
     return this.db.transaction(() => {
       const existing = this.db.prepare(`${CARD_SELECT}
-        WHERE c.source_kind = ? AND c.source_ref IS ? AND c.front = ?`).get(input.sourceKind, input.sourceRef ?? null, input.front) as CardRow | undefined;
+        WHERE k.deleted_at IS NULL AND c.source_kind = ? AND c.source_ref IS ? AND c.front = ?`).get(input.sourceKind, input.sourceRef ?? null, input.front) as CardRow | undefined;
       if (existing) return toCard(existing);
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -67,31 +68,43 @@ export class KnowledgeCardRepository {
       SELECT id, former_work_title AS bookTitle, type, COALESCE(selected_text, note_content, '') AS text, created_at AS createdAt
       FROM annotations WHERE book_id IS NULL AND former_work_title IS NOT NULL
       UNION ALL
-      SELECT k.id, k.former_work_title, k.knowledge_type, COALESCE(n.content, h.quoted_text, q.quoted_text, u.question_text, b.label, ''), k.created_at
+      SELECT k.id, k.former_work_title, k.knowledge_type, COALESCE(s.content,r.review,n.content, h.quoted_text, q.quoted_text, u.question_text, b.label, ''), k.created_at
       FROM knowledge k
       LEFT JOIN note_detail n ON n.knowledge_id = k.id
+      LEFT JOIN study_note_detail s ON s.knowledge_id=k.id
+      LEFT JOIN reading_reflection_detail r ON r.knowledge_id=k.id
       LEFT JOIN highlight_detail h ON h.knowledge_id = k.id
       LEFT JOIN quote_detail q ON q.knowledge_id = k.id
       LEFT JOIN question_detail u ON u.knowledge_id = k.id
       LEFT JOIN bookmark_detail b ON b.knowledge_id = k.id
-      WHERE k.work_id IS NULL AND k.former_work_title IS NOT NULL AND k.knowledge_type IS NOT 'card'
+      WHERE k.work_id IS NULL AND k.deleted_at IS NULL AND k.former_work_title IS NOT NULL AND k.knowledge_type IS NOT 'card'
         -- Saving knowledge also writes an annotation with the same id.
         AND k.id NOT IN (SELECT id FROM annotations)
       ORDER BY 2, 5 DESC LIMIT 500`).all() as PreservedKnowledge[];
   }
 
   remove(id: string): boolean {
-    return this.db.prepare(`DELETE FROM knowledge WHERE id = ? AND knowledge_type = 'card'`).run(id).changes > 0;
+    if (!this.db.prepare('SELECT 1 FROM card_detail WHERE knowledge_id=?').get(id)) return false;
+    return trashKnowledge(this.db,id);
   }
 
   /** Taking a card out keeps its progress, so adding it back continues from there. */
   setMemorizing(id: string, memorizing: boolean): boolean {
-    if (!this.db.prepare('SELECT 1 FROM card_detail WHERE knowledge_id = ?').get(id)) return false;
+    if (!this.db.prepare('SELECT 1 FROM card_detail c JOIN knowledge k ON k.id=c.knowledge_id WHERE c.knowledge_id = ? AND k.deleted_at IS NULL').get(id)) return false;
     if (!memorizing) {
       this.db.prepare(`UPDATE srs_state SET state = 'suspended' WHERE knowledge_id = ?`).run(id);
       return true;
     }
-    const resumed = this.db.prepare(`UPDATE srs_state SET state = CASE WHEN reps = 0 THEN 'new' ELSE 'review' END WHERE knowledge_id = ? AND state = 'suspended'`).run(id);
+    let resumeState = 'review';
+    const previous = this.db.prepare('SELECT state_before FROM srs_review_log WHERE knowledge_id=? ORDER BY reviewed_at DESC,rowid DESC LIMIT 1').get(id) as { state_before: string | null } | undefined;
+    if (previous?.state_before) {
+      try {
+        const state = JSON.parse(previous.state_before).after?.state;
+        if (state === 1) resumeState = 'learning';
+        if (state === 3) resumeState = 'relearning';
+      } catch {}
+    }
+    const resumed = this.db.prepare(`UPDATE srs_state SET state = CASE WHEN reps = 0 THEN 'new' ELSE ? END WHERE knowledge_id = ? AND state = 'suspended'`).run(resumeState, id);
     if (resumed.changes === 0) {
       this.db.prepare(`INSERT OR IGNORE INTO srs_state (knowledge_id, state, due_at) VALUES (?, 'new', ?)`).run(id, new Date().toISOString());
     }

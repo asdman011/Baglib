@@ -107,6 +107,13 @@ export interface SunnahResearchQuery {
   root?: string; narratorId?: string;
 }
 
+/** Counted from the attached corpus; nothing here is a scholarly judgment. */
+export interface SunnahStatistics {
+  collections: { id: SunnahCollectionId; hadiths: number; chapters: number; commentary: number; corroborated: number }[];
+  totals: { hadiths: number; narratorProfiles: number; chainLinks: number; rootLinks: number };
+  topNarrators: { id: string; name: string; mentions: number }[];
+}
+
 export type SunnahResult<T> = { ok: true; data: T } | { ok: false; error: 'unavailable' | 'invalid-corpus' | 'read-failed' };
 
 export interface SunnahAPI {
@@ -118,4 +125,5 @@ export interface SunnahAPI {
   openSource?: (id: number, kind?: 'commentary' | 'matn') => Promise<SunnahResult<null>>;
   narrator?: (id: string) => Promise<SunnahResult<SunnahNarrator>>;
   search?: (query: SunnahResearchQuery) => Promise<SunnahResult<SunnahSearchHit[]>>;
+  statistics?: () => Promise<SunnahResult<SunnahStatistics>>;
 }

@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { withKnowledgeHistory } from '../knowledge-history';
 import type { PoetryDetail, PoetrySaveInput, PoetrySavedItem } from '../../../shared/types/poetry';
 import { studyLinkText, studyLinks, validStudyTarget } from '../../../shared/study-notes';
 
@@ -25,12 +26,12 @@ export class PoetryKnowledgeService {
     const note = input.type === 'bookmark' ? null : input.note || null;
     const id = randomUUID(), createdAt = new Date().toISOString();
     const item: PoetrySavedItem = { id, type: input.type, reference, label, text: input.type === 'bookmark' ? null : text, note, createdAt };
-    this.database.transaction(() => {
+    withKnowledgeHistory(this.database,[id],'save',() => {
       this.database.prepare('INSERT INTO knowledge(id,work_id,edition_id,source_id,knowledge_type,location,created_at,updated_at) VALUES(?,NULL,NULL,NULL,?,?,?,?)').run(id, input.type, reference, createdAt, createdAt);
       if (input.type === 'note') this.database.prepare('INSERT INTO note_detail(knowledge_id,content) VALUES(?,?)').run(id, `${studyLinkText(reference, label)}\n${text}\n${citation}${note ? `\n\n${note}` : ''}`);
       if (input.type === 'quote') this.database.prepare('INSERT INTO quote_detail(knowledge_id,quoted_text,context_note) VALUES(?,?,?)').run(id, text, `${citation}${note ? `\n\n${note}` : ''}`);
       if (input.type === 'bookmark') this.database.prepare('INSERT INTO bookmark_detail(knowledge_id,label) VALUES(?,?)').run(id, label);
-    })();
+    });
     return item;
   }
 
@@ -40,7 +41,7 @@ export class PoetryKnowledgeService {
       COALESCE(b.label,'') AS label,q.quoted_text AS text,COALESCE(n.content,q.context_note) AS note
       FROM knowledge k LEFT JOIN note_detail n ON n.knowledge_id=k.id LEFT JOIN quote_detail q ON q.knowledge_id=k.id
       LEFT JOIN bookmark_detail b ON b.knowledge_id=k.id
-      WHERE k.work_id IS NULL AND k.location LIKE 'poetry:ashaar:%' AND k.knowledge_type IN ('note','quote','bookmark')
+      WHERE k.work_id IS NULL AND k.deleted_at IS NULL AND k.location LIKE 'poetry:ashaar:%' AND k.knowledge_type IN ('note','quote','bookmark')
       ORDER BY k.created_at DESC,k.id DESC LIMIT 41 OFFSET ?`).all(offset) as PoetrySavedItem[];
     return { items: rows.slice(0, 40).filter(row => validStudyTarget(row.reference)).map(row => ({ ...row, label: row.label || studyLinks(row.note || '')[0]?.label || row.note?.split('\n')[0] || row.reference })), next: rows.length > 40 ? offset + 40 : null };
   }

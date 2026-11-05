@@ -22,6 +22,8 @@ import { EmbeddedMetadataExtractor } from '../metadata/embedded-metadata.extract
 import { getDatabase } from '../../database/connection';
 import { ContentFtsRepository } from '../../database/repositories/content-fts.repository';
 import { bundledPdfEngineRoot, pdfEnginePython } from '../pdf-editor/engine-root';
+import { settingsRepository } from '../../database/repositories/settings.repository';
+import { readPageLayout } from './ocr-preference';
 
 // A dense page takes minutes on CPU; this only stops a hung worker.
 const PADDLE_PAGE_TIMEOUT_MS = 20 * 60 * 1000;
@@ -333,7 +335,7 @@ export class OcrService {
   ): string[] {
     const common = ['--image', imagePath, '--language', language, '--page', String(pageNumber)];
     return engine === 'ocrmypdf'
-      ? [this.getOcrmypdfWorkerPath(), ...common, '--dpi', String(dpi), '--engine-root', this.getEngineRoot()]
+      ? [this.getOcrmypdfWorkerPath(), ...common, '--dpi', String(dpi), '--engine-root', this.getEngineRoot(), '--layout', readPageLayout(settingsRepository)]
       : [this.getPaddleWorkerPath(), ...common];
   }
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BookmarkPlus, Check, Globe, Loader2, Repeat2, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { cardPosition, KNOWLEDGE_CARD_SAVED, type CardRequest } from '../../libs/knowledge-card-context';
+import { cardPosition, cardScience, KNOWLEDGE_CARD_SAVED, type CardRequest } from '../../libs/knowledge-card-context';
 import type { AggregateDictionaryLookupResult, WikipediaSummaryCard } from '../../../shared/types/dictionary';
 import type { QuranRichNode } from '../../../shared/types/quran';
 import type { KnowledgeCard } from '../../../shared/types/knowledge-cards';
@@ -64,7 +64,7 @@ export function KnowledgeCardPopover({ request, onClose, onPointerEnter, onPoint
     const load = async () => {
       const [special, dictionary] = await Promise.all([
         context.kind === 'quran' ? quranSections(request, t).catch(() => []) : context.kind === 'hadith' ? narratorSections(request, t).catch(() => []) : Promise.resolve([]),
-        (window.electronAPI.dictionaryLookup(text, { lang, includeWikipedia: false }) as Promise<AggregateDictionaryLookupResult>).catch(() => null),
+        (window.electronAPI.dictionaryLookup(text, { lang, includeWikipedia: false, ...cardScience(context) }) as Promise<AggregateDictionaryLookupResult>).catch(() => null),
       ]);
       const entries: CardSection[] = (dictionary?.entries ?? []).slice(0, 3).map(entry => ({ title: entry.headword, text: clip(entry.definitionText), source: entry.dictTitle }));
       if (active) setSections([...special, ...entries]);

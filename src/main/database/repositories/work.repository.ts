@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { withWorkPreservation } from '../../services/knowledge-history';
 import fs from 'fs';
 import path from 'path';
 import type { Database } from 'better-sqlite3';
@@ -1004,7 +1005,7 @@ export class SqliteWorkRepository implements IWorkRepository {
    */
   deleteBook(workId: string): boolean {
     const stmt = this.db.prepare('DELETE FROM work WHERE id = ?');
-    const result = stmt.run(workId);
+    const result = withWorkPreservation(this.db,[workId],()=>stmt.run(workId));
     return result.changes > 0;
   }
 
@@ -1031,7 +1032,7 @@ export class SqliteWorkRepository implements IWorkRepository {
    */
   permanentlyDeleteBook(workId: string): boolean {
     const stmt = this.db.prepare('DELETE FROM work WHERE id = ?');
-    const result = stmt.run(workId);
+    const result = withWorkPreservation(this.db,[workId],()=>stmt.run(workId));
     return result.changes > 0;
   }
 
@@ -1111,7 +1112,8 @@ export class SqliteWorkRepository implements IWorkRepository {
    */
   emptyTrash(): number {
     const stmt = this.db.prepare('DELETE FROM work WHERE deleted_at IS NOT NULL');
-    const result = stmt.run();
+    const ids=(this.db.prepare('SELECT id FROM work WHERE deleted_at IS NOT NULL').all() as {id:string}[]).map(row=>row.id);
+    const result = withWorkPreservation(this.db,ids,()=>stmt.run());
     return result.changes;
   }
 
@@ -1970,7 +1972,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       }
       return deleted;
     });
-    return tx();
+    return withWorkPreservation(this.db,workIds,()=>tx());
   }
 
   /**
@@ -2021,7 +2023,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       }
       return deleted;
     });
-    return tx();
+    return withWorkPreservation(this.db,workIds,()=>tx());
   }
 }
 

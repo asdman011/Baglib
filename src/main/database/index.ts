@@ -14,6 +14,9 @@ import { runMigrations } from './migrator';
 import { migrations } from './migrations';
 
 import { SeedService } from './seed.service';
+import { backupBeforeMigrations } from './migration-backup';
+import { StudyNotesService } from '../services/study-notes';
+import { settingsRepository } from './repositories/settings.repository';
 
 /**
  * Opens the database, runs any pending migrations, and returns the instance.
@@ -21,7 +24,14 @@ import { SeedService } from './seed.service';
  */
 export async function initializeDatabase() {
   const db = getDatabase();
+  backupBeforeMigrations(db,migrations);
   runMigrations(db, migrations);
+  // Legacy notes stay in place until converted, so a failure here must not stop the app opening.
+  try {
+    new StudyNotesService(settingsRepository,db).convertLegacy();
+  } catch (error) {
+    console.error('[baglib] Legacy note conversion failed:', error);
+  }
   
   // Seed the database if it's empty
   const seeder = new SeedService(db);

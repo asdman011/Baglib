@@ -7,6 +7,7 @@ import type { TranslationKey } from '../../translations';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { QuranReaderView } from './QuranReaderView';
 import { QuranKhatmah } from './QuranKhatmah';
+import { QuranFrequencyPanel } from './QuranFrequencyPanel';
 import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
 import { quranErrorKeys as errorKeys } from '../../utils/quran-errors';
 import { quranResourceBundles, quranResourceGuidance, type QuranResourceBundle, type QuranResourceFeature } from '../../../shared/quran-resource-guidance';
@@ -149,14 +150,15 @@ export function QuranResourceView() {
 
 export function QuranView() {
   const { t, dir } = useWorkspace();
-  const [view, setView] = useState<'reader' | 'resources' | 'khatmah'>('reader');
+  const [view, setView] = useState<'reader' | 'resources' | 'khatmah' | 'frequency'>('reader');
   useEffect(() => { const open = () => setView('reader'); window.addEventListener(QURAN_OPEN_EVENT, open); return () => window.removeEventListener(QURAN_OPEN_EVENT, open); }, []);
   return <div dir={dir} className="flex-1 min-h-0 min-w-0 flex flex-col">
     <nav className="flex flex-wrap gap-2 px-4 py-3 border-b border-subtle bg-surface" aria-label={t('navQuran')}>
-      {(['reader', 'resources', 'khatmah'] as const).map(value => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)} className={`rounded-xl px-4 py-2 text-sm ${view === value ? 'bg-pale-sky-600 text-white' : 'border border-subtle'}`}>{t(value === 'reader' ? 'quranRead' : value === 'resources' ? 'quranResources' : 'khatmahTitle')}</button>)}
+      {(['reader', 'resources', 'khatmah', 'frequency'] as const).map(value => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)} className={`rounded-xl px-4 py-2 text-sm ${view === value ? 'bg-pale-sky-600 text-white' : 'border border-subtle'}`}>{t(value === 'reader' ? 'quranRead' : value === 'resources' ? 'quranResources' : value === 'khatmah' ? 'khatmahTitle' : 'quranFrequencyTitle')}</button>)}
     </nav>
     <div className={`${view === 'reader' ? 'flex' : 'hidden'} flex-1 min-h-0 min-w-0`}><QuranReaderView visible={view === 'reader'} /></div>
     <div className={`${view === 'resources' ? 'flex' : 'hidden'} flex-1 min-h-0 min-w-0`}><QuranResourceView /></div>
     {view === 'khatmah' && <QuranKhatmah />}
+    {view === 'frequency' && <QuranFrequencyPanel />}
   </div>;
 }

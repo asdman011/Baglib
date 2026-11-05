@@ -1,4 +1,5 @@
 import { errorMessage } from '../../../shared/errors';
+import { sourceUrls } from '../source-urls';
 import https from 'https';
 import http from 'http';
 import fs from 'fs';
@@ -85,17 +86,14 @@ export class LibgenDownloadService {
    */
   public async resolveDownloadUrl(
     md5: string,
-    preferredMirror = 'https://libgen.li'
+    preferredMirror = sourceUrls.mirrors('libgen')[0]
   ): Promise<{ downloadUrl: string; referer: string; cdnLocation?: string } | null> {
     const cleanMd5 = md5.trim().toLowerCase();
 
     // Mirror list to race in parallel: primary + reliable mirrors
     const candidateMirrors = [
       preferredMirror,
-      'https://libgen.li',
-      'https://libgen.bz',
-      'https://libgen.is',
-      'https://libgen.rs',
+      ...sourceUrls.mirrors('libgen'),
     ].filter((m, i, arr) => arr.indexOf(m) === i);
 
     const probeMirror = async (mirror: string) => {
@@ -267,7 +265,7 @@ export class LibgenDownloadService {
 
     // Candidate 3: Proactive fallback mirror key resolution if primary hasn't resolved
     if (candidateUrls.length === 0) {
-      for (const fallbackMirror of ['https://libgen.bz', 'https://libgen.is', 'https://libgen.rs']) {
+      for (const fallbackMirror of sourceUrls.mirrors('libgen').slice(1)) {
         try {
           const fbResolved = await this.resolveDownloadUrl(cleanMd5, fallbackMirror);
           if (fbResolved) {

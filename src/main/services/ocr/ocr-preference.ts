@@ -3,6 +3,8 @@ import type { OcrEngineId } from '../../../shared/types/ocr';
 import type { ISettingsRepository } from '../../database/repositories/settings.repository';
 
 const OCR_ENGINE_SETTING = 'ocr.engine.v1';
+const OCR_LAYOUT_SETTING = 'ocr.layout.v1';
+export type OcrPageLayout = 'lines' | 'columns';
 
 export function isOcrEngine(value: unknown): value is OcrEngineId {
   return value === 'ocrmypdf' || value === 'paddleocr_vl';
@@ -22,4 +24,15 @@ export function savePreferredEngine(settings: Pick<ISettingsRepository, 'set'>, 
   if (!isOcrEngine(engine)) throw new Error('Unknown OCR engine');
   settings.set(OCR_ENGINE_SETTING, engine);
   return engine;
+}
+
+/** Arabic page layout for OCRmyPDF: lines suits verse and one column, columns suits two. */
+export function readPageLayout(settings: Pick<ISettingsRepository, 'get'>): OcrPageLayout {
+  try { return settings.get<string>(OCR_LAYOUT_SETTING) === 'columns' ? 'columns' : 'lines'; } catch { return 'lines'; }
+}
+
+export function savePageLayout(settings: Pick<ISettingsRepository, 'set'>, layout: unknown): OcrPageLayout {
+  if (layout !== 'lines' && layout !== 'columns') throw new Error('Unknown OCR layout');
+  settings.set(OCR_LAYOUT_SETTING, layout);
+  return layout;
 }

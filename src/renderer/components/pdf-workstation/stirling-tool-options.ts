@@ -290,6 +290,7 @@ export const STIRLING_TOOL_OPTIONS: Record<string, ToolOption[]> = {
   'extract-images': [select('format', 'stirlingOptImageFormat', 'png', [{ value: 'png', label: 'stirlingOptPng' }, { value: 'jpeg', label: 'stirlingOptJpeg' }, { value: 'gif', label: 'stirlingOptGif' }])],
   'flatten-forms': [toggle('flattenOnlyForms', 'stirlingOptFlattenFormsOnly', true, 'stirlingOptFlattenFormsOnlyHint'), withWhen(number('renderDpi', 'stirlingOptDpi', 200, 72, 600), 'flattenOnlyForms', false)],
   'ocr-pdf': [
+    select('layout', 'stirlingOptOcrLayout', 'columns', [{ value: 'columns', label: 'stirlingOptOcrLayoutColumns' }, { value: 'lines', label: 'stirlingOptOcrLayoutLines' }]),
     select('languages', 'stirlingOptOcrLanguages', 'ara,eng', [{ value: 'ara,eng', label: 'stirlingOptOcrArabicEnglish' }, { value: 'ara', label: 'stirlingOptOcrArabic' }, { value: 'eng', label: 'stirlingOptOcrEnglish' }]),
     select('ocrType', 'stirlingOptOcrMode', 'skip-text', [{ value: 'skip-text', label: 'stirlingOptOcrSkipText' }, { value: 'force-ocr', label: 'stirlingOptOcrForce' }, { value: 'Normal', label: 'stirlingOptOcrNormal' }]),
     select('ocrRenderType', 'stirlingOptOcrLayer', 'hocr', [{ value: 'hocr', label: 'stirlingOptOcrHocr' }, { value: 'sandwich', label: 'stirlingOptOcrSandwich' }]),

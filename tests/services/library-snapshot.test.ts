@@ -11,6 +11,8 @@ import * as fflate from 'fflate';
 import Database from 'better-sqlite3';
 import { LibrarySnapshotService } from '../../src/main/services/sync/library-snapshot.service';
 import { getDatabase, closeDatabase } from '../../src/main/database/connection';
+import { runMigrations } from '../../src/main/database/migrator';
+import { migrations } from '../../src/main/database/migrations';
 
 describe('Library Snapshot & Atomic Rollback Service (KEY-147)', () => {
   let tempSnapshotsDir: string;
@@ -131,6 +133,22 @@ describe('Library Snapshot & Atomic Rollback Service (KEY-147)', () => {
       const restoredDb = getDatabase();
       const restoredRow = restoredDb.prepare("SELECT title FROM work WHERE id = 'work_mukaddimah'").get() as { title: string };
       assert.strictEqual(restoredRow.title, 'مقدمة ابن خلدون');
+    });
+
+    it('upgrades a snapshot from an older schema and converts its notes', async () => {
+      const oldPath = path.join(tempSnapshotsDir, 'old.db');
+      const old = new Database(oldPath);
+      runMigrations(old, migrations.filter((migration) => migration.id < 21));
+      old.prepare(`INSERT INTO app_settings (key, value) VALUES (?, ?)`).run('study.note.v1:old-note', JSON.stringify({
+        id: 'old-note', title: 'قديم', content: 'نص', aliases: [], tags: [], createdAt: '2026-01-01', updatedAt: '2026-01-01',
+      }));
+      old.close();
+      fs.writeFileSync(path.join(tempSnapshotsDir, 'old.zip'), Buffer.from(fflate.zipSync({ 'baglib.db': new Uint8Array(fs.readFileSync(oldPath)) })));
+
+      const restoreRes = await service.restoreSnapshot('old.zip');
+      assert.strictEqual(restoreRes.success, true);
+      const row = getDatabase().prepare(`SELECT s.content FROM knowledge k JOIN study_note_detail s ON s.knowledge_id = k.id WHERE k.id = 'old-note' AND k.deleted_at IS NULL`).get() as { content: string };
+      assert.strictEqual(row.content, 'نص');
     });
 
     it('rejects corrupt archive and guarantees live database remains untouched via rollback', async () => {

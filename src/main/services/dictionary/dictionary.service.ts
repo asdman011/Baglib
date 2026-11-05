@@ -16,6 +16,7 @@ import type {
   AggregateDictionaryLookupResult,
   ImportDictionaryOptions,
 } from '../../../shared/types/dictionary';
+import { BIOGRAPHY_SCIENCE } from '../../../shared/types/dictionary';
 import {
   buildLookupCandidates,
   stripArabicDiacritics,
@@ -26,6 +27,8 @@ import { BglReader } from './bgl-reader';
 import { SlobReader } from './slob-reader';
 import { MdictReader } from './mdict-reader';
 import { WikipediaService } from './wikipedia.service';
+
+const SCIENCES_KEY = 'dictionary.sciences.v1';
 
 export class DictionaryService {
   private db: Database.Database;
@@ -51,10 +54,49 @@ export class DictionaryService {
       )
       .all() as DictionaryItem[];
 
+    const sciences = this.sciences();
     return rows.map((r) => ({
       ...r,
       isEnabled: Boolean(r.isEnabled),
+      science: sciences[r.id],
     }));
+  }
+
+  /** Science tags live in settings because `dictionaries` has no field for them. */
+  private sciences(): Record<string, string> {
+    try {
+      const row = this.db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get(SCIENCES_KEY) as { value: string } | undefined;
+      return row ? JSON.parse(row.value) as Record<string, string> : {};
+    } catch { return {}; }
+  }
+
+  setScience(id: string, science: string | null): boolean {
+    if (!this.db.prepare(`SELECT 1 FROM dictionaries WHERE id = ?`).get(id)) return false;
+    if (science && science !== BIOGRAPHY_SCIENCE && !this.db.prepare(`SELECT 1 FROM category WHERE id = ?`).get(science)) return false;
+    const sciences = this.sciences();
+    if (science) sciences[id] = science; else delete sciences[id];
+    this.db.prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+      .run(SCIENCES_KEY, JSON.stringify(sciences), new Date().toISOString());
+    return true;
+  }
+
+  private ancestors(id: string): Set<string> {
+    const found = new Set<string>();
+    const parent = this.db.prepare(`SELECT parent_id AS parent FROM category WHERE id = ?`);
+    for (let current: string | null | undefined = id; current && !found.has(current); current = (parent.get(current) as { parent: string | null } | undefined)?.parent) found.add(current);
+    return found;
+  }
+
+  /** The reading's science comes first. Another science's meaning goes only when this one has an answer. */
+  private bySciences(entries: DictionaryEntryMatch[], options?: { science?: string; workId?: string }): DictionaryEntryMatch[] {
+    const sciences = this.sciences();
+    const tagged = entries.map(entry => ({ ...entry, science: sciences[entry.dictId] }));
+    const science = options?.science ?? (options?.workId ? (this.db.prepare(`SELECT primary_category_id AS category FROM work WHERE id = ?`).get(options.workId) as { category: string | null } | undefined)?.category : undefined);
+    if (!science) return tagged;
+    const family = this.ancestors(science);
+    const rank = ({ science: tag }: { science?: string }) => !tag ? 2 : tag === BIOGRAPHY_SCIENCE ? 1 : family.has(tag) || this.ancestors(tag).has(science) ? 0 : 3;
+    const sorted = [...tagged].sort((first, second) => rank(first) - rank(second));
+    return sorted.some(entry => rank(entry) === 0) ? sorted.filter(entry => rank(entry) !== 3) : sorted;
   }
 
   /**
@@ -204,6 +246,7 @@ export class DictionaryService {
     }
     this.readers.delete(id);
 
+    if (this.sciences()[id]) this.setScience(id, null);
     const res = this.db.prepare(`DELETE FROM dictionaries WHERE id = ?`).run(id);
     return res.changes > 0;
   }
@@ -245,7 +288,7 @@ export class DictionaryService {
    */
   async lookup(
     word: string,
-    options?: { lang?: string; includeWikipedia?: boolean; maxCandidates?: number }
+    options?: { lang?: string; includeWikipedia?: boolean; maxCandidates?: number; science?: string; workId?: string }
   ): Promise<AggregateDictionaryLookupResult> {
     const startTime = performance.now();
     const candidates = buildLookupCandidates(word, options?.lang);
@@ -350,7 +393,7 @@ export class DictionaryService {
     return {
       query: word,
       candidates,
-      entries,
+      entries: this.bySciences(entries, options),
       wikipedia: wikipediaCard,
       durationMs,
     };

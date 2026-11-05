@@ -15,6 +15,8 @@ import {
   LayoutDashboard,
   Feather,
   CalendarDays,
+  Route,
+  Clapperboard,
 } from 'lucide-react';
 import { useWorkspace, type WorkspaceViewMode } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
@@ -52,6 +54,20 @@ export const NavigationRail: React.FC = () => {
       id: 'planner',
       label: t('plannerTitle'),
       icon: CalendarDays,
+      count: 0,
+      disabled: false,
+    },
+    {
+      id: 'pathways',
+      label: t('pathwaysTitle'),
+      icon: Route,
+      count: 0,
+      disabled: false,
+    },
+    {
+      id: 'lectures',
+      label: t('lecturesTitle'),
+      icon: Clapperboard,
       count: 0,
       disabled: false,
     },

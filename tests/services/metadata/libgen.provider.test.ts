@@ -1,6 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { LibgenProvider, LIBGEN_MIRRORS } from '../../../src/main/services/metadata/libgen.provider';
+import { LibgenProvider } from '../../../src/main/services/metadata/libgen.provider';
+import { DEFAULT_SOURCE_URLS } from '../../../src/shared/source-urls';
+
+const LIBGEN_MIRRORS = DEFAULT_SOURCE_URLS.sources.libgen;
 import {
   LibgenDownloadService,
   PUBLIC_IPFS_GATEWAYS,

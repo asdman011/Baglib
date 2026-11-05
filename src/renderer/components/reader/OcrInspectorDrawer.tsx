@@ -20,6 +20,7 @@ import {
   HardDrive,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { OcrCompare } from './OcrCompare';
 import type { OcrEngineId, OcrPageResult, OcrWord, OcrEngineInfo } from '../../../shared/types/ocr';
 import { OCR_ENGINE_ORDER, ocrEngineBlocker, ocrEngineInfo, ocrEngineName, ocrFallbackMessage } from './ocr-status';
 
@@ -544,6 +545,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
             {/* Tab: Plain Text */}
             {activeTab === 'text' && (
               <div className="space-y-2">
+                <OcrCompare text={pageResult.text} />
                 <div className="flex justify-end">
                   <button
                     type="button"

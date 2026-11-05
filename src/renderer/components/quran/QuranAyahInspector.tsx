@@ -7,11 +7,11 @@ import type { TranslationKey } from '../../translations';
 import { openStudyNote } from '../../utils/study-navigation';
 import { studyLinkText } from '../../../shared/study-notes';
 
-export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar, floating = false }: {
+export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar, floating = false, commentary }: {
   details: QuranAyahDetails | null; reference: { surah: number; ayah: number }; surahName: string; error: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string; dir: 'rtl' | 'ltr';
   onClose: () => void; onCopy: (text: string) => void; onStudy: () => void; onSimilar?: () => void;
-  floating?: boolean;
+  floating?: boolean; commentary?: React.ReactNode;
 }) {
   const drawer = useRef<HTMLElement>(null);
   const close = useRef(onClose);
@@ -44,6 +44,7 @@ export function QuranAyahInspector({ details, reference, surahName, error, t, di
         <button data-quran-study-jump type="button" onClick={onStudy} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 text-white px-4 py-3 text-sm"><ExternalLink className="size-4 rtl:rotate-180" />{t('quranOpenInStudyReader')}</button>
         {onSimilar && <button type="button" onClick={onSimilar} className="inline-flex items-center gap-2 rounded-xl border border-subtle px-4 py-3 text-sm hover:bg-pale-sky-500/10 transition-colors"><CopyCheck className="size-4 text-emerald-600 dark:text-emerald-400" />{t('quranSimilarAyahs')}</button>}
       </div>
+      {commentary}
       </div>
     </aside>
   </div>;

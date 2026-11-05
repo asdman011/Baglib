@@ -302,22 +302,6 @@ export function setupDatabaseIPC() {
     try {
       const db = getDatabase();
       const repo = new (ipcModule0.KnowledgeRepository)(db);
-      const annotRepo = new (ipcModule1.AnnotationRepository)(db);
-
-      // Save to annotations table as well
-      try {
-        annotRepo.save({
-          id: noteData.id,
-          bookId: noteData.bookId,
-          type: 'note',
-          locationCfiOrPage: String(noteData.pageNumber || 1),
-          selectedText: noteData.highlightedText || null,
-          noteContent: noteData.content,
-          createdAt: noteData.createdAt,
-        });
-      } catch (e) {
-        console.warn('[baglib/db-ipc] Auto-sync to annotations table failed:', e);
-      }
 
       return repo.addNote(noteData);
     } catch (err) {

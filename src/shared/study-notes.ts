@@ -8,6 +8,9 @@ export function matchesStudyQuery(text: string, query: string): boolean {
 }
 
 export interface StudyNote {
+  kind?: string;
+  sourceRef?: string;
+  revision?: number;
   id: string;
   title: string;
   content: string;
@@ -18,7 +21,7 @@ export interface StudyNote {
   createdAt: string;
   updatedAt: string;
 }
-export type StudyNoteInput = Pick<StudyNote, 'title' | 'content' | 'aliases' | 'tags'> & { id?: string; workId?: string };
+export type StudyNoteInput = Pick<StudyNote, 'title' | 'content' | 'aliases' | 'tags'> & { id?: string; workId?: string; expectedRevision?: number };
 export interface StudyNotesAPI {
   list(): Promise<StudyNote[]>;
   save(note: StudyNoteInput): Promise<StudyNote>;
@@ -30,6 +33,7 @@ export function validStudyTarget(target: string): boolean {
   const poetry = /^poetry:ashaar:(\d+):(\d+):(\d+)$/u.exec(target);
   if (poetry) return Number.isSafeInteger(+poetry[1]) && +poetry[1] > 0 && +poetry[2] >= 0 && +poetry[3] >= +poetry[2] && +poetry[3] <= 100000;
   if (/^(note|book):[^\s\[\]|:]{1,180}$/u.test(target)) return true;
+  if (/^media:[0-9a-f-]{36}:\d{1,6}(?::[0-9a-f-]{36})?$/u.test(target)) return true;
   const quran = /^quran:(hafs|warsh):(\d+):(\d+)$/u.exec(target);
   if (quran) return +quran[2] >= 1 && +quran[2] <= 114 && +quran[3] >= 1 && +quran[3] <= 300;
   const sunnah = /^sunnah:([^:]+):(\d+):([^\s\[\]|]{1,180})$/u.exec(target);

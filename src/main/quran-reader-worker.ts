@@ -43,6 +43,10 @@ const run = async (request: QuranReaderRequest) => {
         ? await reader!.searchTopics(request.pack, request.text)
         : request.action === 'topics'
         ? await reader!.topics(request.pack, request.ids)
+        : request.action === 'frequency'
+        ? await reader!.frequency(request.query)
+        : request.action === 'frequency-places'
+        ? await reader!.frequencyPlaces(request.family, request.text)
         : request.action === 'structure'
         ? await reader!.structure()
         : await reader!.similarAyahs(request.pack, request.surah, request.ayah);

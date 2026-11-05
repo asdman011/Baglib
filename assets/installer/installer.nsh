@@ -14,6 +14,8 @@ LangString baglibOptionStartMenu 1033 "Create a Start menu shortcut"
 LangString baglibOptionStartMenu 1025 "إنشاء اختصار في قائمة ابدأ"
 LangString baglibOptionAssociations 1033 "Add Baglib to Open with for books (PDF, EPUB, MOBI and more)"
 LangString baglibOptionAssociations 1025 "إضافة بَغْلِب إلى قائمة الفتح بواسطة للكتب (PDF وEPUB وMOBI وغيرها)"
+LangString baglibOptionOcr 1033 "Install text recognition (OCR) with Arabic and English data, about 240 MB"
+LangString baglibOptionOcr 1025 "تثبيت التعرف الضوئي على النصوص مع بيانات العربية والإنجليزية، نحو 240 ميغابايت"
 
 !macro baglibAssistedArabic
   LangString chooseInstallationOptions 1025 "اختر خيارات التثبيت"
@@ -73,6 +75,9 @@ LangString baglibOptionAssociations 1025 "إضافة بَغْلِب إلى قا�
     Var baglibStartMenu
     Var baglibAssociations
     Var baglibSkipTypes
+    Var baglibOcrBox
+    Var baglibOcr
+    Var baglibSkipOcr
 
     Function baglibOptionsShow
       ; An update keeps the choices made at first install.
@@ -83,6 +88,7 @@ LangString baglibOptionAssociations 1025 "إضافة بَغْلِب إلى قا�
         StrCpy $baglibDesktop ${BST_CHECKED}
         StrCpy $baglibStartMenu ${BST_CHECKED}
         StrCpy $baglibAssociations ${BST_CHECKED}
+        StrCpy $baglibOcr ${BST_CHECKED}
       ${endIf}
       !insertmacro MUI_HEADER_TEXT "$(baglibOptionsTitle)" "$(baglibOptionsSubtitle)"
       nsDialogs::Create 1018
@@ -96,11 +102,15 @@ LangString baglibOptionAssociations 1025 "إضافة بَغْلِب إلى قا�
       ${NSD_CreateCheckbox} 0 52u 100% 14u "$(baglibOptionAssociations)"
       Pop $baglibAssociationsBox
       ${NSD_SetState} $baglibAssociationsBox $baglibAssociations
+      ${NSD_CreateCheckbox} 0 74u 100% 14u "$(baglibOptionOcr)"
+      Pop $baglibOcrBox
+      ${NSD_SetState} $baglibOcrBox $baglibOcr
       ; nsDialogs mirrors the text but not the box, so Arabic moves it to the right by hand.
       ${if} "$(^RTL)" == "1"
         ${NSD_AddStyle} $baglibDesktopBox 0x220
         ${NSD_AddStyle} $baglibStartMenuBox 0x220
         ${NSD_AddStyle} $baglibAssociationsBox 0x220
+        ${NSD_AddStyle} $baglibOcrBox 0x220
       ${endIf}
       nsDialogs::Show
     FunctionEnd
@@ -109,6 +119,7 @@ LangString baglibOptionAssociations 1025 "إضافة بَغْلِب إلى قا�
       ${NSD_GetState} $baglibDesktopBox $baglibDesktop
       ${NSD_GetState} $baglibStartMenuBox $baglibStartMenu
       ${NSD_GetState} $baglibAssociationsBox $baglibAssociations
+      ${NSD_GetState} $baglibOcrBox $baglibOcr
       StrCpy $baglibOptionsShown "1"
     FunctionEnd
   !endif
@@ -125,6 +136,7 @@ LangString baglibOptionAssociations 1025 "إضافة بَغْلِب إلى قا�
 !macro customInit
   ; An update removes the old version first, so the saved choice has to be read before that.
   ReadRegStr $baglibSkipTypes HKCU "Software\${APP_GUID}\Setup" "SkipFileAssociations"
+  ReadRegStr $baglibSkipOcr HKCU "Software\${APP_GUID}\Setup" "SkipOcr"
 !macroend
 
 !macro customInstall
@@ -142,13 +154,28 @@ LangString baglibOptionAssociations 1025 "إضافة بَغْلِب إلى قا�
     ${else}
       StrCpy $baglibSkipTypes "1"
     ${endIf}
+    ${if} $baglibOcr == ${BST_CHECKED}
+      StrCpy $baglibSkipOcr ""
+    ${else}
+      StrCpy $baglibSkipOcr "1"
+    ${endIf}
   ${endIf}
   ; The template registers file types on every run, so an update re-applies this choice.
   ${if} $baglibSkipTypes == "1"
     !insertmacro baglibRemoveFileAssociations
     WriteRegStr HKCU "Software\${APP_GUID}\Setup" "SkipFileAssociations" "1"
   ${else}
-    DeleteRegKey HKCU "Software\${APP_GUID}\Setup"
+    DeleteRegValue HKCU "Software\${APP_GUID}\Setup" "SkipFileAssociations"
+  ${endIf}
+  ; Skipped OCR is removed after copying. Running the installer again with the box ticked restores it,
+  ; and an update keeps the earlier choice. The app reports OCR as unavailable and falls back.
+  ${if} $baglibSkipOcr == "1"
+    RMDir /r "$INSTDIR\resources\pdf-engine\tesseract"
+    RMDir /r "$INSTDIR\resources\pdf-engine\ocr-best"
+    RMDir /r "$INSTDIR\resources\pdf-engine\tessdata"
+    WriteRegStr HKCU "Software\${APP_GUID}\Setup" "SkipOcr" "1"
+  ${else}
+    DeleteRegValue HKCU "Software\${APP_GUID}\Setup" "SkipOcr"
   ${endIf}
 !macroend
 

@@ -1,6 +1,6 @@
 import { utilityProcess } from 'electron';
 import path from 'node:path';
-import type { QuranPack, QuranReadQuery, QuranResult } from '../../../shared/types/quran';
+import type { QuranFrequencyFamily, QuranFrequencyQuery, QuranPack, QuranReadQuery, QuranResult } from '../../../shared/types/quran';
 
 type Action =
   | { action: 'catalog' }
@@ -19,6 +19,8 @@ type Action =
   | { action: 'ayah-topics'; pack?: string; surah: number; ayah: number }
   | { action: 'search-topics'; pack?: string; text: string }
   | { action: 'topics'; pack?: string; ids: number[] }
+  | { action: 'frequency'; query: QuranFrequencyQuery }
+  | { action: 'frequency-places'; family: QuranFrequencyFamily; text: string }
   | { action: 'structure' }
   | { action: 'similar-ayahs'; pack?: string; surah: number; ayah: number };
 export type QuranReaderRequest = Action & { id: number; root: string; packs: QuranPack[] };

@@ -1,4 +1,5 @@
 'use client';
+import { ReadingLogPanel } from '../notes/ReadingLogPanel';
 import { errorMessage } from '../../../shared/errors';
 
 
@@ -1257,6 +1258,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* MODAL BODY                                                        */}
         {/* ================================================================= */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+          {!isCreateMode && book?.id && <ReadingLogPanel workId={book.id}/>}
           {/* TAB 1: INFO & TYPE-SPECIFIC FIELDS */}
           {activeTab === 'info' && (
             <div className="space-y-4">

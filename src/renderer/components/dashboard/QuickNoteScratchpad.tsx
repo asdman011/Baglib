@@ -96,15 +96,7 @@ export const QuickNoteScratchpad: React.FC<{ initialNote?: StudyNote; initialCon
       const split = (value: string) => [...new Set(value.split(/[,،]/u).map(value => value.trim()).filter(Boolean))];
       const id = noteId.current || crypto.randomUUID();
       noteId.current = id;
-      const note = { id, title: title.trim() || studyNoteHeading(content), content: content.trim(), aliases: split(aliasesInput), tags: split(tagsInput), workId: workId || undefined };
-      // Keep existing book notes visible in their reader, with link metadata in private settings.
-      if (workId || initialNote?.knowledgeId) {
-        if (!api.knowledge?.save) throw new Error('desktop-required');
-        const existing = initialNote ? (await (workId ? api.knowledge.getByWork(workId, 'note') : api.knowledge.getAll())).find((item: { id: string }) => item.id === (initialNote.knowledgeId || id)) : undefined;
-        const tagIds: string[] = [];
-        for (const tag of note.tags) { const saved = await api.tags.create(tag); if (saved?.id) tagIds.push(saved.id); }
-        await api.knowledge.save({ id, workId: workId || null, editionId: existing?.editionId, sourceId: existing?.sourceId, knowledgeType: 'note', location: existing?.location || '1', createdAt: existing?.createdAt, noteContent: note.content, tagIds });
-      }
+      const note = { id, title: title.trim() || studyNoteHeading(content), content, aliases: split(aliasesInput), tags: split(tagsInput), workId: workId || undefined,expectedRevision:initialNote?.revision ?? 0 };
       await api.studyNotes.save(note);
       if (!initialNote) { await api.settings.set(draftKey, { content: '', title: '', tagsInput: '', aliasesInput: '', workId: '' }); pendingDraft.current = null; clear(); noteId.current = undefined; }
       void refreshTags();

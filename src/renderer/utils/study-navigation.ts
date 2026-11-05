@@ -3,6 +3,7 @@ import type { BookItem } from '../../shared/types/work';
 import { validStudyTarget } from '../../shared/study-notes';
 import { openQuranAyah } from './quran-navigation';
 import { openPoetryReference } from './poetry-navigation';
+import { openLecture } from './lecture-navigation';
 export const STUDY_NOTE_OPEN = 'baglib:study-note-open';
 let pendingNote: { id?: string; content?: string } | null = null;
 let pendingSunnah: { collection: SunnahCollectionId; chapter: number; hadith: string } | null = null;
@@ -32,6 +33,11 @@ export async function navigateStudyReference(target: string, books: BookItem[], 
     const source = catalog.data.sources.find(source => source.kind === 'script' && source.profile === profile);
     if (!source) throw new Error('missing-source');
     openQuranAyah({ script: source.id, surah: +surah, ayah: +ayah }); return;
+  }
+  if (target.startsWith('media:')) {
+    const [, id, seconds] = target.split(':');
+    openLecture({ id, seconds: +seconds });
+    return;
   }
   if (target.startsWith('poetry:')) {
     const [, , poem, from, to] = target.split(':');

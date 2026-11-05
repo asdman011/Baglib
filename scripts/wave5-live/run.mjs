@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {spawn} from 'node:child_process';
+import electron from 'electron';
+const directory=fs.mkdtempSync(path.resolve('.baglib-data/wave5-live-'));
+const packs=path.resolve('.baglib-data/wave5-quran-copy');
+const corpus=path.resolve('tools/hadith-alignment/data/output/sunnah_merged_quranlab_v1.sqlite');
+if(!fs.existsSync(path.join(packs,'catalog.sqlite')))throw new Error('Disposable Quran copy required');
+fs.writeFileSync(path.join(directory,'quran-location.json'),JSON.stringify({directory:packs}));
+fs.mkdirSync(path.join(directory,'sunnah'));
+fs.writeFileSync(path.join(directory,'sunnah','research-source.json'),JSON.stringify({filename:corpus}));
+const env={...process.env,BAGLIB_DATA_DIR:directory,BAGLIB_WAVE5_LIVE_DIR:directory};delete env.ELECTRON_RUN_AS_NODE;
+const child=spawn(electron,['scripts/wave5-live/main.cjs',`--user-data-dir=${directory}`,'--disable-features=CalculateNativeWinOcclusion'],{env,stdio:'inherit',windowsHide:true});
+const timer=setTimeout(()=>child.kill(),480000);
+child.once('exit',code=>{clearTimeout(timer);console.log(JSON.stringify({directory,code}));process.exitCode=code??1;});

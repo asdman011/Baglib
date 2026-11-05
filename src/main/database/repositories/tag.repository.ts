@@ -1,6 +1,7 @@
 interface TagRow { id: string; name: string; origin: 'manual' | 'calibre' | 'import' | 'ai'; category?: string; workCount: number; usage_count: number; usageCount: number; }
 import type { Database } from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { withKnowledgeHistory } from '../../services/knowledge-history';
 import { getDatabase } from '../connection';
 import type {
   Tag,
@@ -170,7 +171,7 @@ export class SqliteTagRepository implements ITagRepository {
       }
     });
 
-    tx();
+    withKnowledgeHistory(db,(db.prepare('SELECT knowledge_id AS id FROM knowledge_tag WHERE tag_id=?').all(id) as {id:string}[]).map(row=>row.id),'tag-update',()=>tx());
 
     return {
       id: tag.id,
@@ -220,7 +221,7 @@ export class SqliteTagRepository implements ITagRepository {
       }
     });
 
-    tx();
+    withKnowledgeHistory(db,(db.prepare('SELECT knowledge_id AS id FROM knowledge_tag WHERE tag_id=?').all(id) as {id:string}[]).map(row=>row.id),'tag-delete',()=>tx());
     return true;
   }
 
@@ -275,6 +276,7 @@ export class SqliteTagRepository implements ITagRepository {
 
       // Delete all links to source tag
       deleteWorkTag.run(sourceTagId);
+      db.prepare('INSERT OR IGNORE INTO knowledge_tag(knowledge_id,tag_id) SELECT knowledge_id,? FROM knowledge_tag WHERE tag_id=?').run(targetTagId,sourceTagId);
       db.prepare('DELETE FROM knowledge_tag WHERE tag_id = ?').run(sourceTagId);
 
       // Delete source tag itself
@@ -283,7 +285,7 @@ export class SqliteTagRepository implements ITagRepository {
       return sourceWorks.length;
     });
 
-    return tx();
+    return withKnowledgeHistory(db,(db.prepare('SELECT knowledge_id AS id FROM knowledge_tag WHERE tag_id=?').all(sourceTagId) as {id:string}[]).map(row=>row.id),'tag-merge',()=>tx());
   }
 }
 

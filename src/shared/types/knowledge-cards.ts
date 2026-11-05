@@ -37,7 +37,42 @@ export interface PreservedKnowledge {
   createdAt: string;
 }
 
+export const DECK_SOURCES = ['notes', 'highlights', 'quran', 'hadith', 'poetry'] as const;
+export type DeckSource = typeof DECK_SOURCES[number];
+
+export interface DeckInput {
+  name: string;
+  sources: DeckSource[];
+  memorize: boolean;
+}
+
+export interface CardDeck {
+  id: string;
+  name: string;
+  cards: number;
+}
+
+export interface DeckResult {
+  deck: CardDeck;
+  added: number;
+  /** Texts too long to be a card. They are left out, never shortened. */
+  skipped: number;
+}
+
+export function validateDeckInput(input: unknown): DeckInput {
+  const { name, sources, memorize } = (input ?? {}) as Record<string, unknown>;
+  if (typeof name !== 'string' || !name.trim() || name.length > 200) throw new Error('invalid-request');
+  if (!Array.isArray(sources) || !sources.length || sources.some(source => !DECK_SOURCES.includes(source))) throw new Error('invalid-request');
+  return { name: name.trim(), sources: [...new Set(sources)] as DeckSource[], memorize: memorize === true };
+}
+
 export interface KnowledgeCardsAPI {
+  decks(): Promise<CardDeck[]>;
+  generateDeck(input: DeckInput): Promise<DeckResult>;
+  /** Resolves false when the save dialog is cancelled. */
+  exportDeck(id: string): Promise<boolean>;
+  reviewQueue(): Promise<import('../srs').ReviewQueue>;
+  gradeReview(input: import('../srs').GradeReviewInput): Promise<import('../srs').ReviewQueue>;
   list(query?: { search?: string; offset?: number }): Promise<KnowledgeCard[]>;
   save(input: SaveCardInput): Promise<KnowledgeCard>;
   listPreserved(): Promise<PreservedKnowledge[]>;
