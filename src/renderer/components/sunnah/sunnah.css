@@ -1,7 +1,7 @@
 .sunnah-workspace { color: var(--text-main); background: var(--bg-canvas); }
 .sunnah-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem; border-block-end: 1px solid var(--border-subtle); background: var(--bg-surface); }
 .sunnah-emblem { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border-subtle); border-radius: 1rem; color: #60cfd0; background: #173a40; flex-shrink: 0; }
-.sunnah-toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.sunnah-toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding:.4rem; border:1px solid var(--border-subtle); border-radius:1rem; background:var(--bg-canvas); }
 .sunnah-mode { display: flex; flex-wrap: wrap; padding: .25rem; gap: .25rem; border: 1px solid var(--border-subtle); border-radius: .75rem; }
 .sunnah-mode button { padding: .5rem .75rem; border-radius: .5rem; font-size: .8rem; line-height: 1.6; }
 .sunnah-mode button[aria-pressed="true"] { background: #173a40; color: #c9f0eb; }
@@ -12,14 +12,15 @@
 .sunnah-workspace :is(button, input, select, summary):focus-visible { outline: 2px solid #3d8c8e; outline-offset: 3px; }
 .sunnah-size { display: flex; align-items: center; gap: .5rem; font-size: .75rem; color: var(--text-muted); }
 .sunnah-size input { width: 5rem; accent-color: #3d8c8e; }
-.sunnah-browser { display: flex; flex-wrap: wrap; align-items: end; gap: .85rem; padding: 1rem 1.5rem; border-block-end: 1px solid var(--border-subtle); }
+.sunnah-browser { display: flex; flex-wrap: wrap; align-items: end; gap: .85rem; padding: 1rem 1.5rem; border-block-end: 1px solid var(--border-subtle); background:var(--bg-surface); }
 .sunnah-browser label { display: flex; flex: 1 1 10rem; flex-direction: column; min-width: 0; gap: .4rem; }
-.sunnah-browser label > span { font-size: .75rem; color: var(--text-muted); }
+.sunnah-browser label > span { font-size: .75rem; line-height:1.9; font-weight:600; color: var(--text-muted); }
 .sunnah-browser .sunnah-chapter-select { flex: 2 1 14rem; }
 .sunnah-browser select { width: 100%; min-width: 0; border: 1px solid var(--border-subtle); border-radius: .65rem; padding: .55rem; background: var(--bg-surface); font-size: .85rem; line-height: 1.8; text-overflow: ellipsis; }
 .sunnah-navigation { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem; }
 .sunnah-search { display: flex; flex: 0 1 24rem; min-width: 0; align-items: center; gap: .5rem; color: var(--text-muted); padding: .5rem .75rem; border: 1px solid var(--border-subtle); border-radius: .7rem; background: var(--bg-surface); }
-.sunnah-search input { min-width: 0; width: 100%; outline: none; font-size: .85rem; line-height: 1.6; }
+.sunnah-search input { min-width: 0; width: 100%; outline: none; font-size: .85rem; line-height: 1.8; }
+.sunnah-search:focus-within { outline:2px solid #3d8c8e; outline-offset:2px; }
 .sunnah-chapter { max-width: 90rem; margin-inline: auto; padding: 0 1.5rem 1.5rem; }
 .sunnah-parallel { display: grid; grid-template-columns: minmax(0, 1fr); }
 .sunnah-bilingual { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -138,3 +139,17 @@
 .sunnah-stats { width:100%; border-collapse:collapse; font-size:.8rem; }
 .sunnah-stats th, .sunnah-stats td { padding:.4rem .6rem; border-block-end:1px solid var(--border-subtle); text-align:start; white-space:nowrap; }
 @media (max-width:700px) { .sunnah-beside { grid-template-columns:minmax(0,1fr); } }
+
+.sunnah-hadith > footer { padding-block-start:1rem; }
+.sunnah-hadith > footer textarea { min-block-size:5rem; max-block-size:24rem; }
+.sunnah-hadith > footer .sunnah-button { min-block-size:2.25rem; }
+.sunnah-navigation { border-block-end:1px solid var(--border-subtle); margin-block-end:.75rem; }
+.sunnah-research > summary:hover { background:var(--bg-surface); }
+@media (max-width:600px) {
+  .sunnah-bilingual { grid-template-columns:minmax(0,1fr); gap:1rem; }
+  .sunnah-bilingual > .sunnah-arabic { grid-column:1; grid-row:1; border-inline-end:0; padding-inline-end:0; }
+  .sunnah-bilingual > .sunnah-english { grid-column:1; grid-row:2; padding-inline-end:0; border-block-start:1px solid var(--border-subtle); padding-block-start:1rem; }
+  .sunnah-toolbar-actions { inline-size:100%; }
+  .sunnah-search { flex-basis:100%; }
+  .sunnah-chapter-heading h2, .sunnah-section-heading h3 { overflow-wrap:anywhere; }
+}

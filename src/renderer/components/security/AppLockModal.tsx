@@ -248,9 +248,9 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
       aria-label={t.securityModalTitle}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div className="relative w-full max-w-lg bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-lg max-h-[calc(100dvh-2rem)] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/40">
+        <div className="flex shrink-0 items-center justify-between gap-2 px-3 sm:px-6 py-4 border-b border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/40">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/30">
               <ShieldCheck className="w-5 h-5" />
@@ -268,7 +268,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
             <button
               onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-              aria-label="Close"
+              aria-label={t.close}
             >
               <X className="w-5 h-5" />
             </button>
@@ -276,7 +276,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-6">
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-6">
           {errorMsg && (
             <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 rounded-xl text-red-700 dark:text-red-400 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0" />

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   X,
   Sliders,
@@ -41,12 +42,33 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [baseline, setBaseline] = useState('[]');
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [sourceStatus, setSourceStatus] = useState({ dirty: false, busy: false });
+  const savingActive = useRef(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session = useRef(0);
+  const clearSaveTimer = useCallback(() => { if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = null; }, []);
+  const expireSession = useCallback(() => { session.current++; savingActive.current = false; clearSaveTimer(); }, [clearSaveTimer]);
+  useEffect(() => { expireSession(); return expireSession; }, [isOpen, expireSession]);
+  const sourceChanged = useCallback((next: { dirty: boolean; busy: boolean }) => {
+    setSourceStatus(previous => previous.dirty === next.dirty && previous.busy === next.busy ? previous : next);
+  }, []);
+  const closeSafely = () => {
+    if (savingActive.current || sourceStatus.busy) return;
+    if (JSON.stringify(configs) !== baseline || sourceStatus.dirty) setConfirmDiscard(true);
+    else onClose();
+  };
+  const dialogRef = useDialogFocus(isOpen, closeSafely);
+  const discardRef = useDialogFocus(isOpen && confirmDiscard, () => setConfirmDiscard(false));
 
   const [previousProviderOpen, setPreviousProviderOpen] = useState<readonly unknown[] | null>(null);
   const inputsProviderOpen = [isOpen];
   if (previousProviderOpen === null || inputsProviderOpen.some((value, index) => !Object.is(value, previousProviderOpen[index]))) {
     setPreviousProviderOpen(inputsProviderOpen);
-    if (isOpen) setLoading(true);
+    if (isOpen) { setLoading(true); setConfirmDiscard(false); setSaving(false); setSavedSuccess(false); setSaveFailed(false); setLoadFailed(false); }
   }
   useEffect(() => {
     if (!isOpen) return;
@@ -56,14 +78,19 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
     const loadConfigs = async () => {
       try {
         const windowAPI = (window).electronAPI;
-        if (windowAPI?.getProviderConfig) {
+        if (!windowAPI?.getProviderConfig) throw new Error('Provider configuration API unavailable');
+        {
           const res = await windowAPI.getProviderConfig();
-          if (isMounted && Array.isArray(res) && res.length > 0) {
-            setConfigs(res.sort((a, b) => a.priority - b.priority));
+          if (!Array.isArray(res)) throw new Error('Invalid provider configuration');
+          if (isMounted) {
+            const sorted = [...res].sort((a, b) => a.priority - b.priority);
+            setConfigs(sorted);
+            setBaseline(JSON.stringify(sorted));
           }
         }
       } catch (err) {
         console.warn('[ProviderSettingsModal] Failed to fetch provider configs:', err);
+        if (isMounted) setLoadFailed(true);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -118,21 +145,32 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
   };
 
   const handleSave = async () => {
+    if (savingActive.current || loading || loadFailed || !configs.length || sourceStatus.busy || sourceStatus.dirty) return;
+    const activeSession = session.current;
+    savingActive.current = true;
     setSaving(true);
+    setSaveFailed(false);
     try {
       const windowAPI = (window).electronAPI;
-      if (windowAPI?.updateProviderConfig) {
-        await windowAPI.updateProviderConfig(configs);
-      }
+      if (!windowAPI?.updateProviderConfig) throw new Error('Provider configuration API unavailable');
+      await windowAPI.updateProviderConfig(configs);
+      if (activeSession !== session.current) return;
+      setBaseline(JSON.stringify(configs));
       setSavedSuccess(true);
-      setTimeout(() => {
+      saveTimer.current = setTimeout(() => {
+        if (activeSession !== session.current) return;
+        savingActive.current = false;
+        setSaving(false);
         setSavedSuccess(false);
         if (onSaved) onSaved();
         onClose();
       }, 700);
     } catch (err) {
+      if (activeSession !== session.current) return;
       console.error('[ProviderSettingsModal] Error saving configs:', err);
       setSaving(false);
+      savingActive.current = false;
+      setSaveFailed(true);
     }
   };
 
@@ -151,12 +189,18 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
   return (
     <div
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) closeSafely();
       }}
       className="fixed inset-0 z-70 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
       dir={dir}
     >
-      <div className="relative w-full max-w-xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] font-sans">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('providerSettingsModalTitle')} tabIndex={-1} className="relative w-full max-w-xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
+        {confirmDiscard && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div ref={discardRef} role="dialog" aria-modal="true" aria-label={t('unsavedChangesTitle')} tabIndex={-1} className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-4 space-y-3 text-sm leading-relaxed">
+            <h4 className="font-bold">{t('unsavedChangesTitle')}</h4><p>{t('settingsDiscardPrompt')}</p>
+            <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setConfirmDiscard(false)} className="rounded-lg border border-subtle p-2">{t('keepEditing')}</button><button type="button" onClick={() => { setConfirmDiscard(false); onClose(); }} className="rounded-lg bg-red-600 p-2 text-white">{t('discardAndClose')}</button></div>
+          </div>
+        </div>}
         {/* Header */}
         <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -174,7 +218,9 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={closeSafely}
+            disabled={saving || sourceStatus.busy}
+            aria-label={t('close')}
             className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer shrink-0"
             title={t('cancel')}
           >
@@ -183,7 +229,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
         </div>
 
         {/* Content List */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
+        <fieldset disabled={saving} className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-3">
           {loading ? (
             <div className="py-12 text-center text-muted text-sm">
               <span className="inline-block animate-spin mr-2">⟳</span>
@@ -299,7 +345,10 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
             })
           )}
 
-          <SourceUrlsPanel />
+          <SourceUrlsPanel onStatus={sourceChanged} />
+          {loadFailed && <p role="alert" className="text-xs leading-relaxed text-red-500">{t('settingsLoadFailed')}</p>}
+          {sourceStatus.dirty && <p role="status" className="text-xs leading-relaxed text-muted">{t('settingsSourceDraftHint')}</p>}
+          {saveFailed && <p role="alert" className="text-xs leading-relaxed text-red-500">{t('settingsSaveFailed')}</p>}
 
           {/* Helpful Explanatory Banner */}
           <div className="p-3.5 rounded-2xl bg-canvas border border-subtle flex items-start gap-3 text-xs text-muted leading-relaxed">
@@ -317,7 +366,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
               </p>
             </div>
           </div>
-        </div>
+        </fieldset>
 
         {/* Footer */}
         <div className="p-4 sm:p-5 bg-canvas/90 border-t border-subtle flex items-center justify-between gap-3">
@@ -333,7 +382,8 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeSafely}
+              disabled={saving || sourceStatus.busy}
               className="px-4 py-2 rounded-xl border border-subtle text-muted hover:text-main hover:bg-canvas text-xs font-semibold transition-colors cursor-pointer"
             >
               {t('cancel')}
@@ -342,7 +392,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving || loading}
+              disabled={saving || loading || loadFailed || !configs.length || sourceStatus.busy || sourceStatus.dirty}
               className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all flex items-center gap-2 cursor-pointer shadow-sm shadow-amber-500/20 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />

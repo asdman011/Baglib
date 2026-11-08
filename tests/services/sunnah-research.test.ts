@@ -20,6 +20,8 @@ it('opens all nine collections read-only, retains row identities and exposes ind
     const books = ['Bukhari','Bukhari','Muslim','AbuDaud','Tirmidhi','Nesai','IbnMajah','MuwattaMalik','MusnadAhmad','SunanDarimi'];
     for (const [index, book] of books.entries()) {
       const row = Object.fromEntries(fields.map(field => [field, '']));
+      // The source writes a missing section number or English title as the text 'nan'.
+      if (book === 'IbnMajah') Object.assign(row, { Section_Number: 'nan', Section_Arabic: 'باب النية', Section_English: 'nan' });
       Object.assign(row, { book_key: book, Chapter_Number: index === 9 ? '' : '1.0', Chapter_Arabic: 'كتاب العلم', Chapter_English: 'Knowledge', Hadith_number: '1', Arabic_Hadith: 'إِنَّمَا الأَعْمَالُ', Arabic_Matn: 'إِنَّمَا الأَعْمَالُ', English_Hadith: 'Actions depend on intentions.', Arabic_Tafseel: 'شرح محقق محفوظ', Commentary_Book_Title: 'شرح عربي', Commentary_Author: 'المؤلف', Source_Row_Reference: 'Shamela:551:v1:p1:s1', Commentary_Shamela_URL:'https://shamela.ws/book/551', Itqan_Narrator_Chain_JSON: JSON.stringify([{pos:1,path:0,surface:'يحيى',resolved_name:'يحيى',rijal_id:'42',method:'exact'}]), Itqan_Quran_Root_Links_JSON:'["علم"]', Itqan_Linked_Ayah_Keys_JSON:'["2:1"]', Itqan_Corroborating_Hadiths_JSON: index === 0 ? '[{"book":"MuwattaMalik","hadith_number":"1","output_row_index":7}]' : '[]', Tafseel_Match_Score: '0.9', Itqan_Chain_Calibration_Score:'0.5' });
       db.prepare(`INSERT INTO hadiths VALUES (${fields.map(() => '?').join(',')},?)`).run(index+1,...fields.map(f=>row[f]));
       db.prepare('INSERT INTO hadiths_fts(rowid,text) VALUES (?,?)').run(index+1,'انما الاعمال شرح محقق محفوظ فاطمه Actions depend on intentions');
@@ -35,6 +37,7 @@ it('opens all nine collections read-only, retains row identities and exposes ind
     assert.equal(corpus.chapter('SunanDarimi',0).hadithCount,1);
     assert.equal(corpus.chapter('Tirmizi',1).collection,'Tirmizi');
     assert.equal(corpus.chapter('IbnMaja',1).collection,'IbnMaja');
+    assert.deepEqual(corpus.chapter('IbnMaja',1).hadiths[0].section,{ number: '', title: { ar: 'باب النية', en: '' } });
     const details=corpus.research(1);
     assert.equal(details.commentary,'شرح محقق محفوظ');
     assert.equal(details.related[0].hadith.id,'MuwattaMalik:1:1');

@@ -676,7 +676,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl bg-surface border border-subtle shadow-2xl overflow-hidden font-sans text-main">
+      <div className="relative w-full max-w-5xl max-h-[calc(100dvh-1.5rem)] flex flex-col rounded-3xl bg-surface border border-subtle shadow-2xl overflow-hidden font-sans text-main">
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-subtle bg-surface-raised/40">
           <div className="flex items-center gap-3">
@@ -948,7 +948,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
             </div>
 
             {/* Audited Books Table */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5">
               {displayedBooks.length === 0 ? (
                 <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-3">
                   <div className="w-12 h-12 rounded-2xl bg-canvas border border-subtle flex items-center justify-center text-muted">
@@ -1145,7 +1145,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
             </div>
 
             {/* Review Content: Book Missing Summary + Candidate Picker */}
-            <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
               {/* Left Column: Current Book & Missing Fields */}
               <div className="lg:col-span-4 space-y-4">
                 <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-4">

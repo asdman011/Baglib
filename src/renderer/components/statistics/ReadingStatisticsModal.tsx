@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   X,
   Flame,
@@ -86,6 +87,7 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
     }
   }, [isOpen]);
 
+  const dialogRef = useDialogFocus(isOpen, onClose);
   if (!isOpen) return null;
 
   const formatDuration = (totalSeconds: number) => {
@@ -126,11 +128,13 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
       role="dialog"
+      ref={dialogRef}
+      tabIndex={-1}
       aria-modal="true"
       aria-label={t.statsDashboardTitle}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-4xl max-h-[calc(100dvh-2rem)] flex flex-col bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/40">
           <div className="flex items-center gap-3">
@@ -151,15 +155,15 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
               onClick={loadData}
               disabled={loading}
               className="p-2 text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-              title="Refresh"
-              aria-label="Refresh statistics"
+              title={t.statsRefreshAction}
+              aria-label={t.statsRefreshAction}
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-              aria-label="Close"
+              aria-label={t.close}
             >
               <X className="w-5 h-5" />
             </button>
@@ -167,7 +171,7 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-3">
               <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />

@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StudyNote } from '../../shared/study-notes';
 import { studyNoteHeading } from '../../shared/study-notes';
 import type { KnowledgeItemDTO } from '../../shared/types/knowledge';
@@ -9,25 +9,36 @@ export function useStudyNotes() {
   const { bookNotes } = useWorkspace();
   const [saved, setSaved] = useState<StudyNote[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeItemDTO[]>([]);
-  const [error, setError] = useState(false);
+  const [failedSources, setFailedSources] = useState<('notes' | 'knowledge')[]>([]);
+  const [loading, setLoading] = useState(true);
+  const generation = useRef(0);
+  const invalidate = useCallback(() => { generation.current++; }, []);
   const [loadedKnowledge,setLoadedKnowledge] = useState(false);
   const refresh = useCallback(async () => {
-    try {
-      const api = window.electronAPI?.studyNotes;
-      const [personal, existing] = await Promise.all([api ? api.list() : Promise.resolve([]), window.electronAPI?.knowledge?.getAll?.() || Promise.resolve([])]);
-      setSaved(personal);
-      setKnowledge(Array.isArray(existing) ? existing : []);
+    const current = ++generation.current;
+    setLoading(true);
+    const [personal, existing] = await Promise.allSettled([
+      Promise.resolve().then(() => window.electronAPI?.studyNotes?.list() ?? []),
+      Promise.resolve().then(() => window.electronAPI?.knowledge?.getAll?.() ?? []),
+    ]);
+    if (current !== generation.current) return;
+    const failures: ('notes' | 'knowledge')[] = [];
+    if (personal.status === 'fulfilled') setSaved(personal.value);
+    else failures.push('notes');
+    if (existing.status === 'fulfilled') {
+      setKnowledge(Array.isArray(existing.value) ? existing.value : []);
       setLoadedKnowledge(Boolean(window.electronAPI?.knowledge?.getAll));
-      setError(false);
-    } catch { setError(true); }
+    } else failures.push('knowledge');
+    setFailedSources(failures);
+    setLoading(false);
   }, []);
   useEffect(() => {
     const timer = setTimeout(() => void refresh(), 0);
     const unsubscribe = window.electronAPI?.studyNotes?.onChanged(() => void refresh());
     const update = () => void refresh();
     window.addEventListener('baglib:notes-changed', update);
-    return () => { clearTimeout(timer); unsubscribe?.(); window.removeEventListener('baglib:notes-changed', update); };
-  }, [refresh]);
+    return () => { invalidate(); clearTimeout(timer); unsubscribe?.(); window.removeEventListener('baglib:notes-changed', update); };
+  }, [refresh, invalidate]);
   const notes = useMemo(() => {
     const all = new Map<string, StudyNote>();
     if (!loadedKnowledge) for (const note of bookNotes) all.set(note.id, { id: note.id, title: studyNoteHeading(note.content), content: note.content, aliases: [], tags: [], workId: note.bookId, createdAt: note.createdAt, updatedAt: note.createdAt });
@@ -39,5 +50,5 @@ export function useStudyNotes() {
     }
     return [...all.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }, [bookNotes, saved, knowledge,loadedKnowledge]);
-  return { notes, refresh, error };
+  return { notes, refresh, error: failedSources.length > 0, failedSources, loading };
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   UploadCloud,
   FileText,
@@ -16,6 +17,7 @@ import {
   ShieldCheck,
   Copy,
   FolderPlus,
+  Minimize2,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { resolveDroppedFilePath } from '../../utils/file-path-helper';
@@ -43,6 +45,7 @@ interface ImportWizardModalProps {
   onClose: () => void;
   onImportComplete?: () => void;
   initialPaths?: string[];
+  requestId?: number;
 }
 
 type WizardStep = 'select' | 'duplicates' | 'importing' | 'summary';
@@ -51,9 +54,16 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   isOpen,
   onClose,
   onImportComplete,
-  initialPaths
+  initialPaths,
+  requestId = 0,
 }) => {
   const { t, dir, lang, refreshBooks } = useWorkspace();
+  const [minimized, setMinimized] = useState(false);
+  const [previousRequest, setPreviousRequest] = useState(requestId);
+  if (previousRequest !== requestId) {
+    setPreviousRequest(requestId);
+    setMinimized(false);
+  }
 
   const [step, setStep] = useState<WizardStep>('select');
   const { files: stagedFiles, setFiles: setStagedFiles, discovering, discoveryErrors, addPaths, clear } = useImportStaging();
@@ -125,7 +135,17 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     onClose();
   };
 
+  const dialogRef = useDialogFocus(isOpen && !minimized, () => {
+    if (isImporting || isScanningDuplicates || scanActive.current || importActive.current) setMinimized(true);
+    else handleModalClose();
+  });
+
   if (!isOpen) return null;
+  if (minimized) return <button type="button" data-import-resume onClick={() => setMinimized(false)} className="fixed bottom-10 end-4 z-40 max-w-[calc(100vw-2rem)] rounded-xl border border-pale-sky-500/50 bg-surface p-3 text-start text-sm text-main shadow-xl">
+    <span className="block font-bold">{t('importResume')}</span>
+    <span role="status" className="block text-xs text-muted leading-relaxed">{importSummary ? t('importBackgroundFinished') : t('importBackgroundHint')}</span>
+    {progressEvent && <span className="block text-xs" dir="auto">{progressEvent.currentFilename} · {progressEvent.progressPercentage}%</span>}
+  </button>;
 
   const formatBytes = (bytes: number): string => {
     if (!bytes || bytes <= 0) return '0 B';
@@ -328,12 +348,17 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 font-sans">
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('importWizardTitle')}
+        tabIndex={-1}
         dir={dir}
-        className="w-full max-w-4xl max-h-[92vh] bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col text-main animate-in fade-in zoom-in-95 duration-200"
+        className="w-full max-w-4xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[92dvh] bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col text-main animate-in fade-in zoom-in-95 duration-200"
       >
         {/* Header */}
-        <div className="px-6 py-4 bg-canvas/80 border-b border-subtle flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="px-3 sm:px-6 py-4 bg-canvas/80 border-b border-subtle flex items-center justify-between gap-2 shrink-0">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-pale-sky-500/10 border border-pale-sky-500/20 flex items-center justify-center text-pale-sky-500">
               <UploadCloud className="w-5 h-5" />
             </div>
@@ -343,18 +368,21 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
             </div>
           </div>
 
+          <button type="button" data-import-minimize onClick={() => setMinimized(true)} title={t('importMinimize')} aria-label={t('importMinimize')} className="ms-auto p-2 rounded-xl text-muted hover:text-main hover:bg-canvas"><Minimize2 className="w-5 h-5" /></button>
           <button
             onClick={handleModalClose}
             disabled={isImporting || isScanningDuplicates}
             className="p-2 rounded-xl text-muted hover:text-main hover:bg-canvas transition-colors disabled:opacity-40 cursor-pointer"
             title={t('closeImportWizard')}
+            aria-label={t('closeImportWizard')}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
+        {(isImporting || isScanningDuplicates) && <p role="status" className="px-3 sm:px-6 py-2 text-xs leading-relaxed text-muted border-b border-subtle">{t('importWaitSafely')}</p>}
         {/* Stepper Navigation Indicator */}
-        <div className="px-6 py-3 bg-canvas/50 border-b border-subtle flex items-center justify-between text-xs font-semibold shrink-0">
+        <div className="px-3 sm:px-6 py-3 bg-canvas/50 border-b border-subtle grid grid-cols-3 gap-2 text-xs leading-relaxed font-semibold shrink-0 [&>span]:hidden [&>div]:min-w-0 [&>div]:flex-wrap [&>div>span:first-child]:shrink-0">
           <div className="flex items-center gap-2">
             <span
               className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
@@ -414,7 +442,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
         </div>
 
         {/* Step Contents */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-6">
           {/* ========================================================================= */}
           {/* STEP 1: FILE SELECTION & STAGING                                          */}
           {/* ========================================================================= */}
@@ -1003,7 +1031,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
         {(step === 'select' ? stagedFiles.length : step === 'duplicates' ? conflictedResults.length : step === 'summary' ? importSummary?.results.length || 0 : 0) > visibleCount &&
           <button type="button" className="px-6 py-2 text-sm text-main" onClick={() => setVisibleCount(count => count + 100)}>{t('showMoreImportFiles')}</button>}
         {/* Modal Footer Controls */}
-        <div className="px-6 py-4 bg-canvas/80 border-t border-subtle flex items-center justify-between shrink-0">
+        <div className="px-3 sm:px-6 py-4 bg-canvas/80 border-t border-subtle flex flex-wrap items-center justify-between gap-2 shrink-0">
           {step === 'select' && (
             <>
               <button

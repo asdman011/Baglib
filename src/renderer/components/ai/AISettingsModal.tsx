@@ -114,11 +114,11 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-start"
+        className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden text-start"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+        <div className="flex shrink-0 items-center justify-between gap-2 p-3 sm:p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
               <Sparkles className="w-6 h-6" />
@@ -134,6 +134,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label={t('close')}
             className="p-2 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
           >
             <X className="w-5 h-5" />
@@ -141,7 +142,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm text-zinc-800 dark:text-zinc-200">
+        <div className="p-3 sm:p-6 min-h-0 overflow-y-auto overscroll-contain space-y-6 flex-1 text-sm text-zinc-800 dark:text-zinc-200">
           {/* Provider Selection */}
           <div>
             <label className="block font-semibold mb-2 text-zinc-900 dark:text-zinc-100">

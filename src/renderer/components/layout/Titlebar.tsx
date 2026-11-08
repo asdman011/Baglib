@@ -35,27 +35,27 @@ export const Titlebar: React.FC = () => {
   } = useWorkspace();
 
   return (
-    <header className="h-12 bg-surface/90 backdrop-blur-md border-b border-subtle flex items-center justify-between px-3 select-none z-30 transition-colors" dir={dir}>
+    <header className="h-12 shrink-0 bg-surface/90 backdrop-blur-md border-b border-subtle flex items-center justify-between gap-1 px-2 sm:px-3 select-none z-30 transition-colors" dir={dir}>
       {/* Left Group: Single Authoritative Brand Logo */}
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 px-1">
+        <button type="button" onClick={() => setViewMode('dashboard')} title={t('navDashboard')} aria-label={t('navDashboard')} className="flex items-center gap-2 px-1 rounded-lg focus-visible:outline-2 focus-visible:outline-pale-sky-500">
           <div className="w-7 h-7 rounded-lg bg-pale-sky-500/10 border border-pale-sky-500/30 flex items-center justify-center text-pale-sky-500">
             <BookOpen className="w-4 h-4" />
           </div>
           <span className="hidden sm:inline font-display text-base font-bold text-main tracking-wide">{t('brand')}</span>
-        </div>
+        </button>
       </div>
 
       {/* Center Group: Global Search & Command Center (Cmd + K) */}
-      <div className="flex-1 max-w-lg mx-2 sm:mx-4 flex items-center gap-2 min-w-0">
+      <div className="flex-1 max-w-lg mx-1 sm:mx-4 flex items-center gap-1 sm:gap-2 min-w-0">
         <button type="button" onClick={() => { setSunnahSearch(false); setQuranSearch(true); }} className="shrink-0 text-xs p-2 rounded-lg border border-subtle" title={t('quranGlobalSearch')} aria-label={t('quranGlobalSearch')}>{t('navQuran')}</button>
         <button type="button" onClick={() => setSunnahSearch(true)} className="shrink-0 text-xs p-2 rounded-lg border border-subtle" title={t('sunnahSearchAll')}>{t('navSunnah')}</button>
         <div
-          className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:border-pale-sky-500/50 hover:text-main transition-all group shadow-inner text-xs cursor-pointer"
+          className="flex-1 min-w-8 flex items-center justify-between px-2 sm:px-3 py-1.5 rounded-xl bg-canvas border border-subtle text-muted hover:border-pale-sky-500/50 hover:text-main transition-all group shadow-inner text-xs cursor-pointer"
         >
           <button type="button" aria-label={t('studyCommandSearch')} onClick={() => setCommandPaletteOpen(true)} className="flex flex-1 items-center gap-2 text-start min-w-0">
             <Search className="w-3.5 h-3.5 text-muted group-hover:text-pale-sky-500 transition-colors" />
-            <span className="hidden md:inline font-sans">
+            <span className="hidden md:inline font-sans truncate leading-relaxed">
               {t('searchPlaceholder')}
             </span>
           </button>
@@ -66,7 +66,7 @@ export const Titlebar: React.FC = () => {
             }}
             title={t('studyCommandSearch')}
             aria-label={t('studyCommandSearch')}
-            className="flex items-center gap-1 text-[10px] font-mono bg-surface hover:bg-canvas border border-subtle px-1.5 py-0.5 rounded text-muted hover:text-main transition-colors"
+            className="hidden sm:flex shrink-0 items-center gap-1 text-[10px] font-mono bg-surface hover:bg-canvas border border-subtle px-1.5 py-0.5 rounded text-muted hover:text-main transition-colors"
           >
             <Command className="w-3 h-3" />
             <span>K</span>
@@ -85,7 +85,7 @@ export const Titlebar: React.FC = () => {
         </section>
       </dialog>}
       {/* Right Group: Action Controls & Theme */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5">
         {/* Zen Mode Button */}
         <button
           onClick={toggleZenMode}

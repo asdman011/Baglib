@@ -1,0 +1,65 @@
+:root {
+  --ui-motion-fast: 120ms;
+  --ui-motion-enter: 180ms;
+  --ui-motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes baglib-surface-enter {
+  from { opacity: 0.65; }
+  to { opacity: 1; }
+}
+
+@keyframes baglib-navigation-enter {
+  from { scale: 0.9; }
+  to { scale: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @layer base {
+    :where(button, a[role="button"], input, select, textarea) {
+      transition-property: background-color, border-color, color, box-shadow, opacity;
+      transition-duration: var(--ui-motion-fast);
+      transition-timing-function: var(--ui-motion-ease);
+    }
+  }
+
+  main[data-workspace-motion="browse"] > :not(.fixed),
+  [role="dialog"],
+  dialog[open],
+  [role="menu"],
+  [data-import-resume] {
+    animation: baglib-surface-enter var(--ui-motion-enter) var(--ui-motion-ease);
+  }
+
+  #workspace-navigation [aria-current="page"] > svg {
+    animation: baglib-navigation-enter var(--ui-motion-enter) var(--ui-motion-ease);
+  }
+
+  [data-library-ribbon] button,
+  [data-settings-entry] {
+    transition-property: translate, scale, background-color, border-color, color, box-shadow;
+  }
+
+  [data-library-ribbon] button:not(:disabled):active,
+  [data-settings-entry]:active {
+    scale: 0.98;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  [data-library-ribbon] button:not(:disabled):hover,
+  [data-settings-entry]:hover {
+    translate: 0 -1px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

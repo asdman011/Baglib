@@ -370,7 +370,7 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
       className="fixed inset-0 z-60 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
       dir={dir}
     >
-      <div className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] font-sans">
+      <div className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
         {/* Header */}
         <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -427,7 +427,7 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
         )}
 
         {/* Candidates List Container */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5 space-y-3">
           {/* Collapsible File & Query Diagnostics Panel */}
           <FileQueryDiagnosticsPanel
             diagnostics={diagnostics}

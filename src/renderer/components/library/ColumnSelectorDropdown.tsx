@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Columns3, Check, RotateCcw } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { ListColumnKey } from '../../../shared/types/library-views';
@@ -39,11 +40,13 @@ export const ColumnSelectorDropdown: React.FC<ColumnSelectorDropdownProps> = ({
   const { t, dir } = useWorkspace();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState({ top: 0, left: 0 });
 
   // Close popover on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node) && !popupRef.current?.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -55,12 +58,28 @@ export const ColumnSelectorDropdown: React.FC<ColumnSelectorDropdownProps> = ({
     };
   }, [isOpen]);
 
-  const isRtl = dir === 'rtl';
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setIsOpen(false); containerRef.current?.querySelector('button')?.focus(); }
+    };
+    const reposition = () => setIsOpen(false);
+    document.addEventListener('keydown', close);
+    window.addEventListener('resize', reposition);
+    return () => { document.removeEventListener('keydown', close); window.removeEventListener('resize', reposition); };
+  }, [isOpen]);
 
   return (
     <div className="relative inline-block text-start" ref={containerRef}>
       <button
-        onClick={() => setIsOpen((prev) => !prev)}
+        type="button"
+        aria-label={t('columnsCustomizer')}
+        aria-expanded={isOpen}
+        onClick={() => {
+          const box = containerRef.current?.getBoundingClientRect();
+          if (box) setAnchor({ top: Math.max(8, Math.min(box.bottom + 8, window.innerHeight - 340)), left: Math.max(8, Math.min(dir === 'rtl' ? box.left : box.right - 224, window.innerWidth - 232)) });
+          setIsOpen(prev => !prev);
+        }}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
           isOpen
             ? 'bg-pale-sky-500/10 border-pale-sky-500/40 text-pale-sky-500'
@@ -72,11 +91,14 @@ export const ColumnSelectorDropdown: React.FC<ColumnSelectorDropdownProps> = ({
         <span className="hidden sm:inline">{t('columnsCustomizer')}</span>
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
-          className={`absolute top-full mt-2 w-56 bg-surface-raised/95 backdrop-blur-xl border border-border/80 rounded-2xl shadow-xl shadow-black/20 p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-100 ${
-            isRtl ? 'left-0' : 'right-0'
-          }`}
+          ref={popupRef}
+          dir={dir}
+          role="region"
+          aria-label={t('columnsCustomizer')}
+          style={{ top: anchor.top, left: anchor.left }}
+          className="fixed w-56 max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] overflow-y-auto bg-surface border border-subtle rounded-2xl shadow-xl p-2 z-50 text-xs text-main"
         >
           <div className="px-2 py-1.5 border-b border-border/40 font-semibold text-foreground/90 flex items-center justify-between">
             <span>{t('columnsCustomizer')}</span>
@@ -121,7 +143,7 @@ export const ColumnSelectorDropdown: React.FC<ColumnSelectorDropdownProps> = ({
               );
             })}
           </div>
-        </div>
+        </div>, document.body
       )}
     </div>
   );

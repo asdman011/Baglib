@@ -31,7 +31,7 @@ app.whenReady().then(async () => {
   const english = openPoetryPartition(path.join(directory, 'english-fixture'));
   const notesDatabase = new Database(path.join(directory, 'notes.sqlite'));
   runMigrations(notesDatabase, migrations);
-  const notes = new StudyNotesService(new SqliteSettingsRepository(notesDatabase));
+  const notes = new StudyNotesService(new SqliteSettingsRepository(notesDatabase), notesDatabase);
   const knowledge = new PoetryKnowledgeService(notesDatabase);
   ipcMain.handle('poetry:status', () => ({ ok: true, data: { phase: 'ready', downloaded: 0, total: null, imported: 254630 } }));
   const knowledgeRepository = new SqliteKnowledgeRepository(notesDatabase);
@@ -48,6 +48,10 @@ app.whenReady().then(async () => {
   ipcMain.handle('poetry:saved', (_, offset) => ({ ok: true, data: knowledge.list(offset) }));
   ipcMain.handle('study-notes:save', (_, input) => notes.save(input));
   ipcMain.handle('study-notes:list', () => notes.list());
+  ipcMain.handle('ai:get-settings', () => null);
+  ipcMain.handle('plugins:list', () => []);
+  ipcMain.handle('audio:get-pairing', () => null);
+  ipcMain.handle('enrichment:find-online-editions', () => ({ candidates: [] }));
   ipcMain.handle('tts:get-voices', () => provider ? PocketTTSProvider.getVoices() : []);
   ipcMain.handle('tts:get-status', () => provider?.getStatus() || ({ providerId: 'pocket-tts', available: false, running: false, supportedLanguages: [], activeLanguages: [] }));
   ipcMain.handle('tts:load-voice', (_, options: TTSProviderVoiceOptions) => { voiceInitializations++; return provider?.loadVoice(options); });
@@ -62,7 +66,8 @@ app.whenReady().then(async () => {
   });
   english.prepare("INSERT INTO poets(id,name,name_normalized,language) VALUES(1,'Fixture Poet','fixture poet','en')").run();
   english.prepare("INSERT INTO poems(id,poet_id,title,title_normalized,language,layout_type,verses_json,search_text_normalized,verse_count) VALUES(9000001,1,'English layout fixture','english layout fixture','en','stanza',?,'fixture',6)").run(JSON.stringify(['Fixture line one', 'Fixture line two', '', 'Fixture line four', 'Fixture line five', 'Fixture line six']));
-  for (const channel of ['library:get-all-books', 'library:get-all-notes', 'categories:get-tree', 'tags:get-all']) ipcMain.handle(channel, () => []);
+  for (const channel of ['library:get-all-books', 'library:get-all-notes', 'categories:get-tree']) ipcMain.handle(channel, () => []);
+  ipcMain.handle('tags:get-all', () => ['العلم', 'Study', 'Study skills'].map((name, index) => ({ id: String(index), name, origin: 'manual', category: null, workCount: index })));
   ipcMain.handle('poetry:search', async (_, query) => ({ ok: true, data: query.language === 'en' ? searchPoetry(english, query) : await worker.query('search', query) }));
   ipcMain.handle('poetry:poets', async (_, query) => ({ ok: true, data: query.language === 'en' ? searchPoets(english, query) : await worker.query('poets', query) }));
   ipcMain.handle('poetry:facets', () => ({ ok: true, data: { ...poetryFacets(database), languages: [{ language: 'ar', count: 254630 }, { language: 'en', count: 1 }] } }));
@@ -220,8 +225,10 @@ app.whenReady().then(async () => {
     notes.save({ title: 'Legacy poetry fixture', content: `[[poetry:ashaar:${described.id}:0:0|Legacy poetry fixture]]`, aliases: [], tags: ['poetry'] });
     await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanSavedVerses')).click()`);
     await until(`document.querySelector('aside')?.textContent.includes('Legacy poetry fixture')`);
-    assert.equal(await evaluate('document.querySelectorAll("aside button").length'), 4);
-    await evaluate('document.querySelector("aside button").click()');
+    const savedPanelButtons = await evaluate('Array.from(document.querySelectorAll("aside:not([hidden]) button")).map(button=>({text:button.textContent,aside:button.closest("aside")?.getAttribute("aria-label")}))');
+    await fs.writeFile(path.join(directory, 'saved-panel-buttons.json'), JSON.stringify(savedPanelButtons, null, 2));
+    assert.equal(savedPanelButtons.length, 4);
+    await evaluate('document.querySelector("aside:not([hidden]) button").click()');
     await until('document.activeElement?.hasAttribute("data-poetry-source-index")');
     for (const language of ['ar', 'en']) {
       await evaluate(`if(window.poetryLive.lang!==${JSON.stringify(language)})window.poetryLive.toggleLanguage()`);
@@ -295,11 +302,12 @@ app.whenReady().then(async () => {
     await until(`document.querySelector('[data-study-note="${nativeNote.id}"]')!==null`);
     await evaluate(`document.querySelector('[data-study-note="${nativeNote.id}"] button[aria-label="'+window.poetryLive.t('studyEdit')+'"]').click()`);
     await until('document.querySelector("[data-scratchpad-textarea]")!==null');
-    await evaluate(`(()=>{const input=document.querySelector('[data-scratchpad-textarea]');input.value=input.value+'\\nEdited native reflection';})()`);
+    await evaluate(`document.querySelector('[data-scratchpad-textarea] .cm-content,textarea[data-scratchpad-textarea]').focus()`);
+    await window.webContents.insertText('\nEdited native reflection');
     await evaluate('document.querySelector("[data-scratchpad-save]").click()');
     await until('document.querySelector("[data-scratchpad-textarea]")===null');
-    assert.ok(knowledge.list().items.find(item => item.id === nativeNote.id)?.note?.includes('Edited native reflection'));
-    assert.equal(knowledge.list().items.find(item => item.id === nativeNote.id)?.reference, nativeNote.reference);
+    assert.ok(notes.list(nativeNote.id)[0]?.content.includes('Edited native reflection'));
+    assert.equal((notesDatabase.prepare('SELECT location FROM knowledge WHERE id=?').get(nativeNote.id) as { location: string }).location, nativeNote.reference);
     await evaluate(`document.querySelector('[data-study-note="${nativeNote.id}"] button[aria-label="'+window.poetryLive.t('deleteNote')+'"]').click()`);
     await until(`document.querySelector('[data-study-note="${nativeNote.id}"]')===null`);
     assert.equal(knowledge.list().items.length, 2);
@@ -313,6 +321,57 @@ app.whenReady().then(async () => {
       await until(`document.querySelector('main h1')?.textContent===window.poetryLive.t('navBayan')&&document.querySelectorAll('main article').length>0`);
       assert.equal(await evaluate('window.poetryLive.viewMode'), 'bayan');
       assert.equal(await evaluate('document.querySelector("main section").dir'), language === 'ar' ? 'rtl' : 'ltr');
+    }
+    await evaluate('window.poetryShowNavigation(false);window.poetryShowTags(true)');
+    await until('document.querySelector("[role=combobox]")!==null');
+    for (const language of ['ar', 'en']) {
+      await evaluate(`if(window.poetryLive.lang!==${JSON.stringify(language)})window.poetryLive.toggleLanguage()`);
+      await evaluate("document.querySelector('[role=combobox]').focus()");
+      window.webContents.focus();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await window.webContents.insertText(language === 'ar' ? 'العلم' : 'Study');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await fs.writeFile(path.join(directory, `tag-focus-${language}.json`), JSON.stringify(await evaluate("(()=>{const input=document.querySelector('[role=combobox]');return {value:input.value,focused:document.activeElement===input,expanded:input.getAttribute('aria-expanded'),options:document.querySelectorAll('[role=option]').length,html:input.outerHTML}})()"), null, 2));
+      await until("document.querySelectorAll('[role=option]').length>0");
+      await window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Down' });
+      await window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Down' });
+      await until("!!document.querySelector('[role=combobox]').getAttribute('aria-activedescendant')");
+      await window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+      await window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+      await until(`document.querySelector('section')?.textContent.includes(${JSON.stringify(language === 'ar' ? 'العلم' : 'Study')})`);
+      await window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+      await window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+      assert.equal(await evaluate("document.querySelector('[role=combobox]').getAttribute('aria-expanded')"), 'false');
+    }
+    await evaluate('window.poetryShowPlayer(true)');
+    for (const language of ['ar', 'en']) {
+      await evaluate(`if(window.poetryLive.lang!==${JSON.stringify(language)})window.poetryLive.toggleLanguage()`);
+      for (const width of [320, 480, 1280]) {
+        window.setContentSize(width, 600);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        const box = await evaluate("(() => {const box=document.querySelector('section > .fixed').getBoundingClientRect();return {left:box.left,right:box.right,center:(box.left+box.right)/2,width:innerWidth};})()");
+        assert.ok(box.left >= 0 && box.right <= box.width && Math.abs(box.center - box.width / 2) < 1);
+        await evaluate(`document.querySelector('button[title='+JSON.stringify(window.poetryLive.t('ttsSleepTimer'))+']').click()`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        assert.ok(await evaluate("(() => {const box=document.querySelector('section > .fixed form').parentElement.getBoundingClientRect();return box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight;})()"));
+        fs.writeFile(path.join(directory, `audio-${language}-${width}.png`), (await window.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
+        await evaluate(`document.querySelector('button[title='+JSON.stringify(window.poetryLive.t('ttsSleepTimer'))+']').click()`);
+      }
+    }
+    for (const language of ['ar', 'en']) {
+      await evaluate(`if(window.poetryLive.lang!==${JSON.stringify(language)})window.poetryLive.toggleLanguage()`);
+      window.setContentSize(480, 600);
+      for (const dialog of ['ai', 'plugins', 'pairing', 'providers', 'diff', 'candidates', 'lend', 'return', 'edition']) {
+        await evaluate(`window.poetryShowDialog(${JSON.stringify(dialog)})`);
+        await until('!!document.querySelector("[data-fixture-dialog] .fixed")');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        if (dialog === 'lend' || dialog === 'return') {
+          assert.ok(await evaluate("(() => {const overlay=document.querySelector('[data-fixture-dialog] .fixed');overlay.scrollTop=0;const header=overlay.querySelector('h3').getBoundingClientRect();const top=header.top>=0;overlay.scrollTop=overlay.scrollHeight;const box=[...overlay.querySelectorAll('form button')].at(-1).getBoundingClientRect();const reachable=box.top>=0&&box.bottom<=innerHeight;overlay.scrollTop=0;return top&&reachable;})()"));
+        } else assert.ok(await evaluate("(() => {const box=document.querySelector('[data-fixture-dialog] .fixed > div').getBoundingClientRect();return box.top>=0&&box.bottom<=innerHeight&&box.left>=0&&box.right<=innerWidth;})()"));
+        await fs.writeFile(path.join(directory, `dialog-${dialog}-${language}.png`), (await window.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
+        await evaluate("(() => {const root=document.querySelector('[data-fixture-dialog]');const close=root.querySelector('button svg.lucide-x')?.closest('button')||[...root.querySelectorAll('button')].find(button=>button.textContent.trim()===window.poetryLive.t('cancel'));if(!close)throw new Error('missing close action');close.click();})()");
+        await until('!document.querySelector("[data-fixture-dialog]")');
+      }
     }
     await provider?.release();
     assert.equal(provider?.getStatus().running || false, false);

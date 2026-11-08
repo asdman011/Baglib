@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { LibraryRibbon } from './LibraryRibbon';
 import {
   BookOpen,
   Search,
@@ -44,7 +45,6 @@ import { BookVolumeBadge } from './BookVolumesPanel';
 import { OnlineLibraryHub } from './OnlineLibraryHub';
 import { StorageManagerModal } from './StorageManagerModal';
 import { TrashBinModal } from './TrashBinModal';
-import { ImportWizardModal } from './ImportWizardModal';
 import { CloudSyncModal } from '../sync/CloudSyncModal';
 import { OPDSHubModal } from '../opds/OPDSHubModal';
 import { WebClipperModal } from '../clipper/WebClipperModal';
@@ -219,8 +219,7 @@ export const LibraryGridView: React.FC = () => {
   const [importMessage, setImportMessage] = useState<string>('');
   const [isOnlineHubOpen, setIsOnlineHubOpen] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
-  const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
-  const [droppedImportPaths, setDroppedImportPaths] = useState<string[]>([]);
+  const { isImportWizardOpen, setIsImportWizardOpen, setDroppedImportPaths } = useWorkspace();
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
   const [isOpdsHubOpen, setIsOpdsHubOpen] = useState(false);
   const [isWebClipperOpen, setIsWebClipperOpen] = useState(false);
@@ -1007,7 +1006,7 @@ export const LibraryGridView: React.FC = () => {
       />
 
       {/* Top Header & Actions */}
-      <div className="p-4 border-b border-subtle bg-surface/50 space-y-3 shrink-0">
+      <div data-library-controls className="max-h-[60%] overflow-y-auto overscroll-contain p-3 sm:p-4 border-b border-subtle bg-surface/50 space-y-3 shrink-0">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-pale-sky-500/10 border border-pale-sky-500/20 flex items-center justify-center text-pale-sky-500 font-bold">
@@ -1019,7 +1018,7 @@ export const LibraryGridView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <LibraryRibbon>
             {/* View Mode Toggle (Grid / List) */}
             <div className="flex items-center bg-canvas border border-subtle rounded-xl p-0.5">
               <button
@@ -1149,7 +1148,9 @@ export const LibraryGridView: React.FC = () => {
 
             {/* Storage Cleaner & Health */}
             <button
+              data-ribbon-group="care"
               onClick={() => setIsStorageModalOpen(true)}
+              data-library-dialog="storage"
               title={t('storageManagerTitle')}
               className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
             >
@@ -1164,7 +1165,9 @@ export const LibraryGridView: React.FC = () => {
 
             {/* Library Metadata Audit & Refresh */}
             <button
+              data-ribbon-group="care"
               onClick={() => setIsAuditModalOpen(true)}
+              data-library-dialog="audit"
               title={
                 selectedBookIds.size > 0
                   ? t('auditScopeSelected', { count: selectedBookIds.size })
@@ -1193,15 +1196,19 @@ export const LibraryGridView: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsStirlingHubOpen(true)}
+              data-library-dialog="tools"
+              data-ribbon-group="pdf"
               title={t('pdfToolsHubTitle')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition-all cursor-pointer"
             >
               <Cpu className="w-3.5 h-3.5 text-white" />
               <span className="hidden sm:inline">{t('pdfToolsHubTitle')}</span>
             </button>
-            <PdfCreationLauncher />
+            <div data-ribbon-group="pdf"><PdfCreationLauncher /></div>
             <button
               onClick={() => setIsImportWizardOpen(true)}
+              data-library-dialog="import"
+              data-ribbon-group="add"
               title={t('openImportWizard')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
             >
@@ -1211,6 +1218,7 @@ export const LibraryGridView: React.FC = () => {
 
             {/* Batch Folder Scanner (KEY-48) */}
             <button
+              data-ribbon-group="add"
               type="button"
               onClick={async () => {
                 try {
@@ -1232,8 +1240,10 @@ export const LibraryGridView: React.FC = () => {
 
             {/* Trash Bin / Recycle Bin (KEY-45) */}
             <button
+              data-ribbon-group="care"
               type="button"
               onClick={() => setIsTrashModalOpen(true)}
+              data-library-dialog="trash"
               title={t('trashBin')}
               className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                 trashCount > 0
@@ -1253,6 +1263,8 @@ export const LibraryGridView: React.FC = () => {
             {/* Cloud Sync & Snapshots (KEY-147) */}
             <button
               onClick={() => setIsCloudSyncModalOpen(true)}
+              data-library-dialog="sync"
+              data-ribbon-group="online"
               title={t('cloudSyncModalTitle')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
             >
@@ -1263,6 +1275,8 @@ export const LibraryGridView: React.FC = () => {
             {/* OPDS Catalogs & Feed Server (KEY-148) */}
             <button
               onClick={() => setIsOpdsHubOpen(true)}
+              data-library-dialog="catalog"
+              data-ribbon-group="online"
               title={t('opdsHubTitle')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
             >
@@ -1273,6 +1287,7 @@ export const LibraryGridView: React.FC = () => {
             {/* Physical book from a cover photo (KEY-259) */}
             <button
               onClick={() => void handleAddFromCover()}
+              data-ribbon-group="add"
               title={t('coverPhotoButton')}
               data-cover-photo
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
@@ -1284,6 +1299,8 @@ export const LibraryGridView: React.FC = () => {
             {/* Web Article & Novel Clipper (KEY-148) */}
             <button
               onClick={() => setIsWebClipperOpen(true)}
+              data-library-dialog="clipper"
+              data-ribbon-group="add"
               title={t('webClipperTitle')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
             >
@@ -1294,6 +1311,8 @@ export const LibraryGridView: React.FC = () => {
             {/* Reading Statistics Dashboard (KEY-149) */}
             <button
               onClick={() => setIsStatsModalOpen(true)}
+              data-library-dialog="statistics"
+              data-ribbon-group="care"
               title={t('statsDashboardTitle')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
             >
@@ -1304,6 +1323,8 @@ export const LibraryGridView: React.FC = () => {
             {/* App Lock & Security (KEY-149) */}
             <button
               onClick={() => setIsSecurityModalOpen(true)}
+              data-library-dialog="security"
+              data-ribbon-group="care"
               title={t('securityModalTitle')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main text-xs font-semibold transition-all cursor-pointer"
             >
@@ -1314,13 +1335,15 @@ export const LibraryGridView: React.FC = () => {
             {/* Add Material (Unified Entry Point) */}
             <button
               onClick={handleAddNewBook}
+              data-library-dialog="book"
+              data-ribbon-group="add"
               title={lang === 'ar' ? 'إضافة مادة جديدة (رقمية، فيزيائية، أو عبر الإنترنت)' : 'Add new material (digital, physical, or online)'}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 shadow-md shadow-pale-sky-500/20 transition-all cursor-pointer"
             >
               <BookOpen className="w-4 h-4" />
               <span>{t('addBook')}</span>
             </button>
-          </div>
+          </LibraryRibbon>
         </div>
 
         {/* Filter Toolbar — Render ONLY when there are books in the library */}
@@ -1334,7 +1357,8 @@ export const LibraryGridView: React.FC = () => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="ابحث بالعنوان، المؤلف، الرف، ISBN، الوسوم..."
+                  placeholder={t('librarySearchFields')}
+                  aria-label={t('librarySearchFields')}
                   className="w-full bg-transparent outline-none text-main placeholder:text-muted font-sans text-xs"
                 />
                 {searchQuery && (
@@ -1367,10 +1391,10 @@ export const LibraryGridView: React.FC = () => {
                   onChange={(e) => setSelectedBookType(e.target.value)}
                   className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs"
                 >
-                  <option value="ALL">نوع الكيان: الكل</option>
-                  <option value="digital">كتب رقمية فقط</option>
-                  <option value="physical">كتب فيزيائية (بالرفوف)</option>
-                  <option value="hybrid">مزدوج (رقمي + ورقي)</option>
+                  <option value="ALL">{t('libraryTypeAll')}</option>
+                  <option value="digital">{t('libraryTypeDigital')}</option>
+                  <option value="physical">{t('libraryTypePhysical')}</option>
+                  <option value="hybrid">{t('libraryTypeHybrid')}</option>
                 </select>
               </div>
 
@@ -1382,7 +1406,7 @@ export const LibraryGridView: React.FC = () => {
                   onChange={(e) => setSelectedFormat(e.target.value)}
                   className="w-full bg-transparent outline-none text-main cursor-pointer font-sans text-xs"
                 >
-                  <option value="ALL">الصيغة: الكل</option>
+                  <option value="ALL">{t('libraryFormatAll')}</option>
                   <option value="PDF">PDF</option>
                   <option value="EPUB">EPUB</option>
                   <option value="MOBI">MOBI</option>
@@ -2681,13 +2705,6 @@ export const LibraryGridView: React.FC = () => {
         onClose={() => setIsStorageModalOpen(false)}
         books={books}
         onRemoveDuplicate={deleteBook}
-      />
-
-      {/* Import Wizard Modal (Story 6) */}
-      <ImportWizardModal
-        isOpen={isImportWizardOpen}
-        initialPaths={droppedImportPaths}
-        onClose={() => { setIsImportWizardOpen(false); setDroppedImportPaths([]); }}
       />
 
       {/* Cloud Backup & KOReader Sync Modal (KEY-147) */}

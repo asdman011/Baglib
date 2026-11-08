@@ -7,7 +7,7 @@ import { getDatabase, closeDatabase } from '../../src/main/database/connection';
 import { runMigrations } from '../../src/main/database/migrator';
 import { migrations } from '../../src/main/database/migrations';
 const root = process.cwd(), directory = process.env.BAGLIB_QURAN_LAYOUT_DIRECTORY!, profile = process.env.BAGLIB_QURAN_LAYOUT_PROFILE!;
-assert.ok(path.resolve(profile).startsWith(path.join(root, '.baglib-data', 'quran-reader-live') + path.sep));
+assert.ok(path.resolve(profile).startsWith(path.join(root, '.baglib-data', 'quran-reader-live') + path.sep) || (path.dirname(path.resolve(profile)) === path.join(root, '.baglib-data') && path.basename(profile).startsWith('layout-live-')));
 app.setPath('userData', profile); app.setAppPath(root);
 protocol.registerSchemesAsPrivileged([{ scheme: 'baglib-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 app.whenReady().then(async () => {
@@ -40,6 +40,16 @@ app.whenReady().then(async () => {
       await unfocus(); await key(language === 'ar' ? 'Left' : 'Right'); await until(`Number(document.querySelector('[data-quran-mushaf] input[type=number]')?.value)===${initial + 1}`);
       await until('Boolean(document.querySelector(".mushaf-svg-surface [data-surah]"))');
       await evaluate('document.querySelector("[data-quran-mushaf] input[type=number]").focus()'); const inputPage = await page(); await key('Space'); await new Promise(resolve => setTimeout(resolve, 150)); assert.equal(await page(), inputPage);
+      await evaluate(`document.querySelector('button[aria-label='+JSON.stringify(window.quranLayout.t('quranCatTheme'))+']').click()`);
+      await until('document.querySelectorAll("[data-quran-theme-marker]").length > 0');
+      const markerGeometry = await evaluate(`Array.from(document.querySelectorAll('[data-quran-theme-marker]')).map(marker=>{
+        const surface=document.querySelector('.mushaf-svg-surface').getBoundingClientRect();
+        const boxes=Array.from(document.querySelectorAll('.mushaf-svg-surface [data-surah][data-aya]')).filter(element=>Number(element.dataset.surah)===Number(marker.dataset.surah)&&Number(element.dataset.aya)>=Number(marker.dataset.ayahFrom)&&Number(element.dataset.aya)<=Number(marker.dataset.ayahTo)).map(element=>element.getBoundingClientRect()).filter(box=>box.width>0&&box.height>0&&box.bottom>surface.top&&box.top<surface.bottom);
+        const actual=marker.getBoundingClientRect();
+        return {count:boxes.length,topError:Math.abs(actual.top-Math.max(surface.top,Math.min(...boxes.map(box=>box.top)))),bottomError:Math.abs(actual.bottom-Math.min(surface.bottom,Math.max(...boxes.map(box=>box.bottom))))};
+      })`);
+      for (const geometry of markerGeometry) { assert.ok(geometry.count > 0); assert.ok(geometry.topError < 2 && geometry.bottomError < 2, JSON.stringify(geometry)); }
+      await evaluate(`document.querySelector('button[aria-label='+JSON.stringify(window.quranLayout.t('quranCatTheme'))+']').click()`);
       for (const width of [480, 1280]) {
         window.setContentSize(width, 1000); await new Promise(resolve => setTimeout(resolve, 150));
         const centered = await evaluate(`(()=>{const button=document.querySelector('[data-quran-play-button]');const root=document.querySelector('[data-quran-workspace]');if(!button)return null;const a=button.getBoundingClientRect(),b=root.getBoundingClientRect();return Math.abs((a.left+a.right-b.left-b.right)/2)})()`);
@@ -52,6 +62,7 @@ app.whenReady().then(async () => {
         await evaluate(`(()=>{const body=document.querySelector('[data-quran-study-panel] [tabindex="0"]');body.focus();body.scrollTop=150})()`);
         const before = await page(); await key('Space'); await new Promise(resolve => setTimeout(resolve, 150)); assert.equal(await page(), before);
         assert.ok(await evaluate(`(()=>{const p=document.querySelector('[data-quran-study-panel]').getBoundingClientRect();return p.left>=0&&p.right<=innerWidth&&p.bottom<=innerHeight})()`));
+        assert.ok(await evaluate(`(()=>{const panel=document.querySelector('[data-quran-study-panel]');if(getComputedStyle(panel).resize!=='both')return false;const old=panel.style.cssText;panel.style.width='210px';panel.style.height='250px';const box=panel.getBoundingClientRect();const fits=box.width<=211&&box.height<=251&&box.left>=0&&box.right<=innerWidth;panel.style.cssText=old;return fits;})()`));
         await fs.writeFile(path.join(directory, `tafsir-${language}-${width}.png`), (await window.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
         await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))`);
         await until(`!document.querySelector('[data-quran-study-panel]')`);

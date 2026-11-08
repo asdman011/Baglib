@@ -88,9 +88,9 @@ export const ReaderPluginsModal: React.FC<ReaderPluginsModalProps> = ({
       aria-label={t.pluginsModalTitle}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/40">
+        <div className="flex shrink-0 items-center justify-between gap-2 px-3 sm:px-6 py-4 border-b border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/40">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-200/50 dark:border-purple-800/30">
               <Puzzle className="w-5 h-5" />
@@ -107,14 +107,14 @@ export const ReaderPluginsModal: React.FC<ReaderPluginsModalProps> = ({
           <button
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-            aria-label="Close"
+            aria-label={t.close}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-4">
           {loading ? (
             <div className="text-center py-12 text-sm text-gray-400">
               {t.clipProgressMessage || 'Loading plugins...'}

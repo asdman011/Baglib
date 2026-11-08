@@ -208,7 +208,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
       dir={dir}
     >
-      <div className="relative flex flex-col w-full max-w-4xl max-h-[85vh] bg-surface border border-border shadow-2xl rounded-2xl overflow-hidden text-main">
+      <div className="relative flex flex-col w-full max-w-4xl max-h-[calc(100dvh-2rem)] bg-surface border border-border shadow-2xl rounded-2xl overflow-hidden text-main">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-surface-raised/40">
           <div className="flex items-center gap-3">
@@ -301,7 +301,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
         )}
 
         {/* Content List */}
-        <div className="flex-1 overflow-y-auto p-6 min-h-[300px]">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted">
               <Loader2 className="w-8 h-8 animate-spin text-pale-sky-500" />

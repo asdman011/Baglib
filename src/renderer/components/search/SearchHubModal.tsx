@@ -3,6 +3,7 @@ import { errorMessage } from '../../../shared/errors';
 
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   Search,
   X,
@@ -58,6 +59,11 @@ export const SearchHubModal: React.FC = () => {
   const [providersInfo, setProvidersInfo] = useState<SearchProviderInfo[]>([]);
 
   const [isSearching, setIsSearching] = useState(false);
+  const [previousOpen, setPreviousOpen] = useState(isSearchHubOpen);
+  if (previousOpen !== isSearchHubOpen) {
+    setPreviousOpen(isSearchHubOpen);
+    if (!isSearchHubOpen) setIsSearching(false);
+  }
   const [results, setResults] = useState<UnifiedSearchResult[]>([]);
   const [searchTimeMs, setSearchTimeMs] = useState<number | null>(null);
   const [providerStatuses, setProviderStatuses] = useState<
@@ -71,6 +77,21 @@ export const SearchHubModal: React.FC = () => {
   const activeSearchIdRef = useRef<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchSequenceRef = useRef(0);
+  const invalidateSearch = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = null;
+    const previous = activeSearchIdRef.current;
+    activeSearchIdRef.current = null;
+    if (previous && window.electronAPI?.search?.cancel) {
+      void Promise.resolve(window.electronAPI.search.cancel(previous)).catch(console.warn);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isSearchHubOpen) invalidateSearch();
+    return invalidateSearch;
+  }, [isSearchHubOpen, invalidateSearch]);
 
   // Show transient toast
   const showToast = (msg: string) => {
@@ -122,36 +143,23 @@ export const SearchHubModal: React.FC = () => {
     };
   }, []);
 
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isSearchHubOpen) {
-        setSearchHubOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSearchHubOpen, setSearchHubOpen]);
+  const dialogRef = useDialogFocus(isSearchHubOpen, () => setSearchHubOpen(false), inputRef);
 
   // Execute search function
   const executeSearch = useCallback(
     async (searchTerm: string, targetScope: SearchScope, providers: SearchProviderId[]) => {
       const trimmed = searchTerm.trim();
-      if (targetScope === 'sources') return; // StudySourcesSearch runs its own queries.
-      if (!trimmed) {
+      invalidateSearch();
+      if (!trimmed || targetScope === 'sources') {
         setResults([]);
         setFtsResults([]);
         setIsSearching(false);
         setSearchTimeMs(null);
+        setProviderStatuses({});
         return;
       }
 
-      // Cancel previous ongoing search
-      if (activeSearchIdRef.current && window.electronAPI?.search?.cancel) {
-        window.electronAPI.search.cancel(activeSearchIdRef.current);
-      }
-
-      const searchId = `search-${Date.now()}`;
+      const searchId = `search-${Date.now()}-${++searchSequenceRef.current}`;
       activeSearchIdRef.current = searchId;
 
       setIsSearching(true);
@@ -206,13 +214,19 @@ export const SearchHubModal: React.FC = () => {
         }
       }
     },
-    []
+    [invalidateSearch]
   );
 
   // Debounced auto-search on typing
   const handleQueryChange = (val: string) => {
+    invalidateSearch();
     setQuery(val);
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    setResults([]);
+    setFtsResults([]);
+    setProviderStatuses({});
+    setSearchTimeMs(null);
+    setIsSearching(false);
+    if (!val.trim()) return;
 
     debounceTimerRef.current = setTimeout(() => {
       executeSearch(val, scope, selectedProviders);
@@ -295,7 +309,7 @@ export const SearchHubModal: React.FC = () => {
       className="fixed inset-0 z-50 bg-black/65 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 transition-all"
       dir={dir}
     >
-      <div className="w-full max-w-5xl h-[90vh] bg-surface border border-subtle rounded-3xl shadow-2xl flex flex-col overflow-hidden relative transition-all">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('searchHubTitle')} tabIndex={-1} className="w-full max-w-5xl h-[90dvh] max-h-[calc(100dvh-1.5rem)] bg-surface border border-subtle rounded-3xl shadow-2xl flex flex-col overflow-hidden relative transition-all">
         {/* Subtle Background Pattern */}
         <div className="absolute inset-0 bg-arabesque-pattern pointer-events-none opacity-20 z-0" />
 
@@ -318,21 +332,21 @@ export const SearchHubModal: React.FC = () => {
           <button
             onClick={() => setSearchHubOpen(false)}
             className="p-2 rounded-xl bg-surface hover:bg-canvas border border-subtle text-muted hover:text-main transition-colors cursor-pointer"
-            title="Close (Esc)"
+            title={t('close')}
+            aria-label={t('close')}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* 2. Control Zone: Search Input, Scopes, and Provider Pills */}
-        <div className="p-4 border-b border-subtle bg-surface/80 space-y-3 relative z-10 shrink-0">
+        <div className="max-h-[45%] overflow-y-auto overscroll-contain p-3 sm:p-4 border-b border-subtle bg-surface/80 space-y-3 relative z-10 shrink-0">
           {/* Main Search Input */}
           <div className="relative flex items-center">
-            <Search className="w-4 h-4 text-pale-sky-500 absolute inset-inline-start-4 pointer-events-none" />
+            <Search className="w-4 h-4 text-pale-sky-500 absolute start-4 pointer-events-none" />
             <input
               ref={inputRef}
               type="text"
-              autoFocus
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
               onKeyDown={(e) => {
@@ -342,16 +356,17 @@ export const SearchHubModal: React.FC = () => {
                 }
               }}
               placeholder={t('searchPlaceholder')}
+              aria-label={t('searchPlaceholder')}
               className="w-full bg-canvas border border-subtle focus:border-pale-sky-500/60 rounded-2xl py-3 px-11 text-sm text-main placeholder:text-muted outline-none transition-all shadow-inner font-sans"
             />
             {query && (
               <button
                 onClick={() => {
-                  setQuery('');
-                  setResults([]);
+                  handleQueryChange('');
                   inputRef.current?.focus();
                 }}
-                className="absolute inset-inline-end-4 p-1 rounded-lg hover:bg-surface text-muted hover:text-main transition-colors"
+                aria-label={t('searchClearQuery')}
+                className="absolute end-4 p-1 rounded-lg hover:bg-surface text-muted hover:text-main transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -569,7 +584,7 @@ export const SearchHubModal: React.FC = () => {
         </div>
 
         {/* 4. Results List Zone */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 relative z-10">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5 relative z-10">
           {scope === 'sources' ? (
             <StudySourcesSearch query={query} onLeave={() => setSearchHubOpen(false)} />
           ) : scope === 'fulltext' ? (

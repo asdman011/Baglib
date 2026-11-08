@@ -1,6 +1,14 @@
 # Feature: Digital Library Import, Deduplication & Storage Health Architecture
 
 ## 1. Overview & Objective
+
+### Confirmed shutdown drain — 2026-11-07, Codex
+
+**Native follow-up:** `scripts/import-shutdown-live` uses the real built Electron app/preload/metadata workers with disposable English- and Arabic-configured profiles. Each submits120unique TXT files and2generated one-page PDFs, requests Quit on the first validating progress event, waits for process exit, then reads SQLite with the existing local Python runtime. Final en-cu8G61/ar-EVEgmV each contain122imported works,122file sources, both PDF cover records/pagecounts and integrity_check=ok; no renderer errors or closed-database failures. Harnesslint/diff-check pass. This supersedes the native-import-during-Quit coverage gap below for this generated corpus, not for hundreds of large PDFs. It tests backend IPC, not wizard/dragdrop interactions or visualRTL. No production change in this follow-up; prior suite/build results were not rerun. Test server stopped/3000free.
+
+Source inspection found `ipc/digital.ts` serialized imports and duplicate checks but disposed the metadata extractor without awaiting that queue at exit. New `services/digital/import-queue.ts` preserves serial admission while running; confirmed shutdown closes admission, waits for accepted work (including queued work) and only then disposes the extractor. Failed jobs do not prevent later jobs or cleanup. `services/quit-cleanup.ts` drains these jobs before shared-service cleanup, retaining cover workers until imports finish; main awaits it before SQLite closes. Cancelled Quit does not start this phase. Large accepted batches may delay exit; this change neither cancels them nor defers extraction.
+
+Verified: delayed real-SQLite test checks exact mixed Arabic/Latin title preservation, ordering, late rejection, one disposal and shared-cleanup ordering; failure recovery test passes. Full1413/1413 tests, finaltsc/mainbuild and scopedlint0errors/0warnings. Native disposable `save-live-FTD21X` passes English Cancel-Quit/Arabic Save-Quit with2marks, foreign annotation and one previous-file-hash emergency copy. That native fixture does not import books: hundreds-file native import during Quit is not certified. No schema/dependency changes, downloads or real-library access.
 This document details Baglib's digital e-book import pipeline, duplicate detection engine, storage verification system, and interactive 3-step Import Wizard (`KEY-6: Story 6 — Digital Library`).
 
 The primary objectives are:

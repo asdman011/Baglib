@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { Tag as TagIcon, X, Plus, Hash } from 'lucide-react';
-import type { TagWithCount } from '../../../shared/types/tag';
+import { X, Plus, Hash } from 'lucide-react';
+import { suggestTags } from '../../../shared/tag-suggestions';
 
 export interface TagEditorProps {
   value?: string[];
@@ -53,20 +53,12 @@ export const TagEditor: React.FC<TagEditorProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const currentTags = Array.isArray(value) ? value : [];
+  const currentTags = useMemo(() => Array.isArray(value) ? value : [], [value]);
+  const listId = useId();
 
   // Autocomplete matching suggestions
   const suggestions = useMemo(() => {
-    const q = inputValue.trim().toLowerCase();
-    const existingSet = new Set(currentTags.map((t) => t.toLowerCase()));
-
-    const filtered = allTags.filter((tag) => {
-      if (existingSet.has(tag.name.toLowerCase())) return false;
-      if (!q) return true; // show popular/available when empty
-      return tag.name.toLowerCase().includes(q);
-    });
-
-    return filtered.slice(0, 8);
+    return suggestTags(allTags, currentTags, inputValue);
   }, [inputValue, allTags, currentTags]);
 
   // Close dropdown on outside click
@@ -81,7 +73,8 @@ export const TagEditor: React.FC<TagEditorProps> = ({
   }, []);
 
   const addTag = (tagName: string) => {
-    const trimmed = tagName.trim();
+    if (disabled) return;
+    const trimmed = allTags.find(tag => tag.name.toLowerCase() === tagName.trim().toLowerCase())?.name || tagName.trim();
     if (!trimmed) return;
     if (currentTags.length >= maxTags) return;
 
@@ -102,6 +95,7 @@ export const TagEditor: React.FC<TagEditorProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (disabled) return;
+    if (e.nativeEvent.isComposing) return;
 
     if (e.key === 'Enter' || e.key === ',' || e.key === '،') {
       e.preventDefault();
@@ -115,22 +109,22 @@ export const TagEditor: React.FC<TagEditorProps> = ({
       removeTag(currentTags.length - 1);
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
+      setIsFocused(true);
       setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      setIsFocused(true);
       setSelectedIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
     } else if (e.key === 'Escape') {
       setIsFocused(false);
+      setSelectedIndex(-1);
     }
   };
 
   // Popular unselected tags to suggest quick clicks
   const popularSuggestions = useMemo(() => {
     if (!showPopularSuggestions) return [];
-    const existingSet = new Set(currentTags.map((t) => t.toLowerCase()));
-    return allTags
-      .filter((t) => !existingSet.has(t.name.toLowerCase()))
-      .slice(0, 5);
+    return suggestTags(allTags, currentTags, '', 5);
   }, [allTags, currentTags, showPopularSuggestions]);
 
   return (
@@ -165,7 +159,7 @@ export const TagEditor: React.FC<TagEditorProps> = ({
                     removeTag(idx);
                   }}
                   className="p-0.5 hover:bg-black/20 dark:hover:bg-white/20 rounded-full transition-colors"
-                  aria-label="Remove tag"
+                  aria-label={`${t('tagRemoveAction')}: ${tag}`}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -179,12 +173,20 @@ export const TagEditor: React.FC<TagEditorProps> = ({
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
+            aria-label={placeholder || t('addTagPlaceholder')}
+            aria-autocomplete="list"
+            aria-expanded={isFocused && suggestions.length > 0}
+            aria-controls={isFocused && suggestions.length > 0 ? listId : undefined}
+            aria-activedescendant={isFocused && suggestions[selectedIndex] ? `${listId}-${selectedIndex}` : undefined}
             value={inputValue}
             onChange={(e) => {
               setInputValue(e.target.value);
+              setIsFocused(true);
               setSelectedIndex(-1);
             }}
             onFocus={() => setIsFocused(true)}
+            onBlur={() => { setIsFocused(false); setSelectedIndex(-1); }}
             onKeyDown={handleKeyDown}
             placeholder={currentTags.length === 0 ? (placeholder || t('addTagPlaceholder')) : ''}
             className="flex-1 min-w-[120px] bg-transparent text-sm text-main placeholder:text-muted outline-none px-1 py-0.5"
@@ -193,8 +195,11 @@ export const TagEditor: React.FC<TagEditorProps> = ({
       </div>
 
       {/* Autocomplete Dropdown */}
-      {isFocused && !disabled && suggestions.length > 0 && (
+      {isFocused && !disabled && currentTags.length < maxTags && suggestions.length > 0 && (
         <div
+          id={listId}
+          role="listbox"
+          aria-label={t('addTagPlaceholder')}
           className="absolute z-50 top-full mt-1.5 w-full bg-surface rounded-2xl border border-subtle shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 max-h-60 overflow-y-auto p-1 divide-y divide-subtle/40"
           style={{ insetInlineStart: 0 }}
         >
@@ -204,6 +209,9 @@ export const TagEditor: React.FC<TagEditorProps> = ({
             return (
               <div
                 key={item.id}
+                id={`${listId}-${idx}`}
+                role="option"
+                aria-selected={isHighlighted}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   addTag(item.name);
@@ -222,7 +230,7 @@ export const TagEditor: React.FC<TagEditorProps> = ({
                 </div>
                 {item.workCount > 0 && (
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-subtle text-muted">
-                    {item.workCount} {item.workCount === 1 ? 'book' : 'books'}
+                    {t('tagBookCount', { count: item.workCount })}
                   </span>
                 )}
               </div>

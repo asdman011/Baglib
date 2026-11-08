@@ -455,7 +455,7 @@ export const CategoriesOverviewView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
+    <div className="flex-1 min-h-0 flex flex-col h-full overflow-hidden bg-canvas [&_.fixed>div]:max-h-[calc(100dvh-2rem)] [&_.fixed>div]:overflow-y-auto [&_.fixed>div]:overscroll-contain [&_.fixed>div]:break-words">
       {/* Header Bar */}
       <div className="p-6 pb-4 border-b border-subtle bg-surface/50 backdrop-blur-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

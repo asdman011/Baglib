@@ -96,7 +96,7 @@ export function BayanView() {
     const timer = setTimeout(() => {
       setLoading(true);
       const api = window.electronAPI?.poetry;
-      if (!api) { setFailed(true); return; }
+      if (!api) { setFailed(true); setLoading(false); return; }
       void api.search({ query, after, limit: 40, language, poetId, era: era || undefined, meter: meter || undefined, theme: theme || undefined, variant: variant || undefined, location: location || undefined }).then(result => {
         if (!alive) return;
         setLoading(false);
@@ -110,13 +110,13 @@ export function BayanView() {
     return () => { alive = false; clearTimeout(timer); };
   }, [query, after, language, era, meter, theme, variant, location, poetId, revision]);
   if (poem) return <PoetryReader key={`${poem.id}:${initialVerse}:${initialTo}`} initialVerse={initialVerse} initialTo={initialTo} poem={poem} onBack={() => setPoem(null)} onPoet={id => { setPoem(null); setPoetId(id); setQuery(''); setEra(''); setMeter(''); setTheme(''); setVariant(''); setLocation(''); setAfter(0); }} />;
-  return <section dir={dir} className="flex h-full min-h-0 flex-col bg-canvas p-4">
+  return <section dir={dir} className="flex h-full min-h-0 flex-col bg-canvas p-3 sm:p-5">
     <h1 className="text-xl font-semibold leading-loose">{t('navBayan')}</h1>
     {failed && <button type="button" disabled={installing} onClick={() => void install()} className="rounded border border-subtle p-3">{t('bayanInstall')}</button>}
     {provision?.phase === 'error' && <p role="alert">{t(provision.error === 'python' ? 'bayanPythonRequired' : provision.error === 'integrity' ? 'bayanIntegrityError' : 'bayanUnavailable')}</p>}
     {installing && <div role="status" className="rounded border border-subtle p-3"><p>{t(provision.phase === 'importing' ? 'bayanImporting' : 'bayanDownloading')}</p><output>{provision.phase === 'importing' ? provision.imported.toLocaleString(lang) : t('bayanDownloadProgress', { downloaded: (provision.downloaded / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }), total: provision.total === null ? '—' : (provision.total / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }), percent: provision.total ? Math.min(100, provision.downloaded / provision.total * 100).toLocaleString(lang, { maximumFractionDigits: 0 }) : '—' })}</output>{provision.total !== null && provision.phase === 'downloading' && <progress aria-label={t('bayanDownloading')} value={provision.downloaded} max={provision.total} className="block w-full" />}</div>}
     <nav className="border-b border-subtle py-3" aria-label={t('navBayan')}><span aria-current="page">{t('bayanPoetry')}</span></nav>
-    <div className="flex flex-wrap gap-3 py-3">
+    <div className="flex shrink-0 flex-wrap items-center gap-2 py-3 [&>button]:rounded-xl [&>button]:border [&>button]:border-subtle [&>button]:px-3 [&>button]:py-2 [&>button]:text-sm [&>button]:leading-relaxed [&>button:hover]:bg-surface [&>button:focus-visible]:outline-2 [&>button:focus-visible]:outline-pale-sky-500 [&>button[aria-pressed=true]]:bg-pale-sky-500/15 [&>button[aria-pressed=true]]:text-pale-sky-500 [&>button[aria-expanded=true]]:bg-pale-sky-500/15">
       {poetId !== undefined && <button type="button" onClick={() => { setPoetId(undefined); setAfter(0); }}>{t('bayanAll')}</button>}
       {(['ar', 'en'] as const).map(value => { const count = facets?.languages.find(item => item.language === value)?.count ?? 0; return <button type="button" key={value} aria-pressed={language === value} onClick={() => { setLanguage(value); setPoetId(undefined); setAfter(0); setEra(''); setMeter(''); setTheme(''); setVariant(''); setLocation(''); }} className="rounded-lg border border-subtle px-3 py-2">{t(value === 'ar' ? 'bayanArabic' : 'bayanEnglish')} · {count || t('bayanComingSoon')}</button>; })}
       <button type="button" aria-expanded={panel === 'filters'} onClick={() => setPanel(current => togglePoetryPanel(current, 'filters'))}>{t('bayanFilters')}</button>
@@ -127,11 +127,14 @@ export function BayanView() {
     </aside>}
     {panel === 'poet' && <PoetBrowser key={`${language}:${era}:${location}`} language={language} era={era} location={location} onPoet={id => { setPoetId(id); setAfter(0); setPanel(null); }} />}
     <input type="search" dir="auto" aria-label={t('bayanSearch')} placeholder={t('bayanSearch')} value={query} onChange={event => { setQuery(event.target.value); setAfter(0); }} className="my-4 rounded-lg border border-subtle bg-surface p-3 text-start" />
-    <div ref={resultsElement} aria-busy={loading} className="min-h-0 flex-1 overflow-y-auto space-y-3">
-      {failed ? <p role="alert">{t('bayanUnavailable')}</p> : !items.length ? <p role="status">{t('bayanEmpty')}</p> : items.map(item => <article key={item.id} dir={item.language === 'ar' ? 'rtl' : 'ltr'} className="rounded-xl border border-subtle bg-surface p-4 text-start leading-loose">
-        <h2 className="font-semibold"><button type="button" onClick={() => void openPoem(item.id)}>{item.title || item.poetName}</button></h2><p>{item.poetName}</p><p className="text-sm text-muted">{[item.meter, item.theme, t('bayanVerseCountShort', { count: item.verseCount.toLocaleString(lang) })].filter(Boolean).join(' · ')}</p>
+    {loading && <p role="status" className="pb-2 text-sm text-muted">{t('bayanLoading')}</p>}
+    <div ref={resultsElement} aria-busy={loading} className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+      {failed ? <p role="alert">{t('bayanUnavailable')}</p> : !items.length ? !loading && <p role="status">{t('bayanEmpty')}</p> : items.map(item => <article key={item.id} dir={item.language === 'ar' ? 'rtl' : 'ltr'} className="rounded-2xl border border-subtle bg-surface p-4 sm:p-5 text-start leading-loose transition-colors hover:border-pale-sky-500/50 focus-within:border-pale-sky-500">
+        <h2 className="font-semibold text-lg leading-loose"><button type="button" className="w-full text-start rounded focus-visible:outline-2 focus-visible:outline-pale-sky-500" onClick={() => void openPoem(item.id)}>{item.title || item.poetName}</button></h2><p className="text-sm text-pale-sky-500">{item.poetName}</p><p className="mt-2 border-t border-subtle pt-2 text-xs text-muted leading-loose">{[item.meter, item.theme, t('bayanVerseCountShort', { count: item.verseCount.toLocaleString(lang) })].filter(Boolean).join(' · ')}</p>
         {item.match && <PoetryExcerpt lines={item.match.lines} query={matchedQuery} onOpen={() => void openPoem(item.id, item.match!.from, item.match!.from + item.match!.lines.length - 1)} />}
       </article>)}
+      </div>
       {!failed && <div className="flex justify-between gap-3"><button type="button" disabled={loading || !after || history.key !== cursorKey || !history.cursors.length} onClick={() => { setLoading(true); setAfter(history.cursors.at(-1)!); setHistory(value => ({ ...value, cursors: value.cursors.slice(0, -1) })); }}>{t('bayanPrevious')}</button><button type="button" disabled={loading || next === null} onClick={() => { if (next === null) return; setLoading(true); setHistory(value => ({ key: cursorKey, cursors: [...(value.key === cursorKey ? value.cursors : []), after] })); setAfter(next); }}>{t('bayanNext')}</button></div>}
     </div>
   </section>;

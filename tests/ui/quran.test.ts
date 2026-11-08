@@ -81,7 +81,14 @@ for (const lang of ['ar', 'en'] as const) {
       await act(async () => root.render(createElement(WorkspaceProvider, null, createElement(Harness))));
       if (lang === 'en') await act(async () => workspace.toggleLanguage());
       await act(async () => { await new Promise(resolve => setTimeout(resolve, 180)); });
-      assert.equal(window.document.querySelector('section')?.getAttribute('dir'), lang === 'ar' ? 'rtl' : 'ltr');
+      assert.equal(window.document.querySelector(`section[aria-label="${translations[lang].navQuran}"]`)?.getAttribute('dir'), lang === 'ar' ? 'rtl' : 'ltr');
+      assert.equal(window.document.querySelectorAll('#workspace-navigation section').length, 3);
+      assert.equal(window.document.querySelectorAll('aside [aria-current="page"]').length, 1);
+      for (const key of ['navRhythmGroup', 'navSourcesGroup', 'navKnowledgeGroup'] as const) {
+        assert.ok(window.document.querySelector(`#workspace-navigation section[aria-label="${translations[lang][key]}"]`));
+      }
+      assert.equal(window.document.querySelector(`#workspace-navigation button[aria-label="${translations[lang].navSettings}"]`), null);
+      assert.ok(window.document.querySelector(`aside button[aria-label="${translations[lang].navSettings}"]`));
       const navigation = [...window.document.querySelectorAll('aside button')].map(node => node.textContent?.trim());
       assert.ok(navigation.indexOf(translations[lang].navQuran) < navigation.indexOf(translations[lang].navSunnah));
       assert.equal(window.document.querySelectorAll('select option').length, 15);
@@ -94,6 +101,15 @@ for (const lang of ['ar', 'en'] as const) {
       await click('quranImport');
       assert.equal(imports, 1);
       assert.equal(subscribed, 1);
+      await act(async () => workspace.openBookForReading({ id: 'layout-book', title: 'العِلْم — Study', author: 'باحث', categories: [], tags: [], lendingHistory: [], bookType: 'digital' }));
+      await act(async () => workspace.setReadingPage(17));
+      await act(async () => workspace.setViewMode('notes'));
+      const resume = window.document.querySelector(`aside button[title="${translations[lang].navResumeBook}"]`);
+      assert.ok(resume);
+      await act(async () => (resume as HTMLElement).click());
+      assert.equal(workspace.viewMode, 'reader');
+      assert.equal(workspace.activeBook?.id, 'layout-book');
+      assert.equal(workspace.readingPage, 17);
     } finally {
       await act(async () => root.unmount());
       assert.equal(subscribed, 0);

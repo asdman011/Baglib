@@ -136,7 +136,7 @@ export const ActiveReadsModule: React.FC<ActiveReadsModuleProps> = ({
             <BookOpen className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-display font-bold text-base text-main truncate">
+            <h2 className={`font-bold text-base text-main leading-relaxed ${lang === 'ar' ? 'font-sans' : 'font-display'}`}>
               {t('dashActiveReadsTitle')}
             </h2>
             <p className="text-xs text-muted truncate">{t('dashActiveReadsSubtitle')}</p>
@@ -160,7 +160,7 @@ export const ActiveReadsModule: React.FC<ActiveReadsModuleProps> = ({
             <Sparkles className="w-6 h-6" />
           </div>
           <div className="space-y-1 max-w-md mx-auto">
-            <h3 className="font-display font-bold text-sm text-main">
+            <h3 className={`font-bold text-sm text-main leading-relaxed ${lang === 'ar' ? 'font-sans' : 'font-display'}`}>
               {t('dashEmptyReadsTitle')}
             </h3>
             <p className="text-xs text-muted leading-relaxed">{t('dashEmptyReadsDesc')}</p>

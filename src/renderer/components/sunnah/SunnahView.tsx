@@ -227,7 +227,7 @@ export function SunnahView() {
     <header className="sunnah-toolbar">
       <div className="flex items-center gap-3 min-w-0">
         <div className="sunnah-emblem"><BookOpenText size={23} /></div>
-        <div><h1 className="font-display text-xl font-bold leading-relaxed">{t('navSunnah')}</h1><p className="text-xs text-muted leading-relaxed">{t(catalog?.research ? 'sunnahResearchSubtitle' : 'sunnahSubtitle')}</p></div>
+        <div><h1 className={`text-xl font-bold leading-relaxed ${lang === 'ar' ? 'font-sans' : 'font-display'}`}>{t('navSunnah')}</h1><p className="text-xs text-muted leading-relaxed">{t(catalog?.research ? 'sunnahResearchSubtitle' : 'sunnahSubtitle')}</p></div>
       </div>
       <div className="sunnah-toolbar-actions">
         <div className="sunnah-mode" role="group" aria-label={t('sunnahViewMode')}>

@@ -2,7 +2,8 @@
 import { errorMessage } from '../../../shared/errors';
 
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   HardDrive,
   RefreshCw,
@@ -58,6 +59,12 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   const [summary, setSummary] = useState<StorageHealthSummary | null>(null);
   const [analytics, setAnalytics] = useState<StorageAnalytics | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearToastTimer = React.useCallback(() => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = null;
+  }, []);
+  useEffect(() => clearToastTimer, [clearToastTimer]);
 
   // Batch rebind state
   const [isBatchScanning, setIsBatchScanning] = useState(false);
@@ -71,6 +78,14 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
     duplicatePath: string;
   } | null>(null);
   const [deletePhysicalFile, setDeletePhysicalFile] = useState(false);
+  const repairActive = useRef(false);
+  const [isRepairing, setIsRepairing] = useState(false);
+  const closeSafely = () => {
+    if (!repairActive.current && !isAuditing && !isBatchScanning) onClose();
+  };
+  const dialogRef = useDialogFocus(isOpen, closeSafely);
+  const resultRef = useDialogFocus(isOpen && !!batchResult, () => { if (!repairActive.current) setBatchResult(null); });
+  const pruneRef = useDialogFocus(isOpen && !!pruneTarget, () => { if (!repairActive.current) setPruneTarget(null); });
 
   // Sync tab if initialTab changes
   const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
@@ -130,14 +145,18 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   }, [isOpen]);
 
   const showToast = (msg: string) => {
+    clearToastTimer();
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    toastTimer.current = setTimeout(() => setToastMessage(null), 4000);
   };
 
   // Single-file locate / re-link handler
   const handleLocateFile = async (workId: string) => {
     const api = window.electronAPI;
     if (!api?.openFileDialog || !api?.storage?.relinkFile) return;
+    if (repairActive.current) return;
+    repairActive.current = true;
+    setIsRepairing(true);
 
     try {
       const newPath = await api.openFileDialog();
@@ -153,6 +172,9 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
       }
     } catch (err: unknown) {
       showToast(t('storageLocateError', { error: errorMessage(err) || '' }));
+    } finally {
+      repairActive.current = false;
+      setIsRepairing(false);
     }
   };
 
@@ -160,6 +182,9 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   const handleVerifySingle = async (workId: string) => {
     const api = window.electronAPI;
     if (!api?.storage?.verifyFile) return;
+    if (repairActive.current) return;
+    repairActive.current = true;
+    setIsRepairing(true);
 
     try {
       await api.storage.verifyFile(workId);
@@ -167,6 +192,9 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
       refreshBooks();
     } catch (err) {
       console.error('Failed single verification:', err);
+    } finally {
+      repairActive.current = false;
+      setIsRepairing(false);
     }
   };
 
@@ -183,6 +211,9 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   const handleStartBatchRebind = async () => {
     const api = window.electronAPI;
     if (!api?.openDirectoryDialog || !api?.storage?.batchAutoRebind) return;
+    if (repairActive.current) return;
+    repairActive.current = true;
+    setIsRepairing(true);
 
     try {
       const folderPath = await api.openDirectoryDialog();
@@ -196,6 +227,8 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
     } catch (err) {
       console.error('Failed batch auto-rebind:', err);
     } finally {
+      repairActive.current = false;
+      setIsRepairing(false);
       setIsBatchScanning(false);
     }
   };
@@ -203,6 +236,9 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   // Prune duplicate action
   const handleConfirmPrune = async () => {
     if (!pruneTarget) return;
+    if (repairActive.current) return;
+    repairActive.current = true;
+    setIsRepairing(true);
     const api = window.electronAPI;
 
     try {
@@ -223,7 +259,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
       }
 
       if (onRemoveDuplicate) {
-        onRemoveDuplicate(pruneTarget.duplicateWorkId);
+        await onRemoveDuplicate(pruneTarget.duplicateWorkId);
         showToast(isRtl ? 'تم حذف النسخة المكررة بنجاح' : 'Duplicate copy removed successfully');
         setPruneTarget(null);
         await loadData(false);
@@ -231,6 +267,9 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
       }
     } catch (err: unknown) {
       showToast(errorMessage(err) || (isRtl ? 'خطأ أثناء الحذف' : 'Error pruning duplicate'));
+    } finally {
+      repairActive.current = false;
+      setIsRepairing(false);
     }
   };
 
@@ -271,11 +310,17 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <div
-        className="relative flex flex-col w-full max-w-5xl h-[88vh] bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('storageManagerTitle')}
+        tabIndex={-1}
+        className="relative flex flex-col w-full max-w-5xl h-[88dvh] max-h-[calc(100dvh-2rem)] bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden"
         style={{ textAlign: 'start' }}
       >
+        {(isRepairing || isAuditing || isBatchScanning) && <p role="status" className="shrink-0 px-4 py-2 text-xs leading-relaxed text-text-muted">{t('storageOperationInProgress')}</p>}
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border-base dark:border-zinc-800 bg-surface-raised dark:bg-zinc-900/90">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 border-b border-border-base dark:border-zinc-800 bg-surface-raised dark:bg-zinc-900/90 [&>div:first-child]:basis-full sm:[&>div:first-child]:basis-auto [&_p]:hidden sm:[&_p]:block">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400">
               <HardDrive className="w-5 h-5" />
@@ -310,7 +355,9 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
             </button>
 
             <button
-              onClick={onClose}
+              onClick={closeSafely}
+              disabled={isRepairing || isAuditing || isBatchScanning}
+              aria-label={t('close')}
               className="flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-base dark:hover:bg-zinc-800 transition"
             >
               <X className="w-4 h-4" />
@@ -319,7 +366,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         </div>
 
         {/* Storage Metrics Banner */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-6 border-b border-border-base dark:border-zinc-800 bg-surface-base dark:bg-zinc-900/50">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-3 sm:p-6 max-h-[20%] sm:max-h-[28%] shrink-0 overflow-y-auto overscroll-contain border-b border-border-base dark:border-zinc-800 bg-surface-base dark:bg-zinc-900/50">
           {/* Total Used Footprint */}
           <div className="p-3 rounded-xl border border-border-base dark:border-zinc-800 bg-surface-raised dark:bg-zinc-800/40">
             <span className="text-[11px] font-medium text-text-muted dark:text-zinc-400">
@@ -432,9 +479,9 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         </div>
 
         {/* Toolbar & Filter Tabs */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3 border-b border-border-base dark:border-zinc-800 bg-surface-raised/40 dark:bg-zinc-900/30">
+        <div className="flex shrink-0 flex-col sm:flex-row items-center justify-between gap-2 px-3 sm:px-6 py-2 border-b border-border-base dark:border-zinc-800 bg-surface-raised/40 dark:bg-zinc-900/30">
           {/* Tabs */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface-base dark:bg-zinc-800/80 border border-border-base dark:border-zinc-700/60">
+          <div className="flex max-w-full overflow-x-auto overscroll-x-contain items-center gap-1.5 p-1 rounded-xl bg-surface-base dark:bg-zinc-800/80 border border-border-base dark:border-zinc-700/60 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
             <button
               onClick={() => setActiveTab('all')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
@@ -482,18 +529,20 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
 
           {/* Search Input */}
           <div className="relative w-full sm:w-64">
-            <Search className="absolute inset-inline-start-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted dark:text-zinc-500" />
+            <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted dark:text-zinc-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={isRtl ? 'بحث في المسارات والعناوين...' : 'Search titles or paths...'}
+              placeholder={t('storageSearchPaths')}
+              aria-label={t('storageSearchPaths')}
               className="w-full py-1.5 ps-9 pe-3 text-xs rounded-xl border border-border-base dark:border-zinc-700 bg-surface-base dark:bg-zinc-800 text-text-primary dark:text-zinc-100 placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute inset-inline-end-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                aria-label={t('searchClearQuery')}
+                className="absolute end-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -502,7 +551,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div data-storage-results className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-4">
           {/* Toast Notification */}
           {toastMessage && (
             <div className="p-3 rounded-xl bg-primary-50 dark:bg-primary-950/60 border border-primary-200 dark:border-primary-800 text-xs font-medium text-primary-800 dark:text-primary-200 flex items-center justify-between animate-in slide-in-from-top-2">
@@ -748,7 +797,8 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
             {t('metricTotal')}: <strong className="text-text-primary dark:text-zinc-200">{summary?.totalFiles ?? 0}</strong>
           </div>
           <button
-            onClick={onClose}
+            onClick={closeSafely}
+            disabled={isRepairing || isAuditing || isBatchScanning}
             className="px-4 py-1.5 rounded-lg border border-border-base dark:border-zinc-700 font-medium hover:bg-surface-base dark:hover:bg-zinc-800 text-text-primary dark:text-zinc-200 transition"
           >
             {isRtl ? 'إغلاق' : 'Close'}
@@ -758,7 +808,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         {/* Batch Re-bind Results Dialog */}
         {batchResult && (
           <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
-            <div className="w-full max-w-lg p-6 rounded-2xl bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 shadow-2xl space-y-4">
+            <div ref={resultRef} role="dialog" aria-modal="true" aria-label={t('storageBatchScanTitle')} tabIndex={-1} className="w-full max-w-lg p-6 rounded-2xl bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 shadow-2xl space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400">
                   <FolderSearch className="w-5 h-5" />
@@ -819,7 +869,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         {/* Prune Confirmation Dialog */}
         {pruneTarget && (
           <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
-            <div className="w-full max-w-md p-6 rounded-2xl bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 shadow-2xl space-y-4">
+            <div ref={pruneRef} role="dialog" aria-modal="true" aria-label={t('storageActionPrune')} tabIndex={-1} className="w-full max-w-md p-6 rounded-2xl bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 shadow-2xl space-y-4">
               <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
                 <Trash2 className="w-5 h-5" />
                 <h3 className="font-bold text-sm text-text-primary dark:text-zinc-100">
@@ -851,12 +901,14 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   onClick={() => setPruneTarget(null)}
+                  disabled={isRepairing}
                   className="px-4 py-1.5 rounded-lg border border-border-base dark:border-zinc-700 text-xs font-medium hover:bg-surface-raised text-text-primary dark:text-zinc-200 transition"
                 >
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   onClick={handleConfirmPrune}
+                  disabled={isRepairing}
                   className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm transition"
                 >
                   {isRtl ? 'تأكيد الحذف' : 'Confirm Delete'}

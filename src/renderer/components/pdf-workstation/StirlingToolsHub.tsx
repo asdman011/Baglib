@@ -1118,7 +1118,7 @@ export function StirlingToolsHub({
       } flex flex-col overflow-hidden font-sans select-none`}
     >
       {/* 1. TOP HEADER & NAVIGATION BAR */}
-      <header className={`flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 border-b ${
+      <header className={`flex flex-wrap items-center justify-between gap-3 px-3 sm:px-6 py-3 border-b ${
         isDark ? 'border-[#1f2229] bg-[#121418]' : 'border-[#e2e8f0] bg-white'
       } shrink-0`}>
         <div className="flex items-center gap-3">
@@ -1229,9 +1229,9 @@ export function StirlingToolsHub({
         </div>
 
         {/* Actions & Search */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex max-w-full flex-wrap items-center gap-2.5 [&>button]:shrink-0">
           {/* Centered Search */}
-          <div className="relative w-64 md:w-80">
+          <div className="relative w-full min-w-0 sm:w-64 md:w-80">
             <Search className={`absolute inset-y-0 start-3 my-auto size-4 ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`} />
             <input
               type="search"
@@ -1357,7 +1357,7 @@ export function StirlingToolsHub({
       </header>
 
       {/* 2. MAIN SCROLLABLE CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto px-6 py-5">
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-6 py-3 sm:py-5">
         {viewMode === 'pipelines' ? (
           /* ============================================================ */
           /* PIPELINES & AUTOMATED WORKFLOWS VIEW                         */
@@ -2319,7 +2319,7 @@ export function StirlingToolsHub({
           <form
             onSubmit={handleSavePipeline}
             dir={dir}
-            className={`w-full max-w-2xl max-h-[90vh] rounded-2xl border ${
+            className={`w-full max-w-2xl max-h-[calc(100dvh-2rem)] rounded-2xl border ${
               isDark ? 'bg-[#121418] border-[#222631] text-[#e1e4ea]' : 'bg-white border-[#e2e8f0] text-[#111827] shadow-2xl'
             } shadow-2xl flex flex-col overflow-hidden`}
           >
@@ -2351,7 +2351,7 @@ export function StirlingToolsHub({
             </div>
 
             {/* Modal Scrollable Body */}
-            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+            <div className="min-h-0 p-3 sm:p-5 overflow-y-auto overscroll-contain space-y-4 text-xs">
               {/* 1-Click Suggested Presets */}
               <div className="space-y-1.5">
                 <span className={`font-bold text-[11px] uppercase tracking-wider ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>

@@ -77,7 +77,8 @@ export function StudyPlannerView({ adjustment = 0 }: { adjustment?: number }) {
       <button className={control} aria-label={t('plannerNext')} onClick={() => setAnchor(civilDate(addCivilDays(range.end, 1)))}><ChevronRight className="w-4 h-4 rtl:rotate-180" /></button>
       <p className="text-sm">{format(range.start)} — {format(range.end)}</p>
     </div>
-    <div className={`grid gap-1 ${period === 'year' ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-7'}`} aria-label={t('plannerCalendar')}>
+    <div className="max-w-full overflow-x-auto overscroll-x-contain pb-2" tabIndex={0} role="region" aria-label={t('plannerCalendar')}>
+    <div className={`grid gap-1 ${period === 'year' ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'min-w-[42rem] grid-cols-7'}`}>
       {period === 'month' && Array.from({ length: (range.start.getDay() + 1) % 7 }, (_, index) => <div key={`offset-${index}`} aria-hidden="true" />)}
       {(period === 'year' ? months : days).map(date => {
         const value = civilDate(date);
@@ -88,6 +89,7 @@ export function StudyPlannerView({ adjustment = 0 }: { adjustment?: number }) {
           {count > 0 && <span className="block text-pale-sky-500 text-xs mt-2">{t('plannerTaskCount', { count })}</span>}
         </button>;
       })}
+    </div>
     </div>
     <div className="grid lg:grid-cols-2 gap-4">
       <form className="border border-subtle rounded-xl bg-surface p-3 space-y-3 min-w-0" onSubmit={event => { event.preventDefault(); void save(); }}>

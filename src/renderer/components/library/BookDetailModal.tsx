@@ -4,6 +4,7 @@ import { errorMessage } from '../../../shared/errors';
 
 
 import React, { useState, useRef, useMemo } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   X,
   BookOpen,
@@ -287,22 +288,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     }
   };
 
-  // Keyboard shortcut (Escape)
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (showConfirmDiscard) {
-          setShowConfirmDiscard(false);
-        } else {
-          handleAttemptClose();
-        }
-      }
-    };
-    if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isDirty, showConfirmDiscard]);
+  const dialogRef = useDialogFocus(isOpen && !!book, handleAttemptClose);
+  const discardRef = useDialogFocus(isOpen && !!book && showConfirmDiscard, () => setShowConfirmDiscard(false));
 
   // Real-time type-aware validation
   const validation = useMemo(() => {
@@ -970,10 +957,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
       <div
         onDragEnter={handleModalDragEnter}
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={isCreateMode ? t('addMaterialTitle') : (book.title || t('editMaterialTitle'))}
+        tabIndex={-1}
         onDragLeave={handleModalDragLeave}
         onDragOver={handleModalDragOver}
         onDrop={handleModalDrop}
-        className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] font-sans"
+        className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[92dvh] font-sans"
         dir={dir}
       >
         {/* Drag & Drop File Update Overlay */}
@@ -993,7 +985,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* Unsaved Changes Confirmation Dialog Overlay */}
         {showConfirmDiscard && (
           <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-surface border border-subtle rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4">
+            <div ref={discardRef} role="dialog" aria-modal="true" aria-label={t('unsavedChangesTitle')} tabIndex={-1} className="bg-surface border border-subtle rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
                   <AlertCircle className="w-5 h-5" />
@@ -1034,19 +1026,19 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* ================================================================= */}
         {/* MODAL HEADER: Title, Type Indicator & Action Buttons              */}
         {/* ================================================================= */}
-        <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
+        <div className="p-3 sm:p-5 bg-canvas/90 border-b border-subtle flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-11 h-11 rounded-2xl bg-pale-sky-500/15 border border-pale-sky-500/30 flex items-center justify-center text-pale-sky-500 shrink-0 shadow-sm">
               <BookOpen className="w-6 h-6" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-main text-base sm:text-lg truncate">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h3 className="font-bold text-main text-base sm:text-lg leading-relaxed break-words">
                   {isCreateMode ? t('addMaterialTitle') : (formData.title || t('editMaterialTitle'))}
                 </h3>
                 {isDirty && (
                   <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold shrink-0">
-                    {lang === 'ar' ? 'تعديلات غير محفوظة' : 'Unsaved changes'}
+                    {t('materialUnsavedChanges')}
                   </span>
                 )}
               </div>
@@ -1257,7 +1249,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* ================================================================= */}
         {/* MODAL BODY                                                        */}
         {/* ================================================================= */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 text-xs">
           {!isCreateMode && book?.id && <ReadingLogPanel workId={book.id}/>}
           {/* TAB 1: INFO & TYPE-SPECIFIC FIELDS */}
           {activeTab === 'info' && (

@@ -17,6 +17,9 @@ import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
 import { LECTURE_OPEN_EVENT } from '../../utils/lecture-navigation';
 import { STUDY_NOTE_OPEN } from '../../utils/study-navigation';
 import { Settings } from 'lucide-react';
+import { SaveSettings } from './SaveSettings';
+import { SettingsDirectory } from './SettingsDirectory';
+import { useAppCloseBridge } from '../../utils/close-guard';
 import { StartupSplash } from '../StartupSplash';
 
 // Lazy-loaded secondary views to dramatically accelerate initial application boot time (<1.5s cold compilation)
@@ -49,6 +52,7 @@ const serverWindowMode = () => null;
 
 export const AppLayout: React.FC = () => {
   const { dir, viewMode, setViewMode, t, theme, lang } = useWorkspace();
+  useAppCloseBridge();
   // The companion note pane (decision S10) sits beside these views and keeps its note while you move between them.
   const companion = useCompanionPane();
   const companionViews: string[] = ['reader', 'quran', 'sunnah', 'bayan', 'lectures'];
@@ -159,7 +163,7 @@ export const AppLayout: React.FC = () => {
         <NavigationRail />
 
         {/* Dynamic App Views */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        <main data-workspace-motion={viewMode === 'reader' || viewMode === 'quran' ? 'reading' : 'browse'} className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           {/* Quota-Saver & Search Limit Banner */}
           <QuotaWarningBanner />
 
@@ -176,10 +180,12 @@ export const AppLayout: React.FC = () => {
             {viewMode === 'reader' && <FullPageBookReader />}
             {viewMode === 'notes' && <NotesOverviewView />}
             {viewMode === 'settings' && (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted font-sans space-y-3">
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-start overflow-y-auto overscroll-contain p-4 sm:p-8 text-center text-muted font-sans space-y-3 [&>svg]:shrink-0">
                 <Settings className="w-10 h-10 text-pale-sky-500" />
                 <h2 className="font-bold text-lg text-main font-display">{t('settingsTitle')}</h2>
                 <p className="text-xs text-muted max-w-sm">{t('settingsDesc')}</p>
+                <SaveSettings />
+                <SettingsDirectory />
               </div>
             )}
           </React.Suspense>

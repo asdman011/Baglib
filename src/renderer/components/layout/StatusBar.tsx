@@ -6,25 +6,25 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 
 export const StatusBar: React.FC = () => {
-  const { t } = useWorkspace();
-  const { notes } = useStudyNotes();
+  const { t, lang, setViewMode, setCommandPaletteOpen, toggleZenMode } = useWorkspace();
+  const { notes, loading, error } = useStudyNotes();
 
   return (
-    <footer className="h-6 bg-surface border-t border-subtle flex items-center justify-between px-3 text-[11px] text-muted select-none z-20 shrink-0 font-sans">
+    <footer className="min-h-7 bg-surface border-t border-subtle flex items-center justify-between gap-2 px-3 text-[11px] leading-relaxed text-muted select-none z-20 shrink-0 font-sans">
       {/* Left Items */}
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-3">
         {/* Total Book Notes Count */}
-        <div className="flex items-center gap-1">
+        <button type="button" onClick={() => setViewMode('notes')} title={t('navNotes')} className="flex shrink-0 items-center gap-1 rounded py-1 hover:text-main focus-visible:outline-2 focus-visible:outline-pale-sky-500">
           <FileText className="w-3 h-3 text-pale-sky-500" />
-          <span>{notes.length} {t('recordedNotes')}</span>
-        </div>
+          <span>{loading ? t('studyLoadingNotes') : error ? t('studyNotesUnavailable') : `${notes.length.toLocaleString(lang)} ${t('recordedNotes')}`}</span>
+        </button>
 
-        <span className="text-subtle">•</span>
+        <span className="hidden sm:inline text-subtle" aria-hidden="true">•</span>
 
         {/* Local Indexing Status */}
-        <div className="flex items-center gap-1.5" title={t('localLibraryReady')}>
-          <Database className="w-3 h-3 text-evergreen-500" />
-          <span>{t('localLibraryReady')}</span>
+        <div className="hidden sm:flex min-w-0 items-center gap-1.5" title={t('localLibraryStorage')}>
+          <Database className="w-3 h-3 text-muted" />
+          <span className="truncate">{t('localLibraryStorage')}</span>
         </div>
       </div>
 
@@ -32,15 +32,15 @@ export const StatusBar: React.FC = () => {
       <div className="flex items-center gap-4">
         {/* Active Shortcuts Quick Help */}
         <div className="hidden md:flex items-center gap-2 text-[10px] text-muted">
-          <span className="flex items-center gap-0.5">
-            <kbd className="px-1 py-0.2 rounded bg-canvas border border-subtle font-mono">Ctrl+K</kbd>{' '}
+          <button type="button" onClick={() => setCommandPaletteOpen(true)} className="flex items-center gap-1 rounded hover:text-main focus-visible:outline-2 focus-visible:outline-pale-sky-500">
+            <kbd dir="ltr" className="px-1 py-0.2 rounded bg-canvas border border-subtle font-mono">Ctrl+K</kbd>{' '}
             {t('globalSearch')}
-          </span>
+          </button>
           <span>•</span>
-          <span className="flex items-center gap-0.5">
-            <kbd className="px-1 py-0.2 rounded bg-canvas border border-subtle font-mono">F11</kbd>{' '}
+          <button type="button" onClick={toggleZenMode} className="flex items-center gap-1 rounded hover:text-main focus-visible:outline-2 focus-visible:outline-pale-sky-500">
+            <kbd dir="ltr" className="px-1 py-0.2 rounded bg-canvas border border-subtle font-mono">F11</kbd>{' '}
             {t('zenModeShort')}
-          </span>
+          </button>
         </div>
       </div>
     </footer>

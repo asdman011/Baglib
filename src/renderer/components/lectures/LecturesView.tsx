@@ -91,7 +91,7 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
         <button type="button" aria-current={current === item} className={`flex-1 min-w-0 rounded-lg border px-3 py-1.5 text-start text-sm ${current === item ? 'border-pale-sky-500' : 'border-subtle'}`} onClick={() => go(item.start)}><bdi className="text-xs text-muted">{clockTime(item.start)}</bdi> <span dir="auto">{item.title}</span></button>
         <button type="button" className="p-1.5 rounded-lg border border-subtle" aria-label={t('pathwayRemoveItem')} title={t('pathwayRemoveItem')} onClick={() => removeSection(index)}><Trash2 className="size-3" /></button>
       </li>)}</ol>
-      <div className="flex gap-2"><input className={`${control} flex-1`} value={section} onChange={event => setSection(event.target.value)} maxLength={300} placeholder={t('lectureSectionTitle')} aria-label={t('lectureSectionTitle')} dir="auto" /><button type="button" className={button} disabled={!section.trim()} onClick={addSection}><Plus className="size-4" />{t('lectureAddSection')}</button></div>
+      <div className="flex flex-wrap gap-2"><input className={`${control} min-w-0 flex-1 basis-40`} value={section} onChange={event => setSection(event.target.value)} maxLength={300} placeholder={t('lectureSectionTitle')} aria-label={t('lectureSectionTitle')} dir="auto" /><button type="button" className={button} disabled={!section.trim()} onClick={addSection}><Plus className="size-4" />{t('lectureAddSection')}</button></div>
     </section>
     <section className="space-y-2">
       <h3 className="text-sm font-bold">{t('lectureNotes')}</h3>
@@ -129,7 +129,7 @@ export function LecturesView() {
       </header>
       {failed && <p role="alert" className="text-sm">{t('pathwayError')}</p>}
       <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <ul className="space-y-1 min-w-0">{lectures.length === 0 && <li className="text-sm text-muted">{t('lecturesEmpty')}</li>}{lectures.map(item => <li key={item.id} className="flex items-center gap-1">
+        <ul className="space-y-1 min-w-0 max-h-64 lg:max-h-[65vh] overflow-y-auto overscroll-contain rounded-xl border border-subtle p-2">{lectures.length === 0 && <li className="p-3 text-sm leading-relaxed text-muted">{t('lecturesEmpty')}</li>}{lectures.map(item => <li key={item.id} className="flex items-center gap-1">
           <button type="button" aria-current={item.id === selected?.id} onClick={() => setSelected({ id: item.id, seek: null })} className={`flex-1 min-w-0 rounded-lg border px-3 py-2 text-start ${item.id === selected?.id ? 'border-pale-sky-500 bg-surface' : 'border-subtle'}`}><span dir="auto" className="block truncate text-sm font-bold">{item.title}</span><span className="block text-xs text-muted">{t(item.kind === 'audio' ? 'lectureAudio' : 'lectureVideo')} · <bdi>{item.path.split('.').pop()?.toUpperCase()}</bdi>{item.sections.length > 0 && ` · ${t('lectureSectionCount', { count: item.sections.length })}`}</span></button>
           <button type="button" className="p-1.5 rounded-lg border border-subtle" aria-label={t('lectureRemove')} title={t('lectureRemove')} onClick={() => remove(item.id)}><Trash2 className="size-3" /></button>
         </li>)}</ul>

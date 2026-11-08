@@ -161,15 +161,15 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
         setIsHovered(true);
         }}
       onMouseLeave={() => setIsHovered(false)}
-      className={`fixed bottom-6 start-1/2 -translate-x-1/2 ${aboveWorkstation ? 'z-[120]' : 'z-50'} transition-all duration-300 ease-out select-none ${
+      className={`fixed bottom-6 inset-x-3 mx-auto max-w-lg ${aboveWorkstation ? 'z-[120]' : 'z-50'} transition-all duration-300 ease-out motion-reduce:transition-none select-none ${
         isVisible
           ? 'opacity-100 translate-y-0 scale-100'
           : 'opacity-40 hover:opacity-100 translate-y-4 hover:translate-y-0 scale-95'
       }`}
     >
-      <div className="bg-surface/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-subtle dark:border-zinc-700/60 rounded-3xl shadow-2xl p-3 sm:p-4 min-w-[340px] max-w-lg text-main">
+      <div className="bg-surface/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-subtle dark:border-zinc-700/60 rounded-3xl shadow-2xl p-3 sm:p-4 w-full min-w-0 text-main">
         {/* Top Info Bar */}
-        <div className="flex items-center justify-between text-xs pb-2 border-b border-subtle/50 mb-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs pb-2 border-b border-subtle/50 mb-2.5">
           <div className="flex items-center gap-2 truncate max-w-[220px]">
             {playbackMode === 'audiobook' ? (
               <Headphones className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -256,7 +256,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
         </div>
 
         {/* Core Controls */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {/* Left Actions: Sleep Timer & Lyrics */}
           <div className="flex items-center gap-1">
             {/* Sleep Timer */}
@@ -274,7 +274,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
               </button>
 
               {isSleepOpen && (
-                <div className="absolute bottom-10 start-0 z-50 bg-surface dark:bg-zinc-800 border border-subtle rounded-2xl p-2 shadow-xl flex flex-col gap-1 min-w-[220px]">
+                <div className="absolute bottom-10 start-0 z-50 bg-surface dark:bg-zinc-800 border border-subtle rounded-2xl p-2 shadow-xl flex flex-col gap-1 w-56 max-w-[calc(100vw-3rem)] max-h-[60dvh] overflow-y-auto overscroll-contain">
                   {SLEEP_OPTIONS.map((minutes) => (
                     <button
                       key={minutes ?? 'off'}
@@ -282,7 +282,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
                         onSleepTimerChange(minutes);
                         setIsSleepOpen(false);
                       }}
-                      className="px-3 py-1 text-xs rounded-xl font-mono text-start hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
+                      className="px-3 py-1 text-xs leading-relaxed rounded-xl font-sans text-start hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
                     >
                       {minutes === null ? t('ttsTimerOff') : t('ttsTimerMinutes', { minutes })}
                     </button>

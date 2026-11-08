@@ -36,6 +36,7 @@ import { buildSequentialAudiobookMappings } from '../../../shared/utils/audioboo
 import type { TOCItem } from '../../libs/reader/types';
 
 export type WizardStep = 'summary' | 'select' | 'abs' | 'anchor' | 'review';
+const EMPTY_TOC: TOCItem[] = [];
 
 interface AbsItem { id: string; title: string; author: string; serverUrl: string; duration?: number; tracks?: { title?: string; index: number; duration?: number }[]; }
 interface AudiobookPairingDialogProps {
@@ -51,7 +52,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
   isOpen,
   bookId,
   bookTitle,
-  toc = [],
+  toc = EMPTY_TOC,
   onClose,
   onPairingSaved,
 }) => {
@@ -374,10 +375,10 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-surface border border-subtle rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-surface border border-subtle rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] animate-in fade-in zoom-in-95 duration-150">
         {/* Dialog Header */}
-        <div className="px-6 py-4 border-b border-subtle flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
+        <div className="px-3 sm:px-6 py-4 border-b border-subtle flex items-center justify-between gap-2 shrink-0">
+          <div className="flex min-w-0 items-center gap-2.5 [&>div]:min-w-0">
             <div className="w-9 h-9 rounded-xl bg-pale-sky-500/15 flex items-center justify-center text-pale-sky-600 dark:text-pale-sky-400">
               <Headphones className="w-5 h-5" />
             </div>
@@ -389,6 +390,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
 
           <button
             onClick={onClose}
+            aria-label={t('close')}
             className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main border border-subtle transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -396,7 +398,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
         </div>
 
         {/* Wizard Step Navigation Indicator */}
-        <div className="px-6 py-2.5 bg-canvas/40 border-b border-subtle flex items-center justify-between text-xs font-semibold">
+        <div className="px-3 sm:px-6 py-2.5 bg-canvas/40 border-b border-subtle flex shrink-0 flex-wrap items-center justify-between gap-2 text-xs leading-relaxed font-semibold">
           {[
             { id: 'summary', label: t('audiobookStepSummary') },
             { id: 'select', label: t('audiobookStepSelect') },
@@ -432,7 +434,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
         )}
 
         {/* Step Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-4">
           {isLoading ? (
             <div className="h-48 flex flex-col items-center justify-center text-muted gap-2">
               <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
@@ -694,7 +696,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
         </div>
 
         {/* Wizard Footer Actions */}
-        <div className="px-6 py-4 border-t border-subtle flex justify-between items-center shrink-0 bg-surface/50">
+        <div className="px-3 sm:px-6 py-4 border-t border-subtle flex flex-wrap justify-between items-center gap-2 shrink-0 bg-surface/50">
           <div>
             {step !== 'summary' && step !== 'select' && (
               <button

@@ -56,18 +56,18 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
     >
       {/* Top Welcome & Companion Controls Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-subtle pb-3">
-        <div className="flex items-center gap-3.5">
+        <div className="flex min-w-0 items-center gap-3.5">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-pale-sky-500/20 to-emerald-500/20 border border-pale-sky-500/30 flex items-center justify-center text-pale-sky-600 dark:text-pale-sky-400 shrink-0">
             <LayoutDashboard className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold text-main font-display">
+              <h1 className={`text-base sm:text-lg font-bold text-main leading-relaxed ${lang === 'ar' ? 'font-sans' : 'font-display'}`}>
                 {t('dashboardTitle')}
               </h1>
 
             </div>
-            <p className="text-xs text-muted mt-0.5">
+            <p className="text-xs leading-relaxed text-muted mt-0.5">
               {t('dashboardSubtitle')}
             </p>
           </div>

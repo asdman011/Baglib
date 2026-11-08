@@ -54,7 +54,7 @@ export function togglePoetryPanel(current: PoetryPanel, requested: Exclude<Poetr
 }
 
 export function poetryDescriptionText(value: unknown): string {
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') return value.replace(/&(?:nbsp|#160|#x0*a0);/giu, '\u00a0');
   if (Array.isArray(value)) return value.map(poetryDescriptionText).filter(Boolean).join('\n');
   if (!value || typeof value !== 'object') return '';
   const node = value as Record<string, unknown>;

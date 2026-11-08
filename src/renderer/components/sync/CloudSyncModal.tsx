@@ -2,7 +2,8 @@
 import { errorMessage } from '../../../shared/errors';
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   X,
   Cloud,
@@ -36,36 +37,21 @@ interface CloudSyncModalProps {
   onClose: () => void;
 }
 
+const DEFAULT_KO: KOSyncConfig = { serverUrl: 'https://sync.koreader.rocks', username: '', password: '', deviceName: 'Baglib Desktop', autoSyncOnOpenClose: true, sendMetadata: true };
+const DEFAULT_CLOUD: CloudConfig = { provider: 'webdav', enabled: false, autoBackupOnClose: false, remoteBackupFolder: 'Baglib/Backups', webdav: { url: '', username: '', password: '' }, nextcloud: { url: '', username: '', password: '' }, s3: { endpoint: '', bucket: '', accessKeyId: '', secretAccessKey: '', region: 'us-east-1' }, dropbox: { token: '' }, gdrive: { token: '' }, onedrive: { token: '' } };
+
 export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose }) => {
   const { t, dir, activeBook, refreshBooks } = useWorkspace();
   const [activeTab, setActiveTab] = useState<'koreader' | 'cloud' | 'snapshots'>('koreader');
 
   // --- KOReader State ---
-  const [koConfig, setKoConfig] = useState<KOSyncConfig>({
-    serverUrl: 'https://sync.koreader.rocks',
-    username: '',
-    password: '',
-    deviceName: 'Baglib Desktop',
-    autoSyncOnOpenClose: true,
-    sendMetadata: true,
-  });
+  const [koConfig, setKoConfig] = useState<KOSyncConfig>(DEFAULT_KO);
   const [isTestingKo, setIsTestingKo] = useState(false);
   const [koStatus, setKoStatus] = useState<{ success?: boolean; message?: string } | null>(null);
   const [isSyncingKo, setIsSyncingKo] = useState(false);
 
   // --- Cloud Storage State ---
-  const [cloudConfig, setCloudConfig] = useState<CloudConfig>({
-    provider: 'webdav',
-    enabled: false,
-    autoBackupOnClose: false,
-    remoteBackupFolder: 'Baglib/Backups',
-    webdav: { url: '', username: '', password: '' },
-    nextcloud: { url: '', username: '', password: '' },
-    s3: { endpoint: '', bucket: '', accessKeyId: '', secretAccessKey: '', region: 'us-east-1' },
-    dropbox: { token: '' },
-    gdrive: { token: '' },
-    onedrive: { token: '' },
-  });
+  const [cloudConfig, setCloudConfig] = useState<CloudConfig>(DEFAULT_CLOUD);
   const [isTestingCloud, setIsTestingCloud] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<{ success?: boolean; message?: string } | null>(null);
   const [isBackingUpCloud, setIsBackingUpCloud] = useState(false);
@@ -78,31 +64,71 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [snapshotStatus, setSnapshotStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [savedKo, setSavedKo] = useState<KOSyncConfig | null>(null);
+  const [savedCloud, setSavedCloud] = useState<CloudConfig | null>(null);
+  const [loadingConfigs, setLoadingConfigs] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [operationBusy, setOperationBusy] = useState(false);
+  const [operationFailed, setOperationFailed] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const busyRef = useRef(false);
+  const session = useRef(0);
+  const expire = useCallback(() => { session.current++; busyRef.current = false; }, []);
+  useEffect(() => { expire(); return expire; }, [isOpen, expire]);
+  const isCurrent = useCallback((token: number) => session.current === token, []);
+  const dirtyKo = savedKo !== null && JSON.stringify(koConfig) !== JSON.stringify(savedKo);
+  const dirtyCloud = savedCloud !== null && JSON.stringify(cloudConfig) !== JSON.stringify(savedCloud);
+  const closeSafely = () => {
+    if (busyRef.current) return;
+    if (dirtyKo || dirtyCloud || newSnapshotDesc.trim()) setConfirmDiscard(true);
+    else onClose();
+  };
+  const dialogRef = useDialogFocus(isOpen, closeSafely);
+  const discardRef = useDialogFocus(isOpen && confirmDiscard, () => setConfirmDiscard(false));
+  const [previousOpen, setPreviousOpen] = useState(isOpen);
+  if (previousOpen !== isOpen) {
+    setPreviousOpen(isOpen);
+    if (isOpen) { setConfirmDiscard(false); setOperationBusy(false); setOperationFailed(false); setLoadingConfigs(true); setLoadFailed(false); setIsTestingKo(false); setIsSyncingKo(false); setIsTestingCloud(false); setIsBackingUpCloud(false); setIsLoadingRemoteFiles(false); setIsCreatingSnapshot(false); setIsRestoring(false); setRemoteFiles([]); }
+  }
+  const perform = async (action: () => Promise<unknown>) => {
+    if (busyRef.current) return;
+    const token = session.current;
+    busyRef.current = true;
+    setOperationBusy(true);
+    setOperationFailed(false);
+    try { await action(); }
+    catch { if (isCurrent(token)) setOperationFailed(true); }
+    finally { if (isCurrent(token)) { busyRef.current = false; setOperationBusy(false); } }
+  };
 
   // Load configs on open
   useEffect(() => {
     if (!isOpen) return;
 
     const windowAPI = (window).electronAPI?.cloudSync;
-    if (!windowAPI) return;
-
-    windowAPI.getKoSyncConfig?.().then((cfg: KOSyncConfig) => {
-      if (cfg) setKoConfig(cfg);
+    let alive = true;
+    const token = session.current;
+    void Promise.allSettled([
+      Promise.resolve().then(() => { if (!windowAPI?.getKoSyncConfig) throw new Error('unavailable'); return windowAPI.getKoSyncConfig(); }),
+      Promise.resolve().then(() => { if (!windowAPI?.getCloudConfig) throw new Error('unavailable'); return windowAPI.getCloudConfig(); }),
+    ]).then(([ko, cloud]) => {
+      if (!alive || !isCurrent(token)) return;
+      if (ko.status === 'fulfilled') { const value = ko.value || DEFAULT_KO; setKoConfig(value); setSavedKo(value); } else setSavedKo(null);
+      if (cloud.status === 'fulfilled') { const value = cloud.value || DEFAULT_CLOUD; setCloudConfig(value); setSavedCloud(value); } else setSavedCloud(null);
+      setLoadFailed(ko.status === 'rejected' || cloud.status === 'rejected');
+      setLoadingConfigs(false);
     });
-
-    windowAPI.getCloudConfig?.().then((cfg: CloudConfig) => {
-      if (cfg) setCloudConfig(cfg);
-    });
-
-    loadSnapshots();
-  }, [isOpen]);
+    if (windowAPI?.listSnapshots) void windowAPI.listSnapshots().then(list => { if (alive && isCurrent(token)) setSnapshots(list || []); }).catch(() => {});
+    return () => { alive = false; };
+  }, [isOpen, isCurrent]);
 
   async function loadSnapshots() {
+    const token = session.current;
     const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.listSnapshots) return;
     try {
       const list = await windowAPI.listSnapshots();
-      setSnapshots(list || []);
+      if (isCurrent(token)) setSnapshots(list || []);
     } catch (e) {
       console.error('Failed to load snapshots:', e);
     }
@@ -110,31 +136,39 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
   // --- KOReader Handlers ---
   const handleSaveKoConfig = async () => {
+    const token = session.current;
     const windowAPI = (window).electronAPI?.cloudSync;
-    if (!windowAPI?.saveKoSyncConfig) return;
+    if (!windowAPI?.saveKoSyncConfig || !savedKo || loadingConfigs) throw new Error('unavailable');
     await windowAPI.saveKoSyncConfig(koConfig);
-    setKoStatus({ success: true, message: t('koSyncSuccess') });
+    if (!isCurrent(token)) return false;
+    setSavedKo(koConfig);
+    setKoStatus({ success: true, message: t('syncSettingsSaved') });
+    return true;
   };
 
   const handleTestKo = async () => {
+    const token = session.current;
     const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.testKoSync) return;
     setIsTestingKo(true);
     setKoStatus(null);
     try {
-      await handleSaveKoConfig();
+      if (!await handleSaveKoConfig()) return;
       const res = await windowAPI.testKoSync(koConfig);
+      if (!isCurrent(token)) return;
       setKoStatus({ success: res.success, message: res.message });
     } catch (e: unknown) {
-      setKoStatus({ success: false, message: errorMessage(e) });
+      if (isCurrent(token)) setKoStatus({ success: false, message: errorMessage(e) });
     } finally {
-      setIsTestingKo(false);
+      if (isCurrent(token)) setIsTestingKo(false);
     }
   };
 
   const handleManualKoSync = async () => {
+    const token = session.current;
+    if (!savedKo || dirtyKo) throw new Error('save-first');
     if (!activeBook) {
-      setKoStatus({ success: false, message: 'Please open a book to sync reading progress.' });
+      setKoStatus({ success: false, message: t('syncOpenBookFirst') });
       return;
     }
     const windowAPI = (window).electronAPI?.cloudSync;
@@ -145,77 +179,93 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
     try {
       // Pull first
       const pullRes = await windowAPI.pullKoSyncProgress(activeBook.id);
+      if (!isCurrent(token)) return;
       if (pullRes.success && pullRes.data) {
-        setKoStatus({ success: true, message: pullRes.message });
+        setKoStatus({ success: true, message: pullRes.message || t('koSyncSuccess') });
         await refreshBooks();
       } else {
         // Push current progress
         const percent = (activeBook.readingProgress || 0) / 100;
         const pushRes = await windowAPI.pushKoSyncProgress(activeBook.id, 'pos-1', percent);
+        if (!isCurrent(token)) return;
         setKoStatus({ success: pushRes.success, message: pushRes.message });
       }
     } catch (e: unknown) {
-      setKoStatus({ success: false, message: errorMessage(e) });
+      if (isCurrent(token)) setKoStatus({ success: false, message: errorMessage(e) });
     } finally {
-      setIsSyncingKo(false);
+      if (isCurrent(token)) setIsSyncingKo(false);
     }
   };
 
   // --- Cloud Storage Handlers ---
   const handleSaveCloudConfig = async () => {
+    const token = session.current;
     const windowAPI = (window).electronAPI?.cloudSync;
-    if (!windowAPI?.saveCloudConfig) return;
+    if (!windowAPI?.saveCloudConfig || !savedCloud || loadingConfigs) throw new Error('unavailable');
     await windowAPI.saveCloudConfig(cloudConfig);
+    if (!isCurrent(token)) return false;
+    setSavedCloud(cloudConfig);
+    setCloudStatus({ success: true, message: t('syncSettingsSaved') });
+    return true;
   };
 
   const handleTestCloud = async () => {
+    const token = session.current;
     const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.testCloudConnection) return;
     setIsTestingCloud(true);
     setCloudStatus(null);
     try {
-      await handleSaveCloudConfig();
+      if (!await handleSaveCloudConfig()) return;
       const res = await windowAPI.testCloudConnection(cloudConfig);
+      if (!isCurrent(token)) return;
       setCloudStatus({ success: res.success, message: res.message });
     } catch (e: unknown) {
-      setCloudStatus({ success: false, message: errorMessage(e) });
+      if (isCurrent(token)) setCloudStatus({ success: false, message: errorMessage(e) });
     } finally {
-      setIsTestingCloud(false);
+      if (isCurrent(token)) setIsTestingCloud(false);
     }
   };
 
   const handleBackupToCloud = async () => {
+    const token = session.current;
     const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.backupToCloud) return;
     setIsBackingUpCloud(true);
     setCloudStatus(null);
     try {
-      await handleSaveCloudConfig();
+      if (!await handleSaveCloudConfig()) return;
       const res = await windowAPI.backupToCloud();
+      if (!isCurrent(token)) return;
       setCloudStatus({ success: res.success, message: res.message });
       await loadSnapshots();
     } catch (e: unknown) {
-      setCloudStatus({ success: false, message: errorMessage(e) });
+      if (isCurrent(token)) setCloudStatus({ success: false, message: errorMessage(e) });
     } finally {
-      setIsBackingUpCloud(false);
+      if (isCurrent(token)) setIsBackingUpCloud(false);
     }
   };
 
   const handleListRemoteFiles = async () => {
+    const token = session.current;
+    if (!savedCloud || dirtyCloud) throw new Error('save-first');
     const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.listCloudFiles) return;
     setIsLoadingRemoteFiles(true);
     try {
       const files = await windowAPI.listCloudFiles(cloudConfig.remoteBackupFolder);
+      if (!isCurrent(token)) return;
       setRemoteFiles(files || []);
     } catch (e) {
       console.error('Failed to list remote files:', e);
     } finally {
-      setIsLoadingRemoteFiles(false);
+      if (isCurrent(token)) setIsLoadingRemoteFiles(false);
     }
   };
 
   const handleRestoreFromCloud = async (fileName: string) => {
+    const token = session.current;
+    if (!savedCloud || dirtyCloud) throw new Error('save-first');
     if (!window.confirm(t('snapshotConfirmRestore'))) return;
     const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.restoreFromCloud) return;
@@ -224,20 +274,22 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
     setCloudStatus({ success: true, message: t('snapshotRestoring') });
     try {
       const res = await windowAPI.restoreFromCloud(fileName);
+      if (!isCurrent(token)) return;
       setCloudStatus({ success: res.success, message: res.message });
       if (res.success) {
         await refreshBooks();
         await loadSnapshots();
       }
     } catch (e: unknown) {
-      setCloudStatus({ success: false, message: errorMessage(e) });
+      if (isCurrent(token)) setCloudStatus({ success: false, message: errorMessage(e) });
     } finally {
-      setIsRestoring(false);
+      if (isCurrent(token)) setIsRestoring(false);
     }
   };
 
   // --- Snapshot Handlers ---
   const handleCreateSnapshot = async () => {
+    const token = session.current;
     const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.createSnapshot) return;
 
@@ -245,17 +297,19 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
     setSnapshotStatus(null);
     try {
       const res = await windowAPI.createSnapshot(newSnapshotDesc.trim() || undefined);
+      if (!isCurrent(token)) return;
       setSnapshotStatus({ success: res.success, message: res.message });
-      setNewSnapshotDesc('');
+      if (res.success) setNewSnapshotDesc('');
       await loadSnapshots();
     } catch (e: unknown) {
-      setSnapshotStatus({ success: false, message: errorMessage(e) });
+      if (isCurrent(token)) setSnapshotStatus({ success: false, message: errorMessage(e) });
     } finally {
-      setIsCreatingSnapshot(false);
+      if (isCurrent(token)) setIsCreatingSnapshot(false);
     }
   };
 
   const handleRestoreSnapshot = async (fileName: string) => {
+    const token = session.current;
     if (!window.confirm(t('snapshotConfirmRestore'))) return;
     const windowAPI = (window).electronAPI?.cloudSync;
     if (!windowAPI?.restoreSnapshot) return;
@@ -264,14 +318,15 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
     setSnapshotStatus({ success: true, message: t('snapshotRestoring') });
     try {
       const res = await windowAPI.restoreSnapshot(fileName);
+      if (!isCurrent(token)) return;
       setSnapshotStatus({ success: res.success, message: res.message });
       if (res.success) {
         await refreshBooks();
       }
     } catch (e: unknown) {
-      setSnapshotStatus({ success: false, message: errorMessage(e) });
+      if (isCurrent(token)) setSnapshotStatus({ success: false, message: errorMessage(e) });
     } finally {
-      setIsRestoring(false);
+      if (isCurrent(token)) setIsRestoring(false);
     }
   };
 
@@ -287,7 +342,16 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" dir={dir}>
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-white dark:bg-stone-900 rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 flex flex-col overflow-hidden text-stone-900 dark:text-stone-100">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('cloudSyncModalTitle')} tabIndex={-1} className="relative w-full max-w-4xl max-h-[calc(100dvh-2rem)] bg-white dark:bg-stone-900 rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 flex flex-col overflow-hidden text-stone-900 dark:text-stone-100">
+        {confirmDiscard && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div ref={discardRef} role="dialog" aria-modal="true" aria-label={t('unsavedChangesTitle')} tabIndex={-1} className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-4 space-y-3 text-sm leading-relaxed text-main">
+            <h4 className="font-bold">{t('unsavedChangesTitle')}</h4><p>{t('settingsDiscardPrompt')}</p>
+            <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setConfirmDiscard(false)} className="rounded-lg border border-subtle p-2">{t('keepEditing')}</button><button type="button" onClick={() => { setConfirmDiscard(false); setNewSnapshotDesc(''); onClose(); }} className="rounded-lg bg-red-600 p-2 text-white">{t('discardAndClose')}</button></div>
+          </div>
+        </div>}
+        {operationBusy && <p role="status" className="shrink-0 px-4 py-2 text-xs leading-relaxed">{t('syncOperationBusy')}</p>}
+        {operationFailed && <p role="alert" className="shrink-0 px-4 py-2 text-xs text-red-500 leading-relaxed">{t('syncOperationFailed')}</p>}
+        {loadFailed && <p role="alert" className="shrink-0 px-4 py-2 text-xs text-red-500 leading-relaxed">{t('syncSettingsLoadFailed')}</p>}
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
@@ -300,12 +364,14 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
                 {t('cloudSyncModalTitle')}
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                KOReader Protocol • WebDAV/S3 • Koodo Atomic Snapshots
+                {t('syncProtocolSummary')}
               </p>
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={closeSafely}
+            disabled={operationBusy}
+            aria-label={t('close')}
             className="p-2 rounded-lg hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-500 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -313,9 +379,10 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-stone-200 dark:border-stone-800 px-6 bg-stone-100/50 dark:bg-stone-950/40">
+        <div className="flex shrink-0 overflow-x-auto overscroll-x-contain border-b border-stone-200 dark:border-stone-800 px-3 sm:px-6 bg-stone-100/50 dark:bg-stone-950/40 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
           <button
             onClick={() => setActiveTab('koreader')}
+            disabled={operationBusy}
             className={`flex items-center gap-2 py-3 px-4 font-medium text-sm border-b-2 transition-all ${
               activeTab === 'koreader'
                 ? 'border-amber-600 dark:border-amber-400 text-amber-700 dark:text-amber-300 font-semibold'
@@ -328,6 +395,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
           <button
             onClick={() => setActiveTab('cloud')}
+            disabled={operationBusy}
             className={`flex items-center gap-2 py-3 px-4 font-medium text-sm border-b-2 transition-all ${
               activeTab === 'cloud'
                 ? 'border-amber-600 dark:border-amber-400 text-amber-700 dark:text-amber-300 font-semibold'
@@ -340,6 +408,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
           <button
             onClick={() => setActiveTab('snapshots')}
+            disabled={operationBusy}
             className={`flex items-center gap-2 py-3 px-4 font-medium text-sm border-b-2 transition-all ${
               activeTab === 'snapshots'
                 ? 'border-amber-600 dark:border-amber-400 text-amber-700 dark:text-amber-300 font-semibold'
@@ -355,7 +424,9 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <fieldset disabled={operationBusy || (loadingConfigs && activeTab !== 'snapshots')} className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-6">
+          {loadingConfigs && <p role="status">{t('loading')}</p>}
+          {((activeTab === 'koreader' && dirtyKo) || (activeTab === 'cloud' && dirtyCloud)) && <p role="status" className="text-xs leading-relaxed">{t('syncSaveFirst')}</p>}
 
           {/* TAB 1: KOReader Sync */}
           {activeTab === 'koreader' && (
@@ -446,10 +517,11 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
                 </div>
               )}
 
-              <div className="flex items-center gap-3 pt-3 border-t border-stone-200 dark:border-stone-800">
+              <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-stone-200 dark:border-stone-800">
+                <button type="button" data-sync-save-ko disabled={!savedKo} onClick={() => void perform(handleSaveKoConfig)} className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{t('syncSaveSettings')}</button>
                 <button
-                  onClick={handleTestKo}
-                  disabled={isTestingKo || !koConfig.username}
+                  onClick={() => void perform(handleTestKo)}
+                  disabled={isTestingKo || !koConfig.username || !savedKo}
                   className="px-4 py-2 text-xs font-semibold rounded-lg bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
                   {isTestingKo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -458,8 +530,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
                 {activeBook && (
                   <button
-                    onClick={handleManualKoSync}
-                    disabled={isSyncingKo || !koConfig.username}
+                    onClick={() => void perform(handleManualKoSync)}
+                    disabled={isSyncingKo || !koConfig.username || !savedKo || dirtyKo}
                     className="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-2 disabled:opacity-50"
                   >
                     {isSyncingKo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BookOpen className="w-3.5 h-3.5" />}
@@ -669,9 +741,10 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
               )}
 
               <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-stone-200 dark:border-stone-800">
+                <button type="button" data-sync-save-cloud disabled={!savedCloud} onClick={() => void perform(handleSaveCloudConfig)} className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{t('syncSaveSettings')}</button>
                 <button
-                  onClick={handleTestCloud}
-                  disabled={isTestingCloud}
+                  onClick={() => void perform(handleTestCloud)}
+                  disabled={isTestingCloud || !savedCloud}
                   className="px-4 py-2 text-xs font-semibold rounded-lg bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
                   {isTestingCloud ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -679,8 +752,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
                 </button>
 
                 <button
-                  onClick={handleBackupToCloud}
-                  disabled={isBackingUpCloud}
+                  onClick={() => void perform(handleBackupToCloud)}
+                  disabled={isBackingUpCloud || !savedCloud}
                   className="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
                   {isBackingUpCloud ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
@@ -688,8 +761,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
                 </button>
 
                 <button
-                  onClick={handleListRemoteFiles}
-                  disabled={isLoadingRemoteFiles}
+                  onClick={() => void perform(handleListRemoteFiles)}
+                  disabled={isLoadingRemoteFiles || !savedCloud || dirtyCloud}
                   className="px-4 py-2 text-xs font-semibold rounded-lg bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
                   {isLoadingRemoteFiles ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderOpen className="w-3.5 h-3.5" />}
@@ -715,8 +788,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
                         </div>
                         {file.name.endsWith('.zip') && (
                           <button
-                            onClick={() => handleRestoreFromCloud(file.name)}
-                            disabled={isRestoring}
+                            onClick={() => void perform(() => handleRestoreFromCloud(file.name))}
+                            disabled={isRestoring || !savedCloud || dirtyCloud}
                             className="px-2.5 py-1 text-[11px] font-semibold rounded bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
                           >
                             {t('cloudRestoreBackup')}
@@ -753,7 +826,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
                   className="flex-1 px-3 py-2 text-xs rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                 />
                 <button
-                  onClick={handleCreateSnapshot}
+                  onClick={() => void perform(handleCreateSnapshot)}
                   disabled={isCreatingSnapshot}
                   className="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-2 shrink-0 disabled:opacity-50"
                 >
@@ -812,7 +885,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
                       <div className="flex items-center gap-2 self-end md:self-center">
                         <button
-                          onClick={() => handleRestoreSnapshot(snap.fileName)}
+                          onClick={() => void perform(() => handleRestoreSnapshot(snap.fileName))}
                           disabled={isRestoring}
                           className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
                         >
@@ -820,7 +893,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
                           {t('snapshotRestore')}
                         </button>
                         <button
-                          onClick={() => handleDeleteSnapshot(snap.fileName)}
+                          onClick={() => void perform(() => handleDeleteSnapshot(snap.fileName))}
                           className="p-1.5 text-stone-400 hover:text-rose-500 transition-colors rounded-lg hover:bg-stone-200 dark:hover:bg-stone-700"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -833,16 +906,17 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
             </div>
           )}
 
-        </div>
+        </fieldset>
 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50 flex items-center justify-between text-xs text-stone-500">
           <div className="flex items-center gap-2">
             <HardDrive className="w-4 h-4 text-stone-400" />
-            <span>Baglib Universal Sync & Backup • 100% Offline Capable</span>
+            <span>{t('syncOfflineScope')}</span>
           </div>
           <button
-            onClick={onClose}
+            onClick={closeSafely}
+            disabled={operationBusy}
             className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 transition-colors"
           >
             {t('back')}

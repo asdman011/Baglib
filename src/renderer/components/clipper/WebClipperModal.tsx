@@ -226,7 +226,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div
-        className="relative flex flex-col w-full max-w-3xl max-h-[90vh] bg-surface rounded-2xl shadow-2xl border border-white/10 overflow-hidden"
+        className="relative flex flex-col w-full max-w-3xl max-h-[calc(100dvh-2rem)] bg-surface rounded-2xl shadow-2xl border border-white/10 overflow-hidden"
         dir={isRtl ? 'rtl' : 'ltr'}
       >
         {/* Header */}
@@ -242,6 +242,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label={t('close')}
             className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-white/5 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -249,7 +250,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-white/10 bg-surface-raised/50 px-6">
+        <div className="flex shrink-0 overflow-x-auto overscroll-x-contain border-b border-white/10 bg-surface-raised/50 px-3 sm:px-6 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
           <button
             onClick={() => setActiveTab('single')}
             className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-all ${
@@ -286,7 +287,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-6">
           {/* Status Alert */}
           {statusMessage && (
             <div

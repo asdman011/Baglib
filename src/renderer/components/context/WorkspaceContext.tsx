@@ -61,6 +61,10 @@ interface WorkspaceContextType extends WorkspaceState {
   toggleSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setSearchHubOpen: (open: boolean) => void;
+  isImportWizardOpen: boolean;
+  setIsImportWizardOpen: (open: boolean) => void;
+  droppedImportPaths: string[];
+  setDroppedImportPaths: (paths: string[]) => void;
   setViewMode: (mode: WorkspaceViewMode) => void;
   setActiveLibraryCategory: (catId: string) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
@@ -88,6 +92,7 @@ interface WorkspaceContextType extends WorkspaceState {
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
+const GlobalImportWizard = React.lazy(() => import('../library/ImportWizardModal').then(module => ({ default: module.ImportWizardModal })));
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Initialize with canonical server defaults to guarantee 100% hydration match with SSR
@@ -113,6 +118,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, []);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isSearchHubOpen, setIsSearchHubOpen] = useState(false);
+  const [isImportWizardOpen, setImportWizardOpen] = useState(false);
+  const [droppedImportPaths, setDroppedImportPaths] = useState<string[]>([]);
+  const [importStarted, setImportStarted] = useState(false);
+  const [importRequest, setImportRequest] = useState(0);
+  const setIsImportWizardOpen = (open: boolean) => {
+    if (open) { setImportStarted(true); setImportRequest(value => value + 1); }
+    setImportWizardOpen(open);
+  };
   const [isZenMode, setIsZenMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
@@ -576,6 +589,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setCommandPaletteOpen: setIsCommandPaletteOpen,
         isSearchHubOpen,
         setSearchHubOpen: setIsSearchHubOpen,
+        isImportWizardOpen,
+        setIsImportWizardOpen,
+        droppedImportPaths,
+        setDroppedImportPaths: paths => { if (!isImportWizardOpen) setDroppedImportPaths(paths); },
         setViewMode: safeSetViewMode,
         activeLibraryCategory,
         setActiveLibraryCategory,
@@ -597,6 +614,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }}
     >
       {children}
+      {importStarted && <React.Suspense fallback={null}><GlobalImportWizard isOpen={isImportWizardOpen} initialPaths={droppedImportPaths} requestId={importRequest} onClose={() => { setImportWizardOpen(false); setDroppedImportPaths([]); }} /></React.Suspense>}
     </WorkspaceContext.Provider>
   );
 };
