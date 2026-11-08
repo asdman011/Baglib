@@ -1,3 +1,9 @@
+## Save live-check rerun — 2026-11-09, Claude Code (verified, committed, pushed)
+
+- User asked to read what Codex changed/published, rerun the save check, then "commit and push then do jira tasks". Codex had already published the unified-saving work (d90dbc6) and updated Jira.
+- Rerun of scripts/save-live on the current code (throwaway profile, two launches) passes in ar and en: info icons (focus, Escape, RTL), manual + Ctrl+S, one emergency copy holding the previous file, grouped after-change write, undo then redo after restart, one-minute interval, book-close Cancel/Close without writing, clean and text-only export (0/1 and 4/1 owned/foreign, working file unchanged), window Cancel then Save writing all 5 marks.
+- Only change: the harness focuses the window before the keyboard tooltip check and waits for the text layer after a file rewrite (no app change). Server stopped; test folder deleted.
+
 ## Authorized publication — 2026-11-08, Codex (implemented, verified, committed, pushed; Jira updated)
 
 - User explicitly authorized commit, push and Jira updates in this request. Publish completed collaborative notes/reader/UI work in organized commits on feature/library-domain to origin/feature/library-domain; do not restart the ended implementation goal. Preserve unrelated .claude launch configuration, dataset-delivery planning, Sunnah chapter-name scripts/docs and hadith-alignment patches. Shared groundwork authored by Claude Code is attributed below; Codex follow-ups and limits are retained. Fresh type/main-build/test checks are running before staging; Jira writes only after successful push. Historical "uncommitted/in progress" sections below are dated records, superseded only by verified publication notes above them.

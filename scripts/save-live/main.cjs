@@ -42,7 +42,7 @@ app.on('browser-window-created', (_, owner) => {
     }
     await pause(1500);
   };
-  const selectSpan = index => evaluate(`(()=>{const spans=[...document.querySelectorAll('.textLayer span')].filter(s=>s.textContent.trim().length>3);const span=spans[${index}];if(!span)throw new Error('no span');const range=document.createRange();range.selectNodeContents(span);const sel=getSelection();sel.removeAllRanges();sel.addRange(range);span.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));return span.textContent;})()`);
+  const selectSpan = async index => { await until(`[...document.querySelectorAll('.textLayer span')].filter(s=>s.textContent.trim().length>3).length>${index}`, 100); return evaluate(`(()=>{const spans=[...document.querySelectorAll('.textLayer span')].filter(s=>s.textContent.trim().length>3);const span=spans[${index}];if(!span)throw new Error('no span');const range=document.createRange();range.selectNodeContents(span);const sel=getSelection();sel.removeAllRanges();sel.addRange(range);span.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));return span.textContent;})()`); };
   const pagePoint = (fx, fy) => evaluate(`(()=>{const r=document.querySelector('[data-page-number="1"]').getBoundingClientRect();return {x:Math.round(r.left+r.width*${fx}),y:Math.round(r.top+r.height*${fy})};})()`);
   const mouse = (type, point) => owner.webContents.sendInputEvent({ type, x: point.x, y: point.y, button: 'left', clickCount: 1 });
   const drag = async (from, to) => { mouse('mouseMove', from); await pause(60); mouse('mouseDown', from); await pause(60); for (let step = 1; step <= 6; step++) { mouse('mouseMove', { x: Math.round(from.x + ((to.x - from.x) * step) / 6), y: Math.round(from.y + ((to.y - from.y) * step) / 6) }); await pause(40); } mouse('mouseUp', to); await pause(500); };
@@ -105,6 +105,7 @@ app.on('browser-window-created', (_, owner) => {
     await until("!!document.querySelector('[data-save-settings] [data-save-mode]')");
     record('infoIcons', await evaluate("document.querySelectorAll('[data-save-settings] [data-info-tip]').length"));
     record('infoLabels', await evaluate("[...document.querySelectorAll('[data-save-settings] [data-info-tip]')].map(b=>b.getAttribute('aria-label'))"));
+    owner.show(); owner.focus(); owner.webContents.focus(); await pause(300);
     await evaluate("document.querySelector('[data-info-tip]').focus()"); await pause(300);
     record('tipOnFocus', await evaluate("(()=>{const t=document.querySelector('[data-info-tip-text]');if(!t)return null;const r=t.getBoundingClientRect();return {text:t.textContent,inside:r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,described:document.querySelector('[data-info-tip]').getAttribute('aria-describedby')===t.id};})()"));
     await evaluate("document.querySelector('[data-info-tip]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))"); await pause(300);
