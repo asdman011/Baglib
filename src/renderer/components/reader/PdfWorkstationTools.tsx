@@ -11,6 +11,7 @@ import { PdfReviewPanel } from './PdfReviewPanel';
 import { PdfAuditViewer } from './PdfAuditViewer';
 import { PdfTocEditor } from './PdfTocEditor';
 import { PdfColorSwatches } from './PdfColorSwatches';
+import type { PagePlanItem } from './PdfPageEditor';
 
 export const REDACTION_PRESETS = [
   { id: 'email', nameKey: 'pdfRedactionEmail' as const, pattern: '[\\w.-]+@[\\w.-]+\\.\\w+', desc: '[\\w.-]+@[\\w.-]+\\.\\w+' },
@@ -43,6 +44,8 @@ export interface PdfToolProps {
   onPage: (value: number) => void;
   onSource: (value: PdfSession) => void;
   mode?: StirlingWorkstationMode;
+  onAppendPages?: (pages: Omit<PagePlanItem, 'id'>[]) => void;
+  getOrganizerPages?: () => PagePlanItem[];
 }
 
 export function PdfWorkstationTools({
@@ -62,6 +65,8 @@ export function PdfWorkstationTools({
   onPage,
   onSource,
   mode,
+  onAppendPages,
+  getOrganizerPages,
 }: PdfToolProps) {
   const { t, lang } = useWorkspace();
   const [asset, setAsset] = useState<PdfAsset | null>(null);
@@ -286,6 +291,7 @@ export function PdfWorkstationTools({
       {effectiveMode === 'organize' && (
         <div className="space-y-4">
           <p className="text-xs text-muted">{t('pdfPagePlanHint')}</p>
+          {!onAppendPages && <>
           <div className="flex flex-wrap gap-1.5">
             {button('pdfSelectAll', () => setSelected(currentPlan.map((_, index) => index)))}
             {button('stirlingSelectEven', () => setSelected(currentPlan.map((_, index) => index).filter(i => (i + 1) % 2 === 0)))}
@@ -356,8 +362,9 @@ export function PdfWorkstationTools({
             })}
           </div>
 
+          </>}
           <div className="flex flex-wrap gap-2">
-            {button('pdfApplyPagePlan', () => {
+            {!onAppendPages && button('pdfApplyPagePlan', () => {
               apply('organize', { pages: currentPlan });
               setPlan(null);
               setSelected([]);
@@ -379,13 +386,19 @@ export function PdfWorkstationTools({
                     if (res.ok === false) throw new Error();
                     val = res.data;
                   }
+                  if (val.state !== 'completed' || !val.inspection) throw new Error(val.error || 'Source inspection failed');
                   if (val.inspection) {
+                    if (onAppendPages) {
+                      onAppendPages(Array.from({ length: val.inspection.totalPages }, (_, i) => ({ page: i + 1, sessionId: source.id, rotation: 0, filename: source.filename })));
+                    } else {
                     setPlan(prev => [
                       ...(prev?.length ? prev : currentPlan),
                       ...Array.from({ length: val.inspection!.totalPages }, (_, i) => ({ page: i + 1, sessionId: source.id, rotation: 0 })),
                     ]);
+                    }
                   }
-                } catch {
+                } catch (error) {
+                  console.warn('[PdfWorkstationTools] Merge source failed:', error);
                   setFailure(true);
                 } finally {
                   setExternal(false);
@@ -417,7 +430,7 @@ export function PdfWorkstationTools({
                 <label className="flex-1">{t('stirlingSplitPages')}
                   <input type="number" min={1} max={1000} value={split} onChange={e => setSplit(Number(e.target.value))} className={field} />
                 </label>
-                {button('stirlingSplitPages', () => apply('split', { pages: currentPlan, pagesPerFile: split }))}
+                {button('stirlingSplitPages', () => apply('split', { pages: getOrganizerPages?.() ?? currentPlan, pagesPerFile: split }))}
               </div>
             </div>
           </details>

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import path from 'node:path';
+import { confirmedQuitCleanup } from '../services/quit-cleanup';
 import { PoetryQueryProcess } from '../services/poetry/process';
 import { PoetryProvisioner } from '../services/poetry/provision';
 import { getDatabase as getMainDatabase } from '../database/connection';
@@ -58,6 +59,6 @@ export function registerPoetryIpc(): void {
   register('poetry:narration-save-recording', input => narrations().addRecording(input));
   register('poetry:narration-add-link', input => narrations().addLink(input));
   register('poetry:narration-delete', input => narrations().delete(input));
-  app.once('before-quit', () => provisioner?.close());
+  confirmedQuitCleanup.register(() => provisioner?.close());
   app.once('will-quit', () => { database?.close(); database = undefined; });
 }

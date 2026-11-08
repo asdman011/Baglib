@@ -761,6 +761,7 @@ export const API = {
     addComment: (id,text,options?)=>ipcRenderer.invoke('knowledge-history:request','comment',{id,text,...(options?.parentId?{parentId:options.parentId}:{}),...(options?.anchor?{anchor:options.anchor}:{})}),
     comments: id=>ipcRenderer.invoke('knowledge-history:request','comments',{id}),
     commentCounts: ()=>ipcRenderer.invoke('knowledge-history:request','comment-counts'),
+    commentTotals: ()=>ipcRenderer.invoke('knowledge-history:request','comment-totals') as Promise<Record<string,{open:number;total:number}>>,
     editComment: (commentId,text)=>ipcRenderer.invoke('knowledge-history:request','comment-edit',{commentId,text}),
     resolveComment: (commentId,resolved)=>ipcRenderer.invoke('knowledge-history:request','comment-resolve',{commentId,resolved}),
     removeComment: commentId=>ipcRenderer.invoke('knowledge-history:request','comment-remove',{commentId}),
@@ -775,10 +776,49 @@ export const API = {
     list: () => ipcRenderer.invoke('study-notes:list') as Promise<import('../shared/study-notes').StudyNote[]>,
     save: (input: StudyNoteInput) => ipcRenderer.invoke('study-notes:save', input) as Promise<import('../shared/study-notes').StudyNote>,
     remove: (id: string) => ipcRenderer.invoke('study-notes:remove', id) as Promise<void>,
+    exportMarkdown: (ids?: string[]) => ipcRenderer.invoke('study-notes:export-markdown', ids) as Promise<{ folder: string; count: number } | null>,
+    exportWord: (ids: string[], language: string, layout?: import('../shared/word-export').WordLayout) => ipcRenderer.invoke('study-notes:export-word', ids, language, layout) as Promise<{ file: string; count: number } | null>,
     onChanged: (callback: () => void) => {
       const listener = () => callback();
       ipcRenderer.on('study-notes:changed', listener);
       return () => { ipcRenderer.removeListener('study-notes:changed', listener); };
+    },
+  },
+  pdfCompare: {
+    run: (workA: string, workB: string, options?: { ignoreDiacritics?: boolean }) => ipcRenderer.invoke('pdf-compare:run', workA, workB, options) as Promise<{ ok: true; data: import('../shared/text-compare').CompareResult & { limited: boolean } } | { ok: false; error: string }>,
+  },
+  appClose: {
+    /** The window asks before closing; answer with answer(true) to close or answer(false) to stay. */
+    onRequested: (listener: () => void) => { const wrapped = () => listener(); ipcRenderer.on('app:close-requested', wrapped); return () => { ipcRenderer.removeListener('app:close-requested', wrapped); }; },
+    answer: (close: boolean) => ipcRenderer.send('app:close-answer', close),
+  },
+  materialSave: (() => {
+    type R<T> = Promise<{ ok: true; data: T } | { ok: false; error: string }>;
+    return {
+      policy: () => ipcRenderer.invoke('material-save:policy') as R<{ policy: import('../shared/material-save').SavePolicy; backupFolder: string; defaultFolder: string }>,
+      setPolicy: (policy: import('../shared/material-save').SavePolicy) => ipcRenderer.invoke('material-save:set-policy', policy) as R<import('../shared/material-save').SavePolicy>,
+      chooseFolder: (language: string) => ipcRenderer.invoke('material-save:choose-folder', language) as R<string | null>,
+      status: (workId: string) => ipcRenderer.invoke('material-save:status', workId) as R<import('../shared/material-save').MaterialSaveStatus>,
+      save: (workId: string) => ipcRenderer.invoke('material-save:save', workId) as R<{ written: boolean; reason?: string; externalChange?: boolean }>,
+      exportCopy: (workId: string, options: import('../shared/material-save').ExportOptions, language: string) => ipcRenderer.invoke('material-save:export', workId, options, language) as R<{ path: string; items: number; bookmarks: number } | null>,
+      restoreEmergency: (workId: string) => ipcRenderer.invoke('material-save:restore-emergency', workId) as R<void>,
+      resolveIncident: (workId: string) => ipcRenderer.invoke('material-save:resolve', workId) as R<void>,
+      undo: (workId: string) => ipcRenderer.invoke('material-save:undo', workId) as R<{ batch: string; items: number; action: string }>,
+      redo: (workId: string) => ipcRenderer.invoke('material-save:redo', workId) as R<{ batch: string; items: number; action: string }>,
+    };
+  })(),
+  studyAssistant: {
+    ask: (request: import('../shared/study-assistant').AssistantRequest) => ipcRenderer.invoke('study-assistant:ask', request) as Promise<{ ok: true; data: import('../shared/study-assistant').AssistantAnswer } | { ok: false; error: string }>,
+  },
+  boards: {
+    list: () => ipcRenderer.invoke('boards:list') as Promise<import('../shared/boards').BoardSummary[]>,
+    get: (id: string) => ipcRenderer.invoke('boards:get', id) as Promise<import('../shared/boards').Board | null>,
+    save: (input: import('../shared/boards').BoardInput) => ipcRenderer.invoke('boards:save', input) as Promise<import('../shared/boards').Board>,
+    remove: (id: string) => ipcRenderer.invoke('boards:remove', id) as Promise<void>,
+    onChanged: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('boards:changed', listener);
+      return () => { ipcRenderer.removeListener('boards:changed', listener); };
     },
   },
   knowledge: {

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileSha256 } from './source';
 
-interface PublicationInput { staged: string; target: string; stagedSha256: string; expectedTargetSha256?: string; backupDirectory?: string; backupFilename?: string }
+interface PublicationInput { staged: string; target: string; stagedSha256: string; expectedTargetSha256?: string; backupDirectory?: string; backupFilename?: string; /** false: the caller keeps its own recovery copy (ADR-012). */ backup?: boolean }
 const locks = new Set<string>();
 /** Outputs must already be independently validated by their engine before publication. */
 export async function publishPdfOutput(input: PublicationInput): Promise<{ sha256: string; backup?: string }> {
@@ -31,7 +31,7 @@ async function publish(input: PublicationInput): Promise<{ sha256: string; backu
     await copyFile(input.staged, temporary, constants.COPYFILE_EXCL);
     if (await fileSha256(temporary) !== input.stagedSha256) throw new Error('source-changed');
     const file = await open(temporary, 'r+'); try { await file.sync(); } finally { await file.close(); }
-    if (original) {
+    if (original && input.backup !== false) {
       if (input.backupDirectory) await mkdir(input.backupDirectory, { recursive: true });
       const backupName = input.backupFilename || `${path.basename(target)}.baglib-backup-${randomUUID()}`;
       backup = input.backupDirectory ? path.join(input.backupDirectory, backupName) : `${target}.baglib-backup-${randomUUID()}`;

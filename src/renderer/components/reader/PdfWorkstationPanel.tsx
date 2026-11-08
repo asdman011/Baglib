@@ -1,5 +1,6 @@
 'use client';
 import { readerEdge } from '../../../shared/reader-immersive';
+import { PdfMarksList } from './PdfMarksList';
 import { setReaderOverlay, type ReaderOverlay } from '../../../shared/reader-overlay';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -37,6 +38,10 @@ import {
   Eye,
   BookOpen,
   LayoutGrid,
+  Highlighter,
+  MoreHorizontal,
+  FileDown,
+  GitCompare,
 } from 'lucide-react';
 import type {
   PdfCapability,
@@ -57,11 +62,16 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { outputAfterFailedJob } from '../../libs/reader/pdf-output-state';
 import type { TranslationKey } from '../../translations';
 import { PdfInlineEditor } from './PdfInlineEditor';
+import { MarkupBarCompact } from './ReaderMarkupBar';
+import { useOverflowLevel } from '../../hooks/useOverflowLevel';
+import type { FileSaveState, SaveNotice } from '../../hooks/useMaterialSave';
+import type { MaterialSaveStatus } from '../../../shared/material-save';
+import { SaveIncidentBanner } from './FileSaveUi';
 import { PdfNativeViewer } from './PdfNativeViewer';
 import { PdfToolDirectory } from './PdfToolDirectory';
 import { PdfWorkstationTools, type PdfCanvasUse, type StirlingWorkstationMode } from './PdfWorkstationTools';
 import { StirlingToolsHub } from '../pdf-workstation/StirlingToolsHub';
-import { PdfPageEditor } from './PdfPageEditor';
+import { PdfPageEditor, type PdfPageEditorHandle } from './PdfPageEditor';
 import { PdfPageThumbnail } from './PdfPageThumbnail';
 import type { PdfViewDocument } from '../../libs/reader/pdf-view-document';
 
@@ -127,6 +137,7 @@ export function PdfWorkstationPanel({
   readingActions,
   annotationPanel,
   markupBar,
+  fileSave,
 }: {
   workId?: string;
   onClose: () => void;
@@ -134,9 +145,11 @@ export function PdfWorkstationPanel({
   initialPage?: number;
   onPageChange?: (page: number) => void;
   fileUrl?: string;
-  readingActions?: { onReadAloud: () => void; onAutoScroll: () => void; autoScrolling: boolean; onBookmark: () => void; bookmarked: boolean; onSearch?: () => void };
+  readingActions?: { onReadAloud: () => void; onAutoScroll: () => void; autoScrolling: boolean; onBookmark: () => void; bookmarked: boolean; onSearch?: () => void; onCompare?: () => void };
   annotationPanel?: { open: boolean; content: React.ReactNode; onToggle: () => void; onClose: () => void; count: number };
   markupBar?: React.ReactNode;
+  /** ADR-012: writing BagLib's marks into this PDF, and the selective export. */
+  fileSave?: { state: FileSaveState; status: MaterialSaveStatus | null; notice: SaveNotice; onSave: () => Promise<boolean>; onClearNotice: () => void; onExport: () => void; onRestore: () => void; onKeep: () => void };
   readerIntegration?: Pick<React.ComponentProps<typeof PdfNativeViewer>, 'highlights' | 'activeSelectionInfo' | 'onSelectionChange' | 'onHighlightClick' | 'onPdfDocLoaded' | 'onOutlineLoaded' | 'onTotalPagesLoaded' | 'contentContainerRef' | 'autoCropMargins' | 'direction'>;
 }) {
   const { lang, dir, t, theme: appTheme, books, openBookForReading } = useWorkspace();
@@ -146,6 +159,8 @@ export function PdfWorkstationPanel({
     if (activeOverlay && annotationPanel?.open) annotationPanel.onClose();
   }, [activeOverlay, annotationPanel]);
   const previousOverlay = useRef<ReaderOverlay>(null);
+  const pageEditorRef = useRef<PdfPageEditorHandle>(null);
+  const [organizerOpenedFor, setOrganizerOpenedFor] = useState<string | null>(null);
   const overlayTrigger = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (activeOverlay && !previousOverlay.current) {
@@ -161,12 +176,21 @@ export function PdfWorkstationPanel({
   const chromeLabels = { top: 'pdfChromeTop', rail: 'pdfChromeRail', library: 'pdfChromeLibrary', tools: 'pdfDirectoryTitle', bottom: 'pdfChromeBottom' } as const;
   const pinChrome = (zone: keyof typeof chromeLabels) => <div className="flex shrink-0 items-center"><button type="button" aria-pressed={pinnedChrome.includes(zone)} title={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} aria-label={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} onClick={() => setPinnedChrome(previous => previous.includes(zone) ? previous.filter(item => item !== zone) : [...previous, zone])} className="rounded-lg p-2 hover:bg-emerald-500/20"><Pin size={14} className={pinnedChrome.includes(zone) ? 'text-emerald-500' : ''} /></button><button type="button" aria-label={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} title={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} onClick={() => setCollapsedChrome(previous => [...previous.filter(item => item !== zone), zone])} className="rounded-lg p-1 hover:bg-emerald-500/20"><X size={12} /></button></div>;
   const workstationRoot = useRef<HTMLElement | null>(null);
+  /**
+   * How compact the header is: 0 shows everything; 1 moves the secondary actions into the More menu; 2 also shrinks the
+   * markup bar to its current tool and palette; 3 also moves the PDF tools and Marks buttons into More and shortens the
+   * saved pill. The header steps down only when its row overflows, and back up once the wider row (whose width was
+   * recorded when it overflowed) fits again, so it never oscillates.
+   */
+  const headerRef = useRef<HTMLElement | null>(null);
+  const headerDensity = useOverflowLevel(headerRef, 3);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const setRevealedEdge = useCallback((edge: string) => { workstationRoot.current?.setAttribute('data-revealed-edge', edge); }, []);
   const hideChromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === 'F11') { event.preventDefault(); setRevealedEdge(''); setImmersive(value => !value); }
-      if (event.key === 'Escape') { setActiveOverlay(null); setImmersive(false); }
+      if (event.key === 'Escape') { setActiveOverlay(null); setImmersive(false); setHeaderMenuOpen(false); }
     };
     window.addEventListener('keydown', key);
     return () => { window.removeEventListener('keydown', key); if (hideChromeTimer.current) clearTimeout(hideChromeTimer.current); };
@@ -174,6 +198,7 @@ export function PdfWorkstationPanel({
   const initialLanguage = useRef(lang);
   const [session, setSession] = useState<PdfSession | null>(null);
   const [mode, setMode] = useState<StirlingWorkstationMode>('view');
+  if (mode === 'organize' && session && organizerOpenedFor !== session.id) setOrganizerOpenedFor(session.id);
   const isToolsHubOpen = activeOverlay === 'hub';
   const quickToolsOpen = activeOverlay === 'quick-tools';
   const setIsToolsHubOpen = (open: boolean) => setActiveOverlay(current => setReaderOverlay(current, 'hub', open));
@@ -254,7 +279,7 @@ export function PdfWorkstationPanel({
   const [versions, setVersions] = useState<PdfVersionItem[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [versionActionMessage, setVersionActionMessage] = useState<string | null>(null);
-  const [zone2Tab, setZone2Tab] = useState<'thumbnails' | 'bookmarks' | 'comments'>('thumbnails');
+  const [zone2Tab, setZone2Tab] = useState<'thumbnails' | 'bookmarks' | 'comments' | 'marks'>('thumbnails');
   const [comments, setComments] = useState<PdfReview[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
@@ -337,21 +362,28 @@ export function PdfWorkstationPanel({
   useEffect(() => {
     const editor = window.electronAPI?.pdfEditor;
     if (!editor?.onSourceChanged) return;
+    let alive = true;
     const unsub = editor.onSourceChanged(changed => {
       if (changed.workId === workId || (session?.workId && changed.workId === session.workId)) {
-        if (session && !nativeReading) {
-          void window.electronAPI.pdfEditor.start({
-            sessionId: session.id,
-            operation: 'preview',
-            payload: { page },
-            language: initialLanguage.current,
-          }).then(result => {
-            if (result.ok) setJob(result.data);
-          });
-        }
+        const changedWorkId = changed.workId || workId || session?.workId;
+        if (!changedWorkId) return;
+        setWorkingFileUrl(null);
+        setOutput(null);
+        setInspection(null);
+        setPreview(null);
+        setThumbnails({});
+        void editor.open({ workId: changedWorkId }).then(async result => {
+          if (!alive) { if (result.ok) await editor.close(result.data.id); return; }
+          if (result.ok) extraSessions.current.push(result.data.id);
+          if (!result.ok) { setError(result.error); return; }
+          const preview = !nativeReading ? await editor.start({ sessionId: result.data.id, operation: 'preview', payload: { page }, language: initialLanguage.current }) : null;
+          if (!alive) return;
+          setSession(result.data);
+          if (preview?.ok) setJob(preview.data);
+        }).catch(() => { if (alive) setError('storage'); });
       }
     });
-    return unsub;
+    return () => { alive = false; unsub(); };
   }, [workId, session, page, nativeReading]);
 
   useEffect(() => {
@@ -671,7 +703,7 @@ export function PdfWorkstationPanel({
   };
 
   useEffect(() => {
-    if (zone2Tab === 'comments' && session?.id) {
+    if ((zone2Tab === 'comments' || zone2Tab === 'marks') && session?.id) {
       const timer = setTimeout(() => { void loadComments(); }, 0);
       return () => clearTimeout(timer);
     }
@@ -757,15 +789,21 @@ export function PdfWorkstationPanel({
           setQuickSaveFeedback(t('pdfDocumentSaved'));
           setTimeout(() => setQuickSaveFeedback(null), 3000);
           if (res.data.session) setSession(res.data.session);
+          if (fileSave) await fileSave.onSave();
         }
       } catch {
         setError('storage');
       }
+    } else if (fileSave && fileSave.state !== 'saved') {
+      const saved = await fileSave.onSave();
+      if (saved) { setQuickSaveFeedback(t('saveStateSaved')); setTimeout(() => setQuickSaveFeedback(null), 2500); }
     } else {
       setQuickSaveFeedback(t('pdfDocumentUpToDate'));
       setTimeout(() => setQuickSaveFeedback(null), 2500);
     }
   };
+  // Save problems (or a file changed outside BagLib) appear in the same feedback toast.
+  const saveNoticeText = fileSave?.notice ? t(fileSave.notice) : null;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -776,7 +814,47 @@ export function PdfWorkstationPanel({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [session, output]);
+  }, [session, output, fileSave]);
+
+  const toggleAnnotations = () => {
+    if (!annotationPanel) return;
+    setActiveOverlay(null);
+    setCollapsedChrome(previous => previous.filter(region => region !== 'tools'));
+    setRevealedEdge('end');
+    annotationPanel.onToggle();
+  };
+  /** What the header row has no room for, at the current density, in the order of the row. */
+  const headerMenuItems: { id: string; label: string; icon: React.ReactNode; checked?: boolean; disabled?: boolean }[] = [
+    ...(headerDensity >= 3 ? [{ id: 'tools', label: t('pdfCompactToolsBtn'), icon: <Cpu size={14} /> }] : []),
+    ...(headerDensity >= 3 && annotationPanel ? [{ id: 'marks', label: annotationPanel.count ? `${t('annotationsDrawerTitle')} (${annotationPanel.count})` : t('annotationsDrawerTitle'), icon: <MessageSquare size={14} />, checked: annotationPanel.open }] : []),
+    ...(readingActions?.onCompare ? [{ id: 'compare', label: t('compareTitle'), icon: <GitCompare size={14} /> }] : []),
+    ...(readingActions ? [
+      { id: 'read-aloud', label: t('ttsReadAloud'), icon: <BookOpen size={14} /> },
+      { id: 'auto-scroll', label: t('autoScrollPlay'), icon: <ChevronDown size={14} />, checked: readingActions.autoScrolling },
+      { id: 'bookmark', label: t('addBookmarkBtn'), icon: <Bookmark size={14} />, checked: readingActions.bookmarked },
+    ] : []),
+    ...(fileSave ? [{ id: 'export', label: t('exportPdfMenu'), icon: <FileDown size={14} /> }] : []),
+    { id: 'undo', label: t('pdfUndo'), icon: <RotateCcw size={14} />, disabled: !session || starting || job?.state === 'running' },
+    { id: 'history', label: t('pdfVersionHistory'), icon: <History size={14} />, disabled: !session },
+    { id: 'page-only', label: t('zenModePurePage'), icon: <Maximize2 size={14} />, checked: immersive },
+    { id: 'pin-top', label: t('pdfPinTopBar'), icon: <Pin size={14} />, checked: pinnedChrome.includes('top') },
+    { id: 'hide-top', label: t('pdfChromeHide', { region: t(chromeLabels.top) }), icon: <X size={14} /> },
+  ];
+  const runHeaderItem = (id: string) => {
+    setHeaderMenuOpen(false);
+    if (id === 'tools') setIsToolsHubOpen(true);
+    else if (id === 'marks') toggleAnnotations();
+    else if (id === 'compare') readingActions?.onCompare?.();
+    else if (id === 'read-aloud') readingActions?.onReadAloud();
+    else if (id === 'auto-scroll') readingActions?.onAutoScroll();
+    else if (id === 'bookmark') readingActions?.onBookmark();
+    else if (id === 'export') fileSave?.onExport();
+    else if (id === 'undo') void handleUndo();
+    else if (id === 'history') { setIsVersionHistoryOpen(true); void loadVersions(); }
+    else if (id === 'page-only') { setRevealedEdge(''); setImmersive(value => !value); }
+    else if (id === 'pin-top') setPinnedChrome(previous => previous.includes('top') ? previous.filter(item => item !== 'top') : [...previous, 'top']);
+    else if (id === 'hide-top') setCollapsedChrome(previous => [...previous.filter(item => item !== 'top'), 'top']);
+  };
 
   return (
     <aside
@@ -816,7 +894,7 @@ export function PdfWorkstationPanel({
     >
       {/* HEADER RIBBON */}
       {collapsedChrome.length > 0 && <details data-reader-recovery className="absolute end-2 top-2 z-[60] rounded-xl border border-subtle bg-surface p-2 text-main shadow-xl"><summary className="cursor-pointer text-xs">{t('pdfChromeRestore')}</summary><div className="mt-2 flex flex-col gap-1">{collapsedChrome.map(zone => <button key={zone} type="button" className="rounded-lg px-2 py-1 text-start text-xs hover:bg-canvas" onClick={() => setCollapsedChrome(previous => previous.filter(item => item !== zone))}>{t(chromeLabels[zone as keyof typeof chromeLabels])}</button>)}</div></details>}
-      <header className="flex h-11 min-h-11 flex-nowrap items-center gap-1.5 border-b border-subtle px-2 bg-canvas/60 shrink-0">
+      <header ref={headerRef} data-pdf-header data-density={headerDensity} className="flex h-11 min-h-11 flex-nowrap items-center gap-1.5 border-b border-subtle px-2 bg-canvas/60 shrink-0">
         {embedded && (
           <button
             type="button"
@@ -829,19 +907,25 @@ export function PdfWorkstationPanel({
             <span className="hidden lg:inline">{t('backToLibrary')}</span>
           </button>
         )}
-        <h2 className="min-w-0 truncate font-bold text-sm" dir="auto">{session?.filename || t('pdfSuiteTitle')}</h2>
+        <h2 className={`${headerDensity >= 3 ? 'min-w-10' : 'min-w-16'} truncate font-bold text-sm`} dir="auto" title={session?.filename || undefined}>{session?.filename || t('pdfSuiteTitle')}</h2>
         {(inspection || nativeReading) && (
           <span data-pdf-document-page-count className="hidden shrink-0 text-[11px] text-muted xl:inline">
             {t('pdfDocumentPageCount', { count: totalPages })}
           </span>
         )}
-        <span
-          data-pdf-save-state={output?.outputs?.length ? 'staged' : 'saved'}
-          className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${output?.outputs?.length ? `bg-amber-500/15 ${workstationTheme === 'dark' ? 'text-amber-300' : 'text-amber-900'}` : `bg-emerald-500/15 ${workstationTheme === 'dark' ? 'text-emerald-300' : 'text-emerald-900'}`}`}
-        >
-          {!output?.outputs?.length && <Check size={11} aria-hidden="true" />}
-          {t(output?.outputs?.length ? 'pdfUnsavedPill' : 'pdfSavedPill')}
-        </span>
+        {(() => {
+          const staged = !!output?.outputs?.length;
+          const state = staged ? 'staged' : fileSave?.state ?? 'saved';
+          const label = staged ? t('pdfUnsavedPill') : state === 'recorded' ? t('saveStateRecorded') : state === 'saving' ? t('saveStateSaving') : state === 'no-engine' || state === 'incident' ? t('saveStateRecorded') : t('pdfSavedPill');
+          const warm = staged || state === 'recorded' || state === 'no-engine' || state === 'incident';
+          const tone = warm ? `bg-amber-500/15 ${workstationTheme === 'dark' ? 'text-amber-300' : 'text-amber-900'}` : state === 'saving' ? 'bg-sky-500/15 text-sky-800 dark:text-sky-200' : `bg-emerald-500/15 ${workstationTheme === 'dark' ? 'text-emerald-300' : 'text-emerald-900'}`;
+          const title = state === 'no-engine' ? t('saveStateNoEngine') : state === 'saved' && fileSave?.status?.lastSavedAt ? `${t('saveStateSaved')} · ${new Date(fileSave.status.lastSavedAt).toLocaleString(lang === 'ar' ? 'ar' : 'en-GB')}` : label;
+          return <span data-pdf-save-state={state} role="status" title={title} className={`flex min-w-0 shrink items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>
+            {!warm && state !== 'saving' && <Check size={11} aria-hidden="true" className="shrink-0" />}
+            <span className={headerDensity >= 2 ? 'sr-only' : 'truncate'}>{label}</span>
+            {headerDensity >= 2 && warm ? <span aria-hidden="true">•</span> : null}
+          </span>;
+        })()}
         <span
           role="status"
           title={t(engineStatus.status === 'ready' ? 'stirlingEngineReady' : engineStatus.status === 'starting' ? 'stirlingEngineStarting' : engineStatus.status === 'processing' ? 'stirlingEngineProcessing' : engineStatus.status === 'error' ? 'stirlingEngineError' : 'stirlingEngineStatus')}
@@ -851,7 +935,7 @@ export function PdfWorkstationPanel({
 
         <div className="ms-auto flex shrink-0 items-center gap-1">
           {/* Compact PDF Tools & Processor Button + Popover */}
-          <div className="relative">
+          <div className={headerDensity >= 3 ? 'hidden' : 'relative'}>
             <button
               type="button"
               onClick={() => setQuickToolsOpen(!quickToolsOpen)}
@@ -938,29 +1022,26 @@ export function PdfWorkstationPanel({
             )}
           </div>
 
-          {markupBar}
-          {readingActions && (
+          <MarkupBarCompact.Provider value={headerDensity >= 2}>{markupBar}</MarkupBarCompact.Provider>
+          {headerDensity === 0 && readingActions?.onCompare && <button type="button" data-compare-open aria-label={t('compareTitle')} title={t('compareTitle')} onClick={readingActions.onCompare} className="shrink-0 rounded-lg border border-subtle bg-surface p-1.5 text-main hover:bg-canvas"><GitCompare size={14} aria-hidden="true" /></button>}
+          {headerDensity === 0 && readingActions && (
             <>
               <button type="button" onClick={readingActions.onReadAloud} aria-label={t('ttsReadAloud')} title={t('ttsReadAloud')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><BookOpen size={14} /></button>
               <button type="button" onClick={readingActions.onAutoScroll} aria-pressed={readingActions.autoScrolling} aria-label={t(readingActions.autoScrolling ? 'autoScrollPause' : 'autoScrollPlay')} title={t(readingActions.autoScrolling ? 'autoScrollPause' : 'autoScrollPlay')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><ChevronDown size={14} /></button>
               <button type="button" onClick={readingActions.onBookmark} aria-pressed={readingActions.bookmarked} aria-label={t('addBookmarkBtn')} title={t('addBookmarkBtn')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><Bookmark size={14} fill={readingActions.bookmarked ? 'currentColor' : 'none'} /></button>
             </>
           )}
-          {annotationPanel && <button
+          {annotationPanel && headerDensity < 3 && <button
             type="button"
             data-pdf-annotations-toggle
             aria-pressed={annotationPanel.open}
             aria-label={t('annotationsDrawerTitle')}
             title={t('annotationsDrawerTitle')}
-            onClick={() => {
-              setActiveOverlay(null);
-              setCollapsedChrome(previous => previous.filter(region => region !== 'tools'));
-              setRevealedEdge('end');
-              annotationPanel.onToggle();
-            }}
+            onClick={toggleAnnotations}
             className={`rounded-lg border border-subtle p-1.5 flex items-center gap-1 text-main hover:bg-surface ${annotationPanel.open ? 'ring-1 ring-emerald-500 bg-emerald-500/10' : ''}`}
           ><MessageSquare size={14} />{annotationPanel.count > 0 && <span className="text-[10px] tabular-nums">{annotationPanel.count}</span>}</button>}
-          <button
+          {headerDensity === 0 && fileSave && <button type="button" data-export-open aria-label={t('exportPdfMenu')} title={t('exportPdfMenu')} onClick={fileSave.onExport} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><FileDown size={14} aria-hidden="true" /></button>}
+          {headerDensity === 0 && <><button
             type="button"
             disabled={!session || starting || job?.state === 'running'}
             onClick={() => void handleUndo()}
@@ -983,7 +1064,7 @@ export function PdfWorkstationPanel({
           >
             <History size={13} />
             <span className="hidden 2xl:inline">{t('pdfVersionHistory')}</span>
-          </button>
+          </button></>}
 
           <button
             type="button"
@@ -996,19 +1077,57 @@ export function PdfWorkstationPanel({
             <span className="hidden md:inline">{t('save')}</span>
           </button>
 
-          <button type="button" aria-pressed={immersive} title={t('zenModePurePage')} aria-label={t('zenModePurePage')} onClick={event => { event.currentTarget.blur(); setRevealedEdge(''); setImmersive(value => !value); }} className="rounded-lg p-1.5 text-main hover:bg-surface"><Maximize2 size={14} /></button>
-          {pinChrome('top')}
+          {headerDensity === 0 && <>
+            <button type="button" aria-pressed={immersive} title={t('zenModePurePage')} aria-label={t('zenModePurePage')} onClick={event => { event.currentTarget.blur(); setRevealedEdge(''); setImmersive(value => !value); }} className="rounded-lg p-1.5 text-main hover:bg-surface"><Maximize2 size={14} /></button>
+            {pinChrome('top')}
+          </>}
+          {headerDensity > 0 && <div className="relative shrink-0">
+            <button type="button" data-pdf-header-more aria-haspopup="menu" aria-expanded={headerMenuOpen} aria-label={t('pdfHeaderMore')} title={t('pdfHeaderMore')} onClick={() => setHeaderMenuOpen(open => !open)} className={`rounded-lg border border-subtle p-1.5 text-main hover:bg-surface ${headerMenuOpen ? 'bg-surface' : ''}`}><MoreHorizontal size={14} aria-hidden="true" /></button>
+            {headerMenuOpen && <>
+              <div className="fixed inset-0 z-40" onClick={() => setHeaderMenuOpen(false)} />
+              <div
+                role="menu"
+                aria-label={t('pdfHeaderMore')}
+                data-pdf-header-menu
+                ref={menu => { if (menu && !menu.contains(document.activeElement)) menu.querySelector<HTMLElement>('[role^=menuitem]:not(:disabled)')?.focus(); }}
+                onKeyDown={event => {
+                  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+                  event.preventDefault();
+                  const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role^=menuitem]:not(:disabled)'));
+                  const at = items.indexOf(document.activeElement as HTMLElement);
+                  items[(at + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+                }}
+                className="absolute end-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-1rem)] rounded-xl border border-subtle bg-surface p-1 text-main shadow-2xl"
+              >
+                {headerMenuItems.map(item => <button
+                  key={item.id}
+                  type="button"
+                  role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+                  aria-checked={item.checked}
+                  data-pdf-header-item={item.id}
+                  disabled={item.disabled}
+                  onClick={() => runHeaderItem(item.id)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-xs hover:bg-canvas focus:bg-canvas focus:outline-none disabled:opacity-40"
+                >
+                  <span className="shrink-0 text-muted" aria-hidden="true">{item.icon}</span>
+                  <span className="min-w-0 flex-1 leading-snug">{item.label}</span>
+                  {item.checked && <Check size={13} aria-hidden="true" className="shrink-0 text-emerald-500" />}
+                </button>)}
+              </div>
+            </>}
+          </div>}
           {!embedded && (
             <button type="button" aria-label={t('studyClose')} title={t('studyClose')} onClick={onClose} className="rounded-lg p-1.5 text-muted hover:text-main hover:bg-canvas"><X size={16} /></button>
           )}
         </div>
       </header>
+      {fileSave?.status?.incident && <SaveIncidentBanner status={fileSave.status} onRestore={fileSave.onRestore} onKeep={fileSave.onKeep} t={t} />}
 
       {/* Floating Quick-Save / Undo Toast Feedback */}
-      {quickSaveFeedback && (
-        <div className="fixed top-14 inset-x-0 mx-auto w-fit z-50 flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xl animate-bounce">
+      {(quickSaveFeedback || saveNoticeText) && (
+        <div role="status" data-save-feedback className="fixed top-14 inset-x-0 mx-auto w-fit z-50 flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xl animate-bounce">
           <Check size={14} />
-          <span>{quickSaveFeedback}</span>
+          <span>{quickSaveFeedback || saveNoticeText}</span>
         </div>
       )}
 
@@ -1247,6 +1366,8 @@ export function PdfWorkstationPanel({
                 { id: 'thumbnails' as const, label: t('pdfThumbnailsTab'), icon: LayoutGrid },
                 { id: 'bookmarks' as const, label: t('pdfBookmarksTab'), icon: Bookmark },
                 { id: 'comments' as const, label: t('pdfCommentsTab'), icon: MessageSquare },
+                // Study marks and review comments in one list (Wave 9.2).
+                { id: 'marks' as const, label: t('marksTab'), icon: Highlighter },
               ].map(tabItem => {
                 const isActive = zone2Tab === tabItem.id;
                 const Icon = tabItem.icon;
@@ -1254,8 +1375,13 @@ export function PdfWorkstationPanel({
                   <button
                     key={tabItem.id}
                     type="button"
+                    data-zone2-tab={tabItem.id}
+                    aria-pressed={isActive}
+                    aria-label={tabItem.label}
+                    title={tabItem.label}
                     onClick={() => setZone2Tab(tabItem.id)}
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                    // Four tabs share a narrow panel: the active one shows its name, the others only their icon.
+                    className={`${isActive ? 'flex-[2]' : 'flex-1'} min-w-0 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
                       isActive
                         ? workstationTheme === 'dark'
                           ? 'bg-[#1e222d] text-white shadow-xs'
@@ -1265,12 +1391,19 @@ export function PdfWorkstationPanel({
                         : 'text-[#64748b] hover:text-[#0f172a]'
                     }`}
                   >
-                    <Icon size={12} />
-                    <span>{tabItem.label}</span>
+                    <Icon size={12} className="shrink-0" />
+                    {isActive && <span className="truncate">{tabItem.label}</span>}
                   </button>
                 );
               })}
             </div>
+
+            {zone2Tab === 'marks' && <PdfMarksList
+              items={readerIntegration?.highlights ?? []}
+              reviews={comments}
+              t={t}
+              onJump={target => { setPage(target); if (!nativeReading) void start('preview', { page: target }); onPageChange?.(target); }}
+            />}
 
             {/* TAB 1: THUMBNAILS LIST */}
             {zone2Tab === 'thumbnails' && (
@@ -1523,9 +1656,10 @@ export function PdfWorkstationPanel({
 
         {/* CENTER HIGH-DPI CANVAS VIEWPORT OR MULTI-TOOL PAGE EDITOR */}
         <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden relative" style={{ backgroundColor: workstationTheme === 'dark' ? '#0b0c0e' : workstationTheme === 'sepia' ? '#efece4' : '#f1f5f9' }}>
-          {mode === 'organize' && session && (
-            <div className="w-full h-full overflow-hidden flex flex-col">
+          {session && (mode === 'organize' || organizerOpenedFor === session.id) && (
+            <div aria-hidden={mode !== 'organize' || undefined} style={{ display: mode === 'organize' ? 'flex' : 'none' }} className="w-full h-full overflow-hidden flex-col">
               <PdfPageEditor
+                ref={pageEditorRef}
                 key={`${session.id}:${totalPages}`}
                 session={session}
                 totalPages={totalPages}
@@ -1946,6 +2080,14 @@ export function PdfWorkstationPanel({
           )}
           {session && !toolDirectoryOpen && (
             <PdfWorkstationTools
+              getOrganizerPages={mode === 'organize' ? () => {
+                if (pageEditorRef.current?.sessionId !== session.id) throw new Error('Organizer unavailable');
+                return pageEditorRef.current.getPages();
+              } : undefined}
+              onAppendPages={mode === 'organize' ? pages => {
+                if (pageEditorRef.current?.sessionId !== session.id) throw new Error('Organizer unavailable');
+                pageEditorRef.current.appendPages(pages);
+              } : undefined}
               key={`${session.id}:${tool}`}
               tool={tool}
               mode={mode}

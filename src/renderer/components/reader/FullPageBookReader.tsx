@@ -70,8 +70,12 @@ import { ZenTopBar } from './ZenTopBar';
 import { ZenBottomScrubber } from './ZenBottomScrubber';
 import { ZenCornerHotspots } from './ZenCornerHotspots';
 import { ReaderMarkupBar, ReaderShortcutSheet } from './ReaderMarkupBar';
+import { PdfMarkupProvider } from './PdfMarkupLayer';
+import { PdfMarkPopover } from './PdfMarkPopover';
+import { PdfCompareDialog } from './PdfCompareDialog';
+import { isTextTool, shapeLocation, type MarkupTool, type ShapeMark } from '../../../shared/pdf-markup';
 import { consumePendingPage } from '../../utils/study-navigation';
-import { readerShortcut } from '../../libs/reader/reader-shortcuts';
+import { markHistoryShortcut, readerShortcut } from '../../libs/reader/reader-shortcuts';
 import { ZenSelectionMenu } from './ZenSelectionMenu';
 import { ZenKnowledgeDrawer } from './ZenKnowledgeDrawer';
 import { ZenTocDrawer } from './ZenTocDrawer';
@@ -125,6 +129,10 @@ import { HighlightActionPopover } from './HighlightActionPopover';
 import { segmentTextIntoSentences } from '../../../shared/utils/tts-text';
 import { readerAssetUrl } from '../../../shared/utils/reader-asset-url';
 import { useCompanionContext } from '../../utils/companion-context';
+import { useMaterialSave } from '../../hooks/useMaterialSave';
+import { saveReaderKnowledge } from '../../libs/reader/save-reader-knowledge';
+import { registerCloseGuard } from '../../utils/close-guard';
+import { ExportPdfDialog, SaveCloseDialog } from './FileSaveUi';
 
 const PDF_TEXT_DELAY_MS = 2500;
 
@@ -138,10 +146,10 @@ export const FullPageBookReader: React.FC = () => {
     splitOrientation,
     setSplitOrientation,
     bookNotes,
-    addPageNote,
     deletePageNote,
-    addHighlight,
     t,
+    lang: workspaceLang,
+    dir: workspaceDir,
   } = useWorkspace();
 
   const panels = useReaderPanels();
@@ -278,7 +286,24 @@ export const FullPageBookReader: React.FC = () => {
   const isAnnotationsDrawerOpen = panels.activePanel === 'annotations';
   const setIsAnnotationsDrawerOpen = panels.setters['annotations'];
   const [isInkModeActive, setIsInkModeActive] = useState<boolean>(false);
-  const [isInstantHighlightMode, setIsInstantHighlightMode] = useState<boolean>(false);
+  // Markup tools (Wave 8.3): the armed tool, and the lock that keeps it armed after one use. A text tool armed is the
+  // old "keep highlighter on": a selection is saved at once in that style.
+  const [markupTool, setMarkupTool] = useState<MarkupTool>('select');
+  const [markupLocked, setMarkupLocked] = useState(false);
+  const isInstantHighlightMode = isTextTool(markupTool);
+  const toggleMarkupLock = useCallback(() => {
+    if (markupLocked) { setMarkupLocked(false); setMarkupTool('select'); }
+    else { setMarkupLocked(true); setMarkupTool(tool => (tool === 'select' ? 'highlight' : tool)); }
+  }, [markupLocked]);
+  const chooseMarkupTool = useCallback((tool: MarkupTool) => setMarkupTool(current => (current === tool ? 'select' : tool)), []);
+  const stopMarkup = useCallback(() => { setMarkupTool('select'); setMarkupLocked(false); }, []);
+  const finishMarkup = useCallback(() => { if (!markupLocked) setMarkupTool('select'); }, [markupLocked]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [openMark, setOpenMark] = useState<{ item: KnowledgeItemDTO; at: { x: number; y: number } } | null>(null);
+  const [markThreadCounts, setMarkThreadCounts] = useState<Record<string, { open: number; total: number }>>({});
+  const refreshMarkCounts = useCallback(() => { void window.electronAPI?.knowledgeHistory?.commentTotals?.().then(setMarkThreadCounts, () => {}); }, []);
+  // Pin colours need the thread counts as soon as the book opens.
+  useEffect(() => { const timer = setTimeout(refreshMarkCounts, 0); return () => clearTimeout(timer); }, [activeBook?.id, refreshMarkCounts]);
   const [activeHighlightColor, setActiveHighlightColor] = useState<string>('amber');
   const [showReaderShortcuts, setShowReaderShortcuts] = useState(false);
   const [showToast, setShowToast] = useState<string | null>(null);
@@ -1288,16 +1313,17 @@ export const FullPageBookReader: React.FC = () => {
   useEffect(() => {
     if (!isPdfWorkstationActive) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      const action = readerShortcut(e, isInstantHighlightMode);
+      const action = readerShortcut(e, markupTool !== 'select');
       if (!action) return;
-      if (action.kind === 'toggle-highlighter') setIsInstantHighlightMode(value => !value);
-      else if (action.kind === 'stop-highlighter') setIsInstantHighlightMode(false);
+      if (action.kind === 'toggle-highlighter') toggleMarkupLock();
+      else if (action.kind === 'stop-highlighter') stopMarkup();
+      else if (action.kind === 'tool') chooseMarkupTool(action.tool);
       else if (action.kind === 'color') setActiveHighlightColor(action.color);
       else setShowReaderShortcuts(true);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPdfWorkstationActive, isInstantHighlightMode]);
+  }, [isPdfWorkstationActive, markupTool, toggleMarkupLock, stopMarkup, chooseMarkupTool]);
 
   // The companion note pane links to the page being read.
   useCompanionContext('reader', () => activeBook ? { kind: 'book', target: `book:${activeBook.id}#p=${Math.max(1, readingPage)}`, label: `${activeBook.title} (${Math.max(1, readingPage)})` } : null, [activeBook?.id, activeBook?.title, readingPage]);
@@ -2081,9 +2107,79 @@ export const FullPageBookReader: React.FC = () => {
     };
   }, [activeBook?.id]);
 
+  /**
+   * ADR-012: marks are recorded in BagLib at once; the save policy decides when they are written into the PDF. A
+   * completed action shows up as a new list of marks or new comment counts, which is what `changed()` listens to.
+   */
+  const fileSave = useMaterialSave(activeBook?.id ?? null, isPdfWorkstationActive);
+  const initialMarksLoad = useRef(false);
+  const seenThreadCounts = useRef<string | null>(null);
+  const fileSaveChanged = fileSave.changed;
+  useEffect(() => {
+    if (initialMarksLoad.current) { initialMarksLoad.current = false; return; }
+    fileSaveChanged();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- a new list of marks is the signal; the callback is stable per policy
+  }, [knowledgeItems]);
+  useEffect(() => {
+    const key = JSON.stringify(markThreadCounts);
+    if (seenThreadCounts.current !== null && seenThreadCounts.current !== key) fileSaveChanged();
+    seenThreadCounts.current = key;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- as above
+  }, [markThreadCounts]);
+  const markWorkId = activeBook?.id;
+  const reloadMarks = useCallback(async () => {
+    if (!markWorkId) return;
+    const [items, notes] = await Promise.all([window.electronAPI.knowledge.getByWork(markWorkId), window.electronAPI.getAnnotations?.(markWorkId)]);
+    if (items) setKnowledgeItems(items);
+    if (notes) setAnnotations(notes);
+    refreshMarkCounts();
+  }, [markWorkId, refreshMarkCounts]);
+  // Ctrl+Z / Ctrl+Shift+Z undo and redo marks and notes, also after a restart. Typing fields keep their own undo.
+  const historyRequestPending = useRef(false);
+  useEffect(() => {
+    if (!isPdfWorkstationActive || !activeBook?.id) return;
+    const workId = activeBook.id;
+    const key = (event: KeyboardEvent) => {
+      const action = markHistoryShortcut(event, !!document.querySelector('[role="dialog"],[role="alertdialog"],dialog[open]'));
+      if (!action) return;
+      event.preventDefault();
+      if (historyRequestPending.current) return;
+      historyRequestPending.current = true;
+      const redo = action === 'redo';
+      void (redo ? window.electronAPI.materialSave.redo(workId) : window.electronAPI.materialSave.undo(workId)).then(async result => {
+        setShowToast(result.ok ? t(redo ? 'markRedone' : 'markUndone') : t(redo ? 'nothingToRedo' : 'nothingToUndo'));
+        setTimeout(() => setShowToast(null), 2000);
+        if (result.ok) await reloadMarks();
+      }).catch(error => { console.warn('[FullPageBookReader] Mark history failed:', error); setShowToast(t('studyActionFailed')); }).finally(() => { historyRequestPending.current = false; });
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [activeBook?.id, isPdfWorkstationActive, reloadMarks, t]);
+  // Closing with changes not yet written into the file asks first; closing without writing keeps them in BagLib.
+  const [closePrompt, setClosePrompt] = useState<((choice: 'save' | 'discard' | 'cancel') => void) | null>(null);
+  const [closeSaving, setCloseSaving] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const askBeforeClosing = useCallback(async (): Promise<boolean> => {
+    const current = await fileSave.refresh();
+    if (!current?.pending || !current.writable || current.incident) return true;
+    const choice = await new Promise<'save' | 'discard' | 'cancel'>(resolve => setClosePrompt(() => resolve));
+    if (choice === 'save') {
+      setCloseSaving(true);
+      const saved = await fileSave.saveNow();
+      setCloseSaving(false);
+      setClosePrompt(null);
+      return saved;
+    }
+    setClosePrompt(null);
+    return choice === 'discard';
+  }, [fileSave]);
+  useEffect(() => isPdfWorkstationActive ? registerCloseGuard(askBeforeClosing) : undefined, [askBeforeClosing, isPdfWorkstationActive]);
   const handleCloseReader = () => {
-    recordCurrentReadingSession();
-    closeReaderToLibrary();
+    void askBeforeClosing().then(close => {
+      if (!close) return;
+      recordCurrentReadingSession();
+      closeReaderToLibrary();
+    });
   };
 
   // Load Knowledge Items from SQLite (KEY-12 / Epic 5)
@@ -2094,7 +2190,7 @@ export const FullPageBookReader: React.FC = () => {
       api.knowledge
         .getByWork(activeBook.id)
         .then((items: KnowledgeItemDTO[]) => {
-          if (items) setKnowledgeItems(items);
+          if (items) { initialMarksLoad.current = true; setKnowledgeItems(items); }
         })
         .catch(console.warn);
     }
@@ -2105,11 +2201,13 @@ export const FullPageBookReader: React.FC = () => {
     type: KnowledgeType,
     color?: string,
     content?: string,
-    contextNote?: string
+    contextNote?: string,
+    textOverride?: string,
+    pageOverride?: number,
   ) => {
-    if (!activeBook?.id) return;
-    const safePage = Math.min(maxBookPages, Math.max(1, readingPage));
-    const textToUse = selectedText || '';
+    if (!activeBook?.id) return false;
+    const safePage = Math.min(maxBookPages, Math.max(1, pageOverride ?? readingPage));
+    const textToUse = textOverride ?? selectedText ?? '';
 
     // Determine location payload: PDF normalized rects JSON or page string
     let locationToSave = String(safePage);
@@ -2120,64 +2218,33 @@ export const FullPageBookReader: React.FC = () => {
         rects: pdfSelection.rects,
         text: textToUse || pdfSelection.text,
         color: color || activeHighlightColor,
+        // Underline and strike-out are highlights drawn differently (Wave 9.1); a plain highlight stores no style.
+        ...(markupTool === 'underline' || markupTool === 'strike' ? { style: markupTool } : {}),
       });
     }
 
-    // 1. Save to SQLite knowledge table
-    const api = (window).electronAPI;
-    if (api?.knowledge?.save) {
-      try {
-        const savedItem: KnowledgeItemDTO = await api.knowledge.save({
-          workId: activeBook.id,
-          type,
-          location: locationToSave,
-          selectedText: textToUse || undefined,
-          noteContent: type === 'note' ? content : undefined,
-          quoteContext: type === 'quote' ? contextNote : undefined,
-          questionText: type === 'question' ? content : undefined,
-          color: color || activeHighlightColor,
-        });
-
-        if (savedItem) {
-          setKnowledgeItems((prev) => [savedItem, ...prev.filter((i) => i.id !== savedItem.id)]);
-        }
-      } catch (e) {
-        console.warn('[FullPageBookReader] Save knowledge failed:', e);
-      }
-    }
-
-    // 2. Dual-sync to annotations table for backward compatibility
-    const annotationType =
-      type === 'highlight'
-        ? 'highlight'
-        : type === 'note'
-        ? 'note'
-        : type === 'bookmark'
-        ? 'bookmark'
-        : 'note';
-    await handleSaveAnnotation({
-      bookId: activeBook.id,
-      type: annotationType,
-      locationCfiOrPage: locationToSave,
-      selectedText: textToUse || undefined,
-      noteContent:
-        content ||
-        contextNote ||
-        (type === 'highlight' ? `Highlight on Page ${safePage}` : undefined),
-      color: color || activeHighlightColor,
-    });
-
-    // 3. Sync to WorkspaceContext legacy notes
-    if (textToUse) {
-      if (type === 'highlight') {
-        const colorClass = `bg-${color || 'amber'}-500/30`;
-        addHighlight(safePage, textToUse, colorClass);
-      }
-      addPageNote({
-        pageNumber: safePage,
-        highlightedText: textToUse,
-        content: content || `${t('selectedQuote').replace('"{text}"', `"${textToUse}"`)}`,
+    try {
+      const saved = await saveReaderKnowledge(window.electronAPI?.knowledge, {
+        workId: activeBook.id,
+        knowledgeType: type,
+        location: locationToSave,
+        quotedText: textToUse || undefined,
+        noteContent: type === 'note' ? content : undefined,
+        contextNote: type === 'quote' ? contextNote : undefined,
+        questionText: type === 'question' ? content : undefined,
+        label: type === 'bookmark' ? content : undefined,
+        color: color || activeHighlightColor,
       });
+      setKnowledgeItems(previous => [saved.item, ...previous.filter(item => item.id !== saved.item.id)]);
+      const annotation = saved.annotation;
+      if (annotation) {
+        setAnnotations(previous => [annotation, ...previous.filter(item => item.id !== annotation.id)]);
+      }
+      window.dispatchEvent(new Event('baglib:notes-changed'));
+    } catch (error) {
+      console.warn('[FullPageBookReader] Save knowledge failed:', error);
+      setShowToast(t('studyActionFailed'));
+      return false;
     }
 
     setPendingSelection(null);
@@ -2190,6 +2257,7 @@ export const FullPageBookReader: React.FC = () => {
     setShowToast(t(type === 'highlight' ? 'highlightSavedToast' : type === 'bookmark' ? 'bookmarkAdded' : 'knowledgeSavedToast', { page: safePage }));
     setTimeout(() => setShowToast(null), 2500);
     setTimeout(() => renderSavedEpubHighlights(), 50);
+    return true;
   };
 
   const handleChangeHighlightColor = async (highlightId: string, newColor: string) => {
@@ -2507,7 +2575,7 @@ export const FullPageBookReader: React.FC = () => {
       return;
     }
 
-    await handleSaveKnowledge('bookmark', undefined, `Page ${readingPage}`);
+    await handleSaveKnowledge('bookmark', undefined, `${t('page')} ${readingPage}`);
   };
 
   // Current page ink annotation & strokes handler
@@ -2654,7 +2722,7 @@ export const FullPageBookReader: React.FC = () => {
   useEffect(() => {
     if (!isInstantHighlightMode || !isPdfWorkstationActive || !pendingSelection?.rects?.length || !selectedText) return;
     // Saved on the next tick, outside the effect body, so the save's state updates do not cascade renders.
-    const timer = setTimeout(() => { void handleSaveKnowledge('highlight', activeHighlightColor); }, 0);
+    const timer = setTimeout(() => { void handleSaveKnowledge('highlight', activeHighlightColor).then(saved => { if (saved) finishMarkup(); }); }, 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInstantHighlightMode, isPdfWorkstationActive, pendingSelection, selectedText]);
@@ -2765,22 +2833,7 @@ export const FullPageBookReader: React.FC = () => {
     if (!textToUse || !activeBook) return;
     const safePage = Math.min(maxBookPages, Math.max(1, noteTargetPage));
 
-    await handleSaveAnnotation({
-      bookId: activeBook.id,
-      type: 'highlight',
-      locationCfiOrPage: safePage.toString(),
-      selectedText: textToUse,
-      color,
-    });
-
-    // Also sync to WorkspaceContext legacy notes
-    const colorClass = `bg-${color}-500/30`;
-    addHighlight(safePage, textToUse, colorClass);
-    addPageNote({
-      pageNumber: safePage,
-      highlightedText: textToUse,
-      content: `${t('selectedQuote').replace('"{text}"', `"${textToUse}"`)}`,
-    });
+    if (!await handleSaveKnowledge('highlight', color, undefined, undefined, textToUse, safePage)) { setSelectedText(textToUse); return; }
 
     setPendingSelection(null);
     setPdfSelectionInfo(null);
@@ -2823,21 +2876,10 @@ export const FullPageBookReader: React.FC = () => {
     }
   };
 
-  const handleCreateNoteFromSelection = () => {
+  const handleCreateNoteFromSelection = async () => {
     if (!selectedText || !activeBook) return;
     const safePage = Math.min(maxBookPages, Math.max(1, noteTargetPage));
-    handleSaveAnnotation({
-      bookId: activeBook.id,
-      type: 'note',
-      locationCfiOrPage: safePage.toString(),
-      selectedText,
-      noteContent: `${t('selectedQuote').replace('"{text}"', `"${selectedText}"`)}`,
-    });
-    addPageNote({
-      pageNumber: safePage,
-      highlightedText: selectedText,
-      content: `${t('selectedQuote').replace('"{text}"', `"${selectedText}"`)}`,
-    });
+    if (!await handleSaveKnowledge('note', undefined, t('selectedQuote').replace('"{text}"', `"${selectedText}"`), undefined, selectedText, safePage)) return;
     setPdfSelectionInfo(null);
     window.getSelection()?.removeAllRanges();
     clearActiveSelectionHighlight();
@@ -2845,22 +2887,12 @@ export const FullPageBookReader: React.FC = () => {
     setSelectedText('');
   };
 
-  const handleAddManualNote = () => {
+  const handleAddManualNote = async () => {
     if (!newNoteText.trim() || !activeBook) return;
     const safePage = Math.min(maxBookPages, Math.max(1, noteTargetPage));
-    handleSaveAnnotation({
-      bookId: activeBook.id,
-      type: 'note',
-      locationCfiOrPage: safePage.toString(),
-      selectedText: selectedText || undefined,
-      noteContent: newNoteText,
-    });
-    addPageNote({
-      pageNumber: safePage,
-      highlightedText: selectedText || undefined,
-      content: newNoteText,
-    });
-    setNewNoteText('');
+    const draft = newNoteText;
+    if (!await handleSaveKnowledge('note', undefined, draft, undefined, selectedText, safePage)) return;
+    setNewNoteText(current => current === draft ? '' : current);
     setPdfSelectionInfo(null);
     window.getSelection()?.removeAllRanges();
     clearActiveSelectionHighlight();
@@ -4126,7 +4158,25 @@ export const FullPageBookReader: React.FC = () => {
                   <span className="text-xs font-bold">{t('loadingNativePdf')}</span>
                 </div>
               ) : effectiveFormat === 'PDF' && legacyPdfWork !== activeBook.id ? (
-                <>
+                <PdfMarkupProvider value={{
+                  tool: markupTool,
+                  color: activeHighlightColor,
+                  threadCounts: markThreadCounts,
+                  labels: { pin: t('markupToolComment'), textBox: t('markupToolText'), drawHint: t(markupTool === 'comment' ? 'markupCommentHint' : 'markupDrawHint') },
+                  onCreate: (mark: ShapeMark) => {
+                    if (!activeBook?.id) return;
+                    void window.electronAPI.knowledge.save({ workId: activeBook.id, type: 'note', location: shapeLocation(mark), noteContent: '' }).then((saved: KnowledgeItemDTO) => {
+                      setKnowledgeItems(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
+                      // A text box and a comment pin open at once for their text; other shapes stay as drawn.
+                      if (mark.shape === 'text' || mark.shape === 'pin') {
+                        const page = document.querySelector(`[data-page-number="${mark.page}"]`)?.getBoundingClientRect();
+                        setOpenMark({ item: saved, at: page ? { x: page.left + (page.width * mark.box.x) / 100, y: page.top + (page.height * mark.box.y) / 100 } : { x: 200, y: 200 } });
+                      }
+                      finishMarkup();
+                    }, () => { setShowToast(t('studyActionFailed')); setTimeout(() => setShowToast(null), 2500); });
+                  },
+                  onOpen: (item, at) => { refreshMarkCounts(); setOpenMark({ item, at }); },
+                }}>
                 <PdfWorkstationPanel
                   key={`embedded-${activeBook.id}`}
                   embedded
@@ -4135,12 +4185,17 @@ export const FullPageBookReader: React.FC = () => {
                   initialPage={readingPage}
                   onPageChange={setReadingPage}
                   onClose={handleCloseReader}
-                  readingActions={{ onReadAloud: () => startReadAloud(), onAutoScroll: handleToggleAutoScroll, autoScrolling: isAutoScrolling, onBookmark: () => { void handleToggleBookmark(); }, bookmarked: isCurrentPageBookmarked, onSearch: () => panels.setters['search'](true) }}
+                  fileSave={{ state: fileSave.state, status: fileSave.status, notice: fileSave.notice, onSave: fileSave.saveNow, onClearNotice: fileSave.clearNotice, onExport: () => setExportOpen(true),
+                    onRestore: () => { if (activeBook) void window.electronAPI.materialSave.restoreEmergency(activeBook.id).then(() => fileSave.refresh()); },
+                    onKeep: () => { if (activeBook) void window.electronAPI.materialSave.resolveIncident(activeBook.id).then(() => fileSave.refresh()); } }}
+                  readingActions={{ onReadAloud: () => startReadAloud(), onAutoScroll: handleToggleAutoScroll, autoScrolling: isAutoScrolling, onBookmark: () => { void handleToggleBookmark(); }, bookmarked: isCurrentPageBookmarked, onSearch: () => panels.setters['search'](true), onCompare: () => setCompareOpen(true) }}
                   markupBar={<ReaderMarkupBar
                     color={activeHighlightColor}
                     onColor={setActiveHighlightColor}
-                    locked={isInstantHighlightMode}
-                    onToggleLock={() => setIsInstantHighlightMode(value => !value)}
+                    locked={markupLocked}
+                    onToggleLock={toggleMarkupLock}
+                    tool={markupTool}
+                    onTool={chooseMarkupTool}
                     onShowShortcuts={() => setShowReaderShortcuts(true)}
                     t={t}
                   />}
@@ -4223,7 +4278,20 @@ export const FullPageBookReader: React.FC = () => {
                   selectedEngine={ocrEngine}
                   onSelectEngine={selectOcrEngine}
                 />
-                </>
+                {closePrompt && <SaveCloseDialog title={activeBook.title} busy={closeSaving} t={t} onSave={() => closePrompt('save')} onDiscard={() => closePrompt('discard')} onCancel={() => closePrompt('cancel')} />}
+                {exportOpen && <ExportPdfDialog workId={activeBook.id} pages={maxBookPages} t={t} lang={workspaceLang} dir={workspaceDir} onClose={() => setExportOpen(false)} />}
+                {compareOpen && <PdfCompareDialog workId={activeBook.id} onClose={() => setCompareOpen(false)} onJump={page => setReadingPage(Math.min(maxBookPages, Math.max(1, page)))} />}
+                {openMark && <PdfMarkPopover
+                  key={openMark.item.id}
+                  item={openMark.item}
+                  at={openMark.at}
+                  t={t}
+                  onClose={() => { setOpenMark(null); refreshMarkCounts(); }}
+                  onSaved={saved => { setKnowledgeItems(previous => previous.map(item => (item.id === saved.id ? saved : item))); setOpenMark(current => (current ? { ...current, item: saved } : current)); }}
+                  onDeleted={id => { setKnowledgeItems(previous => previous.filter(item => item.id !== id)); setOpenMark(null); }}
+                  onThreadsChanged={refreshMarkCounts}
+                />}
+                </PdfMarkupProvider>
               ) : pdfBlobUrl ? (
                 <div
                   className="pdf-viewport-container relative w-full h-full overflow-hidden flex items-center justify-center"

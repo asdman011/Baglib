@@ -34,6 +34,7 @@ import migration021 from './021_knowledge_history';
 import migration022 from './022_pathways';
 import migration023 from './023_comment_threads';
 import migration024 from './024_question_investigating';
+import migration025 from './025_material_save_state';
 
 
 /** All migrations in chronological order. */
@@ -62,6 +63,7 @@ export const migrations: Migration[] = [
   migration022,
   migration023,
   migration024,
+  migration025,
 ];
 
 

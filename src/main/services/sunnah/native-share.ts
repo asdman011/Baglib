@@ -2,6 +2,7 @@ import { app, type BrowserWindow } from 'electron';
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+import { confirmedQuitCleanup } from '../quit-cleanup';
 
 const active = new Map<number, ChildProcess>();
 
@@ -16,12 +17,12 @@ export function shareHadith(window: BrowserWindow, text: string): Promise<void> 
   active.set(window.id, child);
   const stop = () => child.kill();
   window.once('closed', stop);
-  app.once('before-quit', stop);
+  const unregister = confirmedQuitCleanup.register(stop);
   const lifetime = setTimeout(stop, 125_000);
   child.once('close', () => {
     clearTimeout(lifetime);
     window.removeListener('closed', stop);
-    app.removeListener('before-quit', stop);
+    unregister();
     if (active.get(window.id) === child) active.delete(window.id);
   });
   return new Promise((resolve, reject) => {

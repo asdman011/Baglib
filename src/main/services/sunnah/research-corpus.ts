@@ -12,7 +12,7 @@ function value(value: Row[string]): string { return value == null || /^\s*(nan|n
 /** The rijal source uses a lone hyphen for "nothing recorded". */
 function detail(field: Row[string]): string { const text = value(field).trim(); return text === '-' ? '' : text; }
 const narratorLinkLimit = 40;
-function num(value: Row[string]): string { return value == null ? '' : String(value).replace(/\.0+$/, ''); }
+function num(field: Row[string]): string { return value(field).replace(/\.0+$/, ''); }
 const supportedMergeSchema = 1;
 const blanketGradeCollections = new Set(['Bukhari', 'Muslim']);
 // A variant covers only part of the corpus row when the row holds several reports.

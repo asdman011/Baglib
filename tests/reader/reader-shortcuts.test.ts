@@ -1,8 +1,19 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readerShortcut } from '../../src/renderer/libs/reader/reader-shortcuts';
+import { markHistoryShortcut, readerShortcut } from '../../src/renderer/libs/reader/reader-shortcuts';
 
 describe('reader single-key shortcuts', () => {
+  it('routes mark history without stealing editor or dialog undo', () => {
+    assert.equal(markHistoryShortcut({ key: 'z', ctrlKey: true }, false), 'undo');
+    assert.equal(markHistoryShortcut({ key: 'Z', metaKey: true, shiftKey: true }, false), 'redo');
+    assert.equal(markHistoryShortcut({ key: 'y', ctrlKey: true }, false), 'redo');
+    for (const option of [{ repeat: true }, { defaultPrevented: true }, { altKey: true }, { target: { tagName: 'TEXTAREA' } }, { target: { isContentEditable: true } }, { target: { closest: () => ({}) } }]) {
+      assert.equal(markHistoryShortcut({ key: 'z', ctrlKey: true, ...option }, false), null);
+    }
+    assert.equal(markHistoryShortcut({ key: 'z', ctrlKey: true }, true), null);
+    assert.equal(markHistoryShortcut({ key: 'z', ctrlKey: true, target: {} }, false), 'undo');
+    assert.equal(markHistoryShortcut({ key: 'z' }, false), null);
+  });
   it('toggles the highlighter with h in either case', () => {
     assert.deepEqual(readerShortcut({ key: 'h' }, false), { kind: 'toggle-highlighter' });
     assert.deepEqual(readerShortcut({ key: 'H' }, true), { kind: 'toggle-highlighter' });

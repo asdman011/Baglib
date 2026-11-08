@@ -8,12 +8,14 @@ import { runMigrations } from '../../src/main/database/migrator';
 import { migrations } from '../../src/main/database/migrations';
 import { SqliteWorkRepository } from '../../src/main/database/repositories/work.repository';
 import { registerPdfEditorIpc, shutdownPdfViewCaches } from '../../src/main/ipc/pdf-editor';
+import { initializeMaterialSave, materialSave } from '../../src/main/ipc/material-save';
 import { makePagePdf } from '../../tests/helpers/pdf-pages';
 import { fileSha256 } from '../../src/main/services/pdf-editor/source';
 import { readerAssetUrl } from '../../src/shared/utils/reader-asset-url';
 import { AIProviderService } from '../../src/main/services/ai/ai-provider.service';
 import { streamAssetResponse } from '../../src/main/services/digital/asset-range';
 import { writeSparsePagePdf } from '../../tests/helpers/sparse-pdf';
+import { inspectPdfFile } from '../../src/main/services/pdf-editor/inspection';
 var root = process.cwd();
 var directory = process.env.BAGLIB_PDF_LIVE_DIRECTORY;
 const externalSource = process.env.BAGLIB_TEST_READONLY_PDF ? path.resolve(process.env.BAGLIB_TEST_READONLY_PDF) : null;
@@ -51,6 +53,7 @@ electron.app.whenReady().then(async () => {
   });
   const db2 = getDatabase();
   runMigrations(db2, migrations);
+  await initializeMaterialSave();
   const filename = externalSource || path.join(directory, "source.pdf");
   if (!externalSource) {
     if (process.env.BAGLIB_TEST_LARGE_RANGE === '1') await writeSparsePagePdf(filename, 2, 500 * 1024 * 1024);
@@ -60,7 +63,14 @@ electron.app.whenReady().then(async () => {
   const works = new SqliteWorkRepository(db2);
   works.addBook({ id: "fixture-work", title: "\u0628\u062D\u062B \u2014 Research", author: "", workType: "book", bookType: "digital", filePath: filename, digitalFormat: "PDF" });
   for (const [channel, action] of Object.entries({ "library:get-all-books": () => works.getAllWorks(), "library:get-all-notes": () => [], "categories:get-tree": () => [], "tags:get-all": () => [] })) electron.ipcMain.handle(channel, action);
+  const registerHandler = electron.ipcMain.handle.bind(electron.ipcMain);
+  if (process.env.BAGLIB_TEST_MUTATIONS === '1') electron.ipcMain.handle = (channel, handler) => registerHandler(channel, async (...args) => {
+    const result = await handler(...args);
+    if (channel === 'pdf-editor:start') console.log('Native tool request:', JSON.stringify(args[1]), 'response:', JSON.stringify(result));
+    return result;
+  });
   registerPdfEditorIpc({ viewCacheDirectory: path.join(directory, 'view-cache') });
+  electron.ipcMain.handle = registerHandler;
   const provider = AIProviderService.getInstance();
   provider.generateChatCompletion = async (request) => {
     const context = JSON.parse(request.userPrompt);
@@ -77,7 +87,7 @@ electron.app.whenReady().then(async () => {
   });
   const evaluate = (code) => window.webContents.executeJavaScript(code).catch(error => { console.error('Native evaluation failed:', code, errors); throw error; });
   const until = async (code) => {
-    for (let i = 0; i < (process.env.BAGLIB_TEST_MUTATIONS === '1' || process.env.BAGLIB_TEST_VIEW_CACHE === '1' ? 1200 : 200); i++) {
+    for (let i = 0; i < (process.env.BAGLIB_TEST_MUTATIONS === '1' || process.env.BAGLIB_TEST_VIEW_CACHE === '1' || process.env.BAGLIB_TEST_ORGANIZER_OUTPUTS === '1' ? 1200 : 200); i++) {
       if (await evaluate(code)) return;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
@@ -368,6 +378,85 @@ electron.app.whenReady().then(async () => {
       return;
     }
     if (process.env.BAGLIB_TEST_IMMERSIVE === "1") {
+      if (process.env.BAGLIB_TEST_ORGANIZER_OUTPUTS === '1') {
+        const originalHash = await fileSha256(filename);
+        const evidence = [];
+        for (const language of ['ar', 'en']) {
+          for (const [name, operation, payload, expected] of [
+            ['apply', 'organize', { pages: [{ page: 2, rotation: 90 }, { page: 1 }, { blank: true }] }, [2, 1, 0]],
+            ['extract', 'organize', { pages: [{ page: 2 }] }, [2]],
+            ['split', 'split', { pages: [{ page: 2 }, { page: 1 }], pagesPerFile: 1 }, [2, 1]],
+            ['split-groups', 'split', { pages: [{ page: 2 }, { page: 1 }, { blank: true }], pagesPerFile: 2 }, [2, 1, 0]],
+          ]) {
+            await evaluate(`(async()=>{const api=window.electronAPI.pdfEditor;const opened=await api.open({workId:'fixture-work'});if(!opened.ok)throw new Error(opened.error);window.outputSession=opened.data.id;const result=await api.start({sessionId:opened.data.id,operation:${JSON.stringify(operation)},language:${JSON.stringify(language)},payload:${JSON.stringify(payload)}});if(!result.ok)throw new Error(result.error);window.outputJob=result.data.id;})()`);
+            await until(`window.electronAPI.pdfEditor.status(window.outputJob).then(result=>result.ok&&result.data.state!=='running')`);
+            const result = await evaluate(`window.electronAPI.pdfEditor.status(window.outputJob)`);
+            assert.equal(result.data.state, 'completed', JSON.stringify(result));
+            const texts = [];
+            const counts = [];
+            for (let index = 0; index < result.data.outputs.length; index++) {
+              const output = result.data.outputs[index];
+              assert.equal(output.format, 'pdf');
+              const target = path.join(directory, `${language}-${name}-${index}.pdf`);
+              electron.dialog.showSaveDialog = async () => ({ canceled: false, filePath: target });
+              const saved = await evaluate(`window.electronAPI.pdfEditor.save({jobId:window.outputJob,outputIndex:${index},mode:'copy'})`);
+              assert.equal(saved.ok, true, JSON.stringify(saved));
+              const inspection = await inspectPdfFile(target, undefined, () => {});
+              counts.push(inspection.totalPages);
+              for (const page of inspection.pages) texts.push(page.text.includes('PAGE 2') ? 2 : page.text.includes('PAGE 1') ? 1 : 0);
+              if (name === 'apply') assert.equal(inspection.pages[0].rotation, 90);
+            }
+            assert.deepEqual(texts, expected);
+            if (name === 'split-groups') assert.deepEqual(counts, [2, 1]);
+            assert.equal(await fileSha256(filename), originalHash);
+            evidence.push({ language, operation: name, pages: texts, originalUnchanged: true });
+            await evaluate(`window.electronAPI.pdfEditor.close(window.outputSession)`);
+          }
+        }
+        await fs.writeFile(path.join(directory, 'organizer-outputs.json'), JSON.stringify(evidence, null, 2));
+        console.log(`Organizer output files verified: ${directory}`);
+        electron.app.quit(); return;
+      }
+      if (process.env.BAGLIB_TEST_PAGE_SELECTION === '1') {
+        electron.dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filename] });
+        for (const direction of ['rtl', 'ltr']) {
+          if (await evaluate('window.pdfLive.dir') !== direction) await evaluate('window.pdfLive.toggleDirection()');
+          await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
+          await until(`document.querySelectorAll('[data-page-editor-card]').length === 2`);
+          await until(`!document.querySelector('[data-pdf-page-editor]').dataset.busy`);
+          await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('pdfPageEditorResetAll')+'"]').click()`);
+          await evaluate(`document.querySelector('[data-page-editor-card] button[title="'+window.pdfLive.t('pdfPageEditorMoveRight')+'"]').click()`);
+          await evaluate(`(()=>{const field=document.querySelector('input[aria-label="'+window.pdfLive.t('pdfPageRangeSelection')+'"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field,${JSON.stringify('١')});field.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+          await evaluate(`document.querySelector('button[aria-label="'+window.pdfLive.t('pdfPageRangeSelection')+'"]').click()`);
+          await until(`document.querySelectorAll('[data-page-editor-card][data-selected]').length === 1`);
+          assert.equal(await evaluate(`document.querySelector('[data-page-editor-card]').hasAttribute('data-selected')`), true);
+          window.webContents.invalidate();
+          await new Promise(resolve => setTimeout(resolve, 500));
+          await fs.writeFile(path.join(directory, `page-selection-${direction}.png`), (await window.capturePage()).toPNG());
+          assert.equal(await evaluate(`!![...document.querySelectorAll('button')].find(button=>button.textContent.trim()===window.pdfLive.t('pdfApplyPagePlan'))`), false);
+          await until(`![...document.querySelectorAll('button')].find(button=>button.textContent.trim()===window.pdfLive.t('stirlingMergePdfs')).disabled`);
+          await evaluate(`[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===window.pdfLive.t('stirlingMergePdfs')).click()`);
+          try { await until(`document.querySelectorAll('[data-page-editor-card]').length === 4`); }
+          catch (error) { console.log(await evaluate(`document.body.innerText`)); throw error; }
+          await evaluate(`document.querySelector('[data-pdf-page-editor] button[title="'+window.pdfLive.t('pdfUndo')+'"]').click()`);
+          await until(`document.querySelectorAll('[data-page-editor-card]').length === 2`);
+          await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('pdfPageEditorRedo')+'"]').click()`);
+          await until(`document.querySelectorAll('[data-page-editor-card]').length === 4`);
+          await evaluate(`document.querySelector('[data-page-editor-card] button[title="'+window.pdfLive.t('pdfPageEditorView')+'"]').click()`);
+          await until(`document.querySelector('[data-pdf-page-editor]').parentElement.getAttribute('aria-hidden') === 'true'`);
+          assert.equal(await evaluate(`getComputedStyle(document.querySelector('[data-pdf-page-editor]').parentElement).display`), 'none');
+          await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
+          await until(`document.querySelector('[data-pdf-page-editor]').parentElement.getAttribute('aria-hidden') !== 'true'`);
+          assert.equal(await evaluate(`document.querySelectorAll('[data-page-editor-card]').length`), 4);
+          await evaluate(`document.querySelector('[data-pdf-page-editor] button[title="'+window.pdfLive.t('pdfUndo')+'"]').click()`);
+          await until(`document.querySelectorAll('[data-page-editor-card]').length === 2`);
+          await evaluate(`document.querySelector('[data-pdf-page-editor] button[title="'+window.pdfLive.t('pdfPageEditorRedo')+'"]').click()`);
+          await until(`document.querySelectorAll('[data-page-editor-card]').length === 4`);
+          await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('pdfPageEditorResetAll')+'"]').click()`);
+        }
+        console.log(`Native reordered page selection passed RTL/LTR: ${directory}`);
+        electron.app.quit(); return;
+      }
       await until(`Boolean(document.querySelector('.pdf-viewport-container canvas'))`);
       await until(`document.querySelector('.pdf-viewport-container .textLayer')?.textContent.includes('PAGE 1')`);
       await until('window.pdfReaderPageCount === 2 && window.pdfReaderDocumentPages === 2');
@@ -455,6 +544,11 @@ electron.app.whenReady().then(async () => {
         return;
       }
       if (process.env.BAGLIB_TEST_MUTATIONS === '1') {
+        const requestedLanguage = process.env.BAGLIB_TEST_MUTATION_LANGUAGE;
+        if (requestedLanguage && await evaluate('window.pdfLive.lang') !== requestedLanguage) {
+          await evaluate('window.pdfLive.toggleLanguage()');
+          await until(`window.pdfLive.lang === ${JSON.stringify(requestedLanguage)}`);
+        }
         const sourceHash = await fileSha256(filename);
         await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
         await until(`document.querySelectorAll('[data-page-editor-card]').length === 2`);
@@ -466,27 +560,39 @@ electron.app.whenReady().then(async () => {
         await until(`document.querySelector('.textLayer')?.textContent.includes('PAGE 1')`);
         await evaluate(`[...document.querySelectorAll('[data-pdf-tool-directory] button')].find(button=>button.textContent.includes(window.pdfLive.t('pdfSuiteEdit'))).click()`);
         await until(`Boolean(document.querySelector('[data-pdf-find]'))`);
+        await until(`document.querySelector('[data-pdf-find-replace]')?.disabled === false`);
         for (const [selector,value] of [['[data-pdf-find]','PAGE 1'],['[data-pdf-replacement]','EDIT 1']]) {
           await evaluate(`(()=>{const input=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
         }
+        await until(`(()=>{const button=[...document.querySelectorAll('[data-pdf-find-replace] button')].find(button=>button.textContent.trim()===window.pdfLive.t('pdfApplyReplacements'));return button&&!button.disabled&&document.querySelector('[data-pdf-find]').value==='PAGE 1'&&document.querySelector('[data-pdf-replacement]').value==='EDIT 1'})()`);
+        console.log('Replacement form ready:', await evaluate(`JSON.stringify({find:document.querySelector('[data-pdf-find]').value,replace:document.querySelector('[data-pdf-replacement]').value,disabled:document.querySelector('[data-pdf-find-replace]').disabled})`));
         await evaluate(`[...document.querySelectorAll('[data-pdf-find-replace] button')].find(button=>button.textContent.trim()===window.pdfLive.t('pdfApplyReplacements')).click()`);
-        await until(`document.querySelector('.textLayer')?.textContent.includes('EDIT 1')`);
+        try { await until(`document.querySelector('.textLayer')?.textContent.includes('EDIT 1')`); }
+        catch (error) {
+          console.log('Replacement failure UI:', await evaluate(`document.body.innerText`));
+          const jobsRoot = path.join(electron.app.getPath('userData'), 'pdf-editor', 'jobs');
+          for (const item of await fs.readdir(jobsRoot, { recursive: true })) if (item.endsWith('.pdf')) {
+            const inspection = await inspectPdfFile(path.join(jobsRoot, item), undefined, () => {}).catch(cause => ({ error: String(cause) }));
+            console.log('Replacement staged file:', item, JSON.stringify(inspection));
+          }
+          throw error;
+        }
         assert.equal(await evaluate(`document.querySelector('.pdf-native-viewer-container canvas').width > document.querySelector('.pdf-native-viewer-container canvas').height`), true);
         assert.equal(await fileSha256(filename), sourceHash);
         assert.equal(await evaluate(`document.querySelector('[data-pdf-save-state]').dataset.pdfSaveState`), 'staged');
         await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('pdfSaveDocument')+'"]').click()`);
         await until(`document.querySelector('[data-pdf-save-state]').dataset.pdfSaveState === 'saved'`);
         assert.notEqual(await fileSha256(filename), sourceHash);
-        await evaluate(`document.querySelector('[data-pdf-workstation] header button[title="'+window.pdfLive.t('pdfVersionHistory')+'"]').click()`);
-        await until(`[...document.querySelectorAll('button')].some(button=>button.textContent.includes(window.pdfLive.t('pdfVersionRestore')))`);
-        await evaluate(`[...document.querySelectorAll('button')].find(button=>button.textContent.includes(window.pdfLive.t('pdfVersionRestore'))).click()`);
+        const emergency = path.join(electron.app.getPath('userData'), 'emergency-copies');
+        const copies = await fs.readdir(emergency);
+        assert.equal(copies.length, 1);
+        assert.equal(await fileSha256(path.join(emergency, copies[0])), sourceHash);
+        await materialSave().restoreEmergency('fixture-work');
+        window.webContents.send('pdf-editor:source-changed', { workId: 'fixture-work' });
         await until(`document.querySelector('.textLayer')?.textContent.includes('PAGE 1')`);
         await until(`(()=>{const canvas=document.querySelector('.pdf-native-viewer-container canvas');return canvas&&canvas.width<canvas.height;})()`);
         assert.equal(await fileSha256(filename), sourceHash);
-        const fixtureSource = db2.prepare('SELECT source_id id FROM file_source_detail WHERE file_path=?').get(filename);
-        const backups = path.join(root, '.baglib-data', 'backups');
-        for (const name of await fs.readdir(backups)) if (name.startsWith(`${fixtureSource.id}_`)) await fs.unlink(path.join(backups, name));
-        console.log('[restore-test] Saved edit restored through version history; viewer reloaded the original');
+        console.log('[restore-test] Saved edit restored through the single emergency copy; viewer reloaded the original');
         assert.equal(errors.length, 0, errors.join('\n'));
         console.log(`Native organizer/apply/replacement staged preview checks passed: ${directory}`);
         electron.app.quit();

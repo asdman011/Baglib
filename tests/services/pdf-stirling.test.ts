@@ -271,6 +271,9 @@ test('Stirling-PDF loopback REST v1 adapter executes bilingual text edits, split
     assert.equal(splitRes.outputs?.length, 2);
     assert.equal(splitRes.outputs?.[0].filename, 'part-0001.pdf');
     assert.equal(splitRes.outputs?.[1].filename, 'part-0002.pdf');
+    for (const payload of [{ pages: [], pagesPerFile: 1 }, { pages: [{ page: 1 }], pagesPerFile: 0 }, { pages: [{ page: 1 }], pagesPerFile: 1.5 }]) {
+      await assert.rejects(runStirlingPdf(tools, { filename: sourcePath, output: path.join(splitOutDir, 'invalid.html'), operation: 'split', language: 'en', expectedHash: sourceHash, payload }, new AbortController().signal, () => {}), /invalid-request/u);
+    }
 
     // 4. Encrypt (/api/v1/security/add-password)
     const encOutDir = path.join(directory, 'out-enc');

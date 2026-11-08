@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useOverflowLevel } from '../../hooks/useOverflowLevel';
 import {
   ScanText,
   Cpu,
@@ -60,15 +61,28 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
   const blockerPackages = pageResult?.missingPackages ?? engineInfo?.missingPackages;
   const blockedEngine = pageResult?.requestedEngine ?? selectedEngine;
   const otherEngineRan = !!pageResult && pageResult.engine !== selectedEngine;
+  /**
+   * How compact the bar is, measured against the view it floats in (8 px clear on each side): 1 shows the run button
+   * as an icon and the page chip without its status (kept in its tooltip); 2 shrinks the engine box to its status dot
+   * (the engine is still chosen in the OCR inspector); 3 hides the page chip. The layout choice always stays.
+   */
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const level = useOverflowLevel(rowRef, 3, row => { const view = row.parentElement?.offsetParent as HTMLElement | null; return { width: (view?.clientWidth ?? window.innerWidth) - 16, observe: view }; });
+  const runLabel = isOcrRunning ? t('ocrRunningText') : isRecognized ? t('ocrRescanPageBtn') : t('ocrRecognizePageBtn');
+  const pageStatus = isRecognized
+    ? `${wordCount} ${t('ocrMetricWords')}${otherEngineRan ? ` · ${ocrEngineName(t, pageResult.engine)}` : ''}`
+    : t('ocrStatusUnrecognized');
 
   return (
     <div
       role="toolbar"
       aria-label={t('ocrInspectorTitle')}
       dir={dir}
-      className={`ocr-quick-action-pill absolute bottom-5 left-1/2 -translate-x-1/2 z-20 transition-all duration-300 select-none ${className}`}
+      data-ocr-pill
+      data-level={level}
+      className={`ocr-quick-action-pill absolute bottom-5 left-1/2 -translate-x-1/2 z-20 w-max max-w-[calc(100%-1rem)] transition-all duration-300 select-none ${className}`}
     >
-      <div className="flex items-center gap-1.5 p-1.5 px-3 rounded-full backdrop-blur-md bg-surface/90 border border-subtle/80 shadow-xl hover:shadow-2xl transition-all duration-200">
+      <div ref={rowRef} className="flex items-center gap-1.5 p-1.5 px-3 rounded-full backdrop-blur-md bg-surface/90 border border-subtle/80 shadow-xl hover:shadow-2xl transition-all duration-200">
         {/* Engine Status Badge */}
         <div
           title={
@@ -97,7 +111,7 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
             value={selectedEngine}
             disabled={isOcrRunning}
             onChange={event => onSelectEngine(event.target.value as OcrEngineId)}
-            className="max-w-28 bg-transparent font-sans font-bold cursor-pointer outline-none disabled:cursor-wait"
+            className={`${level >= 2 ? 'hidden' : ''} max-w-28 bg-transparent font-sans font-bold cursor-pointer outline-none disabled:cursor-wait`}
           >
             {OCR_ENGINE_ORDER.map(engine => {
               const blocked = ocrEngineBlocker(ocrEngineInfo(engines, engine));
@@ -108,7 +122,7 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
               );
             })}
           </select>
-          <Cpu className="w-3 h-3 text-pale-sky-500 opacity-80" />
+          {level < 2 && <Cpu className="w-3 h-3 text-pale-sky-500 opacity-80" />}
         </div>
 
         {/* Arabic page layout for OCRmyPDF; PaddleOCR-VL reads rows itself. */}
@@ -158,7 +172,9 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
         ) : (
           <>
             {/* Page Recognition Status Chip */}
-            <div
+            {level < 3 && <><div
+              data-ocr-page-chip
+              title={`${t('page')} ${readingPage} · ${pageStatus}`}
               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium shrink-0 border ${
                 isRecognized
                   ? 'bg-pale-sky-500/10 text-pale-sky-800 dark:text-pale-sky-200 border-pale-sky-500/25'
@@ -171,30 +187,29 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
                   <span className="font-mono font-bold text-main">
                     {t('page')} {readingPage}
                   </span>
-                  <span className="text-muted text-[10px]">
-                    ({wordCount} {t('ocrMetricWords')}{otherEngineRan ? ` · ${ocrEngineName(t, pageResult.engine)}` : ''})
-                  </span>
+                  {level < 1 && <span className="text-muted text-[10px]">({pageStatus})</span>}
                 </>
               ) : (
                 <>
                   <span className="font-mono text-muted">
                     {t('page')} {readingPage}
                   </span>
-                  <span className="text-[10px] text-muted hidden md:inline">
-                    · {t('ocrStatusUnrecognized')}
-                  </span>
+                  {level < 1 && <span className="text-[10px] text-muted">· {pageStatus}</span>}
                 </>
               )}
             </div>
 
-            <div className="w-px h-4 bg-subtle shrink-0 mx-0.5" />
+            <div className="w-px h-4 bg-subtle shrink-0 mx-0.5" /></>}
 
             {/* Run / Re-scan Button */}
             <button
               type="button"
               disabled={isOcrRunning}
               onClick={onRunOcrPage}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0 ${
+              data-ocr-run
+              title={runLabel}
+              aria-label={runLabel}
+              className={`inline-flex items-center gap-1.5 ${level >= 1 ? 'px-2' : 'px-3'} py-1 rounded-full text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0 ${
                 isOcrRunning
                   ? 'bg-pale-sky-500 text-white cursor-wait'
                   : isRecognized
@@ -209,13 +224,7 @@ export const OcrQuickActionPill: React.FC<OcrQuickActionPillProps> = ({
               ) : (
                 <ScanText className="w-3.5 h-3.5" />
               )}
-              <span>
-                {isOcrRunning
-                  ? t('ocrRunningText')
-                  : isRecognized
-                  ? t('ocrRescanPageBtn')
-                  : t('ocrRecognizePageBtn')}
-              </span>
+              <span className={level >= 1 ? 'sr-only' : undefined}>{runLabel}</span>
             </button>
 
             {/* Toggle Word Bounding Boxes */}

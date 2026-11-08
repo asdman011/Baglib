@@ -1,6 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, session, utilityProcess } from 'electron';
 import { mkdir, readFile, writeFile, rm, stat, rename, copyFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { confirmedQuitCleanup } from '../services/quit-cleanup';
 import path from 'node:path';
 import { QuranLibraryService, type QuranInstaller } from '../services/quran/quran-library.service';
 import { category, QUL_ORIGIN, validateSourceUrl } from '../services/quran/qul-catalog';
@@ -15,7 +16,7 @@ import { localResourceCandidates } from '../services/quran/local-resources';
 import { khatmahService } from '../services/quran/khatmah-reminders';
 import { KHATMAH_JUZ_ENDS, KHATMAH_JUZ_STARTS } from '../../shared/khatmah';
 import type { KhatmahMutation } from '../../shared/types/khatmah';
-import type { QuranMushafPage, QuranReaderCatalog } from '../../shared/types/quran';
+import type { QuranMushafPage, QuranPassage, QuranReaderCatalog } from '../../shared/types/quran';
 
 const allowedDownloadOrigins = new Set([QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
 const allowedAudioOrigins = new Set(['https://audio-cdn.tarteel.ai', QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
@@ -97,6 +98,10 @@ export const runQuranInstaller: QuranInstaller = (request, signal) => new Promis
   child.once('message', (message: QuranResult<QuranPack>) => message.ok ? finish(undefined, message.data) : finish(new Error(message.error)));
   child.once('exit', () => finish(new Error('invalid-package')));
 });
+
+let ayahReader: ((surah: number, from: number, to: number) => Promise<{ number: number; text: string }[]>) | null = null;
+/** The text of ayahs from the installed Hafs script, for other main-process features (the study assistant). Empty when none is installed. */
+export const readAyahTexts = (surah: number, from: number, to: number) => ayahReader ? ayahReader(surah, from, to) : Promise.resolve([]);
 
 export function registerQuranIpc(): void {
   const reader = new QuranReaderProcess();
@@ -184,6 +189,21 @@ export function registerQuranIpc(): void {
     return reader.request<Value>(instance.root, [...latest.values()], action);
   };
   ipcMain.handle('quran:reader-catalog', event => result(event, () => readRequest({ action: 'catalog' })));
+  ayahReader = async (surah, from, to) => {
+    const catalog = await readRequest<QuranReaderCatalog>({ action: 'catalog' });
+    const script = catalog.sources.find(source => source.kind === 'script' && source.profile === 'hafs')?.id;
+    if (!script) return [];
+    const ayahs: { number: number; text: string }[] = [];
+    // A passage is read in chunks; `next` continues it until the last ayah asked for.
+    for (let at: number | null = from, rounds = 0; at !== null && at <= to && rounds < 20; rounds++) {
+      const passage: QuranPassage = await readRequest<QuranPassage>({ action: 'read', query: { script, surah, from: at } });
+      if (passage.surah !== surah) break;
+      for (const ayah of passage.ayahs) if (ayah.number >= from && ayah.number <= to && !ayahs.some(entry => entry.number === ayah.number)) ayahs.push({ number: ayah.number, text: ayah.words.filter(word => !word.marker).map(word => word.text).join(' ') });
+      const last: number = passage.ayahs.at(-1)?.number ?? at;
+      at = passage.next !== null && passage.next > at ? Math.max(passage.next, last + 1) : null;
+    }
+    return ayahs.sort((a, b) => a.number - b.number);
+  };
   const khatmahState = () => ({ plans: khatmahService.list(), notificationsSupported: Notification.isSupported() });
   ipcMain.handle('quran:khatmah-list', event => result(event, async () => khatmahState()));
   ipcMain.handle('quran:khatmah-mutate', (event, query: KhatmahMutation) => result(event, async () => {
@@ -543,11 +563,11 @@ export function registerQuranIpc(): void {
     changed();
     return null;
   }));
-  app.once('before-quit', () => {
+  confirmedQuitCleanup.register(async () => {
     clearTimeout(changeTimer);
     reader.close();
     for (const item of downloads.values()) item.cancel();
     for (const id of windows.keys()) closeWindow(id);
-    void service?.dispose();
+    await service?.dispose();
   });
 }

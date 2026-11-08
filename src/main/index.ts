@@ -1,5 +1,6 @@
 import { errorMessage } from '../shared/errors';
-import { app, BrowserWindow, protocol, dialog } from "electron";
+import { confirmedQuitCleanup } from './services/quit-cleanup';
+import { app, BrowserWindow, protocol, dialog, ipcMain } from "electron";
 import { translations } from '../renderer/translations';
 import { registerKnowledgeHistoryIpc } from './ipc/knowledge-history';
 import path from "path";
@@ -29,6 +30,10 @@ import { registerSunnahIpc } from "./ipc/sunnah";
 import { registerQuranIpc } from "./ipc/quran";
 import { registerAthanIpc, startAthanScheduler } from "./ipc/athan";
 import { registerStudyNotesIpc } from "./ipc/study-notes";
+import { registerBoardsIpc } from "./ipc/boards";
+import { registerStudyAssistantIpc } from "./ipc/study-assistant";
+import { registerMaterialSaveIpc, initializeMaterialSave, shutdownMaterialSave } from "./ipc/material-save";
+import { registerPdfCompareIpc } from "./ipc/pdf-compare";
 import { registerPdfEditorIpc, shutdownPdfViewCaches } from "./ipc/pdf-editor";
 import { registerPoetryIpc } from './ipc/poetry';
 import { registerKnowledgeCardIpc } from './ipc/knowledge-cards';
@@ -232,6 +237,23 @@ async function createWindow() {
     },
   });
 
+  // ADR-012: before the window closes, the renderer may ask to write pending changes into an open file.
+  // Without an answer within 5 seconds (a stuck page) the window closes anyway, so it can never trap the user.
+  {
+    const owner = mainWindow;
+    let allowed = false;
+    owner.on('close', event => {
+      if (allowed || owner.webContents.isDestroyed() || owner.webContents.isCrashed()) return;
+      event.preventDefault();
+      const fallback = setTimeout(() => { allowed = true; if (!owner.isDestroyed()) owner.close(); }, 5000);
+      ipcMain.once('app:close-answer', (answer, close: boolean) => {
+        if (answer.sender !== owner.webContents) return;
+        clearTimeout(fallback);
+        if (close) { allowed = true; if (!owner.isDestroyed()) owner.close(); }
+      });
+      owner.webContents.send('app:close-requested');
+    });
+  }
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
     mainWindow?.focus();
@@ -331,6 +353,10 @@ registerSunnahIpc();
 registerQuranIpc();
 registerAthanIpc();
 registerStudyNotesIpc();
+registerBoardsIpc();
+registerStudyAssistantIpc();
+registerMaterialSaveIpc();
+registerPdfCompareIpc();
 registerPdfEditorIpc();
 registerPoetryIpc();
 registerKnowledgeCardIpc();
@@ -349,6 +375,9 @@ app.whenReady().then(async () => {
   // Initialize SQLite database and run pending migrations
   try {
     await initializeDatabase();
+    if (shutdownStarted) return;
+    await initializeMaterialSave();
+    if (shutdownStarted) return;
     startKhatmahReminders();
     startAthanScheduler();
     console.log("[baglib] Database initialized successfully.");
@@ -386,13 +415,29 @@ app.on("window-all-closed", () => {
 
 let shutdownComplete = false;
 let shutdownStarted = false;
+let quitRequested = false;
 app.on('before-quit', event => {
   if (shutdownComplete) return;
   event.preventDefault();
-  if (shutdownStarted) return;
+  if (shutdownStarted || quitRequested) return;
+  const owner = mainWindow;
+  if (owner && !owner.isDestroyed()) {
+    quitRequested = true;
+    const cleanup = () => { ipcMain.removeListener('app:close-answer', onAnswer); owner.removeListener('closed', onClosed); };
+    const onClosed = () => { cleanup(); quitRequested = false; app.quit(); };
+    const onAnswer = (answer: Electron.IpcMainEvent, close: boolean) => {
+      if (answer.sender !== owner.webContents || close !== false) return;
+      cleanup();
+      quitRequested = false;
+    };
+    owner.once('closed', onClosed);
+    ipcMain.on('app:close-answer', onAnswer);
+    owner.close();
+    return;
+  }
   shutdownStarted = true;
   ocrService.shutdown();
-  void Promise.allSettled([shutdownAudioIpc(), shutdownPdfViewCaches(), stirlingProcessor.stopWatchedFoldersDaemon(), defaultStirlingSidecar.stop()]).finally(() => {
+  void shutdownMaterialSave().then(() => Promise.allSettled([confirmedQuitCleanup.run(), shutdownAudioIpc(), shutdownPdfViewCaches(), stirlingProcessor.stopWatchedFoldersDaemon(), defaultStirlingSidecar.stop()])).finally(() => {
     closeDatabase();
     shutdownComplete = true;
     app.quit();

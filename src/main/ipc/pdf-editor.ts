@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, type IpcMainInvokeEvent } from 'electron';
 import fs from 'node:fs';
-import { mkdir, writeFile, unlink, stat, readdir, copyFile } from 'node:fs/promises';
+import { mkdir, writeFile, unlink, stat, readdir, copyFile, utimes } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { readerAssetUrl } from '../../shared/utils/reader-asset-url';
@@ -14,7 +14,8 @@ import { registerPdfCloudIpc } from './pdf-cloud';
 import { registerPdfCollaborationIpc } from './pdf-collaboration';
 import { pdfEngineTools } from '../services/pdf-editor/tools';
 import { PdfViewCache } from '../services/pdf-editor/view-cache';
-import { deletePdfVersion, listPdfVersions, restorePdfVersion, selectUndoVersion } from '../services/pdf-editor/versions';
+import { deletePdfVersion, listPdfVersions, versionFile } from '../services/pdf-editor/versions';
+import { materialSave, runMaterialSaveTask } from './material-save';
 import { pdfViewOptimizer } from '../services/pdf-editor/view-cache-runtime';
 import { stirlingInspection, type PdfEngineTools } from '../services/pdf-editor/python';
 import { runStirlingPdf, defaultStirlingSidecar, resolveStirlingEndpoint } from '../services/pdf-editor/stirling';
@@ -67,7 +68,6 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
       }
     });
     const cleanup = () => { void defaultStirlingSidecar.stop(); };
-    app.once('before-quit', cleanup);
     app.once('will-quit', cleanup);
     process.once('SIGINT', cleanup);
     process.once('SIGTERM', cleanup);
@@ -97,7 +97,7 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
     return event.sender.id;
   };
   const result = async <T>(event: IpcMainInvokeEvent, run: (owner: number) => Promise<T> | T): Promise<PdfResult<T>> => {
-    try { return { ok: true, data: await run(owner(event)) }; }
+    try { const id = owner(event); return { ok: true, data: await runMaterialSaveTask(() => run(id)) }; }
     catch (error) {
       const code = (error as Error).message;
       return { ok: false, error: (['invalid-request', 'invalid-source', 'source-required', 'source-changed', 'encrypted', 'permission-denied', 'unsupported', 'busy', 'cancelled', 'engine-missing', 'signed-document-locked', 'owner-password-required', 'invalid-output', 'no-output', 'no-tables', 'no-text', 'no-bookmarks', 'redaction-unverified', 'certificate-invalid'].includes(code) ? code : 'storage') as PdfError };
@@ -185,8 +185,8 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
     const source = controller().source(owner, output.job.sessionId);
     if (input.mode === 'overwrite') {
       if (!source.path || output.format !== 'pdf') throw new Error('invalid-request');
-      const backupFilename = `${source.sourceId || randomUUID()}_${Date.now()}.pdf`;
-      const publication = await publishPdfOutput({ staged: output.filename, target: source.path, stagedSha256: output.sha256, expectedTargetSha256: source.sha256, backupDirectory: backupDirectory(), backupFilename });
+      await materialSave().publishFileChange(source.workId ?? null, source.path, output.filename, source.sha256);
+      const publication: { backup?: string } = {};
       try {
         if (source.sourceId) {
           const size = (await stat(source.path)).size, db = getDatabase();
@@ -196,7 +196,8 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
           })();
         }
       } catch (error) {
-        if (publication.backup) await publishPdfOutput({ staged: publication.backup, target: source.path, stagedSha256: source.sha256, expectedTargetSha256: output.sha256 });
+        // The emergency copy holds the file as it was before this write: put it back.
+        if (source.workId) await materialSave().restoreEmergency(source.workId).catch(() => {});
         throw error;
       }
       const session = controller().rebase(owner, output.job.sessionId, output.sha256);
@@ -251,11 +252,14 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
   ipcMain.handle('pdf-editor:processor:save-folders', (event, input) => result(event, () => stirlingProcessor.saveWatchedFolders(input as WatchedFolderSource[])));
 
   const backupDirectory = () => app.isPackaged ? path.join(app.getPath('userData'), 'backups') : path.join(app.getAppPath(), '.baglib-data', 'backups');
+  /** `select` gives the file to put in place; the replaced file becomes the one emergency copy (ADR-012). */
   const applyRestoredVersion = async (event: IpcMainInvokeEvent, owner: number, sessionId: string, select: (source: ReturnType<ReturnType<typeof controller>['source']>) => Promise<string>) => {
     const source = controller().source(owner, sessionId);
     if (!source.path || !source.sourceId) throw new Error('invalid-source');
-    const filename = await select(source);
-    const restored = await restorePdfVersion({ directory: backupDirectory(), sourceId: source.sourceId, filename, target: source.path, expectedSha256: source.sha256 });
+    const staged = await select(source);
+    const restored = { sha256: await materialSave().publishFileChange(source.workId ?? null, source.path, staged, source.sha256) };
+    const now = new Date();
+    await utimes(source.path, now, now);
     const size = (await stat(source.path)).size;
     try {
       const db = getDatabase();
@@ -264,7 +268,7 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
         db.prepare('DELETE FROM book_content_fts WHERE book_id=?').run(source.workId);
       })();
     } catch (error) {
-      await publishPdfOutput({ staged: restored.restorePoint, target: source.path, stagedSha256: source.sha256, expectedTargetSha256: restored.sha256 });
+      if (source.workId) await materialSave().restoreEmergency(source.workId).catch(() => {});
       throw error;
     }
     const session = controller().rebase(owner, sessionId, restored.sha256, true);
@@ -275,11 +279,13 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
     const source = controller().source(owner, sessionId);
     return source.sourceId ? listPdfVersions(backupDirectory(), source.sourceId) : [];
   }));
-  ipcMain.handle('pdf-editor:versions:restore', (event, sessionId: string, versionFilename: string) => result(event, owner => applyRestoredVersion(event, owner, sessionId, async () => versionFilename)));
+  ipcMain.handle('pdf-editor:versions:restore', (event, sessionId: string, versionFilename: string) => result(event, owner => applyRestoredVersion(event, owner, sessionId, async source => versionFile(backupDirectory(), source.sourceId!, versionFilename))));
+  // File undo puts back the emergency copy: the file as it was before the last write. It is a file action, separate
+  // from Ctrl+Z on marks and notes, and it can itself be reversed because the replaced file becomes the copy.
   ipcMain.handle('pdf-editor:versions:undo', (event, sessionId: string) => result(event, owner => applyRestoredVersion(event, owner, sessionId, async source => {
-    const filename = await selectUndoVersion(backupDirectory(), source.sourceId!, source.sha256);
-    if (!filename) throw new Error('invalid-request');
-    return filename;
+    const copy = source.workId ? (await materialSave().status(source.workId)).backup?.path : null;
+    if (!copy) throw new Error('invalid-request');
+    return copy;
   })));
   ipcMain.handle('pdf-editor:versions:delete', (event, sessionId: string, versionFilename: string) => result(event, async owner => {
     const source = controller().source(owner, sessionId);

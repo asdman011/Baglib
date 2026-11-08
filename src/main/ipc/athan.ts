@@ -3,6 +3,7 @@
  */
 
 import { app, BrowserWindow, dialog, ipcMain, Notification, nativeImage, powerMonitor } from 'electron';
+import { confirmedQuitCleanup } from '../services/quit-cleanup';
 import path from 'node:path';
 import { settingsRepository } from '../database/repositories/settings.repository';
 import {
@@ -88,7 +89,7 @@ export function startAthanScheduler(): void {
   };
   powerMonitor.on('resume', onResume);
 
-  app.once('before-quit', () => {
+  confirmedQuitCleanup.register(() => {
     service.stopScheduler();
     powerMonitor.removeListener('resume', onResume);
     for (const n of activeNotifications) {

@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import { readFile, stat, mkdir, writeFile, rename, rm, access } from 'node:fs/promises';
 import path from 'node:path';
+import { confirmedQuitCleanup } from '../quit-cleanup';
 import { pathToFileURL } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -114,7 +115,7 @@ let singleton: PdfPageCoverService | undefined;
 export function getPdfPageCoverService(): PdfPageCoverService {
   if (!singleton) {
     singleton = new PdfPageCoverService();
-    app.once('before-quit', () => singleton?.dispose());
+    confirmedQuitCleanup.register(() => singleton?.dispose());
   }
   return singleton;
 }

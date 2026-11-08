@@ -1538,6 +1538,17 @@ export async function runStirlingPdf(
   }
 
   if (input.operation === 'split') {
+    if (payload.pages !== undefined) {
+      if (!Array.isArray(payload.pages) || !payload.pages.length || payload.pages.length > 10000) throw new Error('invalid-request');
+      const pagesPerFile = payload.pagesPerFile ?? 1;
+      if (typeof pagesPerFile !== 'number' || !Number.isSafeInteger(pagesPerFile) || pagesPerFile < 1) throw new Error('invalid-request');
+      const buffer = await organizeStirling(baseUrl, fileField, input, signal);
+      const boundaries: number[] = [];
+      for (let page = pagesPerFile; page < payload.pages.length; page += pagesPerFile) boundaries.push(page);
+      const outputs = await stageSplitRanges(baseUrl, fileField, buffer, boundaries, outputDir, signal);
+      progress(1, 1);
+      return { outputs };
+    }
     const splitType = String(payload.splitType ?? payload.splitBy ?? payload.method ?? '');
     if (splitType === 'chapters') {
       const fields: MultipartField[] = [

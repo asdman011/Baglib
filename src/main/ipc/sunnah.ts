@@ -1,18 +1,27 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'node:path';
+import { confirmedQuitCleanup } from '../services/quit-cleanup';
 import type { SunnahCollectionId, SunnahResearchQuery, SunnahResult } from '../../shared/types/sunnah';
 import { SunnahService } from '../services/sunnah/sunnah.service';
 import { shareHadith } from '../services/sunnah/native-share';
 import { translations } from '../../renderer/translations';
 
+let hadithReader: ((collection: string, chapter: number, id: string) => Promise<{ text: string; number: string } | null>) | null = null;
+/** One hadith's full Arabic text from the installed corpus, for other main-process features (the study assistant). */
+export const readHadithText = (collection: string, chapter: number, id: string) => hadithReader ? hadithReader(collection, chapter, id) : Promise.resolve(null);
+
 export function registerSunnahIpc(): void {
   let service: SunnahService | undefined;
+  hadithReader = async (collection, chapter, id) => {
+    const found = (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths.find(hadith => hadith.id === id);
+    return found ? { text: found.text.ar.full || found.text.ar.matn, number: String(found.number) } : null;
+  };
   const getService = () => service ??= new SunnahService(path.join(app.getPath('userData'), 'sunnah'), app.isPackaged ? [] : [
     path.join(app.getAppPath(), 'repos', 'Hadith', 'LK-Hadith-Corpus-master.zip'),
     path.join(app.getAppPath(), 'repos', 'LK-Hadith-Corpus-master.zip'),
   ], ['sunnah_merged_quranlab_v1.sqlite', 'sunnah_kutub_tisah_itqan.sqlite'].flatMap(name => [path.join(app.getPath('userData'), 'sunnah', name),
     ...(!app.isPackaged ? [path.join(app.getAppPath(), 'tools', 'hadith-alignment', 'data', 'output', name)] : [])]));
-  app.once('before-quit', () => service?.close());
+  confirmedQuitCleanup.register(() => service?.close());
   const result = async <Value>(action: () => Promise<Value>, error: 'invalid-corpus' | 'read-failed'): Promise<SunnahResult<Value>> => {
     try { return { ok: true, data: await action() }; } catch (cause) {
       console.error('[baglib:sunnah]', cause);

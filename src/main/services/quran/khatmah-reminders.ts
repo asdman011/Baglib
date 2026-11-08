@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Notification, powerMonitor } from 'electron';
 import { settingsRepository } from '../../database/repositories/settings.repository';
+import { confirmedQuitCleanup } from '../quit-cleanup';
 import { translations } from '../../../renderer/translations';
 import { KhatmahService } from './khatmah';
 import { localDate } from '../../../shared/khatmah';
@@ -43,7 +44,7 @@ export function startKhatmahReminders(): void {
   timer.unref();
   const initial = setTimeout(check, 10_000);
   powerMonitor.on('resume', check);
-  app.once('before-quit', () => {
+  confirmedQuitCleanup.register(() => {
     clearInterval(timer); clearTimeout(initial);
     powerMonitor.removeListener('resume', check);
     for (const notification of active) notification.close();

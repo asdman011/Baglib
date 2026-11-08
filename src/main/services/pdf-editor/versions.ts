@@ -52,6 +52,12 @@ export async function restorePdfVersion(input: RestoreInput): Promise<{ sha256: 
   return { sha256, restorePoint: published.backup! };
 }
 
+/** The path of a listed version file, after checking its name belongs to this source. */
+export function versionFile(directory: string, sourceId: string, filename: string): string {
+  if (!parseVersion(sourceId, filename)) throw new Error('invalid-request');
+  return path.join(directory, filename);
+}
+
 export async function deletePdfVersion(directory: string, sourceId: string, filename: string): Promise<void> {
   if (!parseVersion(sourceId, filename)) throw new Error('invalid-request');
   await unlink(path.join(directory, filename));

@@ -1,5 +1,6 @@
 import { errorMessage } from '../../shared/errors';
-import { app, ipcMain } from 'electron';
+import { ipcMain } from 'electron';
+import { confirmedQuitCleanup } from '../services/quit-cleanup';
 import { DigitalFileValidatorService } from '../services/digital/digital-file-validator.service';
 import { DigitalImportPipelineService } from '../services/digital/digital-import-pipeline.service';
 import { DuplicateDetectorService } from '../services/digital/duplicate-detector.service';
@@ -8,19 +9,16 @@ import type { DigitalImportOptions } from '../../shared/types/digital-file';
 import type { DigitalFormat } from '../../shared/types/work';
 import { BackgroundMetadataService } from '../services/digital/background-metadata.service';
 import { discoverImportFiles } from '../services/digital/import-files';
+import { ImportQueue } from '../services/digital/import-queue';
 
 export function setupDigitalIPC(): void {
   const validator = DigitalFileValidatorService.getInstance();
   const extractor = new BackgroundMetadataService();
   const duplicateDetector = new DuplicateDetectorService(undefined, extractor);
   const pipeline = new DigitalImportPipelineService(undefined, validator, extractor, undefined, duplicateDetector);
-  app.once('before-quit', () => extractor.dispose());
-  let pending: Promise<unknown> = Promise.resolve();
-  const enqueue = <Value>(action: () => Promise<Value>): Promise<Value> => {
-    const job = pending.then(action);
-    pending = job.catch(() => {});
-    return job;
-  };
+  const queue = new ImportQueue(() => extractor.dispose());
+  confirmedQuitCleanup.registerDrain(() => queue.close());
+  const enqueue = <Value>(action: () => Promise<Value>): Promise<Value> => queue.enqueue(action);
   ipcMain.handle('digital:discover-files', (_event, paths: string[]) => {
     if (!Array.isArray(paths) || paths.some(value => typeof value !== 'string')) throw new Error('Invalid import paths');
     return discoverImportFiles(paths);

@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { openPdfByteSource, type PdfByteSource } from '../../../shared/pdf-byte-source';
 import { PdfRasterClient, type PdfPageInfo } from '../../../shared/pdf-raster-client';
+import { renderWithoutOwned } from '../../../shared/pdf-owned-annotations';
 
 export interface PdfOutlineEntry { title: string; page: number; items: PdfOutlineEntry[] }
 type TextContent = Awaited<ReturnType<pdfjsLib.PDFPageProxy['getTextContent']>>;
@@ -178,7 +179,8 @@ export class PdfViewDocument {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('engine-failed');
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const task = (await document.getPage(page)).render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport });
+    const pdfPage = await document.getPage(page);
+    const task = pdfPage.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport, ...await renderWithoutOwned(document, pdfPage) });
     const cancel = () => task.cancel();
     signal.addEventListener('abort', cancel, { once: true });
     try {

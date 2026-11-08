@@ -1,5 +1,7 @@
 'use client';
 import { errorMessage } from '../../../shared/errors';
+import { PdfMarkupLayer } from './PdfMarkupLayer';
+import { textStyleOf } from '../../../shared/pdf-markup';
 import type { PdfViewPreview } from '../../../shared/types/pdf-editor';
 
 
@@ -390,25 +392,38 @@ const PdfPageItem = React.memo(function PdfPageItem({
         {pageHighlights.map((highlight) => {
           const { rects } = parseHighlightLocation(highlight.location);
           const colorHex = HIGHLIGHT_COLOR_HEX[highlight.color || 'amber'] || '#FACC15';
+          // Underline and strike-out (Wave 9.1) draw a line under or through the words instead of a fill.
+          const style = textStyleOf(highlight.location);
 
           return (
             <React.Fragment key={highlight.id}>
               {rects.map((r, idx) => (
                 <div
                   key={idx}
+                  data-pdf-text-mark={style}
                   className="pdf-highlight-rect absolute rounded-xs cursor-pointer pointer-events-auto transition-opacity hover:opacity-80"
                   onClick={(e) => {
                     e.stopPropagation();
                     onHighlightClick?.(highlight, e);
                   }}
                   title={highlight.quotedText || ''}
-                  style={{
+                  style={style === 'highlight' ? {
                     left: `${r.x}%`,
                     top: `${r.y}%`,
                     width: `${r.width}%`,
                     height: `${r.height}%`,
                     backgroundColor: colorHex,
                     opacity: isDarkTheme ? 0.6 : 0.45,
+                    outline: 'none',
+                    border: 'none',
+                  } : {
+                    left: `${r.x}%`,
+                    top: `${style === 'underline' ? r.y + r.height * 0.88 : r.y + r.height * 0.48}%`,
+                    width: `${r.width}%`,
+                    height: `${Math.max(0.18, r.height * 0.1)}%`,
+                    minHeight: '2px',
+                    backgroundColor: colorHex,
+                    opacity: 0.95,
                     outline: 'none',
                     border: 'none',
                   }}
@@ -439,6 +454,9 @@ const PdfPageItem = React.memo(function PdfPageItem({
           contain: 'layout style paint',
         }}
       />
+
+      {/* Layer 4: study shapes, text boxes and comment pins, and the drawing surface for shape tools */}
+      <PdfMarkupLayer pageNumber={pageNumber} items={pageHighlights} />
 
       {/* Loading Overlay */}
       {isRendering && (

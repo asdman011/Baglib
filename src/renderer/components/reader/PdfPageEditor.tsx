@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useState } from 'react';
 import {
   RotateCw,
   RotateCcw,
@@ -37,19 +37,23 @@ export interface PagePlanItem {
 }
 
 export function parsePageSelectionSyntax(syntax: string, totalPages: number): number[] {
+  if (!Number.isSafeInteger(totalPages) || totalPages < 1) return [];
   const selected = new Set<number>();
-  const tokens = syntax.split(/[,;\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  const normalized = syntax.replace(/[٠-٩]/g, digit => String(digit.charCodeAt(0) - 0x660))
+    .replace(/[۰-۹]/g, digit => String(digit.charCodeAt(0) - 0x6f0))
+    .replace(/[\u200e\u200f\u061c]/g, '').replace(/[–—]/g, '-');
+  const tokens = normalized.split(/[,;،؛\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
 
   for (const token of tokens) {
-    if (token === 'all') {
+    if (token === 'all' || token === 'الكل') {
       for (let i = 1; i <= totalPages; i++) selected.add(i);
       continue;
     }
-    if (token === '2n' || token === 'even') {
+    if (token === '2n' || token === 'even' || token === 'زوجي') {
       for (let i = 2; i <= totalPages; i += 2) selected.add(i);
       continue;
     }
-    if (token === '2n+1' || token === '2n-1' || token === 'odd') {
+    if (token === '2n+1' || token === '2n-1' || token === 'odd' || token === 'فردي') {
       for (let i = 1; i <= totalPages; i += 2) selected.add(i);
       continue;
     }
@@ -63,12 +67,17 @@ export function parsePageSelectionSyntax(syntax: string, totalPages: number): nu
       continue;
     }
     const num = Number(token);
-    if (Number.isInteger(num) && num >= 1 && num <= totalPages) {
+    if (/^\d+$/.test(token) && Number.isSafeInteger(num) && num >= 1 && num <= totalPages) {
       selected.add(num);
     }
   }
 
   return Array.from(selected).sort((a, b) => a - b);
+}
+
+export function selectPagePlanPositions(items: readonly PagePlanItem[], syntax: string): Set<string> {
+  const positions = new Set(parsePageSelectionSyntax(syntax, items.length));
+  return new Set(items.filter((_, index) => positions.has(index + 1)).map(item => item.id));
 }
 
 interface PdfPageEditorProps {
@@ -82,7 +91,13 @@ interface PdfPageEditorProps {
   theme?: 'dark' | 'light' | 'sepia';
 }
 
-export function PdfPageEditor({
+export interface PdfPageEditorHandle {
+  sessionId: string;
+  appendPages: (pages: Omit<PagePlanItem, 'id'>[]) => void;
+  getPages: () => PagePlanItem[];
+}
+
+export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>(function PdfPageEditor({
   session,
   totalPages,
   thumbnails,
@@ -91,7 +106,7 @@ export function PdfPageEditor({
   onViewPage,
   busy = false,
   theme = 'dark',
-}: PdfPageEditorProps) {
+}: PdfPageEditorProps, ref) {
   const { t, dir } = useWorkspace();
   const [items, setItems] = useState<PagePlanItem[]>(() =>
     Array.from({ length: totalPages || 1 }, (_, i) => ({
@@ -134,6 +149,16 @@ export function PdfPageEditor({
     pushHistory(next);
   };
 
+  useImperativeHandle(ref, () => ({
+    sessionId: session.id,
+    getPages: () => items.map(item => ({ ...item, splitAfter: splitBoundaries.has(item.id) })),
+    appendPages: pages => {
+      if (!pages.length) return;
+      if (busy) throw new Error('busy');
+      updateItemsWithHistory(previous => [...previous, ...pages.map(item => ({ ...item, id: `merged-${crypto.randomUUID()}` }))]);
+    },
+  }));
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -153,14 +178,7 @@ export function PdfPageEditor({
 
   const applySyntaxSelection = () => {
     if (!syntaxInput.trim()) return;
-    const pageNums = parsePageSelectionSyntax(syntaxInput, items.length);
-    const newSelected = new Set<string>();
-    items.forEach((item, index) => {
-      if (pageNums.includes(index + 1) || (item.page && pageNums.includes(item.page))) {
-        newSelected.add(item.id);
-      }
-    });
-    setSelectedIds(newSelected);
+    setSelectedIds(selectPagePlanPositions(items, syntaxInput));
   };
 
   const rotateItem = (index: number, degrees: number) => {
@@ -308,10 +326,14 @@ export function PdfPageEditor({
           </button>
 
           {/* Syntax input */}
+          <button type="button" disabled={busy} onClick={() => setSelectedIds(selectPagePlanPositions(items, 'even'))} className="text-xs px-2 py-1 rounded-lg border border-subtle">{t('stirlingSelectEven')}</button>
+          <button type="button" disabled={busy} onClick={() => setSelectedIds(selectPagePlanPositions(items, 'odd'))} className="text-xs px-2 py-1 rounded-lg border border-subtle">{t('stirlingSelectOdd')}</button>
           <div className="flex items-center gap-1">
             <input
               type="text"
               placeholder={t('pdfPageEditorSelectionExample')}
+              aria-label={t('pdfPageRangeSelection')}
+              title={t('pdfPageRangeSelectionHint')}
               value={syntaxInput}
               onChange={e => setSyntaxInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') applySyntaxSelection(); }}
@@ -322,6 +344,7 @@ export function PdfPageEditor({
             <button
               type="button"
               onClick={applySyntaxSelection}
+              aria-label={t('pdfPageRangeSelection')}
               className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer"
             >
               <Check size={13} />
@@ -462,6 +485,7 @@ export function PdfPageEditor({
           </button>
 
           {/* Apply Changes */}
+          <button type="button" disabled={busy || selectedIds.size === 0} onClick={() => onApply(items.filter(item => selectedIds.has(item.id)))} className="text-xs px-2 py-1.5 rounded-lg border border-subtle disabled:opacity-40">{t('stirlingExtractSelected')}</button>
           <button
             type="button"
             disabled={busy || items.length === 0}
@@ -671,4 +695,4 @@ export function PdfPageEditor({
       </div>
     </div>
   );
-}
+});

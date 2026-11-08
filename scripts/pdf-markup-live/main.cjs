@@ -66,7 +66,7 @@ app.on('browser-window-created', (_, owner) => {
       results[language] = result; console.log(JSON.stringify({ language, result }));
       assert.equal(result.afterKey3, 'rose'); assert.equal(result.afterArabicKey2, 'emerald');
       assert.equal(result.savedWithoutLock, 0); assert.equal(result.lockOn, 'true'); assert.equal(result.savedWithLock, 1);
-      assert.equal(result.savedColor, 'emerald'); assert.equal(result.lockAfterTyping, 'true'); assert.equal(result.lockAfterEscape, 'false'); assert.equal(result.sheetRows, 7); assert.equal(result.toast, true);
+      assert.equal(result.savedColor, 'emerald'); assert.equal(result.lockAfterTyping, 'true'); assert.equal(result.lockAfterEscape, 'false'); assert.equal(result.sheetRows, 9); assert.equal(result.toast, true);
       await evaluate(`window.electronAPI.knowledge.getByWork('markup-work').then(rows=>Promise.all(rows.map(r=>window.electronAPI.knowledge.delete?window.electronAPI.knowledge.delete(r.id):null)))`).catch(() => {});
     }
     fs.writeFileSync(path.join(directory, 'results.json'), JSON.stringify(results, null, 2)); console.log(JSON.stringify({ directory, passed: true })); app.quit();

@@ -12,6 +12,7 @@ import { resolvePdfSource } from '../services/pdf-editor/source';
 import type { PdfEditorJobs } from '../services/pdf-editor/jobs';
 import { cloudProvider, type PdfCloudError, type PdfCloudResult } from '../../shared/types/pdf-cloud';
 import { inspectPdfFile } from '../services/pdf-editor/inspection';
+import { confirmedQuitCleanup } from '../services/quit-cleanup';
 
 export function registerPdfCloudIpc(jobs: () => PdfEditorJobs, owner: (event: IpcMainInvokeEvent) => number): void {
   let connector: PdfCloudConnector | undefined;
@@ -41,7 +42,7 @@ export function registerPdfCloudIpc(jobs: () => PdfEditorJobs, owner: (event: Ip
         } catch (error) { await unlink(filename).catch(() => {}); throw error; }
       },
     }, url => shell.openExternal(url));
-    connector.start(); app.once('before-quit', () => connector?.stop()); return connector;
+    connector.start(); confirmedQuitCleanup.register(() => connector?.stop()); return connector;
   };
   const invoke = async <T>(event: IpcMainInvokeEvent, action: (id: number) => Promise<T> | T): Promise<PdfCloudResult<T>> => {
     try { return { ok: true, data: await action(owner(event)) }; }

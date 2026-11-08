@@ -1,5 +1,6 @@
 import * as pdfjs from 'pdfjs-dist';
 import { openPdfByteSource, type PdfByteSource } from '../src/shared/pdf-byte-source';
+import { renderWithoutOwned } from '../src/shared/pdf-owned-annotations';
 
 const scope = globalThis as unknown as { fonts: FontFaceSet; postMessage: (message: unknown, transfer?: Transferable[]) => void; onmessage: ((event: MessageEvent) => void) | null };
 let documentTask: ReturnType<typeof pdfjs.getDocument> | undefined;
@@ -120,7 +121,7 @@ scope.onmessage = event => {
         const context = canvas.getContext('2d');
         if (!context) throw new Error('unsupported-worker-canvas');
         context.setTransform(message.dpr, 0, 0, message.dpr, 0, 0);
-        renderTask = page.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport });
+        renderTask = page.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport, ...await renderWithoutOwned(document, page) });
         await renderTask.promise;
         if (cancelled.has(message.id)) return;
         const bitmap = canvas.transferToImageBitmap();
