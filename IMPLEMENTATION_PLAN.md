@@ -1,6 +1,10 @@
 # Implementation Plan
 
 ## Recent Agent Updates
+- [2026-11-09, Claude Code] Recorded the user's decisions in Jira KEY-269/270/271/272/273/275/276/277 (undo scope option, settings-store drafts, packaged-only baglib: registration, uharfbuzz+fonttools in the base engine, Noto Naskh Arabic download approved, English-only read-aloud, Warsh tafsir overlap rule, ten stamps) and a KEY-230 installer note. No code changes.
+- [2026-11-09, Claude Code] Rewrote Jira KEY-269 to KEY-278 as agent-ready tasks (map, approach, constraints, acceptance, verification, process) and set the work order 278, 269, 270, 273, 277, 276, 275, 274, 272, 271 with Blocks/Relates links. No code changes.
+
+- [2026-11-09, Claude Code] Queued next work as Jira To Do tasks KEY-269 to KEY-278 with agent-ready descriptions; board gaps added to KEY-244. No code changes.
 
 - [2026-11-08, Codex] Authorized publication completed:7ad3e43(notes foundations/exports/assistant),d90dbc6(PDF/save/organizer/import lifecycle),89d5fd7(bilingual UI/accessibility/navigation). Successfully pushed/remote verified on origin/feature/library-domain. Fresh1415tests/tsc/mainbuild pass; selected TS/TSX lint0errors/180warnings; diffcheck/hash-snapshot checks pass. Jira202/204/48 descriptions+evidence comments updated, remain In Progress;149/116/189/138 evidence comments added without status changes, missing Reader/Library labels restored on149/138/116 and existing epics preserved. No new issues/epics/labels. Separate dataset-delivery/Sunnah-patching/local-launch files remain uncommitted and untouched. Dated older "uncommitted" records below are superseded only for included published scopes, not remaining acceptance gaps. Ending goal remains respected; no further implementation authorized by publication request. See CURRENT_TASK.md for exact excluded files and evidence limits.
 
