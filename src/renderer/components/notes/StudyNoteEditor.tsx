@@ -1,14 +1,14 @@
 'use client';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { Annotation, Compartment, EditorSelection, EditorState, Prec, RangeSetBuilder } from '@codemirror/state';
-import { Decoration, EditorView, ViewPlugin, keymap, placeholder as placeholderExtension, type DecorationSet, type ViewUpdate } from '@codemirror/view';
+import { Annotation, Compartment, EditorSelection, EditorState, Facet, Prec, RangeSetBuilder, StateField } from '@codemirror/state';
+import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, showTooltip, type Tooltip, placeholder as placeholderExtension, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, isolateHistory } from '@codemirror/commands';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { markdown } from '@codemirror/lang-markdown';
 import { autocompletion, completionStatus, startCompletion, type Completion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { tags } from '@lezer/highlight';
-import { openStudyLink, studyLinkOptions } from '../../../shared/study-link-completion';
-import { studyLinks, type StudyNote } from '../../../shared/study-notes';
+import { openStudyLink, studyLinkOptions, withRelation } from '../../../shared/study-link-completion';
+import { STUDY_RELATIONS, matchingStudyRelations, studyLinks, withLinkRelation, type StudyNote, type StudyRelation } from '../../../shared/study-notes';
 import { matchSlashCommands, openSlashCommand, type SlashCommandId } from '../../../shared/note-slash-commands';
 import { cardsFromLine } from '../../../shared/note-cards';
 import { honorificExpansion } from '../../../shared/honorifics';
@@ -45,6 +45,12 @@ const theme = EditorView.theme({
   '.cm-tooltip-autocomplete ul li': { padding: '0.25rem 0.5rem', lineHeight: '1.8' },
   // Emerald 500 reads on both the light and dark themes.
   '.cm-paragraph-anchor': { opacity: '0.35', fontSize: '0.75em' },
+  '.cm-link-relation': { fontSize: '0.75em', padding: '0 0.4em', marginInlineEnd: '0.3em', borderRadius: '0.4em', backgroundColor: 'rgb(16 185 129 / 0.15)', color: 'rgb(16 185 129)', fontWeight: '600' },
+  // The app's own surface and ink, so the menu reads in both the light and dark themes.
+  '.cm-tooltip.cm-relation-tooltip': { border: '1px solid rgb(128 128 128 / 0.35)', borderRadius: '0.6rem', padding: '0.25rem', backgroundColor: 'var(--bg-surface)', color: 'var(--text-main)', boxShadow: '0 4px 14px rgb(0 0 0 / 0.25)' },
+  '.cm-relation-menu': { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.25rem', maxWidth: '28rem', fontSize: '0.75rem' },
+  '.cm-relation-menu button': { border: '1px solid rgb(128 128 128 / 0.35)', borderRadius: '0.4rem', padding: '0 0.45rem', lineHeight: '1.8', cursor: 'pointer', background: 'transparent', color: 'inherit' },
+  '.cm-relation-menu button[aria-pressed="true"]': { backgroundColor: 'rgb(16 185 129 / 0.2)', borderColor: 'rgb(16 185 129)', color: 'rgb(16 185 129)', fontWeight: '600' },
   '.cm-study-link': { color: 'rgb(16 185 129)', textDecoration: 'underline', textUnderlineOffset: '0.2em', textDecorationThickness: '1px' },
 });
 
@@ -75,6 +81,20 @@ const lineDirection = ViewPlugin.fromClass(class {
 // Live preview for links: on lines without the cursor, `[[target|label]]` shows only its label, styled as a
 // link, so Arabic labels read in their own direction. The raw text comes back as soon as the cursor enters the line.
 const hidden = Decoration.replace({});
+/** Names for typed relationships in the interface language; a coined one shows as written. */
+const relationNames = Facet.define<Record<string, string>, Record<string, string>>({ combine: values => values[0] ?? {} });
+class RelationChip extends WidgetType {
+  constructor(readonly text: string) { super(); }
+  eq(other: RelationChip) { return other.text === this.text; }
+  toDOM() {
+    const chip = document.createElement('span');
+    chip.className = 'cm-link-relation';
+    chip.setAttribute('data-link-relation', '');
+    chip.dir = 'auto';
+    chip.textContent = this.text;
+    return chip;
+  }
+}
 const linkLabel = Decoration.mark({ class: 'cm-study-link' });
 function linkDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
@@ -90,7 +110,8 @@ function linkDecorations(view: EditorView): DecorationSet {
           const labelStart = link.start + bar + 1;
           const labelEnd = link.end - 2;
           if (labelEnd <= labelStart) continue;
-          builder.add(line.from + link.start, line.from + labelStart, hidden);
+          // A typed relationship shows as a small chip before the label.
+          builder.add(line.from + link.start, line.from + labelStart, link.relation ? Decoration.replace({ widget: new RelationChip(view.state.facet(relationNames)[link.relation] ?? link.relation) }) : hidden);
           builder.add(line.from + labelStart, line.from + labelEnd, linkLabel);
           builder.add(line.from + labelEnd, line.from + link.end, hidden);
         }
@@ -120,10 +141,83 @@ const paragraphAnchors = ViewPlugin.fromClass(class {
   update(update: ViewUpdate) { if (update.docChanged || update.viewportChanged) this.decorations = anchorDecorations(update.view); }
 }, { decorations: plugin => plugin.decorations, provide: plugin => EditorView.atomicRanges.of(view => view.plugin(plugin)?.decorations ?? Decoration.none) });
 
+// The relationship menu (decision S4): with the cursor on a link, or just after one, a small bar above it sets,
+// changes or removes the link's relationship. Ctrl+Alt+R (Cmd+Alt+R) steps through them from the keyboard.
+interface LinkAtCursor { from: number; to: number; relation?: string }
+function linkAtCursor(state: EditorState): LinkAtCursor | null {
+  const selection = state.selection.main;
+  if (!selection.empty || completionStatus(state)) return null;
+  const line = state.doc.lineAt(selection.head);
+  const offset = selection.head - line.from;
+  const link = studyLinks(line.text).find(entry => offset > entry.start && offset <= entry.end);
+  return link ? { from: line.from + link.start, to: line.from + link.end, relation: link.relation } : null;
+}
+function setLinkRelation(view: EditorView, relation?: string): boolean {
+  const link = linkAtCursor(view.state);
+  if (!link) return false;
+  const next = withLinkRelation(view.state.sliceDoc(link.from, link.to), relation);
+  if (!next) return false;
+  view.dispatch({ changes: { from: link.from, to: link.to, insert: next }, selection: { anchor: link.from + next.length }, userEvent: 'input' });
+  return true;
+}
+const cycleRelation = (view: EditorView) => {
+  const link = linkAtCursor(view.state);
+  if (!link) return false;
+  const order: (StudyRelation | undefined)[] = [undefined, ...STUDY_RELATIONS];
+  const index = order.indexOf(link.relation as StudyRelation | undefined);
+  return setLinkRelation(view, order[(index + 1) % order.length]);
+};
+function relationTooltip(state: EditorState): Tooltip | null {
+  const link = linkAtCursor(state);
+  const names = state.facet(relationNames);
+  if (!link || !names.relation) return null;
+  return {
+    pos: link.from,
+    above: true,
+    create: view => {
+      const dom = document.createElement('div');
+      dom.className = 'cm-relation-tooltip';
+      const menu = document.createElement('div');
+      menu.className = 'cm-relation-menu';
+      menu.setAttribute('role', 'toolbar');
+      menu.setAttribute('data-relation-menu', '');
+      menu.setAttribute('aria-label', names.relation);
+      menu.title = names.menuHint ?? '';
+      menu.dir = 'auto';
+      const title = document.createElement('span');
+      title.textContent = names.relation;
+      title.style.opacity = '0.7';
+      menu.append(title);
+      for (const relation of [...STUDY_RELATIONS, undefined]) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = relation ? names[relation] ?? relation : names.none ?? '-';
+        button.setAttribute('data-relation-choice', relation ?? 'none');
+        button.setAttribute('aria-pressed', String(link.relation === relation));
+        // Keep the cursor in the text: the click acts without moving focus away from the editor.
+        button.addEventListener('mousedown', event => event.preventDefault());
+        button.addEventListener('click', () => { setLinkRelation(view, relation); view.focus(); });
+        menu.append(button);
+      }
+      dom.append(menu);
+      return { dom };
+    },
+  };
+}
+const relationMenu = StateField.define<Tooltip | null>({
+  create: relationTooltip,
+  update(current, transaction) {
+    const same = !transaction.docChanged && !transaction.selection && transaction.startState.facet(relationNames) === transaction.state.facet(relationNames)
+      && Boolean(completionStatus(transaction.startState)) === Boolean(completionStatus(transaction.state));
+    return same ? current : relationTooltip(transaction.state);
+  },
+  provide: field => showTooltip.from(field),
+});
+
 const linkPreview = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
   constructor(view: EditorView) { this.decorations = linkDecorations(view); }
-  update(update: ViewUpdate) { if (update.docChanged || update.viewportChanged || update.selectionSet || update.focusChanged) this.decorations = linkDecorations(update.view); }
+  update(update: ViewUpdate) { if (update.docChanged || update.viewportChanged || update.selectionSet || update.focusChanged || update.startState.facet(relationNames) !== update.state.facet(relationNames)) this.decorations = linkDecorations(update.view); }
 }, { decorations: plugin => plugin.decorations });
 
 // Typed honorific triggers become their honorific. The typed character goes in first and the expansion is a
@@ -154,6 +248,8 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   notes: StudyNote[];
   books: { id: string; title: string }[];
   kindLabels: Record<'note' | 'book' | 'quran' | 'hadith' | 'poem' | 'paragraph', string>;
+  /** Names of the typed relationships (decision S4), and the word shown beside them in suggestions. */
+  relationLabels?: Record<StudyRelation, string> & { relation: string; none: string; menuHint: string };
   /** The note being edited, so its own paragraphs are not offered. */
   currentNoteId?: string;
   /** Saves a new anchor at the end of a paragraph in another note (the paragraph text is not changed). */
@@ -171,18 +267,19 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   /** Enter starts the new line with this text when it returns one (lecture timestamps). */
   newLinePrefix?: () => string | null;
   onSave?: () => void;
-}>(function StudyNoteEditor({ value, onChange, dir, disabled, ariaLabel, placeholder, notes, books, kindLabels, currentNoteId, onAnchorParagraph, searchCorpus, slashLabels, dateText, onMakeCards, autoFocus, expandHonorifics = true, newLinePrefix, onSave }, ref) {
+}>(function StudyNoteEditor({ value, onChange, dir, disabled, ariaLabel, placeholder, notes, books, kindLabels, relationLabels, currentNoteId, onAnchorParagraph, searchCorpus, slashLabels, dateText, onMakeCards, autoFocus, expandHonorifics = true, newLinePrefix, onSave }, ref) {
   // CodeMirror needs a real DOM (MutationObserver, ranges). Simplified DOMs used by unit tests get a plain textarea.
   const supported = typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && typeof document.createRange === 'function';
   const fallback = useRef<HTMLTextAreaElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  const latest = useRef({ onChange, onSave, notes, books, kindLabels, slashLabels, dateText, searchCorpus, onMakeCards, currentNoteId, onAnchorParagraph, newLinePrefix });
-  latest.current = { onChange, onSave, notes, books, kindLabels, slashLabels, dateText, searchCorpus, onMakeCards, currentNoteId, onAnchorParagraph, newLinePrefix };
+  const latest = useRef({ onChange, onSave, notes, books, kindLabels, relationLabels, slashLabels, dateText, searchCorpus, onMakeCards, currentNoteId, onAnchorParagraph, newLinePrefix });
+  latest.current = { onChange, onSave, notes, books, kindLabels, relationLabels, slashLabels, dateText, searchCorpus, onMakeCards, currentNoteId, onAnchorParagraph, newLinePrefix };
   const emitted = useRef<string[]>([]);
   const editable = useRef(new Compartment());
   const honorifics = useRef(new Compartment());
   const labels = useRef(new Compartment());
+  const relations = useRef(new Compartment());
 
   useEffect(() => {
     if (!supported || !host.current) return;
@@ -193,8 +290,25 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
       const open = openStudyLink(line.text.slice(0, context.pos - line.from));
       if (!open) { if (context.view) quoteMode.delete(context.view); return null; }
       if (context.view && quoteMode.has(context.view)) return null;
-      const { notes, books, kindLabels, currentNoteId } = latest.current;
-      const options: Completion[] = studyLinkOptions(open.query, notes, books).map(option => ({ label: option.label, detail: kindLabels[option.kind], apply: option.text, boost: 99, type: option.kind === 'note' ? 'text' : option.kind === 'book' ? 'class' : 'constant' }));
+      const { notes, books, kindLabels, relationLabels, currentNoteId } = latest.current;
+      const options: Completion[] = studyLinkOptions(open.query, notes, books).map(option => ({ label: option.label, detail: kindLabels[option.kind], apply: withRelation(option.text, open.relation), boost: 99, type: option.kind === 'note' ? 'text' : option.kind === 'book' ? 'class' : 'constant' }));
+      // Typed relationships (decision S4): `[[sup` or `[[يؤ` offers `supports::`, then the search goes on for the target.
+      if (!open.relation && relationLabels) {
+        for (const relation of matchingStudyRelations(open.query)) {
+          options.push({
+            label: `${relation}::`,
+            displayLabel: relationLabels[relation],
+            detail: relationLabels.relation,
+            boost: open.query.trim() ? 40 : -60,
+            type: 'keyword',
+            apply: (editor: EditorView, _completion: Completion, from: number, to: number) => {
+              const text = `[[${relation}::`;
+              editor.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+              startCompletion(editor);
+            },
+          });
+        }
+      }
       // Paragraphs of saved notes come after note titles. A paragraph without an anchor gets one in its own note.
       for (const paragraph of paragraphOptions(open.query, notes, currentNoteId)) {
         options.push({
@@ -206,7 +320,7 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
           apply: (editor: EditorView, _completion: Completion, from: number, to: number) => {
             const target = latest.current.notes.find(note => note.id === paragraph.noteId);
             const anchor = paragraph.anchor ?? newParagraphAnchor(target?.content ?? '');
-            const text = paragraphLink(paragraph.noteId, anchor, paragraph.label);
+            const text = withRelation(paragraphLink(paragraph.noteId, anchor, paragraph.label), open.relation);
             editor.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
             if (!paragraph.anchor) void latest.current.onAnchorParagraph?.(paragraph.noteId, paragraph.start, anchor);
           },
@@ -241,7 +355,7 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
           apply: (editor: EditorView, _completion: Completion, from: number, to: number) => {
             const quote = quoteMode.get(editor);
             quoteMode.delete(editor);
-            const text = quote ? option.quote : option.link;
+            const text = quote ? option.quote : withRelation(option.link, open.relation);
             // A quote starts on its own line so the Markdown block is valid.
             const lineStart = editor.state.doc.lineAt(from).from;
             const prefix = quote && from > lineStart && editor.state.sliceDoc(lineStart, from).trim() ? '\n' : '';
@@ -304,6 +418,7 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
           EditorView.perLineTextDirection.of(true),
           lineDirection,
           linkPreview,
+          relationMenu,
           paragraphAnchors,
           theme,
           // interactionDelay 0: CodeMirror otherwise ignores Enter for 75 ms after the list changes, so a press that
@@ -322,11 +437,13 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
             { key: 'Mod-b', run: wrap('**', '**') },
             { key: 'Mod-i', run: wrap('*', '*') },
             { key: 'Mod-s', preventDefault: true, run: () => { latest.current.onSave?.(); return true; } },
+            { key: 'Mod-Alt-r', preventDefault: true, run: cycleRelation },
             ...defaultKeymap,
             ...historyKeymap,
           ]),
           editable.current.of([EditorView.editable.of(!disabled), EditorState.readOnly.of(!!disabled)]),
           honorifics.current.of(expandHonorifics ? honorificInput : []),
+          relations.current.of(relationNames.of(relationLabels ?? {})),
           labels.current.of([placeholderExtension(placeholder), EditorView.contentAttributes.of({ 'aria-label': ariaLabel, 'aria-multiline': 'true' })]),
           EditorView.updateListener.of(update => {
             if (!update.docChanged) return;
@@ -367,6 +484,12 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   useEffect(() => {
     view.current?.dispatch({ effects: honorifics.current.reconfigure(expandHonorifics ? honorificInput : []) });
   }, [expandHonorifics]);
+
+  // The names change with the interface language; compare by content, since the object is rebuilt each render.
+  const relationKey = JSON.stringify(relationLabels ?? {});
+  useEffect(() => {
+    view.current?.dispatch({ effects: relations.current.reconfigure(relationNames.of(JSON.parse(relationKey))) });
+  }, [relationKey]);
 
   // Focus once the editor is first editable (a new note is disabled while its saved draft loads).
   const focused = useRef(false);

@@ -22,6 +22,8 @@ export interface HistoryAPI {
   addComment(id:string,text:string,options?:{parentId?:string;anchor?:import('./comment-threads').CommentAnchor}):Promise<string>;
   comments(id:string):Promise<import('./comment-threads').CommentThread[]>;
   commentCounts():Promise<Record<string,number>>;
+  /** Open and total comment threads per item. */
+  commentTotals():Promise<Record<string,{open:number;total:number}>>;
   editComment(commentId:string,text:string):Promise<void>;
   resolveComment(commentId:string,resolved:boolean):Promise<void>;
   removeComment(commentId:string):Promise<void>;

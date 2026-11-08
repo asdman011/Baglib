@@ -1,4 +1,4 @@
-import { matchesStudyQuery, studyLinkText, type StudyNote } from './study-notes';
+import { matchesStudyQuery, splitRelation, studyLinkText, type StudyNote } from './study-notes';
 
 export interface StudyLinkOption { kind: 'note' | 'book' | 'quran'; label: string; target: string; text: string }
 
@@ -40,9 +40,19 @@ export function studyLinkOptions(query: string, notes: Pick<StudyNote, 'id' | 't
   return options.slice(0, limit);
 }
 
-/** The open `[[query` immediately before the cursor, if any. */
-export function openStudyLink(beforeCursor: string): { from: number; query: string } | null {
+/**
+ * The open `[[query` immediately before the cursor, if any. `[[supports::query` searches for `query`, and
+ * `relation` holds the typed relationship so the chosen link keeps it.
+ */
+export function openStudyLink(beforeCursor: string): { from: number; query: string; relation?: string } | null {
   // A leading `!` stays in place, so `![[` completes to an embed.
   const match = /\[\[([^\[\]\n|]{0,80})$/u.exec(beforeCursor);
-  return match ? { from: match.index, query: match[1] } : null;
+  if (!match) return null;
+  const { relation, target } = splitRelation(match[1]);
+  return relation ? { from: match.index, query: target, relation } : { from: match.index, query: match[1] };
+}
+
+/** A completed link (`[[target|label]]`) with the typed relationship put back in front of its target. */
+export function withRelation(text: string, relation?: string): string {
+  return relation ? text.replace(/^(!?)\[\[/u, `$1[[${relation}::`) : text;
 }

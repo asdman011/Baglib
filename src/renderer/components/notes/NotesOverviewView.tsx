@@ -1,7 +1,9 @@
 'use client';
 import { KnowledgeGraphButton } from './KnowledgeGraph';
+import { BoardsWorkspace } from './BoardsWorkspace';
+import { StudyAssistant } from './StudyAssistant';
 import React, { useEffect, useMemo, useState } from 'react';
-import { FileText, Search, Trash2, Pencil, Plus, X } from 'lucide-react';
+import { Download, FileText, FileType, LayoutGrid, Sparkles, Search, Trash2, Pencil, Plus, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { QuickNoteScratchpad } from '../dashboard/QuickNoteScratchpad';
@@ -14,10 +16,14 @@ import { ReadingLogPanel } from './ReadingLogPanel';
 import { studyBacklinks, studyLinks, type StudyNote } from '../../../shared/study-notes';
 import { matchesStudyQuery } from '../../../shared/study-notes';
 import { consumeStudyNote, navigateStudyReference, STUDY_NOTE_OPEN } from '../../utils/study-navigation';
+import { DEFAULT_WORD_LAYOUT, wordLayout, type WordLayout } from '../../../shared/word-export';
+
+const WORD_LAYOUT_KEY = 'baglib.wordLayout.v1';
+const savedWordLayout = (): WordLayout => { try { return wordLayout(JSON.parse(localStorage.getItem(WORD_LAYOUT_KEY) || 'null')); } catch { return DEFAULT_WORD_LAYOUT; } };
 
 export const NotesOverviewView: React.FC = () => {
-  const { books, dir, t, openBookForReading } = useWorkspace();
-  const { notes, refresh, error } = useStudyNotes();
+  const { books, dir, t, lang, openBookForReading } = useWorkspace();
+  const { notes, refresh, error, failedSources, loading } = useStudyNotes();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [editor, setEditor] = useState<{ note?: StudyNote; content?: string; key: number } | null>(null);
@@ -83,6 +89,29 @@ export const NotesOverviewView: React.FC = () => {
       setSelected(null); await refresh();
     } catch { setActionError(true); }
   };
+  // One-way Markdown export (S7) of the notes shown now: all of them, or the search/filter result.
+  const [boardsOpen, setBoardsOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [exported, setExported] = useState<{ folder: string; count: number } | null>(null);
+  const [wordExported, setWordExported] = useState<{ file: string; count: number } | null>(null);
+  // Word options (table of contents, page size, margins) open before the save dialog and are remembered on this device.
+  const [wordOptions, setWordOptions] = useState<WordLayout | null>(null);
+  const exportMarkdown = async () => {
+    setActionError(false); setExported(null); setWordExported(null);
+    try {
+      const result = await window.electronAPI.studyNotes.exportMarkdown(shown.map(note => note.id));
+      if (result) setExported(result);
+    } catch { setActionError(true); }
+  };
+  // Word export (S8) of the notes shown now, as one document.
+  const exportWord = async (layout: WordLayout) => {
+    setActionError(false); setWordExported(null); setExported(null); setWordOptions(null);
+    try { localStorage.setItem(WORD_LAYOUT_KEY, JSON.stringify(layout)); } catch { /* remembered for this time only */ }
+    try {
+      const result = await window.electronAPI.studyNotes.exportWord(shown.map(note => note.id), lang, layout);
+      if (result) setWordExported(result);
+    } catch { setActionError(true); }
+  };
   const memorize = async (note: StudyNote) => {
     try {
       const card = await window.electronAPI.knowledgeCards.save({ front: note.title || note.content, back: note.content, sourceKind: 'note', sourceRef: `note:${note.id}`, sourceLabel: note.title, workId: note.workId });
@@ -92,13 +121,31 @@ export const NotesOverviewView: React.FC = () => {
     } catch { setActionError(true); }
   };
   return <section className="flex-1 min-h-0 overflow-y-auto bg-canvas p-4 sm:p-6 space-y-4" dir={dir} data-notes-overview>
-    <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 font-display text-xl font-bold leading-relaxed"><FileText size={20} />{t('myNotesTitle')}</h1><p className="text-xs text-muted">{t('myNotesDesc')} · {notes.length}</p></div><button type="button" onClick={() => setEditor({ content: '', key: Date.now() })} className="flex items-center gap-2 rounded-lg bg-amber-600 text-white px-3 py-2 text-sm"><Plus size={15} />{t('studyNewNote')}</button></header>
+    <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 font-display text-xl font-bold leading-relaxed"><FileText size={20} />{t('myNotesTitle')}</h1><p className="text-xs text-muted">{t('myNotesDesc')} · {notes.length}</p></div><div className="flex flex-wrap gap-2"><button type="button" data-notes-assistant onClick={() => setAssistantOpen(true)} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm"><Sparkles size={15} />{t('assistantOpen')}</button><button type="button" data-notes-boards onClick={() => setBoardsOpen(true)} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm"><LayoutGrid size={15} />{t('boardsOpen')}</button><button type="button" data-notes-export-word disabled={!shown.length} title={t('notesExportWordHint')} aria-expanded={Boolean(wordOptions)} onClick={() => setWordOptions(current => (current ? null : savedWordLayout()))} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-40"><FileType size={15} />{t('notesExportWord', { count: shown.length })}</button><button type="button" data-notes-export-markdown disabled={!shown.length} title={t('notesExportMarkdownHint')} onClick={() => void exportMarkdown()} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-40"><Download size={15} />{t('notesExportMarkdown', { count: shown.length })}</button><button type="button" onClick={() => setEditor({ content: '', key: Date.now() })} className="flex items-center gap-2 rounded-lg bg-amber-600 text-white px-3 py-2 text-sm"><Plus size={15} />{t('studyNewNote')}</button></div></header>
+    {/* The notes shown start ticked when they are a small, chosen set (a search or one note), not the whole library. */}
+    {assistantOpen && <StudyAssistant notes={notes} initialNotes={shown.length <= 10 && shown.length < notes.length ? shown.map(note => note.id) : []} onClose={() => setAssistantOpen(false)} />}
+    {boardsOpen && <BoardsWorkspace notes={notes} onClose={() => setBoardsOpen(false)} />}
+    {wordOptions && <form data-word-options aria-label={t('wordOptionsTitle')} onSubmit={event => { event.preventDefault(); void exportWord(wordOptions); }} className="flex flex-wrap items-end gap-3 rounded-xl border border-subtle bg-surface p-3 text-sm">
+      <strong className="basis-full text-xs">{t('wordOptionsTitle')}</strong>
+      <label className="flex items-center gap-2"><input type="checkbox" data-word-contents checked={wordOptions.contents} onChange={event => setWordOptions({ ...wordOptions, contents: event.target.checked })} />{t('wordContents')}</label>
+      <label className="flex flex-col gap-1 text-xs">{t('wordPageSize')}<select data-word-page value={wordOptions.pageSize} onChange={event => setWordOptions(wordLayout({ ...wordOptions, pageSize: event.target.value }))} className="rounded border border-subtle bg-canvas px-2 py-1 text-sm"><option value="a4">A4</option><option value="letter">{t('wordPageLetter')}</option><option value="a5">A5</option></select></label>
+      <label className="flex flex-col gap-1 text-xs">{t('wordMargins')}<select data-word-margins value={wordOptions.margins} onChange={event => setWordOptions(wordLayout({ ...wordOptions, margins: event.target.value }))} className="rounded border border-subtle bg-canvas px-2 py-1 text-sm"><option value="normal">{t('wordMarginNormal')}</option><option value="narrow">{t('wordMarginNarrow')}</option><option value="wide">{t('wordMarginWide')}</option></select></label>
+      <span className="ms-auto flex gap-2"><button type="button" onClick={() => setWordOptions(null)} className="rounded-lg border border-subtle px-3 py-1.5">{t('cancel')}</button><button type="submit" data-word-go className="rounded-lg bg-amber-600 px-3 py-1.5 text-white">{t('wordExportGo')}</button></span>
+    </form>}
+    {wordExported && <p role="status" data-notes-word-exported className="text-xs text-emerald-700 dark:text-emerald-300 leading-loose">{t('notesExportWordDone', { count: wordExported.count })} <bdi dir="ltr" className="break-all">{wordExported.file}</bdi></p>}
+    {exported && <p role="status" data-notes-exported className="text-xs text-emerald-700 dark:text-emerald-300 leading-loose">{t('notesExportDone', { count: exported.count })} <bdi dir="ltr" className="break-all">{exported.folder}</bdi></p>}
     <label className="flex items-center gap-2 rounded-xl border border-subtle bg-surface px-3 py-2"><Search size={17} /><input type="search" aria-label={t('studySearchNotes')} placeholder={t('studySearchNotes')} value={query} onChange={event => { setQuery(event.target.value); setSelected(null); }} className="w-full min-w-0 bg-transparent outline-none text-sm leading-loose" /></label>
     <label className="block text-sm">{t('waveReadingLog')}<select data-reading-log-book aria-label={t('waveReadingLog')} value={readingWork} onChange={event=>setReadingWork(event.target.value)} className="w-full bg-surface border border-subtle rounded p-2"><option value="">{t('dashScratchpadAttachBook')}</option>{books.map(book=><option key={book.id} value={book.id}>{book.title}</option>)}</select></label>
     {readingWork&&<ReadingLogPanel key={readingWork} workId={readingWork}/>}
     <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" data-notes-open-comments checked={onlyOpenComments} onChange={event => setOnlyOpenComments(event.target.checked)} />{t('commentsOnlyOpen', { count: Object.values(openComments).reduce((sum, count) => sum + count, 0) })}</label>
     {(selected || anchor) && <button type="button" onClick={() => { setSelected(null); setAnchor(null); }} className="text-xs flex items-center gap-1"><X size={14} />{t('studyLinkedNotes')}</button>}
-    {(error || actionError) && <p role="alert">{t('studyActionFailed')}</p>}
+    {error && <div role="alert" className="rounded-xl border border-amber-500/40 p-3 text-sm leading-loose space-y-2">
+      <p>{t('studyLoadFailed')}</p>
+      <p>{failedSources.map(source => t(source === 'notes' ? 'studyLoadPersonalSource' : 'studyLoadKnowledgeSource')).join(' · ')}</p>
+      <button type="button" disabled={loading} onClick={() => void refresh()} className="rounded-lg border border-subtle px-3 py-1 hover:bg-surface disabled:opacity-50">{t('lookupRetry')}</button>
+    </div>}
+    {actionError && <p role="alert">{t('studyActionFailed')}</p>}
+    {loading && <p role="status" className="text-sm text-muted">{t('studyLoadingNotes')}</p>}
     {editor && <div className="max-w-3xl"><div className="flex justify-end mb-1"><button type="button" aria-label={t('studyClose')} onClick={() => setEditor(null)}><X size={18} /></button></div><QuickNoteScratchpad key={editor.key} initialNote={editor.note} initialContent={editor.content} autoFocus onSaved={() => { setEditor(null); void refresh(); }} /></div>}
     <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
       {shown.map(note => {
@@ -117,7 +164,7 @@ export const NotesOverviewView: React.FC = () => {
         </article>;
       })}
     </div>
-    {!shown.length && <p className="py-8 text-center text-sm text-muted">{t('studyNoResults')}</p>}
+    {!shown.length && !error && !loading && <p className="py-8 text-center text-sm text-muted">{t('studyNoResults')}</p>}
     <KnowledgeTools />
     <SrsReviewPanel />
     <SavedCardsPanel />

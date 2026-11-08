@@ -2,7 +2,8 @@ import { parseBookTarget, parseNoteTarget, parseQuranTarget, studyLinks, type St
 
 export type GraphNodeKind = 'note' | 'book' | 'quran' | 'hadith' | 'poem' | 'lecture' | 'tag';
 export interface GraphNode { id: string; kind: GraphNodeKind; label: string; target?: string }
-export interface GraphEdge { source: string; target: string; kind: 'link' | 'embed' | 'tag' }
+/** `relation` is the typed relationship written in the link (decision S4); it reads from `source` to `target`. */
+export interface GraphEdge { source: string; target: string; kind: 'link' | 'embed' | 'tag'; relation?: string }
 export interface KnowledgeGraph { nodes: GraphNode[]; edges: GraphEdge[] }
 
 /**
@@ -42,7 +43,10 @@ export function buildKnowledgeGraph(notes: Pick<StudyNote, 'id' | 'title' | 'con
       if (node.kind === 'book') node.label = titles.books?.get(node.id.slice(5)) ?? node.label;
       if (!nodes.has(node.id)) nodes.set(node.id, node);
       const key = [source, node.id].sort().join('|');
-      if (!edges.has(key)) edges.set(key, { source, target: node.id, kind: link.embed ? 'embed' : 'link' });
+      const existing = edges.get(key);
+      // One line per pair; a typed relationship on any of their links names it (the first one written wins).
+      if (!existing) edges.set(key, { source, target: node.id, kind: link.embed ? 'embed' : 'link', ...(link.relation ? { relation: link.relation } : {}) });
+      else if (!existing.relation && link.relation) edges.set(key, { source, target: node.id, kind: existing.kind, relation: link.relation });
     }
     for (const tag of note.tags) {
       const id = `tag:${tag}`;
@@ -67,6 +71,25 @@ export function localGraph(graph: KnowledgeGraph, center: string, depth = 1): Kn
     frontier = next;
   }
   return { nodes: graph.nodes.filter(node => keep.has(node.id)), edges: graph.edges.filter(edge => keep.has(edge.source) && keep.has(edge.target)) };
+}
+
+/** Relationships present in a graph, with how many lines each has, most common first. */
+export function graphRelations(graph: KnowledgeGraph): { relation: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const edge of graph.edges) if (edge.relation) counts.set(edge.relation, (counts.get(edge.relation) ?? 0) + 1);
+  return [...counts].map(([relation, count]) => ({ relation, count })).sort((a, b) => b.count - a.count || a.relation.localeCompare(b.relation));
+}
+
+/**
+ * Only the lines with the chosen relationships, and the dots they join. `keep` (the note the map is about)
+ * always stays, so the map never goes empty around it. An empty choice means no filter.
+ */
+export function filterByRelations(graph: KnowledgeGraph, relations: ReadonlySet<string>, keep?: string): KnowledgeGraph {
+  if (!relations.size) return graph;
+  const edges = graph.edges.filter(edge => edge.relation && relations.has(edge.relation));
+  const ids = new Set(edges.flatMap(edge => [edge.source, edge.target]));
+  if (keep) ids.add(keep);
+  return { nodes: graph.nodes.filter(node => ids.has(node.id)), edges };
 }
 
 /** How many connections a node has; the local button is greyed out at zero. */

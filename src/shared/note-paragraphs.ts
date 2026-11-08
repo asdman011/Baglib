@@ -68,10 +68,15 @@ export function anchorParagraph(content: string, start: number, anchor: string):
 
 export interface ParagraphOption { noteId: string; noteTitle: string; start: number; anchor?: string; label: string; text: string }
 
-/** The first words of a paragraph, as a link label: links, Markdown markers and anchors removed. */
-export function paragraphLabel(text: string, words = 8): string {
+function shownText(text: string): string {
   let plain = text;
   for (const link of studyLinks(plain).reverse()) plain = plain.slice(0, link.start) + link.label + plain.slice(link.end);
+  return plain;
+}
+
+/** The first words of a paragraph, as a link label: links, Markdown markers and anchors removed. */
+export function paragraphLabel(text: string, words = 8): string {
+  let plain = shownText(text);
   plain = plain.replace(/^\s*(?:#{1,6}|>|[-*])\s+/gmu, '').replace(/[*_`]/gu, '').replace(/\s+/gu, ' ').trim();
   const parts = plain.split(' ');
   return parts.length > words ? `${parts.slice(0, words).join(' ')}…` : plain;
@@ -85,7 +90,8 @@ export function paragraphOptions(query: string, notes: Pick<StudyNote, 'id' | 't
   for (const note of notes) {
     if (note.id === exclude) continue;
     for (const paragraph of noteParagraphs(note.content)) {
-      if (!matchesStudyQuery(paragraph.text, text)) continue;
+      // Match what the reader sees: link labels, not targets or relationship names hidden in the link text.
+      if (!matchesStudyQuery(shownText(paragraph.text), text)) continue;
       options.push({ noteId: note.id, noteTitle: note.title, start: paragraph.start, anchor: paragraph.anchor, label: paragraphLabel(paragraph.text), text: paragraph.text });
       if (options.length >= limit) return options;
     }

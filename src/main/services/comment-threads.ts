@@ -22,6 +22,12 @@ export class CommentThreadService {
     return Object.fromEntries(rows.map(row => [row.id, row.count]));
   }
 
+  /** Open and total threads per item, so a list can tell an empty item from a resolved one. */
+  threadCounts(): Record<string, { open: number; total: number }> {
+    const rows = this.db.prepare("SELECT c.knowledge_id AS id, SUM(CASE WHEN c.resolved_at IS NULL THEN 1 ELSE 0 END) AS open, COUNT(*) AS total FROM comment c JOIN knowledge k ON k.id=c.knowledge_id WHERE c.parent_comment_id IS NULL AND k.deleted_at IS NULL GROUP BY c.knowledge_id").all() as { id: string; open: number; total: number }[];
+    return Object.fromEntries(rows.map(row => [row.id, { open: row.open, total: row.total }]));
+  }
+
   add(input: AddCommentInput): string {
     const text = validText(input.text);
     if (!this.db.prepare('SELECT 1 FROM knowledge WHERE id=? AND deleted_at IS NULL').get(input.knowledgeId)) throw new Error('invalid-request');

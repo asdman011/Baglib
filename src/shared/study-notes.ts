@@ -27,7 +27,56 @@ export interface StudyNotesAPI {
   save(note: StudyNoteInput): Promise<StudyNote>;
   remove(id: string): Promise<void>;
 }
-export interface StudyLink { target: string; label: string; embed: boolean; start: number; end: number }
+/**
+ * A link may name how the note relates to its target, inside the link text (decision S4):
+ * `[[supports::note:abc|label]]` or, in Arabic, `[[يؤيد::quran:hafs:2:153|…]]`. Known names map to one key;
+ * any other single word is kept as written, so a reader can coin their own relationship.
+ */
+export interface StudyLink { target: string; label: string; embed: boolean; start: number; end: number; relation?: string }
+export const STUDY_RELATIONS = ['supports', 'refutes', 'explains', 'answers', 'example', 'contrasts', 'questions'] as const;
+export type StudyRelation = typeof STUDY_RELATIONS[number];
+const RELATION_NAMES: Record<string, StudyRelation> = {
+  supports: 'supports', support: 'supports', 'يؤيد': 'supports', 'يدعم': 'supports',
+  refutes: 'refutes', refute: 'refutes', 'يرد': 'refutes', 'ينقض': 'refutes',
+  explains: 'explains', explain: 'explains', 'يشرح': 'explains', 'يفسر': 'explains',
+  answers: 'answers', answer: 'answers', 'يجيب': 'answers',
+  example: 'example', 'مثال': 'example',
+  contrasts: 'contrasts', contrast: 'contrasts', 'يخالف': 'contrasts',
+  questions: 'questions', question: 'questions', 'يسأل': 'questions',
+};
+const RELATION_WORD = /^[\p{L}\p{M}\p{N}_-]{1,24}$/u;
+// Matching ignores case, tashkeel and hamza/alef forms, the same way note search does.
+const relationKey = (value: string) => normalizeArabicText(value.trim(), { normalizeTaaMarbuta: false }).toLowerCase();
+const RELATION_LOOKUP = new Map(Object.entries(RELATION_NAMES).map(([name, key]) => [relationKey(name), key]));
+/** The key for a typed relationship name: a known one in English or Arabic, or the word itself as written. */
+export function studyRelation(name: string): string | undefined {
+  const word = name.trim();
+  if (!RELATION_WORD.test(word)) return undefined;
+  return RELATION_LOOKUP.get(relationKey(word)) ?? word;
+}
+/** Known relationship names that start with what was typed (for suggestions after `[[`). */
+export function matchingStudyRelations(typed: string): StudyRelation[] {
+  const word = relationKey(typed);
+  if (!word) return [...STUDY_RELATIONS];
+  return STUDY_RELATIONS.filter(key => [...RELATION_LOOKUP].some(([name, value]) => value === key && name.startsWith(word)));
+}
+/** Splits `relation::target` into its parts; a target without a relation comes back as is. */
+export function splitRelation(head: string): { relation?: string; target: string } {
+  const match = /^([^:\s|\[\]]{1,24})::(.*)$/su.exec(head);
+  const relation = match ? studyRelation(match[1]) : undefined;
+  return match && relation ? { relation, target: match[2] } : { target: head };
+}
+
+/** The same link with its relationship set, changed or removed (`relation` undefined); null if `raw` is not a link. */
+export function withLinkRelation(raw: string, relation?: string): string | null {
+  const match = /^(!?)\[\[([^\]\n]+)\]\]$/u.exec(raw);
+  if (!match) return null;
+  const [head, ...label] = match[2].split('|');
+  const { target } = splitRelation(head);
+  if (!validStudyTarget(target)) return null;
+  const named = relation ? studyRelation(relation) : undefined;
+  return `${match[1]}[[${named ? `${named}::` : ''}${target}${label.length ? `|${label.join('|')}` : ''}]]`;
+}
 
 export function validStudyTarget(target: string): boolean {
   const poetry = /^poetry:ashaar:(\d+):(\d+):(\d+)$/u.exec(target);
@@ -69,9 +118,10 @@ export function studyLinks(content: string): StudyLink[] {
   const pattern = /```[^]*?```|`[^`\n]*`|(!?)\[\[([^\]\n]+)\]\]/gu;
   for (const match of content.matchAll(pattern)) {
     if (match[2] === undefined) continue;
-    const [target, ...label] = match[2].split('|');
+    const [head, ...label] = match[2].split('|');
+    const { relation, target } = splitRelation(head);
     if (!validStudyTarget(target)) continue;
-    links.push({ target, label: label.join('|') || target, embed: match[1] === '!', start: match.index!, end: match.index! + match[0].length });
+    links.push({ target, label: label.join('|') || target, embed: match[1] === '!', start: match.index!, end: match.index! + match[0].length, ...(relation ? { relation } : {}) });
   }
   return links;
 }
@@ -95,7 +145,8 @@ export function studyNoteHeading(content: string): string {
   return heading.replace(/[ \t]\^[A-Za-z0-9-]{1,64}[ \t]*$/u, '').replace(/^#{1,6}\s*|^>\s*|^[*-]\s+/u, '').replace(/[*`]/gu, '').slice(0, 100);
 }
 
-export function studyLinkText(target: string, label: string, embed = false): string {
+export function studyLinkText(target: string, label: string, embed = false, relation?: string): string {
   if (!validStudyTarget(target)) return '';
-  return `${embed ? '!' : ''}[[${target}|${label.replace(/[\[\]|\r\n]/gu, ' ').trim()}]]`;
+  const named = relation ? studyRelation(relation) : undefined;
+  return `${embed ? '!' : ''}[[${named ? `${named}::` : ''}${target}|${label.replace(/[\[\]|\r\n]/gu, ' ').trim()}]]`;
 }

@@ -101,7 +101,7 @@ export class KnowledgeHistoryService {
     if (!row || createHash('sha256').update(row.content).digest('hex') !== row.hash) throw new Error('invalid-history');
     return JSON.parse(row.content) as Snapshot;
   }
-  restore(id: string, revision: number, expected: number, keepExistingAssociations = false): void {
+  restore(id: string, revision: number, expected: number, keepExistingAssociations = false, action = 'restore'): void {
     const value = this.read(id,revision);
     // A trash version has no reader projection, so it comes from the last version before the trash.
     if (value.knowledge?.deleted_at && !value.annotation) {
@@ -117,7 +117,7 @@ export class KnowledgeHistoryService {
       value.details.note_detail={knowledge_id:id,content:annotation.note_content || ''};
     }
     if (!value.knowledge) throw new Error('invalid-history');
-    withKnowledgeHistory(this.db,[id],'restore',() => {
+    withKnowledgeHistory(this.db,[id],action,() => {
       for (const [table,items] of [['tag',value.tags],['collection',value.collections]] as const) {
         for (const item of items) {
           const current = this.db.prepare(`SELECT name FROM ${table} WHERE id=?`).get(item.id) as {name:string} | undefined;

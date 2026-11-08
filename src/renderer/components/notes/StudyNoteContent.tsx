@@ -1,4 +1,5 @@
 'use client';
+import { relationLabel } from '../../utils/relation-labels';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { studyLinks, type StudyNote } from '../../../shared/study-notes';
 import type { TranslationKey } from '../../translations';
@@ -102,6 +103,7 @@ function renderSegment(content: string, notes: StudyNote[], onOpen: (target: str
     pieces.push(<React.Fragment key={`${key}-before-${link.start}`}>{formatted(content.slice(end, link.start), t)}</React.Fragment>);
     const embedded = link.embed && link.target.startsWith('note:') ? embeddedText(link.target, notes) : null;
     pieces.push(<span key={`${key}-${link.start}`} className={link.embed ? 'block my-2 border-s-2 border-amber-500 ps-3' : ''}>
+      {link.relation && <span data-link-relation={link.relation} dir="auto" className="me-1 rounded bg-emerald-500/15 px-1.5 text-[0.75em] font-semibold text-emerald-700 dark:text-emerald-300">{relationLabel(t, link.relation)}</span>}
       <StudyLinkButton target={link.target} label={link.label} notes={notes} onOpen={onOpen} />
       {link.embed && link.target.startsWith('media:') && link.target.split(':').length === 4 ? <LectureShot shot={link.target.split(':')[3]} />
         : link.embed && <span dir="auto" data-embedded-note={link.target} className="block text-sm text-muted whitespace-pre-wrap leading-loose">{embedded ?? t('studyEmbedUnavailable')}</span>}

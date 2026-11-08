@@ -36,3 +36,18 @@ test('the local graph is a note and its neighbours', () => {
   assert.ok(local.edges.every(edge => local.nodes.some(node => node.id === edge.source) && local.nodes.some(node => node.id === edge.target)));
   assert.deepEqual(localGraph(graph, 'note:c').nodes.map(node => node.id), ['note:c']);
 });
+
+test('the relationship filter keeps only the chosen lines and the note the map is about', async () => {
+  const { filterByRelations, graphRelations } = await import('../../src/shared/knowledge-graph');
+  const graph = buildKnowledgeGraph([
+    { id: 'a', title: 'A', content: '[[supports::note:b|B]] [[refutes::note:c|C]] [[note:d|D]] [[supports::quran:hafs:1:1|1:1]]', tags: ['t'] },
+    { id: 'b', title: 'B', content: '', tags: [] }, { id: 'c', title: 'C', content: '', tags: [] }, { id: 'd', title: 'D', content: '', tags: [] },
+  ]);
+  assert.deepEqual(graphRelations(graph), [{ relation: 'supports', count: 2 }, { relation: 'refutes', count: 1 }]);
+  const supports = filterByRelations(graph, new Set(['supports']), 'note:a');
+  assert.deepEqual(supports.nodes.map(node => node.id).sort(), ['note:a', 'note:b', 'quran:1:1']);
+  assert.ok(supports.edges.every(edge => edge.relation === 'supports'));
+  assert.equal(filterByRelations(graph, new Set(['supports', 'refutes'])).edges.length, 3);
+  assert.equal(filterByRelations(graph, new Set()), graph);
+  assert.deepEqual(filterByRelations(graph, new Set(['answers']), 'note:d').nodes.map(node => node.id), ['note:d']);
+});

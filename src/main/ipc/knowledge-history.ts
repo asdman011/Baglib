@@ -83,6 +83,7 @@ export function registerKnowledgeHistoryIpc():void {
       }
       case 'comments': return new CommentThreadService(db).list(id());
       case 'comment-counts': return new CommentThreadService(db).openCounts();
+      case 'comment-totals': return new CommentThreadService(db).threadCounts();
       case 'comment-edit': new CommentThreadService(db).edit(identifier(input.commentId),input.text as string);changed();return;
       case 'comment-resolve': if(typeof input.resolved!=='boolean') throw new Error('invalid-request');new CommentThreadService(db).setResolved(identifier(input.commentId),input.resolved);changed();return;
       case 'comment-remove': new CommentThreadService(db).remove(identifier(input.commentId));changed();return;
