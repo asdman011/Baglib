@@ -266,7 +266,7 @@ export class QuranReader {
     const warsh = this.packs.find(pack => pack.resource.id === 'quran-script/qpc-warsh-script-wbw');
     if (!warsh) throw new Error('warsh-not-installed');
     if (!hafs) throw new Error('invalid-resource');
-    const identity = createHash('sha256').update(`assistant-overlap-v1:${hafs.digest}:${warsh.digest}:${surah}`).digest('hex');
+    const identity = createHash('sha256').update(`assistant-overlap-v2:${hafs.digest}:${warsh.digest}:${surah}`).digest('hex');
     const directory = path.join(this.root, 'derived');
     const filename = path.join(directory, `${identity}.json`);
     try {
@@ -275,7 +275,7 @@ export class QuranReader {
     } catch { /* Rebuild a missing or invalid derived file. */ }
     const a = (await this.database(hafs.id, 'script')).prepare('SELECT ayah,text FROM words WHERE surah=? ORDER BY ayah,word').all(surah) as { ayah: number; text: string }[];
     const b = (await this.database(warsh.id, 'script')).prepare('SELECT ayah,text FROM words WHERE surah=? ORDER BY ayah,word').all(surah) as { ayah: number; text: string }[];
-    const map = alignWarshSurah(a, b, surah === 1);
+    const map = alignWarshSurah(a, b, surah === 1, surah);
     await mkdir(directory, { recursive: true });
     const temporary = path.join(directory, `${randomUUID()}.json`);
     try { await writeFile(temporary, JSON.stringify({ identity, map })); await rename(temporary, filename); }

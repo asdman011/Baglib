@@ -15,14 +15,24 @@ const joinCost = (a: string, b: string): number | null => {
   }
   return changes + a.length - i + b.length - j <= 1 ? 5 : null;
 };
+/** Coverage uses reference identity, not just cardinality, and lists every missing attachment. */
+export function assertHafsCoverage(map: Record<number, number[]>, expected: number[], surah?: number): void {
+  const attached = new Set(Object.values(map).flat());
+  const missing = [...new Set(expected)].filter(ayah => !attached.has(ayah)).sort((a, b) => a - b);
+  if (missing.length) throw new Error(`unattached-hafs-ayahs: ${missing.map(ayah => surah === undefined ? String(ayah) : `${surah}:${ayah}`).join(', ')}`);
+}
 type Edge = { i: number; j: number; cost: number; pairs: string[] };
 /** Global monotone word alignment, with 1:2/2:1 spelling joins and all optimal paths checked.
  * Substitutions accommodate riwayah spelling differences. Gaps cost twice a substitution.
  * A gap is attributable only inside the same ayah; a boundary gap is ambiguous.
  * The band is a resource bound, never permission to accept an incomplete alignment.
  */
-export function alignWarshSurah(hafs: OverlapWord[], warsh: OverlapWord[], fatiha = false): Record<number, number[]> {
-  const a = hafs.filter(word => !fatiha || word.ayah !== 1).map(word => ({ ...word, token: overlapText(word.text) })).filter(word => word.token);
+export function alignWarshSurah(hafs: OverlapWord[], warsh: OverlapWord[], fatiha = false, surah?: number): Record<number, number[]> {
+  // Only omit the counted Hafs basmala from lexical alignment when the installed
+  // Warsh first ayah starts with al-hamd instead. Its Hafs sources still attach below.
+  const firstText = (words: OverlapWord[]) => overlapText(words.filter(word => word.ayah === 1).map(word => word.text).join(' '));
+  const uncountedBasmala = fatiha && firstText(hafs) === overlapText('بسم الله الرحمن الرحيم') && firstText(warsh).startsWith('الحمد');
+  const a = hafs.filter(word => !uncountedBasmala || word.ayah !== 1).map(word => ({ ...word, token: overlapText(word.text) })).filter(word => word.token);
   const b = warsh.map(word => ({ ...word, token: overlapText(word.text) })).filter(word => word.token);
   if (!a.length || !b.length || Math.abs(a.length - b.length) > 12) throw new Error('ambiguous-alignment');
   const width = 25, size = (a.length + 1) * width;
@@ -76,7 +86,9 @@ export function alignWarshSurah(hafs: OverlapWord[], warsh: OverlapWord[], fatih
   }
   const result: Record<number, number[]> = {};
   for (const pair of possible) { const [w, h] = pair.split(':').map(Number); (result[w] ??= []).push(h); }
+  if (uncountedBasmala && result[1]) result[1].unshift(1);
+  assertHafsCoverage(result, hafs.map(word => word.ayah), surah ?? (fatiha ? 1 : undefined));
   for (const refs of Object.values(result)) refs.sort((x, y) => x - y);
-  if (new Set(a.map(word => word.ayah)).size !== new Set(Object.values(result).flat()).size || new Set(b.map(word => word.ayah)).size !== Object.keys(result).length) throw new Error('ambiguous-alignment');
+  if (new Set(b.map(word => word.ayah)).size !== Object.keys(result).length) throw new Error('ambiguous-alignment');
   return result;
 }

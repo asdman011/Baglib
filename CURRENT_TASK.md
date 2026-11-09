@@ -1,3 +1,10 @@
+## KEY-276 review fix — 2026-11-09, Codex (implemented and verified; publication pending)
+
+- Review of26f6d7a exposed unattached Hafs1:1. The attached-source map now places Hafs1:1 tafsir/translation before Hafs1:2 on Warsh1:1 only when installed Hafs1:1 is the basmala and Warsh1:1 starts with al-hamd. Warsh canonical text/UI stay unchanged. A counted-basmala script retains direct mapping. Existing labels retain actual Hafs numbers in both languages. The cache adapter is bumped to assistant-overlap-v2 so old maps rebuild.
+- `assertHafsCoverage` compares original Hafs reference identities after attachment and lists every missing reference. Initial test-first run reproduced three failures (missing basmala, counted-basmala handling, absent coverage function). Final15/15 focused pass, including source order/unchanged-text regression. Fresh full1495/1495 tests, zero failures/skips; tsc, five-file ESLint0errors0warnings and diff check pass. Disposable KEY-278 copy `.baglib-data/key276-fix-fTNNQr` verifies114surahs/6214Warsh ayahs/all6236Hafs ayahs attached, **zero unattached**;127tracked originals unchanged; copied profile deleted. Evidence retained in overlap.json/cleanup.json; `.baglib-data/key276-review-tests.log` holds full-suite receipt. No UI change, native rerun or new screenshots; no schema/dependency/download/original-file write.
+- Updated existing QUL.md, Quran Experience.md and local KEY-276 report with corrected coverage and the basmala rule. Claude attributed the late original catalog/WAL change to the user's installed BagLib jobs-table writes (read-only quick_check ok); this is reviewer-supplied attribution, not an inspection repeated by Codex.
+- Exact9fix files/hunks: `src/main/services/quran/warsh-overlap.ts`, `src/main/services/quran/quran-reader.ts`, `scripts/assistant-live/verify-overlap.ts`, `tests/services/warsh-overlap.test.ts`, `tests/services/study-assistant-quran.test.ts`, `docs/features/QUL.md`, `docs/features/feature - Quran Experience.md`, plus own `CURRENT_TASK.md` and `IMPLEMENTATION_PLAN.md` hunks. Earlier local KEY-276 publication receipts belong to this agent and may accompany the shared hunks. Other-task files remain excluded. No unresolved review requirement. One fix-forward commit/push authorized, ending Agent: Codex; no history rewrite/Jira; stop after normal push to origin/feature/library-domain.
+
 ## KEY-274: Reader Task 6.12: Markup tools and Marks list for the EPUB reader — 2026-11-09, Antigravity (completed and verified; review fixes applied)
 
 - **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
@@ -71,7 +78,7 @@
   - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (success in 181ms), `git diff --check` (0 errors).
   - Live harness: `scripts/ocr-review-live/run.mjs` executed real Arabic scanned PDF (`تفسير الموعذتين لابن تيمية.pdf`) and English PDF (`New Scientist 2016`), verified 16 Arabic suspects and 8 English suspects in reading order, tested live word correction (`تصحيح-اختباري`), verified persistence, verified that re-OCR does NOT misapply stale corrections to shifted words, and captured inspected screenshots in `.baglib-data/key275-evidence/`.
 
-## KEY-276 — 2026-11-09, Codex (implemented and verified; publication pending)
+## KEY-276 — 2026-11-09, Codex (committed and pushed)
 
 - Session `01a1c03b-110e-7463-ad62-8737c6443789`. Implemented profile-aware assistant Quran text, installed tafsir/translation source pickers, and explicit derived Warsh→Hafs overlap mapping. Canonical Warsh comes from the installed ayah script; no Hafs fallback. Main validates resource IDs and reads every overlapping Hafs ayah as a separate source with original title, actual Hafs number and localized numbering notice. Existing budget/quote validation remains enforced. No schema, dependency, download or Quran-view changes; Jira delegated to Claude.
 - UX: Hafs/Warsh choice plus per-ayah tafsir/translation selectors. Arabic RTL / English LTR, automatic source direction, wrapped metadata and more Arabic preview line height; single scrollable column at 480 px and two columns at 1280 px. Warsh 4:44 gets both Hafs 4:44 and 4:45 sources. Al-Fatiha maps Warsh 1–5→Hafs 2–6 and Warsh 6/7→Hafs 7.
@@ -100,6 +107,9 @@
 - `IMPLEMENTATION_PLAN.md`
 
 - Local-only report: `docs/agent-ops/reports/KEY-276.md`; local board updated independently. Publication authorized by the current user request: one KEY-276 commit ending `Agent: Codex`, normal push to `origin/feature/library-domain`, then stop. Hash/push receipt will follow publication.
+
+- Publication receipt (local post-commit update): `26f6d7a2eccc062d0a7be0048020e541c027573a` committed exactly18 KEY-276 files/hunks, ending `Agent: Codex`; normal push to `origin/feature/library-domain` succeeded and `git ls-remote` verified the exact hash. Shared state hunks used `git apply --cached`; unrelated local changes preserved. Jira skipped; Claude review next. No further task taken.
+
 ## KEY-277 — 2026-11-09, Codex (committed and pushed)
 
 - Session 01a1c037-f1f8-7731-b32b-95aedff36c38. Added packaged-only protocol registration (explicit dev opt-in uses the resolved app entry), bounded validated deep-link delivery from cold argv, second-instance argv and open-url, renderer-ready handshake, fresh-data navigation and a localized missing-target alert. Existing shared parsers/navigation retain all target kinds. Added per-card Markdown/Word disclosure actions with wrapping RTL/LTR layout and the existing dialogs/options. Canonical export selection now includes ordinary reader notes and reading reflections already shown in Notes; no schema/dependency/download changes.

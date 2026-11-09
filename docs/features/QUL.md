@@ -2,6 +2,12 @@
 
 ## Study assistant Warsh correspondence — KEY-276, Codex, 2026-11-09
 
+Review correction to `26f6d7a`: lexical alignment excluded Hafs 1:1's basmala, which left its tafsir/translation unattached. The attached-source map now assigns **Warsh 1:1 → Hafs [1:1, 1:2]**, in that order, when the installed Hafs first ayah is the basmala and the installed Warsh first ayah starts with al-hamd. A script that counts the basmala retains its direct alignment. Only attached Hafs-numbered sources change; no basmala is inserted into canonical Warsh ayah text. Existing localized labels and Hafs citation targets identify each source independently.
+
+`assertHafsCoverage` checks reference identity against every original Hafs ayah after that attachment rule and throws `unattached-hafs-ayahs` with the full missing-reference list. The old cardinality-only check excluded the basmala and did not prove this requirement. The derived cache adapter is now `assistant-overlap-v2`, forcing old maps to rebuild. The reproducible disposable-copy verifier passed all **114 surahs /6,214 Warsh ayahs /6,236 attached Hafs ayahs, zero unattached references** in `.baglib-data/key276-fix-fTNNQr`; its `overlap.json` records the map/coverage and `cleanup.json` confirms127 tracked originals unchanged and copied profiles deleted. The UI is unchanged; no native rerun was required for this fix.
+
+Claude later attributed the late real `catalog.sqlite` hash/WAL change to the user's own installed BagLib writing its `jobs` table; Claude's read-only `quick_check` passed. This is reviewer-provided attribution, not a new inspection by Codex. The original files were not altered or repaired by this task.
+
 This adds one explicit correspondence path for the assistant. Earlier statements that no Warsh/Hafs mapping exists are superseded for this path only. The Quran view's profile compatibility checks remain in force.
 
 Evidence actually inspected:
@@ -11,7 +17,7 @@ Evidence actually inspected:
 - REA copied Warsh ayah inventory: `ev_a44846df6311314e90bb08593f82c492b97e5eb3812b16e46167e9de4dc1c73c`, SQLite SHA-256 `4823aba2f5bb32b27438d71d565a8f1ed4b93a9c073437ac727a0787490bcf0c`, one five-column `verses` table.
 - Parameterized read-only queries against the disposable catalog/pack copies established `words(surah,ayah,word,text)` and `verses(surah,ayah,text)`. The complete sequence experiment and reproducible `scripts/assistant-live/verify-overlap.ts` cover all 114 surahs / 6,214 Warsh ayahs.
 
-Verified observations include: Warsh Al-Fatiha omits the counted basmala, maps 1–5 to Hafs 2–6, and splits Hafs 7 across Warsh 6 and 7. Warsh 4:44 contains the joined token `اُ۬لسَّبِيلَۖوَاللَّهُ`, crossing Hafs 4:44/45. Joined tokens also occur at 20:87/88 and 24:36/37, so matching by ayah index or ordinal WBW position loses references. Split spelling differences include Hafs `وَأَلَّوِ` versus Warsh `وَأَن` + `لَّوِ` at 72:16.
+Verified observations include: Warsh Al-Fatiha omits the counted basmala; its lexical words map 1–5 to Hafs 2–6 (attached sources additionally include Hafs1:1 on Warsh1:1), and splits Hafs 7 across Warsh 6 and 7. Warsh 4:44 contains the joined token `اُ۬لسَّبِيلَۖوَاللَّهُ`, crossing Hafs 4:44/45. Joined tokens also occur at 20:87/88 and 24:36/37, so matching by ayah index or ordinal WBW position loses references. Split spelling differences include Hafs `وَأَلَّوِ` versus Warsh `وَأَن` + `لَّوِ` at 72:16.
 
 `src/main/services/quran/warsh-overlap.ts` compares normalized copies: strip combining/Quran marks, marker digits, tatweel and spacing; unify alif forms; preserve taa marbuta/haa distinctions. A bounded monotone word edit alignment permits substitutions and 1:2/2:1 joins, including one-letter join differences. Every reachable optimal path must yield the same ayah-pair set; ambiguous pairs, boundary gaps, excessive divergence and unsupported drift fail explicitly. Interior spelling ties are allowed when their ayah mapping agrees. This is an algorithmic correspondence derived from the installed versions, not a claim that the two readings have identical canonical words or a publisher-certified universal map. All tested installed surahs passed; untested future resource versions must pass again. The 12-word band and divergence bound are deliberate compatibility limits.
 

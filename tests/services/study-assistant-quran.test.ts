@@ -21,11 +21,11 @@ async function fixture(run: (reader: QuranReader, packs: QuranPack[], root: stri
     const metadata = presetResource(resource.endsWith('-ayah') ? 'quran-script/qpc-warsh-script-wbw' : resource);
     packs.push({ id, digest, resource: { ...metadata, id: resource }, bytes: 1, files: [{ name: 'source.sqlite', bytes: 1, type: 'sqlite' }], installedAt: '', capability: 'stored' });
   };
-  await add('quran-script/312', `CREATE TABLE words(id INTEGER,surah INTEGER,ayah INTEGER,word INTEGER,text TEXT); INSERT INTO words VALUES(1,4,44,1,'السبيل'),(2,4,45,1,'والله'),(3,4,45,2,'أعلم');`);
-  await add('quran-script/qpc-warsh-script-wbw', `CREATE TABLE words(id INTEGER,surah INTEGER,ayah INTEGER,word INTEGER,text TEXT); INSERT INTO words VALUES(1,4,44,1,'السبيلوالله'),(2,4,44,2,'أعلم');`);
-  await add('quran-script/qpc-warsh-script-ayah', `CREATE TABLE verses(id INTEGER,surah INTEGER,ayah INTEGER,text TEXT); INSERT INTO verses VALUES(1,4,44,'اُ۬لسَّبِيلَۖوَاللَّهُ أَعْلَمُ');`);
-  await add('tafsir/22', `CREATE TABLE tafsir(ayah_key TEXT,text TEXT,group_ayah_key TEXT,from_ayah TEXT,to_ayah TEXT); INSERT INTO tafsir VALUES('4:44','<p>تفسير <b>الأول</b></p>','','4:44','4:44'),('4:45','<p>تفسير الثاني</p>','','4:45','4:45');`);
-  await add('translation/193', `CREATE TABLE translation(sura INTEGER,ayah INTEGER,text TEXT); INSERT INTO translation VALUES(4,44,'"First meaning"'),(4,45,'"Second meaning [[footnote]]"');`);
+  await add('quran-script/312', `CREATE TABLE words(id INTEGER,surah INTEGER,ayah INTEGER,word INTEGER,text TEXT); INSERT INTO words VALUES(1,4,44,1,'السبيل'),(2,4,45,1,'والله'),(3,4,45,2,'أعلم'),(4,1,1,1,'بسم الله الرحمن الرحيم'),(5,1,2,1,'الحمد');`);
+  await add('quran-script/qpc-warsh-script-wbw', `CREATE TABLE words(id INTEGER,surah INTEGER,ayah INTEGER,word INTEGER,text TEXT); INSERT INTO words VALUES(1,4,44,1,'السبيلوالله'),(2,4,44,2,'أعلم'),(3,1,1,1,'الحمد');`);
+  await add('quran-script/qpc-warsh-script-ayah', `CREATE TABLE verses(id INTEGER,surah INTEGER,ayah INTEGER,text TEXT); INSERT INTO verses VALUES(1,4,44,'اُ۬لسَّبِيلَۖوَاللَّهُ أَعْلَمُ'),(2,1,1,'الحمد');`);
+  await add('tafsir/22', `CREATE TABLE tafsir(ayah_key TEXT,text TEXT,group_ayah_key TEXT,from_ayah TEXT,to_ayah TEXT); INSERT INTO tafsir VALUES('4:44','<p>تفسير <b>الأول</b></p>','','4:44','4:44'),('4:45','<p>تفسير الثاني</p>','','4:45','4:45'),('1:1','<p>تفسير البسملة</p>','','1:1','1:1'),('1:2','<p>تفسير الحمد</p>','','1:2','1:2');`);
+  await add('translation/193', `CREATE TABLE translation(sura INTEGER,ayah INTEGER,text TEXT); INSERT INTO translation VALUES(4,44,'"First meaning"'),(4,45,'"Second meaning [[footnote]]"'),(1,1,'"Basmala meaning"'),(1,2,'"Praise meaning"');`);
   const reader = new QuranReader(root, packs);
   try { await run(reader, packs, root); }
   finally {
@@ -72,3 +72,13 @@ test('passage request preserves resource IDs but refuses malformed IDs and non-Q
   assert.equal(validateAssistantRequest({ ...base, passages: [{ target: 'quran:warsh:4:44', label: '4:44', tafsir: 'tafsir/22', translation: 'translation/193' }] }).passages[0].tafsir, 'tafsir/22');
   for (const target of ['quran:warsh:4:44', 'sunnah:Muslim:1:1']) assert.throws(() => validateAssistantRequest({ ...base, passages: [{ target, label: 'x', tafsir: '../bad' }] }), /invalid-request/);
 });
+test('Warsh uncounted basmala attaches Hafs1:1 tafsir/translation before Hafs1:2 without changing Warsh text', () => fixture(async reader => {
+  const fatiha = { surah: 1, from: 1, to: 1, profile: 'warsh' as const };
+  const text = await reader.ayahTexts(fatiha);
+  const sources = await reader.assistantSources({ ...fatiha, tafsir: 'tafsir/22', translation: 'translation/193' });
+  assert.deepEqual(sources.map(source => [source.kind, source.surah, source.ayah]), [['tafsir', 1, 1], ['translation', 1, 1], ['tafsir', 1, 2], ['translation', 1, 2]]);
+  assert.match(sources[0].text, /البسملة/);
+  assert.equal(sources[1].text, 'Basmala meaning');
+  assert.deepEqual(text, [{ number: 1, text: 'الحمد' }]);
+  assert.deepEqual(await reader.ayahTexts(fatiha), text);
+}));
