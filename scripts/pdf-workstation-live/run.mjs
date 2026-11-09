@@ -15,14 +15,21 @@ fs.copyFileSync('src/renderer/app/ui-motion.css', path.join(directory, 'ui-motio
 fs.writeFileSync(path.join(directory, 'style.css'), (await postcss([tailwind()]).process(css, { from: path.join(directory, 'input.css') })).css);
 fs.writeFileSync(path.join(directory, 'index.html'), '<!doctype html><html class="dark"><meta charset="utf-8"><link rel="stylesheet" href="style.css"><body><div id="root"></div><script src="fixture.js"></script></body></html>');
 const env = { ...process.env, BAGLIB_PDF_LIVE_DIRECTORY: directory }; delete env.ELECTRON_RUN_AS_NODE;
-const child = spawn(electron, [path.join(directory, 'main.cjs')], { env, stdio: 'inherit', windowsHide: true });
-const timer = setTimeout(() => child.kill(), process.env.BAGLIB_TEST_ORGANIZER_OUTPUTS === '1' ? 300_000 : 110_000);
-child.once('exit', code => {
-  clearTimeout(timer);
-  if (process.env.BAGLIB_TEST_LARGE_RANGE === '1') {
-    const source = path.resolve(directory, 'source.pdf');
-    if (!source.startsWith(root + path.sep)) throw new Error('invalid fixture cleanup path');
-    if (fs.existsSync(source)) fs.unlinkSync(source);
-  }
-  process.exitCode = code ?? 1;
+const runLaunch = extraEnv => new Promise(resolve => {
+  const child = spawn(electron, [path.join(directory, 'main.cjs')], { env: { ...env, ...extraEnv }, stdio: 'inherit', windowsHide: true });
+  const timer = setTimeout(() => child.kill(), process.env.BAGLIB_TEST_ORGANIZER_OUTPUTS === '1' || process.env.BAGLIB_TEST_ORGANIZER_DRAFT === '1' ? 300_000 : 110_000);
+  child.once('exit', code => {
+    clearTimeout(timer);
+    resolve(code ?? 1);
+  });
 });
+let code = await runLaunch(process.env.BAGLIB_TEST_ORGANIZER_DRAFT === '1' ? { BAGLIB_ORGANIZER_DRAFT_LAUNCH: '1' } : {});
+if (code === 0 && process.env.BAGLIB_TEST_ORGANIZER_DRAFT === '1') {
+  code = await runLaunch({ BAGLIB_ORGANIZER_DRAFT_LAUNCH: '2' });
+}
+if (process.env.BAGLIB_TEST_LARGE_RANGE === '1') {
+  const source = path.resolve(directory, 'source.pdf');
+  if (!source.startsWith(root + path.sep)) throw new Error('invalid fixture cleanup path');
+  if (fs.existsSync(source)) fs.unlinkSync(source);
+}
+process.exitCode = code;

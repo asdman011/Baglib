@@ -1,5 +1,5 @@
 'use client';
-import React, { forwardRef, useImperativeHandle, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   RotateCw,
   RotateCcw,
@@ -20,8 +20,14 @@ import {
   Redo,
   ZoomIn,
   ZoomOut,
+  X,
 } from 'lucide-react';
 import type { PdfSession } from '../../../shared/types/pdf-editor';
+import {
+  buildOrganizerDraft,
+  organizerDraftKey,
+  resolveOrganizerDraftForSession,
+} from '../../../shared/pdf-organizer-draft';
 import type { PdfViewDocument } from '../../libs/reader/pdf-view-document';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { PdfPageThumbnail } from './PdfPageThumbnail';
@@ -108,6 +114,8 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
   theme = 'dark',
 }: PdfPageEditorProps, ref) {
   const { t, dir } = useWorkspace();
+  const draftSourceId = session.sourceId || session.workId || null;
+  const draftKey = organizerDraftKey(draftSourceId);
   const [items, setItems] = useState<PagePlanItem[]>(() =>
     Array.from({ length: totalPages || 1 }, (_, i) => ({
       id: `${session.id}-p-${i + 1}`,
@@ -123,6 +131,134 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
   const [thumbSize, setThumbSize] = useState<'sm' | 'md' | 'lg'>('md');
   const [history, setHistory] = useState<PagePlanItem[][]>(() => [items]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [draftBanner, setDraftBanner] = useState<'restored' | 'discarded' | null>(null);
+  const draftLoadedForKeyRef = useRef<string | null>(null);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestPlanRef = useRef<{ items: PagePlanItem[]; splitBoundaries: Set<string> }>({
+    items,
+    splitBoundaries,
+  });
+
+  useEffect(() => {
+    latestPlanRef.current = { items, splitBoundaries };
+  }, [items, splitBoundaries]);
+
+  const deleteStoredDraft = useCallback(async (key: string | null) => {
+    if (!key || typeof window === 'undefined') return;
+    if (window.electronAPI?.settings?.delete) {
+      await window.electronAPI.settings.delete(key);
+    } else if (window.electronAPI?.settings?.set) {
+      await window.electronAPI.settings.set(key, null);
+    }
+  }, []);
+
+  const persistDraftState = useCallback(
+    async (nextItems: readonly PagePlanItem[], nextSplits: ReadonlySet<string>) => {
+      if (!draftKey || !draftSourceId || typeof window === 'undefined') return;
+      const nextDraft = buildOrganizerDraft({
+        sourceId: draftSourceId,
+        sha256: session.sha256,
+        totalPages,
+        items: nextItems,
+        splitBoundaries: nextSplits,
+        currentSessionId: session.id,
+      });
+      if (nextDraft) {
+        await window.electronAPI?.settings?.set?.(draftKey, nextDraft);
+      } else {
+        await deleteStoredDraft(draftKey);
+      }
+    },
+    [deleteStoredDraft, draftKey, draftSourceId, session.id, session.sha256, totalPages]
+  );
+
+  // Restore or discard saved draft when source + totalPages are ready
+  useEffect(() => {
+    const loadSignature = `${draftKey ?? 'none'}:${session.sha256}:${totalPages}`;
+    if (!draftKey || !draftSourceId || totalPages < 1) return;
+    if (draftLoadedForKeyRef.current === loadSignature) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const raw = await window.electronAPI?.settings?.get?.(draftKey);
+        if (cancelled) return;
+        const resolution = resolveOrganizerDraftForSession(raw, {
+          id: session.id,
+          sourceId: draftSourceId,
+          filename: session.filename,
+          sha256: session.sha256,
+          totalPages,
+        });
+        draftLoadedForKeyRef.current = loadSignature;
+        if (resolution.status === 'restored') {
+          setItems(resolution.items);
+          setSplitBoundaries(resolution.splitBoundaries);
+          setHistory([resolution.items]);
+          setHistoryIndex(0);
+          setSelectedIds(new Set());
+          setDraftBanner('restored');
+        } else if (resolution.status === 'discarded-changed') {
+          await deleteStoredDraft(draftKey);
+          if (cancelled) return;
+          const fresh = Array.from({ length: totalPages || 1 }, (_, i) => ({
+            id: `${session.id}-p-${i + 1}`,
+            page: i + 1,
+            sessionId: session.id,
+            filename: session.filename,
+            rotation: 0,
+          }));
+          setItems(fresh);
+          setSplitBoundaries(new Set());
+          setHistory([fresh]);
+          setHistoryIndex(0);
+          setSelectedIds(new Set());
+          setDraftBanner('discarded');
+        }
+      } catch {
+        draftLoadedForKeyRef.current = loadSignature;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deleteStoredDraft, draftKey, draftSourceId, session.filename, session.id, session.sha256, totalPages]);
+
+  // Debounced auto-save of draft when items or splitBoundaries change
+  useEffect(() => {
+    const loadSignature = `${draftKey ?? 'none'}:${session.sha256}:${totalPages}`;
+    if (!draftKey || draftLoadedForKeyRef.current !== loadSignature) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      draftTimerRef.current = null;
+      void persistDraftState(items, splitBoundaries);
+    }, 120);
+    return () => {
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+        draftTimerRef.current = null;
+      }
+    };
+  }, [draftKey, items, persistDraftState, session.sha256, splitBoundaries, totalPages]);
+
+  // Flush any pending draft on unmount so closing the book immediately preserves the latest edit
+  useEffect(() => {
+    return () => {
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+        draftTimerRef.current = null;
+        void persistDraftState(latestPlanRef.current.items, latestPlanRef.current.splitBoundaries);
+      }
+    };
+  }, [persistDraftState]);
+
+  const clearStoredDraft = useCallback(() => {
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
+    setDraftBanner(null);
+    void deleteStoredDraft(draftKey);
+  }, [deleteStoredDraft, draftKey]);
 
   const pushHistory = (newItems: PagePlanItem[]) => {
     setHistory(prev => [...prev.slice(0, historyIndex + 1), newItems]);
@@ -275,6 +411,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
   };
 
   const resetAll = () => {
+    clearStoredDraft();
     const fresh = Array.from({ length: totalPages || 1 }, (_, i) => ({
       id: `${session.id}-p-${i + 1}`,
       page: i + 1,
@@ -285,6 +422,11 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
     updateItemsWithHistory(() => fresh);
     setSelectedIds(new Set());
     setSplitBoundaries(new Set());
+  };
+
+  const applyPlanChanges = () => {
+    clearStoredDraft();
+    onApply(items.map(item => ({ ...item, splitAfter: splitBoundaries.has(item.id) })));
   };
 
   const isDark = theme === 'dark';
@@ -303,11 +445,11 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
       {/* Top Batch & Selection Toolbar */}
       <div
         data-page-editor-toolbar
-        className={`p-3 border-b flex flex-wrap items-center justify-between gap-3 shrink-0 ${
+        className={`p-2 sm:p-3 border-b flex flex-wrap items-center justify-between gap-2 sm:gap-3 shrink-0 ${
           isDark ? 'border-[#222631] bg-[#14161c]' : 'border-[#e2e8f0] bg-white'
         }`}
       >
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
           {/* Select All */}
           <button
             type="button"
@@ -328,7 +470,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
           {/* Syntax input */}
           <button type="button" disabled={busy} onClick={() => setSelectedIds(selectPagePlanPositions(items, 'even'))} className="text-xs px-2 py-1 rounded-lg border border-subtle">{t('stirlingSelectEven')}</button>
           <button type="button" disabled={busy} onClick={() => setSelectedIds(selectPagePlanPositions(items, 'odd'))} className="text-xs px-2 py-1 rounded-lg border border-subtle">{t('stirlingSelectOdd')}</button>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 min-w-0">
             <input
               type="text"
               placeholder={t('pdfPageEditorSelectionExample')}
@@ -337,7 +479,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
               value={syntaxInput}
               onChange={e => setSyntaxInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') applySyntaxSelection(); }}
-              className={`px-2.5 py-1 text-xs rounded-lg border font-mono outline-none w-36 ${
+              className={`px-2 py-1 text-xs rounded-lg border font-mono outline-none w-24 sm:w-36 min-w-0 ${
                 isDark ? 'bg-[#181a20] border-[#2b303d] text-white focus:border-emerald-500' : 'bg-[#f1f5f9] border-[#cbd5e1] text-[#0f172a] focus:border-emerald-500'
               }`}
             />
@@ -345,7 +487,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
               type="button"
               onClick={applySyntaxSelection}
               aria-label={t('pdfPageRangeSelection')}
-              className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer"
+              className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer shrink-0"
             >
               <Check size={13} />
             </button>
@@ -353,7 +495,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
           {/* Undo / Redo */}
           <div className="flex items-center gap-1 border-e border-subtle pe-2">
             <button
@@ -489,8 +631,8 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
           <button
             type="button"
             disabled={busy || items.length === 0}
-            onClick={() => onApply(items.map(item => ({ ...item, splitAfter: splitBoundaries.has(item.id) })))}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer disabled:opacity-40"
+            onClick={applyPlanChanges}
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer disabled:opacity-40"
           >
             <Save size={14} />
             <span>{t('pdfPageEditorApplyChanges')}</span>
@@ -498,15 +640,65 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
         </div>
       </div>
 
-      {/* Grid of Page Thumbnails */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+      {/* Draft Status Banner */}
+      {draftBanner && (
         <div
-          className={`grid gap-4 ${
+          role="status"
+          data-organizer-draft-banner={draftBanner}
+          className={`px-3 py-2 border-b flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 ${
+            draftBanner === 'restored'
+              ? isDark
+                ? 'bg-emerald-950/50 border-emerald-800/60 text-emerald-200'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : isDark
+              ? 'bg-amber-950/50 border-amber-800/60 text-amber-200'
+              : 'bg-amber-50 border-amber-200 text-amber-900'
+          }`}
+        >
+          <span className="font-medium leading-relaxed">
+            {draftBanner === 'restored'
+              ? t('pdfOrganizerDraftRestored')
+              : t('pdfOrganizerDraftDiscardedChanged')}
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {draftBanner === 'restored' ? (
+              <button
+                type="button"
+                data-organizer-draft-discard
+                disabled={busy}
+                onClick={resetAll}
+                className={`px-2.5 py-1 rounded-md border text-xs font-semibold transition-colors cursor-pointer ${
+                  isDark
+                    ? 'border-emerald-700/70 bg-emerald-900/40 hover:bg-emerald-800/50 text-emerald-100'
+                    : 'border-emerald-300 bg-white hover:bg-emerald-100 text-emerald-800'
+                }`}
+              >
+                {t('pdfOrganizerDraftDiscard')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-organizer-draft-dismiss
+                onClick={() => setDraftBanner(null)}
+                aria-label={t('close')}
+                className="p-1 rounded-md hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Grid of Page Thumbnails */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-2.5 sm:p-4 md:p-6">
+        <div
+          className={`grid gap-3 sm:gap-4 ${
             thumbSize === 'sm'
-              ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2.5'
+              ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2.5'
               : thumbSize === 'lg'
-              ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5'
-              : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4'
+              ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5'
+              : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4'
           }`}
         >
           {items.map((item, index) => {

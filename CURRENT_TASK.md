@@ -1,3 +1,31 @@
+## KEY-273: Reader Task 6.11: Page organizer — drafts that survive closing, recovery button and Arabic replace certification — 2026-11-09, Antigravity (committed and pushed)
+
+- **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
+- **Implemented & Verified**:
+  - **Persistent Organizer Drafts (`src/shared/pdf-organizer-draft.ts`, `src/renderer/components/reader/PdfPageEditor.tsx`)**: Unapplied page-organizer plans (`items` + `splitBoundaries`) persist in `SqliteSettingsRepository` (`app_settings` table) under `pdf.organizerDraft.v1:<sourceId>`, bound to `sourceSha256` and `totalPages` with **no schema change**. Drafts survive closing/reopening the book and full Electron app restarts, show a localized banner (`[data-organizer-draft-banner="restored"]`) with a **Discard** button (`[data-organizer-draft-discard]`), flush pending edits on unmount, and clear on `Apply Changes`, `Reset All`, `Discard`, or when returning to the default plan. If the underlying PDF file changed on disk (`sourceSha256` or `totalPages` mismatch), the stale draft is deleted immediately, a localized warning notice (`[data-organizer-draft-banner="discarded"]`) is shown, and the stale plan is never applied.
+  - **Blank-Page `Apply Changes` Fix & 480 px Bilingual Layout (`src/renderer/components/reader/PdfWorkstationPanel.tsx`, `src/renderer/components/reader/PdfPageEditor.tsx`)**: Fixed `onApply` in `PdfWorkstationPanel.tsx` (line 1679) so blank page items omit `page` instead of sending `page: undefined` (which `validatePdfJob` rejected with `invalid-request`). Hidden the secondary 275 px tools sidebar below `md` (`768px`) when `mode === 'organize'` (`${mode === 'organize' ? 'hidden md:flex' : 'flex'}`) and updated `PdfPageEditor.tsx` responsive toolbar/grid classes (`p-2 sm:p-3`, `w-24 sm:w-36 min-w-0`, `grid-cols-2`, `overflow-x-hidden`) so `480 px` Arabic (`RTL`) and English (`LTR`) layouts have zero horizontal scroll (`wsScrollWidth: 454 <= 454`, `edScrollWidth: 410 <= 410`).
+  - **UI Recovery Button Verification (`scripts/pdf-workstation-live/recovered-main.mjs`)**: Verified in `BAGLIB_TEST_MUTATIONS=1` (`run-PE48fy`) that clicking the workstation header recovery button (`title={t('pdfUndo')}`) restores the pre-save PDF via `restoreLatestEmergencyCopy`, preserves **exactly 1** emergency copy (`copiesAfterRestore.length === 1`), and refreshes the viewer back to portrait `PAGE 1`.
+  - **Arabic Text Replacement Certification (`scripts/pdf-workstation-live/recovered-main.mjs`)**: Certified in `run-uOap8u` that `edit-content` with `textReplacements: [{ find: 'مرحبا', replace: 'أهلا' }]` against an Arabic PDF deterministically returns `{ state: 'failed', error: 'engine-missing' }` because `applyRtlJsonReplacements` (`src/main/services/pdf-editor/stirling.ts`, lines 897–905 and 1491–1509) refuses unmeasured replacement strings when `contentStreams` exist on the page rather than falling back to `/api/v1/general/edit-text` (which lacks Arabic glyph shaping/font subsetting).
+- **Exact Files Changed (12 files; shared files KEY-273 hunks only)**:
+  - `src/shared/pdf-organizer-draft.ts`
+  - `tests/services/pdf-organizer-draft.test.ts`
+  - `src/renderer/components/reader/PdfPageEditor.tsx`
+  - `src/renderer/components/reader/PdfWorkstationPanel.tsx`
+  - `src/renderer/translations.ts` (KEY-273 keys: `pdfOrganizerDraftRestored`, `pdfOrganizerDraftDiscard`, `pdfOrganizerDraftDiscardedChanged`)
+  - `scripts/pdf-workstation-live/fixture.tsx`
+  - `scripts/pdf-workstation-live/run.mjs`
+  - `scripts/pdf-workstation-live/recovered-main.mjs`
+  - `docs/features/Stirling-PDF.md`
+  - `docs/features/feature - Document Workstation.md`
+  - `CURRENT_TASK.md` (KEY-273 entry only)
+  - `IMPLEMENTATION_PLAN.md` (KEY-273 bullet only)
+- **Verification**:
+  - Focused unit tests: `node scripts/test-runner.js tests/services/pdf-organizer-draft.test.ts` → **7/7 passed**.
+  - Full test suite: `npm test` → **1462/1462 passed** across 299 suites (0 failures, 0 skipped; up from 1415 baseline).
+  - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (clean build), `git diff --check` (0 errors).
+  - Live native runs: `BAGLIB_TEST_ORGANIZER_DRAFT=1` (`run-uOap8u`, two launches, Arabic/English 1280px & 480px screenshots inspected, Apply output verified `[PAGE 2 (0°), BLANK (0°), PAGE 1 (90°)]`, changed-file discard verified, Arabic replace certified), `BAGLIB_TEST_IMMERSIVE=1 BAGLIB_TEST_MUTATIONS=1` (`run-PE48fy`, UI recovery button verified with 1 emergency copy), and `BAGLIB_TEST_IMMERSIVE=1 BAGLIB_TEST_ORGANIZER_OUTPUTS=1` (`run-5O93Uq`). All throwaway `.baglib-data/pdf-workstation-live/run-*` profiles deleted and dev server stopped.
+
+
 ## KEY-277 — 2026-11-09, Codex (implemented and verified; publication authorized)
 
 - Session 01a1c037-f1f8-7731-b32b-95aedff36c38. Added packaged-only protocol registration (explicit dev opt-in uses the resolved app entry), bounded validated deep-link delivery from cold argv, second-instance argv and open-url, renderer-ready handshake, fresh-data navigation and a localized missing-target alert. Existing shared parsers/navigation retain all target kinds. Added per-card Markdown/Word disclosure actions with wrapping RTL/LTR layout and the existing dialogs/options. Canonical export selection now includes ordinary reader notes and reading reflections already shown in Notes; no schema/dependency/download changes.

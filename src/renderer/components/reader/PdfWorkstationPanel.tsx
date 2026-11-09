@@ -1676,7 +1676,7 @@ export function PdfWorkstationPanel({
                 }}
                 onApply={plan => {
                   const sanitizedPlan = plan.map(item => ({
-                    page: item.page,
+                    ...(typeof item.page === 'number' ? { page: item.page } : {}),
                     sessionId: item.sessionId || session.id,
                     rotation: item.rotation || 0,
                     blank: item.blank || false,
@@ -1986,7 +1986,7 @@ export function PdfWorkstationPanel({
           workstationTheme === 'dark'
             ? 'border-[#1f2229] bg-[#131519] text-[#e5e7eb]'
             : 'border-[#e2e8f0] bg-white text-[#111827]'
-        } flex flex-col min-h-0 overflow-y-auto p-3 space-y-3.5 text-sm`}>
+        } ${mode === 'organize' ? 'hidden md:flex' : 'flex'} flex-col min-h-0 overflow-y-auto p-3 space-y-3.5 text-sm`}>
           {/* PDF Processor LIVE Header */}
           {pinChrome('tools')}
           {annotationPanel?.open ? <div data-pdf-annotations-panel className="flex-1 min-h-0 overflow-hidden">{annotationPanel.content}</div> : <>

@@ -3841,6 +3841,9 @@ export const translations = {
     pdfSaveDocument: 'حفظ المستند (Ctrl+S)',
     pdfDocumentSaved: 'تم حفظ المستند بنجاح',
     pdfDocumentUpToDate: 'المستند محدث بالفعل ولا توجد تعديلات معلقة',
+    pdfOrganizerDraftRestored: 'تمت استعادة تعديلات منظم الصفحات غير المحفوظة',
+    pdfOrganizerDraftDiscard: 'تجاهل',
+    pdfOrganizerDraftDiscardedChanged: 'تم تجاهل مسودة منظم الصفحات غير المحفوظة لأن ملف PDF قد تغير.',
   },
   en: {
     syncSaveSettings: 'Save settings locally',
@@ -7684,6 +7687,9 @@ export const translations = {
     pdfSaveDocument: 'Save Document (Ctrl+S)',
     pdfDocumentSaved: 'Document saved successfully',
     pdfDocumentUpToDate: 'Document is already up to date with no pending edits',
+    pdfOrganizerDraftRestored: 'Unsaved organizer changes restored',
+    pdfOrganizerDraftDiscard: 'Discard',
+    pdfOrganizerDraftDiscardedChanged: 'Unsaved organizer draft was discarded because the PDF file changed.',
   }
 };
 

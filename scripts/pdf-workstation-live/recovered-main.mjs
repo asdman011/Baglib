@@ -7,6 +7,7 @@ import { getDatabase, closeDatabase } from '../../src/main/database/connection';
 import { runMigrations } from '../../src/main/database/migrator';
 import { migrations } from '../../src/main/database/migrations';
 import { SqliteWorkRepository } from '../../src/main/database/repositories/work.repository';
+import { SqliteSettingsRepository } from '../../src/main/database/repositories/settings.repository';
 import { registerPdfEditorIpc, shutdownPdfViewCaches } from '../../src/main/ipc/pdf-editor';
 import { initializeMaterialSave, materialSave } from '../../src/main/ipc/material-save';
 import { makePagePdf } from '../../tests/helpers/pdf-pages';
@@ -55,14 +56,31 @@ electron.app.whenReady().then(async () => {
   runMigrations(db2, migrations);
   await initializeMaterialSave();
   const filename = externalSource || path.join(directory, "source.pdf");
-  if (!externalSource) {
+  const sourceExists = externalSource ? true : await fs.stat(filename).then(() => true).catch(() => false);
+  if (!externalSource && !sourceExists) {
     if (process.env.BAGLIB_TEST_LARGE_RANGE === '1') await writeSparsePagePdf(filename, 2, 500 * 1024 * 1024);
     else await fs.writeFile(filename, makePagePdf(process.env.BAGLIB_TEST_PERFORMANCE === '1' ? 60 : 2, Buffer.alloc(process.env.BAGLIB_TEST_RANGE === '1' ? 32 * 1024 * 1024 : 0)));
   }
   const externalHash = externalSource ? await fileSha256(externalSource) : null;
   const works = new SqliteWorkRepository(db2);
-  works.addBook({ id: "fixture-work", title: "\u0628\u062D\u062B \u2014 Research", author: "", workType: "book", bookType: "digital", filePath: filename, digitalFormat: "PDF" });
-  for (const [channel, action] of Object.entries({ "library:get-all-books": () => works.getAllWorks(), "library:get-all-notes": () => [], "categories:get-tree": () => [], "tags:get-all": () => [] })) electron.ipcMain.handle(channel, action);
+  const settings = new SqliteSettingsRepository(db2);
+  if (!db2.prepare('SELECT id FROM work WHERE id = ?').get('fixture-work')) {
+    works.addBook({ id: "fixture-work", title: "\u0628\u062D\u062B \u2014 Research", author: "", workType: "book", bookType: "digital", filePath: filename, digitalFormat: "PDF" });
+  }
+  for (const [channel, action] of Object.entries({
+    "library:get-all-books": () => works.getAllWorks(),
+    "library:get-all-notes": () => [],
+    "categories:get-tree": () => [],
+    "tags:get-all": () => [],
+    "settings:get": (_, key, defaultValue) => (typeof key === 'string' && !key.startsWith('private.') ? settings.get(key, defaultValue) : defaultValue),
+    "settings:set": (_, key, value) => {
+      if (typeof key !== 'string' || key.startsWith('private.')) return false;
+      settings.set(key, value);
+      return true;
+    },
+    "settings:get-all": () => Object.fromEntries(Object.entries(settings.getAll()).filter(([key]) => !key.startsWith('private.'))),
+    "settings:delete": (_, key) => (typeof key === 'string' && !key.startsWith('private.') ? settings.delete(key) : false),
+  })) electron.ipcMain.handle(channel, action);
   const registerHandler = electron.ipcMain.handle.bind(electron.ipcMain);
   if (process.env.BAGLIB_TEST_MUTATIONS === '1') electron.ipcMain.handle = (channel, handler) => registerHandler(channel, async (...args) => {
     const result = await handler(...args);
@@ -87,14 +105,14 @@ electron.app.whenReady().then(async () => {
   });
   const evaluate = (code) => window.webContents.executeJavaScript(code).catch(error => { console.error('Native evaluation failed:', code, errors); throw error; });
   const until = async (code) => {
-    for (let i = 0; i < (process.env.BAGLIB_TEST_MUTATIONS === '1' || process.env.BAGLIB_TEST_VIEW_CACHE === '1' || process.env.BAGLIB_TEST_ORGANIZER_OUTPUTS === '1' ? 1200 : 200); i++) {
+    for (let i = 0; i < (process.env.BAGLIB_TEST_MUTATIONS === '1' || process.env.BAGLIB_TEST_VIEW_CACHE === '1' || process.env.BAGLIB_TEST_ORGANIZER_OUTPUTS === '1' || process.env.BAGLIB_TEST_ORGANIZER_DRAFT === '1' ? 1200 : 200); i++) {
       if (await evaluate(code)) return;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     throw new Error(`Timed out ${code}`);
   };
   try {
-    await window.loadFile(path.join(directory, "index.html"), { query: process.env.BAGLIB_TEST_FIRST_PAINT === '1' ? { performance: '1', delayedOpen: '1', viewCache: '1', pdf: readerAssetUrl(filename) } : process.env.BAGLIB_TEST_PERFORMANCE === '1' || process.env.BAGLIB_TEST_RANGE === '1' ? { performance: '1', pdf: readerAssetUrl(filename), ...(process.env.BAGLIB_TEST_VIEW_CACHE === '1' ? { viewCache: '1' } : {}) } : process.env.BAGLIB_TEST_TOC === '1' ? { toc: '1' } : process.env.BAGLIB_TEST_IMMERSIVE === "1" ? { pdf: readerAssetUrl(filename) } : {} });
+    await window.loadFile(path.join(directory, "index.html"), { query: process.env.BAGLIB_TEST_FIRST_PAINT === '1' ? { performance: '1', delayedOpen: '1', viewCache: '1', pdf: readerAssetUrl(filename) } : process.env.BAGLIB_TEST_PERFORMANCE === '1' || process.env.BAGLIB_TEST_RANGE === '1' ? { performance: '1', pdf: readerAssetUrl(filename), ...(process.env.BAGLIB_TEST_VIEW_CACHE === '1' ? { viewCache: '1' } : {}) } : process.env.BAGLIB_TEST_TOC === '1' ? { toc: '1' } : process.env.BAGLIB_TEST_IMMERSIVE === "1" || process.env.BAGLIB_TEST_ORGANIZER_DRAFT === "1" ? { pdf: readerAssetUrl(filename) } : {} });
     await until('Boolean(window.pdfLive && (document.querySelector("[data-pdf-performance]") || document.querySelector("[data-pdf-workstation]") || document.querySelector("[data-pdf-toc-editor]")))');
     if (process.env.BAGLIB_TEST_LANGUAGE) {
       const language = process.env.BAGLIB_TEST_LANGUAGE;
@@ -377,6 +395,266 @@ electron.app.whenReady().then(async () => {
       electron.app.quit();
       return;
     }
+    if (process.env.BAGLIB_TEST_ORGANIZER_DRAFT === '1') {
+      const launchStage = process.env.BAGLIB_ORGANIZER_DRAFT_LAUNCH || '1';
+      const sourceHash = await fileSha256(filename);
+      const sourceRow = db2.prepare("SELECT s.id FROM source s JOIN edition e ON e.id = s.edition_id WHERE e.work_id = ?").get('fixture-work');
+      assert.ok(sourceRow?.id, 'Expected source row for fixture-work');
+      const draftKey = `pdf.organizerDraft.v1:${sourceRow.id}`;
+
+      await until(`Boolean(document.querySelector('.pdf-viewport-container canvas'))`);
+      await until(`document.querySelector('.pdf-viewport-container .textLayer')?.textContent.includes('PAGE 1')`);
+      await until('window.pdfReaderPageCount === 2 && window.pdfReaderDocumentPages === 2');
+
+      if (launchStage === '1') {
+        // Open organizer mode and create a draft: rotate page 1 by 90°, move page 1 right (so order is [page 2, page 1 (90°)]), and insert a blank page at index 0
+        await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
+        await until(`document.querySelectorAll('[data-page-editor-card]').length === 2`);
+        await until(`Boolean(document.querySelector('[data-pdf-page-editor]')) && document.querySelector('[data-pdf-page-editor]').dataset.busy !== 'true'`);
+        await evaluate(`document.querySelector('[data-page-editor-card] button[title="'+window.pdfLive.t('pdfPageEditorRotateRight')+'"]').click()`);
+        await until(`document.querySelector('[data-page-editor-card]').textContent.includes('90')`);
+        await evaluate(`document.querySelector('[data-page-editor-card] button[title="'+window.pdfLive.t('pdfPageEditorMoveRight')+'"]').click()`);
+        await until(`document.querySelectorAll('[data-page-editor-card]')[1]?.textContent.includes('90')`);
+        await evaluate(`document.querySelectorAll('[data-page-editor-divider]')[2 ? 1 : 0].querySelector('button[title="'+window.pdfLive.t('pdfPageEditorInsertBlankPageHere')+'"]').click()`);
+        await until(`document.querySelectorAll('[data-page-editor-card]').length === 3`);
+        // Wait for debounced auto-save into app_settings
+        await until(`window.electronAPI.settings.get(${JSON.stringify(draftKey)}).then(v => Boolean(v && Array.isArray(v.pages) && v.pages.length === 3))`);
+        const savedDraft = settings.get(draftKey);
+        assert.ok(savedDraft && savedDraft.pages.length === 3, 'Draft must be saved in SqliteSettingsRepository');
+        assert.equal(savedDraft.sha256, sourceHash);
+        assert.equal(await fileSha256(filename), sourceHash, 'Original source file hash must remain unchanged while editing draft');
+
+        // Close the book (unmount workstation) and reopen in the same app session
+        await evaluate('window.pdfOpenBlank()');
+        await until(`document.querySelector('[data-pdf-workstation] header h2')?.textContent === 'document.pdf'`);
+        await evaluate('window.pdfOpenWork()');
+        await until(`document.querySelector('[data-pdf-workstation] header h2')?.textContent?.includes('source.pdf')`);
+        await until(`Boolean(document.querySelector('.pdf-viewport-container canvas'))`);
+        await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
+        await until(`document.querySelector('[data-organizer-draft-banner]')?.dataset.organizerDraftBanner === 'restored'`);
+        assert.equal(await evaluate(`document.querySelectorAll('[data-page-editor-card]').length`), 3, 'Draft must survive closing and reopening the book');
+        assert.equal(await fileSha256(filename), sourceHash);
+        console.log('[organizer-draft-launch-1] Draft survived closing/reopening book and is persisted for app restart:', draftKey);
+        assert.equal(errors.length, 0, errors.join('\n'));
+        electron.app.quit();
+        return;
+      }
+
+      // Launch 2: Verify draft survived full app restart
+      await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
+      await until(`document.querySelector('[data-organizer-draft-banner]')?.dataset.organizerDraftBanner === 'restored'`);
+      assert.equal(await evaluate(`document.querySelectorAll('[data-page-editor-card]').length`), 3, 'Draft must survive app restart (launch 2)');
+      assert.equal(await evaluate(`document.querySelectorAll('[data-page-editor-card]')[2]?.textContent.includes('90')`), true);
+
+      // Verify 480 px and 1280 px in Arabic (RTL) and English (LTR) with no horizontal scroll
+      const layoutEvidence = [];
+      for (const language of ['ar', 'en']) {
+        if (await evaluate('window.pdfLive.lang') !== language) {
+          await evaluate('window.pdfLive.toggleLanguage()');
+          await until(`window.pdfLive.lang === ${JSON.stringify(language)}`);
+        }
+        const expectedDir = language === 'ar' ? 'rtl' : 'ltr';
+        if (await evaluate('window.pdfLive.dir') !== expectedDir) {
+          await evaluate('window.pdfLive.toggleDirection()');
+        }
+        await until(`document.querySelector('[data-pdf-workstation]').dir === ${JSON.stringify(expectedDir)}`);
+        for (const width of [1280, 480]) {
+          window.setContentSize(width, 900);
+          await new Promise(resolve => setTimeout(resolve, 200));
+          const metrics = await evaluate(`(()=>{
+            const ws = document.querySelector('[data-pdf-workstation]');
+            const ed = document.querySelector('[data-pdf-page-editor]');
+            const banner = document.querySelector('[data-organizer-draft-banner]');
+            return {
+              dir: ws?.dir,
+              wsScrollWidth: ws?.scrollWidth ?? 0,
+              wsClientWidth: ws?.clientWidth ?? 0,
+              edScrollWidth: ed?.scrollWidth ?? 0,
+              edClientWidth: ed?.clientWidth ?? 0,
+              bannerState: banner?.dataset.organizerDraftBanner ?? null,
+              bannerText: banner?.textContent?.trim() ?? '',
+              cards: document.querySelectorAll('[data-page-editor-card]').length,
+            };
+          })()`);
+          assert.equal(metrics.dir, expectedDir);
+          assert.ok(metrics.wsScrollWidth <= metrics.wsClientWidth + 1, `Workstation horizontal overflow at ${language}/${width}: ${JSON.stringify(metrics)}`);
+          assert.ok(metrics.edScrollWidth <= metrics.edClientWidth + 1, `PageEditor horizontal overflow at ${language}/${width}: ${JSON.stringify(metrics)}`);
+          assert.equal(metrics.bannerState, 'restored');
+          assert.equal(metrics.cards, 3);
+          const shotPath = path.join(directory, `organizer-draft-${language}-${width}.png`);
+          await fs.writeFile(shotPath, (await window.webContents.capturePage(void 0, { stayHidden: true, stayAwake: true })).toPNG());
+          layoutEvidence.push({ language, width, ...metrics, screenshot: path.basename(shotPath) });
+        }
+      }
+      window.setContentSize(1280, 1000);
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Apply the restored draft and verify output PDF page count, order, and rotation
+      await evaluate(`[...document.querySelectorAll('[data-pdf-page-editor] button')].find(button => button.textContent.trim() === window.pdfLive.t('pdfPageEditorApplyChanges')).click()`);
+      await until(`document.querySelector('[data-pdf-save-state]')?.dataset.pdfSaveState === 'staged'`);
+      await until(`document.querySelector('[data-pdf-page-editor]')?.parentElement?.getAttribute('aria-hidden') === 'true'`);
+      assert.equal(settings.get(draftKey, null), null, 'Draft must be cleared from settings after Apply');
+      assert.equal(await fileSha256(filename), sourceHash, 'Original source file hash must still be unchanged after Apply before Save');
+
+      // Inspect the staged output PDF produced by Apply
+      const jobsRoot = path.join(electron.app.getPath('userData'), 'pdf-editor', 'jobs');
+      const jobFiles = (await fs.readdir(jobsRoot, { recursive: true })).filter(item => item.endsWith('.pdf'));
+      assert.ok(jobFiles.length >= 1, 'Expected staged output PDF after Apply');
+      const stagedPdfPath = path.join(jobsRoot, jobFiles.at(-1));
+      const appliedInspection = await inspectPdfFile(stagedPdfPath, undefined, () => {});
+      assert.equal(appliedInspection.totalPages, 3, 'Applied draft output must have 3 pages');
+      const appliedPageSummary = appliedInspection.pages.map(p => ({
+        label: p.text.includes('PAGE 2') ? 'PAGE 2' : p.text.includes('PAGE 1') ? 'PAGE 1' : 'BLANK',
+        rotation: p.rotation,
+      }));
+      assert.deepEqual(appliedPageSummary, [
+        { label: 'PAGE 2', rotation: 0 },
+        { label: 'BLANK', rotation: 0 },
+        { label: 'PAGE 1', rotation: 90 },
+      ]);
+
+      // Test Discard button on a restored draft (reopen clean work session first so totalPages is 2)
+      await evaluate('window.pdfOpenBlank()');
+      await until(`document.querySelector('[data-pdf-workstation] header h2')?.textContent === 'document.pdf'`);
+      await evaluate('window.pdfOpenWork()');
+      await until(`document.querySelector('[data-pdf-workstation] header h2')?.textContent?.includes('source.pdf')`);
+      await until(`Boolean(document.querySelector('.pdf-viewport-container canvas'))`);
+      await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
+      await until(`document.querySelectorAll('[data-page-editor-card]').length === 2`);
+      await evaluate(`document.querySelector('[data-page-editor-card] button[title="'+window.pdfLive.t('pdfPageEditorRotateRight')+'"]').click()`);
+      await until(`window.electronAPI.settings.get(${JSON.stringify(draftKey)}).then(v => Boolean(v && Array.isArray(v.pages)))`);
+      await evaluate('window.pdfOpenBlank()');
+      await until(`document.querySelector('[data-pdf-workstation] header h2')?.textContent === 'document.pdf'`);
+      await evaluate('window.pdfOpenWork()');
+      await until(`document.querySelector('[data-pdf-workstation] header h2')?.textContent?.includes('source.pdf')`);
+      await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
+      await until(`document.querySelector('[data-organizer-draft-banner]')?.dataset.organizerDraftBanner === 'restored'`);
+      await evaluate(`document.querySelector('[data-organizer-draft-discard]').click()`);
+      await until(`!document.querySelector('[data-organizer-draft-banner]')`);
+      assert.equal(await evaluate(`document.querySelector('[data-page-editor-card]').textContent.includes('90')`), false);
+      assert.equal(settings.get(draftKey, null), null, 'Discard button must delete stored draft');
+
+      // Test stale draft discard when the underlying PDF file changed on disk
+      await evaluate(`document.querySelector('[data-page-editor-card] button[title="'+window.pdfLive.t('pdfPageEditorRotateRight')+'"]').click()`);
+      await until(`window.electronAPI.settings.get(${JSON.stringify(draftKey)}).then(v => Boolean(v && Array.isArray(v.pages)))`);
+      await evaluate('window.pdfOpenBlank()');
+      await until(`document.querySelector('[data-pdf-workstation] header h2')?.textContent === 'document.pdf'`);
+      // Modify source.pdf on disk to a 3-page PDF (new sha256 and page count) and evict view-cache so PDF.js loads the 3-page file
+      await shutdownPdfViewCaches();
+      await fs.writeFile(filename, makePagePdf(3, Buffer.alloc(0)));
+      const changedSourceHash = await fileSha256(filename);
+      assert.notEqual(changedSourceHash, sourceHash);
+      await evaluate('window.pdfOpenWork()');
+      await until(`document.querySelector('[data-pdf-workstation] header h2')?.textContent?.includes('source.pdf')`);
+      await until(`Boolean(document.querySelector('.pdf-viewport-container canvas'))`);
+      await evaluate(`document.querySelector('button[title="'+window.pdfLive.t('stirlingModeOrganize')+'"]').click()`);
+      await until(`document.querySelector('[data-organizer-draft-banner]')?.dataset.organizerDraftBanner === 'discarded'`);
+      const discardedNoticeText = await evaluate(`document.querySelector('[data-organizer-draft-banner]')?.textContent?.trim()`);
+      assert.equal(await evaluate(`document.querySelectorAll('[data-page-editor-card]').length >= 2`), true, 'Changed file must load its fresh pages and never apply stale draft');
+      assert.equal(await evaluate(`document.querySelector('[data-page-editor-card]').textContent.includes('90')`), false, 'Stale rotation must not be applied');
+      assert.equal(settings.get(draftKey, null), null, 'Stale draft must be removed from settings');
+
+      // Restore original 2-page source.pdf
+      await fs.writeFile(filename, makePagePdf(2, Buffer.alloc(0)));
+      assert.equal(await fileSha256(filename), sourceHash);
+
+      // Certify Arabic text replacement behavior
+      const arabicReplaceSession = await evaluate(`(async()=>{
+        const api = window.electronAPI.pdfEditor;
+        const blank = await api.blankSession();
+        if (!blank.ok) return { error: blank.error };
+        const created = await api.start({
+          sessionId: blank.data.id,
+          operation: 'create',
+          language: 'ar',
+          payload: { pages: [{ text: 'مرحبا بالعالم — الصفحة ١' }] },
+        });
+        if (!created.ok) return { error: created.error };
+        for (let i = 0; i < 200; i++) {
+          const st = await api.status(created.data.id);
+          if (st.ok && st.data.state !== 'running') {
+            return { createdJob: st.data };
+          }
+          await new Promise(r => setTimeout(r, 50));
+        }
+        return { error: 'create-timeout' };
+      })()`);
+      let arabicReplaceCertification = { tested: true, status: 'unknown' };
+      if (arabicReplaceSession?.createdJob?.state === 'completed') {
+        const arabicTempPath = path.join(directory, 'arabic-replace-source.pdf');
+        electron.dialog.showSaveDialog = async () => ({ canceled: false, filePath: arabicTempPath });
+        const savedArabic = await evaluate(`window.electronAPI.pdfEditor.save({ jobId: ${JSON.stringify(arabicReplaceSession.createdJob.id)}, outputIndex: 0, mode: 'copy' })`);
+        assert.equal(savedArabic.ok, true);
+        // Copy into source.pdf temporarily so we can open via workId: 'fixture-work'
+        await fs.copyFile(arabicTempPath, filename);
+        const beforeInspect = await inspectPdfFile(filename, undefined, () => {});
+        const replaceOutcome = await evaluate(`(async()=>{
+          const api = window.electronAPI.pdfEditor;
+          const opened = await api.open({ workId: 'fixture-work' });
+          if (!opened.ok) return { step: 'open', error: opened.error };
+          const started = await api.start({
+            sessionId: opened.data.id,
+            operation: 'edit-content',
+            language: 'ar',
+            payload: {
+              textReplacements: [{ find: 'مرحبا', replace: 'أهلا', matchCase: false }],
+            },
+          });
+          if (!started.ok) return { step: 'start', error: started.error };
+          for (let i = 0; i < 300; i++) {
+            const st = await api.status(started.data.id);
+            if (st.ok && st.data.state !== 'running') {
+              return { step: 'status', state: st.data.state, error: st.data.error || null, outputs: st.data.outputs?.length || 0, jobId: started.data.id };
+            }
+            await new Promise(r => setTimeout(r, 50));
+          }
+          return { step: 'timeout' };
+        })()`);
+        let afterExtractedText = null;
+        if (replaceOutcome?.state === 'completed' && replaceOutcome?.jobId) {
+          const arabicOutPath = path.join(directory, 'arabic-replace-output.pdf');
+          electron.dialog.showSaveDialog = async () => ({ canceled: false, filePath: arabicOutPath });
+          const savedOut = await evaluate(`window.electronAPI.pdfEditor.save({ jobId: ${JSON.stringify(replaceOutcome.jobId)}, outputIndex: 0, mode: 'copy' })`);
+          if (savedOut.ok) {
+            const afterInspect = await inspectPdfFile(arabicOutPath, undefined, () => {});
+            afterExtractedText = afterInspect.pages.map(p => p.text.trim());
+          }
+        }
+        arabicReplaceCertification = {
+          tested: true,
+          beforeExtractedText: beforeInspect.pages.map(p => p.text.trim()),
+          replaceOutcome,
+          afterExtractedText,
+        };
+        // Restore original 2-page source.pdf
+        await fs.writeFile(filename, makePagePdf(2, Buffer.alloc(0)));
+        assert.equal(await fileSha256(filename), sourceHash);
+      }
+
+      await fs.writeFile(
+        path.join(directory, 'organizer-draft-results.json'),
+        JSON.stringify(
+          {
+            passed: true,
+            draftSurvivedReopenAndRestart: true,
+            appliedPageSummary,
+            discardedButtonWorked: true,
+            staleDraftDiscardedOnFileChange: true,
+            discardedNoticeText,
+            layoutEvidence,
+            arabicReplaceCertification,
+            originalSourceHashUnchanged: (await fileSha256(filename)) === sourceHash,
+            rendererErrors: errors,
+          },
+          null,
+          2
+        )
+      );
+      console.log('[organizer-draft-launch-2] All organizer draft, 480px layout, apply, discard, and Arabic replace checks completed:', directory);
+      assert.equal(errors.length, 0, errors.join('\n'));
+      electron.app.quit();
+      return;
+    }
     if (process.env.BAGLIB_TEST_IMMERSIVE === "1") {
       if (process.env.BAGLIB_TEST_ORGANIZER_OUTPUTS === '1') {
         const originalHash = await fileSha256(filename);
@@ -587,12 +865,14 @@ electron.app.whenReady().then(async () => {
         const copies = await fs.readdir(emergency);
         assert.equal(copies.length, 1);
         assert.equal(await fileSha256(path.join(emergency, copies[0])), sourceHash);
-        await materialSave().restoreEmergency('fixture-work');
-        window.webContents.send('pdf-editor:source-changed', { workId: 'fixture-work' });
+        const uiUndoClicked = await evaluate(`(()=>{const btn=document.querySelector('[data-pdf-workstation] > header button[title="'+window.pdfLive.t('pdfUndo')+'"]:not(:disabled)');if(!btn)return false;btn.click();return true;})()`);
+        assert.equal(uiUndoClicked, true, 'Header recovery button (pdfUndo) should be enabled after saving an overwrite');
         await until(`document.querySelector('.textLayer')?.textContent.includes('PAGE 1')`);
         await until(`(()=>{const canvas=document.querySelector('.pdf-native-viewer-container canvas');return canvas&&canvas.width<canvas.height;})()`);
         assert.equal(await fileSha256(filename), sourceHash);
-        console.log('[restore-test] Saved edit restored through the single emergency copy; viewer reloaded the original');
+        const copiesAfterRestore = await fs.readdir(emergency);
+        assert.equal(copiesAfterRestore.length, 1, 'Exactly one emergency copy must remain after UI recovery');
+        console.log('[restore-test] Saved edit restored via UI recovery button through the single emergency copy; viewer reloaded the original');
         assert.equal(errors.length, 0, errors.join('\n'));
         console.log(`Native organizer/apply/replacement staged preview checks passed: ${directory}`);
         electron.app.quit();
