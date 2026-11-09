@@ -1,4 +1,6 @@
 'use client';
+import {ExplainBack} from './ExplainBack';
+import {bookStudyTarget} from '../../../shared/study-notes';
 import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpenText, Check, Sparkles, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -75,6 +77,10 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
       setCards(current => ({ ...current, [index]: 'added' }));
     } catch { setError('engine-failed'); }
   };
+  const [explainBack,setExplainBack]=useState(false);
+  const explainTarget=readerSource?.target ?? (book ? bookStudyTarget({id:book,sourceId:pdfBooks.find(entry=>entry.id===book)?.sourceId},from) : passages.length===1?passages[0].target:undefined);
+  const explainLabel=readerSource?.label ?? (book ? (pdfBooks.find(entry=>entry.id===book)?.title??'')+' · '+t('page')+' '+from : passages[0]?.label??'');
+  if(explainBack&&explainTarget)return <ExplainBack target={explainTarget} label={explainLabel} onClose={()=>setExplainBack(false)} onOpen={open}/>;
   const field = 'w-full rounded-lg border border-subtle bg-canvas px-2 py-1.5 text-sm';
   return <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/40 p-2 sm:p-4" dir={dir} onClick={onClose}>
     <div role="dialog" aria-modal="true" aria-labelledby="assistant-title" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }} data-study-assistant className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
@@ -147,6 +153,8 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
             <textarea data-assistant-question dir="auto" value={question} maxLength={2000} onChange={event => setQuestion(event.target.value)} className={`${field} mt-1 min-h-20 font-normal leading-relaxed`} />
           </label>
           <label className="flex items-start gap-2 text-xs leading-relaxed"><input type="checkbox" data-assistant-remote checked={allowRemote} onChange={event => setAllowRemote(event.target.checked)} className="mt-1" />{t('assistantAllowRemote')}</label>
+          <p className="text-xs leading-loose text-muted">{t('explainBackChoose')}</p>
+          <button type="button" data-assistant-explain-back disabled={busy||!explainTarget} onClick={()=>setExplainBack(true)} className="w-full rounded-lg border border-subtle px-3 py-2 text-sm leading-loose disabled:opacity-40">{t('explainBackTitle')}</button>
           <button type="button" data-assistant-ask disabled={busy || !hasSources || (task === 'qa' && !question.trim())} onClick={() => void ask()} className="w-full rounded-lg bg-amber-600 py-2 text-sm text-white disabled:opacity-40">{busy ? t('assistantWorking') : t('assistantAsk')}</button>
         </section>
         <section className="min-h-0 min-w-0 space-y-3 p-4 break-words" aria-live="polite">

@@ -1,5 +1,23 @@
 export const translations = {
   ar: {
+    // KEY-287: passage-only explain-back judgments
+    explainBackTitle: "اشرح بأسلوبك",
+    explainBackIntro: "اكتب ملخصًا قصيرًا. تُقارَن كل فكرة بهذا المقطع فقط. اقتباسات الأفكار غير المدعومة للمقارنة، وليست دليلًا على الغياب. تُصنَّف إعادة الصياغة احتياطًا كغير مدعومة؛ صحّح الحكم بعد قراءة الاقتباس.",
+    explainBackSummary: "ملخصك",
+    explainBackCheck: "تحقّق من ملخصي",
+    explainBackJudgment: "يحتاج إلى تقدير — اقبل كل حكم أو صحّحه.",
+    explainBackSupported: "يدعمه المقطع",
+    explainBackMissing: "غير مذكور في المقطع",
+    explainBackUnsupported: "لا يدعمه المقطع",
+    explainBackAccept: "اقبل هذا الحكم",
+    explainBackSave: "احفظ الأحكام المقبولة",
+    explainBackSaved: "حُفظ كملاحظة مرتبطة بالمقطع وسُجّل تقدير المحاولة.",
+    explainBackShort: "هذا المقطع أقصر من اللازم للتحقّق. اختر مقطعًا أطول.",
+    explainBackLong: "هذا المقطع أطول من اللازم للتحقّق. اختر مقطعًا أقصر.",
+    explainBackChoose: "اختر مقطعًا واحدًا أولًا. يُستخدم رقم صفحة البداية عند اختيار كتاب.",
+    explainBackCorrection: "تصحيح الحكم",
+    explainBackConfirmed: "مقبول",
+
     practiceOpenSource: "فتح مقطع المصدر",
     practiceKindRecall: "استدعاء",
     practiceKindChoice: "اختيار من متعدد",
@@ -4102,6 +4120,24 @@ export const translations = {
     ocrReapplyCorrection: 'تطبيق على الكلمة المحددة',
   },
   en: {
+    // KEY-287: passage-only explain-back judgments
+    explainBackTitle: "Explain it back",
+    explainBackIntro: "Write a short summary. Each claim is compared only with this passage. Quotes beside unsupported claims provide comparison context, not proof of absence. Paraphrases are conservatively marked unsupported; correct these after reading the quote.",
+    explainBackSummary: "Your summary",
+    explainBackCheck: "Check my summary",
+    explainBackJudgment: "Needs judgment: accept or correct every verdict.",
+    explainBackSupported: "Supported",
+    explainBackMissing: "Missing from the passage",
+    explainBackUnsupported: "Unsupported by the passage",
+    explainBackAccept: "Accept this verdict",
+    explainBackSave: "Save accepted verdicts",
+    explainBackSaved: "Saved as a linked study note. Attempt judged.",
+    explainBackShort: "This passage is too short to check. Select a longer passage.",
+    explainBackLong: "This passage is too long to check. Select a shorter passage.",
+    explainBackChoose: "Choose one passage first. Book checks use the starting page only.",
+    explainBackCorrection: "Correct verdict",
+    explainBackConfirmed: "Accepted",
+
     practiceOpenSource: "Open source passage",
     practiceKindRecall: "Recall",
     practiceKindChoice: "Multiple choice",

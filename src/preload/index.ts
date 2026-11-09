@@ -862,6 +862,9 @@ export const API = {
     };
   })(),
   studyAssistant: {
+    resumeExplainBack: (id:string) => ipcRenderer.invoke('study-assistant:resume-explain-back',id) as Promise<import('../shared/explain-back').ExplainResult<import('../shared/explain-back').ExplainCheck>>,
+    explainBack: (request: import('../shared/explain-back').ExplainRequest) => ipcRenderer.invoke('study-assistant:explain-back',request) as Promise<import('../shared/explain-back').ExplainResult<import('../shared/explain-back').ExplainCheck>>,
+    acceptExplainBack: (input: import('../shared/explain-back').ExplainAcceptance) => ipcRenderer.invoke('study-assistant:accept-explain-back',input) as Promise<import('../shared/explain-back').ExplainResult<{attempt: import('../shared/practice').PracticeAttempt;note: import('../shared/study-notes').StudyNote}>>,
     ask: (request: import('../shared/study-assistant').AssistantRequest) => ipcRenderer.invoke('study-assistant:ask', request) as Promise<{ ok: true; data: import('../shared/study-assistant').AssistantAnswer } | { ok: false; error: string; target?: string }>,
   },
   boards: {

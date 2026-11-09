@@ -1,3 +1,25 @@
+## KEY-287 — 2026-11-10, Codex (verified; publication pending)
+
+- [2026-11-10, Codex] KEY-287 implemented and verified (session 01a1c264-e95c-7191-8a3e-cff435fcdb19). Passage-only Explain it back with ar/en claim segmentation, all three verdicts, existing exact quote validator, conservative verbatim-only auto-support and explicit learner corrections. Main-only file/installed Quran/Sunnah text, existing consent/BYOK gates. ADR-013 pending attempts; atomic one-time judgment plus precise-link study note; no PDF projection. Bounded20 pending snapshots resume through practice history. Final shared1606/1606, focused9/9, tsc/mainbuild/scopedlint0errors0warnings pass; native LUP8a0 ar/en1280/480 real Arabic PDF3, English PDF8, scanned Arabic PDF2 and copied Quran4:106 pass including history resume, forged-source discard, remote denial and one-time judgment. Thirty screenshots reviewed in five contact sheets plus full-resolution Arabic/Quran/mixed/history samples.127original corpus hashes unchanged; throwaway profile cleaned; existing shared renderer preserved. No document writes/OCR/schema/deps/download/Jira. Cosmetic English punctuation corrected after live capture; final focused+translation parity11/11 pass; diff check clean. Exact14ownfiles/hunks only; sibling KEY-285 and unrelated edits excluded. Isolated exact staged candidate tsc/mainbuild and11/11 focused+parity pass; staged/working diff checks clean. Authorized one commit/push to origin/feature/library-domain; publication pending, stop afterward. Limits: semantic paraphrases require manual correction; quotes do not prove entailment/absence;20snapshot cap; existing PDF text/order/extraction cost; no real-provider quality claim or new EPUB/Sunnah live certification. Claude owns review/Jira.
+
+Exact task files/hunks:
+- `src/shared/explain-back.ts`
+- `src/main/services/explain-back.ts`
+- `src/main/ipc/study-assistant.ts`
+- `src/preload/index.ts` (KEY-287 only)
+- `src/renderer/translations.ts` (KEY-287 only)
+- `src/renderer/components/notes/ExplainBack.tsx`
+- `src/renderer/components/notes/StudyAssistant.tsx`
+- `src/renderer/components/knowledge/PracticeHistoryPanel.tsx`
+- `tests/services/explain-back.test.ts`
+- `scripts/explain-back-live/main.cjs`
+- `scripts/explain-back-live/run.mjs`
+- `docs/features/feature - Study Workspace.md`
+- `CURRENT_TASK.md` (KEY-287 only)
+- `IMPLEMENTATION_PLAN.md` (KEY-287 only)
+
+Local report: `docs/agent-ops/reports/KEY-287.md`. Evidence: `.baglib-data/k287-LUP8a0/evidence/`; logs `.baglib-data/key287-{focused,full,tsc,lint,build,live}.log`. Earlier native runs were incomplete (fixture quoting, page-one projection discovered/fixed, or development hot reload); only the final LUP8a0 matrix is final implementation evidence. Native profile removed; evidence retained.
+
 ## KEY-282 — 2026-11-10, Codex (verified; publication pending)
 
 - [2026-11-10, Codex] KEY-282 implemented and verified, session 01a1c252-33e3-7613-90b9-e5045d0105f8. Main resolves exact Work/Source and reads PDF page or EPUB CFI evidence; renderer text discarded. Reuses KEY-272 mapping-aware extraction and KEY-276 quote pipeline. Typed missing-source/missing-page/no-text-layer; separate localized OCR page navigation; comparison-only PDF glyph aliases; explicit ar/en gaps. Seven new regressions pass; final shared suite1597/1597, tsc/build/lint0errors0warnings/diff check pass. Native k282-BTmoR1 ar/en1280/480 PDF citation/reopening, scanned refusal/no-provider-call/OCR-navigation, forged renderer evidence, fabricated quote, gap and file-derived EPUB pass;14screenshots inspected; profile removed. No document writes/OCR/dependency/download/schema/Jira. Handoff/report and Study Workspace updated. Only13ownfiles/hunks authorized for one commit/push to origin/feature/library-domain. Publication pending; stop after KEY-282. Limits: file text quirks retained; fake provider tests grounding/navigation, not explanation quality; accessibility extraction scans whole PDF; EPUB supports existing CFI subset/text entries up to8MB. Existing absent Mushaf-layout warning in throwaway dashboard. Preserve KEY-285 and unrelated edits.

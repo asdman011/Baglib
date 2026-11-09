@@ -1,3 +1,5 @@
+import { ExplainBackService } from '../services/explain-back';
+import { explainPrompt, validateExplainRequest, type ExplainAcceptance } from '../../shared/explain-back';
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { getDatabase } from '../database/connection';
 import { settingsRepository } from '../database/repositories/settings.repository';
@@ -33,6 +35,44 @@ export function isLocalProvider(settings: { provider?: string; ollamaEndpoint?: 
 
 export function registerStudyAssistantIpc(): void {
   let running = false;
+  const service = () => new ExplainBackService(getDatabase(), settingsRepository, async target => {
+    if (target.startsWith('book:')) return readAssistantBookSources(target);
+    const quran = parseQuranTarget(target);
+    if (quran) {
+      const ayahs = await readAyahTexts(quran.surah, quran.from, quran.to, {profile:quran.profile});
+      if (ayahs.length !== quran.to-quran.from+1) throw new Error('missing-source');
+      return [{id:'S1',label:target,target,text:ayahs.map(a=>a.text).join('\n')}];
+    }
+    const sunnah=/^sunnah:([^:]+):(\d+):(.+)$/u.exec(target);
+    const hadith=sunnah?await readHadithText(sunnah[1],+sunnah[2],sunnah[3]):null;
+    if(!hadith?.text)throw new Error('missing-source');
+    return [{id:'S1',label:target,target,text:hadith.text}];
+  }, async (request,claims,source) => {
+    const settings=AIResearchService.getInstance().getSettings();
+    if(!settings.enabled)throw new Error('ai-disabled');
+    if(!isLocalProvider(settings)&&!request.allowRemote)throw new Error('permission-denied');
+    return AIProviderService.getInstance().generateChatCompletion({temperature:0,preventRedirect:!request.allowRemote,systemPrompt:explainPrompt(request.language),userPrompt:JSON.stringify({claims,sources:[source]})},settings);
+  });
+  ipcMain.handle('study-assistant:explain-back',async(event,input:unknown)=>{
+    let owned=false;
+    try {
+      authorize(event);const request=validateExplainRequest(input);
+      const settings=AIResearchService.getInstance().getSettings();
+      if(!settings.enabled)throw new Error('ai-disabled');
+      if(!isLocalProvider(settings)&&!request.allowRemote)throw new Error('permission-denied');
+      if(running)throw new Error('busy');running=true;owned=true;
+      return {ok:true,data:await service().check(request)};
+    } catch(error){const code=(error as Error).message;return {ok:false,error:[...KNOWN,'passage-too-short','passage-too-long'].includes(code)?code:'engine-failed',...(error instanceof AssistantBookError?{target:error.target}:{})};}
+    finally {if(owned)running=false;}
+  });
+  ipcMain.handle('study-assistant:resume-explain-back',(event,id:unknown)=>{
+    try{authorize(event);return {ok:true,data:service().resume(id)};}
+    catch(error){const code=(error as Error).message;return {ok:false,error:['attempt-changed','invalid-request'].includes(code)?code:'engine-failed'};}
+  });
+  ipcMain.handle('study-assistant:accept-explain-back',(event,input:ExplainAcceptance)=>{
+    try{authorize(event);return {ok:true,data:service().accept(input)};}
+    catch(error){const code=(error as Error).message;return {ok:false,error:['attempt-changed','invalid-request'].includes(code)?code:'engine-failed'};}
+  });
   ipcMain.handle('study-assistant:ask', async (event, input: unknown): Promise<Result<AssistantAnswer>> => {
     try {
       authorize(event);
