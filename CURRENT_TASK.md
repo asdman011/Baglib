@@ -1,3 +1,33 @@
+## KEY-290 — 2026-11-10, Antigravity (implemented and verified)
+
+- Implementation & Verification: "Link target not found" notice can be dismissed and times out (follow-up to KEY-277).
+  - Added localized close button in `src/renderer/components/notes/StudyDeepLinkBridge.tsx` (`<button type="button" tabIndex={0} data-study-link-dismiss>`) with `aria-label={t('studyLinkDismiss')}`, `title={t('studyLinkDismiss')}`, and `<X className="size-4" />`.
+  - Added centralized localization key `studyLinkDismiss` in `src/renderer/translations.ts` ("إغلاق التنبيه" in Arabic, "Dismiss notice" in English) with strict 1:1 parity and zero trailing whitespace.
+  - Implemented keyboard accessibility: native HTML button handles focus and activation via Enter or Space. Added Escape key dismiss listener.
+  - Unified 8-second auto-dismiss timeout (`DISMISS_TIMEOUT_MS = 8000`) for both `missing` and `sourceMissing` notices.
+  - Implemented pause on hover and on focus:
+    - Listens to `onMouseEnter` / `onPointerEnter` and `onMouseLeave` / `onPointerLeave`.
+    - Listens to `onFocus` and `onBlur` (verifying whether focus moved outside via `!event.currentTarget.contains(event.relatedTarget as Node | null)`).
+    - Accurately tracks remaining time (`remainingRef` and `startRef`): pauses when hovered or focused, and resumes for the remaining duration once hover and focus are released.
+  - Clears existing notice immediately upon arrival of a new link; if the new link is missing/invalid, the notice re-surfaces with a freshly reset 8s timer.
+  - Maintained `role="alert"` and `data-study-link-missing` on the container element so screen readers announce it once upon appearance.
+  - Positioned responsively at `absolute top-14 inset-x-3 z-[100] max-w-2xl sm:mx-auto`, strictly 8px below the 48px Titlebar (`h-12`, `z-30`) with zero overlap over header controls at both 480 px and 1280 px in both Arabic RTL and English LTR.
+  - Added unit and UI component tests in `tests/ui/study-deep-link-bridge.test.ts` (2/2 pass) covering initial state, notice appearance, localized close button, keyboard activation (Enter/Space), immediate dismissal, re-showing on subsequent missing links, 8000ms timeout, hover pause & resume, focus pause & resume, Escape dismiss, missing source event, and new link clearing.
+  - Added live assertions in `scripts/deeplink-live/main.cjs` exercising the close button click, alert disappearance, and re-showing in the real Electron browser at 480 px.
+  - Verified live: `node scripts/deeplink-live/run.mjs` passed all 8 configurations; evidence screenshots copied to `.baglib-data/key290-evidence/` (`ar-missing-480.png`, `ar-dismissed-480.png`, `en-missing-480.png`, `en-dismissed-480.png`).
+  - Tests: `node scripts/test-runner.js tests/ui/study-deep-link-bridge.test.ts` (2/2 pass), `node scripts/test-runner.js tests/ui/translation-keys.test.ts` (2/2 pass), `npm test` -> 1,619 / 1,619 pass across 324 suites (51.0s, 0 failures, 0 skips).
+  - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint src/renderer/components/notes/StudyDeepLinkBridge.tsx tests/ui/study-deep-link-bridge.test.ts scripts/deeplink-live/main.cjs` (0 errors, 0 warnings), `git diff --check` (0 errors).
+  - Zero schema changes, zero new dependencies, zero downloads.
+- Exact task files:
+  - `src/renderer/components/notes/StudyDeepLinkBridge.tsx`
+  - `src/renderer/translations.ts` (KEY-290 only)
+  - `tests/ui/study-deep-link-bridge.test.ts`
+  - `scripts/deeplink-live/main.cjs`
+  - `docs/agent-ops/reports/KEY-290.md`
+  - `docs/agent-ops/board.md`
+  - `CURRENT_TASK.md`
+  - `IMPLEMENTATION_PLAN.md`
+
 ## KEY-289 — 2026-11-10, Antigravity (implemented and verified)
 
 - Implementation & Verification: Explain reads only the needed PDF pages, or caches them by file hash (follow-up to KEY-282).

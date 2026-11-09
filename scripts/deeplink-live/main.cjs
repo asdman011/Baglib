@@ -94,6 +94,10 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
         let prevented=false; app.emit('open-url',{preventDefault(){prevented=true;}},'baglib://note%3Alink-note'); assert.equal(prevented,true); await note();
         await second('baglib:note:deleted-note'); await until("!!document.querySelector('[data-study-link-missing]')");
         win.setContentSize(480,900); await shot('missing-480');
+        await evaluate("document.querySelector('[data-study-link-dismiss]').click()");
+        await until("!document.querySelector('[data-study-link-missing]')");
+        await shot('dismissed-480');
+        await second('baglib:note:another-deleted-note'); await until("!!document.querySelector('[data-study-link-missing]')");
         await second('baglib:note:reader-note'); await until("!!document.querySelector('[data-study-note=\"reader-note\"]')");
         await evaluate("document.querySelector('[data-note-export-menu]').open=true;document.querySelector('[data-note-export-markdown]').click()");
         await until("!!document.querySelector('[data-notes-exported]')");
