@@ -38,3 +38,19 @@ test('every installer variable is declared, because warnings are off and NSIS wo
   // baglibSkipAssociations, at 22 characters, compiled to literal text with warnings off. A shorter name fixed it.
   for (const name of declared) assert.ok(name.length <= 21, name);
 });
+
+test('engine setup verifies shaping wheels separately after both base installs', () => {
+  const setup = fs.readFileSync('scripts/setup-pdf-engine.ps1', 'utf8');
+  const base = fs.readFileSync('assets/pdf-editor/requirements.txt', 'utf8');
+  assert.doesNotMatch(base, /--hash/u);
+  const installs = setup.split(/\r?\n/u).filter(line => line.startsWith('& $enginePython -m pip install'));
+  const baseInstalls = installs.filter(line => line.includes('/requirements.txt'));
+  assert.equal(baseInstalls.length, 2);
+  for (const baseInstall of baseInstalls) {
+    const shaping = installs[installs.indexOf(baseInstall) + 1];
+    assert.ok(shaping.includes('/requirements-shaping.txt'));
+    assert.ok(shaping.includes('--require-hashes'));
+    assert.equal(shaping.includes('--target $embeddedPackages'), baseInstall.includes('--target $embeddedPackages'));
+    assert.equal(shaping.includes('--upgrade'), baseInstall.includes('--upgrade'));
+  }
+});

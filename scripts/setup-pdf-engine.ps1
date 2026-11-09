@@ -25,6 +25,8 @@ if (-not (Test-Path -LiteralPath $enginePython)) {
 }
 & $enginePython -m pip install -r (Join-Path $PSScriptRoot '../assets/pdf-editor/requirements.txt')
 if ($LASTEXITCODE -ne 0) { throw 'PDF dependency installation failed.' }
+& $enginePython -m pip install --require-hashes -r (Join-Path $PSScriptRoot '../assets/pdf-editor/requirements-shaping.txt')
+if ($LASTEXITCODE -ne 0) { throw 'PDF shaping dependency installation failed.' }
 $tessdataRoot = Join-Path $engineRoot 'tessdata'
 New-Item -ItemType Directory -Path $tessdataRoot -Force | Out-Null
 $models = @{
@@ -125,6 +127,8 @@ if (-not (Test-Path -LiteralPath (Join-Path $embeddedRoot 'python.exe'))) {
 $embeddedPackages = Join-Path $embeddedRoot 'Lib/site-packages'
 & $enginePython -m pip install --upgrade --target $embeddedPackages -r (Join-Path $PSScriptRoot '../assets/pdf-editor/requirements.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Embedded PDF dependency installation failed.' }
+& $enginePython -m pip install --upgrade --target $embeddedPackages --require-hashes -r (Join-Path $PSScriptRoot '../assets/pdf-editor/requirements-shaping.txt')
+if ($LASTEXITCODE -ne 0) { throw 'Embedded PDF shaping dependency installation failed.' }
 & $enginePython -m pip install --upgrade --target $embeddedPackages --require-hashes -r (Join-Path $PSScriptRoot '../assets/pdf-editor/requirements-ocr.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Embedded OCRmyPDF installation failed.' }
 & $enginePython (Join-Path $PSScriptRoot 'make-portable-launcher.py') (Join-Path $venvRoot 'Scripts/ocrmypdf.exe') (Join-Path $embeddedRoot 'ocrmypdf.exe')
