@@ -742,6 +742,8 @@ export const API = {
     savePreferences: input => ipcRenderer.invoke('study-planner:save-preferences', input),
     words: bookId => ipcRenderer.invoke('study-planner:words', bookId),
     rhythmDailyActivity: days => ipcRenderer.invoke('study-planner:rhythm-activity', days),
+    progressTargets: () => ipcRenderer.invoke('study-planner:progress-targets'),
+    progressSummary: (targetKind, targetId) => ipcRenderer.invoke('study-planner:progress-summary', targetKind, targetId),
   } satisfies import('../shared/study-insights').StudyInsightsAPI,
   knowledgeCards: {
     decks: () => ipcRenderer.invoke('knowledge-cards:decks'),

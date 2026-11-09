@@ -5,3 +5,4 @@ export { ReadingAnalyticsModule } from './ReadingAnalyticsModule';
 export { QuickNoteScratchpad, detectTextDirection } from './QuickNoteScratchpad';
 export { AthanDashboardModule } from './AthanDashboardModule';
 export { TodayStudyPanel } from './TodayStudyPanel';
+export { StudyProgressPanel } from './StudyProgressPanel';

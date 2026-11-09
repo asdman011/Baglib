@@ -3,6 +3,7 @@ import { getDatabase } from '../database/connection';
 import { StudyPlannerRepository } from '../database/repositories/study-planner.repository';
 import { validateTask } from '../../shared/study-planner';
 import { StudyInsightsService } from '../services/statistics/study-insights.service';
+import { StudyProgressService } from '../services/statistics/study-progress.service';
 import { readingTrackerService } from '../services/statistics/reading-tracker.service';
 
 function repository(event: IpcMainInvokeEvent): StudyPlannerRepository {
@@ -29,5 +30,15 @@ export function registerStudyPlannerIpc(): void {
     repository(event);
     if (typeof paused !== 'boolean') throw new Error('invalid-request');
     readingTrackerService.setPaused(paused);
+  });
+  const progressService = (event: IpcMainInvokeEvent) => {
+    repository(event);
+    return new StudyProgressService(getDatabase());
+  };
+  ipcMain.handle('study-planner:progress-targets', event => progressService(event).listTargets());
+  ipcMain.handle('study-planner:progress-summary', (event, targetKind: unknown, targetId: unknown) => {
+    if (targetKind !== 'pathway' && targetKind !== 'book') throw new Error('invalid-request');
+    if (typeof targetId !== 'string' || !targetId) throw new Error('invalid-request');
+    return progressService(event).getProgress(targetKind, targetId);
   });
 }

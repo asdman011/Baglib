@@ -13,6 +13,7 @@ import { KhatmahDashboardModule, CompanionMiniWidget } from './KhatmahDashboardM
 import { ReadingAnalyticsModule } from './ReadingAnalyticsModule';
 import { StudyInsightsModule } from './StudyInsightsModule';
 import { TodayStudyPanel } from './TodayStudyPanel';
+import { StudyProgressPanel } from './StudyProgressPanel';
 import { StudyRhythmSettings } from './StudyRhythm';
 import { QuickNoteScratchpad } from './QuickNoteScratchpad';
 import { AthanDashboardModule } from './AthanDashboardModule';
@@ -116,6 +117,7 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
       )}
 
       <TodayStudyPanel />
+      <StudyProgressPanel />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start" data-dashboard-study-grid>
         <div className="space-y-4 min-w-0">

@@ -1,3 +1,34 @@
+## KEY-284 — 2026-11-09, Antigravity (implemented and verified; publication pending)
+
+- Implementation & Verification: Study Workspace 6 Progress view — reading, demonstrated knowledge and reviews due kept separate.
+  - Implemented three separate measures per pathway or book (never merged into one score):
+    1. Reading coverage: pages actually read from `reading_page_stat` dwell (threshold >= 30 seconds) vs opened (< 30s) and total book/pathway pages.
+    2. Demonstrated knowledge: Khan-style mastery levels (Started -> Familiar -> Proficient -> Mastered) derived exclusively from `practice_attempt` records checked automatically or judged (`auto`, `judgment`). Self-ratings and SRS ratings are kept separate and displayed as self-rated cards. Exact thresholds documented in `feature - Study Workspace.md` and verified including demotions on lapses and post-lapse recovery.
+    3. Reviews due: SRS review schedule from `srs_state` categorizing reviews due today, due this week (next 7 days), and overdue.
+  - Added dedicated InfoTips for each measure explaining source calculations in Arabic and English.
+  - Added target picker to switch between available Pathways and Books, with section-by-section breakdown for curriculum pathways.
+  - Created responsive `StudyProgressPanel.tsx` placed next to `TodayStudyPanel` in `HomeDashboardView.tsx`. Zero horizontal scroll at 480px.
+  - Added 28 bilingual translation keys in `translations.ts` (1:1 parity and all keys referenced).
+  - Tests: `tests/services/study-progress.test.ts` (9/9 pass), `tests/ui/translation-keys.test.ts` (2/2 pass), `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors, 0 warnings), `npx tsup` (success). Full test suite: 1546/1546 pass (306 suites, 0 failures, 0 skips).
+  - Live Electron harness (`scripts/study-progress-live/`): verified with real Arabic and English PDFs (`tests/real-files/`), seeded pathways, cards, and practice attempts at 1280px and 480px viewports in both Arabic and English. Evidence screenshots in `.baglib-data/key284-evidence/`.
+- Exact task files:
+  - `src/shared/study-progress.ts`
+  - `src/main/services/statistics/study-progress.service.ts`
+  - `src/renderer/components/dashboard/StudyProgressPanel.tsx`
+  - `src/renderer/components/dashboard/HomeDashboardView.tsx`
+  - `src/renderer/components/dashboard/index.ts`
+  - `src/main/ipc/study-planner.ts`
+  - `src/preload/index.ts` (shared)
+  - `src/renderer/translations.ts` (shared)
+  - `src/shared/study-insights.ts`
+  - `tests/services/study-progress.test.ts`
+  - `scripts/study-progress-live/main.cjs`
+  - `scripts/study-progress-live/run.mjs`
+  - `docs/features/feature - Study Workspace.md`
+  - `docs/agent-ops/reports/KEY-284.md`
+  - `CURRENT_TASK.md` (shared)
+  - `IMPLEMENTATION_PLAN.md` (shared)
+
 ## KEY-283 — 2026-11-09, Antigravity (review fixes verified; publication pending)
 
 - Review Fix (2026-11-09): Restored the four Daily Rhythm tests from commit `f492e12` that were inadvertently replaced in `tests/services/study-rhythm.test.ts`:
