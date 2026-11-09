@@ -1,5 +1,11 @@
-## KEY-283 — 2026-11-09, Antigravity (implemented and verified; publication pending)
+## KEY-283 — 2026-11-09, Antigravity (review fixes verified; publication pending)
 
+- Review Fix (2026-11-09): Restored the four Daily Rhythm tests from commit `f492e12` that were inadvertently replaced in `tests/services/study-rhythm.test.ts`:
+  - "snooze is disabled by default and launch text requires explicit bilingual wording"
+  - "prayer boundaries use existing Athan schedule and exclude sunrise"
+  - "custom wird windows cross midnight with stable event identity"
+  - "pause flushes reading time, retains the session and excludes snooze time"
+  Combined these 4 daily rhythm tests with the 8 weekly rhythm & today panel tests, bringing `tests/services/study-rhythm.test.ts` to 13 passed tests (4 top-level + 1 suite with 8 subtests). Full test suite: 1537/1537 passed (306 suites, 0 failures, 0 skips). `tsc --noEmit` 0 errors. `eslint` 0 errors, 0 warnings.
 - Implementation & Verification: Study Workspace 5 Today panel, weekly rhythm engine and rest days.
   - Implemented `study.rhythm.v1` weekly rhythm config with automatic 2-rest-day buffer and default Friday rest day (`restDays: [5]`).
   - Implemented guilt-free missed day handling (silently counts against rest-day buffer; unreached days after rest days do not punish or display streak loss).
@@ -9,7 +15,7 @@
   - Added 41 bilingual keys in `translations.ts` (1:1 parity and all keys referenced).
   - Integrated `TodayStudyPanel` at top of `HomeDashboardView.tsx` with Hijri and Gregorian dates, 7-day strip (Sat-Fri), weekly goal progress, milestone celebration banner, and settings modal.
   - Responsive down to 480px width without horizontal scroll.
-  - Tests: `tests/services/study-rhythm.test.ts` (8/8 pass), `tests/ui/translation-keys.test.ts` (2/2 pass), `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors, 0 warnings), `npx tsup` (success).
+  - Tests: `tests/services/study-rhythm.test.ts` (13/13 pass), `tests/ui/translation-keys.test.ts` (2/2 pass), `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors, 0 warnings), `npx tsup` (success).
   - Live Electron harness (`scripts/today-study-live/`): verified with real Arabic and English PDFs (`tests/real-files/`), knowledge cards, planner tasks, pathways, and reading stats. Tested step open, swap, skip, settings modal, and responsive viewports (1280px and 480px) in both Arabic and English. Evidence screenshots in `.baglib-data/key283-evidence/`.
 - Exact task files:
   - `src/shared/study-rhythm.ts`
