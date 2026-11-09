@@ -1,3 +1,24 @@
+## KEY-282 — 2026-11-10, Codex (verified; publication pending)
+
+- [2026-11-10, Codex] KEY-282 implemented and verified, session 01a1c252-33e3-7613-90b9-e5045d0105f8. Main resolves exact Work/Source and reads PDF page or EPUB CFI evidence; renderer text discarded. Reuses KEY-272 mapping-aware extraction and KEY-276 quote pipeline. Typed missing-source/missing-page/no-text-layer; separate localized OCR page navigation; comparison-only PDF glyph aliases; explicit ar/en gaps. Seven new regressions pass; final shared suite1597/1597, tsc/build/lint0errors0warnings/diff check pass. Native k282-BTmoR1 ar/en1280/480 PDF citation/reopening, scanned refusal/no-provider-call/OCR-navigation, forged renderer evidence, fabricated quote, gap and file-derived EPUB pass;14screenshots inspected; profile removed. No document writes/OCR/dependency/download/schema/Jira. Handoff/report and Study Workspace updated. Only13ownfiles/hunks authorized for one commit/push to origin/feature/library-domain. Publication pending; stop after KEY-282. Limits: file text quirks retained; fake provider tests grounding/navigation, not explanation quality; accessibility extraction scans whole PDF; EPUB supports existing CFI subset/text entries up to8MB. Existing absent Mushaf-layout warning in throwaway dashboard. Preserve KEY-285 and unrelated edits.
+
+Exact task files/hunks:
+- `src/main/services/assistant-book-sources.ts`
+- `src/main/ipc/study-assistant.ts`
+- `src/shared/study-assistant.ts`
+- `src/renderer/components/notes/StudyAssistant.tsx`
+- `src/preload/index.ts` (KEY-282 only)
+- `src/renderer/translations.ts` (KEY-282 only)
+- `tests/services/assistant-book-sources.test.ts`
+- `tests/services/reader-study-selection.test.ts`
+- `scripts/book-assistant-live/main.cjs`
+- `scripts/book-assistant-live/run.mjs`
+- `docs/features/feature - Study Workspace.md`
+- `CURRENT_TASK.md` (KEY-282 only)
+- `IMPLEMENTATION_PLAN.md` (KEY-282 only)
+
+Local report: `docs/agent-ops/reports/KEY-282.md`. Evidence: `.baglib-data/k282-BTmoR1/evidence/`; static logs `.baglib-data/key282-*.log`. Earlier k282-tPMnNA failed at Notes navigation timing after two valid PDF cases; full later run passes.
+
 ## KEY-280 — 2026-11-09, Codex (implemented and verified, publication pending)
 
 - [2026-11-09, Codex] KEY-280 implemented and verified, session 01a1c17c-63d5-7692-b7fa-bdd24024c88e. PDF/EPUB selection Explain, Practice and Review later; precise source/page and source/CFI links; question editor source seeding; saved-card/SRS reopening; CFI practice evidence. Shared full suite 1579/1579, TypeScript, main build and diff check pass. Scoped lint 0 errors, 61 existing warnings. Six focused regressions pass within the full suite. Native Arabic k280-jU19R6 and English k280-0sEETc pass at1280/480 with real ar/en PDFs, small real EPUB and scanned Arabic PDF. Nine screenshots inspected. Real EPUB is English under both UIs because the manifest has English EPUBs. Explain uses bounded reader-selected evidence; file-derived extraction/verification is KEY-282. PdfNativeViewer, KEY-272/288, quran-navigation and README changes excluded. Explicit task-only commit/push to origin/feature/library-domain authorized, publication pending. Jira/review delegated to Claude; stop after publication.

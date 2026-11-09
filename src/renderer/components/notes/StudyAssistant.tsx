@@ -17,6 +17,7 @@ const taskKeys: Record<AssistantTask, TranslationKey> = {
 const errorKeys: Record<string, TranslationKey> = {
   'ai-disabled': 'assistantErrorDisabled', 'permission-denied': 'assistantErrorRemote', 'invalid-output': 'assistantErrorUnchecked',
   'warsh-not-installed': 'assistantWarshMissing', 'invalid-resource': 'assistantInvalidResource', 'ambiguous-alignment': 'assistantAlignmentFailed',
+  'missing-source': 'assistantMissingBookSource', 'missing-page': 'assistantMissingBookPage', 'no-text-layer': 'assistantNoTextLayer',
   busy: 'assistantErrorBusy', 'no-sources': 'assistantErrorNoSources', 'invalid-request': 'assistantErrorRequest',
 };
 
@@ -36,6 +37,7 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
   const [allowRemote, setAllowRemote] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ocrTarget, setOcrTarget] = useState<string | null>(null);
   const [answer, setAnswer] = useState<AssistantAnswer | null>(null);
   const [cards, setCards] = useState<Record<number, 'added' | 'skipped'>>({});
   const [passages, setPassages] = useState<AssistantPassage[]>([]);
@@ -58,10 +60,10 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
   const toggle = (id: string) => setPicked(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const hasSources = Boolean(readerSource) || picked.size > 0 || Boolean(book) || passages.length > 0;
   const ask = async () => {
-    setBusy(true); setError(null); setAnswer(null); setCards({});
+    setBusy(true); setError(null); setOcrTarget(null); setAnswer(null); setCards({});
     try {
-      const result = await window.electronAPI.studyAssistant.ask({ task, question, language: lang === 'ar' ? 'ar' : 'en', allowRemote, notes: [...picked], books: book ? [{ id: book, from, to: Math.max(from, Math.min(to, from + 49)) }] : [], passages, readerSource });
-      if (result.ok) setAnswer(result.data); else setError(result.error);
+      const result = await window.electronAPI.studyAssistant.ask({ task, question, language: lang === 'ar' ? 'ar' : 'en', allowRemote, notes: [...picked], books: book ? [{ id: book, sourceId: pdfBooks.find(entry => entry.id === book)?.sourceId, from, to: Math.max(from, Math.min(to, from + 49)) }] : [], passages, readerSource: readerSource ? { target: readerSource.target, label: readerSource.label } : undefined });
+      if (result.ok) setAnswer(result.data); else { setError(result.error); if (result.error === 'no-text-layer' && result.target) setOcrTarget(result.target); }
     } catch { setError('engine-failed'); } finally { setBusy(false); }
   };
   const open = (target: string) => { onClose(); void navigateStudyReference(target, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => {}); };
@@ -149,6 +151,7 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
         </section>
         <section className="min-h-0 min-w-0 space-y-3 p-4 break-words" aria-live="polite">
           {error && <p role="alert" data-assistant-error={error} className="rounded-lg bg-red-500/10 p-2 text-sm text-red-700 dark:text-red-300">{t(errorKeys[error] ?? 'assistantErrorEngine')}</p>}
+          {ocrTarget && <button type="button" data-assistant-ocr onClick={() => open(ocrTarget)} className="rounded-lg border border-subtle px-3 py-2 text-start text-sm leading-loose">{t('assistantOpenForOcr')}</button>}
           {!answer && !error && <p className="text-sm text-muted">{t('assistantEmpty')}</p>}
           {answer && <>
             {answer.abstained && <p data-assistant-abstained className="rounded-lg bg-amber-500/10 p-2 text-sm">{t('assistantAbstained')}</p>}

@@ -862,7 +862,7 @@ export const API = {
     };
   })(),
   studyAssistant: {
-    ask: (request: import('../shared/study-assistant').AssistantRequest) => ipcRenderer.invoke('study-assistant:ask', request) as Promise<{ ok: true; data: import('../shared/study-assistant').AssistantAnswer } | { ok: false; error: string }>,
+    ask: (request: import('../shared/study-assistant').AssistantRequest) => ipcRenderer.invoke('study-assistant:ask', request) as Promise<{ ok: true; data: import('../shared/study-assistant').AssistantAnswer } | { ok: false; error: string; target?: string }>,
   },
   boards: {
     list: () => ipcRenderer.invoke('boards:list') as Promise<import('../shared/boards').BoardSummary[]>,

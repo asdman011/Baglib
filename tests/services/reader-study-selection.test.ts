@@ -60,7 +60,7 @@ test('assistant accepts bounded reader-selected book evidence and rejects invali
  const { validateAssistantRequest,validateAssistantAnswer } = await import('../../src/shared/study-assistant');
  const readerSource={target:'book:work@source#p=3',label:'Original title',text:'Selected عِلْم passage'};
  const request={task:'qa',question:'Explain',language:'en',allowRemote:false,notes:[],books:[],passages:[],readerSource};
- assert.deepEqual(validateAssistantRequest(request).readerSource,readerSource);
+ assert.deepEqual(validateAssistantRequest(request).readerSource,{target:readerSource.target,label:readerSource.label});
  for(const readerSource of [{target:'note:x',label:'x',text:'x'},{target:'book:x',label:'x',text:' '},{target:'book:x',label:'x',text:'a'.repeat(20001)}]) assert.throws(()=>validateAssistantRequest({...request,readerSource}));
  const sources=[{id:'S1',...readerSource}];
  const answer=validateAssistantAnswer(JSON.stringify({answer:'Explanation',abstained:false,citations:[{source:'S1',quote:readerSource.text}],cards:[]}),sources,'qa',false);

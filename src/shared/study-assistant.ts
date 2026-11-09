@@ -3,7 +3,7 @@
  * books — and every claim cites an exact quote from one of them. AI stays opt-in: the same consent rule as the PDF
  * assistant (a local Ollama runs without asking; anything else needs the "send to a remote service" tick).
  */
-import type { ReaderStudySource } from './reader-study-selection';
+import { KNOWN_PUA_CHAR_MAP } from './pdf-accessibility-utils';
 import { parseBookTarget, parseQuranTarget, validStudyTarget } from './study-notes';
 
 export const ASSISTANT_TASKS =['qa', 'guide', 'questions', 'terms', 'organise', 'cards'] as const;
@@ -20,9 +20,9 @@ export interface AssistantRequest {
   language: 'ar' | 'en';
   allowRemote: boolean;
   notes: string[];
-  books: { id: string; from: number; to: number }[];
+  books: { id: string; sourceId?: string; from: number; to: number }[];
   passages: AssistantPassage[];
-  readerSource?: ReaderStudySource;
+  readerSource?: { target: string; label: string };
 }
 export interface AssistantPassage { target: string; label: string; tafsir?: string; translation?: string }
 export interface AssistantQuranQuery { surah: number; from: number; to: number; profile: 'hafs' | 'warsh'; tafsir?: string; translation?: string }
@@ -47,7 +47,8 @@ export function validateAssistantRequest(input: unknown): AssistantRequest {
     const book = (raw ?? {}) as Record<string, unknown>;
     const from = Number(book.from), to = Number(book.to);
     if (typeof book.id !== 'string' || !ID.test(book.id) || !Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from || to - from >= 50) throw new Error('invalid-request');
-    return { id: book.id, from, to };
+    if (book.sourceId !== undefined && (typeof book.sourceId !== 'string' || !ID.test(book.sourceId))) throw new Error('invalid-request');
+    return { id: book.id, ...(book.sourceId ? { sourceId: book.sourceId as string } : {}), from, to };
   });
   const rawPassages = Array.isArray(value.passages) ? value.passages : [];
   if (rawPassages.length > 20) throw new Error('invalid-request');
@@ -62,18 +63,21 @@ export function validateAssistantRequest(input: unknown): AssistantRequest {
     }
     return { target: passage.target, label, ...selected };
   });
-  let readerSource: ReaderStudySource | undefined;
+  let readerSource: AssistantRequest['readerSource'];
   if (value.readerSource !== undefined) {
     const source = value.readerSource as Record<string, unknown>;
-    if (!source || typeof source.target !== 'string' || source.target.length > 500 || !parseBookTarget(source.target) || typeof source.text !== 'string' || !source.text.trim() || source.text.length > 20000 || typeof source.label !== 'string' || source.label.length > 500) throw new Error('invalid-request');
-    readerSource = { target: source.target, text: source.text, label: source.label };
+    if (!source || typeof source.target !== 'string' || source.target.length > 500 || !parseBookTarget(source.target) || typeof source.label !== 'string' || source.label.length > 500) throw new Error('invalid-request');
+    if (passageKind(source.target) !== 'book') throw new Error('invalid-request');
+    readerSource = { target: source.target, label: source.label };
   }
   if (!notes.length && !ranges.length && !passages.length && !readerSource) throw new Error('invalid-request');
   return { task, question, language: value.language, allowRemote: value.allowRemote, notes: notes as string[], books: ranges, passages, ...(readerSource ? { readerSource } : {}) };
 }
 
-/** `quran:hafs:2:255-257` (at most 50 ayahs) or `sunnah:<collection>:<chapter>:<hadith id>`; anything else is not a passage. */
-export function passageKind(target: string): 'quran' | 'hadith' | null {
+/** Precise book page/CFI, Quran range (at most 50 ayahs), or installed hadith target. */
+export function passageKind(target: string): 'book' | 'quran' | 'hadith' | null {
+  const book = parseBookTarget(target);
+  if (book?.sourceId && (book.page || book.cfi)) return 'book';
   const quran = parseQuranTarget(target);
   if (quran) return quran.to - quran.from < 50 ? 'quran' : null;
   return target.startsWith('sunnah:') && validStudyTarget(target) ? 'hadith' : null;
@@ -116,12 +120,17 @@ export function assistantSystemPrompt(task: AssistantTask, language: 'ar' | 'en'
     'Return JSON only: {"answer":string,"abstained":boolean,"citations":[{"source":"S1","quote":string}]' + (task === 'cards' ? ',"cards":[{"front":string,"back":string,"source":"S1","quote":string}]' : '') + '}.',
     'Each quote must be copied exactly from that source (a substring, not a paraphrase), at most 300 characters. Every factual point needs a citation.',
     'Quranic text and hadith must be quoted exactly as given, never reworded. If the sources do not support an answer, set abstained to true.',
+    'For missing or partially covered topics, explicitly say ' + (language === 'ar' ? '«غير مشمول بالمادة المختارة»' : '"not covered by the selected material"') + '. Do not fill gaps from prior knowledge.',
   ].join('\n');
 }
 
 const squash = (text: string) => text.replace(/\s+/gu, ' ').trim();
 /** Whether `quote` appears in `text`, ignoring differences in spacing and line breaks only. */
 export const quoteFound = (quote: string, text: string) => squash(quote).length >= 3 && squash(text).includes(squash(quote));
+
+/** Known PDF glyph aliases and whitespace only; no tashkeel removal or Allah/orthographic rewrites. */
+const bookComparison = (text: string) => squash(Array.from(text, ch => KNOWN_PUA_CHAR_MAP[ch.codePointAt(0)!] ?? ch).join('').normalize('NFC'));
+export const bookQuoteFound = (quote: string, text: string) => bookComparison(quote).length >= 3 && bookComparison(text).includes(bookComparison(quote));
 
 /** Checks the model's JSON: known sources, exact quotes, sizes. Anything unverifiable is refused, never shown. */
 export function validateAssistantAnswer(output: string, sources: AssistantSource[], task: AssistantTask, limited = false): AssistantAnswer {
@@ -132,7 +141,7 @@ export function validateAssistantAnswer(output: string, sources: AssistantSource
   const cite = (entry: unknown) => {
     const value = (entry ?? {}) as Record<string, unknown>;
     const source = typeof value.source === 'string' ? byId.get(value.source) : undefined;
-    if (!source || typeof value.quote !== 'string' || value.quote.length > 600 || !quoteFound(value.quote, source.text)) throw new Error('invalid-output');
+    if (!source || typeof value.quote !== 'string' || value.quote.length > 600 || !(source.target.startsWith('book:') ? bookQuoteFound(value.quote, source.text) : quoteFound(value.quote, source.text))) throw new Error('invalid-output');
     return { source: source.id, target: source.target, label: source.label, quote: squash(value.quote) };
   };
   const citations = raw.citations.map(cite);

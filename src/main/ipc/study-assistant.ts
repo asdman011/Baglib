@@ -4,17 +4,17 @@ import { settingsRepository } from '../database/repositories/settings.repository
 import { StudyNotesService } from '../services/study-notes';
 import { AIResearchService } from '../services/ai/ai-research.service';
 import { AIProviderService } from '../services/ai/ai-provider.service';
-import { inspectPdfFile } from '../services/pdf-editor/inspection';
+import { AssistantBookError, readAssistantBookSources } from '../services/assistant-book-sources';
 import { bookPdfFile } from '../services/book-files';
 import { readAyahTexts, readQuranSources } from './quran';
 import { readHadithText } from './sunnah';
-import { bookStudyTarget, parseBookTarget, parseQuranTarget } from '../../shared/study-notes';
+import { bookStudyTarget, parseQuranTarget } from '../../shared/study-notes';
 import { assistantSystemPrompt, budgetSources, validateAssistantAnswer, validateAssistantRequest, type AssistantAnswer, type AssistantSource } from '../../shared/study-assistant';
 
 import { translations } from '../../renderer/translations';
 
-type Result<T> = { ok: true; data: T } | { ok: false; error: string };
-const KNOWN = ['invalid-request', 'permission-denied', 'invalid-output', 'busy', 'no-sources', 'ai-disabled', 'warsh-not-installed', 'invalid-resource', 'ambiguous-alignment'];
+type Result<T> = { ok: true; data: T } | { ok: false; error: string; target?: string };
+const KNOWN = ['invalid-request', 'permission-denied', 'invalid-output', 'busy', 'no-sources', 'ai-disabled', 'warsh-not-installed', 'invalid-resource', 'ambiguous-alignment', 'missing-source', 'missing-page', 'no-text-layer'];
 
 const authorize = (event: IpcMainInvokeEvent) => {
   const frame = event.senderFrame;
@@ -45,27 +45,22 @@ export function registerStudyAssistantIpc(): void {
       try {
         const sources: AssistantSource[] = [];
         const add = (label: string, target: string, text: string) => sources.push({ id: `S${sources.length + 1}`, label, target, text });
-        if (request.readerSource) {
-          const selected = request.readerSource;
-          const target = parseBookTarget(selected.target)!;
-          const source = getDatabase().prepare('SELECT s.id FROM source s JOIN edition e ON e.id=s.edition_id WHERE e.work_id=? AND s.id=?').get(target.id, target.sourceId ?? '');
-          if (!source) throw new Error('no-sources');
-          // Explicit reader-selected evidence. Full file extraction/verification is the separate KEY-282 task.
-          add(selected.label, selected.target, selected.text);
-        }
+        const addBook = async (target: string, to?: number) => {
+          for (const source of await readAssistantBookSources(target, to)) add(source.label, source.target, source.text);
+        };
+        if (request.readerSource) await addBook(request.readerSource.target);
         const notes = new StudyNotesService(settingsRepository, getDatabase()).list();
         for (const id of request.notes) {
           const note = notes.find(entry => entry.id === id);
           if (note) add(note.title || note.content.slice(0, 60), `note:${note.id}`, note.content);
         }
         for (const range of request.books) {
-          const file = bookPdfFile(range.id);
-          if (!file) continue;
-          const pages = Array.from({ length: range.to - range.from + 1 }, (_, index) => range.from + index);
-          const inspection = await inspectPdfFile(file.path, undefined, () => {}, pages);
-          for (const page of inspection.pages.filter(entry => pages.includes(entry.page))) add(`${file.title} (${page.page})`, bookStudyTarget({ id: range.id, sourceId: file.sourceId }, page.page), page.text);
+          const sourceId = range.sourceId ?? bookPdfFile(range.id)?.sourceId;
+          if (!sourceId) throw new Error('missing-source');
+          await addBook(bookStudyTarget({ id: range.id, sourceId }, range.from), range.to);
         }
         for (const passage of request.passages) {
+          if (passage.target.startsWith('book:')) { await addBook(passage.target); continue; }
           // The text comes from the installed Quran and Sunnah data, never from the renderer.
           const quran = parseQuranTarget(passage.target);
           if (quran) {
@@ -92,7 +87,7 @@ export function registerStudyAssistantIpc(): void {
       } finally { running = false; }
     } catch (error) {
       const code = (error as Error).message;
-      return { ok: false, error: KNOWN.includes(code) ? code : 'engine-failed' };
+      return { ok: false, error: KNOWN.includes(code) ? code : 'engine-failed', ...(error instanceof AssistantBookError ? { target: error.target } : {}) };
     }
   });
 }
