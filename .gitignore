@@ -100,3 +100,8 @@ src/renderer/out/
 *.db
 *.db-wal
 *.db-shm
+
+# Real test files (local only; see tests/real-files/README.md)
+tests/real-files/**
+!tests/real-files/README.md
+!tests/real-files/manifest.json

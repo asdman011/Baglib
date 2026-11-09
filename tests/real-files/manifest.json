@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "created": "2026-11-09",
+  "files": [
+    {
+      "path": "audio/en/Great Expectations [Book on Disc] Disc 1/01 An Encounter in the Churchyard.wma",
+      "bytes": 7403718,
+      "sha256": "b6b31f897eac15f50fd7e8a03e6fa3b5b40389d2694e676a5e51aa13e1a55cdb",
+      "lang": "en",
+      "kind": "audio",
+      "notes": "WMA audiobook track (Great Expectations, disc 1)."
+    },
+    {
+      "path": "audio/en/Great Expectations [Book on Disc] Disc 1/02 Pip's Theft.wma",
+      "bytes": 6501718,
+      "sha256": "2bb2c243175318e9133a9147c236ff72426848289cea8c8237b1862b844862c7",
+      "lang": "en",
+      "kind": "audio",
+      "notes": "WMA audiobook track (Great Expectations, disc 1)."
+    },
+    {
+      "path": "audio/en/Great Expectations [Book on Disc] Disc 1/03 Convict.wma",
+      "bytes": 5951918,
+      "sha256": "e4d0ffccc1547c9a468bffe18fe88f35f7f195453fc15012cfbfc776fdd6f5d3",
+      "lang": "en",
+      "kind": "audio",
+      "notes": "WMA audiobook track (Great Expectations, disc 1)."
+    },
+    {
+      "path": "audio/en/Great Expectations [Book on Disc] Disc 1/04 Mrs. Joe Gives a Super Party.wma",
+      "bytes": 5754752,
+      "sha256": "b21cb94866babace98b092229484a438c857882fb0fa042c319aa66b46e80eaa",
+      "lang": "en",
+      "kind": "audio",
+      "notes": "WMA audiobook track (Great Expectations, disc 1)."
+    },
+    {
+      "path": "audio/en/Great Expectations [Book on Disc] Disc 1/05 The Runaways Apprehended.wma",
+      "bytes": 8563464,
+      "sha256": "2420d851d9a09440eeb68b7baf60189a4adc33778c6000fc1773f9f1c1a0a8f7",
+      "lang": "en",
+      "kind": "audio",
+      "notes": "WMA audiobook track (Great Expectations, disc 1)."
+    },
+    {
+      "path": "audio/en/Great Expectations [Book on Disc] Disc 1/06 Pip Is Apprenticed to Joe.wma",
+      "bytes": 10374194,
+      "sha256": "3c7d1e443ab65950ed63232f8989de78e7a407b8046955672f7b5e66edb2be82",
+      "lang": "en",
+      "kind": "audio",
+      "notes": "WMA audiobook track (Great Expectations, disc 1)."
+    },
+    {
+      "path": "audio/en/Great Expectations [Book on Disc] Disc 1/07 A Visit to Miss Havisham.wma",
+      "bytes": 15041448,
+      "sha256": "8ef00c25f8b589360e26b13ffa21d3e30166bb40e9f25aaeeaf3cdf0764c3a47",
+      "lang": "en",
+      "kind": "audio",
+      "notes": "WMA audiobook track (Great Expectations, disc 1)."
+    },
+    {
+      "path": "audio/en/Great Expectations [Book on Disc] Disc 1/08 'A Bright New Shilling'.wma",
+      "bytes": 6824446,
+      "sha256": "6ed1d86f370addc18ad56e2e904035e9ef42a3e8186717ebd857c106bff1a4ad",
+      "lang": "en",
+      "kind": "audio",
+      "notes": "WMA audiobook track (Great Expectations, disc 1)."
+    },
+    {
+      "path": "audio/en/Great Expectations [Book on Disc] Disc 1/09 The Pale Young Gentleman.wma",
+      "bytes": 9764640,
+      "sha256": "935a72ac84f358619d14e80e6a01baebb303cbd9e191f951e15259ec7cd8bcec",
+      "lang": "en",
+      "kind": "audio",
+      "notes": "WMA audiobook track (Great Expectations, disc 1)."
+    },
+    {
+      "path": "epub/en/Fundamentals of Cost Accounting - Lanen, William;Anderson, Shanno.epub",
+      "bytes": 42200208,
+      "sha256": "37e447c37ac431b4bc506749d3550543024b9d717533489504d6466f7349d18d",
+      "lang": "en",
+      "kind": "epub",
+      "notes": "Large (42 MB) image-heavy textbook EPUB."
+    },
+    {
+      "path": "epub/en/Why Would Feminists Trust the Police -- Leah Cowan -- Verso 2024 -- Anna’s Archive.epub",
+      "bytes": 299748,
+      "sha256": "14e0f2939a7b6579480c903f4a95b8da55017b186e1ccfd8e5ec1ef28e929abe",
+      "lang": "en",
+      "kind": "epub",
+      "notes": "Small text EPUB. File name keeps a curly apostrophe and double dashes; it was shortened from a 230-character original that pushed the full path past Windows MAX_PATH (260)."
+    },
+    {
+      "path": "pdf/ar/scanned-image-only/تفسير الموعذتين لابن تيمية.pdf",
+      "bytes": 531445,
+      "sha256": "c932cf9b5791144f6265616a1588df464c59f5b0625795514d2f6200922287d5",
+      "lang": "ar",
+      "kind": "pdf",
+      "textLayer": "no",
+      "pages": 42,
+      "notes": "Scanned images only, no text layer. OCR only when the test is about OCR; otherwise test image-only behavior (no text selection/search results, OCR offer)."
+    },
+    {
+      "path": "pdf/ar/text-layer/الدفاع عن اراضي المسلمين اهم فروض الاعيان للشيخ عبدالله عزام.pdf",
+      "bytes": 355001,
+      "sha256": "2e1e5418f350fde299fdaea0ee59e4482032aaedd1304774d1b9e194447439d1",
+      "lang": "ar",
+      "kind": "pdf",
+      "textLayer": "yes",
+      "pages": 45,
+      "notes": "Arabic text layer with real-world defects: Private Use Area glyphs (e.g. U+F22B for Quranic brackets), broken lam-alif/Allah ligatures (\"االله\"), Arabic-Indic page numbers. Do not \"fix\" the file; test that BagLib copes."
+    },
+    {
+      "path": "pdf/en/text-layer/New Scientist International Edition - 19_November_2016.pdf",
+      "bytes": 14625998,
+      "sha256": "a0205de99e2a11e9dde75ae326a1e488754839f6d958262b14a6cd2f5c86c6e6",
+      "lang": "en",
+      "kind": "pdf",
+      "textLayer": "yes",
+      "pages": 69,
+      "notes": "Born-digital magazine; multi-column layout, ads, some image-only pages (e.g. pages 3-4 have no text)."
+    },
+    {
+      "path": "pdf/en/text-layer/Why lyrics last_ evolution, cognition, and Shakesp.pdf",
+      "bytes": 1088989,
+      "sha256": "58efb70a9f6fbc2adbae321ddb19658afceb5b07bee92c6dc06fcd0ab005e7d5",
+      "lang": "en",
+      "kind": "pdf",
+      "textLayer": "yes",
+      "pages": 240,
+      "notes": "Born-digital academic book; front-matter pages with little or no text."
+    }
+  ]
+}

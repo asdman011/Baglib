@@ -74,6 +74,7 @@ Work in this order. Take the first task that is still **To Do** and whose blocke
    - Start the renderer in the background with `node node_modules/next/dist/bin/next dev src/renderer -p 3000 -H 127.0.0.1`.
    - Build main with `npx tsup`, then run the task's `node scripts/<name>-live/run.mjs`.
    - The harness must use a throwaway folder under `.baglib-data/`, passed as `BAGLIB_DATA_DIR` and `--user-data-dir`.
+   - **Use the real files in `tests/real-files/`** (see its `README.md` and `manifest.json`) for any document or media the check opens: at least one Arabic and one English file of that format. Don't OCR the scanned Arabic PDF unless the task is about OCR. Never commit these files.
    - Inspect the screenshots in **Arabic (RTL) and English (LTR) at 1280 px and 480 px**.
    - Afterwards, delete the throwaway folder and stop the server.
 6. **Meet every acceptance criterion.** If one cannot be met, say exactly which one and why. Never mark it as passed.
