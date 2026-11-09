@@ -24,7 +24,7 @@ interface PathwayRow {
   collection_type: string;
 }
 
-interface SectionStats {
+export interface SectionStats {
   level: MasteryLevel;
   totalCards: number;
   lapsesCount: number;
@@ -328,11 +328,11 @@ export class StudyPrerequisitesService {
     return hints;
   }
 
-  private getSectionStats(
+  public getSectionStats(
     pathwayId: string,
     sectionName: string,
-    hasPractice: boolean,
-    hasSrs: boolean
+    hasPractice: boolean = this.hasTable('practice_attempt'),
+    hasSrs: boolean = this.hasTable('srs_state')
   ): SectionStats {
     let lapsesCount = 0;
     let incorrectAttempts = 0;

@@ -82,6 +82,7 @@ export class PathwayService {
     this.db.prepare('DELETE FROM collection WHERE id=?').run(id);
     this.settings.delete(`pathways.prerequisites.v1:${id}`);
     this.settings.delete(`pathways.prerequisites.dismissed.v1:${id}`);
+    this.settings.delete(`pathways.exam.v1:${id}`);
   }
 
   addItem(input: PathwayItemInput): PathwayItem {

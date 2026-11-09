@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowDown, ArrowUp, Check, Edit3, ExternalLink, Network, Pin, PinOff, Plus, Route, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, Calendar, Check, Edit3, ExternalLink, Network, Pin, PinOff, Plus, Route, Sparkles, Trash2, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { StudyLinkPicker } from '../notes/StudyLinkPicker';
@@ -10,6 +10,9 @@ import { studyLinks } from '../../../shared/study-notes';
 import { parseOutline, type Pathway, type PathwayDetail, type PathwayItem, type PathwayKind, type PathwayTemplate, type ReferenceFormat } from '../../../shared/pathways';
 import type { TranslationKey } from '../../translations';
 import { OnlineCoursesPanel } from './OnlineCoursesPanel';
+import { CurriculumExamModal } from './CurriculumExamModal';
+import type { CurriculumExamConfig } from '../../../shared/curriculum-exam';
+import { parseCivilDate } from '../../../shared/study-planner';
 
 const control = 'rounded-lg border border-subtle bg-surface p-2 text-sm text-main min-w-0';
 const button = 'inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-sm disabled:opacity-50';
@@ -110,10 +113,13 @@ function Detail({ pathway, onChange, onRemoved, onError }: { pathway: PathwayDet
   const [editingSectionPrereqs, setEditingSectionPrereqs] = useState<string | null>(null);
   const [renamingSection, setRenamingSection] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [examConfig, setExamConfig] = useState<CurriculumExamConfig | null>(null);
+  const [isExamModalOpen, setIsExamModalOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
     if (pathway.kind === 'curriculum') {
+      window.electronAPI.pathwayExam?.getConfig?.(pathway.id).then(cfg => { if (alive && cfg) setExamConfig(cfg); }).catch(() => {});
       window.electronAPI.pathwayPrerequisites?.get?.(pathway.id)
         .then(res => {
           if (alive && res) setPrereqMap(res);
@@ -188,8 +194,38 @@ function Detail({ pathway, onChange, onRemoved, onError }: { pathway: PathwayDet
   return <div className="space-y-5">
     <header className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0"><h2 dir="auto" className="font-display text-lg font-bold break-words">{pathway.name}</h2><p className="text-xs text-muted">{t(pathway.kind === 'research' ? 'pathwayKindResearch' : 'pathwayKindCurriculum')}</p></div>
+        <div className="min-w-0"><h2 dir="auto" className="font-display text-lg font-bold break-words">{pathway.name}</h2><p className="text-xs text-muted">{t(pathway.kind === 'research' ? 'pathwayKindResearch' : 'pathwayKindCurriculum')}</p>{examConfig?.examDate && (
+            <div
+              data-pathway-exam-badge
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 mt-1"
+            >
+              <Calendar className="size-3" />
+              <span>
+                {t('pathwayExamBadge', {
+                  date: examConfig.examDate,
+                  days: Math.max(
+                    0,
+                    Math.ceil(
+                      (parseCivilDate(examConfig.examDate).getTime() - new Date().setHours(0, 0, 0, 0)) /
+                        (1000 * 60 * 60 * 24)
+                    )
+                  ),
+                })}
+              </span>
+            </div>
+          )}</div>
         <div className="flex flex-wrap gap-2">
+          {pathway.kind === 'curriculum' && (
+            <button
+              type="button"
+              data-pathway-exam-btn
+              className={button}
+              onClick={() => setIsExamModalOpen(true)}
+            >
+              <Calendar className="size-4" />
+              <span>{t('pathwayExamReplanButton')}</span>
+            </button>
+          )}
           <button type="button" className={button} onClick={() => exportAs('bibtex')}>{t('pathwayExportBib')}</button>
           <button type="button" className={button} onClick={() => exportAs('markdown')}>{t('pathwayExportMd')}</button>
           <button type="button" className={button} onClick={remove}><Trash2 className="size-4" />{t('pathwayDelete')}</button>
@@ -350,7 +386,22 @@ function Detail({ pathway, onChange, onRemoved, onError }: { pathway: PathwayDet
       <div className="flex flex-wrap gap-2"><input className={`${control} flex-1`} value={step} onChange={event => setStep(event.target.value)} maxLength={300} placeholder={t('pathwayStepTitle')} aria-label={t('pathwayStepTitle')} dir="auto" /><button type="button" className={button} disabled={!step.trim()} onClick={addStep}><Check className="size-4" />{t('pathwayAddStep')}</button></div>
       <div className="flex flex-wrap gap-2"><input className={`${control} flex-1`} value={linkTitle} onChange={event => setLinkTitle(event.target.value)} maxLength={500} placeholder={t('pathwayLinkTitle')} aria-label={t('pathwayLinkTitle')} dir="auto" /><input className={`${control} flex-1`} value={linkUrl} onChange={event => setLinkUrl(event.target.value)} maxLength={2000} placeholder="https://" aria-label={t('pathwayLinkUrl')} dir="ltr" /><button type="button" className={button} disabled={!linkTitle.trim() || !linkUrl.trim()} onClick={addLink}><Plus className="size-4" />{t('pathwayAddLink')}</button></div>
       <details><summary className="cursor-pointer text-sm">{t('pathwayAddResource')}</summary><div className="pt-2"><StudyLinkPicker notes={notes} onInsert={addResource} /></div></details>
+
     </section>
+    <CurriculumExamModal
+      pathwayId={pathway.id}
+      pathwayName={pathway.name}
+      isOpen={isExamModalOpen}
+      onClose={() => setIsExamModalOpen(false)}
+      onPlanApplied={() => {
+        onChange();
+        window.electronAPI.pathwayExam?.getConfig?.(pathway.id)
+          .then(cfg => setExamConfig(cfg))
+          .catch(() => {});
+      }}
+    />
+
+
   </div>;
 }
 
@@ -386,5 +437,6 @@ export function PathwaysView() {
         </main>
       </div>
     </div>
+
   </div>;
 }

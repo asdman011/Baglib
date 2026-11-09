@@ -1,4 +1,41 @@
-## KEY-287 — 2026-11-10, Codex (verified; publication pending)
+## KEY-285 — 2026-11-10, Antigravity (implemented and verified; publication pending)
+
+- Implementation & Verification: Study Workspace 7: Exam date and adaptive re-planning for a curriculum.
+  - Exam date and available time per weekday stored schema-free in `app_settings` under `pathways.exam.v1:<collectionId>`, bounded (0–720 min) and validated with zero schema changes.
+  - Adaptive re-plan calculates suggested `study_task.due_date` across remaining free study days.
+  - Preview shown first; nothing created or moved without user confirmation.
+  - Weekly rhythm rest days (KEY-283, `study.rhythm.v1`, Friday default) respected and excluded from study days.
+  - Pinned dates (`item.pinned && item.dueDate`) locked onto their specific dates and capacity accounted for.
+  - If workload exceeds remaining study days before exam: states shortfall plainly without guilt wording, and suggests what to drop or shorten prioritizing weak sections (<0.8 mastery or recent lapses) and prerequisites over mastered/proficient sections.
+  - Dual Hijri and Gregorian civil date display using BagLib's `calculateHijriDate`.
+  - Deleting pathway cleans up `pathways.exam.v1:<id>` while preserving planner tasks (ADR-009).
+  - Verified with real university statistics course PDFs from `U:\Cources\الجامعة\السنة الرابعة والأخيرة بإذن الله\الترم الأول\` (`Mathematical Statistics Study Guide.pdf` and `[mid] Econometrics Exam Study Guide - Parts I and II.pdf`) copied read-only.
+  - 14 screenshots captured in `.baglib-data/key285-evidence/`. Responsive in Arabic RTL and English LTR at 1280px and 480px viewports with zero horizontal overflow.
+  - Tests: `tests/services/curriculum-exam.test.ts` (11/11 pass), `npx eslint` (0 errors, 0 warnings), `git diff --check` (0 errors), full test suite 1607/1608 pass.
+- Exact task files:
+  - `src/shared/curriculum-exam.ts`
+  - `src/main/services/curriculum-exam.service.ts`
+  - `src/main/services/pathways.ts`
+  - `src/main/services/study-prerequisites.service.ts`
+  - `src/main/ipc/pathways.ts`
+  - `src/preload/index.ts` (KEY-285 only)
+  - `src/renderer/translations.ts` (KEY-285 only)
+  - `src/renderer/components/dashboard/CurriculumExamModal.tsx`
+  - `src/renderer/components/dashboard/PathwaysView.tsx`
+  - `tests/services/curriculum-exam.test.ts`
+  - `scripts/curriculum-exam-live/main.cjs`
+  - `scripts/curriculum-exam-live/run.mjs`
+  - `docs/agent-ops/reports/KEY-285.md`
+  - `CURRENT_TASK.md`
+  - `IMPLEMENTATION_PLAN.md`
+
+## KEY-271 — 2026-11-10, Codex (active)
+
+- Session 01a1c27f-6676-7ab3-915b-f97bd1d8dc99. Implement stamps, calibrated measurement and saved staged actions per local task. Read dispatch, board and architecture. Existing note payload and settings store only. Preserve KEY-285 and unrelated hunks. One task-only commit/push explicitly authorized after verification; Claude owns Jira/review. Inspection ongoing; no tests run.
+
+## KEY-287 — 2026-11-10, Codex (pushed)
+
+- [2026-11-10, Codex] KEY-287 publication receipt (local post-commit): 109c1204cb83916978445dddcc3a625720c97a45 pushed normally to origin/feature/library-domain; exact remote hash verified. Exactly14ownfiles/hunks committed, ending Agent: Codex; sibling changes excluded. Shared1606/1606, finalfocused11/11, candidate tsc/build/11tests, scopedlint and diff pass; native LUP8a0 ar/en1280/480 PDF/scan/Quran/history pass,30screenshots reviewed. Profiles/corpus copies cleaned,127original hashes unchanged; existing shared renderer preserved. Claude owns review/Jira. Stop after KEY-287; no next task.
 
 - [2026-11-10, Codex] KEY-287 implemented and verified (session 01a1c264-e95c-7191-8a3e-cff435fcdb19). Passage-only Explain it back with ar/en claim segmentation, all three verdicts, existing exact quote validator, conservative verbatim-only auto-support and explicit learner corrections. Main-only file/installed Quran/Sunnah text, existing consent/BYOK gates. ADR-013 pending attempts; atomic one-time judgment plus precise-link study note; no PDF projection. Bounded20 pending snapshots resume through practice history. Final shared1606/1606, focused9/9, tsc/mainbuild/scopedlint0errors0warnings pass; native LUP8a0 ar/en1280/480 real Arabic PDF3, English PDF8, scanned Arabic PDF2 and copied Quran4:106 pass including history resume, forged-source discard, remote denial and one-time judgment. Thirty screenshots reviewed in five contact sheets plus full-resolution Arabic/Quran/mixed/history samples.127original corpus hashes unchanged; throwaway profile cleaned; existing shared renderer preserved. No document writes/OCR/schema/deps/download/Jira. Cosmetic English punctuation corrected after live capture; final focused+translation parity11/11 pass; diff check clean. Exact14ownfiles/hunks only; sibling KEY-285 and unrelated edits excluded. Isolated exact staged candidate tsc/mainbuild and11/11 focused+parity pass; staged/working diff checks clean. Authorized one commit/push to origin/feature/library-domain; publication pending, stop afterward. Limits: semantic paraphrases require manual correction; quotes do not prove entailment/absence;20snapshot cap; existing PDF text/order/extraction cost; no real-provider quality claim or new EPUB/Sunnah live certification. Claude owns review/Jira.
 
@@ -20,7 +57,9 @@ Exact task files/hunks:
 
 Local report: `docs/agent-ops/reports/KEY-287.md`. Evidence: `.baglib-data/k287-LUP8a0/evidence/`; logs `.baglib-data/key287-{focused,full,tsc,lint,build,live}.log`. Earlier native runs were incomplete (fixture quoting, page-one projection discovered/fixed, or development hot reload); only the final LUP8a0 matrix is final implementation evidence. Native profile removed; evidence retained.
 
-## KEY-282 — 2026-11-10, Codex (verified; publication pending)
+## KEY-282 — 2026-11-10, Codex (pushed)
+
+- [2026-11-10, Codex] KEY-282 publication receipt (local post-commit): d7f35a9cd991a169ab907e798ec2f31201d75b0f pushed normally to origin/feature/library-domain; exact remote hash verified. Exactly13taskfiles/hunks committed, ending Agent: Codex; sibling changes excluded. Shared1597/1597, staged candidate29/29+tsc/build, scoped lint and native ar/en1280/480 pass;14screenshots inspected. Owned server/candidate/profiles cleaned, evidence retained and KEY-285 server preserved. Claude owns review/Jira. Stopped after KEY-282; no next task.
 
 - [2026-11-10, Codex] KEY-282 implemented and verified, session 01a1c252-33e3-7613-90b9-e5045d0105f8. Main resolves exact Work/Source and reads PDF page or EPUB CFI evidence; renderer text discarded. Reuses KEY-272 mapping-aware extraction and KEY-276 quote pipeline. Typed missing-source/missing-page/no-text-layer; separate localized OCR page navigation; comparison-only PDF glyph aliases; explicit ar/en gaps. Seven new regressions pass; final shared suite1597/1597, tsc/build/lint0errors0warnings/diff check pass. Native k282-BTmoR1 ar/en1280/480 PDF citation/reopening, scanned refusal/no-provider-call/OCR-navigation, forged renderer evidence, fabricated quote, gap and file-derived EPUB pass;14screenshots inspected; profile removed. No document writes/OCR/dependency/download/schema/Jira. Handoff/report and Study Workspace updated. Only13ownfiles/hunks authorized for one commit/push to origin/feature/library-domain. Publication pending; stop after KEY-282. Limits: file text quirks retained; fake provider tests grounding/navigation, not explanation quality; accessibility extraction scans whole PDF; EPUB supports existing CFI subset/text entries up to8MB. Existing absent Mushaf-layout warning in throwaway dashboard. Preserve KEY-285 and unrelated edits.
 
@@ -41,7 +80,9 @@ Exact task files/hunks:
 
 Local report: `docs/agent-ops/reports/KEY-282.md`. Evidence: `.baglib-data/k282-BTmoR1/evidence/`; static logs `.baglib-data/key282-*.log`. Earlier k282-tPMnNA failed at Notes navigation timing after two valid PDF cases; full later run passes.
 
-## KEY-280 — 2026-11-09, Codex (implemented and verified, publication pending)
+## KEY-280 — 2026-11-09, Codex (pushed)
+
+- Publication receipt, local post-commit. 4b37e5f534c52738cc963c179d0fa7645f64880c pushed normally to origin/feature/library-domain and exact remote hash verified. Exactly21ownfiles/hunks committed, ending Agent: Codex. Native profiles and task-only verification candidate removed, dependency junction detached first. Owned renderer session29934 stopped. Evidence retained. Jira/review delegated to Claude. Stopped after KEY-280.
 
 - [2026-11-09, Codex] KEY-280 implemented and verified, session 01a1c17c-63d5-7692-b7fa-bdd24024c88e. PDF/EPUB selection Explain, Practice and Review later; precise source/page and source/CFI links; question editor source seeding; saved-card/SRS reopening; CFI practice evidence. Shared full suite 1579/1579, TypeScript, main build and diff check pass. Scoped lint 0 errors, 61 existing warnings. Six focused regressions pass within the full suite. Native Arabic k280-jU19R6 and English k280-0sEETc pass at1280/480 with real ar/en PDFs, small real EPUB and scanned Arabic PDF. Nine screenshots inspected. Real EPUB is English under both UIs because the manifest has English EPUBs. Explain uses bounded reader-selected evidence; file-derived extraction/verification is KEY-282. PdfNativeViewer, KEY-272/288, quran-navigation and README changes excluded. Explicit task-only commit/push to origin/feature/library-domain authorized, publication pending. Jira/review delegated to Claude; stop after publication.
 

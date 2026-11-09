@@ -737,6 +737,19 @@ export const API = {
         currentFailureCount
       ),
   },
+  pathwayExam: {
+    getConfig: (pathwayId: string): Promise<import('../shared/curriculum-exam').CurriculumExamConfig> =>
+      ipcRenderer.invoke('pathways:get-exam-config', pathwayId),
+    saveConfig: (config: unknown): Promise<import('../shared/curriculum-exam').CurriculumExamConfig> =>
+      ipcRenderer.invoke('pathways:save-exam-config', config),
+    previewReplan: (
+      pathwayId: string,
+      lang: 'ar' | 'en'
+    ): Promise<import('../shared/curriculum-exam').ReplanResult> =>
+      ipcRenderer.invoke('pathways:get-replan-preview', pathwayId, lang),
+    applyReplan: (pathwayId: string, schedule: { taskId: string; date: string }[]): Promise<void> =>
+      ipcRenderer.invoke('pathways:apply-replan', pathwayId, schedule),
+  },
   lectures: {
     list: () => ipcRenderer.invoke('lectures:list'),
     add: () => ipcRenderer.invoke('lectures:add'),

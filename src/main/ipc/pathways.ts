@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { getDatabase } from '../database/connection';
 import { PathwayService } from '../services/pathways';
 import { StudyPrerequisitesService } from '../services/study-prerequisites.service';
+import { CurriculumExamService } from '../services/curriculum-exam.service';
 import { AIResearchService } from '../services/ai/ai-research.service';
 import { AIProviderService } from '../services/ai/ai-provider.service';
 import { buildCurriculumDraftPrompt } from '../../shared/utils/ai-prompts';
@@ -21,6 +22,13 @@ const prereqService = (event: IpcMainInvokeEvent) => {
   const url = new URL(frame.url);
   if (url.username || url.password || !(url.protocol === 'app:' && url.hostname === '-' || url.protocol === 'file:' && !url.hostname || url.origin === 'http://localhost:3000')) throw new Error('invalid-request');
   return new StudyPrerequisitesService(getDatabase());
+};
+const examService = (event: IpcMainInvokeEvent) => {
+  const frame = event.senderFrame;
+  if (!frame || frame !== event.sender.mainFrame) throw new Error('invalid-request');
+  const url = new URL(frame.url);
+  if (url.username || url.password || !(url.protocol === 'app:' && url.hostname === '-' || url.protocol === 'file:' && !url.hostname || url.origin === 'http://localhost:3000')) throw new Error('invalid-request');
+  return new CurriculumExamService(getDatabase());
 };
 const shortText = (value: unknown, max: number) => {
   if (typeof value !== 'string' || !value.trim() || value.length > max) throw new Error('invalid-request');
@@ -96,5 +104,17 @@ export function registerPathwayIpc(): void {
         String(weakestPrerequisite),
         Number(currentFailureCount) || 0
       )
+  );
+  ipcMain.handle('pathways:get-exam-config', (event, id: unknown) =>
+    examService(event).getExamConfig(pathwayId(id))
+  );
+  ipcMain.handle('pathways:save-exam-config', (event, config: unknown) =>
+    examService(event).saveExamConfig(config)
+  );
+  ipcMain.handle('pathways:get-replan-preview', (event, id: unknown, lang: unknown) =>
+    examService(event).getReplanPreview(pathwayId(id), lang === 'ar' ? 'ar' : 'en')
+  );
+  ipcMain.handle('pathways:apply-replan', (event, id: unknown, schedule: unknown) =>
+    examService(event).applyReplan(pathwayId(id), schedule as { taskId: string; date: string }[])
   );
 }
