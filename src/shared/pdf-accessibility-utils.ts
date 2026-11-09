@@ -2,6 +2,68 @@ import { segmentTextIntoSentences } from './utils/tts-text';
 
 export const ARABIC_CHAR_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/u;
 
+export const KNOWN_PUA_CHAR_MAP: Record<number, string> = {
+  0xF22B: '﴿',
+  0xF22A: '﴾',
+  0xF222: '﴾',
+  0xF228: '﴾',
+  0xFD3E: '﴾',
+  0xFD3F: '﴿',
+  0xF220: ' ',
+};
+
+export interface SanitizedPdfTextResult {
+  cleanText: string;
+  hasUnmappedGlyphs: boolean;
+  unmappedCount: number;
+  totalLength: number;
+}
+
+/**
+ * Sanitizes extracted PDF text:
+ * - Maps known Private Use Area (PUA) characters (e.g. U+F22B/U+F222 for Quranic brackets).
+ * - Drops unmapped PUA characters (0xE000-0xF8FF, 0xF0000-0xFFFFD, 0x100000-0x10FFFD) so they
+ *   never render as boxes (□) and are never spoken.
+ * - Detects whether any unmapped glyphs were encountered so the UI can warn the user.
+ */
+export function sanitizePdfExtractedText(text: string): SanitizedPdfTextResult {
+  if (!text) {
+    return { cleanText: '', hasUnmappedGlyphs: false, unmappedCount: 0, totalLength: 0 };
+  }
+
+  let unmappedCount = 0;
+  const chars: string[] = [];
+
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code in KNOWN_PUA_CHAR_MAP) {
+      chars.push(KNOWN_PUA_CHAR_MAP[code]);
+    } else if (
+      (code >= 0xE000 && code <= 0xF8FF) ||
+      (code >= 0xF0000 && code <= 0xFFFFD) ||
+      (code >= 0x100000 && code <= 0x10FFFD)
+    ) {
+      unmappedCount++;
+    } else {
+      chars.push(ch);
+    }
+  }
+
+  const rawClean = chars.join('');
+  const cleanText = rawClean
+    .replace(/[ \t]+/gu, ' ')
+    .replace(/\r\n/gu, '\n')
+    .replace(/\n\s*\n+/gu, '\n\n')
+    .trim();
+
+  return {
+    cleanText,
+    hasUnmappedGlyphs: unmappedCount > 0,
+    unmappedCount,
+    totalLength: text.length,
+  };
+}
+
 export function isArabicText(text: string): boolean {
   if (!text) return false;
   const arabicChars = text.match(new RegExp(ARABIC_CHAR_REGEX.source, 'gu')) || [];
@@ -37,7 +99,10 @@ export function buildReflowParagraphs(
   fallbackDirection: 'rtl' | 'ltr' = 'ltr'
 ): ReflowParagraph[] {
   if (typeof input === 'string') {
-    const rawParagraphs = input
+    const { cleanText } = sanitizePdfExtractedText(input);
+    if (!cleanText) return [];
+
+    const rawParagraphs = cleanText
       .split(/\n\s*\n+/u)
       .map(p => p.trim())
       .filter(p => p.length > 0);
@@ -59,9 +124,19 @@ export function buildReflowParagraphs(
     return [];
   }
 
+  // Sanitize blocks and filter empty blocks
+  const sanitizedBlocks = input
+    .map(block => ({
+      ...block,
+      text: sanitizePdfExtractedText(block.text).cleanText,
+    }))
+    .filter(b => b.text.length > 0);
+
+  if (sanitizedBlocks.length === 0) return [];
+
   // Group text blocks into lines based on Y coordinate proximity
   // Line threshold: 0.6 of average block height
-  const sorted = [...input].sort((a, b) => {
+  const sorted = [...sanitizedBlocks].sort((a, b) => {
     // Round Y to nearest 4px bucket for line grouping
     const lineDiff = Math.round(a.y / 6) - Math.round(b.y / 6);
     if (lineDiff !== 0) return lineDiff;

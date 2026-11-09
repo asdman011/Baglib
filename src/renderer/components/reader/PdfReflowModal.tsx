@@ -19,6 +19,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import {
   buildReflowParagraphs,
   selectTtsVoiceForParagraph,
+  sanitizePdfExtractedText,
   type ReflowParagraph,
 } from '../../../shared/pdf-accessibility-utils';
 
@@ -31,6 +32,7 @@ interface PdfReflowModalProps {
   pageText: string;
   docTitle?: string;
   defaultDirection?: 'rtl' | 'ltr';
+  hasUnmappedGlyphs?: boolean;
 }
 
 export function PdfReflowModal({
@@ -42,6 +44,7 @@ export function PdfReflowModal({
   pageText,
   docTitle,
   defaultDirection = 'ltr',
+  hasUnmappedGlyphs = false,
 }: PdfReflowModalProps) {
   const { t } = useWorkspace();
   const [fontSize, setFontSize] = useState<number>(18);
@@ -71,8 +74,8 @@ export function PdfReflowModal({
     window.speechSynthesis.onvoiceschanged = updateVoices;
   }, []);
 
-  // Build reflow paragraphs for current page
-  const paragraphs: ReflowParagraph[] = useMemo(() => {
+  // Sanitize the text (maps known PUA brackets like 0xF22B to ﴿, drops unmapped PUA characters)
+  const { cleanText, hasUnmappedGlyphs: textHasUnmapped } = useMemo(() => {
     let text = pageText || '';
     if (!text && typeof document !== 'undefined') {
       const spans = Array.from(document.querySelectorAll('.textLayer span'))
@@ -81,8 +84,15 @@ export function PdfReflowModal({
         .trim();
       if (spans) text = spans;
     }
-    return buildReflowParagraphs(text, defaultDirection);
-  }, [pageText, defaultDirection]);
+    return sanitizePdfExtractedText(text);
+  }, [pageText]);
+
+  const showUnmappedNotice = Boolean(hasUnmappedGlyphs || textHasUnmapped);
+
+  // Build reflow paragraphs for current page
+  const paragraphs: ReflowParagraph[] = useMemo(() => {
+    return buildReflowParagraphs(cleanText, defaultDirection);
+  }, [cleanText, defaultDirection]);
 
   // Speech stopping helper
   const stopSpeech = useCallback(() => {
@@ -402,6 +412,18 @@ export function PdfReflowModal({
           </div>
         )}
 
+        {/* Notice for unmapped glyphs */}
+        {showUnmappedNotice && (
+          <div
+            role="alert"
+            data-reflow-unmapped-notice
+            className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-900 dark:text-amber-200"
+          >
+            <AlertCircle size={15} className="shrink-0 text-amber-600" />
+            <span>{t('pdfA11yUnmappedWarning')}</span>
+          </div>
+        )}
+
         {/* Reflowed Text Body */}
         <div
           data-reflow-content
@@ -410,7 +432,7 @@ export function PdfReflowModal({
           style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}
         >
           {paragraphs.length === 0 ? (
-            <p className="text-center text-muted py-12 text-sm">{t('noSearchResults')}</p>
+            <p className="text-center text-muted py-12 text-sm">{t('pdfA11yNoTextOnPage')}</p>
           ) : (
             paragraphs.map((para, pIdx) => {
               if (needle && !para.text.toLocaleLowerCase().includes(needle)) {

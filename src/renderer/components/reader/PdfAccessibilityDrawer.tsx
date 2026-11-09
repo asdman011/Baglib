@@ -27,6 +27,7 @@ interface PdfAccessibilityDrawerProps {
   showReadingOrder?: boolean;
   onToggleReadingOrder?: (show: boolean, order?: PdfAccessibilityReadingOrderItem[], isTagged?: boolean) => void;
   onFixStaged?: (result: PdfAccessibilityFixResult) => void;
+  onReportLoaded?: (report: PdfAccessibilityReport) => void;
   onOpenOcr?: () => void;
   workId?: string;
   readingPage?: number;
@@ -40,6 +41,7 @@ export function PdfAccessibilityDrawer({
   showReadingOrder,
   onToggleReadingOrder,
   onFixStaged,
+  onReportLoaded,
   onOpenOcr,
 }: PdfAccessibilityDrawerProps) {
   const { t } = useWorkspace();
@@ -68,6 +70,7 @@ export function PdfAccessibilityDrawer({
       });
       if (res.ok) {
         setReport(res.data);
+        onReportLoaded?.(res.data);
         if (res.data.base.title) {
           setTitleInput(res.data.base.title);
         }

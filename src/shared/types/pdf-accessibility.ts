@@ -36,6 +36,8 @@ export interface PdfAccessibilityBaseReport {
   fontsWithoutToUnicode: string[];
   allFontsCount: number;
   readingOrder: PdfAccessibilityReadingOrderItem[];
+  pageTexts?: Record<string, string>;
+  pageHasUnmapped?: Record<string, boolean>;
 }
 
 export interface VeraPdfRuleSummary {

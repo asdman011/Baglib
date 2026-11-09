@@ -309,6 +309,18 @@ app.on('browser-window-created', (_, owner) => {
       await evaluate('document.querySelector("[data-pdf-reflow-button]")?.click() || document.querySelector("[data-pdf-reflow-top-button]")?.click()');
       await until('!!document.querySelector("[data-pdf-reflow-modal]")', 100);
       await pause(1000);
+
+      // Advance to Page 2 which contains real Arabic body text
+      console.log('[pdf-a11y-live] Advancing reflow view to Page 2 (real Arabic body text)');
+      await evaluate('document.querySelector("[data-reflow-next-page]").click()');
+      await until('[...document.querySelectorAll("[data-reflow-paragraph]")].some(p => p.textContent.includes("إنفروا خفافا"))', 100);
+      await pause(1000);
+
+      // Verify readable joined Arabic without any PUA or box characters
+      const page2Text = await evaluate('document.querySelector("[data-reflow-content]").textContent');
+      assert.ok(page2Text.includes('إنفروا خفافا وثقالا'), 'Page 2 must contain readable Arabic text');
+      assert.ok(!/[\uE000-\uF8FF]/u.test(page2Text), 'Page 2 must not contain any raw PUA box characters');
+      console.log('✓ Page 2 verified: readable joined Arabic rendered cleanly without boxes');
       await shot('07-reflow-modal-ar-1280');
 
       // Test Arabic Read-Aloud when no Arabic voice is installed

@@ -131,7 +131,10 @@ import { OcrInspectorDrawer } from './OcrInspectorDrawer';
 import { PdfAccessibilityDrawer } from './PdfAccessibilityDrawer';
 import { PdfReflowModal } from './PdfReflowModal';
 import { PdfReadingOrderOverlay } from './PdfReadingOrderOverlay';
-import type { PdfAccessibilityReadingOrderItem } from '../../../shared/types/pdf-accessibility';
+import type {
+  PdfAccessibilityReadingOrderItem,
+  PdfAccessibilityBaseReport,
+} from '../../../shared/types/pdf-accessibility';
 import {
   applyWordCorrection,
   applyStoredCorrections,
@@ -366,6 +369,7 @@ const SourceBookReader: React.FC = () => {
   const [showReadingOrderOverlay, setShowReadingOrderOverlay] = useState<boolean>(false);
   const [readingOrderItems, setReadingOrderItems] = useState<PdfAccessibilityReadingOrderItem[]>([]);
   const [isReadingOrderTagged, setIsReadingOrderTagged] = useState<boolean>(false);
+  const [a11yReport, setA11yReport] = useState<PdfAccessibilityBaseReport | null>(null);
   const [ocrProgress, setOcrProgress] = useState<{ current: number; total: number; words: number } | null>(null);
   const [activeOcrWordIndex, setActiveOcrWordIndex] = useState<number | null>(null);
 
@@ -3688,6 +3692,7 @@ const SourceBookReader: React.FC = () => {
             if (order) setReadingOrderItems(order);
             if (isTagged !== undefined) setIsReadingOrderTagged(isTagged);
           }}
+          onReportLoaded={(rep) => setA11yReport(rep.base)}
         />
 
         {/* PDF Reflow & Read-Aloud Modal */}
@@ -3697,7 +3702,14 @@ const SourceBookReader: React.FC = () => {
           currentPage={readingPage}
           totalPages={maxBookPages}
           onPageChange={(p) => setReadingPage(p)}
-          pageText={extractedPages[readingPage - 1] || ''}
+          pageText={
+            a11yReport?.pageTexts?.[String(readingPage)] ||
+            extractedPages[readingPage - 1] ||
+            ''
+          }
+          hasUnmappedGlyphs={
+            Boolean(a11yReport?.pageHasUnmapped?.[String(readingPage)])
+          }
           docTitle={activeBook?.title}
           defaultDirection={readerDirection}
         />

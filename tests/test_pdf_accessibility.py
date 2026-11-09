@@ -130,6 +130,41 @@ class PdfAccessibilityTests(unittest.TestCase):
                 self.assertEqual(str(fixed.docinfo.get("/Title")), "كتاب الإتاحة")
                 self.assertTrue(fixed.Root.ViewerPreferences.DisplayDocTitle)
 
+    def test_font_without_tounicode_and_pua_glyphs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "pua_font.pdf"
+            with pikepdf.new() as document:
+                page = document.add_blank_page(page_size=(300, 400))
+                # Add a font dictionary lacking /ToUnicode
+                font_dict = pikepdf.Dictionary({
+                    "/Type": pikepdf.Name("/Font"),
+                    "/Subtype": pikepdf.Name("/TrueType"),
+                    "/BaseFont": pikepdf.Name("/CustomArabicDecorative"),
+                    "/Encoding": pikepdf.Name("/WinAnsiEncoding"),
+                })
+                page.Resources = pikepdf.Dictionary({
+                    "/Font": pikepdf.Dictionary({
+                        "/F1": font_dict
+                    })
+                })
+                document.save(source)
+
+            report = engine.check_accessibility(str(source))
+            # 1. Detects font without /ToUnicode
+            self.assertIn("/CustomArabicDecorative", report["fontsWithoutToUnicode"])
+
+            # 2. Test sanitize_pdf_text handling of PUA characters:
+            # - U+F22B maps to '﴿'
+            # - U+F222 maps to '﴾'
+            # - Unmapped PUA glyph U+F201 is dropped
+            # - has_unmapped is detected
+            raw_text = "قال الله عز وجل: \uf22bإنفروا خفافا\uf222 \uf201\uf202"
+            clean, has_unmapped = engine.sanitize_pdf_text(raw_text)
+            self.assertTrue(has_unmapped)
+            self.assertEqual(clean, "قال الله عز وجل: ﴿إنفروا خفافا﴾")
+            # No PUA characters remain in clean text
+            self.assertFalse(any(0xE000 <= ord(c) <= 0xF8FF for c in clean))
+
 
 if __name__ == "__main__":
     unittest.main()

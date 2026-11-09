@@ -6,6 +6,7 @@ Operates on JSON request from stdin; writes JSON progress and complete results o
 
 import sys
 import os
+import re
 import json
 import hashlib
 from pathlib import Path
@@ -23,6 +24,35 @@ def digest(filename):
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+PUA_MAP = {
+    0xF22B: "﴿",
+    0xF22A: "﴾",
+    0xF222: "﴾",
+    0xF228: "﴾",
+    0xFD3E: "﴾",
+    0xFD3F: "﴿",
+    0xF220: " ",
+}
+
+
+def sanitize_pdf_text(raw_text):
+    has_unmapped = False
+    result = []
+    for ch in raw_text:
+        code = ord(ch)
+        if code in PUA_MAP:
+            result.append(PUA_MAP[code])
+        elif 0xE000 <= code <= 0xF8FF or 0xF0000 <= code <= 0x10FFFD:
+            has_unmapped = True
+        else:
+            result.append(ch)
+    clean = "".join(result)
+    clean = re.sub(r"[ \t]+", " ", clean)
+    clean = re.sub(r"\r\n", "\n", clean)
+    clean = re.sub(r"\n\s*\n+", "\n\n", clean).strip()
+    return clean, has_unmapped
 
 
 def check_accessibility(filename):
@@ -240,28 +270,50 @@ def check_accessibility(filename):
             except Exception:
                 pass
 
-    # 7. Text layer check and fallback reading order via fitz
-    doc = fitz.open(filename)
-    pages_without_text = []
-    estimated_blocks = []
-    for idx, page in enumerate(doc, 1):
-        text = page.get_text().strip()
-        if not text:
-            pages_without_text.append(idx)
-        if not report["isTagged"] and idx <= 25:
-            page_blocks = page.get_text("blocks")
-            for b in page_blocks:
-                if len(b) >= 5 and b[4].strip():
-                    estimated_blocks.append({
-                        "order": len(estimated_blocks) + 1,
-                        "page": idx,
-                        "tag": "P",
-                        "text": b[4].strip()[:120],
-                        "rect": [round(b[0], 1), round(b[1], 1), round(b[2], 1), round(b[3], 1)],
-                        "estimated": True
-                    })
-    report["pagesWithoutText"] = pages_without_text
-    report["readingOrder"] = reading_order if report["isTagged"] and reading_order else estimated_blocks
+    # 7. Text layer check and fallback reading order via pypdfium2
+    import pypdfium2 as pdfium
+    pdoc = pdfium.PdfDocument(filename)
+    try:
+        pages_without_text = []
+        estimated_blocks = []
+        page_texts = {}
+        page_has_unmapped = {}
+
+        for idx in range(len(pdoc)):
+            p_num = idx + 1
+            page = pdoc[idx]
+            tpage = page.get_textpage()
+            raw_text = tpage.get_text_range()
+            tpage.close()
+            page.close()
+            clean_text, has_unmapped = sanitize_pdf_text(raw_text)
+
+            # A page has no text layer if it has no extractable text, or if after removing PUA and whitespace it is empty
+            non_pua = re.sub(r"[\s\uE000-\uF8FF\U000F0000-\U0010FFFD]", "", raw_text)
+            if not non_pua:
+                pages_without_text.append(p_num)
+
+            page_texts[str(p_num)] = clean_text
+            page_has_unmapped[str(p_num)] = has_unmapped
+
+            if not report["isTagged"] and p_num <= 25 and clean_text:
+                paras = [p.strip() for p in clean_text.split("\n\n") if p.strip()]
+                for para in paras:
+                    if para:
+                        estimated_blocks.append({
+                            "order": len(estimated_blocks) + 1,
+                            "page": p_num,
+                            "tag": "P",
+                            "text": para[:120],
+                            "estimated": True
+                        })
+
+        report["pagesWithoutText"] = pages_without_text
+        report["readingOrder"] = reading_order if report["isTagged"] and reading_order else estimated_blocks
+        report["pageTexts"] = page_texts
+        report["pageHasUnmapped"] = page_has_unmapped
+    finally:
+        pdoc.close()
 
     return report
 

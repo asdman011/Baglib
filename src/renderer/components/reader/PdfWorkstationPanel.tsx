@@ -72,7 +72,10 @@ import { PdfToolDirectory } from './PdfToolDirectory';
 import { PdfAccessibilityDrawer } from './PdfAccessibilityDrawer';
 import { PdfReflowModal } from './PdfReflowModal';
 import { PdfReadingOrderOverlay } from './PdfReadingOrderOverlay';
-import type { PdfAccessibilityReadingOrderItem } from '../../../shared/types/pdf-accessibility';
+import type {
+  PdfAccessibilityReadingOrderItem,
+  PdfAccessibilityBaseReport,
+} from '../../../shared/types/pdf-accessibility';
 import { PdfWorkstationTools, type PdfCanvasUse, type StirlingWorkstationMode } from './PdfWorkstationTools';
 import { StirlingToolsHub } from '../pdf-workstation/StirlingToolsHub';
 import { PdfPageEditor, type PdfPageEditorHandle } from './PdfPageEditor';
@@ -186,6 +189,7 @@ export function PdfWorkstationPanel({
   const [showReadingOrderOverlay, setShowReadingOrderOverlay] = useState(false);
   const [readingOrderItems, setReadingOrderItems] = useState<PdfAccessibilityReadingOrderItem[]>([]);
   const [isReadingOrderTagged, setIsReadingOrderTagged] = useState(false);
+  const [a11yReport, setA11yReport] = useState<PdfAccessibilityBaseReport | null>(null);
   const chromeLabels = { top: 'pdfChromeTop', rail: 'pdfChromeRail', library: 'pdfChromeLibrary', tools: 'pdfDirectoryTitle', bottom: 'pdfChromeBottom' } as const;
   const pinChrome = (zone: keyof typeof chromeLabels) => <div className="flex shrink-0 items-center"><button type="button" aria-pressed={pinnedChrome.includes(zone)} title={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} aria-label={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} onClick={() => setPinnedChrome(previous => previous.includes(zone) ? previous.filter(item => item !== zone) : [...previous, zone])} className="rounded-lg p-2 hover:bg-emerald-500/20"><Pin size={14} className={pinnedChrome.includes(zone) ? 'text-emerald-500' : ''} /></button><button type="button" aria-label={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} title={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} onClick={() => setCollapsedChrome(previous => [...previous.filter(item => item !== zone), zone])} className="rounded-lg p-1 hover:bg-emerald-500/20"><X size={12} /></button></div>;
   const workstationRoot = useRef<HTMLElement | null>(null);
@@ -2433,6 +2437,7 @@ export function PdfWorkstationPanel({
             if (order) setReadingOrderItems(order);
             if (isTagged !== undefined) setIsReadingOrderTagged(isTagged);
           }}
+          onReportLoaded={(rep) => setA11yReport(rep.base)}
         />
       )}
 
@@ -2446,6 +2451,7 @@ export function PdfWorkstationPanel({
           if (preview) setPreview({ ...preview, page: p });
         }}
         pageText={
+          a11yReport?.pageTexts?.[String(preview?.page || initialPage || 1)] ||
           inspection?.pages.find(p => p.page === (preview?.page || initialPage || 1))?.text ||
           (typeof document !== 'undefined'
             ? Array.from(document.querySelectorAll('.textLayer span'))
@@ -2454,6 +2460,9 @@ export function PdfWorkstationPanel({
                 .trim()
             : '') ||
           ''
+        }
+        hasUnmappedGlyphs={
+          Boolean(a11yReport?.pageHasUnmapped?.[String(preview?.page || initialPage || 1)])
         }
         docTitle={session?.filename}
         defaultDirection={lang === 'ar' ? 'rtl' : 'ltr'}

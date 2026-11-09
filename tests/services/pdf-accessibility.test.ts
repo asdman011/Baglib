@@ -4,6 +4,7 @@ import {
   buildReflowParagraphs,
   isArabicText,
   selectTtsVoiceForParagraph,
+  sanitizePdfExtractedText,
   type TextBlockItem,
 } from '../../src/shared/pdf-accessibility-utils';
 import { isVeraPdfAvailable } from '../../src/main/services/pdf-editor/accessibility';
@@ -104,6 +105,30 @@ test('KEY-272: PDF Accessibility & Reflow Utilities', async (t) => {
     assert.equal(arResult.hasVoice, false);
     assert.equal(arResult.missingArabicNotice, true);
     assert.equal(arResult.lang, 'ar');
+  });
+
+  await t.test('sanitizePdfExtractedText maps known PUA brackets and drops unmapped PUA glyphs', () => {
+    // String mimicking real Arabic PDF: contains ayah bracket U+F22B, U+F222 and unmapped glyphs U+F241, U+F2C5
+    const raw = 'قال الله عز وجل: \uf22bإنفروا خفافا وثقالا\uf222\n\uf241\uf2c5\uf2bb';
+    const result = sanitizePdfExtractedText(raw);
+
+    assert.equal(result.hasUnmappedGlyphs, true);
+    assert.equal(result.unmappedCount, 3); // 3 unmapped PUA chars dropped
+    // Mapped brackets preserved:
+    assert.equal(result.cleanText, 'قال الله عز وجل: ﴿إنفروا خفافا وثقالا﴾');
+    // Does not contain any PUA characters
+    assert.equal(/[\uE000-\uF8FF]/u.test(result.cleanText), false);
+  });
+
+  await t.test('sanitizePdfExtractedText on page with only unmapped glyphs and whitespace returns empty cleanText', () => {
+    // Like Page 1 of the Arabic text PDF: only unmapped custom font characters
+    const raw = ' \n \n \uf220\uf294\uf2c0\uf2bc\uf26e\uf29d\uf241 \uf2cf\uf279\uf241 \n ';
+    const result = sanitizePdfExtractedText(raw);
+
+    assert.equal(result.hasUnmappedGlyphs, true);
+    assert.equal(result.cleanText, '');
+    const paragraphs = buildReflowParagraphs(raw);
+    assert.equal(paragraphs.length, 0);
   });
 
   await t.test('isVeraPdfAvailable gracefully handles missing java or verapdf paths', () => {

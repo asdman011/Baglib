@@ -65,23 +65,23 @@
 - `CURRENT_TASK.md`
 - `IMPLEMENTATION_PLAN.md`
 
-## KEY-272: Reader Task 6.10: PDF accessibility check and reflowed read-aloud — 2026-11-09, Antigravity (implemented and verified, push pending)
+## KEY-272: Reader Task 6.10: PDF accessibility check and reflowed read-aloud — 2026-11-09, Antigravity (review fixes verified, push pending)
 
 - **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
-- **Status**: Implemented and verified — live verification, static checks, unit test suites (1519/1519 passed), and screenshot evidence captured.
-- **Scope & Implementation**:
-  - Implemented `check_accessibility` in `assets/pdf-editor/engine.py` and `src/main/services/pdf-editor/accessibility.ts`: structural tags, language (`/Lang`), title and `DisplayDocTitle`, missing `/Alt` figure tags, missing `/ToUnicode` CMaps (especially for Arabic PUA glyphs), text layer presence per page (`pagesWithoutText`), reading order extraction, and optional veraPDF PDF/UA-1 execution.
-  - Implemented `fix_accessibility_metadata` (staged output) and `saveAccessibilityFix` adhering strictly to ADR-012 emergency copy rules (creates exactly 1 `.baglib-backup-<uuid>` file upon Save).
-  - Implemented IPC handlers: `pdf-editor:accessibility-check`, `pdf-editor:fix-accessibility`, `pdf-editor:save-accessibility-fix` and exposed in `src/preload/index.ts`.
-  - Implemented `PdfAccessibilityDrawer.tsx`: complete audit drawer, "Set Language" and "Set Title" forms with staged output, Save button, veraPDF PDF/UA-1 execution toggle, and Reading Order overlay toggle.
-  - Implemented `PdfReadingOrderOverlay.tsx`: interactive order badges over document pages.
-  - Implemented `PdfReflowModal.tsx`: distraction-free reflow reading view with font size zoom (12px to 32px), in-text keyword search, sentence-by-sentence TTS audio playback with active sentence highlighting, page navigation, and graceful missing voice notice.
-  - User Decision adhered: Test PC has only English/Japanese voices. When Arabic text is read, reflow view works fully while TTS displays a clear localized notice (`"No Arabic voice is installed on this device"` / `"لا يوجد صوت عربي مثبت على هذا الجهاز"`). Never downloads voices.
-  - All controls are keyboard focusable (`tabIndex={0}`). No horizontal overflow at 480px width.
+- **Status**: Review fixes implemented and verified — Arabic reflow Unicode mapping and PUA sanitization, dedicated empty-page message, unmapped character warning notice, Python test suite (5/5 passed), TypeScript test suite (10/10 passed), translation key parity (2/2 passed), tsc/eslint/tsup/diff-check clean, and live Electron harness passed (Page 2 joined Arabic without boxes in `07-reflow-modal-ar-1280.png` and `09-reflow-modal-ar-480.png`).
+- **Scope & Review Fixes**:
+  - Addressed Claude review of commit `78dea66`:
+    1. Fixed Arabic reflow empty boxes (`□□□`) on decorative fonts lacking `/ToUnicode`: switched text layer extraction in `assets/pdf-editor/engine.py` to `pypdfium2` applying embedded font CMaps with explicit resource closing. Added `PUA_MAP` mapping known Quranic brackets (`0xF22B` -> `﴿`, `0xF222` -> `﴾`) and `sanitizePdfExtractedText` stripping unmapped PUA code points (`src/shared/pdf-accessibility-utils.ts`, `src/renderer/components/reader/PdfReflowModal.tsx`).
+    2. Replaced generic search key with dedicated `pdfA11yNoTextOnPage` ("No readable text on this page" / "لا يوجد نص مقروء في هذه الصفحة") in both languages (`src/renderer/translations.ts`).
+    3. Added `pdfA11yUnmappedWarning` notice when page has unmapped glyphs.
+    4. Extended unit tests in `tests/test_pdf_accessibility.py` (`test_font_without_tounicode_and_pua_glyphs`) and `tests/services/pdf-accessibility.test.ts` (PUA mapping and empty-page sanitization).
+    5. Re-ran live harness on Page 2 real Arabic body text («قال الله عز وجل: ﴿إنفروا خفافا وثقالا...»), capturing clean joined Naskh without boxes in 1280px (`07-reflow-modal-ar-1280.png`) and 480px (`09-reflow-modal-ar-480.png`).
 - **Verification**:
-  - `npm test`: 1519 passed, 0 failed.
+  - `tests/test_pdf_accessibility.py`: 5/5 passed.
+  - `tests/services/pdf-accessibility.test.ts`: 10/10 passed.
+  - `tests/ui/translation-keys.test.ts`: 2/2 passed.
   - `npx tsc --noEmit`: 0 errors.
-  - `npx eslint`: 0 errors.
+  - `npx eslint`: 0 errors on changed files.
   - `npx tsup`: built cleanly.
   - `git diff --check`: clean.
   - Live check: `node scripts/pdf-a11y-live/run.mjs` exited with code 0 across 4 real benchmark files in Arabic and English (`.baglib-data/key272-evidence/` screenshots 01 to 09).
