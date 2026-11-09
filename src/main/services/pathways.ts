@@ -80,6 +80,8 @@ export class PathwayService {
   remove(id: string): void {
     this.assertPathway(id);
     this.db.prepare('DELETE FROM collection WHERE id=?').run(id);
+    this.settings.delete(`pathways.prerequisites.v1:${id}`);
+    this.settings.delete(`pathways.prerequisites.dismissed.v1:${id}`);
   }
 
   addItem(input: PathwayItemInput): PathwayItem {

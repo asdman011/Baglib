@@ -1,3 +1,33 @@
+## KEY-288 — 2026-11-09, Antigravity (implemented and verified; publication pending)
+
+- Implementation & Verification: Study Workspace 10: Curriculum prerequisites and "revisit first" hints.
+  - Stored curriculum prerequisites schema-free in `app_settings` under `pathways.prerequisites.v1:<collectionId>` (section -> list of sections) following ADR-009 precedent.
+  - Implemented graph DFS cycle detection in `detectCycle()` and localized cycle path formatter (`A → B → C → A` in English / `أ ← ب ← ج ← أ` in Arabic). Cycles are rejected immediately on save with localized error banner.
+  - Section rename in `renameSection()` updates prerequisites entries and database collection items atomically; section deletion in `deleteSection()` removes prerequisites map entries and dismissals.
+  - Pathway deletion in `PathwayService.remove()` cleans up prerequisites maps and dismissals.
+  - Implemented weakest prerequisite evaluation in `evaluatePrerequisiteAssessment()` and `selectWeakestPrerequisite()` based deterministically on Khan-style mastery levels (`not_started` < `started` < `familiar` < `proficient` < `mastered`), accuracy, and SRS lapses.
+  - Added non-blocking "Revisit First" hint banner on `TodayStudyPanel.tsx` with 1-click navigation to Pathways and dismiss action.
+  - Dismissals persist in `pathways.prerequisites.dismissed.v1:<collectionId>` and stay quiet until new failures occur on that section (`currentFailureCount > failureCountAtDismissal`).
+  - Added 13 bilingual translation keys in `translations.ts` with 1:1 parity and full coverage.
+  - Real university course PDFs used: `Mathematical Statistics Study Guide.pdf` and `[mid] Econometrics Exam Study Guide - Parts I and II.pdf` from `U:\Cources\الجامعة\السنة الرابعة والأخيرة بإذن الله\الترم الأول\` copied into throwaway profile read-only.
+  - Tests: `tests/services/study-prerequisites.test.ts` (21/21 pass), `tests/ui/translation-keys.test.ts` (2/2 pass), `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors, 0 warnings), `npx tsup` (success). Full test suite: 1579/1579 pass across 319 suites (0 failures, 0 skips).
+  - Live Electron harness (`scripts/prerequisites-live/`): verified in Arabic RTL and English LTR at 1280px and 480px viewports with zero horizontal overflow, cycle rejection banner, and dismissal quiet until new failures. Evidence screenshots in `.baglib-data/key288-evidence/`. Detailed report in `docs/agent-ops/reports/KEY-288.md`.
+- Exact task files:
+  - `src/shared/study-prerequisites.ts`
+  - `src/main/services/study-prerequisites.service.ts`
+  - `src/main/services/pathways.ts` (shared)
+  - `src/main/ipc/pathways.ts` (shared)
+  - `src/preload/index.ts` (shared)
+  - `src/renderer/components/dashboard/TodayStudyPanel.tsx` (shared)
+  - `src/renderer/components/dashboard/PathwaysView.tsx` (shared)
+  - `src/renderer/translations.ts` (shared)
+  - `tests/services/study-prerequisites.test.ts`
+  - `scripts/prerequisites-live/run.mjs`
+  - `scripts/prerequisites-live/main.cjs`
+  - `docs/agent-ops/reports/KEY-288.md`
+  - `CURRENT_TASK.md` (shared)
+  - `IMPLEMENTATION_PLAN.md` (shared)
+
 ## KEY-286 — 2026-11-09, Antigravity (implemented and verified; publication pending)
 
 - Implementation & Verification: Study Workspace 8 Daily Quran wird and muraja'a revision cycle.

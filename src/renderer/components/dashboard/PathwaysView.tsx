@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, ExternalLink, Pin, PinOff, Plus, Route, Sparkles, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, Check, Edit3, ExternalLink, Network, Pin, PinOff, Plus, Route, Sparkles, Trash2, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { StudyLinkPicker } from '../notes/StudyLinkPicker';
@@ -104,6 +104,57 @@ function ItemRow({ item, first, last, onMove, onChange, onOpen, onError }: { ite
 
 function Detail({ pathway, onChange, onRemoved, onError }: { pathway: PathwayDetail; onChange: () => void; onRemoved: () => void; onError: () => void }) {
   const { t, books, openBookForReading, setViewMode } = useWorkspace();
+  const { lang } = useWorkspace();
+  const [prereqMap, setPrereqMap] = useState<Record<string, string[]>>({});
+  const [cycleError, setCycleError] = useState<string | null>(null);
+  const [editingSectionPrereqs, setEditingSectionPrereqs] = useState<string | null>(null);
+  const [renamingSection, setRenamingSection] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    if (pathway.kind === 'curriculum') {
+      window.electronAPI.pathwayPrerequisites?.get?.(pathway.id)
+        .then(res => {
+          if (alive && res) setPrereqMap(res);
+        })
+        .catch(() => {});
+    }
+    return () => { alive = false; };
+  }, [pathway.id, pathway.kind]);
+
+  const handleTogglePrereq = async (secName: string, depName: string) => {
+    const current = prereqMap[secName] || [];
+    const updated = current.includes(depName)
+      ? current.filter(d => d !== depName)
+      : [...current, depName];
+    const nextMap = { ...prereqMap, [secName]: updated };
+    const res = await window.electronAPI.pathwayPrerequisites?.save?.(pathway.id, nextMap);
+    if (res && !res.success && res.cycle) {
+      setCycleError(res.cycle.join(lang === 'ar' ? ' ← ' : ' → '));
+    } else {
+      setCycleError(null);
+      setPrereqMap(nextMap);
+    }
+  };
+
+  const handleRenameSection = async (oldName: string) => {
+    const trimmed = renameDraft.trim();
+    if (!trimmed || trimmed === oldName) {
+      setRenamingSection(null);
+      return;
+    }
+    await window.electronAPI.pathwayPrerequisites?.renameSection?.(pathway.id, oldName, trimmed);
+    setRenamingSection(null);
+    onChange();
+  };
+
+  const handleDeleteSection = async (secName: string) => {
+    if (window.confirm(`${t('pathwayDeleteSection')} "${secName}"?`)) {
+      await window.electronAPI.pathwayPrerequisites?.deleteSection?.(pathway.id, secName);
+      onChange();
+    }
+  };
   const { notes } = useStudyNotes();
   const api = window.electronAPI.pathways;
   const [section, setSection] = useState('');
@@ -155,7 +206,141 @@ function Detail({ pathway, onChange, onRemoved, onError }: { pathway: PathwayDet
     {sections.map(name => {
       const rows = pathway.items.filter(item => item.section === name);
       return <section key={name} className="space-y-2">
-        {name && <h3 dir="auto" className="text-sm font-bold">{name}</h3>}
+        {name && (
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-b border-subtle/40 pb-1.5">
+            {renamingSection === name ? (
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <input
+                  className={`${control} flex-1 py-1 text-xs`}
+                  value={renameDraft}
+                  onChange={e => setRenameDraft(e.target.value)}
+                  placeholder={t('pathwaySectionNewName')}
+                  aria-label={t('pathwaySectionNewName')}
+                  dir="auto"
+                />
+                <button
+                  type="button"
+                  className={button}
+                  onClick={() => void handleRenameSection(name)}
+                >
+                  <Check className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className={button}
+                  onClick={() => setRenamingSection(null)}
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <h3 dir="auto" className="text-sm font-bold">{name}</h3>
+                {pathway.kind === 'curriculum' && (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-[11px] text-muted">
+                      {prereqMap[name]?.length
+                        ? t('pathwayPrereqsDependsOn', { deps: prereqMap[name].join('، ') })
+                        : t('pathwayPrereqsNone')}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs text-pale-sky-600 dark:text-pale-sky-400 hover:underline cursor-pointer flex items-center gap-1"
+                      title={t('pathwayPrereqsLabel')} aria-label={t('pathwayPrereqsLabel')} data-pathway-prereq-edit={name}
+                      onClick={() => {
+                        setCycleError(null);
+                        setEditingSectionPrereqs(editingSectionPrereqs === name ? null : name);
+                      }}
+                    >
+                      <Network className="size-3" />
+                      <span>{t('pathwayPrereqsEdit')}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-1">
+              {renamingSection !== name && (
+                <button
+                  type="button"
+                  className={icon}
+                  title={t('pathwayRenameSection')}
+                  aria-label={t('pathwayRenameSection')}
+                  onClick={() => {
+                    setRenameDraft(name);
+                    setRenamingSection(name);
+                  }}
+                >
+                  <Edit3 className="size-3" />
+                </button>
+              )}
+              <button
+                type="button"
+                className={icon}
+                title={t('pathwayDeleteSection')}
+                aria-label={t('pathwayDeleteSection')}
+                onClick={() => void handleDeleteSection(name)}
+              >
+                <Trash2 className="size-3" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {editingSectionPrereqs === name && (
+          <div
+            data-pathway-prereq-selector={name}
+            className="p-2.5 rounded-lg border border-subtle bg-surface/80 space-y-2 text-xs"
+          >
+            <div className="font-semibold text-muted flex items-center gap-1">
+              <Network className="size-3.5 text-pale-sky-500" />
+              <span>{t('pathwayPrereqsSelect')}</span>
+            </div>
+
+            {cycleError && (
+              <div
+                role="alert"
+                data-pathway-cycle-error
+                className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-semibold p-2 rounded-md bg-rose-500/10 border border-rose-500/20"
+              >
+                <AlertCircle className="size-4 shrink-0" />
+                <span>{t('pathwayPrereqsCycleError', { cycle: cycleError })}</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {sections
+                .filter(s => s && s !== name)
+                .map(candidate => {
+                  const isDep = prereqMap[name]?.includes(candidate);
+                  return (
+                    <label
+                      key={candidate}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border cursor-pointer transition-colors ${
+                        isDep
+                          ? 'border-pale-sky-500 bg-pale-sky-500/15 text-pale-sky-700 dark:text-pale-sky-300 font-semibold'
+                          : 'border-subtle bg-surface hover:border-subtle/80 text-muted'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isDep}
+                        data-pathway-dep-toggle={candidate}
+                        onChange={() => void handleTogglePrereq(name, candidate)}
+                        className="size-3.5 rounded"
+                      />
+                      <span dir="auto">{candidate}</span>
+                    </label>
+                  );
+                })}
+              {sections.filter(s => s && s !== name).length === 0 && (
+                <span className="text-muted italic">{t('pathwayPrereqsNone')}</span>
+              )}
+            </div>
+          </div>
+        )}
+
         <ul className="space-y-1">{rows.map((item, index) => <ItemRow key={item.id} item={item} first={index === 0} last={index === rows.length - 1} onMove={delta => move(item, delta)} onChange={onChange} onOpen={open} onError={onError} />)}</ul>
       </section>;
     })}

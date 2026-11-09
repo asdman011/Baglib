@@ -709,6 +709,34 @@ export const API = {
     removeTemplate: id => ipcRenderer.invoke('pathways:remove-template', id),
     draft: (subject, language) => ipcRenderer.invoke('pathways:draft', subject, language),
   } satisfies import('../shared/pathways').PathwaysAPI,
+  pathwayPrerequisites: {
+    get: (pathwayId: string): Promise<import('../shared/study-prerequisites').PrerequisitesMap> =>
+      ipcRenderer.invoke('pathways:get-prerequisites', pathwayId),
+    save: (
+      pathwayId: string,
+      map: import('../shared/study-prerequisites').PrerequisitesMap
+    ): Promise<{ success: boolean; cycle?: string[]; error?: string }> =>
+      ipcRenderer.invoke('pathways:save-prerequisites', pathwayId, map),
+    renameSection: (pathwayId: string, oldSection: string, newSection: string): Promise<void> =>
+      ipcRenderer.invoke('pathways:rename-section', pathwayId, oldSection, newSection),
+    deleteSection: (pathwayId: string, section: string): Promise<void> =>
+      ipcRenderer.invoke('pathways:delete-section', pathwayId, section),
+    getHints: (): Promise<import('../shared/study-prerequisites').PrerequisiteHint[]> =>
+      ipcRenderer.invoke('pathways:get-prerequisite-hints'),
+    dismissHint: (
+      pathwayId: string,
+      failingSection: string,
+      weakestPrerequisite: string,
+      currentFailureCount: number
+    ): Promise<void> =>
+      ipcRenderer.invoke(
+        'pathways:dismiss-prerequisite-hint',
+        pathwayId,
+        failingSection,
+        weakestPrerequisite,
+        currentFailureCount
+      ),
+  },
   lectures: {
     list: () => ipcRenderer.invoke('lectures:list'),
     add: () => ipcRenderer.invoke('lectures:add'),

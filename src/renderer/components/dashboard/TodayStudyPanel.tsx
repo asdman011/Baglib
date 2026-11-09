@@ -16,12 +16,15 @@ import {
   Layers,
   BookOpen,
   CheckSquare,
+  Compass,
+  RotateCcw,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { calculateHijriDate } from '../../../shared/athan-calculator';
 import { civilDate, addCivilDays } from '../../../shared/study-planner';
 import { navigateStudyReference } from '../../utils/study-navigation';
 import { QuranWirdSettingsModal } from './QuranWirdSettingsModal';
+import type { PrerequisiteHint } from '../../../shared/study-prerequisites';
 import {
   WEEKLY_RHYTHM_SETTINGS_KEY,
   WEEKLY_RHYTHM_CHANGED_EVENT,
@@ -46,6 +49,7 @@ export function TodayStudyPanel() {
   const [swappedIds, setSwappedIds] = useState<string[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isWirdSettingsOpen, setIsWirdSettingsOpen] = useState(false);
+  const [prereqHints, setPrereqHints] = useState<PrerequisiteHint[]>([]);
   const [settingsDraft, setSettingsDraft] = useState<WeeklyRhythmConfig>(DEFAULT_WEEKLY_RHYTHM);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -207,6 +211,13 @@ export function TodayStudyPanel() {
         }
       } catch {}
 
+      try {
+        const hints = await window.electronAPI?.pathwayPrerequisites?.getHints?.();
+        if (alive && Array.isArray(hints)) {
+          setPrereqHints(hints);
+        }
+      } catch {}
+
       if (alive) {
         setCandidates(candidateList);
       }
@@ -306,6 +317,18 @@ export function TodayStudyPanel() {
       const taskId = (step.payload as { taskId?: string })?.taskId;
       await window.electronAPI?.studyWird?.complete?.(todayStr, taskId);
       setCandidates(prev => prev.filter(c => c.id !== step.id));
+    } catch {}
+  };
+
+  const handleDismissPrereqHint = async (hint: PrerequisiteHint) => {
+    try {
+      await window.electronAPI?.pathwayPrerequisites?.dismissHint?.(
+        hint.pathwayId,
+        hint.failingSection,
+        hint.weakestPrerequisite,
+        hint.currentFailureCount
+      );
+      setPrereqHints(prev => prev.filter(h => h.id !== hint.id));
     } catch {}
   };
 
@@ -515,6 +538,73 @@ export function TodayStudyPanel() {
           </div>
         )}
       </div>
+
+      {/* Prerequisite Revisit Hint (Study Workspace 10 / KEY-288) */}
+      {prereqHints.length > 0 && (
+        <div
+          data-today-prereq-hint
+          role="region"
+          aria-label={t('todayPrereqHintTitle', { prerequisite: prereqHints[0].weakestPrerequisite })}
+          className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-surface p-3.5 shadow-xs transition-all space-y-2.5"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                <Compass className="h-4 w-4" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h4 className="text-xs sm:text-sm font-bold text-main flex items-center gap-1.5 flex-wrap">
+                  <span>{t('todayPrereqHintTitle', { prerequisite: prereqHints[0].weakestPrerequisite })}</span>
+                  <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                    {prereqHints[0].pathwayName}
+                  </span>
+                </h4>
+                <p className="text-xs text-muted leading-relaxed">
+                  {t('todayPrereqHintDesc', {
+                    section: prereqHints[0].failingSection,
+                    prerequisite: prereqHints[0].weakestPrerequisite,
+                    pathway: prereqHints[0].pathwayName,
+                  })}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              data-today-prereq-dismiss
+              onClick={() => void handleDismissPrereqHint(prereqHints[0])}
+              title={t('todayPrereqHintDismiss')}
+              aria-label={t('todayPrereqHintDismiss')}
+              className="text-muted hover:text-main p-1 rounded-lg hover:bg-surface/80 cursor-pointer shrink-0 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-amber-500/20 text-xs">
+            <button
+              type="button"
+              data-today-prereq-revisit
+              onClick={() => {
+                setViewMode('pathways');
+              }}
+              className="flex items-center gap-1.5 rounded-lg bg-amber-600 text-white dark:bg-amber-500 dark:text-black font-semibold px-3 py-1.5 hover:opacity-90 cursor-pointer transition-opacity"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>{t('todayPrereqHintRevisit', { prerequisite: prereqHints[0].weakestPrerequisite })}</span>
+            </button>
+
+            <button
+              type="button"
+              data-today-prereq-dismiss-text
+              onClick={() => void handleDismissPrereqHint(prereqHints[0])}
+              className="text-xs text-muted hover:text-main underline cursor-pointer"
+            >
+              {t('todayPrereqHintDismiss')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Suggested 3 Concrete Steps Section */}
       <div className="space-y-3 pt-2 border-t border-subtle/40" data-today-steps-section>

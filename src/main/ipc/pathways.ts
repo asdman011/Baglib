@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electro
 import { writeFile } from 'node:fs/promises';
 import { getDatabase } from '../database/connection';
 import { PathwayService } from '../services/pathways';
+import { StudyPrerequisitesService } from '../services/study-prerequisites.service';
 import { AIResearchService } from '../services/ai/ai-research.service';
 import { AIProviderService } from '../services/ai/ai-provider.service';
 import { buildCurriculumDraftPrompt } from '../../shared/utils/ai-prompts';
@@ -13,6 +14,13 @@ const service = (event: IpcMainInvokeEvent) => {
   const url = new URL(frame.url);
   if (url.username || url.password || !(url.protocol === 'app:' && url.hostname === '-' || url.protocol === 'file:' && !url.hostname || url.origin === 'http://localhost:3000')) throw new Error('invalid-request');
   return new PathwayService(getDatabase());
+};
+const prereqService = (event: IpcMainInvokeEvent) => {
+  const frame = event.senderFrame;
+  if (!frame || frame !== event.sender.mainFrame) throw new Error('invalid-request');
+  const url = new URL(frame.url);
+  if (url.username || url.password || !(url.protocol === 'app:' && url.hostname === '-' || url.protocol === 'file:' && !url.hostname || url.origin === 'http://localhost:3000')) throw new Error('invalid-request');
+  return new StudyPrerequisitesService(getDatabase());
 };
 const shortText = (value: unknown, max: number) => {
   if (typeof value !== 'string' || !value.trim() || value.length > max) throw new Error('invalid-request');
@@ -56,4 +64,37 @@ export function registerPathwayIpc(): void {
     if (!parseOutline(text).length) throw new Error('ai-unavailable');
     return text;
   });
+  ipcMain.handle('pathways:get-prerequisites', (event, id: unknown) =>
+    prereqService(event).getPrerequisites(pathwayId(id))
+  );
+  ipcMain.handle('pathways:save-prerequisites', (event, id: unknown, map: unknown) =>
+    prereqService(event).savePrerequisites(pathwayId(id), map)
+  );
+  ipcMain.handle(
+    'pathways:rename-section',
+    (event, id: unknown, oldSection: unknown, newSection: unknown) =>
+      prereqService(event).renameSection(pathwayId(id), String(oldSection), String(newSection))
+  );
+  ipcMain.handle('pathways:delete-section', (event, id: unknown, section: unknown) =>
+    prereqService(event).deleteSection(pathwayId(id), String(section))
+  );
+  ipcMain.handle('pathways:get-prerequisite-hints', (event) =>
+    prereqService(event).getPrerequisiteHints()
+  );
+  ipcMain.handle(
+    'pathways:dismiss-prerequisite-hint',
+    (
+      event,
+      id: unknown,
+      failingSection: unknown,
+      weakestPrerequisite: unknown,
+      currentFailureCount: unknown
+    ) =>
+      prereqService(event).dismissHint(
+        pathwayId(id),
+        String(failingSection),
+        String(weakestPrerequisite),
+        Number(currentFailureCount) || 0
+      )
+  );
 }
