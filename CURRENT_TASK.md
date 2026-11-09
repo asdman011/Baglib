@@ -1,3 +1,31 @@
+## KEY-286 — 2026-11-09, Antigravity (implemented and verified; publication pending)
+
+- Implementation & Verification: Study Workspace 8 Daily Quran wird and muraja'a revision cycle.
+  - Implemented `study.wird.v1` in settings store with validated and bounded parameters: profile (`hafs` or `warsh`), unit (`pages`, `ayahs`, `juz`), daily amount, starting position, revision rotation (muraja'a), and active weekdays.
+  - Portions link to or create a `study_task` (ADR-007) whose `references_json` holds the `quran:` range (`quran:hafs:S:A[-B]` or `quran:warsh:S:A[-B]`). Completing in Planner, Today panel or Quran view performs the same write and advances the wird.
+  - Wird step appears on Today panel with highest priority, showing portion range, revision details, and guilt-free catch-up notes.
+  - Missed portions roll into ONE consolidated catch-up suggestion without accumulating overdue tasks or using guilt wording.
+  - Page units require installed Mushaf layout data for the chosen profile; missing layout returns a typed error (`missing-layout`) and UI displays a warning banner prompting the user to select ayahs or juz units.
+  - Canonical text is preserved; Warsh uses installed Warsh data and counts (6214 ayahs), never substituting Hafs.
+  - Real files: PDFs/EPUBs in `tests/real-files/` not applicable for this Quran task; real Quran packs from `%APPDATA%/baglib/quran` were safely copied into throwaway profile using `scripts/lib/corpus-copy.mjs` and accessed read-only.
+  - Tests: `tests/services/quran-wird.test.ts` (12/12 pass), `tests/ui/translation-keys.test.ts` (2/2 pass), `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors, 0 warnings), `npx tsup` (success). Full test suite: 1558/1558 pass (312 suites, 0 failures, 0 skips).
+  - Live Electron harness (`scripts/quran-wird-live/`): verified in Arabic RTL and English LTR at 1280px and 480px viewports (0 horizontal overflow, one-click open into Quran reader at portion start). Evidence screenshots copied to `.baglib-data/key286-evidence/`.
+- Exact task files:
+  - `src/shared/quran-wird.ts`
+  - `src/main/services/quran-wird.service.ts`
+  - `src/renderer/components/dashboard/QuranWirdSettingsModal.tsx`
+  - `src/renderer/components/dashboard/TodayStudyPanel.tsx` (shared)
+  - `src/main/ipc/study-planner.ts` (shared)
+  - `src/preload/index.ts` (shared)
+  - `src/shared/study-rhythm.ts` (shared)
+  - `src/renderer/translations.ts` (shared)
+  - `tests/services/quran-wird.test.ts`
+  - `scripts/quran-wird-live/run.mjs`
+  - `scripts/quran-wird-live/main.cjs`
+  - `docs/agent-ops/reports/KEY-286.md`
+  - `CURRENT_TASK.md` (shared)
+  - `IMPLEMENTATION_PLAN.md` (shared)
+
 ## KEY-284 — 2026-11-09, Antigravity (implemented and verified; publication pending)
 
 - Implementation & Verification: Study Workspace 6 Progress view — reading, demonstrated knowledge and reviews due kept separate.

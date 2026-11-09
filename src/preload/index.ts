@@ -745,6 +745,13 @@ export const API = {
     progressTargets: () => ipcRenderer.invoke('study-planner:progress-targets'),
     progressSummary: (targetKind, targetId) => ipcRenderer.invoke('study-planner:progress-summary', targetKind, targetId),
   } satisfies import('../shared/study-insights').StudyInsightsAPI,
+  studyWird: {
+    getConfig: (): Promise<import('../shared/quran-wird').QuranWirdConfig> => ipcRenderer.invoke('study-planner:wird-get-config'),
+    saveConfig: (input: unknown): Promise<import('../shared/quran-wird').QuranWirdConfig> => ipcRenderer.invoke('study-planner:wird-save-config', input),
+    syncToday: (todayStr: string): Promise<import('../shared/quran-wird').TodayWirdSyncResult> => ipcRenderer.invoke('study-planner:wird-sync-today', todayStr),
+    complete: (todayStr: string, taskId?: string): Promise<import('../shared/quran-wird').TodayWirdSyncResult> => ipcRenderer.invoke('study-planner:wird-complete', todayStr, taskId),
+    hasLayout: (profile: import('../shared/quran-wird').QuranWirdProfile): Promise<boolean> => ipcRenderer.invoke('study-planner:wird-has-layout', profile),
+  },
   knowledgeCards: {
     decks: () => ipcRenderer.invoke('knowledge-cards:decks'),
     generateDeck: input => ipcRenderer.invoke('knowledge-cards:generate-deck', input),

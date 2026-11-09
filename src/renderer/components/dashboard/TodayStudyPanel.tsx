@@ -21,6 +21,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { calculateHijriDate } from '../../../shared/athan-calculator';
 import { civilDate, addCivilDays } from '../../../shared/study-planner';
 import { navigateStudyReference } from '../../utils/study-navigation';
+import { QuranWirdSettingsModal } from './QuranWirdSettingsModal';
 import {
   WEEKLY_RHYTHM_SETTINGS_KEY,
   WEEKLY_RHYTHM_CHANGED_EVENT,
@@ -44,6 +45,7 @@ export function TodayStudyPanel() {
   const [skippedIds, setSkippedIds] = useState<string[]>([]);
   const [swappedIds, setSwappedIds] = useState<string[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isWirdSettingsOpen, setIsWirdSettingsOpen] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState<WeeklyRhythmConfig>(DEFAULT_WEEKLY_RHYTHM);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -165,6 +167,46 @@ export function TodayStudyPanel() {
         }
       } catch {}
 
+      // 5. Daily Quran Wird and Muraja'a (Study Workspace Task 8 / KEY-286)
+      try {
+        const wirdSync = await window.electronAPI?.studyWird?.syncToday?.(todayStr);
+        if (alive && wirdSync && wirdSync.isActiveToday && !wirdSync.isCompletedToday) {
+          if (wirdSync.taskId) {
+            const idx = candidateList.findIndex(
+              c => c.payload && typeof c.payload === 'object' && (c.payload as { taskId?: string }).taskId === wirdSync.taskId
+            );
+            if (idx >= 0) candidateList.splice(idx, 1);
+          }
+          const qIdx = candidateList.findIndex(c => c.target?.startsWith(`quran:${wirdSync.config.profile}:`));
+          if (qIdx >= 0) candidateList.splice(qIdx, 1);
+
+          let subtitle = t('todayWirdStepSubtitle');
+          if (wirdSync.catchUp?.needed) {
+            subtitle = `${t('quranWirdCatchUpSuggestion')} (${wirdSync.catchUp.label})`;
+          } else if (wirdSync.murajaaPortion) {
+            subtitle = `${t('quranMurajaaLabel', { portion: wirdSync.murajaaPortion.label })} • ${subtitle}`;
+          }
+
+          candidateList.unshift({
+            id: `wird:${todayStr}`,
+            kind: 'wird',
+            title: t('todayWirdStepTitle', { portion: wirdSync.portion.label }),
+            subtitle,
+            dueDate: todayStr,
+            priority: 3, // High priority ensuring it is always one of Today's steps
+            createdAt: new Date().toISOString(),
+            target: wirdSync.portion.primaryTarget,
+            payload: {
+              wird: true,
+              taskId: wirdSync.taskId,
+              portion: wirdSync.portion,
+              catchUp: wirdSync.catchUp,
+              murajaaPortion: wirdSync.murajaaPortion,
+            },
+          });
+        }
+      } catch {}
+
       if (alive) {
         setCandidates(candidateList);
       }
@@ -229,6 +271,18 @@ export function TodayStudyPanel() {
 
   const handleOpenStep = async (step: TodayCandidateStep) => {
     if (!step.target) return;
+    if (step.kind === 'wird' || step.target.startsWith('quran:')) {
+      setViewMode('quran');
+      try {
+        await navigateStudyReference(
+          step.target,
+          books,
+          openBookForReading,
+          () => setViewMode('notes')
+        );
+      } catch {}
+      return;
+    }
     if (step.target.startsWith('book:') || step.target.startsWith('note:')) {
       try {
         await navigateStudyReference(
@@ -245,6 +299,14 @@ export function TodayStudyPanel() {
     } else if (step.kind === 'pathway') {
       setViewMode('pathways');
     }
+  };
+
+  const handleCompleteWird = async (step: TodayCandidateStep) => {
+    try {
+      const taskId = (step.payload as { taskId?: string })?.taskId;
+      await window.electronAPI?.studyWird?.complete?.(todayStr, taskId);
+      setCandidates(prev => prev.filter(c => c.id !== step.id));
+    } catch {}
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -322,17 +384,31 @@ export function TodayStudyPanel() {
           </div>
         </div>
 
-        <button
-          type="button"
-          data-today-settings-button
-          onClick={() => setIsSettingsOpen(true)}
-          title={t('todayRhythmSettings')}
-          aria-label={t('todayRhythmSettings')}
-          className="flex items-center gap-1.5 rounded-xl border border-subtle bg-surface px-3 py-1.5 text-xs text-muted hover:text-main hover:bg-surface/90 cursor-pointer transition-all shrink-0"
-        >
-          <Settings className="h-3.5 w-3.5" />
-          <span>{t('todayRhythmSettings')}</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            data-today-wird-settings-button
+            onClick={() => setIsWirdSettingsOpen(true)}
+            title={t('quranWirdSettingsButton')}
+            aria-label={t('quranWirdSettingsButton')}
+            className="flex items-center gap-1.5 rounded-xl border border-subtle bg-surface px-3 py-1.5 text-xs text-muted hover:text-main hover:bg-surface/90 cursor-pointer transition-all"
+          >
+            <BookOpen className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>{t('quranWirdSettingsButton')}</span>
+          </button>
+
+          <button
+            type="button"
+            data-today-settings-button
+            onClick={() => setIsSettingsOpen(true)}
+            title={t('todayRhythmSettings')}
+            aria-label={t('todayRhythmSettings')}
+            className="flex items-center gap-1.5 rounded-xl border border-subtle bg-surface px-3 py-1.5 text-xs text-muted hover:text-main hover:bg-surface/90 cursor-pointer transition-all"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            <span>{t('todayRhythmSettings')}</span>
+          </button>
+        </div>
       </div>
 
       {/* Weekly Rhythm Section */}
@@ -472,6 +548,9 @@ export function TodayStudyPanel() {
               } else if (step.kind === 'pathway') {
                 kindIcon = <BookOpen className="h-3.5 w-3.5 text-emerald-500" />;
                 kindLabel = t('todayStepPathway');
+              } else if (step.kind === 'wird') {
+                kindIcon = <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />;
+                kindLabel = t('todayStepWird');
               }
 
               return (
@@ -510,7 +589,7 @@ export function TodayStudyPanel() {
                     )}
                   </div>
 
-                  {/* Actions: Start, Swap, Skip for today */}
+                  {/* Actions: Start, Complete (if wird), Swap, Skip for today */}
                   <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-subtle/30 text-xs">
                     <button
                       type="button"
@@ -521,6 +600,19 @@ export function TodayStudyPanel() {
                       <Play className="h-3 w-3 fill-current" />
                       <span>{t('todayStepOpen')}</span>
                     </button>
+
+                    {step.kind === 'wird' && (
+                      <button
+                        type="button"
+                        data-today-wird-complete
+                        onClick={() => void handleCompleteWird(step)}
+                        title={t('quranWirdMarkComplete')}
+                        aria-label={t('quranWirdMarkComplete')}
+                        className="flex items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 cursor-pointer transition-all"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -711,6 +803,16 @@ export function TodayStudyPanel() {
           </div>
         </div>
       )}
+
+      {/* Quran Wird Settings Modal */}
+      <QuranWirdSettingsModal
+        isOpen={isWirdSettingsOpen}
+        onClose={() => setIsWirdSettingsOpen(false)}
+        onSaved={() => {
+          // Trigger reload of settings and candidate steps
+          window.dispatchEvent(new CustomEvent(WEEKLY_RHYTHM_CHANGED_EVENT));
+        }}
+      />
     </section>
   );
 }

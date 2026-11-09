@@ -266,7 +266,7 @@ export function evaluateWeeklyRhythm(
 // Today Panel Step Selection (Up to 3 concrete steps, swap, skip)
 // -----------------------------------------------------------------------------
 
-export type TodayStepKind = 'planner' | 'srs' | 'pathway';
+export type TodayStepKind = 'planner' | 'srs' | 'pathway' | 'wird';
 
 export interface TodayCandidateStep {
   id: string;
