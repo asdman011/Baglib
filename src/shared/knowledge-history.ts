@@ -19,12 +19,12 @@ export interface HistoryAPI {
   saveReflection(input:ReflectionInput):Promise<void>;
   addAction(id:string,title:string):Promise<void>;
   addQuote(id:string,text:string):Promise<void>;
-  addComment(id:string,text:string,options?:{parentId?:string;anchor?:import('./comment-threads').CommentAnchor}):Promise<string>;
+  addComment(id:string,text:string,options?:{parentId?:string;anchor?:import('./comment-threads').CommentAnchor;actor?:'reader'}):Promise<string>;
   comments(id:string):Promise<import('./comment-threads').CommentThread[]>;
   commentCounts():Promise<Record<string,number>>;
   /** Open and total comment threads per item. */
   commentTotals():Promise<Record<string,{open:number;total:number}>>;
-  editComment(commentId:string,text:string):Promise<void>;
-  resolveComment(commentId:string,resolved:boolean):Promise<void>;
-  removeComment(commentId:string):Promise<void>;
+  editComment(commentId:string,text:string,actor?:'reader'):Promise<void>;
+  resolveComment(commentId:string,resolved:boolean,actor?:'reader'):Promise<void>;
+  removeComment(commentId:string,actor?:'reader'):Promise<void>;
 }

@@ -37,13 +37,13 @@ export function PdfMarkPopover({ item, at, onClose, onSaved, onDeleted, onThread
     setFailed(false);
     try {
       const next = { ...mark, ...(patch.color ? { color: patch.color } : {}) };
-      const saved: KnowledgeItemDTO = await window.electronAPI.knowledge.save({ id: item.id, workId: item.workId, type: 'note', location: shapeLocation(next), noteContent: patch.text ?? item.noteContent ?? '' });
+      const saved: KnowledgeItemDTO = await window.electronAPI.knowledge.save({ actor: 'reader', id: item.id, workId: item.workId, type: 'note', location: shapeLocation(next), noteContent: patch.text ?? item.noteContent ?? '' });
       onSaved(saved);
     } catch { setFailed(true); }
   };
   const remove = async () => {
     if (!window.confirm(t('markDeleteConfirm'))) return;
-    try { await window.electronAPI.knowledge.delete(item.id); onDeleted(item.id); } catch { setFailed(true); }
+    try { await window.electronAPI.knowledge.delete(item.id, 'reader'); onDeleted(item.id); } catch { setFailed(true); }
   };
   // Kept inside the window: opens beside the click, flipped when it would leave the screen.
   const width = 320;
@@ -62,7 +62,7 @@ export function PdfMarkPopover({ item, at, onClose, onSaved, onDeleted, onThread
       <button type="button" data-mark-delete onClick={() => void remove()} className="ms-auto inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 text-xs text-red-600"><Trash2 size={12} />{t('delete')}</button>
     </div>
     {mark.shape === 'pin'
-      ? <CommentThreads id={item.id} onChanged={onThreadsChanged} />
+      ? <CommentThreads actor="reader" id={item.id} onChanged={onThreadsChanged} />
       : <form onSubmit={event => { event.preventDefault(); void save({ text }); }} className="space-y-2">
         <textarea data-mark-text dir="auto" autoFocus={mark.shape === 'text'} value={text} maxLength={4000} onChange={event => setText(event.target.value)} placeholder={t(mark.shape === 'text' ? 'markTextPlaceholder' : 'markNotePlaceholder')}
           className="block min-h-20 w-full rounded-lg border border-subtle bg-canvas p-2 text-sm leading-relaxed" />

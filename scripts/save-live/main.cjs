@@ -18,7 +18,7 @@ const sha = file => crypto.createHash('sha256').update(fs.readFileSync(file)).di
 const emergency = () => fs.existsSync(backups) ? fs.readdirSync(backups) : [];
 let exported = 0;
 dialog.showSaveDialog = async () => ({ canceled: false, filePath: path.join(directory, `export-${++exported}.pdf`) });
-const labels = { ar: { library: 'المكتبة', read: 'قراءة', settings: 'الإعدادات', back: 'العودة إلى المكتبة' }, en: { library: 'Library', read: 'Read', settings: 'Settings', back: 'Back to Library' } };
+const labels = { ar: { library: 'المكتبة', read: 'قراءة', settings: 'الإعدادات', back: 'العودة للمكتبة' }, en: { library: 'Library', read: 'Read', settings: 'Settings', back: 'Back to Library' } };
 let started = false;
 app.on('browser-window-created', (_, owner) => {
   if (started) return; started = true;
@@ -55,6 +55,153 @@ app.on('browser-window-created', (_, owner) => {
   const marks = () => evaluate("window.electronAPI.knowledge.getByWork('save-work').then(items=>items.length)");
   const results = {};
   const record = (name, value) => { results[name] = value; console.log(JSON.stringify({ [name]: value })); };
+
+  // KEY-269 native check exercises real reader actor metadata and cross-view scope filtering.
+  const undoCheck = async () => {
+    const language = phase === 'first' ? 'en' : 'ar';
+    await load(language);
+    owner.show(); owner.focus(); owner.webContents.focus();
+    if (phase === 'first') {
+      await evaluate(`window.electronAPI.addBook({id:'save-work',title:'علم — Save',author:'',workType:'book',bookType:'digital',digitalFormat:'PDF',filePath:${JSON.stringify(book)}})`);
+      await load(language);
+    }
+    await policy('manual');
+    await nav(labels[language].settings);
+    await until("!!document.querySelector('[data-undo-scope=book]')");
+    const expectedScope = phase === 'first' ? 'book' : 'reader';
+    await until(`document.querySelector('[data-undo-scope="${expectedScope}"]').checked && !document.querySelector('[data-undo-scope="${expectedScope}"]').disabled`);
+    record('scopeAfterLaunch', expectedScope);
+    for (const lang of ['en', 'ar']) {
+      await load(lang); await nav(labels[lang].settings);
+      await until("!!document.querySelector('[data-info-tip=undoScopeTitle]')");
+      for (const width of [1280, 480]) {
+        owner.setContentSize(width, 900);
+        owner.show(); owner.focus(); owner.webContents.focus(); await pause(300);
+        await evaluate("document.querySelector('[data-info-tip=undoScopeTitle]').scrollIntoView({block:'center'});document.querySelector('[data-info-tip=undoScopeTitle]').focus();document.querySelector('[data-info-tip=undoScopeTitle]').click()");
+        await until("!!document.querySelector('[data-info-tip-text]')");
+        const layout = await evaluate("(()=>{const t=document.querySelector('[data-info-tip-text]');const r=t.getBoundingClientRect();return {inside:r.left>=0&&r.right<=innerWidth,dir:getComputedStyle(t).direction,text:t.textContent};})()");
+        assert.equal(layout.inside, true); assert.equal(layout.dir, lang === 'ar' ? 'rtl' : 'ltr');
+        assert.ok(!layout.text.includes('???'));
+        await shot('undo-settings-' + phase + '-' + lang + '-' + width);
+        await key('Escape');
+        await evaluate("document.querySelector('[data-info-tip=undoScopeTitle]').blur()");
+      }
+    }
+    await load(language);
+    await evaluate("window.electronAPI.settings.set('undo.scope.v1','book')");
+    await openBook(language);
+    const starting = await marks();
+    // A is undone, C replaces its branch. A must remain discarded after undo C and redo C.
+    await tool('highlight'); await selectSpan(0); await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.length===${starting + 1})`);
+    await key('z', {ctrl:true}); await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.length===${starting})`);
+    await tool('highlight'); await selectSpan(1); await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.length===${starting + 1})`);
+    await key('z', {ctrl:true}); await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.length===${starting})`);
+    await key('z', {ctrl:true,shift:true}); await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.length===${starting + 1})`);
+    await pause(300); await key('z', {ctrl:true,shift:true});
+    await pause(300);
+    assert.equal(await marks(), starting + 1);
+    const notice = language === 'ar' ? 'لا شيء لإعادته' : 'Nothing to redo';
+    await until(`document.body.innerText.includes(${JSON.stringify(notice)})`, 20, 100);
+    record('branch-' + language, { marks: await marks(), notice });
+    await shot('undo-branch-' + language);
+    assert.equal((await evaluate("window.electronAPI.materialSave.redo('save-work')")).error, 'nothing-to-redo');
+    await waitState('recorded');
+    await key('s', {ctrl:true}); await waitState('saved');
+    assert.equal(inspect(book).outside, 1);
+    // A real Notes-screen edit, including promotion of a book note to study_note.
+    const id = 'notes-' + phase;
+    await evaluate(`window.electronAPI.knowledge.save({id:'${id}',workId:'save-work',type:'note',location:'1',noteContent:'Original — أصل'})`);
+    await evaluate("window.dispatchEvent(new Event('baglib:study-note-open'))");
+    await until(`!!document.querySelector('[data-study-note="${id}"]')`);
+    await evaluate(`document.querySelector('[data-study-note="${id}"] button[aria-label="${language === 'ar' ? 'تحرير الملاحظة' : 'Edit note'}"]').click()`);
+    await until("!!document.querySelector('[data-scratchpad-save]:not(:disabled)') && !!document.querySelector('.cm-content')");
+    await evaluate("document.querySelector('.cm-content').focus()");
+    owner.webContents.sendInputEvent({type:'keyDown',keyCode:'A',modifiers:['control']});
+    owner.webContents.sendInputEvent({type:'keyUp',keyCode:'A',modifiers:['control']});
+    owner.webContents.insertText('Edited — عِلْمٌ');
+    await pause(300);
+    await evaluate("document.querySelector('[data-scratchpad-save]').click()");
+    await until("!document.querySelector('[data-scratchpad-save]')");
+    await openBook(language);
+    await evaluate("document.activeElement?.blur()");
+    await key('z',{ctrl:true});
+    await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.find(r=>r.id==='${id}')?.noteContent==='Original — أصل')`);
+    await shot('undo-notes-' + language);
+    await key('z',{ctrl:true,shift:true});
+    await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.find(r=>r.id==='${id}')?.noteContent==='Edited — عِلْمٌ')`);
+    await waitState('recorded');
+    await key('s',{ctrl:true}); await waitState('saved');
+    assert.equal(inspect(book).outside,1);
+    const names=inspect(book).names; assert.equal(new Set(names).size,names.length);
+    await evaluate("window.electronAPI.settings.set('undo.scope.v1','reader')");
+    const beforeReaderUndo = await marks();
+    const writtenBeforeReaderUndo = owned();
+    await evaluate("document.activeElement?.blur()");
+    await key('z', {ctrl:true});
+    await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.length===${beforeReaderUndo - 1})`);
+    const readerOrigin = language === 'ar' ? 'من القارئ' : 'from Reader';
+    await until(`document.body.innerText.includes(${JSON.stringify(readerOrigin)})`,20,100);
+    assert.equal(await evaluate(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.find(r=>r.id==='${id}')?.noteContent)`), 'Edited — عِلْمٌ', 'reader scope skips the newer Notes-screen edit');
+    await shot('undo-reader-scope-' + language);
+    await waitState('recorded');
+    await key('s', {ctrl:true}); await waitState('saved');
+    await waitOwned(writtenBeforeReaderUndo - 1);
+    await waitState('saved');
+    const afterUndo = inspect(book);
+    assert.equal(afterUndo.outside, 1);
+    assert.equal(new Set(afterUndo.names).size, afterUndo.names.length);
+    await key('z', {ctrl:true,shift:true});
+    await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.length===${beforeReaderUndo})`);
+    await waitState('recorded');
+    await key('s', {ctrl:true}); await waitState('saved');
+    await waitOwned(writtenBeforeReaderUndo);
+    await waitState('saved');
+    const afterRedo = inspect(book);
+    assert.equal(afterRedo.owned, afterUndo.owned + 1);
+    assert.equal(afterRedo.outside, 1);
+    assert.equal(new Set(afterRedo.names).size, afterRedo.names.length);
+    record('readerScope-' + language, {taggedReaderUndone:true, notesEditPreserved:true, ownedAfterUndo:afterUndo.owned, ownedAfterRedo:afterRedo.owned, outside:afterRedo.outside});
+    // The reader pin uses the shared comment UI; Undo must remove its comment, keeping the pin.
+    const beforePin = await marks();
+    await until("document.querySelectorAll('.textLayer span').length>0");
+    await tool('comment');
+    const pinPoint = await pagePoint(0.7,0.6);
+    mouse('mouseDown',pinPoint); mouse('mouseUp',pinPoint);
+    await until("!!document.querySelector('[data-pdf-mark-popover=pin] [data-comment-new]')");
+    const pinId = await evaluate("document.querySelector('[data-pdf-mark-popover=pin] [data-comment-threads]').dataset.commentThreads");
+    await evaluate("document.querySelector('[data-pdf-mark-popover=pin] [data-comment-new]').focus()");
+    owner.webContents.insertText('Reader comment — تعليقٌ');
+    await until("!!document.querySelector('[data-pdf-mark-popover=pin] [data-comment-add]:not(:disabled)')");
+    await evaluate("document.querySelector('[data-pdf-mark-popover=pin] [data-comment-add]').click()");
+    await until(`window.electronAPI.knowledgeHistory.comments('${pinId}').then(rows=>rows.length===1)`);
+    await evaluate("document.querySelector('[data-pdf-mark-popover=pin] header button').click();document.activeElement?.blur()");
+    await key('z',{ctrl:true});
+    await until(`window.electronAPI.knowledgeHistory.comments('${pinId}').then(rows=>rows.length===0)`);
+    assert.equal(await marks(),beforePin+1,'undo comment keeps its reader pin');
+    await key('z',{ctrl:true,shift:true});
+    await until(`window.electronAPI.knowledgeHistory.comments('${pinId}').then(rows=>rows.length===1)`);
+    await evaluate(`window.electronAPI.knowledge.delete('${pinId}','reader')`);
+    assert.equal(await marks(),beforePin);
+    await key('z',{ctrl:true});
+    await until(`window.electronAPI.knowledge.getByWork('save-work').then(rows=>rows.some(row=>row.id==='${pinId}'))`);
+    assert.equal((await evaluate(`window.electronAPI.knowledgeHistory.comments('${pinId}')`)).length,1);
+    await waitState('recorded');
+    await key('s',{ctrl:true}); await waitState('saved');
+    assert.equal(inspect(book).outside,1);
+    record('readerCommentDelete-' + language,{commentUndoRedo:true,deleteUndo:true});
+    await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(labels[language].back)}]').click()`);
+    await until("!document.querySelector('[data-pdf-save-state]')");
+    await nav(labels[language].settings);
+    await until("!!document.querySelector('[data-undo-scope=book]')");
+    await evaluate("document.querySelector('[data-undo-scope=book]').click()");
+    await until("window.electronAPI.settings.get('undo.scope.v1').then(value=>value==='book')");
+    await until("!document.querySelector('[data-undo-scope=reader]').disabled");
+    await evaluate("document.querySelector('[data-undo-scope=reader]').click()");
+    await until("window.electronAPI.settings.get('undo.scope.v1').then(value=>value==='reader')");
+    const expected=inspect(book).owned;
+    fs.writeFileSync(path.join(directory,'results-' + phase + '.json'),JSON.stringify({...results,expectFinalOwned:expected},null,2));
+    assertAll(); owner.close();
+  };
 
   const lifecycle = async () => {
     await load('en');
@@ -244,7 +391,7 @@ app.on('browser-window-created', (_, owner) => {
   const assertAll = () => {
     const errors = consoleLines.filter(line => /uncaught|error/iu.test(line) && !/Electron Security Warning/u.test(line));
     assert.deepEqual(errors, []);
-    if (phase === 'restart') {
+    if (phase === 'restart' && !process.env.BAGLIB_SAVE_UNDO_ONLY) {
       assert.deepEqual(results.redoAfterRestart.owned, 3);
       assert.equal(results.intervalWaits.unchangedAfter5s, true);
       assert.equal(results.intervalWrote, 4);
@@ -260,6 +407,7 @@ app.on('browser-window-created', (_, owner) => {
   };
 
   (async () => {
+    if (process.env.BAGLIB_SAVE_UNDO_ONLY) { await undoCheck(); return; }
     if (process.env.BAGLIB_SAVE_QUIT_ONLY) { await lifecycle(); return; }
     if (phase === 'first') {
       await first();

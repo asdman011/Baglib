@@ -19,7 +19,7 @@ function anchorLabel(anchor: CommentAnchor | null, t: (key: TranslationKey, para
 }
 
 /** Threaded comments on one knowledge item: reply, resolve, reopen, edit, delete, with open/resolved filters (ADR-010). */
-export function CommentThreads({ id, onChanged }: { id: string; onChanged: () => void }) {
+export function CommentThreads({ id, onChanged, actor }: { id: string; onChanged: () => void; actor?: 'reader' }) {
   const { t, lang } = useWorkspace();
   const [threads, setThreads] = useState<CommentThread[]>([]);
   const [filter, setFilter] = useState<CommentFilter>('open');
@@ -50,14 +50,14 @@ export function CommentThreads({ id, onChanged }: { id: string; onChanged: () =>
     <div className="flex gap-2"><button type="button" disabled={busy || !text.trim()} onClick={onSubmit} className="rounded border border-subtle px-2 py-1 disabled:opacity-40">{t(label)}</button><button type="button" onClick={() => { setReplyTo(null); setEditing(null); setText(''); }} className="px-2 py-1 text-muted">{t('cancel')}</button></div>
   </div>;
   const body = (entryId: string, content: string, edited: boolean, createdAt: string) => editing === entryId
-    ? editor(() => void run(() => api().editComment(entryId, text)), 'commentsSaveEdit')
+    ? editor(() => void run(() => api().editComment(entryId, text, actor)), 'commentsSaveEdit')
     : <>
       <p dir="auto" className="whitespace-pre-wrap break-words leading-loose">{content}</p>
       <p className="text-[11px] text-muted">{when(createdAt)}{edited ? ` · ${t('commentsEdited')}` : ''}</p>
     </>;
   const actions = (entryId: string, content: string) => <>
     <button type="button" aria-label={t('commentsEdit')} title={t('commentsEdit')} onClick={() => { setEditing(entryId); setReplyTo(null); setText(content); }} className="p-1 rounded hover:bg-canvas"><Pencil size={13} /></button>
-    <button type="button" aria-label={t('commentsDelete')} title={t('commentsDelete')} onClick={() => { if (window.confirm(t('commentsDeleteConfirm'))) void run(() => api().removeComment(entryId)); }} className="p-1 rounded hover:bg-canvas"><Trash2 size={13} /></button>
+    <button type="button" aria-label={t('commentsDelete')} title={t('commentsDelete')} onClick={() => { if (window.confirm(t('commentsDeleteConfirm'))) void run(() => api().removeComment(entryId, actor)); }} className="p-1 rounded hover:bg-canvas"><Trash2 size={13} /></button>
   </>;
   return <section data-comment-threads={id} aria-label={t('commentsTitle')} className="space-y-2">
     <header className="flex flex-wrap items-center gap-2">
@@ -78,7 +78,7 @@ export function CommentThreads({ id, onChanged }: { id: string; onChanged: () =>
             {body(thread.id, thread.content, thread.edited, thread.createdAt)}
           </div>
           <div className="flex shrink-0 items-center">
-            <button type="button" data-comment-resolve aria-label={t(thread.resolvedAt ? 'commentsReopen' : 'commentsResolve')} title={t(thread.resolvedAt ? 'commentsReopen' : 'commentsResolve')} onClick={() => void run(() => api().resolveComment(thread.id, !thread.resolvedAt))} className="p-1 rounded hover:bg-canvas">{thread.resolvedAt ? <RotateCcw size={13} /> : <CheckCircle2 size={13} />}</button>
+            <button type="button" data-comment-resolve aria-label={t(thread.resolvedAt ? 'commentsReopen' : 'commentsResolve')} title={t(thread.resolvedAt ? 'commentsReopen' : 'commentsResolve')} onClick={() => void run(() => api().resolveComment(thread.id, !thread.resolvedAt, actor))} className="p-1 rounded hover:bg-canvas">{thread.resolvedAt ? <RotateCcw size={13} /> : <CheckCircle2 size={13} />}</button>
             {actions(thread.id, thread.content)}
           </div>
         </div>
@@ -86,11 +86,11 @@ export function CommentThreads({ id, onChanged }: { id: string; onChanged: () =>
           {thread.replies.map(reply => <li key={reply.id} data-comment-reply={reply.id} className="flex items-start gap-2"><div className="min-w-0 flex-1">{body(reply.id, reply.content, reply.edited, reply.createdAt)}</div><div className="flex shrink-0">{actions(reply.id, reply.content)}</div></li>)}
         </ul>}
         {replyTo === thread.id
-          ? editor(() => void run(() => api().addComment(id, text, { parentId: thread.id })), 'commentsReply')
+          ? editor(() => void run(() => api().addComment(id, text, { parentId: thread.id, actor })), 'commentsReply')
           : <button type="button" data-comment-reply-button onClick={() => { setReplyTo(thread.id); setEditing(null); setText(''); }} className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-main"><CornerDownLeft size={12} className="rtl:-scale-x-100" aria-hidden="true" />{t('commentsReply')}</button>}
       </li>)}
     </ul>
     <label className="block">{t('commentsNew')}<textarea rows={2} dir="auto" data-comment-new value={draft} onChange={event => setDraft(event.target.value)} className="w-full bg-canvas border border-subtle p-2 rounded leading-loose" /></label>
-    <button type="button" data-comment-add disabled={busy || !draft.trim()} onClick={() => void run(async () => { await api().addComment(id, draft); setDraft(''); setFilter(current => current === 'resolved' ? 'open' : current); })} className="rounded border border-subtle px-2 py-1 disabled:opacity-40">{t('waveSaveComment')}</button>
+    <button type="button" data-comment-add disabled={busy || !draft.trim()} onClick={() => void run(async () => { await api().addComment(id, draft, { actor }); setDraft(''); setFilter(current => current === 'resolved' ? 'open' : current); })} className="rounded border border-subtle px-2 py-1 disabled:opacity-40">{t('waveSaveComment')}</button>
   </section>;
 }

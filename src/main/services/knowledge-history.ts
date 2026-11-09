@@ -5,6 +5,31 @@ import { authoredQuestions } from '../../shared/question-capture';
 type Row = Record<string, unknown>;
 const detailTables = ['note_detail','highlight_detail','quote_detail','bookmark_detail','question_detail','card_detail','study_note_detail','reading_reflection_detail'];
 interface Snapshot { knowledge: Row | null; details: Record<string, Row | null>; annotation: Row | null; tags: Row[]; collections: Row[]; comments: Row[]; workTitle: string | null; legacy:string|null }
+export const NON_USER_HISTORY_ACTIONS = ['undo', 'redo', 'baseline', 'capture', 'conversion', 'book-detached'];
+export interface MaterialHistoryState { redo: string[]; discarded: string[] }
+export function parseMaterialHistory(raw: string | null | undefined): MaterialHistoryState {
+  try {
+    const value = raw ? JSON.parse(raw) : [];
+    const strings = (input: unknown): string[] => Array.isArray(input) ? [...new Set(input.filter((id): id is string => typeof id === 'string'))] : [];
+    return Array.isArray(value) ? { redo: strings(value), discarded: [] } : { redo: strings(value?.redo), discarded: strings(value?.discarded) };
+  } catch { return { redo: [], discarded: [] }; }
+}
+
+/** Invalidating redo and recording a user batch share the same SQLite transaction. */
+function invalidateRedo(db: Database, workIds: Set<string>) {
+  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='material_save_state'").get()) return;
+  for (const workId of workIds) {
+    const rows = db.prepare('SELECT m.source_id, m.redo_json FROM material_save_state m JOIN source s ON s.id=m.source_id JOIN edition e ON e.id=s.edition_id WHERE e.work_id=?').all(workId) as { source_id: string; redo_json: string | null }[];
+    for (const row of rows) {
+      const state = parseMaterialHistory(row.redo_json);
+      if (!state.redo.length) continue;
+      state.discarded = [...new Set([...state.discarded, ...state.redo])];
+      state.redo = [];
+      db.prepare('UPDATE material_save_state SET redo_json=?, updated_at=? WHERE source_id=?').run(JSON.stringify(state), new Date().toISOString(), row.source_id);
+    }
+  }
+}
+
 interface Context { before: Map<string, Snapshot>; action: string; batch: string }
 const contexts = new WeakMap<Database, Context>();
 export const historyAvailable = (db: Database) => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='entity_version'").get());
@@ -29,12 +54,12 @@ function snapshot(db: Database, id: string): Snapshot {
 function equivalent(value: Snapshot): string {
   return JSON.stringify(value, (key, field) => key === 'updated_at' ? undefined : field);
 }
-function append(db: Database, id: string, value: Snapshot, action: string, batch: string, restored?: number) {
+function append(db: Database, id: string, value: Snapshot, action: string, batch: string, restored?: number, actor?: string) {
   const content = JSON.stringify(value);
   const hash = createHash('sha256').update(content).digest('hex');
   const now = new Date().toISOString();
   db.prepare('INSERT OR IGNORE INTO history_blob(hash,content,byte_length,created_at) VALUES(?,?,?,?)').run(hash, content, Buffer.byteLength(content), now);
-  db.prepare("INSERT INTO entity_version(id,entity_type,entity_id,revision,snapshot_hash,action,batch_id,restored_from_revision,schema_version,created_at) VALUES(?,'knowledge',?,?,?,?,?,?,1,?)").run(randomUUID(), id, headRevision(db,id)+1, hash, action, batch, restored ?? null, now);
+  db.prepare("INSERT INTO entity_version(id,entity_type,entity_id,revision,snapshot_hash,action,batch_id,restored_from_revision,actor,schema_version,created_at) VALUES(?,'knowledge',?,?,?,?,?,?,?,1,?)").run(randomUUID(), id, headRevision(db,id)+1, hash, action, batch, restored ?? null, actor ?? null, now);
 }
 function capture(db: Database,id: string) {
   const preference = db.prepare("SELECT value FROM app_settings WHERE key='knowledge.questions.enabled'").get() as {value:string}|undefined;
@@ -53,7 +78,8 @@ function capture(db: Database,id: string) {
     });
   }
 }
-export function withKnowledgeHistory<T>(db: Database, ids: string[], action: string, operation: () => T, expected?: { id: string; revision: number; restored?:number }): T {
+export function withKnowledgeHistory<T>(db: Database, ids: string[], action: string, operation: () => T, expected?: { id: string; revision: number; restored?:number }, actor?: 'reader'): T {
+  if (actor !== undefined && actor !== 'reader') throw new Error('invalid-request');
   if (!historyAvailable(db)) return operation();
   const active = contexts.get(db);
   if (active) {
@@ -67,12 +93,15 @@ export function withKnowledgeHistory<T>(db: Database, ids: string[], action: str
     try {
       const result = operation();
       for (const id of [...context.before.keys()]) capture(db,id);
+      const changedWorks = new Set<string>();
       for (const [id,before] of context.before) {
         const after = snapshot(db,id);
         if (equivalent(before) === equivalent(after)) continue;
         if (!headRevision(db,id) && (before.knowledge || before.annotation)) append(db,id,before,'baseline',context.batch);
-        append(db,id,after,action,context.batch,expected?.restored);
+        append(db,id,after,action,context.batch,expected?.restored,actor);
+        for (const workId of [before.knowledge?.work_id, after.knowledge?.work_id]) if (typeof workId === 'string') changedWorks.add(workId);
       }
+      if (!NON_USER_HISTORY_ACTIONS.includes(action)) invalidateRedo(db, changedWorks);
       return result;
     } finally { contexts.delete(db); }
   })();
@@ -82,14 +111,14 @@ export function withWorkPreservation<T>(db:Database,workIds:string[],operation:(
   const ids=workIds.flatMap(workId=>(db.prepare('SELECT id FROM knowledge WHERE work_id=?').all(workId) as {id:string}[]).map(row=>row.id));
   return withKnowledgeHistory(db,ids,'book-detached',operation);
 }
-export function trashKnowledge(db: Database,id: string): boolean {
+export function trashKnowledge(db: Database,id: string, actor?: 'reader'): boolean {
   return withKnowledgeHistory(db,[id],'trash',() => {
     const row = db.prepare('SELECT id FROM knowledge WHERE id=? AND deleted_at IS NULL').get(id);
     if (!row) return false;
     db.prepare('UPDATE knowledge SET deleted_at=?,updated_at=? WHERE id=?').run(new Date().toISOString(),new Date().toISOString(),id);
     db.prepare('DELETE FROM annotations WHERE id=?').run(id);
     return true;
-  });
+  }, undefined, actor);
 }
 export class KnowledgeHistoryService {
   constructor(private db: Database) {}

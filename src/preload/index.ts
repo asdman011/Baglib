@@ -758,13 +758,13 @@ export const API = {
     saveReflection: input=>ipcRenderer.invoke('knowledge-history:request','reflection-save',input),
     addAction: (id,title)=>ipcRenderer.invoke('knowledge-history:request','action',{id,title}),
     addQuote: (id,text)=>ipcRenderer.invoke('knowledge-history:request','quote',{id,text}),
-    addComment: (id,text,options?)=>ipcRenderer.invoke('knowledge-history:request','comment',{id,text,...(options?.parentId?{parentId:options.parentId}:{}),...(options?.anchor?{anchor:options.anchor}:{})}),
+    addComment: (id,text,options?)=>ipcRenderer.invoke('knowledge-history:request','comment',{id,text,...(options?.parentId?{parentId:options.parentId}:{}),...(options?.anchor?{anchor:options.anchor}:{}),...(options?.actor?{actor:options.actor}:{})}),
     comments: id=>ipcRenderer.invoke('knowledge-history:request','comments',{id}),
     commentCounts: ()=>ipcRenderer.invoke('knowledge-history:request','comment-counts'),
     commentTotals: ()=>ipcRenderer.invoke('knowledge-history:request','comment-totals') as Promise<Record<string,{open:number;total:number}>>,
-    editComment: (commentId,text)=>ipcRenderer.invoke('knowledge-history:request','comment-edit',{commentId,text}),
-    resolveComment: (commentId,resolved)=>ipcRenderer.invoke('knowledge-history:request','comment-resolve',{commentId,resolved}),
-    removeComment: commentId=>ipcRenderer.invoke('knowledge-history:request','comment-remove',{commentId}),
+    editComment: (commentId,text,actor)=>ipcRenderer.invoke('knowledge-history:request','comment-edit',{commentId,text,actor}),
+    resolveComment: (commentId,resolved,actor)=>ipcRenderer.invoke('knowledge-history:request','comment-resolve',{commentId,resolved,actor}),
+    removeComment: (commentId,actor)=>ipcRenderer.invoke('knowledge-history:request','comment-remove',{commentId,actor}),
   } satisfies import('../shared/knowledge-history').HistoryAPI,
   commentary: {
     list: reference=>ipcRenderer.invoke('knowledge-history:request','commentary-list',{reference}),
@@ -825,7 +825,7 @@ export const API = {
     getByWork: (workId: string, type?: string) => ipcRenderer.invoke('knowledge:get-by-work', workId, type),
     getAll: () => ipcRenderer.invoke('knowledge:get-all'),
     save: (payload: unknown) => ipcRenderer.invoke('knowledge:save', payload),
-    delete: (knowledgeId: string) => ipcRenderer.invoke('knowledge:delete', knowledgeId),
+    delete: (knowledgeId: string, actor?: 'reader') => ipcRenderer.invoke('knowledge:delete', knowledgeId, actor),
   },
 
   // Reader Session & Continuous Location Tracking

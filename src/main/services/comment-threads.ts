@@ -10,7 +10,7 @@ const validText = (text: unknown): string => {
 
 /** Comment threads on knowledge items (ADR-010). Every write is versioned with the item's history. */
 export class CommentThreadService {
-  constructor(private db: Database, private clock: () => Date = () => new Date()) {}
+  constructor(private db: Database, private clock: () => Date = () => new Date(), private actor?: 'reader') {}
 
   list(knowledgeId: string): CommentThread[] {
     return buildCommentThreads(this.db.prepare('SELECT id,knowledge_id,parent_comment_id,content,created_at,updated_at,resolved_at,anchor_json FROM comment WHERE knowledge_id=?').all(knowledgeId) as CommentRow[]);
@@ -44,26 +44,26 @@ export class CommentThreadService {
       this.db.prepare("INSERT INTO comment(id,knowledge_id,parent_comment_id,content,actor,created_at,updated_at,anchor_json) VALUES(?,?,?,?,'local',?,?,?)").run(id, input.knowledgeId, parentId, text, now, now, anchor);
       // A reply reopens a resolved thread, as in Figma and Acrobat.
       if (parentId) this.db.prepare('UPDATE comment SET resolved_at=NULL WHERE id=?').run(this.rootId(parentId));
-    });
+    }, undefined, this.actor);
     return id;
   }
 
   edit(commentId: string, text: string): void {
     const value = validText(text);
     const row = this.row(commentId);
-    withKnowledgeHistory(this.db, [row.knowledge_id], 'comment-edit', () => this.db.prepare('UPDATE comment SET content=?, updated_at=? WHERE id=?').run(value, this.clock().toISOString(), commentId));
+    withKnowledgeHistory(this.db, [row.knowledge_id], 'comment-edit', () => this.db.prepare('UPDATE comment SET content=?, updated_at=? WHERE id=?').run(value, this.clock().toISOString(), commentId), undefined, this.actor);
   }
 
   setResolved(commentId: string, resolved: boolean): void {
     const root = this.rootId(commentId);
     const row = this.row(root);
-    withKnowledgeHistory(this.db, [row.knowledge_id], resolved ? 'comment-resolve' : 'comment-reopen', () => this.db.prepare('UPDATE comment SET resolved_at=? WHERE id=?').run(resolved ? this.clock().toISOString() : null, root));
+    withKnowledgeHistory(this.db, [row.knowledge_id], resolved ? 'comment-resolve' : 'comment-reopen', () => this.db.prepare('UPDATE comment SET resolved_at=? WHERE id=?').run(resolved ? this.clock().toISOString() : null, root), undefined, this.actor);
   }
 
   remove(commentId: string): void {
     const row = this.row(commentId);
     // parent_comment_id cascades, so removing a root removes its replies; history keeps the text until erased.
-    withKnowledgeHistory(this.db, [row.knowledge_id], 'comment-remove', () => this.db.prepare('DELETE FROM comment WHERE id=?').run(commentId));
+    withKnowledgeHistory(this.db, [row.knowledge_id], 'comment-remove', () => this.db.prepare('DELETE FROM comment WHERE id=?').run(commentId), undefined, this.actor);
   }
 
   private row(commentId: string): CommentRow {

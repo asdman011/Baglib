@@ -84,7 +84,7 @@ material_save_state(
   backup_expires_at TEXT,
   incident         TEXT CHECK(incident IN ('interrupted','corrupt','external-change')),
   incident_at      TEXT,
-  redo_json        TEXT,      -- bounded redo stack for persistent undo
+  redo_json        TEXT,      -- redo and discarded branch IDs for persistent undo
   updated_at       TEXT NOT NULL
 )
 ```
@@ -96,6 +96,28 @@ No other table or column changes. Work → Edition → Source is preserved: stat
 - Writing into PDFs requires the PDF engine's Python (pikepdf). Without it, marks stay recorded in BagLib and the save state says the file cannot be written; nothing is lost.
 - External viewers differ in how they show Arabic text in annotations, replies and resolved status.
 - Canonical Quran, hadith and poetry corpus text is never written by this mechanism.
+
+## Linear mark history and undo scope — 2026-11-09, KEY-269
+
+### Traversal and branch rule
+
+Each completed user batch is one step. Ordering uses SQLite append sequence (MAX(entity_version.rowid)), including batches sharing a timestamp. Undo applies every affected item in the batch for the current book. Baselines supply the previous state and are excluded from the action list. Creation is undone by trashing, trash by restoring, and redo reapplies the recorded result. Book-linked study_note records remain eligible when Notes promotes a page note.
+
+Recording a real user batch invalidates that book's redo inside the same database transaction as its snapshots. The existing material_save_state.redo_json holds { redo, discarded } arrays. Invalidation moves the redo IDs to discarded before clearing redo. Both lists exclude batches from future undo selection, so the sequence undo A, create C, undo C, redo C, redo cannot revive A. Historical versions remain available through ADR-008. No-op and failed saves preserve the previous branch. Other books retain independent state. Existing array-form redo_json values remain readable.
+
+The previous 500-batch query limit and 200-entry redo truncation are removed. The state grows with retained history. All entries remain reachable. A lightweight legacy-store freshness check remains for callers implementing the older injected RedoStore interface without discarded-batch support. The production store invalidates at recording time. Undo/redo snapshots and the durable stack update share one SQLite transaction.
+
+### Preference and feedback
+
+The existing settings key undo.scope.v1 accepts book (default) or reader. Save settings exposes both choices and an InfoTip in Arabic and English. Main reads the preference on each operation. Reader scope selects only entity_version.actor = reader. Earlier versions with a null actor are skipped. When a newer active batch touches the same item, reader scope rejects the older step with typed history-unappliable feedback, preserving the newer edit. This conflict policy was chosen during implementation to protect edits from the skipped view.
+
+Feedback names the item kind, the action and its origin. Null/other origins are described as Notes or another screen. Comments, replies, resolution/reopening, edits and removal already use withKnowledgeHistory and participate as full snapshots in book scope. Canonical reader saves, shape/text/color edits, deletion and reader comment actions explicitly tag entity_version.actor as reader through their shared contracts, preload and main boundaries. Notes and other callers retain their existing untagged origin. Invalid actor values are rejected before mutation.
+
+### Implementation and verification
+
+The dispatcher approved the actor-plumbing file-scope extension. The earlier incomplete reader-only checkpoint is superseded. Three normal-entry-point actor regressions failed before plumbing and now pass. Twenty targeted tests cover discarded branches, service reconstruction, scope/conflict behavior, comments, multi-item/same-time batches, invalid actor refusal, rollback/no-op invalidation, independent books, legacy stacks, 502 undo/redo steps and real PDF ownership after Save. Final collaborative full suite passes 1438/1438, type check/main build pass, changed-code lint has zero errors and 60 existing warnings, and diff check passes.
+
+Native save-live-L3Vq0b passes two actual Electron launches, en and ar, including exact empty-redo notices, Notes-screen CodeMirror edits, scope selection across restart, tagged reader undo preserving a newer Notes edit, actual pin comment UI undo/redo and reader delete IPC undo. Save inspection after reader undo/redo shows 1/2 owned annotations in English and 5/6 after restart in Arabic, preserving one foreign annotation. Final inspection finds 8 unique owned annotation names and 1 foreign. The fixture waits for Recorded before Ctrl+S and actual rewritten counts before inspection. Settings screenshots were inspected in Arabic RTL and English LTR at 1280 and 480 px. Profiles were removed and the session renderer stopped. Evidence and limits are in the local KEY-269 report.
 
 ## FreeText appearance consequence — 2026-11-09, KEY-270
 

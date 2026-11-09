@@ -338,7 +338,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
             );
         }
       }
-    },payload.expectedRevision === undefined ? undefined : {id,revision:payload.expectedRevision});
+    },payload.expectedRevision === undefined ? undefined : {id,revision:payload.expectedRevision}, payload.actor);
 
     const result = (payload.workId?this.getKnowledgeByWork(payload.workId):this.getAllKnowledge()).find((k) => k.id === id);
     if (!result) {
@@ -365,8 +365,8 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
   /**
    * Deletes a knowledge record by ID. Foreign keys CASCADE to all detail and join tables.
    */
-  deleteKnowledge(knowledgeId: string): boolean {
-    return trashKnowledge(this.db,knowledgeId);
+  deleteKnowledge(knowledgeId: string, actor?: 'reader'): boolean {
+    return trashKnowledge(this.db,knowledgeId,actor);
   }
 
   /**

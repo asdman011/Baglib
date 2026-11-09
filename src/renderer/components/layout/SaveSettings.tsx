@@ -15,10 +15,14 @@ const modeKeys: Record<SaveMode, [TranslationKey, TranslationKey]> = {
 /** Settings → Saving into files (ADR-012): the save mode, the interval, and the one emergency copy's folder. */
 export function SaveSettings() {
   const { t, lang, dir } = useWorkspace();
+  const [undoScope, setUndoScope] = useState<'book' | 'reader'>('book');
+  const [scopeSaving, setScopeSaving] = useState(true);
   const [policy, setPolicy] = useState<SavePolicy | null>(null);
   const [folder, setFolder] = useState({ current: '', fallback: '' });
   const [error, setError] = useState<TranslationKey | null>(null);
   useEffect(() => {
+    void window.electronAPI?.settings.get('undo.scope.v1', 'book').then(value => { setUndoScope(value === 'reader' ? 'reader' : 'book'); setScopeSaving(false); }, () => { setError('studyActionFailed'); setScopeSaving(false); });
+
     void window.electronAPI?.materialSave?.policy().then(result => {
       if (result.ok) { setPolicy(result.data.policy); setFolder({ current: result.data.backupFolder, fallback: result.data.defaultFolder }); }
     });
@@ -27,6 +31,13 @@ export function SaveSettings() {
     setPolicy(next);
     const result = await window.electronAPI.materialSave.setPolicy(next);
     if (result.ok) { setPolicy(result.data); window.dispatchEvent(new CustomEvent('baglib:save-policy', { detail: result.data })); }
+  };
+  const updateScope = async (next: 'book' | 'reader') => {
+    setScopeSaving(true);
+    setError(null);
+    try { await window.electronAPI.settings.set('undo.scope.v1', next); setUndoScope(next); }
+    catch { setError('studyActionFailed'); }
+    finally { setScopeSaving(false); }
   };
   const choose = async () => {
     setError(null);
@@ -55,6 +66,13 @@ export function SaveSettings() {
       </div>)}
       <p className="text-xs text-muted">{t('saveShortcutNote')}</p>
     </fieldset>}
+    <fieldset className="min-w-0 space-y-2 border-t border-subtle pt-3" disabled={scopeSaving}>
+      <legend className="flex items-center gap-1 text-sm font-bold leading-relaxed">{t('undoScopeTitle')}{info('undoScopeTitle', 'undoScopeInfo')}</legend>
+      {(['book', 'reader'] as const).map(scope => <label key={scope} className="flex items-start gap-2 text-sm leading-relaxed">
+        <input className="mt-1 shrink-0" type="radio" name="undo-scope" data-undo-scope={scope} checked={undoScope === scope} onChange={() => void updateScope(scope)} />
+        {t(scope === 'book' ? 'undoScopeBook' : 'undoScopeReader')}
+      </label>)}
+    </fieldset>
     <div className="space-y-2 border-t border-subtle pt-3">
       <h4 className="flex items-center gap-1 text-xs font-bold">{t('saveEmergencyTitle')}{info('saveEmergencyTitle', 'saveEmergencyInfo')}</h4>
       <div className="flex flex-wrap items-center gap-2 text-xs">

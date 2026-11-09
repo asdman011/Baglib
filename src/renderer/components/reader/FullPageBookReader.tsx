@@ -2036,7 +2036,10 @@ export const FullPageBookReader: React.FC = () => {
     try {
       const api = (window).electronAPI;
       if (api?.deleteAnnotation) {
-        await api.deleteAnnotation(id);
+        if (knowledgeItems.some(item => item.id === id)) {
+          await api.knowledge.delete(id, 'reader');
+          setKnowledgeItems(previous => previous.filter(item => item.id !== id));
+        } else await api.deleteAnnotation(id);
         setAnnotations((prev) => prev.filter((a) => a.id !== id));
       }
     } catch (err) {
@@ -2147,7 +2150,18 @@ export const FullPageBookReader: React.FC = () => {
       historyRequestPending.current = true;
       const redo = action === 'redo';
       void (redo ? window.electronAPI.materialSave.redo(workId) : window.electronAPI.materialSave.undo(workId)).then(async result => {
-        setShowToast(result.ok ? t(redo ? 'markRedone' : 'markUndone') : t(redo ? 'nothingToRedo' : 'nothingToUndo'));
+        if (result.ok) {
+          const [kind, operation, origin] = result.data.action.split('|');
+          const kindKey = { highlight: 'historyKindHighlight', note: 'historyKindNote', question: 'historyKindQuestion', bookmark: 'historyKindBookmark', quote: 'historyKindQuote' } as const;
+          const actionKey = { save: 'historyActionSave', trash: 'historyActionTrash', restore: 'historyActionRestore' } as const;
+          setShowToast(t(redo ? 'historyRedoneDetail' : 'historyUndoneDetail', {
+            kind: t(kindKey[kind as keyof typeof kindKey] || 'historyKindNote'),
+            action: t(operation?.startsWith('comment') ? 'historyActionComment' : actionKey[operation as keyof typeof actionKey] || 'historyActionOther'),
+            origin: t(origin === 'reader' ? 'historyOriginReader' : 'historyOriginNotes'),
+          }));
+        } else {
+          setShowToast(t(result.error === 'nothing-to-redo' ? 'nothingToRedo' : result.error === 'nothing-to-undo' ? 'nothingToUndo' : result.error === 'history-unappliable' ? 'historyUnappliable' : 'studyActionFailed'));
+        }
         setTimeout(() => setShowToast(null), 2000);
         if (result.ok) await reloadMarks();
       }).catch(error => { console.warn('[FullPageBookReader] Mark history failed:', error); setShowToast(t('studyActionFailed')); }).finally(() => { historyRequestPending.current = false; });
@@ -2284,7 +2298,7 @@ export const FullPageBookReader: React.FC = () => {
     const api = (window).electronAPI;
     if (api?.knowledge?.save) {
       try {
-        const saved = await api.knowledge.save(payload);
+        const saved = await api.knowledge.save({ ...payload, actor: 'reader' });
         if (saved) {
           setKnowledgeItems((prev) => prev.map((k) => (k.id === highlightId ? saved : k)));
         }
@@ -2326,7 +2340,7 @@ export const FullPageBookReader: React.FC = () => {
     const api = (window).electronAPI;
     if (api?.knowledge?.delete) {
       try {
-        await api.knowledge.delete(id);
+        await api.knowledge.delete(id, 'reader');
         setKnowledgeItems((prev) => prev.filter((i) => i.id !== id));
       } catch (e) {
         console.warn('[FullPageBookReader] Delete knowledge failed:', e);
@@ -4165,7 +4179,7 @@ export const FullPageBookReader: React.FC = () => {
                   labels: { pin: t('markupToolComment'), textBox: t('markupToolText'), drawHint: t(markupTool === 'comment' ? 'markupCommentHint' : 'markupDrawHint') },
                   onCreate: (mark: ShapeMark) => {
                     if (!activeBook?.id) return;
-                    void window.electronAPI.knowledge.save({ workId: activeBook.id, type: 'note', location: shapeLocation(mark), noteContent: '' }).then((saved: KnowledgeItemDTO) => {
+                    void window.electronAPI.knowledge.save({ actor: 'reader', workId: activeBook.id, type: 'note', location: shapeLocation(mark), noteContent: '' }).then((saved: KnowledgeItemDTO) => {
                       setKnowledgeItems(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
                       // A text box and a comment pin open at once for their text; other shapes stay as drawn.
                       if (mark.shape === 'text' || mark.shape === 'pin') {

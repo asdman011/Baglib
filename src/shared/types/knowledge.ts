@@ -51,6 +51,8 @@ export interface KnowledgeItemDTO {
 }
 
 export interface SaveKnowledgePayload {
+  /** Origin of this editing action, independent of the item's original source. */
+  actor?: 'reader';
   title?: string;
   aliases?: string[];
   entryDate?: string;

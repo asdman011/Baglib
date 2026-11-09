@@ -78,15 +78,15 @@ export function registerKnowledgeHistoryIpc():void {
         new SqliteKnowledgeRepository(db).saveKnowledge({workId:source.work_id,knowledgeType:'quote',location:`note:${target}`,quotedText:text,contextNote:`[[note:${target}]]`,projectToReader:false});changed();return;
       }
       case 'comment': {
-        if(Object.keys(input).some(key=>!['id','text','parentId','anchor'].includes(key))) throw new Error('invalid-request');
-        const created=new CommentThreadService(db).add({knowledgeId:id(),text:input.text as string,parentId:input.parentId===undefined?undefined:identifier(input.parentId),anchor:input.anchor as never});changed();return created;
+        if(Object.keys(input).some(key=>!['id','text','parentId','anchor','actor'].includes(key))) throw new Error('invalid-request');
+        const created=new CommentThreadService(db, undefined, input.actor as 'reader' | undefined).add({knowledgeId:id(),text:input.text as string,parentId:input.parentId===undefined?undefined:identifier(input.parentId),anchor:input.anchor as never});changed();return created;
       }
       case 'comments': return new CommentThreadService(db).list(id());
       case 'comment-counts': return new CommentThreadService(db).openCounts();
       case 'comment-totals': return new CommentThreadService(db).threadCounts();
-      case 'comment-edit': new CommentThreadService(db).edit(identifier(input.commentId),input.text as string);changed();return;
-      case 'comment-resolve': if(typeof input.resolved!=='boolean') throw new Error('invalid-request');new CommentThreadService(db).setResolved(identifier(input.commentId),input.resolved);changed();return;
-      case 'comment-remove': new CommentThreadService(db).remove(identifier(input.commentId));changed();return;
+      case 'comment-edit': new CommentThreadService(db, undefined, input.actor as 'reader' | undefined).edit(identifier(input.commentId),input.text as string);changed();return;
+      case 'comment-resolve': if(typeof input.resolved!=='boolean') throw new Error('invalid-request');new CommentThreadService(db, undefined, input.actor as 'reader' | undefined).setResolved(identifier(input.commentId),input.resolved);changed();return;
+      case 'comment-remove': new CommentThreadService(db, undefined, input.actor as 'reader' | undefined).remove(identifier(input.commentId));changed();return;
       default: throw new Error('invalid-request');
     }
   });

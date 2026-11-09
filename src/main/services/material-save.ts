@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { copyFile, mkdir, readdir, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Database } from 'better-sqlite3';
+import { parseMaterialHistory } from './knowledge-history';
 import { publishPdfOutput } from './pdf-editor/publication';
 import { fileSha256 } from './pdf-editor/source';
 import { BACKUP_RETENTION_MS, additionsKey, collectAdditions, filterForExport, type AdditionsPayload, type CommentRow, type ExportOptions, type MarkRow, type MaterialSaveStatus } from '../../shared/material-save';
@@ -44,11 +45,11 @@ export class MaterialSaveService {
   }
 
   additions(workId: string): AdditionsPayload {
-    const rows = this.env.db.prepare(`SELECT k.id, k.knowledge_type AS type, COALESCE(k.location,'') AS location, k.created_at AS createdAt, k.updated_at AS updatedAt,
-        hd.color, COALESCE(hd.quoted_text, qd2.quoted_text) AS quote, nd.content AS note, qd.question_text AS question, bd.label
+    const rows = this.env.db.prepare(`SELECT k.id, CASE WHEN k.knowledge_type='study_note' THEN 'note' ELSE k.knowledge_type END AS type, COALESCE(k.location,'') AS location, k.created_at AS createdAt, k.updated_at AS updatedAt,
+        hd.color, COALESCE(hd.quoted_text, qd2.quoted_text) AS quote, COALESCE(nd.content, snd.content) AS note, qd.question_text AS question, bd.label
       FROM knowledge k LEFT JOIN highlight_detail hd ON hd.knowledge_id = k.id LEFT JOIN quote_detail qd2 ON qd2.knowledge_id = k.id
-      LEFT JOIN note_detail nd ON nd.knowledge_id = k.id LEFT JOIN question_detail qd ON qd.knowledge_id = k.id LEFT JOIN bookmark_detail bd ON bd.knowledge_id = k.id
-      WHERE k.work_id = ? AND k.deleted_at IS NULL AND k.knowledge_type IN ('highlight','note','question','bookmark','quote')`).all(workId) as MarkRow[];
+      LEFT JOIN study_note_detail snd ON snd.knowledge_id = k.id LEFT JOIN note_detail nd ON nd.knowledge_id = k.id LEFT JOIN question_detail qd ON qd.knowledge_id = k.id LEFT JOIN bookmark_detail bd ON bd.knowledge_id = k.id
+      WHERE k.work_id = ? AND k.deleted_at IS NULL AND k.knowledge_type IN ('highlight','note','question','bookmark','quote','study_note')`).all(workId) as MarkRow[];
     const comments = rows.length ? this.env.db.prepare(`SELECT c.knowledge_id AS knowledgeId, c.parent_comment_id AS parentId, c.content, c.created_at AS createdAt, c.updated_at AS updatedAt, c.resolved_at AS resolvedAt
       FROM comment c JOIN knowledge k ON k.id = c.knowledge_id WHERE k.work_id = ? AND k.deleted_at IS NULL`).all(workId) as CommentRow[] : [];
     return collectAdditions(rows, comments);
@@ -271,10 +272,14 @@ export class MaterialSaveService {
   redoStack(workId: string): string[] {
     const file = this.file(workId);
     const raw = file ? this.state(file.sourceId)?.redo_json : null;
-    try { const value = raw ? JSON.parse(raw) as unknown : []; return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []; } catch { return []; }
+    return parseMaterialHistory(raw).redo;
+  }
+  discardedBatches(workId: string): string[] {
+    const file = this.file(workId);
+    return parseMaterialHistory(file ? this.state(file.sourceId)?.redo_json : null).discarded;
   }
   setRedoStack(workId: string, stack: string[]): void {
     const file = this.file(workId);
-    if (file) this.upsert(file.sourceId, { redo_json: JSON.stringify(stack.slice(-200)) });
+    if (file) this.upsert(file.sourceId, { redo_json: JSON.stringify({ redo: stack, discarded: this.discardedBatches(workId) }) });
   }
 }

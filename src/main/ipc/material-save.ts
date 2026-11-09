@@ -13,7 +13,7 @@ import { translations } from '../../renderer/translations';
 import { PdfTaskGate } from '../services/pdf-editor/task-gate';
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
-const KNOWN = ['unsupported', 'engine-missing', 'busy', 'incident', 'no-backup', 'source-changed', 'invalid-request', 'nothing-to-undo', 'nothing-to-redo', 'not-writable'];
+const KNOWN = ['unsupported', 'engine-missing', 'busy', 'incident', 'no-backup', 'source-changed', 'invalid-request', 'nothing-to-undo', 'nothing-to-redo', 'history-unappliable', 'not-writable'];
 const POLICY_KEY = 'save.policy.v1', FOLDER_KEY = 'save.backupFolder.v1';
 
 const authorize = (event: IpcMainInvokeEvent) => {

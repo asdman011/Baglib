@@ -6,7 +6,7 @@ export async function saveReaderKnowledge(
   payload: SaveKnowledgePayload,
 ): Promise<{ item: KnowledgeItemDTO; annotation: AnnotationDTO | null }> {
   if (!api) throw new Error('Knowledge API unavailable');
-  const item = await api.save(payload);
+  const item = await api.save({ ...payload, actor: 'reader' });
   if (!item?.id) throw new Error('Knowledge save did not return an item');
   const annotation: AnnotationDTO | null = item.workId ? {
     id: item.id,

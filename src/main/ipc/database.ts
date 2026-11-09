@@ -424,11 +424,11 @@ export function setupDatabaseIPC() {
     }
   });
 
-  ipcMain.handle('knowledge:delete', (_, knowledgeId: string) => {
+  ipcMain.handle('knowledge:delete', (_, knowledgeId: string, actor?: 'reader') => {
     try {
       const db = getDatabase();
       const repo = new (ipcModule0.KnowledgeRepository)(db);
-      return repo.deleteKnowledge(knowledgeId);
+      return repo.deleteKnowledge(knowledgeId, actor);
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to delete knowledge item:', err);
       throw err;
