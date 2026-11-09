@@ -55,19 +55,97 @@ def sanitize_pdf_text(raw_text):
     return clean, has_unmapped
 
 
-def check_accessibility(filename):
+def extract_pdf_pages(filename, pages=None):
     """
-    Base PDF Accessibility check using pikepdf and pymupdf (fitz).
+    Page-scoped, mapping-aware text extraction using pypdfium2 and pikepdf.
+    Returns totalPages, pageTexts, pageHasUnmapped, pagesWithoutText, and fontsWithoutToUnicode.
+    Only processes the requested 1-based page numbers.
+    """
+    if not filename or not os.path.exists(filename):
+        raise ValueError("file-not-found")
+
+    import pypdfium2 as pdfium
+    pdoc = pdfium.PdfDocument(filename)
+    try:
+        total_pages = len(pdoc)
+        if pages is None:
+            target_pages = list(range(1, total_pages + 1))
+        else:
+            target_pages = [p for p in pages if isinstance(p, int) and 1 <= p <= total_pages]
+
+        page_texts = {}
+        page_has_unmapped = {}
+        pages_without_text = []
+
+        for p_num in target_pages:
+            idx = p_num - 1
+            page = pdoc[idx]
+            tpage = page.get_textpage()
+            raw_text = tpage.get_text_range()
+            tpage.close()
+            page.close()
+
+            clean_text, has_unmapped = sanitize_pdf_text(raw_text)
+            non_pua = re.sub(r"[\s\uE000-\uF8FF\U000F0000-\U0010FFFD]", "", raw_text)
+            if not non_pua:
+                pages_without_text.append(p_num)
+
+            page_texts[str(p_num)] = clean_text
+            page_has_unmapped[str(p_num)] = has_unmapped
+    finally:
+        pdoc.close()
+
+    fonts_without_tounicode = set()
+    all_fonts = set()
+    try:
+        import pikepdf
+        with pikepdf.open(filename) as pdf:
+            for p_num in target_pages:
+                idx = p_num - 1
+                if idx < len(pdf.pages):
+                    page = pdf.pages[idx]
+                    res_dict = page.get("/Resources")
+                    if not res_dict:
+                        continue
+                    font_dict = res_dict.get("/Font")
+                    if not font_dict:
+                        continue
+                    for font_key, font_obj in font_dict.items():
+                        try:
+                            if isinstance(font_obj, pikepdf.Dictionary):
+                                base_font = str(font_obj.get("/BaseFont", font_key))
+                                all_fonts.add(base_font)
+                                subtype = str(font_obj.get("/Subtype", ""))
+                                if "/ToUnicode" not in font_obj and subtype in ["/Type0", "/TrueType", "/Type1"]:
+                                    fonts_without_tounicode.add(base_font)
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+
+    return {
+        "engine": "pypdfium2 " + getattr(pdfium, "__version__", "1.x"),
+        "filename": os.path.basename(filename),
+        "fileSize": os.path.getsize(filename),
+        "sha256": digest(filename),
+        "totalPages": total_pages,
+        "pageTexts": page_texts,
+        "pageHasUnmapped": page_has_unmapped,
+        "pagesWithoutText": pages_without_text,
+        "fontsWithoutToUnicode": sorted(list(fonts_without_tounicode)),
+        "allFontsCount": len(all_fonts),
+    }
+
+
+def check_accessibility(filename, pages=None):
+    """
+    Base PDF Accessibility check using pikepdf and pypdfium2.
     Never modifies the file.
     """
     if not filename or not os.path.exists(filename):
         raise ValueError("file-not-found")
 
     import pikepdf
-    try:
-        import pymupdf as fitz
-    except ImportError:
-        import fitz
 
     report = {
         "engine": "pikepdf " + getattr(pikepdf, "__version__", "10.x"),
@@ -379,12 +457,18 @@ def run(request):
                 "sign",
                 "verify-signatures",
                 "accessibility",
+                "extract-text",
             ],
         }
 
     filename = request.get("filename", "")
+    if operation == "extract-text":
+        pages = request.get("pages")
+        return extract_pdf_pages(filename, pages)
+
     if operation == "accessibility":
-        return check_accessibility(filename)
+        pages = request.get("pages")
+        return check_accessibility(filename, pages=pages)
 
     if operation == "fix-accessibility-metadata":
         output = request.get("output", "")
@@ -408,6 +492,8 @@ def main():
             line = sys.stdin.read().strip()
             if not line:
                 return
+            if line.startswith("\ufeff"):
+                line = line[1:]
             request = json.loads(line)
             result = run(request)
             emit("complete", result=result)

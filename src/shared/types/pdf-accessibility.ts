@@ -75,3 +75,16 @@ export interface PdfAccessibilityFixResult {
   sha256: string;
   bytes: number;
 }
+
+export interface PdfPageTextExtractionResult {
+  engine: string;
+  filename: string;
+  fileSize: number;
+  sha256: string;
+  totalPages: number;
+  pageTexts: Record<string, string>;
+  pageHasUnmapped: Record<string, boolean>;
+  pagesWithoutText: number[];
+  fontsWithoutToUnicode: string[];
+  allFontsCount: number;
+}

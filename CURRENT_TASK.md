@@ -1,3 +1,50 @@
+## KEY-289 — 2026-11-10, Antigravity (implemented and verified)
+
+- Implementation & Verification: Explain reads only the needed PDF pages, or caches them by file hash (follow-up to KEY-282).
+  - Added `extract_pdf_pages(filename, pages=None)` in `assets/pdf-editor/engine.py` using `pypdfium2` for page-scoped text extraction and `pikepdf` for font metadata on target pages.
+  - Retained all KEY-272 handling: PUA bracket normalization (`0xF22B`, `0xF22A`, `0xF222`, `0xF228`, `0xFD3E`, `0xFD3F`, `0xF220`), unmapped PUA glyph detection and warning flag, and font inspection for fonts lacking `/ToUnicode`.
+  - Exposed `extract-text` operation in engine capabilities and handled optional `pages` parameter in `accessibility` check. Removed unused `fitz` import which previously wasted ~1.25s per call.
+  - Implemented `extractPdfPageTexts(tools, filename, pages, options)` in `src/main/services/pdf-editor/accessibility.ts` with in-memory LRU cache (`MAX_PDF_TEXT_CACHE_ENTRIES = 20`) keyed by `${sha256}:${engineVersion}`. Automatically evicts old cache entries when file content changes on disk. Only missing pages are requested from Python engine on subsequent page queries.
+  - Exported cache helpers: `clearPdfPageTextCache()`, `invalidatePdfPageCache(sha256?)`, and `getPdfPageTextCacheStats()`. Populated cache in `runAccessibilityCheck` as well.
+  - Updated `defaults.pdf` in `src/main/services/assistant-book-sources.ts` to call `extractPdfPageTexts(pdfEngineTools(), filename, pages)` instead of running the whole-document accessibility audit.
+  - Kept KEY-282 boundaries: main reads the file, renderer never supplies text, and empty/image-only pages raise typed `AssistantBookError('no-text-layer', target)`.
+  - Added `PdfPageTextExtractionResult` to `src/shared/types/pdf-accessibility.ts`.
+  - Acceptance benchmarks on 240-page real PDF (`Why lyrics last...`):
+    - Whole-document pass (before KEY-289): 661 ms (and was 1,772 ms before removing unused `fitz` import).
+    - Page-scoped cold extraction of page 200 (after KEY-289): 281 ms (>2.3x speedup).
+    - Repeat call (in-memory cache hit): 0 ms (<1 ms, instantaneous).
+    - Text exact match verified: 2,148 characters match byte-for-byte across passes.
+  - Verified with real files:
+    - 240-page English text-layer PDF (`tests/real-files/pdf/en/text-layer/Why lyrics last_ evolution, cognition, and Shakesp.pdf`, page 200).
+    - Arabic text-layer PDF (`tests/real-files/pdf/ar/text-layer/الدفاع عن اراضي المسلمين اهم فروض الاعيان للشيخ عبدالله عزام.pdf`, page 2, 691 chars verified without tofu boxes).
+    - Arabic scanned PDF (`tests/real-files/pdf/ar/scanned-image-only/تفسير الموعذتين لابن تيمية.pdf`, page 1 correctly raises `no-text-layer`).
+  - Tests:
+    - `tests/services/pdf-page-extraction.test.ts` (6/6 pass).
+    - `tests/test_pdf_page_extraction.py` (3/3 pass).
+    - `tests/test_pdf_accessibility.py` (5/5 pass).
+    - Full test suite: `npm test` -> 1,617 / 1,617 pass (46.9s).
+    - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` (0 errors, 0 warnings), `npx tsup` (success), `git diff --check` (0 errors).
+  - Live harness: `scripts/pdf-explain-live/key289-live.ts` (all checks pass).
+  - Zero schema changes, zero new dependencies, zero downloads.
+- Exact task files:
+  - `assets/pdf-editor/engine.py`
+  - `src/main/services/assistant-book-sources.ts`
+  - `src/main/services/pdf-editor/accessibility.ts`
+  - `src/shared/types/pdf-accessibility.ts`
+  - `tests/services/pdf-page-extraction.test.ts`
+  - `tests/test_pdf_page_extraction.py`
+  - `scripts/pdf-explain-live/key289-live.ts`
+  - `docs/agent-ops/reports/KEY-289.md`
+  - `docs/agent-ops/board.md`
+  - `CURRENT_TASK.md`
+  - `IMPLEMENTATION_PLAN.md`
+
+## KEY-271 checkpoint - 2026-11-10, Codex
+
+Session 01a1c27f-6676-7ab3-915b-f97bd1d8dc99. Implemented owned stamps and calibrated distance/rectangular-area note payloads, separate stamp export category, catalogue selectors, PDFium physical-page sizing, and settings-backed saved actions with main validation and one staged job. Tools home and directory reuse the same action component. Five action tools reuse existing runners. No schema, dependency, download or Jira action.
+
+Verified full1610/1610, initial4 focused TS, Python writer1, type check, main build and scoped lint0errors/79existing warnings. Arabic translations corrected after shell encoding loss; exact sibling mixed line endings preserved. Native mGImQA Arabic10stamps+2measurements, undo/redo, Save/repeat/selective export passed. Ongoing native1pgyFP tests both real PDF languages, restart, ar/en1280/480 and action Save. Earlier harness navigation/read-button/English image-cover and responsive palette waits were corrected. Verification remains pending, no commit/push yet. Other-agent KEY-285 publication b6a16dd and unrelated changes preserved.
+
 ## KEY-285 — 2026-11-10, Antigravity (implemented and verified; publication pending)
 
 - Implementation & Verification: Study Workspace 7: Exam date and adaptive re-planning for a curriculum.

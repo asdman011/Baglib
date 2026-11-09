@@ -5,7 +5,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { DOMParser } from 'linkedom';
 import { getDatabase } from '../database/connection';
 import { inspectPdfFile } from './pdf-editor/inspection';
-import { runAccessibilityCheck } from './pdf-editor/accessibility';
+import { extractPdfPageTexts } from './pdf-editor/accessibility';
 import { pdfEngineTools } from './pdf-editor/tools';
 import { bookStudyTarget, parseBookTarget } from '../../shared/study-notes';
 import type { AssistantSource } from '../../shared/study-assistant';
@@ -65,7 +65,7 @@ const defaults: BookSourceDependencies = {
     // Retain PDF.js bounds/password/copy-permission checks. Text itself comes from KEY-272's mapping-aware reader.
     try { await inspectPdfFile(filename, undefined, () => {}, pages); }
     catch (error) { if ((error as Error).message === 'invalid-request') throw new Error('missing-page'); throw error; }
-    return (await runAccessibilityCheck(pdfEngineTools(), filename)).base;
+    return extractPdfPageTexts(pdfEngineTools(), filename, pages);
   },
   epub: readAssistantEpub,
 };

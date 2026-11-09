@@ -10,6 +10,7 @@ import type {
   PdfAccessibilityBaseReport,
   PdfAccessibilityFixResult,
   PdfAccessibilityReport,
+  PdfPageTextExtractionResult,
   VeraPdfRuleSummary,
   VeraPdfUaReport,
 } from '../../../shared/types/pdf-accessibility';
@@ -49,6 +50,194 @@ function spawnAsync(
     }
     proc.stdin.end();
   });
+}
+
+interface CachedPdfPagesEntry {
+  sha256: string;
+  engineVersion: string;
+  totalPages: number;
+  pageTexts: Record<string, string>;
+  pageHasUnmapped: Record<string, boolean>;
+  pagesWithoutText: number[];
+  fontsWithoutToUnicode: string[];
+  allFontsCount: number;
+  accessedAt: number;
+}
+
+const MAX_PDF_TEXT_CACHE_ENTRIES = 20;
+const pdfPageTextCache = new Map<string, CachedPdfPagesEntry>();
+const fileMetaCache = new Map<string, { sha256: string; mtimeMs: number; size: number }>();
+
+export function clearPdfPageTextCache(): void {
+  pdfPageTextCache.clear();
+  fileMetaCache.clear();
+}
+
+export function invalidatePdfPageCache(sha256?: string): void {
+  if (!sha256) {
+    clearPdfPageTextCache();
+    return;
+  }
+  for (const [key, entry] of pdfPageTextCache.entries()) {
+    if (entry.sha256 === sha256 || key.startsWith(`${sha256}:`)) {
+      pdfPageTextCache.delete(key);
+    }
+  }
+  for (const [filepath, meta] of fileMetaCache.entries()) {
+    if (meta.sha256 === sha256) {
+      fileMetaCache.delete(filepath);
+    }
+  }
+}
+
+export function getPdfPageTextCacheStats(): { size: number; keys: string[] } {
+  return {
+    size: pdfPageTextCache.size,
+    keys: Array.from(pdfPageTextCache.keys()),
+  };
+}
+
+export async function extractPdfPageTexts(
+  tools: PdfEngineTools,
+  filename: string,
+  pages?: number[],
+  options: { forceHash?: boolean } = {},
+): Promise<PdfPageTextExtractionResult> {
+  if (!fs.existsSync(filename)) {
+    throw new Error('file-not-found');
+  }
+
+  // 1. Resolve file SHA-256 (and invalidate if file content changed)
+  const stat = await fs.promises.stat(filename);
+  const lastMeta = fileMetaCache.get(filename);
+  let currentSha: string;
+  if (lastMeta && !options.forceHash && lastMeta.mtimeMs === stat.mtimeMs && lastMeta.size === stat.size) {
+    currentSha = lastMeta.sha256;
+  } else {
+    currentSha = await fileSha256(filename);
+    if (lastMeta && lastMeta.sha256 !== currentSha) {
+      // Content changed on disk! Invalidate old cache entry
+      invalidatePdfPageCache(lastMeta.sha256);
+    }
+    fileMetaCache.set(filename, { sha256: currentSha, mtimeMs: stat.mtimeMs, size: stat.size });
+  }
+
+  // 2. Cache key
+  const engineVersion = 'pypdfium2-1.x';
+  const cacheKey = `${currentSha}:${engineVersion}`;
+  let entry = pdfPageTextCache.get(cacheKey);
+
+  // 3. Check if all requested pages are already cached
+  const targetPages = pages ? pages.filter(p => Number.isInteger(p) && p >= 1) : undefined;
+  const missingPages = targetPages
+    ? (entry ? targetPages.filter(p => typeof entry!.pageTexts[String(p)] !== 'string') : targetPages)
+    : undefined;
+
+  if (entry && missingPages && missingPages.length === 0) {
+    entry.accessedAt = Date.now();
+    return {
+      engine: entry.engineVersion,
+      filename: path.basename(filename),
+      fileSize: stat.size,
+      sha256: entry.sha256,
+      totalPages: entry.totalPages,
+      pageTexts: entry.pageTexts,
+      pageHasUnmapped: entry.pageHasUnmapped,
+      pagesWithoutText: entry.pagesWithoutText,
+      fontsWithoutToUnicode: entry.fontsWithoutToUnicode,
+      allFontsCount: entry.allFontsCount,
+    };
+  }
+
+  // 4. Request missing pages from engine.py
+  const pagesToFetch = missingPages && missingPages.length > 0 ? missingPages : targetPages;
+  const requestJson = JSON.stringify({
+    operation: 'extract-text',
+    filename,
+    pages: pagesToFetch,
+  });
+
+  const { stdout, stderr, code } = await spawnAsync(
+    tools.python,
+    [tools.script],
+    requestJson,
+    30_000,
+  );
+
+  if (code !== 0 && !stdout) {
+    throw new Error(`PDF text extraction engine failed (code ${code}): ${stderr}`);
+  }
+
+  const lines = stdout.trim().split('\n').filter(Boolean);
+  let result: PdfPageTextExtractionResult | null = null;
+  for (const line of lines) {
+    try {
+      const msg = JSON.parse(line);
+      if (msg.type === 'complete' && msg.result) {
+        result = msg.result as PdfPageTextExtractionResult;
+        break;
+      }
+      if (msg.type === 'error') {
+        throw new Error(msg.error || 'pdf-text-extract-error');
+      }
+    } catch (e) {
+      if ((e as Error).message === 'file-not-found' || (e as Error).message === 'pdf-text-extract-error') {
+        throw e;
+      }
+    }
+  }
+
+  if (!result) {
+    throw new Error('Failed to parse text extraction report from python engine');
+  }
+
+  // 5. Update or create cache entry
+  if (entry) {
+    Object.assign(entry.pageTexts, result.pageTexts);
+    Object.assign(entry.pageHasUnmapped, result.pageHasUnmapped);
+    entry.pagesWithoutText = Array.from(new Set([...entry.pagesWithoutText, ...result.pagesWithoutText]));
+    entry.fontsWithoutToUnicode = Array.from(new Set([...entry.fontsWithoutToUnicode, ...result.fontsWithoutToUnicode]));
+    entry.allFontsCount = Math.max(entry.allFontsCount, result.allFontsCount);
+    entry.accessedAt = Date.now();
+  } else {
+    if (pdfPageTextCache.size >= MAX_PDF_TEXT_CACHE_ENTRIES) {
+      let oldestKey: string | null = null;
+      let oldestTime = Infinity;
+      for (const [k, v] of pdfPageTextCache.entries()) {
+        if (v.accessedAt < oldestTime) {
+          oldestTime = v.accessedAt;
+          oldestKey = k;
+        }
+      }
+      if (oldestKey) pdfPageTextCache.delete(oldestKey);
+    }
+
+    entry = {
+      sha256: currentSha,
+      engineVersion: result.engine || engineVersion,
+      totalPages: result.totalPages,
+      pageTexts: result.pageTexts,
+      pageHasUnmapped: result.pageHasUnmapped,
+      pagesWithoutText: result.pagesWithoutText,
+      fontsWithoutToUnicode: result.fontsWithoutToUnicode,
+      allFontsCount: result.allFontsCount,
+      accessedAt: Date.now(),
+    };
+    pdfPageTextCache.set(cacheKey, entry);
+  }
+
+  return {
+    engine: entry.engineVersion,
+    filename: path.basename(filename),
+    fileSize: stat.size,
+    sha256: entry.sha256,
+    totalPages: entry.totalPages,
+    pageTexts: entry.pageTexts,
+    pageHasUnmapped: entry.pageHasUnmapped,
+    pagesWithoutText: entry.pagesWithoutText,
+    fontsWithoutToUnicode: entry.fontsWithoutToUnicode,
+    allFontsCount: entry.allFontsCount,
+  };
 }
 
 export function isVeraPdfAvailable(tools: PdfEngineTools): boolean {
@@ -156,6 +345,24 @@ export async function runAccessibilityCheck(
 
   if (!baseReport) {
     throw new Error('Failed to parse accessibility report from python engine');
+  }
+
+  // Populate cache with extracted page texts from base report
+  if (baseReport.sha256 && baseReport.pageTexts) {
+    const engineVersion = 'pypdfium2-1.x';
+    const cacheKey = `${baseReport.sha256}:${engineVersion}`;
+    const entry: CachedPdfPagesEntry = {
+      sha256: baseReport.sha256,
+      engineVersion: baseReport.engine || engineVersion,
+      totalPages: baseReport.totalPages,
+      pageTexts: { ...baseReport.pageTexts },
+      pageHasUnmapped: { ...(baseReport.pageHasUnmapped || {}) },
+      pagesWithoutText: [...(baseReport.pagesWithoutText || [])],
+      fontsWithoutToUnicode: [...(baseReport.fontsWithoutToUnicode || [])],
+      allFontsCount: baseReport.allFontsCount || 0,
+      accessedAt: Date.now(),
+    };
+    pdfPageTextCache.set(cacheKey, entry);
   }
 
   // 2. Optional veraPDF check
