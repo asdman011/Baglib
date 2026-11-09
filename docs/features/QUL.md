@@ -1,5 +1,24 @@
 # QUL investigation for Baglib
 
+## Study assistant Warsh correspondence — KEY-276, Codex, 2026-11-09
+
+This adds one explicit correspondence path for the assistant. Earlier statements that no Warsh/Hafs mapping exists are superseded for this path only. The Quran view's profile compatibility checks remain in force.
+
+Evidence actually inspected:
+
+- REA catalog inventory: `ev_bed8dd9d9b255ee6f044629d978c36553e6e59f3ce816b080dd1ab261c6d5249`, catalog SHA-256 `4fdd1557148453388c369f3991417896653747eb466d111e954b5313415b2647`. No nonempty source WAL was observed; REA uses a private stable-file copy and does not certify an atomic live backup.
+- REA copied Warsh WBW inventory: `ev_5a8b601277a05e23a441bfc4f124e357329947dc62439eab780ccc5a5dd5cbdc`, SQLite SHA-256 `dc8126a9ea943961efa8a3d50887d016f052b11c72bb6a5d54a57d6394db2b1d`, one six-column `words` table.
+- REA copied Warsh ayah inventory: `ev_a44846df6311314e90bb08593f82c492b97e5eb3812b16e46167e9de4dc1c73c`, SQLite SHA-256 `4823aba2f5bb32b27438d71d565a8f1ed4b93a9c073437ac727a0787490bcf0c`, one five-column `verses` table.
+- Parameterized read-only queries against the disposable catalog/pack copies established `words(surah,ayah,word,text)` and `verses(surah,ayah,text)`. The complete sequence experiment and reproducible `scripts/assistant-live/verify-overlap.ts` cover all 114 surahs / 6,214 Warsh ayahs.
+
+Verified observations include: Warsh Al-Fatiha omits the counted basmala, maps 1–5 to Hafs 2–6, and splits Hafs 7 across Warsh 6 and 7. Warsh 4:44 contains the joined token `اُ۬لسَّبِيلَۖوَاللَّهُ`, crossing Hafs 4:44/45. Joined tokens also occur at 20:87/88 and 24:36/37, so matching by ayah index or ordinal WBW position loses references. Split spelling differences include Hafs `وَأَلَّوِ` versus Warsh `وَأَن` + `لَّوِ` at 72:16.
+
+`src/main/services/quran/warsh-overlap.ts` compares normalized copies: strip combining/Quran marks, marker digits, tatweel and spacing; unify alif forms; preserve taa marbuta/haa distinctions. A bounded monotone word edit alignment permits substitutions and 1:2/2:1 joins, including one-letter join differences. Every reachable optimal path must yield the same ayah-pair set; ambiguous pairs, boundary gaps, excessive divergence and unsupported drift fail explicitly. Interior spelling ties are allowed when their ayah mapping agrees. This is an algorithmic correspondence derived from the installed versions, not a claim that the two readings have identical canonical words or a publisher-certified universal map. All tested installed surahs passed; untested future resource versions must pass again. The 12-word band and divergence bound are deliberate compatibility limits.
+
+`QuranReader.overlap` stores per-surah JSON under the existing `quran/derived` directory, keyed by both pack digests, adapter version and surah. No canonical database field/table is added. `ayahTexts` reads the original Warsh **ayah** script read-only; the WBW alignment never replaces its text. `assistantSources` resolves the installed Hafs resources against each overlapping Hafs ayah, preserving original resource titles and grouped commentary content. Distinct labels can reference the same grouped tafsir text; no overlapping reference is removed by deduplicating commentary bodies. Labels carry the actual Hafs reference and localized numbering notice, and citation targets open that Hafs reference.
+
+Native run `.baglib-data/assistant-live-3k7Xnb` verified both UI languages, 1280/480 widths, source pickers for tafsir 22/251 and translations 193/92, exact quotes accepted and fabricated quotes refused. `overlap.json`, `results.json`, `cleanup.json` and six `key276-*.png` screenshots retain evidence; copied corpus/profile directories were deleted. The helper's 128 tracked original-file hashes stayed identical. No downloads, remote provider, source normalization or library schema changes occurred. Existing budget trimming remains explicit through `limited`; very long sources can be shortened or omitted once that budget is exhausted. See [Quran experience](feature%20-%20Quran%20Experience.md#study-assistant-sources--key-276-2026-11-09).
+
 ## Arabic metadata translation source audit — 2026-10-26
 
 User-authorized Arabic derivative copies are being prepared separately from immutable supplied sources. REA inspected `surah_infos`, `topics` and `themes` schemas/samples; measured coverage is 114 introductions, 2,512 topics and 2,098 themes. Existing Arabic, IDs, HTML structure and relation/reference fields must remain unchanged. Canonical Hafs quote references come from provided script 312, not backtranslation. See [Arabic Metadata Localization](feature%20-%20Quran%20Metadata%20Arabic%20Localization.md) for exact source evidence, validation and honest progress boundaries; preparation does not mean translation is complete.

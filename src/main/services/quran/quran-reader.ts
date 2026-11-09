@@ -1,6 +1,8 @@
 import Database from 'better-sqlite3';
+import { alignWarshSurah } from './warsh-overlap';
+import type { AssistantQuranQuery, AssistantQuranSource } from '../../../shared/study-assistant';
 import { createHash, randomUUID } from 'node:crypto';
-import { copyFile, mkdir, rename, rm, realpath, readFile } from 'node:fs/promises';
+import { copyFile, mkdir, rename, rm, realpath, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseHTML } from 'linkedom';
 import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranDivision, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit, QuranSimilarAyah, QuranStructure, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
@@ -231,6 +233,88 @@ export class QuranReader {
     if (this.databases.size >= 12) { const [oldId, old] = this.databases.entries().next().value!; old.close(); this.databases.delete(oldId); }
     this.databases.set(id, database);
     return database;
+  }
+  /** Read the canonical ayah script, without substituting one reading for another. */
+  async ayahTexts(query: AssistantQuranQuery): Promise<{ number: number; text: string }[]> {
+    if (!Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.from) || !Number.isInteger(query.to) || query.from < 1 || query.to < query.from || query.to > 300 || query.to - query.from >= 50 || !['hafs', 'warsh'].includes(query.profile)) throw new Error('invalid-resource');
+    if (query.profile === 'warsh') {
+      const pack = this.packs.find(pack => pack.resource.id === 'quran-script/qpc-warsh-script-ayah');
+      if (!pack) throw new Error('warsh-not-installed');
+      if (!/^[a-f0-9-]{36}$/.test(pack.id) || !/^[a-f0-9]{64}$/.test(pack.digest)) throw new Error('invalid-resource');
+      const parent = await realpath(path.join(this.root, 'packs', pack.id));
+      if (path.dirname(parent) !== await realpath(path.join(this.root, 'packs'))) throw new Error('invalid-resource');
+      const file = await realpath(path.join(parent, `${pack.files.findIndex(file => file.type === 'sqlite')}.sqlite`));
+      if (path.dirname(file) !== parent) throw new Error('invalid-resource');
+      const db = new Database(file, { readonly: true, fileMustExist: true });
+      try {
+        db.pragma('trusted_schema = OFF');
+        return db.prepare('SELECT ayah AS number, text FROM verses WHERE surah=? AND ayah BETWEEN ? AND ? ORDER BY ayah').all(query.surah, query.from, query.to) as { number: number; text: string }[];
+      } finally { db.close(); }
+    }
+    const script = this.catalog().sources.find(source => source.kind === 'script' && source.profile === 'hafs');
+    if (!script) return [];
+    const result: { number: number; text: string }[] = [];
+    for (let at: number | null = query.from; at !== null && at <= query.to;) {
+      const passage = await this.read({ script: script.id, surah: query.surah, from: at });
+      result.push(...passage.ayahs.filter(ayah => ayah.number <= query.to).map(ayah => ({ number: ayah.number, text: ayah.words.filter(word => !word.marker).map(word => word.text).join(' ') })));
+      at = passage.next !== null && passage.next > at ? passage.next : null;
+    }
+    return result;
+  }
+  private async overlap(surah: number): Promise<Record<number, number[]>> {
+    const hafs = this.packs.find(pack => pack.resource.id === 'quran-script/312');
+    const warsh = this.packs.find(pack => pack.resource.id === 'quran-script/qpc-warsh-script-wbw');
+    if (!warsh) throw new Error('warsh-not-installed');
+    if (!hafs) throw new Error('invalid-resource');
+    const identity = createHash('sha256').update(`assistant-overlap-v1:${hafs.digest}:${warsh.digest}:${surah}`).digest('hex');
+    const directory = path.join(this.root, 'derived');
+    const filename = path.join(directory, `${identity}.json`);
+    try {
+      const cached = JSON.parse(await readFile(filename, 'utf8'));
+      if (cached.identity === identity && cached.map && Object.entries(cached.map).every(([key, refs]) => /^\d{1,3}$/.test(key) && Array.isArray(refs) && refs.length && refs.every(ref => Number.isInteger(ref) && ref > 0 && ref <= 300))) return cached.map;
+    } catch { /* Rebuild a missing or invalid derived file. */ }
+    const a = (await this.database(hafs.id, 'script')).prepare('SELECT ayah,text FROM words WHERE surah=? ORDER BY ayah,word').all(surah) as { ayah: number; text: string }[];
+    const b = (await this.database(warsh.id, 'script')).prepare('SELECT ayah,text FROM words WHERE surah=? ORDER BY ayah,word').all(surah) as { ayah: number; text: string }[];
+    const map = alignWarshSurah(a, b, surah === 1);
+    await mkdir(directory, { recursive: true });
+    const temporary = path.join(directory, `${randomUUID()}.json`);
+    try { await writeFile(temporary, JSON.stringify({ identity, map })); await rename(temporary, filename); }
+    finally { await rm(temporary, { force: true }); }
+    return map;
+  }
+  async assistantSources(query: AssistantQuranQuery): Promise<AssistantQuranSource[]> {
+    // Validate even when no optional sources were requested.
+    const ayahs = await this.ayahTexts(query);
+    const selections = (['tafsir', 'translation'] as const).flatMap(kind => {
+      if (!query[kind]) return [];
+      const pack = this.packs.find(pack => pack.resource.id === query[kind]);
+      const preset = pack && readerPreset(pack);
+      if (!pack || !preset || preset.profile !== 'hafs' || !(preset.kind === kind || kind === 'translation' && preset.kind === 'word-translation')) throw new Error('invalid-resource');
+      return [{ pack, preset, kind }];
+    });
+    if (!selections.length) return [];
+    const hafs = this.catalog().sources.find(source => source.kind === 'script' && source.profile === 'hafs');
+    if (!hafs) throw new Error('invalid-resource');
+    const map = query.profile === 'warsh' ? await this.overlap(query.surah) : null;
+    const numbers = [...new Set(ayahs.flatMap(ayah => {
+      const refs = map ? map[ayah.number] : [ayah.number];
+      if (!refs?.length) throw new Error('ambiguous-alignment');
+      return refs;
+    }))].sort((a, b) => a - b);
+    const flatten = (nodes: QuranRichNode[]): string => nodes.map(node => node.tag === 'text' ? node.text || '' : `${flatten(node.children || [])}${['p', 'div', 'br', 'h2', 'h3'].includes(node.tag) ? '\n' : ''}`).join('');
+    const result: AssistantQuranSource[] = [];
+    for (const ayah of numbers) for (const { pack, preset, kind } of selections) {
+      let text: string;
+      if (kind === 'tafsir') text = flatten((await this.commentary({ script: hafs.id, pack: pack.id, surah: query.surah, ayah })).nodes);
+      else {
+        const passage = await this.read({ script: hafs.id, surah: query.surah, from: ayah, ...(preset.kind === 'word-translation' ? { meanings: pack.id } : { translation: pack.id }) });
+        const verse = passage.ayahs.find(entry => entry.number === ayah);
+        text = preset.kind === 'word-translation' ? verse?.words.filter(word => !word.marker).map(word => word.meaning || '').join(' ') || '' : [verse?.translation?.text, ...(verse?.translation?.notes || [])].filter(Boolean).join('\n');
+      }
+      if (!text.trim()) throw new Error('invalid-package');
+      result.push({ kind, title: pack.resource.title, surah: query.surah, ayah, text, direction: kind === 'tafsir' ? 'rtl' : 'ltr' });
+    }
+    return result;
   }
   async read(query: QuranReadQuery): Promise<QuranPassage> {
     if (!Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.from) || query.from < 1 || query.from > 300) throw new Error('invalid-resource');

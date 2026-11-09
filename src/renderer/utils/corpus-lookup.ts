@@ -10,34 +10,29 @@ export interface CorpusOption { kind: CorpusKind; target: string; label: string;
 const toLatinDigits = (value: string) => value.replace(/[٠-٩]/gu, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
 const quoted = (text: string) => text.split(/\r?\n/u).map(line => `> ${line}`).join('\n');
 
-let hafsScript: Promise<string | null> | null = null;
-function quranScript(): Promise<string | null> {
-  hafsScript ??= (async () => {
-    const catalog = await window.electronAPI?.quran?.readerCatalog();
-    if (!catalog?.ok) { hafsScript = null; return null; }
-    return catalog.data.sources.find(source => source.kind === 'script' && source.profile === 'hafs')?.id ?? null;
-  })();
-  return hafsScript;
+async function quranScript(profile: 'hafs' | 'warsh' = 'hafs'): Promise<string | null> {
+  const catalog = await window.electronAPI?.quran?.readerCatalog();
+  return catalog?.ok ? catalog.data.sources.find(source => source.kind === 'script' && source.profile === profile)?.id ?? null : null;
 }
 
-async function ayahTexts(surah: number, from: number, to: number): Promise<{ number: number; text: string }[]> {
-  const script = await quranScript();
+async function ayahTexts(surah: number, from: number, to: number, profile: 'hafs' | 'warsh' = 'hafs'): Promise<{ number: number; text: string }[]> {
+  const script = await quranScript(profile);
   if (!script) return [];
   const passage = await window.electronAPI.quran.read({ script, surah, from });
   if (!passage.ok) return [];
   return passage.data.ayahs.filter(ayah => ayah.number >= from && ayah.number <= to).map(ayah => ({ number: ayah.number, text: ayah.words.filter(word => !word.marker).map(word => word.text).join(' ') }));
 }
 
-function quranOption(surah: number, from: number, to: number, ayahs: { number: number; text: string }[]): CorpusOption {
+function quranOption(surah: number, from: number, to: number, ayahs: { number: number; text: string }[], profile: 'hafs' | 'warsh' = 'hafs'): CorpusOption {
   const reference = from === to ? `${surah}:${from}` : `${surah}:${from}-${to}`;
-  const target = `quran:hafs:${reference}`;
+  const target = `quran:${profile}:${reference}`;
   const text = ayahs.map(ayah => `${ayah.text} (${ayah.number})`).join(' ');
   const link = studyLinkText(target, reference);
   return { kind: 'quran', target, label: reference, snippet: text.slice(0, 120), link, quote: `${quoted(`﴿${text}﴾`)}\n> ${link}` };
 }
 
 /** Searches the installed Quran (by `2:255`, `2:255-257` or words), Sunnah and poetry. Missing data gives no results, not an error. */
-export async function searchCorpus(kinds: CorpusKind[], query: string, collectionLabel: (id: SunnahCollectionId) => string, limit = 6): Promise<CorpusOption[]> {
+export async function searchCorpus(kinds: CorpusKind[], query: string, collectionLabel: (id: SunnahCollectionId) => string, limit = 6, profile: 'hafs' | 'warsh' = 'hafs'): Promise<CorpusOption[]> {
   const text = query.trim();
   if (text.length < 2) return [];
   const jobs: Promise<CorpusOption[]>[] = [];
@@ -45,14 +40,14 @@ export async function searchCorpus(kinds: CorpusKind[], query: string, collectio
     const citation = /^(\d{1,3})\s*[:：]\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?$/u.exec(toLatinDigits(text));
     if (citation) {
       const surah = +citation[1], from = +citation[2], to = citation[3] ? +citation[3] : from;
-      if (!parseQuranTarget(`quran:hafs:${surah}:${from}${to !== from ? `-${to}` : ''}`)) return [];
-      const ayahs = await ayahTexts(surah, from, to);
-      return ayahs.length ? [quranOption(surah, from, Math.min(to, ayahs.at(-1)!.number), ayahs)] : [];
+      if (!parseQuranTarget(`quran:${profile}:${surah}:${from}${to !== from ? `-${to}` : ''}`)) return [];
+      const ayahs = await ayahTexts(surah, from, to, profile);
+      return ayahs.length ? [quranOption(surah, from, Math.min(to, ayahs.at(-1)!.number), ayahs, profile)] : [];
     }
-    const script = await quranScript();
+    const script = await quranScript(profile);
     if (!script) return [];
     const found = await window.electronAPI.quran.searchAyahs({ script, text });
-    return found.ok ? found.data.slice(0, limit).map(hit => quranOption(hit.surah, hit.ayah, hit.ayah, [{ number: hit.ayah, text: hit.text }])) : [];
+    return found.ok ? found.data.slice(0, limit).map(hit => quranOption(hit.surah, hit.ayah, hit.ayah, [{ number: hit.ayah, text: hit.text }], profile)) : [];
   })());
   if (kinds.includes('hadith')) jobs.push((async () => {
     const found = await window.electronAPI?.sunnah?.search?.({ text });

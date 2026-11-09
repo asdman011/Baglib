@@ -6,13 +6,15 @@ import { AIResearchService } from '../services/ai/ai-research.service';
 import { AIProviderService } from '../services/ai/ai-provider.service';
 import { inspectPdfFile } from '../services/pdf-editor/inspection';
 import { bookPdfFile } from '../services/book-files';
-import { readAyahTexts } from './quran';
+import { readAyahTexts, readQuranSources } from './quran';
 import { readHadithText } from './sunnah';
 import { parseQuranTarget } from '../../shared/study-notes';
 import { assistantSystemPrompt, budgetSources, validateAssistantAnswer, validateAssistantRequest, type AssistantAnswer, type AssistantSource } from '../../shared/study-assistant';
 
+import { translations } from '../../renderer/translations';
+
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
-const KNOWN = ['invalid-request', 'permission-denied', 'invalid-output', 'busy', 'no-sources', 'ai-disabled'];
+const KNOWN = ['invalid-request', 'permission-denied', 'invalid-output', 'busy', 'no-sources', 'ai-disabled', 'warsh-not-installed', 'invalid-resource', 'ambiguous-alignment'];
 
 const authorize = (event: IpcMainInvokeEvent) => {
   const frame = event.senderFrame;
@@ -59,8 +61,11 @@ export function registerStudyAssistantIpc(): void {
           // The text comes from the installed Quran and Sunnah data, never from the renderer.
           const quran = parseQuranTarget(passage.target);
           if (quran) {
-            const ayahs = await readAyahTexts(quran.surah, quran.from, quran.to).catch(() => []);
+            const ayahs = await readAyahTexts(quran.surah, quran.from, quran.to, { profile: quran.profile });
             if (ayahs.length) add(passage.label, passage.target, ayahs.map(ayah => `${ayah.text} (${ayah.number})`).join('\n'));
+            for (const source of await readQuranSources({ ...quran, tafsir: passage.tafsir, translation: passage.translation })) {
+              add(`${source.title} — ${source.surah}:${source.ayah} (${translations[request.language].assistantHafsNumbering})`, `quran:hafs:${source.surah}:${source.ayah}`, source.text);
+            }
             continue;
           }
           const sunnah = /^sunnah:([^:]+):(\d+):(.+)$/u.exec(passage.target);

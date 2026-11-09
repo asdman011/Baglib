@@ -2,7 +2,11 @@ import { utilityProcess } from 'electron';
 import path from 'node:path';
 import type { QuranFrequencyFamily, QuranFrequencyQuery, QuranPack, QuranReadQuery, QuranResult } from '../../../shared/types/quran';
 
+import type { AssistantQuranQuery } from '../../../shared/study-assistant';
+
 type Action =
+  | { action: 'assistant-ayahs'; query: AssistantQuranQuery }
+  | { action: 'assistant-sources'; query: AssistantQuranQuery }
   | { action: 'catalog' }
   | { action: 'morphology'; script: string; surah: number; ayah: number }
   | { action: 'mutashabihat'; script: string; surah: number; ayah: number }

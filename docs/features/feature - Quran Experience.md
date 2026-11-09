@@ -1,5 +1,14 @@
 # Feature: Quran Experience — approved roadmap
 
+## Study assistant sources — KEY-276, 2026-11-09
+
+The assistant now offers Hafs/Warsh selection and installed tafsir/translation pickers beneath each selected ayah. Arabic RTL and English LTR layouts preserve original source titles and use automatic per-source text direction, wrapping metadata and extra line height for Arabic previews. At 480 px the source selection and answer share one scrollable column; at 1280 px they appear side by side.
+
+Main reads canonical Warsh ayah text and refuses missing Warsh resources with `warsh-not-installed`. Optional sources are checked against installed resource IDs in main, read independently, labelled with their actual Hafs ayah number and “Hafs numbering” / “بترقيم حفص”, and passed through the existing source budget and exact-quote verifier. Warsh 4:44 receives both Hafs 4:44 and 4:45 tafsirs/translations, in order, including text from the later Hafs ayah. Al-Fatiha's differing basmala/last-ayah numbering is covered explicitly.
+
+The assistant's derived correspondence is a scoped exception to the existing profile isolation rule. Quran reader view checks, Work → Edition → Source and canonical pack contents are unchanged. [QUL investigation](QUL.md#study-assistant-warsh-correspondence--key-276-codex-2026-11-09) records REA evidence, algorithm, versioned cache, verified corpus coverage and compatibility limits. The local fake-provider harness certifies UI and quote plumbing, not a model's theological accuracy or a remote service.
+
+
 ## Integrated Khatmah — 2026-10-26
 
 A localized Khatmahs tab adds independent private completion plans, custom/preset scheduling, page/session and verified Hafs Juz pacing, adaptive assignments, exact Mushaf jumps, progress/streaks and pace forecasts. A reader-side mark/undo control supports optional visibility/focus-gated 20-second activity tracking. Native reminders require Baglib to be running. No source Quran databases or Work → Edition → Source schemas are modified; the existing private SQLite settings repository is reused. See [Khatmah](feature%20-%20Quran%20Khatmah.md) for contracts, calculations, evidence, resource-binding/Warsh limits and verification.

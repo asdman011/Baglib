@@ -11,7 +11,11 @@ const run = async (request: QuranReaderRequest) => {
     const next = JSON.stringify([request.root, request.packs.map(pack => pack.id)]);
     if (next !== identity) { reader?.close(); reader = new QuranReader(request.root, request.packs); identity = next; }
     const data =
-      request.action === 'mutashabihat'
+      request.action === 'assistant-ayahs'
+        ? await reader!.ayahTexts(request.query)
+        : request.action === 'assistant-sources'
+        ? await reader!.assistantSources(request.query)
+        : request.action === 'mutashabihat'
         ? await reader!.mutashabihat(request.script, request.surah, request.ayah)
         : request.action === 'morphology'
         ? await reader!.morphology(request.script, request.surah, request.ayah)
@@ -53,7 +57,7 @@ const run = async (request: QuranReaderRequest) => {
     port.postMessage({ id: request.id, ok: true, data });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
-    port.postMessage({ id: request.id, ok: false, error: ['invalid-resource', 'invalid-package', 'unsupported-format'].includes(message) ? message : 'storage' });
+    port.postMessage({ id: request.id, ok: false, error: ['invalid-resource', 'invalid-package', 'unsupported-format', 'warsh-not-installed', 'ambiguous-alignment'].includes(message) ? message : 'storage' });
   }
 };
 const enqueue = (request: QuranReaderRequest) => { pending = pending.then(() => run(request)); };

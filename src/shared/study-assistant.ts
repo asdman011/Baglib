@@ -22,7 +22,9 @@ export interface AssistantRequest {
   books: { id: string; from: number; to: number }[];
   passages: AssistantPassage[];
 }
-export interface AssistantPassage { target: string; label: string }
+export interface AssistantPassage { target: string; label: string; tafsir?: string; translation?: string }
+export interface AssistantQuranQuery { surah: number; from: number; to: number; profile: 'hafs' | 'warsh'; tafsir?: string; translation?: string }
+export interface AssistantQuranSource { title: string; surah: number; ayah: number; text: string; kind: 'tafsir' | 'translation'; direction: 'rtl' | 'ltr' }
 /** One source as the model sees it: `S1`, `S2` … with a study link target so a citation becomes a live link. */
 export interface AssistantSource { id: string; label: string; target: string; text: string }
 export interface AssistantCitation { source: string; target: string; label: string; quote: string }
@@ -51,7 +53,12 @@ export function validateAssistantRequest(input: unknown): AssistantRequest {
     const passage = (raw ?? {}) as Record<string, unknown>;
     if (typeof passage.target !== 'string' || !passageKind(passage.target) || typeof passage.label !== 'string') throw new Error('invalid-request');
     const label = passage.label.replace(/[\r\n[\]|]+/gu, ' ').trim().slice(0, 200) || passage.target;
-    return { target: passage.target, label };
+    const selected: { tafsir?: string; translation?: string } = {};
+    for (const key of ['tafsir', 'translation'] as const) if (passage[key] !== undefined) {
+      if (!parseQuranTarget(passage.target) || typeof passage[key] !== 'string' || !/^(?:tafsir|translation)\/[a-zA-Z0-9-]{1,100}$/u.test(passage[key])) throw new Error('invalid-request');
+      selected[key] = passage[key];
+    }
+    return { target: passage.target, label, ...selected };
   });
   if (!notes.length && !ranges.length && !passages.length) throw new Error('invalid-request');
   return { task, question, language: value.language, allowRemote: value.allowRemote, notes: notes as string[], books: ranges, passages };

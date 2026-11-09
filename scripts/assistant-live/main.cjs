@@ -18,9 +18,10 @@ const fake = http.createServer((request, response) => {
     requests.push({ url: request.url, system, user });
     const source = user.sources[0];
     const quote = source.text.trim().split('\n')[0].slice(0, 20);
+    const extraSources = user.sources.filter(source => /Hafs numbering|بترقيم حفص/u.test(source.label));
     const answer = system.includes('"cards"')
       ? { answer: '', abstained: false, citations: [], cards: [{ front: system.includes('Arabic') ? 'ما الصبر؟' : 'What is patience?', back: 'ضياء', source: source.id, quote }, { front: 'Second card', back: 'answer', source: source.id, quote }] }
-      : { answer: system.includes('Arabic') ? 'الصبر ضياء كما في المصدر.' : 'Patience is light, as the source says.', abstained: false, citations: [{ source: source.id, quote }] };
+      : { answer: system.includes('Arabic') ? 'الصبر ضياء كما في المصدر.' : 'Patience is light, as the source says.', abstained: false, citations: extraSources.length ? extraSources.map(source => ({ source: source.id, quote: user.question === '__KEY276_FABRICATE__' ? 'THIS QUOTE DOES NOT EXIST IN THE INSTALLED TEXT' : source.text.trim().slice(0, 60) })) : [{ source: source.id, quote }] };
     response.writeHead(200, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify({ message: { content: JSON.stringify(answer) } }));
   });
@@ -36,7 +37,7 @@ app.on('browser-window-created', (_, owner) => {
   const load = async language => {
     owner.setContentSize(1280, 900);
     for (let i = 0; i < 150 && (!owner.webContents.getURL().startsWith('http://localhost:3000') || owner.webContents.isLoading()); i++) await pause(200);
-    await evaluate(`localStorage.setItem('baglib-lang','${language}')`); await owner.loadURL('http://localhost:3000');
+    await evaluate(`localStorage.setItem('baglib-lang','${language}')`); await owner.loadURL('http://localhost:3000').catch(error => { console.log('Reload readiness retry: '+error.message); });
     await until('!!window.electronAPI && !!document.querySelector("footer")'); await pause(800);
     await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')}).click()`);
     await until("document.querySelectorAll('[data-study-note]').length>=1");
@@ -49,10 +50,11 @@ app.on('browser-window-created', (_, owner) => {
   };
   const ask = async () => { await evaluate("document.querySelector('[data-assistant-ask]').click()"); await until("!!document.querySelector('[data-assistant-error], [data-assistant-answer], [data-assistant-cards]')"); };
   (async () => {
+    owner.show(); owner.focus(); owner.webContents.focus();
     const results = {};
     const port = await new Promise(resolve => fake.listen(0, '127.0.0.1', () => resolve(fake.address().port)));
     for (let i = 0; i < 150 && (!owner.webContents.getURL().startsWith('http://localhost:3000') || owner.webContents.isLoading()); i++) await pause(200);
-    await until('!!window.electronAPI?.studyNotes');
+    await until('!!window.electronAPI?.studyNotes && !!document.querySelector("footer")'); await pause(1500);
     await evaluate("window.electronAPI.studyNotes.save({id:'evidence',title:'الصبر ضياء',content:'الصبر ضياء كما في الحديث الصحيح.\\nوهو حبس النفس على الطاعة.',aliases:[],tags:[],expectedRevision:0})");
     for (const language of ['ar', 'en']) {
       const result = {};
@@ -123,6 +125,48 @@ app.on('browser-window-created', (_, owner) => {
       result.forgedOk = forged.ok;
       await shot(`passage-answer-${language}`);
       await evaluate("document.querySelector('[data-study-assistant] header button').click()");
+      // KEY-276: choose Warsh, attach installed Hafs-numbered sources, retain both overlapping ayahs.
+      await openAssistant();
+      await evaluate("document.querySelector('[data-assistant-note=\"evidence\"]').click()");
+      await setValue('[data-assistant-question]', 'KEY-276 تفسير Study');
+      await setValue('[data-assistant-profile]', 'warsh', 'HTMLSelectElement');
+      await setValue('[data-assistant-passage-search]', '٤:٤٤', 'HTMLInputElement');
+      await until('!!document.querySelector(\'[data-assistant-passage-option="quran:warsh:4:44"]\')');
+      await evaluate('document.querySelector(\'[data-assistant-passage-option="quran:warsh:4:44"]\').click()');
+      await setValue('[data-assistant-extra="tafsir"]', 'tafsir/22', 'HTMLSelectElement');
+      await setValue('[data-assistant-extra="translation"]', 'translation/193', 'HTMLSelectElement');
+      await ask();
+      assert.equal(await evaluate("document.querySelector('[data-assistant-error]')?.dataset.assistantError || null"), null);
+      const warshSources = requests.at(-1).user.sources;
+      assert.equal(warshSources.length, 5, 'Warsh + two tafsirs + two translations');
+      assert.deepEqual(warshSources.slice(1).map(source => /4:(44|45)/u.exec(source.label)?.[0]), ['4:44', '4:44', '4:45', '4:45']);
+      assert.ok(warshSources.slice(1).every(source => source.label.includes(language === 'ar' ? 'بترقيم حفص' : 'Hafs numbering')));
+      result.warsh = { sources: warshSources, citations: await evaluate("[...document.querySelectorAll('[data-assistant-citation]')].map(e=>e.dataset.assistantCitation)") };
+      assert.deepEqual(result.warsh.citations, ['quran:hafs:4:44', 'quran:hafs:4:44', 'quran:hafs:4:45', 'quran:hafs:4:45']);
+      for (const width of [1280, 480]) {
+        owner.setContentSize(width, 900); await pause(500);
+        const fit = await evaluate("(()=>{const d=document.querySelector('[data-study-assistant]');return d.scrollWidth<=d.clientWidth+1 && [...d.querySelectorAll('select,button')].every(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;});})()");
+        assert.equal(fit, true, 'all controls fit at '+width);
+        await shot(`key276-${language}-${width}`);
+        if (width === 480) {
+          await evaluate("document.querySelector('[data-assistant-citation]').scrollIntoView({block:'start'})");
+          await shot(`key276-${language}-${width}-sources`);
+          await evaluate("document.querySelector('[data-assistant-profile]').scrollIntoView({block:'center'})");
+        }
+      }
+      // Verify the other two already-installed source adapters through the same real IPC.
+      await setValue('[data-assistant-extra="tafsir"]', 'tafsir/251', 'HTMLSelectElement');
+      await setValue('[data-assistant-extra="translation"]', 'translation/92', 'HTMLSelectElement');
+      await ask();
+      await until("!!document.querySelector('[data-assistant-answer]')");
+      result.otherInstalledSources = requests.at(-1).user.sources.map(source => source.label);
+      assert.equal(result.otherInstalledSources.length, 5);
+      await setValue('[data-assistant-question]', '__KEY276_FABRICATE__');
+      await ask();
+      await until("document.querySelector('[data-assistant-error]')?.dataset.assistantError==='invalid-output'");
+      result.fabricatedRefused = true;
+      await evaluate("document.querySelector('[data-study-assistant] header button').click()");
+      owner.setContentSize(1280, 900);
       results[language] = result; console.log(JSON.stringify({ language, result }));
       assert.equal(result.disabled, 'ai-disabled');
       assert.equal(result.remote, 'permission-denied');

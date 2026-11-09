@@ -71,10 +71,35 @@
   - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (success in 181ms), `git diff --check` (0 errors).
   - Live harness: `scripts/ocr-review-live/run.mjs` executed real Arabic scanned PDF (`تفسير الموعذتين لابن تيمية.pdf`) and English PDF (`New Scientist 2016`), verified 16 Arabic suspects and 8 English suspects in reading order, tested live word correction (`تصحيح-اختباري`), verified persistence, verified that re-OCR does NOT misapply stale corrections to shifted words, and captured inspected screenshots in `.baglib-data/key275-evidence/`.
 
-## KEY-276 ? 2026-11-09, Codex (active)
+## KEY-276 — 2026-11-09, Codex (implemented and verified; publication pending)
 
-- Session 01a1c03b-110e-7463-ad62-8737c6443789. Implement profile-aware assistant sources, derived Warsh/Hafs overlap mapping, installed tafsir/translation pickers and disposable bilingual verification. Shared-file boundaries per task; no Jira. One verified task commit and normal push authorized. Initial REA catalog inspection and hash-verified corpus copy complete; implementation/tests pending.
+- Session `01a1c03b-110e-7463-ad62-8737c6443789`. Implemented profile-aware assistant Quran text, installed tafsir/translation source pickers, and explicit derived Warsh→Hafs overlap mapping. Canonical Warsh comes from the installed ayah script; no Hafs fallback. Main validates resource IDs and reads every overlapping Hafs ayah as a separate source with original title, actual Hafs number and localized numbering notice. Existing budget/quote validation remains enforced. No schema, dependency, download or Quran-view changes; Jira delegated to Claude.
+- UX: Hafs/Warsh choice plus per-ayah tafsir/translation selectors. Arabic RTL / English LTR, automatic source direction, wrapped metadata and more Arabic preview line height; single scrollable column at 480 px and two columns at 1280 px. Warsh 4:44 gets both Hafs 4:44 and 4:45 sources. Al-Fatiha maps Warsh 1–5→Hafs 2–6 and Warsh 6/7→Hafs 7.
+- Verification: initial overlap tests failed before implementation; final focused 12/12 pass. Fresh resumed full suite **1492/1492**, zero failures/skips; `npx tsc --noEmit`, 15-file ESLint (0 errors/0 warnings), `npx tsup`, `git diff --check` pass. Retained native `assistant-live-3k7Xnb` passed ar/en and all four installed optional adapters using a local fake provider, accepted exact quotes, rejected fabricated quotes, and verified all114 surahs /6214 Warsh ayahs. Six 1280/480 screenshots inspected. Native receipt confirms128 tracked originals unchanged during run; throwaway profiles deleted. Earlier failed runs were harness reload timing/startup readiness failures, corrected before the passing run. Final static/test checks include the later read-only trusted-schema guard and short-sequence regression threshold; native run was not repeated after resume per user instruction.
+- Cleanup/evidence: `.baglib-data/assistant-live-3k7Xnb/{results.json,overlap.json,cleanup.json,key276-*.png}` and `.baglib-data/key276-tests-final.log`. No port3000 server remained at resume cleanup. Research profile removed after a late read-only comparison:126 pack/derived files matched; the current original catalog hash differs from the morning snapshot and sidecar bytes differ. No cause is attributed; the contemporaneous passing native receipt remains the hash guarantee for that run. Receipt: `.baglib-data/key276-research-cleanup.json`.
+- Limits: bounded alignment supports the inspected versions, rejects ambiguous ayah pairs/unsupported drift; not a publisher-certified universal correspondence. Existing source budget can shorten/omit later sources with `limited`. A local fake provider verifies grounding plumbing, not model correctness. No unresolved KEY-276 acceptance failures. Research recorded in QUL.md and Quran Experience.md. Ten KEY-276 bilingual keys already reached HEAD through collaborative commits; no new translation hunks remain to stage. No unrelated agent files belong in this commit.
+- Exact KEY-276 commit files/hunks:
 
+- `docs/features/QUL.md`
+- `docs/features/feature - Quran Experience.md`
+- `scripts/assistant-live/main.cjs`
+- `scripts/assistant-live/run.mjs`
+- `scripts/assistant-live/verify-overlap.ts`
+- `src/main/ipc/quran.ts`
+- `src/main/ipc/study-assistant.ts`
+- `src/main/quran-reader-worker.ts`
+- `src/main/services/quran/quran-reader-process.ts`
+- `src/main/services/quran/quran-reader.ts`
+- `src/main/services/quran/warsh-overlap.ts`
+- `src/renderer/components/notes/StudyAssistant.tsx`
+- `src/renderer/utils/corpus-lookup.ts`
+- `src/shared/study-assistant.ts`
+- `tests/services/study-assistant-quran.test.ts`
+- `tests/services/warsh-overlap.test.ts`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
+- Local-only report: `docs/agent-ops/reports/KEY-276.md`; local board updated independently. Publication authorized by the current user request: one KEY-276 commit ending `Agent: Codex`, normal push to `origin/feature/library-domain`, then stop. Hash/push receipt will follow publication.
 ## KEY-277 — 2026-11-09, Codex (committed and pushed)
 
 - Session 01a1c037-f1f8-7731-b32b-95aedff36c38. Added packaged-only protocol registration (explicit dev opt-in uses the resolved app entry), bounded validated deep-link delivery from cold argv, second-instance argv and open-url, renderer-ready handshake, fresh-data navigation and a localized missing-target alert. Existing shared parsers/navigation retain all target kinds. Added per-card Markdown/Word disclosure actions with wrapping RTL/LTR layout and the existing dialogs/options. Canonical export selection now includes ordinary reader notes and reading reflections already shown in Notes; no schema/dependency/download changes.

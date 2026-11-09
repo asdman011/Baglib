@@ -6,6 +6,7 @@ import { answerAsNote, ASSISTANT_TASKS, cardSourceKind, type AssistantAnswer, ty
 import { searchCorpus, type CorpusOption } from '../../utils/corpus-lookup';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { matchesStudyQuery, type StudyNote } from '../../../shared/study-notes';
+import type { QuranReaderCatalog } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 
@@ -14,6 +15,7 @@ const taskKeys: Record<AssistantTask, TranslationKey> = {
 };
 const errorKeys: Record<string, TranslationKey> = {
   'ai-disabled': 'assistantErrorDisabled', 'permission-denied': 'assistantErrorRemote', 'invalid-output': 'assistantErrorUnchecked',
+  'warsh-not-installed': 'assistantWarshMissing', 'invalid-resource': 'assistantInvalidResource', 'ambiguous-alignment': 'assistantAlignmentFailed',
   busy: 'assistantErrorBusy', 'no-sources': 'assistantErrorNoSources', 'invalid-request': 'assistantErrorRequest',
 };
 
@@ -36,17 +38,20 @@ export function StudyAssistant({ notes, initialNotes, onClose }: { notes: StudyN
   const [answer, setAnswer] = useState<AssistantAnswer | null>(null);
   const [cards, setCards] = useState<Record<number, 'added' | 'skipped'>>({});
   const [passages, setPassages] = useState<AssistantPassage[]>([]);
+  const [profile, setProfile] = useState<'hafs' | 'warsh'>('hafs');
+  const [catalog, setCatalog] = useState<QuranReaderCatalog | null>(null);
+  useEffect(() => { let live = true; void window.electronAPI.quran.readerCatalog().then(result => { if (live && result.ok) setCatalog(result.data); }).catch(() => {}); return () => { live = false; }; }, []);
   const [corpusQuery, setCorpusQuery] = useState('');
-  const [corpusFound, setCorpusFound] = useState<{ query: string; items: CorpusOption[] }>({ query: '', items: [] });
-  const corpusResults = corpusQuery.trim().length >= 2 && corpusFound.query === corpusQuery.trim() ? corpusFound.items : [];
+  const [corpusFound, setCorpusFound] = useState<{ query: string; profile?: string; items: CorpusOption[] }>({ query: '', items: [] });
+  const corpusResults = corpusQuery.trim().length >= 2 && corpusFound.query === corpusQuery.trim() && corpusFound.profile === profile ? corpusFound.items : [];
   useEffect(() => {
     // Ayahs by `2:255` or words, hadith by words: the same lookup as `[[` in the note editor.
     const query = corpusQuery.trim();
     if (query.length < 2) return;
     let live = true;
-    const timer = setTimeout(() => { void searchCorpus(['quran', 'hadith'], query, id => t(collectionKeys[id]), 8).then(found => { if (live) setCorpusFound({ query, items: found }); }).catch(() => { if (live) setCorpusFound({ query, items: [] }); }); }, 250);
+    const timer = setTimeout(() => { void searchCorpus(['quran', 'hadith'], query, id => t(collectionKeys[id]), 8, profile).then(found => { if (live) setCorpusFound({ query, profile, items: found }); }).catch(() => { if (live) setCorpusFound({ query, profile, items: [] }); }); }, 250);
     return () => { live = false; clearTimeout(timer); };
-  }, [corpusQuery, t]);
+  }, [corpusQuery, t, profile]);
   const addPassage = (option: CorpusOption) => setPassages(current => current.some(entry => entry.target === option.target) || current.length >= 20 ? current : [...current, { target: option.target, label: option.label }]);
   const listed = notes.filter(note => !filter || matchesStudyQuery(`${note.title} ${note.content}`, filter)).slice(0, 200);
   const toggle = (id: string) => setPicked(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -98,19 +103,31 @@ export function StudyAssistant({ notes, initialNotes, onClose }: { notes: StudyN
           </fieldset>
           <fieldset className="min-w-0 space-y-1.5" data-assistant-passages>
             <legend className="text-xs font-bold">{t('assistantPassages', { count: passages.length })}</legend>
+            <label className="block text-xs">{t('assistantQuranProfile')}
+              <select data-assistant-profile value={profile} onChange={event => { setProfile(event.target.value as 'hafs' | 'warsh'); setCorpusFound({ query: '', items: [] }); }} className={field}>
+                <option value="hafs">{t('assistantProfileHafs')}</option><option value="warsh">{t('assistantProfileWarsh')}</option>
+              </select>
+            </label>
             <input type="search" dir="auto" data-assistant-passage-search value={corpusQuery} onChange={event => setCorpusQuery(event.target.value)} placeholder={t('assistantPassageSearch')} aria-label={t('assistantPassageSearch')} className={field} />
             {corpusResults.length > 0 && <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-subtle p-1 text-sm">
               {corpusResults.map(option => { const added = passages.some(entry => entry.target === option.target); return <li key={option.target}>
                 <button type="button" data-assistant-passage-option={option.target} disabled={added} onClick={() => addPassage(option)} className="flex w-full items-start gap-2 rounded p-1.5 text-start hover:bg-canvas disabled:opacity-50">
                   <BookOpenText size={14} aria-hidden="true" className="mt-1 shrink-0" />
-                  <span className="min-w-0"><b dir="auto" className="block text-xs">{t(option.kind === 'quran' ? 'studyLinkKindAyah' : 'studyLinkKindHadith')} · {option.label}</b><span dir="auto" className="block truncate text-xs text-muted">{option.snippet}</span></span>
+                  <span className="min-w-0"><b dir="auto" className="block text-xs">{t(option.kind === 'quran' ? 'studyLinkKindAyah' : 'studyLinkKindHadith')} · {option.label}</b><span dir="auto" className="block truncate py-0.5 text-xs leading-loose text-muted">{option.snippet}</span></span>
                 </button>
               </li>; })}
             </ul>}
-            {corpusQuery.trim().length >= 2 && corpusFound.query === corpusQuery.trim() && !corpusResults.length && <p className="text-xs text-muted">{t('assistantPassageNone')}</p>}
-            {passages.length > 0 && <ul className="flex flex-wrap gap-1.5">{passages.map(passage => <li key={passage.target} data-assistant-passage={passage.target} className="inline-flex max-w-full items-center gap-1 rounded-full border border-subtle bg-canvas py-0.5 pe-1 ps-2 text-xs">
-              <span dir="auto" className="truncate">{passage.label}</span>
-              <button type="button" aria-label={t('assistantPassageRemove', { label: passage.label })} title={t('assistantPassageRemove', { label: passage.label })} onClick={() => setPassages(current => current.filter(entry => entry.target !== passage.target))} className="rounded-full p-0.5 hover:bg-surface"><X size={12} /></button>
+            {corpusQuery.trim().length >= 2 && corpusFound.query === corpusQuery.trim() && corpusFound.profile === profile && !corpusResults.length && <p className="text-xs text-muted">{t('assistantPassageNone')}</p>}
+            {passages.length > 0 && <ul className="space-y-2">{passages.map(passage => <li key={passage.target} data-assistant-passage={passage.target} className="min-w-0 rounded-lg border border-subtle bg-canvas p-2 text-xs">
+              <div className="flex items-start gap-1"><span dir="auto" className="min-w-0 flex-1 break-words leading-relaxed">{passage.target.startsWith('quran:') && <>{t(passage.target.startsWith('quran:warsh:') ? 'assistantProfileWarsh' : 'assistantProfileHafs')} · </>}{passage.label}</span>
+              <button type="button" aria-label={t('assistantPassageRemove', { label: passage.label })} title={t('assistantPassageRemove', { label: passage.label })} onClick={() => setPassages(current => current.filter(entry => entry.target !== passage.target))} className="rounded-full p-0.5 hover:bg-surface"><X size={12} /></button></div>
+              {passage.target.startsWith('quran:') && <div className="mt-2 space-y-2">{(['tafsir', 'translation'] as const).map(kind => <label key={kind} className="block leading-relaxed">{t(kind === 'tafsir' ? 'assistantAddTafsir' : 'assistantAddTranslation')}
+                <select data-assistant-extra={kind} value={passage[kind] || ''} className={`${field} min-w-0 max-w-full`} onChange={event => setPassages(current => current.map(entry => entry.target === passage.target ? { ...entry, [kind]: event.target.value || undefined } : entry))}>
+                  <option value="">{t('assistantNoExtraSource')}</option>
+                  {catalog?.presets.filter(source => source.installed && (source.kind === kind || kind === 'translation' && source.kind === 'word-translation')).map(source => <option key={source.id} value={source.id}>{source.title}</option>)}
+                </select>
+                {passage[kind] && <span data-assistant-numbering dir="auto" className="block break-words py-1 text-muted">{catalog?.presets.find(source => source.id === passage[kind])?.title} · {t('assistantHafsNumbering')}</span>}
+              </label>)}</div>}
             </li>)}</ul>}
           </fieldset>
           <label className="block text-xs font-bold">{t('assistantTask')}
@@ -124,7 +141,7 @@ export function StudyAssistant({ notes, initialNotes, onClose }: { notes: StudyN
           <label className="flex items-start gap-2 text-xs leading-relaxed"><input type="checkbox" data-assistant-remote checked={allowRemote} onChange={event => setAllowRemote(event.target.checked)} className="mt-1" />{t('assistantAllowRemote')}</label>
           <button type="button" data-assistant-ask disabled={busy || !hasSources || (task === 'qa' && !question.trim())} onClick={() => void ask()} className="w-full rounded-lg bg-amber-600 py-2 text-sm text-white disabled:opacity-40">{busy ? t('assistantWorking') : t('assistantAsk')}</button>
         </section>
-        <section className="min-h-0 space-y-3 p-4" aria-live="polite">
+        <section className="min-h-0 min-w-0 space-y-3 p-4 break-words" aria-live="polite">
           {error && <p role="alert" data-assistant-error={error} className="rounded-lg bg-red-500/10 p-2 text-sm text-red-700 dark:text-red-300">{t(errorKeys[error] ?? 'assistantErrorEngine')}</p>}
           {!answer && !error && <p className="text-sm text-muted">{t('assistantEmpty')}</p>}
           {answer && <>
@@ -135,7 +152,7 @@ export function StudyAssistant({ notes, initialNotes, onClose }: { notes: StudyN
               <h3 className="mb-1 text-xs font-bold">{t('assistantSources')}</h3>
               <ul className="space-y-1.5">{answer.citations.map((citation, index) => <li key={index}>
                 <button type="button" data-assistant-citation={citation.target} onClick={() => open(citation.target)} className="w-full rounded-lg border border-subtle p-2 text-start text-xs hover:bg-canvas">
-                  <b dir="auto" className="block">{citation.label}</b><span dir="auto" className="block leading-relaxed text-muted">«{citation.quote}»</span>
+                  <b dir="auto" className="block leading-relaxed">{citation.label}</b><span dir="auto" className="block leading-relaxed text-muted">«{citation.quote}»</span>
                 </button>
               </li>)}</ul>
             </div>}
