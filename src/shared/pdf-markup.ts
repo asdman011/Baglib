@@ -116,6 +116,8 @@ export interface ListedMark {
   layer: 'study' | 'review';
   kind: MarkKind;
   page: number | null;
+  chapter?: string | null;
+  cfi?: string | null;
   color?: string;
   text: string;
   createdAt: string;
@@ -129,7 +131,7 @@ export interface MarkFilter {
   since?: 'all' | 'today' | 'week';
   status?: 'all' | 'open' | 'resolved';
   query?: string;
-  sort?: 'page' | 'newest';
+  sort?: 'page' | 'chapter' | 'newest';
 }
 
 /** Filters and sorts the list (Wave 9.3). `normalize` is the app's Arabic search normalisation. */
@@ -142,8 +144,13 @@ export function filterMarks(marks: ListedMark[], filter: MarkFilter, normalize: 
     && (!filter.color || mark.color === filter.color)
     && (!since || Date.parse(mark.createdAt) >= since)
     && (!filter.status || filter.status === 'all' || mark.status === filter.status)
-    && (!query || query.split(/\s+/u).every(term => normalize(mark.text).includes(term))));
+    && (!query || query.split(/\s+/u).every(term => normalize(mark.text).includes(term) || (mark.chapter && normalize(mark.chapter).includes(term)))));
   return kept.sort(filter.sort === 'newest'
     ? (a, b) => b.createdAt.localeCompare(a.createdAt)
-    : (a, b) => (a.page ?? Infinity) - (b.page ?? Infinity) || a.createdAt.localeCompare(b.createdAt));
+    : (a, b) => {
+        if (filter.sort === 'chapter' && a.chapter && b.chapter && a.chapter !== b.chapter) {
+          return a.chapter.localeCompare(b.chapter, undefined, { numeric: true });
+        }
+        return (a.page ?? Infinity) - (b.page ?? Infinity) || a.createdAt.localeCompare(b.createdAt);
+      });
 }

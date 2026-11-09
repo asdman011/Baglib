@@ -44,6 +44,13 @@ export class MaterialSaveService {
     return row && existsSync(row.path) ? row : null;
   }
 
+  /** The Source that owns a library book's file (Work → Edition → Source), PDF, EPUB, or other format. */
+  materialSource(workId: string): { sourceId: string; path: string } | null {
+    const row = this.env.db.prepare(`SELECT s.id AS sourceId, fsd.file_path AS path FROM edition e JOIN source s ON s.edition_id = e.id
+      JOIN file_source_detail fsd ON fsd.source_id = s.id WHERE e.work_id = ? AND fsd.file_path IS NOT NULL LIMIT 1`).get(workId) as { sourceId: string; path: string } | undefined;
+    return row && existsSync(row.path) ? row : null;
+  }
+
   additions(workId: string): AdditionsPayload {
     const rows = this.env.db.prepare(`SELECT k.id, CASE WHEN k.knowledge_type='study_note' THEN 'note' ELSE k.knowledge_type END AS type, COALESCE(k.location,'') AS location, k.created_at AS createdAt, k.updated_at AS updatedAt,
         hd.color, COALESCE(hd.quoted_text, qd2.quoted_text) AS quote, COALESCE(nd.content, snd.content) AS note, qd.question_text AS question, bd.label
@@ -270,16 +277,16 @@ export class MaterialSaveService {
   }
 
   redoStack(workId: string): string[] {
-    const file = this.file(workId);
+    const file = this.materialSource(workId);
     const raw = file ? this.state(file.sourceId)?.redo_json : null;
     return parseMaterialHistory(raw).redo;
   }
   discardedBatches(workId: string): string[] {
-    const file = this.file(workId);
+    const file = this.materialSource(workId);
     return parseMaterialHistory(file ? this.state(file.sourceId)?.redo_json : null).discarded;
   }
   setRedoStack(workId: string, stack: string[]): void {
-    const file = this.file(workId);
+    const file = this.materialSource(workId);
     if (file) this.upsert(file.sourceId, { redo_json: JSON.stringify({ redo: stack, discarded: this.discardedBatches(workId) }) });
   }
 }

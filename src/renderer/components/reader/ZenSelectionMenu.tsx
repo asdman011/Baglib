@@ -14,6 +14,8 @@ import {
   X,
   Check,
   BookmarkCheck,
+  Underline,
+  Strikethrough,
 } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
 import { HIGHLIGHT_COLORS } from '../../libs/reader/highlight-manager';
@@ -25,6 +27,8 @@ export interface ZenSelectionMenuProps {
   bookAuthor?: string;
   bookPublisher?: string;
   onApplyHighlight: (colorId: string) => void;
+  onApplyUnderline?: () => void;
+  onApplyStrike?: () => void;
   onSaveNote: (content: string) => void;
   onSaveQuote: (contextNote?: string) => void;
   onSaveQuestion: (questionText: string) => void;
@@ -43,6 +47,8 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   bookAuthor,
   bookPublisher,
   onApplyHighlight,
+  onApplyUnderline,
+  onApplyStrike,
   onSaveNote,
   onSaveQuote,
   onSaveQuestion,
@@ -109,8 +115,42 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
               ))}
             </div>
 
-            {/* Actions: Note, Quote, Question, Dictionary, AI, TTS, Copy */}
+            {/* Actions: Underline, Strike, Note, Quote, Question, Dictionary, AI, TTS, Copy */}
             <div className="flex items-center gap-0.5">
+              {onApplyUnderline && (
+                <button
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onApplyUnderline();
+                  }}
+                  title={t('markupToolUnderline')}
+                  className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
+                >
+                  <Underline className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {onApplyStrike && (
+                <button
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onApplyStrike();
+                  }}
+                  title={t('markupToolStrike')}
+                  className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
+                >
+                  <Strikethrough className="w-3.5 h-3.5" />
+                </button>
+              )}
+
               {/* Add Margin Note */}
               <button
                 onMouseDown={(e) => {

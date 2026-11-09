@@ -74,6 +74,13 @@ import { PdfMarkupProvider } from './PdfMarkupLayer';
 import { PdfMarkPopover } from './PdfMarkPopover';
 import { PdfCompareDialog } from './PdfCompareDialog';
 import { isTextTool, shapeLocation, type MarkupTool, type ShapeMark } from '../../../shared/pdf-markup';
+import {
+  buildEpubCfi,
+  serializeEpubLocation,
+  parseEpubLocation,
+  extractMarkPage,
+  isEpubLocation,
+} from '../../../shared/epub-marks';
 import { consumePendingPage } from '../../utils/study-navigation';
 import { markHistoryShortcut, readerShortcut } from '../../libs/reader/reader-shortcuts';
 import { ZenSelectionMenu } from './ZenSelectionMenu';
@@ -1391,21 +1398,25 @@ export const FullPageBookReader: React.FC = () => {
     };
   }, [activeBook?.id, currentSourceId, sourcesCount, readingPage, ocrPages, ocrEngine]);
 
-  // Single-key markup shortcuts for the PDF workstation: H keeps the highlighter on, 1-5 pick a colour, ? lists shortcuts.
+  // Single-key markup shortcuts for the PDF workstation and EPUB reflowable reader: H keeps highlighter on, 1-5 pick a colour, ? lists shortcuts.
   useEffect(() => {
-    if (!isPdfWorkstationActive) return;
+    if (!isPdfWorkstationActive && !isReflowable) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       const action = readerShortcut(e, markupTool !== 'select');
       if (!action) return;
       if (action.kind === 'toggle-highlighter') toggleMarkupLock();
       else if (action.kind === 'stop-highlighter') stopMarkup();
-      else if (action.kind === 'tool') chooseMarkupTool(action.tool);
+      else if (action.kind === 'tool') {
+        if (!isReflowable || action.tool === 'select' || action.tool === 'highlight' || action.tool === 'underline' || action.tool === 'strike' || action.tool === 'comment') {
+          chooseMarkupTool(action.tool);
+        }
+      }
       else if (action.kind === 'color') setActiveHighlightColor(action.color);
       else setShowReaderShortcuts(true);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPdfWorkstationActive, markupTool, toggleMarkupLock, stopMarkup, chooseMarkupTool]);
+  }, [isPdfWorkstationActive, isReflowable, markupTool, toggleMarkupLock, stopMarkup, chooseMarkupTool]);
 
   // The companion note pane links to the page being read.
   useCompanionContext('reader', () => activeBook ? { kind: 'book', target: `book:${activeBook.id}#p=${Math.max(1, readingPage)}`, label: `${activeBook.title} (${Math.max(1, readingPage)})` } : null, [activeBook?.id, activeBook?.title, readingPage]);
@@ -2222,7 +2233,7 @@ export const FullPageBookReader: React.FC = () => {
   // Ctrl+Z / Ctrl+Shift+Z undo and redo marks and notes, also after a restart. Typing fields keep their own undo.
   const historyRequestPending = useRef(false);
   useEffect(() => {
-    if (!isPdfWorkstationActive || !activeBook?.id) return;
+    if (!activeBook?.id) return;
     const workId = activeBook.id;
     const key = (event: KeyboardEvent) => {
       const action = markHistoryShortcut(event, !!document.querySelector('[role="dialog"],[role="alertdialog"],dialog[open]'));
@@ -2250,7 +2261,7 @@ export const FullPageBookReader: React.FC = () => {
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [activeBook?.id, isPdfWorkstationActive, reloadMarks, t]);
+  }, [activeBook?.id, reloadMarks, t]);
   // Closing with changes not yet written into the file asks first; closing without writing keeps them in BagLib.
   const [closePrompt, setClosePrompt] = useState<((choice: 'save' | 'discard' | 'cancel') => void) | null>(null);
   const [closeSaving, setCloseSaving] = useState(false);
@@ -2300,22 +2311,46 @@ export const FullPageBookReader: React.FC = () => {
     contextNote?: string,
     textOverride?: string,
     pageOverride?: number,
+    styleOverride?: 'underline' | 'strike',
   ) => {
     if (!activeBook?.id) return false;
     const safePage = Math.min(maxBookPages, Math.max(1, pageOverride ?? readingPage));
     const textToUse = textOverride ?? selectedText ?? '';
+    const effectiveStyle = styleOverride || (markupTool === 'underline' || markupTool === 'strike' ? markupTool : undefined);
 
-    // Determine location payload: PDF normalized rects JSON or page string
+    // Determine location payload: EPUB CFI JSON or PDF normalized rects JSON or page string
     let locationToSave = String(safePage);
     const pdfSelection = pendingSelection || pdfSelectionInfo;
-    if (type === 'highlight' && pdfSelection && pdfSelection.rects.length > 0) {
+    if (isReflowable) {
+      const sectionIdx = typeof activeFormattedPage?.sectionIndex === 'number'
+        ? activeFormattedPage.sectionIndex
+        : Math.max(0, safePage - 1);
+      const sectionId = activeFormattedPage?.sectionId;
+      const chapterLabel = activeFormattedPage?.chapterLabel;
+      const cfi = buildEpubCfi(
+        sectionIdx,
+        activeRange?.startOffset ?? 0,
+        activeRange?.endOffset,
+        sectionId,
+      );
+      locationToSave = serializeEpubLocation({
+        cfi,
+        chapter: chapterLabel,
+        sectionIndex: sectionIdx,
+        sectionId,
+        page: safePage,
+        style: effectiveStyle,
+        color: color || activeHighlightColor,
+        text: textToUse || undefined,
+      });
+    } else if (type === 'highlight' && pdfSelection && pdfSelection.rects.length > 0) {
       locationToSave = JSON.stringify({
         page: pdfSelection.pageNumber,
         rects: pdfSelection.rects,
         text: textToUse || pdfSelection.text,
         color: color || activeHighlightColor,
         // Underline and strike-out are highlights drawn differently (Wave 9.1); a plain highlight stores no style.
-        ...(markupTool === 'underline' || markupTool === 'strike' ? { style: markupTool } : {}),
+        ...(effectiveStyle ? { style: effectiveStyle } : {}),
       });
     }
 
@@ -2548,46 +2583,69 @@ export const FullPageBookReader: React.FC = () => {
         const color = item.color || 'amber';
         const hex = colorHexMap[color] || '#FACC15';
 
+        let markStyle: 'highlight' | 'underline' | 'strike' = 'highlight';
+        try {
+          const loc = parseEpubLocation(item.location);
+          if (loc?.style) markStyle = loc.style;
+          else if (item.location?.startsWith('{')) {
+            const p = JSON.parse(item.location);
+            if (p.style) markStyle = p.style;
+          }
+        } catch {}
+
+        const applyMarkProps = (mark: HTMLElement) => {
+          mark.className = `baglib-highlight baglib-highlight-${color} baglib-mark-${markStyle}`;
+          mark.setAttribute('data-highlight-id', item.id);
+          mark.setAttribute('data-mark-id', item.id);
+          mark.setAttribute('data-mark-style', markStyle);
+          mark.style.color = 'inherit';
+          mark.style.cursor = 'pointer';
+          if (markStyle === 'underline') {
+            mark.style.backgroundColor = 'transparent';
+            mark.style.textDecoration = `underline 2px solid ${hex}`;
+            mark.style.textUnderlineOffset = '3px';
+          } else if (markStyle === 'strike') {
+            mark.style.backgroundColor = 'transparent';
+            mark.style.textDecoration = `line-through 2px solid ${hex}`;
+          } else {
+            mark.style.backgroundColor = `${hex}66`;
+            mark.style.borderRadius = '2px';
+            mark.style.padding = '1px 0';
+          }
+
+          mark.onclick = (e) => {
+            e.stopPropagation();
+            const knowledgeItem = knowledgeItems.find(k => k.id === item.id);
+            setOpenMark({
+              item: knowledgeItem || {
+                id: item.id,
+                workId: item.workId,
+                knowledgeType: ((item as { knowledgeType?: KnowledgeType }).knowledgeType) || ((item as { type?: string }).type === 'note' ? 'note' : 'highlight'),
+                location: item.location,
+                quotedText: item.quotedText || ('selectedText' in item ? item.selectedText : undefined),
+                noteContent: item.noteContent,
+                contextNote: 'contextNote' in item ? (item.contextNote as string | undefined) : undefined,
+                questionText: 'questionText' in item ? (item.questionText as string | undefined) : undefined,
+                label: 'label' in item ? (item.label as string | undefined) : undefined,
+                color: item.color,
+                createdAt: item.createdAt,
+                updatedAt: item.updatedAt,
+              },
+              at: { x: e.clientX, y: e.clientY },
+            });
+          };
+        };
+
         const ranges = findRangesForText(root, text);
         ranges.forEach((range) => {
           try {
             const mark = (root.ownerDocument || document).createElement('mark');
-            mark.className = `baglib-highlight baglib-highlight-${color}`;
-            mark.setAttribute('data-highlight-id', item.id);
-            mark.style.backgroundColor = `${hex}66`;
-            mark.style.color = 'inherit';
-            mark.style.borderRadius = '2px';
-            mark.style.padding = '1px 0';
-            mark.style.cursor = 'pointer';
-
-            mark.onclick = (e) => {
-              e.stopPropagation();
-              setActiveHighlightPopover({
-                highlight: { ...item, type: item.knowledgeType },
-                position: { x: e.clientX, y: e.clientY },
-              });
-            };
-
+            applyMarkProps(mark);
             range.surroundContents(mark);
           } catch {
             try {
               const mark = (root.ownerDocument || document).createElement('mark');
-              mark.className = `baglib-highlight baglib-highlight-${color}`;
-              mark.setAttribute('data-highlight-id', item.id);
-              mark.style.backgroundColor = `${hex}66`;
-              mark.style.color = 'inherit';
-              mark.style.borderRadius = '2px';
-              mark.style.padding = '1px 0';
-              mark.style.cursor = 'pointer';
-
-              mark.onclick = (e) => {
-                e.stopPropagation();
-                setActiveHighlightPopover({
-                  highlight: { ...item, type: item.knowledgeType },
-                  position: { x: e.clientX, y: e.clientY },
-                });
-              };
-
+              applyMarkProps(mark);
               const fragment = range.extractContents();
               mark.appendChild(fragment);
               range.insertNode(mark);
@@ -2837,11 +2895,13 @@ export const FullPageBookReader: React.FC = () => {
     renderTempSelectionOverlay(range, contentContainerRef.current);
 
     if (isInstantHighlightMode) {
-      handleApplyHighlight(activeHighlightColor, text);
-      selection.removeAllRanges();
-      clearActiveSelectionHighlight();
-      removeTempSelectionOverlay();
-      setActiveRange(null);
+      void handleApplyHighlight(activeHighlightColor, text).then(() => {
+        finishMarkup();
+      });
+    } else if (markupTool === 'comment') {
+      void handleSaveKnowledge('note', activeHighlightColor, '', undefined, text, readingPage).then(saved => {
+        if (saved) finishMarkup();
+      });
     } else {
       setSelectedText(text);
     }
@@ -3007,6 +3067,8 @@ export const FullPageBookReader: React.FC = () => {
         bookAuthor={activeBook.author}
         bookPublisher={activeBook.publisher}
         onApplyHighlight={(colorId) => handleSaveKnowledge('highlight', colorId)}
+        onApplyUnderline={() => handleSaveKnowledge('highlight', activeHighlightColor, undefined, undefined, undefined, undefined, 'underline')}
+        onApplyStrike={() => handleSaveKnowledge('highlight', activeHighlightColor, undefined, undefined, undefined, undefined, 'strike')}
         onSaveNote={(content) => handleSaveKnowledge('note', undefined, content)}
         onSaveQuote={(contextNote) =>
           handleSaveKnowledge('quote', undefined, undefined, contextNote)
@@ -3311,6 +3373,19 @@ export const FullPageBookReader: React.FC = () => {
       {isDocumentPanelOpen && effectiveFormat === 'PDF' && legacyPdfWork === activeBook.id && <PdfWorkstationPanel key={activeBook.id} workId={activeBook.id} onClose={() => setIsDocumentPanelOpen(false)} />}
       {!isPdfWorkstationActive && (
       <ZenTopBar
+        markupBar={
+          <ReaderMarkupBar
+            tool={markupTool}
+            onTool={chooseMarkupTool}
+            color={activeHighlightColor}
+            onColor={setActiveHighlightColor}
+            locked={markupLocked}
+            onToggleLock={toggleMarkupLock}
+            allowedTools={isReflowable ? ['select', 'highlight', 'underline', 'strike', 'comment'] : undefined}
+            onShowShortcuts={() => setShowReaderShortcuts(true)}
+            t={t}
+          />
+        }
         onReadAloud={() => startReadAloud()}
         isVisible={isTopBarVisible || isSettingsOpen || isTocPinned || isKnowledgePinned || isDocumentPanelOpen}
         activeBook={activeBook}
@@ -3460,8 +3535,13 @@ export const FullPageBookReader: React.FC = () => {
           knowledgeItems={knowledgeItems}
           onDeleteKnowledge={handleDeleteKnowledgeItem}
           onJumpToLocation={(loc) => {
-            const p = parseInt(loc, 10);
-            if (!isNaN(p)) {
+            if (isReflowable && (loc.startsWith('epubcfi(') || loc.startsWith('/'))) {
+              try {
+                (bookDoc?.rendition as { display?: (target: string) => void } | undefined)?.display?.(loc);
+              } catch {}
+            }
+            const p = extractMarkPage(loc) ?? parseInt(loc, 10);
+            if (!isNaN(p) && p > 0) {
               setPreviousJumpPage(readingPage);
               setReadingPage(p);
             }
@@ -4115,6 +4195,9 @@ export const FullPageBookReader: React.FC = () => {
                 <span className="flex items-center gap-1.5 text-[11px] text-pale-sky-600 dark:text-pale-sky-300 font-sans truncate max-w-[65%]">
                   <Sparkles className="w-3 h-3 shrink-0" />
                   {activeFormattedPage?.chapterLabel || t('highlightHint')}
+                  <span data-epub-marks-status className="text-[11px] text-muted ms-2 italic">
+                    • {t('epubMarksKeptInBaglib')}
+                  </span>
                 </span>
                 <span>{t('pageText').replace('{page}', readingPage.toString())}</span>
               </div>
@@ -4389,16 +4472,6 @@ export const FullPageBookReader: React.FC = () => {
                 {closePrompt && <SaveCloseDialog title={activeBook.title} busy={closeSaving} t={t} onSave={() => closePrompt('save')} onDiscard={() => closePrompt('discard')} onCancel={() => closePrompt('cancel')} />}
                 {exportOpen && <ExportPdfDialog workId={activeBook.id} pages={maxBookPages} t={t} lang={workspaceLang} dir={workspaceDir} onClose={() => setExportOpen(false)} />}
                 {compareOpen && <PdfCompareDialog workId={activeBook.id} onClose={() => setCompareOpen(false)} onJump={page => setReadingPage(Math.min(maxBookPages, Math.max(1, page)))} />}
-                {openMark && <PdfMarkPopover
-                  key={openMark.item.id}
-                  item={openMark.item}
-                  at={openMark.at}
-                  t={t}
-                  onClose={() => { setOpenMark(null); refreshMarkCounts(); }}
-                  onSaved={saved => { setKnowledgeItems(previous => previous.map(item => (item.id === saved.id ? saved : item))); setOpenMark(current => (current ? { ...current, item: saved } : current)); }}
-                  onDeleted={id => { setKnowledgeItems(previous => previous.filter(item => item.id !== id)); setOpenMark(null); }}
-                  onThreadsChanged={refreshMarkCounts}
-                />}
                 </PdfMarkupProvider>
               ) : pdfBlobUrl ? (
                 <div
@@ -4505,6 +4578,31 @@ export const FullPageBookReader: React.FC = () => {
           onSaveNote={handleSaveHighlightNote}
           onDelete={handleDeleteKnowledgeItem}
           onClose={() => setActiveHighlightPopover(null)}
+        />
+      )}
+
+      {/* Unified Mark Popover (PDF & EPUB: details, colors, notes, comments, threads, delete) */}
+      {openMark && (
+        <PdfMarkPopover
+          key={openMark.item.id}
+          item={openMark.item}
+          at={openMark.at}
+          t={t}
+          onClose={() => {
+            setOpenMark(null);
+            refreshMarkCounts();
+          }}
+          onSaved={(saved) => {
+            setKnowledgeItems((previous) => previous.map((item) => (item.id === saved.id ? saved : item)));
+            setOpenMark((current) => (current ? { ...current, item: saved } : current));
+            setTimeout(() => renderSavedEpubHighlights(), 50);
+          }}
+          onDeleted={(id) => {
+            setKnowledgeItems((previous) => previous.filter((item) => item.id !== id));
+            setOpenMark(null);
+            setTimeout(() => renderSavedEpubHighlights(), 50);
+          }}
+          onThreadsChanged={refreshMarkCounts}
         />
       )}
     </div>

@@ -1,3 +1,49 @@
+## KEY-274: Reader Task 6.12: Markup tools and Marks list for the EPUB reader — 2026-11-09, Antigravity (completed and verified)
+
+- **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
+- **Implemented & Verified**:
+  - **Reflowable EPUB Markup Tools (`src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/reader/ReaderMarkupBar.tsx`, `src/renderer/components/reader/ZenSelectionMenu.tsx`)**:
+    - Enabled Highlight, Underline, Strike, Note, Bookmark, and Comment thread markup tools for reflowable EPUB books in `FullPageBookReader`.
+    - Wired selection menu with Highlight, Underline, Strike, and Note actions.
+    - Anchors reflowable text marks dynamically using Canonical Fragment Identifiers (CFI), which survive re-pagination, font-size adjustments, and window resizing without using pixel coordinates.
+  - **Unified Mark Popover & Comments (`src/renderer/components/reader/PdfMarkPopover.tsx`)**:
+    - Integrated `PdfMarkPopover` for EPUB marks, providing 5 color swatches (yellow, green, blue, pink, purple), note textarea editing, full comment threads (`CommentThreads` component under Details/Comments tabs), and mark deletion.
+  - **Unified Marks List with Chapter Grouping (`src/shared/epub-marks.ts`, `src/shared/pdf-markup.ts`, `src/renderer/components/reader/PdfMarksList.tsx`, `src/renderer/components/reader/ZenKnowledgeDrawer.tsx`)**:
+    - Enhanced `PdfMarksList` to support chapter-based grouping (`marksSortChapter`) for EPUBs while preserving page-based grouping for PDFs.
+    - Implemented CFI-based sorting and jump navigation in EPUBs.
+    - Embedded unified `PdfMarksList` into the Zen knowledge drawer.
+  - **ADR-012 Safe Save Compliance**:
+    - EPUB files are never modified on disk (100% byte-identical file SHA-256 verified before and after all operations).
+    - Localized notice displayed: `"Marks are kept in BagLib"` / `"العلامات محفوظة في باجليب"`.
+    - Save button and PDF file save policy menu are completely hidden when an EPUB is active.
+  - **Undo / Redo via MarkHistoryService (`src/main/services/material-save.ts`, `src/renderer/components/reader/FullPageBookReader.tsx`)**:
+    - Enabled `Ctrl+Z` / `Ctrl+Shift+Z` keyboard shortcuts in EPUB reader.
+    - Enhanced `MaterialSaveService` to resolve material source records across both PDF and EPUB files, persisting redo stacks to `material_save_state.redo_json`.
+    - Verified that mark creations and comment thread additions undo and redo cleanly across batches.
+  - **Bilingual & Layout Verification**:
+    - Added centralized translation keys in Arabic and English in `src/renderer/translations.ts` (`marksSortChapter`, `epubMarksKeptInBaglib`, `epubMarksGeneral`, `epubMarksChapter`, `markKindComments`, `markKindDetails`).
+    - Verified in Arabic (RTL) and English (LTR) at 1280 px and 480 px.
+- **Exact Files Changed (14 files; shared files KEY-274 hunks only)**:
+  - `src/shared/epub-marks.ts`
+  - `src/shared/pdf-markup.ts`
+  - `src/main/services/material-save.ts`
+  - `src/renderer/translations.ts` (KEY-274 keys only)
+  - `src/renderer/components/reader/PdfMarksList.tsx`
+  - `src/renderer/components/reader/PdfMarkPopover.tsx`
+  - `src/renderer/components/reader/ReaderMarkupBar.tsx`
+  - `src/renderer/components/reader/ZenTopBar.tsx`
+  - `src/renderer/components/reader/ZenKnowledgeDrawer.tsx`
+  - `src/renderer/components/reader/ZenSelectionMenu.tsx`
+  - `src/renderer/components/reader/FullPageBookReader.tsx`
+  - `tests/services/epub-marks.test.ts`
+  - `docs/features/feature - EPUB Markup and Marks.md`
+  - `scripts/epub-markup-live/`
+- **Verification**:
+  - Unit tests: `tests/services/epub-marks.test.ts` (15/15 passed), `tests/ui/translation-keys.test.ts` (2/2 passed).
+  - Full test suite: `npm test` → **1491 tests passed, 0 failures** across 306 suites.
+  - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (success in 130ms), `git diff --check` (0 errors).
+  - Live harness: `scripts/epub-markup-live/run.mjs` executed real English EPUB (`Why Would Feminists Trust the Police...epub`) and Arabic EPUB (`arabic-test.epub`), verified 100% byte-identical file hash preservation before and after operations, verified mark creation (Highlight, Underline, Strike), verified popover & comments, verified chapter-grouped marks list, verified undo/redo batches, and captured screenshots in `.baglib-data/key274-evidence/`.
+
 ## KEY-275: Reader Task 8.3: Review uncertain OCR words — 2026-11-09, Antigravity (review fixes verified)
 
 - **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
@@ -70,34 +116,27 @@
   - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (clean build), `git diff --check` (0 errors).
   - Live native runs: `BAGLIB_TEST_ORGANIZER_DRAFT=1` (`run-uOap8u`, two launches, Arabic/English 1280px & 480px screenshots inspected, Apply output verified `[PAGE 2 (0°), BLANK (0°), PAGE 1 (90°)]`, changed-file discard verified, Arabic replace certified), `BAGLIB_TEST_IMMERSIVE=1 BAGLIB_TEST_MUTATIONS=1` (`run-PE48fy`, UI recovery button verified with 1 emergency copy), and `BAGLIB_TEST_IMMERSIVE=1 BAGLIB_TEST_ORGANIZER_OUTPUTS=1` (`run-5O93Uq`). All throwaway `.baglib-data/pdf-workstation-live/run-*` profiles deleted and dev server stopped.
 
-
-## KEY-277 — 2026-11-09, Codex (implemented and verified; publication authorized)
-
-- Session 01a1c037-f1f8-7731-b32b-95aedff36c38. Added packaged-only protocol registration (explicit dev opt-in uses the resolved app entry), bounded validated deep-link delivery from cold argv, second-instance argv and open-url, renderer-ready handshake, fresh-data navigation and a localized missing-target alert. Existing shared parsers/navigation retain all target kinds. Added per-card Markdown/Word disclosure actions with wrapping RTL/LTR layout and the existing dialogs/options. Canonical export selection now includes ordinary reader notes and reading reflections already shown in Notes; no schema/dependency/download changes.
-- Verification: parser/registration and export-selection regressions failed before implementation; focused4/4 pass. Final full shared-worktree suite1460/1460, zero failures/skips (includes concurrent273/276 tests); tsc, scoped ESLint0errors/0warnings, main tsup and diff-check pass. Earlier suite1450/1450 also passed. A transient KEY-276 missing-translation TypeScript error disappeared after its owner added the keys; no other-task fix was made.
-- Native deeplink-live-wrMOkr passes eight primary launches in one disposable profile, ar/en cold note with paragraph anchor, book page3, Quran Hafs2:255 (page42 plus2:255 study panel), real secondary-instance note/book/Quran routing, restore/focus, missing note, card/bulk Markdown byte equality, Word document XML equality after generated bookmark-ID normalization, and reader-note export. Arabic run additionally checks same-mounted-book1→3 and emits open-url through the real main handler. Registry registration is replaced with a throwing assertion in the unpackaged harness. Profile deleted;1338 original corpus hashes unchanged. Owned renderer stopped and port3000 free at cleanup. Screenshots ar/en cards1280/480, missing480, cold books1280 and Quran1280 visually inspected under .baglib-data/deeplink-live-wrMOkr/evidence/. No horizontal overflow in card checks; Arabic diacritics and mixed scripts readable.
-- Exact publication files (16; shared files KEY-277 hunks only): `electron-builder.yml`, `src/main/index.ts`, `src/main/ipc/study-notes.ts`, `src/preload/index.ts`, `src/shared/deep-link.ts`, `src/shared/study-note-export.ts`, `src/renderer/components/layout/AppLayout.tsx`, `src/renderer/components/notes/StudyDeepLinkBridge.tsx`, `src/renderer/components/notes/NotesOverviewView.tsx`, `src/renderer/translations.ts`, `tests/services/deep-link.test.ts`, `scripts/deeplink-live/main.cjs`, `scripts/deeplink-live/run.mjs`, `docs/features/feature - Linked Study Notes and Dashboard.md`, `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`. Local report docs/agent-ops/reports/KEY-277.md records evidence, fixture corrections and limits. Temporary Quran tracing removed with no navigation utility diff. Concurrent KEY-273/276 and unrelated work must remain unstaged.
-- Limits: actual installed Windows association dispatch and macOS OS delivery were not exercised; macOS handler was simulated on Windows. Other accepted kinds and Warsh are parser-tested, with existing navigation reused. No external application/Obsidian investigation or new REA claim. Jira delegated to Claude. User authorizes one task commit ending Agent: Codex and a normal push to origin/feature/library-domain, then stop. Publication receipt pending.
-
 ## KEY-270 — 2026-11-09, Codex (implemented and verified, publication authorized)
 
 - Session `01a1c020-0d37-7191-8026-6aadac0a575d`. Saved FreeText now has removable embedded appearances using Noto Naskh Arabic for Arabic and DejaVu Sans for Latin/fallback, with joined letters, tashkeel including U+06E1, mixed runs, wrapping, RTL/LTR alignment and CropBox/rotation handling. Contents/DA and foreign annotations are preserved. Fonts are subset once per save with ToUnicode and ActualText. Missing shaping imports allow saving with a writer JSON warning.
 - Dispatcher-approved installer correction uses `requirements-shaping.txt` with the two approved pinned wheel/hash lines. Setup installs it with `--require-hashes` after both base installs, matching embedded target flags. Base `requirements.txt` is byte-for-byte equal to HEAD. Packaging's existing wildcard includes the new requirements file, regular Noto font and OFL licence. Three dry runs pass in `.baglib-data/key270-install-y0u36o8l`, using existing base packages read-only and additionally forcing verification of only the two approved cached shaping wheels. Throwaway venv deleted. Log `.baglib-data/key270-install-dry-run.log` retained.
 - Final focused tests pass 12/12 (six appearance tests and six installer tests). Full shared-worktree suite passes 1439/1439, zero skipped. TypeScript, changed-test ESLint, PowerShell parser, Python compile and diff check pass. Earlier main build passed. PDFium 2x `appearances-2x.png`, `rtl-rotation-montage.png` and `ltr-rotation-montage.png` under `.baglib-data/key270-render/` inspected. No dev server/live harness or Jira action in this task. Geometric PDFium/PDF.js extraction of projected appearances reorders some Arabic combining sequences. Direct ToUnicode reconstruction and annotation Contents are exact. Viewer-specific copying and explicit bidi embedding/isolate controls remain documented limits.
-- Exact publication files are `assets/pdf-editor/baglib_marks.py`, `assets/pdf-editor/fonts/NotoNaskhArabic-Regular.ttf`, `assets/pdf-editor/fonts/OFL.txt`, `assets/pdf-editor/requirements-shaping.txt`, `scripts/setup-pdf-engine.ps1`, `tests/services/pdf-freetext-appearance.test.ts`, `tests/services/installer-script.test.ts`, and KEY-270-only hunks in `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/ADR-012-unified-saving-and-emergency-recovery.md` and `docs/features/PDF and Notes Experience Plan.md`. Local report `docs/agent-ops/reports/KEY-270.md` includes ZIP SHA-256 `6c050ab9bd087d69b733c505a7576e60c528c2f33cd7b91005a5bd7da4514032`, sizes, provenance and inspected PNGs. Concurrent KEY-269/KEY-273 and unrelated work excluded. Commit and normal push to `origin/feature/library-domain` authorized. Stop after push. Publication receipt follows locally after successful push.
+- Exact publication files are `assets/pdf-editor/baglib_marks.py`, `assets/pdf-editor/fonts/NotoNaskhArabic-Regular.ttf`, `assets/pdf-editor/fonts/OFL.txt`, `assets/pdf-editor/requirements-shaping.txt`, `scripts/setup-pdf-engine.ps1`, `tests/services/pdf-freetext-appearance.test.ts`, `tests/services/installer-script.test.ts`, and KEY-270-only hunks in `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/ADR-012-unified-saving-and-emergency-recovery.md` and `docs/features/PDF and Notes Experience Plan.md`. Local report `docs/agent-ops/reports/KEY-270.md` includes ZIP SHA-256 `6c050ab9bd087d69b733c505a7576e60c528c2f33cd7b91005a5bd7da4514032`, sizes, provenance and inspected PNGs. Concurrent KEY-269/KEY-273 and unrelated work excluded. Commit and normal push to `origin/feature/library-domain` authorized. Stop after push. Publication receipt. Commit `c34b28f3ffe94ac4745d341e435ff884e140159c` pushed successfully to `origin/feature/library-domain` as a normal push, remote verified at that hash. Board marked pushed. Jira left to Claude. Session stopped after publication as requested.
 
-## KEY-278 review fix - 2026-11-09, Codex (implemented and verified; publication pending)
+## KEY-278 review fix - 2026-11-09, Codex (committed and pushed)
 
 - Session `01a1c018-68f0-7062-aeea-09680f9ee258`: finished Claude's review fix on Antigravity's uncommitted KEY-278 implementation. `setupThrowawayCorpus` now refuses resolved destinations outside a strict child of the repo `.baglib-data/`, and destinations equal to, inside, or containing `sourceUserDataDir`, before filesystem mutation. Containment uses path boundaries, including Windows case comparison.
 - Added two refusal regressions (both failed before the guard); moved synthetic test fixtures under `.baglib-data/`. Fresh corpus tests pass 5/5; changed-script/test eslint passes with zero errors/warnings; diff check passes. No live harness/dev server/full-suite rerun or screenshots in this review session; earlier live/full-suite evidence below belongs to Antigravity. No app interface/layout changes in either language; the harness now rejects unsafe destinations before copying or cleanup.
 - Exact publication scope: `scripts/dashboard-live/fixture.tsx`, `scripts/dashboard-live/main.ts`, `scripts/dashboard-live/run.mjs`, `scripts/note-editor-live/main.cjs`, `scripts/note-editor-live/run.mjs`, `scripts/poetry-live/main.ts`, `scripts/poetry-live/run.mjs`, `scripts/lib/corpus-copy.mjs`, `scripts/lib/corpus-copy.d.mts`, `tests/scripts/corpus-copy.test.ts`, KEY-278 hunks only in `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, and `docs/features/PDF and Notes Experience Plan.md`. Preserved concurrent KEY-269 files/entries and unrelated work. Commit and normal push to origin/feature/library-domain authorized; Jira delegated to Claude; stop after push.
 
-## KEY-269 — 2026-11-09, Codex (implemented and verified; publication pending)
+- Publication receipt: commit `cd22efb5dd66761ef37221eac47b886732a913c8` pushed successfully to `origin/feature/library-domain` (normal push, remote 07296a1 -> cd22efb). Board marked pushed. Jira left to Claude. This local receipt follows the published implementation handoff; session stopped as requested.
+
+## KEY-269 — 2026-11-09, Codex (committed and pushed)
 
 - Session 01a1c010-1c65-7271-8b12-68c71244cf37. Dispatcher approved the actor-plumbing scope extension. Implemented atomic redo invalidation/discarded batch tracking, unlimited retained batch traversal, book/reader scope preference, reader actors through save/delete/comment entry points, typed conflicts, localized notices and existing study_note save/history coverage. Earlier scope-blocked and partial-verification entries are superseded by this completed checkpoint.
 - Actual verification passed. Targeted20/20, full1438/1438 (includes concurrent task tests), tsc, tsup, changed-code eslint0errors/60existingwarnings and diffcheck. Native save-live-L3Vq0b passes2launches en/ar, actual Notes edits, branch notices, scope UI persistence, reader-only undo preserving Notes edits, actual reader comment UI undo/redo and delete IPC undo. PDF undo/redo counts1/2 en and5/6 ar; final8uniqueowned/1foreign. Settings screenshots inspected1280/480 in both languages. Fixture Save timing corrected to wait Recorded and actual PDF output.
 - Exact tracked scope is the22files listed in docs/agent-ops/reports/KEY-269.md, including only KEY-269 hunks in this file, IMPLEMENTATION_PLAN.md, ADR-012 and translations. Preserve all KEY-270 assets/installer/tests, KEY-273 organizer files and other sessions' work. Local board/report and .baglib-data/key269-evidence retain evidence. All8session profiles deleted; own renderer stopped, port3000free.
-- Behavioral decisions recorded in ADR-012 include persistent discarded IDs and typed refusal for a reader-only step that would overwrite a newer same-item edit from another view. Legacy null actors remain skipped in reader scope. Existing warnings remain. Jira is delegated to Claude. Commit and normal push to origin/feature/library-domain authorized; KEY-269-only patch staging/publication next.
+- Behavioral decisions recorded in ADR-012 include persistent discarded IDs and typed refusal for a reader-only step that would overwrite a newer same-item edit from another view. Legacy null actors remain skipped in reader scope. Existing warnings remain. Jira is delegated to Claude. Commit and normal push to origin/feature/library-domain authorized; Publication receipt. KEY-269-only22file patch was staged with git apply --cached and committed as fa9f4208781b44bdc4728141c1d7c33ccdac51e8. Normal push to origin/feature/library-domain succeeded, c34b28f to fa9f420, and the remote full hash was verified. Board marked pushed; local report updated. Claude owns review/Jira. This receipt is local handoff state following the published implementation handoff.
 
 ## Multi-agent workflow set up — 2026-11-09, Claude Code (process only; no feature code)
 

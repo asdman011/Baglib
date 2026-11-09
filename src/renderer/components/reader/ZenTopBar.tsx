@@ -68,6 +68,7 @@ interface ZenTopBarProps {
   onToggleAutoScroll?: () => void;
   autoScrollSpeed?: number;
   onCycleAutoScrollSpeed?: () => void;
+  markupBar?: React.ReactNode;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
@@ -110,6 +111,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
   onToggleAutoScroll,
   autoScrollSpeed = 1,
   onCycleAutoScrollSpeed,
+  markupBar,
   t,
 }) => {
   return (
@@ -154,6 +156,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
         {/* Knowledge & Highlights Drawer Toggle */}
         {onToggleKnowledge && (
           <button
+            data-toggle-knowledge
             onClick={onToggleKnowledge}
             className={`p-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1 text-xs font-bold shrink-0 ${
               isKnowledgeOpen
@@ -195,6 +198,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
 
       {/* Center: View Mode, Zoom/Fit, Direction */}
       <div className="flex flex-1 basis-full 2xl:basis-auto min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 [&>button]:shrink-0 [&>div]:shrink-0">
+        {markupBar && <div className="shrink-0 flex items-center">{markupBar}</div>}
         <button onClick={onReadAloud} title={t('ttsReadAloud')} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl hover:bg-canvas text-xs leading-relaxed whitespace-nowrap cursor-pointer">
           <Play className="w-4 h-4 rtl:rotate-180" />
           <span>{t('ttsReadAloud')}</span>

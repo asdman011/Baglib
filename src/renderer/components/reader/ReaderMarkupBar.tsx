@@ -33,7 +33,7 @@ export const MarkupBarCompact = createContext(false);
  * The markup bar (Wave 8.3): tool modes in Acrobat's compact and expanded layouts, the colour, a lock that keeps
  * the tool armed after one use, and the shortcut sheet. The last drawing tool used stays visible when compact.
  */
-export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowShortcuts, tool = 'select', onTool, t }: {
+export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowShortcuts, tool = 'select', onTool, allowedTools, t }: {
   color: string;
   onColor: (color: string) => void;
   locked: boolean;
@@ -41,11 +41,13 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
   onShowShortcuts: () => void;
   tool?: MarkupTool;
   onTool?: (tool: MarkupTool) => void;
+  allowedTools?: readonly MarkupTool[];
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [lastShape, setLastShape] = useState<MarkupTool>('rect');
-  const shown = tools.filter(entry => expanded || COMPACT.includes(entry.id) || entry.id === (isShapeTool(tool) && tool !== 'comment' ? tool : lastShape));
+  const availableTools = allowedTools ? tools.filter(entry => allowedTools.includes(entry.id)) : tools;
+  const shown = availableTools.filter(entry => expanded || COMPACT.includes(entry.id) || entry.id === (isShapeTool(tool) && tool !== 'comment' ? tool : lastShape));
   const choose = (id: MarkupTool) => { if (isShapeTool(id) && id !== 'comment') setLastShape(id); onTool?.(id); };
   const compact = useContext(MarkupBarCompact);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -84,7 +86,7 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
   const toolButton = (entry: typeof tools[number], withLabel = false) => { const Icon = entry.icon; return <button key={entry.id} type="button" data-markup-tool-button={entry.id} aria-pressed={tool === entry.id} aria-label={t(entry.label)} title={t(entry.label)} onClick={() => { choose(entry.id); setPaletteOpen(false); }}
     className={`flex items-center gap-1.5 rounded-md p-1 ${withLabel ? 'w-full px-2 text-start text-xs' : ''} ${tool === entry.id ? 'bg-emerald-600 text-white' : 'text-main hover:bg-canvas'}`}><Icon size={13} aria-hidden="true" className={entry.id === 'arrow' ? 'shrink-0 rtl:-scale-x-100' : 'shrink-0'} />{withLabel && <span className="min-w-0 leading-snug">{t(entry.label)}</span>}</button>; };
   if (compact && onTool) {
-    const current = tools.find(entry => entry.id === tool) ?? tools[0];
+    const current = availableTools.find(entry => entry.id === tool) ?? availableTools[0];
     return <div role="toolbar" aria-label={t('markupBarLabel')} data-reader-markup-bar data-markup-compact data-markup-tool={tool} className="relative flex shrink-0 items-center gap-1 rounded-lg border border-subtle bg-surface px-1 py-1">
       {toolButton(current)}
       <button type="button" data-markup-palette aria-haspopup="dialog" aria-expanded={paletteOpen} aria-label={t('markupPalette')} title={t('markupPalette')} onClick={() => setPaletteOpen(value => !value)} className="flex items-center gap-0.5 rounded-md p-0.5 text-main hover:bg-canvas">
@@ -94,7 +96,7 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
       {paletteOpen && <>
         <div className="fixed inset-0 z-40" onClick={() => setPaletteOpen(false)} />
         <div role="dialog" aria-label={t('markupPalette')} data-markup-palette-panel className="absolute end-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] space-y-2 rounded-xl border border-subtle bg-surface p-2 text-main shadow-2xl">
-          <div className="grid grid-cols-2 gap-0.5">{tools.map(entry => toolButton(entry, true))}</div>
+          <div className="grid grid-cols-2 gap-0.5">{availableTools.map(entry => toolButton(entry, true))}</div>
           <div className="flex items-center gap-2 border-t border-subtle px-1 pt-2">{swatches}</div>
           <div className="flex items-center justify-between gap-1 border-t border-subtle pt-2">{lockButton}{shortcutsButton}</div>
         </div>
@@ -104,7 +106,7 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
   return <div role="toolbar" aria-label={t('markupBarLabel')} data-reader-markup-bar data-markup-tool={tool} className="flex shrink-0 items-center gap-1 rounded-lg border border-subtle bg-surface px-1.5 py-1">
     {onTool ? <span className="flex items-center gap-0.5">
       {shown.map(entry => toolButton(entry))}
-      <button type="button" data-markup-more aria-expanded={expanded} aria-label={t('markupMoreTools')} title={t('markupMoreTools')} onClick={() => setExpanded(value => !value)} className="rounded-md p-0.5 text-muted hover:bg-canvas"><ChevronDown size={12} className={expanded ? 'rotate-180' : undefined} /></button>
+      {availableTools.length > COMPACT.length && <button type="button" data-markup-more aria-expanded={expanded} aria-label={t('markupMoreTools')} title={t('markupMoreTools')} onClick={() => setExpanded(value => !value)} className="rounded-md p-0.5 text-muted hover:bg-canvas"><ChevronDown size={12} className={expanded ? 'rotate-180' : undefined} /></button>}
       <span className="mx-0.5 h-4 w-px bg-subtle" aria-hidden="true" />
     </span> : <Highlighter size={14} aria-hidden="true" className="text-muted" />}
     <span className="contents">{swatches}</span>
