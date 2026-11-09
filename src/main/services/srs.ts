@@ -23,13 +23,13 @@ export class SrsService {
   queue(): ReviewQueue {
     const now = this.clock();
     const filter = `FROM srs_state s JOIN knowledge k ON k.id=s.knowledge_id JOIN card_detail c ON c.knowledge_id=k.id WHERE s.state <> 'suspended'${this.activeKnowledge()}`;
-    const rows = this.db.prepare(`SELECT s.*, c.front, c.back, c.source_kind AS sourceKind, c.source_ref AS sourceRef, c.source_label AS sourceLabel, c.language, k.work_id AS workId, k.created_at AS createdAt ${filter} AND s.due_at <= ? ORDER BY s.due_at,s.knowledge_id LIMIT 50`).all(now.toISOString()) as (Schedule & { front: string; back: string; sourceKind: ReviewQueue['cards'][number]['sourceKind']; sourceRef: string | null; sourceLabel: string | null; language: string | null; workId: string | null; createdAt: string })[];
+    const rows = this.db.prepare(`SELECT s.*, c.question_kind AS questionKind,c.payload_json AS payloadJson, (SELECT COALESCE(MAX(revision),0) FROM entity_version WHERE entity_type='knowledge' AND entity_id=k.id) AS cardRevision,c.front, c.back, c.source_kind AS sourceKind, c.source_ref AS sourceRef, c.source_label AS sourceLabel, c.language, k.work_id AS workId, k.created_at AS createdAt ${filter} AND s.due_at <= ? ORDER BY s.due_at,s.knowledge_id LIMIT 50`).all(now.toISOString()) as (Schedule & { questionKind: ReviewQueue['cards'][number]['questionKind']; payloadJson: string|null; cardRevision:number; front: string; back: string; sourceKind: ReviewQueue['cards'][number]['sourceKind']; sourceRef: string | null; sourceLabel: string | null; language: string | null; workId: string | null; createdAt: string })[];
     const due = (this.db.prepare(`SELECT COUNT(*) AS count ${filter} AND s.due_at <= ?`).get(now.toISOString()) as { count: number }).count;
     const nextDue = (this.db.prepare(`SELECT MIN(s.due_at) AS due ${filter} AND s.due_at > ?`).get(now.toISOString()) as { due: string | null }).due;
     const midnight = new Date(now); midnight.setHours(0, 0, 0, 0);
     const tomorrow = new Date(midnight); tomorrow.setDate(tomorrow.getDate() + 1);
     const reviewedToday = (this.db.prepare(`SELECT COUNT(*) AS count FROM srs_review_log r JOIN knowledge k ON k.id=r.knowledge_id WHERE r.reviewed_at >= ? AND r.reviewed_at < ?${this.activeKnowledge()}`).get(midnight.toISOString(), tomorrow.toISOString()) as { count: number }).count;
-    return { cards: rows.map(row => ({ id: row.knowledge_id, front: row.front, back: row.back, sourceKind: row.sourceKind, sourceRef: row.sourceRef, sourceLabel: row.sourceLabel, language: row.language, workId: row.workId, createdAt: row.createdAt, memorizing: true, revision: revision(row) })), due, reviewedToday, nextDue };
+    return { cards: rows.map(row => ({ id: row.knowledge_id, questionKind:row.questionKind, payload:row.payloadJson?JSON.parse(row.payloadJson):null, cardRevision:row.cardRevision, front: row.front, back: row.back, sourceKind: row.sourceKind, sourceRef: row.sourceRef, sourceLabel: row.sourceLabel, language: row.language, workId: row.workId, createdAt: row.createdAt, memorizing: true, revision: revision(row) })), due, reviewedToday, nextDue };
   }
 
   grade(input: GradeReviewInput): ReviewQueue {

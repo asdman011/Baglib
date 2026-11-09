@@ -1,6 +1,34 @@
-## KEY-281 ? active, 2026-11-09, Codex
+## KEY-281 - 2026-11-09, Codex (implemented and verified; publication pending)
 
-- [2026-11-09, Codex] KEY-281 active (session 01a1c155-1b05-7e10-8260-f113dd254066). ADR-013 schema only authorized; implementing attempt evidence and question kinds. KEY-272 files/hunks preserved. Tests/live verification and task-scoped authorized publication pending; Jira delegated to Claude.
+- [2026-11-09, Codex] KEY-281 implemented and verified (session 01a1c155-1b05-7e10-8260-f113dd254066). Approved ADR-013 migration026 only; bounded main-process practice evidence, question authoring/review, confidence, mistake categories, one-time judgment and retained/confirmed-clear history. Fixed reproduced book-card reader query leak; restored old/new card snapshots in place without SRS reset. Twelve focused and14 focused+translation tests pass; final shared1520/1520, zero failures/skips. Exact task-only candidate tsc/lint0errors0warnings/tsup pass and1498passes+14environment-skips; final shared tsc passes after separate KEY-272 publication. Native zVcTC2,3Qyv6b,SNaG5t ar/en1280/480 pass with real PDF passages, numeric Arabic digits, all five requested kinds, editor create/edit, UI judgment, retention/clear-cancel and exact source/page reopening. Final screenshots inspected. Dictionary/report updated; no schema beyond ADR-013, dependencies, downloads or Jira actions. Explicit one-task commit/push authorization to origin/feature/library-domain; stop afterward. KEY-272 publication78dea66 preserved; remaining unrelated files excluded.
+
+- Experience: Arabic RTL and English LTR now have a question editor, automatic choice/numeric checks and manual/pending answers. Confidence is chosen before reveal; wrong answers offer a mistake category before Save attempt completes submission. Every saved result identifies its check method. Original recall reveal/rating controls remain, with a confidence prompt; recall ratings are explicitly self-rated, not automatic assessment. SRS scheduling stays separate. History keeps deleted questions and opens the exact source passage; Clear requires confirmation. Controls wrap at480px and Arabic text uses loose line height.
+- Evidence: .baglib-data/key281-zVcTC2/evidence (final); .baglib-data/key281-3Qyv6b/evidence and key281-SNaG5t/evidence (preceding complete runs). No real PDFs were written by these checks; all native profiles were deleted by the harness. Detailed evidence and limits: docs/agent-ops/reports/KEY-281.md.
+- Limits: legacy cards with no entity_version store NULL card_revision; coarse/invalid legacy source references are omitted from attempts rather than guessed. Canonical corpus cards remain verbatim recall cards. Isolated14skips concern Python/PDF/corpus environment; shared final suite has no skips. A populated pre026 fixture was copied and migrated up/down, not a user database. Existing Arabic PDF extraction defects remain as supplied.
+- Exact23task files/hunks:
+  - `docs/data-dictionary.md`
+  - `src/main/database/migrations/index.ts`
+  - `src/main/database/migrations/026_practice_attempts.ts`
+  - `src/main/database/repositories/knowledge-card.repository.ts`
+  - `src/main/ipc/knowledge-cards.ts`
+  - `src/main/services/knowledge-history.ts`
+  - `src/main/services/practice.ts`
+  - `src/main/services/srs.ts`
+  - `src/shared/practice.ts`
+  - `src/shared/types/knowledge-cards.ts`
+  - `src/renderer/components/knowledge/PracticeAnswer.tsx`
+  - `src/renderer/components/knowledge/PracticeHistoryPanel.tsx`
+  - `src/renderer/components/knowledge/QuestionCardEditor.tsx`
+  - `src/renderer/components/knowledge/SavedCardsPanel.tsx`
+  - `src/renderer/components/knowledge/SrsReviewPanel.tsx`
+  - `tests/services/practice.test.ts`
+  - `scripts/practice-live/main.cjs`
+  - `scripts/practice-live/run.mjs`
+  - `src/main/database/repositories/knowledge.repository.ts`
+  - `src/preload/index.ts`
+  - `src/renderer/translations.ts`
+  - `CURRENT_TASK.md`
+  - `IMPLEMENTATION_PLAN.md`
 
 ## KEY-279 — 2026-11-09, Codex (implemented and verified, publication pending)
 

@@ -115,7 +115,7 @@ export class SqliteKnowledgeRepository implements IKnowledgeRepository {
       LEFT JOIN quote_detail qd     ON k.id = qd.knowledge_id
       LEFT JOIN bookmark_detail bd  ON k.id = bd.knowledge_id
       LEFT JOIN question_detail qud ON k.id = qud.knowledge_id
-      WHERE k.work_id = ? AND k.deleted_at IS NULL
+      WHERE k.work_id = ? AND k.knowledge_type IS NOT 'card' AND k.deleted_at IS NULL
     `;
 
     const params: unknown[] = [workId];

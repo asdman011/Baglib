@@ -1,5 +1,17 @@
 # Baglib — Unified Data Dictionary
 
+## Practice evidence - ADR-013 / migration 026 (2026-11-09)
+
+`card_detail.question_kind` is NOT NULL, defaults to `recall`, and is checked against `recall`, `choice`, `numeric`, `short`, `application`, `explain_back`. Nullable `payload_json` holds validated choices (2-12 options, correct zero-based index), numeric answer/absolute tolerance/unit, or a personal model answer. Front/back and canonical names remain exact. Numeric checking accepts Arabic/Persian digits in the submitted answer without rewriting stored text. Payloads are bounded in the main process; corpus cards remain verbatim recall cards.
+
+`practice_attempt` stores `id` (TEXT PK), nullable `knowledge_id` and `card_revision`, `question_kind` (the same six-value CHECK), exact `answer_text` (NOT NULL, default empty), `result` (correct/partial/incorrect/pending), `check_method` (auto/self/judgment), nullable `mistake_category` (definition/assumption/calculation/recall/reading/method/other), nullable `confidence` (INTEGER, 1-4), nullable `duration_ms` (INTEGER, nonnegative), nullable `source_ref`, `context` (practice/section_check/challenge; default practice), and UTC ISO `created_at`. All enums are CHECK constrained; the main process additionally enforces integer bounds and result/mistake consistency. Its three indexes are `(knowledge_id, created_at)`, `(created_at)`, and the partial `(source_ref) WHERE source_ref IS NOT NULL`.
+
+The card id and passage are soft references, with no foreign keys or cascading deletion. Trashing/erasing a card or deleting a Work retains attempts. The UI shows "deleted question" when the question is gone. Only explicitly confirmed Clear practice history deletes attempts. Pending judgment may update only result and mistake category, once; other attempts are immutable. Automatic outcomes are recomputed in main from the current validated card payload. Self-ratings remain distinct from assessment evidence and from SRS scheduling.
+
+The answer is pinned to the current `entity_version` revision, checked atomically when recorded. Legacy cards with no existing version store NULL rather than inventing a revision; new saves and edits receive real revisions. Card creation/edit uses the existing knowledge history transaction. Restoring pre-026 snapshots supplies recall/null defaults; restoring newer snapshots restores kind/payload in place without resetting SRS or changing attempts. No additional history table or field is introduced. New book references use `bookStudyTarget()` / KEY-279 `book:<work>@<source>#p=N`; invalid or coarse legacy references are retained on cards but omitted from new attempt evidence rather than guessed. Attempt listing supports exact card/source filtering and pages of 100. Personal evidence stays local.
+
+No changes to Work → Edition → Source, corpus storage, relationships or dependencies. See [ADR-013](ADR-013-practice-attempts.md).
+
 ## Wave4a persistence extension — 2026-11-02
 
 Approved ADR008/migration021 adds knowledge-owned study_note_detail (title, exact content, aliases_json) and reading_reflection_detail (entry_date, mood, optional difficulty/rating 1–5, review, recommendations, lessons). Both share knowledge_id with knowledge and inherit its tags, comments, collections and deleted-book preservation. No study_document store exists. knowledge.deleted_at is recoverable trash; annotations is a projection removed on trash and rebuilt on restore.

@@ -6,7 +6,8 @@
  */
 
 import { randomUUID } from 'crypto';
-import { trashKnowledge } from '../../services/knowledge-history';
+import { validateCardInput } from '../../../shared/types/knowledge-cards';
+import { headRevision, withKnowledgeHistory, trashKnowledge } from '../../services/knowledge-history';
 import type { Database } from 'better-sqlite3';
 import type { CardSourceKind, KnowledgeCard, PreservedKnowledge, SaveCardInput } from '../../../shared/types/knowledge-cards';
 
@@ -14,6 +15,9 @@ const PAGE_SIZE = 50;
 
 interface CardRow {
   id: string;
+  questionKind: KnowledgeCard["questionKind"];
+  payloadJson: string | null;
+  cardRevision: number;
   front: string;
   back: string;
   sourceKind: CardSourceKind;
@@ -26,13 +30,14 @@ interface CardRow {
 }
 
 const CARD_SELECT = `
-  SELECT k.id, c.front, c.back, c.source_kind AS sourceKind, c.source_ref AS sourceRef,
+  SELECT k.id, c.question_kind AS questionKind,c.payload_json AS payloadJson,
+    (SELECT COALESCE(MAX(revision),0) FROM entity_version WHERE entity_type='knowledge' AND entity_id=k.id) AS cardRevision, c.front, c.back, c.source_kind AS sourceKind, c.source_ref AS sourceRef,
     c.source_label AS sourceLabel, c.language, k.work_id AS workId, s.state AS srsState, k.created_at AS createdAt
   FROM knowledge k
   JOIN card_detail c ON c.knowledge_id = k.id
   LEFT JOIN srs_state s ON s.knowledge_id = k.id`;
 
-const toCard = ({ srsState, ...row }: CardRow): KnowledgeCard => ({ ...row, memorizing: srsState !== null && srsState !== 'suspended' });
+const toCard = ({ srsState, payloadJson, ...row }: CardRow): KnowledgeCard => ({ ...row, payload: payloadJson ? JSON.parse(payloadJson) : null, memorizing: srsState !== null && srsState !== 'suspended' });
 
 export class KnowledgeCardRepository {
   constructor(private db: Database) {}
@@ -47,20 +52,37 @@ export class KnowledgeCardRepository {
 
   /** Saving the same text from the same source returns the existing card. */
   save(input: SaveCardInput): KnowledgeCard {
+    input=validateCardInput(input);
     return this.db.transaction(() => {
       const existing = this.db.prepare(`${CARD_SELECT}
-        WHERE k.deleted_at IS NULL AND c.source_kind = ? AND c.source_ref IS ? AND c.front = ?`).get(input.sourceKind, input.sourceRef ?? null, input.front) as CardRow | undefined;
+        WHERE k.deleted_at IS NULL AND c.source_kind = ? AND c.source_ref IS ? AND c.front = ? AND c.question_kind=? AND c.payload_json IS ?`).get(input.sourceKind, input.sourceRef ?? null, input.front,input.questionKind??'recall',input.payload?JSON.stringify(input.payload):null) as CardRow | undefined;
       if (existing) return toCard(existing);
       const id = randomUUID();
       const now = new Date().toISOString();
       const workExists = input.workId && this.db.prepare('SELECT 1 FROM work WHERE id = ?').get(input.workId);
+      withKnowledgeHistory(this.db,[id],'create',()=>{
       this.db.prepare(`INSERT INTO knowledge (id, work_id, knowledge_type, created_at, updated_at) VALUES (?, ?, 'card', ?, ?)`)
         .run(id, workExists ? input.workId : null, now, now);
-      this.db.prepare(`INSERT INTO card_detail (knowledge_id, front, back, source_kind, source_ref, source_label, language) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, input.front, input.back, input.sourceKind, input.sourceRef ?? null, input.sourceLabel ?? null, input.language ?? null);
+      this.db.prepare(`INSERT INTO card_detail (knowledge_id, front, back, source_kind, source_ref, source_label, language, question_kind, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, input.front, input.back, input.sourceKind, input.sourceRef ?? null, input.sourceLabel ?? null, input.language ?? null, input.questionKind ?? 'recall', input.payload ? JSON.stringify(input.payload) : null);
+      });
       return toCard(this.db.prepare(`${CARD_SELECT} WHERE k.id = ?`).get(id) as CardRow);
     })();
   }
+
+  update(id: string, input: SaveCardInput, expectedRevision: number): KnowledgeCard {
+    input=validateCardInput(input);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision<0) throw new Error('invalid-request');
+    withKnowledgeHistory(this.db,[id],'edit',()=>{
+      const row=this.db.prepare(`${CARD_SELECT} WHERE k.id=? AND k.deleted_at IS NULL`).get(id) as CardRow|undefined;
+      if(!row || headRevision(this.db,id)!==expectedRevision) throw new Error('history-conflict');
+      if(['quran','hadith','poetry'].includes(row.sourceKind)) throw new Error('invalid-request');
+      this.db.prepare('UPDATE card_detail SET front=?,back=?,question_kind=?,payload_json=? WHERE knowledge_id=?').run(input.front,input.back,input.questionKind??'recall',input.payload?JSON.stringify(input.payload):null,id);
+      return id;
+    },{id,revision:expectedRevision});
+    return this.get(id);
+  }
+  private get(id:string):KnowledgeCard { return toCard(this.db.prepare(`${CARD_SELECT} WHERE k.id=?`).get(id) as CardRow); }
 
   /** Notes and highlights whose book was deleted. Cards stay in the card list. */
   listPreserved(): PreservedKnowledge[] {

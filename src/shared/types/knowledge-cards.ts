@@ -1,3 +1,4 @@
+import { validateQuestion, type QuestionKind, type QuestionPayload } from '../practice';
 export const CARD_SOURCE_KINDS = ['book', 'quran', 'hadith', 'poetry', 'note', 'term', 'person'] as const;
 export type CardSourceKind = typeof CARD_SOURCE_KINDS[number];
 
@@ -5,6 +6,8 @@ const MAX_CARD_TEXT = 20_000;
 const MAX_CARD_FIELD = 500;
 
 export interface SaveCardInput {
+  questionKind?: QuestionKind;
+  payload?: QuestionPayload;
   front: string;
   back: string;
   sourceKind: CardSourceKind;
@@ -17,6 +20,9 @@ export interface SaveCardInput {
 
 export interface KnowledgeCard {
   id: string;
+  questionKind?: QuestionKind;
+  payload?: QuestionPayload;
+  cardRevision?: number;
   front: string;
   back: string;
   sourceKind: CardSourceKind;
@@ -67,6 +73,11 @@ export function validateDeckInput(input: unknown): DeckInput {
 }
 
 export interface KnowledgeCardsAPI {
+  recordAttempt(input: import('../practice').PracticeInput): Promise<import('../practice').PracticeAttempt>;
+  judgeAttempt(input: import('../practice').JudgeAttemptInput): Promise<import('../practice').PracticeAttempt>;
+  listAttempts(query?: import('../practice').AttemptQuery): Promise<import('../practice').PracticeAttempt[]>;
+  clearPracticeHistory(confirmed: boolean): Promise<void>;
+  update(id: string, input: SaveCardInput, expectedRevision: number): Promise<KnowledgeCard>;
   decks(): Promise<CardDeck[]>;
   generateDeck(input: DeckInput): Promise<DeckResult>;
   /** Resolves false when the save dialog is cancelled. */
@@ -93,7 +104,9 @@ export function validateCardInput(input: unknown): SaveCardInput {
   if (typeof front !== 'string' || !front.trim() || front.length > MAX_CARD_TEXT) throw new Error('invalid-request');
   if (typeof back !== 'string' || back.length > MAX_CARD_TEXT) throw new Error('invalid-request');
   if (!CARD_SOURCE_KINDS.includes(sourceKind as CardSourceKind)) throw new Error('invalid-request');
+  if (['quran','hadith','poetry'].includes(sourceKind as string) && (value.questionKind && value.questionKind !== 'recall' || value.payload)) throw new Error('invalid-request');
   return {
+    ...validateQuestion(value.questionKind, value.payload),
     front,
     back,
     sourceKind: sourceKind as CardSourceKind,

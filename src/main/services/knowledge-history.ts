@@ -169,7 +169,14 @@ export class KnowledgeHistoryService {
       for (const [field,table] of [['edition_id','edition'],['source_id','source']] as const) if (parent[field] && !this.db.prepare(`SELECT 1 FROM ${table} WHERE id=?`).get(parent[field])) parent[field]=null;
       this.upsert('knowledge',parent,'id');
       for (const table of detailTables) {
-        if (table === 'card_detail') continue;
+        if (table === 'card_detail') {
+          // Restore question content in place; SRS remains independent.
+          if (details.card_detail) {
+            const hasKinds=(this.db.prepare('PRAGMA table_info(card_detail)').all() as {name:string}[]).some(c=>c.name==='question_kind');
+            this.upsert(table,hasKinds?{question_kind:'recall',payload_json:null,...details.card_detail}:details.card_detail,'knowledge_id');
+          }
+          continue;
+        }
         this.db.prepare(`DELETE FROM ${table} WHERE knowledge_id=?`).run(id);
         if (details[table]) this.upsert(table,details[table]!,'knowledge_id');
       }

@@ -5,6 +5,9 @@ import { Repeat2, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { CARD_HOVER_SETTING, cardHoverEnabled, KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import type { KnowledgeCard, PreservedKnowledge } from '../../../shared/types/knowledge-cards';
+import { QuestionCardEditor } from './QuestionCardEditor';
+import { PracticeAnswer } from './PracticeAnswer';
+import { PracticeHistoryPanel } from './PracticeHistoryPanel';
 import { NoteHistory } from '../notes/NoteHistory';
 import { CardDecksPanel } from './CardDecksPanel';
 import { DictionariesPanel } from './DictionariesPanel';
@@ -12,6 +15,9 @@ import { PersonalCommentary } from './PersonalCommentary';
 
 export function SavedCardsPanel() {
   const { t } = useWorkspace();
+  const [editing,setEditing]=useState<string|null>(null);
+  const [practicing,setPracticing]=useState<string|null>(null);
+  const [creating,setCreating]=useState(false);
   const [cards, setCards] = useState<KnowledgeCard[]>([]);
   const [preserved, setPreserved] = useState<PreservedKnowledge[]>([]);
   const [search, setSearch] = useState('');
@@ -57,8 +63,10 @@ export function SavedCardsPanel() {
     </label>
     {failed && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{t('knowledgeCardFailed')}</p>}
     {!failed && cards.length === 0 && <p className="text-sm text-muted">{t('savedCardsEmpty')}</p>}
+    <button onClick={()=>setCreating(!creating)} className="rounded-lg border border-subtle p-2">{t('practiceNewQuestion')}</button>
+    {creating&&<QuestionCardEditor onSaved={()=>{setCreating(false);void refresh();}}/>}
     <ul className="space-y-2">
-      {cards.map(card => <li key={card.id} className="rounded-xl border border-subtle p-3">
+      {cards.map(card => <li key={card.id} data-saved-card={card.id} className="rounded-xl border border-subtle p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p dir="auto" className="font-reading text-base leading-loose break-words">{card.front}</p>
@@ -70,9 +78,16 @@ export function SavedCardsPanel() {
           </div>
         </div>
         {card.back && <p dir="auto" className="mt-2 border-t border-subtle pt-2 text-sm text-muted whitespace-pre-line line-clamp-4 break-words">{card.back}</p>}
+        <div className="flex flex-wrap gap-2 mt-2">
+          <button onClick={()=>setPracticing(practicing===card.id?null:card.id)} className="rounded border border-subtle p-2">{t('practiceStart')}</button>
+          {!['quran','hadith','poetry'].includes(card.sourceKind)&&<button onClick={()=>setEditing(editing===card.id?null:card.id)} className="rounded border border-subtle p-2">{t('practiceEdit')}</button>}
+        </div>
+        {editing===card.id&&<QuestionCardEditor key={`${card.id}-${card.cardRevision}`} card={card} onSaved={()=>{setEditing(null);void refresh();}}/>}
+        {practicing===card.id&&<PracticeAnswer key={`${card.id}-${card.cardRevision}`} card={card}/>}
         <NoteHistory id={card.id} onChanged={()=>void refresh()}/>
       </li>)}
     </ul>
+    <PracticeHistoryPanel />
     <CardDecksPanel />
     <DictionariesPanel />
     <PersonalCommentary />
