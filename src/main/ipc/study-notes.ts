@@ -1,3 +1,5 @@
+import { exportableStudyNotes } from '../../shared/study-note-export';
+import { SqliteKnowledgeRepository } from '../database/repositories/knowledge.repository';
 import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -32,6 +34,7 @@ const workTitles = (notes: { workId?: string }[]) => {
 
 export function registerStudyNotesIpc(): void {
   const service = () => new StudyNotesService(settingsRepository,getDatabase());
+  const exportNotes = () => exportableStudyNotes(service().list(), new SqliteKnowledgeRepository(getDatabase()).getAllKnowledge());
   const changed = () => {
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send('study-notes:changed');
   };
@@ -43,7 +46,7 @@ export function registerStudyNotesIpc(): void {
     authorize(event);
     if (ids !== undefined && (!Array.isArray(ids) || ids.length > 100_000 || ids.some(id => typeof id !== 'string'))) throw new Error('invalid-request');
     const wanted = ids ? new Set(ids as string[]) : null;
-    const notes = service().list().filter(note => !wanted || wanted.has(note.id));
+    const notes = exportNotes().filter(note => !wanted || wanted.has(note.id));
     if (!notes.length) return null;
     const owner = BrowserWindow.fromWebContents(event.sender);
     const options = { properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[] };
@@ -61,7 +64,7 @@ export function registerStudyNotesIpc(): void {
     authorize(event);
     if (!Array.isArray(ids) || ids.length > 100_000 || ids.some(id => typeof id !== 'string')) throw new Error('invalid-request');
     const wanted = new Set(ids as string[]);
-    const notes = service().list().filter(note => wanted.has(note.id));
+    const notes = exportNotes().filter(note => wanted.has(note.id));
     if (!notes.length) return null;
     const lang = language === 'ar' ? 'ar' : 'en';
     const text = translations[lang];

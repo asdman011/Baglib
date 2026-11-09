@@ -1,3 +1,4 @@
+import { parseDeepLink, protocolRegistrationArgs } from '../shared/deep-link';
 import { errorMessage } from '../shared/errors';
 import { confirmedQuitCleanup } from './services/quit-cleanup';
 import { app, BrowserWindow, protocol, dialog, ipcMain } from "electron";
@@ -111,6 +112,26 @@ queueMicrotask(() => protocol.registerSchemesAsPrivileged([
 ]));
 
 let mainWindow: BrowserWindow | null = null;
+let studyNavigationReady = false;
+const pendingStudyTargets: string[] = [];
+function flushStudyTargets() {
+  if (!studyNavigationReady || !mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoading()) return;
+  for (const target of pendingStudyTargets.splice(0)) mainWindow.webContents.send('study:navigate', target);
+}
+function receiveStudyLink(url: string): boolean {
+  const target = parseDeepLink(url);
+  if (!target) return false;
+  // Bound untrusted input while the renderer is starting or reloading.
+  if (pendingStudyTargets.length >= 32) pendingStudyTargets.shift();
+  pendingStudyTargets.push(target);
+  flushStudyTargets();
+  return true;
+}
+ipcMain.on('study:navigation-ready', event => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return;
+  studyNavigationReady = true;
+  flushStudyTargets();
+});
 
 // MIME type map for streaming digital book formats and internal asset files
 const MIME_BY_EXT: Record<string, string> = {
@@ -237,6 +258,10 @@ async function createWindow() {
     },
   });
 
+  studyNavigationReady = false;
+  mainWindow.webContents.on('did-start-loading', () => { studyNavigationReady = false; });
+  mainWindow.webContents.on('did-finish-load', flushStudyTargets);
+
   // ADR-012: before the window closes, the renderer may ask to write pending changes into an open file.
   // Without an answer within 5 seconds (a stuck page) the window closes anyway, so it can never trap the user.
   {
@@ -300,7 +325,11 @@ async function createWindow() {
 }
 
 // Single-instance lock and OS file association / protocol routing
-app.setAsDefaultProtocolClient('baglib');
+const registration = protocolRegistrationArgs(app.isPackaged, process.env.BAGLIB_REGISTER_PROTOCOL, process.execPath, process.argv[1] ? path.resolve(process.argv[1]) : undefined);
+if (registration) {
+  if (registration.length === 1) app.setAsDefaultProtocolClient(registration[0]);
+  else app.setAsDefaultProtocolClient(...registration);
+}
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -308,11 +337,12 @@ if (!gotTheLock) {
   process.exit(0);
 } else {
   app.on('second-instance', (_event, argv) => {
+    const hasStudyLink = argv.some(receiveStudyLink);
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
-      const openArg = argv.find(
-        (arg) => !arg.startsWith('--') && !arg.endsWith('.exe') && fs.existsSync(arg)
+      const openArg = !hasStudyLink && argv.find(
+        (arg) => !/^baglib:/iu.test(arg) && !arg.startsWith('--') && !arg.endsWith('.exe') && fs.existsSync(arg)
       );
       if (openArg) {
         mainWindow.webContents.send('reader:open-file', openArg);
@@ -320,6 +350,18 @@ if (!gotTheLock) {
     }
   });
 }
+
+// Cold starts and macOS URL delivery use the same validated queue.
+process.argv.some(receiveStudyLink);
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (!receiveStudyLink(url)) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
 
 app.on('open-file', (event, filePath) => {
   event.preventDefault();

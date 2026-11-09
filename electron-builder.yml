@@ -96,6 +96,11 @@ nsis:
   # The Arabic for the template's install-mode page replaces its English, which NSIS reports as a warning.
   warningsAsErrors: false
 
+protocols:
+  - name: BagLib study links
+    schemes:
+      - baglib
+
 fileAssociations:
   - ext: epub
     name: Electronic Publication

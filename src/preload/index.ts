@@ -443,6 +443,13 @@ export const API = {
     return () => { ipcRenderer.removeListener('system:notification', subscription); };
   },
 
+  onStudyNavigate: (callback: (target: string) => void) => {
+    const subscription = (_: unknown, target: string) => callback(target);
+    ipcRenderer.on('study:navigate', subscription);
+    ipcRenderer.send('study:navigation-ready');
+    return () => { ipcRenderer.removeListener('study:navigate', subscription); };
+  },
+
   onReaderOpenFile: (callback: (filePath: string) => void) => {
     const subscription = (_: unknown, filePath: string) => callback(filePath);
     ipcRenderer.on('reader:open-file', subscription);

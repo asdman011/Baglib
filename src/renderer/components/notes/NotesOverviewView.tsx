@@ -96,10 +96,14 @@ export const NotesOverviewView: React.FC = () => {
   const [wordExported, setWordExported] = useState<{ file: string; count: number } | null>(null);
   // Word options (table of contents, page size, margins) open before the save dialog and are remembered on this device.
   const [wordOptions, setWordOptions] = useState<WordLayout | null>(null);
-  const exportMarkdown = async () => {
+  const [wordNoteId, setWordNoteId] = useState<string | null>(null);
+  useEffect(() => {
+    if (wordOptions && wordNoteId) document.querySelector('[data-word-options]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [wordOptions, wordNoteId]);
+  const exportMarkdown = async (ids = shown.map(note => note.id)) => {
     setActionError(false); setExported(null); setWordExported(null);
     try {
-      const result = await window.electronAPI.studyNotes.exportMarkdown(shown.map(note => note.id));
+      const result = await window.electronAPI.studyNotes.exportMarkdown(ids);
       if (result) setExported(result);
     } catch { setActionError(true); }
   };
@@ -108,7 +112,7 @@ export const NotesOverviewView: React.FC = () => {
     setActionError(false); setWordExported(null); setExported(null); setWordOptions(null);
     try { localStorage.setItem(WORD_LAYOUT_KEY, JSON.stringify(layout)); } catch { /* remembered for this time only */ }
     try {
-      const result = await window.electronAPI.studyNotes.exportWord(shown.map(note => note.id), lang, layout);
+      const result = await window.electronAPI.studyNotes.exportWord(wordNoteId ? [wordNoteId] : shown.map(note => note.id), lang, layout);
       if (result) setWordExported(result);
     } catch { setActionError(true); }
   };
@@ -121,11 +125,11 @@ export const NotesOverviewView: React.FC = () => {
     } catch { setActionError(true); }
   };
   return <section className="flex-1 min-h-0 overflow-y-auto bg-canvas p-4 sm:p-6 space-y-4" dir={dir} data-notes-overview>
-    <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 font-display text-xl font-bold leading-relaxed"><FileText size={20} />{t('myNotesTitle')}</h1><p className="text-xs text-muted">{t('myNotesDesc')} · {notes.length}</p></div><div className="flex flex-wrap gap-2"><button type="button" data-notes-assistant onClick={() => setAssistantOpen(true)} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm"><Sparkles size={15} />{t('assistantOpen')}</button><button type="button" data-notes-boards onClick={() => setBoardsOpen(true)} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm"><LayoutGrid size={15} />{t('boardsOpen')}</button><button type="button" data-notes-export-word disabled={!shown.length} title={t('notesExportWordHint')} aria-expanded={Boolean(wordOptions)} onClick={() => setWordOptions(current => (current ? null : savedWordLayout()))} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-40"><FileType size={15} />{t('notesExportWord', { count: shown.length })}</button><button type="button" data-notes-export-markdown disabled={!shown.length} title={t('notesExportMarkdownHint')} onClick={() => void exportMarkdown()} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-40"><Download size={15} />{t('notesExportMarkdown', { count: shown.length })}</button><button type="button" onClick={() => setEditor({ content: '', key: Date.now() })} className="flex items-center gap-2 rounded-lg bg-amber-600 text-white px-3 py-2 text-sm"><Plus size={15} />{t('studyNewNote')}</button></div></header>
+    <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 font-display text-xl font-bold leading-relaxed"><FileText size={20} />{t('myNotesTitle')}</h1><p className="text-xs text-muted">{t('myNotesDesc')} · {notes.length}</p></div><div className="flex flex-wrap gap-2"><button type="button" data-notes-assistant onClick={() => setAssistantOpen(true)} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm"><Sparkles size={15} />{t('assistantOpen')}</button><button type="button" data-notes-boards onClick={() => setBoardsOpen(true)} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm"><LayoutGrid size={15} />{t('boardsOpen')}</button><button type="button" data-notes-export-word disabled={!shown.length} title={t('notesExportWordHint')} aria-expanded={Boolean(wordOptions)} onClick={() => { setWordNoteId(null); setWordOptions(current => (current ? null : savedWordLayout())); }} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-40"><FileType size={15} />{t('notesExportWord', { count: shown.length })}</button><button type="button" data-notes-export-markdown disabled={!shown.length} title={t('notesExportMarkdownHint')} onClick={() => void exportMarkdown()} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-40"><Download size={15} />{t('notesExportMarkdown', { count: shown.length })}</button><button type="button" onClick={() => setEditor({ content: '', key: Date.now() })} className="flex items-center gap-2 rounded-lg bg-amber-600 text-white px-3 py-2 text-sm"><Plus size={15} />{t('studyNewNote')}</button></div></header>
     {/* The notes shown start ticked when they are a small, chosen set (a search or one note), not the whole library. */}
     {assistantOpen && <StudyAssistant notes={notes} initialNotes={shown.length <= 10 && shown.length < notes.length ? shown.map(note => note.id) : []} onClose={() => setAssistantOpen(false)} />}
     {boardsOpen && <BoardsWorkspace notes={notes} onClose={() => setBoardsOpen(false)} />}
-    {wordOptions && <form data-word-options aria-label={t('wordOptionsTitle')} onSubmit={event => { event.preventDefault(); void exportWord(wordOptions); }} className="flex flex-wrap items-end gap-3 rounded-xl border border-subtle bg-surface p-3 text-sm">
+    {wordOptions && <form data-word-options aria-label={t('wordOptionsTitle')} data-word-note={wordNoteId || undefined} onSubmit={event => { event.preventDefault(); void exportWord(wordOptions); }} className="flex flex-wrap items-end gap-3 rounded-xl border border-subtle bg-surface p-3 text-sm">
       <strong className="basis-full text-xs">{t('wordOptionsTitle')}</strong>
       <label className="flex items-center gap-2"><input type="checkbox" data-word-contents checked={wordOptions.contents} onChange={event => setWordOptions({ ...wordOptions, contents: event.target.checked })} />{t('wordContents')}</label>
       <label className="flex flex-col gap-1 text-xs">{t('wordPageSize')}<select data-word-page value={wordOptions.pageSize} onChange={event => setWordOptions(wordLayout({ ...wordOptions, pageSize: event.target.value }))} className="rounded border border-subtle bg-canvas px-2 py-1 text-sm"><option value="a4">A4</option><option value="letter">{t('wordPageLetter')}</option><option value="a5">A5</option></select></label>
@@ -154,6 +158,13 @@ export const NotesOverviewView: React.FC = () => {
         const book = books.find(book => book.id === note.workId);
         return <article key={note.id} data-study-note={note.id} className="rounded-xl border border-subtle bg-surface p-4 space-y-3 min-w-0">
           <header className="flex items-start justify-between gap-2"><div className="min-w-0"><h2 dir="auto" className="font-bold leading-loose break-words">{note.title || t('dashScratchpadGeneralNote')}</h2>{(openComments[note.id] ?? 0) > 0 && <span data-note-open-comments className="inline-flex items-center rounded-full bg-amber-500/15 px-2 text-[11px]">{t('commentsOpenCount', { count: openComments[note.id] })}</span>}{note.aliases.length > 0 && <p className="text-xs text-muted leading-loose" dir="auto">{note.aliases.join(' · ')}</p>}</div><div className="flex shrink-0 gap-1"><KnowledgeGraphButton noteId={note.id} notes={notes} /><button type="button" aria-label={t('studyEdit')} onClick={() => note.kind==='reading_reflection'?setReadingWork(note.workId || note.sourceRef?.replace(/^book:/u,'') || ''):setEditor({ note, key: Date.now() })} className="p-1.5"><Pencil size={15} /></button><button type="button" aria-label={t('deleteNote')} onClick={() => void remove(note)} className="p-1.5 text-red-500"><Trash2 size={15} /></button></div></header>
+          <details data-note-export-menu className="text-xs border-t border-subtle pt-2">
+            <summary className="cursor-pointer leading-loose">{t('noteExportMenu')}</summary>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button type="button" data-note-export-markdown onClick={() => void exportMarkdown([note.id])} className="rounded-lg border border-subtle px-3 py-2 text-start leading-relaxed">{t('noteExportMarkdown')}</button>
+              <button type="button" data-note-export-word onClick={() => { setWordNoteId(note.id); setWordOptions(savedWordLayout()); }} className="rounded-lg border border-subtle px-3 py-2 text-start leading-relaxed">{t('noteExportWord')}</button>
+            </div>
+          </details>
           <StudyNoteContent content={note.content} notes={notes} onOpen={target => void open(target)} t={t} />
           <NoteHistory id={note.id} onChanged={()=>void refresh()}/>
           <button type="button" onClick={() => void memorize(note)} className="text-xs underline">{t('srsFromNote')}</button>

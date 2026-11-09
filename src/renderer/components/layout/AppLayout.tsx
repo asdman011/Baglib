@@ -20,6 +20,7 @@ import { Settings } from 'lucide-react';
 import { SaveSettings } from './SaveSettings';
 import { SettingsDirectory } from './SettingsDirectory';
 import { useAppCloseBridge } from '../../utils/close-guard';
+import { StudyDeepLinkBridge } from '../notes/StudyDeepLinkBridge';
 import { StartupSplash } from '../StartupSplash';
 
 // Lazy-loaded secondary views to dramatically accelerate initial application boot time (<1.5s cold compilation)
@@ -142,6 +143,7 @@ export const AppLayout: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-main select-none font-sans relative" dir={dir} suppressHydrationWarning>
+      <StudyDeepLinkBridge />
       {/* Scholar-Grade Startup Splash Orchestrator */}
       {showSplash && (
         <StartupSplash
