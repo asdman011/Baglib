@@ -120,6 +120,7 @@ import {
 import { useReaderPanels } from './useReaderPanels';
 import { PdfWorkstationPanel } from './PdfWorkstationPanel';
 import { OcrInspectorDrawer } from './OcrInspectorDrawer';
+import { applyWordCorrection } from '../../../shared/ocr-suspects';
 import { OcrQuickActionPill } from './OcrQuickActionPill';
 import { OcrPageOverlay } from './OcrPageOverlay';
 import { ocrEngineName, ocrFallbackMessage } from './ocr-status';
@@ -1308,6 +1309,50 @@ export const FullPageBookReader: React.FC = () => {
     }
     return [];
   }, [paginatedPages, extractedPages, ocrPages]);
+
+  // Load persistent OCR word corrections for the current page and book
+  useEffect(() => {
+    const currentPageResult = ocrPages.get(readingPage);
+    if (!currentPageResult || !activeBook?.id || !window.electronAPI?.settings?.get) return;
+
+    let mounted = true;
+    (async () => {
+      try {
+        const corrKey = `ocr.corrections.v1:${activeBook.id}:${readingPage}`;
+        const saved = (await window.electronAPI.settings.get(corrKey, null)) as Record<string, string> | null;
+        if (!saved || Object.keys(saved).length === 0 || !mounted) return;
+
+        let needsUpdate = false;
+        for (const [idxStr, text] of Object.entries(saved)) {
+          const idx = Number(idxStr);
+          if (currentPageResult.words?.[idx] && currentPageResult.words[idx].text !== text) {
+            needsUpdate = true;
+            break;
+          }
+        }
+
+        if (needsUpdate && mounted) {
+          let patched = currentPageResult;
+          for (const [idxStr, text] of Object.entries(saved)) {
+            patched = applyWordCorrection(patched, Number(idxStr), text);
+          }
+          setOcrPages((prev) => new Map(prev).set(readingPage, patched));
+          setExtractedPages((prev) => {
+            const next = [...prev];
+            while (next.length < readingPage) next.push('');
+            next[readingPage - 1] = patched.text;
+            return next;
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load persistent OCR corrections:', err);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeBook?.id, readingPage, ocrPages]);
 
   // Single-key markup shortcuts for the PDF workstation: H keeps the highlighter on, 1-5 pick a colour, ? lists shortcuts.
   useEffect(() => {
@@ -3480,6 +3525,7 @@ export const FullPageBookReader: React.FC = () => {
           }}
           pageResult={ocrPages.get(readingPage) || null}
           readingPage={readingPage}
+          bookId={activeBook?.id}
           isOcrRunning={isOcrRunning}
           onRunOcrPage={() => handleRunOcrPage(readingPage)}
           showBoundingBoxes={showOcrDebug}
@@ -3490,6 +3536,15 @@ export const FullPageBookReader: React.FC = () => {
             if (idx !== null && !showOcrDebug) {
               setShowOcrDebug(true);
             }
+          }}
+          onUpdatePageResult={(updated) => {
+            setOcrPages((prev) => new Map(prev).set(readingPage, updated));
+            setExtractedPages((prev) => {
+              const next = [...prev];
+              while (next.length < readingPage) next.push('');
+              next[readingPage - 1] = updated.text;
+              return next;
+            });
           }}
           engines={ocrEngines}
           selectedEngine={ocrEngine}

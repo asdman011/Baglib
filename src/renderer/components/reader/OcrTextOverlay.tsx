@@ -79,6 +79,8 @@ export const OcrTextOverlay: React.FC<OcrTextOverlayProps> = ({
         return (
           <span
             key={`ocr-word-${index}`}
+            data-ocr-word-index={index}
+            data-ocr-active={isActive ? 'true' : undefined}
             className={`ocr-word-node absolute cursor-pointer select-text transition-all duration-150 inline-block rounded-xs ${
               isActive
                 ? 'bg-amber-400/45 border-2 border-amber-500 shadow-lg ring-2 ring-amber-400/60 z-30 text-amber-950 dark:text-amber-100 font-mono text-[10px]'

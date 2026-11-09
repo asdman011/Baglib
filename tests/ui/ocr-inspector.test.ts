@@ -184,4 +184,49 @@ describe('PaddleOCR-VL-1.6 Visual Layout & Inspector UI Tests', () => {
     assert.equal(matches.length, 1);
     assert.equal(matches[0].text, 'والعلوم');
   });
+
+  it('validates suspect review localization keys and string interpolation', () => {
+    const suspectKeys = [
+      'ocrTabReview',
+      'ocrReviewSuspectsTitle',
+      'ocrReviewSuspectsSubtitle',
+      'ocrSuspectCounter',
+      'ocrSuspectConfidenceScore',
+      'ocrSuspectHeuristicLabel',
+      'ocrHeuristicMixedScripts',
+      'ocrHeuristicInvalidChars',
+      'ocrHeuristicIsolatedArabic',
+      'ocrHeuristicDictionaryMiss',
+      'ocrSuspectThreshold',
+      'ocrSuspectAccept',
+      'ocrSuspectEdit',
+      'ocrSuspectSaveEdit',
+      'ocrSuspectCancelEdit',
+      'ocrSuspectSkip',
+      'ocrSuspectNext',
+      'ocrSuspectPrev',
+      'ocrNoSuspectsNotice',
+      'ocrAllSuspectsReviewed',
+      'ocrWordCorrectedToast',
+    ] as const;
+
+    for (const lang of ['ar', 'en'] as const) {
+      for (const key of suspectKeys) {
+        assert.ok(translations[lang][key], `Missing ${lang} translation for: ${key}`);
+        assert.ok(translations[lang][key].length > 0);
+      }
+
+      // Check placeholder interpolation
+      const counterStr = translations[lang].ocrSuspectCounter
+        .replace('{current}', '3')
+        .replace('{total}', '10');
+      assert.ok(counterStr.includes('3') && counterStr.includes('10'));
+
+      const confStr = translations[lang].ocrSuspectConfidenceScore.replace('{score}', '45');
+      assert.ok(confStr.includes('45'));
+
+      const heuristicStr = translations[lang].ocrSuspectHeuristicLabel.replace('{reason}', 'Mixed');
+      assert.ok(heuristicStr.includes('Mixed'));
+    }
+  });
 });

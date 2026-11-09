@@ -18,7 +18,16 @@ import {
   Code,
   Download,
   HardDrive,
+  CheckCheck,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  SkipForward,
+  AlertTriangle,
+  Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
+import { findOcrSuspects, applyWordCorrection, type OcrSuspect } from '../../../shared/ocr-suspects';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { OcrCompare } from './OcrCompare';
 import type { OcrEngineId, OcrPageResult, OcrWord, OcrEngineInfo } from '../../../shared/types/ocr';
@@ -29,12 +38,14 @@ interface OcrInspectorDrawerProps {
   onClose: () => void;
   pageResult: OcrPageResult | null;
   readingPage: number;
+  bookId?: string;
   isOcrRunning?: boolean;
   onRunOcrPage?: () => void;
   showBoundingBoxes?: boolean;
   onToggleBoundingBoxes?: () => void;
   activeWordIndex?: number | null;
   onSelectWord?: (index: number | null) => void;
+  onUpdatePageResult?: (updated: OcrPageResult) => void;
   engines: OcrEngineInfo[];
   selectedEngine: OcrEngineId;
   onSelectEngine: (engine: OcrEngineId) => void;
@@ -46,19 +57,29 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
   onClose,
   pageResult,
   readingPage,
+  bookId,
   isOcrRunning = false,
   onRunOcrPage,
   showBoundingBoxes = false,
   onToggleBoundingBoxes,
   activeWordIndex = null,
   onSelectWord,
+  onUpdatePageResult,
   engines,
   selectedEngine,
   onSelectEngine,
   onEnginesChanged,
 }) => {
   const { t, dir } = useWorkspace();
-  const [activeTab, setActiveTab] = useState<'markdown' | 'text' | 'tables' | 'bboxes'>('markdown');
+  const [activeTab, setActiveTab] = useState<'markdown' | 'text' | 'tables' | 'bboxes' | 'review'>('markdown');
+  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(60);
+  const [acceptedIndices, setAcceptedIndices] = useState<Set<number>>(new Set());
+  const [currentSuspectIndex, setCurrentSuspectIndex] = useState<number>(0);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [editText, setEditText] = useState<string>('');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const cropCanvasRef = React.useRef<HTMLCanvasElement>(null);
+  const editInputRef = React.useRef<HTMLInputElement>(null);
   const [markdownView, setMarkdownView] = useState<'preview' | 'raw'>('preview');
   const [copied, setCopied] = useState<boolean>(false);
   const [copiedTableIdx, setCopiedTableIdx] = useState<number | null>(null);
@@ -96,6 +117,218 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
       unsub?.();
     }
   };
+
+  // Load saved accepted indices and corrections for this page
+  React.useEffect(() => {
+    if (!bookId || !window.electronAPI?.settings?.get) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const key = `ocr.accepted.v1:${bookId}:${readingPage}`;
+        const saved = await window.electronAPI.settings.get(key, []) as number[];
+        if (mounted && Array.isArray(saved)) {
+          setAcceptedIndices(new Set(saved));
+        }
+      } catch (err) {
+        console.warn('Failed to load accepted suspects:', err);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [bookId, readingPage]);
+
+  // Compute suspects ordered by reading order
+  const pageWords = pageResult?.words;
+  const suspects = React.useMemo(() => {
+    if (!pageWords || pageWords.length === 0) return [];
+    return findOcrSuspects(pageWords, {
+      confidenceThreshold: confidenceThreshold / 100,
+      isRtl: dir === 'rtl',
+    });
+  }, [pageWords, confidenceThreshold, dir]);
+
+  const activeSuspects = React.useMemo(() => {
+    return suspects.filter(s => !acceptedIndices.has(s.originalIndex));
+  }, [suspects, acceptedIndices]);
+
+  const activeSuspectsCount = activeSuspects.length;
+  const safeSuspectIndex = Math.min(Math.max(0, currentSuspectIndex), Math.max(0, activeSuspects.length - 1));
+  const currentSuspect: OcrSuspect | null = activeSuspects[safeSuspectIndex] || null;
+
+  // Sync highlight and active word with current suspect when on review tab
+  React.useEffect(() => {
+    if (activeTab === 'review' && currentSuspect) {
+      onSelectWord?.(currentSuspect.originalIndex);
+      if (!showBoundingBoxes) {
+        onToggleBoundingBoxes?.();
+      }
+    }
+  }, [activeTab, currentSuspect, onSelectWord, onToggleBoundingBoxes, showBoundingBoxes]);
+
+  // Focus input when editing starts
+  React.useEffect(() => {
+    if (isEditing) {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  // Draw zoomed crop on canvas when current suspect changes
+  React.useEffect(() => {
+    if (activeTab !== 'review' || !currentSuspect || !pageResult) return;
+    const canvas = cropCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const sourceCanvas = document.querySelector('canvas.pdf-canvas') as HTMLCanvasElement | null;
+    if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
+      const scaleX = sourceCanvas.width / (pageResult.width || 1);
+      const scaleY = sourceCanvas.height / (pageResult.height || 1);
+      const bbox = currentSuspect.word.bbox;
+
+      const padX = Math.max(12, bbox.width * 0.15);
+      const padY = Math.max(10, bbox.height * 0.25);
+
+      const sx = Math.max(0, (bbox.x - padX) * scaleX);
+      const sy = Math.max(0, (bbox.y - padY) * scaleY);
+      const sw = Math.min(sourceCanvas.width - sx, (bbox.width + padX * 2) * scaleX);
+      const sh = Math.min(sourceCanvas.height - sy, (bbox.height + padY * 2) * scaleY);
+
+      if (sw > 0 && sh > 0) {
+        const hRatio = (canvas.width - 24) / sw;
+        const vRatio = (canvas.height - 20) / sh;
+        const fitRatio = Math.min(hRatio, vRatio, 3.2);
+
+        const dw = sw * fitRatio;
+        const dh = sh * fitRatio;
+        const dx = (canvas.width - dw) / 2;
+        const dy = (canvas.height - dh) / 2;
+
+        ctx.fillStyle = '#fafaf9';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.drawImage(sourceCanvas, sx, sy, sw, sh, dx, dy, dw, dh);
+
+        const wordDx = dx + padX * scaleX * fitRatio;
+        const wordDy = dy + padY * scaleY * fitRatio;
+        const wordDw = bbox.width * scaleX * fitRatio;
+        const wordDh = bbox.height * scaleY * fitRatio;
+
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wordDx, wordDy, wordDw, wordDh);
+        return;
+      }
+    }
+
+    // Fallback placeholder
+    ctx.fillStyle = '#f5f5f4';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#44403c';
+    ctx.font = '16px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(currentSuspect.word.text, canvas.width / 2, canvas.height / 2);
+  }, [activeTab, currentSuspect, pageResult]);
+
+  // Actions for Review tab
+  const handleNextSuspect = () => {
+    if (activeSuspects.length <= 1) return;
+    setIsEditing(false);
+    setCurrentSuspectIndex((prev) => (prev + 1) % activeSuspects.length);
+  };
+
+  const handlePrevSuspect = () => {
+    if (activeSuspects.length <= 1) return;
+    setIsEditing(false);
+    setCurrentSuspectIndex((prev) => (prev - 1 + activeSuspects.length) % activeSuspects.length);
+  };
+
+  const handleAcceptSuspect = async () => {
+    if (!currentSuspect) return;
+    const wordIdx = currentSuspect.originalIndex;
+    setAcceptedIndices((prev) => {
+      const next = new Set(prev);
+      next.add(wordIdx);
+      if (bookId && window.electronAPI?.settings?.set) {
+        window.electronAPI.settings.set(`ocr.accepted.v1:${bookId}:${readingPage}`, Array.from(next)).catch(() => {});
+      }
+      return next;
+    });
+  };
+
+  const handleSkipSuspect = () => {
+    handleNextSuspect();
+  };
+
+  const handleSaveEdit = async () => {
+    if (!currentSuspect || !pageResult || !editText.trim()) return;
+    const trimmed = editText.trim();
+    const updated = applyWordCorrection(pageResult, currentSuspect.originalIndex, trimmed);
+    onUpdatePageResult?.(updated);
+
+    if (bookId && window.electronAPI?.settings) {
+      try {
+        const corrKey = `ocr.corrections.v1:${bookId}:${readingPage}`;
+        const existing = (await window.electronAPI.settings.get(corrKey, {})) as Record<string, string>;
+        existing[String(currentSuspect.originalIndex)] = trimmed;
+        await window.electronAPI.settings.set(corrKey, existing);
+      } catch (err) {
+        console.warn('Failed to save correction:', err);
+      }
+    }
+
+    // Accept after edit
+    handleAcceptSuspect();
+    setIsEditing(false);
+    setToastMessage(t('ocrWordCorrectedToast'));
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  // Keyboard navigation shortcuts
+  React.useEffect(() => {
+    if (!isOpen || activeTab !== 'review' || !currentSuspect) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTyping =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable;
+
+      if (isTyping) {
+        if (e.key === 'Escape') {
+          setIsEditing(false);
+        }
+        return;
+      }
+
+      if (e.key === 'Enter' || e.key === 'j' || e.key === 'n') {
+        e.preventDefault();
+        handleNextSuspect();
+      } else if (e.key === 'k' || e.key === 'p') {
+        e.preventDefault();
+        handlePrevSuspect();
+      } else if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        handleAcceptSuspect();
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        handleSkipSuspect();
+      } else if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        setIsEditing(true);
+        setEditText(currentSuspect.word.text);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, activeTab, currentSuspect, activeSuspects.length, currentSuspectIndex, isEditing, editText, pageResult, handleNextSuspect, handlePrevSuspect, handleAcceptSuspect, handleSkipSuspect]);
 
   const engineInfo = ocrEngineInfo(engines, selectedEngine);
   const engineBlocker = ocrEngineBlocker(engineInfo);
@@ -406,6 +639,19 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
           <Layers className="w-3.5 h-3.5" />
           <span>{t('ocrTabBboxes', { count: wordCount })}</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('review')}
+          className={`py-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'review'
+              ? 'border-pale-sky-500 text-pale-sky-600 dark:text-pale-sky-400'
+              : 'border-transparent text-muted hover:text-main'
+          }`}
+        >
+          <CheckCheck className="w-3.5 h-3.5" />
+          <span>{t('ocrTabReview', { count: activeSuspectsCount })}</span>
+        </button>
       </div>
 
       {/* Content Area */}
@@ -623,6 +869,233 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                     </div>
                   ))
                 )}
+              </div>
+            )}
+
+            {/* Tab: Review Suspects */}
+            {activeTab === 'review' && (
+              <div className="space-y-4">
+                {/* Header & Threshold Slider */}
+                <div className="p-3 rounded-xl border border-subtle bg-canvas space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-pale-sky-500" />
+                      <span className="font-bold text-main text-xs">{t('ocrReviewSuspectsTitle')}</span>
+                    </div>
+                    {activeSuspectsCount > 0 && (
+                      <span className="font-mono text-xs px-2 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-400 font-bold">
+                        {t('ocrSuspectCounter', { current: safeSuspectIndex + 1, total: activeSuspectsCount })}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted leading-relaxed">
+                    {t('ocrReviewSuspectsSubtitle')}
+                  </p>
+
+                  {/* Threshold Control */}
+                  <div className="pt-1 flex items-center justify-between gap-3 text-xs">
+                    <label htmlFor="suspect-threshold" className="text-[11px] text-muted whitespace-nowrap">
+                      {t('ocrSuspectThreshold')}:
+                    </label>
+                    <input
+                      id="suspect-threshold"
+                      type="range"
+                      min={10}
+                      max={90}
+                      step={5}
+                      value={confidenceThreshold}
+                      onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
+                      className="w-full h-1.5 bg-subtle/50 rounded-lg appearance-none cursor-pointer accent-pale-sky-500"
+                    />
+                    <span className="font-mono text-[11px] font-bold text-main w-10 text-end">
+                      {confidenceThreshold}%
+                    </span>
+                  </div>
+                </div>
+
+                {toastMessage && (
+                  <div className="p-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+                    <span>{toastMessage}</span>
+                  </div>
+                )}
+
+                {activeSuspectsCount === 0 ? (
+                  <div className="py-12 text-center text-muted space-y-2">
+                    <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-500/80 stroke-1" />
+                    <p className="font-bold text-main text-xs">
+                      {suspects.length > 0
+                        ? t('ocrAllSuspectsReviewed')
+                        : t('ocrNoSuspectsNotice', { threshold: confidenceThreshold })}
+                    </p>
+                  </div>
+                ) : currentSuspect ? (
+                  <div className="space-y-3.5">
+                    {/* Suspect metadata badge */}
+                    <div className="flex items-center justify-between gap-2">
+                      {currentSuspect.kind === 'confidence' ? (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                          <span>
+                            {t('ocrSuspectConfidenceScore', {
+                              score: Math.round((currentSuspect.confidence ?? 0) * 100),
+                            })}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-sky-500/10 text-sky-800 dark:text-sky-300 border border-sky-500/20">
+                          <Sparkles className="w-3.5 h-3.5 text-sky-500" />
+                          <span>
+                            {t('ocrSuspectHeuristicLabel', {
+                              reason:
+                                currentSuspect.heuristicReason === 'mixed-scripts'
+                                  ? t('ocrHeuristicMixedScripts')
+                                  : currentSuspect.heuristicReason === 'invalid-chars'
+                                  ? t('ocrHeuristicInvalidChars')
+                                  : currentSuspect.heuristicReason === 'isolated-arabic'
+                                  ? t('ocrHeuristicIsolatedArabic')
+                                  : t('ocrHeuristicDictionaryMiss'),
+                            })}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Nav Chevrons */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={handlePrevSuspect}
+                          disabled={activeSuspectsCount <= 1}
+                          title={t('ocrSuspectPrev')}
+                          className="p-1 rounded-md text-muted hover:text-main hover:bg-canvas border border-subtle transition-colors cursor-pointer disabled:opacity-40"
+                        >
+                          <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleNextSuspect}
+                          disabled={activeSuspectsCount <= 1}
+                          title={t('ocrSuspectNext')}
+                          className="p-1 rounded-md text-muted hover:text-main hover:bg-canvas border border-subtle transition-colors cursor-pointer disabled:opacity-40"
+                        >
+                          <ChevronRight className="w-4 h-4 rtl:rotate-180" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Word Crop Canvas & Comparison Card */}
+                    <div className="p-3.5 rounded-xl border border-subtle bg-canvas space-y-3">
+                      <div>
+                        <span className="block text-[10px] text-muted uppercase font-bold tracking-wider mb-1.5">
+                          {t('ocrSelectedWord')}
+                        </span>
+                        <div className="flex justify-center bg-surface/80 rounded-lg p-2 border border-subtle overflow-hidden">
+                          <canvas
+                            ref={cropCanvasRef}
+                            width={320}
+                            height={90}
+                            className="max-w-full h-auto rounded border border-subtle/60 shadow-xs"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Recognized Word / Edit Mode */}
+                      <div>
+                        <span className="block text-[10px] text-muted uppercase font-bold tracking-wider mb-1">
+                          {t('ocrTabText')}
+                        </span>
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <input
+                              ref={editInputRef}
+                              type="text"
+                              dir="auto"
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveEdit();
+                                if (e.key === 'Escape') setIsEditing(false);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg border border-pale-sky-500 bg-surface text-sm font-serif text-main focus:outline-none focus:ring-2 focus:ring-pale-sky-500/30"
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleSaveEdit}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-pale-sky-500 hover:bg-pale-sky-600 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>{t('ocrSuspectSaveEdit')}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setIsEditing(false)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-surface border border-subtle hover:bg-canvas text-muted hover:text-main transition-all cursor-pointer"
+                              >
+                                <span>{t('ocrSuspectCancelEdit')}</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 rounded-lg bg-surface border border-subtle flex items-center justify-between gap-2">
+                            <span
+                              dir="auto"
+                              className="font-serif text-base font-bold text-main break-words select-text"
+                            >
+                              {currentSuspect.word.text}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsEditing(true);
+                                setEditText(currentSuspect.word.text);
+                              }}
+                              className="p-1 rounded-md text-muted hover:text-main hover:bg-canvas transition-colors cursor-pointer"
+                              title={t('ocrSuspectEdit')}
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons Row */}
+                      {!isEditing && (
+                        <div className="grid grid-cols-3 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleAcceptSuspect}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-800 dark:text-emerald-300 flex items-center justify-center gap-1 transition-all cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{t('ocrSuspectAccept')}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditing(true);
+                              setEditText(currentSuspect.word.text);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-pale-sky-500/15 border border-pale-sky-500/30 hover:bg-pale-sky-500/25 text-pale-sky-700 dark:text-pale-sky-300 flex items-center justify-center gap-1 transition-all cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>{t('ocrSuspectEdit')}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleSkipSuspect}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-surface border border-subtle hover:bg-canvas text-muted hover:text-main flex items-center justify-center gap-1 transition-all cursor-pointer"
+                          >
+                            <SkipForward className="w-3.5 h-3.5" />
+                            <span>{t('ocrSuspectSkip')}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
 

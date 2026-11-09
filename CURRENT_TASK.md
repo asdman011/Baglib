@@ -1,3 +1,43 @@
+## KEY-275: Reader Task 8.3: Review uncertain OCR words — 2026-11-09, Antigravity (completed & verified)
+
+- **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
+- **Implemented & Verified**:
+  - **Step 0 Investigation (`docs/features/feature - OCR Word Review.md`)**: Verified Tesseract 5 / OCRmyPDF exports per-word confidence (`x_wconf`, 0.0–1.0) into `OcrWord.confidence` matching text layer bounding boxes. Verified that PaddleOCR-VL and Windows OCR lack confidence scores and formulated heuristic detection for confidence-absent engines.
+  - **OCR Suspect Detection & Reading Order (`src/shared/ocr-suspects.ts`, `tests/services/ocr-suspects.test.ts`)**: Implemented threshold-based suspect detection (default < 60%) where scores exist, and clearly labelled heuristic suspect detection (mixed scripts, invalid characters, isolated invalid Arabic particles, dictionary misses) where scores are absent. Implemented reading-order sorting by grouping bounding boxes into horizontal lines and ordering right-to-left for Arabic RTL and left-to-right for English LTR.
+  - **Suspect Review Mode (`src/renderer/components/reader/OcrInspectorDrawer.tsx`)**: Added `'review'` tab to the OCR Inspector drawer with live suspect count badge (`Review Suspects ({count})` / `مراجعة المشتبهات ({count})`), threshold slider (10% to 90%), live canvas crop of the suspect word image with golden focus border, metadata indicator (confidence % or heuristic reason), inline word editing (with Save and Cancel), and Accept (A), Edit (E), Skip (S), Next (Enter / J / N), and Previous (K / P) buttons and keyboard shortcuts protected by a shared input typing guard.
+  - **Persistent Word Corrections (`src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/reader/OcrTextOverlay.tsx`)**: Reused existing SQLite `app_settings` via `window.electronAPI.settings` under keys `ocr.corrections.v1:<bookId>:<page>` and `ocr.accepted.v1:<bookId>:<page>` with **zero database schema changes**. On page change or book reopen, saved corrections are overlaid onto the text layer, and accepted words do not reappear as suspects. Zero changes are made to the original PDF until explicit user save (ADR-012 Safe Save compliance).
+  - **Bilingual & Layout Verification**: 21 centralized translation keys in Arabic and English in `src/renderer/translations.ts`. Verified in Arabic (RTL) and English (LTR) at 1280 px and 480 px.
+- **Exact Files Changed (12 files; shared files KEY-275 hunks only)**:
+  - `docs/features/feature - OCR Word Review.md`
+  - `src/shared/ocr-suspects.ts`
+  - `tests/services/ocr-suspects.test.ts`
+  - `src/renderer/components/reader/OcrInspectorDrawer.tsx`
+  - `src/renderer/components/reader/OcrTextOverlay.tsx`
+  - `src/renderer/components/reader/FullPageBookReader.tsx`
+  - `tests/ui/ocr-inspector.test.ts`
+  - `scripts/ocr-review-live/run.mjs`
+  - `scripts/ocr-review-live/main.cjs`
+  - `src/renderer/translations.ts` (KEY-275 keys only)
+  - `CURRENT_TASK.md` (KEY-275 entry only)
+  - `IMPLEMENTATION_PLAN.md` (KEY-275 bullet only)
+- **Verification**:
+  - Unit tests: `tests/services/ocr-suspects.test.ts` (6/6 passed), `tests/ui/ocr-inspector.test.ts` (7/7 passed).
+  - Full test suite: `npm test` → **1469 tests passed, 0 failures** across 300 suites.
+  - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (success in 140ms), `git diff --check` (0 errors).
+  - Live harness: `scripts/ocr-review-live/run.mjs` executed real Arabic scanned PDF (`تفسير الموعذتين لابن تيمية.pdf`) and English PDF (`New Scientist 2016`), verified 16 Arabic suspects and 8 English suspects in reading order, tested live word correction (`تصحيح-اختباري`), verified persistence, and captured inspected screenshots in `.baglib-data/key275-evidence/`.
+
+## KEY-276 ? 2026-11-09, Codex (active)
+
+- Session 01a1c03b-110e-7463-ad62-8737c6443789. Implement profile-aware assistant sources, derived Warsh/Hafs overlap mapping, installed tafsir/translation pickers and disposable bilingual verification. Shared-file boundaries per task; no Jira. One verified task commit and normal push authorized. Initial REA catalog inspection and hash-verified corpus copy complete; implementation/tests pending.
+
+## KEY-277 — 2026-11-09, Codex (committed and pushed)
+
+- Session 01a1c037-f1f8-7731-b32b-95aedff36c38. Added packaged-only protocol registration (explicit dev opt-in uses the resolved app entry), bounded validated deep-link delivery from cold argv, second-instance argv and open-url, renderer-ready handshake, fresh-data navigation and a localized missing-target alert. Existing shared parsers/navigation retain all target kinds. Added per-card Markdown/Word disclosure actions with wrapping RTL/LTR layout and the existing dialogs/options. Canonical export selection now includes ordinary reader notes and reading reflections already shown in Notes; no schema/dependency/download changes.
+- Verification: parser/registration and export-selection regressions failed before implementation; focused4/4 pass. Final full shared-worktree suite1460/1460, zero failures/skips (includes concurrent273/276 tests); tsc, scoped ESLint0errors/0warnings, main tsup and diff-check pass. Earlier suite1450/1450 also passed. A transient KEY-276 missing-translation TypeScript error disappeared after its owner added the keys; no other-task fix was made.
+- Native deeplink-live-wrMOkr passes eight primary launches in one disposable profile, ar/en cold note with paragraph anchor, book page3, Quran Hafs2:255 (page42 plus2:255 study panel), real secondary-instance note/book/Quran routing, restore/focus, missing note, card/bulk Markdown byte equality, Word document XML equality after generated bookmark-ID normalization, and reader-note export. Arabic run additionally checks same-mounted-book1→3 and emits open-url through the real main handler. Registry registration is replaced with a throwing assertion in the unpackaged harness. Profile deleted;1338 original corpus hashes unchanged. Owned renderer stopped and port3000 free at cleanup. Screenshots ar/en cards1280/480, missing480, cold books1280 and Quran1280 visually inspected under .baglib-data/deeplink-live-wrMOkr/evidence/. No horizontal overflow in card checks; Arabic diacritics and mixed scripts readable.
+- Exact publication files (16; shared files KEY-277 hunks only): `electron-builder.yml`, `src/main/index.ts`, `src/main/ipc/study-notes.ts`, `src/preload/index.ts`, `src/shared/deep-link.ts`, `src/shared/study-note-export.ts`, `src/renderer/components/layout/AppLayout.tsx`, `src/renderer/components/notes/StudyDeepLinkBridge.tsx`, `src/renderer/components/notes/NotesOverviewView.tsx`, `src/renderer/translations.ts`, `tests/services/deep-link.test.ts`, `scripts/deeplink-live/main.cjs`, `scripts/deeplink-live/run.mjs`, `docs/features/feature - Linked Study Notes and Dashboard.md`, `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`. Local report docs/agent-ops/reports/KEY-277.md records evidence, fixture corrections and limits. Temporary Quran tracing removed with no navigation utility diff. Concurrent KEY-273/276 and unrelated work must remain unstaged.
+- Limits: actual installed Windows association dispatch and macOS OS delivery were not exercised; macOS handler was simulated on Windows. Other accepted kinds and Warsh are parser-tested, with existing navigation reused. No external application/Obsidian investigation or new REA claim. Jira delegated to Claude. User authorizes one task commit ending Agent: Codex and a normal push to origin/feature/library-domain, then stop. Publication receipt: commit 01796c1f2819167917615c195bcd961f66674b82 pushed successfully as a normal push to origin/feature/library-domain (fa9f420→01796c1); remote full hash verified. Board marked pushed. Claude owns review/Jira; stopped after publication. This receipt is local handoff state following the published implementation handoff.
+
 ## KEY-273: Reader Task 6.11: Page organizer — drafts that survive closing, recovery button and Arabic replace certification — 2026-11-09, Antigravity (committed and pushed)
 
 - **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
