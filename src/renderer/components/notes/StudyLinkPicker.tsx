@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { StudyNote } from '../../../shared/study-notes';
 import { studyLinkText } from '../../../shared/study-notes';
-import { matchesStudyQuery } from '../../../shared/study-notes';
+import { bookStudyTarget, matchesStudyQuery } from '../../../shared/study-notes';
 import { SUNNAH_COLLECTION_IDS } from '../../../shared/types/sunnah';
 import { collectionKeys } from '../../utils/sunnah-collections';
 
@@ -21,7 +21,7 @@ export function StudyLinkPicker({ notes, onInsert }: { notes: StudyNote[]; onIns
   const kind = scope?.[1].toLowerCase() || 'notes';
   const keyword = query.replace(/^\/(notes|books|quran|sunnah)\b\s*/iu, '').trim();
   const local = useMemo(() => kind === 'books'
-    ? books.filter(book => matchesStudyQuery(`${book.title} ${book.author}`, keyword)).map(book => ({ target: `book:${book.id}`, label: book.title }))
+    ? books.filter(book => matchesStudyQuery(`${book.title} ${book.author}`, keyword)).map(book => ({ target: bookStudyTarget(book), label: book.title }))
     : notes.filter(note => matchesStudyQuery(`${note.title} ${note.content} ${note.aliases.join(' ')} ${note.tags.join(' ')}`, keyword)).map(note => ({ target: `note:${note.id}`, label: note.title || note.content.slice(0, 70) })), [kind, books, notes, keyword]);
   const searchKey = `${kind}:${keyword}:${profile}:${collection}`;
   useEffect(() => {

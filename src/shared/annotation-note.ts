@@ -1,5 +1,5 @@
 import { annotationPage } from './annotation-location';
-import { studyLinkText } from './study-notes';
+import { bookStudyTarget, studyLinkText } from './study-notes';
 
 export interface AnnotationNoteSource { id: string; bookId: string; type: string; locationCfiOrPage: string; selectedText?: string | null; noteContent?: string | null; createdAt: string }
 
@@ -10,12 +10,12 @@ const generated = [/^Highlight on Page \d+$/u, /^(?:Selected Quote|الاقتب�
  * A Markdown study note from a book's annotations, in page order (Zotero's "Add Note from Annotations").
  * Each quote is followed by a link back to its page, so the note opens the PDF where it was taken.
  */
-export function annotationsToNote(annotations: AnnotationNoteSource[], book: { id: string; title: string }): string {
+export function annotationsToNote(annotations: AnnotationNoteSource[], book: { id: string; title: string; sourceId?: string }): string {
   const usable = annotations.filter(item => item.type !== 'ink' && (item.selectedText?.trim() || item.noteContent?.trim() || item.type === 'bookmark'));
   const sorted = [...usable].sort((a, b) => (annotationPage(a.locationCfiOrPage) ?? Number.MAX_SAFE_INTEGER) - (annotationPage(b.locationCfiOrPage) ?? Number.MAX_SAFE_INTEGER) || a.createdAt.localeCompare(b.createdAt));
   const blocks = sorted.map(item => {
     const page = annotationPage(item.locationCfiOrPage);
-    const link = studyLinkText(page ? `book:${book.id}#p=${page}` : `book:${book.id}`, page ? `${book.title} (${page})` : book.title);
+    const link = studyLinkText(bookStudyTarget(book, page ?? undefined), page ? `${book.title} (${page})` : book.title);
     const parts: string[] = [];
     const quote = item.selectedText?.trim();
     // The page link ends the quote's last line; a line right after `>` would join the quote in Markdown.

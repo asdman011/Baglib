@@ -29,10 +29,16 @@ export async function navigateStudyReference(target: string, books: BookItem[], 
   if (target.startsWith('note:')) { const parsed = parseNoteTarget(target)!; onNote(parsed.id, parsed.anchor); return; }
   if (target.startsWith('book:')) {
     const parsed = parseBookTarget(target);
-    const book = parsed && books.find(book => book.id === parsed.id);
-    if (!book) throw new Error('missing-book');
+    const defaultBook = parsed && books.find(book => book.id === parsed.id);
+    if (!defaultBook) throw new Error('missing-book');
+    let book = defaultBook;
+    if (parsed.sourceId) {
+      const sourceBook = await window.electronAPI.getBookSource(parsed.id, parsed.sourceId);
+      if (sourceBook) book = sourceBook;
+      else window.dispatchEvent(new CustomEvent('baglib:study-source-missing'));
+    }
     pendingPage = parsed.page ? { workId: book.id, page: parsed.page } : null;
-    onBook(book); return;
+    onBook({ ...book }); return;
   }
   if (target.startsWith('quran:')) {
     const parsed = parseQuranTarget(target)!;

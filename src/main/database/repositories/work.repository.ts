@@ -86,6 +86,9 @@ export class SqliteWorkRepository implements IWorkRepository {
 
     return {
       id: r.id,
+      editionId: r.editionId || undefined,
+      sourceId: r.sourceId || undefined,
+      sourceCount: r.sourceCount,
       title: r.title || 'بدون عنوان',
       author: r.author || meta.speaker || meta.scribe || meta.advisor || (/[\u0600-\u06FF]/.test(r.title || '') ? 'غير معروف' : 'Unknown Author'),
       edition: r.edition || meta.edition || undefined,
@@ -334,6 +337,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         fsd.storage_state as storageState,
         fsd.last_verified_at as lastVerifiedAt,
         s.id as sourceId,
+        (SELECT COUNT(*) FROM source sc JOIN edition ec ON ec.id=sc.edition_id WHERE ec.work_id=w.id) as sourceCount,
         psd.shelf as shelf,
         psd.room as room,
         psd.bookcase as bookcase,
@@ -431,7 +435,7 @@ export class SqliteWorkRepository implements IWorkRepository {
   /**
    * Fetch a single work by ID with complete extended metadata and lending history.
    */
-  getById(workId: string): BookItem | null {
+  getById(workId: string, sourceId?: string): BookItem | null {
     const row = this.db.prepare(`
       SELECT 
         w.id as id,
@@ -458,6 +462,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         fsd.storage_state as storageState,
         fsd.last_verified_at as lastVerifiedAt,
         s.id as sourceId,
+        (SELECT COUNT(*) FROM source sc JOIN edition ec ON ec.id=sc.edition_id WHERE ec.work_id=w.id) as sourceCount,
         psd.shelf as shelf,
         psd.room as room,
         psd.bookcase as bookcase,
@@ -483,9 +488,9 @@ export class SqliteWorkRepository implements IWorkRepository {
       LEFT JOIN work_tag wt ON wt.work_id = w.id
       LEFT JOIN tag t ON t.id = wt.tag_id
       LEFT JOIN category cat ON cat.id = w.primary_category_id
-      WHERE w.id = ?
+      WHERE w.id = ? AND (? IS NULL OR (s.id = ? AND fsd.file_path IS NOT NULL))
       GROUP BY w.id
-    `).get(workId) as WorkRow | undefined;
+    `).get(workId, sourceId ?? null, sourceId ?? null) as WorkRow | undefined;
 
     if (!row) {
       return null;
@@ -1066,6 +1071,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         fsd.storage_state as storageState,
         fsd.last_verified_at as lastVerifiedAt,
         s.id as sourceId,
+        (SELECT COUNT(*) FROM source sc JOIN edition ec ON ec.id=sc.edition_id WHERE ec.work_id=w.id) as sourceCount,
         psd.shelf as shelf,
         psd.room as room,
         psd.bookcase as bookcase,
@@ -1773,6 +1779,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         fsd.storage_state as storageState,
         fsd.last_verified_at as lastVerifiedAt,
         s.id as sourceId,
+        (SELECT COUNT(*) FROM source sc JOIN edition ec ON ec.id=sc.edition_id WHERE ec.work_id=w.id) as sourceCount,
         psd.shelf as shelf,
         psd.room as room,
         psd.bookcase as bookcase,

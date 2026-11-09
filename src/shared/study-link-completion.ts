@@ -1,4 +1,4 @@
-import { matchesStudyQuery, splitRelation, studyLinkText, type StudyNote } from './study-notes';
+import { bookStudyTarget, matchesStudyQuery, splitRelation, studyLinkText, type StudyNote } from './study-notes';
 
 export interface StudyLinkOption { kind: 'note' | 'book' | 'quran'; label: string; target: string; text: string }
 
@@ -8,7 +8,7 @@ const toLatinDigits = (value: string) => value.replace(/[٠-٩]/gu, digit => Str
  * Suggestions shown after typing `[[` in a note: local notes and books by title or alias,
  * and an ayah when the query looks like `2:255` (Arabic-Indic digits accepted).
  */
-export function studyLinkOptions(query: string, notes: Pick<StudyNote, 'id' | 'title' | 'aliases'>[], books: { id: string; title: string }[], limit = 20): StudyLinkOption[] {
+export function studyLinkOptions(query: string, notes: Pick<StudyNote, 'id' | 'title' | 'aliases'>[], books: { id: string; title: string; sourceId?: string }[], limit = 20): StudyLinkOption[] {
   const options: StudyLinkOption[] = [];
   const add = (kind: StudyLinkOption['kind'], target: string, label: string) => {
     const text = studyLinkText(target, label);
@@ -24,7 +24,7 @@ export function studyLinkOptions(query: string, notes: Pick<StudyNote, 'id' | 't
   if (paged && +paged[2] >= 1) {
     for (const book of books) {
       if (options.length >= limit) break;
-      if (!paged[1].trim() || matchesStudyQuery(book.title, paged[1].trim())) add('book', `book:${book.id}#p=${+paged[2]}`, `${book.title} (${+paged[2]})`);
+      if (!paged[1].trim() || matchesStudyQuery(book.title, paged[1].trim())) add('book', bookStudyTarget(book, +paged[2]), `${book.title} (${+paged[2]})`);
     }
     return options.slice(0, limit);
   }
@@ -35,7 +35,7 @@ export function studyLinkOptions(query: string, notes: Pick<StudyNote, 'id' | 't
   }
   for (const book of books) {
     if (options.length >= limit) break;
-    if (!trimmed || matchesStudyQuery(book.title, trimmed)) add('book', `book:${book.id}`, book.title);
+    if (!trimmed || matchesStudyQuery(book.title, trimmed)) add('book', bookStudyTarget(book), book.title);
   }
   return options.slice(0, limit);
 }

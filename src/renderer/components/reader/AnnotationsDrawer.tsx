@@ -34,6 +34,7 @@ interface AnnotationsDrawerProps {
   annotations: AnnotationDTO[];
   currentPage: number;
   bookTitle: string;
+  sourceId?: string;
   bookAuthor?: string;
   bookIsbn?: string;
   bookFormat?: string;
@@ -54,6 +55,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
   annotations,
   currentPage,
   bookTitle,
+  sourceId,
   bookAuthor,
   bookIsbn,
   bookFormat,
@@ -149,7 +151,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
               type="button"
               data-annotations-to-note
               disabled={filteredAnnotations.length === 0}
-              onClick={() => openStudyNote({ content: annotationsToNote(filteredAnnotations, { id: filteredAnnotations[0].bookId, title: bookTitle }) })}
+              onClick={() => openStudyNote({ content: annotationsToNote(filteredAnnotations, { id: filteredAnnotations[0].bookId, title: bookTitle, sourceId }) })}
               title={t('annotationsToNote')}
               aria-label={t('annotationsToNote')}
               className="p-1.5 rounded-lg hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer disabled:opacity-40"

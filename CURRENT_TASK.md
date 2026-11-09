@@ -1,3 +1,36 @@
+## KEY-279 — 2026-11-09, Codex (implemented and verified, publication pending)
+
+- Session 01a1c136-f7e9-76d0-ac71-a2a3c1412c5a. Explicit task-scoped commit/push authorization applies to origin/feature/library-domain. Jira belongs to Claude.
+- Source-precise book grammar and centralized link creation, repository edition/source identity with derived source count, read-only Work-scoped source lookup, exact-source reader/workstation navigation, localized eight-second missing-source fallback, source-scoped OCR state/keys, annotation and assistant citations, compatible backlinks. Native investigation caught and fixed Strict Mode replay overwriting requested pages with a saved location.
+- Verification. Five focused regressions pass after four initial test-first failures. Final shared-workspace npm test passed 1508/1508, zero failures/skips. Exact task-only checkout passed tsc, ESLint zero errors (91 warnings initially, reader recheck 59 after removing one new warning), tsup and full suite with 1498 passes, 2 environment skips and 0 failures. Skips concern Python/PyArrow configuration and installed-corpus statistics in the isolated checkout. Initial isolated run lacked existing local fixtures; after supplying them its suite passed. Diff check passes.
+- Live. Real English and Arabic PDFs attached to one Work across two editions with the same basename. Final WPFnph and earlier ZaE3h4/oPPETH pass ar/en at 1280/480 px exact source+page, legacy page4/page5, missing-source fallback page6, source session IDs and exact original PDF hashes. Final run uses English page8 and Arabic page3. Narrow snapshots exercise existing Hide PDF Tools. Eight final screenshots inspected, plus earlier wide/narrow evidence. Originals were read only, all live profiles deleted. Evidence .baglib-data/key279-WPFnph/evidence; detailed local report docs/agent-ops/reports/KEY-279.md.
+- Collaborative boundary. KEY-272 subsequently edited FullPageBookReader/PdfWorkstationPanel and shared preload/translations. Preserve all its accessibility wiring. Stage the saved KEY-279-only source patch and own state hunks. Workspace tsc currently has sibling accessibility key/type errors; the exact task candidate passes separately against HEAD. The pre-existing untracked Study Workspace design remains with Claude; this task creates the focused Source-Precise Study Links implementation document.
+- User experience. Links and newly created citations reopen the defining file/page, including duplicate filenames. Missing-source links open the default file with an ar/en notice that expires after 8 seconds. OCR corrections follow the open source ID. Source switches reset reader-local state. Narrow evidence uses the existing tools-collapse action.
+- Exact 23 files/hunks follow.
+- `src/main/database/repositories/work.repository.ts`
+- `src/main/ipc/database.ts`
+- `src/main/ipc/study-assistant.ts`
+- `src/main/services/book-files.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/notes/StudyAssistant.tsx`
+- `src/renderer/components/notes/StudyDeepLinkBridge.tsx`
+- `src/renderer/components/notes/StudyLinkPicker.tsx`
+- `src/renderer/components/reader/AnnotationsDrawer.tsx`
+- `src/renderer/components/reader/FullPageBookReader.tsx`
+- `src/renderer/components/reader/PdfWorkstationPanel.tsx`
+- `src/renderer/translations.ts`
+- `src/renderer/utils/study-navigation.ts`
+- `src/shared/annotation-note.ts`
+- `src/shared/study-link-completion.ts`
+- `src/shared/study-notes.ts`
+- `src/shared/types/work.ts`
+- `tests/services/study-source-links.test.ts`
+- `scripts/study-source-live/main.cjs`
+- `scripts/study-source-live/run.mjs`
+- `docs/features/feature - Source-Precise Study Links.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
 ## KEY-276 review fix — 2026-11-09, Codex (implemented and verified; publication pending)
 
 - Review of26f6d7a exposed unattached Hafs1:1. The attached-source map now places Hafs1:1 tafsir/translation before Hafs1:2 on Warsh1:1 only when installed Hafs1:1 is the basmala and Warsh1:1 starts with al-hamd. Warsh canonical text/UI stay unchanged. A counted-basmala script retains direct mapping. Existing labels retain actual Hafs numbers in both languages. The cache adapter is bumped to assistant-overlap-v2 so old maps rebuild.

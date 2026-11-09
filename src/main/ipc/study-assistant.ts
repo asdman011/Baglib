@@ -8,7 +8,7 @@ import { inspectPdfFile } from '../services/pdf-editor/inspection';
 import { bookPdfFile } from '../services/book-files';
 import { readAyahTexts, readQuranSources } from './quran';
 import { readHadithText } from './sunnah';
-import { parseQuranTarget } from '../../shared/study-notes';
+import { bookStudyTarget, parseQuranTarget } from '../../shared/study-notes';
 import { assistantSystemPrompt, budgetSources, validateAssistantAnswer, validateAssistantRequest, type AssistantAnswer, type AssistantSource } from '../../shared/study-assistant';
 
 import { translations } from '../../renderer/translations';
@@ -55,7 +55,7 @@ export function registerStudyAssistantIpc(): void {
           if (!file) continue;
           const pages = Array.from({ length: range.to - range.from + 1 }, (_, index) => range.from + index);
           const inspection = await inspectPdfFile(file.path, undefined, () => {}, pages);
-          for (const page of inspection.pages.filter(entry => pages.includes(entry.page))) add(`${file.title} (${page.page})`, `book:${range.id}#p=${page.page}`, page.text);
+          for (const page of inspection.pages.filter(entry => pages.includes(entry.page))) add(`${file.title} (${page.page})`, bookStudyTarget({ id: range.id, sourceId: file.sourceId }, page.page), page.text);
         }
         for (const passage of request.passages) {
           // The text comes from the installed Quran and Sunnah data, never from the renderer.

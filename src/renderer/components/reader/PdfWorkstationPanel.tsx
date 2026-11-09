@@ -128,6 +128,7 @@ const MODE_TABS: { id: StirlingWorkstationMode; labelKey: TranslationKey; defaul
 
 export function PdfWorkstationPanel({
   workId,
+  sourceId,
   onClose,
   embedded = false,
   initialPage = 1,
@@ -140,6 +141,7 @@ export function PdfWorkstationPanel({
   fileSave,
 }: {
   workId?: string;
+  sourceId?: string;
   onClose: () => void;
   embedded?: boolean;
   initialPage?: number;
@@ -372,7 +374,7 @@ export function PdfWorkstationPanel({
         setInspection(null);
         setPreview(null);
         setThumbnails({});
-        void editor.open({ workId: changedWorkId }).then(async result => {
+        void editor.open({ workId: changedWorkId, sourceId }).then(async result => {
           if (!alive) { if (result.ok) await editor.close(result.data.id); return; }
           if (result.ok) extraSessions.current.push(result.data.id);
           if (!result.ok) { setError(result.error); return; }
@@ -384,7 +386,7 @@ export function PdfWorkstationPanel({
       }
     });
     return () => { alive = false; unsub(); };
-  }, [workId, session, page, nativeReading]);
+  }, [workId, sourceId, session, page, nativeReading]);
 
   useEffect(() => {
     if (nativeReading) {
@@ -444,7 +446,7 @@ export function PdfWorkstationPanel({
           .catch(() => {
             if (alive) setError('unavailable');
           });
-        const result = await (workId ? editorApi.open({ workId }) : editorApi.blankSession());
+        const result = await (workId ? editorApi.open({ workId, sourceId }) : editorApi.blankSession());
         if (result.ok === true) opened = result.data;
         if (!alive) {
           if (opened) await editorApi.close(opened.id);
@@ -487,7 +489,7 @@ export function PdfWorkstationPanel({
       for (const id of extraSessions.current) void editorApi?.close(id);
       extraSessions.current = [];
     };
-  }, [workId]);
+  }, [workId, sourceId]);
 
   useEffect(() => {
     if (!jobId || jobState !== 'running') return;

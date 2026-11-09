@@ -87,6 +87,10 @@ export interface MetadataProvenance {
 
 export interface BookItem {
   id: string;
+  /** Identity of the edition/source projected with filePath, never inferred from the filename. */
+  editionId?: string;
+  sourceId?: string;
+  sourceCount?: number;
   title: string;
   author: string;
   seriesTitle?: string;

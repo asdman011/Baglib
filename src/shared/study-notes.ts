@@ -81,8 +81,8 @@ export function withLinkRelation(raw: string, relation?: string): string | null 
 export function validStudyTarget(target: string): boolean {
   const poetry = /^poetry:ashaar:(\d+):(\d+):(\d+)$/u.exec(target);
   if (poetry) return Number.isSafeInteger(+poetry[1]) && +poetry[1] > 0 && +poetry[2] >= 0 && +poetry[3] >= +poetry[2] && +poetry[3] <= 100000;
-  if (/^(note|book):[^\s\[\]|:#]{1,180}$/u.test(target)) return true;
-  if (parseBookTarget(target)?.page) return true;
+  if (/^note:[^\s\[\]|:#]{1,180}$/u.test(target)) return true;
+  if (target.startsWith('book:')) return !!parseBookTarget(target);
   if (parseNoteTarget(target)?.anchor) return true;
   if (/^media:[0-9a-f-]{36}:\d{1,6}(?::[0-9a-f-]{36})?$/u.test(target)) return true;
   if (target.startsWith('quran:')) return !!parseQuranTarget(target);
@@ -105,11 +105,16 @@ export function parseNoteTarget(target: string): { id: string; anchor?: string }
   return match ? (match[2] ? { id: match[1], anchor: match[2] } : { id: match[1] }) : null;
 }
 
-/** `book:<id>` or a page in it, `book:<id>#p=12`. */
-export function parseBookTarget(target: string): { id: string; page?: number } | null {
-  const match = /^book:([^\s\[\]|:#]{1,180})(?:#p=(\d{1,6}))?$/u.exec(target);
-  if (!match || (match[2] !== undefined && +match[2] < 1)) return null;
-  return match[2] === undefined ? { id: match[1] } : { id: match[1], page: +match[2] };
+/** A work, optionally tied to its source and page. IDs retain the existing 180-character limit. */
+export function parseBookTarget(target: string): { id: string; sourceId?: string; page?: number } | null {
+  const match = /^book:([^\s\[\]|:#@]{1,180})(?:@([^\s\[\]|:#@]{1,180}))?(?:#p=(\d{1,6}))?$/u.exec(target);
+  if (!match || (match[3] !== undefined && +match[3] < 1)) return null;
+  return { id: match[1], ...(match[2] ? { sourceId: match[2] } : {}), ...(match[3] ? { page: +match[3] } : {}) };
+}
+
+/** Build references from the source identity carried with the open file. */
+export function bookStudyTarget(book: { id: string; sourceId?: string }, page?: number): string {
+  return `book:${book.id}${book.sourceId ? `@${book.sourceId}` : ''}${page === undefined ? '' : `#p=${page}`}`;
 }
 
 export function studyLinks(content: string): StudyLink[] {
@@ -127,9 +132,19 @@ export function studyLinks(content: string): StudyLink[] {
 }
 
 export function studyBacklinks(notes: StudyNote[], target: string): StudyNote[] {
-  return notes.filter(note => `note:${note.id}` !== target && (
-    (target.startsWith('book:') && note.workId === target.slice(5)) || studyLinks(note.content).some(link => link.target === target || ((target.startsWith('book:') || target.startsWith('note:')) && link.target.startsWith(`${target}#`)))
-  ));
+  const book = parseBookTarget(target);
+  return notes.filter(note => {
+    if (`note:${note.id}` === target) return false;
+    if (book && !book.sourceId && !book.page && note.workId === book.id) return true;
+    return studyLinks(note.content).some(link => {
+      if (link.target === target) return true;
+      if (book && !book.page) {
+        const linked = parseBookTarget(link.target);
+        return linked?.id === book.id && (!book.sourceId || linked.sourceId === book.sourceId);
+      }
+      return target.startsWith('note:') && link.target.startsWith(`${target}#`);
+    });
+  });
 }
 
 export function studyNoteHeading(content: string): string {

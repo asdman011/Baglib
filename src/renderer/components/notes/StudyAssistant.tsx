@@ -5,7 +5,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { answerAsNote, ASSISTANT_TASKS, cardSourceKind, type AssistantAnswer, type AssistantCard, type AssistantPassage, type AssistantTask } from '../../../shared/study-assistant';
 import { searchCorpus, type CorpusOption } from '../../utils/corpus-lookup';
 import { collectionKeys } from '../../utils/sunnah-collections';
-import { matchesStudyQuery, type StudyNote } from '../../../shared/study-notes';
+import { parseBookTarget, matchesStudyQuery, type StudyNote } from '../../../shared/study-notes';
 import type { QuranReaderCatalog } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
@@ -66,7 +66,7 @@ export function StudyAssistant({ notes, initialNotes, onClose }: { notes: StudyN
   const open = (target: string) => { onClose(); void navigateStudyReference(target, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => {}); };
   const addCard = async (card: AssistantCard, index: number) => {
     try {
-      const workId = card.target.startsWith('book:') ? card.target.slice(5).split('#')[0] : undefined;
+      const workId = parseBookTarget(card.target)?.id;
       await window.electronAPI.knowledgeCards.save({ front: card.front, back: card.back, sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId });
       window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
       setCards(current => ({ ...current, [index]: 'added' }));

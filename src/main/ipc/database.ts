@@ -60,6 +60,13 @@ export function setupDatabaseIPC() {
   /**
    * Fetch all books (works) from SQLite database
    */
+  ipcMain.handle('library:get-book-source', (_, workId: unknown, sourceId: unknown) => {
+    if (typeof workId !== 'string' || typeof sourceId !== 'string' ||
+        !/^[^\s\[\]|:#@]{1,180}$/u.test(workId) || !/^[^\s\[\]|:#@]{1,180}$/u.test(sourceId)) throw new Error('invalid-reference');
+    const book = new WorkRepository(getDatabase()).getById(workId, sourceId);
+    return book && !book.deletedAt ? book : null;
+  });
+
   ipcMain.handle('library:get-all-books', () => {
     try {
       const db = getDatabase();

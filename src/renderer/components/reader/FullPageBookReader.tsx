@@ -81,6 +81,7 @@ import {
   extractMarkPage,
   isEpubLocation,
 } from '../../../shared/epub-marks';
+import { bookStudyTarget } from '../../../shared/study-notes';
 import { consumePendingPage } from '../../utils/study-navigation';
 import { markHistoryShortcut, readerShortcut } from '../../libs/reader/reader-shortcuts';
 import { ZenSelectionMenu } from './ZenSelectionMenu';
@@ -149,6 +150,12 @@ import { ExportPdfDialog, SaveCloseDialog } from './FileSaveUi';
 const PDF_TEXT_DELAY_MS = 2500;
 
 export const FullPageBookReader: React.FC = () => {
+  const { activeBook } = useWorkspace();
+  return <SourceBookReader key={`${activeBook?.id}:${activeBook?.sourceId ?? activeBook?.filePath ?? ''}`} />;
+};
+
+// Reader state, including OCR results and pending corrections, belongs to the open source.
+const SourceBookReader: React.FC = () => {
   const {
     activeBook,
     books,
@@ -180,38 +187,8 @@ export const FullPageBookReader: React.FC = () => {
     if (source.workId === activeBook?.id) setPdfSourceRevision(previous => previous + 1);
   }), [activeBook?.id]);
 
-  const [currentSourceId, setCurrentSourceId] = useState<string | null>(null);
-  const [sourcesCount, setSourcesCount] = useState<number>(1);
-
-  // Resolve open source id and count for current active book
-  useEffect(() => {
-    let alive = true;
-    if (!activeBook?.id || !window.electronAPI?.pdfEditor?.sources) {
-      return () => { alive = false; };
-    }
-    window.electronAPI.pdfEditor.sources(activeBook.id)
-      .then((sources: { id: string; filename: string }[]) => {
-        if (!alive || !Array.isArray(sources)) return;
-        setSourcesCount(sources.length);
-        if (sources.length > 0) {
-          const activeName = activeBook.filePath ? activeBook.filePath.split(/[/\\]/).pop() : null;
-          const matched = activeName ? sources.find(s => s.filename === activeName) : null;
-          setCurrentSourceId(matched?.id || sources[0].id);
-        } else {
-          setCurrentSourceId(null);
-        }
-      })
-      .catch((err) => {
-        console.warn('Failed to resolve book sources:', err);
-        if (alive) {
-          setCurrentSourceId(null);
-          setSourcesCount(1);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, [activeBook?.id, activeBook?.filePath, pdfSourceRevision]);
+  const currentSourceId = activeBook?.sourceId ?? null;
+  const sourcesCount = activeBook?.sourceCount ?? 0;
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(1);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
 
@@ -1362,7 +1339,7 @@ export const FullPageBookReader: React.FC = () => {
     let mounted = true;
     (async () => {
       try {
-        const effectiveKey = currentSourceId || (sourcesCount === 1 ? activeBook.id : null);
+        const effectiveKey = currentSourceId;
         if (!effectiveKey) return;
 
         const { corrections } = await resolveAndMigratePageCorrections({
@@ -1419,7 +1396,7 @@ export const FullPageBookReader: React.FC = () => {
   }, [isPdfWorkstationActive, isReflowable, markupTool, toggleMarkupLock, stopMarkup, chooseMarkupTool]);
 
   // The companion note pane links to the page being read.
-  useCompanionContext('reader', () => activeBook ? { kind: 'book', target: `book:${activeBook.id}#p=${Math.max(1, readingPage)}`, label: `${activeBook.title} (${Math.max(1, readingPage)})` } : null, [activeBook?.id, activeBook?.title, readingPage]);
+  useCompanionContext('reader', () => activeBook ? { kind: 'book', target: bookStudyTarget(activeBook, Math.max(1, readingPage)), label: `${activeBook.title} (${Math.max(1, readingPage)})` } : null, [activeBook?.id, activeBook?.sourceId, activeBook?.title, readingPage]);
 
   // Global Ctrl+F / Cmd+F shortcut to open in-book search drawer
   useEffect(() => {
@@ -2140,26 +2117,23 @@ export const FullPageBookReader: React.FC = () => {
     }
   };
 
-  // Restore Last Read Location on mount; a page link (book:<id>#p=N) wins over the saved location.
+  // Retain the consumed request across Strict Mode effect replay.
+  const requestedLocation = useRef<{ book: typeof activeBook; page: number | null }>({ book: null, page: null });
+  // Explicit links win over the saved work location, including same-work/source navigation.
   useEffect(() => {
     if (!activeBook?.id) return;
-    const linkedPage = consumePendingPage(activeBook.id);
-    if (linkedPage) { setReadingPage(linkedPage); return; }
-    const api = (window).electronAPI;
-    if (api?.reader?.getLastLocation) {
-      api.reader
-        .getLastLocation(activeBook.id)
-        .then((loc: string | null) => {
-          if (loc) {
-            const pageNum = parseInt(loc, 10);
-            if (!isNaN(pageNum) && pageNum > 0 && pageNum !== readingPage) {
-              setReadingPage(pageNum);
-            }
-          }
-        })
-        .catch(console.warn);
+    if (requestedLocation.current.book !== activeBook) {
+      requestedLocation.current = { book: activeBook, page: consumePendingPage(activeBook.id) };
     }
-  }, [activeBook?.id]);
+    const linkedPage = requestedLocation.current.page;
+    if (linkedPage) { setReadingPage(linkedPage); return; }
+    let alive = true;
+    void window.electronAPI?.reader?.getLastLocation(activeBook.id).then(loc => {
+      const page = parseInt(loc || '', 10);
+      if (alive && page > 0) setReadingPage(page);
+    }).catch(console.warn);
+    return () => { alive = false; };
+  }, [activeBook, setReadingPage]);
 
   // Debounced continuous tracking of reading location (2000ms debounce)
   useEffect(() => {
@@ -3081,7 +3055,7 @@ export const FullPageBookReader: React.FC = () => {
           const bounds = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null;
           openKnowledgeCard({
             text: selectedText,
-            context: { kind: 'book', ref: activeBook ? `book:${activeBook.id}` : undefined, label: activeBook?.title, workId: activeBook?.id },
+            context: { kind: 'book', ref: activeBook ? bookStudyTarget(activeBook, Math.max(1, readingPage)) : undefined, label: activeBook?.title, workId: activeBook?.id },
             x: bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2,
             y: bounds?.bottom ?? window.innerHeight / 3,
           });
@@ -3341,6 +3315,8 @@ export const FullPageBookReader: React.FC = () => {
     <div
       role="region"
       aria-label={t('a11yReaderLandmark') || 'Digital Book Reader'}
+      data-reader-source={currentSourceId ?? undefined}
+      data-reader-page={readingPage}
       onClick={handleViewportClick}
       className={`fixed inset-y-0 start-0 z-50 h-screen overflow-hidden bg-canvas text-main font-sans select-none flex flex-col ${
         isIdle ? 'cursor-none' : 'cursor-auto'
@@ -3370,7 +3346,7 @@ export const FullPageBookReader: React.FC = () => {
       )}
 
       {/* Floating Zen Top Bar */}
-      {isDocumentPanelOpen && effectiveFormat === 'PDF' && legacyPdfWork === activeBook.id && <PdfWorkstationPanel key={activeBook.id} workId={activeBook.id} onClose={() => setIsDocumentPanelOpen(false)} />}
+      {isDocumentPanelOpen && effectiveFormat === 'PDF' && legacyPdfWork === activeBook.id && <PdfWorkstationPanel key={activeBook.id} workId={activeBook.id} sourceId={currentSourceId ?? undefined} onClose={() => setIsDocumentPanelOpen(false)} />}
       {!isPdfWorkstationActive && (
       <ZenTopBar
         markupBar={
@@ -3580,6 +3556,7 @@ export const FullPageBookReader: React.FC = () => {
           annotations={annotations}
           currentPage={readingPage}
           bookTitle={activeBook.title}
+          sourceId={currentSourceId ?? undefined}
           bookAuthor={activeBook.author}
           bookIsbn={activeBook.isbn}
           bookFormat={detectedFormat}
@@ -3643,7 +3620,7 @@ export const FullPageBookReader: React.FC = () => {
           pageResult={ocrPages.get(readingPage) || null}
           readingPage={readingPage}
           sourceId={currentSourceId}
-          bookId={activeBook?.id}
+          bookId={currentSourceId ? activeBook?.id : undefined}
           sourcesCount={sourcesCount}
           isOcrRunning={isOcrRunning}
           onRunOcrPage={() => handleRunOcrPage(readingPage)}
@@ -4372,6 +4349,7 @@ export const FullPageBookReader: React.FC = () => {
                   key={`embedded-${activeBook.id}`}
                   embedded
                   workId={activeBook.id}
+                  sourceId={currentSourceId ?? undefined}
                   fileUrl={pdfBlobUrl || undefined}
                   initialPage={readingPage}
                   onPageChange={setReadingPage}
@@ -4402,6 +4380,7 @@ export const FullPageBookReader: React.FC = () => {
                       annotations={annotations}
                       currentPage={readingPage}
                       bookTitle={activeBook.title}
+                      sourceId={currentSourceId ?? undefined}
                       bookAuthor={activeBook.author}
                       bookIsbn={activeBook.isbn}
                       bookFormat={detectedFormat}
