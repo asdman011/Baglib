@@ -1,12 +1,60 @@
+## KEY-278 review fix - 2026-11-09, Codex (implemented and verified; publication pending)
+
+- Session `01a1c018-68f0-7062-aeea-09680f9ee258`: finished Claude's review fix on Antigravity's uncommitted KEY-278 implementation. `setupThrowawayCorpus` now refuses resolved destinations outside a strict child of the repo `.baglib-data/`, and destinations equal to, inside, or containing `sourceUserDataDir`, before filesystem mutation. Containment uses path boundaries, including Windows case comparison.
+- Added two refusal regressions (both failed before the guard); moved synthetic test fixtures under `.baglib-data/`. Fresh corpus tests pass 5/5; changed-script/test eslint passes with zero errors/warnings; diff check passes. No live harness/dev server/full-suite rerun or screenshots in this review session; earlier live/full-suite evidence below belongs to Antigravity. No app interface/layout changes in either language; the harness now rejects unsafe destinations before copying or cleanup.
+- Exact publication scope: `scripts/dashboard-live/fixture.tsx`, `scripts/dashboard-live/main.ts`, `scripts/dashboard-live/run.mjs`, `scripts/note-editor-live/main.cjs`, `scripts/note-editor-live/run.mjs`, `scripts/poetry-live/main.ts`, `scripts/poetry-live/run.mjs`, `scripts/lib/corpus-copy.mjs`, `scripts/lib/corpus-copy.d.mts`, `tests/scripts/corpus-copy.test.ts`, KEY-278 hunks only in `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, and `docs/features/PDF and Notes Experience Plan.md`. Preserved concurrent KEY-269 files/entries and unrelated work. Commit and normal push to origin/feature/library-domain authorized; Jira delegated to Claude; stop after push.
+
 ## Multi-agent workflow set up — 2026-11-09, Claude Code (process only; no feature code)
 
 - User made Claude the planner/dispatcher/reviewer; Codex and Antigravity implement. Approvals (continuous work, commit+push when tests pass, Jira) were already in AGENTS.md; added "Roles, board and handover" (local board docs/agent-ops/board.md, limit-hit handover, 6 h stale claims, fix-forward review). Agent prompt updated to match (board claims, commit/push and Jira per AGENTS.md, checkpoints, continue to next task).
 - Verified tools: Codex CLI 0.167.0-alpha.3.2 logged in, model gpt-6.1-sol available (config default is gpt-6-astra/low, so pass -m and effort); sandbox chosen: workspace-write + --approve-for-me + network on. Antigravity agentapi present with new-conversation/get-conversation-metadata/send-message; flash = Gemini 3.8 Flash not yet confirmed.
 - First dispatch planned: KEY-269 to Codex, KEY-278 to Antigravity (no file overlap). Local brief: docs/agent-ops/orchestrator.md.
 
-## KEY-278: Repair dashboard-live; make note-editor-live self-contained — 2026-11-09, Antigravity (in progress)
+## KEY-278: Repair dashboard-live; make note-editor-live self-contained — 2026-11-09, Antigravity (implemented and verified)
 
-- Active task: KEY-278 (1 of 10 in queue). Repair `scripts/dashboard-live` and make `scripts/note-editor-live` (and `scripts/poetry-live`) self-contained via a shared read-only corpus copy helper (`scripts/lib/corpus-copy.mjs`) with hash verification, `try/finally` cleanup, and explicit `SKIPPED:` reporting when a pack is absent.
+- **Task Overview**: KEY-278 (1 of 10 in queue, unblocking KEY-276 and KEY-277). Repair `scripts/dashboard-live` and make `scripts/note-editor-live` (and `scripts/poetry-live`) self-contained via a shared read-only corpus copy helper (`scripts/lib/corpus-copy.mjs`) with hash verification, `try/finally` cleanup, and explicit `SKIPPED:` reporting when a pack is absent.
+
+- **Root Causes of `dashboard-live` Failure & Fixes**:
+  1. *Book-note edit persistence in SQLite vs AppSettings*: In `scripts/dashboard-live/main.ts` lines 24 and 155, the live test fixture instantiated `new StudyNotesService(settings)` without passing the SQLite `db` handle (`new StudyNotesService(settings, db)` / `new StudyNotesService(settings, reopened)`). In production (`src/main/ipc/study-notes.ts:34`), `new StudyNotesService(settingsRepository, getDatabase())` always passes the database. When `StudyNotesService.save` received the note edit for `'book-note-test'` (seeded into `knowledge` via `knowledge.saveKnowledge`), omitting `db` caused `save` to fall back to `app_settings` key `study.note.v1:book-note-test` instead of updating the `knowledge` / `study_note_detail` row in SQLite. Consequently, when `main.ts` queried `knowledge.getKnowledgeByWork('study-book')[0].noteContent`, it returned the unmodified seeded value `'Book note — ملاحظة كتاب'` rather than the updated note, causing the assertion failure. Fixed by passing `db` and `reopened` to `StudyNotesService`.
+  2. *Missing `knowledgeHistory` IPC in fixture preload*: Wave 9 integrated `<CommentThreads>` inside `<NoteHistory>` on every note card rendered by `NotesOverviewView`. On mount, `<CommentThreads>` calls `window.electronAPI.knowledgeHistory.comments(id)`. Because `scripts/dashboard-live/fixture.tsx` lacked a `knowledgeHistory` mock on `window.electronAPI`, the notes view threw `Uncaught TypeError: Cannot read properties of undefined (reading 'comments')`. Fixed by providing `knowledgeHistory: { comments: async () => [], commentCounts: async () => ({}) }` in `fixture.tsx`.
+  3. *PostCSS missing `ui-motion.css` & `StartupSplash` overlay*: `src/renderer/app/globals.css` references `@import "./ui-motion.css";`. When building styles into the fixture's temporary folder, PostCSS failed unless `ui-motion.css` was present in the build directory. Additionally, the first screenshot (`dashboard-ar-480.png`) captured the `StartupSplash` overlay (`[aria-label="Baglib Startup Screen"]`) before it unmounted; fixed by copying `ui-motion.css` in `run.mjs` and adding an explicit wait for splash unmount in `main.ts`.
+
+- **Self-contained Corpus Copying (`scripts/lib/corpus-copy.mjs`)**:
+  - Created shared utility `setupThrowawayCorpus` with strict read-only guarantees:
+    - Locates installed Quran packs (`%APPDATA%/baglib/quran`) and Bayan poetry partitions (`%APPDATA%/baglib/partitions`).
+    - Copies SQLite databases, font files, and manifests into isolated throwaway run directories, leaving original files strictly intact.
+    - Computes read-only (`O_RDONLY`) SHA-256 hashes of original files before any test execution.
+    - Upon test completion or failure (`try/finally`), securely deletes all throwaway copies and verifies that original files match their initial hashes bit-for-bit (`originalsUnchanged: true`).
+    - Reports explicit `SKIPPED: no installed Quran pack` or `SKIPPED: no installed poetry partition` when corpora are absent, and ensures skips result in non-zero exit code (`exit 2`, `passed: false`), never falsely passing.
+  - Applied to `scripts/note-editor-live/run.mjs`, `scripts/note-editor-live/main.cjs`, `scripts/poetry-live/run.mjs`, and `scripts/poetry-live/main.ts`.
+
+- **Files Changed**:
+  - `scripts/lib/corpus-copy.mjs`: Shared read-only corpus copy and verification module.
+  - `scripts/lib/corpus-copy.d.mts`: TypeScript declarations for the corpus copy module.
+  - `tests/scripts/corpus-copy.test.ts`: Unit test suite verifying read-only copying, hash validation, skip reporting, and manifest traversal.
+  - `scripts/dashboard-live/run.mjs`: Copies `ui-motion.css` into build directory.
+  - `scripts/dashboard-live/main.ts`: Passes `db`/`reopened` to `StudyNotesService`, waits for startup splash unmount.
+  - `scripts/dashboard-live/fixture.tsx`: Adds `knowledgeHistory` mock with comments and commentCounts.
+  - `scripts/note-editor-live/run.mjs`: Wraps run in `setupThrowawayCorpus` with `try/finally` cleanup and hash verification.
+  - `scripts/note-editor-live/main.cjs`: Detects Quran/poetry availability, skips gracefully with explicit console lines and non-zero exit code when absent, and resiliently handles home navigation.
+  - `scripts/poetry-live/run.mjs`: Copies `ui-motion.css`, uses `setupThrowawayCorpus` for Bayan poetry partition, exits with code 2 if absent.
+  - `scripts/poetry-live/main.ts`: Connects to throwaway partition path via `BAGLIB_POETRY_PARTITION`.
+  - `docs/features/PDF and Notes Experience Plan.md`: Documented root causes of dashboard-live failure and self-contained corpus architecture.
+
+- **Verification Evidence**:
+  - Unit tests: `node scripts/test-runner.js tests/scripts/corpus-copy.test.ts` passed 3/3 tests.
+  - Full test suite: `npm test` passed 1418/1418 tests (3 new tests added vs 1415 baseline).
+  - TypeScript: `npx tsc --noEmit` passed with 0 errors.
+  - Linter: `npx eslint` passed with 0 errors on all touched files.
+  - Main build: `npx tsup` built cleanly.
+  - Git diff: `git diff --check` clean.
+  - Live `dashboard-live`: Passed 2 consecutive runs (`run-qE0GRB` and `run-u1qfa1`); all 25 migrations applied; screenshots inspected in Arabic and English at 1280px and 480px, including notes log and dashboard views.
+  - Live `note-editor-live`:
+    - With installed packs (`run-4R18Pk`): Passed with 0 manual steps, verifying ayah search, Hadith quotes, poetry insertion, PDF jumps, hover cards, callouts, footnotes, and note creation; cleaned up 129 copied files and confirmed original files unchanged. Screenshots inspected in Arabic and English at 1280px and 480px.
+    - Without installed packs (`run-7RPTZa`): Executed all non-pack editor flows, logged explicit `SKIPPED: no installed Quran pack` and `SKIPPED: no installed poetry partition` lines, recorded `passed: false`, and exited with code 2.
+  - Live `poetry-live`: Passed with throwaway Bayan partition (`run-jVRgod`); all native checks passed, throwaway copies deleted, and original partition hash verified unchanged.
+  - All temporary directories in `.baglib-data/` cleaned up. Dev server on port 3000 shut down.
+
 
 ## User decisions for KEY-269..277 recorded in Jira — 2026-11-09, Claude Code (Jira only; no code)
 

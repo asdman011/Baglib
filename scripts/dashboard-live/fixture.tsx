@@ -16,6 +16,7 @@ const api = {
   categories: { getTree: empty }, tags: { getAll: empty },
   settings: { get: (key: string) => live.call('get', key), set: (key: string, value: unknown) => live.call('set', { key, value }) },
   knowledge: { getAll: () => live.call('knowledge-list'), getByWork: (id: string) => live.call('knowledge-by-work', id), save: (input: unknown) => live.call('knowledge-save', input), delete: (id: string) => live.call('knowledge-delete', id) },
+  knowledgeHistory: { comments: empty, commentCounts: async () => ({}) },
   studyNotes: { list: () => live.call('list'), save: (input: unknown) => live.call('save', input), remove: (id: string) => live.call('remove', id), onChanged: () => () => {} },
   statistics: { getStreakStats: async () => ({ currentStreakDays: 3 }), getDailyHeatmap: empty, getAllBookStats: empty, startSession: async () => {}, endSession: async () => {}, turnPage: async () => {}, heartbeat: async () => {} },
   athan: { getState: () => live.call('athan'), onStateChanged: () => () => {}, onAlert: live.onAlert, triggerTestAlert: () => live.call('alert'), toggleMiniWidget: async () => ({ open: true }) },

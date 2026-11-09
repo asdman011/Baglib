@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const directory = process.env.BAGLIB_EDITOR_LIVE_DIR;
+const hasQuran = process.env.BAGLIB_EDITOR_QURAN_AVAILABLE !== '0';
+const hasPoetry = process.env.BAGLIB_EDITOR_POETRY_AVAILABLE !== '0';
 app.setPath('userData', directory);
 app.setAppPath(path.resolve(__dirname, '../..'));
 const pause = duration => new Promise(resolve => setTimeout(resolve, duration));
@@ -19,7 +21,12 @@ app.on('browser-window-created', (_, owner) => {
   // text typed just after it. Waiting first keeps the order a person would produce.
   const type = async text => { await pause(250); owner.webContents.insertText(text); await pause(250); };
   const value = () => evaluate("document.querySelector('[data-study-note-editor]').value");
-  const load = async language => { owner.setContentSize(1280, 900); for (let i = 0; i < 150 && (!owner.webContents.getURL().startsWith('http://localhost:3000') || owner.webContents.isLoading()); i++) await pause(200);  await evaluate(`localStorage.setItem('baglib-lang','${language}')`); await owner.loadURL('http://localhost:3000'); await until('!!window.electronAPI && !!document.querySelector("[data-study-note-editor] .cm-content")'); await pause(800); };
+  const navigateHome = async () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try { await owner.loadURL('http://localhost:3000'); return; } catch (error) { if (attempt === 4) throw error; await pause(500); }
+    }
+  };
+  const load = async language => { owner.setContentSize(1280, 900); await until('!!window.electronAPI && !!document.querySelector("footer")', 200); await evaluate(`localStorage.setItem('baglib-lang','${language}')`); await navigateHome(); await until('!!window.electronAPI && !!document.querySelector("[data-study-note-editor] .cm-content")', 200); await pause(800); };
   const settle = () => pause(1500);
   // Real mouse moves onto a link until its preview card has loaded (moves can be dropped while the page lays out).
   const hover = async box => {
@@ -34,6 +41,7 @@ app.on('browser-window-created', (_, owner) => {
   const options = () => evaluate("[...document.querySelectorAll('.cm-tooltip-autocomplete li')].map(li=>li.textContent)");
   (async () => {
     const results = {};
+    const skipped = [];
     await load('en');
     await evaluate(`window.electronAPI.addBook({id:'editor-book',title:'رياض الصالحين',author:'',workType:'book',bookType:'digital',digitalFormat:'PDF',filePath:${JSON.stringify(path.join(directory, 'pages.pdf'))}})`);
     await evaluate(`window.electronAPI.studyNotes.save({id:'patience-note',title:'الصبر عند البلاء',content:'الصبر ضياء',aliases:['patience'],tags:[],expectedRevision:0})`);
@@ -71,11 +79,16 @@ app.on('browser-window-created', (_, owner) => {
       await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0");
       press('Enter'); await pause(300);
       // /quran and /hadith insert the text itself with its reference.
-      await pause(300); press('Enter'); await pause(200); await type('/قرآن');
-      await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0");
-      press('Enter'); await pause(300); await type('2:255');
-      await until("[...document.querySelectorAll('.cm-tooltip-autocomplete li')].some(li=>li.textContent.includes('2:255'))", 100);
-      press('Enter'); await pause(400);
+      if (hasQuran) {
+        await pause(300); press('Enter'); await pause(200); await type('/قرآن');
+        await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0");
+        press('Enter'); await pause(300); await type('2:255');
+        await until("[...document.querySelectorAll('.cm-tooltip-autocomplete li')].some(li=>li.textContent.includes('2:255'))", 100);
+        press('Enter'); await pause(400);
+      } else {
+        console.log('SKIPPED: no installed Quran pack');
+        skipped.push(`${language}:quran-slash-quote`);
+      }
       press('End'); press('Enter'); await pause(200); await type('/hadith');
       await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0");
       press('Enter'); await pause(300); await type('إنما الأعمال بالنيات');
@@ -83,25 +96,35 @@ app.on('browser-window-created', (_, owner) => {
       await settle(); result.hadithOptions = await options();
       press('Enter'); await pause(400);
       // /poem inserts verses with their poet and poem link.
-      press('End'); press('Enter'); await pause(200); await type('/شعر');
-      await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0");
-      press('Enter'); await pause(300); await type('قفا نبك');
-      await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0", 150);
-      await settle(); result.poemOptions = await options();
-      press('Enter'); await pause(400); await closed();
-      // Plain [[ search also finds poems.
-      press('End'); press('Enter'); await pause(200); await type('[[قفا نبك');
-      await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0", 150);
-      await settle(); result.poemLinkOptions = await options();
-      press('Escape'); await pause(200);
-      await evaluate("(()=>{const view=document.querySelector('[data-study-note-editor]');view.value=view.value.replace(/\\n\\[\\[قفا نبك$/u,'');})()");
+      if (hasPoetry) {
+        press('End'); press('Enter'); await pause(200); await type('/شعر');
+        await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0");
+        press('Enter'); await pause(300); await type('قفا نبك');
+        await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0", 150);
+        await settle(); result.poemOptions = await options();
+        press('Enter'); await pause(400); await closed();
+        // Plain [[ search also finds poems.
+        press('End'); press('Enter'); await pause(200); await type('[[قفا نبك');
+        await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0", 150);
+        await settle(); result.poemLinkOptions = await options();
+        press('Escape'); await pause(200);
+        await evaluate("(()=>{const view=document.querySelector('[data-study-note-editor]');view.value=view.value.replace(/\\n\\[\\[قفا نبك$/u,'');})()");
+      } else {
+        console.log('SKIPPED: no installed poetry partition');
+        skipped.push(`${language}:poetry-slash-and-search`);
+      }
       // Plain [[ search also finds ayahs by words.
-      press('End'); press('Enter'); await pause(200); await type('[[الحمد لله رب العالمين');
-      await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0", 100);
-      await settle(); result.wordSearchOptions = await options();
-      result.quranProbe = await evaluate("window.electronAPI.quran.readerCatalog().then(c=>{const s=c.ok&&c.data.sources.find(x=>x.kind==='script'&&x.profile==='hafs');return s?window.electronAPI.quran.searchAyahs({script:s.id,text:'الحمد لله رب العالمين'}).then(r=>JSON.stringify(r).slice(0,200)):'no script';})");
-      press('Escape'); await pause(200);
-      await evaluate("(()=>{const view=document.querySelector('[data-study-note-editor]');view.value=view.value.replace(/\\n\\[\\[الحمد لله رب العالمين$/u,'');})()");
+      if (hasQuran) {
+        press('End'); press('Enter'); await pause(200); await type('[[الحمد لله رب العالمين');
+        await until("document.querySelectorAll('.cm-tooltip-autocomplete li').length>0", 100);
+        await settle(); result.wordSearchOptions = await options();
+        result.quranProbe = await evaluate("window.electronAPI.quran.readerCatalog().then(c=>{const s=c.ok&&c.data.sources.find(x=>x.kind==='script'&&x.profile==='hafs');return s?window.electronAPI.quran.searchAyahs({script:s.id,text:'الحمد لله رب العالمين'}).then(r=>JSON.stringify(r).slice(0,200)):'no script';})");
+        press('Escape'); await pause(200);
+        await evaluate("(()=>{const view=document.querySelector('[data-study-note-editor]');view.value=view.value.replace(/\\n\\[\\[الحمد لله رب العالمين$/u,'');})()");
+      } else {
+        console.log('SKIPPED: no installed Quran pack');
+        skipped.push(`${language}:quran-word-search`);
+      }
       result.text = await value();
       // Live preview: lines without the cursor show only the link label.
       result.previewLines = await evaluate("[...document.querySelectorAll('[data-study-note-editor] .cm-line')].slice(0,3).map(line=>line.textContent)");
@@ -131,17 +154,27 @@ app.on('browser-window-created', (_, owner) => {
       await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')}).click()`);
       await until(`[...document.querySelectorAll('[data-notes-overview] button')].some(b=>b.textContent==='رياض الصالحين (3)')`);
       // Hover (focus) card on the ayah link shows its text without leaving the note.
-      const box = await evaluate(`(()=>{const el=document.querySelector('[data-notes-overview] [data-study-link="quran:hafs:2:255"]');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
-      await hover(box);
-      result.preview = await evaluate("document.querySelector('[data-study-link-preview]').textContent.slice(0,80)");
-      await shot(`preview-${language}-1280`);
-      owner.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 }); await pause(500);
+      if (hasQuran) {
+        const box = await evaluate(`(()=>{const el=document.querySelector('[data-notes-overview] [data-study-link="quran:hafs:2:255"]');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
+        await hover(box);
+        result.preview = await evaluate("document.querySelector('[data-study-link-preview]').textContent.slice(0,80)");
+        await shot(`preview-${language}-1280`);
+        owner.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 }); await pause(500);
+      } else {
+        console.log('SKIPPED: no installed Quran pack');
+        skipped.push(`${language}:quran-hover-preview`);
+      }
       // Poem link hover shows its verses.
-      const poemBox = await evaluate(`(()=>{const el=document.querySelector('[data-notes-overview] [data-study-link^="poetry:ashaar:"]');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
-      await hover(poemBox);
-      result.poemPreview = await evaluate("document.querySelector('[data-study-link-preview]').textContent.slice(0,120)");
-      await shot(`poem-preview-${language}-1280`);
-      owner.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 }); await pause(200);
+      if (hasPoetry) {
+        const poemBox = await evaluate(`(()=>{const el=document.querySelector('[data-notes-overview] [data-study-link^="poetry:ashaar:"]');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
+        await hover(poemBox);
+        result.poemPreview = await evaluate("document.querySelector('[data-study-link-preview]').textContent.slice(0,120)");
+        await shot(`poem-preview-${language}-1280`);
+        owner.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 }); await pause(200);
+      } else {
+        console.log('SKIPPED: no installed poetry partition');
+        skipped.push(`${language}:poetry-hover-preview`);
+      }
       await evaluate(`[...document.querySelectorAll('[data-notes-overview] button')].find(b=>b.textContent==='رياض الصالحين (3)').click()`);
       await until("!!document.querySelector('.textLayer span')", 200);
       await pause(2600);
@@ -179,15 +212,20 @@ app.on('browser-window-created', (_, owner) => {
       assert.deepEqual(result.previewLines.slice(1), ['2:255-257', 'رياض الصالحين (3)']);
       assert.ok(result.previewLines[0].endsWith('الصبر عند البلاء') && !result.previewLines[0].includes('note:'));
       assert.ok(result.linkSpans >= 3); assert.equal(result.openedPage, '3');
-      assert.match(result.text, /^> ﴿[^\n]+\(255\)﴾\n> \[\[quran:hafs:2:255\|2:255\]\]$/mu);
       assert.match(result.text, /\n> \[\[sunnah:[^\]|]+\|[^\]]+\]\]/u);
-      assert.ok(result.hadithOptions.length > 0 && result.wordSearchOptions.some(option => /1:2/u.test(option)));
-      assert.match(result.quranProbe, /"surah":1,"ayah":2/u);
-      assert.ok(result.poemOptions[0].startsWith('امرؤ القيس — قفا نبك'), 'the poem itself first');
-      assert.match(result.text, /\n> [^\n]*\n?(?:> [^\n]*\n)*> \[\[poetry:ashaar:\d+:\d+:\d+\|[^\]]+\]\]/u);
-      assert.ok(result.poemLinkOptions.some(option => /شعر|Poetry/u.test(option)), 'poem in [[ search');
-      assert.ok(result.poemPreview.length > 20 && !/لا تتوفر|No preview/u.test(result.poemPreview), 'poem preview');
-      assert.ok(result.preview.includes('2:255') && result.preview.length > 20);
+      assert.ok(result.hadithOptions.length > 0);
+      if (hasQuran) {
+        assert.match(result.text, /^> ﴿[^\n]+\(255\)﴾\n> \[\[quran:hafs:2:255\|2:255\]\]$/mu);
+        assert.ok(result.wordSearchOptions.some(option => /1:2/u.test(option)));
+        assert.match(result.quranProbe, /"surah":1,"ayah":2/u);
+        assert.ok(result.preview.includes('2:255') && result.preview.length > 20);
+      }
+      if (hasPoetry) {
+        assert.ok(result.poemOptions[0].startsWith('امرؤ القيس — قفا نبك'), 'the poem itself first');
+        assert.match(result.text, /\n> [^\n]*\n?(?:> [^\n]*\n)*> \[\[poetry:ashaar:\d+:\d+:\d+\|[^\]]+\]\]/u);
+        assert.ok(result.poemLinkOptions.some(option => /شعر|Poetry/u.test(option)), 'poem in [[ search');
+        assert.ok(result.poemPreview.length > 20 && !/لا تتوفر|No preview/u.test(result.poemPreview), 'poem preview');
+      }
       assert.ok(result.callout.length > 0); assert.deepEqual(result.footnotes, [true, true]);
       assert.equal(result.annotationNote, `## رياض الصالحين\n\n> Page one [[book:editor-book#p=1|رياض الصالحين (1)]]\n\n${language === 'ar' ? 'فكرتي' : 'My thought'}\n\n> Page three [[book:editor-book#p=3|رياض الصالحين (3)]]`);
       assert.match(result.text, /\*\*Patience is light\.\*\*/u);
@@ -195,6 +233,12 @@ app.on('browser-window-created', (_, owner) => {
       assert.equal(result.firstLineFits, true); assert.equal(result.cleared, true);
     }
     assert.deepEqual(consoleLines.filter(line => /codemirror|cm-|uncaught/iu.test(line)), []);
+    if (skipped.length > 0) {
+      fs.writeFileSync(path.join(directory, 'results.json'), JSON.stringify({ passed: false, skipped, results }, null, 2));
+      console.log(JSON.stringify({ directory, passed: false, skipped }));
+      app.exit(2);
+      return;
+    }
     fs.writeFileSync(path.join(directory, 'results.json'), JSON.stringify(results, null, 2)); console.log(JSON.stringify({ directory, passed: true })); app.quit();
   })().catch(error => { console.error(error); fs.writeFileSync(path.join(directory, 'failure.txt'), String(error.stack || error) + '\n' + consoleLines.join('\n')); owner.webContents.capturePage().then(image => fs.writeFileSync(path.join(directory, 'failure.png'), image.toPNG())).finally(() => app.exit(1)); });
 });

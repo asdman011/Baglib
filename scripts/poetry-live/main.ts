@@ -26,8 +26,8 @@ let narrationVerified = false;
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.setPath('userData', path.join(directory, 'profile'));
 app.whenReady().then(async () => {
-  const database = new Database(path.join(process.env.APPDATA!, 'baglib/partitions/bayan_poetry.sqlite'), { readonly: true });
-  const worker = new PoetryQueryProcess(path.join(directory, 'poetry-worker.cjs'), path.join(process.env.APPDATA!, 'baglib/partitions/bayan_poetry.sqlite'));
+  const poetryPartitionPath = process.env.BAGLIB_POETRY_PARTITION || path.join(directory, 'partitions/bayan_poetry.sqlite'); const database = new Database(poetryPartitionPath, { readonly: true });
+  const worker = new PoetryQueryProcess(path.join(directory, 'poetry-worker.cjs'), poetryPartitionPath);
   const english = openPoetryPartition(path.join(directory, 'english-fixture'));
   const notesDatabase = new Database(path.join(directory, 'notes.sqlite'));
   runMigrations(notesDatabase, migrations);

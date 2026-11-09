@@ -14,6 +14,7 @@ const { markup } = createRequire(import.meta.url)(path.join(directory, 'ssr.cjs'
 const serverMarkup = markup();
 buildSync({ entryPoints: ['scripts/dashboard-live/fixture.tsx'], outfile: path.join(directory, 'fixture.js'), bundle: true, platform: 'browser', define: { 'process.env.NODE_ENV': '"development"' } });
 for (const file of ['main', 'preload']) buildSync({ entryPoints: [`scripts/dashboard-live/${file}.ts`], outfile: path.join(directory, `${file}.cjs`), bundle: true, platform: 'node', format: 'cjs', packages: 'external' });
+fs.copyFileSync('src/renderer/app/ui-motion.css', path.join(directory, 'ui-motion.css'));
 const css = fs.readFileSync('src/renderer/app/globals.css', 'utf8') + '\n@source "../../../src/renderer/components";';
 fs.writeFileSync(path.join(directory, 'style.css'), (await postcss([tailwind()]).process(css, { from: path.join(directory, 'input.css') })).css);
 fs.writeFileSync(path.join(directory, 'index.html'), `<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="style.css"></head><body><div id="root">${serverMarkup}</div><script src="fixture.js"></script></body></html>`);

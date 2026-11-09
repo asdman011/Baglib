@@ -453,6 +453,35 @@ User request: graph filter by relationship; Word table of contents, page size an
 
 **Limits.** At 480 px the PDF header still clips its last buttons (as before). The PDF tools are for the PDF workstation only, not EPUB or the Quran and Sunnah readers. Study marks are not yet written into an exported PDF copy (9.6). Stamps, OCR suspects, accessibility check, read-aloud reflow, actions and measure (13.2–13.7) are not done.
 
+### 2026-11-09, Antigravity — KEY-278: Repair dashboard-live and make note-editor-live / poetry-live self-contained
+
+- **Root Cause of `dashboard-live` Failures (3 distinct causes identified and resolved)**:
+  1. *Book-note edit persistence in SQLite vs AppSettings*: In `scripts/dashboard-live/main.ts` lines 24 and 155, the live test fixture instantiated `new StudyNotesService(settings)` without passing the SQLite `db` handle (`new StudyNotesService(settings, db)` / `new StudyNotesService(settings, reopened)`). In production (`src/main/ipc/study-notes.ts`), `new StudyNotesService(settingsRepository, getDatabase())` is always provided with the database. When `StudyNotesService.save` received the note edit for `'book-note-test'` (seeded into `knowledge` via `knowledge.saveKnowledge`), omitting `db` caused `save` to fall back to `app_settings` key `study.note.v1:book-note-test` instead of updating the `knowledge` / `study_note_detail` row in SQLite. Consequently, when `main.ts` queried `knowledge.getKnowledgeByWork('study-book')[0].noteContent`, it returned the unmodified seeded value `'Book note — ملاحظة كتاب'` rather than the updated note, causing the assertion failure. Fixed by passing `db` and `reopened` to `StudyNotesService`.
+  2. *Missing `knowledgeHistory` IPC in fixture preload*: Wave 9 integrated `<CommentThreads>` inside `<NoteHistory>` on every note card rendered by `NotesOverviewView`. On mount, `<CommentThreads>` calls `window.electronAPI.knowledgeHistory.comments(id)`. Because `scripts/dashboard-live/fixture.tsx` lacked a `knowledgeHistory` mock on `window.electronAPI`, the notes view threw `Uncaught TypeError: Cannot read properties of undefined (reading 'comments')`. Fixed by providing `knowledgeHistory: { comments: async () => [], commentCounts: async () => ({}) }` in `fixture.tsx`.
+  3. *PostCSS missing `ui-motion.css` & `StartupSplash` overlay*: `src/renderer/app/globals.css` references `@import "./ui-motion.css";`. When building styles into the fixture's temporary folder, PostCSS failed unless `ui-motion.css` was present in the build directory. Additionally, the first screenshot (`dashboard-ar-480.png`) captured the `StartupSplash` overlay (`[aria-label="Baglib Startup Screen"]`) before it unmounted; fixed by copying `ui-motion.css` in `run.mjs` and adding an explicit wait for splash unmount in `main.ts`.
+
+- **Self-contained Corpus Copying (`scripts/lib/corpus-copy.mjs`)**:
+  - **2026-11-09 Codex review fix:** Before any destination creation/copy/cleanup, require a strict child of the repo `.baglib-data/` and refuse resolved paths equal to, inside, or containing the source profile. Two refusal regressions cover overlap, outside/prefix lookalikes and parent traversal, checking no mutation; corpus unit tests now pass 5/5. Existing three tests use synthetic profiles under `.baglib-data/`. Changed-script/test eslint and diff check pass; no live rerun or interface/layout change in this review session.
+  - Created shared utility `setupThrowawayCorpus` with strict read-only guarantees:
+    - Locates installed Quran packs (`%APPDATA%/baglib/quran`) and Bayan poetry partitions (`%APPDATA%/baglib/partitions`).
+    - Copies SQLite databases, font files, and manifests into isolated throwaway run directories, leaving original files strictly intact.
+    - Computes read-only (`O_RDONLY`) SHA-256 hashes of original files before any test execution.
+    - Upon test completion or failure (`try/finally`), securely deletes all throwaway copies and verifies that original files match their initial hashes bit-for-bit (`originalsUnchanged: true`).
+    - Reports explicit `SKIPPED: no installed Quran pack` or `SKIPPED: no installed poetry partition` when corpora are absent, and ensures skips result in non-zero exit code (`exit 2`, `passed: false`), never falsely passing.
+  - Applied to `scripts/note-editor-live/run.mjs`, `scripts/note-editor-live/main.cjs`, `scripts/poetry-live/run.mjs`, and `scripts/poetry-live/main.ts`.
+
+- **Verification**:
+  - `corpus-copy.test.ts`: 3 unit tests passing (read-only hash checking, skip reporting, manifest handling).
+  - `npm test`: 1418/1418 passing (3 new tests added vs 1415 baseline).
+  - `npx tsc --noEmit`: 0 errors.
+  - `npx eslint`: 0 errors across all modified script and test files.
+  - `npx tsup`: Clean build.
+  - `git diff --check`: Clean.
+  - `scripts/dashboard-live`: Passed 2 consecutive runs (`run-qE0GRB`, `run-u1qfa1`); verified all 25 migrations applied, Arabic & English screenshots inspected at 1280px and 480px, `dashboard-ar-480.png` displays real dashboard content.
+  - `scripts/note-editor-live`: Passed with installed packs (`run-4R18Pk`) with zero manual steps, verifying Quran, Hadith, poetry, PDF page jumps, hover cards, annotations-to-note; verified without packs (`run-7RPTZa`) printing explicit `SKIPPED:` notices and exiting with code 2.
+  - `scripts/poetry-live`: Passed native live run (`run-jVRgod`) using throwaway copy with full cleanup and hash verification.
+
+
 ### 2026-11-05, Claude Code — narrow PDF header; ayahs and hadith as assistant sources
 
 User request: "The narrow-window PDF header: at 480 px it cuts off its last buttons. Ayahs and hadith as direct study assistant sources." No schema change and no new dependency.

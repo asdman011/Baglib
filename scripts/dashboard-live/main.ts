@@ -21,7 +21,7 @@ app.whenReady().then(async () => {
   const knowledge = new SqliteKnowledgeRepository(db);
   knowledge.saveKnowledge({ id: 'book-note-test', workId: 'study-book', knowledgeType: 'note', location: 'epubcfi(/6/2)', noteContent: 'Book note — ملاحظة كتاب' });
   const settings = new SqliteSettingsRepository(db);
-  const notes = new StudyNotesService(settings);
+  const notes = new StudyNotesService(settings, db);
   const first = notes.save({ title: 'الهداية — Guidance', content: 'تأمل في الهداية', aliases: ['Faith', 'إِيمَان'], tags: ['بحث'] });
   const second = notes.save({ title: 'روابط البحث', content: `![[note:${first.id}|الهداية]]\n[[quran:hafs:2:255|البقرة ٢٥٥]]\n[[sunnah:Bukhari:1:Bukhari:1:1|حديث النيات]]`, aliases: [], tags: [] });
   ipcMain.handle('dashboard-live', (_, action, input) => {
@@ -59,7 +59,7 @@ app.whenReady().then(async () => {
   const fill = async (selector: string, value: string) => evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(el.hasAttribute('data-study-note-editor')){el.value=${JSON.stringify(value)};return;}Object.getOwnPropertyDescriptor(el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   try {
     await owner.loadURL(url);
-    await until("Boolean(window.dashboardTest && document.querySelector('[data-dashboard-view]'))");
+    await until("Boolean(window.dashboardTest && document.querySelector('[data-dashboard-view]') && !document.querySelector('[aria-label=\"Baglib Startup Screen\"]'))");
     for (const lang of ['ar', 'en']) {
       await evaluate(`if(window.dashboardTest.workspace.lang!==${JSON.stringify(lang)})window.dashboardTest.workspace.toggleLanguage()`);
       for (const width of [480, 1280]) {
@@ -152,5 +152,5 @@ app.whenReady().then(async () => {
   }
   finally { owner.destroy(); server.close(); db.close(); }
   const reopened = new Database(path.join(directory, 'notes.db'));
-  assert.equal(new StudyNotesService(new SqliteSettingsRepository(reopened)).list().length, 4); reopened.close(); app.quit();
+  assert.equal(new StudyNotesService(new SqliteSettingsRepository(reopened), reopened).list().length, 4); reopened.close(); app.quit();
 });
