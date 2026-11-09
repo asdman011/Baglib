@@ -1,6 +1,7 @@
 # Implementation Plan
 
 ## Recent Agent Updates
+- [2026-11-09, Claude Code] Set up the multi-agent workflow: Claude reviews, Codex and Antigravity implement; AGENTS.md "Roles, board and handover" and the agent prompt updated; local board in docs/agent-ops. No feature code.
 - [2026-11-09, Claude Code] Recorded the user's decisions in Jira KEY-269/270/271/272/273/275/276/277 (undo scope option, settings-store drafts, packaged-only baglib: registration, uharfbuzz+fonttools in the base engine, Noto Naskh Arabic download approved, English-only read-aloud, Warsh tafsir overlap rule, ten stamps) and a KEY-230 installer note. No code changes.
 - [2026-11-09, Claude Code] Rewrote Jira KEY-269 to KEY-278 as agent-ready tasks (map, approach, constraints, acceptance, verification, process) and set the work order 278, 269, 270, 273, 277, 276, 275, 274, 272, 271 with Blocks/Relates links. No code changes.
 

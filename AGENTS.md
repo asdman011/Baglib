@@ -29,9 +29,65 @@ You are working collaboratively with another AI coding agent on this local proje
 - Never claim an action, test, investigation, verification, or result occurred unless it actually occurred.
 - Report failures, limitations, missing access, and unresolved problems honestly.
 
+## Continuous work (standing instruction from the user, 2026-11-09)
+
+Work non-stop through the task queue. Do not end your session or wait for the user between tasks.
+
+1. Take the next task from the queue in `docs/Agent Prompt - Next Tasks KEY-269-278.md`: the first To Do task whose blockers are done and that no other agent has claimed on the board (`docs/agent-ops/board.md`, see "Roles, board and handover" below). Claim it there before you start.
+2. When a task is implemented and verified, write its handoff in `CURRENT_TASK.md` with the exact files it changed. Then commit and push it without asking (see "Standing commit and push authorization" in section 2), and immediately take the next task.
+3. Do not stop to ask routine questions. Make the reasonable choice that follows the task description and these rules, and record it.
+4. Stop and ask only at a hard gate: a new database entity or field, a new dependency, a download, or a destructive action. While a gate waits for an answer, record it in `CURRENT_TASK.md`, then continue with another unblocked task that does not touch the same files.
+5. Checkpoint progress on the board after each meaningful step, saying what is done and what the next step is. If you hit a usage limit, crash, or lose context, you or another agent must be able to resume from that checkpoint without redoing work.
+6. Never let continuous work weaken any other rule in this file. Verification, i18n, architecture and Git gates still apply to every task.
+
+Stop only when no unblocked task is left, or when the user tells you to stop.
+
+## Roles, board and handover (set by the user, 2026-11-09)
+
+- **Roles.**
+  - **Codex and Antigravity implement.**
+  - **Claude Code plans, dispatches and reviews.** It does not write feature code unless the user asks.
+
+  The two implementers share this folder and branch, so they must never hold tasks that edit the same files.
+- **The board** is `docs/agent-ops/board.md`. It is local only; `.gitignore` excludes it. It holds one row per active task:
+  - the Jira key;
+  - the agent and its session or conversation id;
+  - its status (`claimed`, `working`, `limit-hit`, `blocked-on-user`, `pushed`, `reviewed-pass`, `changes-requested`);
+  - the files it touches;
+  - the last checkpoint, with its time;
+  - the next step.
+
+  Update your row at every checkpoint. `CURRENT_TASK.md` still gets the dated handoff entry when the task is pushed.
+- **Usage limit.** If you are about to run out, or you are stopped by a limit:
+  1. set your row to `limit-hit`;
+  2. write the exact next step;
+  3. leave the work uncommitted, unless it passes its tests.
+
+  The next agent with quota resumes from that checkpoint. It first re-reads the board and runs `git status`, then continues the same task in place. It never starts it over.
+- **Stale claims.** A `working` row with no checkpoint for 6 hours counts as `limit-hit`.
+- **Review.** Claude reviews each pushed task against its Jira acceptance criteria and these rules. On `changes-requested`, the same task goes back to an implementer with a numbered fix list. Fix forward with a new commit; never rewrite history.
+- **Agent reports** go to `docs/agent-ops/reports/KEY-xxx.md`, also local only: what was done, the evidence, and the open points.
+
 ---
 
 # 2. Git Safety — Mandatory Approval Gates
+
+## Standing commit and push authorization (granted by the user, 2026-11-09)
+
+This overrides the approval steps below for normal task work. Agents may commit and push without asking when all of these hold:
+
+- the task is implemented, its tests and verification pass, and its handoff is written in `CURRENT_TASK.md`;
+- the commit contains only the files that task changed, never other agents' or sessions' files;
+- it is one commit per task (or a few logical commits), with a message naming the Jira key and ending with the agent's attribution line;
+- the push goes to `origin/feature/library-domain` as a normal push.
+
+Still forbidden without explicit user approval:
+
+- force-push, rebase or history rewrites, `git stash`, reset, or switching branches;
+- pushing to or merging into `main`, or any other branch;
+- committing secrets, large binaries or files outside the task.
+
+Never commit work that fails its tests. Record the commit hash and push result in `CURRENT_TASK.md`.
 
 Git commits and pushes are explicit approval boundaries.
 
@@ -247,19 +303,20 @@ Use the reverse-engineering documentation skill for the complete documentation w
 
 Jira represents completed project work and must accurately reflect reality.
 
-Do NOT modify, create, transition, or otherwise manage Jira issues as part of the completion workflow until:
+**Standing permission (granted by the user, 2026-11-09):** Agents may create, edit, comment on, link and transition Jira issues without asking the user first. This permission covers Jira only; it does not approve Git commits, pushes, schema changes, dependencies or downloads.
 
-1. `CURRENT_TASK.md` and `IMPLEMENTATION_PLAN.md` have been read and understood so that Jira updates, ticket numbers, issue links, and completion comments accurately reflect the full recorded collaborative context;
-2. implementation is complete;
-3. relevant verification/tests have succeeded;
-4. the user has explicitly approved the Git commit;
-5. the commit has been created;
-6. the user has explicitly approved the Git push, either on its own or in a combined commit-and-push request; and
-7. the push has succeeded.
+Before any Jira change, read `CURRENT_TASK.md` and `IMPLEMENTATION_PLAN.md` so that ticket numbers, issue links and comments accurately reflect the recorded collaborative context.
 
-Never infer commit or push authorization.
+Every Jira change must match reality:
 
-After those conditions are satisfied, use the Jira completion skill and configured Atlassian tools to identify, create, or update appropriate issues.
+- Planning work (creating tasks, editing descriptions, adding links, comments about decisions or progress) may happen at any time.
+- Moving an issue to **Done**, or writing a comment that claims work is complete, requires that the implementation is complete, relevant verification/tests have succeeded, and the work is committed and pushed. Reference the commit hash.
+- Every task or bug must have an existing label and a parent epic.
+- Record each Jira change in `CURRENT_TASK.md`.
+
+Never infer commit or push authorization from this Jira permission.
+
+Use the Jira completion skill and configured Atlassian tools to identify, create, or update appropriate issues.
 
 Never:
 
@@ -301,6 +358,8 @@ Then report:
 
 Never conflate:
 
-**implementation complete → commit approved → push approved → Jira updated**
+**implementation complete → commit approved → push approved → Jira marked Done**
+
+(Jira planning updates need no approval; see section 7.)
 
 These are separate stages with separate requirements, but commit and push approval may be granted together in one user request. Combined approval does not waive verification or the requirement for a successful push before Jira updates.

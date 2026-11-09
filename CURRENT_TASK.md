@@ -1,3 +1,13 @@
+## Multi-agent workflow set up — 2026-11-09, Claude Code (process only; no feature code)
+
+- User made Claude the planner/dispatcher/reviewer; Codex and Antigravity implement. Approvals (continuous work, commit+push when tests pass, Jira) were already in AGENTS.md; added "Roles, board and handover" (local board docs/agent-ops/board.md, limit-hit handover, 6 h stale claims, fix-forward review). Agent prompt updated to match (board claims, commit/push and Jira per AGENTS.md, checkpoints, continue to next task).
+- Verified tools: Codex CLI 0.167.0-alpha.3.2 logged in, model gpt-6.1-sol available (config default is gpt-6-astra/low, so pass -m and effort); sandbox chosen: workspace-write + --approve-for-me + network on. Antigravity agentapi present with new-conversation/get-conversation-metadata/send-message; flash = Gemini 3.8 Flash not yet confirmed.
+- First dispatch planned: KEY-269 to Codex, KEY-278 to Antigravity (no file overlap). Local brief: docs/agent-ops/orchestrator.md.
+
+## KEY-278: Repair dashboard-live; make note-editor-live self-contained — 2026-11-09, Antigravity (in progress)
+
+- Active task: KEY-278 (1 of 10 in queue). Repair `scripts/dashboard-live` and make `scripts/note-editor-live` (and `scripts/poetry-live`) self-contained via a shared read-only corpus copy helper (`scripts/lib/corpus-copy.mjs`) with hash verification, `try/finally` cleanup, and explicit `SKIPPED:` reporting when a pack is absent.
+
 ## User decisions for KEY-269..277 recorded in Jira — 2026-11-09, Claude Code (Jira only; no code)
 
 - User answered the open decisions; the tasks now carry them under "Decisions already made by the user". KEY-269: one undo history per book by default, plus a user option "reader edits only" in Save settings (`undo.scope.v1`, settings store; filter by the existing entity_version.actor column). KEY-273: organizer drafts in the settings store (`pdf.organizerDraft.v1:<sourceId>`), no schema change. KEY-277: register baglib: only in installed builds; dev opt-in BAGLIB_REGISTER_PROTOCOL=1.
