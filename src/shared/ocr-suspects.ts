@@ -207,3 +207,200 @@ export function applyWordCorrection(
     markdown: text,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Storage Keys & Persistent Correction Data Types (Source-keyed & Validated)
+// ---------------------------------------------------------------------------
+
+export function ocrCorrectionsKey(sourceId: string | null | undefined, page: number): string | null {
+  if (!sourceId) return null;
+  return `ocr.corrections.v1:${sourceId}:${page}`;
+}
+
+export function ocrAcceptedKey(sourceId: string | null | undefined, page: number): string | null {
+  if (!sourceId) return null;
+  return `ocr.accepted.v1:${sourceId}:${page}`;
+}
+
+export function legacyOcrCorrectionsKey(bookId: string | null | undefined, page: number): string | null {
+  if (!bookId) return null;
+  return `ocr.corrections.v1:${bookId}:${page}`;
+}
+
+export function legacyOcrAcceptedKey(bookId: string | null | undefined, page: number): string | null {
+  if (!bookId) return null;
+  return `ocr.accepted.v1:${bookId}:${page}`;
+}
+
+export interface OcrWordCorrectionEntry {
+  original: string;
+  corrected: string;
+  engine?: string;
+  timestamp?: number;
+}
+
+export type OcrWordCorrectionsMap = Record<string, OcrWordCorrectionEntry | string>;
+
+export interface StaleCorrectionInfo {
+  index: number;
+  original: string;
+  corrected: string;
+  engine?: string;
+  reason: 'index-out-of-bounds' | 'text-mismatch' | 'engine-mismatch' | 'legacy-shape';
+}
+
+export interface AppliedCorrectionsResult {
+  patchedResult: OcrPageResult;
+  appliedCount: number;
+  staleCorrections: StaleCorrectionInfo[];
+}
+
+/**
+ * Applies saved corrections to an OcrPageResult safely:
+ * - Checks that the target index exists and that its current text matches `original`.
+ * - Checks that the engine matches if specified.
+ * - Rejects legacy shape `Record<number, string>` (never applies blindly, marks stale).
+ * - Returns the patched result along with any stale corrections that no longer match.
+ */
+export function applyStoredCorrections(
+  pageResult: OcrPageResult,
+  corrections: OcrWordCorrectionsMap | null | undefined,
+  currentEngine?: string
+): AppliedCorrectionsResult {
+  if (!corrections || typeof corrections !== 'object' || !pageResult.words || pageResult.words.length === 0) {
+    return { patchedResult: pageResult, appliedCount: 0, staleCorrections: [] };
+  }
+
+  const effectiveEngine = currentEngine || pageResult.engine;
+  const staleCorrections: StaleCorrectionInfo[] = [];
+  let patched = pageResult;
+  let appliedCount = 0;
+
+  for (const [key, value] of Object.entries(corrections)) {
+    const idx = Number(key);
+    if (!Number.isFinite(idx) || idx < 0) continue;
+
+    // Check legacy shape or invalid entry
+    if (typeof value === 'string' || !value || typeof value !== 'object' || typeof (value as { original?: unknown }).original !== 'string') {
+      const correctedText = typeof value === 'string' ? value : String((value as { corrected?: unknown })?.corrected || '');
+      staleCorrections.push({
+        index: idx,
+        original: '',
+        corrected: correctedText,
+        reason: 'legacy-shape',
+      });
+      continue;
+    }
+
+    const entry = value as OcrWordCorrectionEntry;
+
+    // Check bounds
+    if (idx >= patched.words.length) {
+      staleCorrections.push({
+        index: idx,
+        original: entry.original,
+        corrected: entry.corrected,
+        engine: entry.engine,
+        reason: 'index-out-of-bounds',
+      });
+      continue;
+    }
+
+    const targetWord = patched.words[idx];
+
+    // Check engine match if specified
+    if (entry.engine && effectiveEngine && entry.engine !== effectiveEngine) {
+      staleCorrections.push({
+        index: idx,
+        original: entry.original,
+        corrected: entry.corrected,
+        engine: entry.engine,
+        reason: 'engine-mismatch',
+      });
+      continue;
+    }
+
+    // Check original text match
+    if (targetWord.text !== entry.original) {
+      staleCorrections.push({
+        index: idx,
+        original: entry.original,
+        corrected: entry.corrected,
+        engine: entry.engine,
+        reason: 'text-mismatch',
+      });
+      continue;
+    }
+
+    // Valid: apply correction
+    patched = applyWordCorrection(patched, idx, entry.corrected);
+    appliedCount++;
+  }
+
+  return { patchedResult: patched, appliedCount, staleCorrections };
+}
+
+export interface MigrateSourceCorrectionsInput {
+  sourceId: string;
+  bookId?: string | null;
+  sourcesCount: number;
+  page: number;
+  getSetting: (key: string, defaultVal: unknown) => Promise<unknown>;
+  setSetting: (key: string, val: unknown) => Promise<void>;
+}
+
+/**
+ * Resolves source-keyed corrections and accepted indices, migrating from legacy
+ * book-keyed settings only when the work has exactly one source.
+ */
+export async function resolveAndMigratePageCorrections(input: MigrateSourceCorrectionsInput): Promise<{
+  corrections: OcrWordCorrectionsMap;
+  acceptedIndices: number[];
+}> {
+  const sourceCorrKey = ocrCorrectionsKey(input.sourceId, input.page);
+  const sourceAcceptedKey = ocrAcceptedKey(input.sourceId, input.page);
+
+  let corrections: OcrWordCorrectionsMap = {};
+  let acceptedIndices: number[] = [];
+
+  if (sourceCorrKey) {
+    const saved = await input.getSetting(sourceCorrKey, null) as OcrWordCorrectionsMap | null;
+    if (saved && typeof saved === 'object' && Object.keys(saved).length > 0) {
+      corrections = saved;
+    }
+  }
+
+  if (sourceAcceptedKey) {
+    const savedAcc = await input.getSetting(sourceAcceptedKey, null) as number[] | null;
+    if (Array.isArray(savedAcc) && savedAcc.length > 0) {
+      acceptedIndices = savedAcc;
+    }
+  }
+
+  // Migrate legacy book-keyed data ONLY if work has exactly one source
+  if (input.bookId && input.sourcesCount === 1) {
+    if (Object.keys(corrections).length === 0 && sourceCorrKey) {
+      const legCorrKey = legacyOcrCorrectionsKey(input.bookId, input.page);
+      if (legCorrKey) {
+        const legSaved = await input.getSetting(legCorrKey, null) as OcrWordCorrectionsMap | null;
+        if (legSaved && typeof legSaved === 'object' && Object.keys(legSaved).length > 0) {
+          corrections = legSaved;
+          await input.setSetting(sourceCorrKey, legSaved);
+        }
+      }
+    }
+
+    if (acceptedIndices.length === 0 && sourceAcceptedKey) {
+      const legAccKey = legacyOcrAcceptedKey(input.bookId, input.page);
+      if (legAccKey) {
+        const legAccSaved = await input.getSetting(legAccKey, null) as number[] | null;
+        if (Array.isArray(legAccSaved) && legAccSaved.length > 0) {
+          acceptedIndices = legAccSaved;
+          await input.setSetting(sourceAcceptedKey, legAccSaved);
+        }
+      }
+    }
+  }
+
+  return { corrections, acceptedIndices };
+}

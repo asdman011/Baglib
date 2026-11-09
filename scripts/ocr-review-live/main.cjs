@@ -218,6 +218,39 @@ app.on('browser-window-created', (_, owner) => {
     // Capture screenshot of edited state
     await shot('arabic-edited-persisted-1280');
 
+    // Test Re-OCR / engine switch with stale correction
+    console.log('[ocr-review-live] Testing re-OCR and stale correction non-misapplication');
+    await evaluate(`(async () => {
+      const sources = await window.electronAPI.pdfEditor?.sources?.('ocr-arabic-book') || [];
+      const srcKey = sources[0]?.id ? 'ocr.corrections.v1:' + sources[0].id + ':1' : 'ocr.corrections.v1:ocr-arabic-book:1';
+      const staleData = {
+        '0': { original: 'نص-قديم-غير-مطابق', corrected: 'تصحيح-خاطئ-يجب-عدم-تطبيقه', engine: 'ocrmypdf' }
+      };
+      await window.electronAPI.settings.set(srcKey, staleData);
+      await window.electronAPI.settings.set('ocr.corrections.v1:ocr-arabic-book:1', staleData);
+    })()`);
+    await pause(800);
+
+    // Re-trigger OCR recognition to verify word 0 is NOT replaced with stale text
+    await evaluate(`(() => {
+      const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('التعرف على النص') || b.textContent.includes('Recognize Page Text'));
+      if (btn) btn.click();
+    })()`);
+    await until("document.querySelectorAll('.ocr-word-node').length > 0", 250);
+    await pause(1200);
+
+    // Verify word 0 does NOT have the stale text
+    const firstWordText = await evaluate(`document.querySelector('.ocr-word-node')?.textContent`);
+    assert.ok(!firstWordText?.includes('تصحيح-خاطئ'), 'Stale correction must NOT be misapplied to mismatched word');
+    console.log('[ocr-review-live] Verified: stale correction was not misapplied to word 0:', firstWordText);
+
+    // Check that stale correction warning is visible in drawer
+    const hasStaleWarning = await evaluate(`[...document.querySelectorAll('aside[role=dialog] *')].some(el => el.textContent.includes('التعديل لم يعد يتطابق'))`);
+    assert.ok(hasStaleWarning, 'Stale correction warning must be visible in the review drawer');
+    console.log('[ocr-review-live] Verified: stale correction notice displayed in review drawer');
+
+    await shot('arabic-stale-correction-detected-1280');
+
     // ==========================================
     // 3. English LTR Flow
     // ==========================================

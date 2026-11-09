@@ -4,8 +4,14 @@ import {
   findOcrSuspects,
   detectHeuristicSuspectReason,
   applyWordCorrection,
+  applyStoredCorrections,
+  ocrCorrectionsKey,
+  ocrAcceptedKey,
+  legacyOcrCorrectionsKey,
+  legacyOcrAcceptedKey,
+  resolveAndMigratePageCorrections,
 } from '../../src/shared/ocr-suspects';
-import type { OcrWord } from '../../src/shared/types/ocr';
+import type { OcrPageResult, OcrWord } from '../../src/shared/types/ocr';
 
 describe('KEY-275 OCR Suspect Detection & Review Service', () => {
   it('identifies words below confidence threshold as score-based suspects', () => {
@@ -61,9 +67,6 @@ describe('KEY-275 OCR Suspect Detection & Review Service', () => {
   });
 
   it('sorts suspects by reading order: RTL (Arabic) vs LTR (English)', () => {
-    // Two lines, each with 2 words
-    // Line 1 (y: 20): right word (x: 200), left word (x: 50)
-    // Line 2 (y: 60): right word (x: 200), left word (x: 50)
     const words: OcrWord[] = [
       { text: 'line2-left', bbox: { x: 50, y: 60, width: 40, height: 20 }, confidence: 0.3 },
       { text: 'line1-left', bbox: { x: 50, y: 20, width: 40, height: 20 }, confidence: 0.4 },
@@ -71,7 +74,6 @@ describe('KEY-275 OCR Suspect Detection & Review Service', () => {
       { text: 'line1-right', bbox: { x: 200, y: 20, width: 40, height: 20 }, confidence: 0.5 },
     ];
 
-    // In RTL reading order: line 1 top-to-bottom, right-to-left -> line1-right, line1-left, line2-right, line2-left
     const rtlSuspects = findOcrSuspects(words, { isRtl: true });
     assert.deepEqual(rtlSuspects.map(s => s.word.text), [
       'line1-right',
@@ -80,7 +82,6 @@ describe('KEY-275 OCR Suspect Detection & Review Service', () => {
       'line2-left',
     ]);
 
-    // In LTR reading order: line 1 top-to-bottom, left-to-right -> line1-left, line1-right, line2-left, line2-right
     const ltrSuspects = findOcrSuspects(words, { isRtl: false });
     assert.deepEqual(ltrSuspects.map(s => s.word.text), [
       'line1-left',
@@ -95,17 +96,16 @@ describe('KEY-275 OCR Suspect Detection & Review Service', () => {
     const mockDictionary = new Set(['الحياة']);
 
     const isMatch = (word: string, dict: Set<string>) => {
-      // Strips tashkeel and punctuation, preserves original for display
       const normalized = word.replace(/[\u064b-\u065f\u0670\u0640]/gu, '').replace(/[^\p{L}\p{N}]/gu, '');
       return dict.has(normalized);
     };
 
     assert.equal(isMatch(rawWord, mockDictionary), true);
-    assert.equal(rawWord, 'الْحَيَاةُ؛'); // Unmodified
+    assert.equal(rawWord, 'الْحَيَاةُ؛');
   });
 
   it('applies word correction and produces updated page text and line text', () => {
-    const pageResult = {
+    const pageResult: OcrPageResult = {
       pageNumber: 1,
       text: 'وكان شهد بدراء وهو أحد',
       lines: [
@@ -130,7 +130,7 @@ describe('KEY-275 OCR Suspect Detection & Review Service', () => {
       ],
       width: 1000,
       height: 1400,
-      engine: 'ocrmypdf' as const,
+      engine: 'ocrmypdf',
       durationMs: 100,
     };
 
@@ -139,5 +139,162 @@ describe('KEY-275 OCR Suspect Detection & Review Service', () => {
     assert.equal(updated.lines[0].words[2].text, 'بدراً');
     assert.equal(updated.lines[0].text, 'وكان شهد بدراً وهو أحد');
     assert.equal(updated.text, 'وكان شهد بدراً وهو أحد');
+  });
+
+  const baseSamplePage: OcrPageResult = {
+    pageNumber: 1,
+    text: 'وكان شهد بدراء وهو أحد',
+    lines: [
+      {
+        text: 'وكان شهد بدراء وهو أحد',
+        bbox: { x: 100, y: 20, width: 200, height: 30 },
+        words: [
+          { text: 'وكان', bbox: { x: 250, y: 20, width: 40, height: 30 }, confidence: 0.9 },
+          { text: 'شهد', bbox: { x: 200, y: 20, width: 40, height: 30 }, confidence: 0.9 },
+          { text: 'بدراء', bbox: { x: 150, y: 20, width: 40, height: 30 }, confidence: 0.5 },
+          { text: 'وهو', bbox: { x: 120, y: 20, width: 25, height: 30 }, confidence: 0.9 },
+          { text: 'أحد', bbox: { x: 100, y: 20, width: 20, height: 30 }, confidence: 0.9 },
+        ],
+      },
+    ],
+    words: [
+      { text: 'وكان', bbox: { x: 250, y: 20, width: 40, height: 30 }, confidence: 0.9 },
+      { text: 'شهد', bbox: { x: 200, y: 20, width: 40, height: 30 }, confidence: 0.9 },
+      { text: 'بدراء', bbox: { x: 150, y: 20, width: 40, height: 30 }, confidence: 0.5 },
+      { text: 'وهو', bbox: { x: 120, y: 20, width: 25, height: 30 }, confidence: 0.9 },
+      { text: 'أحد', bbox: { x: 100, y: 20, width: 20, height: 30 }, confidence: 0.9 },
+    ],
+    width: 1000,
+    height: 1400,
+    engine: 'ocrmypdf',
+    durationMs: 100,
+  };
+
+  it('safely applies stored corrections on happy path matching original text and engine', () => {
+    const corrections = {
+      2: { original: 'بدراء', corrected: 'بدراً', engine: 'ocrmypdf' },
+    };
+
+    const res = applyStoredCorrections(baseSamplePage, corrections);
+    assert.equal(res.appliedCount, 1);
+    assert.equal(res.staleCorrections.length, 0);
+    assert.equal(res.patchedResult.words[2].text, 'بدراً');
+    assert.equal(res.patchedResult.text, 'وكان شهد بدراً وهو أحد');
+  });
+
+  it('rejects corrections when word text at index shifted (re-OCR shifted indices)', () => {
+    // Simulate re-OCR where an extra token inserted earlier shifted indices:
+    // Index 2 is now 'شهد', while saved correction expected 'بدراء' at index 2
+    const shiftedPage: OcrPageResult = {
+      ...baseSamplePage,
+      words: [
+        { text: 'قد', bbox: { x: 280, y: 20, width: 20, height: 30 }, confidence: 0.9 },
+        { text: 'وكان', bbox: { x: 250, y: 20, width: 40, height: 30 }, confidence: 0.9 },
+        { text: 'شهد', bbox: { x: 200, y: 20, width: 40, height: 30 }, confidence: 0.9 },
+        { text: 'بدراء', bbox: { x: 150, y: 20, width: 40, height: 30 }, confidence: 0.5 },
+      ],
+    };
+
+    const corrections = {
+      2: { original: 'بدراء', corrected: 'بدراً', engine: 'ocrmypdf' },
+    };
+
+    const res = applyStoredCorrections(shiftedPage, corrections);
+    assert.equal(res.appliedCount, 0);
+    assert.equal(res.staleCorrections.length, 1);
+    assert.equal(res.staleCorrections[0].reason, 'text-mismatch');
+    assert.equal(res.staleCorrections[0].original, 'بدراء');
+    assert.equal(res.staleCorrections[0].corrected, 'بدراً');
+    // Ensure word at index 2 ('شهد') was NOT overwritten
+    assert.equal(res.patchedResult.words[2].text, 'شهد');
+  });
+
+  it('rejects corrections when engine does not match (engine switch)', () => {
+    const corrections = {
+      2: { original: 'بدراء', corrected: 'بدراً', engine: 'paddleocr-vl' },
+    };
+
+    const res = applyStoredCorrections(baseSamplePage, corrections, 'ocrmypdf');
+    assert.equal(res.appliedCount, 0);
+    assert.equal(res.staleCorrections.length, 1);
+    assert.equal(res.staleCorrections[0].reason, 'engine-mismatch');
+    assert.equal(res.patchedResult.words[2].text, 'بدراء');
+  });
+
+  it('treats legacy shape Record<index, string> as stale and never applies blindly', () => {
+    const legacyCorrections = {
+      2: 'بدراً',
+    };
+
+    const res = applyStoredCorrections(baseSamplePage, legacyCorrections);
+    assert.equal(res.appliedCount, 0);
+    assert.equal(res.staleCorrections.length, 1);
+    assert.equal(res.staleCorrections[0].reason, 'legacy-shape');
+    assert.equal(res.staleCorrections[0].corrected, 'بدراً');
+    assert.equal(res.patchedResult.words[2].text, 'بدراء');
+  });
+
+  it('flags index out of bounds as stale when page word count decreased', () => {
+    const corrections = {
+      99: { original: 'غير-موجود', corrected: 'تصحيح', engine: 'ocrmypdf' },
+    };
+
+    const res = applyStoredCorrections(baseSamplePage, corrections);
+    assert.equal(res.appliedCount, 0);
+    assert.equal(res.staleCorrections.length, 1);
+    assert.equal(res.staleCorrections[0].reason, 'index-out-of-bounds');
+  });
+
+  it('formats storage keys correctly for source and legacy book keys', () => {
+    assert.equal(ocrCorrectionsKey('src-123', 5), 'ocr.corrections.v1:src-123:5');
+    assert.equal(ocrAcceptedKey('src-123', 5), 'ocr.accepted.v1:src-123:5');
+    assert.equal(legacyOcrCorrectionsKey('book-abc', 5), 'ocr.corrections.v1:book-abc:5');
+    assert.equal(legacyOcrAcceptedKey('book-abc', 5), 'ocr.accepted.v1:book-abc:5');
+    assert.equal(ocrCorrectionsKey(null, 5), null);
+  });
+
+  it('migrates legacy book-keyed data ONLY when work has exactly one source', async () => {
+    const store = new Map<string, unknown>();
+    store.set('ocr.corrections.v1:book-single:1', {
+      2: { original: 'بدراء', corrected: 'بدراً', engine: 'ocrmypdf' },
+    });
+    store.set('ocr.accepted.v1:book-single:1', [0, 1]);
+
+    const getSetting = async (k: string, def: unknown) => store.get(k) ?? def;
+    const setSetting = async (k: string, v: unknown) => { store.set(k, v); };
+
+    // Case 1: Exactly 1 source -> should migrate
+    const migrated = await resolveAndMigratePageCorrections({
+      sourceId: 'src-single',
+      bookId: 'book-single',
+      sourcesCount: 1,
+      page: 1,
+      getSetting,
+      setSetting,
+    });
+
+    assert.equal(Object.keys(migrated.corrections).length, 1);
+    assert.deepEqual(migrated.acceptedIndices, [0, 1]);
+    // Verifies it wrote to source key
+    assert.ok(store.has('ocr.corrections.v1:src-single:1'));
+    assert.ok(store.has('ocr.accepted.v1:src-single:1'));
+
+    // Case 2: Multi-source work (sourcesCount > 1) -> must NOT migrate book-keyed entries
+    const storeMulti = new Map<string, unknown>();
+    storeMulti.set('ocr.corrections.v1:book-multi:1', {
+      2: { original: 'بدراء', corrected: 'بدراً', engine: 'ocrmypdf' },
+    });
+    const multiRes = await resolveAndMigratePageCorrections({
+      sourceId: 'src-multi-2',
+      bookId: 'book-multi',
+      sourcesCount: 2,
+      page: 1,
+      getSetting: async (k: string, def: unknown) => storeMulti.get(k) ?? def,
+      setSetting: async (k: string, v: unknown) => { storeMulti.set(k, v); },
+    });
+
+    assert.equal(Object.keys(multiRes.corrections).length, 0);
+    assert.deepEqual(multiRes.acceptedIndices, []);
+    assert.equal(storeMulti.has('ocr.corrections.v1:src-multi-2:1'), false);
   });
 });

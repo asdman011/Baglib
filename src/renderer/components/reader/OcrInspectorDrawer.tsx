@@ -27,7 +27,17 @@ import {
   Sparkles,
   CheckCircle2,
 } from 'lucide-react';
-import { findOcrSuspects, applyWordCorrection, type OcrSuspect } from '../../../shared/ocr-suspects';
+import {
+  findOcrSuspects,
+  applyWordCorrection,
+  applyStoredCorrections,
+  ocrCorrectionsKey,
+  ocrAcceptedKey,
+  resolveAndMigratePageCorrections,
+  type OcrSuspect,
+  type OcrWordCorrectionsMap,
+  type StaleCorrectionInfo,
+} from '../../../shared/ocr-suspects';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { OcrCompare } from './OcrCompare';
 import type { OcrEngineId, OcrPageResult, OcrWord, OcrEngineInfo } from '../../../shared/types/ocr';
@@ -38,7 +48,9 @@ interface OcrInspectorDrawerProps {
   onClose: () => void;
   pageResult: OcrPageResult | null;
   readingPage: number;
+  sourceId?: string | null;
   bookId?: string;
+  sourcesCount?: number;
   isOcrRunning?: boolean;
   onRunOcrPage?: () => void;
   showBoundingBoxes?: boolean;
@@ -57,7 +69,9 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
   onClose,
   pageResult,
   readingPage,
+  sourceId,
   bookId,
+  sourcesCount = 1,
   isOcrRunning = false,
   onRunOcrPage,
   showBoundingBoxes = false,
@@ -78,8 +92,11 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editText, setEditText] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [savedCorrections, setSavedCorrections] = useState<OcrWordCorrectionsMap>({});
+  const [staleCorrections, setStaleCorrections] = useState<StaleCorrectionInfo[]>([]);
   const cropCanvasRef = React.useRef<HTMLCanvasElement>(null);
   const editInputRef = React.useRef<HTMLInputElement>(null);
+  const effectiveSourceKey = sourceId || bookId || null;
   const [markdownView, setMarkdownView] = useState<'preview' | 'raw'>('preview');
   const [copied, setCopied] = useState<boolean>(false);
   const [copiedTableIdx, setCopiedTableIdx] = useState<number | null>(null);
@@ -118,16 +135,27 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
     }
   };
 
-  // Load saved accepted indices and corrections for this page
+  // Load saved accepted indices and corrections for this page (keyed by source with safe book fallback)
   React.useEffect(() => {
-    if (!bookId || !window.electronAPI?.settings?.get) return;
+    if (!effectiveSourceKey || !window.electronAPI?.settings?.get) return;
     let mounted = true;
     (async () => {
       try {
-        const key = `ocr.accepted.v1:${bookId}:${readingPage}`;
-        const saved = await window.electronAPI.settings.get(key, []) as number[];
-        if (mounted && Array.isArray(saved)) {
-          setAcceptedIndices(new Set(saved));
+        const { corrections, acceptedIndices: acc } = await resolveAndMigratePageCorrections({
+          sourceId: effectiveSourceKey,
+          bookId,
+          sourcesCount,
+          page: readingPage,
+          getSetting: window.electronAPI.settings.get,
+          setSetting: window.electronAPI.settings.set,
+        });
+        if (mounted) {
+          setSavedCorrections(corrections);
+          setAcceptedIndices(new Set(acc));
+          if (pageResult) {
+            const check = applyStoredCorrections(pageResult, corrections, selectedEngine);
+            setStaleCorrections(check.staleCorrections);
+          }
         }
       } catch (err) {
         console.warn('Failed to load accepted suspects:', err);
@@ -136,7 +164,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
     return () => {
       mounted = false;
     };
-  }, [bookId, readingPage]);
+  }, [effectiveSourceKey, bookId, sourcesCount, readingPage, pageResult, selectedEngine]);
 
   // Compute suspects ordered by reading order
   const pageWords = pageResult?.words;
@@ -248,14 +276,60 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
     setCurrentSuspectIndex((prev) => (prev - 1 + activeSuspects.length) % activeSuspects.length);
   };
 
+  const handleDiscardStaleCorrection = async (staleIdx: number) => {
+    const nextCorr = { ...savedCorrections };
+    delete nextCorr[String(staleIdx)];
+    setSavedCorrections(nextCorr);
+    setStaleCorrections(prev => prev.filter(s => s.index !== staleIdx));
+
+    if (effectiveSourceKey && window.electronAPI?.settings?.set) {
+      const corrKey = ocrCorrectionsKey(effectiveSourceKey, readingPage);
+      if (corrKey) {
+        await window.electronAPI.settings.set(corrKey, nextCorr).catch(() => {});
+      }
+    }
+  };
+
+  const handleReapplyStaleCorrection = async (stale: StaleCorrectionInfo) => {
+    if (activeWordIndex === null || !pageResult?.words?.[activeWordIndex]) return;
+    const targetWord = pageResult.words[activeWordIndex];
+
+    const updated = applyWordCorrection(pageResult, activeWordIndex, stale.corrected);
+    onUpdatePageResult?.(updated);
+
+    const nextCorr: OcrWordCorrectionsMap = { ...savedCorrections };
+    delete nextCorr[String(stale.index)];
+    nextCorr[String(activeWordIndex)] = {
+      original: targetWord.text,
+      corrected: stale.corrected,
+      engine: selectedEngine,
+          };
+
+    setSavedCorrections(nextCorr);
+    setStaleCorrections(prev => prev.filter(s => s.index !== stale.index));
+
+    if (effectiveSourceKey && window.electronAPI?.settings?.set) {
+      const corrKey = ocrCorrectionsKey(effectiveSourceKey, readingPage);
+      if (corrKey) {
+        await window.electronAPI.settings.set(corrKey, nextCorr).catch(() => {});
+      }
+    }
+
+    setToastMessage(t('ocrWordCorrectedToast'));
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
   const handleAcceptSuspect = async () => {
     if (!currentSuspect) return;
     const wordIdx = currentSuspect.originalIndex;
     setAcceptedIndices((prev) => {
       const next = new Set(prev);
       next.add(wordIdx);
-      if (bookId && window.electronAPI?.settings?.set) {
-        window.electronAPI.settings.set(`ocr.accepted.v1:${bookId}:${readingPage}`, Array.from(next)).catch(() => {});
+      if (effectiveSourceKey && window.electronAPI?.settings?.set) {
+        const accKey = ocrAcceptedKey(effectiveSourceKey, readingPage);
+        if (accKey) {
+          window.electronAPI.settings.set(accKey, Array.from(next)).catch(() => {});
+        }
       }
       return next;
     });
@@ -268,15 +342,25 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
   const handleSaveEdit = async () => {
     if (!currentSuspect || !pageResult || !editText.trim()) return;
     const trimmed = editText.trim();
-    const updated = applyWordCorrection(pageResult, currentSuspect.originalIndex, trimmed);
+    const wordIdx = currentSuspect.originalIndex;
+    const updated = applyWordCorrection(pageResult, wordIdx, trimmed);
     onUpdatePageResult?.(updated);
 
-    if (bookId && window.electronAPI?.settings) {
+    if (effectiveSourceKey && window.electronAPI?.settings) {
       try {
-        const corrKey = `ocr.corrections.v1:${bookId}:${readingPage}`;
-        const existing = (await window.electronAPI.settings.get(corrKey, {})) as Record<string, string>;
-        existing[String(currentSuspect.originalIndex)] = trimmed;
-        await window.electronAPI.settings.set(corrKey, existing);
+        const corrKey = ocrCorrectionsKey(effectiveSourceKey, readingPage);
+        if (corrKey) {
+          const nextCorr: OcrWordCorrectionsMap = {
+            ...savedCorrections,
+            [String(wordIdx)]: {
+              original: currentSuspect.word.text,
+              corrected: trimmed,
+              engine: selectedEngine,
+                          },
+          };
+          setSavedCorrections(nextCorr);
+          await window.electronAPI.settings.set(corrKey, nextCorr);
+        }
       } catch (err) {
         console.warn('Failed to save correction:', err);
       }
@@ -917,6 +1001,55 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                   <div className="p-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
                     <span>{toastMessage}</span>
+                  </div>
+                )}
+
+                {/* Stale Corrections Warning & Resolution */}
+                {staleCorrections.length > 0 && (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>{t('ocrCorrectionNoLongerMatches')}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {staleCorrections.map((stale) => (
+                        <div
+                          key={`stale-${stale.index}`}
+                          className="flex flex-col gap-1.5 rounded-lg border border-amber-500/20 bg-surface/90 p-2.5 text-xs"
+                        >
+                          <div className="flex items-center justify-between text-[11px] text-muted">
+                            {stale.original ? (
+                              <span>{t('ocrStaleOriginal').replace('{text}', stale.original)}</span>
+                            ) : null}
+                            <span className="font-semibold text-main">
+                              {t('ocrStaleCorrected').replace('{text}', stale.corrected)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-subtle/40">
+                            {activeWordIndex !== null && pageResult?.words?.[activeWordIndex] ? (
+                              <button
+                                type="button"
+                                onClick={() => handleReapplyStaleCorrection(stale)}
+                                className="px-2 py-1 rounded-md text-[11px] font-bold bg-amber-500/20 text-amber-900 dark:text-amber-200 hover:bg-amber-500/30 transition-colors cursor-pointer"
+                              >
+                                {t('ocrReapplyCorrection')}
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-muted italic">
+                                {"(Select word to re-apply)"}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDiscardStaleCorrection(stale.index)}
+                              className="px-2 py-1 rounded-md text-[11px] font-semibold text-red-600 hover:bg-red-500/10 transition-colors cursor-pointer"
+                            >
+                              {t('ocrDiscardStaleCorrection')}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

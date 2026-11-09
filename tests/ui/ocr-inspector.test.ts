@@ -208,6 +208,11 @@ describe('PaddleOCR-VL-1.6 Visual Layout & Inspector UI Tests', () => {
       'ocrNoSuspectsNotice',
       'ocrAllSuspectsReviewed',
       'ocrWordCorrectedToast',
+      'ocrCorrectionNoLongerMatches',
+      'ocrStaleOriginal',
+      'ocrStaleCorrected',
+      'ocrDiscardStaleCorrection',
+      'ocrReapplyCorrection',
     ] as const;
 
     for (const lang of ['ar', 'en'] as const) {

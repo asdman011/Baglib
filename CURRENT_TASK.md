@@ -1,12 +1,17 @@
-## KEY-275: Reader Task 8.3: Review uncertain OCR words — 2026-11-09, Antigravity (completed & verified)
+## KEY-275: Reader Task 8.3: Review uncertain OCR words — 2026-11-09, Antigravity (review fixes verified)
 
 - **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
-- **Implemented & Verified**:
+- **Implemented & Verified (including Review Fixes)**:
   - **Step 0 Investigation (`docs/features/feature - OCR Word Review.md`)**: Verified Tesseract 5 / OCRmyPDF exports per-word confidence (`x_wconf`, 0.0–1.0) into `OcrWord.confidence` matching text layer bounding boxes. Verified that PaddleOCR-VL and Windows OCR lack confidence scores and formulated heuristic detection for confidence-absent engines.
   - **OCR Suspect Detection & Reading Order (`src/shared/ocr-suspects.ts`, `tests/services/ocr-suspects.test.ts`)**: Implemented threshold-based suspect detection (default < 60%) where scores exist, and clearly labelled heuristic suspect detection (mixed scripts, invalid characters, isolated invalid Arabic particles, dictionary misses) where scores are absent. Implemented reading-order sorting by grouping bounding boxes into horizontal lines and ordering right-to-left for Arabic RTL and left-to-right for English LTR.
   - **Suspect Review Mode (`src/renderer/components/reader/OcrInspectorDrawer.tsx`)**: Added `'review'` tab to the OCR Inspector drawer with live suspect count badge (`Review Suspects ({count})` / `مراجعة المشتبهات ({count})`), threshold slider (10% to 90%), live canvas crop of the suspect word image with golden focus border, metadata indicator (confidence % or heuristic reason), inline word editing (with Save and Cancel), and Accept (A), Edit (E), Skip (S), Next (Enter / J / N), and Previous (K / P) buttons and keyboard shortcuts protected by a shared input typing guard.
-  - **Persistent Word Corrections (`src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/reader/OcrTextOverlay.tsx`)**: Reused existing SQLite `app_settings` via `window.electronAPI.settings` under keys `ocr.corrections.v1:<bookId>:<page>` and `ocr.accepted.v1:<bookId>:<page>` with **zero database schema changes**. On page change or book reopen, saved corrections are overlaid onto the text layer, and accepted words do not reappear as suspects. Zero changes are made to the original PDF until explicit user save (ADR-012 Safe Save compliance).
-  - **Bilingual & Layout Verification**: 21 centralized translation keys in Arabic and English in `src/renderer/translations.ts`. Verified in Arabic (RTL) and English (LTR) at 1280 px and 480 px.
+  - **Source-Keyed Persistent Word Corrections & Engine Safety (`src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/reader/OcrInspectorDrawer.tsx`)**:
+    - Reused existing SQLite `app_settings` via `window.electronAPI.settings` under source keys `ocr.corrections.v1:<sourceId>:<page>` and `ocr.accepted.v1:<sourceId>:<page>` with **zero schema changes** and **zero modifications to original PDF files** (ADR-012 Safe Save compliance).
+    - Stored format: `{ [index]: { original, corrected, engine } }`. Applied only when target word matches `original` and active `engine`. Stale corrections (from re-OCR index shifts or engine switch) are flagged with *"Correction no longer matches this OCR"* / *"التعديل لم يعد يتطابق مع هذا التعرف الضوئي"*, with Discard and Re-apply options. Legacy string shapes are safely quarantined as stale.
+    - Legacy book-keyed entries (`ocr.corrections.v1:<bookId>:<page>`) are migrated only when the work has exactly one source (`sourcesCount === 1`).
+  - **Empirical Ground-Truth Precision & Recall Benchmark (`.baglib-data/ocr-benchmark/`)**: Evaluated on 894 words from Bukhari hadith benchmark passages using Tesseract 5 (`ara`): 196 errors, 242 suspects flagged, 148 True Positives, 84 False Positives, 48 False Negatives -> **Precision: 63.8%**, **Recall: 75.5%**, **F1 Score: 69.2%**.
+  - **Documentation Correction (`docs/features/feature - OCR Word Review.md`)**: Corrected doc to reflect that corrections live in the reader's runtime text layer and `app_settings` only; they are not yet written into physical PDF streams or indexed into SQLite FTS.
+  - **Bilingual & Layout Verification**: 26 centralized translation keys in Arabic and English in `src/renderer/translations.ts`. Verified in Arabic (RTL) and English (LTR) at 1280 px and 480 px.
 - **Exact Files Changed (12 files; shared files KEY-275 hunks only)**:
   - `docs/features/feature - OCR Word Review.md`
   - `src/shared/ocr-suspects.ts`
@@ -21,10 +26,10 @@
   - `CURRENT_TASK.md` (KEY-275 entry only)
   - `IMPLEMENTATION_PLAN.md` (KEY-275 bullet only)
 - **Verification**:
-  - Unit tests: `tests/services/ocr-suspects.test.ts` (6/6 passed), `tests/ui/ocr-inspector.test.ts` (7/7 passed).
-  - Full test suite: `npm test` → **1469 tests passed, 0 failures** across 300 suites.
-  - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (success in 140ms), `git diff --check` (0 errors).
-  - Live harness: `scripts/ocr-review-live/run.mjs` executed real Arabic scanned PDF (`تفسير الموعذتين لابن تيمية.pdf`) and English PDF (`New Scientist 2016`), verified 16 Arabic suspects and 8 English suspects in reading order, tested live word correction (`تصحيح-اختباري`), verified persistence, and captured inspected screenshots in `.baglib-data/key275-evidence/`.
+  - Unit tests: `tests/services/ocr-suspects.test.ts` (13/13 passed), `tests/ui/ocr-inspector.test.ts` (7/7 passed).
+  - Full test suite: `npm test` → **1476 tests passed, 0 failures** across 300 suites.
+  - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (success in 181ms), `git diff --check` (0 errors).
+  - Live harness: `scripts/ocr-review-live/run.mjs` executed real Arabic scanned PDF (`تفسير الموعذتين لابن تيمية.pdf`) and English PDF (`New Scientist 2016`), verified 16 Arabic suspects and 8 English suspects in reading order, tested live word correction (`تصحيح-اختباري`), verified persistence, verified that re-OCR does NOT misapply stale corrections to shifted words, and captured inspected screenshots in `.baglib-data/key275-evidence/`.
 
 ## KEY-276 ? 2026-11-09, Codex (active)
 

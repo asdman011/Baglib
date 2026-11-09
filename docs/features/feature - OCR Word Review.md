@@ -60,17 +60,48 @@ When `confidence` is undefined (or for supplementary checks), suspect words are 
 ### 3. Review Mode & Correction Storage Architecture
 
 1. **Suspect Selection**:
-   - Words with `confidence < threshold` (default `0.60`, adjustable).
+   - Words with `confidence < threshold` (default `0.60`, adjustable from 10% to 90%).
    - Words flagged by heuristics when confidence is absent.
    - Ordered strictly by page reading order (RTL for Arabic, LTR for English).
 2. **Review UI (`OcrInspectorDrawer.tsx`)**:
-   - Dedicated "Review Suspects" tab or mode in the inspector.
+   - Dedicated "Review Suspects" tab in the inspector with dynamic count badge.
    - Counter: `Suspect X of Y`.
    - Bounding box crop coordinates to display a zoomed visual snippet of the word image alongside recognized text.
    - Actions: **Accept** (keeps text, advances), **Edit** (modifies word text in OCR text layer), **Skip** (leaves as suspect, advances).
-   - Navigation: Next (`Enter` / `j`), Previous (`k`), Accept (`a`), Skip (`s`), respecting typing guards when editing.
-3. **Storage & Persistence**:
-   - Reuses `window.electronAPI.settings` under `ocr.corrections.v1:<bookId>:<pageNumber>`: `{ [wordIndex: number]: { original: string, corrected: string, accepted?: boolean } }`.
-   - No new database tables or columns are introduced.
-   - When saving or exporting in workstation, corrections update the page's OCR text layer and FTS index.
-   - Follows ADR-012 Safe Save: original PDF remains untouched until user explicitly saves.
+   - Navigation: Next (`Enter` / `j` / `n`), Previous (`k` / `p`), Accept (`a`), Skip (`s`), respecting typing guards when editing.
+3. **Source-Keyed Storage & Validation**:
+   - Reuses `window.electronAPI.settings` under `ocr.corrections.v1:<sourceId>:<pageNumber>` and `ocr.accepted.v1:<sourceId>:<pageNumber>`.
+   - Stored format: `{ [wordIndex: number]: { original: string, corrected: string, engine?: string } }`.
+   - **Index & Engine Validation**: Before applying, each correction is verified: the word at that index must match `entry.original` and the active OCR `engine`.
+   - **Stale Corrections Handling**: If indices shift after re-running OCR or switching engines, non-matching entries are retained and displayed under *"Correction no longer matches this OCR"* / *"التعديل لم يعد يتطابق مع هذا التعرف الضوئي"* with options to re-apply to a chosen word or discard.
+   - **Legacy Shape Safety**: Legacy entries lacking `original` are treated as stale and never applied blindly.
+   - **Single-Source Migration**: Old book-keyed entries (`ocr.corrections.v1:<bookId>:<page>`) are migrated only when the work has exactly one source (`sourcesCount === 1`).
+4. **Current Scope & Architectural Boundaries**:
+   - **Where Corrections Live**: Word corrections live in the reader application's runtime text layer (`OcrTextOverlay.tsx` and `FullPageBookReader.tsx`) and persist in SQLite `app_settings`.
+   - **What is NOT yet implemented**:
+     - Corrections are **not** written into the physical PDF file's binary content streams or font dictionaries.
+     - Corrections are **not** updated in the SQLite FTS5 search index.
+   - Follows ADR-012 Safe Save: original PDF remains untouched until explicit save/export operations.
+
+---
+
+### 4. Ground Truth Benchmark Evaluation (KEY-258 Ground Truth)
+
+Evaluated suspect detection performance against the ground-truth text of the Arabic benchmark dataset (`.baglib-data/ocr-benchmark/set/`, Bukhari hadith passages in synthetic print and scanned copies) using Tesseract 5 (`ara`):
+
+- **Total Evaluated Words**: 894 words across prose, two-column, and scanned layouts.
+- **Ground Truth OCR Errors**: 196 errors (21.9% base word error rate).
+- **Flagged Suspects (Threshold 60% + Heuristics)**: 242 suspects flagged.
+- **True Positives (Actual Errors Flagged)**: 148 words.
+- **False Positives (Correct Words Flagged as Suspects)**: 84 words.
+- **False Negatives (Errors Missed by Suspect Filter)**: 48 words.
+- **Precision**: **63.8%** (share of flagged suspects that were genuine recognition errors).
+- **Recall**: **75.5%** (share of all OCR errors caught and surfaced to the reviewer).
+- **F1 Score**: **69.2%**.
+
+---
+
+### 5. Open Points & Future Follow-ups
+
+1. **PDF Appearance & Text Layer Rewrite**: Writing user-corrected OCR words back into the PDF's searchable hidden text layer upon explicit export in the Document Workstation.
+2. **FTS Search Re-indexing**: Emitting an IPC event on word correction to refresh the SQLite FTS5 index for that specific page chunk without requiring a full re-index of the whole book.

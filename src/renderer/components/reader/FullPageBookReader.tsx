@@ -120,7 +120,11 @@ import {
 import { useReaderPanels } from './useReaderPanels';
 import { PdfWorkstationPanel } from './PdfWorkstationPanel';
 import { OcrInspectorDrawer } from './OcrInspectorDrawer';
-import { applyWordCorrection } from '../../../shared/ocr-suspects';
+import {
+  applyWordCorrection,
+  applyStoredCorrections,
+  resolveAndMigratePageCorrections,
+} from '../../../shared/ocr-suspects';
 import { OcrQuickActionPill } from './OcrQuickActionPill';
 import { OcrPageOverlay } from './OcrPageOverlay';
 import { ocrEngineName, ocrFallbackMessage } from './ocr-status';
@@ -168,6 +172,39 @@ export const FullPageBookReader: React.FC = () => {
   useEffect(() => window.electronAPI?.pdfEditor?.onSourceChanged(source => {
     if (source.workId === activeBook?.id) setPdfSourceRevision(previous => previous + 1);
   }), [activeBook?.id]);
+
+  const [currentSourceId, setCurrentSourceId] = useState<string | null>(null);
+  const [sourcesCount, setSourcesCount] = useState<number>(1);
+
+  // Resolve open source id and count for current active book
+  useEffect(() => {
+    let alive = true;
+    if (!activeBook?.id || !window.electronAPI?.pdfEditor?.sources) {
+      return () => { alive = false; };
+    }
+    window.electronAPI.pdfEditor.sources(activeBook.id)
+      .then((sources: { id: string; filename: string }[]) => {
+        if (!alive || !Array.isArray(sources)) return;
+        setSourcesCount(sources.length);
+        if (sources.length > 0) {
+          const activeName = activeBook.filePath ? activeBook.filePath.split(/[/\\]/).pop() : null;
+          const matched = activeName ? sources.find(s => s.filename === activeName) : null;
+          setCurrentSourceId(matched?.id || sources[0].id);
+        } else {
+          setCurrentSourceId(null);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to resolve book sources:', err);
+        if (alive) {
+          setCurrentSourceId(null);
+          setSourcesCount(1);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [activeBook?.id, activeBook?.filePath, pdfSourceRevision]);
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(1);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
 
@@ -1310,7 +1347,7 @@ export const FullPageBookReader: React.FC = () => {
     return [];
   }, [paginatedPages, extractedPages, ocrPages]);
 
-  // Load persistent OCR word corrections for the current page and book
+  // Load persistent OCR word corrections for the current page and source
   useEffect(() => {
     const currentPageResult = ocrPages.get(readingPage);
     if (!currentPageResult || !activeBook?.id || !window.electronAPI?.settings?.get) return;
@@ -1318,31 +1355,31 @@ export const FullPageBookReader: React.FC = () => {
     let mounted = true;
     (async () => {
       try {
-        const corrKey = `ocr.corrections.v1:${activeBook.id}:${readingPage}`;
-        const saved = (await window.electronAPI.settings.get(corrKey, null)) as Record<string, string> | null;
-        if (!saved || Object.keys(saved).length === 0 || !mounted) return;
+        const effectiveKey = currentSourceId || (sourcesCount === 1 ? activeBook.id : null);
+        if (!effectiveKey) return;
 
-        let needsUpdate = false;
-        for (const [idxStr, text] of Object.entries(saved)) {
-          const idx = Number(idxStr);
-          if (currentPageResult.words?.[idx] && currentPageResult.words[idx].text !== text) {
-            needsUpdate = true;
-            break;
-          }
-        }
+        const { corrections } = await resolveAndMigratePageCorrections({
+          sourceId: effectiveKey,
+          bookId: activeBook.id,
+          sourcesCount,
+          page: readingPage,
+          getSetting: window.electronAPI.settings.get,
+          setSetting: window.electronAPI.settings.set,
+        });
 
-        if (needsUpdate && mounted) {
-          let patched = currentPageResult;
-          for (const [idxStr, text] of Object.entries(saved)) {
-            patched = applyWordCorrection(patched, Number(idxStr), text);
+        if (!mounted || Object.keys(corrections).length === 0) return;
+
+        const { patchedResult, appliedCount } = applyStoredCorrections(currentPageResult, corrections, ocrEngine);
+        if (appliedCount > 0 && mounted) {
+          if (patchedResult.text !== currentPageResult.text) {
+            setOcrPages((prev) => new Map(prev).set(readingPage, patchedResult));
+            setExtractedPages((prev) => {
+              const next = [...prev];
+              while (next.length < readingPage) next.push('');
+              next[readingPage - 1] = patchedResult.text;
+              return next;
+            });
           }
-          setOcrPages((prev) => new Map(prev).set(readingPage, patched));
-          setExtractedPages((prev) => {
-            const next = [...prev];
-            while (next.length < readingPage) next.push('');
-            next[readingPage - 1] = patched.text;
-            return next;
-          });
         }
       } catch (err) {
         console.warn('Failed to load persistent OCR corrections:', err);
@@ -1352,7 +1389,7 @@ export const FullPageBookReader: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [activeBook?.id, readingPage, ocrPages]);
+  }, [activeBook?.id, currentSourceId, sourcesCount, readingPage, ocrPages, ocrEngine]);
 
   // Single-key markup shortcuts for the PDF workstation: H keeps the highlighter on, 1-5 pick a colour, ? lists shortcuts.
   useEffect(() => {
@@ -3525,7 +3562,9 @@ export const FullPageBookReader: React.FC = () => {
           }}
           pageResult={ocrPages.get(readingPage) || null}
           readingPage={readingPage}
+          sourceId={currentSourceId}
           bookId={activeBook?.id}
+          sourcesCount={sourcesCount}
           isOcrRunning={isOcrRunning}
           onRunOcrPage={() => handleRunOcrPage(readingPage)}
           showBoundingBoxes={showOcrDebug}

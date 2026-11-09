@@ -3865,6 +3865,11 @@ export const translations = {
     ocrNoSuspectsNotice: 'لا توجد كلمات غير مؤكدة في هذه الصفحة عند العتبة الحالية ({threshold}%).',
     ocrAllSuspectsReviewed: 'تمت مراجعة جميع الكلمات غير المؤكدة في هذه الصفحة!',
     ocrWordCorrectedToast: 'تم تعديل الكلمة بنجاح',
+    ocrCorrectionNoLongerMatches: 'التعديل لم يعد يتطابق مع هذا التعرف الضوئي',
+    ocrStaleOriginal: 'النص الأصلي: "{text}"',
+    ocrStaleCorrected: 'التعديل: "{text}"',
+    ocrDiscardStaleCorrection: 'تجاهل',
+    ocrReapplyCorrection: 'تطبيق على الكلمة المحددة',
   },
   en: {
     syncSaveSettings: 'Save settings locally',
@@ -7732,6 +7737,11 @@ export const translations = {
     ocrNoSuspectsNotice: 'No suspect words found on this page at current threshold ({threshold}%).',
     ocrAllSuspectsReviewed: 'All suspect words on this page have been reviewed!',
     ocrWordCorrectedToast: 'Word corrected successfully',
+    ocrCorrectionNoLongerMatches: 'Correction no longer matches this OCR',
+    ocrStaleOriginal: 'Original: "{text}"',
+    ocrStaleCorrected: 'Corrected: "{text}"',
+    ocrDiscardStaleCorrection: 'Discard',
+    ocrReapplyCorrection: 'Apply to selected word',
   }
 };
 
