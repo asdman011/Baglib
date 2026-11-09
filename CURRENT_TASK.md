@@ -1,3 +1,34 @@
+## KEY-280 — 2026-11-09, Codex (implemented and verified, publication pending)
+
+- [2026-11-09, Codex] KEY-280 implemented and verified, session 01a1c17c-63d5-7692-b7fa-bdd24024c88e. PDF/EPUB selection Explain, Practice and Review later; precise source/page and source/CFI links; question editor source seeding; saved-card/SRS reopening; CFI practice evidence. Shared full suite 1579/1579, TypeScript, main build and diff check pass. Scoped lint 0 errors, 61 existing warnings. Six focused regressions pass within the full suite. Native Arabic k280-jU19R6 and English k280-0sEETc pass at1280/480 with real ar/en PDFs, small real EPUB and scanned Arabic PDF. Nine screenshots inspected. Real EPUB is English under both UIs because the manifest has English EPUBs. Explain uses bounded reader-selected evidence; file-derived extraction/verification is KEY-282. PdfNativeViewer, KEY-272/288, quran-navigation and README changes excluded. Explicit task-only commit/push to origin/feature/library-domain authorized, publication pending. Jira/review delegated to Claude; stop after publication.
+
+- Experience. Selecting PDF or EPUB text reveals three persistent study buttons. Explain opens the existing assistant with the passage, source citation and localized prompt. Practice opens the existing question editor pre-filled as recall. Review later saves an empty-back card and makes it due in SRS. Saved cards and SRS review open the precise source passage. Arabic RTL and English LTR controls wrap at480px, use loose line height and receive keyboard focus without hovering.
+- Evidence. Arabic ar-checks.json in .baglib-data/k280-jU19R6/evidence and English en-checks.json/result.json in .baglib-data/k280-0sEETc/evidence. Each language passed six format/width cases and two scanned-page cases. Each format/width case authors a numeric question, double-submits safely, creates one review card, reopens both source paths and records one automatically checked correct answer. Native profiles removed by the completed harnesses. Earlier failures concern native Enter char delivery, text-layer readiness, background throttling and the CFI attempt validator, which now has a regression test.
+- Limits. The CFI parser accepts BagLib's existing adapter subset of section/range offsets. The real EPUB corpus has English files only. Explain hands off reader-selected evidence under the existing provider/remote-consent rules. Independently file-derived citation validation is scoped to KEY-282. Native throwaway dashboards emitted existing missing-layout warnings for absent Mushaf layout data. Original document files were opened read-only. Existing lint warnings belong to the legacy reader/menu.
+- Documentation. Updated feature - Study Workspace.md and feature - Source-Precise Study Links.md. Detailed local report docs/agent-ops/reports/KEY-280.md.
+- Exact task files/hunks follow.
+- `src/main/ipc/study-assistant.ts`
+- `src/shared/practice.ts`
+- `src/renderer/components/knowledge/QuestionCardEditor.tsx`
+- `src/renderer/components/knowledge/SavedCardsPanel.tsx`
+- `src/renderer/components/knowledge/SrsReviewPanel.tsx`
+- `src/renderer/components/notes/StudyAssistant.tsx`
+- `src/renderer/components/reader/FullPageBookReader.tsx`
+- `src/renderer/components/reader/ZenSelectionMenu.tsx`
+- `src/renderer/translations.ts`
+- `src/renderer/utils/study-navigation.ts`
+- `src/shared/study-assistant.ts`
+- `src/shared/study-notes.ts`
+- `src/renderer/libs/reader/epub-study-location.ts`
+- `src/shared/reader-study-selection.ts`
+- `tests/services/reader-study-selection.test.ts`
+- `scripts/reader-study-live/main.cjs`
+- `scripts/reader-study-live/run.mjs`
+- `docs/features/feature - Study Workspace.md`
+- `docs/features/feature - Source-Precise Study Links.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
 ## KEY-288 — 2026-11-09, Antigravity (implemented and verified; publication pending)
 
 - Implementation & Verification: Study Workspace 10: Curriculum prerequisites and "revisit first" hints.

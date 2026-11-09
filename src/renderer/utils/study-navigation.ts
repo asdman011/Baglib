@@ -6,6 +6,13 @@ import { openPoetryReference } from './poetry-navigation';
 import { openLecture } from './lecture-navigation';
 export const STUDY_NOTE_OPEN = 'baglib:study-note-open';
 let pendingNote: { id?: string; content?: string; anchor?: string } | null = null;
+let pendingCfi: { workId: string; cfi: string } | null = null;
+export function consumePendingCfi(workId: string): string | null {
+  if (!pendingCfi || pendingCfi.workId !== workId) return null;
+  const cfi = pendingCfi.cfi;
+  pendingCfi = null;
+  return cfi;
+}
 let pendingPage: { workId: string; page: number } | null = null;
 /** The page a `book:<id>#p=N` link asked for; read once by the reader when that book opens. */
 export function consumePendingPage(workId: string): number | null {
@@ -37,6 +44,7 @@ export async function navigateStudyReference(target: string, books: BookItem[], 
       if (sourceBook) book = sourceBook;
       else window.dispatchEvent(new CustomEvent('baglib:study-source-missing'));
     }
+    pendingCfi = parsed.cfi ? { workId: book.id, cfi: parsed.cfi } : null;
     pendingPage = parsed.page ? { workId: book.id, page: parsed.page } : null;
     onBook({ ...book }); return;
   }

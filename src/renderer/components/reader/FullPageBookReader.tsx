@@ -81,8 +81,14 @@ import {
   extractMarkPage,
   isEpubLocation,
 } from '../../../shared/epub-marks';
-import { bookStudyTarget } from '../../../shared/study-notes';
-import { consumePendingPage } from '../../utils/study-navigation';
+import { QuestionCardEditor } from '../knowledge/QuestionCardEditor';
+import { StudyAssistant } from '../notes/StudyAssistant';
+import { readerSelectionCard, type ReaderStudySource } from '../../../shared/reader-study-selection';
+import type { SaveCardInput } from '../../../shared/types/knowledge-cards';
+import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
+import { selectionStudyLocation, resolveStudyCfi, revealStudyRange } from '../../libs/reader/epub-study-location';
+import { bookCfiTarget, bookStudyTarget } from '../../../shared/study-notes';
+import { consumePendingPage, consumePendingCfi } from '../../utils/study-navigation';
 import { markHistoryShortcut, readerShortcut } from '../../libs/reader/reader-shortcuts';
 import { ZenSelectionMenu } from './ZenSelectionMenu';
 import { ZenKnowledgeDrawer } from './ZenKnowledgeDrawer';
@@ -182,6 +188,10 @@ const SourceBookReader: React.FC = () => {
   const isDocumentPanelOpen = panels.activePanel === 'document';
   const setIsDocumentPanelOpen = panels.setters.document;
   const [selectedText, setSelectedText] = useState('');
+  const [studySource, setStudySource] = useState<ReaderStudySource | null>(null);
+  const [studyDraft, setStudyDraft] = useState<SaveCardInput | null>(null);
+  const reviewSaving = useRef(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
   const [activeRange, setActiveRange] = useState<Range | null>(null);
   const [newNoteText, setNewNoteText] = useState('');
   const [filterMode, setFilterMode] = useState<'current_page' | 'all_pages'>('current_page');
@@ -782,12 +792,14 @@ const SourceBookReader: React.FC = () => {
   // Full Screen-Reader Accessible Keyboard Navigation & Physics
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Never intercept keystrokes when typing in inputs/textareas
+      // Keep text selection and focused study controls under native keyboard handling.
+      if (e.defaultPrevented || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
+          target.closest('button, select, [role="dialog"]') ||
           target.isContentEditable)
       ) {
         return;
@@ -2132,13 +2144,14 @@ const SourceBookReader: React.FC = () => {
   };
 
   // Retain the consumed request across Strict Mode effect replay.
-  const requestedLocation = useRef<{ book: typeof activeBook; page: number | null }>({ book: null, page: null });
+  const requestedLocation = useRef<{ book: typeof activeBook; page: number | null; cfi: string | null }>({ book: null, page: null, cfi: null });
   // Explicit links win over the saved work location, including same-work/source navigation.
   useEffect(() => {
     if (!activeBook?.id) return;
     if (requestedLocation.current.book !== activeBook) {
-      requestedLocation.current = { book: activeBook, page: consumePendingPage(activeBook.id) };
+      requestedLocation.current = { book: activeBook, page: consumePendingPage(activeBook.id), cfi: consumePendingCfi(activeBook.id) };
     }
+    if (requestedLocation.current.cfi) return;
     const linkedPage = requestedLocation.current.page;
     if (linkedPage) { setReadingPage(linkedPage); return; }
     let alive = true;
@@ -2148,6 +2161,19 @@ const SourceBookReader: React.FC = () => {
     }).catch(console.warn);
     return () => { alive = false; };
   }, [activeBook, setReadingPage]);
+
+  useEffect(() => {
+    const cfi = requestedLocation.current.cfi;
+    if (!cfi || !paginatedPages.length || isPaginating || isLoadingFile) return;
+    const location = resolveStudyCfi(paginatedPages, cfi);
+    if (!location) return;
+    if (readingPage !== location.page) { setReadingPage(location.page); return; }
+    const timer = setTimeout(() => {
+      const root = contentContainerRef.current?.querySelector<HTMLElement>(`[data-study-epub-page="${location.page}"]`);
+      if (root) { revealStudyRange(root, location.start, location.end); requestedLocation.current.cfi = null; }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [activeBook, paginatedPages, isPaginating, isLoadingFile, readingPage, setReadingPage]);
 
   // Debounced continuous tracking of reading location (2000ms debounce)
   useEffect(() => {
@@ -3044,11 +3070,63 @@ const SourceBookReader: React.FC = () => {
     setSelectedText('');
   };
 
+  const selectionCard = () => {
+    if (!activeBook || (isReflowable && !activeRange)) throw new Error('invalid-selection');
+    const page = pendingSelection?.pageNumber ?? pdfSelectionInfo?.pageNumber ?? readingPage;
+    const epub = isReflowable && activeRange ? selectionStudyLocation(paginatedPages, activeRange, readingPage) : null;
+    const target = epub ? bookCfiTarget(activeBook, epub.cfi) : bookStudyTarget(activeBook, page);
+    const label = epub
+      ? `${activeBook.title} — ${epub.chapter}`
+      : t('readerStudyPage', { title: activeBook.title, page });
+    return readerSelectionCard(selectedText, { target, label, workId: activeBook.id, language: workspaceLang });
+  };
+  const studySelection = async (action: 'explain' | 'practice' | 'review') => {
+    if (reviewSaving.current) return;
+    try {
+      const input = selectionCard();
+      if (action === 'explain') {
+        setStudySource({ target: input.sourceRef!, label: input.sourceLabel!, text: input.front });
+        return;
+      }
+      if (action === 'practice') {
+        setStudyDraft(input);
+        return;
+      }
+      reviewSaving.current = true;
+      setReviewBusy(true);
+      const card = await window.electronAPI.knowledgeCards.save(input);
+      if (!await window.electronAPI.knowledgeCards.setMemorizing(card.id, true)) throw new Error('missing-card');
+      window.dispatchEvent(new CustomEvent(KNOWLEDGE_CARD_SAVED));
+      setShowToast(t('readerStudySaved'));
+      setTimeout(() => setShowToast(null), 3000);
+    } catch {
+      setShowToast(t('srsFailed'));
+    } finally {
+      reviewSaving.current = false;
+      setReviewBusy(false);
+    }
+  };
+
   // Floating Zen Selection Menu (KEY-137 / KEY-12)
   const renderSelectionPopover = () => {
     if (!activeBook || !selectedText || isInstantHighlightMode) return null;
     return (
       <ZenSelectionMenu
+        studyActions={<div role="group" aria-label={t('readerStudyActions')} className="flex flex-wrap gap-2 border-b border-subtle pb-2 mb-2" dir={workspaceDir}>
+          {(['explain', 'practice', 'review'] as const).map(action => (
+            <button
+              key={action}
+              autoFocus={action === 'explain'}
+              type="button"
+              data-reader-study={action}
+              disabled={reviewBusy}
+              onClick={() => void studySelection(action)}
+              className="rounded-lg border border-subtle px-3 py-2 leading-loose hover:bg-canvas focus-visible:outline-2 focus-visible:outline-amber-500"
+            >
+              {t(action === 'explain' ? 'readerStudyExplain' : action === 'practice' ? 'readerStudyPractice' : 'readerStudyReviewLater')}
+            </button>
+          ))}
+        </div>}
         selectedText={selectedText}
         readingPage={readingPage}
         bookTitle={activeBook.title}
@@ -4088,6 +4166,8 @@ const SourceBookReader: React.FC = () => {
             /* REFLOWABLE FORMAT VIEWER (EPUB, MOBI, FB2, TXT, MD, DOCX, HTML) */
             <div
               onMouseUp={handleMouseUp}
+              onKeyUp={event => { if (event.shiftKey) handleMouseUp(); }}
+              tabIndex={0}
               className={`w-full flex flex-col border rounded-3xl p-6 sm:p-10 shadow-xl relative transition-all overflow-hidden ${
                 viewMode === 'two-column' ? 'max-w-6xl' : 'max-w-3xl'
               } ${themeClasses[readerTheme] || themeClasses.sepia}`}
@@ -4165,6 +4245,7 @@ const SourceBookReader: React.FC = () => {
                           key={`epub-stream-${idx}`}
                           id={`epub-page-${idx + 1}`}
                           data-page-number={idx + 1}
+                          data-study-epub-page={idx + 1}
                           className="epub-stream-page w-full max-w-3xl pb-8 border-b border-subtle/30 prose prose-slate dark:prose-invert max-w-none break-words relative"
                           style={{ lineHeight: lineSpacing }}
                           dangerouslySetInnerHTML={{ __html: page.html }}
@@ -4182,6 +4263,7 @@ const SourceBookReader: React.FC = () => {
                   viewMode === 'two-column' && secondFormattedPage ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 w-full">
                       <div
+                        data-study-epub-page={(readerDirection === 'rtl' ? secondFormattedPage : activeFormattedPage).pageNumber}
                         dangerouslySetInnerHTML={{
                           __html: (readerDirection === 'rtl' ? secondFormattedPage : activeFormattedPage).html,
                         }}
@@ -4189,6 +4271,7 @@ const SourceBookReader: React.FC = () => {
                         style={{ lineHeight: lineSpacing }}
                       />
                       <div
+                        data-study-epub-page={(readerDirection === 'rtl' ? activeFormattedPage : secondFormattedPage).pageNumber}
                         dangerouslySetInnerHTML={{
                           __html: (readerDirection === 'rtl' ? activeFormattedPage : secondFormattedPage).html,
                         }}
@@ -4198,6 +4281,7 @@ const SourceBookReader: React.FC = () => {
                     </div>
                   ) : (
                     <div
+                      data-study-epub-page={activeFormattedPage.pageNumber}
                       dangerouslySetInnerHTML={{ __html: activeFormattedPage.html }}
                       className="prose prose-slate dark:prose-invert max-w-none break-words"
                       style={{ lineHeight: lineSpacing }}
@@ -4620,6 +4704,14 @@ const SourceBookReader: React.FC = () => {
 
       {/* Floating Selection Action Pill */}
       {renderSelectionPopover()}
+      {studySource && <StudyAssistant readerSource={studySource} notes={[]} initialNotes={[]} onClose={() => setStudySource(null)} />}
+      {studyDraft && <div className="fixed inset-0 z-[90] bg-black/40 p-3 flex items-center justify-center" onClick={() => setStudyDraft(null)}>
+        <section role="dialog" aria-modal="true" aria-label={t('readerStudyPractice')} dir={workspaceDir} data-reader-study-editor className="w-full max-w-xl max-h-full overflow-y-auto rounded-xl bg-surface text-main p-4" onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setStudyDraft(null); } }}>
+          <button autoFocus type="button" className="mb-3 rounded-lg border border-subtle p-2" onClick={() => setStudyDraft(null)}>{t('close')}</button>
+          <p dir="auto" className="mb-3 break-words leading-loose">{studyDraft.sourceLabel}</p>
+          <QuestionCardEditor initial={studyDraft} onSaved={() => setStudyDraft(null)} />
+        </section>
+      </div>}
       {showReaderShortcuts && <ReaderShortcutSheet onClose={() => setShowReaderShortcuts(false)} t={t} />}
 
       {/* Existing Highlight Options Popover */}

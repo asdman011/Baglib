@@ -63,7 +63,7 @@ export function validateSourceRef(v: unknown): string | null {
         return invalid();
     if (v.startsWith('book:')) {
         const book = parseBookTarget(v);
-        if (!book?.sourceId || !book.page)
+        if (!book?.sourceId || (!book.page && !book.cfi))
             return invalid();
     }
     return v;

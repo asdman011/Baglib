@@ -1,18 +1,21 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { QUESTION_KINDS, kindKey, validateQuestion, type QuestionKind } from '../../../shared/practice';
 import type { KnowledgeCard, SaveCardInput } from '../../../shared/types/knowledge-cards';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
-export function QuestionCardEditor({ card, onSaved }: {
+export function QuestionCardEditor({ card, initial, onSaved }: {
     card?: KnowledgeCard;
+    initial?: SaveCardInput;
     onSaved: () => void;
 }) {
     const { t, lang } = useWorkspace();
-    const [front, setFront] = useState(card?.front ?? '');
-    const [back, setBack] = useState(card?.back ?? '');
-    const [kind, setKind] = useState<QuestionKind>(card?.questionKind ?? 'recall');
-    const p = card?.payload;
+    const saving = useRef(false);
+    const seed = card ?? initial;
+    const [front, setFront] = useState(seed?.front ?? '');
+    const [back, setBack] = useState(seed?.back ?? '');
+    const [kind, setKind] = useState<QuestionKind>(seed?.questionKind ?? 'recall');
+    const p = seed?.payload;
     const [options, setOptions] = useState(p && 'options' in p ? p.options.join('\n') : '');
     const [index, setIndex] = useState(p && 'correctIndex' in p ? String(p.correctIndex + 1) : '1');
     const [answer, setAnswer] = useState(p && 'answer' in p ? String(p.answer) : '');
@@ -22,11 +25,13 @@ export function QuestionCardEditor({ card, onSaved }: {
     const [failed, setFailed] = useState(false);
     const [busy, setBusy] = useState(false);
     const save = async () => {
+        if (saving.current) return;
+        saving.current = true;
         setBusy(true);
         try {
             const payload = kind === 'recall' ? null : kind === 'choice' ? { options: options.split('\n'), correctIndex: Number(index) - 1 } : kind === 'numeric' ? { answer: answer.trim() ? Number(answer) : NaN, tolerance: tolerance.trim() ? Number(tolerance) : NaN, unit } : { modelAnswer: model };
             const question = validateQuestion(kind, payload);
-            const input: SaveCardInput = { front, back, sourceKind: card?.sourceKind ?? 'note', sourceRef: card?.sourceRef ?? undefined, language: card?.language ?? lang, ...question };
+            const input: SaveCardInput = { front, back, sourceKind: seed?.sourceKind ?? 'note', sourceRef: seed?.sourceRef ?? undefined, sourceLabel: seed?.sourceLabel ?? undefined, workId: seed?.workId ?? undefined, language: seed?.language ?? lang, ...question };
             if (card)
                 await window.electronAPI.knowledgeCards.update(card.id, input, card.cardRevision ?? 0);
             else
@@ -39,6 +44,7 @@ export function QuestionCardEditor({ card, onSaved }: {
             setFailed(true);
         }
         finally {
+            saving.current = false;
             setBusy(false);
         }
     };

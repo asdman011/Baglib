@@ -35,3 +35,9 @@ The KEY-279-only checkout passed TypeScript, ESLint (zero errors, 91 warnings in
 Native runs verified all four language/width combinations and duplicate filenames. A native-observed Strict Mode effect replay initially overwrote a requested page with the stored Work location. Retaining the consumed request across effect replay fixed it. The committed harness exercises this regression with same-source and cross-source navigation.
 
 The shared workspace's concurrent KEY-272 accessibility work produced TypeScript errors during verification. The exact task-only source patch was type-checked separately against HEAD. The local report records those boundaries and the final screenshot paths.
+
+## EPUB selection links — KEY-280, 2026-11-09
+
+`bookCfiTarget` adds `book:<work>@<source>#cfi=<encoded-CFI>` for EPUB study selections. `parseBookTarget` validates the BagLib adapter's section/character-range form and keeps the decoded CFI distinct from a PDF page. `navigateStudyReference` resolves the named source and passes the CFI to the reader. Saved cards, SRS review and practice history use that same path. Practice source validation accepts a precise source with either a PDF page or an EPUB CFI.
+
+The reflow adapter computes section-wide offsets from rendered text, retaining Arabic diacritics and ignoring whitespace while counting. It resolves the selected range after pagination, including after a viewport change. Existing book/page links retain their behavior. See the KEY-280 implementation section in `feature - Study Workspace.md` for the selected-source assistant boundary and verification scope.

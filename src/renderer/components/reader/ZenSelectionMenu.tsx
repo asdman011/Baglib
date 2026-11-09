@@ -21,6 +21,7 @@ import type { TranslationKey } from '../../translations';
 import { HIGHLIGHT_COLORS } from '../../libs/reader/highlight-manager';
 
 export interface ZenSelectionMenuProps {
+  studyActions?: React.ReactNode;
   selectedText: string;
   readingPage: number;
   bookTitle: string;
@@ -42,6 +43,7 @@ export interface ZenSelectionMenuProps {
 
 export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   selectedText,
+  studyActions,
   readingPage,
   bookTitle,
   bookAuthor,
@@ -65,7 +67,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   const [questionText, setQuestionText] = useState('');
   const [copiedCitation, setCopiedCitation] = useState(false);
 
-  if (!selectedText) return null;
+  if (!selectedText.trim()) return null;
 
   const handleCopyCitation = () => {
     const citation = `[${bookTitle} - ${bookAuthor || 'مؤلف غير معروف'}، ${bookPublisher || 'طبعة خاصة'}، ص ${readingPage}]`;
@@ -78,15 +80,16 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   return (
     <div
       role="dialog"
-      aria-label="Text Selection Actions"
+      aria-label={t('readerStudyActions')}
       onMouseDown={(e) => {
         // Prevent action menu mousedown from bubbling to reader containers and stealing focus/selection
         e.stopPropagation();
         e.preventDefault();
       }}
-      className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-in fade-in zoom-in-95 duration-150 select-none max-w-lg w-full px-4"
+      className="fixed top-16 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-50 animate-in fade-in zoom-in-95 duration-150 select-none max-w-lg w-full px-4"
     >
       <div className="bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl rounded-2xl p-2.5 text-xs text-main">
+        {studyActions}
         {/* Default Pill Toolbar */}
         {activeTab === 'toolbar' && (
           <div className="flex flex-wrap items-center gap-1.5 justify-between">

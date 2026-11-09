@@ -106,7 +106,16 @@ export function parseNoteTarget(target: string): { id: string; anchor?: string }
 }
 
 /** A work, optionally tied to its source and page. IDs retain the existing 180-character limit. */
-export function parseBookTarget(target: string): { id: string; sourceId?: string; page?: number } | null {
+export function parseBookTarget(target: string): { id: string; sourceId?: string; page?: number; cfi?: string } | null {
+  const cfiMatch = /^book:([^\s\[\]|:#@]{1,180})(?:@([^\s\[\]|:#@]{1,180}))?#cfi=(.{1,2000})$/u.exec(target);
+  if (cfiMatch) {
+    try {
+      const cfi = decodeURIComponent(cfiMatch[3]);
+      const location = /^epubcfi\(\/6\/(\d{1,7})(?:\[[^\]\s]*\])?!\/4\/2(?:\/1:(\d{1,9})|,\/1:(\d{1,9}),\/1:(\d{1,9}))\)$/u.exec(cfi);
+      if (!location || +location[1] < 2 || +location[1] % 2 !== 0 || (location[4] && +location[4] < +location[3])) return null;
+      return { id: cfiMatch[1], ...(cfiMatch[2] ? { sourceId: cfiMatch[2] } : {}), cfi };
+    } catch { return null; }
+  }
   const match = /^book:([^\s\[\]|:#@]{1,180})(?:@([^\s\[\]|:#@]{1,180}))?(?:#p=(\d{1,6}))?$/u.exec(target);
   if (!match || (match[3] !== undefined && +match[3] < 1)) return null;
   return { id: match[1], ...(match[2] ? { sourceId: match[2] } : {}), ...(match[3] ? { page: +match[3] } : {}) };
@@ -115,6 +124,13 @@ export function parseBookTarget(target: string): { id: string; sourceId?: string
 /** Build references from the source identity carried with the open file. */
 export function bookStudyTarget(book: { id: string; sourceId?: string }, page?: number): string {
   return `book:${book.id}${book.sourceId ? `@${book.sourceId}` : ''}${page === undefined ? '' : `#p=${page}`}`;
+}
+
+/** EPUB locations keep their CFI instead of a synthetic PDF page. */
+export function bookCfiTarget(book: { id: string; sourceId?: string }, cfi: string): string {
+  const target = bookStudyTarget(book) + '#cfi=' + encodeURIComponent(cfi);
+  if (!parseBookTarget(target) || target.length > 500) throw new Error('invalid-reference');
+  return target;
 }
 
 export function studyLinks(content: string): StudyLink[] {
@@ -135,10 +151,10 @@ export function studyBacklinks(notes: StudyNote[], target: string): StudyNote[] 
   const book = parseBookTarget(target);
   return notes.filter(note => {
     if (`note:${note.id}` === target) return false;
-    if (book && !book.sourceId && !book.page && note.workId === book.id) return true;
+    if (book && !book.sourceId && !book.page && !book.cfi && note.workId === book.id) return true;
     return studyLinks(note.content).some(link => {
       if (link.target === target) return true;
-      if (book && !book.page) {
+      if (book && !book.page && !book.cfi) {
         const linked = parseBookTarget(link.target);
         return linked?.id === book.id && (!book.sourceId || linked.sourceId === book.sourceId);
       }

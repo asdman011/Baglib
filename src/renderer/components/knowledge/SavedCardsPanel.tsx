@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Repeat2, Search, Sparkles, Trash2 } from 'lucide-react';
+import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { CARD_HOVER_SETTING, cardHoverEnabled, KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import type { KnowledgeCard, PreservedKnowledge } from '../../../shared/types/knowledge-cards';
@@ -14,7 +15,7 @@ import { DictionariesPanel } from './DictionariesPanel';
 import { PersonalCommentary } from './PersonalCommentary';
 
 export function SavedCardsPanel() {
-  const { t } = useWorkspace();
+  const { t, books, openBookForReading } = useWorkspace();
   const [editing,setEditing]=useState<string|null>(null);
   const [practicing,setPracticing]=useState<string|null>(null);
   const [creating,setCreating]=useState(false);
@@ -70,6 +71,16 @@ export function SavedCardsPanel() {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p dir="auto" className="font-reading text-base leading-loose break-words">{card.front}</p>
+            {card.sourceRef && (
+              <button
+                type="button"
+                data-card-source={card.id}
+                className="rounded border border-subtle p-2 text-sm underline"
+                onClick={() => void navigateStudyReference(card.sourceRef!, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => setFailed(true))}
+              >
+                {t('practiceOpenSource')}
+              </button>
+            )}
             {card.sourceLabel && <p dir="auto" className="text-xs text-muted">{card.sourceLabel}</p>}
           </div>
           <div className="flex shrink-0 gap-1">

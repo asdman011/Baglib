@@ -8,7 +8,7 @@ import { inspectPdfFile } from '../services/pdf-editor/inspection';
 import { bookPdfFile } from '../services/book-files';
 import { readAyahTexts, readQuranSources } from './quran';
 import { readHadithText } from './sunnah';
-import { bookStudyTarget, parseQuranTarget } from '../../shared/study-notes';
+import { bookStudyTarget, parseBookTarget, parseQuranTarget } from '../../shared/study-notes';
 import { assistantSystemPrompt, budgetSources, validateAssistantAnswer, validateAssistantRequest, type AssistantAnswer, type AssistantSource } from '../../shared/study-assistant';
 
 import { translations } from '../../renderer/translations';
@@ -45,6 +45,14 @@ export function registerStudyAssistantIpc(): void {
       try {
         const sources: AssistantSource[] = [];
         const add = (label: string, target: string, text: string) => sources.push({ id: `S${sources.length + 1}`, label, target, text });
+        if (request.readerSource) {
+          const selected = request.readerSource;
+          const target = parseBookTarget(selected.target)!;
+          const source = getDatabase().prepare('SELECT s.id FROM source s JOIN edition e ON e.id=s.edition_id WHERE e.work_id=? AND s.id=?').get(target.id, target.sourceId ?? '');
+          if (!source) throw new Error('no-sources');
+          // Explicit reader-selected evidence. Full file extraction/verification is the separate KEY-282 task.
+          add(selected.label, selected.target, selected.text);
+        }
         const notes = new StudyNotesService(settingsRepository, getDatabase()).list();
         for (const id of request.notes) {
           const note = notes.find(entry => entry.id === id);

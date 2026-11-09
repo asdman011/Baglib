@@ -149,3 +149,17 @@ Later phases: generated questions with citations that the user can correct; mast
 - [Codecademy — Weekly targets](https://help.codecademy.com/hc/en-us/articles/360056218734-Weekly-Targets)
 
 The research figures come mostly from secondary analyses, and none of them are used as evidence in BagLib. The table above takes the mechanics, not the claimed retention numbers.
+
+## KEY-280 implementation — 2026-11-09
+
+Reader selections offer Explain, Practice and Review later in Arabic RTL and English LTR. The selection menu accepts a study-actions slot, so these buttons share the existing PDF/EPUB menu. The first action receives focus when the menu opens. Native buttons support Tab and Enter, and the reader leaves focused controls and Shift-selection to native keyboard handling.
+
+- Review later trims the selected passage, bounds the card front to 20,000 UTF-16 units without a dangling surrogate, leaves the back empty and schedules the saved card through the existing SRS API. The repository reuses a matching source/front/question card. An in-flight guard prevents repeated creation requests. A failed scheduling step can be retried against the same saved card.
+- Practice seeds `QuestionCardEditor` with a recall question, the passage, the original title/location label, Work ID and source reference. The editor keeps ADR-013 question kinds and the existing practice-attempt flow. Saving has an in-flight guard. Saved cards and SRS cards both offer Open source passage.
+- Explain opens `StudyAssistant` with a bounded reader-selected source, a localized prompt and a clickable precise citation. Its request retains the existing AI enablement and remote-transfer consent gates. Answer quotes are checked against the supplied selected passage. This handoff identifies its evidence as a selected book passage. KEY-282 remains responsible for independently extracting and validating book-passage evidence from the file.
+
+PDF references use `book:<work>@<source>#p=N`. EPUB references use `book:<work>@<source>#cfi=<encoded-CFI>` with the CFI shape from BagLib's existing `buildEpubCfi` adapter. EPUB anchors store section-wide text offsets, ignoring whitespace only while computing offsets. They preserve diacritics and canonical text. Reopening resolves those offsets into the current rendered pages and selects the original range. The source reference contains no EPUB screen-page number. These references use BagLib's adapter CFI subset, including section/range offsets, rather than accepting arbitrary external-reader CFI paths.
+
+Relevant implementation files are `src/shared/reader-study-selection.ts`, `src/shared/study-notes.ts`, `src/shared/practice.ts`, `src/renderer/libs/reader/epub-study-location.ts`, `FullPageBookReader.tsx`, `ZenSelectionMenu.tsx`, `QuestionCardEditor.tsx`, `SavedCardsPanel.tsx`, `SrsReviewPanel.tsx`, `StudyAssistant.tsx` and `src/main/ipc/study-assistant.ts`. Existing `card_detail`, `srs_state` and `practice_attempt` storage is reused. Canonical source files are read only in this flow.
+
+Regression coverage is in `tests/services/reader-study-selection.test.ts`. Native verification is in `scripts/reader-study-live/`, using real Arabic and English text PDFs, the small real English EPUB and the image-only Arabic scan from the manifest. Arabic EPUB files are absent from that manifest, so the real EPUB is exercised under both interface languages. The local KEY-280 report records final checks, screenshots and limitations.

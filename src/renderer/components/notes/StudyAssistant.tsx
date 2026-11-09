@@ -8,6 +8,7 @@ import { collectionKeys } from '../../utils/sunnah-collections';
 import { parseBookTarget, matchesStudyQuery, type StudyNote } from '../../../shared/study-notes';
 import type { QuranReaderCatalog } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
+import type { ReaderStudySource } from '../../../shared/reader-study-selection';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 
 const taskKeys: Record<AssistantTask, TranslationKey> = {
@@ -23,7 +24,7 @@ const errorKeys: Record<string, TranslationKey> = {
  * The grounded study assistant (Wave 12): tick sources (notes, PDF book pages), pick a study prompt, ask. The answer
  * shows its quotes with links; it can be saved as an editable note, and drafted cards are approved one by one.
  */
-export function StudyAssistant({ notes, initialNotes, onClose }: { notes: StudyNote[]; initialNotes: string[]; onClose: () => void }) {
+export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: { readerSource?: ReaderStudySource; notes: StudyNote[]; initialNotes: string[]; onClose: () => void }) {
   const { t, lang, dir, books, openBookForReading } = useWorkspace();
   const pdfBooks = useMemo(() => books.filter(book => book.filePath && /\.pdf$/iu.test(book.filePath)), [books]);
   const [picked, setPicked] = useState<Set<string>>(new Set(initialNotes));
@@ -31,7 +32,7 @@ export function StudyAssistant({ notes, initialNotes, onClose }: { notes: StudyN
   const [book, setBook] = useState('');
   const [from, setFrom] = useState(1), [to, setTo] = useState(5);
   const [task, setTask] = useState<AssistantTask>('qa');
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState(readerSource ? t('readerStudyExplainPrompt') : '');
   const [allowRemote, setAllowRemote] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,11 +56,11 @@ export function StudyAssistant({ notes, initialNotes, onClose }: { notes: StudyN
   const addPassage = (option: CorpusOption) => setPassages(current => current.some(entry => entry.target === option.target) || current.length >= 20 ? current : [...current, { target: option.target, label: option.label }]);
   const listed = notes.filter(note => !filter || matchesStudyQuery(`${note.title} ${note.content}`, filter)).slice(0, 200);
   const toggle = (id: string) => setPicked(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  const hasSources = picked.size > 0 || Boolean(book) || passages.length > 0;
+  const hasSources = Boolean(readerSource) || picked.size > 0 || Boolean(book) || passages.length > 0;
   const ask = async () => {
     setBusy(true); setError(null); setAnswer(null); setCards({});
     try {
-      const result = await window.electronAPI.studyAssistant.ask({ task, question, language: lang === 'ar' ? 'ar' : 'en', allowRemote, notes: [...picked], books: book ? [{ id: book, from, to: Math.max(from, Math.min(to, from + 49)) }] : [], passages });
+      const result = await window.electronAPI.studyAssistant.ask({ task, question, language: lang === 'ar' ? 'ar' : 'en', allowRemote, notes: [...picked], books: book ? [{ id: book, from, to: Math.max(from, Math.min(to, from + 49)) }] : [], passages, readerSource });
       if (result.ok) setAnswer(result.data); else setError(result.error);
     } catch { setError('engine-failed'); } finally { setBusy(false); }
   };
@@ -74,15 +75,20 @@ export function StudyAssistant({ notes, initialNotes, onClose }: { notes: StudyN
   };
   const field = 'w-full rounded-lg border border-subtle bg-canvas px-2 py-1.5 text-sm';
   return <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/40 p-2 sm:p-4" dir={dir} onClick={onClose}>
-    <div role="dialog" aria-modal="true" aria-labelledby="assistant-title" data-study-assistant className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
+    <div role="dialog" aria-modal="true" aria-labelledby="assistant-title" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }} data-study-assistant className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
       <header className="flex items-center gap-2 border-b border-subtle px-4 py-2">
         <Sparkles size={16} aria-hidden="true" />
         <h2 id="assistant-title" className="text-sm font-bold">{t('assistantTitle')}</h2>
-        <button type="button" aria-label={t('close')} title={t('close')} onClick={onClose} className="ms-auto rounded p-1 hover:bg-canvas"><X size={16} /></button>
+        <button type="button" autoFocus={Boolean(readerSource)} aria-label={t('close')} title={t('close')} onClick={onClose} className="ms-auto rounded p-1 hover:bg-canvas"><X size={16} /></button>
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <section className="space-y-3 border-subtle p-4 md:border-e">
           <p className="text-xs leading-relaxed text-muted">{t('assistantIntro')}</p>
+          {readerSource && <section data-assistant-reader-source className="space-y-2 rounded-lg border border-subtle p-2 text-sm">
+            <h3 className="font-bold">{t('readerStudySelectionSource')}</h3>
+            <button type="button" onClick={() => open(readerSource.target)} dir="auto" className="text-start underline">{readerSource.label}</button>
+            <blockquote dir="auto" className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words leading-loose">{readerSource.text}</blockquote>
+          </section>}
           <fieldset className="min-w-0 space-y-1.5">
             <legend className="text-xs font-bold">{t('assistantNotes', { count: picked.size })}</legend>
             <input type="search" dir="auto" value={filter} onChange={event => setFilter(event.target.value)} placeholder={t('studySearchNotes')} aria-label={t('studySearchNotes')} className={field} />

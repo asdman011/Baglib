@@ -3,7 +3,8 @@
  * books — and every claim cites an exact quote from one of them. AI stays opt-in: the same consent rule as the PDF
  * assistant (a local Ollama runs without asking; anything else needs the "send to a remote service" tick).
  */
-import { parseQuranTarget, validStudyTarget } from './study-notes';
+import type { ReaderStudySource } from './reader-study-selection';
+import { parseBookTarget, parseQuranTarget, validStudyTarget } from './study-notes';
 
 export const ASSISTANT_TASKS =['qa', 'guide', 'questions', 'terms', 'organise', 'cards'] as const;
 export type AssistantTask = typeof ASSISTANT_TASKS[number];
@@ -21,6 +22,7 @@ export interface AssistantRequest {
   notes: string[];
   books: { id: string; from: number; to: number }[];
   passages: AssistantPassage[];
+  readerSource?: ReaderStudySource;
 }
 export interface AssistantPassage { target: string; label: string; tafsir?: string; translation?: string }
 export interface AssistantQuranQuery { surah: number; from: number; to: number; profile: 'hafs' | 'warsh'; tafsir?: string; translation?: string }
@@ -60,8 +62,14 @@ export function validateAssistantRequest(input: unknown): AssistantRequest {
     }
     return { target: passage.target, label, ...selected };
   });
-  if (!notes.length && !ranges.length && !passages.length) throw new Error('invalid-request');
-  return { task, question, language: value.language, allowRemote: value.allowRemote, notes: notes as string[], books: ranges, passages };
+  let readerSource: ReaderStudySource | undefined;
+  if (value.readerSource !== undefined) {
+    const source = value.readerSource as Record<string, unknown>;
+    if (!source || typeof source.target !== 'string' || source.target.length > 500 || !parseBookTarget(source.target) || typeof source.text !== 'string' || !source.text.trim() || source.text.length > 20000 || typeof source.label !== 'string' || source.label.length > 500) throw new Error('invalid-request');
+    readerSource = { target: source.target, text: source.text, label: source.label };
+  }
+  if (!notes.length && !ranges.length && !passages.length && !readerSource) throw new Error('invalid-request');
+  return { task, question, language: value.language, allowRemote: value.allowRemote, notes: notes as string[], books: ranges, passages, ...(readerSource ? { readerSource } : {}) };
 }
 
 /** `quran:hafs:2:255-257` (at most 50 ayahs) or `sunnah:<collection>:<chapter>:<hadith id>`; anything else is not a passage. */

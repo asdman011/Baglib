@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MISTAKE_CATEGORIES,mistakeKey,type MistakeCategory } from '../../../shared/practice';
 import { PracticeAnswer } from './PracticeAnswer';
+import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import type { ReviewQueue, ReviewRating } from '../../../shared/srs';
 
 export function SrsReviewPanel() {
-  const { t, dir, lang } = useWorkspace();
+  const { t, dir, lang, books, openBookForReading } = useWorkspace();
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
   const [mistake,setMistake]=useState<MistakeCategory|undefined>();
   const [confidence,setConfidence]=useState(0);
@@ -63,6 +64,16 @@ export function SrsReviewPanel() {
     {!queue && !failed && <p role="status">{t('srsLoading')}</p>}
     {card ? <article key={card.id} className="space-y-3" data-srs-card={card.id}>
       <p dir="auto" className="font-reading text-lg leading-loose whitespace-pre-wrap break-words">{card.front}</p>
+      {card.sourceRef && (
+        <button
+          type="button"
+          data-card-source={card.id}
+          className="rounded border border-subtle p-2 text-sm underline"
+          onClick={() => void navigateStudyReference(card.sourceRef!, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => setFailed(true))}
+        >
+          {t('practiceOpenSource')}
+        </button>
+      )}
       {card.sourceLabel && <p dir="auto" className="text-xs text-muted">{card.sourceLabel}</p>}
       {(card.questionKind??'recall')!=='recall'&&<PracticeAnswer key={`${card.id}-${card.cardRevision}`} card={card} onRecorded={()=>{setPracticeDone(true);setRevealed(true);}}/>}
       {(card.questionKind??'recall')==='recall'&&!revealed&&<fieldset><legend className="leading-loose">{t('practiceConfidence')}</legend><div className="flex flex-wrap gap-2">{[1,2,3,4].map(n=><label className="rounded border border-subtle p-2" key={n}><input type="radio" name="srs-confidence" value={n} checked={confidence===n} onChange={()=>setConfidence(n)}/> {n}</label>)}</div></fieldset>}
