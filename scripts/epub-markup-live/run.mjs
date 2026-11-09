@@ -101,18 +101,25 @@ async function main() {
   const arabicEpubPath = path.join(directory, 'arabic-test.epub');
   fs.writeFileSync(arabicEpubPath, createArabicEpubBuffer());
 
-  // 2. Prepare English EPUB (from real files)
-  const realEnglishEpub = path.resolve(
+  // 2. Prepare English EPUBs (from real files: small text and large textbook)
+  const realEnglishSmallEpub = path.resolve(
     'tests/real-files/epub/en/Why Would Feminists Trust the Police -- Leah Cowan -- Verso 2024 -- Anna’s Archive.epub'
   );
+  const realEnglishTextbookEpub = path.resolve(
+    'tests/real-files/epub/en/Fundamentals of Cost Accounting - Lanen, William;Anderson, Shanno.epub'
+  );
   const englishEpubPath = path.join(directory, 'english-test.epub');
-  fs.copyFileSync(realEnglishEpub, englishEpubPath);
+  const englishTextbookPath = path.join(directory, 'english-textbook.epub');
+  fs.copyFileSync(realEnglishSmallEpub, englishEpubPath);
+  fs.copyFileSync(realEnglishTextbookEpub, englishTextbookPath);
 
   // 3. Record Initial SHA-256 Hashes
   const initialArabicHash = getFileHash(arabicEpubPath);
   const initialEnglishHash = getFileHash(englishEpubPath);
-  console.log(`[epub-markup-live] Initial Arabic EPUB Hash: ${initialArabicHash}`);
-  console.log(`[epub-markup-live] Initial English EPUB Hash: ${initialEnglishHash}`);
+  const initialTextbookHash = getFileHash(englishTextbookPath);
+  console.log(`[epub-markup-live] Initial Arabic EPUB Hash:   ${initialArabicHash}`);
+  console.log(`[epub-markup-live] Initial English Small Hash:  ${initialEnglishHash}`);
+  console.log(`[epub-markup-live] Initial English Textbook:    ${initialTextbookHash}`);
 
   // 4. Connect to running renderer on port 3000
 
@@ -147,9 +154,11 @@ async function main() {
     // 6. Verify EPUB File Hashes Remained 100% Byte-Identical (ADR-012)
     const finalArabicHash = getFileHash(arabicEpubPath);
     const finalEnglishHash = getFileHash(englishEpubPath);
+    const finalTextbookHash = getFileHash(englishTextbookPath);
 
     console.log(`[epub-markup-live] Final Arabic EPUB Hash:   ${finalArabicHash}`);
-    console.log(`[epub-markup-live] Final English EPUB Hash:  ${finalEnglishHash}`);
+    console.log(`[epub-markup-live] Final English Small Hash:  ${finalEnglishHash}`);
+    console.log(`[epub-markup-live] Final English Textbook:    ${finalTextbookHash}`);
 
     if (finalArabicHash !== initialArabicHash) {
       console.error('[epub-markup-live] CRITICAL ERROR: Arabic EPUB was modified on disk! Violates ADR-012.');
@@ -157,12 +166,17 @@ async function main() {
       return;
     }
     if (finalEnglishHash !== initialEnglishHash) {
-      console.error('[epub-markup-live] CRITICAL ERROR: English EPUB was modified on disk! Violates ADR-012.');
+      console.error('[epub-markup-live] CRITICAL ERROR: English Small EPUB was modified on disk! Violates ADR-012.');
+      process.exitCode = 1;
+      return;
+    }
+    if (finalTextbookHash !== initialTextbookHash) {
+      console.error('[epub-markup-live] CRITICAL ERROR: English Textbook EPUB was modified on disk! Violates ADR-012.');
       process.exitCode = 1;
       return;
     }
 
-    console.log('[epub-markup-live] ADR-012 Safe Save Verified: EPUB files are 100% byte-identical!');
+    console.log('[epub-markup-live] ADR-012 Safe Save Verified: All 3 EPUB files are 100% byte-identical!');
 
     // 7. Copy evidence screenshots
     const files = fs.readdirSync(directory);

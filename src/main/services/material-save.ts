@@ -46,8 +46,14 @@ export class MaterialSaveService {
 
   /** The Source that owns a library book's file (Work → Edition → Source), PDF, EPUB, or other format. */
   materialSource(workId: string): { sourceId: string; path: string } | null {
+    // Always preserve PDF file precedence so existing PDF save/redo states are never hijacked
+    const pdf = this.file(workId);
+    if (pdf) return pdf;
+
+    // Otherwise, check for any other valid format (e.g. EPUB), deterministically ordered
     const row = this.env.db.prepare(`SELECT s.id AS sourceId, fsd.file_path AS path FROM edition e JOIN source s ON s.edition_id = e.id
-      JOIN file_source_detail fsd ON fsd.source_id = s.id WHERE e.work_id = ? AND fsd.file_path IS NOT NULL LIMIT 1`).get(workId) as { sourceId: string; path: string } | undefined;
+      JOIN file_source_detail fsd ON fsd.source_id = s.id WHERE e.work_id = ? AND fsd.file_path IS NOT NULL
+      ORDER BY s.id ASC LIMIT 1`).get(workId) as { sourceId: string; path: string } | undefined;
     return row && existsSync(row.path) ? row : null;
   }
 

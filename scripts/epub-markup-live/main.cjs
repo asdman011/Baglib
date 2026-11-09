@@ -66,6 +66,7 @@ app.on('browser-window-created', (_, owner) => {
     const results = {};
     const arabicEpub = path.join(directory, 'arabic-test.epub');
     const englishEpub = path.join(directory, 'english-test.epub');
+    const textbookEpub = path.join(directory, 'english-textbook.epub');
 
     await load('ar');
     await until('!!window.electronAPI?.addBook');
@@ -89,6 +90,16 @@ app.on('browser-window-created', (_, owner) => {
       bookType: 'digital',
       digitalFormat: 'EPUB',
       filePath: ${JSON.stringify(englishEpub)}
+    })`);
+
+    await evaluate(`window.electronAPI.addBook({
+      id: 'epub-en-textbook',
+      title: 'Fundamentals of Cost Accounting',
+      author: 'Lanen & Anderson',
+      workType: 'book',
+      bookType: 'digital',
+      digitalFormat: 'EPUB',
+      filePath: ${JSON.stringify(textbookEpub)}
     })`);
 
     // ==========================================
@@ -134,20 +145,6 @@ app.on('browser-window-created', (_, owner) => {
       // Verify save button/policy is hidden for EPUB
       const hasSavePdfPolicy = await evaluate("!!document.querySelector('[data-file-save-policy]') || !!document.querySelector('[data-save-status]')");
       assert.strictEqual(hasSavePdfPolicy, false, 'File save policy menu should be absent in EPUB reader');
-
-      // Screenshot at 1280px
-      await shot(`epub-${language}-markup-1280`);
-
-      // Test 480px responsive layout
-      owner.setContentSize(480, 800);
-      await pause(800);
-      await shot(`epub-${language}-markup-480`);
-
-      // Restore 1280px and wait for repagination to settle
-      owner.setContentSize(1280, 900);
-      await pause(1000);
-      await until("!document.querySelector('.animate-spin')", 100);
-      await pause(500);
 
       // If initial page is a cover image with no text paragraphs, advance to text content
       for (let adv = 0; adv < 10; adv++) {
@@ -235,6 +232,35 @@ app.on('browser-window-created', (_, owner) => {
         }));
       })()`);
       assert.ok(markElements.length >= 2, `Expected rendered marks in DOM, found ${markElements.length}`);
+
+      // Reveal top bar via pointer hover (clientY <= 44px) so markup toolbar is visible in screenshot
+      await evaluate("window.dispatchEvent(new MouseEvent('mousemove', { clientX: 200, clientY: 20, bubbles: true }))");
+      await pause(400);
+      await shot(`epub-${language}-markup-1280`);
+
+      // Test 480px responsive layout with marks visible and toolbar revealed
+      owner.setContentSize(480, 800);
+      await pause(1000);
+      await until("!document.querySelector('.animate-spin')", 100);
+      await evaluate("window.dispatchEvent(new MouseEvent('mousemove', { clientX: 200, clientY: 20, bubbles: true }))");
+      await pause(400);
+      await shot(`epub-${language}-markup-480`);
+
+      // Verify toolbar can also be toggled without mouse via viewport tap/click (accessibility check)
+      const toolbarBeforeTap = await evaluate("!document.querySelector('[data-reader-markup-bar]')?.closest('.opacity-0')");
+      await evaluate(`(()=>{
+        const prose = document.querySelector('.prose');
+        if (prose) prose.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      })()`);
+      await pause(300);
+      const toolbarAfterTap = await evaluate("!document.querySelector('[data-reader-markup-bar]')?.closest('.opacity-0')");
+      results[`a11y_tap_toggle_${language}`] = { before: toolbarBeforeTap, after: toolbarAfterTap };
+
+      // Restore 1280px and wait for repagination to settle
+      owner.setContentSize(1280, 900);
+      await pause(1000);
+      await until("!document.querySelector('.animate-spin')", 100);
+      await pause(500);
 
       // ==========================================
       // MARK POPOVER: Details, Color, Comments
@@ -327,6 +353,138 @@ app.on('browser-window-created', (_, owner) => {
         assert.strictEqual(countAfterRedo, countBeforeUndo, 'Expected marks count to be restored after redo');
       }
     }
+
+    // ==========================================
+    // 3. REAL ENGLISH TEXTBOOK EPUB TEST (Fundamentals of Cost Accounting)
+    // ==========================================
+    await load('en', 1280, 900);
+
+    // Navigate to library and open the textbook
+    await evaluate("document.querySelector('aside button[aria-label=\"Library\"]')?.click()");
+    await until("[...document.querySelectorAll('button')].some(b=>b.title==='Read'||b.textContent.trim()==='Read')");
+
+    await evaluate(`(()=>{
+      const isRead = b => b.title === 'Read' || b.textContent.trim() === 'Read';
+      const titleNodes = [...document.querySelectorAll('*')].filter(e => e.children.length === 0 && e.textContent.includes('Cost Accounting'));
+      for (const title of titleNodes) {
+        let node = title;
+        while (node && ![...node.querySelectorAll('button')].some(isRead)) node = node.parentElement;
+        if (node) {
+          const btn = [...node.querySelectorAll('button')].find(isRead);
+          if (btn) { btn.click(); return; }
+        }
+      }
+      throw new Error('Could not find read button for Fundamentals of Cost Accounting');
+    })()`);
+
+    // Wait for textbook reader to render
+    await until("!!document.querySelector('[data-epub-marks-status]')", 250);
+    await pause(2000);
+
+    // Verify ADR-012 Safe Save notice in textbook EPUB reader
+    const textbookNotice = await evaluate("document.querySelector('[data-epub-marks-status]')?.textContent || ''");
+    assert.ok(textbookNotice.includes('Marks are kept in BagLib'), `Expected textbook notice, got: ${textbookNotice}`);
+    results.notice_textbook = textbookNotice;
+
+    // Verify save button/policy is hidden for textbook EPUB
+    const textbookSavePolicy = await evaluate("!!document.querySelector('[data-file-save-policy]') || !!document.querySelector('[data-save-status]')");
+    assert.strictEqual(textbookSavePolicy, false, 'File save policy menu should be absent in textbook EPUB reader');
+
+    // Advance to text content in a later chapter
+    for (let adv = 0; adv < 15; adv++) {
+      const pCount = await evaluate("[...document.querySelectorAll('.prose p')].filter(p => p.textContent.trim().length > 20).length");
+      if (pCount >= 2) break;
+      await key('PageDown');
+      await pause(800);
+      await until("!document.querySelector('.animate-spin')", 60);
+    }
+
+    // Add Highlight in textbook
+    await evaluate("document.querySelector('[data-markup-tool-button=\"highlight\"]')?.click()");
+    await pause(300);
+    const textbookSelect = await evaluate(`(()=>{
+      try {
+        const paragraphs = [...document.querySelectorAll('.prose p')].filter(p => p.textContent.trim().length > 20);
+        if (paragraphs.length === 0) return 'ERROR: no paragraphs';
+        const p = paragraphs[0];
+        const textNode = p.firstChild || p;
+        const text = textNode.textContent || '';
+        const range = document.createRange();
+        range.setStart(textNode, 0);
+        range.setEnd(textNode, Math.min(text.length, 30));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        p.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        return 'OK: ' + range.toString();
+      } catch (e) { return 'ERR: ' + e.message; }
+    })()`);
+    console.log('[epub-markup-live] textbook highlight select:', textbookSelect);
+    await pause(1000);
+
+    // Add a Note to the mark via knowledge API
+    const initialTextbookMarks = await evaluate("window.electronAPI.knowledge.getByWork('epub-en-textbook')");
+    assert.ok(initialTextbookMarks.length >= 1, `Expected at least 1 mark in textbook, found ${initialTextbookMarks.length}`);
+    const textbookMarkId = initialTextbookMarks[0].id;
+
+    // Update note content on the mark
+    await evaluate(`window.electronAPI.knowledge.save({
+      id: ${JSON.stringify(textbookMarkId)},
+      workId: 'epub-en-textbook',
+      type: 'highlight',
+      location: ${JSON.stringify(initialTextbookMarks[0].location)},
+      noteContent: 'Cost accounting analysis of cost behavior and value creation',
+      actor: 'reader'
+    })`);
+    await pause(500);
+
+    // Reveal toolbar via hover
+    await evaluate("window.dispatchEvent(new MouseEvent('mousemove', { clientX: 200, clientY: 20, bubbles: true }))");
+    await pause(400);
+    await shot('epub-en-textbook-1280');
+
+    // Open Knowledge Drawer to check Marks list grouped by chapter
+    await evaluate("document.querySelector('[data-toggle-knowledge]')?.click()");
+    await until("!!document.querySelector('[role=\"complementary\"]')", 100);
+    await pause(800);
+
+    const textbookChapterGroups = await evaluate(`(()=>{
+      return [...document.querySelectorAll('[data-marks-chapter-header]')].map(el => el.textContent.trim());
+    })()`);
+    console.log('[epub-markup-live] textbook chapter groups:', textbookChapterGroups);
+    assert.ok(textbookChapterGroups.length >= 1, 'Expected at least 1 chapter group header in Marks list');
+    results.textbookChapterGroups = textbookChapterGroups;
+    await shot('epub-en-textbook-marks-grouped');
+
+    // Test Jump Back from Marks list
+    const pageBeforeJump = await evaluate("document.querySelector('[data-page-number]')?.getAttribute('data-page-number') || ''");
+    // Advance away
+    await key('PageDown');
+    await pause(800);
+    await until("!document.querySelector('.animate-spin')", 60);
+
+    // Click mark in Marks list to jump back
+    await evaluate("document.querySelector('[data-marks-row]')?.click()");
+    await pause(1000);
+    const pageAfterJump = await evaluate("document.querySelector('[data-page-number]')?.getAttribute('data-page-number') || ''");
+    results.textbookJump = { before: pageBeforeJump, after: pageAfterJump };
+
+    // Close Knowledge Drawer
+    await key('Escape');
+    await pause(400);
+
+    // Undo the textbook operations (first note content, second highlight mark)
+    const textbookUndo1 = await evaluate("window.electronAPI.materialSave.undo('epub-en-textbook')");
+    console.log('[epub-markup-live] textbook undo 1 (note):', textbookUndo1);
+    assert.ok(textbookUndo1.ok, 'Textbook undo 1 must succeed');
+
+    const textbookUndo2 = await evaluate("window.electronAPI.materialSave.undo('epub-en-textbook')");
+    console.log('[epub-markup-live] textbook undo 2 (mark):', textbookUndo2);
+    assert.ok(textbookUndo2.ok, 'Textbook undo 2 must succeed');
+
+    const marksAfterUndo = await evaluate("window.electronAPI.knowledge.getByWork('epub-en-textbook')");
+    console.log('[epub-markup-live] textbook marks after undo:', marksAfterUndo.length);
+    assert.strictEqual(marksAfterUndo.length, 0, 'Textbook marks count must decrease to 0 after undos');
 
     // Save test results summary to disk
     fs.writeFileSync(path.join(directory, 'results.json'), JSON.stringify(results, null, 2));

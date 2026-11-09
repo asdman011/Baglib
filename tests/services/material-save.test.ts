@@ -261,6 +261,68 @@ test('discarded redo branch stays discarded after new action, undo, redo and res
   } finally { db.close(); rmSync(directory, { recursive: true, force: true }); }
 });
 
+test('materialSource: work with both PDF and EPUB keeps its existing PDF redo state; EPUB-only gets its own; stable across repeated calls', () => {
+  const db = createTestDatabase();
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'baglib-multi-source-'));
+  const pdfFile = path.join(directory, 'book.pdf');
+  const epubFile = path.join(directory, 'book.epub');
+  writeFileSync(pdfFile, 'pdf content');
+  writeFileSync(epubFile, 'epub content');
+
+  // Work 1: Has BOTH a PDF source and an EPUB source
+  db.exec("INSERT INTO work(id,title) VALUES('w_both','Dual Format Book'); INSERT INTO edition(id,work_id) VALUES('e_both','w_both');");
+  // Insert EPUB source first (to test that unordered query would have picked it)
+  db.exec("INSERT INTO source(id,edition_id,source_type,added_at) VALUES('s_epub','e_both','file','2026-11-01T10:00:00Z');");
+  db.prepare('INSERT INTO file_source_detail(source_id,file_path) VALUES(?,?)').run('s_epub', epubFile);
+  // Insert PDF source second
+  db.exec("INSERT INTO source(id,edition_id,source_type,added_at) VALUES('s_pdf','e_both','file','2026-11-02T10:00:00Z');");
+  db.prepare('INSERT INTO file_source_detail(source_id,file_path) VALUES(?,?)').run('s_pdf', pdfFile);
+
+  // Work 2: Has ONLY an EPUB source
+  db.exec("INSERT INTO work(id,title) VALUES('w_epub','EPUB Only Book'); INSERT INTO edition(id,work_id) VALUES('e_epub','w_epub');");
+  db.exec("INSERT INTO source(id,edition_id,source_type,added_at) VALUES('s_epub_only','e_epub','file','2026-11-03T10:00:00Z');");
+  db.prepare('INSERT INTO file_source_detail(source_id,file_path) VALUES(?,?)').run('s_epub_only', epubFile);
+
+  const service = new MaterialSaveService({ db, python: () => null, helper, staging: directory, backupFolder: () => directory });
+
+  try {
+    // 1. Existing PDF state is kept when work has both formats
+    // Pre-seed redo state under s_pdf (the PDF source)
+    db.prepare("INSERT INTO material_save_state(source_id,redo_json,updated_at) VALUES('s_pdf',?,'2026-11-09T10:00:00Z')").run(JSON.stringify({ redo: ['batch-pdf-1', 'batch-pdf-2'], discarded: [] }));
+    // Also seed a different state under s_epub to verify it is NOT picked
+    db.prepare("INSERT INTO material_save_state(source_id,redo_json,updated_at) VALUES('s_epub',?,'2026-11-09T10:00:00Z')").run(JSON.stringify({ redo: ['batch-epub-rogue'], discarded: [] }));
+
+    // Calling redoStack on w_both MUST return the PDF redo stack
+    assert.deepEqual(service.redoStack('w_both'), ['batch-pdf-1', 'batch-pdf-2'], 'Work with PDF and EPUB must keep PDF redo state');
+
+    // Updating redoStack on w_both writes to s_pdf, not s_epub
+    service.setRedoStack('w_both', ['batch-pdf-1']);
+    assert.deepEqual(service.redoStack('w_both'), ['batch-pdf-1']);
+    const pdfRow = db.prepare("SELECT redo_json FROM material_save_state WHERE source_id='s_pdf'").pluck().get() as string;
+    assert.ok(pdfRow.includes('batch-pdf-1'), 'Written to s_pdf');
+    const epubRow = db.prepare("SELECT redo_json FROM material_save_state WHERE source_id='s_epub'").pluck().get() as string;
+    assert.ok(epubRow.includes('batch-epub-rogue'), 's_epub row unmodified');
+
+    // 2. EPUB-only work gets its own redo state
+    assert.deepEqual(service.redoStack('w_epub'), [], 'EPUB-only book starts with empty redo stack');
+    service.setRedoStack('w_epub', ['batch-epub-1', 'batch-epub-2']);
+    assert.deepEqual(service.redoStack('w_epub'), ['batch-epub-1', 'batch-epub-2']);
+    const epubOnlyRow = db.prepare("SELECT redo_json FROM material_save_state WHERE source_id='s_epub_only'").pluck().get() as string;
+    assert.ok(epubOnlyRow.includes('batch-epub-1'), 'Written to s_epub_only');
+
+    // 3. Result is completely stable across repeated calls
+    for (let i = 0; i < 10; i++) {
+      assert.deepEqual(service.redoStack('w_both'), ['batch-pdf-1']);
+      assert.deepEqual(service.redoStack('w_epub'), ['batch-epub-1', 'batch-epub-2']);
+      assert.equal(service.materialSource('w_both')?.sourceId, 's_pdf');
+      assert.equal(service.materialSource('w_epub')?.sourceId, 's_epub_only');
+    }
+  } finally {
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 
 function historyFixture() {
   const db = createTestDatabase();

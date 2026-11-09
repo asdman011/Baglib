@@ -1,7 +1,7 @@
-## KEY-274: Reader Task 6.12: Markup tools and Marks list for the EPUB reader — 2026-11-09, Antigravity (completed and verified)
+## KEY-274: Reader Task 6.12: Markup tools and Marks list for the EPUB reader — 2026-11-09, Antigravity (completed and verified; review fixes applied)
 
 - **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
-- **Implemented & Verified**:
+- **Implemented & Verified (including Review Fixes)**:
   - **Reflowable EPUB Markup Tools (`src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/reader/ReaderMarkupBar.tsx`, `src/renderer/components/reader/ZenSelectionMenu.tsx`)**:
     - Enabled Highlight, Underline, Strike, Note, Bookmark, and Comment thread markup tools for reflowable EPUB books in `FullPageBookReader`.
     - Wired selection menu with Highlight, Underline, Strike, and Note actions.
@@ -13,36 +13,30 @@
     - Implemented CFI-based sorting and jump navigation in EPUBs.
     - Embedded unified `PdfMarksList` into the Zen knowledge drawer.
   - **ADR-012 Safe Save Compliance**:
-    - EPUB files are never modified on disk (100% byte-identical file SHA-256 verified before and after all operations).
+    - EPUB files are never modified on disk (100% byte-identical file SHA-256 verified before and after all operations across all 3 test EPUBs).
     - Localized notice displayed: `"Marks are kept in BagLib"` / `"العلامات محفوظة في باجليب"`.
     - Save button and PDF file save policy menu are completely hidden when an EPUB is active.
-  - **Undo / Redo via MarkHistoryService (`src/main/services/material-save.ts`, `src/renderer/components/reader/FullPageBookReader.tsx`)**:
+  - **Undo / Redo via MarkHistoryService & Redo Stack Determinism (`src/main/services/material-save.ts`, `src/renderer/components/reader/FullPageBookReader.tsx`)**:
     - Enabled `Ctrl+Z` / `Ctrl+Shift+Z` keyboard shortcuts in EPUB reader.
-    - Enhanced `MaterialSaveService` to resolve material source records across both PDF and EPUB files, persisting redo stacks to `material_save_state.redo_json`.
+    - Preserved `this.file(workId)` precedence for PDF works in `MaterialSaveService.materialSource` so PDF redo history is never hijacked by dual-source works.
+    - Deterministic fallback for EPUB sources using `ORDER BY s.id ASC LIMIT 1`.
+    - Added unit test coverage in `tests/services/material-save.test.ts` (21/21 passed).
     - Verified that mark creations and comment thread additions undo and redo cleanly across batches.
   - **Bilingual & Layout Verification**:
     - Added centralized translation keys in Arabic and English in `src/renderer/translations.ts` (`marksSortChapter`, `epubMarksKeptInBaglib`, `epubMarksGeneral`, `epubMarksChapter`, `markKindComments`, `markKindDetails`).
-    - Verified in Arabic (RTL) and English (LTR) at 1280 px and 480 px.
-- **Exact Files Changed (14 files; shared files KEY-274 hunks only)**:
-  - `src/shared/epub-marks.ts`
-  - `src/shared/pdf-markup.ts`
+    - Verified in Arabic (RTL) and English (LTR) at 1280 px and 480 px with marks and revealed markup toolbar visible.
+    - Non-mouse accessibility: verified viewport tap/click toggles top bar visibility for non-mouse devices.
+- **Exact Files Changed for Review Fixes**:
   - `src/main/services/material-save.ts`
-  - `src/renderer/translations.ts` (KEY-274 keys only)
-  - `src/renderer/components/reader/PdfMarksList.tsx`
-  - `src/renderer/components/reader/PdfMarkPopover.tsx`
-  - `src/renderer/components/reader/ReaderMarkupBar.tsx`
-  - `src/renderer/components/reader/ZenTopBar.tsx`
-  - `src/renderer/components/reader/ZenKnowledgeDrawer.tsx`
-  - `src/renderer/components/reader/ZenSelectionMenu.tsx`
-  - `src/renderer/components/reader/FullPageBookReader.tsx`
-  - `tests/services/epub-marks.test.ts`
-  - `docs/features/feature - EPUB Markup and Marks.md`
-  - `scripts/epub-markup-live/`
+  - `tests/services/material-save.test.ts`
+  - `scripts/epub-markup-live/main.cjs`
+  - `scripts/epub-markup-live/run.mjs`
+  - `docs/agent-ops/reports/KEY-274.md`
 - **Verification**:
-  - Unit tests: `tests/services/epub-marks.test.ts` (15/15 passed), `tests/ui/translation-keys.test.ts` (2/2 passed).
-  - Full test suite: `npm test` → **1491 tests passed, 0 failures** across 306 suites.
-  - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (success in 130ms), `git diff --check` (0 errors).
-  - Live harness: `scripts/epub-markup-live/run.mjs` executed real English EPUB (`Why Would Feminists Trust the Police...epub`) and Arabic EPUB (`arabic-test.epub`), verified 100% byte-identical file hash preservation before and after operations, verified mark creation (Highlight, Underline, Strike), verified popover & comments, verified chapter-grouped marks list, verified undo/redo batches, and captured screenshots in `.baglib-data/key274-evidence/`.
+  - Unit tests: `tests/services/material-save.test.ts` (21/21 passed), `tests/services/epub-marks.test.ts` (15/15 passed), `tests/ui/translation-keys.test.ts` (2/2 passed).
+  - Full test suite: `npm test` → **1492 tests passed, 0 failures** across 306 suites.
+  - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors), `npx tsup` (success in 148ms), `git diff --check` (0 errors).
+  - Live harness: `scripts/epub-markup-live/run.mjs` executed Arabic EPUB, English small text EPUB, and English 42 MB textbook EPUB, verified 100% byte-identical file hash preservation before and after operations, verified mark creation, verified popover & comments, verified chapter-grouped marks list, verified jump-back, verified undo/redo batches, and captured 9 evidence screenshots in `.baglib-data/key274-evidence/`.
 
 ## KEY-275: Reader Task 8.3: Review uncertain OCR words — 2026-11-09, Antigravity (review fixes verified)
 
