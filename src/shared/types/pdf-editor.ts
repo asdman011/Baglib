@@ -1,3 +1,5 @@
+import type { PdfAccessibilityReport, PdfAccessibilityFixResult } from './pdf-accessibility';
+
 export const PDF_FEATURES = [
   'inspect',
   'preview',
@@ -37,6 +39,7 @@ export const PDF_FEATURES = [
   'document-properties',
   'basic-info',
   'convert-file-pdf',
+  'accessibility',
 ] as const;
 export type PdfFeature = typeof PDF_FEATURES[number];
 
@@ -78,6 +81,7 @@ export const PDF_ENGINE_OPERATIONS = [
   'document-properties',
   'basic-info',
   'convert-file-pdf',
+  'accessibility',
 ] as const;
 export type PdfOperation = typeof PDF_ENGINE_OPERATIONS[number];
 export type PdfOutputFormat = 'pdf' | 'docx' | 'odt' | 'xlsx' | 'pptx' | 'ppt' | 'odp' | 'html' | 'json' | 'txt' | 'md' | 'csv' | 'zip' | 'xml' | 'rtf' | 'png' | 'jpg';
@@ -160,6 +164,9 @@ export interface PdfEditorAPI {
   exportPipelineFolderScan?(folder: WatchedFolderSource, pipeline: StirlingPipeline): Promise<PdfResult<string>>;
   importPipeline?(jsonContent: string): Promise<PdfResult<StirlingPipeline>>;
   checkWatchedFolders?(): Promise<PdfResult<{ processed: number; errors: string[] }>>;
+  accessibilityCheck?(input: { path: string; runVeraPdf?: boolean }): Promise<PdfResult<PdfAccessibilityReport>>;
+  fixAccessibility?(input: { path: string; language?: string; title?: string }): Promise<PdfResult<PdfAccessibilityFixResult>>;
+  saveAccessibilityFix?(input: { path: string; stagedPath: string }): Promise<PdfResult<{ ok: boolean; sha256?: string; backup?: string; error?: string }>>;
 }
 
 export interface StirlingPipelineStep {

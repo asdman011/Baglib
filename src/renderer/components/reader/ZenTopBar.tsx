@@ -24,6 +24,8 @@ import {
   FilePenLine,
   ScanText,
   FileDown,
+  ShieldCheck,
+  Volume2,
 } from 'lucide-react';
 import type { BookItem } from '../../types/library';
 import type { BookFormat, ReaderViewMode } from '../../libs/reader/types';
@@ -53,6 +55,9 @@ interface ZenTopBarProps {
   isWorkstationOpen?: boolean;
   onToggleOcrInspector?: () => void;
   isOcrInspectorOpen?: boolean;
+  onToggleAccessibility?: () => void;
+  isAccessibilityOpen?: boolean;
+  onOpenReflow?: () => void;
   onToggleDictionary: () => void;
   onToggleSettings: () => void;
   isSettingsOpen: boolean;
@@ -96,6 +101,9 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
   isWorkstationOpen,
   onToggleOcrInspector,
   isOcrInspectorOpen,
+  onToggleAccessibility,
+  isAccessibilityOpen = false,
+  onOpenReflow,
   onToggleDictionary,
   onToggleSettings,
   isSettingsOpen,
@@ -367,6 +375,43 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
             <ScanText className="w-4 h-4" />
             <span className="hidden 2xl:inline text-[11px] font-bold">
               {t('ocrOpenInspector')}
+            </span>
+          </button>
+        )}
+        {detectedFormat === 'PDF' && onToggleAccessibility && (
+          <button
+            type="button"
+            tabIndex={0}
+            data-pdf-accessibility-button
+            onClick={onToggleAccessibility}
+            aria-pressed={!!isAccessibilityOpen}
+            aria-label={t('pdfA11yCheck')}
+            title={t('pdfA11yCheck')}
+            className={`p-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-emerald-500 ${
+              isAccessibilityOpen
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                : 'bg-canvas/80 border-subtle text-muted hover:text-main'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span className="hidden 2xl:inline text-[11px] font-bold">
+              {t('pdfA11yCheck')}
+            </span>
+          </button>
+        )}
+        {detectedFormat === 'PDF' && onOpenReflow && (
+          <button
+            type="button"
+            tabIndex={0}
+            data-pdf-reflow-top-button
+            onClick={onOpenReflow}
+            aria-label={t('pdfA11yReflowReader')}
+            title={t('pdfA11yReflowReader')}
+            className="p-1.5 rounded-xl border border-subtle bg-canvas/80 text-muted hover:text-main transition-all cursor-pointer flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-emerald-500"
+          >
+            <Volume2 className="w-4 h-4" />
+            <span className="hidden 2xl:inline text-[11px] font-bold">
+              {t('pdfA11yReflowReader')}
             </span>
           </button>
         )}

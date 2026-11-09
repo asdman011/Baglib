@@ -128,6 +128,10 @@ import {
 import { useReaderPanels } from './useReaderPanels';
 import { PdfWorkstationPanel } from './PdfWorkstationPanel';
 import { OcrInspectorDrawer } from './OcrInspectorDrawer';
+import { PdfAccessibilityDrawer } from './PdfAccessibilityDrawer';
+import { PdfReflowModal } from './PdfReflowModal';
+import { PdfReadingOrderOverlay } from './PdfReadingOrderOverlay';
+import type { PdfAccessibilityReadingOrderItem } from '../../../shared/types/pdf-accessibility';
 import {
   applyWordCorrection,
   applyStoredCorrections,
@@ -356,6 +360,12 @@ const SourceBookReader: React.FC = () => {
   const [showOcrDebug, setShowOcrDebug] = useState<boolean>(false);
   const isOcrMenuOpen = panels.activePanel === 'ocr';
   const setIsOcrMenuOpen = panels.setters['ocr'];
+  const isAccessibilityDrawerOpen = panels.activePanel === 'accessibility';
+  const setIsAccessibilityDrawerOpen = panels.setters['accessibility'];
+  const [isReflowModalOpen, setIsReflowModalOpen] = useState<boolean>(false);
+  const [showReadingOrderOverlay, setShowReadingOrderOverlay] = useState<boolean>(false);
+  const [readingOrderItems, setReadingOrderItems] = useState<PdfAccessibilityReadingOrderItem[]>([]);
+  const [isReadingOrderTagged, setIsReadingOrderTagged] = useState<boolean>(false);
   const [ocrProgress, setOcrProgress] = useState<{ current: number; total: number; words: number } | null>(null);
   const [activeOcrWordIndex, setActiveOcrWordIndex] = useState<number | null>(null);
 
@@ -3393,6 +3403,14 @@ const SourceBookReader: React.FC = () => {
         isWorkstationOpen={isDocumentPanelOpen}
         onToggleOcrInspector={() => { setIsInkModeActive(false); setIsOcrMenuOpen(previous => !previous); }}
         isOcrInspectorOpen={isOcrMenuOpen}
+        onToggleAccessibility={() => {
+          setIsInkModeActive(false);
+          setIsAccessibilityDrawerOpen(previous => !previous);
+        }}
+        isAccessibilityOpen={isAccessibilityDrawerOpen}
+        onOpenReflow={() => {
+          setIsReflowModalOpen(true);
+        }}
         onToggleSettings={handleToggleSettings}
         isSettingsOpen={isSettingsOpen}
         onTogglePlugins={() => {
@@ -3646,6 +3664,42 @@ const SourceBookReader: React.FC = () => {
           selectedEngine={ocrEngine}
           onSelectEngine={selectOcrEngine}
           onEnginesChanged={refreshOcrEngines}
+        />
+
+        {/* PDF Accessibility Drawer */}
+        <PdfAccessibilityDrawer
+          isOpen={isAccessibilityDrawerOpen}
+          onClose={() => {
+            setIsAccessibilityDrawerOpen(false);
+          }}
+          filePath={activeBook?.filePath}
+          workId={activeBook?.id}
+          readingPage={readingPage}
+          onOpenOcr={() => {
+            setIsAccessibilityDrawerOpen(false);
+            setIsOcrMenuOpen(true);
+          }}
+          onOpenReflow={() => {
+            setIsReflowModalOpen(true);
+          }}
+          showReadingOrder={showReadingOrderOverlay}
+          onToggleReadingOrder={(show, order, isTagged) => {
+            setShowReadingOrderOverlay(show);
+            if (order) setReadingOrderItems(order);
+            if (isTagged !== undefined) setIsReadingOrderTagged(isTagged);
+          }}
+        />
+
+        {/* PDF Reflow & Read-Aloud Modal */}
+        <PdfReflowModal
+          isOpen={isReflowModalOpen}
+          onClose={() => setIsReflowModalOpen(false)}
+          currentPage={readingPage}
+          totalPages={maxBookPages}
+          onPageChange={(p) => setReadingPage(p)}
+          pageText={extractedPages[readingPage - 1] || ''}
+          docTitle={activeBook?.title}
+          defaultDirection={readerDirection}
         />
 
         {/* TTS & Audiobook Mini Player (KEY-145) */}
@@ -4349,6 +4403,7 @@ const SourceBookReader: React.FC = () => {
                   key={`embedded-${activeBook.id}`}
                   embedded
                   workId={activeBook.id}
+                  filePath={activeBook.filePath}
                   sourceId={currentSourceId ?? undefined}
                   fileUrl={pdfBlobUrl || undefined}
                   initialPage={readingPage}
@@ -4429,6 +4484,13 @@ const SourceBookReader: React.FC = () => {
                       }}
                     />
                   </OcrPageOverlay>
+                )}
+                {showReadingOrderOverlay && (
+                  <PdfReadingOrderOverlay
+                    pageNumber={readingPage}
+                    items={readingOrderItems}
+                    isTagged={isReadingOrderTagged}
+                  />
                 )}
                 <OcrQuickActionPill
                   compact

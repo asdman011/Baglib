@@ -654,6 +654,9 @@ export const API = {
     restoreVersion: (sessionId: string, versionFilename: string) => ipcRenderer.invoke('pdf-editor:versions:restore', sessionId, versionFilename),
     undoVersion: (sessionId: string) => ipcRenderer.invoke('pdf-editor:versions:undo', sessionId),
     deleteVersion: (sessionId: string, versionFilename: string) => ipcRenderer.invoke('pdf-editor:versions:delete', sessionId, versionFilename),
+    accessibilityCheck: (input: { path: string; runVeraPdf?: boolean }) => ipcRenderer.invoke('pdf-editor:accessibility-check', input),
+    fixAccessibility: (input: { path: string; language?: string; title?: string }) => ipcRenderer.invoke('pdf-editor:fix-accessibility', input),
+    saveAccessibilityFix: (input: { path: string; stagedPath: string }) => ipcRenderer.invoke('pdf-editor:save-accessibility-fix', input),
     onSourceChanged: callback => {
       const listener = (_: unknown, source: { workId: string | null; sourceId: string | null }) => callback(source);
       ipcRenderer.on('pdf-editor:source-changed', listener);

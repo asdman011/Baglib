@@ -69,6 +69,10 @@ import type { MaterialSaveStatus } from '../../../shared/material-save';
 import { SaveIncidentBanner } from './FileSaveUi';
 import { PdfNativeViewer } from './PdfNativeViewer';
 import { PdfToolDirectory } from './PdfToolDirectory';
+import { PdfAccessibilityDrawer } from './PdfAccessibilityDrawer';
+import { PdfReflowModal } from './PdfReflowModal';
+import { PdfReadingOrderOverlay } from './PdfReadingOrderOverlay';
+import type { PdfAccessibilityReadingOrderItem } from '../../../shared/types/pdf-accessibility';
 import { PdfWorkstationTools, type PdfCanvasUse, type StirlingWorkstationMode } from './PdfWorkstationTools';
 import { StirlingToolsHub } from '../pdf-workstation/StirlingToolsHub';
 import { PdfPageEditor, type PdfPageEditorHandle } from './PdfPageEditor';
@@ -114,6 +118,7 @@ const featureKeys: Record<PdfCapability['feature'], TranslationKey> = {
   'document-properties': 'stirlingDocProperties',
   'basic-info': 'stirlingBasicInfo',
   'convert-file-pdf': 'stirlingConvertFile',
+  accessibility: 'pdfA11yCheck',
 };
 
 const PDF_TYPE_LABELS: Record<string, TranslationKey> = { book: 'pdfTypeBook', research_paper: 'pdfTypeResearch', article: 'pdfTypeArticle', lecture: 'pdfTypeLecture' };
@@ -129,6 +134,7 @@ const MODE_TABS: { id: StirlingWorkstationMode; labelKey: TranslationKey; defaul
 export function PdfWorkstationPanel({
   workId,
   sourceId,
+  filePath,
   onClose,
   embedded = false,
   initialPage = 1,
@@ -142,6 +148,7 @@ export function PdfWorkstationPanel({
 }: {
   workId?: string;
   sourceId?: string;
+  filePath?: string;
   onClose: () => void;
   embedded?: boolean;
   initialPage?: number;
@@ -175,6 +182,10 @@ export function PdfWorkstationPanel({
   }, [activeOverlay]);
   const [pinnedChrome, setPinnedChrome] = useState<string[]>([]);
   const [collapsedChrome, setCollapsedChrome] = useState<string[]>([]);
+  const [isReflowModalOpen, setIsReflowModalOpen] = useState(false);
+  const [showReadingOrderOverlay, setShowReadingOrderOverlay] = useState(false);
+  const [readingOrderItems, setReadingOrderItems] = useState<PdfAccessibilityReadingOrderItem[]>([]);
+  const [isReadingOrderTagged, setIsReadingOrderTagged] = useState(false);
   const chromeLabels = { top: 'pdfChromeTop', rail: 'pdfChromeRail', library: 'pdfChromeLibrary', tools: 'pdfDirectoryTitle', bottom: 'pdfChromeBottom' } as const;
   const pinChrome = (zone: keyof typeof chromeLabels) => <div className="flex shrink-0 items-center"><button type="button" aria-pressed={pinnedChrome.includes(zone)} title={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} aria-label={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} onClick={() => setPinnedChrome(previous => previous.includes(zone) ? previous.filter(item => item !== zone) : [...previous, zone])} className="rounded-lg p-2 hover:bg-emerald-500/20"><Pin size={14} className={pinnedChrome.includes(zone) ? 'text-emerald-500' : ''} /></button><button type="button" aria-label={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} title={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} onClick={() => setCollapsedChrome(previous => [...previous.filter(item => item !== zone), zone])} className="rounded-lg p-1 hover:bg-emerald-500/20"><X size={12} /></button></div>;
   const workstationRoot = useRef<HTMLElement | null>(null);
@@ -936,6 +947,35 @@ export function PdfWorkstationPanel({
         />
 
         <div className="ms-auto flex shrink-0 items-center gap-1">
+          {/* Accessibility & Reflow Buttons */}
+          <button
+            type="button"
+            tabIndex={0}
+            data-pdf-accessibility-button
+            onClick={() => setTool(tool === 'accessibility' ? 'inspect' : 'accessibility')}
+            aria-label={t('pdfA11yCheck')}
+            title={t('pdfA11yCheck')}
+            className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-emerald-500 ${
+              tool === 'accessibility'
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                : 'border-subtle bg-surface text-muted hover:text-main'
+            }`}
+          >
+            <ShieldCheck size={14} />
+            <span className="hidden xl:inline text-xs font-semibold">{t('pdfA11yCheck')}</span>
+          </button>
+          <button
+            type="button"
+            tabIndex={0}
+            data-pdf-reflow-top-button
+            onClick={() => setIsReflowModalOpen(true)}
+            aria-label={t('pdfA11yReflowReader')}
+            title={t('pdfA11yReflowReader')}
+            className="p-1.5 rounded-lg border border-subtle bg-surface text-muted hover:text-main transition-all cursor-pointer flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-emerald-500"
+          >
+            <BookOpen size={14} />
+            <span className="hidden xl:inline text-xs font-semibold">{t('pdfA11yReflowReader')}</span>
+          </button>
           {/* Compact PDF Tools & Processor Button + Popover */}
           <div className={headerDensity >= 3 ? 'hidden' : 'relative'}>
             <button
@@ -1707,6 +1747,13 @@ export function PdfWorkstationPanel({
                   viewMode={viewMode === 'double' ? 'two-column' : viewMode === 'scroll' ? 'scrolled' : 'single'}
                   zoom={zoom / 100}
                 />
+                {showReadingOrderOverlay && (
+                  <PdfReadingOrderOverlay
+                    pageNumber={page}
+                    items={readingOrderItems}
+                    isTagged={isReadingOrderTagged}
+                  />
+                )}
               </div>
             )}
             {showPagePreview && preview && (
@@ -2371,6 +2418,46 @@ export function PdfWorkstationPanel({
           </aside>
         </>
       )}
+
+      {tool === 'accessibility' && (
+        <PdfAccessibilityDrawer
+          isOpen={true}
+          onClose={() => setTool('inspect')}
+          filePath={filePath || session?.filename || fileUrl}
+          workId={workId || session?.workId || undefined}
+          readingPage={preview?.page || initialPage || 1}
+          onOpenReflow={() => setIsReflowModalOpen(true)}
+          showReadingOrder={showReadingOrderOverlay}
+          onToggleReadingOrder={(show, order, isTagged) => {
+            setShowReadingOrderOverlay(show);
+            if (order) setReadingOrderItems(order);
+            if (isTagged !== undefined) setIsReadingOrderTagged(isTagged);
+          }}
+        />
+      )}
+
+      <PdfReflowModal
+        isOpen={isReflowModalOpen}
+        onClose={() => setIsReflowModalOpen(false)}
+        currentPage={preview?.page || initialPage || 1}
+        totalPages={totalPages || 1}
+        onPageChange={(p) => {
+          if (onPageChange) onPageChange(p);
+          if (preview) setPreview({ ...preview, page: p });
+        }}
+        pageText={
+          inspection?.pages.find(p => p.page === (preview?.page || initialPage || 1))?.text ||
+          (typeof document !== 'undefined'
+            ? Array.from(document.querySelectorAll('.textLayer span'))
+                .map(s => s.textContent || '')
+                .join(' ')
+                .trim()
+            : '') ||
+          ''
+        }
+        docTitle={session?.filename}
+        defaultDirection={lang === 'ar' ? 'rtl' : 'ltr'}
+      />
     </aside>
   );
 }

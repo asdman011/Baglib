@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, type IpcMainInvokeEvent } from 'electron';
 import fs from 'node:fs';
-import { mkdir, writeFile, unlink, stat, readdir, copyFile, utimes } from 'node:fs/promises';
+import { mkdir, writeFile, unlink, stat, utimes } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { readerAssetUrl } from '../../shared/utils/reader-asset-url';
@@ -8,8 +8,8 @@ import { getDatabase } from '../database/connection';
 import { PdfEditorJobs } from '../services/pdf-editor/jobs';
 import { runPdfWorker } from '../services/pdf-editor/process';
 import { publishPdfOutput } from '../services/pdf-editor/publication';
-import { fileSha256 } from '../services/pdf-editor/source';
-import { pdfCapabilities, type PdfError, type PdfResult, type PdfVersionItem } from '../../shared/types/pdf-editor';
+
+import { pdfCapabilities, type PdfError, type PdfResult } from '../../shared/types/pdf-editor';
 import { registerPdfCloudIpc } from './pdf-cloud';
 import { registerPdfCollaborationIpc } from './pdf-collaboration';
 import { pdfEngineTools } from '../services/pdf-editor/tools';
@@ -22,6 +22,7 @@ import { runStirlingPdf, defaultStirlingSidecar, resolveStirlingEndpoint } from 
 import { SqliteWorkRepository } from '../database/repositories/work.repository';
 import type { PdfSaveRequest } from '../../shared/types/pdf-editor';
 import { PdfAudit } from '../services/pdf-editor/audit';
+import { runAccessibilityCheck, fixAccessibilityMetadata, saveAccessibilityFix } from '../services/pdf-editor/accessibility';
 import { settingsRepository } from '../database/repositories/settings.repository';
 import {
   stirlingProcessor,
@@ -292,5 +293,21 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
     if (!source.sourceId) throw new Error('invalid-source');
     await deletePdfVersion(backupDirectory(), source.sourceId, versionFilename);
     return true;
+
+  }));
+  ipcMain.handle('pdf-editor:accessibility-check', (event, input: { path: string; runVeraPdf?: boolean }) => result(event, async () => {
+    if (!input || typeof input.path !== 'string' || !path.isAbsolute(input.path)) throw new Error('invalid-request');
+    const tools = pdfEngineTools();
+    return runAccessibilityCheck(tools, input.path, { runVeraPdf: input.runVeraPdf });
+  }));
+  ipcMain.handle('pdf-editor:fix-accessibility', (event, input: { path: string; language?: string; title?: string }) => result(event, async () => {
+    if (!input || typeof input.path !== 'string' || !path.isAbsolute(input.path)) throw new Error('invalid-request');
+    const tools = pdfEngineTools();
+    return fixAccessibilityMetadata(tools, input.path, { language: input.language, title: input.title });
+  }));
+  ipcMain.handle('pdf-editor:save-accessibility-fix', (event, input: { path: string; stagedPath: string }) => result(event, async () => {
+    if (!input || typeof input.path !== 'string' || typeof input.stagedPath !== 'string') throw new Error('invalid-request');
+    const tools = pdfEngineTools();
+    return saveAccessibilityFix(tools, input.path, input.stagedPath);
   }));
 }

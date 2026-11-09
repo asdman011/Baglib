@@ -1,4 +1,10 @@
+## KEY-281 ? active, 2026-11-09, Codex
+
+- [2026-11-09, Codex] KEY-281 active (session 01a1c155-1b05-7e10-8260-f113dd254066). ADR-013 schema only authorized; implementing attempt evidence and question kinds. KEY-272 files/hunks preserved. Tests/live verification and task-scoped authorized publication pending; Jira delegated to Claude.
+
 ## KEY-279 — 2026-11-09, Codex (implemented and verified, publication pending)
+
+- Publication receipt, local post-commit. fb3cf97bea084d7a10190085ba965c69e4bd7ff1 pushed normally to origin/feature/library-domain, exact remote hash verified. Exactly23taskfiles/hunks committed, ending Agent: Codex. All live profiles and 3 verification checkout directories deleted; verification junctions detached first. Own renderer server stopped. Sibling changes and existing edits preserved. Jira delegated to Claude. Stopped after KEY-279.
 
 - Session 01a1c136-f7e9-76d0-ac71-a2a3c1412c5a. Explicit task-scoped commit/push authorization applies to origin/feature/library-domain. Jira belongs to Claude.
 - Source-precise book grammar and centralized link creation, repository edition/source identity with derived source count, read-only Work-scoped source lookup, exact-source reader/workstation navigation, localized eight-second missing-source fallback, source-scoped OCR state/keys, annotation and assistant citations, compatible backlinks. Native investigation caught and fixed Strict Mode replay overwriting requested pages with a saved location.
@@ -31,8 +37,54 @@
 - `CURRENT_TASK.md`
 - `IMPLEMENTATION_PLAN.md`
 
-## KEY-276 review fix — 2026-11-09, Codex (implemented and verified; publication pending)
+## KEY-272: Reader Task 6.10: PDF accessibility check and reflowed read-aloud — 2026-11-09, Antigravity (implemented and verified, push pending)
 
+- **Conversation ID**: `0ba1ad54-fb31-4f59-b976-e8d974322825`.
+- **Status**: Implemented and verified — live verification, static checks, unit test suites (1519/1519 passed), and screenshot evidence captured.
+- **Scope & Implementation**:
+  - Implemented `check_accessibility` in `assets/pdf-editor/engine.py` and `src/main/services/pdf-editor/accessibility.ts`: structural tags, language (`/Lang`), title and `DisplayDocTitle`, missing `/Alt` figure tags, missing `/ToUnicode` CMaps (especially for Arabic PUA glyphs), text layer presence per page (`pagesWithoutText`), reading order extraction, and optional veraPDF PDF/UA-1 execution.
+  - Implemented `fix_accessibility_metadata` (staged output) and `saveAccessibilityFix` adhering strictly to ADR-012 emergency copy rules (creates exactly 1 `.baglib-backup-<uuid>` file upon Save).
+  - Implemented IPC handlers: `pdf-editor:accessibility-check`, `pdf-editor:fix-accessibility`, `pdf-editor:save-accessibility-fix` and exposed in `src/preload/index.ts`.
+  - Implemented `PdfAccessibilityDrawer.tsx`: complete audit drawer, "Set Language" and "Set Title" forms with staged output, Save button, veraPDF PDF/UA-1 execution toggle, and Reading Order overlay toggle.
+  - Implemented `PdfReadingOrderOverlay.tsx`: interactive order badges over document pages.
+  - Implemented `PdfReflowModal.tsx`: distraction-free reflow reading view with font size zoom (12px to 32px), in-text keyword search, sentence-by-sentence TTS audio playback with active sentence highlighting, page navigation, and graceful missing voice notice.
+  - User Decision adhered: Test PC has only English/Japanese voices. When Arabic text is read, reflow view works fully while TTS displays a clear localized notice (`"No Arabic voice is installed on this device"` / `"لا يوجد صوت عربي مثبت على هذا الجهاز"`). Never downloads voices.
+  - All controls are keyboard focusable (`tabIndex={0}`). No horizontal overflow at 480px width.
+- **Verification**:
+  - `npm test`: 1519 passed, 0 failed.
+  - `npx tsc --noEmit`: 0 errors.
+  - `npx eslint`: 0 errors.
+  - `npx tsup`: built cleanly.
+  - `git diff --check`: clean.
+  - Live check: `node scripts/pdf-a11y-live/run.mjs` exited with code 0 across 4 real benchmark files in Arabic and English (`.baglib-data/key272-evidence/` screenshots 01 to 09).
+- **Exact files touched**:
+  - `assets/pdf-editor/engine.py`
+  - `src/main/ipc/pdf-editor.ts`
+  - `src/main/services/pdf-editor/accessibility.ts`
+  - `src/preload/index.ts`
+  - `src/renderer/components/reader/FullPageBookReader.tsx`
+  - `src/renderer/components/reader/PdfAccessibilityDrawer.tsx`
+  - `src/renderer/components/reader/PdfReadingOrderOverlay.tsx`
+  - `src/renderer/components/reader/PdfReflowModal.tsx`
+  - `src/renderer/components/reader/PdfToolDirectory.tsx`
+  - `src/renderer/components/reader/PdfWorkstationPanel.tsx`
+  - `src/renderer/components/reader/ZenTopBar.tsx`
+  - `src/renderer/components/reader/useReaderPanels.ts`
+  - `src/renderer/translations.ts`
+  - `src/shared/pdf-accessibility-utils.ts`
+  - `src/shared/types/pdf-accessibility.ts`
+  - `src/shared/types/pdf-editor.ts`
+  - `tests/real-files/README.md`
+  - `tests/services/pdf-accessibility.test.ts`
+  - `tests/test_pdf_accessibility.py`
+  - `scripts/pdf-a11y-live/`
+  - `docs/agent-ops/reports/KEY-272.md`
+  - `CURRENT_TASK.md`
+  - `IMPLEMENTATION_PLAN.md`
+
+## KEY-276 review fix — 2026-11-09, Codex (committed and pushed)
+
+- Publication receipt (local post-commit): `7569e97577a13377f45ea88f35f0e1b0020226e3` pushed normally to origin/feature/library-domain; remote exact hash verified. Nine KEY-276 files/hunks only; KEY-272 shared entry excluded using cached patch. Old history retained. Jira left to Claude; stopped.
 - Review of26f6d7a exposed unattached Hafs1:1. The attached-source map now places Hafs1:1 tafsir/translation before Hafs1:2 on Warsh1:1 only when installed Hafs1:1 is the basmala and Warsh1:1 starts with al-hamd. Warsh canonical text/UI stay unchanged. A counted-basmala script retains direct mapping. Existing labels retain actual Hafs numbers in both languages. The cache adapter is bumped to assistant-overlap-v2 so old maps rebuild.
 - `assertHafsCoverage` compares original Hafs reference identities after attachment and lists every missing reference. Initial test-first run reproduced three failures (missing basmala, counted-basmala handling, absent coverage function). Final15/15 focused pass, including source order/unchanged-text regression. Fresh full1495/1495 tests, zero failures/skips; tsc, five-file ESLint0errors0warnings and diff check pass. Disposable KEY-278 copy `.baglib-data/key276-fix-fTNNQr` verifies114surahs/6214Warsh ayahs/all6236Hafs ayahs attached, **zero unattached**;127tracked originals unchanged; copied profile deleted. Evidence retained in overlap.json/cleanup.json; `.baglib-data/key276-review-tests.log` holds full-suite receipt. No UI change, native rerun or new screenshots; no schema/dependency/download/original-file write.
 - Updated existing QUL.md, Quran Experience.md and local KEY-276 report with corrected coverage and the basmala rule. Claude attributed the late original catalog/WAL change to the user's installed BagLib jobs-table writes (read-only quick_check ok); this is reviewer-supplied attribution, not an inspection repeated by Codex.

@@ -10,7 +10,7 @@ const groups: { label: TranslationKey; mode: StirlingWorkstationMode; tools: Pdf
   { label: 'pdfDirectoryRecommended', mode: 'view', tools: ['redact', 'compress', 'sign', 'edit-content', 'organize', 'export-docx', 'ocr'] },
   { label: 'pdfDirectorySigning', mode: 'security', tools: ['sign'] },
   { label: 'pdfDirectorySecurity', mode: 'security', tools: ['encrypt', 'watermark', 'add-image', 'sanitize', 'unlock-forms'] },
-  { label: 'pdfDirectoryVerification', mode: 'view', tools: ['inspect', 'verify-signatures', 'validate'] },
+  { label: 'pdfDirectoryVerification', mode: 'view', tools: ['inspect', 'verify-signatures', 'validate', 'accessibility'] },
   { label: 'pdfDirectoryReview', mode: 'view', tools: ['repair-metadata', 'edit-toc', 'review'] },
   { label: 'pdfDirectoryPages', mode: 'organize', tools: ['crop', 'organize', 'split', 'scale-pages'] },
 ];

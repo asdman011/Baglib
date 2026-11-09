@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useReducer, type SetStateAction } from 'react';
 
-export const READER_PANELS = ['toc', 'knowledge', 'search', 'settings', 'ai', 'annotations', 'dictionary', 'ai-settings', 'ocr', 'lyrics', 'pairing', 'cloud', 'plugins', 'document'] as const;
+export const READER_PANELS = ['toc', 'knowledge', 'search', 'settings', 'ai', 'annotations', 'dictionary', 'ai-settings', 'ocr', 'lyrics', 'pairing', 'cloud', 'plugins', 'accessibility', 'document'] as const;
 export type ReaderPanel = typeof READER_PANELS[number];
 export interface ReaderPanelState { activePanel: ReaderPanel | null; tocPinned: boolean; knowledgePinned: boolean }
 export type ReaderPanelAction = { type: 'set'; panel: ReaderPanel; value: SetStateAction<boolean> } | { type: 'pin'; panel: 'toc' | 'knowledge'; value: SetStateAction<boolean> } | { type: 'close'; except?: ReaderPanel };
