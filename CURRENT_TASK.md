@@ -1,4 +1,40 @@
+## KEY-283 — 2026-11-09, Antigravity (implemented and verified; publication pending)
+
+- Implementation & Verification: Study Workspace 5 Today panel, weekly rhythm engine and rest days.
+  - Implemented `study.rhythm.v1` weekly rhythm config with automatic 2-rest-day buffer and default Friday rest day (`restDays: [5]`).
+  - Implemented guilt-free missed day handling (silently counts against rest-day buffer; unreached days after rest days do not punish or display streak loss).
+  - Implemented deterministic step ordering (due date, priority, age) selecting up to 3 concrete steps from planner tasks due/overdue, due SRS cards, and next unfinished pathway step.
+  - Implemented 1-click step open, swap with next reserve candidate, and skip for today (persisted under `study.today.skipped.v1:YYYY-MM-DD`).
+  - Added `rhythmDailyActivity(daysCount = 14)` backend aggregation in `study-insights.service.ts` across reading page dwell (>= 30s), SRS review logs, practice attempts, and planner tasks.
+  - Added 41 bilingual keys in `translations.ts` (1:1 parity and all keys referenced).
+  - Integrated `TodayStudyPanel` at top of `HomeDashboardView.tsx` with Hijri and Gregorian dates, 7-day strip (Sat-Fri), weekly goal progress, milestone celebration banner, and settings modal.
+  - Responsive down to 480px width without horizontal scroll.
+  - Tests: `tests/services/study-rhythm.test.ts` (8/8 pass), `tests/ui/translation-keys.test.ts` (2/2 pass), `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors, 0 warnings), `npx tsup` (success).
+  - Live Electron harness (`scripts/today-study-live/`): verified with real Arabic and English PDFs (`tests/real-files/`), knowledge cards, planner tasks, pathways, and reading stats. Tested step open, swap, skip, settings modal, and responsive viewports (1280px and 480px) in both Arabic and English. Evidence screenshots in `.baglib-data/key283-evidence/`.
+- Exact task files:
+  - `src/shared/study-rhythm.ts`
+  - `src/renderer/components/dashboard/TodayStudyPanel.tsx`
+  - `src/renderer/components/dashboard/HomeDashboardView.tsx`
+  - `src/renderer/components/dashboard/index.ts`
+  - `src/main/services/statistics/study-insights.service.ts`
+  - `src/main/ipc/study-planner.ts`
+  - `src/shared/study-insights.ts`
+  - `src/preload/index.ts` (shared)
+  - `src/renderer/translations.ts` (shared)
+  - `tests/services/study-rhythm.test.ts`
+  - `scripts/today-study-live/main.cjs`
+  - `scripts/today-study-live/run.mjs`
+  - `docs/agent-ops/reports/KEY-283.md`
+  - `CURRENT_TASK.md` (shared)
+  - `IMPLEMENTATION_PLAN.md` (shared)
+
+## KEY-280 — 2026-11-09, Codex (active)
+
+- Session 01a1c17c-63d5-7692-b7fa-bdd24024c88e. Reader Explain/Practice/Review later, source-aware CFI navigation and saved-card/SRS source buttons implemented. Three test-first regressions and 14 focused tests pass, tsc passes, scoped lint 0 errors with existing 65 warnings. Native checks and final suite pending. Explicit task commit/push authorized, Jira delegated to Claude. Preserve sibling work.
+
 ## KEY-281 - 2026-11-09, Codex (implemented and verified; publication pending)
+
+- Publication receipt (local, post-commit): 877616dcb21a7ffec2ed91bbc89c9ef090d2242e pushed normally to origin/feature/library-domain; exact remote hash verified. Exactly23KEY-281 files/hunks committed, ending Agent: Codex. All native profiles and three verification copies removed (junctions detached first); suite profile removed and owned renderer stopped. Evidence retained. Remaining unrelated files preserved. Jira/review delegated to Claude. Stopped after KEY-281.
 
 - [2026-11-09, Codex] KEY-281 implemented and verified (session 01a1c155-1b05-7e10-8260-f113dd254066). Approved ADR-013 migration026 only; bounded main-process practice evidence, question authoring/review, confidence, mistake categories, one-time judgment and retained/confirmed-clear history. Fixed reproduced book-card reader query leak; restored old/new card snapshots in place without SRS reset. Twelve focused and14 focused+translation tests pass; final shared1520/1520, zero failures/skips. Exact task-only candidate tsc/lint0errors0warnings/tsup pass and1498passes+14environment-skips; final shared tsc passes after separate KEY-272 publication. Native zVcTC2,3Qyv6b,SNaG5t ar/en1280/480 pass with real PDF passages, numeric Arabic digits, all five requested kinds, editor create/edit, UI judgment, retention/clear-cancel and exact source/page reopening. Final screenshots inspected. Dictionary/report updated; no schema beyond ADR-013, dependencies, downloads or Jira actions. Explicit one-task commit/push authorization to origin/feature/library-domain; stop afterward. KEY-272 publication78dea66 preserved; remaining unrelated files excluded.
 

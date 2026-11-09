@@ -22,6 +22,9 @@ export function registerStudyPlannerIpc(): void {
   ipcMain.handle('study-planner:preferences', event => insights(event).preferences());
   ipcMain.handle('study-planner:save-preferences', (event, input: unknown) => insights(event).savePreferences(input));
   ipcMain.handle('study-planner:words', (event, bookId?: string) => insights(event).words(bookId));
+  ipcMain.handle('study-planner:rhythm-activity', (event, days?: unknown) => {
+    return insights(event).rhythmDailyActivity(typeof days === 'number' && days > 0 && days <= 60 ? days : 14);
+  });
   ipcMain.handle('study-planner:pause', (event, paused: unknown) => {
     repository(event);
     if (typeof paused !== 'boolean') throw new Error('invalid-request');

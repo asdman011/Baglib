@@ -741,6 +741,7 @@ export const API = {
     preferences: (): Promise<import('../shared/study-insights').StudyPreferences> => ipcRenderer.invoke('study-planner:preferences'),
     savePreferences: input => ipcRenderer.invoke('study-planner:save-preferences', input),
     words: bookId => ipcRenderer.invoke('study-planner:words', bookId),
+    rhythmDailyActivity: days => ipcRenderer.invoke('study-planner:rhythm-activity', days),
   } satisfies import('../shared/study-insights').StudyInsightsAPI,
   knowledgeCards: {
     decks: () => ipcRenderer.invoke('knowledge-cards:decks'),

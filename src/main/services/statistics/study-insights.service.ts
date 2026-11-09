@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { civilDate } from '../../../shared/study-planner';
+import type { DayActivityRecord } from '../../../shared/study-rhythm';
 import { validateStudyPreferences, type StudyInsights, type StudyPreferences, type WordFrequency } from '../../../shared/study-insights';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
 
@@ -94,5 +95,91 @@ export class StudyInsightsService {
       await new Promise<void>(resolve => setImmediate(resolve));
     }
     return { words: [...frequencies].map(([word, count]) => ({ word, count })).sort((first, second) => second.count - first.count || first.word.localeCompare(second.word)).slice(0, 50), partial, indexedPages };
+  }
+
+  rhythmDailyActivity(daysCount = 14): DayActivityRecord[] {
+    const days: DayActivityRecord[] = [];
+    const now = new Date();
+    for (let offset = daysCount - 1; offset >= 0; offset--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset, 12);
+      days.push({
+        date: civilDate(d),
+        dayOfWeek: d.getDay(),
+        srsReviewsCount: 0,
+        maxPageDwellSeconds: 0,
+        pagesRead: 0,
+        readingMinutes: 0,
+        practiceAttemptsCount: 0,
+        completedTasksCount: 0,
+      });
+    }
+    const dayMap = new Map<string, DayActivityRecord>();
+    for (const d of days) dayMap.set(d.date, d);
+
+    // 1. Reading dwell & pages from reading_page_stat
+    try {
+      const pageRows = this.db.prepare(`
+        SELECT date(start_time, 'unixepoch', 'localtime') AS day,
+               MAX(duration) AS max_dwell,
+               SUM(duration) AS total_duration,
+               COUNT(DISTINCT id_book || '-' || page) AS pages
+        FROM reading_page_stat
+        WHERE start_time >= ?
+        GROUP BY day
+      `).all(Math.floor(Date.now() / 1000) - daysCount * 86400) as { day: string; max_dwell: number; total_duration: number; pages: number }[];
+
+      for (const r of pageRows) {
+        const item = dayMap.get(r.day);
+        if (item) {
+          item.maxPageDwellSeconds = Number(r.max_dwell || 0);
+          item.readingMinutes = Math.round(Number(r.total_duration || 0) / 60);
+          item.pagesRead = Number(r.pages || 0);
+        }
+      }
+    } catch {}
+
+    // 2. SRS reviews from srs_review_log
+    try {
+      const srsRows = this.db.prepare(`
+        SELECT date(reviewed_at) AS day, COUNT(*) AS count
+        FROM srs_review_log
+        WHERE reviewed_at >= datetime('now', '-' || ? || ' days')
+        GROUP BY day
+      `).all(daysCount) as { day: string; count: number }[];
+      for (const r of srsRows) {
+        const item = dayMap.get(r.day);
+        if (item) item.srsReviewsCount = Number(r.count || 0);
+      }
+    } catch {}
+
+    // 3. Practice attempts from practice_attempt (if exists)
+    try {
+      const practiceRows = this.db.prepare(`
+        SELECT date(created_at) AS day, COUNT(*) AS count
+        FROM practice_attempt
+        WHERE created_at >= datetime('now', '-' || ? || ' days')
+        GROUP BY day
+      `).all(daysCount) as { day: string; count: number }[];
+      for (const r of practiceRows) {
+        const item = dayMap.get(r.day);
+        if (item) item.practiceAttemptsCount = Number(r.count || 0);
+      }
+    } catch {}
+
+    // 4. Completed planner tasks from study_task
+    try {
+      const taskRows = this.db.prepare(`
+        SELECT date(completed_at) AS day, COUNT(*) AS count
+        FROM study_task
+        WHERE status='completed' AND completed_at IS NOT NULL AND completed_at >= datetime('now', '-' || ? || ' days')
+        GROUP BY day
+      `).all(daysCount) as { day: string; count: number }[];
+      for (const r of taskRows) {
+        const item = dayMap.get(r.day);
+        if (item) item.completedTasksCount = Number(r.count || 0);
+      }
+    } catch {}
+
+    return days;
   }
 }

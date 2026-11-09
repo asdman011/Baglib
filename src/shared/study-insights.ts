@@ -36,6 +36,7 @@ export interface StudyInsightsAPI {
   preferences(): Promise<StudyPreferences>;
   savePreferences(input: StudyPreferences): Promise<StudyPreferences>;
   words(bookId?: string): Promise<WordFrequency>;
+  rhythmDailyActivity?(days?: number): Promise<import('./study-rhythm').DayActivityRecord[]>;
 }
 
 export function validateStudyPreferences(raw: unknown): StudyPreferences {
