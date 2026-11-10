@@ -35,6 +35,15 @@ export function StudyPlannerView({ adjustment = 0 }: { adjustment?: number }) {
     if (!window.electronAPI?.planner) { queueMicrotask(() => { if (alive) { setError(true); setLoading(false); } }); }
     return () => { alive = false; };
   }, []);
+  useEffect(() => {
+    const handleNewTask = () => {
+      setDraft(emptyTask());
+      const inputEl = document.querySelector<HTMLInputElement>('[data-study-planner] input[type="text"]');
+      inputEl?.focus();
+    };
+    window.addEventListener('baglib:new-task', handleNewTask);
+    return () => window.removeEventListener('baglib:new-task', handleNewTask);
+  }, []);
   const range = useMemo(() => plannerRange(parseCivilDate(anchor), period, calendar, adjustment), [anchor, period, calendar, adjustment]);
   const from = civilDate(range.start);
   const to = civilDate(range.end);

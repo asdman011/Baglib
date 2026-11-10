@@ -8,6 +8,8 @@ import { KnowledgeCardLayer } from '../knowledge/KnowledgeCardLayer';
 import { StudyRhythmLayer } from '../dashboard/StudyRhythm';
 import { StatusBar } from './StatusBar';
 import { NavigationRail } from './NavigationRail';
+import { TreeDrawer } from './TreeDrawer';
+import { SupportSheet } from './SupportSheet';
 import { HomeDashboardView, CompanionMiniWidget } from '../dashboard';
 import { QuotaWarningBanner } from './QuotaWarningBanner';
 import { SearchHubModal } from '../search/SearchHubModal';
@@ -211,6 +213,12 @@ export const AppLayout: React.FC = () => {
 
       {/* Global Book Discovery & Search Hub (Story 11) */}
       <SearchHubModal />
+
+      {/* Responsive Navigation Drawer (at 480px / narrow screens) */}
+      <TreeDrawer />
+
+      {/* System & Support Sheet */}
+      <SupportSheet />
     </div>
   );
 };

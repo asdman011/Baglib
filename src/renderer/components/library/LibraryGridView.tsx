@@ -654,6 +654,31 @@ export const LibraryGridView: React.FC = () => {
     setIsDetailModalOpen(true);
   };
 
+  useEffect(() => {
+    const handler = () => {
+      const newBook: BookItem = {
+        id: `work-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        title: lang === 'ar' ? 'مادة جديدة في المكتبة' : 'New Library Material',
+        author: t('newMaterialDefaultAuthor'),
+        language: lang === 'ar' ? 'العربية' : 'English',
+        categories: [],
+        tags: ['#جديد'],
+        workType: 'book',
+        workTypeId: 'wt-book',
+        bookType: 'physical',
+        readingStatus: 'unread',
+        lendingHistory: [],
+        shelf: '',
+        room: '',
+      };
+      setSelectedBook(newBook);
+      setIsNewBook(true);
+      setIsDetailModalOpen(true);
+    };
+    window.addEventListener('baglib:add-physical-book', handler);
+    return () => window.removeEventListener('baglib:add-physical-book', handler);
+  }, [lang, t]);
+
 
   /** KEY-259: the cover photo proposes the entry; the reader reviews it in the usual form before saving. */
   const handleAddFromCover = async () => {

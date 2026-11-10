@@ -2,24 +2,14 @@
 
 import React from 'react';
 import {
-  Library,
-  BookOpen,
-  FileText,
-  Settings,
   ChevronRight,
   ChevronLeft,
-  Layers,
-  Globe,
-  BookOpenText,
-  BookMarked,
-  LayoutDashboard,
-  Feather,
-  CalendarDays,
-  Route,
-  Clapperboard,
+  BookOpen,
 } from 'lucide-react';
-import { useWorkspace, type WorkspaceViewMode } from '../context/WorkspaceContext';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
+import { NAV_GROUPS, NAV_ITEMS, NAV_SECTIONS } from './nav-model';
+import { NewObjectMenu } from './NewObjectMenu';
 
 export const NavigationRail: React.FC = () => {
   const {
@@ -28,140 +18,73 @@ export const NavigationRail: React.FC = () => {
     isSidebarCollapsed,
     toggleSidebar,
     setSearchHubOpen,
+    setIsSupportSheetOpen,
     activeBook,
     books,
     t,
-    lang
+    lang,
   } = useWorkspace();
   const { notes } = useStudyNotes();
 
-  const navItems: Array<{
-    id: WorkspaceViewMode | 'search';
-    label: string;
-    tooltip?: string;
-    icon: React.ComponentType<{ className?: string }>;
-    count: number;
-    disabled: boolean;
-    onClick?: () => void;
-  }> = [
-    {
-      id: 'dashboard',
-      label: t('navDashboard'),
-      icon: LayoutDashboard,
-      count: 0,
-      disabled: false,
-    },
-    {
-      id: 'planner',
-      label: t('plannerTitle'),
-      icon: CalendarDays,
-      count: 0,
-      disabled: false,
-    },
-    {
-      id: 'pathways',
-      label: t('pathwaysTitle'),
-      icon: Route,
-      count: 0,
-      disabled: false,
-    },
-    {
-      id: 'lectures',
-      label: t('lecturesTitle'),
-      icon: Clapperboard,
-      count: 0,
-      disabled: false,
-    },
-    {
-      id: 'quran',
-      label: t('navQuran'),
-      icon: BookMarked,
-      count: 0,
-      disabled: false,
-    },
-    {
-      id: 'sunnah',
-      label: t('navSunnah'),
-      icon: BookOpenText,
-      count: 0,
-      disabled: false,
-    },
-    {
-      id: 'bayan',
-      label: t('navBayan'),
-      tooltip: t('navBayanTooltip'),
-      icon: Feather,
-      count: 0,
-      disabled: false,
-    },
-    {
-      id: 'library',
-      label: t('navLibrary'),
-      icon: Library,
-      count: books.length,
-      disabled: false,
-    },
-    {
-      id: 'search',
-      label: t('navSearch'),
-      icon: Globe,
-      count: 0,
-      disabled: false,
-      onClick: () => setSearchHubOpen(true),
-    },
-    {
-      id: 'categories',
-      label: t('navCategories'),
-      icon: Layers,
-      count: new Set(books.flatMap(b => b.categories)).size,
-      disabled: false,
-    },
-    {
-      id: 'reader',
-      label: t('navReader'),
-      icon: BookOpen,
-      count: activeBook ? 1 : 0,
-      disabled: !activeBook,
-    },
-    {
-      id: 'notes',
-      label: t('navNotes'),
-      icon: FileText,
-      count: notes.length,
-      disabled: false,
-    },
-    {
-      id: 'settings',
-      label: t('navSettings'),
-      icon: Settings,
-      count: 0,
-      disabled: false,
-    },
-  ];
+  const handleItemClick = (id: string) => {
+    const item = NAV_ITEMS[id];
+    if (!item) return;
 
-  const groups = [
-    { label: t('navRhythmGroup'), ids: ['dashboard', 'planner', 'pathways'] },
-    { label: t('navSourcesGroup'), ids: ['quran', 'sunnah', 'bayan', 'library', 'lectures', 'categories', 'reader'] },
-    { label: t('navKnowledgeGroup'), ids: ['notes', 'search'] },
-  ];
+    if (item.actionType === 'searchHub') {
+      setSearchHubOpen(true);
+    } else if (item.actionType === 'boards') {
+      setViewMode('notes');
+      window.dispatchEvent(new CustomEvent('baglib:open-boards'));
+    } else if (item.actionType === 'cards') {
+      setViewMode('notes');
+      window.dispatchEvent(new CustomEvent('baglib:open-cards'));
+    } else if (item.actionType === 'support') {
+      setIsSupportSheetOpen(true);
+    } else if (item.viewMode) {
+      setViewMode(item.viewMode);
+    }
+  };
 
-  const renderItem = (item: typeof navItems[number]) => {
+  const getItemCount = (id: string): number => {
+    switch (id) {
+      case 'library':
+        return books.length;
+      case 'categories':
+        return new Set(books.flatMap((b) => b.categories)).size;
+      case 'notes':
+        return notes.length;
+      case 'reader':
+        return activeBook ? 1 : 0;
+      default:
+        return 0;
+    }
+  };
+
+  const isItemActive = (id: string): boolean => {
+    const item = NAV_ITEMS[id];
+    if (!item || !item.viewMode) return false;
+    return viewMode === item.viewMode;
+  };
+
+  const renderItem = (itemId: string) => {
+    const item = NAV_ITEMS[itemId];
+    if (!item) return null;
     const Icon = item.icon;
-    const isActive = viewMode === item.id;
+    const isActive = isItemActive(itemId);
+    const count = getItemCount(itemId);
+    const label = t(item.labelKey);
+    const tooltip = item.tooltipKey ? t(item.tooltipKey) : label;
+
     return (
       <button
         key={item.id}
         type="button"
-        disabled={item.disabled}
-        onClick={() => {
-          if (item.onClick) item.onClick();
-          else if (item.id !== 'search') setViewMode(item.id);
-        }}
-        title={item.tooltip || item.label}
-        aria-label={item.label}
+        onClick={() => handleItemClick(item.id)}
+        title={tooltip}
+        aria-label={label}
         aria-current={isActive ? 'page' : undefined}
         className={`w-full min-h-10 flex items-center gap-3 rounded-xl text-xs font-semibold leading-relaxed transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
-          item.disabled ? 'opacity-40 cursor-not-allowed text-muted' : isActive
+          isActive
             ? 'bg-primary/15 text-primary-text ring-1 ring-inset ring-primary-text/40'
             : 'text-muted hover:text-main hover:bg-canvas'
         } ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-center lg:justify-start px-1 lg:px-3'}`}
@@ -169,8 +92,12 @@ export const NavigationRail: React.FC = () => {
         <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-primary-text' : ''}`} />
         {!isSidebarCollapsed && (
           <span className="hidden lg:flex min-w-0 flex-1 items-center justify-between gap-2 py-2">
-            <span className="truncate">{item.label}</span>
-            {item.count > 0 && <span className="shrink-0 text-[10px] px-1.5 rounded-full bg-canvas text-muted tabular-nums">{item.count.toLocaleString(lang)}</span>}
+            <span className="truncate">{label}</span>
+            {count > 0 && (
+              <span className="shrink-0 text-[10px] px-1.5 rounded-full bg-canvas text-muted tabular-nums">
+                {count.toLocaleString(lang)}
+              </span>
+            )}
           </span>
         )}
       </button>
@@ -180,16 +107,40 @@ export const NavigationRail: React.FC = () => {
   return (
     <aside
       aria-label={t('navGlobal')}
-      className={`h-full min-h-0 bg-surface border-e border-subtle flex flex-col transition-[width] duration-200 motion-reduce:transition-none z-30 shrink-0 select-none ${
+      className={`hidden md:flex h-full min-h-0 bg-surface border-e border-subtle flex-col transition-[width] duration-200 motion-reduce:transition-none z-30 shrink-0 select-none ${
         isSidebarCollapsed ? 'w-14 sm:w-16' : 'w-14 sm:w-16 lg:w-56'
       }`}
     >
-      {/* Top Header: Single Collapse/Expand Control (No Duplicate Logo) */}
-      <div className="p-2 shrink-0 border-b border-subtle/60 flex items-center justify-between">
-        {!isSidebarCollapsed && (
-          <span className="hidden lg:inline text-xs font-bold text-muted font-sans px-2">
-            {t('navGlobal')}
-          </span>
+      {/* Brand & Rail Collapse Header */}
+      <div className="p-2 shrink-0 border-b border-subtle/60 flex items-center justify-between gap-2">
+        {!isSidebarCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setViewMode('dashboard')}
+            title={t('navDashboard')}
+            className="hidden lg:flex items-center gap-2 px-1 py-1 rounded-lg text-start focus-visible:outline-2 focus-visible:outline-focus min-w-0 flex-1"
+          >
+            <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text shrink-0">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <span className="font-display text-sm font-bold text-main tracking-wide block truncate leading-tight">
+                {t('brand')}
+              </span>
+              <span className="text-[10px] text-muted block truncate font-sans leading-tight">
+                {t('brandSubtitle')}
+              </span>
+            </div>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setViewMode('dashboard')}
+            title={t('navDashboard')}
+            className="w-8 h-8 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text mx-auto shrink-0 focus-visible:outline-2 focus-visible:outline-focus"
+          >
+            <BookOpen className="w-4 h-4" />
+          </button>
         )}
 
         <button
@@ -199,8 +150,8 @@ export const NavigationRail: React.FC = () => {
           aria-expanded={!isSidebarCollapsed}
           aria-controls="workspace-navigation"
           title={isSidebarCollapsed ? t('expandMenu') : t('collapseMenu')}
-          className={`p-2 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer ${
-            isSidebarCollapsed ? 'mx-auto' : ''
+          className={`p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer shrink-0 ${
+            isSidebarCollapsed ? 'hidden' : 'hidden lg:flex'
           }`}
         >
           {isSidebarCollapsed ? (
@@ -209,30 +160,80 @@ export const NavigationRail: React.FC = () => {
             <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
           )}
         </button>
+
+        {isSidebarCollapsed && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={t('expandMenu')}
+            title={t('expandMenu')}
+            className="p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer mx-auto mt-1"
+          >
+            <ChevronRight className="w-4 h-4 rtl:rotate-180" />
+          </button>
+        )}
       </div>
 
-      {/* Main Navigation Items (Using Pale Sky Primary Accent) */}
-      <nav id="workspace-navigation" aria-label={t('navGlobal')} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2 space-y-2">
-        {groups.map(group => (
-          <section key={group.label} aria-label={group.label} className="space-y-1 border-b border-subtle/60 pb-2 last:border-0">
-            {!isSidebarCollapsed && <h2 className="hidden lg:block px-3 pt-2 pb-1 text-[11px] font-medium leading-relaxed text-muted">{group.label}</h2>}
-            {group.ids.map(id => navItems.find(item => item.id === id)).filter((item): item is typeof navItems[number] => !!item).map(renderItem)}
+      {/* Primary New Object + Button (D3) */}
+      <div className="p-2 shrink-0 border-b border-subtle/60">
+        <NewObjectMenu collapsed={isSidebarCollapsed} />
+      </div>
+
+      {/* Main Navigation Groups (Home, Library, Notes, Research, Islamic Studies) */}
+      <nav
+        id="workspace-navigation"
+        aria-label={t('navGlobal')}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2 space-y-2"
+      >
+        {NAV_SECTIONS.map((section) => (
+          <section
+            key={section.ariaLabelKey}
+            aria-label={t(section.ariaLabelKey)}
+            className="space-y-2 border-b border-subtle/60 pb-2 last:border-0"
+          >
+            {section.groupIds.map((groupId) => {
+              const group = NAV_GROUPS.find((g) => g.id === groupId);
+              if (!group) return null;
+              return (
+                <div key={group.id} className="space-y-1">
+                  {!isSidebarCollapsed && (
+                    <h2 className="hidden lg:block px-3 pt-1.5 pb-0.5 text-[11px] font-bold uppercase tracking-wider text-muted font-sans">
+                      {t(group.labelKey)}
+                    </h2>
+                  )}
+                  {group.itemIds.map(renderItem)}
+                </div>
+              );
+            })}
           </section>
         ))}
       </nav>
-      <div className="shrink-0 border-t border-subtle/60 p-2">
-        {navItems.filter(item => item.id === 'settings').map(renderItem)}
+
+      {/* Pinned Bottom Settings and Support */}
+      <div className="shrink-0 border-t border-subtle/60 p-2 space-y-1">
+        {renderItem('settings')}
+        {renderItem('support')}
       </div>
 
       {/* Bottom Status / Active Book Indicator */}
       {!isSidebarCollapsed && activeBook && (
         <div className="hidden lg:block shrink-0 p-3 border-t border-subtle/60 bg-canvas/40">
-          <button type="button" onClick={() => setViewMode('reader')} title={t('navResumeBook')} aria-label={`${t('navResumeBook')}: ${activeBook.title}`} className="w-full text-start p-2.5 rounded-xl bg-surface border border-subtle hover:border-primary-text space-y-1 focus-visible:outline-2 focus-visible:outline-focus">
+          <button
+            type="button"
+            onClick={() => setViewMode('reader')}
+            title={t('navResumeBook')}
+            aria-label={`${t('navResumeBook')}: ${activeBook.title}`}
+            className="w-full text-start p-2.5 rounded-xl bg-surface border border-subtle hover:border-primary-text space-y-1 focus-visible:outline-2 focus-visible:outline-focus"
+          >
             <span className="text-[10px] font-bold text-primary-text uppercase tracking-wider block">
               {t('currentBook')}
             </span>
-            <span className="block text-xs font-bold text-main truncate leading-relaxed" dir="auto">{activeBook.title}</span>
-            <span className="block text-[10px] text-muted truncate leading-relaxed" dir="auto">{activeBook.author}</span>
+            <span className="block text-xs font-bold text-main truncate leading-relaxed" dir="auto">
+              {activeBook.title}
+            </span>
+            <span className="block text-[10px] text-muted truncate leading-relaxed" dir="auto">
+              {activeBook.author}
+            </span>
           </button>
         </div>
       )}

@@ -1,3 +1,58 @@
+## KEY-297 — 2026-11-10, Antigravity (implemented and verified)
+
+- Implementation & Verification: UI/UX U3 App Shell to the Vision Mockup (`library-shell-mockup.png`, D3, D4).
+  - Navigation Rail (`NavigationRail.tsx` & `nav-model.ts`):
+    - Positioned on start edge with CSS logical properties and collapsible toggle.
+    - Header with brand "BagLib" and localized subtitle "Local-first OS" / "نظام تشغيل محلي أولاً" (`brandSubtitle`).
+    - Primary New Object button (`NewObjectMenu.tsx`) opening accessible `Menu` primitive with 6 creation flows: import book (`ImportWizardModal`), add physical book (`LibraryGridView`), new note (`NotesOverviewView`), new card (`SavedCardsPanel`), new task (`StudyPlannerView`), new research space (`PathwaysView`).
+    - 5 canonical groups per mockup & D4: Home (`dashboard`, `planner`), Library (`library`, `categories`, `lectures`), Notes (`notes`, `notes-boards`, `notes-cards`), Research (`pathways`, `search`), Islamic Studies (`quran`, `sunnah`, `bayan`).
+    - Pinned bottom Settings (`navSettings`) and Support (`navSupport`). Active book resumption indicator at rail bottom.
+  - Top Bar Breadcrumb (`Titlebar.tsx`):
+    - Responsive breadcrumb navigation (`resolveBreadcrumbs` in `nav-model.ts`) showing parent group and current view or book title in reader.
+    - Preserved central search with `Ctrl+K`, Quran and Sunnah shortcuts, Zen mode, Language switcher, Theme toggle.
+    - Hamburger button (`md:hidden`) with `aria-label={t('mobileNavOpen')}` to toggle drawer.
+  - Responsive 480px Navigation Drawer (`TreeDrawer.tsx`):
+    - `Sheet` primitive with `side="start"` containing brand header, New Object button, grouped navigation, active book indicator, pinned settings/support.
+    - Closes on navigation and Escape. Verified 0 horizontal overflow at 480px (`scrollWidth === clientWidth === 480`).
+  - Support & System Info Sheet (`SupportSheet.tsx`):
+    - Modal sheet displaying app version (`v0.1.0-alpha`), environment (Electron / SQLite3 / Local storage), and local-first data guarantee.
+  - Command Palette (`CommandPalette.tsx`):
+    - Added instant workspace routing commands so every workspace is reachable via `Ctrl+K`.
+  - Translations (`src/renderer/translations.ts`):
+    - Added 30 bilingual keys to `ar` and `en` with 1:1 parity and zero trailing whitespace.
+  - Tests & Verification:
+    - `tests/ui/nav-model.test.ts`: 5/5 pass.
+    - `tests/ui/shell-navigation.test.ts`: 5/5 pass.
+    - Full test suite: 1,646 / 1,646 tests pass across 330 suites (0 failures, 0 skips).
+    - `npx tsc --noEmit`: 0 errors.
+    - `npx eslint`: 0 errors, 0 warnings.
+    - `npx tsup`: success in 140ms.
+    - `git diff --check`: 0 errors.
+    - Live harness (`scripts/shell-ui-live/run.mjs`): 56 screenshots captured across Arabic/English, Light/Dark, 1280px/480px with real files imported into `.baglib-data/KEY-297-evidence/`. Original corpus verified unchanged.
+- Exact files changed:
+  - `src/renderer/components/layout/nav-model.ts`
+  - `src/renderer/components/layout/NewObjectMenu.tsx`
+  - `src/renderer/components/layout/NavigationRail.tsx`
+  - `src/renderer/components/layout/Titlebar.tsx`
+  - `src/renderer/components/layout/TreeDrawer.tsx`
+  - `src/renderer/components/layout/SupportSheet.tsx`
+  - `src/renderer/components/layout/CommandPalette.tsx`
+  - `src/renderer/components/layout/AppLayout.tsx`
+  - `src/renderer/components/context/WorkspaceContext.tsx`
+  - `src/renderer/components/library/LibraryGridView.tsx`
+  - `src/renderer/components/notes/NotesOverviewView.tsx`
+  - `src/renderer/components/dashboard/StudyPlannerView.tsx`
+  - `src/renderer/components/dashboard/PathwaysView.tsx`
+  - `src/renderer/components/knowledge/SavedCardsPanel.tsx`
+  - `src/renderer/translations.ts`
+  - `tests/ui/nav-model.test.ts`
+  - `tests/ui/shell-navigation.test.ts`
+  - `scripts/shell-ui-live/run.mjs`
+  - `scripts/shell-ui-live/shell-check.cjs`
+  - `docs/agent-ops/reports/KEY-297.md`
+  - `CURRENT_TASK.md`
+  - `IMPLEMENTATION_PLAN.md`
+
 ## KEY-296 — 2026-11-10, Antigravity (implemented and verified)
 
 - Implementation & Verification: UI/UX U2 Design Tokens & Shared Primitives (The Figma Palette Wins, D1).

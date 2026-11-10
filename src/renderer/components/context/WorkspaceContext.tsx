@@ -51,6 +51,8 @@ export interface WorkspaceState {
   // App Main View Mode
   viewMode: WorkspaceViewMode;
   activeLibraryCategory: string;
+  isMobileNavOpen?: boolean;
+  isSupportSheetOpen?: boolean;
 }
 
 interface WorkspaceContextType extends WorkspaceState {
@@ -59,6 +61,11 @@ interface WorkspaceContextType extends WorkspaceState {
   toggleLanguage: () => void;
   toggleZenMode: () => void;
   toggleSidebar: () => void;
+  isMobileNavOpen?: boolean;
+  setIsMobileNavOpen: (open: boolean) => void;
+  toggleMobileNav: () => void;
+  isSupportSheetOpen?: boolean;
+  setIsSupportSheetOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setSearchHubOpen: (open: boolean) => void;
   isImportWizardOpen: boolean;
@@ -128,6 +135,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
   const [isZenMode, setIsZenMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isSupportSheetOpen, setIsSupportSheetOpen] = useState(false);
+  const toggleMobileNav = () => setIsMobileNavOpen((prev) => !prev);
   
   // Navigation & View Mode
   const [viewMode, setViewMode] = useState<WorkspaceViewMode>('dashboard');
@@ -457,6 +467,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const safeSetViewMode = (mode: WorkspaceViewMode) => {
+    setIsMobileNavOpen(false);
     if (viewMode === 'reader' && mode !== 'reader') {
       try {
         removeTempSelectionOverlay();
@@ -570,6 +581,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isCommandPaletteOpen,
         isZenMode,
         isSidebarCollapsed,
+        isMobileNavOpen,
+        setIsMobileNavOpen,
+        toggleMobileNav,
+        isSupportSheetOpen,
+        setIsSupportSheetOpen,
         books,
         categoryTree,
         allTags,

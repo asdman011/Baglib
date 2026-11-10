@@ -418,6 +418,15 @@ export function PathwaysView() {
     setSelected(id ? await api.get(id) : null);
   }, []);
   useEffect(() => { void window.electronAPI.pathways.list().then(setPathways).catch(fail); }, [fail]);
+  useEffect(() => {
+    const handleNewPathway = () => {
+      setSelected(null);
+      const creator = document.querySelector('[data-pathway-creator]');
+      creator?.scrollIntoView({ behavior: 'smooth' });
+    };
+    window.addEventListener('baglib:new-pathway', handleNewPathway);
+    return () => window.removeEventListener('baglib:new-pathway', handleNewPathway);
+  }, []);
 
   return <div dir={dir} className="flex-1 min-h-0 overflow-auto bg-canvas p-4 sm:p-6">
     <div className="mx-auto max-w-6xl space-y-4">
@@ -426,7 +435,9 @@ export function PathwaysView() {
       <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
         <aside className="space-y-3 min-w-0">
           <OnlineCoursesPanel />
-          <Creator onCreated={pathway => { setFailed(false); void load(pathway.id).catch(fail); }} onError={fail} />
+          <div data-pathway-creator>
+            <Creator onCreated={pathway => { setFailed(false); void load(pathway.id).catch(fail); }} onError={fail} />
+          </div>
           <ul className="space-y-1">{pathways.map(pathway => <li key={pathway.id}><button type="button" aria-current={selected?.id === pathway.id} onClick={() => { setFailed(false); void load(pathway.id).catch(fail); }} className={`w-full rounded-lg border px-3 py-2 text-start ${selected?.id === pathway.id ? 'border-pale-sky-500 bg-surface' : 'border-subtle'}`}>
             <span dir="auto" className="block text-sm font-bold break-words">{pathway.name}</span>
             <span className="block text-xs text-muted">{t(pathway.kind === 'research' ? 'pathwayKindResearch' : 'pathwayKindCurriculum')}{pathway.steps > 0 && <> · {t('pathwayProgress', { done: pathway.done, total: pathway.steps })}</>}</span>

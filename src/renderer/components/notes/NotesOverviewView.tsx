@@ -91,6 +91,19 @@ export const NotesOverviewView: React.FC = () => {
   };
   // One-way Markdown export (S7) of the notes shown now: all of them, or the search/filter result.
   const [boardsOpen, setBoardsOpen] = useState(false);
+  useEffect(() => {
+    const handleBoards = () => setBoardsOpen(true);
+    const handleCards = () => {
+      const cardsEl = document.querySelector('[data-srs-panel], [data-saved-cards]');
+      cardsEl?.scrollIntoView({ behavior: 'smooth' });
+    };
+    window.addEventListener('baglib:open-boards', handleBoards);
+    window.addEventListener('baglib:open-cards', handleCards);
+    return () => {
+      window.removeEventListener('baglib:open-boards', handleBoards);
+      window.removeEventListener('baglib:open-cards', handleCards);
+    };
+  }, []);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [exported, setExported] = useState<{ folder: string; count: number } | null>(null);
   const [wordExported, setWordExported] = useState<{ file: string; count: number } | null>(null);

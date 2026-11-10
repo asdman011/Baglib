@@ -38,8 +38,13 @@ export function SavedCardsPanel() {
   useEffect(() => {
     const load = () => void refresh();
     load();
+    const handleNewCard = () => setCreating(true);
+    window.addEventListener('baglib:new-card', handleNewCard);
     window.addEventListener(KNOWLEDGE_CARD_SAVED, load);
-    return () => window.removeEventListener(KNOWLEDGE_CARD_SAVED, load);
+    return () => {
+      window.removeEventListener('baglib:new-card', handleNewCard);
+      window.removeEventListener(KNOWLEDGE_CARD_SAVED, load);
+    };
   }, [refresh]);
 
   // localStorage exists only in the browser, so the saved choice is read after the first render.
