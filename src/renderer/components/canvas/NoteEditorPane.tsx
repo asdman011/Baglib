@@ -1,7 +1,3 @@
 'use client';
 
-import React from 'react';
-
-export const NoteEditorPane: React.FC = () => {
-  return null;
-};
+export { NoteEditorPane, type NoteEditorPaneProps } from '../notes/NoteEditorPane';

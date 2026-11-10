@@ -125,5 +125,5 @@ export function StudyNoteContent({ content, notes, onOpen, t }: { content: strin
     end = paragraph.end;
   }
   pieces.push(...renderSegment(content.slice(end), notes, onOpen, t, `rest-${end}`));
-  return <div dir="auto" className="whitespace-pre-wrap break-words text-sm leading-loose select-text">{pieces}</div>;
+  return <div dir="auto" className="whitespace-pre-wrap break-words text-base leading-[2.2] select-text" style={{ fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)" }}>{pieces}</div>;
 }

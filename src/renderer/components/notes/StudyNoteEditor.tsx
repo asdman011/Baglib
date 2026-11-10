@@ -36,10 +36,10 @@ const highlight = HighlightStyle.define([
 const theme = EditorView.theme({
   '&': { fontSize: '0.875rem', backgroundColor: 'transparent', color: 'inherit' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'inherit', lineHeight: '2', minHeight: '8rem', maxHeight: '28rem', overflow: 'auto' },
+  '.cm-scroller': { fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)", lineHeight: '2.2', minHeight: '8rem', maxHeight: '28rem', overflow: 'auto' },
   // Room above and below each line so Arabic diacritics are never clipped.
-  '.cm-content': { padding: '0.5rem 0.75rem', caretColor: 'currentColor' },
-  '.cm-line': { padding: '0.1rem 0', textAlign: 'start' },
+  '.cm-content': { padding: '0.75rem 0.75rem', caretColor: 'currentColor', fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)" },
+  '.cm-line': { padding: '0.2rem 0', textAlign: 'start', lineHeight: '2.2' },
   '.cm-placeholder': { opacity: '0.6' },
   '.cm-tooltip-autocomplete': { borderRadius: '0.5rem', overflow: 'hidden' },
   '.cm-tooltip-autocomplete ul li': { padding: '0.25rem 0.5rem', lineHeight: '1.8' },

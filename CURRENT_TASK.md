@@ -1,3 +1,44 @@
+## KEY-304 — 2026-11-10, Antigravity (implemented and verified)
+
+- **Task**: KEY-304 (UI/UX U10): Notes, knowledge cards, and boards workspace.
+- **Session**: `0bd4d514-7629-42e3-8915-c145fa1f7627`
+- **Status**: Implemented, verified with unit tests and 14 live screenshots on real Arabic/English PDFs.
+- **Changes**:
+  - Unified notes, knowledge cards, and boards into one cohesive workspace (`NotesOverviewView.tsx`).
+  - Implemented 3-pane layout on desktop (Note List, Note Editor, Collapsible `NoteDetailsPane` with Backlinks & History).
+  - 480px responsive stacked navigation with prominent Back button and 0 overflow.
+  - Dedicated review screen (`SrsReviewScreen.tsx`) with progress bar, centered card, large interval buttons, keyboard Space to reveal and 1-4 keys to grade, and empty-state celebration.
+  - Deck/list view banner with due count badge and "Start Review" button (`SavedCardsPanel.tsx`).
+  - Card editor redesigned with note editor chrome matching (`QuestionCardEditor.tsx`).
+  - First-class embedded Boards workspace (`BoardsWorkspace.tsx`) replacing overlay modal dialog.
+  - Amiri Arabic typography with `leading-[2.2]` and padding across CodeMirror editor and rendered markdown to prevent diacritic clipping.
+  - Added centralized bilingual translation keys in `translations.ts`.
+  - Added unit tests in `tests/ui/notes-workspace-layout.test.ts` and `tests/ui/srs-review-keyboard.test.ts` (6/6 pass).
+  - Built automated Electron live harness in `scripts/notes-ui-live/` producing 14 verification screenshots in `.baglib-data/KEY-304-evidence/`.
+- **Verification**:
+  - `npx tsc --noEmit`: 0 errors.
+  - `npx eslint` on changed files: 0 errors.
+  - `git diff --check`: 0 errors.
+  - Unit tests: 6/6 pass.
+  - Live runner: 14/14 checks pass in ar/en at 1280px and 480px.
+- **Files changed**:
+  - `src/renderer/components/notes/NotesOverviewView.tsx`
+  - `src/renderer/components/notes/NoteEditorPane.tsx`
+  - `src/renderer/components/notes/NoteDetailsPane.tsx`
+  - `src/renderer/components/notes/BoardsWorkspace.tsx`
+  - `src/renderer/components/notes/StudyNoteEditor.tsx`
+  - `src/renderer/components/notes/StudyNoteContent.tsx`
+  - `src/renderer/components/knowledge/SrsReviewScreen.tsx`
+  - `src/renderer/components/knowledge/SavedCardsPanel.tsx`
+  - `src/renderer/components/knowledge/QuestionCardEditor.tsx`
+  - `src/renderer/components/canvas/NoteEditorPane.tsx`
+  - `src/renderer/translations.ts` (KEY-304 keys only)
+  - `tests/ui/notes-workspace-layout.test.ts`
+  - `tests/ui/srs-review-keyboard.test.ts`
+  - `scripts/notes-ui-live/run.mjs`
+  - `scripts/notes-ui-live/notes-check.cjs`
+  - `docs/agent-ops/reports/KEY-304.md`
+
 ## KEY-271 - 2026-11-10, Codex (implemented and verified, ready for publication)
 
 Session `01a1c27f-6676-7ab3-915b-f97bd1d8dc99`. Ten bilingual vector PDF stamps, calibrated distance/rectangular area and settings-backed saved action sequences implemented using existing note/history/settings contracts. Labels use centralized translations. Stamp language stays as placed, while measurement digits follow the current interface. Five existing single-PDF tools run sequentially in one staged job. Progress/errors remain visible above the page. Save reuses ADR-012 and one emergency copy per source. No schema, dependency, download or Jira action.

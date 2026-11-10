@@ -1,196 +1,850 @@
 'use client';
-import { KnowledgeGraphButton } from './KnowledgeGraph';
-import { BoardsWorkspace } from './BoardsWorkspace';
-import { StudyAssistant } from './StudyAssistant';
+
 import React, { useEffect, useMemo, useState } from 'react';
-import { Download, FileText, FileType, LayoutGrid, Sparkles, Search, Trash2, Pencil, Plus, X } from 'lucide-react';
+import {
+  FileText,
+  Filter,
+  LayoutGrid,
+  Plus,
+  Search,
+  Sparkles,
+  X,
+  BookOpen,
+  ArrowUpDown,
+  MessageSquare,
+} from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
-import { QuickNoteScratchpad } from '../dashboard/QuickNoteScratchpad';
-import { StudyNoteContent } from './StudyNoteContent';
+import { StudyAssistant } from './StudyAssistant';
+import { BoardsWorkspace } from './BoardsWorkspace';
 import { SavedCardsPanel } from '../knowledge/SavedCardsPanel';
-import { SrsReviewPanel } from '../knowledge/SrsReviewPanel';
-import { NoteHistory } from './NoteHistory';
-import { KnowledgeTools } from './KnowledgeTools';
+import { SrsReviewScreen } from '../knowledge/SrsReviewScreen';
+import { NoteEditorPane } from './NoteEditorPane';
+import { NoteDetailsPane } from './NoteDetailsPane';
+import { Button } from '../ui/Button';
+import { EmptyState } from '../ui/EmptyState';
 import { ReadingLogPanel } from './ReadingLogPanel';
-import { studyBacklinks, studyLinks, type StudyNote } from '../../../shared/study-notes';
-import { matchesStudyQuery } from '../../../shared/study-notes';
-import { consumeStudyNote, navigateStudyReference, STUDY_NOTE_OPEN } from '../../utils/study-navigation';
-import { DEFAULT_WORD_LAYOUT, wordLayout, type WordLayout } from '../../../shared/word-export';
+import {
+  studyBacklinks,
+  studyLinks,
+  matchesStudyQuery,
+  type StudyNote,
+} from '../../../shared/study-notes';
+import {
+  consumeStudyNote,
+  navigateStudyReference,
+  STUDY_NOTE_OPEN,
+} from '../../utils/study-navigation';
+import {
+  DEFAULT_WORD_LAYOUT,
+  wordLayout,
+  type WordLayout,
+} from '../../../shared/word-export';
 
 const WORD_LAYOUT_KEY = 'baglib.wordLayout.v1';
-const savedWordLayout = (): WordLayout => { try { return wordLayout(JSON.parse(localStorage.getItem(WORD_LAYOUT_KEY) || 'null')); } catch { return DEFAULT_WORD_LAYOUT; } };
+const savedWordLayout = (): WordLayout => {
+  try {
+    return wordLayout(JSON.parse(localStorage.getItem(WORD_LAYOUT_KEY) || 'null'));
+  } catch {
+    return DEFAULT_WORD_LAYOUT;
+  }
+};
+
+export type WorkspaceTab = 'notes' | 'cards' | 'boards' | 'review';
+export type NoteSortOrder = 'recent' | 'title' | 'oldest';
+export type NoteFilter = 'all' | 'comments' | 'book';
 
 export const NotesOverviewView: React.FC = () => {
   const { books, dir, t, lang, openBookForReading } = useWorkspace();
   const { notes, refresh, error, failedSources, loading } = useStudyNotes();
+
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('notes');
+  const [mobileScreen, setMobileScreen] = useState<'list' | 'editor'>('list');
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
+
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
-  const [editor, setEditor] = useState<{ note?: StudyNote; content?: string; key: number } | null>(null);
+  const [sortOrder, setSortOrder] = useState<NoteSortOrder>('recent');
+  const [filterMode, setFilterMode] = useState<NoteFilter>('all');
+  const [readingWork, setReadingWork] = useState('');
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creatingNew, setCreatingNew] = useState(false);
+  const [editorDraft, setEditorDraft] = useState<{ content?: string; key: number } | null>(null);
+
+  const [dueCardsCount, setDueCardsCount] = useState<number>(0);
+  const [boardsCount, setBoardsCount] = useState<number>(0);
+  const [openComments, setOpenComments] = useState<Record<string, number>>({});
   const [actionError, setActionError] = useState(false);
-  const [readingWork,setReadingWork]=useState('');
+
+  // Anchor and paragraph focus for deep link scrolling
   const [anchor, setAnchor] = useState<string | null>(null);
-  // A paragraph link scrolls to its paragraph and highlights it briefly; without that paragraph, the note stays at its top.
   const [focusParagraph, setFocusParagraph] = useState<{ id: string; anchor: string; at: number } | null>(null);
+
+  // Modals & Exports
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [exported, setExported] = useState<{ folder: string; count: number } | null>(null);
+  const [wordExported, setWordExported] = useState<{ file: string; count: number } | null>(null);
+  const [wordOptions, setWordOptions] = useState<WordLayout | null>(null);
+  const [wordNoteId, setWordNoteId] = useState<string | null>(null);
+
+  // Refresh counts (due cards, boards, comments)
+  useEffect(() => {
+    let alive = true;
+    const loadCounts = async () => {
+      try {
+        const [counts, queue, boardList] = await Promise.all([
+          window.electronAPI?.knowledgeHistory?.commentCounts?.().catch(() => ({})),
+          window.electronAPI?.knowledgeCards?.reviewQueue?.().catch(() => null),
+          window.electronAPI?.boards?.list?.().catch(() => []),
+        ]);
+        if (!alive) return;
+        if (counts) setOpenComments(counts);
+        if (queue) setDueCardsCount(queue.due);
+        if (boardList) setBoardsCount(boardList.length);
+      } catch {}
+    };
+
+    void loadCounts();
+    const offStudy = window.electronAPI?.studyNotes?.onChanged?.(() => {
+      void loadCounts();
+    });
+    const offBoards = window.electronAPI?.boards?.onChanged?.(() => {
+      void loadCounts();
+    });
+
+    const handleSrsReview = () => void loadCounts();
+    window.addEventListener('baglib:srs-reviewed', handleSrsReview);
+    window.addEventListener('baglib:knowledge-card-saved', handleSrsReview);
+
+    return () => {
+      alive = false;
+      offStudy?.();
+      offBoards?.();
+      window.removeEventListener('baglib:srs-reviewed', handleSrsReview);
+      window.removeEventListener('baglib:knowledge-card-saved', handleSrsReview);
+    };
+  }, [notes]);
+
+  // Handle cross-workspace events from navigation rail and elsewhere
+  useEffect(() => {
+    const handleOpenBoards = () => setActiveTab('boards');
+    const handleOpenCards = () => setActiveTab('cards');
+    const handleStartReview = () => setActiveTab('review');
+    const handleNewNote = () => {
+      setActiveTab('notes');
+      setSelectedId(null);
+      setCreatingNew(true);
+      setEditorDraft({ content: '', key: Date.now() });
+      setMobileScreen('editor');
+    };
+    const handleNewCard = () => {
+      setActiveTab('cards');
+    };
+
+    window.addEventListener('baglib:open-boards', handleOpenBoards);
+    window.addEventListener('baglib:open-cards', handleOpenCards);
+    window.addEventListener('baglib:start-review', handleStartReview);
+    window.addEventListener('baglib:new-note', handleNewNote);
+    window.addEventListener('baglib:new-card', handleNewCard);
+
+    return () => {
+      window.removeEventListener('baglib:open-boards', handleOpenBoards);
+      window.removeEventListener('baglib:open-cards', handleOpenCards);
+      window.removeEventListener('baglib:start-review', handleStartReview);
+      window.removeEventListener('baglib:new-note', handleNewNote);
+      window.removeEventListener('baglib:new-card', handleNewCard);
+    };
+  }, []);
+
+  // Handle deep links and external note targets
+  useEffect(() => {
+    const consume = () => {
+      const pending = consumeStudyNote();
+      if (!pending) return;
+      setActiveTab('notes');
+      setMobileScreen('editor');
+      if (pending.id) {
+        setSelectedId(pending.id);
+        setCreatingNew(false);
+        setEditorDraft(null);
+        setQuery('');
+        setFocusParagraph(pending.anchor ? { id: pending.id, anchor: pending.anchor, at: Date.now() } : null);
+      } else {
+        setSelectedId(null);
+        setCreatingNew(true);
+        setEditorDraft({ content: pending.content || '', key: Date.now() });
+        setAnchor(studyLinks(pending.content || '')[0]?.target || null);
+      }
+    };
+    consume();
+    window.addEventListener(STUDY_NOTE_OPEN, consume);
+    return () => window.removeEventListener(STUDY_NOTE_OPEN, consume);
+  }, []);
+
+  // Paragraph highlight animation
   useEffect(() => {
     if (!focusParagraph) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let element: Element | null = null;
-    const clear = () => { element?.classList.remove('bg-amber-400/30'); element?.removeAttribute('data-paragraph-focused'); };
+    const clear = () => {
+      element?.classList.remove('bg-amber-400/30');
+      element?.removeAttribute('data-paragraph-focused');
+    };
     const frame = requestAnimationFrame(() => {
-      element = document.querySelector(`[data-study-note="${CSS.escape(focusParagraph.id)}"] [data-paragraph="${CSS.escape(focusParagraph.anchor)}"]`);
+      element = document.querySelector(
+        `[data-study-note="${CSS.escape(focusParagraph.id)}"] [data-paragraph="${CSS.escape(focusParagraph.anchor)}"]`
+      );
       if (!element) return;
       element.scrollIntoView({ block: 'center', behavior: 'smooth' });
       element.classList.add('bg-amber-400/30');
       element.setAttribute('data-paragraph-focused', 'true');
       timer = setTimeout(clear, 2200);
     });
-    // A new navigation (or leaving) ends the highlight at once, instead of leaving it on.
-    return () => { cancelAnimationFrame(frame); if (timer) clearTimeout(timer); clear(); };
-  }, [focusParagraph, notes]);
-  const [openComments, setOpenComments] = useState<Record<string, number>>({});
-  const [onlyOpenComments, setOnlyOpenComments] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    const load = () => window.electronAPI?.knowledgeHistory?.commentCounts?.().then(counts => { if (alive) setOpenComments(counts); }, () => {});
-    void load();
-    const off = window.electronAPI?.studyNotes?.onChanged?.(() => { void load(); });
-    return () => { alive = false; off?.(); };
-  }, [notes]);
-  useEffect(() => {
-    const consume = () => {
-      const pending = consumeStudyNote();
-      if (!pending) return;
-      if (pending.id) { setSelected(pending.id); setQuery(''); setFocusParagraph(pending.anchor ? { id: pending.id, anchor: pending.anchor, at: Date.now() } : null); }
-      else {
-        setEditor({ content: pending.content || '', key: Date.now() });
-        setAnchor(studyLinks(pending.content || '')[0]?.target || null);
-      }
+    return () => {
+      cancelAnimationFrame(frame);
+      if (timer) clearTimeout(timer);
+      clear();
     };
-    consume(); window.addEventListener(STUDY_NOTE_OPEN, consume);
-    return () => window.removeEventListener(STUDY_NOTE_OPEN, consume);
-  }, []);
-  const open = async (target: string) => {
+  }, [focusParagraph, notes]);
+
+  // Navigate study references
+  const openTarget = async (target: string) => {
     setActionError(false);
     try {
       await navigateStudyReference(target, books, openBookForReading, (id, paragraph) => {
-        if (!notes.some(note => note.id === id)) throw new Error('missing-note');
-        setSelected(id); setQuery(''); setAnchor(null); setEditor(null);
+        if (!notes.some((n) => n.id === id)) throw new Error('missing-note');
+        setSelectedId(id);
+        setCreatingNew(false);
+        setEditorDraft(null);
+        setQuery('');
+        setAnchor(null);
+        setMobileScreen('editor');
         setFocusParagraph(paragraph ? { id, anchor: paragraph, at: Date.now() } : null);
       });
-    } catch { setActionError(true); }
+    } catch {
+      setActionError(true);
+    }
   };
-  const shown = useMemo(() => notes.filter(note => (!selected || note.id === selected) && (!onlyOpenComments || (openComments[note.id] ?? 0) > 0) && (!anchor || studyBacklinks([note], anchor).length) && matchesStudyQuery(`${note.title} ${note.content} ${note.aliases.join(' ')} ${note.tags.join(' ')} ${books.find(book => book.id === note.workId)?.title || ''}`, query)), [notes, selected, anchor, query, books, onlyOpenComments, openComments]);
-  const remove = async (note: StudyNote) => {
+
+  // Filtered and sorted notes list
+  const filteredNotes = useMemo(() => {
+    return notes
+      .filter((note) => {
+        if (filterMode === 'comments' && (openComments[note.id] ?? 0) <= 0) {
+          return false;
+        }
+        if (filterMode === 'book' && readingWork && note.workId !== readingWork) {
+          return false;
+        }
+        if (anchor && !studyBacklinks([note], anchor).length) {
+          return false;
+        }
+        if (query) {
+          const bookTitle = books.find((b) => b.id === note.workId)?.title || '';
+          const haystack = `${note.title} ${note.content} ${note.aliases.join(' ')} ${note.tags.join(' ')} ${bookTitle}`;
+          return matchesStudyQuery(haystack, query);
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortOrder === 'title') {
+          return (a.title || '').localeCompare(b.title || '', lang === 'ar' ? 'ar' : 'en');
+        }
+        if (sortOrder === 'oldest') {
+          return a.id.localeCompare(b.id);
+        }
+        // 'recent' by default (descending)
+        return b.id.localeCompare(a.id);
+      });
+  }, [notes, filterMode, readingWork, anchor, query, books, openComments, sortOrder, lang]);
+
+  // Select first note automatically if none selected on desktop
+  const activeNote = useMemo(() => {
+    if (creatingNew) return null;
+    if (selectedId) {
+      return notes.find((n) => n.id === selectedId) || null;
+    }
+    return filteredNotes[0] || null;
+  }, [notes, selectedId, creatingNew, filteredNotes]);
+
+  const handleSelectNote = (noteId: string) => {
+    setSelectedId(noteId);
+    setCreatingNew(false);
+    setEditorDraft(null);
+    setMobileScreen('editor');
+  };
+
+  const handleStartNewNote = () => {
+    setSelectedId(null);
+    setCreatingNew(true);
+    setEditorDraft({ content: '', key: Date.now() });
+    setMobileScreen('editor');
+  };
+
+  const handleRemoveNote = async (note: StudyNote) => {
     try {
-      if (note.workId || note.knowledgeId) await window.electronAPI.knowledge.delete(note.knowledgeId || note.id);
+      if (note.workId || note.knowledgeId) {
+        await window.electronAPI.knowledge.delete(note.knowledgeId || note.id);
+      }
       await window.electronAPI.studyNotes.remove(note.id);
       window.dispatchEvent(new CustomEvent('baglib:notes-changed'));
-      setSelected(null); await refresh();
-    } catch { setActionError(true); }
+      if (selectedId === note.id) {
+        setSelectedId(null);
+        setMobileScreen('list');
+      }
+      await refresh();
+    } catch {
+      setActionError(true);
+    }
   };
-  // One-way Markdown export (S7) of the notes shown now: all of them, or the search/filter result.
-  const [boardsOpen, setBoardsOpen] = useState(false);
-  useEffect(() => {
-    const handleBoards = () => setBoardsOpen(true);
-    const handleCards = () => {
-      const cardsEl = document.querySelector('[data-srs-panel], [data-saved-cards]');
-      cardsEl?.scrollIntoView({ behavior: 'smooth' });
-    };
-    window.addEventListener('baglib:open-boards', handleBoards);
-    window.addEventListener('baglib:open-cards', handleCards);
-    return () => {
-      window.removeEventListener('baglib:open-boards', handleBoards);
-      window.removeEventListener('baglib:open-cards', handleCards);
-    };
-  }, []);
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [exported, setExported] = useState<{ folder: string; count: number } | null>(null);
-  const [wordExported, setWordExported] = useState<{ file: string; count: number } | null>(null);
-  // Word options (table of contents, page size, margins) open before the save dialog and are remembered on this device.
-  const [wordOptions, setWordOptions] = useState<WordLayout | null>(null);
-  const [wordNoteId, setWordNoteId] = useState<string | null>(null);
-  useEffect(() => {
-    if (wordOptions && wordNoteId) document.querySelector('[data-word-options]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [wordOptions, wordNoteId]);
-  const exportMarkdown = async (ids = shown.map(note => note.id)) => {
-    setActionError(false); setExported(null); setWordExported(null);
+
+  const handleMemorizeNote = async (note: StudyNote) => {
     try {
-      const result = await window.electronAPI.studyNotes.exportMarkdown(ids);
-      if (result) setExported(result);
-    } catch { setActionError(true); }
-  };
-  // Word export (S8) of the notes shown now, as one document.
-  const exportWord = async (layout: WordLayout) => {
-    setActionError(false); setWordExported(null); setExported(null); setWordOptions(null);
-    try { localStorage.setItem(WORD_LAYOUT_KEY, JSON.stringify(layout)); } catch { /* remembered for this time only */ }
-    try {
-      const result = await window.electronAPI.studyNotes.exportWord(wordNoteId ? [wordNoteId] : shown.map(note => note.id), lang, layout);
-      if (result) setWordExported(result);
-    } catch { setActionError(true); }
-  };
-  const memorize = async (note: StudyNote) => {
-    try {
-      const card = await window.electronAPI.knowledgeCards.save({ front: note.title || note.content, back: note.content, sourceKind: 'note', sourceRef: `note:${note.id}`, sourceLabel: note.title, workId: note.workId });
+      const card = await window.electronAPI.knowledgeCards.save({
+        front: note.title || note.content,
+        back: note.content,
+        sourceKind: 'note',
+        sourceRef: `note:${note.id}`,
+        sourceLabel: note.title,
+        workId: note.workId,
+      });
       await window.electronAPI.knowledgeCards.setMemorizing(card.id, true);
       window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
       setActionError(false);
-    } catch { setActionError(true); }
+    } catch {
+      setActionError(true);
+    }
   };
-  return <section className="flex-1 min-h-0 overflow-y-auto bg-canvas p-4 sm:p-6 space-y-4" dir={dir} data-notes-overview>
-    <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 font-display text-xl font-bold leading-relaxed"><FileText size={20} />{t('myNotesTitle')}</h1><p className="text-xs text-muted">{t('myNotesDesc')} · {notes.length}</p></div><div className="flex flex-wrap gap-2"><button type="button" data-notes-assistant onClick={() => setAssistantOpen(true)} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm"><Sparkles size={15} />{t('assistantOpen')}</button><button type="button" data-notes-boards onClick={() => setBoardsOpen(true)} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm"><LayoutGrid size={15} />{t('boardsOpen')}</button><button type="button" data-notes-export-word disabled={!shown.length} title={t('notesExportWordHint')} aria-expanded={Boolean(wordOptions)} onClick={() => { setWordNoteId(null); setWordOptions(current => (current ? null : savedWordLayout())); }} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-40"><FileType size={15} />{t('notesExportWord', { count: shown.length })}</button><button type="button" data-notes-export-markdown disabled={!shown.length} title={t('notesExportMarkdownHint')} onClick={() => void exportMarkdown()} className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-40"><Download size={15} />{t('notesExportMarkdown', { count: shown.length })}</button><button type="button" onClick={() => setEditor({ content: '', key: Date.now() })} className="flex items-center gap-2 rounded-lg bg-amber-600 text-white px-3 py-2 text-sm"><Plus size={15} />{t('studyNewNote')}</button></div></header>
-    {/* The notes shown start ticked when they are a small, chosen set (a search or one note), not the whole library. */}
-    {assistantOpen && <StudyAssistant notes={notes} initialNotes={shown.length <= 10 && shown.length < notes.length ? shown.map(note => note.id) : []} onClose={() => setAssistantOpen(false)} />}
-    {boardsOpen && <BoardsWorkspace notes={notes} onClose={() => setBoardsOpen(false)} />}
-    {wordOptions && <form data-word-options aria-label={t('wordOptionsTitle')} data-word-note={wordNoteId || undefined} onSubmit={event => { event.preventDefault(); void exportWord(wordOptions); }} className="flex flex-wrap items-end gap-3 rounded-xl border border-subtle bg-surface p-3 text-sm">
-      <strong className="basis-full text-xs">{t('wordOptionsTitle')}</strong>
-      <label className="flex items-center gap-2"><input type="checkbox" data-word-contents checked={wordOptions.contents} onChange={event => setWordOptions({ ...wordOptions, contents: event.target.checked })} />{t('wordContents')}</label>
-      <label className="flex flex-col gap-1 text-xs">{t('wordPageSize')}<select data-word-page value={wordOptions.pageSize} onChange={event => setWordOptions(wordLayout({ ...wordOptions, pageSize: event.target.value }))} className="rounded border border-subtle bg-canvas px-2 py-1 text-sm"><option value="a4">A4</option><option value="letter">{t('wordPageLetter')}</option><option value="a5">A5</option></select></label>
-      <label className="flex flex-col gap-1 text-xs">{t('wordMargins')}<select data-word-margins value={wordOptions.margins} onChange={event => setWordOptions(wordLayout({ ...wordOptions, margins: event.target.value }))} className="rounded border border-subtle bg-canvas px-2 py-1 text-sm"><option value="normal">{t('wordMarginNormal')}</option><option value="narrow">{t('wordMarginNarrow')}</option><option value="wide">{t('wordMarginWide')}</option></select></label>
-      <span className="ms-auto flex gap-2"><button type="button" onClick={() => setWordOptions(null)} className="rounded-lg border border-subtle px-3 py-1.5">{t('cancel')}</button><button type="submit" data-word-go className="rounded-lg bg-amber-600 px-3 py-1.5 text-white">{t('wordExportGo')}</button></span>
-    </form>}
-    {wordExported && <p role="status" data-notes-word-exported className="text-xs text-emerald-700 dark:text-emerald-300 leading-loose">{t('notesExportWordDone', { count: wordExported.count })} <bdi dir="ltr" className="break-all">{wordExported.file}</bdi></p>}
-    {exported && <p role="status" data-notes-exported className="text-xs text-emerald-700 dark:text-emerald-300 leading-loose">{t('notesExportDone', { count: exported.count })} <bdi dir="ltr" className="break-all">{exported.folder}</bdi></p>}
-    <label className="flex items-center gap-2 rounded-xl border border-subtle bg-surface px-3 py-2"><Search size={17} /><input type="search" aria-label={t('studySearchNotes')} placeholder={t('studySearchNotes')} value={query} onChange={event => { setQuery(event.target.value); setSelected(null); }} className="w-full min-w-0 bg-transparent outline-none text-sm leading-loose" /></label>
-    <label className="block text-sm">{t('waveReadingLog')}<select data-reading-log-book aria-label={t('waveReadingLog')} value={readingWork} onChange={event=>setReadingWork(event.target.value)} className="w-full bg-surface border border-subtle rounded p-2"><option value="">{t('dashScratchpadAttachBook')}</option>{books.map(book=><option key={book.id} value={book.id}>{book.title}</option>)}</select></label>
-    {readingWork&&<ReadingLogPanel key={readingWork} workId={readingWork}/>}
-    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" data-notes-open-comments checked={onlyOpenComments} onChange={event => setOnlyOpenComments(event.target.checked)} />{t('commentsOnlyOpen', { count: Object.values(openComments).reduce((sum, count) => sum + count, 0) })}</label>
-    {(selected || anchor) && <button type="button" onClick={() => { setSelected(null); setAnchor(null); }} className="text-xs flex items-center gap-1"><X size={14} />{t('studyLinkedNotes')}</button>}
-    {error && <div role="alert" className="rounded-xl border border-amber-500/40 p-3 text-sm leading-loose space-y-2">
-      <p>{t('studyLoadFailed')}</p>
-      <p>{failedSources.map(source => t(source === 'notes' ? 'studyLoadPersonalSource' : 'studyLoadKnowledgeSource')).join(' · ')}</p>
-      <button type="button" disabled={loading} onClick={() => void refresh()} className="rounded-lg border border-subtle px-3 py-1 hover:bg-surface disabled:opacity-50">{t('lookupRetry')}</button>
-    </div>}
-    {actionError && <p role="alert">{t('studyActionFailed')}</p>}
-    {loading && <p role="status" className="text-sm text-muted">{t('studyLoadingNotes')}</p>}
-    {editor && <div className="max-w-3xl"><div className="flex justify-end mb-1"><button type="button" aria-label={t('studyClose')} onClick={() => setEditor(null)}><X size={18} /></button></div><QuickNoteScratchpad key={editor.key} initialNote={editor.note} initialContent={editor.content} autoFocus onSaved={() => { setEditor(null); void refresh(); }} /></div>}
-    <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
-      {shown.map(note => {
-        const backlinks = studyBacklinks(notes, `note:${note.id}`);
-        const refs = [...new Map(studyLinks(note.content).map(link => [link.target, link])).values()];
-        const book = books.find(book => book.id === note.workId);
-        return <article key={note.id} data-study-note={note.id} className="rounded-xl border border-subtle bg-surface p-4 space-y-3 min-w-0">
-          <header className="flex items-start justify-between gap-2"><div className="min-w-0"><h2 dir="auto" className="font-bold leading-loose break-words">{note.title || t('dashScratchpadGeneralNote')}</h2>{(openComments[note.id] ?? 0) > 0 && <span data-note-open-comments className="inline-flex items-center rounded-full bg-amber-500/15 px-2 text-[11px]">{t('commentsOpenCount', { count: openComments[note.id] })}</span>}{note.aliases.length > 0 && <p className="text-xs text-muted leading-loose" dir="auto">{note.aliases.join(' · ')}</p>}</div><div className="flex shrink-0 gap-1"><KnowledgeGraphButton noteId={note.id} notes={notes} /><button type="button" aria-label={t('studyEdit')} onClick={() => note.kind==='reading_reflection'?setReadingWork(note.workId || note.sourceRef?.replace(/^book:/u,'') || ''):setEditor({ note, key: Date.now() })} className="p-1.5"><Pencil size={15} /></button><button type="button" aria-label={t('deleteNote')} onClick={() => void remove(note)} className="p-1.5 text-red-500"><Trash2 size={15} /></button></div></header>
-          <details data-note-export-menu className="text-xs border-t border-subtle pt-2">
-            <summary className="cursor-pointer leading-loose">{t('noteExportMenu')}</summary>
-            <div className="flex flex-wrap gap-2 pt-2">
-              <button type="button" data-note-export-markdown onClick={() => void exportMarkdown([note.id])} className="rounded-lg border border-subtle px-3 py-2 text-start leading-relaxed">{t('noteExportMarkdown')}</button>
-              <button type="button" data-note-export-word onClick={() => { setWordNoteId(note.id); setWordOptions(savedWordLayout()); }} className="rounded-lg border border-subtle px-3 py-2 text-start leading-relaxed">{t('noteExportWord')}</button>
+
+  const exportMarkdown = async (ids = filteredNotes.map((n) => n.id)) => {
+    setActionError(false);
+    setExported(null);
+    setWordExported(null);
+    try {
+      const result = await window.electronAPI.studyNotes.exportMarkdown(ids);
+      if (result) setExported(result);
+    } catch {
+      setActionError(true);
+    }
+  };
+
+  const exportWord = async (layout: WordLayout) => {
+    setActionError(false);
+    setWordExported(null);
+    setExported(null);
+    setWordOptions(null);
+    try {
+      localStorage.setItem(WORD_LAYOUT_KEY, JSON.stringify(layout));
+    } catch {}
+    try {
+      const ids = wordNoteId ? [wordNoteId] : filteredNotes.map((n) => n.id);
+      const result = await window.electronAPI.studyNotes.exportWord(ids, lang, layout);
+      if (result) setWordExported(result);
+    } catch {
+      setActionError(true);
+    }
+  };
+
+  return (
+    <section
+      data-notes-overview
+      className="flex-1 min-h-0 flex flex-col bg-canvas select-none overflow-hidden"
+      dir={dir}
+    >
+      {/* Workspace Header Tabs Bar (hidden in focused Review mode) */}
+      {activeTab !== 'review' && (
+        <header className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-subtle bg-surface">
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* Notes Tab */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('notes')}
+              data-notes-tab="notes"
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                activeTab === 'notes'
+                  ? 'bg-primary text-primary-contrast shadow-xs'
+                  : 'text-muted hover:text-main hover:bg-canvas'
+              }`}
+            >
+              <FileText className="size-4" />
+              <span>{t('notesTabNotes')}</span>
+              <span
+                className={`text-[11px] px-1.5 py-0.2 rounded-full tabular-nums ${
+                  activeTab === 'notes'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-canvas border border-subtle text-muted'
+                }`}
+              >
+                {notes.length}
+              </span>
+            </button>
+
+            {/* Knowledge Cards Tab */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('cards')}
+              data-notes-tab="cards"
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                activeTab === 'cards'
+                  ? 'bg-primary text-primary-contrast shadow-xs'
+                  : 'text-muted hover:text-main hover:bg-canvas'
+              }`}
+            >
+              <Sparkles className="size-4" />
+              <span>{t('notesTabCards')}</span>
+              {dueCardsCount > 0 && (
+                <span
+                  className={`text-[11px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
+                    activeTab === 'cards'
+                      ? 'bg-amber-400 text-stone-900'
+                      : 'bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400'
+                  }`}
+                >
+                  {dueCardsCount}
+                </span>
+              )}
+            </button>
+
+            {/* Boards Tab */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('boards')}
+              data-notes-tab="boards"
+              data-notes-boards
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                activeTab === 'boards'
+                  ? 'bg-primary text-primary-contrast shadow-xs'
+                  : 'text-muted hover:text-main hover:bg-canvas'
+              }`}
+            >
+              <LayoutGrid className="size-4" />
+              <span>{t('notesTabBoards')}</span>
+              {boardsCount > 0 && (
+                <span
+                  className={`text-[11px] px-1.5 py-0.2 rounded-full tabular-nums ${
+                    activeTab === 'boards'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-canvas border border-subtle text-muted'
+                  }`}
+                >
+                  {boardsCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Quick Actions in Workspace Header */}
+          <div className="flex items-center gap-2">
+            {activeTab === 'notes' && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-notes-assistant
+                  onClick={() => setAssistantOpen(true)}
+                  icon={<Sparkles className="size-3.5 text-amber-500" />}
+                >
+                  <span className="hidden sm:inline">{t('assistantOpen')}</span>
+                </Button>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleStartNewNote}
+                  icon={<Plus className="size-3.5" />}
+                  data-new-note-button
+                >
+                  {t('studyNewNote')}
+                </Button>
+              </>
+            )}
+
+            {activeTab === 'cards' && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setActiveTab('review')}
+                icon={<Sparkles className="size-3.5" />}
+                data-start-review-header
+              >
+                {dueCardsCount > 0
+                  ? t('srsReviewDue', { count: dueCardsCount })
+                  : t('srsStartReview')}
+              </Button>
+            )}
+          </div>
+        </header>
+      )}
+
+      {/* Global Modals / Panels */}
+      {assistantOpen && (
+        <StudyAssistant
+          notes={notes}
+          initialNotes={
+            filteredNotes.length <= 10 && filteredNotes.length < notes.length
+              ? filteredNotes.map((n) => n.id)
+              : []
+          }
+          onClose={() => setAssistantOpen(false)}
+        />
+      )}
+
+      {/* Word Layout Options form */}
+      {wordOptions && (
+        <form
+          data-word-options
+          aria-label={t('wordOptionsTitle')}
+          data-word-note={wordNoteId || undefined}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void exportWord(wordOptions);
+          }}
+          className="m-4 flex flex-wrap items-end gap-3 rounded-2xl border border-subtle bg-surface p-4 text-sm shadow-md"
+        >
+          <strong className="basis-full text-xs font-bold text-main">
+            {t('wordOptionsTitle')}
+          </strong>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              data-word-contents
+              checked={wordOptions.contents}
+              onChange={(e) => setWordOptions({ ...wordOptions, contents: e.target.checked })}
+            />
+            {t('wordContents')}
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            {t('wordPageSize')}
+            <select
+              data-word-page
+              value={wordOptions.pageSize}
+              onChange={(e) =>
+                setWordOptions(wordLayout({ ...wordOptions, pageSize: e.target.value }))
+              }
+              className="rounded-lg border border-subtle bg-canvas px-2.5 py-1 text-sm outline-none"
+            >
+              <option value="a4">A4</option>
+              <option value="letter">{t('wordPageLetter')}</option>
+              <option value="a5">A5</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            {t('wordMargins')}
+            <select
+              data-word-margins
+              value={wordOptions.margins}
+              onChange={(e) =>
+                setWordOptions(wordLayout({ ...wordOptions, margins: e.target.value }))
+              }
+              className="rounded-lg border border-subtle bg-canvas px-2.5 py-1 text-sm outline-none"
+            >
+              <option value="normal">{t('wordMarginNormal')}</option>
+              <option value="narrow">{t('wordMarginNarrow')}</option>
+              <option value="wide">{t('wordMarginWide')}</option>
+            </select>
+          </label>
+          <span className="ms-auto flex gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setWordOptions(null)}>
+              {t('cancel')}
+            </Button>
+            <Button variant="primary" size="sm" type="submit" data-word-go>
+              {t('wordExportGo')}
+            </Button>
+          </span>
+        </form>
+      )}
+
+      {/* Export Notifications */}
+      {wordExported && (
+        <p
+          role="status"
+          data-notes-word-exported
+          className="mx-4 mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed"
+        >
+          {t('notesExportWordDone', { count: wordExported.count })}{' '}
+          <bdi dir="ltr" className="break-all font-mono">
+            {wordExported.file}
+          </bdi>
+        </p>
+      )}
+
+      {exported && (
+        <p
+          role="status"
+          data-notes-exported
+          className="mx-4 mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed"
+        >
+          {t('notesExportDone', { count: exported.count })}{' '}
+          <bdi dir="ltr" className="break-all font-mono">
+            {exported.folder}
+          </bdi>
+        </p>
+      )}
+
+      {/* Load error banner */}
+      {error && (
+        <div role="alert" className="mx-4 mt-2 p-2 rounded-lg bg-danger/10 text-danger text-xs">
+          {t('studyLoadFailed')} {failedSources.length > 0 && `(${failedSources.join(' · ')})`}
+        </div>
+      )}
+
+      {/* Action error banner */}
+      {actionError && (
+        <p role="alert" className="mx-4 mt-2 p-2 rounded-lg bg-danger/10 text-danger text-xs">
+          {t('studyActionFailed')}
+        </p>
+      )}
+
+      {/* TAB 1: 3-PART NOTES WORKSPACE */}
+      {activeTab === 'notes' && (
+        <div className="flex-1 min-h-0 flex overflow-hidden">
+          {/* PANE 1: NOTES LIST (Visible if desktop or mobileScreen === 'list') */}
+          <aside
+            data-notes-list-pane
+            className={`w-full md:w-72 lg:w-80 shrink-0 border-e border-subtle bg-surface flex flex-col min-h-0 select-none ${
+              mobileScreen === 'editor' ? 'hidden md:flex' : 'flex'
+            }`}
+          >
+            {/* Search and Filters Header */}
+            <div className="p-3 border-b border-subtle space-y-2.5 bg-canvas/40">
+              <label className="flex items-center gap-2 rounded-xl border border-subtle bg-surface px-3 py-1.5 text-xs">
+                <Search className="size-3.5 text-muted shrink-0" />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t('studySearchNotes')}
+                  aria-label={t('studySearchNotes')}
+                  className="w-full min-w-0 bg-transparent outline-none text-main placeholder:text-muted"
+                />
+                {query && (
+                  <button type="button" onClick={() => setQuery('')} className="text-muted">
+                    <X className="size-3" />
+                  </button>
+                )}
+              </label>
+
+              {/* Filters & Sort Controls */}
+              <div className="flex items-center justify-between gap-2 text-xs">
+                {/* Filter Selector */}
+                <div className="flex items-center gap-1">
+                  <Filter className="size-3 text-muted shrink-0" />
+                  <select
+                    value={filterMode}
+                    onChange={(e) => setFilterMode(e.target.value as NoteFilter)}
+                    className="bg-transparent text-xs text-muted outline-none cursor-pointer"
+                  >
+                    <option value="all">{t('notesFilterAll')}</option>
+                    <option value="comments">{t('notesFilterComments')}</option>
+                    <option value="book">{t('notesFilterBook')}</option>
+                  </select>
+                </div>
+
+                {/* Sort Selector */}
+                <div className="flex items-center gap-1">
+                  <ArrowUpDown className="size-3 text-muted shrink-0" />
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as NoteSortOrder)}
+                    className="bg-transparent text-xs text-muted outline-none cursor-pointer"
+                  >
+                    <option value="recent">{t('notesSortRecent')}</option>
+                    <option value="title">{t('notesSortTitle')}</option>
+                    <option value="oldest">{t('notesSortOldest')}</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Work Selector if Filter is 'book' */}
+              {filterMode === 'book' && (
+                <select
+                  data-reading-log-book
+                  aria-label={t('waveReadingLog')}
+                  value={readingWork}
+                  onChange={(e) => setReadingWork(e.target.value)}
+                  className="w-full bg-surface border border-subtle rounded-lg px-2 py-1 text-xs outline-none"
+                >
+                  <option value="">{t('dashScratchpadAttachBook')}</option>
+                  {books.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.title}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
-          </details>
-          <StudyNoteContent content={note.content} notes={notes} onOpen={target => void open(target)} t={t} />
-          <NoteHistory id={note.id} onChanged={()=>void refresh()}/>
-          <button type="button" onClick={() => void memorize(note)} className="text-xs underline">{t('srsFromNote')}</button>
-          {book && <button type="button" dir="auto" className="text-xs text-emerald-700 dark:text-emerald-300 underline" onClick={() => openBookForReading(book)}>{book.title}</button>}
-          {note.tags.length > 0 && <p className="text-xs text-muted" dir="auto">{note.tags.map(tag => `#${tag}`).join(' ')}</p>}
-          {refs.length > 0 && <details className="text-xs border-t border-subtle pt-2"><summary>{t('studyReferences')} ({refs.length})</summary><div className="space-y-2 mt-2">{refs.map(link => <button type="button" key={link.target} dir="auto" className="block text-start underline leading-relaxed" onClick={() => void open(link.target)}>{link.label}</button>)}</div></details>}
-          <details className="text-xs border-t border-subtle pt-2" open={!!selected}><summary>{t('studyBacklinks')} ({backlinks.length})</summary><div className="space-y-2 mt-2">{backlinks.map(backlink => <button type="button" key={backlink.id} dir="auto" className="block text-start underline leading-relaxed" onClick={() => void open(`note:${backlink.id}`)}>{backlink.title}</button>)}</div></details>
-        </article>;
-      })}
-    </div>
-    {!shown.length && !error && !loading && <p className="py-8 text-center text-sm text-muted">{t('studyNoResults')}</p>}
-    <KnowledgeTools />
-    <SrsReviewPanel />
-    <SavedCardsPanel />
-  </section>;
+
+            {/* Reading Log Panel if book selected */}
+            {readingWork && <ReadingLogPanel key={readingWork} workId={readingWork} />}
+
+            {/* Notes List Scroll Area */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
+              {loading && (
+                <p className="p-4 text-center text-xs text-muted">{t('studyLoadingNotes')}</p>
+              )}
+
+              {filteredNotes.length === 0 && !loading && (
+                <EmptyState
+                  icon={<FileText className="size-6 text-muted" />}
+                  title={t('notesEmptyTitle')}
+                  description={t('notesEmptyDesc')}
+                  action={
+                    <Button variant="primary" size="sm" onClick={handleStartNewNote}>
+                      {t('studyNewNote')}
+                    </Button>
+                  }
+                  className="py-6"
+                />
+              )}
+
+              {filteredNotes.map((note) => {
+                const isSelected = (!creatingNew && activeNote?.id === note.id) || selectedId === note.id;
+                const book = books.find((b) => b.id === note.workId);
+                const commentsCount = openComments[note.id] ?? 0;
+
+                return (
+                  <article
+                    key={note.id}
+                    data-study-note={note.id}
+                    onClick={() => handleSelectNote(note.id)}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1.5 ${
+                      isSelected
+                        ? 'bg-primary/10 border-primary-text/40 shadow-xs ring-1 ring-primary-text/20'
+                        : 'bg-surface hover:bg-canvas border-subtle/80'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <h4
+                        dir="auto"
+                        className={`text-xs sm:text-sm font-bold truncate leading-tight ${
+                          isSelected ? 'text-primary-text' : 'text-main'
+                        }`}
+                      >
+                        {note.title || t('dashScratchpadGeneralNote')}
+                      </h4>
+
+                      {commentsCount > 0 && (
+                        <span
+                          data-note-open-comments
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.2 text-[10px] text-amber-700 dark:text-amber-300 shrink-0 font-medium"
+                        >
+                          <MessageSquare className="size-2.5" />
+                          <span>{commentsCount}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <p
+                      dir="auto"
+                      className="text-xs text-muted line-clamp-2 leading-relaxed"
+                      style={{
+                        fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)",
+                      }}
+                    >
+                      {note.content || '...'}
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-1 pt-1 text-[10px] text-muted">
+                      {book && (
+                        <span className="inline-flex items-center gap-1 bg-canvas px-1.5 py-0.5 rounded border border-subtle truncate max-w-[140px]">
+                          <BookOpen className="size-2.5 text-primary-text" />
+                          <span className="truncate">{book.title}</span>
+                        </span>
+                      )}
+                      {note.tags.slice(0, 2).map((tg) => (
+                        <span key={tg} className="bg-canvas px-1 py-0.5 rounded text-muted">
+                          #{tg}
+                        </span>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </aside>
+
+          {/* PANE 2: NOTE EDITOR (Visible if desktop or mobileScreen === 'editor') */}
+          <main
+            className={`flex-1 min-h-0 flex flex-col bg-surface ${
+              mobileScreen === 'list' ? 'hidden md:flex' : 'flex'
+            }`}
+          >
+            {activeNote || creatingNew ? (
+              <NoteEditorPane
+                key={activeNote ? activeNote.id : `new-${editorDraft?.key ?? 0}`}
+                note={activeNote}
+                initialContent={editorDraft?.content}
+                showBack={mobileScreen === 'editor'}
+                onBack={() => setMobileScreen('list')}
+                isPanelOpen={isPanelOpen}
+                onTogglePanel={() => setIsPanelOpen(!isPanelOpen)}
+                onSaved={(saved) => {
+                  if (saved) setSelectedId(saved.id);
+                  setCreatingNew(false);
+                  void refresh();
+                }}
+                onDelete={handleRemoveNote}
+                onMemorize={handleMemorizeNote}
+                onOpenAssistant={() => setAssistantOpen(true)}
+                onExportMarkdown={() => void exportMarkdown(activeNote ? [activeNote.id] : [])}
+                onExportWord={() => {
+                  if (activeNote) setWordNoteId(activeNote.id);
+                  setWordOptions(savedWordLayout());
+                }}
+              />
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-8">
+                <EmptyState
+                  icon={<FileText className="size-10 text-muted" />}
+                  title={t('studySearchNotes')}
+                  description={t('notesSelectPrompt')}
+                  action={
+                    <Button variant="primary" size="md" onClick={handleStartNewNote}>
+                      {t('studyNewNote')}
+                    </Button>
+                  }
+                />
+              </div>
+            )}
+          </main>
+
+          {/* PANE 3: COLLAPSIBLE BACKLINKS & HISTORY PANEL (Desktop only when open, and note active) */}
+          {isPanelOpen && activeNote && (
+            <div className="hidden lg:flex min-h-0">
+              <NoteDetailsPane
+                note={activeNote}
+                notes={notes}
+                onOpenTarget={openTarget}
+                onRefresh={() => void refresh()}
+                onClose={() => setIsPanelOpen(false)}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: SAVED KNOWLEDGE CARDS */}
+      {activeTab === 'cards' && (
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <SavedCardsPanel onStartReview={() => setActiveTab('review')} />
+        </div>
+      )}
+
+      {/* TAB 3: DEDICATED REVIEW SCREEN */}
+      {activeTab === 'review' && (
+        <SrsReviewScreen
+          onClose={() => setActiveTab('cards')}
+          onNavigateSource={openTarget}
+        />
+      )}
+
+      {/* TAB 4: BOARDS WORKSPACE (First-class view) */}
+      {activeTab === 'boards' && (
+        <BoardsWorkspace
+          notes={notes}
+          onClose={() => setActiveTab('notes')}
+        />
+      )}
+    </section>
+  );
 };
