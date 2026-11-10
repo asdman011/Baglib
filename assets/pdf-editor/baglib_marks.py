@@ -458,6 +458,51 @@ class TextAppearances:
                 font.embed()
 
 
+def study_mark(document, frame, item, text_appearances):
+    rect = frame.rect(item["box"])
+    if item["kind"] == "stamp":
+        annotation = base(document, "Stamp", rect, item)
+        annotation.Name = Name("/BagLibStudy")
+        rendered = text_appearances.appearance(rect, str(item.get("text", "")), bool(item.get("rtl")), rotation=frame.rotate)
+        if rendered is None:
+            raise ValueError("engine-missing")
+        # Keep the shaped label as a form inside the vector border appearance.
+        label = rendered.N
+        x, y, right, top = rect
+        radius = min(5, (right-x)/4, (top-y)/4)
+        k = radius * 0.552285
+        border = (f"q 1 1 1 rg {color_ops(item.get('color'))} 1.5 w "
+                  f"{x+radius} {y+1} m {right-radius} {y+1} l "
+                  f"{right-radius+k} {y+1} {right-1} {y+radius-k} {right-1} {y+radius} c "
+                  f"{right-1} {top-radius} l {right-1} {top-radius+k} {right-radius+k} {top-1} {right-radius} {top-1} c "
+                  f"{x+radius} {top-1} l {x+radius-k} {top-1} {x+1} {top-radius+k} {x+1} {top-radius} c "
+                  f"{x+1} {y+radius} l {x+1} {y+radius-k} {x+radius-k} {y+1} {x+radius} {y+1} c B Q /Label Do")
+        annotation.AP = appearance(document, rect, border)
+        annotation.AP.N.Resources = Dictionary(XObject=Dictionary(Label=label))
+        return annotation
+    start, end = item["from"], item["to"]
+    ax, ay = frame.point(start["x"], start["y"])
+    bx, by = frame.point(end["x"], end["y"])
+    rect = [min(ax,bx)-3, min(ay,by)-3, max(ax,bx)+3, max(ay,by)+3]
+    if item.get("measurement", {}).get("mode") == "area":
+        vertices = []
+        for px, py in [(start["x"], start["y"]), (end["x"], start["y"]), (end["x"], end["y"]), (start["x"], end["y"])]:
+            vertices.extend(frame.point(px, py))
+        annotation = base(document, "Polygon", rect, item)
+        annotation.Vertices = Array(vertices)
+        points = [f"{vertices[i]} {vertices[i+1]}" for i in range(0,8,2)]
+        drawing = points[0] + " m " + " l ".join(points[1:]) + " l h S"
+    else:
+        annotation = base(document, "Line", rect, item)
+        annotation.L = Array([ax,ay,bx,by])
+        annotation.IT = Name("/LineDimension")
+        annotation.LE = Array([Name("/ClosedArrow"), Name("/ClosedArrow")])
+        annotation.Cap = True
+        drawing = f"{ax} {ay} m {bx} {by} l S"
+    annotation.AP = appearance(document, rect, f"{color_ops(item.get('color'))} 1.5 w " + drawing)
+    return annotation
+
+
 def shape_mark(document, frame, item, text_appearances=None):
     shape = item["kind"]
     rect = frame.rect(item["box"])
@@ -574,6 +619,8 @@ def write(source, output, payload_path):
             kind = item["kind"]
             if kind in ("highlight", "underline", "strike"):
                 annotation = text_mark(document, frame, item)
+            elif kind in ("stamp", "measure"):
+                annotation = study_mark(document, frame, item, text_appearances)
             elif kind in ("rect", "oval", "arrow", "text", "area"):
                 annotation = shape_mark(document, frame, item, text_appearances)
             elif kind in ("pin", "note", "question"):

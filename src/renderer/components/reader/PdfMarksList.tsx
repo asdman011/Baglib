@@ -1,4 +1,6 @@
 'use client';
+import { measurementLabel } from '../../../shared/pdf-study-tools';
+import { useWorkspace } from '../context/WorkspaceContext';
 import React, { useEffect, useMemo, useState } from 'react';
 import type { KnowledgeItemDTO } from '../../../shared/types/knowledge';
 import type { PdfReview } from '../../../shared/types/pdf-collaboration';
@@ -12,7 +14,7 @@ import { HIGHLIGHT_COLOR_HEX } from './PdfNativeViewer';
 export const markKindKeys: Record<MarkKind, TranslationKey> = {
   highlight: 'markupToolHighlight', underline: 'markupToolUnderline', strike: 'markupToolStrike', rect: 'markupToolRect', oval: 'markupToolOval',
   arrow: 'markupToolArrow', text: 'markupToolText', area: 'markupToolArea', pin: 'markupToolComment', note: 'markKindNote', question: 'markKindQuestion',
-  quote: 'markKindQuote', bookmark: 'markKindBookmark', review: 'markKindReview',
+  stamp: 'markupToolStamp', measure: 'markupToolMeasure', quote: 'markKindQuote', bookmark: 'markKindBookmark', review: 'markKindReview',
 };
 const normalize = (text: string) => normalizeArabicText(text, { normalizeTaaMarbuta: false }).toLowerCase();
 
@@ -29,6 +31,7 @@ export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflow
   isReflowable?: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }) {
+  const { lang } = useWorkspace();
   const [threads, setThreads] = useState<Record<string, { open: number; total: number }>>({});
   useEffect(() => {
     let alive = true;
@@ -51,7 +54,7 @@ export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflow
         cfi: epubLoc?.cfi ?? null,
         createdAt: item.createdAt,
         color: shape?.color ?? epubLoc?.color ?? item.color,
-        text: item.quotedText || item.noteContent || item.questionText || item.label || '',
+        text: (shape?.shape === 'measure' ? measurementLabel(shape, lang) : '') || item.quotedText || item.noteContent || item.questionText || item.label || '',
         ...(count ? { status: count.open ? 'open' as const : 'resolved' as const } : {}),
       };
     }),
@@ -64,7 +67,7 @@ export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflow
       text: [`${review.author}: ${review.text}`, ...review.replies.map(reply => `${reply.author}: ${reply.text}`)].join('\n'),
       status: review.status === 'open' ? 'open' as const : 'resolved' as const,
     })),
-  ], [items, reviews, threads]);
+  ], [items, reviews, threads, lang]);
 
   const isEpub = isReflowable || marks.some(m => !!m.chapter || !!m.cfi);
   const [filter, setFilter] = useState<MarkFilter>({

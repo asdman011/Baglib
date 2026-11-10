@@ -169,11 +169,11 @@ Priorities: P1 now, P2 next, P3 later. Each wave is usable on its own.
 | # | Feature | Notes |
 |---|---|---|
 | 13.1 | Compare two editions: side by side and overlay with previous and next difference | Useful for two printings of the same book; check existing workstation compare first |
-| 13.2 | Custom stamps, including study stamps such as "checked", "to revise", and grading stamps | Acrobat Stamp tool; stamp images ship with the app |
+| 13.2 | Custom stamps, including study stamps such as "checked", "to revise", and grading stamps | KEY-271 uses ten bilingual vector stamps with embedded shaped text and no image assets |
 | 13.3 | Scan and OCR "review suspects": step through low-confidence words | Acrobat `ShowCaptureSuspects`; reuses OCR confidence |
 | 13.4 | Accessibility check and reading order view | Depends on what the open engine supports; the proprietary Stirling module stays excluded |
 | 13.5 | Read aloud and reflow for the PDF view | Reuses existing TTS and text layer |
-| 13.6 | Saved tool sequences shown as "actions" | The existing pipelines, renamed and surfaced in the Tools home |
+| 13.6 | Saved tool sequences shown as "actions" | KEY-271 settings-backed action sequences invoke existing tools in one staged job from the Tools home |
 | 13.7 | Measure (distance, area) | P3, low value for study |
 
 Left out on purpose: e-signature requests, bulk send, payments, web forms, rich media, JavaScript, print production, cloud storage, generated images.
@@ -507,3 +507,28 @@ Saved text boxes now carry an embedded appearance visible to PDFium while preser
 The approved official archive `NotoNaskhArabic-v2.021.zip` is 2,922,060 bytes, SHA-256 `6c050ab9bd087d69b733c505a7576e60c528c2f33cd7b91005a5bd7da4514032`, stored and unpacked only under `.baglib-data/downloads/noto-naskh/`. The packaged additions are only the regular full TTF (291,980 bytes) and SIL OFL 1.1 licence (4,381 bytes). Existing electron-builder `assets/pdf-editor` resource filters ship both. The two approved shaping libraries use the same pinned wheel/hash lines as `requirements-ocr.txt` in a separate `requirements-shaping.txt`. Setup installs it with `--require-hashes` immediately after each base install for both the venv and embedded target, with explicit failure checks. The existing packaging wildcard ships the new requirements file. The base `requirements.txt` stays byte-for-byte equal to HEAD so its legacy dependencies retain their existing installation behavior. Font provenance is the [official Noto Naskh Arabic release](https://github.com/notofonts/arabic/releases/tag/NotoNaskhArabic-v2.021).
 
 Six focused tests pass. They exercise the Python writer, inspect embedded font programs, reconstruct all three acceptance strings exactly through ToUnicode, compare repeat-save font counts and PDFium pixels, preserve a foreign annotation, simulate each missing import and check packaging, wrapping and four cropped-page rotations. Visually inspected PDFium 2x evidence is under `.baglib-data/key270-render/`, including Arabic tashkeel, English, the mixed `سورة 2:255 Al-Baqarah` reference and RTL/LTR rotation montages. Direct ToUnicode reconstruction and annotation Contents are exact. PDFium/PDF.js geometric extraction from a synthetic page projection reorders some Arabic combining sequences, so broader viewer-specific copying remains a verification limit. Explicit bidi embedding/isolate controls are not interpreted by this ordinary Arabic/Latin resolver. Acrobat and live BagLib harnesses were not run in this session under the assigned isolation rules. See ADR-012 and `docs/agent-ops/reports/KEY-270.md` for detailed results and install dry-run evidence.
+
+
+## KEY-271 PDF study tools implementation - 2026-11-10, Codex
+
+The Wave 13.2, 13.6 and 13.7 entries now have an implementation. This section supersedes the earlier historical statement that stamps, actions and measurement were pending. Its evidence is local BagLib source inspection and the tests below. No external application was reverse-engineered during KEY-271.
+
+### Stamps and measurements
+
+`src/shared/pdf-study-tools.ts` defines the ten approved stamps, four distinct grade colours, physical unit conversions and locale-aware value formatting. User-facing labels live in `src/renderer/translations.ts`. The PDF-only stamp selector defaults to the interface language and offers a placement-language choice. `PdfMarkupLayer.tsx` provides selectors and a per-page calibration line, known length, unit, distance and rectangular area controls. PDF coordinates remain independent of RTL/LTR. Native page dimensions are taken before zoom and device-pixel scaling.
+
+Both additions use existing `note` knowledge records and their shape-location JSON. Each measurement records its geometry, physical page dimensions, calibration ratio, units and placement locale. Stamp labels and saved PDF contents retain their placement language. Measurement labels in the page, Marks list and popover are reformatted for the current interface language from the stored geometry. Calibration controls start with the default PDF scale on a newly mounted page. Stored measurements retain their own scale. Existing reader-origin history provides restart-safe undo and redo. Existing EPUB tool restrictions continue to expose its supported text and comment tools.
+
+`assets/pdf-editor/baglib_marks.py` emits owned `/Stamp` appearances through the KEY-270 `TextAppearances` shaping and embedding helper. Rounded vector borders have a white background so the page text stays behind a legible label. Measurements become `/Line` with `/IT /LineDimension`, or a rectangular `/Polygon`, with the value in `/Contents`. `base()` supplies the existing ownership metadata. Save removes/recreates owned annotations without duplicating them and preserves foreign annotations. `material-save.ts` adds the independent `stamps` export category. Measurements belong to `shapes`.
+
+### Saved actions
+
+The shared `PdfSavedActions.tsx` authoring surface is mounted in the Tools home and the workstation directory. It stores up to 50 named sequences in `pdf.actions.v1`, each with 2-12 ordered steps. Available single-PDF tools are compression, page numbers, watermark, OCR and repair. Options are bounded JSON fields of those existing operations. The page-number default uses numeric position `8`, matching `stirling-tool-options.ts`. OCR delegates the existing skip-text implementation. The live checks did not OCR either real text-layer PDF.
+
+`PdfEditorJobs.start()` validates sequences in main before execution. Each step invokes the existing runner with the preceding staged file and its verified digest, in a separate step directory. Only a fully successful sequence becomes the session's working output. A failed or cancelled sequence leaves the original file and earlier working output intact. Progress and the localized failed-step message appear above the reader page, including when side panes are closed. Save uses the existing ADR-012 publication and emergency-copy path.
+
+### Verification checkpoint
+
+Seven focused TypeScript tests pass, including catalogue/key parity, Arabic digits, calibration, area, invalid payloads, action validation, exact ordering and failure rollback. The Python writer regression verifies embedded-appearance ownership, stable rewrite, dimension annotation subtypes and foreign preservation. The initial full suite passed 1611 tests. The resumed shared workspace passes 1670 tests after the other tasks landed. Final checks and native evidence are recorded in the KEY-271 handoff and local report.
+
+Native profile `key271-live-1pgyFP` verified both copied real PDFs, all ten labels in each language, ten-centimetre calibration, two measurements per PDF, undo/redo, restart, repeat Save, selective export and two-step compression-to-numbering actions. Each action produced one staged PDF and Save retained one emergency copy per source. Fresh final profile `key271-live-ChjNym` passes the same two-launch bilingual workflow with opaque stamp appearances. PDFium 2x renders of both saved pages have been inspected, including correctly joined Arabic labels and all four grade colours. The generated raster worker was rebuilt with `npm run copy:pdfjs` so owned Stamp and Polygon annotations are hidden under the editable reader overlays. A targeted resumed run verifies opposite-language book reopening and locale-specific digits. The real corpus files remain unchanged. No schema, dependency or download was added.

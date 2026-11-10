@@ -1,6 +1,6 @@
 'use client';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { ChevronDown, Circle, Palette, Highlighter, Keyboard, Lock, LockOpen, MessageSquarePlus, MousePointer2, MoveUpRight, Square, SquareDashed, Strikethrough, Type, Underline } from 'lucide-react';
+import { Stamp, Ruler, ChevronDown, Circle, Palette, Highlighter, Keyboard, Lock, LockOpen, MessageSquarePlus, MousePointer2, MoveUpRight, Square, SquareDashed, Strikethrough, Type, Underline } from 'lucide-react';
 import { isShapeTool, type MarkupTool } from '../../../shared/pdf-markup';
 import type { TranslationKey } from '../../translations';
 import { HIGHLIGHT_COLORS } from '../../libs/reader/highlight-manager';
@@ -20,6 +20,8 @@ const tools: { id: MarkupTool; icon: typeof Highlighter; label: TranslationKey }
   { id: 'arrow', icon: MoveUpRight, label: 'markupToolArrow' },
   { id: 'text', icon: Type, label: 'markupToolText' },
   { id: 'area', icon: SquareDashed, label: 'markupToolArea' },
+  { id: 'stamp', icon: Stamp, label: 'markupToolStamp' },
+  { id: 'measure', icon: Ruler, label: 'markupToolMeasure' },
 ];
 const COMPACT: MarkupTool[] = ['select', 'highlight', 'underline', 'strike', 'comment'];
 

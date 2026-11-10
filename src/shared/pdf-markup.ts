@@ -1,3 +1,4 @@
+import { STAMPS, type StampId, type Measurement } from './pdf-study-tools';
 /**
  * PDF study markup (Waves 8.3, 9.1 and 9.4). Every mark is a knowledge item of the book, so it lives in BagLib's
  * database and the PDF file is never touched; the page position goes in the item's `location` JSON, which already
@@ -6,20 +7,20 @@
  * - shapes and pins (`note` items): `shape` is `rect`, `oval`, `arrow`, `text`, `area` or `pin`, with a box or two
  *   points in page percentages (0–100, from the top-left corner of the page), and the note text as their content.
  */
-export type MarkupTool = 'select' | 'highlight' | 'underline' | 'strike' | 'rect' | 'oval' | 'arrow' | 'text' | 'area' | 'comment';
+export type MarkupTool = 'select' | 'highlight' | 'underline' | 'strike' | 'rect' | 'oval' | 'arrow' | 'text' | 'area' | 'comment' | 'stamp' | 'measure';
 export type TextStyle = 'highlight' | 'underline' | 'strike';
-export type ShapeKind = 'rect' | 'oval' | 'arrow' | 'text' | 'area' | 'pin';
+export type ShapeKind = 'rect' | 'oval' | 'arrow' | 'text' | 'area' | 'pin' | 'stamp' | 'measure';
 export const TEXT_TOOLS: readonly MarkupTool[] = ['highlight', 'underline', 'strike'];
-export const SHAPE_TOOLS: readonly MarkupTool[] = ['rect', 'oval', 'arrow', 'text', 'area', 'comment'];
+export const SHAPE_TOOLS: readonly MarkupTool[] = ['rect', 'oval', 'arrow', 'text', 'area', 'comment', 'stamp', 'measure'];
 export const MARKUP_TOOLS: readonly MarkupTool[] = ['select', ...TEXT_TOOLS, ...SHAPE_TOOLS];
 
 export interface Box { x: number; y: number; width: number; height: number }
 export interface Point { x: number; y: number }
-export interface ShapeMark { page: number; shape: ShapeKind; color: string; box: Box; from?: Point; to?: Point }
+export interface ShapeMark { page: number; shape: ShapeKind; color: string; box: Box; from?: Point; to?: Point; stampId?: StampId; language?: 'ar' | 'en'; measurement?: Measurement }
 
 export const isTextTool = (tool: MarkupTool): tool is TextStyle => (TEXT_TOOLS as readonly string[]).includes(tool);
 export const isShapeTool = (tool: MarkupTool) => (SHAPE_TOOLS as readonly string[]).includes(tool);
-export const shapeForTool = (tool: MarkupTool): ShapeKind | null => (tool === 'comment' ? 'pin' : (['rect', 'oval', 'arrow', 'text', 'area'] as const).find(kind => kind === tool) ?? null);
+export const shapeForTool = (tool: MarkupTool): ShapeKind | null => (tool === 'comment' ? 'pin' : (['rect', 'oval', 'arrow', 'text', 'area', 'stamp', 'measure'] as const).find(kind => kind === tool) ?? null);
 
 const COLORS = new Set(['amber', 'emerald', 'rose', 'sky', 'violet']);
 const percent = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, Math.round(value * 100) / 100)) : null;
@@ -36,7 +37,7 @@ export function parseShapeMark(location: string): ShapeMark | null {
   if (!location.startsWith('{')) return null;
   try {
     const value = JSON.parse(location) as Record<string, unknown>;
-    const shape = (['rect', 'oval', 'arrow', 'text', 'area', 'pin'] as const).find(kind => kind === value.shape);
+    const shape = (['rect', 'oval', 'arrow', 'text', 'area', 'pin', 'stamp', 'measure'] as const).find(kind => kind === value.shape);
     const page = Number(value.page);
     if (!shape || !Number.isInteger(page) || page < 1) return null;
     const raw = (value.box ?? {}) as Record<string, unknown>;
@@ -44,7 +45,18 @@ export function parseShapeMark(location: string): ShapeMark | null {
     if (x === null || y === null || width === null || height === null) return null;
     const color = typeof value.color === 'string' && COLORS.has(value.color) ? value.color : 'amber';
     const mark: ShapeMark = { page, shape, color, box: { x, y, width, height } };
-    if (shape === 'arrow') {
+    if (shape === 'stamp') {
+      const stamp = STAMPS.find(entry => entry.id === value.stampId);
+      if (!stamp || !['ar', 'en'].includes(String(value.language))) return null;
+      mark.stampId = stamp.id; mark.language = value.language as 'ar' | 'en';
+      mark.color = stamp.color;
+    }
+    if (shape === 'measure') {
+      const m = value.measurement as Measurement | undefined;
+      if (!m || !['distance', 'area'].includes(m.mode) || !['cm', 'mm', 'inch', 'pt'].includes(m.unit) || !['ar', 'en'].includes(m.language) || ![m.pointsPerUnit, m.page?.width, m.page?.height].every(n => Number.isFinite(n) && n > 0 && n < 1000000)) return null;
+      mark.measurement = m;
+    }
+    if (shape === 'arrow' || shape === 'measure') {
       const from = readPoint(value.from), to = readPoint(value.to);
       if (!from || !to) return null;
       mark.from = from; mark.to = to;
@@ -75,8 +87,9 @@ export function shapeFromDrag(tool: MarkupTool, page: number, start: Point, end:
   const clamp = (point: Point): Point => ({ x: percent(point.x)!, y: percent(point.y)! });
   const a = clamp(start), b = clamp(end);
   const tint = COLORS.has(color) ? color : 'amber';
+  if (shape === 'stamp') return { page, shape, color: tint, box: { x: Math.min(a.x, 65), y: Math.min(a.y, 92), width: 35, height: 8 } };
   if (shape === 'pin') return { page, shape, color: tint, box: { x: a.x, y: a.y, width: 0, height: 0 } };
-  if (shape === 'arrow') {
+  if (shape === 'arrow' || shape === 'measure') {
     if (Math.hypot(b.x - a.x, b.y - a.y) < MIN_SHAPE) return null;
     return { page, shape, color: tint, from: a, to: b, box: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) } };
   }

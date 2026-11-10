@@ -65,3 +65,10 @@ Supplied Stirling JAR has Linux native runtime only; actual Windows merge/split 
 
 See [JPDFium](JPDFium.md), [Spring Boot](Spring%20Boot.md), and [Stirling-PDF](Stirling-PDF.md) for actual evidence and verification limits. UI drag, split-plan undo and full publication acceptance remain pending; a passing server output test is not proof of those interactions.
 
+
+
+## KEY-271 saved actions and PDF study annotations - 2026-11-10, Codex
+
+Saved actions reuse the existing PDF tool runner through `PdfEditorJobs`, with bounded settings in `pdf.actions.v1`, ordered step directories and a single publishable PDF only after all steps succeed. The source file is published through the existing ADR-012 Save path. Failure retains the prior staged output and stops remaining steps. The Tools home and directory share one bilingual action component. Numeric page-number position `8` follows the existing tools-home options contract.
+
+Stamps and measurements use existing note location JSON and reader history. The PDF writer emits shaped embedded-font vector `/Stamp` appearances, dimension `/Line` annotations and rectangular `/Polygon` annotations. The export category distinguishes stamps from other shapes. This work inspected BagLib source and exercised its installed tool runners. It performed no additional third-party reverse engineering. Implementation details and verification are in [PDF and Notes Experience Plan](PDF%20and%20Notes%20Experience%20Plan.md#key-271-pdf-study-tools-implementation---2026-11-10-codex).

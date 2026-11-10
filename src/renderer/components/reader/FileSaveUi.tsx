@@ -45,11 +45,11 @@ export function SaveIncidentBanner({ status, onRestore, onKeep, t }: { status: M
 }
 
 const categoryKeys: Record<ExportCategory, TranslationKey> = {
-  textMarks: 'exportCatTextMarks', shapes: 'exportCatShapes', textBoxes: 'exportCatTextBoxes', comments: 'exportCatComments',
+  stamps: 'markupToolStamp', textMarks: 'exportCatTextMarks', shapes: 'exportCatShapes', textBoxes: 'exportCatTextBoxes', comments: 'exportCatComments',
   replies: 'exportCatReplies', questions: 'exportCatQuestions', bookmarks: 'exportCatBookmarks', pageNotes: 'exportCatPageNotes',
 };
 const kindKeys: Record<AdditionKind, TranslationKey> = {
-  highlight: 'markupToolHighlight', underline: 'markupToolUnderline', strike: 'markupToolStrike', rect: 'markupToolRect', oval: 'markupToolOval',
+  stamp: 'markupToolStamp', measure: 'markupToolMeasure', highlight: 'markupToolHighlight', underline: 'markupToolUnderline', strike: 'markupToolStrike', rect: 'markupToolRect', oval: 'markupToolOval',
   arrow: 'markupToolArrow', text: 'markupToolText', area: 'markupToolArea', pin: 'markupToolComment', note: 'exportCatPageNotes', question: 'exportCatQuestions',
 };
 const colorKeys: Record<string, TranslationKey> = { amber: 'markupColorAmber', emerald: 'markupColorEmerald', rose: 'markupColorRose', sky: 'markupColorSky', violet: 'markupColorViolet' };

@@ -1,4 +1,6 @@
 'use client';
+import { STAMPS, measurementLabel } from '../../../shared/pdf-study-tools';
+import { translations } from '../../translations';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
@@ -4483,7 +4485,14 @@ const SourceBookReader: React.FC = () => {
                   labels: { pin: t('markupToolComment'), textBox: t('markupToolText'), drawHint: t(markupTool === 'comment' ? 'markupCommentHint' : 'markupDrawHint') },
                   onCreate: (mark: ShapeMark) => {
                     if (!activeBook?.id) return;
-                    void window.electronAPI.knowledge.save({ actor: 'reader', workId: activeBook.id, type: 'note', location: shapeLocation(mark), noteContent: '' }).then((saved: KnowledgeItemDTO) => {
+                    let noteContent = '';
+                    if (mark.shape === 'stamp') {
+                      const stamp = STAMPS.find(entry => entry.id === mark.stampId);
+                      if (!stamp || !mark.language) return;
+                      noteContent = translations[mark.language][stamp.label];
+                    }
+                    if (mark.measurement) noteContent = measurementLabel(mark, mark.measurement.language);
+                    void window.electronAPI.knowledge.save({ actor: 'reader', workId: activeBook.id, type: 'note', location: shapeLocation(mark), noteContent }).then((saved: KnowledgeItemDTO) => {
                       setKnowledgeItems(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
                       // A text box and a comment pin open at once for their text; other shapes stay as drawn.
                       if (mark.shape === 'text' || mark.shape === 'pin') {

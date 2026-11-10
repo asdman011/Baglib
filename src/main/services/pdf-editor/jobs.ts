@@ -1,3 +1,4 @@
+import { validatePdfAction, type PdfAction } from '../../../shared/pdf-actions';
 import path from 'node:path';
 import { mkdir, mkdtemp, stat, lstat, realpath, readdir, unlink, rmdir, copyFile, chmod } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -72,6 +73,7 @@ export class PdfEditorJobs {
   async start(owner: number, unknownInput: unknown): Promise<PdfJob> {
     const input: PdfJobRequest = validatePdfJob(unknownInput), source = this.session(owner, input.sessionId);
     if ([...this.jobs.values()].filter(record => record.job.state === 'running').length >= 2 || [...this.jobs.values()].some(record => record.job.state === 'running' && record.job.sessionId === input.sessionId) || this.jobs.size >= 128) throw new Error('busy');
+    const action = input.operation === 'saved-action' ? validatePdfAction(input.payload?.action) : null;
     const current = await this.current(source);
     const working = source.working || current;
     if (!working.path && input.operation !== 'create') throw new Error('invalid-source');
@@ -88,9 +90,11 @@ export class PdfEditorJobs {
     const job: PdfJob = { id: randomUUID(), sessionId: input.sessionId, operation: input.operation, state: 'running', current: 0, total: 0 };
     const controller = new AbortController();
     const record: JobRecord = { owner, job, controller, directory, settled: Promise.resolve() }; this.jobs.set(job.id, record);
-    record.settled = this.runner({ filename: working.path, output: path.join(directory, 'document.html'), operation: input.operation, password: input.password, language: input.language, payload: input.payload, sources, assets, expectedHash: working.sha256 }, controller.signal, (current, total) => {
+    const workerInput: PdfWorkerInput = { filename: working.path, output: path.join(directory, 'document.html'), operation: input.operation, password: input.password, language: input.language, payload: input.payload, sources, assets, expectedHash: working.sha256 };
+    const progress = (current: number, total: number) => {
       if (job.state === 'running' && Number.isInteger(current) && Number.isInteger(total) && current >= 0 && total >= current && total <= 10000) { job.current = current; job.total = total; }
-    }).then(async response => {
+    };
+    record.settled = (action ? this.runAction(action, job, workerInput, controller.signal, progress) : this.runner(workerInput, controller.signal, progress)).then(async response => {
       if (controller.signal.aborted) return;
       await this.current(source);
       if ('totalPages' in response && 'pages' in response) job.inspection = response as PdfInspection;
@@ -120,6 +124,34 @@ export class PdfEditorJobs {
     });
     return structuredClone(job);
   }
+  private async runAction(action: PdfAction, job: PdfJob, input: PdfWorkerInput, signal: AbortSignal, progress: (current: number, total: number) => void): Promise<PdfEngineResult> {
+    let filename = input.filename, expectedHash = input.expectedHash;
+    let last: PdfEngineResult | undefined;
+    const root = path.dirname(input.output);
+    job.actionSteps = action.steps.length;
+    for (const [index, step] of action.steps.entries()) {
+      if (signal.aborted) throw new Error('cancelled');
+      job.actionStep = index + 1;
+      const directory = path.join(root, `step-${index}`);
+      await mkdir(directory);
+      const response = await this.runner({ ...input, filename, expectedHash, operation: step.tool, payload: step.options, output: path.join(directory, 'document.html') }, signal, (current, total) => {
+        progress(index * 100 + (total > 0 ? Math.min(99, Math.floor(current / total * 100)) : 0), action.steps.length * 100);
+      });
+      const result = response as PdfEngineResult;
+      const output = result.outputs?.[0];
+      if (!output || result.outputs?.length !== 1 || output.format !== 'pdf' || path.basename(output.filename) !== output.filename || path.extname(output.filename) !== '.pdf') throw new Error('invalid-output');
+      filename = path.join(directory, output.filename);
+      const info = await lstat(filename);
+      if (!info.isFile() || info.isSymbolicLink() || info.size > 512 * 1024 * 1024) throw new Error('invalid-output');
+      expectedHash = await fileSha256(filename);
+      if (output.sha256 && output.sha256 !== expectedHash) throw new Error('invalid-output');
+      last = result;
+    }
+    if (signal.aborted) throw new Error('cancelled');
+    await copyFile(filename, path.join(root, 'document.pdf'));
+    progress(action.steps.length * 100, action.steps.length * 100);
+    return { ...last, outputs: [{ filename: 'document.pdf', format: 'pdf', bytes: (await stat(filename)).size, sha256: expectedHash }] };
+  }
   status(owner: number, id: string): PdfJob { return structuredClone(this.ownedJob(owner, id).job); }
   cancel(owner: number, id: string): void { const record = this.ownedJob(owner, id); if (record.job.state !== 'running') return; record.controller.abort(); record.job.state = 'cancelled'; record.job.error = 'cancelled'; }
   async output(owner: number, id: string, index = 0): Promise<{ filename: string; sha256: string; format: PdfOutput['format']; job: PdfJob }> {
@@ -134,7 +166,13 @@ export class PdfEditorJobs {
     this.session(owner, id);
     for (const [jobId, record] of this.jobs) if (record.job.sessionId === id) {
       this.cancel(owner, jobId); await record.settled;
-      for (const filename of await readdir(record.directory)) await unlink(path.join(record.directory, filename)).catch(() => {});
+      for (const filename of await readdir(record.directory)) {
+        const target = path.join(record.directory, filename);
+        if (/^step-\d+$/u.test(filename) && (await lstat(target)).isDirectory()) {
+          for (const child of await readdir(target)) await unlink(path.join(target, child)).catch(() => {});
+          await rmdir(target).catch(() => {});
+        } else await unlink(target).catch(() => {});
+      }
       await rmdir(record.directory).catch(() => {}); this.jobs.delete(jobId);
     }
     this.sessions.delete(id);

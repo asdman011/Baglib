@@ -1,3 +1,47 @@
+## KEY-271 - 2026-11-10, Codex (implemented and verified, ready for publication)
+
+Session `01a1c27f-6676-7ab3-915b-f97bd1d8dc99`. Ten bilingual vector PDF stamps, calibrated distance/rectangular area and settings-backed saved action sequences implemented using existing note/history/settings contracts. Labels use centralized translations. Stamp language stays as placed, while measurement digits follow the current interface. Five existing single-PDF tools run sequentially in one staged job. Progress/errors remain visible above the page. Save reuses ADR-012 and one emergency copy per source. No schema, dependency, download or Jira action.
+
+Final full suite 1670/1670 with zero failures/skips, focused7/7, Python writer1/1, tsc and tsup pass. Scoped eslint has zero errors and 89 warnings in reader/tools files. Final small-file lint passes with no diagnostics. Native `key271-live-ChjNym` passed ar/en1280/480, both real PDFs, all20stamp labels, ten-centimetre calibration, area, restart, repeat Save, stamps-only/shapes-only export, one-click compression-to-numbering, unchanged source until Save and exactly one emergency copy per source. Targeted resumed native checks passed stamp-specific undo9/redo10 with all12rows restored, independent stamp-language choice, opposite-language book reopening and current-locale digits. Generated raster worker rebuilt with `npm run copy:pdfjs`, fixing duplicate baked appearances in the live reader. Both actual PDFium2x pages inspected with joined Arabic text. Two original PDF SHA-256 values match. Six own disposable profiles removed, own renderer tree stopped and evidence retained under `.baglib-data/key271-evidence/`.
+
+Existing PDF/Notes plan and Document Workstation feature docs updated. Local report `docs/agent-ops/reports/KEY-271.md` holds evidence and limitations. Area uses rectangles. Calibration controls reset on page remount, while stored measurements retain their scale. Step options use bounded JSON and five existing tools. Cancellation path was inspected; injected engine-failure isolation was tested. No Acrobat/physical print certification.
+
+Commit and normal push to origin/feature/library-domain are explicitly authorized. The prior shared-index blocker was resolved by KEY-302 commit d286896. Codex re-read the current shared handoffs, verified an empty index and acquired docs/agent-ops/commit.lock. The prepared patch is being regenerated against current HEAD with only KEY-271 hunks, including only its 76 translation lines. Exactly31files/hunks will be inspected before the authorized commit/push. Existing verification above is retained. Claude owns review/Jira. Publication receipt will follow after push. Preserve all sibling/unrelated files.
+
+Exact KEY-271 files/hunks intended for the commit follow.
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `assets/pdf-editor/baglib_marks.py`
+- `docs/features/PDF and Notes Experience Plan.md`
+- `docs/features/feature - Document Workstation.md`
+- `scripts/pdf-markup-live/key271-render.py`
+- `scripts/pdf-markup-live/key271-run.mjs`
+- `scripts/pdf-markup-live/key271.cjs`
+- `scripts/pdf-workstation-live/key271-actions.cjs`
+- `src/main/services/pdf-editor/jobs.ts`
+- `src/renderer/components/pdf-workstation/StirlingToolsHub.tsx`
+- `src/renderer/components/reader/FileSaveUi.tsx`
+- `src/renderer/components/reader/FullPageBookReader.tsx`
+- `src/renderer/components/reader/PdfMarkPopover.tsx`
+- `src/renderer/components/reader/PdfMarksList.tsx`
+- `src/renderer/components/reader/PdfMarkupLayer.tsx`
+- `src/renderer/components/reader/PdfNativeViewer.tsx`
+- `src/renderer/components/reader/PdfSavedActions.tsx`
+- `src/renderer/components/reader/PdfToolDirectory.tsx`
+- `src/renderer/components/reader/PdfWorkstationPanel.tsx`
+- `src/renderer/components/reader/ReaderMarkupBar.tsx`
+- `src/renderer/translations.ts`
+- `src/shared/material-save.ts`
+- `src/shared/pdf-actions.ts`
+- `src/shared/pdf-markup.ts`
+- `src/shared/pdf-owned-annotations.ts`
+- `src/shared/pdf-study-tools.ts`
+- `src/shared/types/pdf-editor.ts`
+- `tests/reader/pdf-study-tools.test.ts`
+- `tests/services/pdf-actions.test.ts`
+- `tests/test_pdf_study_annotations.py`
+
 ## KEY-299 — 2026-11-10, Antigravity (implemented and verified)
 
 - Implementation & Verification: UI/UX U5 Library Home to the Vision Mockup (`library-shell-mockup.png` and `library-sketches.png`).

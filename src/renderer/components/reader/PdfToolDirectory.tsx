@@ -1,4 +1,6 @@
 'use client';
+import { PdfSavedActions } from './PdfSavedActions';
+import type { PdfAction } from '../../../shared/pdf-actions';
 import React, { useState } from 'react';
 import { FileText, Search } from 'lucide-react';
 import type { PdfCapability, PdfFeature } from '../../../shared/types/pdf-editor';
@@ -23,7 +25,8 @@ function toolMode(tool: PdfFeature, fallback: StirlingWorkstationMode): Stirling
   return fallback;
 }
 
-export function PdfToolDirectory({ capabilities, labels, disabled, onSelect }: {
+export function PdfToolDirectory({ capabilities, labels, disabled, onSelect, onRunAction }: {
+  onRunAction?: (action: PdfAction) => void;
   capabilities: PdfCapability[];
   labels: Record<PdfFeature, TranslationKey>;
   disabled: boolean;
@@ -38,6 +41,7 @@ export function PdfToolDirectory({ capabilities, labels, disabled, onSelect }: {
       <Search size={14} aria-hidden="true" />
       <input aria-label={t('pdfDirectoryFilter')} placeholder={t('pdfDirectoryFilter')} value={query} onChange={event => setQuery(event.target.value)} className="min-w-0 w-full bg-transparent text-xs outline-none" />
     </label>
+    {onRunAction && <PdfSavedActions disabled={disabled} available={capabilities.filter(item => item.available).map(item => item.feature)} labels={labels} onRun={onRunAction} />}
     {groups.map(group => {
       const tools = group.tools.filter(tool => t(labels[tool]).toLocaleLowerCase().includes(needle));
       if (!tools.length) return null;

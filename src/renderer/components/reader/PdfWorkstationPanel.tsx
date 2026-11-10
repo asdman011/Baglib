@@ -68,6 +68,7 @@ import type { FileSaveState, SaveNotice } from '../../hooks/useMaterialSave';
 import type { MaterialSaveStatus } from '../../../shared/material-save';
 import { SaveIncidentBanner } from './FileSaveUi';
 import { PdfNativeViewer } from './PdfNativeViewer';
+import { PdfSavedActions } from './PdfSavedActions';
 import { PdfToolDirectory } from './PdfToolDirectory';
 import { PdfAccessibilityDrawer } from './PdfAccessibilityDrawer';
 import { PdfReflowModal } from './PdfReflowModal';
@@ -879,6 +880,9 @@ export function PdfWorkstationPanel({
       aria-label={t('pdfSuiteTitle')}
       dir={dir}
       data-pdf-workstation
+      data-pdf-job-id={job?.id}
+      data-pdf-job-state={job?.state}
+      data-pdf-action-step={job?.actionStep}
       data-reader-overlay={activeOverlay || undefined}
       data-workstation-theme={workstationTheme}
       data-immersive={immersive || undefined}
@@ -1167,6 +1171,12 @@ export function PdfWorkstationPanel({
           )}
         </div>
       </header>
+      {job?.operation === 'saved-action' && job.state === 'running' && <div role="status" data-action-progress className="flex shrink-0 items-center justify-between gap-2 border-b border-subtle bg-surface px-3 py-2 text-xs leading-relaxed text-main">
+        <span>{t('pdfActionStep', { step: job.actionStep ?? 1, total: job.actionSteps ?? 1 })}</span>
+        <button type="button" onClick={() => { void api().cancel(job.id); }} className="rounded border border-subtle px-2 py-1">{t('cancel')}</button>
+      </div>}
+      {job?.operation === 'saved-action' && job.state === 'failed' && <p role="alert" data-action-error className="shrink-0 border-b border-subtle bg-surface px-3 py-2 text-xs leading-relaxed text-red-600">{t('pdfActionFailed', { step: job.actionStep ?? 1 })}</p>}
+
       {fileSave?.status?.incident && <SaveIncidentBanner status={fileSave.status} onRestore={fileSave.onRestore} onKeep={fileSave.onKeep} t={t} />}
 
       {/* Floating Quick-Save / Undo Toast Feedback */}
@@ -2112,6 +2122,7 @@ export function PdfWorkstationPanel({
           {/* Tool Directory / Tools View */}
           {toolDirectoryOpen ? (
             <PdfToolDirectory
+              onRunAction={action => { void start('saved-action', { action }); }}
               capabilities={capabilities}
               labels={featureKeys}
               disabled={!session || starting || job?.state === 'running'}
@@ -2194,7 +2205,7 @@ export function PdfWorkstationPanel({
           {job?.state === 'running' && (
             <div role="status" className="p-3 rounded-xl border border-sky-500/30 bg-sky-500/10 space-y-2">
               <p className="text-xs text-sky-900 dark:text-sky-200">
-                {t('pdfSuiteProgress', { current: job.current, total: job.total })}
+                {job.operation === 'saved-action' ? t('pdfActionStep', { step: job.actionStep ?? 1, total: job.actionSteps ?? 1 }) : t('pdfSuiteProgress', { current: job.current, total: job.total })}
               </p>
               <button
                 type="button"
@@ -2281,6 +2292,7 @@ export function PdfWorkstationPanel({
 
           <button
             type="button"
+            data-pdf-tools-home
             onClick={() => setIsToolsHubOpen(true)}
             className="w-full py-2 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 text-xs font-bold transition-all text-center block mt-3"
           >
@@ -2294,6 +2306,7 @@ export function PdfWorkstationPanel({
       {isToolsHubOpen && (
         <StirlingToolsHub
           initialView={hubView}
+          actionsPanel={<PdfSavedActions disabled={!session || starting || job?.state === 'running'} available={capabilities.filter(item => item.available).map(item => item.feature)} labels={featureKeys} onRun={action => { setIsToolsHubOpen(false); void start('saved-action', { action }); }} />}
           onClose={() => { setHubView('columns'); setIsToolsHubOpen(false); }}
           onOpenInWorkstation={() => {
             setIsToolsHubOpen(false);

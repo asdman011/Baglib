@@ -29,7 +29,7 @@ export interface MaterialSaveStatus {
   backup: { path: string; expiresAt: string | null } | null;
 }
 
-export const ADDITION_KINDS = ['highlight', 'underline', 'strike', 'rect', 'oval', 'arrow', 'text', 'area', 'pin', 'note', 'question'] as const;
+export const ADDITION_KINDS = ['highlight', 'underline', 'strike', 'rect', 'oval', 'arrow', 'text', 'area', 'pin', 'note', 'question', 'stamp', 'measure'] as const;
 export type AdditionKind = typeof ADDITION_KINDS[number];
 interface Box { x: number; y: number; width: number; height: number }
 export interface Reply { text: string; created: string | null; modified: string | null }
@@ -37,6 +37,7 @@ export interface Addition {
   id: string; kind: AdditionKind; page: number; color?: string; colorId?: string;
   rects?: Box[]; box?: Box; from?: { x: number; y: number }; to?: { x: number; y: number };
   text?: string; quote?: string; rtl?: boolean; created: string | null; modified: string | null;
+  stampId?: string; language?: 'ar' | 'en'; measurement?: import('./pdf-study-tools').Measurement;
   replies: Reply[]; resolved: string | null;
 }
 export interface BookmarkAddition { id: string; page: number; title: string }
@@ -89,7 +90,7 @@ export function collectAdditions(rows: MarkRow[], comments: CommentRow[]): Addit
     const shape = parseShapeMark(row.location);
     if (shape) {
       const text = row.note ?? '';
-      items.push({ ...common, kind: shape.shape, box: shape.box, colorId: shape.color, color: COLOR_HEX[shape.color] ?? COLOR_HEX.amber, ...(shape.from && shape.to ? { from: shape.from, to: shape.to } : {}), ...(text ? { text, rtl: RTL.test(text) } : {}) });
+      items.push({ ...common, kind: shape.shape, ...(shape.shape === 'stamp' ? { stampId: shape.stampId, language: shape.language } : {}), ...(shape.measurement ? { measurement: shape.measurement } : {}), box: shape.box, colorId: shape.color, color: COLOR_HEX[shape.color] ?? COLOR_HEX.amber, ...(shape.from && shape.to ? { from: shape.from, to: shape.to } : {}), ...(text ? { text, rtl: RTL.test(text) } : {}) });
       continue;
     }
     if (row.type === 'question') { items.push({ ...common, kind: 'question', text: row.question ?? row.note ?? '' }); continue; }
@@ -101,11 +102,11 @@ export function collectAdditions(rows: MarkRow[], comments: CommentRow[]): Addit
 /** Stable text of a payload: its digest tells whether the file already holds exactly these additions. */
 export const additionsKey = (payload: AdditionsPayload) => JSON.stringify(payload);
 
-export const EXPORT_CATEGORIES = ['textMarks', 'shapes', 'textBoxes', 'comments', 'replies', 'questions', 'bookmarks', 'pageNotes'] as const;
+export const EXPORT_CATEGORIES = ['textMarks', 'shapes', 'textBoxes', 'comments', 'replies', 'questions', 'bookmarks', 'pageNotes', 'stamps'] as const;
 export type ExportCategory = typeof EXPORT_CATEGORIES[number];
 const CATEGORY_OF: Record<AdditionKind, ExportCategory> = {
   highlight: 'textMarks', underline: 'textMarks', strike: 'textMarks', rect: 'shapes', oval: 'shapes', arrow: 'shapes', area: 'shapes',
-  text: 'textBoxes', pin: 'comments', note: 'pageNotes', question: 'questions',
+  stamp: 'stamps', measure: 'shapes', text: 'textBoxes', pin: 'comments', note: 'pageNotes', question: 'questions',
 };
 export const categoryOf = (kind: AdditionKind) => CATEGORY_OF[kind];
 export interface ExportOptions { categories: ExportCategory[]; pages?: { from: number; to: number } | null; colors?: string[] | null; kinds?: AdditionKind[] | null }

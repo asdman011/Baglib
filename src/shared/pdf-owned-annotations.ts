@@ -6,7 +6,7 @@ import { AnnotationMode, type PDFDocumentProxy, type PDFPageProxy } from 'pdfjs-
  * Annotations from anywhere else are drawn as before.
  */
 export const BAGLIB_AUTHOR = 'BagLib';
-const OWNED_SUBTYPES = new Set(['Highlight', 'Underline', 'StrikeOut', 'Square', 'Circle', 'Line', 'FreeText', 'Text']);
+const OWNED_SUBTYPES = new Set(['Highlight', 'Underline', 'StrikeOut', 'Square', 'Circle', 'Line', 'FreeText', 'Text', 'Stamp', 'Polygon']);
 
 export async function renderWithoutOwned(document: PDFDocumentProxy, page: PDFPageProxy): Promise<{ annotationMode: number }> {
   try {

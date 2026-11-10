@@ -1,4 +1,6 @@
 'use client';
+import { measurementLabel } from '../../../shared/pdf-study-tools';
+import { useWorkspace } from '../context/WorkspaceContext';
 import React, { useEffect, useState } from 'react';
 import { Trash2, X } from 'lucide-react';
 import type { KnowledgeItemDTO } from '../../../shared/types/knowledge';
@@ -10,7 +12,7 @@ import { CommentThreads } from '../notes/CommentThreads';
 import { markKindKeys } from './PdfMarksList';
 
 export const shapeKindKeys: Record<ShapeKind, TranslationKey> = {
-  rect: 'markupToolRect', oval: 'markupToolOval', arrow: 'markupToolArrow', text: 'markupToolText', area: 'markupToolArea', pin: 'markupToolComment',
+  stamp: 'markupToolStamp', measure: 'markupToolMeasure', rect: 'markupToolRect', oval: 'markupToolOval', arrow: 'markupToolArrow', text: 'markupToolText', area: 'markupToolArea', pin: 'markupToolComment',
 };
 
 /**
@@ -26,6 +28,7 @@ export function PdfMarkPopover({ item, at, onClose, onSaved, onDeleted, onThread
   onThreadsChanged: () => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }) {
+  const { lang } = useWorkspace();
   const mark = parseShapeMark(item.location);
   const epubLoc = parseEpubLocation(item.location);
   const kind = markKind(item);
@@ -138,7 +141,7 @@ export function PdfMarkPopover({ item, at, onClose, onSaved, onDeleted, onThread
       </header>
 
       <div className="mb-2 flex items-center gap-1.5" role="group" aria-label={t('markColor')}>
-        {HIGHLIGHT_COLORS.map(swatch => (
+        {mark?.shape !== 'stamp' && HIGHLIGHT_COLORS.map(swatch => (
           <button
             key={swatch.id}
             type="button"
@@ -203,10 +206,11 @@ export function PdfMarkPopover({ item, at, onClose, onSaved, onDeleted, onThread
             className="space-y-2"
           >
             <textarea
+              readOnly={mark?.shape === 'stamp' || mark?.shape === 'measure'}
               data-mark-text
               dir="auto"
               autoFocus={mark?.shape === 'text' || !item.noteContent}
-              value={text}
+              value={mark?.shape === 'measure' ? measurementLabel(mark, lang) : text}
               maxLength={4000}
               onChange={event => setText(event.target.value)}
               placeholder={t(mark?.shape === 'text' ? 'markTextPlaceholder' : 'markNotePlaceholder')}

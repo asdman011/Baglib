@@ -229,6 +229,8 @@ const PdfPageItem = React.memo(function PdfPageItem({
         canvas.dataset.pdfPageReadyAt = String(performance.now());
 
         const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+        containerRef.current!.dataset.pdfWidth = String(info.width);
+        containerRef.current!.dataset.pdfHeight = String(info.height);
         const displayWidth = Math.round(info.width * scale);
         const displayHeight = Math.round(info.height * scale);
 

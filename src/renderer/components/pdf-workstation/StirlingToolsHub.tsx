@@ -749,10 +749,12 @@ export function StirlingToolsHub({
   onClose,
   onOpenInWorkstation,
   initialView = 'columns',
+  actionsPanel,
 }: {
   onClose: () => void;
   onOpenInWorkstation?: (fileUrlOrWorkId: string) => void;
   initialView?: 'columns' | 'pipelines';
+  actionsPanel?: React.ReactNode;
 }) {
   const { t, lang, dir, books, theme, toggleTheme } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
@@ -1358,6 +1360,7 @@ export function StirlingToolsHub({
 
       {/* 2. MAIN SCROLLABLE CONTENT AREA */}
       <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-6 py-3 sm:py-5">
+        {actionsPanel && <div className="mb-4 max-w-2xl">{actionsPanel}</div>}
         {viewMode === 'pipelines' ? (
           /* ============================================================ */
           /* PIPELINES & AUTOMATED WORKFLOWS VIEW                         */

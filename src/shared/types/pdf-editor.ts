@@ -44,6 +44,7 @@ export const PDF_FEATURES = [
 export type PdfFeature = typeof PDF_FEATURES[number];
 
 export const PDF_ENGINE_OPERATIONS = [
+  'saved-action',
   'inspect',
   'preview',
   'create',
@@ -110,7 +111,7 @@ export interface PdfInspection { pages: PdfInspectedPage[]; totalPages: number; 
 export type PdfJobState = 'running' | 'completed' | 'cancelled' | 'failed';
 export interface PdfJob {
   id: string; sessionId: string; operation: PdfOperation; state: PdfJobState;
-  current: number; total: number; inspection?: PdfInspection; error?: PdfError;
+  current: number; total: number; actionStep?: number; actionSteps?: number; inspection?: PdfInspection; error?: PdfError;
   output?: PdfOutput; outputs?: PdfOutput[]; result?: PdfEngineResult;
   previewUrl?: string;
 }
