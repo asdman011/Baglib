@@ -165,8 +165,13 @@ export const DashboardCustomizeModal: React.FC<DashboardCustomizeModalProps> = (
         </ul>
 
         <div className="pt-3 border-t border-border flex justify-end">
-          <Button type="button" variant="primary" onClick={onClose}>
-            {t('ocrSuspectSaveEdit')}
+          <Button
+            type="button"
+            variant="primary"
+            data-customize-close-btn
+            onClick={onClose}
+          >
+            {t('dashCustomizeDone')}
           </Button>
         </div>
       </div>

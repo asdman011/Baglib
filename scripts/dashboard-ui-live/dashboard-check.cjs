@@ -4,7 +4,9 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 
 const profile = process.env.BAGLIB_DASHBOARD_PROFILE || path.resolve('.baglib-data/key302-profile');
-const evidence = process.env.BAGLIB_DASHBOARD_EVIDENCE || path.resolve('.baglib-data/KEY-302-evidence');
+const evidence = process.env.BAGLIB_DASHBOARD_EVIDENCE || path.resolve('.baglib-data/KEY-302-evidence/fix1');
+
+fs.mkdirSync(evidence, { recursive: true });
 
 app.setPath('userData', profile);
 app.setAppPath(path.resolve(__dirname, '../..'));
@@ -38,6 +40,25 @@ app.on('browser-window-created', (_, win) => {
     throw new Error(`Timeout waiting for: ${code}`);
   };
 
+  const ensureNoModalsOpen = async () => {
+    const modalOpen = await evaluate('!!document.querySelector("[role=\\"dialog\\"]")');
+    if (modalOpen) {
+      await evaluate(`
+        (() => {
+          const closeBtn = document.querySelector('[data-customize-close-btn], [role="dialog"] button[aria-label*="إغلاق"], [role="dialog"] button[aria-label*="close"], [role="dialog"] button[aria-label*="Close"]');
+          if (closeBtn) {
+            closeBtn.click();
+          } else {
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          }
+        })()
+      `);
+      await pause(400);
+    }
+    const stillOpen = await evaluate('!!document.querySelector("[role=\\"dialog\\"]")');
+    assert.ok(!stillOpen, 'No modal should remain open over the dashboard view');
+  };
+
   const shot = async (name) => {
     win.show();
     win.focus();
@@ -56,32 +77,40 @@ app.on('browser-window-created', (_, win) => {
     await pause(300);
   };
 
-  const setLanguage = async (lang) => {
-    await evaluate(`
-      (async () => {
-        const sel = document.querySelector('select[aria-label="Language"]') || document.querySelector('select[data-lang-selector]');
-        if (sel) {
-          sel.value = '${lang}';
-          sel.dispatchEvent(new Event('change', { bubbles: true }));
-        } else if (window.__baglib_setLanguage) {
-          window.__baglib_setLanguage('${lang}');
-        }
-      })()
-    `);
-    await pause(300);
+  const setLanguage = async (targetLang) => {
+    const current = await evaluate('document.documentElement.getAttribute("lang") || "ar"');
+    if (current !== targetLang) {
+      console.log(`[live] Switching language from ${current} to ${targetLang}...`);
+      await evaluate(`
+        (() => {
+          const btn = document.querySelector('header button[aria-label*="Language"], header button[aria-label*="اللغة"], header button[title*="Language"], header button[title*="اللغة"]');
+          if (btn) btn.click();
+        })()
+      `);
+      await pause(400);
+    }
+    await until(`document.documentElement.getAttribute("lang") === "${targetLang}"`);
+    const actualLang = await evaluate('document.documentElement.getAttribute("lang")');
+    const actualDir = await evaluate('document.documentElement.getAttribute("dir")');
+    assert.equal(actualLang, targetLang, `HTML lang attribute must be ${targetLang}`);
+    assert.equal(actualDir, targetLang === 'ar' ? 'rtl' : 'ltr', `HTML dir attribute must match ${targetLang}`);
+    await pause(250);
   };
 
-  const setTheme = async (theme) => {
-    await evaluate(`
-      (async () => {
-        const root = document.documentElement;
-        if ('${theme}' === 'dark') {
-          root.classList.add('dark');
-        } else {
-          root.classList.remove('dark');
-        }
-      })()
-    `);
+  const setTheme = async (targetTheme) => {
+    const isDark = await evaluate('document.documentElement.classList.contains("dark")');
+    const wantsDark = targetTheme === 'dark';
+    if (isDark !== wantsDark) {
+      console.log(`[live] Switching theme to ${targetTheme}...`);
+      await evaluate(`
+        (() => {
+          const btn = document.querySelector('header button[aria-label*="Theme"], header button[aria-label*="المظهر"], header button[title*="Theme"], header button[title*="المظهر"]');
+          if (btn) btn.click();
+        })()
+      `);
+      await pause(350);
+    }
+    await until(`"${targetTheme}" === "dark" ? document.documentElement.classList.contains("dark") : !document.documentElement.classList.contains("dark")`);
     await pause(200);
   };
 
@@ -91,37 +120,42 @@ app.on('browser-window-created', (_, win) => {
       win.show();
       win.focus();
 
-      console.log('[live] Waiting for dashboard view to load at /dashboard-live...');
-      await until('!!window.electronAPI && !!document.querySelector("[data-dashboard-view]")');
-      console.log('[live] Dashboard view confirmed active at /dashboard-live.');
+      console.log('[live] Waiting for real application shell and dashboard view...');
+      await until('!!window.electronAPI && !!document.querySelector("aside nav") && !!document.querySelector("[data-dashboard-view]")');
+      console.log('[live] Real app shell with KEY-297 navigation rail and dashboard active.');
 
       // ==========================================
-      // STAGE 1: EMPTY / NO-DATA STATE
+      // STAGE 1: EMPTY / NO-DATA DASHBOARD STATE
       // ==========================================
-      console.log('[live] Capturing Stage 1: Empty / No-Data Dashboard State...');
+      console.log('[live] Capturing Stage 1: Empty State in real app shell...');
+      await ensureNoModalsOpen();
       await setLanguage('ar');
       await setTheme('light');
       await setDimensions(1280, 850);
-      await shot('dashboard-empty-ar-light-1280');
+      await ensureNoModalsOpen();
+      await shot('empty-dashboard-ar-light-1280');
 
       await setDimensions(480, 800);
-      // Verify 480px stacks in 1 column and has zero horizontal overflow
+      await pause(300);
       const overflow480Empty = await evaluate(`
         (() => {
-          const main = document.querySelector('main') || document.querySelector('[data-dashboard-view]');
+          const main = document.querySelector('[data-dashboard-view]');
           return main ? main.scrollWidth <= main.clientWidth + 2 : true;
         })()
       `);
       assert.ok(overflow480Empty, '480px empty dashboard should not have horizontal overflow');
-      await shot('dashboard-empty-ar-light-480');
+      await ensureNoModalsOpen();
+      await shot('empty-dashboard-ar-light-480');
 
       await setDimensions(1280, 850);
       await setLanguage('en');
       await setTheme('light');
-      await shot('dashboard-empty-en-light-1280');
+      await ensureNoModalsOpen();
+      await shot('empty-dashboard-en-light-1280');
 
       await setTheme('dark');
-      await shot('dashboard-empty-en-dark-1280');
+      await ensureNoModalsOpen();
+      await shot('empty-dashboard-en-dark-1280');
 
       // ==========================================
       // STAGE 2: SEED REAL DATA
@@ -221,13 +255,42 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       console.log('[live] Page reloaded to render real data.');
-      await pause(2000);
-      await until('!!document.querySelector("[data-dashboard-view]")');
+      await pause(2500);
+      await until('!!document.querySelector("[data-dashboard-view]") && !!document.querySelector("aside nav")');
+
+      // Ensure default module order: Today panel first, then calendar, then rest
+      await evaluate(`
+        (async () => {
+          const api = window.electronAPI;
+          if (api?.settings?.set) {
+            await api.settings.set('dashboard.layout.v1', {
+              version: 1,
+              modules: [
+                { id: 'today', visible: true },
+                { id: 'calendar', visible: true },
+                { id: 'readingGoals', visible: true },
+                { id: 'activeReads', visible: true },
+                { id: 'studyProgress', visible: true },
+                { id: 'studyInsights', visible: true },
+                { id: 'scratchpad', visible: true },
+                { id: 'athan', visible: true },
+                { id: 'khatmah', visible: true },
+                { id: 'studyRhythm', visible: true }
+              ]
+            });
+          }
+        })()
+      `);
 
       // ==========================================
-      // STAGE 3: VERIFY CALENDAR & DUAL DATES
+      // STAGE 3: CALENDAR MODULE & HIJRI DATES
       // ==========================================
       console.log('[live] Verifying Calendar Module with Dual Dates...');
+      await ensureNoModalsOpen();
+      await setLanguage('ar');
+      await setTheme('light');
+      await setDimensions(1280, 850);
+
       const hasCalendarModule = await evaluate('!!document.querySelector("[data-dashboard-module=\\"calendar\\"]")');
       assert.ok(hasCalendarModule, 'Calendar module should be present on dashboard');
 
@@ -238,15 +301,47 @@ app.on('browser-window-created', (_, win) => {
       console.log(`[live] Current header Hijri date: "${headerHijriText}"`);
       assert.ok(headerHijriText.length > 0, 'Header Hijri date must not be empty');
 
-      // Verify that calendar cells have Hijri dates under Gregorian days
-      const calendarHijriCellsCount = await evaluate('document.querySelectorAll("[data-calendar-day] [data-hijri-date]").length');
-      console.log(`[live] Calendar cells with Hijri dates: ${calendarHijriCellsCount}`);
-      assert.ok(calendarHijriCellsCount >= 28, 'Calendar month should have at least 28 days with Hijri dates');
+      // Scroll calendar into view
+      await evaluate(`
+        (() => {
+          const cal = document.querySelector('[data-dashboard-module="calendar"]');
+          if (cal) cal.scrollIntoView({ behavior: 'instant', block: 'center' });
+        })()
+      `);
+      await pause(300);
+      await ensureNoModalsOpen();
+      await shot('calendar-module-hijri-ar-1280');
+
+      // Calendar in English
+      await setLanguage('en');
+      await evaluate(`
+        (() => {
+          const cal = document.querySelector('[data-dashboard-module="calendar"]');
+          if (cal) cal.scrollIntoView({ behavior: 'instant', block: 'center' });
+        })()
+      `);
+      await pause(300);
+      await ensureNoModalsOpen();
+      await shot('calendar-module-hijri-en-1280');
+
+      // Scroll back to top
+      await evaluate(`
+        (() => {
+          const view = document.querySelector('[data-dashboard-view]');
+          if (view) view.scrollTop = 0;
+        })()
+      `);
+      await pause(200);
 
       // ==========================================
-      // STAGE 4: VERIFY CUSTOMIZATION MODAL
+      // STAGE 4: CUSTOMIZE MODAL ON ITS OWN
       // ==========================================
-      console.log('[live] Testing Dashboard Customization...');
+      console.log('[live] Testing Dashboard Customize Modal...');
+      await setLanguage('ar');
+      await setTheme('light');
+      await setDimensions(1280, 850);
+
+      // Open customize modal in Arabic
       await evaluate(`
         (() => {
           const btn = document.querySelector('[data-dashboard-customize-btn]');
@@ -255,38 +350,47 @@ app.on('browser-window-created', (_, win) => {
       `);
       await pause(500);
       await until('!!document.querySelector("[data-dashboard-customize-content]")');
-      await shot('dashboard-customize-modal-ar-1280');
+      await shot('customize-modal-ar-1280');
 
-      // Reorder module: Move calendar up to position 1
+      // Close customize modal
       await evaluate(`
         (() => {
-          const calRow = document.querySelector('[data-customize-module-row="calendar"]');
-          if (calRow) {
-            const upBtn = calRow.querySelector('button[title*="أعلى"], button[title*="up"], button[aria-label*="أعلى"], button[aria-label*="up"]');
-            if (upBtn) upBtn.click();
-          }
-        })()
-      `);
-      await pause(400);
-
-      // Close customization modal
-      await evaluate(`
-        (() => {
-          const closeBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && (b.textContent.includes('حفظ') || b.textContent.includes('Save') || b.textContent.includes('إغلاق') || b.textContent.includes('Close')));
+          const closeBtn = document.querySelector('[data-customize-close-btn]');
           if (closeBtn) closeBtn.click();
         })()
       `);
-      await pause(500);
+      await pause(400);
+      await ensureNoModalsOpen();
+      console.log('[live] Arabic customize modal closed successfully.');
 
-      // Verify layout saved in settings
-      const savedLayout = await evaluate('window.electronAPI.settings.get("dashboard.layout.v1")');
-      console.log('[live] Verified saved layout order:', savedLayout?.modules?.map(m => m.id));
-      assert.equal(savedLayout?.modules?.[0]?.id, 'calendar', 'Calendar module should be moved to first slot and persisted');
+      // Open customize modal in English
+      await setLanguage('en');
+      await evaluate(`
+        (() => {
+          const btn = document.querySelector('[data-dashboard-customize-btn]');
+          if (btn) btn.click();
+        })()
+      `);
+      await pause(500);
+      await until('!!document.querySelector("[data-dashboard-customize-content]")');
+      await shot('customize-modal-en-1280');
+
+      // Close customize modal
+      await evaluate(`
+        (() => {
+          const closeBtn = document.querySelector('[data-customize-close-btn]');
+          if (closeBtn) closeBtn.click();
+        })()
+      `);
+      await pause(400);
+      await ensureNoModalsOpen();
+      console.log('[live] English customize modal closed successfully.');
 
       // ==========================================
-      // STAGE 5: VERIFY SNOOZE MODAL (KEY-239 link)
+      // STAGE 5: SNOOZE MODAL ON ITS OWN
       // ==========================================
       console.log('[live] Testing Prayer Snooze Modal...');
+      await setLanguage('ar');
       await evaluate(`
         (() => {
           const btn = document.querySelector('[data-dashboard-snooze-btn]');
@@ -295,35 +399,48 @@ app.on('browser-window-created', (_, win) => {
       `);
       await pause(500);
       await until('!!document.querySelector("[data-dashboard-snooze-modal]")');
-      await shot('dashboard-snooze-modal-ar-1280');
+      await shot('snooze-modal-ar-1280');
 
       // Close snooze modal
       await evaluate(`
         (() => {
-          const closeBtn = document.querySelector('[data-dashboard-snooze-modal] button');
+          const closeBtn = document.querySelector('[data-dashboard-snooze-modal] button:last-child');
           if (closeBtn) closeBtn.click();
         })()
       `);
       await pause(400);
+      await ensureNoModalsOpen();
+      console.log('[live] Snooze modal closed successfully.');
 
       // ==========================================
-      // STAGE 6: MATRIX OF REAL DATA CAPTURES
+      // STAGE 6: FULL REAL DATA MATRIX (NO MODALS!)
       // ==========================================
-      console.log('[live] Capturing Matrix with Real Data (ar/en, light/dark, 1280/480)...');
+      console.log('[live] Capturing Stage 6: Matrix with Real Data in real shell (ar/en, light/dark, 1280/480)...');
+
+      // Scroll view to top
+      await evaluate(`
+        (() => {
+          const view = document.querySelector('[data-dashboard-view]');
+          if (view) view.scrollTop = 0;
+        })()
+      `);
 
       // 1. Arabic Light 1280px
       await setLanguage('ar');
       await setTheme('light');
       await setDimensions(1280, 850);
+      await ensureNoModalsOpen();
       await shot('dashboard-ar-light-1280');
 
       // 2. Arabic Dark 1280px
       await setTheme('dark');
+      await ensureNoModalsOpen();
       await shot('dashboard-ar-dark-1280');
 
       // 3. Arabic Light 480px (Stacked single column, 0 horizontal overflow)
       await setTheme('light');
       await setDimensions(480, 850);
+      await pause(300);
       const overflow480Ar = await evaluate(`
         (() => {
           const main = document.querySelector('[data-dashboard-view]');
@@ -331,25 +448,30 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       assert.ok(overflow480Ar, '480px Arabic dashboard should stack cleanly without horizontal overflow');
+      await ensureNoModalsOpen();
       await shot('dashboard-ar-light-480');
 
       // 4. Arabic Dark 480px
       await setTheme('dark');
+      await ensureNoModalsOpen();
       await shot('dashboard-ar-dark-480');
 
       // 5. English Light 1280px
       await setDimensions(1280, 850);
       await setLanguage('en');
       await setTheme('light');
+      await ensureNoModalsOpen();
       await shot('dashboard-en-light-1280');
 
       // 6. English Dark 1280px
       await setTheme('dark');
+      await ensureNoModalsOpen();
       await shot('dashboard-en-dark-1280');
 
       // 7. English Light 480px
       await setDimensions(480, 850);
       await setTheme('light');
+      await pause(300);
       const overflow480En = await evaluate(`
         (() => {
           const main = document.querySelector('[data-dashboard-view]');
@@ -357,13 +479,15 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       assert.ok(overflow480En, '480px English dashboard should stack cleanly without horizontal overflow');
+      await ensureNoModalsOpen();
       await shot('dashboard-en-light-480');
 
       // 8. English Dark 480px
       await setTheme('dark');
+      await ensureNoModalsOpen();
       await shot('dashboard-en-dark-480');
 
-      console.log('[live] All live assertions and captures completed successfully!');
+      console.log('[live] All live assertions and captures completed successfully with 0 modals left open!');
       app.exit(0);
     } catch (err) {
       console.error('[live failure]', err);

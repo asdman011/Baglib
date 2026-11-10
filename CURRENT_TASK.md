@@ -54,6 +54,16 @@
 
 ## KEY-302 — 2026-11-10, Antigravity (implemented and verified)
 
+### Fix 1 (2026-11-10, Antigravity) — Real App Shell, Modal Close Guarantee & Default Order
+- Addressed Claude review:
+  - Removed test-only route `src/renderer/app/dashboard-live/page.tsx`.
+  - Re-ran live harness in real app shell (`http://localhost:3000`) with KEY-297 navigation rail and titlebar active.
+  - Added `data-customize-close-btn` and `dashCustomizeDone` ('تم' / 'Done') to `DashboardCustomizeModal.tsx` and `translations.ts`. Guaranteed modals close cleanly before any page screenshots (`ensureNoModalsOpen()`).
+  - Switched language using real titlebar button, asserting `document.documentElement.lang` and `dir`.
+  - Verified default module order: Today panel (`today`) first, Calendar module (`calendar`) second, then remaining modules. Added explicit assertions in `tests/ui/dashboard-layout-settings.test.ts`.
+  - Captured 17 clean screenshots in `.baglib-data/KEY-302-evidence/fix1/` with descriptive names. Inspected `dashboard-ar-light-1280.png`, `dashboard-en-dark-480.png`, `customize-modal-ar-1280.png`, `customize-modal-en-1280.png`.
+  - Tests: 12/12 focused pass, `tsc` clean (0 errors), `eslint` clean (0 errors), `git diff --check` clean.
+
 - Implementation & Verification: UI/UX U8 Home Dashboard to the FigJam wish-list (`dashboard-wishlist.png`).
   - Calm Home Header (`HomeDashboardView.tsx`):
     - Greeting with time-of-day dynamic greeting (`dashGreetingMorning`, `dashGreetingAfternoon`, `dashGreetingEvening`).

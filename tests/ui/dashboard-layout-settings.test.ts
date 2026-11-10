@@ -12,6 +12,8 @@ test('validateDashboardLayout returns default 10 modules on invalid or null inpu
   const def = validateDashboardLayout(null);
   assert.equal(def.version, 1);
   assert.equal(def.modules.length, 10);
+  assert.equal(def.modules[0].id, 'today', 'Today panel must be first in default module order');
+  assert.equal(def.modules[1].id, 'calendar', 'Calendar module must be second in default module order');
   assert.deepEqual(
     def.modules.map((m) => m.id),
     DEFAULT_DASHBOARD_MODULES.map((m) => m.id)
@@ -19,6 +21,8 @@ test('validateDashboardLayout returns default 10 modules on invalid or null inpu
 
   const defEmpty = validateDashboardLayout({});
   assert.equal(defEmpty.modules.length, 10);
+  assert.equal(defEmpty.modules[0].id, 'today', 'Today panel must be first in default module order');
+  assert.equal(defEmpty.modules[1].id, 'calendar', 'Calendar module must be second in default module order');
 });
 
 test('validateDashboardLayout sanitizes unknown modules and preserves order and visibility', () => {

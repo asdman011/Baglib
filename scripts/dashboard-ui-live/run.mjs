@@ -11,7 +11,7 @@ try {
 } catch {}
 
 const profile = path.resolve('.baglib-data/key302-profile');
-const evidence = path.resolve('.baglib-data/KEY-302-evidence');
+const evidence = path.resolve('.baglib-data/KEY-302-evidence/fix1');
 
 fs.mkdirSync(profile, { recursive: true });
 fs.mkdirSync(evidence, { recursive: true });
@@ -53,10 +53,10 @@ nextProcess.stderr.on('data', (d) => {
 let devServerReady = false;
 for (let i = 0; i < 60; i++) {
   try {
-    const res = await fetch('http://localhost:3000/dashboard-live');
+    const res = await fetch('http://localhost:3000');
     if (res.status === 200 || res.status === 304 || res.status === 404) {
       devServerReady = true;
-      console.log('[live] Next.js dev server is ready at /dashboard-live.');
+      console.log('[live] Next.js dev server is ready at http://localhost:3000.');
       break;
     }
   } catch {}
@@ -69,7 +69,7 @@ const env = {
   BAGLIB_DATA_DIR: profile,
   BAGLIB_DASHBOARD_PROFILE: profile,
   BAGLIB_DASHBOARD_EVIDENCE: evidence,
-  BAGLIB_DEV_URL: 'http://localhost:3000/dashboard-live',
+  BAGLIB_DEV_URL: 'http://localhost:3000',
   BAGLIB_REGISTER_PROTOCOL: '0',
 };
 delete env.ELECTRON_RUN_AS_NODE;
