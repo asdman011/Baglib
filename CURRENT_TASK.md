@@ -1,3 +1,44 @@
+## KEY-306 verified — 2026-11-10, Antigravity, finished by Claude Code
+
+Antigravity (conversation faf3dd6a) built the One Research space, then hit its weekly quota on every model at the verification stage. As the user instructed, Claude Code finished the task in place.
+
+**Delivered:**
+- Pathways tabs: All, Research, Curricula and Templates.
+- A shared list / steps / notes-and-links layout.
+- Per-pathway and per-section progress, with one-click Continue to the next step's source.
+- A templates gallery: three built-in templates plus "My templates".
+- "Save as my template", which stores steps and headings only.
+- Step actions in the KEY-316 context menu.
+- No schema change and no dependency: personal templates use the existing `pathways.templates.v1` setting (ADR-009).
+
+**Claude's changes:**
+- Fixed the live harness assertion (it split on a literal `
+`).
+- Removed two keys the rewrite no longer used (`pathwayNew`, `pathwayEmpty`).
+- Added the feature-doc section.
+
+**Verification:**
+- `npx tsc --noEmit`, eslint on the changed files, `npx tsup` and `git diff --check` pass.
+- Focused `tests/services/pathway-model.test.ts`: 8/8.
+- `scripts/research-ui-live` passed 8/8 cases (ar and en, light and dark, 1280 and 480 px). Each case creates a curriculum from a template, follows the first step into the real Arabic PDF, and saves and reuses a personal template. The throwaway profile was removed.
+- Five screenshots inspected, in `.baglib-data/KEY-306-evidence/`.
+- Full `npm test --test-concurrency=2`: 1773/1774. The one failure was translation-keys (the two unused keys); it passes after their removal.
+
+**Files:**
+- `src/renderer/components/dashboard/PathwaysView.tsx`
+- `src/renderer/components/dashboard/PathwayTemplateGallery.tsx`
+- `src/shared/pathway-model.ts`
+- `src/renderer/translations.ts`
+- `tests/services/pathway-model.test.ts`
+- `scripts/research-ui-live/main.cjs`
+- `scripts/research-ui-live/run.mjs`
+- `docs/features/feature - Pathways and Wave 5 Research.md`
+- `CURRENT_TASK.md`
+
+**Follow-ups for KEY-308:**
+- The display font squeezes the spaces in Arabic headings.
+- "Draft with AI" is cramped beside the subject field in the customize panel.
+
 ## KEY-316 verified — 2026-11-10T19:18:45.043Z, Codex
 
 Session 01a1c58e-3bd8-7440-badb-6d219525adc6. Continued in place and preserved reviewed KEY-313. Shared portal menus support mouse, Shift+F10/Menu key, touch, RTL placement, submenus, icons, disabled reasons and keyboard navigation. Library regular/featured/row/bulk actions share existing flows. Reader selection/mark, Quran/hadith/poetry, notes/cards/board items and nav/empty surfaces use context actions. Localized native text editing is installed in the main window. One scoped shortcut registry drives matching, help, palette and menu hints. Duplicate library-row buttons and saved-card delete moved into menus. Primary controls remain available. Existing canonical-source card edit restrictions are retained. PDF shape grouping now preserves the saved page and mark targets are keyboard focusable. No schema, dependency, download or Jira change.

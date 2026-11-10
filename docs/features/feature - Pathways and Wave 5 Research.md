@@ -51,3 +51,16 @@ Checked by request on 2026-11-02. Islamweb's address came from its own page scri
 ## Verification
 
 `scripts/wave5-live` needs a copy of the installed Quran packs in `.baglib-data/wave5-quran-copy`, made by hand and removed after the run. It runs the real main process, preload and dev renderer on a throwaway profile, with that disposable copy and the real read-only Sunnah database, in Arabic and English. AI uses a local stub, and save dialogs and external links are captured. Latest passing run: `.baglib-data/wave5-live-wc5CmX`. Screenshots at 1280 and 480 widths were inspected. Tests are in `tests/services/pathways.test.ts` and `tests/services/sunnah-insights.test.ts`, plus frequency cases in `quran-reader.test.ts`.
+
+## One Research space and personal templates (KEY-306, 2026-11-10)
+
+**Verified in the live run and the tests.** Pathways is now one space with four tabs: All, Research workspaces, Curricula and Templates.
+- **Layout:** one shared three-column layout. The pathway list sits at the start, the ordered steps and sources in the middle, and notes and links at the end. It stacks at 480 px.
+- **Progress:** each pathway shows its progress, per section as well, and a **Continue** button opens the next step's source (book, note, ayah or hadith) in one click.
+- **Step actions:** they live in the right-click, Shift+F10 or long-press menu (KEY-316).
+- **Templates gallery:** three built-in templates (Research project, Book study, Staged curriculum) plus "My templates".
+  - **Save as my template** stores the pathway's steps and section headings only: no resources, links, pins or progress. It uses the existing `pathways.templates.v1` setting through `pathways.saveTemplate`, so there is no new table or field (ADR-009).
+  - Creating from a template copies the outline through the normal `pathways.save`, and the stored template never changes.
+- **Code:** the pure model is `src/shared/pathway-model.ts` (template copy, outline round-trip, progress, next target, column placement). Its tests are `tests/services/pathway-model.test.ts`, and the live check is `scripts/research-ui-live/`. The check covers ar and en, light and dark, 1280 and 480 px, and follows the first step into the real Arabic PDF from `tests/real-files/`.
+
+**Known limit.** Arabic headings in the display font draw spaces very tightly (for example «لا ملاحظات ولا روابط»). The text is correct; this is a font issue, tracked in KEY-308.
