@@ -168,7 +168,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
       {/* Search Input Bar */}
       <div className="p-3 border-b border-subtle space-y-2">
         <div className="relative">
-          <Search className="w-4 h-4 text-muted absolute inset-inline-start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-muted absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             ref={inputRef}
             type="text"
@@ -188,7 +188,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="absolute inset-inline-end-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-main p-0.5"
+              className="absolute end-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-main p-0.5"
             >
               <X className="w-3.5 h-3.5" />
             </button>

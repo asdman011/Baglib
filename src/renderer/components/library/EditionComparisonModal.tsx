@@ -563,7 +563,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                       <div className="col-span-2 font-medium text-gray-300">
                         {t(diff.labelKey as import('../../translations').TranslationKey) || fieldKey}
                       </div>
-                      <div className="col-span-4 pr-3 pl-3">
+                      <div className="col-span-4 px-3">
                         {fieldKey === 'coverImage' && diff.currentValue ? (
                           <div className="w-8 h-11 rounded border border-gray-700 overflow-hidden">
                             <img src={String(diff.currentValue)} alt="current" className="w-full h-full object-cover" />
@@ -587,7 +587,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="col-span-3 pr-3 pl-3">
+                      <div className="col-span-3 px-3">
                         {fieldKey === 'coverImage' && diff.incomingValue ? (
                           <div className="w-8 h-11 rounded border border-emerald-500/40 overflow-hidden">
                             <img src={String(diff.incomingValue)} alt="candidate" className="w-full h-full object-cover" />
@@ -613,7 +613,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                   <span>{t('overwriteProtectionToggle')}</span>
                 </label>
                 {allowOverwrite && (
-                  <p className="text-[11px] text-amber-400/90 pr-6 pl-6">
+                  <p className="text-[11px] text-amber-400/90 px-6">
                     {t('overwriteWarningText')}
                   </p>
                 )}

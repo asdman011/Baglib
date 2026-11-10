@@ -724,7 +724,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative flex flex-col items-center justify-start">
         {/* Slide-out TOC Drawer */}
         {isTocOpen && bookDoc?.toc && (
-          <div className="absolute top-0 bottom-0 inset-inline-start-0 w-64 bg-surface/95 backdrop-blur-md border-r border-subtle z-30 shadow-2xl flex flex-col animate-in slide-in-from-left duration-150">
+          <div className="absolute top-0 bottom-0 start-0 w-64 bg-surface/95 backdrop-blur-md border-e border-subtle z-30 shadow-2xl flex flex-col animate-in slide-in-from-left duration-150">
             <div className="p-2.5 border-b border-subtle flex items-center justify-between bg-canvas/30">
               <span className="font-bold text-xs flex items-center gap-1.5 text-main">
                 <ListTree className="w-3.5 h-3.5 text-pale-sky-500" />

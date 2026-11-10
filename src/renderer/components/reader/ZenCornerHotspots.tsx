@@ -47,7 +47,7 @@ export const ZenCornerHotspots: React.FC<ZenCornerHotspotsProps> = ({
     <>
       {/* Top-End Corner Hotspot (64px x 64px) */}
       <div
-        className="fixed top-0 inset-inline-end-0 w-20 h-20 z-40 flex items-start justify-end p-2.5 pointer-events-auto group select-none"
+        className="fixed top-0 end-0 w-20 h-20 z-40 flex items-start justify-end p-2.5 pointer-events-auto group select-none"
         aria-label="Corner Actions"
       >
         {/* Bookmark Ribbon Hanging from Top Page Margin */}
@@ -55,7 +55,7 @@ export const ZenCornerHotspots: React.FC<ZenCornerHotspotsProps> = ({
           <div
             onClick={onToggleBookmark}
             title={t('oneClickBookmark')}
-            className="absolute top-0 inset-inline-end-4 w-6 h-10 bg-amber-500 shadow-md rounded-b flex items-end justify-center pb-1 text-white z-20 cursor-pointer hover:h-11 transition-all"
+            className="absolute top-0 end-4 w-6 h-10 bg-amber-500 shadow-md rounded-b flex items-end justify-center pb-1 text-white z-20 cursor-pointer hover:h-11 transition-all"
           >
             <Bookmark className="w-3.5 h-3.5 fill-current" />
           </div>
@@ -91,7 +91,7 @@ export const ZenCornerHotspots: React.FC<ZenCornerHotspotsProps> = ({
       {/* Bottom-Start Corner Hotspot (Turn Backward in LTR / Forward in RTL) */}
       <div
         onClick={readerDirection === 'rtl' ? onNextPage : onPrevPage}
-        className={`fixed bottom-0 inset-inline-start-0 w-16 h-16 z-30 flex items-end justify-start p-3 opacity-0 hover:opacity-100 transition-opacity duration-150 cursor-pointer select-none group ${
+        className={`fixed bottom-0 start-0 w-16 h-16 z-30 flex items-end justify-start p-3 opacity-0 hover:opacity-100 transition-opacity duration-150 cursor-pointer select-none group ${
           (readerDirection === 'rtl' ? canGoNext : canGoPrev) ? '' : 'pointer-events-none'
         }`}
         title={readerDirection === 'rtl' ? t('paginationNext') : t('paginationPrevious')}
@@ -104,7 +104,7 @@ export const ZenCornerHotspots: React.FC<ZenCornerHotspotsProps> = ({
       {/* Bottom-End Corner Hotspot (Turn Forward in LTR / Backward in RTL) */}
       <div
         onClick={readerDirection === 'rtl' ? onPrevPage : onNextPage}
-        className={`fixed bottom-0 inset-inline-end-0 w-16 h-16 z-30 flex items-end justify-end p-3 opacity-0 hover:opacity-100 transition-opacity duration-150 cursor-pointer select-none group ${
+        className={`fixed bottom-0 end-0 w-16 h-16 z-30 flex items-end justify-end p-3 opacity-0 hover:opacity-100 transition-opacity duration-150 cursor-pointer select-none group ${
           (readerDirection === 'rtl' ? canGoPrev : canGoNext) ? '' : 'pointer-events-none'
         }`}
         title={readerDirection === 'rtl' ? t('paginationPrevious') : t('paginationNext')}

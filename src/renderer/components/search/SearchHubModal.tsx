@@ -687,7 +687,7 @@ export const SearchHubModal: React.FC = () => {
 
         {/* Toast Notification Popup */}
         {toastMessage && (
-          <div className="absolute bottom-5 inset-inline-end-5 z-50 bg-main text-canvas px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="absolute bottom-5 end-5 z-50 bg-main text-canvas px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-2 duration-200">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{toastMessage}</span>
           </div>

@@ -201,7 +201,7 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
       aria-label={t('tableOfContents')}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className={embedded ? 'relative flex h-full min-h-0 w-full flex-col bg-surface select-none' : `fixed top-14 bottom-0 inset-inline-start-0 w-80 sm:w-88 backdrop-blur-2xl bg-surface/95 border-e border-subtle/70 z-40 flex flex-col shadow-2xl transition-all duration-300 select-none ${
+      className={embedded ? 'relative flex h-full min-h-0 w-full flex-col bg-surface select-none' : `fixed top-14 bottom-0 start-0 w-80 sm:w-88 backdrop-blur-2xl bg-surface/95 border-e border-subtle/70 z-40 flex flex-col shadow-2xl transition-all duration-300 select-none ${
         isOpen
           ? 'opacity-100 translate-x-0 pointer-events-auto'
           : 'opacity-0 rtl:translate-x-full ltr:-translate-x-full pointer-events-none'
@@ -280,7 +280,7 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
           {/* TOC Search Input & Expand/Collapse Toggle */}
           <div className="p-3 border-b border-subtle/50 shrink-0 flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 absolute inset-inline-start-2.5 top-2.5 text-muted pointer-events-none" />
+              <Search className="w-3.5 h-3.5 absolute start-2.5 top-2.5 text-muted pointer-events-none" />
               <input
                 type="text"
                 value={searchFilter}

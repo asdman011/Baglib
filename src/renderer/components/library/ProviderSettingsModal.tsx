@@ -232,7 +232,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
         <fieldset disabled={saving} className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-3">
           {loading ? (
             <div className="py-12 text-center text-muted text-sm">
-              <span className="inline-block animate-spin mr-2">⟳</span>
+              <span className="inline-block animate-spin me-2">⟳</span>
               {lang === 'ar' ? 'جارٍ تحميل الإعدادات...' : 'Loading provider configuration...'}
             </div>
           ) : (

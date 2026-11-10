@@ -92,7 +92,7 @@ export const ZenKnowledgeDrawer: React.FC<ZenKnowledgeDrawerProps> = ({
       aria-label={t('knowledgeDrawer')}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className={`fixed top-14 bottom-0 inset-inline-end-0 w-80 sm:w-96 backdrop-blur-2xl bg-surface/95 border-s border-subtle/70 z-40 flex flex-col shadow-2xl transition-all duration-300 select-none ${
+      className={`fixed top-14 bottom-0 end-0 w-80 sm:w-96 backdrop-blur-2xl bg-surface/95 border-s border-subtle/70 z-40 flex flex-col shadow-2xl transition-all duration-300 select-none ${
         isOpen
           ? 'opacity-100 translate-x-0 pointer-events-auto'
           : 'opacity-0 rtl:-translate-x-full ltr:translate-x-full pointer-events-none'

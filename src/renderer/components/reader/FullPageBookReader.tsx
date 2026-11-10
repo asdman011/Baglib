@@ -3305,7 +3305,7 @@ const SourceBookReader: React.FC = () => {
     <aside
       className={`bg-surface border-subtle flex flex-col z-10 shrink-0 font-sans ${
         splitOrientation === 'vertical'
-          ? 'w-80 sm:w-96 border-r'
+          ? 'w-80 sm:w-96 border-s'
           : splitOrientation === 'horizontal'
           ? 'h-64 sm:h-72 border-t'
           : 'flex-1 border-none'
@@ -3402,7 +3402,7 @@ const SourceBookReader: React.FC = () => {
               </div>
 
               {note.highlightedText && (
-                <blockquote className="border-r-2 border-pale-sky-500 pr-2 italic text-muted text-[11px] font-serif bg-surface/50 p-1.5 rounded-lg">
+                <blockquote dir="auto" className="border-s-2 border-pale-sky-500 ps-2 italic text-muted text-[11px] font-serif bg-surface/50 p-1.5 rounded-lg">
                   &quot;{note.highlightedText}&quot;
                 </blockquote>
               )}

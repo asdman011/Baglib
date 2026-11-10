@@ -120,9 +120,9 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
 
     return (
       <div className="flex items-baseline font-mono select-none">
-        <span className="text-right flex-1 text-main opacity-80">{before}</span>
+        <span className="text-end flex-1 text-main opacity-80">{before}</span>
         <span className="text-rose-500 font-bold px-0.5">{orpChar}</span>
-        <span className="text-left flex-1 text-main opacity-80">{after}</span>
+        <span className="text-start flex-1 text-main opacity-80">{after}</span>
       </div>
     );
   };

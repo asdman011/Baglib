@@ -29,7 +29,7 @@ export function PdfReadingOrderOverlay({
       aria-hidden="true"
     >
       {/* Top Banner Tag */}
-      <div className="absolute top-2 inset-inline-start-2 rounded-full border border-emerald-500/40 bg-surface/90 backdrop-blur-xs px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-200 shadow-sm flex items-center gap-1.5">
+      <div className="absolute top-2 start-2 rounded-full border border-emerald-500/40 bg-surface/90 backdrop-blur-xs px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-200 shadow-sm flex items-center gap-1.5">
         <span className="inline-block size-2 rounded-full bg-emerald-500 animate-pulse" />
         <span>
           {isTagged ? t('pdfA11yReadingOrderTagged') : t('pdfA11yReadingOrderEstimate')}

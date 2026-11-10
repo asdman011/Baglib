@@ -127,7 +127,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
 
           {/* Formats badge overlay */}
           {result.availableFormats && result.availableFormats.length > 0 && (
-            <div className="absolute bottom-1 inset-inline-end-1 bg-black/75 backdrop-blur-xs text-white text-[9px] font-mono font-bold px-1 rounded">
+            <div className="absolute bottom-1 end-1 bg-black/75 backdrop-blur-xs text-white text-[9px] font-mono font-bold px-1 rounded">
               {result.availableFormats[0]}
             </div>
           )}

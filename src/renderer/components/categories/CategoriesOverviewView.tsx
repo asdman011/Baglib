@@ -516,7 +516,7 @@ export const CategoriesOverviewView: React.FC = () => {
 
         {/* Search Bar */}
         <div className="mt-4 relative max-w-md">
-          <Search className="w-4 h-4 text-muted absolute top-2.5 inset-inline-start-3" />
+          <Search className="w-4 h-4 text-muted absolute top-2.5 start-3" />
           <input
             type="text"
             value={searchQuery}
@@ -528,7 +528,7 @@ export const CategoriesOverviewView: React.FC = () => {
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute top-2.5 inset-inline-end-3 text-muted hover:text-main"
+              className="absolute top-2.5 end-3 text-muted hover:text-main"
             >
               <X className="w-4 h-4" />
             </button>

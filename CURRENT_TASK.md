@@ -1,3 +1,47 @@
+## KEY-308 part 3 verified — 2026-11-10, Claude Code (at the user's request)
+
+**RTL / logical-property sweep in the renderer.**
+- **Undefined classes:** 18 uses of `inset-inline-start-N` / `inset-inline-end-N` were not Tailwind utilities and generated no CSS. They are now `start-N` / `end-N`, so those elements finally sit on their intended side in both directions. The affected elements:
+  - the Zen TOC and knowledge drawers;
+  - the Zen corner hotspots;
+  - the PDF accessibility drawer;
+  - the in-book search icon and its clear button;
+  - the categories search;
+  - the ink canvas toolbar;
+  - the reading-order badge;
+  - the search toast and the result-card badge.
+- **OPDS search:** pinned at `start-3` with `ps-10`, which matches how it drew before.
+- **Notes split panel:** sits at the end of the row, so its border moved to `border-s`.
+- **Highlight quote:** `border-s-2 ps-2` with `dir="auto"`.
+- **Reader TOC drawer:** `border-e`.
+- **Citation:** `text-start` with `dir="auto"`.
+- **RSVP before/after:** `text-end` / `text-start`.
+- **Edition comparison:** `px-*`.
+- **Provider spinner:** `me-2`.
+
+**Justified physical classes that stay:**
+- BotanicalIllustrations, a mirrored pair on both sides.
+- Board canvas coordinates and the resize handle.
+- Centring with `left-1/2` (OCR pill, Zen scrubber).
+- PdfReflowModal, which aligns each paragraph by its detected direction.
+- The legacy Quran fallback rail, used only when no header host exists.
+
+**Verification:**
+- `npx tsc --noEmit` passes. ESLint on the changed files: 0 errors. `npx tsup` passes.
+- Full `npm test --test-concurrency=2`: 1777/1777.
+- `scripts/reader-chrome-live` passed in every case. Its leftover profile was deleted.
+- **Not visually re-checked:** the Zen-mode drawers and corner hotspots. No harness opens them.
+
+**Found, not caused by this change:** in Arabic, the reader panel covers the left end of the reader header. It appears the same in the 12:08 run. Recorded in the plan doc for KEY-308.
+
+**Files** (17 renderer files):
+- categories/CategoriesOverviewView, inspector/CitationSection
+- library/EditionComparisonModal, library/ProviderSettingsModal
+- opds/OPDSHubModal
+- reader/FullPageBookReader, InBookSearchDrawer, InkCanvasOverlay, PdfAccessibilityDrawer, PdfReadingOrderOverlay, RSVPOverlay, ReaderPane, ZenCornerHotspots, ZenKnowledgeDrawer, ZenTocDrawer
+- search/SearchHubModal, search/SearchResultCard
+- plus `CURRENT_TASK.md`
+
 ## KEY-308 part 2 verified — 2026-11-10, Claude Code (at the user's request)
 
 **Mushaf gutters.** With the reader controls in the shared header (KEY-305), the floating rail is gone. So the mushaf scroller's gutters went from 4rem top, 6rem bottom and 3.5–5rem sides down to 1.5rem, 2.5rem and 1–2rem. The fit-to-height width allowance changed to match, from 10rem to 4rem. The old padding stays when no header host exists.

@@ -144,7 +144,7 @@ export function PdfAccessibilityDrawer({
       aria-modal="true"
       aria-label={t('pdfA11yTitle')}
       data-pdf-accessibility-drawer
-      className="fixed inset-y-0 inset-inline-end-0 z-50 flex w-full max-w-md flex-col border-s border-subtle bg-surface text-main shadow-2xl animate-in slide-in-from-right duration-200"
+      className="fixed inset-y-0 end-0 z-50 flex w-full max-w-md flex-col border-s border-subtle bg-surface text-main shadow-2xl animate-in slide-in-from-right duration-200"
     >
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-subtle px-4 py-3">

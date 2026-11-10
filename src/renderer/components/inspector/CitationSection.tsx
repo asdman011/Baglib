@@ -64,7 +64,7 @@ export const CitationSection: React.FC = () => {
               {copiedFormat === 'APA' ? <Check className="w-3.5 h-3.5 text-evergreen-500" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           </div>
-          <p className="text-[11px] text-muted font-serif text-right">
+          <p dir="auto" className="text-[11px] text-muted font-serif text-start">
             {citationData.author}. ({citationData.year}). {citationData.title}. {citationData.publisher}.
           </p>
         </div>

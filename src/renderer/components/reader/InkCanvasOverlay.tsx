@@ -249,7 +249,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
 
       {/* Floating Stylus Drawing Toolbar */}
       {isActive && (
-        <div className="absolute top-4 inset-inline-end-4 z-30 bg-surface/95 backdrop-blur-md border border-subtle p-2 rounded-2xl shadow-2xl flex items-center gap-2 animate-in fade-in zoom-in-95 duration-150 text-xs font-sans">
+        <div className="absolute top-4 end-4 z-30 bg-surface/95 backdrop-blur-md border border-subtle p-2 rounded-2xl shadow-2xl flex items-center gap-2 animate-in fade-in zoom-in-95 duration-150 text-xs font-sans">
           {/* Tool Selector */}
           <div className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle">
             <button
