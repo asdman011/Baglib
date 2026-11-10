@@ -27,6 +27,7 @@ import { Chip } from '../ui/Chip';
 import { Menu } from '../ui/Menu';
 import { StudyNoteEditor, type StudyNoteEditorHandle } from './StudyNoteEditor';
 import { StudyNoteContent } from './StudyNoteContent';
+import { KnowledgeGraphButton } from './KnowledgeGraph';
 import { detectTextDirection } from '../dashboard/QuickNoteScratchpad';
 import { calculateHijriDate } from '../../../shared/athan-calculator';
 import { relationLabels } from '../../utils/relation-labels';
@@ -36,6 +37,7 @@ import type { StudyNote } from '../../../shared/study-notes';
 
 export interface NoteEditorPaneProps {
   note?: StudyNote | null;
+  notes?: StudyNote[];
   initialContent?: string;
   onSaved?: (note?: StudyNote) => void;
   onDelete?: (note: StudyNote) => void;
@@ -54,6 +56,7 @@ const DRAFT_KEY = 'dashboard.scratchpad.draft.v1';
 
 export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
   note,
+  notes: propNotes,
   initialContent,
   onSaved,
   onDelete,
@@ -68,7 +71,8 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
   draftKey: ownDraftKey,
 }) => {
   const { books, dir, t, lang, openBookForReading, refreshTags } = useWorkspace();
-  const { notes } = useStudyNotes();
+  const { notes: hookNotes } = useStudyNotes();
+  const notes = propNotes || hookNotes;
 
   const draftKey = ownDraftKey ?? (initialContent !== undefined ? 'study.capture.draft.v1' : DRAFT_KEY);
 
@@ -372,6 +376,9 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
           >
             {t('save')}
           </Button>
+
+          {/* Per-note Knowledge Graph Button */}
+          {note && <KnowledgeGraphButton noteId={note.id} notes={notes} />}
 
           {/* Preview Toggle */}
           <IconButton

@@ -199,6 +199,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
   return (
     <div
       dir={dir}
+      data-srs-review
       data-srs-review-screen
       className="flex-1 min-h-0 flex flex-col bg-canvas select-none overflow-hidden"
     >

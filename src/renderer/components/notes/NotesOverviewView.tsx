@@ -21,6 +21,7 @@ import { SavedCardsPanel } from '../knowledge/SavedCardsPanel';
 import { SrsReviewScreen } from '../knowledge/SrsReviewScreen';
 import { NoteEditorPane } from './NoteEditorPane';
 import { NoteDetailsPane } from './NoteDetailsPane';
+import { KnowledgeTools } from './KnowledgeTools';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { ReadingLogPanel } from './ReadingLogPanel';
@@ -52,7 +53,7 @@ const savedWordLayout = (): WordLayout => {
 
 export type WorkspaceTab = 'notes' | 'cards' | 'boards' | 'review';
 export type NoteSortOrder = 'recent' | 'title' | 'oldest';
-export type NoteFilter = 'all' | 'comments' | 'book';
+export type NoteFilter = 'all' | 'comments' | 'questions' | 'book';
 
 export const NotesOverviewView: React.FC = () => {
   const { books, dir, t, lang, openBookForReading } = useWorkspace();
@@ -636,6 +637,7 @@ export const NotesOverviewView: React.FC = () => {
                   >
                     <option value="all">{t('notesFilterAll')}</option>
                     <option value="comments">{t('notesFilterComments')}</option>
+                    <option value="questions">{t('waveQuestions')}</option>
                     <option value="book">{t('notesFilterBook')}</option>
                   </select>
                 </div>
@@ -678,89 +680,95 @@ export const NotesOverviewView: React.FC = () => {
             {readingWork && <ReadingLogPanel key={readingWork} workId={readingWork} />}
 
             {/* Notes List Scroll Area */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
-              {loading && (
-                <p className="p-4 text-center text-xs text-muted">{t('studyLoadingNotes')}</p>
-              )}
+            {filterMode === 'questions' ? (
+              <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                <KnowledgeTools />
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
+                {loading && (
+                  <p className="p-4 text-center text-xs text-muted">{t('studyLoadingNotes')}</p>
+                )}
 
-              {filteredNotes.length === 0 && !loading && (
-                <EmptyState
-                  icon={<FileText className="size-6 text-muted" />}
-                  title={t('notesEmptyTitle')}
-                  description={t('notesEmptyDesc')}
-                  action={
-                    <Button variant="primary" size="sm" onClick={handleStartNewNote}>
-                      {t('studyNewNote')}
-                    </Button>
-                  }
-                  className="py-6"
-                />
-              )}
+                {filteredNotes.length === 0 && !loading && (
+                  <EmptyState
+                    icon={<FileText className="size-6 text-muted" />}
+                    title={t('notesEmptyTitle')}
+                    description={t('notesEmptyDesc')}
+                    action={
+                      <Button variant="primary" size="sm" onClick={handleStartNewNote}>
+                        {t('studyNewNote')}
+                      </Button>
+                    }
+                    className="py-6"
+                  />
+                )}
 
-              {filteredNotes.map((note) => {
-                const isSelected = (!creatingNew && activeNote?.id === note.id) || selectedId === note.id;
-                const book = books.find((b) => b.id === note.workId);
-                const commentsCount = openComments[note.id] ?? 0;
+                {filteredNotes.map((note) => {
+                  const isSelected = (!creatingNew && activeNote?.id === note.id) || selectedId === note.id;
+                  const book = books.find((b) => b.id === note.workId);
+                  const commentsCount = openComments[note.id] ?? 0;
 
-                return (
-                  <article
-                    key={note.id}
-                    data-study-note={note.id}
-                    onClick={() => handleSelectNote(note.id)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1.5 ${
-                      isSelected
-                        ? 'bg-primary/10 border-primary-text/40 shadow-xs ring-1 ring-primary-text/20'
-                        : 'bg-surface hover:bg-canvas border-subtle/80'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <h4
-                        dir="auto"
-                        className={`text-xs sm:text-sm font-bold truncate leading-tight ${
-                          isSelected ? 'text-primary-text' : 'text-main'
-                        }`}
-                      >
-                        {note.title || t('dashScratchpadGeneralNote')}
-                      </h4>
-
-                      {commentsCount > 0 && (
-                        <span
-                          data-note-open-comments
-                          className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.2 text-[10px] text-amber-700 dark:text-amber-300 shrink-0 font-medium"
-                        >
-                          <MessageSquare className="size-2.5" />
-                          <span>{commentsCount}</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <p
-                      dir="auto"
-                      className="text-xs text-muted line-clamp-2 leading-relaxed"
-                      style={{
-                        fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)",
-                      }}
+                  return (
+                    <article
+                      key={note.id}
+                      data-study-note={note.id}
+                      onClick={() => handleSelectNote(note.id)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1.5 ${
+                        isSelected
+                          ? 'bg-primary/10 border-primary-text/40 shadow-xs ring-1 ring-primary-text/20'
+                          : 'bg-surface hover:bg-canvas border-subtle/80'
+                      }`}
                     >
-                      {note.content || '...'}
-                    </p>
+                      <div className="flex items-start justify-between gap-2">
+                        <h4
+                          dir="auto"
+                          className={`text-xs sm:text-sm font-bold truncate leading-tight ${
+                            isSelected ? 'text-primary-text' : 'text-main'
+                          }`}
+                        >
+                          {note.title || t('dashScratchpadGeneralNote')}
+                        </h4>
 
-                    <div className="flex flex-wrap items-center gap-1 pt-1 text-[10px] text-muted">
-                      {book && (
-                        <span className="inline-flex items-center gap-1 bg-canvas px-1.5 py-0.5 rounded border border-subtle truncate max-w-[140px]">
-                          <BookOpen className="size-2.5 text-primary-text" />
-                          <span className="truncate">{book.title}</span>
-                        </span>
-                      )}
-                      {note.tags.slice(0, 2).map((tg) => (
-                        <span key={tg} className="bg-canvas px-1 py-0.5 rounded text-muted">
-                          #{tg}
-                        </span>
-                      ))}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                        {commentsCount > 0 && (
+                          <span
+                            data-note-open-comments
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.2 text-[10px] text-amber-700 dark:text-amber-300 shrink-0 font-medium"
+                          >
+                            <MessageSquare className="size-2.5" />
+                            <span>{commentsCount}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <p
+                        dir="auto"
+                        className="text-xs text-muted line-clamp-2 leading-relaxed"
+                        style={{
+                          fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)",
+                        }}
+                      >
+                        {note.content || '...'}
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-1 pt-1 text-[10px] text-muted">
+                        {book && (
+                          <span className="inline-flex items-center gap-1 bg-canvas px-1.5 py-0.5 rounded border border-subtle truncate max-w-[140px]">
+                            <BookOpen className="size-2.5 text-primary-text" />
+                            <span className="truncate">{book.title}</span>
+                          </span>
+                        )}
+                        {note.tags.slice(0, 2).map((tg) => (
+                          <span key={tg} className="bg-canvas px-1 py-0.5 rounded text-muted">
+                            #{tg}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </aside>
 
           {/* PANE 2: NOTE EDITOR (Visible if desktop or mobileScreen === 'editor') */}
@@ -773,6 +781,7 @@ export const NotesOverviewView: React.FC = () => {
               <NoteEditorPane
                 key={activeNote ? activeNote.id : `new-${editorDraft?.key ?? 0}`}
                 note={activeNote}
+                notes={notes}
                 initialContent={editorDraft?.content}
                 showBack={mobileScreen === 'editor'}
                 onBack={() => setMobileScreen('list')}

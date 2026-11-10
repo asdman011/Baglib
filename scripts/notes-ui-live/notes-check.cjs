@@ -36,6 +36,11 @@ app.on('browser-window-created', (_, win) => {
     throw new Error(`Timeout waiting for: ${code}`);
   };
 
+  const fix1Dir = path.join(evidence, 'fix1');
+  if (!fs.existsSync(fix1Dir)) {
+    fs.mkdirSync(fix1Dir, { recursive: true });
+  }
+
   const shot = async (name) => {
     win.show();
     win.focus();
@@ -45,6 +50,17 @@ app.on('browser-window-created', (_, win) => {
     const filePath = path.join(evidence, `${name}.png`);
     fs.writeFileSync(filePath, image.toPNG());
     console.log(`[shot] ${name}.png saved (${image.getSize().width}x${image.getSize().height})`);
+  };
+
+  const shotFix1 = async (name) => {
+    win.show();
+    win.focus();
+    win.webContents.focus();
+    await pause(350);
+    const image = await win.webContents.capturePage();
+    const filePath = path.join(fix1Dir, `${name}.png`);
+    fs.writeFileSync(filePath, image.toPNG());
+    console.log(`[shot-fix1] ${name}.png saved (${image.getSize().width}x${image.getSize().height})`);
   };
 
   const setDimensions = async (width, height) => {
@@ -159,15 +175,17 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
 
-      // 2. Seed Study Notes from real Arabic passage
-      console.log('[live] Creating note from passage of real Arabic PDF...');
+      // 2. Seed Study Notes from real Arabic passage with question capture enabled
+      console.log('[live] Creating notes from real passages and enabling question capture...');
       await evaluate(`
         (async () => {
           try {
+            await window.electronAPI.knowledgeHistory.setCapture(true);
+
             await window.electronAPI.studyNotes.save({
               id: 'note-ar-defense',
               title: 'تأصيل فرضية الدفاع عن أراضي المسلمين',
-              content: 'إن الحمد لله نحمده ونستعينه ونستغفره ونعوذ بالله من شرور أنفسنا ومن سيئات أعمالنا. هذا تأصيل شرعي مستمد من نصوص الفقهاء الأربعة في وجوب الدفاع عن الثغور وأراضي المسلمين وحمايتها عند نزول العدو.',
+              content: 'إن الحمد لله نحمده ونستعينه ونستغفره ونعوذ بالله من شرور أنفسنا ومن سيئات أعمالنا. هذا تأصيل شرعي مستمد من نصوص الفقهاء الأربعة في وجوب الدفاع عن الثغور وأراضي المسلمين وحمايتها عند نزول العدو.\\n\\nهل يسقط الدفاع عن أراضي المسلمين بالتقصير؟',
               aliases: ['أراضي المسلمين', 'فروض الأعيان'],
               tags: ['فقه', 'جهاد', 'تأصيل'],
               workId: 'real-ar-pdf',
@@ -176,7 +194,7 @@ app.on('browser-window-created', (_, win) => {
             await window.electronAPI.studyNotes.save({
               id: 'note-en-lyrics',
               title: 'Cognitive Patterns in Shakespearean Sonnets',
-              content: 'Exploring Brian Boyd analysis of evolutionary memory and attention capture in lyrical structures [[note:note-ar-defense|الدفاع عن أراضي المسلمين]].',
+              content: 'Exploring Brian Boyd analysis of evolutionary memory and attention capture in lyrical structures [[note:note-ar-defense|الدفاع عن أراضي المسلمين]].\\n\\nHow does Shakespeare structure memory and lyrical retention?',
               aliases: ['Shakespeare', 'Cognition'],
               tags: ['literature', 'cognition'],
               workId: 'real-en-pdf',
@@ -245,6 +263,53 @@ app.on('browser-window-created', (_, win) => {
       const dir1 = await evaluate('document.documentElement.dir');
       assert.equal(dir1, 'rtl', 'Dir must be rtl in Arabic');
       await shot('01-notes-workspace-3pane-ar-light-1280');
+
+      // 5b. Fix 1 Verifications: Open Questions & Note Graph Button in Arabic (1280px Light)
+      console.log('[live] Fix 1: Checking Open Questions list filter (Arabic)...');
+      await evaluate(`
+        (() => {
+          const sel = document.querySelector('[data-notes-list-pane] select');
+          if (sel) {
+            sel.value = 'questions';
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        })()
+      `);
+      await until('!!document.querySelector("[data-notes-list-pane] [data-knowledge-tools]")');
+      await pause(400);
+      await shotFix1('01-open-questions-list-ar-1280');
+
+      console.log('[live] Fix 1: Checking Note Graph Button on Note 2 (Arabic)...');
+      await evaluate(`
+        (() => {
+          const sel = document.querySelector('[data-notes-list-pane] select');
+          if (sel) {
+            sel.value = 'all';
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        })()
+      `);
+      await pause(300);
+      await evaluate(`
+        (() => {
+          const item = document.querySelector('[data-study-note="note-en-lyrics"]');
+          if (item) item.click();
+        })()
+      `);
+      await until('!!document.querySelector("[data-note-editor-pane] [data-graph-button]")');
+      await pause(400);
+      await shotFix1('02-note-graph-button-ar-1280');
+
+      console.log('[live] Fix 1: Checking Open Questions tab in NoteDetailsPane (Arabic)...');
+      await evaluate(`
+        (() => {
+          const qTab = document.querySelector('[data-note-details-pane] [data-tab-questions]');
+          if (qTab) qTab.click();
+        })()
+      `);
+      await until('!!document.querySelector("[data-note-details-pane] [data-knowledge-tools]")');
+      await pause(400);
+      await shotFix1('03-open-questions-pane-ar-1280');
 
       // 6. Switch to Cards tab
       console.log('[live] Switching to Cards tab...');
@@ -391,6 +456,42 @@ app.on('browser-window-created', (_, win) => {
       `);
       await pause(500);
       await shot('10-notes-workspace-en-dark-1280');
+
+      // 12b. Fix 1 Verifications: Open Questions & Note Graph Button in English Dark (1280px)
+      console.log('[live] Fix 1: Checking Open Questions list filter (English Dark)...');
+      await evaluate(`
+        (() => {
+          const sel = document.querySelector('[data-notes-list-pane] select');
+          if (sel) {
+            sel.value = 'questions';
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        })()
+      `);
+      await until('!!document.querySelector("[data-notes-list-pane] [data-knowledge-tools]")');
+      await pause(400);
+      await shotFix1('04-open-questions-en-dark-1280');
+
+      console.log('[live] Fix 1: Checking Note Graph Button on Note 2 (English Dark)...');
+      await evaluate(`
+        (() => {
+          const sel = document.querySelector('[data-notes-list-pane] select');
+          if (sel) {
+            sel.value = 'all';
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        })()
+      `);
+      await pause(300);
+      await evaluate(`
+        (() => {
+          const item = document.querySelector('[data-study-note="note-en-lyrics"]');
+          if (item) item.click();
+        })()
+      `);
+      await until('!!document.querySelector("[data-note-editor-pane] [data-graph-button]")');
+      await pause(400);
+      await shotFix1('05-note-graph-button-en-dark-1280');
 
       // Cards tab in English Dark
       await evaluate(`

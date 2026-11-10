@@ -24,11 +24,33 @@ Exact KEY-291 files/hunks follow.
 - `src/renderer/translations.ts`
 - `tests/ui/reader-toolbar-access.test.ts`
 
-## KEY-304 — 2026-11-10, Antigravity (implemented and verified)
+## KEY-304 — 2026-11-10, Antigravity (fix 1 verified, ready for commit)
 
 - **Task**: KEY-304 (UI/UX U10): Notes, knowledge cards, and boards workspace.
 - **Session**: `0bd4d514-7629-42e3-8915-c145fa1f7627`
-- **Status**: Implemented, verified with unit tests and 14 live screenshots on real Arabic/English PDFs.
+- **Status**: Implemented, initial commit `96c7d37`. Review fixes requested by Claude implemented, verified, 5 new fix screenshots inspected, ready for fix commit.
+- **Fix 1 Restorations & Verifications**:
+  - Restored Open Questions list (`KnowledgeTools`) in two reachable locations:
+    - Tab "Questions" (`[data-tab-questions]`) in `NoteDetailsPane`.
+    - Note list filter dropdown option "questions" (`waveQuestions`) in `NotesOverviewView`.
+    - Clicking originating note link (`waveSource`) uses `openStudyNote` (`'baglib:study-note-open'`) to navigate smoothly to the originating note.
+  - Restored Per-Note Knowledge Graph button (`KnowledgeGraphButton`) in `NoteEditorPane` header next to Save button, wired with `noteId` and `notes` array to render connection count and interactive graph modal with full keyboard accessibility.
+  - Verified `SrsReviewScreen` covers and supersedes `SrsReviewPanel` (due count, review session, SRS grading attempt records, and legacy `data-srs-*` selectors). File `SrsReviewPanel.tsx` kept untouched.
+- **Verification**:
+  - `npx tsc --noEmit`: 0 errors.
+  - `npx eslint` on changed files: 0 errors.
+  - `git diff --check`: 0 errors.
+  - Unit tests: `tests/ui/notes-workspace-layout.test.ts` (4/4 pass), `tests/ui/srs-review-keyboard.test.ts` (3/3 pass).
+  - Live runner `scripts/notes-ui-live/run.mjs`: all 14 tests pass with exit code 0, and 5 fix1 screenshots captured in `.baglib-data/KEY-304-evidence/fix1/` (01-open-questions-list-ar-1280, 02-note-graph-button-ar-1280, 03-open-questions-pane-ar-1280, 04-open-questions-en-dark-1280, 05-note-graph-button-en-dark-1280).
+- **Files changed in Fix 1**:
+  - `src/renderer/components/notes/NoteEditorPane.tsx`
+  - `src/renderer/components/notes/NoteDetailsPane.tsx`
+  - `src/renderer/components/notes/NotesOverviewView.tsx`
+  - `src/renderer/components/knowledge/SrsReviewScreen.tsx`
+  - `tests/ui/notes-workspace-layout.test.ts`
+  - `scripts/notes-ui-live/notes-check.cjs`
+  - `docs/agent-ops/reports/KEY-304.md`
+  - `CURRENT_TASK.md`
 - **Changes**:
   - Unified notes, knowledge cards, and boards into one cohesive workspace (`NotesOverviewView.tsx`).
   - Implemented 3-pane layout on desktop (Note List, Note Editor, Collapsible `NoteDetailsPane` with Backlinks & History).

@@ -241,3 +241,101 @@ test('Notes selection and stacked screen navigation (480px model)', async () => 
   const listPane = rootElement.querySelector('[data-notes-list-pane]');
   assert.ok(listPane, 'List pane should be visible after back button click');
 });
+
+test('Notes workspace renders open-questions entry and per-note knowledge graph button', async () => {
+  const win = setupDOM();
+  const rootElement = win.document.getElementById('root')!;
+  const root = createRoot(rootElement as unknown as HTMLElement);
+
+  Object.defineProperty(win, 'electronAPI', {
+    configurable: true,
+    value: {
+      getAllBooks: async () => [],
+      getAllNotes: async () => [],
+      getCategoryTree: async () => [],
+      studyNotes: {
+        list: async () => mockNotes,
+        onChanged: () => () => {},
+      },
+      knowledgeCards: {
+        list: async () => [],
+        listPreserved: async () => [],
+        reviewQueue: async () => ({ cards: [], due: 0, reviewedToday: 0, nextDue: null }),
+      },
+      boards: {
+        list: async () => [],
+        onChanged: () => () => {},
+      },
+      knowledgeHistory: {
+        commentCounts: async () => ({}),
+        questions: async () => [
+          { id: 'q-1', text: 'ما الفرق بين العام والخاص في التفسير؟', source: 'note:note-1', status: 'open' },
+        ],
+        trash: async () => [],
+        captureEnabled: async () => true,
+        conversionReport: async () => ({ issues: [], historyBytes: 100, historyVersions: 1 }),
+      },
+    },
+  });
+
+  await act(async () => {
+    root.render(
+      createElement(WorkspaceProvider, null, createElement(NotesOverviewView))
+    );
+  });
+
+  // 1. Verify Note List filter has 'questions' option
+  const filterSelect = rootElement.querySelector('[data-notes-list-pane] select') as HTMLSelectElement;
+  assert.ok(filterSelect, 'Filter select must exist');
+  const questionsOption = Array.from(filterSelect.options).find((o) => o.value === 'questions');
+  assert.ok(questionsOption, 'Open questions option must exist in filter select');
+
+  // Switch filter to questions
+  await act(async () => {
+    filterSelect.value = 'questions';
+    // linkedom select options
+    const opt = Array.from(filterSelect.options).find(o => o.value === 'questions');
+    if (opt) opt.selected = true;
+    const changeEvent = new win.Event('change', { bubbles: true });
+    Object.defineProperty(changeEvent, 'target', { value: filterSelect });
+    filterSelect.dispatchEvent(changeEvent);
+  });
+
+  // Verify KnowledgeTools is rendered in notes list
+  const toolsInList = rootElement.querySelector('[data-notes-list-pane] [data-knowledge-tools]');
+  assert.ok(toolsInList, 'KnowledgeTools must be rendered when questions filter is active');
+
+  // Switch filter back to all
+  await act(async () => {
+    filterSelect.value = 'all';
+    const opt = Array.from(filterSelect.options).find(o => o.value === 'all');
+    if (opt) opt.selected = true;
+    const changeEvent = new win.Event('change', { bubbles: true });
+    Object.defineProperty(changeEvent, 'target', { value: filterSelect });
+    filterSelect.dispatchEvent(changeEvent);
+  });
+
+  // 2. Select note-2 (which links to note-1)
+  const noteItem2 = rootElement.querySelector('[data-study-note="note-2"]') as HTMLElement;
+  assert.ok(noteItem2, 'Note 2 item must exist');
+  await act(async () => {
+    noteItem2.click();
+  });
+
+  // Verify per-note knowledge graph button exists in NoteEditorPane header
+  const graphButton = rootElement.querySelector('[data-note-editor-pane] [data-graph-button]') as HTMLElement;
+  assert.ok(graphButton, 'KnowledgeGraphButton must be present in NoteEditorPane header');
+  assert.equal(graphButton.hasAttribute('disabled'), false, 'Graph button should be enabled because note-2 has a link');
+
+  // 3. Verify NoteDetailsPane has the Questions tab
+  const questionsTab = rootElement.querySelector('[data-note-details-pane] [data-tab-questions]') as HTMLElement;
+  assert.ok(questionsTab, 'Questions tab button must exist in NoteDetailsPane');
+
+  await act(async () => {
+    questionsTab.click();
+  });
+
+  // Verify KnowledgeTools is rendered inside NoteDetailsPane
+  const toolsInDetails = rootElement.querySelector('[data-note-details-pane] [data-knowledge-tools]');
+  assert.ok(toolsInDetails, 'KnowledgeTools must be rendered inside NoteDetailsPane under questions tab');
+});

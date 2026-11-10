@@ -5,11 +5,13 @@ import {
   CornerDownRight,
   History,
   Link as LinkIcon,
+  HelpCircle,
   X,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { IconButton } from '../ui/Button';
 import { NoteHistory } from './NoteHistory';
+import { KnowledgeTools } from './KnowledgeTools';
 import { studyBacklinks, studyLinks, type StudyNote } from '../../../shared/study-notes';
 
 export interface NoteDetailsPaneProps {
@@ -28,7 +30,7 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
   onClose,
 }) => {
   const { t, dir } = useWorkspace();
-  const [activeTab, setActiveTab] = useState<'links' | 'history'>('links');
+  const [activeTab, setActiveTab] = useState<'links' | 'history' | 'questions'>('links');
 
   const backlinks = studyBacklinks(notes, `note:${note.id}`);
   const outgoingLinks = [...new Map(studyLinks(note.content).map((link) => [link.target, link])).values()];
@@ -85,6 +87,20 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
         >
           <History className="size-3.5" />
           <span>{t('waveHistory')}</span>
+        </button>
+
+        <button
+          type="button"
+          data-tab-questions
+          onClick={() => setActiveTab('questions')}
+          className={`flex-1 py-1.5 px-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+            activeTab === 'questions'
+              ? 'bg-surface text-main shadow-xs'
+              : 'text-muted hover:text-main'
+          }`}
+        >
+          <HelpCircle className="size-3.5" />
+          <span>{t('waveQuestions')}</span>
         </button>
       </div>
 
@@ -171,6 +187,12 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
         {activeTab === 'history' && (
           <div className="space-y-4">
             <NoteHistory id={note.id} onChanged={onRefresh} />
+          </div>
+        )}
+
+        {activeTab === 'questions' && (
+          <div className="space-y-4">
+            <KnowledgeTools />
           </div>
         )}
       </div>
