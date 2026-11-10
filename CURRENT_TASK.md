@@ -1,3 +1,19 @@
+## KEY-308 part 2 verified — 2026-11-10, Claude Code (at the user's request)
+
+**Mushaf gutters.** With the reader controls in the shared header (KEY-305), the floating rail is gone. So the mushaf scroller's gutters went from 4rem top, 6rem bottom and 3.5–5rem sides down to 1.5rem, 2.5rem and 1–2rem. The fit-to-height width allowance changed to match, from 10rem to 4rem. The old padding stays when no header host exists.
+- **Effect:** each page is drawn larger in the same window.
+- **Note:** pages 1–2 of the mushaf are small centred blocks by design, so they still leave space.
+
+**Poetry toolbar** (a KEY-313 follow-up): already moved into the shared header and settings popover by KEY-305, so no change was needed.
+
+**Verification:**
+- `npx tsc --noEmit` and `npx tsup` pass.
+- Quran tests pass: 41/41.
+- `scripts/islamic-ui-live` passed, including the real restart and the resume links. Corpus copies were deleted and the originals are unchanged (1340 files verified).
+- I inspected the Quran screenshots in ar light at 1280 px and en dark at 480 px.
+
+**Files:** `src/renderer/components/quran/QuranMushafView.tsx`, `CURRENT_TASK.md`.
+
 ## KEY-308 part 1 verified — 2026-11-10, Claude Code (at the user's request: "work on KEY-308 yourself until codex resets")
 
 This is the first slice of the U14 polish pass. It covers the review follow-ups collected in section 8 of "feature - UI UX Vision Program.md".

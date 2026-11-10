@@ -146,8 +146,9 @@ export function QuranMushafView({ controlsHost, page, t, lang, dir, selectedAyah
       .dark .mushaf-svg-surface [data-baglib-selected] path,.dark .mushaf-svg-surface [data-baglib-hover-word] path { fill:#34d399 !important; }
     `}</style>
     {controlsHost ? createPortal(<div className="flex flex-wrap items-center gap-2">{controls}</div>, controlsHost) : <div className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-2 rounded-2xl bg-surface/95 border border-subtle p-2 shadow-lg max-h-[70dvh] overflow-auto">{controls}</div>}
-    <div className="flex-1 min-h-0 overflow-auto overscroll-contain [scrollbar-gutter:stable_both-edges] bg-white dark:bg-zinc-950 px-14 sm:px-20 pt-16 pb-24">
-      <div ref={surface} className="mushaf-svg-surface mx-auto text-zinc-900 dark:text-zinc-100" style={{ width: `${zoom}%`, containerType: 'inline-size', maxWidth: zoom === 100 ? 'min(100%, calc((100cqh - 10rem) * 0.68))' : undefined }} onClick={event => {
+    {/* KEY-308: with the controls in the shared header (KEY-305) the floating rail is gone, so the page no longer needs its wide gutters. */}
+    <div className={`flex-1 min-h-0 overflow-auto overscroll-contain [scrollbar-gutter:stable_both-edges] bg-white dark:bg-zinc-950 ${controlsHost ? 'px-4 sm:px-8 pt-6 pb-10' : 'px-14 sm:px-20 pt-16 pb-24'}`}>
+      <div ref={surface} className="mushaf-svg-surface mx-auto text-zinc-900 dark:text-zinc-100" style={{ width: `${zoom}%`, containerType: 'inline-size', maxWidth: zoom === 100 ? `min(100%, calc((100cqh - ${controlsHost ? '4rem' : '10rem'}) * 0.68))` : undefined }} onClick={event => {
         const target = targetAt(event);
         if (clickTimer.current) clearTimeout(clickTimer.current);
         clickTimer.current = setTimeout(() => select(target), 250);
