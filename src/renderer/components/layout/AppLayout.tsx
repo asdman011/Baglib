@@ -20,8 +20,7 @@ import { useAthan } from '../../hooks/useAthan';
 import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
 import { LECTURE_OPEN_EVENT } from '../../utils/lecture-navigation';
 import { STUDY_NOTE_OPEN } from '../../utils/study-navigation';
-import { Settings } from 'lucide-react';
-import { SaveSettings } from './SaveSettings';
+import { FirstRunGuide } from './FirstRunGuide';
 import { SettingsDirectory } from './SettingsDirectory';
 import { useAppCloseBridge } from '../../utils/close-guard';
 import { StudyDeepLinkBridge } from '../notes/StudyDeepLinkBridge';
@@ -236,15 +235,7 @@ export const AppLayout: React.FC = () => {
             {viewMode === 'categories' && <CategoriesOverviewView />}
             {viewMode === 'reader' && <FullPageBookReader />}
             {viewMode === 'notes' && <NotesOverviewView />}
-            {viewMode === 'settings' && (
-              <div className="flex-1 min-h-0 flex flex-col items-center justify-start overflow-y-auto overscroll-contain p-4 sm:p-8 text-center text-muted font-sans space-y-3 [&>svg]:shrink-0">
-                <Settings className="w-10 h-10 text-primary-text" />
-                <h2 className="font-bold text-lg text-main font-display">{t('settingsTitle')}</h2>
-                <p className="text-xs text-muted max-w-sm">{t('settingsDesc')}</p>
-                <SaveSettings />
-                <SettingsDirectory />
-              </div>
-            )}
+            {viewMode === 'settings' && <SettingsDirectory athan={athanState} />}
           </React.Suspense>
           {companionViews.includes(viewMode) && <CompanionToggle open={companion.open} onToggle={companion.toggle} />}
         </main>
@@ -274,6 +265,7 @@ export const AppLayout: React.FC = () => {
 
       {/* System & Support Sheet */}
       <SupportSheet />
+      <FirstRunGuide ready={!showSplash} />
     </div>
   );
 };

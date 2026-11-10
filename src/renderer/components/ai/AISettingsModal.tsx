@@ -2,6 +2,7 @@
 import { errorMessage } from '../../../shared/errors';
 
 
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
@@ -109,10 +110,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   };
 
+  const dialogRef = useDialogFocus(isOpen, () => { if (!isLoading && !isTesting) onClose(); });
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('aiSettingsModalTitle')} tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div
         className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden text-start"
         onClick={(e) => e.stopPropagation()}

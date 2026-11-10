@@ -1,5 +1,6 @@
 'use client';
 
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import React, { useState, useEffect } from 'react';
 import { X, BookOpen, AlertCircle, CheckCircle2, RotateCw } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -53,6 +54,8 @@ export function QuranWirdSettingsModal({ isOpen, onClose, onSaved }: QuranWirdSe
       alive = false;
     };
   }, [isOpen]);
+
+  const dialogRef = useDialogFocus(isOpen, () => { if (!isSaving) onClose(); });
 
   if (!isOpen) return null;
 
@@ -134,6 +137,8 @@ export function QuranWirdSettingsModal({ isOpen, onClose, onSaved }: QuranWirdSe
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       data-quran-wird-settings-modal
       aria-modal="true"

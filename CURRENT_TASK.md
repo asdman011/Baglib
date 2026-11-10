@@ -1,3 +1,38 @@
+## KEY-307 verified - 2026-11-11, Codex (key307-20261111)
+
+Implemented U13 under KEY-294 / Library. Settings is one calm searchable page with 31 entries across the ten requested groups, bilingual name/description indexing through existing Arabic normalization, Advanced disclosure, and existing setting editors. Search-source switches persist through the existing provider API. The first-run guide waits for the KEY-150 splash callback, offers language/theme, an import-source folder, read-only pack status and first-import handoff, and persists completion/skip in existing settings storage. Help reopens it. About/Support shows native version/data path, fixed-path logs access, the KEY-316 shortcut sheet and a problem-report link. Existing bridge-less Support preview and Quran entry selector contracts remain compatible. Four reused dialogs gained existing shared focus/Escape handling.
+
+UX changes. Search works across Arabic and English regardless of interface language, including tashkeel/hamza and mixed API text. Saving is reachable from the directory instead of occupying its header. The guide has four small steps and can be skipped. Support actions fit at 480 px. No schema, dependency or download was added.
+
+Verification. Sequential tsc passed. Changed-file eslint has 0 errors and 5 pre-existing warnings in reused AI/lock/plugin files. Focused 16/16 passed, including existing shell/usability tests. New directory files add 7 tests. Main build and diff checks passed. Final native matrix 8/8 passed in ar/en, light/dark, 1280/480 px with zero renderer errors, guide completion/skip, reload persistence, Help reopen, bilingual search, nine existing editors and shortcut/log/report wiring. 138 screenshots retained. Directly inspected final en-light-480-directory, en-light-480-guide-packs, en-light-480-about, ar-dark-480-guide-language and ar-dark-480-search-mixed. Evidence `.baglib-data/KEY-307-evidence/2026-11-10T23-20-59-161Z/`. The one final full npm test at concurrency 2 passed 1786/1786 across 334 suites in 130.76 seconds. Existing tests were never edited or deleted.
+
+Verification boundaries. The harness stages real ar/en PDFs, then cancels before the unchanged import pipeline creates its separate hidden cover BrowserWindow. An earlier attempted import hit the single-window guard and was stopped/cleaned. Actual OS folder/browser opening is intercepted, and the CJS harness supplies the product package version. Device pack availability is read through existing APIs. Missing-profile-layout warnings are expected in the throwaway profile. External sync and biometrics were not exercised. Earlier text-encoding and dialog-dismissal problems were fixed before the final matrix. All six run profiles were deleted. No original book/corpus edits, generated corpus copies or scratch profiles remain.
+
+Publication. User explicitly authorized this scoped commit and normal push to origin/feature/library-domain through commit.lock. Claude owns review and Jira. No Jira mutation. Unrelated changes, protected paths, and other agents' state hunks remain excluded. IMPLEMENTATION_PLAN.md, the local board and report were updated separately.
+
+Exact 19 files for the task commit
+
+- `src/main/ipc/system.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/ai/AISettingsModal.tsx`
+- `src/renderer/components/dashboard/QuranWirdSettingsModal.tsx`
+- `src/renderer/components/layout/AppLayout.tsx`
+- `src/renderer/components/layout/FirstRunGuide.tsx`
+- `src/renderer/components/layout/SearchProviderSettings.tsx`
+- `src/renderer/components/layout/SettingsDirectory.tsx`
+- `src/renderer/components/layout/SupportSheet.tsx`
+- `src/renderer/components/layout/settings-directory-model.ts`
+- `src/renderer/components/plugins/ReaderPluginsModal.tsx`
+- `src/renderer/components/security/AppLockModal.tsx`
+- `src/renderer/translations.ts`
+- `scripts/settings-ui-live/main.cjs`
+- `scripts/settings-ui-live/run.mjs`
+- `tests/ui/settings-directory-search.test.ts`
+- `tests/ui/settings-directory-coverage.test.ts`
+- `docs/features/Usability Inspection.md`
+- `CURRENT_TASK.md`
+
+
 ## KEY-308 part 5 verified — 2026-11-11, Claude Code (at the user's request)
 
 **Reader header no longer loses its last controls when the reading panel is open.**

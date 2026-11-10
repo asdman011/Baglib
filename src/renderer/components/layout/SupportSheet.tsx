@@ -1,86 +1,35 @@
 'use client';
-
-import React from 'react';
-import { BookOpen, Database, ShieldCheck, Cpu } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { Sheet } from '../ui/Sheet';
-import { Button } from '../ui/Button';
+import { Sheet, Button } from '../ui';
+import packageMetadata from '../../../../package.json';
+import { shortcutHint } from '../actions/shortcuts';
 
-export const SupportSheet: React.FC = () => {
-  const { isSupportSheetOpen, setIsSupportSheetOpen, t, lang } = useWorkspace();
-
-  if (!isSupportSheetOpen) return null;
-
-  return (
-    <Sheet
-      open={Boolean(isSupportSheetOpen)}
-      onClose={() => setIsSupportSheetOpen(false)}
-      side="end"
-      title={
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text font-bold">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-main font-display leading-tight">{t('supportSheetTitle')}</h2>
-            <p className="text-[11px] text-muted font-sans leading-tight">{t('supportSheetDesc')}</p>
-          </div>
-        </div>
-      }
-    >
-      <div className="space-y-4 text-xs font-sans text-main">
-        {/* Scholar Grade Brand Card */}
-        <div className="p-3.5 rounded-xl bg-canvas border border-subtle space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-sm text-main font-display">{t('brand')}</span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary-text border border-primary-text/20">
-              v0.1.0-alpha
-            </span>
-          </div>
-          <p className="text-muted text-[11px] leading-relaxed">
-            {t('brandSubtitle')} — {lang === 'ar' ? 'بيئة مكتبية ودراسية متكاملة للباحث وطالب العلم.' : 'Integrated scholarly library and study workspace.'}
-          </p>
-        </div>
-
-        {/* Local-First Storage Guarantee */}
-        <div className="p-3.5 rounded-xl bg-surface border border-subtle space-y-2">
-          <div className="flex items-center gap-2 text-primary-text font-bold">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span>{t('supportDataLocation')}</span>
-          </div>
-          <div className="flex items-start gap-2 text-muted text-[11px] leading-relaxed">
-            <Database className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            <span>{t('localLibraryStorage')}</span>
-          </div>
-          <p className="text-[11px] text-muted leading-relaxed pt-1 border-t border-subtle/50">
-            {t('supportLocalFirstPromise')}
-          </p>
-        </div>
-
-        {/* Runtime Environment Info */}
-        <div className="p-3 rounded-xl bg-canvas border border-subtle space-y-1.5">
-          <div className="flex items-center gap-2 text-muted font-semibold text-[11px]">
-            <Cpu className="w-3.5 h-3.5" />
-            <span>{t('supportEnvironment')}</span>
-          </div>
-          <div className="font-mono text-[10px] text-muted space-y-0.5">
-            <div>Platform: Electron / Chromium Desktop</div>
-            <div>Database: SQLite3 + FTS5 Full-Text Search</div>
-            <div>Storage Engine: Local Filesystem (.baglib-data)</div>
-          </div>
-        </div>
-
-        {/* Dismiss Button */}
-        <div className="pt-2">
-          <Button
-            variant="secondary"
-            className="w-full justify-center"
-            onClick={() => setIsSupportSheetOpen(false)}
-          >
-            {t('close')}
-          </Button>
-        </div>
+export function SupportSheet() {
+  const { isSupportSheetOpen, setIsSupportSheetOpen, t } = useWorkspace();
+  const [info, setInfo] = useState<Awaited<ReturnType<typeof window.electronAPI.getSystemInfo>> | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!isSupportSheetOpen || !window.electronAPI?.getSystemInfo) return;
+    let alive = true;
+    void window.electronAPI.getSystemInfo().then(value => { if (alive) { setInfo(value); setFailed(false); } }, () => { if (alive) setFailed(true); });
+    return () => { alive = false; };
+  }, [isSupportSheetOpen]);
+  return <Sheet open={!!isSupportSheetOpen} onClose={() => setIsSupportSheetOpen(false)} side="end" title={t('settingAbout')}>
+    <div data-about-support className="space-y-6 text-start text-sm leading-loose text-main">
+      <h2 className="font-display text-xl">{t('brand')}</h2>
+      <dl className="space-y-4">
+        <div><dt className="text-muted">{t('supportVersion')}</dt><dd dir="auto">{info?.version || `v${packageMetadata.version}-alpha`}</dd></div>
+        <div><dt className="text-muted">{t('supportDataLocation')}</dt><dd dir="auto" className="break-all select-text">{info?.dataLocation || t('loading')}</dd></div>
+        <div><dt className="text-muted">{t('supportEnvironment')}</dt><dd>Electron / Chromium</dd></div>
+      </dl>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" data-support-logs onClick={() => { void window.electronAPI.openLogsFolder().then(error => setFailed(!!error), () => setFailed(true)); }}>{t('supportLogs')}</Button>
+        <Button variant="secondary" data-support-shortcuts onClick={() => { setIsSupportSheetOpen(false); window.dispatchEvent(new Event('baglib:shortcut-help')); }}>{t('shortcutSheet')} <kbd dir="ltr">{shortcutHint('help')}</kbd></Button>
+        <Button variant="secondary" data-support-guide onClick={() => window.dispatchEvent(new Event('baglib:first-run'))}>{t('settingGuide')}</Button>
       </div>
-    </Sheet>
-  );
-};
+      <section className="space-y-3"><h3 className="font-semibold">{t('supportReport')}</h3><p className="text-muted">{t('supportReportHint')}</p><Button variant="secondary" data-support-report onClick={() => { void window.electronAPI.openExternal('https://github.com/asdman011/Baglib/issues/new').then(opened => setFailed(!opened), () => setFailed(true)); }}>{t('supportReport')}</Button></section>
+      {failed && <p role="alert">{t('studyActionFailed')}</p>}
+    </div>
+  </Sheet>;
+}

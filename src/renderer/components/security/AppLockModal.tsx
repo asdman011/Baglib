@@ -8,6 +8,7 @@ import { errorMessage } from '../../../shared/errors';
  * - Configurable inactivity timeouts and private shelf isolation
  */
 
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import React, { useState, useEffect } from 'react';
 import {
   Shield,
@@ -107,6 +108,8 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
 
     }
   }, [isOpen, isLockScreen]);
+
+  const dialogRef = useDialogFocus(isOpen, () => { if (!isLockScreen && !authenticating) onClose(); });
 
   if (!isOpen) return null;
 
@@ -243,6 +246,8 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
       className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in ${
         isLockScreen ? 'cursor-default' : ''
       }`}
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label={t.securityModalTitle}

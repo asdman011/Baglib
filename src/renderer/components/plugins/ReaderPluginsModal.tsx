@@ -7,6 +7,7 @@
  * - TTS voice providers
  */
 
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import React, { useState, useEffect } from 'react';
 import {
   Puzzle,
@@ -54,6 +55,8 @@ export const ReaderPluginsModal: React.FC<ReaderPluginsModalProps> = ({
     }
   }, [isOpen]);
 
+  const dialogRef = useDialogFocus(isOpen, onClose);
+
   if (!isOpen) return null;
 
   const handleToggle = async (id: string, currentState: boolean) => {
@@ -83,6 +86,8 @@ export const ReaderPluginsModal: React.FC<ReaderPluginsModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label={t.pluginsModalTitle}

@@ -1,7 +1,7 @@
 import * as ipcModule0 from 'electron';
 import * as ipcModule1 from '../services/shield/content-shield.service';
 import { errorMessage } from '../../shared/errors';
-import { ipcMain, app, dialog } from 'electron';
+import { ipcMain, app, dialog, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
@@ -26,7 +26,15 @@ export function setupSystemIPC() {
       platform: process.platform,
       arch: process.arch,
       version: app.getVersion(),
+      dataLocation: app.getPath('userData'),
+      logsLocation: app.getPath('logs'),
     };
+  });
+
+  ipcMain.handle('system:open-logs', async () => {
+    const folder = app.getPath('logs');
+    await fs.promises.mkdir(folder, { recursive: true });
+    return shell.openPath(folder);
   });
 
   // Native Electron OS File Picker Dialog

@@ -64,11 +64,22 @@ Impact: users cannot readily distinguish an unavailable store from an empty coll
 
 ### U6 — Settings is not a reliable directory of available settings
 
+#### KEY-307 / U13 implementation - 2026-11-11, Codex
+
+Settings now has one searchable page with 31 entries in the ten requested groups. Each entry indexes its Arabic and English name and description through the existing Arabic search normalizer. Advanced stays behind a disclosure. SaveSettings and the provider, storage, sync, AI, lock, extension and wird editors remain the configuration owners. Search-source switches use the existing persisted provider API. New coverage scans registered preference constants across the source tree and checks directory membership, with explicit exclusions for content, caches and derived lock secrets.
+
+The once-only guide starts after the KEY-150 splash completion callback and stores its seen flag and optional import-source folder in the existing app_settings key-value store. Its pack step reads catalog/status APIs. Its final action opens the existing import wizard with the chosen folder. Help reopens the guide. About/Support reads the native version and data path, opens the fixed native logs directory, links to the KEY-316 shortcut sheet and offers the project's GitHub issue form.
+
+Sequential verification passed TypeScript, changed-file lint (zero errors, five existing warnings), 16 focused checks, the main build and whitespace checks. The final native matrix passed all eight ar/en, light/dark, 1280/480 combinations with zero renderer errors. Evidence is in `.baglib-data/KEY-307-evidence/2026-11-10T23-20-59-161Z/`. Five final screenshots were directly inspected. The profile was deleted. The single final full-suite run passed 1786/1786 tests across 334 suites at concurrency two. CURRENT_TASK.md and the local KEY-307 report record the full handoff.
+
+The native harness stages real Arabic/English PDFs and cancels the import wizard before the PDF-cover pipeline creates its additional hidden BrowserWindow. It verifies guide completion and import handoff, with shell folder/URL calls intercepted. It supplies the product package version because its CJS launch entry otherwise reports Electron's version. External sync, actual OS folder/browser opening and biometric authentication are outside these checks. Corpus availability reflects the device's installed resources, with the expected missing-layout warning in the isolated profile. No schema, dependency or download was added.
+
+
 **Implemented 2026-11-07:** SettingsDirectory adds localized searchable shortcuts, existing theme/language actions, direct access to the original provider/sync dialogs and clearly described navigation to Quran/Library tools. SaveSettings remains unchanged. The outdated future-only description is replaced; no preference store was duplicated. Search uses the existing derived-text normalizer and leaves canonical content untouched.
 
 Evidence: bilingual component checks exercise theme changes, Quran navigation and diacritized Arabic settings search. Actual-app recovery run opens/closes existing provider and sync dialogs in Arabic/English and checks short-window overflow. It does not save provider/cloud credentials, perform synchronization or certify external services.
 
-`AppLayout.tsx` currently renders the settings title/description plus `SaveSettings`. The centralized description says fonts/display/sync are reserved for future updates, while sync, provider and other settings already exist in separate workflow dialogs. Those settings are not linked from this view.
+Historical inspection: `AppLayout.tsx` rendered the settings title/description plus `SaveSettings`. The centralized description says fonts/display/sync are reserved for future updates, while sync, provider and other settings already exist in separate workflow dialogs. Those settings are not linked from this view.
 
 Impact: users may conclude a feature is unavailable or need to remember which reader/library dialog contains its configuration. Recommendation: make Settings an honest, searchable directory linking existing controls, without inventing new preferences or duplicated state. Source verified; preference storage was not changed.
 
