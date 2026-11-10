@@ -1,3 +1,26 @@
+## KEY-308 part 5 verified — 2026-11-11, Claude Code (at the user's request)
+
+**Reader header no longer loses its last controls when the reading panel is open.**
+
+**Diagnosis**, from a throwaway DOM probe in the live app with the real ar and en PDFs:
+- The PDF header lives inside `[data-reader-content]`. That area shrinks by the panel's width (320 px), so the header goes from 1280 to 960 px.
+- The header needed 1026 px (`flex-nowrap`, no shrinking), so its last 66 px were clipped. That hid ⋯ and full screen, and half of save, in both directions.
+- The header's own hide rules used window breakpoints (`min-[1000px]`, `min-[1100px]`), so they never kicked in while the window stayed wide.
+
+**Fix:**
+- The header is now a container (`@container`). The view-mode/zoom/fit group and the save label use `@min-[1000px]` / `@min-[1100px]`, so they follow the header's real width.
+- Those controls stay reachable in the ⋯ menu, which already lists the view modes, zoom and fit.
+- After the fix the probe measured 960/960 px with every button inside the header, in ar and en.
+
+**Guard:** `scripts/reader-chrome-live` now asserts that, with the desktop panel open, the header doesn't overflow and its last button sits inside it.
+
+**Verification:**
+- `npx tsc --noEmit` passes. ESLint: 0 errors.
+- Full `npm test --test-concurrency=2`: 1779/1779.
+- `reader-chrome-live` passed in every case (ar and en, light and dark, 1280 and 480 px, PDF and EPUB) with the new assertion. I inspected the ar dark 1280 panel screenshot.
+
+**Files:** `src/renderer/components/reader/ReaderHeader.tsx`, `scripts/reader-chrome-live/main.cjs`, `CURRENT_TASK.md`.
+
 ## KEY-308 part 4 verified — 2026-11-10, Claude Code (at the user's request)
 
 **Task counts now use real plural forms.** A new `src/renderer/utils/task-count.ts` uses `Intl.PluralRules`, plus four keys in each language (`taskCountOne`, `taskCountTwo`, `taskCountFew`, `taskCountOther`):

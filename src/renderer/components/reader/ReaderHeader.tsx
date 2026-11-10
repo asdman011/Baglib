@@ -97,7 +97,7 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
     <header ref={headerRef} id={toolbarId} data-reader-top-bar data-reader-shared-header data-pdf-header={format === 'PDF' ? '' : undefined} role="toolbar" aria-label={t('a11yToolbarLandmark')} dir={dir}
       onFocusCapture={() => setHasFocus(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHasFocus(false); }}
       onMouseEnter={() => { setPeek(true); onMouseEnter?.(); }} onMouseLeave={() => { setPeek(false); onMouseLeave?.(); }}
-      className={`${focusMode ? 'absolute top-0 inset-x-0' : 'relative'} z-40 flex h-14 min-h-14 w-full shrink-0 flex-nowrap items-center gap-1 border-b border-border bg-surface/95 px-2 text-text backdrop-blur-xl select-none transition-[transform,opacity] duration-200 motion-reduce:transition-none`}
+      className={`${focusMode ? 'absolute top-0 inset-x-0' : 'relative'} @container z-40 flex h-14 min-h-14 w-full shrink-0 flex-nowrap items-center gap-1 border-b border-border bg-surface/95 px-2 text-text backdrop-blur-xl select-none transition-[transform,opacity] duration-200 motion-reduce:transition-none`}
       style={{ transform: shown ? 'translateY(0)' : 'translateY(-110%)', opacity: shown ? 1 : 0, pointerEvents: shown ? 'auto' : 'none' }}>
       <IconButton size="sm" label={t('backToLibrary')} onClick={onClose} className="shrink-0"><ArrowLeft className="size-4 rtl:rotate-180" /></IconButton>
       <div className="min-w-0 flex-1 text-start" title={[title, author].filter(Boolean).join(' · ')}>
@@ -108,7 +108,8 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
         <input data-reader-go-to type="number" min={1} max={total} aria-label={t('readerGoToPage')} value={goTo ?? page ?? 1} onChange={event => setGoTo(event.target.value)} onBlur={() => setGoTo(null)} className="w-11 rounded-md border border-border bg-canvas px-1 py-1.5 text-center tabular-nums focus-visible:outline-focus" />
         <span className="hidden sm:inline text-text-muted whitespace-nowrap">/ {number(total ?? 1)}</span>
       </form>}
-      <div className="hidden min-[1000px]:flex shrink-0 items-center gap-1">
+      {/* KEY-308: breakpoints follow the header's own width; the open side panel narrows it while the window stays wide. These controls are also in the ⋯ menu. */}
+      <div className="hidden @min-[1000px]:flex shrink-0 items-center gap-1">
         <select aria-label={t('readerViewMode')} value={viewMode} onChange={event => { if (event.target.value === 'reflow') onReflow?.(); else onViewMode(event.target.value as ReaderViewMode); }} className="max-w-28 rounded-lg border border-border bg-canvas px-2 py-1.5 text-xs leading-relaxed">
           {modes.map(([mode, label]) => <option key={mode} value={mode}>{t(label)}</option>)}
           {onReflow && <option value="reflow">{t('pdfA11yReflowReader')}</option>}
@@ -121,7 +122,7 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
       <IconButton size="sm" label={t('searchInBook')} data-reader-search onClick={onSearch} className="shrink-0"><Search className="size-4" /></IconButton>
       <IconButton size="sm" label={t(format === 'PDF' ? 'pdfCompactToolsBtn' : 'typographySettings')} data-reader-tools onClick={onTools} className="shrink-0"><Wrench className="size-4" /></IconButton>
       <span data-reader-ocr-status-slot className="inline-flex shrink-0 empty:hidden">{ocrChip}</span>
-      <span data-pdf-save-state={saveState} role="status" title={saveLabel ?? t('readerMarksRecorded')} className="hidden min-[1100px]:inline-flex shrink-0 items-center gap-1 text-[10px] text-text-muted"><Check className="size-3" />{saveLabel ?? t('readerMarksRecorded')}</span>
+      <span data-pdf-save-state={saveState} role="status" title={saveLabel ?? t('readerMarksRecorded')} className="hidden @min-[1100px]:inline-flex shrink-0 items-center gap-1 text-[10px] text-text-muted"><Check className="size-3" />{saveLabel ?? t('readerMarksRecorded')}</span>
       {onSave && <IconButton size="sm" label={t('pdfSaveDocument')} data-reader-save disabled={saveDisabled} onClick={onSave} className="shrink-0"><Save className="size-4" /></IconButton>}
       {onFocusMode && <IconButton size="sm" label={t('zenModePurePage')} aria-keyshortcuts="F11" aria-pressed={focusMode} data-reader-focus-toggle onClick={event => { event.currentTarget.blur(); setPinned(false); setPeek(false); onFocusMode(!focusMode); }} className="shrink-0"><Maximize2 className="size-4" /></IconButton>}
       <Menu align="end" trigger={props => <IconButton {...props} size="sm" label={t('pdfHeaderMore')} data-pdf-header-more className="shrink-0"><MoreHorizontal className="size-4" /></IconButton>} items={overflow} className="max-h-[75vh] overflow-y-auto" />

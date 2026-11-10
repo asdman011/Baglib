@@ -69,6 +69,11 @@ app.on('browser-window-created', (_, win) => {
       await until('!!document.querySelector("[data-reader-side-panel]")');
       assert.deepEqual(await evaluate('[...document.querySelectorAll("[data-reader-panel-tab]")].map(e=>e.dataset.readerPanelTab)'), ['toc', 'knowledge', 'annotations', 'search']);
       assert.equal(await evaluate('!!document.querySelector("[data-reader-panel-sheet]")'), width === 480);
+      // KEY-308: the open desktop panel narrows the header; every header control must stay inside it.
+      if (width > 480) {
+        const open = await evaluate(`(()=>{const h=document.querySelector('[data-reader-shared-header]'),r=h.getBoundingClientRect();const last=[...h.querySelectorAll('button')].pop().getBoundingClientRect();return {overflow:h.scrollWidth-h.clientWidth,inside:last.left>=r.left-1&&last.right<=r.right+1};})()`);
+        assert.ok(open.overflow <= 1 && open.inside, prefix + ' header overflows with the panel open ' + JSON.stringify(open));
+      }
       await click('[data-reader-panel-tab="knowledge"]');
       await until('document.querySelector("[data-reader-panel-tab=knowledge]")?.getAttribute("aria-selected")==="true"');
       await shot(prefix + '-panel');
