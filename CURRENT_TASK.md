@@ -1,3 +1,49 @@
+## KEY-295 — 2026-11-10, Antigravity (implemented and verified)
+
+- Implementation & Verification: UI baseline audit of every screen against the user's FigJam vision (U1).
+  - Executed automated live audit harness (`scripts/ui-audit-live/run.mjs` and `scripts/ui-audit-live/audit.cjs`) driving real Electron with disposable profile `.baglib-data/key295-profile/` and Turbopack dev server.
+  - Seeded real test files directly:
+    - Arabic text-layer PDF (`tests/real-files/pdf/ar/text-layer/الدفاع عن اراضي المسلمين اهم فروض الاعيان للشيخ عبدالله عزام.pdf`)
+    - English text-layer academic PDF (`tests/real-files/pdf/en/text-layer/Why lyrics last_ evolution, cognition, and Shakesp.pdf`)
+    - English magazine PDF (`tests/real-files/pdf/en/text-layer/New Scientist International Edition - 19_November_2016.pdf`)
+    - Arabic scanned PDF (`tests/real-files/pdf/ar/scanned-image-only/تفسير الموعذتين لابن تيمية.pdf`, tested strictly image-only, zero OCR performed)
+    - English EPUB small (`tests/real-files/epub/en/Why Would Feminists Trust the Police -- Leah Cowan -- Verso 2024 -- Anna’s Archive.epub`)
+    - English EPUB textbook (`tests/real-files/epub/en/Fundamentals of Cost Accounting - Lanen, William;Anderson, Shanno.epub`)
+    - Audio track (`tests/real-files/audio/en/Great Expectations [Book on Disc] Disc 1/01 An Encounter in the Churchyard.wma`)
+    - Physical book record (`مقدمة ابن خلدون`, with room, bookcase, and shelf locations)
+    - Quran, Sunnah, and Poetry packs copied safely via `scripts/lib/corpus-copy.mjs`. All 1,340 original corpus files verified unchanged upon test completion.
+  - Captured 177 evidence screenshots in `.baglib-data/KEY-295-evidence/` covering the full matrix:
+    - Languages: `ar` (RTL) & `en` (LTR)
+    - Themes: `light` (Parchment) & `dark` (Scholar Night)
+    - Viewports: `1280px` & `480px`
+    - Screens & modals: Library (grid, list, filters, bulk), Book Detail modal, Import Wizard modal, PDF Reader (markup bar & workstation tools), EPUB Reader, Notes Overview, Knowledge Cards Review, Boards Canvas, Home Dashboard, Study Planner, Pathways, Quran Reader, Sunnah Reader, Bayan Poetry, Research/Lectures, Settings Directory, Command Palette (`Ctrl+K`), and Search Hub.
+  - Walked the six user journeys from section 4, logging findings:
+    - Journey 1 (Import, filter, mark physical): Partial (seed/filter works; visual physical/digital card tag and topic/author side rail missing).
+    - Journey 2 (PDF read, markup, save, reopen): Working with friction (tools functional; top bar overcrowded with 15+ tool icons).
+    - Journey 3 (Note from passage, make card, review): Working with friction (notes functional; SRS review buried at page bottom rather than a dedicated view).
+    - Journey 4 (Dashboard plan, prayer snooze): Broken (Today panel works; prayer snooze feature from wishlist is absent from codebase).
+    - Journey 5 (Ayah & Hadith comparison, tafsir, link to note): Broken (no unified Islamic Studies hub; no side-by-side tafsir; no 1-click citation link).
+    - Journey 6 (Curriculum template & first step): Working with friction (templates work; isolated from Research/Roadmap; lacks inline step progress).
+  - Populated Section 6 of `docs/features/feature - UI UX Vision Program.md` with area-by-area gap tables (Gap, Severity, Evidence, Fixed by) and listed unassigned items in "Not covered by any U-task".
+  - Detailed report compiled in `docs/agent-ops/reports/KEY-295.md`.
+  - Zero application code changed (read-only audit). Zero schema changes, zero new dependencies, zero downloads.
+- Exact task files:
+  - `docs/features/feature - UI UX Vision Program.md` (section 6 only)
+  - `scripts/ui-audit-live/audit.cjs`
+  - `scripts/ui-audit-live/run.mjs`
+  - `docs/agent-ops/reports/KEY-295.md`
+  - `docs/agent-ops/board.md`
+  - `CURRENT_TASK.md`
+  - `IMPLEMENTATION_PLAN.md`
+
+## UI/UX Vision Program planning — 2026-11-10, Claude Code (planning only, no code)
+
+- User request: make a plan and tasks to improve the UI and UX of every part of the app and turn the Figma vision into a polished program, then run it with the other agents.
+- Read the FigJam board `baglib` (4TZ6QkfONsXCPwo4Jd4yrd), the only Figma file. The vision crops are in `docs/features/ui-vision/`.
+- Plan: `docs/features/feature - UI UX Vision Program.md` (decisions D1–D5, principles, 15 tasks, six journeys, dispatch).
+- Jira (standing permission): epic KEY-294, tasks KEY-295 to KEY-309 (U1–U15), all with existing labels and parent KEY-294. KEY-290 Done after review of 96f79de; KEY-295 In Progress (Antigravity via agy).
+- No code, no schema changes, no dependencies. Git: these docs are not committed by Claude.
+
 ## KEY-290 — 2026-11-10, Antigravity (implemented and verified)
 
 - Implementation & Verification: "Link target not found" notice can be dismissed and times out (follow-up to KEY-277).
