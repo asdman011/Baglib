@@ -60,6 +60,10 @@
   --color-subtle: var(--border-subtle);
   --color-main: var(--text-main);
   --color-muted: var(--text-muted);
+  --color-scrollbar-track: var(--scrollbar-track);
+  --color-scrollbar-thumb: var(--scrollbar-thumb);
+  --color-scrollbar-thumb-hover: var(--scrollbar-thumb-hover);
+  --color-scrollbar-thumb-active: var(--scrollbar-thumb-active);
 
   /* Warm Beige Parchment Palette (ورقي عتيق) */
   --color-parchment-50: #fbf9f4;
@@ -159,6 +163,13 @@
     --border-subtle: var(--color-border-val);
     --text-main: var(--color-text-val);
     --text-muted: var(--color-text-muted-val);
+
+    /* Global Themed Scrollbar Tokens (KEY-315: warm grey thumb on light, darker on hover) */
+    color-scheme: light;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: color-mix(in srgb, var(--color-text-muted-val) 48%, var(--color-border-val));
+    --scrollbar-thumb-hover: var(--color-text-muted-val);
+    --scrollbar-thumb-active: color-mix(in srgb, var(--color-text-val) 75%, var(--color-text-muted-val));
   }
 
   .dark {
@@ -202,6 +213,13 @@
     --border-subtle: var(--color-border-val);
     --text-main: var(--color-text-val);
     --text-muted: var(--color-text-muted-val);
+
+    /* Global Themed Scrollbar Tokens (KEY-315: subtle light-grey thumb on dark, darker on hover) */
+    color-scheme: dark;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: color-mix(in srgb, var(--color-text-muted-val) 62%, var(--color-border-val));
+    --scrollbar-thumb-hover: color-mix(in srgb, var(--color-text-muted-val) 45%, var(--color-border-val));
+    --scrollbar-thumb-active: var(--color-text-muted-val);
   }
 
   html,
@@ -368,13 +386,56 @@ mark.baglib-highlight-violet, mark.baglib-highlight-purple {
   background-color: rgba(192, 132, 252, 0.42) !important;
 }
 
-/* Study text owns one scroll region; keep its scrollbar consistent in both themes. */
-[data-quran-study-panel] > [tabindex="0"],
-[data-quran-inspector-layer] [tabindex="0"],
-[data-quran-popup],
-[data-quran-audio-dock] {
-  scrollbar-width: thin;
-  scrollbar-color: var(--text-muted) transparent;
+/* Global Themed Rounded Scrollbars (KEY-315 / U21)
+ * Applies to all scroll containers: library, reader side panels & canvas,
+ * notes, settings, modals, sheets, and Quran/Sunnah/Bayan study panels. */
+@supports not selector(::-webkit-scrollbar) {
+  *,
+  *::before,
+  *::after,
+  [data-quran-study-panel] > [tabindex="0"],
+  [data-quran-inspector-layer] [tabindex="0"],
+  [data-quran-popup],
+  [data-quran-audio-dock] {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+}
+
+.pdf-native-viewer-container {
+  scrollbar-width: auto !important;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  min-height: 28px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+  border-width: 1.5px;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-thumb-active);
+  border-width: 1.5px;
 }
 /* Startup Splash Orchestrator Animations */
 @keyframes splash-draw {

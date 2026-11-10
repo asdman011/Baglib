@@ -1,6 +1,6 @@
 'use client';
 
-import { CompanionNotePane, CompanionToggle, useCompanionPane } from '../notes/CompanionNotePane';
+import { CompanionNotePane, CompanionToggle, isCompanionShortcut, useCompanionPane } from '../notes/CompanionNotePane';
 import React from 'react';
 import { Titlebar } from './Titlebar';
 import { CommandPalette } from './CommandPalette';
@@ -75,7 +75,8 @@ export const AppLayout: React.FC = () => {
   const companionViews: string[] = ['reader', 'quran', 'sunnah', 'bayan', 'lectures'];
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'm' && companionViews.includes(viewMode)) { event.preventDefault(); companion.toggle(); }
+      if (event.defaultPrevented) return;
+      if (isCompanionShortcut(event) && companionViews.includes(viewMode)) { event.preventDefault(); companion.toggle(); }
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);

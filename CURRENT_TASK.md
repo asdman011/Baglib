@@ -1,3 +1,37 @@
+## KEY-315 — 2026-11-10, Antigravity (pushed)
+
+Session `6a383cbf-8075-4cf1-849f-badba626cd6a`. Implemented **KEY-315 (UI/UX U21)**: Themed rounded scrollbars app-wide and a side-note tab that collapses to an edge tip.
+
+1. **Global Themed Rounded Scrollbars (`src/renderer/app/globals.css`):**
+   - Added `--scrollbar-track`, `--scrollbar-thumb`, `--scrollbar-thumb-hover`, and `--scrollbar-thumb-active` in `@theme`, `:root` (`color-scheme: light`), and `.dark` (`color-scheme: dark`) derived from semantic surface, border, and muted-text tokens via `color-mix(in srgb, ...)`.
+   - Dark theme uses a subtle light slate-grey pill thumb (`color-mix(in srgb, var(--color-text-muted-val) 62%, var(--color-border-val))`, never white); light theme uses a warm parchment-grey pill thumb (`color-mix(in srgb, var(--color-text-muted-val) 48%, var(--color-border-val))`).
+   - Added `scrollbar-width: thin` and `scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track)` scoped under `@supports not selector(::-webkit-scrollbar)` plus `*::-webkit-scrollbar*` pseudo-elements (`10px` track, `border-radius: 9999px` thumb, `3px` transparent border at rest expanding to `1.5px` on `:hover` / `:active` for a wider, darker thumb).
+   - Overrode `.pdf-native-viewer-container { scrollbar-width: auto !important; }` so needed reader scrollbars are never hidden.
+
+2. **Collapsible Side-Note Tab (`src/renderer/components/notes/CompanionNotePane.tsx` & `src/renderer/components/layout/AppLayout.tsx`):**
+   - **At rest:** renders as a small `10px` (`COMPANION_REST_WIDTH_PX = 10`, `8–12 px` range) edge tip (`data-companion-toggle`, `data-state="rest"`, `end-0`) showing only `<NotebookPen size={10} />` and no text.
+   - **On hover or keyboard focus:** slides out (`data-state="expanded"`, `32px` width) with a focus outline and localized floating tooltip (`[data-companion-tooltip]`, `role="tooltip"`) displaying `t('companionOpen')` (`Ctrl+Shift+M`).
+   - **On click / shortcut:** clicking the tab or pressing `Ctrl+Shift+M` / `Cmd+Shift+M` (`isCompanionShortcut`, supporting Latin `m` and Arabic keyboard `ة` / `KeyM`) toggles the companion side-note pane (`[data-companion-pane]`).
+   - **Placement & collision avoidance:** placed on `end-0` (opposite the `start-0` navigation rail and KEY-310 nav peek trigger strip `[data-nav-peek-trigger-edge]`); `findNonCollidingTopPercent` inspects interactive controls and bottom sheets on mount, resize, and DOM mutation (`MutationObserver`), automatically shifting `topPercent` so the tab never covers interactive controls at `1280px` or `480px`.
+   - **Position memory:** persists `topPercent` and `edge` in `localStorage` under `baglib.companion.v1`, supporting pointer drag and `Alt+ArrowUp` / `Alt+ArrowDown`.
+
+3. **Verification & Evidence:**
+   - Focused UI & unit tests: `node --import tsx --test tests/ui/companion-side-note-tab.test.ts tests/ui/primitives.test.ts tests/ui/translation-keys.test.ts` — **16/16 pass**.
+   - Single final full test suite: `npm test -- --test-concurrency=2` — **1,734 / 1,734 pass** across 334 suites in 120.92 s (0 failures, 0 cancellations, 0 skips).
+   - Static checks: `npx tsc --noEmit` (0 errors), `npx eslint` on changed files (0 errors, 0 warnings), `npx tsup` build pass, `git diff --check` clean.
+   - Live Electron check (`scripts/scrollbars-sidenote-live/run.mjs`) passed with exit code 0 using real Arabic & English PDFs from `tests/real-files/`, capturing 32 screenshots in `.baglib-data/KEY-315-evidence/` across `ar`/`en`, `dark`/`light`, `1280px`/`480px`. Directly inspected 8 screenshots (`01-library-ar-dark-1280.png`, `01-library-ar-light-1280.png`, `03-notes-en-light-1280.png`, `05-reader-sidenote-rest-ar-dark-1280.png`, `06-reader-sidenote-expanded-ar-dark-1280.png`, `06-reader-sidenote-expanded-en-dark-1280.png`, `07-reader-sidenote-rest-ar-dark-480.png`, `08-reader-sidenote-open-en-light-1280.png`).
+   - Full report in `docs/agent-ops/reports/KEY-315.md`. Zero schema changes, zero new dependencies, zero downloads.
+
+Exact 8 task files changed:
+- `src/renderer/app/globals.css`
+- `src/renderer/components/notes/CompanionNotePane.tsx`
+- `src/renderer/components/layout/AppLayout.tsx`
+- `tests/ui/companion-side-note-tab.test.ts`
+- `scripts/scrollbars-sidenote-live/run.mjs`
+- `scripts/scrollbars-sidenote-live/main.cjs`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
 ## KEY-314 verified — 2026-11-10, Codex continuing Antigravity
 
 Session `01a1c50c-559e-7681-8efc-aa5e1025e62e`, continuing Antigravity `509e74c2-3f90-40fe-a5b6-efb4b7157a29`. Antigravity supplied the uncommitted catalogue, grouped directory, initial OCR/header integration and bottom-bar removal. Codex continued in place, fixed keyboard access, actual text-layer detection, normalized confidence, repeated chip focus and engine/layout controls, completed shared-primitives forms and added regression coverage.
