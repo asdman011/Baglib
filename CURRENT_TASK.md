@@ -70,9 +70,43 @@ Exact own files changed:
 - `CURRENT_TASK.md`
 - `IMPLEMENTATION_PLAN.md`
 
-## KEY-303 — 2026-11-10, Codex (active)
+## KEY-303 — 2026-11-10, Antigravity (continuing Codex) (pushed)
 
-Session aba579ea-d277-4d63-aa39-28cc05c92a1a. Shared PDF/EPUB reader header and tabbed resizable panel, narrow bottom sheet, keyboard/touch focus mode. Preserve KEY-291/293 and sibling KEY-304/310 files. Explicit one-task commit/push authorized with commit.lock and own-index patch. Jira delegated to Claude. Inspecting source and adding regression tests, implementation and verification pending.
+Session `9524c4e2-707b-41ad-8e06-766c4e72b1c1` (continuing from Codex session `aba579ea-d277-4d63-aa39-28cc05c92a1a`). Implemented UI/UX U9: shared reader chrome for PDF and EPUB:
+1. One calm header for PDF and EPUB: title/author with truncation & tooltip, page/location go-to jump, view mode dropdown, zoom/fit controls, in-book search drawer toggle, tools/edit panel toggle, file save status, overflow menu (`...`) keeping all actions on < 1 row at 1280px. Focus retention and peek hover state verified.
+2. Tabbed resizable side panel: 4 tabs in stable order (Outline, Marks, Notes, Search), resizable between 260px and 560px with RTL start-drag mirroring. Persisted per-book in SQLite settings (`reader.chrome.v1:<bookId>`).
+3. 480px bottom sheet: side panel gracefully collapses to a bottom Sheet closed by default, keeping page content fully readable and unobstructed.
+4. Focus mode: F11 / Esc / button hides all chrome; top focus hover zone, Tab, or touch handle brings controls back.
+5. Preserved KEY-291 keyboard & touch navigation (Alt+M bottom handle) and KEY-293 FreeText saving appearance stage.
+
+Verification & Tests:
+- 3/3 focused unit tests pass (`tests/ui/reader-chrome.test.ts`).
+- 33/33 reader suite unit tests pass.
+- `npx tsc --noEmit` clean (0 errors), `npx eslint` clean on changed files (0 errors, 0 warnings), `npx tsup` build clean, `git diff --check` clean.
+- Real-app live matrix (`scripts/reader-chrome-live/`): 24/24 cases pass across Arabic/English, light/dark, 1280/480px, PDF & EPUB in `.baglib-data/KEY-303-evidence/2026-11-10T04-56-22-138Z/`.
+- Regression live runs: `scripts/reader-toolbar-live/` 8/8 pass, `scripts/save-live/appearance-run.mjs` 4/4 pass.
+- 4 screenshots inspected in `.baglib-data/KEY-303-evidence/`: `header-1280.png`, `side-panel-1280.png`, `focus-mode-1280.png`, `bottom-sheet-closed-480.png`.
+- Three pre-existing failing tests in concurrent KEY-304 scope (`translation-keys`, `usability-recovery`, `srs-review-keyboard`) reported and untouched.
+
+Exact own files changed:
+- `src/renderer/components/reader/ReaderHeader.tsx`
+- `src/renderer/components/reader/ReaderSidePanel.tsx`
+- `src/renderer/components/reader/reader-chrome-state.ts`
+- `src/renderer/components/reader/reader-chrome.module.css`
+- `src/renderer/components/reader/useReaderChrome.ts`
+- `src/renderer/components/reader/FullPageBookReader.tsx`
+- `src/renderer/components/reader/InBookSearchDrawer.tsx`
+- `src/renderer/components/reader/PdfNativeViewer.tsx`
+- `src/renderer/components/reader/PdfWorkstationPanel.tsx`
+- `src/renderer/components/reader/ReaderMarkupBar.tsx`
+- `src/renderer/components/reader/ZenTocDrawer.tsx`
+- `src/renderer/translations.ts`
+- `tests/ui/reader-chrome.test.ts`
+- `scripts/reader-chrome-live/main.cjs`
+- `scripts/reader-chrome-live/run.mjs`
+- `docs/agent-ops/reports/KEY-303.md`
+- `docs/agent-ops/board.md`
+- `CURRENT_TASK.md`
 
 ## KEY-293 — 2026-11-10, Codex (pushed)
 

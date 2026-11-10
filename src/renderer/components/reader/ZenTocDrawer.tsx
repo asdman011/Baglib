@@ -6,6 +6,7 @@ import type { TOCItem } from '../../libs/reader/types';
 import type { TranslationKey } from '../../translations';
 
 interface ZenTocDrawerProps {
+  embedded?: boolean;
   isOpen: boolean;
   isPinned: boolean;
   onTogglePin: () => void;
@@ -26,6 +27,7 @@ interface ZenTocDrawerProps {
 
 export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
   isOpen,
+  embedded = false,
   isPinned,
   onTogglePin,
   onClose,
@@ -199,7 +201,7 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
       aria-label={t('tableOfContents')}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className={`fixed top-14 bottom-0 inset-inline-start-0 w-80 sm:w-88 backdrop-blur-2xl bg-surface/95 border-e border-subtle/70 z-40 flex flex-col shadow-2xl transition-all duration-300 select-none ${
+      className={embedded ? 'relative flex h-full min-h-0 w-full flex-col bg-surface select-none' : `fixed top-14 bottom-0 inset-inline-start-0 w-80 sm:w-88 backdrop-blur-2xl bg-surface/95 border-e border-subtle/70 z-40 flex flex-col shadow-2xl transition-all duration-300 select-none ${
         isOpen
           ? 'opacity-100 translate-x-0 pointer-events-auto'
           : 'opacity-0 rtl:translate-x-full ltr:-translate-x-full pointer-events-none'
@@ -231,7 +233,7 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
             }`}
           >
             <LayoutGrid className="w-3.5 h-3.5" />
-            <span>الصفحات</span>
+            <span>{t('stirlingOptPages')}</span>
           </button>
           <button
             onClick={() => setActiveTab('bookmarks')}

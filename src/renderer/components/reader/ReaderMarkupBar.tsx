@@ -1,6 +1,7 @@
 'use client';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Stamp, Ruler, ChevronDown, Circle, Palette, Highlighter, Keyboard, Lock, LockOpen, MessageSquarePlus, MousePointer2, MoveUpRight, Square, SquareDashed, Strikethrough, Type, Underline } from 'lucide-react';
+import { Button, IconButton } from '../ui/Button';
 import { isShapeTool, type MarkupTool } from '../../../shared/pdf-markup';
 import type { TranslationKey } from '../../translations';
 import { HIGHLIGHT_COLORS } from '../../libs/reader/highlight-manager';
@@ -98,8 +99,19 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
   const shortcutsButton = <button type="button" data-reader-shortcuts-button aria-label={t('readerShortcutsTitle')} title={t('readerShortcutsTitle')} onClick={() => { setPaletteOpen(false); onShowShortcuts(); }} className="flex items-center gap-1 rounded-md p-1 text-muted hover:text-main hover:bg-canvas">
     <Keyboard size={13} aria-hidden="true" />{compact && <span className="text-[11px]">{t('readerShortcutsTitle')}</span>}
   </button>;
-  const toolButton = (entry: typeof tools[number], withLabel = false) => { const Icon = entry.icon; return <button key={entry.id} type="button" data-markup-tool-button={entry.id} aria-pressed={tool === entry.id} aria-label={t(entry.label)} title={t(entry.label)} onClick={() => { choose(entry.id); setPaletteOpen(false); }}
-    className={`flex items-center gap-1.5 rounded-md p-1 ${withLabel ? 'w-full px-2 text-start text-xs' : ''} ${tool === entry.id ? 'bg-emerald-600 text-white' : 'text-main hover:bg-canvas'}`}><Icon size={13} aria-hidden="true" className={entry.id === 'arrow' ? 'shrink-0 rtl:-scale-x-100' : 'shrink-0'} />{withLabel && <span className="min-w-0 leading-snug">{t(entry.label)}</span>}</button>; };
+  const toolButton = (entry: typeof tools[number], withLabel = false) => {
+    const Icon = entry.icon;
+    const properties = {
+      'data-markup-tool-button': entry.id,
+      'aria-pressed': tool === entry.id,
+      onClick: () => { choose(entry.id); setPaletteOpen(false); },
+      className: tool === entry.id ? 'bg-primary/15 text-primary-text' : 'text-text hover:bg-canvas',
+    };
+    const icon = <Icon size={14} aria-hidden="true" className={entry.id === 'arrow' ? 'shrink-0 rtl:-scale-x-100' : 'shrink-0'} />;
+    return withLabel
+      ? <Button key={entry.id} {...properties} variant="ghost" size="sm" aria-label={t(entry.label)} title={t(entry.label)} className={properties.className + ' w-full h-auto min-h-8 justify-start px-2 py-1.5 text-start'} icon={icon}>{t(entry.label)}</Button>
+      : <IconButton key={entry.id} {...properties} size="sm" label={t(entry.label)}>{icon}</IconButton>;
+  };
   if (compact && onTool) {
     const current = availableTools.find(entry => entry.id === tool) ?? availableTools[0];
     return <div ref={barRef} role="toolbar" aria-keyshortcuts="Alt+M" aria-label={t('markupBarLabel')} data-reader-markup-bar data-markup-compact data-markup-tool={tool} className="relative flex shrink-0 items-center gap-1 rounded-lg border border-subtle bg-surface px-1 py-1">

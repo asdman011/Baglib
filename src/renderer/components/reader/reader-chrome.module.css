@@ -1,0 +1,29 @@
+﻿.reader > [data-reader-shared-header] {
+  flex-shrink: 0;
+}
+.reader[data-reader-focus-mode] > [data-reader-content] {
+  margin-inline-end: 0;
+}
+@media (min-width: 768px) {
+  .reader[data-reader-panel-open] > [data-reader-content] {
+    margin-inline-end: min(var(--reader-panel-width), max(280px, calc(100vw - 500px)));
+  }
+}
+/* The embedded reader header owns focus reveal. Legacy workstation selectors keep their dedicated scope. */
+.reader [data-reader-shared-frame][data-immersive] {
+  position: relative !important;
+  inset: auto !important;
+  z-index: auto;
+}
+.reader [data-reader-shared-frame][data-immersive] > header:focus-within {
+  opacity: 1 !important;
+  transform: none !important;
+}
+.reader [data-reader-shared-frame] [data-pdf-bottom-navigation] {
+  max-width: calc(100% - 1rem);
+}
+@media (max-width: 767px) {
+  .reader [data-reader-shared-frame] [data-pdf-bottom-navigation] {
+    display: none;
+  }
+}

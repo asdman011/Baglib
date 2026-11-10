@@ -83,6 +83,7 @@ interface PdfNativeViewerProps {
   viewMode?: 'single' | 'two-column' | 'scrolled';
   theme?: ReaderTheme;
   tintPages?: boolean;
+  fitMode?: 'page' | 'width';
   zoom?: number; // scale multiplier e.g. 1.0, 1.25
   autoCropMargins?: boolean;
   direction?: 'rtl' | 'ltr';
@@ -580,6 +581,7 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
   viewMode = 'single',
   tintPages = false,
   zoom = 1.0,
+  fitMode = 'page',
   autoCropMargins = false,
   direction = 'ltr',
   highlights = EMPTY_HIGHLIGHTS,
@@ -797,7 +799,7 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
     } else if (viewMode === 'single') {
       const scaleByWidth = containerWidth / baseWidth;
       const scaleByHeight = containerHeight / baseHeight;
-      computedScale = Math.min(scaleByWidth, scaleByHeight);
+      computedScale = fitMode === 'width' ? scaleByWidth : Math.min(scaleByWidth, scaleByHeight);
     } else {
       // Scrolled mode
       computedScale = containerWidth / baseWidth;
@@ -805,7 +807,7 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
 
     const finalComputed = Math.min(3.0, Math.max(0.5, computedScale * zoom));
     setCalculatedScale(finalComputed);
-  }, [viewMode, zoom]);
+  }, [viewMode, zoom, fitMode]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;

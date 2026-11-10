@@ -1,5 +1,16 @@
 export const translations = {
   ar: {
+    // KEY-303 shared reader chrome
+    readerPanelOutline: "المحتويات",
+    readerPanelMarks: "العلامات",
+    readerPanelNotes: "الملاحظات",
+    readerPanelSearch: "البحث",
+    readerPanelTitle: "لوحة القراءة",
+    readerPanelResize: "تغيير عرض لوحة القراءة",
+    readerGoToPage: "الانتقال إلى صفحة",
+    readerViewMode: "نمط العرض",
+    readerMarksRecorded: "العلامات محفوظة في المكتبة",
+
     readerToolbarShow: "أدوات القراءة والتعليق",
     readerToolbarUnpin: "إلغاء تثبيت أدوات القراءة",
     markupToolStamp: "الأختام",
@@ -2359,6 +2370,8 @@ export const translations = {
     marginLabel: "الهوامش الجانبية",
     brightnessLabel: "السطوع",
     contrastLabel: "التباين",
+    contrast: "التباين",
+    paragraphSpacing: "تباعد الفقرات",
     focusAids: "أدوات التركيز",
     readingRulerBtn: "مسطرة القراءة",
     paragraphFocusBtn: "تركيز الفقرة",
@@ -4327,6 +4340,17 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    // KEY-303 shared reader chrome
+    readerPanelOutline: "Outline",
+    readerPanelMarks: "Marks",
+    readerPanelNotes: "Notes",
+    readerPanelSearch: "Search",
+    readerPanelTitle: "Reading panel",
+    readerPanelResize: "Resize reading panel",
+    readerGoToPage: "Go to page",
+    readerViewMode: "View mode",
+    readerMarksRecorded: "Marks recorded in library",
+
     readerToolbarShow: "Reading and markup tools",
     readerToolbarUnpin: "Unpin reading tools",
     markupToolStamp: "Stamps",
@@ -6686,6 +6710,8 @@ export const translations = {
     marginLabel: "Margins",
     brightnessLabel: "Brightness",
     contrastLabel: "Contrast",
+    contrast: "Contrast",
+    paragraphSpacing: "Paragraph Spacing",
     focusAids: "Focus Aids",
     readingRulerBtn: "Reading Ruler",
     paragraphFocusBtn: "Paragraph Focus",

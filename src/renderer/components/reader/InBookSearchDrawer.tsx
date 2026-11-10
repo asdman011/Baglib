@@ -20,6 +20,7 @@ import type {
 } from '../../../shared/types/full-text-search';
 
 interface InBookSearchDrawerProps {
+  embedded?: boolean;
   isOpen: boolean;
   onClose: () => void;
   sections: SearchableSection[];
@@ -31,6 +32,7 @@ interface InBookSearchDrawerProps {
 
 export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
   isOpen,
+  embedded = false,
   onClose,
   sections,
   currentPage,
@@ -147,7 +149,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
   return (
     <aside
       dir={direction}
-      className="absolute top-0 bottom-0 inset-inline-start-0 w-84 sm:w-96 bg-surface/95 backdrop-blur-md border-inline-end border-subtle z-30 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200"
+      className={embedded ? 'relative flex h-full min-h-0 w-full flex-col bg-surface' : 'absolute top-0 bottom-0 start-0 w-84 sm:w-96 bg-surface/95 backdrop-blur-md border-e border-subtle z-30 shadow-2xl flex flex-col animate-in duration-200'}
     >
       {/* Header */}
       <div className="p-3 border-b border-subtle flex items-center justify-between bg-canvas/40">

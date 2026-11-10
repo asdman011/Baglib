@@ -68,7 +68,12 @@ import {
   getViewportCssVariables,
   getPdfThemeFilter,
 } from '../../libs/reader/typography';
-import { ZenTopBar } from './ZenTopBar';
+import { ReaderHeader } from './ReaderHeader';
+import { ReaderSidePanel } from './ReaderSidePanel';
+import { PdfMarksList } from './PdfMarksList';
+import { useReaderChrome } from './useReaderChrome';
+import type { PdfReview } from '../../../shared/types/pdf-collaboration';
+import chromeStyles from './reader-chrome.module.css';
 import { ZenBottomScrubber } from './ZenBottomScrubber';
 import { ZenCornerHotspots } from './ZenCornerHotspots';
 import { ReaderMarkupBar, ReaderShortcutSheet } from './ReaderMarkupBar';
@@ -93,7 +98,6 @@ import { bookCfiTarget, bookStudyTarget } from '../../../shared/study-notes';
 import { consumePendingPage, consumePendingCfi } from '../../utils/study-navigation';
 import { markHistoryShortcut, readerShortcut } from '../../libs/reader/reader-shortcuts';
 import { ZenSelectionMenu } from './ZenSelectionMenu';
-import { ZenKnowledgeDrawer } from './ZenKnowledgeDrawer';
 import { ZenTocDrawer } from './ZenTocDrawer';
 import { ZenFootnotePopover } from './ZenFootnotePopover';
 import type { KnowledgeItemDTO, KnowledgeType } from '../../../shared/types/knowledge';
@@ -187,6 +191,9 @@ const SourceBookReader: React.FC = () => {
   } = useWorkspace();
 
   const panels = useReaderPanels();
+  const chrome = useReaderChrome(activeBook?.id, panels.activePanel, panels.setters);
+  const [focusMode, setFocusMode] = useState(false);
+  const [pdfReviews, setPdfReviews] = useState<PdfReview[]>([]);
   const isDocumentPanelOpen = panels.activePanel === 'document';
   const setIsDocumentPanelOpen = panels.setters.document;
   const [selectedText, setSelectedText] = useState('');
@@ -247,8 +254,6 @@ const SourceBookReader: React.FC = () => {
   const setIsTocPinned = panels.pinToc;
   const isKnowledgeDrawerOpen = panels.activePanel === 'knowledge';
   const setIsKnowledgeDrawerOpen = panels.setters['knowledge'];
-  const isKnowledgePinned = panels.knowledgePinned;
-  const setIsKnowledgePinned = panels.pinKnowledge;
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemDTO[]>([]);
   const [previousJumpPage, setPreviousJumpPage] = useState<number | null>(null);
   const [autoCropMargins, setAutoCropMargins] = useState<boolean>(false);
@@ -415,8 +420,6 @@ const SourceBookReader: React.FC = () => {
 
   // Exclusive Panel Switching: Opening any panel automatically closes previously open panels
   const closeAllPanelsExcept = panels.close;
-  const handleToggleToc = () => setIsTocOpen(previous => !previous);
-  const handleToggleKnowledge = () => setIsKnowledgeDrawerOpen(previous => !previous);
   const handleToggleSearch = useCallback(() => setIsSearchDrawerOpen(previous => !previous), [setIsSearchDrawerOpen]);
   const handleToggleAIDrawer = () => setIsAIDrawerOpen(previous => !previous);
   const handleToggleSettings = () => setIsSettingsOpen(previous => !previous);
@@ -1012,7 +1015,8 @@ const SourceBookReader: React.FC = () => {
           topHideTimerRef.current = null;
         }
         setIsTopBarVisible(true);
-      } else if (y > 88 && !isTopBarHoveredRef.current) {
+      } else if (y > 88) {
+        isTopBarHoveredRef.current = false;
         if (!topHideTimerRef.current) {
           topHideTimerRef.current = setTimeout(() => {
             setIsTopBarVisible(false);
@@ -3405,14 +3409,62 @@ const SourceBookReader: React.FC = () => {
     );
   }
 
+  const closeChromePanel = () => panels.close();
+  const changeFocusMode = (focus: boolean) => {
+    setFocusMode(focus);
+    setIsTopBarVisible(false);
+    setIsBottomBarVisible(false);
+    if (focus) panels.close();
+  };
+  const renderChrome = (pdf?: Parameters<NonNullable<React.ComponentProps<typeof PdfWorkstationPanel>['renderReaderHeader']>>[0]) => (
+    <ReaderHeader title={activeBook.title} author={activeBook.author} format={effectiveFormat} dir={workspaceDir}
+      page={readingPage} total={maxBookPages} onPage={page => setReadingPage(page)}
+      viewMode={pdf?.viewMode ?? viewMode} onViewMode={pdf?.onViewMode ?? setViewMode}
+      zoom={pdf?.zoom ?? Math.round(readerFontSize / 18 * 100)}
+      onZoom={pdf?.onZoom ?? (value => setReaderFontSize(Math.max(9, Math.min(54, Math.round(value * 18 / 100)))))}
+      onFit={pdf?.onFit ?? (() => { setReaderFontSize(18); setMargin(28); })}
+      onReflow={pdf?.onReflow ?? (effectiveFormat === 'PDF' ? () => setIsReflowModalOpen(true) : undefined)}
+      onClose={handleCloseReader} onPanel={() => { pdf?.closeTools(); chrome.open ? panels.close() : chrome.select(chrome.tab); }} panelOpen={chrome.open}
+      onSearch={() => { pdf?.closeTools(); chrome.select('search'); }}
+      onTools={() => { panels.close(); pdf ? pdf.onTools() : handleToggleSettings(); }}
+      onSave={pdf?.onSave} saveState={pdf?.saveState} saveLabel={pdf?.saveLabel} saveDisabled={pdf?.saveDisabled}
+      focusMode={focusMode} onFocusMode={changeFocusMode} visible={pdf ? (!focusMode || isTopBarVisible) : (!focusMode && (isTopBarVisible || isSettingsOpen))}
+      onMouseEnter={() => { isTopBarHoveredRef.current = true; }} onMouseLeave={() => { isTopBarHoveredRef.current = false; }}
+      markupBar={<ReaderMarkupBar color={activeHighlightColor} onColor={setActiveHighlightColor} tool={markupTool} onTool={chooseMarkupTool}
+        locked={markupLocked} onToggleLock={toggleMarkupLock} allowedTools={isReflowable ? ['select', 'highlight', 'underline', 'strike', 'comment'] : undefined}
+        onShowShortcuts={() => setShowReaderShortcuts(true)} t={t} />}
+      overflowItems={[
+        ...(pdf?.overflowItems ?? []),
+        { label: t('tableOfContents'), onClick: () => { pdf?.closeTools(); chrome.select('toc'); } },
+        { label: t('readerPanelMarks'), onClick: () => { pdf?.closeTools(); chrome.select('knowledge'); } },
+        { label: t('readerPanelNotes'), onClick: () => { pdf?.closeTools(); chrome.select('annotations'); } },
+        { label: t('dictionaryLookupTitle'), onClick: () => { setDictionaryLookupWord(selectedText || ''); setIsDictionaryModalOpen(true); } },
+        { label: t('aiAssistantTitle'), onClick: handleToggleAIDrawer },
+        { label: t('pluginsTitle'), onClick: () => setIsPluginsModalOpen(true) },
+        { label: t('typographySettings'), onClick: handleToggleSettings },
+        { label: t('autoCropMargins'), onClick: () => setAutoCropMargins(previous => !previous) },
+        ...(!pdf && effectiveFormat === 'PDF' ? [{ label: t('fitPage'), onClick: () => setPdfFitMode(previous => previous === 'Fit' ? 'FitH' : 'Fit') }] : []),
+        { label: t(readerDirection === 'rtl' ? 'readingDirectionRtl' : 'readingDirectionLtr'), onClick: () => setReaderDirection(readerDirection === 'rtl' ? 'ltr' : 'rtl') },
+        ...(!pdf ? [
+          { label: t('ttsReadAloud'), onClick: () => startReadAloud() },
+          { label: t(isAutoScrolling ? 'autoScrollPause' : 'autoScrollPlay'), onClick: handleToggleAutoScroll },
+          { label: t('autoScrollSpeed') + ' ' + autoScrollSpeed, onClick: handleCycleAutoScrollSpeed },
+          ...(paginatedPages.length ? [{ label: t('readerSavePdf'), disabled: isSavingPdf, onClick: () => { void handleSaveBookAsPdf(); } }] : []),
+        ] : []),
+      ]} t={t} />
+  );
+
   return (
     <div
       role="region"
       aria-label={t('a11yReaderLandmark') || 'Digital Book Reader'}
       data-reader-source={currentSourceId ?? undefined}
       data-reader-page={readingPage}
+      data-reader-panel-open={chrome.open && !focusMode || undefined}
+      data-reader-focus-mode={focusMode || undefined}
+      dir={workspaceDir}
       onClick={handleViewportClick}
-      className={`fixed inset-y-0 start-0 z-50 h-screen overflow-hidden bg-canvas text-main font-sans select-none flex flex-col ${
+      className={`${chromeStyles.reader} fixed inset-y-0 start-0 z-50 h-screen overflow-hidden bg-canvas text-main font-sans select-none flex flex-col ${
         isIdle ? 'cursor-none' : 'cursor-auto'
       }`}
       style={{ ...(getViewportCssVariables({
@@ -3425,7 +3477,7 @@ const SourceBookReader: React.FC = () => {
         contrast,
         fontFamily: getFontFamilyStyle(),
       // The companion note pane, when open, takes the end edge; the reader ends where it starts.
-      }) as React.CSSProperties), insetInlineEnd: 'var(--companion-width, 0px)' }}
+      }) as React.CSSProperties), ...({ '--reader-panel-width': `${chrome.width}px` } as React.CSSProperties), insetInlineEnd: 'var(--companion-width, 0px)' }}
     >
       {/* Dynamic Screen-Reader Live Region for Page Transitions (KEY-149) */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -3441,88 +3493,10 @@ const SourceBookReader: React.FC = () => {
 
       {/* Floating Zen Top Bar */}
       {isDocumentPanelOpen && effectiveFormat === 'PDF' && legacyPdfWork === activeBook.id && <PdfWorkstationPanel key={activeBook.id} workId={activeBook.id} sourceId={currentSourceId ?? undefined} onClose={() => setIsDocumentPanelOpen(false)} />}
-      {!isPdfWorkstationActive && (
-      <ZenTopBar
-        markupBar={
-          <ReaderMarkupBar
-            tool={markupTool}
-            onTool={chooseMarkupTool}
-            color={activeHighlightColor}
-            onColor={setActiveHighlightColor}
-            locked={markupLocked}
-            onToggleLock={toggleMarkupLock}
-            allowedTools={isReflowable ? ['select', 'highlight', 'underline', 'strike', 'comment'] : undefined}
-            onShowShortcuts={() => setShowReaderShortcuts(true)}
-            t={t}
-          />
-        }
-        onReadAloud={() => startReadAloud()}
-        isVisible={isTopBarVisible || isSettingsOpen || isTocPinned || isKnowledgePinned || isDocumentPanelOpen}
-        activeBook={activeBook}
-        detectedFormat={detectedFormat}
-        chapterTitle={activeFormattedPage?.chapterLabel}
-        readerDirection={readerDirection}
-        setReaderDirection={setReaderDirection}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        viewType={viewType}
-        setViewType={setViewType}
-        pdfFitMode={pdfFitMode}
-        setPdfFitMode={setPdfFitMode}
-        autoCropMargins={autoCropMargins}
-        setAutoCropMargins={setAutoCropMargins}
-        onClose={handleCloseReader}
-        onToggleToc={handleToggleToc}
-        isTocOpen={isTocOpen}
-        onToggleKnowledge={handleToggleKnowledge}
-        isKnowledgeOpen={isKnowledgeDrawerOpen}
-        onToggleSearch={handleToggleSearch}
-        onToggleAIDrawer={handleToggleAIDrawer}
-        onToggleDictionary={() => {
-          closeAllPanelsExcept();
-          setDictionaryLookupWord(selectedText || '');
-          setIsDictionaryModalOpen(true);
-        }}
-        onOpenWorkstation={() => { setIsInkModeActive(false); setIsDocumentPanelOpen(previous => !previous); }}
-        isWorkstationOpen={isDocumentPanelOpen}
-        onToggleOcrInspector={() => { setIsInkModeActive(false); setIsOcrMenuOpen(previous => !previous); }}
-        isOcrInspectorOpen={isOcrMenuOpen}
-        onToggleAccessibility={() => {
-          setIsInkModeActive(false);
-          setIsAccessibilityDrawerOpen(previous => !previous);
-        }}
-        isAccessibilityOpen={isAccessibilityDrawerOpen}
-        onOpenReflow={() => {
-          setIsReflowModalOpen(true);
-        }}
-        onToggleSettings={handleToggleSettings}
-        isSettingsOpen={isSettingsOpen}
-        onTogglePlugins={() => {
-          closeAllPanelsExcept();
-          setIsPluginsModalOpen(true);
-        }}
-        onSavePdf={paginatedPages.length > 0 ? () => void handleSaveBookAsPdf() : undefined}
-        isSavingPdf={isSavingPdf}
-        isAutoScrolling={isAutoScrolling}
-        onToggleAutoScroll={handleToggleAutoScroll}
-        autoScrollSpeed={autoScrollSpeed}
-        onCycleAutoScrollSpeed={handleCycleAutoScrollSpeed}
-        onMouseEnter={() => {
-          isTopBarHoveredRef.current = true;
-          if (topHideTimerRef.current) {
-            clearTimeout(topHideTimerRef.current);
-            topHideTimerRef.current = null;
-          }
-        }}
-        onMouseLeave={() => {
-          isTopBarHoveredRef.current = false;
-        }}
-        t={t}
-      />
-      )}
+      {!isPdfWorkstationActive && renderChrome()}
 
       {/* Floating Zen Bottom Scrubber */}
-      {!isPdfWorkstationActive && (
+      {!isPdfWorkstationActive && !focusMode && (
       <ZenBottomScrubber
         isVisible={isBottomBarVisible || isSettingsOpen}
         readingPage={readingPage}
@@ -3552,7 +3526,7 @@ const SourceBookReader: React.FC = () => {
       )}
 
       {/* Zen Corner Hotspots */}
-      {!isPdfWorkstationActive && (
+      {!isPdfWorkstationActive && !focusMode && (
       <ZenCornerHotspots
         isCurrentPageBookmarked={isCurrentPageBookmarked}
         onToggleBookmark={handleToggleBookmark}
@@ -3565,14 +3539,10 @@ const SourceBookReader: React.FC = () => {
       />
       )}
 
-      {/* Main Content Area */}
-      <div
-        className={`flex-1 flex min-h-0 relative overflow-hidden ${
-          splitOrientation === 'horizontal' ? 'flex-col' : 'flex-row'
-        }`}
-      >
-        {/* Slide-out Table of Contents (TOC) & Bookmarks Drawer */}
-        <ZenTocDrawer
+      <ReaderSidePanel open={chrome.open && !focusMode} tab={chrome.tab} onTab={chrome.select}
+        onClose={closeChromePanel} width={chrome.width} onResize={chrome.resize} dir={workspaceDir} t={t}>
+        {chrome.tab === 'toc' && (<ZenTocDrawer
+          embedded
           isOpen={isTocOpen}
           isPinned={isTocPinned}
           onTogglePin={() => setIsTocPinned(!isTocPinned)}
@@ -3596,64 +3566,16 @@ const SourceBookReader: React.FC = () => {
           t={t}
           pdfDoc={pdfDocProxy}
           paginatedPages={paginatedPages}
-        />
-
-        {/* Slide-out SQLite Knowledge & Highlights Drawer */}
-        <ZenKnowledgeDrawer
-          isOpen={isKnowledgeDrawerOpen}
-          isPinned={isKnowledgePinned}
-          onTogglePin={() => setIsKnowledgePinned(!isKnowledgePinned)}
-          onClose={() => setIsKnowledgeDrawerOpen(false)}
-          onMouseEnter={() => {
-            isTopBarHoveredRef.current = true;
-          }}
-          onMouseLeave={() => {
-            isTopBarHoveredRef.current = false;
-          }}
-          knowledgeItems={knowledgeItems}
-          onDeleteKnowledge={handleDeleteKnowledgeItem}
-          onJumpToLocation={(loc) => {
-            if (isReflowable && (loc.startsWith('epubcfi(') || loc.startsWith('/'))) {
-              try {
-                (bookDoc?.rendition as { display?: (target: string) => void } | undefined)?.display?.(loc);
-              } catch {}
-            }
-            const p = extractMarkPage(loc) ?? parseInt(loc, 10);
-            if (!isNaN(p) && p > 0) {
-              setPreviousJumpPage(readingPage);
-              setReadingPage(p);
-            }
-          }}
-          readingPage={readingPage}
-          readerTheme={readerTheme}
-          setReaderTheme={setReaderTheme}
-          fontFamily={fontFamily}
-          setFontFamily={setFontFamily}
-          readerFontSize={readerFontSize}
-          setReaderFontSize={setReaderFontSize}
-          lineSpacing={lineSpacing}
-          setLineSpacing={setLineSpacing}
-          paragraphSpacing={paragraphSpacing}
-          setParagraphSpacing={setParagraphSpacing}
-          margin={margin}
-          setMargin={setMargin}
-          brightness={brightness}
-          setBrightness={setBrightness}
-          contrast={contrast}
-          setContrast={setContrast}
-          t={t}
-        />
-
-        {/* Inline Footnote / Classical Gloss Popover */}
-        <ZenFootnotePopover
-          footnote={activeFootnote}
-          onClose={() => setActiveFootnote(null)}
-          t={t}
-        />
-
-        {/* Slide-out Annotations & Highlights Drawer (KEY-137 / KEY-138) */}
-        <AnnotationsDrawer
-          isOpen={isAnnotationsDrawerOpen && !isPdfWorkstationActive}
+        />)}
+        {chrome.tab === 'knowledge' && <PdfMarksList items={knowledgeItems} reviews={pdfReviews} isReflowable={isReflowable} t={t}
+          onOpenMark={(item, at) => { refreshMarkCounts(); setOpenMark({ item, at }); }}
+          onJump={(page, cfi) => {
+            if (cfi && isReflowable) { try { (bookDoc?.rendition as { display?: (target: string) => void } | undefined)?.display?.(cfi); } catch {} }
+            setPreviousJumpPage(readingPage); setReadingPage(Math.min(maxBookPages, Math.max(1, page)));
+          }} />}
+        {chrome.tab === 'annotations' && (<AnnotationsDrawer
+          embedded
+          isOpen={isAnnotationsDrawerOpen}
           onClose={() => setIsAnnotationsDrawerOpen(false)}
           annotations={annotations}
           currentPage={readingPage}
@@ -3668,10 +3590,9 @@ const SourceBookReader: React.FC = () => {
           onDeleteAnnotation={handleDeleteAnnotation}
           t={t}
           direction={readerDirection}
-        />
-
-        {/* Slide-out In-Book Full-Text Search Drawer (KEY-140) */}
-        <InBookSearchDrawer
+        />)}
+        {chrome.tab === 'search' && (<InBookSearchDrawer
+          embedded
           isOpen={isSearchDrawerOpen}
           onClose={() => setIsSearchDrawerOpen(false)}
           sections={searchableSections}
@@ -3679,7 +3600,31 @@ const SourceBookReader: React.FC = () => {
           onJumpToPage={(p) => setReadingPage(Math.min(maxBookPages, Math.max(1, p)))}
           t={t}
           direction={readerDirection}
+        />)}
+      </ReaderSidePanel>
+
+      {/* Main Content Area */}
+      <div
+        data-reader-content
+        className={`flex-1 flex min-w-0 min-h-0 relative overflow-hidden ${
+          splitOrientation === 'horizontal' ? 'flex-col' : 'flex-row'
+        }`}
+      >
+        {/* Slide-out Table of Contents (TOC) & Bookmarks Drawer */}
+
+
+        {/* Inline Footnote / Classical Gloss Popover */}
+        <ZenFootnotePopover
+          footnote={activeFootnote}
+          onClose={() => setActiveFootnote(null)}
+          t={t}
         />
+
+        {/* Slide-out Annotations & Highlights Drawer (KEY-137 / KEY-138) */}
+
+
+        {/* Slide-out In-Book Full-Text Search Drawer (KEY-140) */}
+
 
         {/* Pluggable Offline Dictionary & Encyclopedia Modal (KEY-142) */}
         <DictionaryLookupModal
@@ -3885,7 +3830,7 @@ const SourceBookReader: React.FC = () => {
 
         {/* Floating Typography Settings Popover */}
         {isSettingsOpen && (
-          <div className="absolute top-2 inset-inline-end-4 w-80 bg-surface/95 backdrop-blur-md border border-subtle rounded-2xl shadow-2xl z-30 p-4 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="absolute top-2 end-4 w-80 max-w-[calc(100%-2rem)] max-h-[calc(100%-1rem)] overflow-y-auto bg-surface/95 backdrop-blur-md border border-subtle rounded-2xl shadow-2xl z-30 p-4 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-subtle/40 pb-2">
               <span className="font-bold text-xs text-main flex items-center gap-1.5">
                 <SlidersHorizontal className="w-3.5 h-3.5 text-pale-sky-500" />
@@ -4007,6 +3952,15 @@ const SourceBookReader: React.FC = () => {
                 className="w-full accent-pale-sky-500"
               />
             </div>
+
+            <label className="block space-y-1 text-xs">
+              <span>{t('contrast')} · {contrast}%</span>
+              <input type="range" min={50} max={150} value={contrast} onChange={event => setContrast(Number(event.target.value))} className="w-full accent-primary" />
+            </label>
+            <label className="block space-y-1 text-xs">
+              <span>{t('paragraphSpacing')} · {paragraphSpacing}</span>
+              <input type="range" min={0} max={2} step={0.1} value={paragraphSpacing} onChange={event => setParagraphSpacing(Number(event.target.value))} className="w-full accent-primary" />
+            </label>
 
             {/* Comic Auto-Spread Toggle */}
             {isComic && (
@@ -4507,6 +4461,9 @@ const SourceBookReader: React.FC = () => {
                 <PdfWorkstationPanel
                   key={`embedded-${activeBook.id}`}
                   embedded
+                  renderReaderHeader={renderChrome}
+                  focusMode={focusMode}
+                  onReviewsChange={setPdfReviews}
                   workId={activeBook.id}
                   filePath={activeBook.filePath}
                   sourceId={currentSourceId ?? undefined}
@@ -4528,30 +4485,6 @@ const SourceBookReader: React.FC = () => {
                     onShowShortcuts={() => setShowReaderShortcuts(true)}
                     t={t}
                   />}
-                  annotationPanel={{
-                    open: isAnnotationsDrawerOpen,
-                    count: annotations.length,
-                    onToggle: () => setIsAnnotationsDrawerOpen(!isAnnotationsDrawerOpen),
-                    onClose: () => setIsAnnotationsDrawerOpen(false),
-                    content: <AnnotationsDrawer
-                      embedded
-                      isOpen={isAnnotationsDrawerOpen}
-                      onClose={() => setIsAnnotationsDrawerOpen(false)}
-                      annotations={annotations}
-                      currentPage={readingPage}
-                      bookTitle={activeBook.title}
-                      sourceId={currentSourceId ?? undefined}
-                      bookAuthor={activeBook.author}
-                      bookIsbn={activeBook.isbn}
-                      bookFormat={detectedFormat}
-                      activeBookInfo={activeBookInfo}
-                      allBooksWithNotes={allBooksWithNotes}
-                      onJumpToPage={value => setReadingPage(Math.min(maxBookPages, Math.max(1, value)))}
-                      onDeleteAnnotation={handleDeleteAnnotation}
-                      t={t}
-                      direction={readerDirection}
-                    />,
-                  }}
                   readerIntegration={{
                     highlights: knowledgeItems,
                     activeSelectionInfo: pdfSelectionInfo,
