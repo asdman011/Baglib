@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { Button } from '../ui/Button';
 import {
   ArrowRight,
   BookOpen,
@@ -122,18 +123,59 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
   markupBar,
   t,
 }) => {
+  const [hasFocus, setHasFocus] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  const toolbarId = useId();
+  const visible = isVisible || isSettingsOpen || hasFocus || pinned;
+
+  useEffect(() => {
+    const header = headerRef.current;
+    const region = header?.closest<HTMLElement>('[role="region"]');
+    if (!header || !region) return;
+    // Keep the selection actions below the wrapped header at every viewport width.
+    const update = () => region.style.setProperty('--reader-toolbar-bottom', visible ? `${header.offsetTop + header.offsetHeight}px` : '0px');
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+      region.style.removeProperty('--reader-toolbar-bottom');
+    };
+  }, [visible]);
+
   return (
+    <>
+    <Button
+      variant="secondary"
+      size="sm"
+      data-reader-toolbar-toggle
+      aria-controls={toolbarId}
+      aria-expanded={visible}
+      aria-keyshortcuts="Alt+M"
+      onClick={() => setPinned(value => !value)}
+      className="fixed bottom-16 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-40 min-h-11 max-w-[calc(100vw-2rem)] text-primary-text shadow-sm motion-reduce:transition-none"
+      icon={<Highlighter className="size-4" />}
+    >
+      {t(pinned ? 'readerToolbarUnpin' : 'readerToolbarShow')}
+    </Button>
     <header
+      ref={headerRef}
+      id={toolbarId}
+      data-reader-top-bar
       role="toolbar"
       aria-label={t('a11yToolbarLandmark')}
+      onFocusCapture={() => setHasFocus(true)}
+      onBlurCapture={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHasFocus(false);
+      }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="fixed top-3 inset-x-3 sm:inset-x-8 max-w-7xl mx-auto min-h-13 backdrop-blur-2xl bg-surface/90 border border-subtle/70 rounded-2xl flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 sm:px-4 py-2 z-40 shadow-2xl select-none"
+      className="fixed top-3 inset-x-3 sm:inset-x-8 max-w-7xl mx-auto min-h-13 backdrop-blur-2xl bg-surface/90 border border-subtle/70 rounded-2xl flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 sm:px-4 py-2 z-40 shadow-2xl select-none transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none"
       style={{
-        transform: isVisible || isSettingsOpen ? 'translateY(0)' : 'translateY(-125%)',
-        opacity: isVisible || isSettingsOpen ? 1 : 0,
-        pointerEvents: isVisible || isSettingsOpen ? 'auto' : 'none',
-        transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease',
+        transform: visible ? 'translateY(0)' : 'translateY(-125%)',
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? 'auto' : 'none',
       }}
     >
       {/* Start: Back to Library, TOC & Book Title */}
@@ -455,5 +497,6 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
         </button>
       </div>
     </header>
+    </>
   );
 };

@@ -1,8 +1,9 @@
 'use client';
+import { Button } from '../ui/Button';
 import { readerEdge } from '../../../shared/reader-immersive';
 import { PdfMarksList } from './PdfMarksList';
 import { setReaderOverlay, type ReaderOverlay } from '../../../shared/reader-overlay';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   X,
   ArrowLeft,
@@ -166,6 +167,7 @@ export function PdfWorkstationPanel({
   readerIntegration?: Pick<React.ComponentProps<typeof PdfNativeViewer>, 'highlights' | 'activeSelectionInfo' | 'onSelectionChange' | 'onHighlightClick' | 'onPdfDocLoaded' | 'onOutlineLoaded' | 'onTotalPagesLoaded' | 'contentContainerRef' | 'autoCropMargins' | 'direction'>;
 }) {
   const { lang, dir, t, theme: appTheme, books, openBookForReading } = useWorkspace();
+  const toolbarId = useId();
   const [immersive, setImmersive] = useState(false);
   const [activeOverlay, setActiveOverlay] = useState<ReaderOverlay>(null);
   useEffect(() => {
@@ -913,9 +915,23 @@ export function PdfWorkstationPanel({
           : `fixed top-12 bottom-6 inset-x-3 mx-auto z-50 max-w-[1600px] rounded-2xl border ${workstationTheme === 'dark' ? 'border-[#232733] bg-[#0f1115] text-[#e1e4ea]' : 'border-[#e5e7eb] bg-[#f8f9fa] text-[#111827]'} shadow-2xl flex flex-col overflow-hidden`
       }
     >
+      {/* Keyboard focus continues to reveal the header through :focus-within. */}
+      {(immersive || collapsedChrome.includes('top')) && <Button
+        variant="secondary"
+        size="sm"
+        data-reader-toolbar-toggle
+        aria-controls={toolbarId}
+        aria-expanded={pinnedChrome.includes('top') && !collapsedChrome.includes('top')}
+        aria-keyshortcuts="Alt+M"
+        onClick={() => {
+          setCollapsedChrome(previous => previous.filter(zone => zone !== 'top'));
+          setPinnedChrome(previous => previous.includes('top') ? previous.filter(zone => zone !== 'top') : [...previous, 'top']);
+        }}
+        className="absolute bottom-16 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-40 min-h-11 max-w-[calc(100vw-2rem)] text-primary-text shadow-sm motion-reduce:transition-none"
+      >{t(pinnedChrome.includes('top') ? 'readerToolbarUnpin' : 'readerToolbarShow')}</Button>}
       {/* HEADER RIBBON */}
       {collapsedChrome.length > 0 && <details data-reader-recovery className="absolute end-2 top-2 z-[60] rounded-xl border border-subtle bg-surface p-2 text-main shadow-xl"><summary className="cursor-pointer text-xs">{t('pdfChromeRestore')}</summary><div className="mt-2 flex flex-col gap-1">{collapsedChrome.map(zone => <button key={zone} type="button" className="rounded-lg px-2 py-1 text-start text-xs hover:bg-canvas" onClick={() => setCollapsedChrome(previous => previous.filter(item => item !== zone))}>{t(chromeLabels[zone as keyof typeof chromeLabels])}</button>)}</div></details>}
-      <header ref={headerRef} data-pdf-header data-density={headerDensity} className="flex h-11 min-h-11 flex-nowrap items-center gap-1.5 border-b border-subtle px-2 bg-canvas/60 shrink-0">
+      <header id={toolbarId} ref={headerRef} data-pdf-header data-density={headerDensity} className="flex h-11 min-h-11 flex-nowrap items-center gap-1.5 border-b border-subtle px-2 bg-canvas/60 shrink-0">
         {embedded && (
           <button
             type="button"

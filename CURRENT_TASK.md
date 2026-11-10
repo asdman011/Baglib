@@ -1,3 +1,29 @@
+## KEY-291 - 2026-11-10, Codex (implemented and verified)
+
+Session `01a1c372-0255-7e82-a6a2-3c957c36ff65`. Implemented focus-reveal and focus retention for the Zen reader header, Alt+M markup focus in PDF/EPUB, and a persistent bilingual 44px-high touch button near the bottom. The PDF control reuses immersive/collapsed header pinning. Header geometry keeps KEY-280 selection actions below the expanded bar. Existing hover and reduced motion verified. No schema, dependency, download or Jira action.
+
+KEY-291-only candidate npm test has 1671 total, 1669 passed, zero failures, two environment skips (unconfigured PyArrow and corpus-verifier integration). Focus/translation tests 3/3 pass. Shared and isolated tsc pass, scoped eslint has zero errors and 21 existing warnings, isolated and shared tsup pass, git diff check passes. The shared full suite stalled in concurrent KEY-304 SRS tests. A baseline-tests run in the shared source completed with 1668/1671 passing and three KEY-304 notes/translation failures. Those files are outside KEY-291 ownership. The passing isolated candidate uses HEAD 3df271c plus KEY-291 with existing runtime/fixture junctions, excluding concurrent notes changes.
+
+Final native `key291-live-gydiPv` passed eight cases across PDF/EPUB, Arabic/English and 1280/480 pixels, each with native Tab/Alt+M/Enter markup activation and Chromium mobile touch activation (16 keyboard/touch paths). Each also passed real-text selection-menu non-overlap, reduced motion and mouse-hover checks. Twenty-four screenshots inspected and retained in `.baglib-data/KEY-291-evidence/`. Arabic PDF page2 and English PDF page200 used for selection. English EPUB tested in both UI languages. All three input SHA-256 hashes match. No real files changed. No real Arabic EPUB exists in the supplied corpus, so that document-language coverage remains unavailable. No download attempted. Physical screen-reader speech output was not tested.
+
+The existing EPUB Markup and Marks feature document is updated. Local report `docs/agent-ops/reports/KEY-291.md` contains the exact evidence and open points. English toolbar keys were included in concurrent KEY-304 commit96c7d37, while their Arabic counterparts and this task's reader implementation remain in this commit. Existing KEY-271 publication receipt corrections and unrelated shared-file changes are excluded from KEY-291 staging.
+
+Explicit authorization covers one KEY-291 commit ending `Agent: Codex` and a normal push to `origin/feature/library-domain`. Publication pending under `docs/agent-ops/commit.lock`. Claude owns review/Jira. Stop after this task.
+
+Exact KEY-291 files/hunks follow.
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `docs/features/feature - EPUB Markup and Marks.md`
+- `scripts/reader-toolbar-live/main.cjs`
+- `scripts/reader-toolbar-live/run.mjs`
+- `src/renderer/components/reader/PdfWorkstationPanel.tsx`
+- `src/renderer/components/reader/ReaderMarkupBar.tsx`
+- `src/renderer/components/reader/ZenSelectionMenu.tsx`
+- `src/renderer/components/reader/ZenTopBar.tsx`
+- `src/renderer/translations.ts`
+- `tests/ui/reader-toolbar-access.test.ts`
+
 ## KEY-304 — 2026-11-10, Antigravity (implemented and verified)
 
 - **Task**: KEY-304 (UI/UX U10): Notes, knowledge cards, and boards workspace.

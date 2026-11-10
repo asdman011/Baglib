@@ -136,3 +136,14 @@ Reflowable text has fluid dimensions that change when the window resizes or font
 - CFIs point to exact DOM structural paths (`/4/2/10/1:0`).
 - Text ranges are reconstructed and W3C CSS Highlights are refreshed without losing precision.
 - Arabic text maintains right-to-left visual flow and diacritic integrity.
+
+
+## 6. Keyboard and touch access, KEY-291, 2026-11-10
+
+`ZenTopBar.tsx` reveals its existing header on descendant focus and holds it open while focus stays inside. A persistent, centrally localized 44px-high reading-tools button near the bottom of the page pins the header for touch use. The header keeps its existing top position and mouse-hover callbacks. Its transition respects reduced-motion preferences. `aria-controls` and `aria-expanded` connect the button to the header, which stays in the accessibility tree.
+
+`ReaderMarkupBar.tsx` handles Alt+M using physical `KeyM` as well as the Latin key value, including Arabic keyboard layouts. It focuses the first markup button in both the EPUB reader and the native PDF workstation. Inputs, editable content, dialog targets, IME composition and other modifiers are excluded. The shortcut sheet lists the combination. The PDF workstation adds the persistent control when its top ribbon is hidden by page-only mode or explicitly collapsed, reusing its existing pin state and focus-within CSS.
+
+`ZenSelectionMenu.tsx` uses the visible header's measured bottom edge and available viewport height, keeping KEY-280 actions below the wrapped toolbar. Header resize observation updates this spacing at narrow widths. Verification evidence and available real-document coverage are recorded in `docs/agent-ops/reports/KEY-291.md`.
+
+This change follows BagLib's existing reader components. No external application investigation was performed for KEY-291.

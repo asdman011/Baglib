@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Stamp, Ruler, ChevronDown, Circle, Palette, Highlighter, Keyboard, Lock, LockOpen, MessageSquarePlus, MousePointer2, MoveUpRight, Square, SquareDashed, Strikethrough, Type, Underline } from 'lucide-react';
 import { isShapeTool, type MarkupTool } from '../../../shared/pdf-markup';
 import type { TranslationKey } from '../../translations';
@@ -46,6 +46,19 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
   allowedTools?: readonly MarkupTool[];
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }) {
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const reveal = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return;
+      if (event.code !== 'KeyM' && event.key.toLowerCase() !== 'm') return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+      event.preventDefault();
+      barRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    };
+    window.addEventListener('keydown', reveal);
+    return () => window.removeEventListener('keydown', reveal);
+  }, []);
   const [expanded, setExpanded] = useState(false);
   const [lastShape, setLastShape] = useState<MarkupTool>('rect');
   const availableTools = allowedTools ? tools.filter(entry => allowedTools.includes(entry.id)) : tools;
@@ -89,7 +102,7 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
     className={`flex items-center gap-1.5 rounded-md p-1 ${withLabel ? 'w-full px-2 text-start text-xs' : ''} ${tool === entry.id ? 'bg-emerald-600 text-white' : 'text-main hover:bg-canvas'}`}><Icon size={13} aria-hidden="true" className={entry.id === 'arrow' ? 'shrink-0 rtl:-scale-x-100' : 'shrink-0'} />{withLabel && <span className="min-w-0 leading-snug">{t(entry.label)}</span>}</button>; };
   if (compact && onTool) {
     const current = availableTools.find(entry => entry.id === tool) ?? availableTools[0];
-    return <div role="toolbar" aria-label={t('markupBarLabel')} data-reader-markup-bar data-markup-compact data-markup-tool={tool} className="relative flex shrink-0 items-center gap-1 rounded-lg border border-subtle bg-surface px-1 py-1">
+    return <div ref={barRef} role="toolbar" aria-keyshortcuts="Alt+M" aria-label={t('markupBarLabel')} data-reader-markup-bar data-markup-compact data-markup-tool={tool} className="relative flex shrink-0 items-center gap-1 rounded-lg border border-subtle bg-surface px-1 py-1">
       {toolButton(current)}
       <button type="button" data-markup-palette aria-haspopup="dialog" aria-expanded={paletteOpen} aria-label={t('markupPalette')} title={t('markupPalette')} onClick={() => setPaletteOpen(value => !value)} className="flex items-center gap-0.5 rounded-md p-0.5 text-main hover:bg-canvas">
         <span className="size-3.5 rounded-full border border-black/10" aria-hidden="true" style={{ backgroundColor: HIGHLIGHT_COLORS.find(swatch => swatch.id === color)?.hex }} />
@@ -105,7 +118,7 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
       </>}
     </div>;
   }
-  return <div role="toolbar" aria-label={t('markupBarLabel')} data-reader-markup-bar data-markup-tool={tool} className="flex shrink-0 items-center gap-1 rounded-lg border border-subtle bg-surface px-1.5 py-1">
+  return <div ref={barRef} role="toolbar" aria-keyshortcuts="Alt+M" aria-label={t('markupBarLabel')} data-reader-markup-bar data-markup-tool={tool} className="flex shrink-0 items-center gap-1 rounded-lg border border-subtle bg-surface px-1.5 py-1">
     {onTool ? <span className="flex items-center gap-0.5">
       {shown.map(entry => toolButton(entry))}
       {availableTools.length > COMPACT.length && <button type="button" data-markup-more aria-expanded={expanded} aria-label={t('markupMoreTools')} title={t('markupMoreTools')} onClick={() => setExpanded(value => !value)} className="rounded-md p-0.5 text-muted hover:bg-canvas"><ChevronDown size={12} className={expanded ? 'rotate-180' : undefined} /></button>}
@@ -119,6 +132,7 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
 }
 
 const rows: { keys: string; label: TranslationKey }[] = [
+  { keys: 'Alt + M', label: 'readerToolbarShow' },
   { keys: 'H', label: 'shortcutHighlighter' },
   { keys: 'U', label: 'shortcutUnderline' },
   { keys: 'C', label: 'shortcutComment' },

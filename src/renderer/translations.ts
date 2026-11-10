@@ -1,5 +1,7 @@
 export const translations = {
   ar: {
+    readerToolbarShow: "أدوات القراءة والتعليق",
+    readerToolbarUnpin: "إلغاء تثبيت أدوات القراءة",
     markupToolStamp: "الأختام",
     markupToolMeasure: "القياس",
     stampChecked: "تمت المراجعة",

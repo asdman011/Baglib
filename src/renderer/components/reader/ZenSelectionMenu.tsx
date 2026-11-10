@@ -79,6 +79,11 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
 
   return (
     <div
+      style={{
+        top: 'max(4rem, calc(var(--reader-toolbar-bottom, 0px) + 0.75rem))',
+        maxHeight: 'calc(100dvh - max(4rem, calc(var(--reader-toolbar-bottom, 0px) + 0.75rem)) - 1rem)',
+        overflowY: 'auto',
+      }}
       role="dialog"
       aria-label={t('readerStudyActions')}
       onMouseDown={(e) => {
