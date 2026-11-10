@@ -1,36 +1,61 @@
-## KEY-292 — 2026-11-10, Antigravity (implemented and verified)
+## KEY-296 — 2026-11-10, Antigravity (implemented and verified)
 
-- Implementation & Verification: OCR word corrections update full-text search (`book_content_fts`) per-page (follow-up to KEY-275).
-  - Implemented `reindexPage(bookId, page)` in `src/main/database/repositories/content-fts.repository.ts` to delete and re-insert single-page text chunk in `book_content_fts` with canonical and normalized Arabic text, preserving existing metadata (`location_cfi_or_page`, `chapter_title`). Added `deletePage` and `getPageContent`.
-  - Added IPC handlers `search:reindex-page-content` (with source-to-work resolution) and `search:get-page-content` in `src/main/ipc/database.ts`.
-  - Exposed `reindexPageContent` and `getPageContent` in `src/preload/index.ts`.
-  - Updated `applyStoredCorrections` in `src/shared/ocr-suspects.ts` to check `targetWord.text === entry.corrected` so existing corrections are not falsely flagged as stale text mismatches.
-  - Updated `OcrInspectorDrawer.tsx` to automatically reindex page content on save, re-apply, and discard; added discard handler and "Applied Corrections" review UI with discard button.
-  - Added 1:1 bilingual translation keys for `ocrSavedCorrectionsTitle`, `ocrDiscardCorrection`, `ocrDiscardCorrectionToast` in `src/renderer/translations.ts`.
-  - Created 7 comprehensive tests in `tests/services/ocr-fts-reindex.test.ts` (per-page re-indexing, metadata preservation, single-page deletion, stale correction rejection, discard restoring indexing, vowelled Arabic normalized lookup, source ID resolution). All 7 pass (128ms).
-  - Executed full test suite: `1635 passed, 0 failed` across 330 suites.
-  - Executed live benchmark (`node scripts/ocr-review-live/run.mjs`) on real scanned Arabic PDF (`tests/real-files/pdf/ar/scanned-image-only/تفسير الموعذتين لابن تيمية.pdf`) without overwriting original:
-    - Edited word on page 1 → FTS search found corrected Arabic text (`<mark>تصحيح-اختباري</mark>`).
-    - Discarded correction → FTS search verified corrected word no longer found, restoring original indexing.
-    - Verified stale correction detection and warning in drawer.
-    - Verified English LTR OCR flow and review drawer layout.
-    - Evidence screenshots saved in `.baglib-data/key292-evidence/`.
-  - Static checks: `npx tsc --noEmit` passed (0 errors), `git diff --check` passed (0 errors), `npx eslint` passed (0 errors on task files).
+- Implementation & Verification: UI/UX U2 Design Tokens & Shared Primitives (The Figma Palette Wins, D1).
+  - Applied Decision D1: Dark Evergreen (`#1e3e2b` in light mode, `#2d5a3f` in dark mode) as primary action color for buttons, active sidebar items, and selected chips. Pale Sky dedicated to focus outlines (`focus-visible:outline-focus`) and links. Baghdad Amber (`#b45309` light, `#fbbf24` dark) for accents. Warm Beige Parchment (`#efece4`) canvas and Cream Paper (`#f8f6f0`) cards with elevated white cards (`#ffffff`). Deep Night Blue-Black (`#0e161b`) dark canvas with Scholar Dark surfaces (`#141f26`).
+  - Added semantic tokens (`canvas`, `surface`, `surface-raised`, `border`, `text`, `text-muted`, `primary`, `primary-contrast`, `accent`, `success`, `warning`, `danger`, `focus`) in `src/renderer/app/globals.css` and `tailwind.config.ts`, preserving all existing CSS variable aliases (`--bg-canvas`, `--bg-surface`, `--bg-sidebar`, `--border-subtle`, `--text-main`, `--text-muted`).
+  - Implemented 11 accessible UI primitives under `src/renderer/components/ui/` with CSS logical properties and strict RTL/LTR support:
+    - `Button` (variants: primary/secondary/ghost/danger; sizes: sm/md; loading state with spinner; disabled) and `IconButton` (requiring descriptive accessible label).
+    - `Chip` (selectable with D1 dark evergreen active styling, removable with localized accessible delete label).
+    - `Badge` (status variants: default, primary, accent, success, warning, danger, outline).
+    - `Card` (`Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`; default and raised variants).
+    - `Modal` and `Sheet` (focus trap cycling Tab/Shift+Tab, Escape key dismiss, opener focus restoration on close, `aria-modal="true"`, labelled title; `Sheet` supports logical sides `start`/`end`/`bottom`/`top`).
+    - `Menu` (keyboard navigation with ArrowDown/ArrowUp wrapping, Home, End, Esc, Enter/Space, `role="menu"` / `role="menuitem"`).
+    - `Tabs` and `TabPanel` (roving tabindex with `tabIndex={isSelected ? 0 : -1}`, directional arrow key navigation mirrored in RTL, Home, End).
+    - `Toast` and `ToastProvider` (live region `role="status"` / `role="alert"`, 1-click Undo action, auto-dismiss paused on mouse hover).
+    - `EmptyState` (calm scholarly placeholder with icon, title, description, and action button).
+    - `Skeleton` (accessible pulse loaders with rounded variations).
+    - `Tooltip` (accessible viewport-clamped tooltip with hover/focus triggers and Esc dismiss).
+  - Migrated shell layout components off hardcoded colors onto semantic tokens: `src/renderer/components/layout/AppLayout.tsx`, `NavigationRail.tsx`, `Titlebar.tsx`, `StatusBar.tsx`, `InfoTip.tsx`. Verified 0 hardcoded hex values in shell files via grep.
+  - Updated `src/renderer/app/playground/page.tsx` with RTL/LTR and Light/Dark live toggles, comprehensive primitives gallery, and token swatch inspector.
+  - Updated `docs/DesignSystem.md` documenting Decision D1, semantic token values, contrast ratios, and how to use the primitives.
+  - Tests:
+    - `tests/ui/primitives.test.ts`: 9/9 unit tests pass covering button states, chip selection/removal, badge/card composables, modal focus trap & opener return, sheet logical sides, menu keyboard navigation, tabs roving tabindex, toast with undo, and empty state/skeleton/tooltip.
+    - Full test suite: 1,635 / 1,635 tests pass across 330 suites (0 failures, 0 skips).
+    - `npx tsc --noEmit`: 0 errors.
+    - `npx eslint` on changed files: 0 errors, 0 warnings.
+    - `npx tsup`: success in 174ms.
+    - `git diff --check`: clean (0 errors).
+  - Live harness (`scripts/ui-primitives-live/`): verified playground and shell across matrix (Arabic RTL, English LTR, light/dark themes, 1280px and 480px viewports) with real files imported (`tests/real-files/` Arabic text PDF, English academic PDF, English EPUB, physical book). 20 evidence screenshots captured in `.baglib-data/KEY-296-evidence/`. Original corpus verified unchanged.
 - Exact files changed:
-  - `src/main/database/repositories/content-fts.repository.ts`
-  - `src/main/ipc/database.ts`
-  - `src/preload/index.ts`
-  - `src/shared/ocr-suspects.ts`
-  - `src/renderer/components/reader/OcrInspectorDrawer.tsx`
-  - `src/renderer/translations.ts`
-  - `tests/services/ocr-fts-reindex.test.ts`
-  - `scripts/ocr-review-live/main.cjs`
-  - `scripts/ocr-review-live/run.mjs`
-  - `docs/agent-ops/reports/KEY-292.md`
-  - `docs/agent-ops/board.md`
+  - `src/renderer/app/globals.css`
+  - `tailwind.config.ts`
+  - `src/renderer/components/ui/Button.tsx`
+  - `src/renderer/components/ui/Chip.tsx`
+  - `src/renderer/components/ui/Badge.tsx`
+  - `src/renderer/components/ui/Card.tsx`
+  - `src/renderer/components/ui/Modal.tsx`
+  - `src/renderer/components/ui/Sheet.tsx`
+  - `src/renderer/components/ui/Menu.tsx`
+  - `src/renderer/components/ui/Tabs.tsx`
+  - `src/renderer/components/ui/Toast.tsx`
+  - `src/renderer/components/ui/EmptyState.tsx`
+  - `src/renderer/components/ui/Skeleton.tsx`
+  - `src/renderer/components/ui/Tooltip.tsx`
+  - `src/renderer/components/ui/index.ts`
+  - `src/renderer/components/layout/AppLayout.tsx`
+  - `src/renderer/components/layout/NavigationRail.tsx`
+  - `src/renderer/components/layout/Titlebar.tsx`
+  - `src/renderer/components/layout/StatusBar.tsx`
+  - `src/renderer/components/layout/InfoTip.tsx`
+  - `src/renderer/app/playground/page.tsx`
+  - `tests/ui/primitives.test.ts`
+  - `docs/DesignSystem.md`
+  - `scripts/ui-primitives-live/run.mjs`
+  - `scripts/ui-primitives-live/primitives-check.cjs`
+  - `docs/agent-ops/reports/KEY-296.md`
   - `CURRENT_TASK.md`
   - `IMPLEMENTATION_PLAN.md`
-
+  - `docs/agent-ops/board.md`
 
 ## KEY-295 — 2026-11-10, Antigravity (implemented and verified)
 

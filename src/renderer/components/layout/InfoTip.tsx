@@ -37,7 +37,7 @@ export function InfoTip({ label, text, ariaLabel }: { label: string; text: strin
     <button type="button" data-info-tip={label} aria-label={ariaLabel} aria-expanded={open} aria-describedby={open ? id : undefined}
       onKeyDown={event => { if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); setOpen(false); setPinned(false); } }}
       onFocus={show} onBlur={hide} onClick={() => { setPinned(value => !value || !open); setOpen(true); }}
-      className="rounded-full p-0.5 text-muted hover:text-main focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500">
+      className="rounded-full p-0.5 text-muted hover:text-main focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus">
       <Info size={13} aria-hidden="true" />
     </button>
     {open && <span ref={bubble} role="tooltip" id={id} data-info-tip-text style={{ transform: `translateX(${shift}px)` }}

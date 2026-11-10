@@ -14,8 +14,8 @@ export const StatusBar: React.FC = () => {
       {/* Left Items */}
       <div className="flex min-w-0 items-center gap-3">
         {/* Total Book Notes Count */}
-        <button type="button" onClick={() => setViewMode('notes')} title={t('navNotes')} className="flex shrink-0 items-center gap-1 rounded py-1 hover:text-main focus-visible:outline-2 focus-visible:outline-pale-sky-500">
-          <FileText className="w-3 h-3 text-pale-sky-500" />
+        <button type="button" onClick={() => setViewMode('notes')} title={t('navNotes')} className="flex shrink-0 items-center gap-1 rounded py-1 hover:text-main focus-visible:outline-2 focus-visible:outline-focus">
+          <FileText className="w-3 h-3 text-primary" />
           <span>{loading ? t('studyLoadingNotes') : error ? t('studyNotesUnavailable') : `${notes.length.toLocaleString(lang)} ${t('recordedNotes')}`}</span>
         </button>
 
@@ -32,12 +32,12 @@ export const StatusBar: React.FC = () => {
       <div className="flex items-center gap-4">
         {/* Active Shortcuts Quick Help */}
         <div className="hidden md:flex items-center gap-2 text-[10px] text-muted">
-          <button type="button" onClick={() => setCommandPaletteOpen(true)} className="flex items-center gap-1 rounded hover:text-main focus-visible:outline-2 focus-visible:outline-pale-sky-500">
+          <button type="button" onClick={() => setCommandPaletteOpen(true)} className="flex items-center gap-1 rounded hover:text-main focus-visible:outline-2 focus-visible:outline-focus">
             <kbd dir="ltr" className="px-1 py-0.2 rounded bg-canvas border border-subtle font-mono">Ctrl+K</kbd>{' '}
             {t('globalSearch')}
           </button>
           <span>•</span>
-          <button type="button" onClick={toggleZenMode} className="flex items-center gap-1 rounded hover:text-main focus-visible:outline-2 focus-visible:outline-pale-sky-500">
+          <button type="button" onClick={toggleZenMode} className="flex items-center gap-1 rounded hover:text-main focus-visible:outline-2 focus-visible:outline-focus">
             <kbd dir="ltr" className="px-1 py-0.2 rounded bg-canvas border border-subtle font-mono">F11</kbd>{' '}
             {t('zenModeShort')}
           </button>

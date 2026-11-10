@@ -2,190 +2,208 @@
 
 `baglib` bridges classical Islamic scholarship—evoking the intellectual depth of _Bayt al-Hikmah_ (the House of Wisdom)—with modern, local-first digital research software (like Obsidian, Zotero, and Readwise).
 
-The visual identity must feel **serene, scholarly, precise, and timeless**.
+The visual identity feels **serene, scholarly, precise, and timeless**.
 
 ---
 
-## 1. Color System & Semantic Mapping
+## 1. Architectural Decisions: Decision D1 (The Figma Palette Wins)
 
-Your primary palette (**Pale Sky**) brings calm, intellectual clarity, while **Evergreen** adds a grounded natural touch deeply rooted in Islamic visual tradition.
-
-To complete the color theory model, we introduce **Baghdad Amber (Accent)**—a rich, parchment-and-gold hue that acts as a complementary warm focal point for highlights, active Quranic verses, search matches, and bookmarks.
-
-### 🎨 Color Roles Breakdown
-
-| Role          | Color Palette      | Key Tokens / Values                                       | Best Used For                                                                           |
-| ------------- | ------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| **Primary**   | **Pale Sky**       | `500` (`#4691b9`) / `600` (`#387494`) / `700` (`#2a576f`) | Primary buttons, active sidebar items, main brand accents, links, focused inputs        |
-| **Secondary** | **Evergreen**      | `500` (`#57a877`) / `600` (`#45875f`) / `700` (`#346548`) | Tags, success states, SRS mastery indicators, Zotero sync badges, green annotations     |
-| **Accent**    | **Baghdad Amber**  | `500` (`#d97706`) / `400` (`#f59e0b`) / `600` (`#b45309`) | Bookmarks, Quranic ayah markers, active search highlights, streak badges, warning flags |
-| **Neutrals**  | **Pale Sky Grays** | `50` (`#edf4f8`) → `950` (`#0a141a`)                      | Surfaces, borders, text, tooltips, panel backgrounds                                    |
+Under Decision D1 (KEY-294 / KEY-296), where the Figma vision mockup (`library-shell-mockup.png`) and early documentation disagreed, the **Figma mockup wins**:
+- **Primary Action Color**: **Dark Evergreen** (`#1e3e2b` in light mode, `#2d5a3f` in dark mode). Used for primary call-to-action buttons (e.g. "New Object +"), active sidebar items, and selected filter chips.
+- **Pale Sky**: Dedicated to links, active focus rings, and secondary interactive states.
+- **Baghdad Amber**: The warm accent for bookmarks, Quranic ayah markers, active search highlights, and streak badges.
+- **Parchment Canvas Base**: Light mode remains Warm Beige Parchment (`#efece4`) with Cream Paper cards (`#f8f6f0`) and elevated pure white cards (`#ffffff`).
+- **Scholar Night Base**: Dark mode remains Deep Night Blue-Black (`#0e161b`) with Scholar Dark surfaces (`#141f26`) and raised surfaces (`#1c2a33`).
 
 ---
 
-### 🌗 Light vs. Dark Mode Mapping
+## 2. Semantic Color System & Tokens
 
-To ensure high contrast and WCAG AAA/AA readability across dense scholarly text, map your background and foreground roles as follows:
+The application uses unified semantic design tokens mapped across both light and dark themes in `globals.css` and `tailwind.config.ts`.
 
-```
-LIGHT MODE (Warm Parchment / ورق عتيق)
-┌─────────────────────────────────────────────────────────┐
-│ Canvas Base        : Parchment Beige (#efece4)          │
-│ Surface / Cards    : Cream Paper (#f8f6f0)              │
-│ Border / Dividers  : Antique Parchment Border (#dcd4c3) │
-│ Foreground Text    : Deep Warm Ink (#2c221e)            │
-│ Muted Text         : Muted Manuscript Ink (#6e5e4f)     │
-└─────────────────────────────────────────────────────────┘
+### 🎨 Semantic Tokens Table
 
-DARK MODE (Scholar Night / ليلي أكاديمي)
-┌─────────────────────────────────────────────────────────┐
-│ Canvas Base        : Deep Night Blue (#0e161b)          │
-│ Surface / Cards    : Scholar Dark (#141f26)             │
-│ Border / Dividers  : Slate Border (#223440)             │
-│ Foreground Text    : Parchment Light (#efece4)          │
-│ Muted Text         : Muted Sky (#95a8b5)                │
-└─────────────────────────────────────────────────────────┘
+| Token | Light Mode (Warm Parchment) | Dark Mode (Scholar Night) | WCAG Contrast Ratio (AA / AAA) | Role & Usage |
+| :--- | :--- | :--- | :--- | :--- |
+| `canvas` | `#efece4` | `#0e161b` | Canvas base | App background canvas |
+| `surface` | `#f8f6f0` | `#141f26` | Surface cards | Default cards, panels, drawers |
+| `surface-raised` | `#ffffff` | `#1c2a33` | Elevated cards | Elevated cards, floating popovers, modals |
+| `border` | `#dcd4c3` | `#223440` | Subtle dividers | Dividers, card borders, input borders |
+| `text` | `#2c221a` | `#efece4` | **13.17:1** (L) / **15.48:1** (D) [AAA] | Primary body text and headers |
+| `text-muted` | `#6e5e4f` | `#95a8b5` | **5.75:1** (L) / **6.82:1** (D) [AA+] | Subtitles, secondary metadata, placeholders |
+| `primary` | `#1e3e2b` | `#2d5a3f` | **11.80:1** (L) / **7.94:1** (D) [AAA] | Primary buttons ("New Object +"), selected chips |
+| `primary-contrast` | `#ffffff` | `#ffffff` | High contrast | Text on primary backgrounds |
+| `accent` | `#b45309` | `#fbbf24` | **4.65:1** (L) / **10.03:1** (D) [AA/AAA] | Baghdad Amber accent, badges, ayah marks |
+| `success` | `#166534` | `#4ade80` | **6.60:1** (L) / **9.61:1** (D) [AAA] | Success notices, verified badges |
+| `warning` | `#92400e` | `#fbbf24` | **6.80:1** (L) / **10.20:1** (D) [AAA] | Warnings, quota thresholds |
+| `danger` | `#991b1b` | `#f87171` | **7.69:1** (L) / **6.06:1** (D) [AAA/AA] | Destructive actions, delete buttons |
+| `focus` | `#2a576f` | `#6ba7c7` | **7.22:1** (L) / **6.36:1** (D) [AAA/AA] | Pale Sky focus rings and hyperlinks |
 
-
-```
+All text foreground-to-background combinations meet or exceed **WCAG 2.1 AA** (4.5:1 for normal text, 3:1 for large text / UI boundaries) and reach **WCAG AAA** for core reading text.
 
 ---
 
-## 2. Typography Strategy
+## 3. Typography Strategy: Three-Tier Operational Separation
 
-For an Islamic research app supporting both Arabic and English, typography requires a clear **three-tier operational separation**:
-
-1. **Reem Kufi (`font-display`)**: Elegant, geometric Kufic headers. Used selectively for app titles, modal headers, major section dividers, and branding elements.
-2. **Tajawal (`font-sans`)**: Crisp, modern, highly legible geometric sans-serif. Used for all **UI elements** (sidebars, button labels, settings, metadata tags, tree views, table columns).
-3. **Amiri (`font-serif` / `font-reading`)**: Classical Naskh script. **Essential** for long-form reading, Quranic text, Hadith citations, Tafsir excerpts, and academic note bodies.
-
-> **Decision Guidance:** Do not choose between Tajawal and Amiri—use **Tajawal for UI controls** and **Amiri for document body/content reading**. This matches how modern academic apps treat interface typography vs. document typography.
-
-```
-Typography Hierarchy Strategy:
-┌─────────────────────────────────────────────────────────────┐
-│ [REEM KUFI]    Main Title / Dashboard Headers / Book Titles │
-│ [TAJAWAL]      Sidebar menu, Buttons, Filters, Tags, Inputs │
-│ [AMIRI]        Quranic Verses, Hadith, Tafsir, Note Body    │
-└─────────────────────────────────────────────────────────────┘
-
-```
+1. **Reem Kufi (`font-display` / `var(--font-reem-kufi)`)**:
+   - Modern, elegant geometric Kufic script.
+   - Used for main book titles, section dividers, dashboard headers, and brand elements.
+2. **Tajawal (`font-sans` / `var(--font-tajawal)`)**:
+   - Clean, geometric modern sans-serif.
+   - Used for all **UI interface elements**: sidebars, button labels, settings, metadata tags, tree views, table columns.
+3. **Amiri (`font-serif` / `font-reading` / `var(--font-amiri)`)**:
+   - Classical Naskh script.
+   - Used for long-form reading, Quranic text, Hadith citations, Tafsir excerpts, and note bodies.
 
 ---
 
-## 3. Tailwind CSS Configuration (`tailwind.config.js`)
+## 4. Shared UI Primitives (`src/renderer/components/ui/`)
 
-Below is the complete ready-to-use Tailwind configuration integrating your colors, fonts, and dark mode rules:
+All shared primitives are located under `src/renderer/components/ui/` and exported via `src/renderer/components/ui/index.ts`. They strictly use CSS logical properties (`start`, `end`, `margin-inline`, `padding-inline`) to support both **Arabic RTL** and **English LTR** with zero layout breakage.
 
-```javascript
-/** @type {import('tailwindcss').Config} */
-module.exports = {
-  darkMode: "class", // Perfect for Electron desktop apps
-  content: [
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        "pale-sky": {
-          50: "#edf4f8",
-          100: "#dae9f1",
-          200: "#b5d3e3",
-          300: "#90bdd5",
-          400: "#6ba7c7",
-          500: "#4691b9",
-          600: "#387494",
-          700: "#2a576f",
-          800: "#1c3a4a",
-          900: "#0e1d25",
-          950: "#0a141a",
-        },
-        evergreen: {
-          50: "#eef6f1",
-          100: "#ddeee4",
-          200: "#bcdcc9",
-          300: "#9acbae",
-          400: "#78ba92",
-          500: "#57a877",
-          600: "#45875f",
-          700: "#346548",
-          800: "#234330",
-          900: "#112218",
-          950: "#0c1811",
-        },
-        amber: {
-          50: "#fffbeb",
-          100: "#fef3c7",
-          200: "#fde68a",
-          300: "#fcd34d",
-          400: "#fbbf24",
-          500: "#d97706", // Primary Baghdad Amber accent
-          600: "#b45309",
-          700: "#92400e",
-          800: "#78350f",
-          900: "#451a03",
-        },
-        // Semantic Token Aliases
-        background: "var(--bg-canvas)",
-        surface: "var(--bg-surface)",
-        border: "var(--border-subtle)",
-        foreground: "var(--text-main)",
-        muted: "var(--text-muted)",
-      },
-      fontFamily: {
-        display: ["var(--font-reem-kufi)", "serif"],
-        sans: ["var(--font-tajawal)", "sans-serif"],
-        serif: ["var(--font-amiri)", "serif"],
-        reading: ["var(--font-amiri)", "serif"],
-      },
-    },
+### 1. `Button` & `IconButton`
+```tsx
+import { Button, IconButton } from '@/components/ui';
+import { Plus, Trash2 } from 'lucide-react';
+
+// Variants: 'primary' (Dark Evergreen), 'secondary', 'ghost', 'danger'
+// Sizes: 'sm', 'md'
+<Button variant="primary" icon={<Plus className="size-4" />} onClick={handleCreate}>
+  كائن جديد +
+</Button>
+
+// Loading button with spinner and aria-busy:
+<Button variant="secondary" loading={isLoading}>
+  حفظ
+</Button>
+
+// Accessible IconButton requiring a descriptive label:
+<IconButton label="حذف الملاحظة" variant="danger" size="sm" onClick={handleDelete}>
+  <Trash2 className="size-4" />
+</IconButton>
+```
+
+### 2. `Chip`
+```tsx
+import { Chip } from '@/components/ui';
+
+// Selectable chip (active evergreen per D1):
+<Chip label="الفقه الإسلامي" selected={isSelected} onSelect={() => setIsSelected(!isSelected)} />
+
+// Removable filter chip:
+<Chip label="تفسير ابن كثير" removable onRemove={() => removeFilter('tafsir')} />
+```
+
+### 3. `Badge`
+```tsx
+import { Badge } from '@/components/ui';
+
+// Variants: 'default', 'primary', 'accent', 'success', 'warning', 'danger', 'outline'
+<Badge variant="primary">جديد</Badge>
+<Badge variant="accent">نسخة ورقية</Badge>
+```
+
+### 4. `Card`
+```tsx
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui';
+
+<Card variant="raised">
+  <CardHeader>
+    <CardTitle>مقدمة ابن خلدون</CardTitle>
+    <CardDescription>عبد الرحمن بن محمد بن خلدون</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <p>نص الملاحظة أو محتوى البطاقة...</p>
+  </CardContent>
+  <CardFooter>
+    <Badge variant="default">تاريخ</Badge>
+    <Button size="sm" variant="ghost">قراءة</Button>
+  </CardFooter>
+</Card>
+```
+
+### 5. `Modal` & `Sheet`
+Accessible dialogs featuring focus trapping, Escape key closing, opener focus restoration, and `aria-modal="true"`.
+```tsx
+import { Modal, Sheet } from '@/components/ui';
+
+<Modal open={isOpen} onClose={() => setIsOpen(false)} title="إضافة بطاقة" description="سؤال المراجعة">
+  <form>{/* Focusable elements */}</form>
+</Modal>
+
+<Sheet open={isSheetOpen} onClose={() => setIsSheetOpen(false)} side="end" title="تفاصيل المخطوطة">
+  <div>{/* Content */}</div>
+</Sheet>
+```
+
+### 6. `Menu`
+Dropdown action menu supporting keyboard arrow keys (ArrowDown, ArrowUp, Home, End, Esc, Enter).
+```tsx
+import { Menu } from '@/components/ui';
+
+<Menu
+  trigger={({ onClick, ref }) => (
+    <Button ref={ref} onClick={onClick}>خيارات المستند</Button>
+  )}
+  items={[
+    { label: 'تعديل', onClick: handleEdit },
+    { label: 'حذف', danger: true, onClick: handleDelete },
+  ]}
+/>
+```
+
+### 7. `Tabs` & `TabPanel`
+Tabs with roving tabindex (`tabIndex={isSelected ? 0 : -1}`), directional arrow navigation (ArrowLeft/ArrowRight mirrored in RTL), and Home/End support.
+```tsx
+import { Tabs, TabPanel } from '@/components/ui';
+
+<Tabs
+  tabs={[
+    { id: 'contents', label: 'الفهرس' },
+    { id: 'bookmarks', label: 'العلامات' },
+  ]}
+  activeTab={activeTab}
+  onChange={setActiveTab}
+/>
+<TabPanel tabId="contents" activeTab={activeTab}>
+  {/* Contents */}
+</TabPanel>
+```
+
+### 8. `Toast` & `ToastProvider`
+Live-region toast notifications with auto-dismiss timers, pause on hover, and 1-click Undo actions.
+```tsx
+import { ToastProvider, useToast } from '@/components/ui';
+
+const { showToast } = useToast();
+
+showToast({
+  message: 'تم حذف الملاحظة بنجاح',
+  type: 'danger',
+  action: {
+    label: 'تراجع',
+    onClick: handleUndo,
   },
-  plugins: [require("@tailwindcss/typography")],
-};
+});
 ```
 
----
+### 9. `EmptyState`, `Skeleton`, `Tooltip`
+```tsx
+import { EmptyState, Skeleton, Tooltip } from '@/components/ui';
 
-## 4. CSS Variables (`globals.css`) Setup
+// Empty State:
+<EmptyState
+  icon={<Search className="size-6 text-text-muted" />}
+  title="لا توجد نتائج"
+  description="جرّب تعديل معايير البحث."
+  action={<Button size="sm">إعادة تعيين</Button>}
+/>
 
-Paste this into your global stylesheet to support effortless light/dark theme switching in Next.js:
+// Skeleton loader:
+<Skeleton rounded="md" className="h-6 w-32" />
 
-```css
-@layer base {
-  :root {
-    --bg-canvas: #edf4f8; /* pale-sky-50 */
-    --bg-surface: #ffffff; /* White card background */
-    --bg-sidebar: #dae9f1; /* pale-sky-100 */
-    --border-subtle: #b5d3e3; /* pale-sky-200 */
-    --text-main: #0a141a; /* pale-sky-950 */
-    --text-muted: #2a576f; /* pale-sky-700 */
-  }
-
-  .dark {
-    --bg-canvas: #0a141a; /* pale-sky-950 */
-    --bg-surface: #0e1d25; /* pale-sky-900 */
-    --bg-sidebar: #0e1d25; /* pale-sky-900 */
-    --border-subtle: #1c3a4a; /* pale-sky-800 */
-    --text-main: #edf4f8; /* pale-sky-50 */
-    --text-muted: #90bdd5; /* pale-sky-300 */
-  }
-
-  body {
-    background-color: var(--bg-canvas);
-    color: var(--text-main);
-    font-family: var(--font-tajawal), sans-serif;
-  }
-}
+// Accessible Tooltip (shows on hover/focus, closes on Esc):
+<Tooltip content="تنزيل نسخة PDF" side="top">
+  <IconButton label="تنزيل"><Download className="size-4" /></IconButton>
+</Tooltip>
 ```
-
----
-
-## 5. Key UI Component Token Mapping
-
-- **Primary Action Buttons**: `bg-pale-sky-600 hover:bg-pale-sky-700 text-white dark:bg-pale-sky-500 dark:hover:bg-pale-sky-600`
-- **Knowledge Cards (Ayah / Hadith)**: `bg-surface border border-border rounded-xl shadow-sm p-4 hover:border-pale-sky-400`
-- **Ayah / Highlight Badges**: `bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300`
-- **SRS Flashcard Mastery / Active Streaks**: `text-evergreen-600 dark:text-evergreen-400`
-- **Sidebar Selected State**: `bg-pale-sky-200/60 text-pale-sky-900 font-semibold dark:bg-pale-sky-800/60 dark:text-pale-sky-100`

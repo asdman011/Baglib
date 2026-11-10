@@ -320,12 +320,6 @@ export function applyStoredCorrections(
       continue;
     }
 
-    // Check if word is already patched with the corrected text
-    if (targetWord.text === entry.corrected) {
-      appliedCount++;
-      continue;
-    }
-
     // Check original text match
     if (targetWord.text !== entry.original) {
       staleCorrections.push({

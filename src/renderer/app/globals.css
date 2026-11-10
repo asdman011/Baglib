@@ -39,9 +39,22 @@
 }
 
 @theme {
-  /* Dynamic Surface & Semantic Design System Tokens */
-  --color-canvas: var(--bg-canvas);
-  --color-surface: var(--bg-surface);
+  /* Dynamic Surface & Semantic Design System Tokens (KEY-296 / D1) */
+  --color-canvas: var(--color-canvas-val);
+  --color-surface: var(--color-surface-val);
+  --color-surface-raised: var(--color-surface-raised-val);
+  --color-border: var(--color-border-val);
+  --color-text: var(--color-text-val);
+  --color-text-muted: var(--color-text-muted-val);
+  --color-primary: var(--color-primary-val);
+  --color-primary-contrast: var(--color-primary-contrast-val);
+  --color-accent: var(--color-accent-val);
+  --color-success: var(--color-success-val);
+  --color-warning: var(--color-warning-val);
+  --color-danger: var(--color-danger-val);
+  --color-focus: var(--color-focus-val);
+
+  /* Preserved Backwards-Compatible Aliases */
   --color-sidebar: var(--bg-sidebar);
   --color-subtle: var(--border-subtle);
   --color-main: var(--text-main);
@@ -105,21 +118,85 @@
 
 @layer base {
   :root {
-    --bg-canvas: #efece4;      /* Warm Beige Parchment (ورق عتيق) */
-    --bg-surface: #f8f6f0;     /* Cream Manuscript Card */
-    --bg-sidebar: #e5dfd0;     /* Soft Parchment Sidebar */
-    --border-subtle: #dcd4c3;  /* Antique Parchment Border */
-    --text-main: #2c221a;      /* Deep Warm Manuscript Ink */
-    --text-muted: #6e5e4f;     /* Muted Manuscript Ink */
+    /* 1. Semantic Design System Tokens (Light Mode: Warm Parchment) */
+    --color-canvas-val: #efece4;           /* Warm Beige Parchment (ورق عتيق) */
+    --color-surface-val: #f8f6f0;          /* Cream Paper Card */
+    --color-surface-raised-val: #ffffff;   /* Elevated White Card (Figma mockup) */
+    --color-border-val: #dcd4c3;           /* Antique Parchment Border */
+    --color-text-val: #2c221a;             /* Deep Warm Manuscript Ink */
+    --color-text-muted-val: #6e5e4f;       /* Muted Manuscript Ink */
+    --color-primary-val: #1e3e2b;          /* Dark Evergreen Primary Action (D1) */
+    --color-primary-contrast-val: #ffffff; /* Primary Text Contrast */
+    --color-accent-val: #b45309;           /* Baghdad Amber Accent */
+    --color-success-val: #166534;          /* Evergreen / Success */
+    --color-warning-val: #92400e;          /* Warning Amber */
+    --color-danger-val: #991b1b;           /* Danger Red */
+    --color-focus-val: #2a576f;            /* Pale Sky Focus & Links */
+
+    /* Direct semantic variable aliases */
+    --canvas: var(--color-canvas-val);
+    --surface: var(--color-surface-val);
+    --surface-raised: var(--color-surface-raised-val);
+    --border: var(--color-border-val);
+    --text: var(--color-text-val);
+    --text-muted: var(--color-text-muted-val);
+    --primary: var(--color-primary-val);
+    --primary-contrast: var(--color-primary-contrast-val);
+    --accent: var(--color-accent-val);
+    --success: var(--color-success-val);
+    --warning: var(--color-warning-val);
+    --danger: var(--color-danger-val);
+    --focus: var(--color-focus-val);
+
+    /* Existing CSS variable aliases to preserve full backward compatibility */
+    --bg-canvas: var(--color-canvas-val);
+    --bg-surface: var(--color-surface-val);
+    --bg-surface-raised: var(--color-surface-raised-val);
+    --bg-sidebar: #e5dfd0;                 /* Soft Parchment Sidebar */
+    --border-subtle: var(--color-border-val);
+    --text-main: var(--color-text-val);
+    --text-muted: var(--color-text-muted-val);
   }
 
   .dark {
-    --bg-canvas: #0e161b;      /* Deep Night Scholar Blue-Black */
-    --bg-surface: #141f26;     /* Dark Card Surface */
+    /* 1. Semantic Design System Tokens (Dark Mode: Scholar Night) */
+    --color-canvas-val: #0e161b;           /* Deep Night Scholar Blue-Black */
+    --color-surface-val: #141f26;          /* Dark Card Surface */
+    --color-surface-raised-val: #1c2a33;   /* Elevated Scholar Night Card */
+    --color-border-val: #223440;           /* Slate Dark Border */
+    --color-text-val: #efece4;             /* Warm Parchment Light Text */
+    --color-text-muted-val: #95a8b5;       /* Muted Sky Text */
+    --color-primary-val: #2d5a3f;          /* Scholar Evergreen Primary Action */
+    --color-primary-contrast-val: #ffffff; /* Primary Text Contrast */
+    --color-accent-val: #fbbf24;           /* Baghdad Amber Accent */
+    --color-success-val: #4ade80;          /* Success Green */
+    --color-warning-val: #fbbf24;          /* Warning Amber */
+    --color-danger-val: #f87171;           /* Danger Red */
+    --color-focus-val: #6ba7c7;            /* Pale Sky Focus & Links */
+
+    /* Direct semantic variable aliases */
+    --canvas: var(--color-canvas-val);
+    --surface: var(--color-surface-val);
+    --surface-raised: var(--color-surface-raised-val);
+    --border: var(--color-border-val);
+    --text: var(--color-text-val);
+    --text-muted: var(--color-text-muted-val);
+    --primary: var(--color-primary-val);
+    --primary-contrast: var(--color-primary-contrast-val);
+    --accent: var(--color-accent-val);
+    --success: var(--color-success-val);
+    --warning: var(--color-warning-val);
+    --danger: var(--color-danger-val);
+    --focus: var(--color-focus-val);
+
+    /* Existing CSS variable aliases to preserve full backward compatibility */
+    --bg-canvas: var(--color-canvas-val);
+    --bg-surface: var(--color-surface-val);
+    --bg-surface-raised: var(--color-surface-raised-val);
     --bg-sidebar: #141f26;
-    --border-subtle: #223440;
-    --text-main: #efece4;      /* Warm Parchment Light Text */
-    --text-muted: #95a8b5;
+    --border-subtle: var(--color-border-val);
+    --text-main: var(--color-text-val);
+    --text-muted: var(--color-text-muted-val);
   }
 
   html,

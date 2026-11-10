@@ -183,7 +183,7 @@ export const AppLayout: React.FC = () => {
             {viewMode === 'notes' && <NotesOverviewView />}
             {viewMode === 'settings' && (
               <div className="flex-1 min-h-0 flex flex-col items-center justify-start overflow-y-auto overscroll-contain p-4 sm:p-8 text-center text-muted font-sans space-y-3 [&>svg]:shrink-0">
-                <Settings className="w-10 h-10 text-pale-sky-500" />
+                <Settings className="w-10 h-10 text-primary" />
                 <h2 className="font-bold text-lg text-main font-display">{t('settingsTitle')}</h2>
                 <p className="text-xs text-muted max-w-sm">{t('settingsDesc')}</p>
                 <SaveSettings />

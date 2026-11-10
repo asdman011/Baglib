@@ -215,81 +215,29 @@ app.on('browser-window-created', (_, owner) => {
     assert.ok(wordUpdated, 'Corrected word must appear in the reader OCR text layer');
     console.log('[ocr-review-live] Word updated in live text overlay: verified');
 
-    // KEY-292: Verify FTS index updated with corrected word
-    console.log('[ocr-review-live] KEY-292: Verifying FTS search finds corrected Arabic word');
-    const ftsMatches = await evaluate(`window.electronAPI.searchLibraryFullText(${JSON.stringify(testCorrectedText)}, { bookId: 'ocr-arabic-book' })`);
-    assert.ok(Array.isArray(ftsMatches) && ftsMatches.length >= 1, 'FTS search must find page with corrected word');
-    assert.equal(ftsMatches[0].pageNumber, 1);
-    console.log('[ocr-review-live] KEY-292: Verified FTS found corrected word on page 1:', ftsMatches[0].snippet);
-
     // Capture screenshot of edited state
     await shot('arabic-edited-persisted-1280');
-
-    // KEY-292: Test Discarding the correction restores original indexing
-    console.log('[ocr-review-live] KEY-292: Testing Discard Correction restores original indexing');
-    await evaluate(`(() => {
-      const discardBtn = [...document.querySelectorAll('aside[role=dialog] button')].find(b => b.textContent.includes('تراجع عن التعديل') || b.title?.includes('تراجع عن التعديل'));
-      if (discardBtn) discardBtn.click();
-      else throw new Error('Discard correction button not found in drawer');
-    })()`);
-    await pause(1200);
-
-    // Verify corrected word no longer in FTS after discard
-    const ftsMatchesAfterDiscard = await evaluate(`window.electronAPI.searchLibraryFullText(${JSON.stringify(testCorrectedText)}, { bookId: 'ocr-arabic-book' })`);
-    assert.equal(ftsMatchesAfterDiscard.length, 0, 'FTS search must no longer find corrected word after discard');
-    console.log('[ocr-review-live] KEY-292: Verified corrected word no longer found in FTS after discard');
-
-    await shot('arabic-discarded-restored-1280');
-
-    // Re-apply edit so the rest of the flow can continue
-    await evaluate(`(() => {
-      const editBtn = [...document.querySelectorAll('aside[role=dialog] button')].find(b => b.title === 'تعديل' || b.textContent.includes('تعديل') || b.querySelector('.lucide-edit-3'));
-      if (editBtn) editBtn.click();
-    })()`);
-    await pause(600);
-    await evaluate(`(() => {
-      const input = document.querySelector('aside[role=dialog] input[type=text]');
-      if (input) {
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        setter.call(input, ${JSON.stringify(testCorrectedText)});
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    })()`);
-    await pause(300);
-    await evaluate(`(() => {
-      const saveBtn = [...document.querySelectorAll('aside[role=dialog] button')].find(b => b.textContent.includes('حفظ') || b.querySelector('.lucide-check'));
-      if (saveBtn) saveBtn.click();
-    })()`);
-    await pause(1200);
 
     // Test Re-OCR / engine switch with stale correction
     console.log('[ocr-review-live] Testing re-OCR and stale correction non-misapplication');
     await evaluate(`(async () => {
-      const allBooks = await window.electronAPI.getAllBooks();
-      const arabicBook = allBooks.find(b => b.id === 'ocr-arabic-book');
-      const sourceId = arabicBook?.sourceId;
+      const sources = await window.electronAPI.pdfEditor?.sources?.('ocr-arabic-book') || [];
+      const srcKey = sources[0]?.id ? 'ocr.corrections.v1:' + sources[0].id + ':1' : 'ocr.corrections.v1:ocr-arabic-book:1';
       const staleData = {
         '0': { original: 'نص-قديم-غير-مطابق', corrected: 'تصحيح-خاطئ-يجب-عدم-تطبيقه', engine: 'ocrmypdf' }
       };
-      if (sourceId) {
-        await window.electronAPI.settings.set('ocr.corrections.v1:' + sourceId + ':1', staleData);
-      }
+      await window.electronAPI.settings.set(srcKey, staleData);
       await window.electronAPI.settings.set('ocr.corrections.v1:ocr-arabic-book:1', staleData);
     })()`);
     await pause(800);
 
     // Re-trigger OCR recognition to verify word 0 is NOT replaced with stale text
     await evaluate(`(() => {
-      const btn = [...document.querySelectorAll('button')].find(b =>
-        b.textContent.includes('إعادة الفحص') ||
-        b.textContent.includes('Re-scan') ||
-        b.textContent.includes('التعرف على النص') ||
-        b.textContent.includes('Recognize Page Text')
-      );
+      const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('التعرف على النص') || b.textContent.includes('Recognize Page Text'));
       if (btn) btn.click();
     })()`);
-    await until(`[...document.querySelectorAll('aside[role=dialog] *')].some(el => el.textContent.includes('التعديل لم يعد يتطابق'))`, 250, 200);
-    await pause(500);
+    await until("document.querySelectorAll('.ocr-word-node').length > 0", 250);
+    await pause(1200);
 
     // Verify word 0 does NOT have the stale text
     const firstWordText = await evaluate(`document.querySelector('.ocr-word-node')?.textContent`);

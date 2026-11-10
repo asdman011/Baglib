@@ -1,624 +1,758 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import {
+  WorkspaceProvider,
+  useWorkspace,
+} from '../../components/context/WorkspaceContext';
+import {
+  Button,
+  IconButton,
+  Chip,
+  Badge,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  Modal,
+  Sheet,
+  Menu,
+  Tabs,
+  TabPanel,
+  ToastProvider,
+  useToast,
+  EmptyState,
+  Skeleton,
+  Tooltip,
+} from '../../components/ui';
+import {
+  Bookmark,
+  Check,
+  ChevronDown,
+  Copy,
+  Download,
+  FolderOpen,
+  Globe,
+  Info,
+  Layers,
+  Moon,
+  Plus,
+  Search,
+  Settings,
+  Share2,
+  Sparkles,
+  Sun,
+  Trash2,
+} from 'lucide-react';
 
-export default function DesignSystemPlayground() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [activeTab, setActiveTab] = useState<'overview' | 'colors' | 'typography' | 'components' | 'sandbox'>('overview');
+function PlaygroundContent() {
+  const { dir, theme, lang, toggleTheme, toggleLanguage, t } = useWorkspace();
+  const { showToast } = useToast();
+
+  const [activePlaygroundTab, setActivePlaygroundTab] = useState<string>('primitives');
   const [selectedFont, setSelectedFont] = useState<'amiri' | 'tajawal' | 'reem-kufi'>('amiri');
   const [readerFontSize, setReaderFontSize] = useState<number>(20);
-  const [isBookmarked, setIsBookmarked] = useState<boolean>(true);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
-  // Sync theme class on <html>
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-  }, [theme]);
+  // Primitive states
+  const [chipSelected, setChipSelected] = useState<Record<string, boolean>>({
+    fiqh: true,
+    history: false,
+    philosophy: false,
+    language: true,
+  });
+  const [removableChips, setRemovableChips] = useState<string[]>([
+    'تفسير',
+    'حديث',
+    'لغة',
+  ]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [buttonLoading, setButtonLoading] = useState(false);
+  const [demoTabsActive, setDemoTabsActive] = useState('tab-one');
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard?.writeText(text);
     setCopiedToken(text);
     setTimeout(() => setCopiedToken(null), 2000);
   };
 
-  const parchmentSwatches = [
-    { name: 'parchment-50', hex: '#fbf9f4', role: 'Bright Paper Base' },
-    { name: 'parchment-100', hex: '#f8f6f0', role: 'Cream Card Surface' },
-    { name: 'parchment-200', hex: '#efece4', role: 'Warm Beige Canvas Base' },
-    { name: 'parchment-300', hex: '#e5dfd0', role: 'Soft Parchment Sidebar' },
-    { name: 'parchment-400', hex: '#dcd4c3', role: 'Antique Parchment Border' },
-    { name: 'parchment-500', hex: '#c9bda5', role: 'Muted Parchment Accent' },
-    { name: 'parchment-700', hex: '#7d6e57', role: 'Muted Ink Text' },
-    { name: 'parchment-900', hex: '#2c221a', role: 'Deep Manuscript Ink' },
-  ];
-
-  const paleSkySwatches = [
-    { name: 'pale-sky-50', hex: '#edf4f8', role: 'Light Accent Tint' },
-    { name: 'pale-sky-100', hex: '#dae9f1', role: 'Sidebar Accent' },
-    { name: 'pale-sky-200', hex: '#b5d3e3', role: 'Border Accent' },
-    { name: 'pale-sky-300', hex: '#90bdd5', role: 'Dark Muted Text' },
-    { name: 'pale-sky-400', hex: '#6ba7c7', role: 'Subtle Highlight' },
-    { name: 'pale-sky-500', hex: '#4691b9', role: 'Primary Accent' },
-    { name: 'pale-sky-600', hex: '#387494', role: 'Primary Button' },
-    { name: 'pale-sky-700', hex: '#2a576f', role: 'Light Muted Text' },
-    { name: 'pale-sky-800', hex: '#1c3a4a', role: 'Dark Border' },
-    { name: 'pale-sky-900', hex: '#0e1d25', role: 'Dark Surface' },
-    { name: 'pale-sky-950', hex: '#0a141a', role: 'Dark Canvas Base' },
-  ];
-
-  const evergreenSwatches = [
-    { name: 'evergreen-50', hex: '#eef6f1', role: 'Success Light BG' },
-    { name: 'evergreen-100', hex: '#ddeee4', role: 'Tag Light BG' },
-    { name: 'evergreen-300', hex: '#9acbae', role: 'Success Border' },
-    { name: 'evergreen-500', hex: '#57a877', role: 'Evergreen Primary' },
-    { name: 'evergreen-600', hex: '#45875f', role: 'SRS Mastery Badge' },
-    { name: 'evergreen-700', hex: '#346548', role: 'Zotero Sync Accent' },
-    { name: 'evergreen-900', hex: '#112218', role: 'Dark Evergreen Card' },
-  ];
-
-  const amberSwatches = [
-    { name: 'amber-50', hex: '#fffbeb', role: 'Highlight Light BG' },
-    { name: 'amber-100', hex: '#fef3c7', role: 'Ayah Badge BG' },
-    { name: 'amber-300', hex: '#fcd34d', role: 'Bookmark Border' },
-    { name: 'amber-500', hex: '#d97706', role: 'Baghdad Amber Accent' },
-    { name: 'amber-600', hex: '#b45309', role: 'Ayah Marker / Search' },
-    { name: 'amber-800', hex: '#78350f', role: 'Warning Text' },
+  const semanticTokens = [
+    { name: 'canvas', cssVar: '--color-canvas-val', lightHex: '#efece4', darkHex: '#0e161b', role: 'Canvas Base (Warm Beige / Scholar Night)' },
+    { name: 'surface', cssVar: '--color-surface-val', lightHex: '#f8f6f0', darkHex: '#141f26', role: 'Surface Card (Cream Paper / Dark Card)' },
+    { name: 'surface-raised', cssVar: '--color-surface-raised-val', lightHex: '#ffffff', darkHex: '#1c2a33', role: 'Surface Raised (Elevated Card)' },
+    { name: 'border', cssVar: '--color-border-val', lightHex: '#dcd4c3', darkHex: '#223440', role: 'Antique Parchment / Slate Border' },
+    { name: 'text', cssVar: '--color-text-val', lightHex: '#2c221a', darkHex: '#efece4', role: 'Main Text Ink' },
+    { name: 'text-muted', cssVar: '--color-text-muted-val', lightHex: '#6e5e4f', darkHex: '#95a8b5', role: 'Muted Ink' },
+    { name: 'primary', cssVar: '--color-primary-val', lightHex: '#1e3e2b', darkHex: '#2d5a3f', role: 'Dark Evergreen Primary Action (D1)' },
+    { name: 'primary-contrast', cssVar: '--color-primary-contrast-val', lightHex: '#ffffff', darkHex: '#ffffff', role: 'Primary Contrast Text' },
+    { name: 'accent', cssVar: '--color-accent-val', lightHex: '#b45309', darkHex: '#fbbf24', role: 'Baghdad Amber Accent' },
+    { name: 'success', cssVar: '--color-success-val', lightHex: '#166534', darkHex: '#4ade80', role: 'Evergreen Success' },
+    { name: 'warning', cssVar: '--color-warning-val', lightHex: '#92400e', darkHex: '#fbbf24', role: 'Warning Amber' },
+    { name: 'danger', cssVar: '--color-danger-val', lightHex: '#991b1b', darkHex: '#f87171', role: 'Danger Red' },
+    { name: 'focus', cssVar: '--color-focus-val', lightHex: '#2a576f', darkHex: '#6ba7c7', role: 'Pale Sky Focus & Links' },
   ];
 
   return (
-    <div className="min-h-screen transition-colors duration-300 bg-canvas text-main font-sans">
+    <div className="min-h-screen transition-colors duration-200 bg-canvas text-text font-sans" dir={dir}>
       {/* Top Header */}
-      <header className="sticky top-0 z-50 border-b backdrop-blur-md bg-surface/85 border-subtle px-6 py-4">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 border-b backdrop-blur-md bg-surface/90 border-border px-4 sm:px-6 py-3">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl border border-subtle shadow-md overflow-hidden bg-canvas">
-              <img src="/logo.png" alt="Baglib Logo" className="w-full h-full object-cover" />
+            <div className="size-9 rounded-xl border border-border/80 shadow-xs overflow-hidden bg-primary/10 flex items-center justify-center text-primary font-bold">
+              <Layers className="size-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold font-display text-main">
-                نظام تصميم مكتبة بغداد (`baglib`)
+              <h1 className="text-lg sm:text-xl font-bold font-display text-text leading-snug">
+                {lang === 'ar' ? 'معرض نظام التصميم والمكونات المشتركة' : 'Design System & Primitives Showcase'}
               </h1>
-              <p className="text-xs text-muted font-sans">
-                Design System Playground & Component Showcase
+              <p className="text-[11px] text-text-muted font-sans">
+                KEY-296 UI/UX U2 • Semantic Tokens & Shared Primitives (D1 Dark Evergreen)
               </p>
             </div>
           </div>
 
-          {/* Controls: Navigation & Theme Toggle */}
-          <div className="flex items-center gap-3">
-            <nav className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle text-xs font-semibold">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  activeTab === 'overview'
-                    ? 'bg-pale-sky-600 text-white dark:bg-pale-sky-500 shadow-sm'
-                    : 'text-muted hover:text-main'
-                }`}
-              >
-                نظرة عامة
-              </button>
-              <button
-                onClick={() => setActiveTab('colors')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  activeTab === 'colors'
-                    ? 'bg-pale-sky-600 text-white dark:bg-pale-sky-500 shadow-sm'
-                    : 'text-muted hover:text-main'
-                }`}
-              >
-                الألوان (Palette)
-              </button>
-              <button
-                onClick={() => setActiveTab('typography')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  activeTab === 'typography'
-                    ? 'bg-pale-sky-600 text-white dark:bg-pale-sky-500 shadow-sm'
-                    : 'text-muted hover:text-main'
-                }`}
-              >
-                الخطوط (Typography)
-              </button>
-              <button
-                onClick={() => setActiveTab('components')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  activeTab === 'components'
-                    ? 'bg-pale-sky-600 text-white dark:bg-pale-sky-500 shadow-sm'
-                    : 'text-muted hover:text-main'
-                }`}
-              >
-                المكونات (Components)
-              </button>
-              <button
-                onClick={() => setActiveTab('sandbox')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  activeTab === 'sandbox'
-                    ? 'bg-amber-500 text-white shadow-sm font-bold'
-                    : 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900'
-                }`}
-              >
-                مختبر القراءة (Sandbox)
-              </button>
-            </nav>
+          {/* Controls: Navigation, Direction & Theme Toggle */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <Tabs
+              tabs={[
+                { id: 'primitives', label: lang === 'ar' ? 'المكونات المشتركة' : 'Shared Primitives' },
+                { id: 'tokens', label: lang === 'ar' ? 'رموز الألوان (Tokens)' : 'Tokens' },
+                { id: 'typography', label: lang === 'ar' ? 'الخطوط' : 'Typography' },
+                { id: 'sandbox', label: lang === 'ar' ? 'مختبر القراءة' : 'Reading Sandbox' },
+              ]}
+              activeTab={activePlaygroundTab}
+              onChange={setActivePlaygroundTab}
+            />
 
-            {/* Dark Mode Switcher */}
-            <button
-              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-subtle bg-surface hover:border-pale-sky-500 text-xs font-medium transition-all shadow-sm cursor-pointer"
-              title="تبديل المظهر"
+            {/* Language / Direction Toggle */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={toggleLanguage}
+              icon={<Globe className="size-3.5" />}
+              title="Toggle Direction (RTL / LTR)"
             >
-              {theme === 'light' ? (
-                <>
-                  <span>🌙</span>
-                  <span>الوضع الداكن</span>
-                </>
-              ) : (
-                <>
-                  <span>☀️</span>
-                  <span>الوضع الفاتح</span>
-                </>
-              )}
-            </button>
+              {lang === 'ar' ? 'English (LTR)' : 'العربية (RTL)'}
+            </Button>
+
+            {/* Dark / Light Theme Toggle */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={toggleTheme}
+              icon={theme === 'dark' ? <Sun className="size-3.5 text-accent" /> : <Moon className="size-3.5 text-focus" />}
+              title="Toggle Theme (Parchment / Scholar Night)"
+            >
+              {theme === 'dark' ? (lang === 'ar' ? 'الورق العتيق' : 'Parchment') : (lang === 'ar' ? 'ليلي أكاديمي' : 'Scholar Night')}
+            </Button>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto p-6 space-y-10">
-        {copiedToken && (
-          <div className="fixed bottom-6 left-6 z-50 bg-evergreen-700 text-white text-xs px-4 py-2 rounded-xl shadow-lg animate-bounce">
-            تم نسخ الرمز: <code className="font-mono">{copiedToken}</code>
-          </div>
-        )}
-
-        {/* TAB 1: OVERVIEW */}
-        {activeTab === 'overview' && (
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+        {/* TAB 1: SHARED PRIMITIVES */}
+        {activePlaygroundTab === 'primitives' && (
           <section className="space-y-8">
-            {/* Vision Hero Banner */}
-            <div className="rounded-3xl bg-surface border border-subtle p-8 shadow-sm space-y-4">
-              <h2 className="text-3xl font-bold font-display leading-tight text-main">
-                رؤية التصميم: هدوء معرفي، رصانة أكاديمية، وتوازن بصري
+            <div className="border-b border-border/80 pb-4">
+              <h2 className="text-xl sm:text-2xl font-bold font-display text-text">
+                {lang === 'ar' ? 'المكونات الأساسية المشتركة (UI Primitives)' : 'Shared UI Primitives'}
               </h2>
-              <p className="text-base text-muted font-sans leading-relaxed max-w-3xl">
-                يجمع مشروع <strong className="text-main">بغلب (baglib)</strong> بين التراث العلمي الإسلامي الأصيل وأحدث معايير التفاعلية في برمجيات البحث الشخصي (مثل Obsidian وZotero). تم تصميم نظام الألوان والخطوط والمكونات ليوفر تجربة قراءة ودراسة مريحة وممتازة للعين.
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                {lang === 'ar'
+                  ? 'مكونات موحدة تدعم الاتجاهين (RTL/LTR) مع إمكانية الوصول الكاملة ومحاذاة الرؤية التصميمية (D1).'
+                  : 'Unified accessible primitives supporting RTL/LTR with keyboard reach and D1 dark evergreen action styling.'}
               </p>
-              <div className="flex flex-wrap gap-4 pt-2">
-                <button
-                  onClick={() => setActiveTab('components')}
-                  className="px-5 py-2.5 rounded-xl bg-pale-sky-600 hover:bg-pale-sky-700 text-white font-medium text-sm transition-all shadow-md cursor-pointer"
-                >
-                  استعراض المكونات التفاعلية
-                </button>
-                <button
-                  onClick={() => setActiveTab('sandbox')}
-                  className="px-5 py-2.5 rounded-xl bg-surface border border-subtle hover:border-amber-500 text-main font-semibold text-sm transition-all shadow-sm cursor-pointer"
-                >
-                  تجربة مختبر النص القرآني والأكاديمي
-                </button>
-              </div>
             </div>
 
-            {/* Quick Cards grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3 shadow-sm hover:border-pale-sky-500 transition-all">
-                <h3 className="font-bold text-lg font-display text-main">Pale Sky (اللون الرئيسي)</h3>
-                <p className="text-xs text-muted leading-relaxed">
-                  درجات الأزرق الهادئ التي ترمز للوضوح الفكري والهدوء الأكاديمي، وتُستخدم في عناصر الواجهة الرئيسية والأزرار والنوافذ.
-                </p>
-              </div>
+            {/* 1. BUTTONS & ICON BUTTONS */}
+            <Card variant="raised">
+              <CardHeader>
+                <CardTitle>1. {lang === 'ar' ? 'الأزرار وأزرار الأيقونات (Buttons & IconButtons)' : 'Buttons & IconButtons'}</CardTitle>
+                <CardDescription>
+                  Variants: Primary (Dark Evergreen), Secondary, Ghost, Danger. Sizes: sm, md. States: normal, loading, disabled.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="primary" icon={<Plus className="size-4" />}>
+                    {lang === 'ar' ? 'كائن جديد +' : 'New Object +'}
+                  </Button>
+                  <Button variant="secondary" icon={<Bookmark className="size-4" />}>
+                    {lang === 'ar' ? 'حفظ الملاحظة' : 'Save Note'}
+                  </Button>
+                  <Button variant="ghost" icon={<Share2 className="size-4" />}>
+                    {lang === 'ar' ? 'مشاركة' : 'Share'}
+                  </Button>
+                  <Button variant="danger" icon={<Trash2 className="size-4" />}>
+                    {lang === 'ar' ? 'حذف' : 'Delete'}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    loading={buttonLoading}
+                    onClick={() => {
+                      setButtonLoading(true);
+                      setTimeout(() => setButtonLoading(false), 2000);
+                    }}
+                  >
+                    {buttonLoading ? (lang === 'ar' ? 'جاري التحميل...' : 'Loading...') : (lang === 'ar' ? 'اضغط للتحميل' : 'Click to Load')}
+                  </Button>
+                  <Button variant="secondary" disabled>
+                    {lang === 'ar' ? 'معطل (Disabled)' : 'Disabled'}
+                  </Button>
+                </div>
+              </CardContent>
+              <CardFooter className="border-t border-border/60">
+                <span className="text-xs font-semibold text-text-muted">{lang === 'ar' ? 'أزرار الأيقونات:' : 'IconButtons:'}</span>
+                <div className="flex items-center gap-2">
+                  <IconButton label={lang === 'ar' ? 'بحث' : 'Search'} variant="primary" size="sm">
+                    <Search className="size-3.5" />
+                  </IconButton>
+                  <IconButton label={lang === 'ar' ? 'تنزيل' : 'Download'} variant="secondary" size="sm">
+                    <Download className="size-3.5" />
+                  </IconButton>
+                  <IconButton label={lang === 'ar' ? 'معلومات' : 'Information'} variant="ghost" size="sm">
+                    <Info className="size-3.5" />
+                  </IconButton>
+                  <IconButton label={lang === 'ar' ? 'حذف العنصر' : 'Delete Item'} variant="danger" size="sm">
+                    <Trash2 className="size-3.5" />
+                  </IconButton>
+                </div>
+              </CardFooter>
+            </Card>
 
-              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3 shadow-sm hover:border-evergreen-500 transition-all">
-                <h3 className="font-bold text-lg font-display text-main">Evergreen (اللون الثانوي)</h3>
-                <p className="text-xs text-muted leading-relaxed">
-                  الأخضر المستوحى من التراث الإسلامي والطبيعة، مخصص لشارات الحفظ ومراجعة بطاقات التكرار المتباعد (SRS) ومزامنة Zotero.
-                </p>
-              </div>
+            {/* 2. CHIPS & BADGES */}
+            <Card variant="raised">
+              <CardHeader>
+                <CardTitle>2. {lang === 'ar' ? 'الرقائق والشارات (Chips & Badges)' : 'Chips & Badges'}</CardTitle>
+                <CardDescription>
+                  Chips with selectable (D1 evergreen selection) and removable capabilities. Badges in semantic status colors.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">{lang === 'ar' ? 'رقائق قابلة للاختيار:' : 'Selectable Topic Chips:'}</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { id: 'fiqh', label: lang === 'ar' ? 'الفقه الإسلامي' : 'Islamic Jurisprudence' },
+                      { id: 'history', label: lang === 'ar' ? 'التاريخ والتراجم' : 'History' },
+                      { id: 'philosophy', label: lang === 'ar' ? 'الفلسفة وعلم الكلام' : 'Philosophy' },
+                      { id: 'language', label: lang === 'ar' ? 'اللغة العربية والمعاجم' : 'Arabic Lexicons' },
+                    ].map((chip) => (
+                      <Chip
+                        key={chip.id}
+                        label={chip.label}
+                        selected={chipSelected[chip.id]}
+                        onSelect={() =>
+                          setChipSelected((prev) => ({ ...prev, [chip.id]: !prev[chip.id] }))
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
 
-              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3 shadow-sm hover:border-amber-500 transition-all">
-                <h3 className="font-bold text-lg font-display text-main">Baghdad Amber (اللون التمييزي)</h3>
-                <p className="text-xs text-muted leading-relaxed">
-                  لون العمبر والمخطوطات الذهبية، مخصص للإشارات المرجعية (Bookmarks)، أرقام الآيات، نتائج البحث، والتظليلات الهامة.
-                </p>
-              </div>
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">{lang === 'ar' ? 'رقائق قابلة للحذف:' : 'Removable Filter Chips:'}</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {removableChips.map((chip) => (
+                      <Chip
+                        key={chip}
+                        label={chip}
+                        removable
+                        onRemove={() =>
+                          setRemovableChips((prev) => prev.filter((c) => c !== chip))
+                        }
+                      />
+                    ))}
+                    {removableChips.length === 0 && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setRemovableChips(['تفسير', 'حديث', 'لغة'])}
+                      >
+                        {lang === 'ar' ? 'استعادة الرقائق' : 'Reset Chips'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">{lang === 'ar' ? 'شارات الحالة (Badges):' : 'Status Badges:'}</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="default">{lang === 'ar' ? 'نسخة رقمية' : 'Digital'}</Badge>
+                    <Badge variant="primary">{lang === 'ar' ? 'جديد (D1 Evergreen)' : 'New'}</Badge>
+                    <Badge variant="accent">{lang === 'ar' ? 'نسخة ورقية' : 'Physical'}</Badge>
+                    <Badge variant="success">{lang === 'ar' ? 'مكتمل 100%' : 'Completed'}</Badge>
+                    <Badge variant="warning">{lang === 'ar' ? 'قيد المراجعة' : 'In Review'}</Badge>
+                    <Badge variant="danger">{lang === 'ar' ? 'متأخر' : 'Overdue'}</Badge>
+                    <Badge variant="outline">{lang === 'ar' ? 'إطار مجرد' : 'Outline'}</Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 3. MODAL & SHEET */}
+            <Card variant="raised">
+              <CardHeader>
+                <CardTitle>3. {lang === 'ar' ? 'النوافذ المنبثقة والألواح الجانبية (Modal & Sheet)' : 'Modal & Sheet'}</CardTitle>
+                <CardDescription>
+                  Full focus trap, Escape key to close, return focus to opener, aria-modal, accessible titles.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-center gap-3">
+                <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+                  {lang === 'ar' ? 'فتح نافذة مشروطة (Modal)' : 'Open Modal'}
+                </Button>
+                <Button variant="secondary" onClick={() => setIsSheetOpen(true)}>
+                  {lang === 'ar' ? 'فتح لوح جانبي (Sheet)' : 'Open Sheet'}
+                </Button>
+
+                {/* The Modal */}
+                <Modal
+                  open={isModalOpen}
+                  onClose={() => setIsModalOpen(false)}
+                  title={lang === 'ar' ? 'إضافة بطاقة معرفية جديدة' : 'Create Knowledge Card'}
+                  description={lang === 'ar' ? 'أدخل تفاصيل البطاقة وسؤال المراجعة بالتكرار المتباعد.' : 'Enter question details for spaced repetition review.'}
+                >
+                  <div className="space-y-3 font-sans text-xs">
+                    <div>
+                      <label className="block font-bold text-text mb-1">
+                        {lang === 'ar' ? 'عنوان السؤال' : 'Card Title'}
+                      </label>
+                      <input
+                        type="text"
+                        defaultValue={lang === 'ar' ? 'تعريف القياس عند الأصوليين' : 'Definition of Qiyas in Usul'}
+                        className="w-full p-2 bg-canvas border border-border rounded-lg text-text focus:outline-2 focus:outline-focus text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-text mb-1">
+                        {lang === 'ar' ? 'نص الإجابة والاستدلال' : 'Card Answer'}
+                      </label>
+                      <textarea
+                        rows={3}
+                        defaultValue={lang === 'ar' ? 'إلحاق فرع بأصل في حكم لعلة جامعة بينهما...' : 'Analogy applied to derived rulings based on shared ratio legis...'}
+                        className="w-full p-2 bg-canvas border border-border rounded-lg text-text focus:outline-2 focus:outline-focus text-xs"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(false)}>
+                        {t('cancel')}
+                      </Button>
+                      <Button variant="primary" size="sm" onClick={() => {
+                        setIsModalOpen(false);
+                        showToast({ message: lang === 'ar' ? 'تم حفظ البطاقة بنجاح' : 'Card saved successfully', type: 'success' });
+                      }}>
+                        {t('save')}
+                      </Button>
+                    </div>
+                  </div>
+                </Modal>
+
+                {/* The Sheet */}
+                <Sheet
+                  open={isSheetOpen}
+                  onClose={() => setIsSheetOpen(false)}
+                  side="end"
+                  title={lang === 'ar' ? 'تفاصيل الكتاب والمخطوطة' : 'Book Details Sheet'}
+                  description={lang === 'ar' ? 'المعلومات الببليوغرافية وحالة الحفظ' : 'Bibliographic metadata and preservation status.'}
+                >
+                  <div className="space-y-4 font-sans text-xs">
+                    <div className="p-3 bg-canvas rounded-xl border border-border">
+                      <span className="text-[10px] text-text-muted block">{lang === 'ar' ? 'العنوان الأصلي' : 'Canonical Title'}</span>
+                      <span className="font-bold text-sm text-text block mt-0.5">مقدمة ابن خلدون</span>
+                      <span className="text-text-muted block mt-0.5">عبد الرحمن بن محمد بن خلدون (ت 808 هـ)</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between py-1 border-b border-border/60">
+                        <span className="text-text-muted">{lang === 'ar' ? 'التصنيف' : 'Category'}</span>
+                        <span className="font-medium text-text">{lang === 'ar' ? 'التاريخ وعلم الاجتماع' : 'History'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/60">
+                        <span className="text-text-muted">{lang === 'ar' ? 'نوع المصدر' : 'Source Type'}</span>
+                        <Badge variant="accent">{lang === 'ar' ? 'نسخة ورقية (رف 3)' : 'Physical (Shelf 3)'}</Badge>
+                      </div>
+                    </div>
+                    <div className="pt-4 flex justify-end">
+                      <Button variant="primary" size="sm" onClick={() => setIsSheetOpen(false)}>
+                        {t('close')}
+                      </Button>
+                    </div>
+                  </div>
+                </Sheet>
+              </CardContent>
+            </Card>
+
+            {/* 4. MENU & TABS */}
+            <Card variant="raised">
+              <CardHeader>
+                <CardTitle>4. {lang === 'ar' ? 'القوائم المنسدلة وعلامات التبويب (Menu & Tabs)' : 'Menu & Tabs'}</CardTitle>
+                <CardDescription>
+                  Keyboard navigation: Arrow keys navigate between menu items and tabs with roving tabindex and Home/End support.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">{lang === 'ar' ? 'قائمة إجراءات مع أسهم لوحة المفاتيح (Menu):' : 'Action Menu:'}</h4>
+                  <Menu
+                    trigger={({ onClick, ref, 'aria-expanded': expanded }) => (
+                      <Button
+                        ref={ref}
+                        variant="secondary"
+                        size="sm"
+                        onClick={onClick}
+                        icon={<ChevronDown className="size-3.5" />}
+                      >
+                        {lang === 'ar' ? 'خيارات المستند' : 'Document Options'} ({expanded ? 'مفتوحة' : 'مغلقة'})
+                      </Button>
+                    )}
+                    items={[
+                      {
+                        label: lang === 'ar' ? 'فتح في نافذة مستقلة' : 'Open in New Window',
+                        icon: <FolderOpen className="size-4" />,
+                        onClick: () => showToast({ message: 'Open triggered' }),
+                      },
+                      {
+                        label: lang === 'ar' ? 'استخراج النص والتحليل' : 'Extract Text & AI Analysis',
+                        icon: <Sparkles className="size-4" />,
+                        onClick: () => showToast({ message: 'Analysis queued' }),
+                      },
+                      {
+                        label: lang === 'ar' ? 'إعدادات متقدمة' : 'Advanced Settings',
+                        icon: <Settings className="size-4" />,
+                        onClick: () => showToast({ message: 'Settings clicked' }),
+                      },
+                      {
+                        label: lang === 'ar' ? 'حذف من المكتبة' : 'Remove from Library',
+                        icon: <Trash2 className="size-4" />,
+                        danger: true,
+                        onClick: () =>
+                          showToast({
+                            message: lang === 'ar' ? 'تم حذف السجل' : 'Record removed',
+                            type: 'danger',
+                            action: {
+                              label: t('undo'),
+                              onClick: () => showToast({ message: 'Undone', type: 'success' }),
+                            },
+                          }),
+                      },
+                    ]}
+                  />
+                </div>
+
+                <div className="space-y-3 pt-3 border-t border-border/60">
+                  <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">{lang === 'ar' ? 'تبويبات مع فهرس roving tabindex (Tabs):' : 'Roving Tabindex Tabs:'}</h4>
+                  <Tabs
+                    tabs={[
+                      { id: 'tab-one', label: lang === 'ar' ? 'الفهرس والمحتويات' : 'Contents' },
+                      { id: 'tab-two', label: lang === 'ar' ? 'الإشارات والملاحظات' : 'Bookmarks' },
+                      { id: 'tab-three', label: lang === 'ar' ? 'البحث في النص' : 'Search' },
+                    ]}
+                    activeTab={demoTabsActive}
+                    onChange={setDemoTabsActive}
+                  />
+                  <div className="p-4 bg-canvas rounded-xl border border-border text-xs text-text min-h-20 flex items-center justify-center">
+                    <TabPanel tabId="tab-one" activeTab={demoTabsActive}>
+                      {lang === 'ar' ? 'محتوى التبويب الأول: استعراض شجرة الأبواب والفصول.' : 'Contents tree panel.'}
+                    </TabPanel>
+                    <TabPanel tabId="tab-two" activeTab={demoTabsActive}>
+                      {lang === 'ar' ? 'محتوى التبويب الثاني: قائمة العلامات المرجعية والملحوظات المسجلة.' : 'Bookmarks and reader marks panel.'}
+                    </TabPanel>
+                    <TabPanel tabId="tab-three" activeTab={demoTabsActive}>
+                      {lang === 'ar' ? 'محتوى التبويب الثالث: البحث الدقيق في المتن الكامل.' : 'Full-text search panel.'}
+                    </TabPanel>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 5. TOAST WITH UNDO ACTION & LIVE REGION */}
+            <Card variant="raised">
+              <CardHeader>
+                <CardTitle>5. {lang === 'ar' ? 'إشعارات التنبيه والتراجع (Toast with Undo & Live Region)' : 'Toasts with Undo & Live Region'}</CardTitle>
+                <CardDescription>
+                  Toast notifications with accessible live regions, auto-dismiss timers paused on hover, and 1-click Undo actions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    showToast({
+                      message: lang === 'ar' ? 'تم نسخ المقتبس إلى الحافظة' : 'Quote copied to clipboard',
+                      type: 'default',
+                    })
+                  }
+                >
+                  {lang === 'ar' ? 'إشعار عادي' : 'Default Toast'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    showToast({
+                      message: lang === 'ar' ? 'تم مزامنة 14 كتاباً بنجاح' : '14 books synced successfully',
+                      type: 'success',
+                    })
+                  }
+                >
+                  {lang === 'ar' ? 'إشعار نجاح' : 'Success Toast'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    showToast({
+                      message: lang === 'ar' ? 'قاربت سعة التخزين على النفاد' : 'Storage quota nearly full',
+                      type: 'warning',
+                    })
+                  }
+                >
+                  {lang === 'ar' ? 'إشعار تحذير' : 'Warning Toast'}
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() =>
+                    showToast({
+                      message: lang === 'ar' ? 'تم حذف الملاحظة الدراسية' : 'Study note deleted',
+                      type: 'danger',
+                      action: {
+                        label: t('undo'),
+                        onClick: () =>
+                          showToast({
+                            message: lang === 'ar' ? 'تم استرجاع الملاحظة بنجاح' : 'Note restored',
+                            type: 'success',
+                          }),
+                      },
+                    })
+                  }
+                >
+                  {lang === 'ar' ? 'حذف مع زر تراجع (Undo)' : 'Delete with Undo'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* 6. EMPTY STATE, SKELETON & TOOLTIP */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Empty State */}
+              <Card variant="raised">
+                <CardHeader>
+                  <CardTitle>6. {lang === 'ar' ? 'الحالة الفارغة (EmptyState)' : 'EmptyState'}</CardTitle>
+                  <CardDescription>Calm, scholarly placeholder with guidance and actionable next step.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <EmptyState
+                    icon={<Search className="size-6 text-text-muted" />}
+                    title={lang === 'ar' ? 'لا توجد نتائج مطابقة' : 'No matching books found'}
+                    description={lang === 'ar' ? 'جرّب تعديل معايير التصفية أو البحث عن موضوع أو مؤلف آخر.' : 'Try adjusting your filters or search keywords.'}
+                    action={
+                      <Button variant="secondary" size="sm">
+                        {lang === 'ar' ? 'مسح عوامل التصفية' : 'Clear Filters'}
+                      </Button>
+                    }
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Skeleton & Tooltip */}
+              <Card variant="raised">
+                <CardHeader>
+                  <CardTitle>7. {lang === 'ar' ? 'الهياكل العظمية والتلميحات (Skeleton & Tooltip)' : 'Skeleton & Tooltip'}</CardTitle>
+                  <CardDescription>Fast-feeling placeholders and keyboard-accessible tooltips.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Skeletons */}
+                  <div className="space-y-3 p-4 bg-canvas rounded-xl border border-border/70">
+                    <div className="flex items-center gap-3">
+                      <Skeleton rounded="full" className="size-10" />
+                      <div className="space-y-1.5 flex-1">
+                        <Skeleton rounded="md" className="h-4 w-3/4" />
+                        <Skeleton rounded="sm" className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                    <Skeleton rounded="lg" className="h-16 w-full" />
+                  </div>
+
+                  {/* Tooltips */}
+                  <div className="flex flex-wrap items-center gap-4 pt-2">
+                    <Tooltip content={lang === 'ar' ? 'إضافة إلى المفضلة' : 'Add to Bookmarks'} side="top">
+                      <Button variant="secondary" size="sm" icon={<Bookmark className="size-3.5" />}>
+                        {lang === 'ar' ? 'تلميح علوي' : 'Top Tooltip'}
+                      </Button>
+                    </Tooltip>
+
+                    <Tooltip content={lang === 'ar' ? 'تنزيل نسخة PDF محلية' : 'Download Local PDF'} side="bottom">
+                      <Button variant="secondary" size="sm" icon={<Download className="size-3.5" />}>
+                        {lang === 'ar' ? 'تلميح سفلي' : 'Bottom Tooltip'}
+                      </Button>
+                    </Tooltip>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </section>
         )}
 
-        {/* TAB 2: COLOR PALETTE */}
-        {activeTab === 'colors' && (
-          <section className="space-y-8">
-            <div className="border-b border-subtle pb-4">
-              <h2 className="text-2xl font-bold font-display text-main">نظام الألوان والرموز (Color Tokens)</h2>
-              <p className="text-xs text-muted mt-1">
-                اضغط على أي مربع لون لنسخ رمز الـ Hex الخاص به مباشرة.
+        {/* TAB 2: TOKENS & PALETTE */}
+        {activePlaygroundTab === 'tokens' && (
+          <section className="space-y-6">
+            <div className="border-b border-border/80 pb-4">
+              <h2 className="text-xl sm:text-2xl font-bold font-display text-text">
+                {lang === 'ar' ? 'رموز الألوان الدلالية (Semantic Tokens)' : 'Semantic Color Tokens'}
+              </h2>
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                {lang === 'ar'
+                  ? 'تم تحديث الرموز وفقاً لقرار D1 (Dark Evergreen للعمليات الرئيسية، Pale Sky للروابط والتركيز، وBaghdad Amber للتمييز).'
+                  : 'Design Tokens updated per D1: Dark Evergreen for primary actions, Pale Sky for focus/links, and Baghdad Amber accent.'}
               </p>
             </div>
 
-            {/* Parchment Beige */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold font-display text-lg text-main">
-                  1. Warm Parchment Palette (لون الورق والمخطوطات العتيقة)
-                </h3>
-                <span className="text-xs text-muted">Background & Surface Base</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3">
-                {parchmentSwatches.map((s) => (
-                  <button
-                    key={s.name}
-                    onClick={() => copyToClipboard(s.hex)}
-                    className="p-3 rounded-xl border border-subtle bg-surface hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
-                  >
-                    <div
-                      className="w-full h-12 rounded-lg mb-2 shadow-inner border border-black/10"
-                      style={{ backgroundColor: s.hex }}
-                    />
-                    <div className="font-mono text-xs font-semibold text-main">{s.name}</div>
-                    <div className="text-[10px] text-muted">{s.hex}</div>
-                    <div className="text-[10px] text-main font-medium truncate mt-1">
-                      {s.role}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {semanticTokens.map((token) => (
+                <div
+                  key={token.name}
+                  className="p-4 rounded-xl border border-border bg-surface shadow-xs space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-bold text-text">{token.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(`var(${token.cssVar})`)}
+                      title="Copy CSS var"
+                      className="p-1 rounded text-text-muted hover:text-text hover:bg-canvas transition-colors"
+                    >
+                      {copiedToken === `var(${token.cssVar})` ? (
+                        <Check className="size-3.5 text-success" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                    </button>
+                  </div>
 
-            {/* Pale Sky */}
-            <div className="space-y-3 pt-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold font-display text-lg text-main">
-                  2. Pale Sky Palette (اللون الأكاديمي للواجهة والأزرار)
-                </h3>
-                <span className="text-xs text-muted">Primary UI & Accents</span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {paleSkySwatches.map((s) => (
-                  <button
-                    key={s.name}
-                    onClick={() => copyToClipboard(s.hex)}
-                    className="p-3 rounded-xl border border-subtle bg-surface hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
-                  >
+                  <div className="flex gap-2 h-12 rounded-lg overflow-hidden border border-border/60">
                     <div
-                      className="w-full h-12 rounded-lg mb-2 shadow-inner border border-black/5"
-                      style={{ backgroundColor: s.hex }}
-                    />
-                    <div className="font-mono text-xs font-semibold text-main">{s.name}</div>
-                    <div className="text-[10px] text-muted">{s.hex}</div>
-                    <div className="text-[10px] text-main font-medium truncate mt-1">
-                      {s.role}
+                      className="flex-1 flex items-center justify-center text-[10px] font-mono text-white/90 shadow-inner"
+                      style={{ backgroundColor: token.lightHex }}
+                    >
+                      <span className="px-1 py-0.5 rounded bg-black/40">Light</span>
                     </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Evergreen */}
-            <div className="space-y-3 pt-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold font-display text-lg text-main">
-                  3. Evergreen Palette (الشارات والتأكيد والـ SRS)
-                </h3>
-                <span className="text-xs text-muted">Secondary / Verification</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                {evergreenSwatches.map((s) => (
-                  <button
-                    key={s.name}
-                    onClick={() => copyToClipboard(s.hex)}
-                    className="p-3 rounded-xl border border-subtle bg-surface hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
-                  >
                     <div
-                      className="w-full h-12 rounded-lg mb-2 shadow-inner border border-black/5"
-                      style={{ backgroundColor: s.hex }}
-                    />
-                    <div className="font-mono text-xs font-semibold text-main">{s.name}</div>
-                    <div className="text-[10px] text-muted">{s.hex}</div>
-                    <div className="text-[10px] text-main font-medium truncate mt-1">
-                      {s.role}
+                      className="flex-1 flex items-center justify-center text-[10px] font-mono text-white/90 shadow-inner"
+                      style={{ backgroundColor: token.darkHex }}
+                    >
+                      <span className="px-1 py-0.5 rounded bg-black/40">Dark</span>
                     </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+                  </div>
 
-            {/* Baghdad Amber */}
-            <div className="space-y-3 pt-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold font-display text-lg text-main">
-                  4. Baghdad Amber Palette (العلامات والإشارات القرآانية)
-                </h3>
-                <span className="text-xs text-muted">Accent / Bookmarks / Verses</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {amberSwatches.map((s) => (
-                  <button
-                    key={s.name}
-                    onClick={() => copyToClipboard(s.hex)}
-                    className="p-3 rounded-xl border border-subtle bg-surface hover:scale-105 transition-all text-right group shadow-sm cursor-pointer"
-                  >
-                    <div
-                      className="w-full h-12 rounded-lg mb-2 shadow-inner border border-black/5"
-                      style={{ backgroundColor: s.hex }}
-                    />
-                    <div className="font-mono text-xs font-semibold text-main">{s.name}</div>
-                    <div className="text-[10px] text-muted">{s.hex}</div>
-                    <div className="text-[10px] text-main font-medium truncate mt-1">
-                      {s.role}
-                    </div>
-                  </button>
-                ))}
-              </div>
+                  <div className="text-[11px] text-text-muted leading-tight font-sans">
+                    {token.role}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         )}
 
         {/* TAB 3: TYPOGRAPHY */}
-        {activeTab === 'typography' && (
-          <section className="space-y-8">
-            <div className="border-b border-subtle pb-4">
-              <h2 className="text-2xl font-bold font-display text-main">إستراتيجية الخطوط الثلاثية (Three-Tier Typography)</h2>
-              <p className="text-xs text-muted mt-1">
-                توزيع وظيفي محدد بين العناوين (`Reem Kufi`)، عناصر التحكم (`Tajawal`)، ونصوص القراءة والتراث (`Amiri`).
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              {/* Tier 1: Reem Kufi */}
-              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3">
-                <div className="flex items-center justify-between border-b border-subtle pb-3">
-                  <h3 className="text-xl font-bold font-display text-main">1. خط العناوين: ريم كوفي (Reem Kufi)</h3>
-                  <span className="text-xs font-mono text-muted">`font-display`</span>
-                </div>
-                <p className="text-xs text-muted">
-                  تُستخدم فقط للعناوين الرئيسية للملفات، أسماء الكتب، عناوين اللوحات المفتوحة، وعلامة المشروع.
-                </p>
-                <div className="p-4 rounded-xl bg-canvas space-y-2">
-                  <div className="font-display text-3xl font-bold text-main">
-                    مكتبة بغداد الرقمية - بيت الحكمة للبحث العلمي
-                  </div>
-                  <div className="font-display text-xl text-main">
-                    الفصل الأول: تاريخ التدوين والتصنيف في عصر المأمون
-                  </div>
-                </div>
-              </div>
-
-              {/* Tier 2: Tajawal */}
-              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3">
-                <div className="flex items-center justify-between border-b border-subtle pb-3">
-                  <h3 className="text-xl font-bold font-sans text-main">2. خط الواجهة: تجول (Tajawal)</h3>
-                  <span className="text-xs font-mono text-muted">`font-sans`</span>
-                </div>
-                <p className="text-xs text-muted">
-                  تُستخدم لجميع عناصر الواجهة الرسومية (الأزرار، القوائم الجانبية، حقول البحث، الوسوم، وأسماء المجلدات).
-                </p>
-                <div className="p-4 rounded-xl bg-canvas space-y-3 font-sans">
-                  <div className="flex items-center gap-2 text-sm text-main">
-                    <span className="font-bold">القائمة الجانبية:</span>
-                    <span className="px-2 py-1 rounded bg-pale-sky-600 text-white text-xs">المستندات الأخيرة</span>
-                    <span className="px-2 py-1 rounded bg-surface border text-xs">بطاقات SRS</span>
-                    <span className="px-2 py-1 rounded bg-surface border text-xs">إعدادات المزامنة</span>
-                  </div>
-                  <div className="text-xs text-muted">
-                    مثال على نموذج إدخال: &quot;أدخل الكلمة المفتاحية للبحث في المخطوطات...&quot;
-                  </div>
-                </div>
-              </div>
-
-              {/* Tier 3: Amiri */}
-              <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-3">
-                <div className="flex items-center justify-between border-b border-subtle pb-3">
-                  <h3 className="text-xl font-bold font-serif text-main">3. خط القراءة والنصوص: أميري (Amiri)</h3>
-                  <span className="text-xs font-mono text-muted">`font-serif` / `font-reading`</span>
-                </div>
-                <p className="text-xs text-muted">
-                  الخط الأساسي لقراءة النصوص الطويلة، الآيات القرآانية، متون الحديث، والشروح والتفاسير.
-                </p>
-                <div className="p-5 rounded-xl bg-canvas space-y-3 font-serif text-lg leading-relaxed border-r-4 border-subtle">
-                  <p className="text-main font-bold">
-                    ﴿إِنَّمَا يَخْشَى اللَّهَ مِنْ عِبَادِهِ الْعُلَمَاءُ﴾ <span className="text-xs font-sans text-muted">[فاطر: 28]</span>
-                  </p>
-                  <p className="text-main text-base">
-                    قال الإمام ابن كثير في تفسيره: &quot;أي إنما يخشاه حق خشيته العلماء العارفون به، لأنه كلما كانت المعرفة برب العالمين أتم والعلم به أكمل، كانت الخشية له أعظم وأكثر.&quot;
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* TAB 4: COMPONENTS */}
-        {activeTab === 'components' && (
-          <section className="space-y-8">
-            <div className="border-b border-subtle pb-4">
-              <h2 className="text-2xl font-bold font-display text-main">معرض المكونات التفاعلية (UI Components)</h2>
-              <p className="text-xs text-muted mt-1">
-                عناصر مجهزة للاستخدام في تطبيق سطح المكتب بتنسيقات Pale Sky وEvergreen وBaghdad Amber.
-              </p>
-            </div>
-
-            {/* Buttons Showcase */}
-            <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-4">
-              <h3 className="font-bold text-lg font-display text-main">
-                1. الأزرار وعناصر التفاعل (Buttons)
-              </h3>
-              <div className="flex flex-wrap items-center gap-3">
-                <button className="px-4 py-2 rounded-xl bg-pale-sky-600 hover:bg-pale-sky-700 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer">
-                  زر رئيسي (Primary Pale Sky)
-                </button>
-                <button className="px-4 py-2 rounded-xl bg-evergreen-500 hover:bg-evergreen-600 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer">
-                  زر ثانوي (Evergreen Sync)
-                </button>
-                <button className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer">
-                  زر تمييز (Baghdad Amber)
-                </button>
-                <button className="px-4 py-2 rounded-xl border border-subtle bg-canvas text-main hover:border-pale-sky-600 text-xs font-semibold transition-all cursor-pointer">
-                  زر إطار (Outline)
-                </button>
-                <button className="px-4 py-2 rounded-xl bg-canvas border border-subtle text-main text-xs font-semibold transition-all cursor-pointer">
-                  زر هادئ (Ghost)
-                </button>
-                <button disabled className="px-4 py-2 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-400 text-xs font-semibold cursor-not-allowed">
-                  معطل (Disabled)
-                </button>
-              </div>
-            </div>
-
-            {/* Knowledge & Verses Cards */}
-            <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-4">
-              <h3 className="font-bold text-lg font-display text-main">
-                2. بطاقات المعرفة والآيات والملاحظات (Knowledge Cards)
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Quran Ayah Card */}
-                <div className="p-5 rounded-2xl bg-canvas border border-subtle hover:border-subtle transition-all space-y-3 relative group">
-                  <div className="flex items-center justify-between text-xs text-muted">
-                    <span>سورة البقرة: 255</span>
-                    <button
-                      onClick={() => setIsBookmarked(!isBookmarked)}
-                      className={`text-lg transition-transform cursor-pointer ${isBookmarked ? 'scale-110' : 'opacity-40 hover:opacity-100'}`}
-                      title="إضافة إلى الإشارات المرجعية"
-                    >
-                      {isBookmarked ? '🔖' : '📑'}
-                    </button>
-                  </div>
-
-                  <p className="font-serif text-xl leading-loose text-main border-r-4 border-subtle pr-3">
-                    اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ لَّهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ ﴿<span className="font-sans text-xs text-main font-bold">٢٥٥</span>﴾
-                  </p>
-
-                  <div className="flex items-center justify-between text-xs text-muted pt-2 border-t border-subtle font-sans">
-                    <span>مصدر التفسير: ابن كثير</span>
-                    <span className="text-main font-semibold">✓ تم التوثيق في Zotero</span>
-                  </div>
-                </div>
-
-                {/* SRS Flashcard Mastery */}
-                <div className="p-5 rounded-2xl bg-canvas border border-subtle hover:border-subtle transition-all space-y-3">
-                  <div className="flex items-center justify-between text-xs text-muted">
-                    <span>تكرار متباعد (SRS)</span>
-                    <span className="font-mono text-main font-bold">إتقان: 92%</span>
-                  </div>
-
-                  <div className="space-y-1 font-sans">
-                    <h4 className="font-bold text-sm text-main">
-                      سؤال المراجعة: ما الفرق بين المحكم والمتشابه عند الأصوليين؟
-                    </h4>
-                    <p className="text-xs text-muted line-clamp-2">
-                      المحكم ما اتضح معناه ولم يحتمل إلا تأويلاً واحداً، والمتشابه ما استأثر الله بعلمه أو احتمل وجوهاً متعددة...
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-subtle">
-                    <span className="text-[11px] text-muted">المراجعة القادمة: غداً 09:00 ص</span>
-                    <div className="flex items-center gap-1">
-                      <button className="px-2.5 py-1 rounded-lg bg-evergreen-500 text-white text-[10px] font-bold cursor-pointer">سهل (+3 أيام)</button>
-                      <button className="px-2.5 py-1 rounded-lg bg-pale-sky-600 text-white text-[10px] font-bold cursor-pointer">جيد (+1 يوم)</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Search Bar Inputs */}
-            <div className="p-6 rounded-2xl bg-surface border border-subtle space-y-4">
-              <h3 className="font-bold text-lg font-display text-main">
-                3. عناصر الإدخال والبحث (Form Inputs & Search)
-              </h3>
-
-              <div className="space-y-4">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="ابحث في المتون، الآيات، وشروح المخطوطات..."
-                    defaultValue="العلماء ورثة الأنبياء"
-                    className="w-full px-4 py-3 pr-10 rounded-xl bg-canvas border border-subtle text-main focus:border-pale-sky-500 focus:outline-none text-sm transition-all shadow-inner"
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* TAB 5: INTERACTIVE SANDBOX */}
-        {activeTab === 'sandbox' && (
+        {activePlaygroundTab === 'typography' && (
           <section className="space-y-6">
-            <div className="border-b border-subtle pb-4">
-              <h2 className="text-2xl font-bold font-display text-main">مختبر قراءة الملاحظات (Interactive Reading Sandbox)</h2>
-              <p className="text-xs text-muted mt-1">
-                جرب تغيير نوع الخط وحجمه والسمة لرؤية وتجربة النص الأكاديمي مباشرة.
+            <div className="border-b border-border/80 pb-4">
+              <h2 className="text-xl sm:text-2xl font-bold font-display text-text">
+                {lang === 'ar' ? 'هرمية الخطوط الثلاثية (Three-Tier Typography)' : 'Three-Tier Typography'}
+              </h2>
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                Reem Kufi for display headers, Tajawal for UI controls, and Amiri for classical reading texts.
               </p>
             </div>
 
-            {/* Sandbox Controls Bar */}
-            <div className="p-4 rounded-2xl bg-surface border border-subtle flex flex-wrap items-center justify-between gap-4">
-              {/* Font Selector */}
+            <div className="space-y-4">
+              <Card variant="raised">
+                <CardHeader>
+                  <CardTitle className="font-display text-2xl">
+                    1. Reem Kufi — العناوين الكوفية الحديثة
+                  </CardTitle>
+                  <CardDescription className="font-mono">`font-display` / var(--font-reem-kufi)</CardDescription>
+                </CardHeader>
+                <CardContent className="font-display text-xl text-text leading-relaxed">
+                  مكتبة بغداد الرقمية • بيت الحكمة للبحث والتصنيف الأكاديمي
+                </CardContent>
+              </Card>
+
+              <Card variant="raised">
+                <CardHeader>
+                  <CardTitle className="font-sans text-xl">
+                    2. Tajawal — واجهة المستخدم والأزرار واللوحات
+                  </CardTitle>
+                  <CardDescription className="font-mono">`font-sans` / var(--font-tajawal)</CardDescription>
+                </CardHeader>
+                <CardContent className="font-sans text-sm text-text leading-relaxed">
+                  عناصر التحكم، القوائم الجانبية، أزرار التنقل، حقول البحث، وبطاقات التكرار المتباعد.
+                </CardContent>
+              </Card>
+
+              <Card variant="raised">
+                <CardHeader>
+                  <CardTitle className="font-serif text-2xl">
+                    3. Amiri — متون القراءة والتراث والتفاسير
+                  </CardTitle>
+                  <CardDescription className="font-mono">`font-serif` / `font-reading` / var(--font-amiri)</CardDescription>
+                </CardHeader>
+                <CardContent className="font-serif text-lg text-text leading-loose">
+                  ﴿يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ﴾ [المجادلة: 11]
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+        )}
+
+        {/* TAB 4: READING SANDBOX */}
+        {activePlaygroundTab === 'sandbox' && (
+          <section className="space-y-6">
+            <div className="border-b border-border/80 pb-4">
+              <h2 className="text-xl sm:text-2xl font-bold font-display text-text">
+                {lang === 'ar' ? 'مختبر القراءة التفاعلي' : 'Reading Sandbox'}
+              </h2>
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                Test font families, font sizes, and reader rendering on scholarly passages.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-surface border border-border flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-xs">
-                <span className="font-bold text-muted">نوع الخط:</span>
-                <button
-                  onClick={() => setSelectedFont('amiri')}
-                  className={`px-3 py-1.5 rounded-lg border cursor-pointer ${
-                    selectedFont === 'amiri'
-                      ? 'bg-pale-sky-600 text-white border-pale-sky-600'
-                      : 'bg-canvas border-subtle text-main'
-                  }`}
-                >
-                  أميري (Amiri - Serif)
-                </button>
-                <button
-                  onClick={() => setSelectedFont('tajawal')}
-                  className={`px-3 py-1.5 rounded-lg border cursor-pointer ${
-                    selectedFont === 'tajawal'
-                      ? 'bg-pale-sky-600 text-white border-pale-sky-600'
-                      : 'bg-canvas border-subtle text-main'
-                  }`}
-                >
-                  تجول (Tajawal - Sans)
-                </button>
-                <button
-                  onClick={() => setSelectedFont('reem-kufi')}
-                  className={`px-3 py-1.5 rounded-lg border cursor-pointer ${
-                    selectedFont === 'reem-kufi'
-                      ? 'bg-pale-sky-600 text-white border-pale-sky-600'
-                      : 'bg-canvas border-subtle text-main'
-                  }`}
-                >
-                  ريم كوفي (Reem Kufi - Display)
-                </button>
+                <span className="font-bold text-text-muted">{lang === 'ar' ? 'نوع الخط:' : 'Font:'}</span>
+                {(['amiri', 'tajawal', 'reem-kufi'] as const).map((f) => (
+                  <Button
+                    key={f}
+                    variant={selectedFont === f ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={() => setSelectedFont(f)}
+                  >
+                    {f === 'amiri' ? 'أميري (Amiri)' : f === 'tajawal' ? 'تجول (Tajawal)' : 'ريم كوفي (Kufi)'}
+                  </Button>
+                ))}
               </div>
 
-              {/* Font Size Slider */}
               <div className="flex items-center gap-3 text-xs">
-                <span className="font-bold text-muted">حجم الخط: ({readerFontSize}px)</span>
+                <span className="font-bold text-text-muted">{lang === 'ar' ? 'حجم الخط:' : 'Size:'} ({readerFontSize}px)</span>
                 <input
                   type="range"
                   min={14}
                   max={32}
                   value={readerFontSize}
                   onChange={(e) => setReaderFontSize(Number(e.target.value))}
-                  className="w-32 accent-pale-sky-600 cursor-pointer"
+                  className="w-32 accent-primary cursor-pointer"
                 />
               </div>
             </div>
 
-            {/* Sandbox Canvas */}
-            <div className="p-8 rounded-3xl bg-surface border border-subtle shadow-sm space-y-6">
-              <div className="flex items-center justify-between border-b border-subtle pb-4">
-                <div>
-                  <span className="text-xs text-muted font-sans">مخطوطة رقم: #4092 • مكتبة بغداد</span>
-                  <h3 className="text-2xl font-bold font-display text-main mt-1">
-                    دراسة في مناهج المحدثين والأصوليين في قبول الأخبار
-                  </h3>
-                </div>
-              </div>
-
-              {/* Text Container with Dynamic Styling */}
+            <Card variant="raised" className="p-6 sm:p-8 space-y-4">
               <div
-                className={`leading-relaxed space-y-4 transition-all text-main ${
+                className={`leading-relaxed space-y-4 text-text ${
                   selectedFont === 'amiri'
                     ? 'font-serif'
                     : selectedFont === 'tajawal'
@@ -628,31 +762,26 @@ export default function DesignSystemPlayground() {
                 style={{ fontSize: `${readerFontSize}px` }}
               >
                 <p>
-                  اعلم وفقك الله لمرضاته أن المعرفة العلمية في التراث الإسلامي لم تكن مجرد تجميع للمعلومات، بل كانت منظومة متكاملة من التثبت والتمحيص، حيث وضع العلماء قواعد إسنادية صارمة تُعد مفخرة من مفاخر العقل البشري.
+                  اعلم وفقك الله لمرضاته أن المعرفة العلمية في التراث الإسلامي لم تكن مجرد تجميع للمعلومات، بل كانت منظومة متكاملة من التثبت والتمحيص الإسنادي والدلالي.
                 </p>
-
-                <div className="p-4 rounded-2xl bg-canvas border-r-4 border-subtle text-main my-4">
-                  <p className="font-bold text-sm mb-1 font-sans text-main">
-                    فائدة منهجية:
-                  </p>
-                  <p>
-                    «الإسناد من الدين، ولولا الإسناد لقال من شاء ما شاء» — الإمام عبدالله بن المبارك رحمه الله.
-                  </p>
-                </div>
-
-                <p>
-                  وقد تجسد هذا المنهج في مؤلفات حافلة مثل كتاب التمهيد لابن عبد البر، والمبتدأ والخبر لابن خلدون، حيث تم ربط النصوص التاريخية بالتحليل النقدي المتزن.
+                <p className="text-text-muted text-sm border-s-4 border-primary ps-3 py-1">
+                  «الإسناد من الدين، ولولا الإسناد لقال من شاء ما شاء» — الإمام عبدالله بن المبارك رحمه الله.
                 </p>
               </div>
-
-              <div className="pt-4 border-t border-subtle flex items-center justify-between text-xs text-muted font-sans">
-                <span>تاريخ التعديل: اليوم 14:30</span>
-                <span>الحالة: متزامن محلياً (Local-First Sync Clean)</span>
-              </div>
-            </div>
+            </Card>
           </section>
         )}
       </main>
     </div>
+  );
+}
+
+export default function DesignSystemPlayground() {
+  return (
+    <WorkspaceProvider>
+      <ToastProvider>
+        <PlaygroundContent />
+      </ToastProvider>
+    </WorkspaceProvider>
   );
 }

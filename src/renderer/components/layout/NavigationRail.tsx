@@ -160,13 +160,13 @@ export const NavigationRail: React.FC = () => {
         title={item.tooltip || item.label}
         aria-label={item.label}
         aria-current={isActive ? 'page' : undefined}
-        className={`w-full min-h-10 flex items-center gap-3 rounded-xl text-xs font-semibold leading-relaxed transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pale-sky-500 ${
+        className={`w-full min-h-10 flex items-center gap-3 rounded-xl text-xs font-semibold leading-relaxed transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
           item.disabled ? 'opacity-40 cursor-not-allowed text-muted' : isActive
-            ? 'bg-pale-sky-500/15 text-main ring-1 ring-inset ring-pale-sky-500/40'
+            ? 'bg-primary/15 text-primary ring-1 ring-inset ring-primary/40'
             : 'text-muted hover:text-main hover:bg-canvas'
         } ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-center lg:justify-start px-1 lg:px-3'}`}
       >
-        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-pale-sky-500' : ''}`} />
+        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
         {!isSidebarCollapsed && (
           <span className="hidden lg:flex min-w-0 flex-1 items-center justify-between gap-2 py-2">
             <span className="truncate">{item.label}</span>
@@ -227,8 +227,8 @@ export const NavigationRail: React.FC = () => {
       {/* Bottom Status / Active Book Indicator */}
       {!isSidebarCollapsed && activeBook && (
         <div className="hidden lg:block shrink-0 p-3 border-t border-subtle/60 bg-canvas/40">
-          <button type="button" onClick={() => setViewMode('reader')} title={t('navResumeBook')} aria-label={`${t('navResumeBook')}: ${activeBook.title}`} className="w-full text-start p-2.5 rounded-xl bg-surface border border-subtle hover:border-pale-sky-500 space-y-1 focus-visible:outline-2 focus-visible:outline-pale-sky-500">
-            <span className="text-[10px] font-bold text-pale-sky-600 dark:text-pale-sky-300 uppercase tracking-wider block">
+          <button type="button" onClick={() => setViewMode('reader')} title={t('navResumeBook')} aria-label={`${t('navResumeBook')}: ${activeBook.title}`} className="w-full text-start p-2.5 rounded-xl bg-surface border border-subtle hover:border-primary space-y-1 focus-visible:outline-2 focus-visible:outline-focus">
+            <span className="text-[10px] font-bold text-primary uppercase tracking-wider block">
               {t('currentBook')}
             </span>
             <span className="block text-xs font-bold text-main truncate leading-relaxed" dir="auto">{activeBook.title}</span>

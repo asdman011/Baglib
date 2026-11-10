@@ -4139,9 +4139,6 @@ export const translations = {
     ocrStaleCorrected: 'التعديل: "{text}"',
     ocrDiscardStaleCorrection: 'تجاهل',
     ocrReapplyCorrection: 'تطبيق على الكلمة المحددة',
-    ocrSavedCorrectionsTitle: 'التعديلات المطبقة',
-    ocrDiscardCorrection: 'تراجع عن التعديل',
-    ocrDiscardCorrectionToast: 'تم التراجع عن تعديل الكلمة',
   },
   en: {
     // KEY-287: passage-only explain-back judgments
@@ -8283,9 +8280,6 @@ export const translations = {
     ocrStaleCorrected: 'Corrected: "{text}"',
     ocrDiscardStaleCorrection: 'Discard',
     ocrReapplyCorrection: 'Apply to selected word',
-    ocrSavedCorrectionsTitle: 'Applied Corrections',
-    ocrDiscardCorrection: 'Discard correction',
-    ocrDiscardCorrectionToast: 'Word correction discarded',
   }
 };
 
