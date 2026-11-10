@@ -1,5 +1,10 @@
 'use client';
 
+import { IslamicReaderHeader, IslamicReaderPanel } from '../islamic/IslamicReaderChrome';
+import type { ReaderTab } from '../islamic/reader-chrome';
+import { saveContinueReading } from '../islamic/continue-reading';
+import { HadithActions } from './HadithActions';
+import { SunnahResearchPanel } from './SunnahResearchPanel';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpenText, Check, Languages, LoaderCircle, Search, Upload } from 'lucide-react';
 import type { SunnahAPI, SunnahCatalog, SunnahChapter, SunnahCollectionId } from '../../../shared/types/sunnah';
@@ -61,6 +66,8 @@ export function SunnahView() {
     viewport.current?.scrollTo({ top: 0 });
   };
   const [retry, setRetry] = useState(0);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [readerTab, setReaderTab] = useState<ReaderTab>('commentary');
   const [insights, setInsights] = useState(false);
   const [visibleCount, setVisibleCount] = useState(24);
   const viewport = useRef<HTMLDivElement>(null);
@@ -144,6 +151,10 @@ export function SunnahView() {
   const chapterIndex = collection?.chapters.findIndex(item => item.number === position.chapter) ?? -1;
   const hadithIndex = Math.max(0, chapter?.hadiths.findIndex(item => item.id === position.hadith) ?? 0);
   const hadith = chapter?.hadiths[hadithIndex];
+  useEffect(() => {
+    if (!hadith || loading) return;
+    void saveContinueReading('sunnah', { target: 'sunnah:' + position.collection + ':' + position.chapter + ':' + hadith.id, label: t(collectionKeys[position.collection]) + ' · ' + hadith.number }).catch(() => setError('sunnahSaveFailed'));
+  }, [hadith, loading, position.collection, position.chapter, t]);
   // The companion note pane links to the hadith on screen.
   useCompanionContext('sunnah', () => {
     if (!hadith) return null;
@@ -224,13 +235,17 @@ export function SunnahView() {
   };
 
   return <section className="sunnah-workspace flex-1 min-h-0 flex flex-col" dir={dir} aria-label={t('navSunnah')}>
-    <header className="sunnah-toolbar">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="sunnah-emblem"><BookOpenText size={23} /></div>
-        <div><h1 className={`text-xl font-bold leading-relaxed ${lang === 'ar' ? 'font-sans' : 'font-display'}`}>{t('navSunnah')}</h1><p className="text-xs text-muted leading-relaxed">{t(catalog?.research ? 'sunnahResearchSubtitle' : 'sunnahSubtitle')}</p></div>
-      </div>
-      <div className="sunnah-toolbar-actions">
-        <div className="sunnah-mode" role="group" aria-label={t('sunnahViewMode')}>
+    <IslamicReaderHeader title={t('navSunnah')} t={t} panelOpen={panelOpen} onPanelToggle={() => setPanelOpen(value => !value)} picker={catalog && <div className="grid min-w-0 w-full grid-cols-1 gap-2 sm:grid-cols-3 [&_label]:min-w-0 [&_label>span]:sr-only [&_select]:w-full">      <label><span>{t('sunnahCollection')}</span><select value={position.collection} disabled={importing} onChange={event => {
+        const next = catalog.collections.find(item => item.id === event.target.value)!;
+        setPosition(previous => ({ ...previous, collection: next.id, chapter: next.chapters[0].number, hadith: '' }));
+        setQuery('');
+      }}>{catalog.collections.map(item => <option key={item.id} value={item.id}>{t(collectionKeys[item.id])}</option>)}</select></label>
+      <label className="sunnah-chapter-select"><span>{t('sunnahChapter')}</span><select value={position.chapter} disabled={importing} onChange={event => selectChapter(Number(event.target.value))}>
+        {collection?.chapters.map(item => <option key={item.number} value={item.number}>{item.number} · {item.title[lang] || item.title.ar || item.title.en}</option>)}
+      </select></label>
+      <label><span>{t('sunnahHadith')}</span><select value={hadith?.id || ''} disabled={loading || importing || !chapter} onChange={event => focusHadith(event.target.value)}>
+        {chapter?.hadiths.map((item, index) => <option key={item.id} value={item.id}>{t('sunnahHadithPosition', { number: item.number || '—', index: index + 1, total: chapter.hadiths.length })}</option>)}
+      </select></label></div>} settings={<div className="space-y-4">        <div className="sunnah-mode" role="group" aria-label={t('sunnahViewMode')}>
           {(['single', 'chapter'] as const).map(mode => <button type="button" key={mode} aria-pressed={position.mode === mode}
             onClick={() => { setPosition(previous => ({ ...previous, mode })); setQuery(''); }}>
             {t(mode === 'single' ? 'sunnahSingle' : 'sunnahContinuous')}
@@ -242,25 +257,17 @@ export function SunnahView() {
         {catalog?.research && <button type="button" className="sunnah-button" aria-pressed={insights} onClick={() => setInsights(value => !value)}><span>{t('sunnahInsights')}</span></button>}
         <label className="sunnah-size"><span>{t('sunnahFontSize')}</span><input type="range" min={20} max={34} step={2} value={position.size}
           onChange={event => setPosition(previous => ({ ...previous, size: Number(event.target.value) }))} /></label>
-      </div>
-    </header>
-
-    {catalog && <div className="sunnah-corpus-status"><p>{t(catalog.research ? 'sunnahResearchReady' : 'sunnahResearchFallback', { count: catalog.hadithCount, collections: catalog.collections.length })}</p><button type="button" className="sunnah-button" disabled={loading || importing} onClick={() => void importCorpus()}><Upload size={15} />{t('sunnahConnectResearch')}</button></div>}
-    {catalog && <div className="sunnah-browser">
-      <label><span>{t('sunnahCollection')}</span><select value={position.collection} disabled={importing} onChange={event => {
-        const next = catalog.collections.find(item => item.id === event.target.value)!;
-        setPosition(previous => ({ ...previous, collection: next.id, chapter: next.chapters[0].number, hadith: '' }));
-        setQuery('');
-      }}>{catalog.collections.map(item => <option key={item.id} value={item.id}>{t(collectionKeys[item.id])}</option>)}</select></label>
-      <label className="sunnah-chapter-select"><span>{t('sunnahChapter')}</span><select value={position.chapter} disabled={importing} onChange={event => selectChapter(Number(event.target.value))}>
-        {collection?.chapters.map(item => <option key={item.number} value={item.number}>{item.number} · {item.title[lang] || item.title.ar || item.title.en}</option>)}
-      </select></label>
-      <label><span>{t('sunnahHadith')}</span><select value={hadith?.id || ''} disabled={loading || importing || !chapter} onChange={event => focusHadith(event.target.value)}>
-        {chapter?.hadiths.map((item, index) => <option key={item.id} value={item.id}>{t('sunnahHadithPosition', { number: item.number || '—', index: index + 1, total: chapter.hadiths.length })}</option>)}
-      </select></label>
-    </div>}
-
-    <div className="sunnah-scroll flex-1 min-h-0 overflow-auto" ref={viewport} style={{ '--sunnah-font-size': `${position.size}px` } as React.CSSProperties}>
+<button type="button" disabled={loading || importing} onClick={() => void importCorpus()}>{t('sunnahConnectResearch')}</button><p className="text-xs text-muted">{catalog && t(catalog.research ? 'sunnahResearchReady' : 'sunnahResearchFallback', {count:catalog.hadithCount,collections:catalog.collections.length})}</p><p className="text-xs text-muted">{t(catalog?.research ? 'sunnahResearchSubtitle' : 'sunnahSubtitle')}</p></div>} />
+    <div className="relative flex flex-1 min-h-0">
+    {panelOpen && <IslamicReaderPanel active={readerTab} onTab={setReaderTab} onClose={() => setPanelOpen(false)} t={t}>
+      {hadith && chapter && <>
+        {readerTab === 'translation' && <p dir="ltr" lang="en" className="leading-loose whitespace-pre-wrap">{hadith.text.en.full || hadith.text.en.matn || t('sunnahMissingEnglish')}</p>}
+        {readerTab === 'notes' && <HadithActions key={hadith.id} chapter={chapter} hadith={hadith} showEnglish={position.english} t={t} />}
+        {readerTab === 'commentary' && <div dir="rtl" lang="ar" className="font-reading text-xl leading-[2.4] whitespace-pre-wrap">{hadith.comment || t('quranWordUnavailable')}</div>}
+        {readerTab === 'related' && (hadith.researchId !== undefined ? <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} matn={hadith.text.ar.matn || hadith.text.ar.full} initialOpen t={t} /> : <p>{t('quranWordUnavailable')}</p>)}
+      </>}
+    </IslamicReaderPanel>}
+    <div className="sunnah-scroll flex-1 min-w-0 min-h-0 overflow-auto" ref={viewport} style={{ '--sunnah-font-size': `${position.size}px` } as React.CSSProperties}>
       {catalog?.research && insights && <SunnahInsightsPanel catalog={catalog} lang={lang} t={t} onChapter={(id, number) => {
         setPosition(previous => ({ ...previous, collection: id, chapter: number, hadith: '' }));
         setQuery('');
@@ -285,7 +292,7 @@ export function SunnahView() {
       {query.trim() && (scope !== 'chapter' || catalog?.research) && <SunnahSearch query={query} scope={scope} collection={position.collection} chapter={position.chapter} t={t} onOpen={openSearchHit} />}
       {!loading && !importing && chapter && !(query.trim() && (scope !== 'chapter' || catalog?.research)) && <>
         {query.trim() && <p role="status" className="px-5 pb-4 text-sm text-muted">{t('sunnahSearchCount', { count: results.length })}</p>}
-        <SunnahChapterView chapter={chapter} hadiths={visibleHadiths} showEnglish={position.english} single={single} t={t} onFocus={focusHadith} />
+        <SunnahChapterView calm onStudy={tab => { setReaderTab(tab); setPanelOpen(true); }} chapter={chapter} hadiths={visibleHadiths} showEnglish={position.english} single={single} t={t} onFocus={focusHadith} />
         {hasMore && <div className="flex justify-center p-4"><button type="button" className="sunnah-button" ref={more} onClick={() => setVisibleCount(count => count + 24)}>{t('sunnahMore')}</button></div>}
         {visibleHadiths.length === 0 && <p className="sunnah-message">{t('sunnahNoResults')}</p>}
       </>}
@@ -297,6 +304,6 @@ export function SunnahView() {
           <button type="button" className="sunnah-button" disabled={loading || importing} onClick={() => void importCorpus()}><Upload size={16} />{t('sunnahImport')}</button>
         </div></details>
       </footer>
-    </div>
+    </div></div>
   </section>;
 }

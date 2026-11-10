@@ -1,5 +1,6 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, ZoomIn, ZoomOut } from 'lucide-react';
 import type { QuranMushafPage } from '../../../shared/types/quran';
@@ -17,6 +18,7 @@ interface QuranMushafViewProps {
   onSelectAyah: (selection: Location | null) => void;
   onNavigatePage: (page: number) => void;
   onOpenInStudyReader?: (surah: number, ayah: number) => void;
+  controlsHost?: HTMLElement | null;
   onCopyText: (text: string) => void;
   cardSource?: { script: string; tafsir: string };
   activeAudio?: Location & { isPlaying: boolean; activeWordIndex: number | null } | null;
@@ -35,7 +37,7 @@ export function svgWordLocation(element: Element | null): Location | null {
   return Number.isInteger(surah) && surah >= 1 && surah <= 114 && Number.isInteger(ayah) && ayah >= 1 && ayah <= 300 ? { surah, ayah } : null;
 }
 
-export function QuranMushafView({ page, t, lang, dir, selectedAyah, onSelectAyah, onNavigatePage, onCopyText, cardSource, activeAudio, loading = false, onContextAyah, onExploreAyah }: QuranMushafViewProps) {
+export function QuranMushafView({ controlsHost, page, t, lang, dir, selectedAyah, onSelectAyah, onNavigatePage, onCopyText, cardSource, activeAudio, loading = false, onContextAyah, onExploreAyah }: QuranMushafViewProps) {
   const [zoom, setZoom] = useState(100);
   const surface = useRef<HTMLDivElement>(null);
   const touchOpened = useRef(false);
@@ -119,6 +121,15 @@ export function QuranMushafView({ page, t, lang, dir, selectedAyah, onSelectAyah
     return nearest;
   };
   const number = (value: number) => new Intl.NumberFormat(lang).format(value);
+  const controls = <>
+      <button type="button" disabled={page.pageNumber <= 1 || loading} onClick={() => onNavigatePage(page.pageNumber - 1)} aria-label={t('quranPrevious')} title={t('quranKeyboardHint')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ChevronLeft className="size-4 rtl:rotate-180" /></button>
+      <label className="flex flex-col items-center gap-1 text-xs"><span>{t('quranPage')}</span><input aria-label={t('quranJumpToPage')} type="number" min={1} max={page.totalPages} value={page.pageNumber} onChange={event => { const target = Number(event.target.value); if (Number.isInteger(target) && target >= 1 && target <= page.totalPages) onNavigatePage(target); }} className="w-16 min-w-0 rounded-lg border border-subtle bg-surface p-2 text-center" /><span>{number(page.totalPages)}</span></label>
+      <button type="button" disabled={page.pageNumber >= page.totalPages || loading} onClick={() => onNavigatePage(page.pageNumber + 1)} aria-label={t('quranNext')} title={t('quranKeyboardHint')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ChevronRight className="size-4 rtl:rotate-180" /></button>
+      <button type="button" disabled={zoom <= 60} onClick={() => setZoom(value => Math.max(60, value - 10))} aria-label={t('quranZoomOut')} title={t('quranZoomOut')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ZoomOut className="size-4" /></button>
+      <button type="button" disabled={zoom >= 200} onClick={() => setZoom(value => Math.min(200, value + 10))} aria-label={t('quranZoomIn')} title={t('quranZoomIn')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ZoomIn className="size-4" /></button>
+      <button type="button" onClick={() => setZoom(100)} title={t('quranResetZoom')} className="p-2 text-xs rounded-lg border border-subtle">{number(zoom)}%</button>
+      <button type="button" onClick={() => onCopyText(page.words.filter(word => word.type !== 'aya-mark').map(word => word.canonicalText || word.textHafs || '').join(' '))} aria-label={t('quranCopyPage')} title={t('quranCopyPage')} className="p-2 rounded-lg border border-subtle"><Copy className="size-4" /></button>
+  </>;
   return <div dir={dir} data-quran-mushaf data-card-script={cardSource?.script} data-card-tafsir={cardSource?.tafsir} className="flex flex-col min-h-0 h-full" style={{ containerType: 'size' }}>
     <style>{`
       .mushaf-svg-surface svg { width:100%; height:auto; display:block; }
@@ -134,15 +145,7 @@ export function QuranMushafView({ page, t, lang, dir, selectedAyah, onSelectAyah
       .mushaf-svg-surface [data-baglib-hover-word] path,.mushaf-svg-surface [data-surah][data-aya]:focus-visible path { fill:#059669 !important; filter:drop-shadow(0 0 3px rgb(16 185 129 / .5)); }
       .dark .mushaf-svg-surface [data-baglib-selected] path,.dark .mushaf-svg-surface [data-baglib-hover-word] path { fill:#34d399 !important; }
     `}</style>
-    <div className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-2 rounded-2xl bg-surface/95 border border-subtle p-2 shadow-lg max-h-[70dvh] overflow-auto">
-      <button type="button" disabled={page.pageNumber <= 1 || loading} onClick={() => onNavigatePage(page.pageNumber - 1)} aria-label={t('quranPrevious')} title={t('quranKeyboardHint')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ChevronLeft className="size-4 rtl:rotate-180" /></button>
-      <label className="flex flex-col items-center gap-1 text-xs"><span>{t('quranPage')}</span><input aria-label={t('quranJumpToPage')} type="number" min={1} max={page.totalPages} value={page.pageNumber} onChange={event => { const target = Number(event.target.value); if (Number.isInteger(target) && target >= 1 && target <= page.totalPages) onNavigatePage(target); }} className="w-16 min-w-0 rounded-lg border border-subtle bg-surface p-2 text-center" /><span>{number(page.totalPages)}</span></label>
-      <button type="button" disabled={page.pageNumber >= page.totalPages || loading} onClick={() => onNavigatePage(page.pageNumber + 1)} aria-label={t('quranNext')} title={t('quranKeyboardHint')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ChevronRight className="size-4 rtl:rotate-180" /></button>
-      <button type="button" disabled={zoom <= 60} onClick={() => setZoom(value => Math.max(60, value - 10))} aria-label={t('quranZoomOut')} title={t('quranZoomOut')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ZoomOut className="size-4" /></button>
-      <button type="button" disabled={zoom >= 200} onClick={() => setZoom(value => Math.min(200, value + 10))} aria-label={t('quranZoomIn')} title={t('quranZoomIn')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ZoomIn className="size-4" /></button>
-      <button type="button" onClick={() => setZoom(100)} title={t('quranResetZoom')} className="p-2 text-xs rounded-lg border border-subtle">{number(zoom)}%</button>
-      <button type="button" onClick={() => onCopyText(page.words.filter(word => word.type !== 'aya-mark').map(word => word.canonicalText || word.textHafs || '').join(' '))} aria-label={t('quranCopyPage')} title={t('quranCopyPage')} className="p-2 rounded-lg border border-subtle"><Copy className="size-4" /></button>
-    </div>
+    {controlsHost ? createPortal(<div className="flex flex-wrap items-center gap-2">{controls}</div>, controlsHost) : <div className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-2 rounded-2xl bg-surface/95 border border-subtle p-2 shadow-lg max-h-[70dvh] overflow-auto">{controls}</div>}
     <div className="flex-1 min-h-0 overflow-auto overscroll-contain [scrollbar-gutter:stable_both-edges] bg-white dark:bg-zinc-950 px-14 sm:px-20 pt-16 pb-24">
       <div ref={surface} className="mushaf-svg-surface mx-auto text-zinc-900 dark:text-zinc-100" style={{ width: `${zoom}%`, containerType: 'inline-size', maxWidth: zoom === 100 ? 'min(100%, calc((100cqh - 10rem) * 0.68))' : undefined }} onClick={event => {
         const target = targetAt(event);

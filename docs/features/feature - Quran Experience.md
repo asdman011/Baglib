@@ -210,3 +210,10 @@ Evidence: `quran-page-keys.ts`, `QuranReaderView.tsx`, `QuranMushafWorkspace.tsx
 - Existing installs: script databases moved from `reader-v1` to `reader-v2` derived files. The first search or read rebuilds the file from the pack already on disk (no download), then deletes the v1 file. If the rebuild fails, the v1 file stays in use.
 - Verified: 7 new tests (spellings, FTS5 queries, upgrade with removal of the v1 file, fallback when the pack is missing); npm test 1326/1326; tsc; eslint. Live on a disposable copy of the installed packs (with their v1 files), in Arabic and English: `searchAyahs('الحمد لله رب العالمين')` returns 1:2 and the note editor's `[[` search lists it. The copy was deleted afterwards; the installed packs were only read.
 - Not changed: ى and ي, and ة and ه, are still distinct in search (a deliberate caution against false matches); Warsh script search gets the same forms but was not checked live.
+
+## Quran notes per reading profile and calm reader chrome — 2026-11-10, Antigravity (continuing Codex), KEY-305
+
+- Verified decision: Hafs and Warsh notes are kept apart without any schema change. Only the reference string inside the existing commentary location field changes: new notes use `quran:hafs:S:A` or `quran:warsh:S:A`. Legacy unqualified `quran:S:A` rows are read as Hafs (`commentaryReferenceKey` in `src/shared/personal-commentary.ts`; `list` matches both forms). No table, column or migration was added.
+- Verified: the mushaf page itself is unchanged; the header (picker, Hafs/Warsh switch, one settings popover, panel toggle), one tabbed side panel and the bottom player bar are shared (`src/renderer/components/islamic/`). Live ar/en, light/dark, 1280/480 and restart checks passed on copies of the installed packs.
+- Limitation: Warsh notes written before this change did not exist, so no legacy Warsh data needs migration.
+

@@ -38,6 +38,7 @@ const FullPageBookReader = React.lazy(() =>
 const SunnahView = React.lazy(() =>
   import('../sunnah/SunnahView').then((m) => ({ default: m.SunnahView }))
 );
+const IslamicStudiesHub = React.lazy(() => import('../islamic/IslamicStudiesHub').then(module => ({ default: module.IslamicStudiesHub })));
 const BayanView = React.lazy(() => import('../poetry/BayanView').then(module => ({ default: module.BayanView })));
 const LecturesView = React.lazy(() => import('../lectures/LecturesView').then(module => ({ default: module.LecturesView })));
 const PathwaysView = React.lazy(() => import('../dashboard/PathwaysView').then(module => ({ default: module.PathwaysView })));
@@ -227,6 +228,7 @@ export const AppLayout: React.FC = () => {
             {viewMode === 'planner' && <StudyPlannerView adjustment={athanState.snapshot?.settings.hijriAdjustmentDays || 0} />}
             {viewMode === 'pathways' && <PathwaysView />}
             {viewMode === 'lectures' && <LecturesView />}
+            {viewMode === 'islamic' && <IslamicStudiesHub />}
             {viewMode === 'quran' && <QuranView />}
             {viewMode === 'sunnah' && <SunnahView />}
             {viewMode === 'bayan' && <BayanView />}

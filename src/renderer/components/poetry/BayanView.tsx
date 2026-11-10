@@ -77,14 +77,15 @@ export function BayanView() {
     return () => { alive = false; };
   }, [revision]);
   const selection = React.useRef(0);
-  useEffect(() => () => { selection.current++; }, []);
+  const mounted = React.useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const openPoem = React.useCallback(async (id: number, from?: number, to?: number) => {
     const request = ++selection.current;
     try {
       const result = await window.electronAPI.poetry.detail(id);
-      if (request !== selection.current) return;
+      if (request !== selection.current || !mounted.current) return;
       if (result.ok && result.data) { setInitialVerse(from); setInitialTo(to); setPoem(result.data); } else setFailed(true);
-    } catch { if (request === selection.current) setFailed(true); }
+    } catch { if (request === selection.current && mounted.current) setFailed(true); }
   }, []);
   useEffect(() => {
     const open = () => { const target = consumePoetryReference(); if (target) void openPoem(target.poemId, target.from, target.to); };

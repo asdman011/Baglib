@@ -243,8 +243,8 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
               return (
                 <div key={group.id} className="space-y-1">
                   {!isSidebarCollapsed && (
-                    <h2 className="hidden lg:block px-3 pt-1.5 pb-0.5 text-[11px] font-bold uppercase tracking-wider text-muted font-sans">
-                      {t(group.labelKey)}
+                    <h2 className="block px-3 pt-1.5 pb-0.5 text-[11px] font-bold uppercase tracking-wider text-muted font-sans">
+                      {group.id === 'islamic' ? <button type="button" data-nav-item="islamic" onClick={() => setViewMode('islamic')} className="text-start hover:text-primary-text focus-visible:outline-2 focus-visible:outline-primary">{t(group.labelKey)}</button> : t(group.labelKey)}
                     </h2>
                   )}
                   {group.itemIds.map(renderItem)}

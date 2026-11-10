@@ -480,11 +480,11 @@ export function QuranAudioPlayer({
   return (
     <div
       dir={dir}
-      className="fixed bottom-4 inset-x-4 max-w-4xl mx-auto z-40 rounded-2xl border border-subtle bg-surface/95 backdrop-blur-md shadow-2xl p-4 transition-all"
+      className="fixed bottom-4 inset-x-4 max-w-4xl mx-auto z-40 rounded-2xl border border-subtle bg-surface/95 backdrop-blur-md shadow-lg p-2 transition-all"
       role="region"
       aria-label={t('quranAudioPlay')}
     >
-      <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {/* Top Info Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex flex-wrap items-center gap-2">
@@ -583,7 +583,7 @@ export function QuranAudioPlayer({
         </div>
 
         {/* Scrubber Progress Bar */}
-        <div className="flex items-center gap-2 text-xs text-muted">
+        <div className="flex items-center gap-2 text-xs text-muted sm:col-span-2 sm:row-start-2">
           <span className="w-10 text-end font-mono">{formatTime(currentTime)}</span>
           <input
             type="range"
@@ -599,7 +599,7 @@ export function QuranAudioPlayer({
         </div>
 
         {/* Main Transport Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {/* Play, Prev, Next */}
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -636,7 +636,7 @@ export function QuranAudioPlayer({
           </div>
 
           {/* Repeat Controls */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div hidden={!showSettings} className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -701,7 +701,7 @@ export function QuranAudioPlayer({
               type="button"
               onClick={toggleMute}
               className="text-muted hover:text-main"
-              aria-label="Mute"
+              aria-label={t('islamicMute')}
             >
               {isMuted || volume === 0 ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
             </button>
@@ -713,14 +713,14 @@ export function QuranAudioPlayer({
               value={isMuted ? 0 : volume}
               onChange={handleVolumeChange}
               className="w-16 sm:w-20 accent-pale-sky-600 h-1 bg-subtle rounded-lg cursor-pointer"
-              aria-label="Volume"
+              aria-label={t('islamicVolume')}
             />
           </div>
         </div>
 
         {/* Expandable Memorization & Timing Options Drawer */}
         {showSettings && (
-          <div className="mt-2 pt-3 border-t border-subtle grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-main">
+          <div className="mt-2 pt-3 border-t border-subtle grid grid-cols-1 sm:col-span-2 sm:grid-cols-3 gap-3 text-xs text-main">
             {/* Repeat count selection for memorization */}
             <div className="flex flex-col gap-1">
               <span className="text-muted font-medium">{t('quranAudioRepeatCount')}</span>

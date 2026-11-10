@@ -1,8 +1,11 @@
 'use client';
 
+import { IslamicReaderPanel } from '../islamic/IslamicReaderChrome';
+import { PersonalCommentary } from '../knowledge/PersonalCommentary';
+import type { ReaderTab } from '../islamic/reader-chrome';
 import { QuranActionMenu } from '../actions/QuranActionMenu';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BookOpen, Languages, Layers, Lightbulb, ListTree, Play, Type, X } from 'lucide-react';
+import { BookOpen, Languages, Layers, Lightbulb, ListTree, Play, Type, MoreHorizontal } from 'lucide-react';
 import type { QuranAyahTheme, QuranSimilarAyah, QuranTopic } from '../../../shared/types/quran';
 import type { SunnahSearchHit } from '../../../shared/types/sunnah';
 import type { TranslationKey } from '../../translations';
@@ -21,6 +24,8 @@ type Reference = { surah: number; ayah: number; wordText?: string; wholePage?: b
 type Tool = 'translation' | 'meanings' | 'tafsir' | 'topics' | 'themes' | 'transliteration' | 'similar' | 'morphology' | 'mutashabihat' | 'explore';
 type WindowState = { id: number; tool: Tool; reference: Reference; side: 'left' | 'right' };
 type Props = React.ComponentProps<typeof QuranMushafView> & {
+  panelOpen?: boolean;
+  onPanelChange?: (open: boolean) => void;
   selection: { script: string; translation: string; tafsir: string; transliteration: string; meanings: string; ayahTransliteration: string };
   metadata: { topics?: string; themes?: string; derived: boolean };
   onStartAudio: (reference: Reference) => void;
@@ -154,9 +159,9 @@ function StudyContent({ tool, reference, page, selection, metadata, t, lang, onN
 }
 
 export function QuranMushafWorkspace(props: Props) {
-  const { page, t, selection, metadata, studyTarget, onStudyTargetConsumed, onNavigateAyah } = props;
+  const { page, t, selection, metadata, studyTarget, onStudyTargetConsumed, onNavigateAyah, onPanelChange } = props;
+  const [notesTab, setNotesTab] = useState(false);
   const [windows, setWindows] = useState<WindowState[]>([]);
-  const sequence = useRef(0);
   const [menu, setMenu] = useState<{ reference: Reference; x: number; y: number } | null>(null);
   const [showThemes, setShowThemes] = useState(false);
   const [themes, setThemes] = useState<QuranAyahTheme[]>([]);
@@ -179,9 +184,11 @@ export function QuranMushafWorkspace(props: Props) {
     return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
   }, [activePanelId]);
   const open = useCallback((tool: Tool, reference: Reference, side: 'left' | 'right') => {
-    setWindows([{ id: ++sequence.current, tool, reference, side }]);
+    setNotesTab(false);
+    onPanelChange?.(true);
+    setWindows([{ id: 1, tool, reference, side }]);
     setMenu(null);
-  }, []);
+  }, [onPanelChange]);
   useEffect(() => {
     if (!studyTarget) return;
     const timer = setTimeout(() => { open('explore', studyTarget, 'left'); onStudyTargetConsumed?.(); }, 0);
@@ -233,7 +240,7 @@ export function QuranMushafWorkspace(props: Props) {
     return () => { window.removeEventListener('keydown', close); if (previous?.isConnected) previous.focus(); };
   }, [menu]);
   const pageStart = { surah: page.surahStart, ayah: page.ayahStart };
-  return <div ref={root} className="relative h-full min-h-0" data-quran-workspace>
+  return <div ref={root} className="group/quran relative h-full min-h-0" data-quran-workspace data-page-profile={page.profile}>
     <style>{`
       [data-immersive] .quran-edge { opacity:0; transition:opacity .18s; }
       [data-immersive] .quran-edge:hover,[data-immersive] .quran-edge:focus-within { opacity:1; }
@@ -241,16 +248,30 @@ export function QuranMushafWorkspace(props: Props) {
       [data-immersive] [data-quran-mushaf]>div:nth-child(2):hover,[data-immersive] [data-quran-mushaf]>div:nth-child(2):focus-within { opacity:1; }
     `}</style>
     <QuranMushafView {...props} cardSource={props.selection} onContextAyah={(reference, point) => setMenu({ reference, ...point })} onExploreAyah={reference => open('explore', reference, 'left')} />
-    <nav aria-label={t('quranReadingOptions')} className="quran-edge absolute right-0 top-1/3 z-20 flex flex-col gap-2 p-3 rounded-s-2xl bg-surface/95 border border-subtle shadow-lg">
+    {props.panelOpen !== undefined && <button type="button" data-quran-ayah-actions title={t('ribbonMoreActions')} aria-label={t('ribbonMoreActions')} onClick={event => { const r = event.currentTarget.getBoundingClientRect(); setMenu({ reference: props.selectedAyah || pageStart, x:r.x, y:r.bottom }); }} className="absolute top-3 end-5 rounded-lg border border-subtle bg-surface p-2 opacity-0 group-hover/quran:opacity-100 group-focus-within/quran:opacity-100 focus:opacity-100"><MoreHorizontal size={18} /></button>}
+    {props.panelOpen === undefined && <>    <nav aria-label={t('quranReadingOptions')} className="quran-edge absolute right-0 top-1/3 z-20 flex flex-col gap-2 p-3 rounded-s-2xl bg-surface/95 border border-subtle shadow-lg">
       {([['tafsir', BookOpen], ['translation', Languages], ['meanings', Type], ['topics', Layers], ['themes', ListTree]] as const).map(([tool, Icon]) => <button key={tool} type="button" title={t(labels[tool])} aria-label={t(labels[tool])} onClick={() => open(tool, { ...pageStart, wholePage: true }, 'right')} className="p-2 rounded-xl hover:bg-emerald-500/15"><Icon className="size-5" /></button>)}
       <button type="button" title={t('quranCatTheme')} aria-label={t('quranCatTheme')} aria-pressed={showThemes} onClick={() => setShowThemes(value => !value)} className="p-2 rounded-xl hover:bg-emerald-500/15"><Lightbulb className="size-5" /></button>
     </nav>
     {props.canPlay && <div className="quran-edge absolute bottom-3 inset-x-0 z-20 flex justify-center pointer-events-none"><button type="button" title={t('quranAudioPlay')} aria-label={t('quranAudioPlay')} onClick={() => props.onStartAudio(pageStart)} data-quran-play-button className="pointer-events-auto rounded-full bg-emerald-700 p-4 text-white shadow-lg"><Play className="size-6" /></button></div>}
+</>}
     {showThemes && page.profile === 'hafs' && positions.map(({ theme, top, height, left }, index) => <aside key={`${theme.surahNumber}:${theme.ayahFrom}:${theme.ayahTo}:${index}`} data-quran-theme-marker data-surah={theme.surahNumber} data-ayah-from={theme.ayahFrom} data-ayah-to={theme.ayahTo} aria-label={`${theme.theme} · ${theme.surahNumber}:${theme.ayahFrom}–${theme.ayahTo}`} style={{ top, height, left, maxWidth: `max(0px, min(7rem, calc(100% - ${left}px - 56px)))` }} className="absolute pointer-events-none border-s-4 border-y-2 border-amber-600 rounded-s-lg ps-2 text-xs text-amber-700 dark:text-amber-300 overflow-hidden whitespace-pre-line" dir="ltr"><span dir="auto">{theme.theme}</span></aside>)}
-    {windows.map(panel => <aside ref={studyPanel} key={panel.id} data-quran-study-panel role="region" aria-label={t(labels[panel.tool])} dir={props.dir} style={{ resize: 'both' }} className={`absolute top-20 z-30 h-[min(36rem,calc(100%-11rem))] w-[min(25rem,calc(100%-1.5rem))] max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-7rem)] max-h-[calc(100%-11rem)] min-h-28 min-w-48 flex flex-col rounded-2xl border border-subtle bg-surface shadow-xl overflow-hidden ${panel.side === 'left' ? 'start-3 sm:start-14' : 'end-3 sm:end-14'}`} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setWindows([]); } }}>
-      <header className="shrink-0 border-b border-subtle flex items-center justify-between gap-2 p-3"><h2 className="text-sm font-semibold">{t(labels[panel.tool])}</h2>{panel.tool === 'topics' && page.profile === 'hafs' && <button type="button" onClick={() => setTopicDrawer({ topics: [], active: null })} className="ms-auto text-xs underline">{t('quranTopicBrowse')}</button>}<button type="button" aria-label={t('quranClosePanel')} onClick={() => setWindows([])} className="rounded-lg p-2 focus-visible:outline-emerald-500"><X className="size-4" /></button></header>
-      <div tabIndex={0} aria-label={t(labels[panel.tool])} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] break-words select-text p-4 leading-loose focus-visible:outline-emerald-500">{(panel.tool === 'explore' ? ['morphology', 'meanings', 'transliteration', 'mutashabihat', 'similar'] as Tool[] : [panel.tool]).map(tool => <section key={tool}><h3 className="font-semibold text-sm">{t(labels[tool])}</h3>{['similar', 'mutashabihat', 'topics', 'themes'].includes(tool) && <p className="text-xs text-muted leading-relaxed">{t('quranConnectionSource', { resource: t(labels[tool]) })}</p>}<StudyContent tool={tool} reference={panel.reference} page={page} selection={selection} metadata={metadata} t={t} lang={props.lang} onNavigateAyah={onNavigateAyah} onOpenTopics={openTopics} onOpenSimilar={openSimilar} /></section>)}</div>
-    </aside>)}
+    {(props.panelOpen ?? windows.length > 0) && (() => {
+      const panel = windows[0] || { id: 0, tool: 'tafsir' as Tool, reference: { ...pageStart, wholePage: true }, side: 'right' as const };
+      const active: ReaderTab = panel.tool === 'tafsir' ? 'commentary' : panel.tool === 'translation' ? 'translation' : 'related';
+      return <IslamicReaderPanel active={notesTab ? 'notes' : active} t={t} recitation onClose={() => { setWindows([]); props.onPanelChange?.(false); }} onTab={tab => {
+        setNotesTab(tab === 'notes');
+        if (tab === 'recitation') { props.onStartAudio(panel.reference); props.onPanelChange?.(false); return; }
+        if (tab !== 'notes') open(tab === 'commentary' ? 'tafsir' : tab === 'translation' ? 'translation' : 'explore', panel.reference, 'right');
+      }}>
+        {notesTab ? <PersonalCommentary key={page.profile + ':' + panel.reference.surah + ':' + panel.reference.ayah} reference={'quran:' + page.profile + ':' + panel.reference.surah + ':' + panel.reference.ayah} /> : <>
+        <p dir="ltr" className="text-xs text-muted">{panel.reference.surah}:{panel.reference.ayah}</p>
+        {panel.tool === 'topics' && page.profile === 'hafs' && <button type="button" onClick={() => setTopicDrawer({ topics:[], active:null })} className="text-xs underline">{t('quranTopicBrowse')}</button>}
+        <div className="flex flex-wrap gap-2 text-xs mb-3">{(['meanings','topics','themes','transliteration','similar','morphology','mutashabihat'] as Tool[]).map(tool => <button key={tool} type="button" aria-label={t(labels[tool])} className="rounded-lg border border-subtle px-2 py-1" onClick={() => open(tool,panel.reference,'right')}>{t(labels[tool])}</button>)}<button type="button" aria-label={t('quranCatTheme')} onClick={() => setShowThemes(value => !value)}>{t('quranCatTheme')}</button></div>
+        {(panel.tool === 'explore' ? ['morphology', 'meanings', 'transliteration', 'mutashabihat', 'similar'] as Tool[] : [panel.tool]).map(tool => <section key={tool}><h3 className="font-semibold text-sm">{t(labels[tool])}</h3>{['similar','mutashabihat','topics','themes'].includes(tool) && <p className="text-xs text-muted leading-relaxed">{t('quranConnectionSource',{resource:t(labels[tool])})}</p>}<StudyContent tool={tool} reference={panel.reference} page={page} selection={selection} metadata={metadata} t={t} lang={props.lang} onNavigateAyah={onNavigateAyah} onOpenTopics={openTopics} onOpenSimilar={openSimilar} /></section>)}
+        </>}
+      </IslamicReaderPanel>;
+    })()}
     {menu && <QuranActionMenu portal anchor={{ x: menu.x, y: menu.y }} onClose={() => setMenu(null)} input={{ reference: menu.reference, script: selection.script, profile: page.profile, language: props.lang, t,
         tafsir: selection.tafsir ? () => open('tafsir',menu.reference,'left') : undefined,
         translation: selection.translation ? () => open('translation',menu.reference,'left') : undefined,

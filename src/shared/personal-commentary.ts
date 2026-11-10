@@ -2,11 +2,11 @@ export const COMMENTARY_KINDS = ['reflection', 'question', 'research', 'cross-re
 export type CommentaryKind = typeof COMMENTARY_KINDS[number];
 
 const MAX_TEXT = 100_000;
-const REFERENCE = /^(quran:\d{1,3}:\d{1,3}|hadith:\d{1,12})$/u;
+const REFERENCE = /^(quran:(?:(?:hafs|warsh):)?\d{1,3}:\d{1,3}|hadith:\d{1,12})$/u;
 
 export interface CommentaryEntry {
   id: string;
-  /** A stable source id such as quran:2:255 or hadith:1234, whichever script or edition is open. */
+  /** Profile-qualified Quran target or hadith id. Legacy unqualified Quran targets belong to Hafs. */
   reference: string;
   kind: CommentaryKind;
   text: string;
@@ -39,4 +39,9 @@ export function validateCommentary(input: unknown): CommentaryInput {
   if (id !== undefined && (typeof id !== 'string' || !/^[\w-]{1,180}$/u.test(id))) throw new Error('invalid-request');
   if (expectedRevision !== undefined && !Number.isSafeInteger(expectedRevision)) throw new Error('invalid-request');
   return { id: id as string | undefined, reference, kind: kind as CommentaryKind, text, expectedRevision: expectedRevision as number | undefined };
+}
+
+/** Earlier Quran comments used Hafs numbering without naming its profile. */
+export function commentaryReferenceKey(reference: string): string {
+  return reference.replace(/^quran:(\d)/u, 'quran:hafs:$1');
 }

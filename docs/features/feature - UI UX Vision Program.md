@@ -113,6 +113,21 @@ Each task below is one Jira task. Every task must:
 
 Conducted on 2026-11-10 by Antigravity using live Electron harness (`scripts/ui-audit-live/`) against disposable profile `.baglib-data/key295-profile/` seeded with real Arabic & English PDFs, EPUBs, WMA audio, Quran/Sunnah/Poetry copies, notes, cards, and physical records. 177 evidence screenshots captured in `.baglib-data/KEY-295-evidence/` across `ar`/`en`, `light`/`dark`, and `1280`/`480` px viewports.
 
+### 6.0 Claude's review corrections (2026-11-10, from `library_grid_ar_light_1280.png`)
+
+Some of the gaps reported below are already partly met. Later tasks must build on what exists rather than redo it:
+- **The nav is already grouped.** It has three groups: Daily study (الدراسة اليومية), Reading sources (مصادر القراءة) and Search and knowledge (البحث والمعرفة). Settings is already pinned at the bottom. What U3 actually has to do:
+  - regroup the nav to the mockup's Library, Notes, Research and Islamic Studies;
+  - add the New Object button and the brand subtitle;
+  - add the breadcrumb;
+  - add the drawer for narrow windows.
+- **The top bar already has a central search with a `Ctrl+K` hint**, plus Quran and Sunnah shortcuts. U3 keeps the search and adds the breadcrumb.
+- **Cards already show a physical-copy badge (نسخة ورقية) and a format badge (WMA).** U5 standardizes them into one physical/digital/wishlist badge, adds "new", and replaces the generic placeholder.
+- **Two items in 6.11 are already Jira tasks:**
+  - the prayer, zikr and wird snooze is KEY-239, in progress;
+  - side-by-side tafsir comparison is KEY-170.
+- **Barcode or ISBN scanning is a new feature**, outside this UI program. Nothing is filed for it.
+
 ### 6.1 Shell and Global Navigation
 
 | Gap | Severity | Evidence | Fixed by |
@@ -219,6 +234,32 @@ The following gaps identified in the audit require backend logic or capabilities
 ## 7. U15 acceptance results (KEY-309)
 
 (The U15 implementer fills this in.)
+
+## 8. Follow-ups collected for U14 (KEY-308)
+
+- KEY-297: the "+" in New Object appears twice (once as the icon, once in the text).
+- KEY-299: the en 480 library evidence shows the drawer. Re-check the single-column grid at 480.
+- KEY-302: exam entries show raw curriculum UUIDs instead of names. "1 tasks" needs plural forms in ar and en. Check the default module order on a fresh profile.
+- KEY-296: one harness screenshot was named for the wrong language.
+
+## 9. Added on 2026-11-10 at the user's request: U16 (KEY-310)
+
+The user said the library is too cluttered, and asked for three changes:
+1. The library header and ribbon hide when you scroll down and come back when you scroll up.
+2. The side menu works as **pin-or-peek**, like Codex, Antigravity and Claude Code. A menu button pins it or unpins it. While it is unpinned, hovering over the edge shows it as an overlay.
+3. One simple search with sorting, plus an "Advanced filters" panel that keeps every existing filter.
+
+## 10. Added on 2026-11-10 at the user's request: U17–U23 (KEY-311 to KEY-316)
+
+| U | Key | What the user asked for |
+|---|---|---|
+| U17 | KEY-311 | The dashboard keeps only the essential stats (at most 4 tiles). A separate Statistics view has rich visuals. |
+| U18 | KEY-312 | Settings for the adhan, prayer and dhikr. A real notification system. Muezzin adhan recordings: research first, and **download only after the user approves**. |
+| U19 | KEY-313 | Al-Bayan poems laid out as centred, aligned hemistichs, with compact actions on hover or right-click. |
+| U20 | KEY-314 | The reader's tools/edit panel redesigned, with an icon and a one-line explanation for each tool. |
+| U21 | KEY-315 | Themed, rounded scrollbars across the app. The side-note tab collapses to a small edge tip. |
+| U22 | KEY-305 (comment) | The controls around the Quran reader feel off: one calm header, an action menu, and a tabbed panel. |
+| U23 | KEY-316 | Context-aware right-click menus everywhere, plus a single shortcut registry (taken over from KEY-298). |
 
 ## U17 implementation checkpoint — KEY-311, Codex, 2026-11-10
 

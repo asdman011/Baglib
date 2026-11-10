@@ -1,5 +1,16 @@
 export const translations = {
   ar: {
+    islamicMute: "كتم الصوت",
+    islamicVolume: "مستوى الصوت",
+    islamicHub: "الدراسات الإسلامية",
+    islamicHubHint: "تابع القراءة أو استكشف القرآن والحديث والشعر",
+    islamicContinue: "متابعة القراءة",
+    islamicNoPosition: "ابدأ القراءة لحفظ موضعك هنا",
+    islamicSearch: "ابحث في القرآن والسنة والشعر",
+    islamicStudyPanel: "لوحة الدراسة",
+    islamicCommentary: "التفسير والشرح",
+    islamicRelated: "ذات صلة",
+
     // KEY-314 reader tools
     pdfToolUnavailable: "هذه الأداة غير متاحة لهذا المستند",
     pdfToolTextOnly: "تتطلب هذه الأداة مستنداً بطبقة نصية",
@@ -4542,6 +4553,17 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    islamicMute: "Mute",
+    islamicVolume: "Volume",
+    islamicHub: "Islamic Studies",
+    islamicHubHint: "Continue reading or explore Quran, hadith and poetry",
+    islamicContinue: "Continue reading",
+    islamicNoPosition: "Start reading to save your place here",
+    islamicSearch: "Search Quran, Sunnah and poetry",
+    islamicStudyPanel: "Study panel",
+    islamicCommentary: "Commentary",
+    islamicRelated: "Related",
+
     // KEY-314 reader tools
     pdfToolUnavailable: "This tool is unavailable for this document",
     pdfToolTextOnly: "This tool requires a document with a text layer",

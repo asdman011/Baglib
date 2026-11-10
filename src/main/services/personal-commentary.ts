@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { SqliteKnowledgeRepository } from '../database/repositories/knowledge.repository';
 import { headRevision, trashKnowledge } from './knowledge-history';
 import { normalizeArabicLetters, stripArabicDiacritics } from '../../shared/utils/lookup-candidates';
+import { commentaryReferenceKey } from '../../shared/personal-commentary';
 import type { CommentaryEntry, CommentaryInput, CommentaryKind } from '../../shared/personal-commentary';
 
 const PREFIX = 'commentary:';
@@ -23,7 +24,11 @@ export class PersonalCommentaryService {
   };
 
   list(reference: string): CommentaryEntry[] {
-    return (this.db.prepare(`${SELECT} ORDER BY k.created_at DESC`).all(`${PREFIX}${reference}:%`) as Row[]).map(this.entry);
+    const canonical = commentaryReferenceKey(reference);
+    const legacy = canonical.startsWith('quran:hafs:') ? canonical.replace('quran:hafs:', 'quran:') : canonical;
+    const query = SELECT.replace('k.location LIKE ?', '(k.location LIKE ? OR k.location LIKE ?)');
+    return (this.db.prepare(query + ' ORDER BY k.created_at DESC').all(PREFIX + canonical + ':%', PREFIX + legacy + ':%') as Row[])
+      .map(row => ({ ...this.entry(row), reference }));
   }
 
   /** Stored text stays as written; only the compared form drops diacritics. */
@@ -40,7 +45,10 @@ export class PersonalCommentaryService {
   }
 
   save(input: CommentaryInput): void {
-    if (input.id && this.owned(input.id)?.reference !== input.reference) throw new Error('invalid-request');
+    if (input.id) {
+      const previous = this.owned(input.id);
+      if (!previous || commentaryReferenceKey(previous.reference) !== commentaryReferenceKey(input.reference)) throw new Error('invalid-request');
+    }
     new SqliteKnowledgeRepository(this.db).saveKnowledge({
       id: input.id || randomUUID(), workId: null, knowledgeType: 'note', location: `${PREFIX}${input.reference}:${input.kind}`,
       noteContent: input.text, expectedRevision: input.expectedRevision,

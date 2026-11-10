@@ -178,6 +178,7 @@ export const NAV_ITEMS: Record<string, NavItemConfig> = {
     icon: Globe,
     actionType: 'searchHub',
   },
+  islamic: { id:'islamic', viewMode:'islamic', labelKey:'islamicHub', icon:BookOpen, actionType:'view' },
   quran: {
     id: 'quran',
     viewMode: 'quran',
@@ -313,19 +314,21 @@ export function resolveBreadcrumbs(
         parent: { labelKey: 'navResearchGroup', viewMode: 'pathways' },
         current: { labelKey: 'pathwaysTitle' },
       };
+    case 'islamic':
+      return { parent: { labelKey:'navIslamicGroup', viewMode:'islamic' }, current: {labelKey:'islamicHub'} };
     case 'quran':
       return {
-        parent: { labelKey: 'navIslamicGroup', viewMode: 'quran' },
+        parent: { labelKey: 'navIslamicGroup', viewMode: 'islamic' },
         current: { labelKey: 'navQuran' },
       };
     case 'sunnah':
       return {
-        parent: { labelKey: 'navIslamicGroup', viewMode: 'sunnah' },
+        parent: { labelKey: 'navIslamicGroup', viewMode: 'islamic' },
         current: { labelKey: 'navSunnah' },
       };
     case 'bayan':
       return {
-        parent: { labelKey: 'navIslamicGroup', viewMode: 'bayan' },
+        parent: { labelKey: 'navIslamicGroup', viewMode: 'islamic' },
         current: { labelKey: 'navBayan' },
       };
     case 'settings':

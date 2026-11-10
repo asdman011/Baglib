@@ -8,6 +8,8 @@ import { isnadTokens, splitSunnahPassage } from '../../libs/sunnah/text';
 import { ContextMenu } from '../ui/ContextMenu';
 import { contextActions } from '../actions/context-actions';
 import { addPassageToSrs, openPassageComment, passageNote, linkPassageToNote, sharePassage } from '../actions/passage-actions';
+import type { ReaderTab } from '../islamic/reader-chrome';
+import { MoreHorizontal } from 'lucide-react';
 import { HadithActions, formatHadith } from './HadithActions';
 import { SunnahResearchPanel } from './SunnahResearchPanel';
 
@@ -39,7 +41,9 @@ function NumberedTitle({ number, title, language, fallback }: { number: string; 
   return <><bdi className="sunnah-number" dir="ltr">{number}</bdi><span>{title[language] || fallback}</span></>;
 }
 
-export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, onFocus }: {
+export function SunnahChapterView({ calm = false, onStudy, chapter, hadiths, showEnglish, single, t, onFocus }: {
+  calm?: boolean;
+  onStudy?: (tab: ReaderTab) => void;
   chapter: SunnahChapter;
   hadiths: SunnahHadith[];
   showEnglish: boolean;
@@ -67,6 +71,7 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
         comment: () => hadith.researchId ? openPassageComment('hadith:'+hadith.researchId) : passageNote(target,label,reference),
         srs: () => addPassageToSrs({ text: reference, sourceKind: 'hadith', sourceRef: target, sourceLabel: label, language: showEnglish ? 'en' : 'ar' }),
         commentary: hadith.comment || hadith.researchId ? () => {
+          if (calm) { onFocus(hadith.id); onStudy?.('commentary'); return; }
           const root = [...document.querySelectorAll<HTMLElement>('[data-hadith-id]')].find(element => element.dataset.hadithId === hadith.id);
           const details = root?.querySelector<HTMLDetailsElement>('details'); if(details){ details.open=true; details.scrollIntoView({block:'nearest'}); }
         } : undefined,
@@ -76,10 +81,10 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
         {showSection && hasSection && <ParallelRow showEnglish={showEnglish} className="sunnah-section-heading"
           arabic={<h3><NumberedTitle number={section.number} title={section.title} language="ar" fallback="" /></h3>}
           english={<h3><NumberedTitle number={section.number} title={section.title} language="en" fallback="" /></h3>} />}
-        <article className="sunnah-hadith" aria-label={t('sunnahHadithNumber', { number: hadith.number || '—' })}>
+        <article className="sunnah-hadith group relative" aria-label={t('sunnahHadithNumber', { number: hadith.number || '—' })}>
           <div className="flex items-center justify-between gap-3 mb-4 text-xs font-sans text-muted">
             <span className="font-bold">{t('sunnahHadithNumber', { number: hadith.number || '—' })}</span>
-            {hadith.researchId !== undefined && <button type="button" className="sunnah-button" onClick={event => {
+            {!calm && hadith.researchId !== undefined && <button type="button" className="sunnah-button" onClick={event => {
               const panel = event.currentTarget.closest('article')?.querySelector<HTMLDetailsElement>('.sunnah-research');
               if (panel) { panel.open = true; panel.scrollIntoView({ block: 'start' }); }
             }}>{t('sunnahResearch')}</button>}
@@ -100,12 +105,12 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
             {hadith.gradingSummary.opposed ? <span className="is-opposed">{t('sunnahGradingOpposed')}</span> : hadith.gradingSummary.wordingDiffers && <span>{t('sunnahGradingDiffers')}</span>}
           </p>}
           {hadith.translation && showEnglish && <p className="sunnah-research-caption" dir="ltr" lang="en">{t('sunnahVariantEnglishUsed')}{hadith.translation.partial && <> {t('sunnahVariantEnglishPartial')}</>}</p>}
-          {hadith.comment && <details className="mt-5 border-t border-subtle pt-3 text-sm">
+          {!calm && hadith.comment && <details className="mt-5 border-t border-subtle pt-3 text-sm">
             <summary className="cursor-pointer text-muted font-sans">{t('sunnahComment')}</summary>
             <p className="font-reading text-lg leading-loose mt-2 whitespace-pre-wrap" dir="rtl" lang="ar">{hadith.comment}</p>
           </details>}
-          {hadith.researchId !== undefined && <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} matn={hadith.text.ar.matn || hadith.text.ar.full} initialOpen={single} showGrading={gradingRequest.id === hadith.researchId ? gradingRequest.count : undefined} sourceBook={Boolean(hadith.sourceBook)} t={t} />}
-          <HadithActions chapter={chapter} hadith={hadith} showEnglish={showEnglish} t={t} />
+          {!calm && hadith.researchId !== undefined && <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} matn={hadith.text.ar.matn || hadith.text.ar.full} initialOpen={single} showGrading={gradingRequest.id === hadith.researchId ? gradingRequest.count : undefined} sourceBook={Boolean(hadith.sourceBook)} t={t} />}
+          {calm ? <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100"><button type="button" aria-label={t('ribbonMoreActions')} onClick={event => { const surface = event.currentTarget.closest('[data-context-surface]'); const r = event.currentTarget.getBoundingClientRect(); surface?.dispatchEvent(new MouseEvent('contextmenu', { bubbles:true, cancelable:true, clientX:r.x, clientY:r.bottom })); }} className="rounded-lg p-2"><MoreHorizontal size={18} /></button><button type="button" onClick={() => { onFocus(hadith.id); onStudy?.('notes'); }} className="rounded-lg p-2 text-xs">{t('sunnahReflection')}</button></div> : <HadithActions chapter={chapter} hadith={hadith} showEnglish={showEnglish} t={t} />}
         </article>
       </ContextMenu>;
     })}

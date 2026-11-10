@@ -1,7 +1,10 @@
 'use client';
+import { IslamicReaderHeader, IslamicReaderPanel } from '../islamic/IslamicReaderChrome';
+import type { ReaderTab } from '../islamic/reader-chrome';
+import { saveContinueReading } from '../islamic/continue-reading';
 import React, { useMemo, useState } from 'react';
 import type { PoetryDetail } from '../../../shared/types/poetry';
-import { poetryDisplayText, poetryDescriptionText, togglePoetryPanel, type PoetryPanel } from '../../../shared/poetry';
+import { poetryDisplayText, poetryDescriptionText } from '../../../shared/poetry';
 import { ContextMenu } from '../ui/ContextMenu';
 import { shortcutForEvent, shortcutHint } from '../actions/shortcuts';
 import { addPassageToSrs } from '../actions/passage-actions';
@@ -58,8 +61,8 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
   const [selection, setSelection] = useState<[number, number] | null>(() => initialVerse === undefined || !verses.length ? null : [targetRow, endRow]);
   const anchor = React.useRef(targetRow);
   const saveNote = async (row: PoetryRowModel) => { await saveNative(row.sourceFrom, row.sourceTo, 'note'); };
-  const [panel, setPanel] = useState<PoetryPanel>(null);
-  const biographyControl = React.useRef<HTMLButtonElement>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [readerTab, setReaderTab] = useState<ReaderTab>('commentary');
   const [font, setFont] = useState(poem.language === 'ar' ? 'Amiri' : 'EB Garamond');
   const fonts = poem.language === 'ar' ? ([['Amiri', 'bayanFontAmiri'], ['Scheherazade New', 'bayanFontScheherazade'], ['Noto Naskh Arabic', 'bayanFontNaskh']] as const) : ([['EB Garamond', 'bayanFontGaramond'], ['Lora', 'bayanFontLora']] as const);
   const description = useMemo(() => {
@@ -92,6 +95,11 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
   const [numbers, setNumbers] = useState(false);
   const [actionsRow, setActionsRow] = useState<number | null>(null);
   const [activeRow, setActiveRow] = useState(targetRow);
+  React.useEffect(() => {
+    const row = rows[activeRow];
+    if (!row) return;
+    void saveContinueReading('poetry', { target: 'poetry:ashaar:' + poem.id + ':' + row.sourceFrom + ':' + row.sourceTo, label: [poem.poet_name, poem.title].filter(Boolean).join(' — ') }).catch(() => setFailed(true));
+  }, [activeRow, rows, poem.id, poem.poet_name, poem.title]);
   const listElement = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (actionsRow === null) return;
@@ -121,19 +129,12 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
   const halfStyle = justify ? { textAlign: 'justify', textAlignLast: 'justify' } as const : undefined;
   const chips = [{ key: 'bayanEra', value: poem.poet_era }, { key: 'bayanMeter', value: poem.meter }, { key: 'bayanRhyme', value: rhyme }, { key: 'bayanTheme', value: poem.theme }, { key: 'bayanLanguageType', value: poem.language_variant === '-' ? null : poem.language_variant }, { key: 'bayanLocation', value: poem.poet_location }, { key: 'bayanVerseCount', value: String(poem.verse_count ?? verses.length) }] as const;
   return <section data-poetry-id={poem.id} data-poetry-reference={initialVerse === undefined ? '' : `${initialVerse}:${initialTo ?? initialVerse}`} dir={dir} className="relative flex h-full min-h-0 flex-col bg-canvas p-4">
-    <header className="flex shrink-0 flex-wrap items-center gap-2 rounded-xl border border-subtle bg-surface p-2 mb-3 [&>button]:rounded-lg [&>button]:px-3 [&>button]:py-2 [&>button]:text-sm [&>button]:leading-relaxed [&>button:hover]:bg-canvas [&>button[aria-expanded=true]]:bg-pale-sky-500/15 [&>button:focus-visible]:outline-2 [&>button:focus-visible]:outline-pale-sky-500 [&>label]:px-2 [&>label]:text-sm [&>label]:leading-loose">
-      <button onClick={onBack} type="button">{t('bayanBack')}</button>
-      <button type="button" aria-expanded={panel === 'typography'} onClick={() => setPanel(current => togglePoetryPanel(current, 'typography'))}>{t('bayanTypography')}</button>
-      <button ref={biographyControl} type="button" aria-expanded={panel === 'poet'} onClick={() => setPanel(current => togglePoetryPanel(current, 'poet'))}>{t('bayanBiography')}</button>
-      <button type="button" aria-expanded={panel === 'saved'} onClick={() => setPanel(current => togglePoetryPanel(current, 'saved'))}>{t('bayanSavedVerses')}</button>
-      <button type="button" data-poetry-narrations-toggle aria-expanded={panel === 'narration'} onClick={() => setPanel(current => togglePoetryPanel(current, 'narration'))}>{t('bayanNarrations')}</button>
-      <button type="button" onClick={() => void shareRows(selectedRows.length ? selectedRows : rows)}>{t('bayanShare')}</button>
+    <IslamicReaderHeader title={poem.title || poem.poet_name} t={t} panelOpen={panelOpen} onPanelToggle={() => setPanelOpen(value => !value)} picker={<><button type="button" onClick={onBack} className="rounded-lg p-2 text-sm">{t('bayanBack')}</button><select aria-label={t('navBayan')} value={poem.id} onChange={onBack} className="flex-1"><option value={poem.id}>{poem.poet_name} · {poem.title}</option></select></>} settings={<div className="flex flex-col gap-3"><label>{t('bayanFont')}<select value={font} onChange={event => setFont(event.target.value)} className="mx-3 rounded border border-subtle bg-canvas p-2">{fonts.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>      <button type="button" onClick={() => void shareRows(selectedRows.length ? selectedRows : rows)}>{t('bayanShare')}</button>
       <button type="button" onClick={() => void copyPoem()}>{t('bayanCopyPoem')}</button>
       <button type="button" disabled={!selectedRows.length} onClick={() => void copySelection()}>{t('bayanCopySelection')}</button>
       <label><input type="checkbox" checked={diacritics} onChange={event => setDiacritics(event.target.checked)} /> {t('bayanDiacritics')}</label>
       <label><input type="checkbox" checked={numbers} onChange={event => setNumbers(event.target.checked)} /> {t('bayanLineNumbers')}</label>
-      {paired && <label><input type="checkbox" checked={justify} onChange={event => setJustify(event.target.checked)} /> {t('bayanJustify')}</label>}
-    </header>
+      {paired && <label><input type="checkbox" checked={justify} onChange={event => setJustify(event.target.checked)} /> {t('bayanJustify')}</label>}</div>} />
     {selection && <div role="toolbar" aria-label={t('bayanSelectVerse')} className="sticky top-0 z-10 flex flex-wrap gap-3 rounded-xl border border-subtle bg-surface p-3 shadow-lg">
       <button type="button" onClick={() => void copySelection()}>{t('bayanCopyVerse')}</button>
       <button type="button" onClick={() => void saveSelection('note')}>{t('bayanSaveNote')}</button>
@@ -142,14 +143,16 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
       <label className="w-full text-sm">{t('bayanPersonalNote')}<textarea rows={2} maxLength={50000} value={personalNote} onChange={event => setPersonalNote(event.target.value)} className="block w-full rounded border border-subtle bg-canvas p-2 text-start" dir="auto" /></label>
       {poem.language === 'en' && <EnglishPoetryNarration key={selection.join(':')} sentences={selectedRows.map(row => row.sadr)} />}
     </div>}
-    {panel === 'saved' && <SavedPoetryNotes />}
-    <PoetryNarrations key={poem.id} poem={poem} hidden={panel !== 'narration'} />
-    {panel === 'typography' && <aside aria-label={t('bayanTypography')} className="rounded-xl border border-subtle bg-surface p-4"><label>{t('bayanFont')}<select value={font} onChange={event => setFont(event.target.value)} className="mx-3 rounded border border-subtle bg-canvas p-2">{fonts.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label></aside>}
-    {panel === 'poet' && <PoetBiography poem={poem} onPoet={onPoet} onClose={() => { setPanel(null); biographyControl.current?.focus(); }} />}
+    {panelOpen && <IslamicReaderPanel active={readerTab} onTab={tab => { setReaderTab(tab); }} onClose={() => setPanelOpen(false)} t={t}>
+      {readerTab === 'commentary' && <p dir="auto" className="whitespace-pre-wrap font-reading text-xl leading-[2.4]">{description || t('quranWordUnavailable')}</p>}
+      {readerTab === 'notes' && <SavedPoetryNotes />}
+      <PoetryNarrations key={poem.id} poem={poem} hidden={readerTab !== 'translation'} />
+      {readerTab === 'related' && <PoetBiography poem={poem} onPoet={onPoet} onClose={() => setPanelOpen(false)} />}
+    </IslamicReaderPanel>}
     <div className="min-h-0 flex-1 overflow-y-auto py-5">
       <div data-poetry-header className="mx-auto mb-6 max-w-3xl text-center">
         <h1 dir="auto" className="mb-1 text-3xl font-semibold leading-[1.8]">{poem.title || poem.poet_name}</h1>
-        <p dir="auto" className="mb-3 text-lg text-muted"><button type="button" className="rounded px-1 text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-pale-sky-500" onClick={() => setPanel(current => togglePoetryPanel(current, 'poet'))}>{poem.poet_name}</button>{poem.poet_era && <> · {poem.poet_era}</>}</p>
+        <p dir="auto" className="mb-3 text-lg text-muted"><button type="button" className="rounded px-1 text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-pale-sky-500" onClick={() => { setPanelOpen(true); setReaderTab('related'); }}>{poem.poet_name}</button>{poem.poet_era && <> · {poem.poet_era}</>}</p>
         <dl className="flex flex-wrap justify-center gap-2 text-sm">
           {chips.map(item => item.value ? <div key={item.key} className="flex items-baseline gap-1.5 rounded-full border border-subtle bg-surface px-3 py-1"><dt className="text-xs text-muted">{t(item.key)}</dt><dd dir="auto" className="leading-relaxed">{item.value}</dd></div> : null)}
         </dl>
