@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import electron from 'electron';
 
 const directory = fs.mkdtempSync(path.resolve('.baglib-data/ocr-review-live-'));
-const evidenceDir = path.resolve('.baglib-data/key275-evidence');
+const evidenceDir = process.env.BAGLIB_EVIDENCE_DIR || path.resolve('.baglib-data/key292-evidence');
 if (!fs.existsSync(evidenceDir)) {
   fs.mkdirSync(evidenceDir, { recursive: true });
 }

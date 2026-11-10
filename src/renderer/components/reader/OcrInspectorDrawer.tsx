@@ -36,6 +36,7 @@ import {
   resolveAndMigratePageCorrections,
   type OcrSuspect,
   type OcrWordCorrectionsMap,
+  type OcrWordCorrectionEntry,
   type StaleCorrectionInfo,
 } from '../../../shared/ocr-suspects';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -155,6 +156,18 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
           if (pageResult) {
             const check = applyStoredCorrections(pageResult, corrections, selectedEngine);
             setStaleCorrections(check.staleCorrections);
+            if (check.appliedCount > 0 && check.patchedResult.text !== pageResult.text) {
+              onUpdatePageResult?.(check.patchedResult);
+              const targetBook = bookId || effectiveSourceKey;
+              if (targetBook && window.electronAPI?.reindexPageContent) {
+                window.electronAPI.reindexPageContent(targetBook, {
+                  pageNumber: readingPage,
+                  locationCfiOrPage: `page-${readingPage}`,
+                  chapterTitle: `Page ${readingPage}`,
+                  content: check.patchedResult.text,
+                }).catch(() => {});
+              }
+            }
           }
         }
       } catch (err) {
@@ -164,7 +177,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
     return () => {
       mounted = false;
     };
-  }, [effectiveSourceKey, bookId, sourcesCount, readingPage, pageResult, selectedEngine]);
+  }, [effectiveSourceKey, bookId, sourcesCount, readingPage, pageResult, selectedEngine, onUpdatePageResult]);
 
   // Compute suspects ordered by reading order
   const pageWords = pageResult?.words;
@@ -179,6 +192,19 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
   const activeSuspects = React.useMemo(() => {
     return suspects.filter(s => !acceptedIndices.has(s.originalIndex));
   }, [suspects, acceptedIndices]);
+
+  const staleIndices = React.useMemo(() => new Set(staleCorrections.map(s => s.index)), [staleCorrections]);
+  const appliedCorrectionsList = React.useMemo(() => {
+    return Object.entries(savedCorrections)
+      .filter(([k, v]) => {
+        const idx = Number(k);
+        return !staleIndices.has(idx) && v && typeof v === 'object' && 'corrected' in v && 'original' in v;
+      })
+      .map(([k, v]) => ({
+        idx: Number(k),
+        entry: v as OcrWordCorrectionEntry,
+      }));
+  }, [savedCorrections, staleIndices]);
 
   const activeSuspectsCount = activeSuspects.length;
   const safeSuspectIndex = Math.min(Math.max(0, currentSuspectIndex), Math.max(0, activeSuspects.length - 1));
@@ -312,10 +338,72 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
       const corrKey = ocrCorrectionsKey(effectiveSourceKey, readingPage);
       if (corrKey) {
         await window.electronAPI.settings.set(corrKey, nextCorr).catch(() => {});
+
+        // KEY-292: Re-index page chunk in book_content_fts
+        const targetBook = bookId || effectiveSourceKey;
+        if (targetBook && window.electronAPI?.reindexPageContent) {
+          await window.electronAPI.reindexPageContent(targetBook, {
+            pageNumber: readingPage,
+            locationCfiOrPage: `page-${readingPage}`,
+            chapterTitle: `Page ${readingPage}`,
+            content: updated.text,
+          }).catch((err) => console.warn('[OcrInspector] FTS re-index failed:', err));
+        }
       }
     }
 
     setToastMessage(t('ocrWordCorrectedToast'));
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const handleDiscardCorrection = async (wordIdxStr: string) => {
+    const entry = savedCorrections[wordIdxStr];
+    if (!entry) return;
+    const wordIdx = Number(wordIdxStr);
+    const originalText = typeof entry === 'string' ? '' : entry.original;
+
+    const nextCorr = { ...savedCorrections };
+    delete nextCorr[wordIdxStr];
+    setSavedCorrections(nextCorr);
+
+    let restored = pageResult;
+    if (pageResult && Number.isFinite(wordIdx) && originalText) {
+      restored = applyWordCorrection(pageResult, wordIdx, originalText);
+      onUpdatePageResult?.(restored);
+    }
+
+    if (effectiveSourceKey && window.electronAPI?.settings?.set) {
+      const corrKey = ocrCorrectionsKey(effectiveSourceKey, readingPage);
+      if (corrKey) {
+        await window.electronAPI.settings.set(corrKey, nextCorr).catch(() => {});
+      }
+    }
+
+    // KEY-292: Re-index page chunk in book_content_fts with restored text
+    const targetBook = bookId || effectiveSourceKey;
+    if (targetBook && restored && window.electronAPI?.reindexPageContent) {
+      await window.electronAPI.reindexPageContent(targetBook, {
+        pageNumber: readingPage,
+        locationCfiOrPage: `page-${readingPage}`,
+        chapterTitle: `Page ${readingPage}`,
+        content: restored.text,
+      }).catch((err) => console.warn('[OcrInspector] FTS re-index failed on discard:', err));
+    }
+
+    // Un-accept so it returns to suspect review
+    setAcceptedIndices((prev) => {
+      const next = new Set(prev);
+      next.delete(wordIdx);
+      if (effectiveSourceKey && window.electronAPI?.settings?.set) {
+        const accKey = ocrAcceptedKey(effectiveSourceKey, readingPage);
+        if (accKey) {
+          window.electronAPI.settings.set(accKey, Array.from(next)).catch(() => {});
+        }
+      }
+      return next;
+    });
+
+    setToastMessage(t('ocrDiscardCorrectionToast'));
     setTimeout(() => setToastMessage(null), 2500);
   };
 
@@ -346,6 +434,11 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
     const updated = applyWordCorrection(pageResult, wordIdx, trimmed);
     onUpdatePageResult?.(updated);
 
+    const existingCorr = savedCorrections[String(wordIdx)];
+    const originalWord = (typeof existingCorr === 'object' && existingCorr?.original)
+      ? existingCorr.original
+      : currentSuspect.word.text;
+
     if (effectiveSourceKey && window.electronAPI?.settings) {
       try {
         const corrKey = ocrCorrectionsKey(effectiveSourceKey, readingPage);
@@ -353,13 +446,24 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
           const nextCorr: OcrWordCorrectionsMap = {
             ...savedCorrections,
             [String(wordIdx)]: {
-              original: currentSuspect.word.text,
+              original: originalWord,
               corrected: trimmed,
               engine: selectedEngine,
-                          },
+            },
           };
           setSavedCorrections(nextCorr);
           await window.electronAPI.settings.set(corrKey, nextCorr);
+
+          // KEY-292: Re-index page chunk in book_content_fts
+          const targetBook = bookId || effectiveSourceKey;
+          if (targetBook && window.electronAPI?.reindexPageContent) {
+            await window.electronAPI.reindexPageContent(targetBook, {
+              pageNumber: readingPage,
+              locationCfiOrPage: `page-${readingPage}`,
+              chapterTitle: `Page ${readingPage}`,
+              content: updated.text,
+            }).catch((err) => console.warn('[OcrInspector] FTS re-index failed:', err));
+          }
         }
       } catch (err) {
         console.warn('Failed to save correction:', err);
@@ -1047,6 +1151,41 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                               {t('ocrDiscardStaleCorrection')}
                             </button>
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Applied Active Corrections List (KEY-292) */}
+                {appliedCorrectionsList.length > 0 && (
+                  <div className="rounded-xl border border-pale-sky-500/30 bg-pale-sky-500/5 p-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-main">
+                      <CheckCheck className="w-4 h-4 text-pale-sky-500 shrink-0" />
+                      <span>{t('ocrSavedCorrectionsTitle')} ({appliedCorrectionsList.length})</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {appliedCorrectionsList.map(({ idx, entry }) => (
+                        <div
+                          key={`applied-corr-${idx}`}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-subtle bg-surface p-2 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <span dir="auto" className="font-bold text-main block truncate">
+                              {entry.corrected}
+                            </span>
+                            <span dir="auto" className="text-[10px] text-muted block truncate">
+                              {t('ocrStaleOriginal').replace('{text}', entry.original)}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDiscardCorrection(String(idx))}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold text-red-600 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                            title={t('ocrDiscardCorrection')}
+                          >
+                            {t('ocrDiscardCorrection')}
+                          </button>
                         </div>
                       ))}
                     </div>
