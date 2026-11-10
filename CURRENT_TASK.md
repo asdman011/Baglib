@@ -1,3 +1,33 @@
+## KEY-313 verified — 2026-11-10, Codex continuing Antigravity
+
+Session 01a1c58e-3bd8-7440-badb-6d219525adc6. Continued Antigravity f10a55bf-f7f5-4bd9-ba44-f3360eeee5d5 in place. Antigravity supplied the centred poem layout, calmer discovery cards, layout model, line-action table, new tests and live harness. Codex added missing Share to the shared actions/header and synchronized the fixture root theme with WorkspaceContext.
+
+Arabic bayts now use equal centred hemistich columns and Amiri with generous line height, stacking below 640px. Reading rows have no visible buttons at rest. Hover, focus and touch reveal compact icons. Enter selects a row, C copies, S shares, N captures a note, arrows move focus. Header copy-whole/copy-selection/share and saved notes/commentary remain reachable. English stanzas preserve LTR and paragraph spacing.
+
+Focused 12/12, final full 1744/1744 at concurrency 2, TypeScript zero errors, scoped ESLint zero errors/warnings, diff check clean. Copied-corpus Electron run-JF8xsL passed eight ar/en/light/dark/1280/480 layout configurations, copy/selection/whole poem, share payload, keyboard and long-press assertions. Thirty PNGs retained. Inspected 02-poem-ar-light-1280.png, 02-poem-ar-dark-1280.png, 03-hover-ar-dark-1280.png, 07-stacked-ar-light-480.png in .baglib-data/KEY-313-evidence/. Corpus cleanup verified one original unchanged and removed its copy.
+
+The fixture renders the production poetry components with real copied Arabic corpus and isolated IPC, not the whole app shell. English stanza text is a generated fixture because no real English poetry corpus is installed. Share payload is verified against the existing sunnah.share IPC contract without opening the OS share panel. The displayed rhyme is a derived common closing letter, not prosodic analysis. No original corpus/document edits, schema changes, dependencies, downloads or Jira changes. Existing tests are unchanged. scripts/poetry-live/main.ts has three selector adjustments for the changed production markup.
+
+Exact 15 task files/hunks
+
+- `src/renderer/components/poetry/BayanView.tsx`
+- `src/renderer/components/poetry/PoetBrowser.tsx`
+- `src/renderer/components/poetry/PoetryExcerpt.tsx`
+- `src/renderer/components/poetry/PoetryReader.tsx`
+- `src/renderer/components/poetry/poetry-layout.ts`
+- `src/renderer/components/poetry/poetry-line-actions.ts`
+- `src/renderer/translations.ts`
+- `tests/ui/poetry-layout.test.ts`
+- `scripts/poetry-ui-live/run.mjs`
+- `scripts/poetry-ui-live/main.ts`
+- `scripts/poetry-ui-live/fixture.tsx`
+- `scripts/poetry-live/main.ts`
+- `docs/features/Al-Bayan Poetry.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
+User authorizes separate attributed KEY-313 commit and normal push to origin/feature/library-domain via commit.lock. Publication pending. Then resume KEY-316 and reuse poetry-line-actions.ts. Claude owns review/Jira.
+
 ## KEY-315 — 2026-11-10, Antigravity (pushed)
 
 Session `6a383cbf-8075-4cf1-849f-badba626cd6a`. Implemented **KEY-315 (UI/UX U21)**: Themed rounded scrollbars app-wide and a side-note tab that collapses to an edge tip.

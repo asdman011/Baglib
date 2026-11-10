@@ -159,13 +159,13 @@ app.whenReady().then(async () => {
     await until(`document.querySelector('section[data-poetry-id]')?.dataset.poetryId==='${prolific.id}'&&document.querySelector('section[data-poetry-id]')?.dataset.poetryReference==='0:0'`);
     const classical = poetryDetail(database, prolific.id) as PoetryDetail;
     const originalVerses = JSON.parse(classical.verses_json) as string[];
-    const displayedBayt = `(()=>{const grid=document.querySelector('[data-poetry-source-index="0"] > div');return [grid.firstElementChild.textContent,grid.lastElementChild.textContent]})()`;
+    const displayedBayt = `(()=>{const grid=document.querySelector('[data-poetry-source-index="0"] [data-poetry-line]');return [grid.firstElementChild.textContent,grid.lastElementChild.textContent]})()`;
     assert.deepEqual(await evaluate(displayedBayt), originalVerses.slice(0, 2));
     await evaluate(`document.querySelector('header input[type=checkbox]').click()`);
     assert.deepEqual(await evaluate(displayedBayt), originalVerses.slice(0, 2).map(text => text.replace(/[\u064B-\u065F\u0670]/gu, '')));
     await evaluate(`document.querySelectorAll('header input[type=checkbox]')[1].click()`);
-    assert.equal(await evaluate(`document.querySelector('[data-poetry-source-index="0"] > div').style.textAlign`), 'justify');
-    await evaluate(`Array.from(document.querySelectorAll('[data-poetry-source-index="0"] button')).find(button=>button.textContent===window.poetryLive.t('bayanCopyVerse')).click()`);
+    assert.equal(await evaluate(`document.querySelector('[data-poetry-source-index="0"] [data-poetry-hemistich]').style.textAlign`), 'justify');
+    await evaluate(`Array.from(document.querySelectorAll('[data-poetry-source-index="0"] button')).find(button=>button.getAttribute('aria-label')===window.poetryLive.t('bayanCopyVerse')).click()`);
     await until('typeof window.poetryClipboard==="string"');
     assert.equal(await evaluate('window.poetryClipboard'), `${originalVerses[0]} *** ${originalVerses[1]}\n${[classical.poet_name, classical.title, classical.meter].filter(Boolean).join(' — ')}`);
     assert.equal((poetryDetail(database, prolific.id) as PoetryDetail).verses_json, classical.verses_json);

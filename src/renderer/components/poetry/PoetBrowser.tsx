@@ -19,12 +19,12 @@ export function PoetBrowser({ language, era, location, onPoet }: { language: 'ar
     }, 100);
     return () => { alive = false; clearTimeout(timer); };
   }, [language, era, location, query, offset]);
-  return <aside aria-label={t('bayanPoets')} className="rounded-xl border border-subtle bg-surface p-3">
+  return <aside aria-label={t('bayanPoets')} className="rounded-2xl border border-border bg-surface p-3 shadow-xs">
     <input type="search" dir="auto" aria-label={t('bayanPoetSearch')} placeholder={t('bayanPoetSearch')} value={query} onChange={event => { setQuery(event.target.value); setOffset(0); }} className="mb-3 w-full rounded border border-subtle bg-canvas p-2" />
     {failed && <p role="alert">{t('bayanUnavailable')}</p>}
     <div key={query} className="h-64 overflow-y-auto" onScroll={event => setOffset(Math.max(0, Math.floor(event.currentTarget.scrollTop / 64) - 3))}>
       <div className="relative" style={{ height: result.total * 64 }}>
-        {result.items.map((poet, index) => <button type="button" key={poet.id} onClick={() => onPoet(poet.id)} className="absolute w-full overflow-hidden border-b border-subtle px-3 text-start" style={{ top: (result.offset + index) * 64, height: 64, insetInlineStart: 0 }}>
+        {result.items.map((poet, index) => <button type="button" key={poet.id} onClick={() => onPoet(poet.id)} className="absolute w-full overflow-hidden border-b border-subtle px-3 text-start transition-colors hover:bg-surface-raised" style={{ top: (result.offset + index) * 64, height: 64, insetInlineStart: 0 }}>
           <span dir="auto" className="block truncate leading-relaxed">{poet.name}</span><span dir="auto" className="block truncate text-xs text-muted">{[poet.era, poet.location, poet.poemCount.toLocaleString(lang)].filter(Boolean).join(' · ')}</span>
         </button>)}
       </div>
