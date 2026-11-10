@@ -79,7 +79,7 @@ test('toggleDashboardModuleVisibility toggles visible flag', () => {
 });
 
 test('Module order survives a restart simulation via storage round-trip', async () => {
-  // Simulate moving calendar to top and hiding studyRhythm
+  // Simulate moving calendar to top and enabling the optional studyRhythm module
   const currentLayout: DashboardLayoutState = {
     version: 1,
     modules: [...DEFAULT_DASHBOARD_MODULES],
@@ -100,5 +100,5 @@ test('Module order survives a restart simulation via storage round-trip', async 
 
   const studyRhythm = validatedAfterRestart.modules.find((m) => m.id === 'studyRhythm');
   assert.ok(studyRhythm);
-  assert.equal(studyRhythm.visible, false);
+  assert.equal(studyRhythm.visible, true);
 });

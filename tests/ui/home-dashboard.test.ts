@@ -232,7 +232,30 @@ for (const lang of ['ar', 'en'] as const) {
         lang === 'ar' ? 'rtl' : 'ltr'
       );
 
-      // 2. Verify all 5 modules + Companion Widget rendered
+      // 2. Fresh dashboards show four tiles and the three essential modules.
+      assert.equal(window.document.querySelectorAll('[data-essential-tile]').length, 4);
+      assert.deepEqual(
+        [...window.document.querySelectorAll('[data-dashboard-item]')].map(item => item.getAttribute('data-dashboard-item')),
+        ['today', 'calendar', 'athan']
+      );
+
+      // Enable the optional modules before exercising their existing behavior below.
+      await act(async () => {
+        (window.document.querySelector('[data-dashboard-customize-btn]') as HTMLButtonElement).click();
+      });
+      for (const id of ['activeReads', 'khatmah', 'readingGoals', 'scratchpad']) {
+        await act(async () => {
+          const toggle = window.document.querySelector(`[data-customize-module-row="${id}"] [role="switch"]`) as HTMLButtonElement | null;
+          assert.ok(toggle);
+          assert.equal(toggle.getAttribute('aria-checked'), 'false');
+          toggle.click();
+        });
+      }
+      await act(async () => {
+        (window.document.querySelector('[data-customize-close-btn]') as HTMLButtonElement).click();
+      });
+
+      // All five original module assertions apply to this customized layout.
       assert.ok(window.document.querySelector('[data-dashboard-module="active-reads"]'));
       assert.ok(window.document.querySelector('[data-dashboard-module="khatmah-tracker"]'));
       assert.ok(window.document.querySelector('[data-dashboard-module="reading-analytics"]'));

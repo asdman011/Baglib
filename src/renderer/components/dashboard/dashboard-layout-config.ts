@@ -25,14 +25,14 @@ export const DASHBOARD_LAYOUT_SETTINGS_KEY = 'dashboard.layout.v1';
 export const DEFAULT_DASHBOARD_MODULES: DashboardModuleItem[] = [
   { id: 'today', visible: true },
   { id: 'calendar', visible: true },
-  { id: 'readingGoals', visible: true },
-  { id: 'activeReads', visible: true },
-  { id: 'studyProgress', visible: true },
-  { id: 'studyInsights', visible: true },
-  { id: 'scratchpad', visible: true },
+  { id: 'readingGoals', visible: false },
+  { id: 'activeReads', visible: false },
+  { id: 'studyProgress', visible: false },
+  { id: 'studyInsights', visible: false },
+  { id: 'scratchpad', visible: false },
   { id: 'athan', visible: true },
-  { id: 'khatmah', visible: true },
-  { id: 'studyRhythm', visible: true },
+  { id: 'khatmah', visible: false },
+  { id: 'studyRhythm', visible: false },
 ];
 
 export const VALID_MODULE_IDS: readonly DashboardModuleId[] = [

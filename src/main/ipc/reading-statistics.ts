@@ -3,10 +3,14 @@
  */
 
 import { ipcMain } from 'electron';
+import { getDatabase } from '../database/connection';
+import { workspaceStatistics } from '../services/statistics/workspace-statistics.service';
 import { readingTrackerService } from '../services/statistics/reading-tracker.service';
 import type { RecordReadingProgressPayload } from '../../shared/types/reading-statistics';
 
 export function registerReadingStatisticsIpc(): void {
+  ipcMain.handle('statistics:workspace', () => workspaceStatistics(getDatabase()));
+
   ipcMain.handle('statistics:start-session', (_event, payload) => {
     readingTrackerService.startSession(payload);
     return true;

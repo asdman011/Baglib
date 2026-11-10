@@ -570,6 +570,7 @@ export const API = {
 
   // Reading Statistics & Analytics Dashboard (KEY-149)
   statistics: {
+    workspace: (): Promise<import('../shared/statistics-workspace').StatisticsSnapshot> => ipcRenderer.invoke('statistics:workspace'),
     startSession: (payload: unknown) => ipcRenderer.invoke('statistics:start-session', payload),
     turnPage: (page: number, totalPages?: number) => ipcRenderer.invoke('statistics:turn-page', page, totalPages),
     heartbeat: () => ipcRenderer.invoke('statistics:heartbeat'),

@@ -1,3 +1,34 @@
+## KEY-311 verified; publication pending — 2026-11-10, Codex
+
+Session `01a1c4f4-9ddd-7a60-8fe0-169c0ab76833`. 2026-11-10T12:48:28+02:00. Reviewer authorized the three obsolete test-file updates and publishing despite unfinished KEY-304 failures. 28/28 focused+updated tests, scoped eslint0errors0warnings and git diff --check pass. Optional-module behavior assertions retained through Customize in both languages. Prior task-only tsc/main build and native8/8 with real PDFs remain valid;60 PNGs/10 distinct paths inspected. No production changes during continuation. Shared KEY-304 failures and2 notes tsc errors are excluded by explicit authorization. Exact24 own files/hunks below. Commit/push authorized to origin/feature/library-domain using commit.lock. Jira Claude. Publication pending.
+
+- `src/shared/statistics-workspace.ts`
+- `src/main/services/statistics/workspace-statistics.service.ts`
+- `src/main/ipc/reading-statistics.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/context/WorkspaceContext.tsx`
+- `src/renderer/components/layout/AppLayout.tsx`
+- `src/renderer/components/layout/nav-model.ts`
+- `src/renderer/components/dashboard/dashboard-layout-config.ts`
+- `src/renderer/components/dashboard/HomeDashboardView.tsx`
+- `src/renderer/components/dashboard/DashboardEssentialStats.tsx`
+- `src/renderer/components/statistics/StatisticsWorkspace.tsx`
+- `src/renderer/components/statistics/StatisticsCharts.tsx`
+- `src/renderer/components/statistics/useStatisticsSnapshot.ts`
+- `src/renderer/translations.ts`
+- `tests/ui/statistics-workspace.test.ts`
+- `tests/services/workspace-statistics.test.ts`
+- `scripts/statistics-ui-live/run.mjs`
+- `scripts/statistics-ui-live/statistics-check.cjs`
+- `docs/features/feature - UI UX Vision Program.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `tests/ui/dashboard-layout-settings.test.ts`
+- `tests/ui/home-dashboard.test.ts`
+- `tests/ui/nav-model.test.ts`
+
+Full evidence/open points in `docs/agent-ops/reports/KEY-311.md`.
+
 ## KEY-310 (Review Fix 1) — 2026-11-10, Antigravity (pushed)
 
 Session `7a52914d-61b5-4055-83f3-cdc819a39296`. Addressed Claude's review comments on commit `60c9386`:

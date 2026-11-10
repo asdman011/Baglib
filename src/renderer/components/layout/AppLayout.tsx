@@ -26,6 +26,7 @@ import { StudyDeepLinkBridge } from '../notes/StudyDeepLinkBridge';
 import { StartupSplash } from '../StartupSplash';
 
 // Lazy-loaded secondary views to dramatically accelerate initial application boot time (<1.5s cold compilation)
+const StatisticsWorkspace = React.lazy(() => import('../statistics/StatisticsWorkspace').then(module => ({ default: module.StatisticsWorkspace })));
 const LibraryGridView = React.lazy(() =>
   import('../library/LibraryGridView').then((m) => ({ default: m.LibraryGridView }))
 );
@@ -219,6 +220,7 @@ export const AppLayout: React.FC = () => {
 
           <React.Suspense fallback={<div className="flex-1 bg-canvas" />}>
             {viewMode === 'dashboard' && <HomeDashboardView athanState={athanState} />}
+            {viewMode === 'statistics' && <StatisticsWorkspace />}
             {viewMode === 'planner' && <StudyPlannerView adjustment={athanState.snapshot?.settings.hijriAdjustmentDays || 0} />}
             {viewMode === 'pathways' && <PathwaysView />}
             {viewMode === 'lectures' && <LecturesView />}

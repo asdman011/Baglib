@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard,
+  ChartNoAxesCombined,
   CalendarDays,
   Library,
   Layers,
@@ -51,7 +52,7 @@ export const NAV_GROUPS: NavGroupConfig[] = [
   {
     id: 'home',
     labelKey: 'navHomeGroup',
-    itemIds: ['dashboard', 'planner'],
+    itemIds: ['dashboard', 'planner', 'statistics'],
   },
   {
     id: 'library',
@@ -99,6 +100,13 @@ export const NAV_ITEMS: Record<string, NavItemConfig> = {
     viewMode: 'dashboard',
     labelKey: 'navDashboard',
     icon: LayoutDashboard,
+    actionType: 'view',
+  },
+  statistics: {
+    id: 'statistics',
+    viewMode: 'statistics',
+    labelKey: 'statisticsTitle',
+    icon: ChartNoAxesCombined,
     actionType: 'view',
   },
   planner: {
@@ -264,6 +272,8 @@ export function resolveBreadcrumbs(
         parent: { labelKey: 'navHomeGroup', viewMode: 'dashboard' },
         current: { labelKey: 'navDashboard' },
       };
+    case 'statistics':
+      return { parent: { labelKey: 'navHomeGroup', viewMode: 'dashboard' }, current: { labelKey: 'statisticsTitle' } };
     case 'planner':
       return {
         parent: { labelKey: 'navHomeGroup', viewMode: 'dashboard' },

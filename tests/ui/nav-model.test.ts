@@ -16,7 +16,7 @@ test('Nav Model: Groups Structure & Items', () => {
   // Check each group's constituent items
   const home = NAV_GROUPS.find((g) => g.id === 'home');
   assert.ok(home);
-  assert.deepEqual(home.itemIds, ['dashboard', 'planner']);
+  assert.deepEqual(home.itemIds, ['dashboard', 'planner', 'statistics']);
 
   const library = NAV_GROUPS.find((g) => g.id === 'library');
   assert.ok(library);

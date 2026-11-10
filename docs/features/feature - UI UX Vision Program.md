@@ -219,3 +219,17 @@ The following gaps identified in the audit require backend logic or capabilities
 ## 7. U15 acceptance results (KEY-309)
 
 (The U15 implementer fills this in.)
+
+## U17 implementation checkpoint — KEY-311, Codex, 2026-11-10
+
+Fresh dashboard defaults enable Today, calendar and prayer times. Four compact summary tiles show the current reading streak, reading minutes over the latest seven civil days, books currently being read and cards due. The dashboard link and the Home navigation group open the Statistics workspace. Existing `dashboard.layout.v1` rows retain their module order and visibility. All ten original modules remain available in Customize.
+
+The workspace has Reading, Books, Knowledge, Study and Quran sections. Token-based handwritten SVG bars, an area chart, a weekday-aligned heatmap, subject donut and progress rings include text summaries and expandable series values. Arabic uses explicit Arabic-Indic digits and Saturday-first weekday rows. English uses Latin digits and Sunday-first rows. Time axes mirror in RTL. Progress fractions use localized words to keep their meaning clear in mixed-script layouts.
+
+The read-only `statistics:workspace` IPC projection is implemented in `src/main/services/statistics/workspace-statistics.service.ts`. It reads `reading_page_stat`, `knowledge`, `srs_review_log`, `srs_state`, `work`, `category` and the existing `reading.log.completed:*` settings. Existing pathway/exam APIs and the khatmah/wird APIs supply the other sections. Current book counts exclude trash. No schema, dependency, download or canonical-text change was introduced.
+
+Date controls use rolling seven-day, thirty-day and 365-day windows, plus all recorded history. Dated reading, creation, reviews, completions and khatmah page events follow the selected window. Current book/subject/pathway/khatmah/wird snapshots and the forward seven-day review schedule are explicitly labelled separately. Long bar series aggregate chronological buckets. The heatmap displays the latest 366 days and explains that limit when applicable.
+
+Data limitations are explicit. Older completed books can lack a recorded completion date. Historical in-progress status transitions are unavailable, so the view pairs the current count with dated book-reading activity in book-reading days. SRS recall success is the observed share of Hard/Good/Easy ratings, while the forecast uses current due dates and includes overdue cards today. Reading, step completion and memorization remain separate measures. No independent memorized-ayah total is supplied by the inspected APIs.
+
+Fourteen new tests cover defaults and saved layout preservation, timeline ranges, gaps, duplicates and future exclusion, aggregation, ring/donut bounds, forecast, countdowns, weekday placement, area mirroring, read-only SQL behavior, legacy completions and trash exclusion. Native evidence and the publication gate are recorded in the local `docs/agent-ops/reports/KEY-311.md`. Reviewer-authorized updates align the three older dashboard/navigation test files with the new defaults while preserving all optional-module behavior assertions. The combined focused and updated tests pass 28/28. Scoped eslint and diff checks pass. Unfinished KEY-304 failures are recorded separately and explicitly excluded from this publication.

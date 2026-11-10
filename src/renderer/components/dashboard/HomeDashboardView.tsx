@@ -15,6 +15,7 @@ import { ActiveReadsModule } from './ActiveReadsModule';
 import { KhatmahDashboardModule, CompanionMiniWidget } from './KhatmahDashboardModule';
 import { ReadingAnalyticsModule } from './ReadingAnalyticsModule';
 import { StudyInsightsModule } from './StudyInsightsModule';
+import { DashboardEssentialStats } from './DashboardEssentialStats';
 import { TodayStudyPanel } from './TodayStudyPanel';
 import { StudyProgressPanel } from './StudyProgressPanel';
 import { StudyRhythmSettings } from './StudyRhythm';
@@ -343,6 +344,8 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
           }}
         />
       )}
+
+      <DashboardEssentialStats />
 
       {/* Reorderable & Customizable Module Grid (Stacks in 1 column at 480px) */}
       <div
