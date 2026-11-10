@@ -1,4 +1,5 @@
 'use client';
+import { Button } from '../ui/Button';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search,
@@ -750,11 +751,13 @@ export function StirlingToolsHub({
   onOpenInWorkstation,
   initialView = 'columns',
   actionsPanel,
+  initialToolId,
 }: {
   onClose: () => void;
   onOpenInWorkstation?: (fileUrlOrWorkId: string) => void;
   initialView?: 'columns' | 'pipelines';
   actionsPanel?: React.ReactNode;
+  initialToolId?: string;
 }) {
   const { t, lang, dir, books, theme, toggleTheme } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
@@ -791,7 +794,7 @@ export function StirlingToolsHub({
   const [newFolderRule, setNewFolderRule] = useState<'keep' | 'archive'>('keep');
 
   // Selected tool execution drawer / modal state
-  const [selectedTool, setSelectedTool] = useState<StirlingToolDef | null>(null);
+  const [selectedTool, setSelectedTool] = useState<StirlingToolDef | null>(() => STIRLING_TOOLS.find(tool => tool.id === initialToolId) ?? null);
   const [selectedBookId, setSelectedBookId] = useState<string>('');
   const [localFilePath, setLocalFilePath] = useState<string>('');
   const [isExecuting, setIsExecuting] = useState(false);
@@ -804,7 +807,7 @@ export function StirlingToolsHub({
   } | null>(null);
 
   // Standalone Tool Parameters
-  const [toolValues, setToolValues] = useState<ToolOptionValues>({});
+  const [toolValues, setToolValues] = useState<ToolOptionValues>(() => initialToolId ? defaultToolValues(initialToolId) : {});
 
   // Pipeline Builder State
   const [isCreatingPipeline, setIsCreatingPipeline] = useState(false);
@@ -1116,24 +1119,24 @@ export function StirlingToolsHub({
       dir={dir}
       data-pdf-tools-hub
       className={`fixed inset-0 z-50 ${
-        isDark ? 'bg-[#0c0d10] text-[#e1e4ea]' : 'bg-[#f8f9fa] text-[#111827]'
+        isDark ? 'bg-canvas text-text' : 'bg-canvas text-text'
       } flex flex-col overflow-hidden font-sans select-none`}
     >
       {/* 1. TOP HEADER & NAVIGATION BAR */}
       <header className={`flex flex-wrap items-center justify-between gap-3 px-3 sm:px-6 py-3 border-b ${
-        isDark ? 'border-[#1f2229] bg-[#121418]' : 'border-[#e2e8f0] bg-white'
+        isDark ? 'border-border bg-canvas' : 'border-border bg-white'
       } shrink-0`}>
         <div className="flex items-center gap-3">
-          <div className="size-9 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/10">
+          <div className="size-9 rounded-xl bg-gradient-to-br from-primary to-primary flex items-center justify-center text-white shadow-lg shadow-primary/10">
             <Cpu size={20} />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className={`font-bold text-base tracking-tight ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
+              <h1 className={`font-bold text-base tracking-tight ${isDark ? 'text-white' : 'text-text'}`}>
                 {t('pdfToolsHubTitle')}
               </h1>
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-[10px] font-bold">
-                <span className="inline-block size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border/30 bg-primary/10 text-primary-text dark:text-primary-text text-[10px] font-bold">
+                <span className="inline-block size-1.5 rounded-full bg-primary animate-pulse" />
                 Ready v3.2.2
               </span>
               {/* External Tool Capability Badges */}
@@ -1142,66 +1145,66 @@ export function StirlingToolsHub({
                   title={engineStatus.externalTools?.libreoffice ? t('stirlingToolAvailable') : t('stirlingToolMissing')}
                   className={`flex items-center gap-1 px-1.5 py-0.2 rounded-full border ${
                     engineStatus.externalTools?.libreoffice
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 font-bold'
-                      : 'border-neutral-500/20 bg-neutral-500/10 text-neutral-400 opacity-60'
+                      ? 'border-border/30 bg-primary/10 text-primary-text font-bold'
+                      : 'border-border/20 bg-surface/10 text-text-muted opacity-60'
                   }`}
                 >
-                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.libreoffice ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
+                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.libreoffice ? 'bg-primary' : 'bg-surface'}`} />
                   LibreOffice
                 </span>
                 <span
                   title={engineStatus.externalTools?.tesseract ? t('stirlingToolAvailable') : t('stirlingToolMissing')}
                   className={`flex items-center gap-1 px-1.5 py-0.2 rounded-full border ${
                     engineStatus.externalTools?.tesseract
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 font-bold'
-                      : 'border-neutral-500/20 bg-neutral-500/10 text-neutral-400 opacity-60'
+                      ? 'border-border/30 bg-primary/10 text-primary-text font-bold'
+                      : 'border-border/20 bg-surface/10 text-text-muted opacity-60'
                   }`}
                 >
-                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.tesseract ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
+                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.tesseract ? 'bg-primary' : 'bg-surface'}`} />
                   Tesseract
                 </span>
                 <span
                   title={engineStatus.externalTools?.qpdf ? t('stirlingToolAvailable') : t('stirlingToolMissing')}
                   className={`flex items-center gap-1 px-1.5 py-0.2 rounded-full border ${
                     engineStatus.externalTools?.qpdf
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 font-bold'
-                      : 'border-neutral-500/20 bg-neutral-500/10 text-neutral-400 opacity-60'
+                      ? 'border-border/30 bg-primary/10 text-primary-text font-bold'
+                      : 'border-border/20 bg-surface/10 text-text-muted opacity-60'
                   }`}
                 >
-                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.qpdf ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
+                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.qpdf ? 'bg-primary' : 'bg-surface'}`} />
                   QPDF
                 </span>
                 <span
                   title={engineStatus.externalTools?.ghostscript ? t('stirlingToolAvailable') : t('stirlingToolMissing')}
                   className={`flex items-center gap-1 px-1.5 py-0.2 rounded-full border ${
                     engineStatus.externalTools?.ghostscript
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 font-bold'
-                      : 'border-neutral-500/20 bg-neutral-500/10 text-neutral-400 opacity-60'
+                      ? 'border-border/30 bg-primary/10 text-primary-text font-bold'
+                      : 'border-border/20 bg-surface/10 text-text-muted opacity-60'
                   }`}
                 >
-                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.ghostscript ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
+                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.ghostscript ? 'bg-primary' : 'bg-surface'}`} />
                   Ghostscript
                 </span>
                 <span
                   title={engineStatus.externalTools?.weasyprint ? t('stirlingToolAvailable') : t('stirlingToolMissing')}
                   className={`flex items-center gap-1 px-1.5 py-0.2 rounded-full border ${
                     engineStatus.externalTools?.weasyprint
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 font-bold'
-                      : 'border-neutral-500/20 bg-neutral-500/10 text-neutral-400 opacity-60'
+                      ? 'border-border/30 bg-primary/10 text-primary-text font-bold'
+                      : 'border-border/20 bg-surface/10 text-text-muted opacity-60'
                   }`}
                 >
-                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.weasyprint ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
+                  <span className={`size-1 rounded-full ${engineStatus.externalTools?.weasyprint ? 'bg-primary' : 'bg-surface'}`} />
                   WeasyPrint
                 </span>
               </div>
             </div>
-            <p className={`text-[11px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfToolsHubSubtitle')}</p>
+            <p className={`text-[11px] ${isDark ? 'text-text' : 'text-text'}`}>{t('pdfToolsHubSubtitle')}</p>
           </div>
         </div>
 
         {/* Quick Nav Pills */}
         <div className={`hidden lg:flex items-center gap-1.5 ${
-          isDark ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f1f5f9] border-[#cbd5e1]'
+          isDark ? 'bg-canvas border-border' : 'bg-canvas border-border'
         } p-1 rounded-xl border`}>
           {[
             { id: 'multi-tool', labelKey: 'hubToolMultiTool' as const },
@@ -1210,7 +1213,7 @@ export function StirlingToolsHub({
             { id: 'split', labelKey: 'hubToolSplit' as const },
             { id: 'merge', labelKey: 'hubToolMerge' as const },
           ].map(pill => (
-            <button
+            <Button variant="secondary" size="sm"
               key={pill.id}
               type="button"
               onClick={() => {
@@ -1222,11 +1225,11 @@ export function StirlingToolsHub({
                 }
               }}
               className={`px-3 py-1 rounded-lg text-xs font-semibold ${
-                isDark ? 'text-[#a0a6b7] hover:text-white hover:bg-[#222631]' : 'text-[#475569] hover:text-[#0f172a] hover:bg-white'
+                isDark ? 'text-text hover:text-white hover:bg-canvas' : 'text-text hover:text-text hover:bg-white'
               } transition-all cursor-pointer`}
             >
               {t(pill.labelKey)}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -1234,7 +1237,7 @@ export function StirlingToolsHub({
         <div className="flex max-w-full flex-wrap items-center gap-2.5 [&>button]:shrink-0">
           {/* Centered Search */}
           <div className="relative w-full min-w-0 sm:w-64 md:w-80">
-            <Search className={`absolute inset-y-0 start-3 my-auto size-4 ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`} />
+            <Search className={`absolute inset-y-0 start-3 my-auto size-4 ${isDark ? 'text-text' : 'text-text'}`} />
             <input
               type="search"
               aria-label={t('pdfToolsSearchPlaceholder')}
@@ -1242,119 +1245,121 @@ export function StirlingToolsHub({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className={`w-full ${
-                isDark ? 'bg-[#181a20] border-[#262a34] text-white placeholder-[#686e80]' : 'bg-[#f1f5f9] border-[#cbd5e1] text-[#0f172a] placeholder-[#94a3b8]'
-              } border rounded-xl ps-9 pe-3 py-1.5 text-xs focus:border-emerald-500 outline-none transition-all`}
+                isDark ? 'bg-canvas border-border text-white placeholder-[#686e80]' : 'bg-canvas border-border text-text placeholder-[#94a3b8]'
+              } border rounded-xl ps-9 pe-3 py-1.5 text-xs focus:border-border outline-none transition-all`}
             />
           </div>
 
           {/* Star Filter */}
-          <button
+          <Button variant="secondary" size="sm"
             type="button"
             title={t('pdfToolsFavorites')}
             aria-pressed={favoritesOnly}
             onClick={() => setFavoritesOnly(!favoritesOnly)}
             className={`p-2 rounded-xl border transition-all cursor-pointer ${
               favoritesOnly
-                ? 'bg-amber-500/20 border-amber-500/40 text-amber-500 dark:text-amber-400'
+                ? 'bg-warning/20 border-warning/40 text-warning dark:text-warning'
                 : isDark
-                ? 'bg-[#181a20] border-[#262a34] text-[#8b92a5] hover:text-white'
-                : 'bg-[#f1f5f9] border-[#cbd5e1] text-[#64748b] hover:text-[#0f172a]'
+                ? 'bg-canvas border-border text-text hover:text-white'
+                : 'bg-canvas border-border text-text hover:text-text'
             }`}
           >
             <Star size={16} fill={favoritesOnly ? 'currentColor' : 'none'} />
-          </button>
+          </Button>
 
           {/* Sort Selector */}
-          <div className={`flex items-center rounded-xl ${isDark ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f1f5f9] border-[#cbd5e1]'} border p-0.5`}>
-            <button
+          <div className={`flex items-center rounded-xl ${isDark ? 'bg-canvas border-border' : 'bg-canvas border-border'} border p-0.5`}>
+            <Button variant="secondary" size="sm"
               type="button"
               onClick={() => setSortMode('category')}
               className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
                 sortMode === 'category'
-                  ? isDark ? 'bg-[#262a34] text-white shadow-sm' : 'bg-white text-[#0f172a] shadow-xs'
-                  : isDark ? 'text-[#8b92a5] hover:text-white' : 'text-[#64748b] hover:text-[#0f172a]'
+                  ? isDark ? 'bg-canvas text-white shadow-sm' : 'bg-white text-text shadow-xs'
+                  : isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'
               }`}
             >
               {t('pdfToolsSortCategory')}
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary" size="sm"
               type="button"
               onClick={() => setSortMode('alpha')}
               className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
                 sortMode === 'alpha'
-                  ? isDark ? 'bg-[#262a34] text-white shadow-sm' : 'bg-white text-[#0f172a] shadow-xs'
-                  : isDark ? 'text-[#8b92a5] hover:text-white' : 'text-[#64748b] hover:text-[#0f172a]'
+                  ? isDark ? 'bg-canvas text-white shadow-sm' : 'bg-white text-text shadow-xs'
+                  : isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'
               }`}
             >
               {t('pdfToolsSortAlpha')}
-            </button>
+            </Button>
           </div>
 
           {/* View Mode Switcher */}
-          <div className={`flex items-center rounded-xl ${isDark ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f1f5f9] border-[#cbd5e1]'} border p-0.5`}>
-            <button
+          <div className={`flex items-center rounded-xl ${isDark ? 'bg-canvas border-border' : 'bg-canvas border-border'} border p-0.5`}>
+            <Button variant="secondary" size="sm"
               type="button"
               title={t('pdfToolsViewColumns')}
               onClick={() => setViewMode('columns')}
               className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                 viewMode === 'columns'
-                  ? isDark ? 'bg-[#262a34] text-white' : 'bg-white text-[#0f172a] shadow-xs'
-                  : isDark ? 'text-[#8b92a5] hover:text-white' : 'text-[#64748b] hover:text-[#0f172a]'
+                  ? isDark ? 'bg-canvas text-white' : 'bg-white text-text shadow-xs'
+                  : isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'
               }`}
             >
               <Columns3 size={15} />
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary" size="sm"
               type="button"
               title={t('pdfToolsViewGrid')}
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                 viewMode === 'grid'
-                  ? isDark ? 'bg-[#262a34] text-white' : 'bg-white text-[#0f172a] shadow-xs'
-                  : isDark ? 'text-[#8b92a5] hover:text-white' : 'text-[#64748b] hover:text-[#0f172a]'
+                  ? isDark ? 'bg-canvas text-white' : 'bg-white text-text shadow-xs'
+                  : isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'
               }`}
             >
               <LayoutGrid size={15} />
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary" size="sm"
               type="button"
               title={t('pdfToolsViewPipelines')}
               onClick={() => setViewMode('pipelines')}
               className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                 viewMode === 'pipelines'
-                  ? 'bg-emerald-600 text-white'
-                  : isDark ? 'text-[#8b92a5] hover:text-white' : 'text-[#64748b] hover:text-[#0f172a]'
+                  ? 'bg-primary text-white'
+                  : isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'
               }`}
             >
               <Cpu size={15} />
-            </button>
+            </Button>
           </div>
 
           {/* Theme Toggle */}
-          <button
+          <Button variant="secondary" size="sm"
             type="button"
             title={isDark ? t('pdfThemeLight') : t('pdfThemeDark')}
             onClick={toggleTheme}
             className={`p-2 rounded-xl border transition-all cursor-pointer ${
               isDark
-                ? 'bg-[#181a20] border-[#262a34] text-[#8b92a5] hover:text-white'
-                : 'bg-[#f1f5f9] border-[#cbd5e1] text-[#64748b] hover:text-[#0f172a]'
+                ? 'bg-canvas border-border text-text hover:text-white'
+                : 'bg-canvas border-border text-text hover:text-text'
             }`}
           >
             {isDark ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
+          </Button>
 
           {/* Close Hub */}
-          <button
+          <Button variant="secondary" size="sm"
             type="button"
             title={t('close')}
+            data-stirling-hub-close
+            aria-label={t('close')}
             onClick={onClose}
             className={`p-2 rounded-xl border ${
-              isDark ? 'border-[#262a34] hover:bg-[#222631] text-[#8b92a5] hover:text-white' : 'border-[#cbd5e1] hover:bg-[#f1f5f9] text-[#64748b] hover:text-[#0f172a]'
+              isDark ? 'border-border hover:bg-canvas text-text hover:text-white' : 'border-border hover:bg-canvas text-text hover:text-text'
             } transition-all cursor-pointer`}
           >
             <X size={16} />
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -1368,15 +1373,15 @@ export function StirlingToolsHub({
           <div className="max-w-6xl mx-auto space-y-6">
             {/* Live Telemetry Banner */}
             <div className={`p-4 rounded-2xl bg-gradient-to-r ${
-              isDark ? 'from-[#141820] to-[#121c17] border-[#222b3a]' : 'from-[#f1f5f9] to-[#ecfdf5] border-[#cbd5e1]'
+              isDark ? 'from-[#141820] to-[#121c17] border-border' : 'from-[#f1f5f9] to-[#ecfdf5] border-border'
             } border shadow-lg flex flex-wrap items-center justify-between gap-4`}>
               <div className="flex items-center gap-3">
-                <div className="size-11 rounded-xl bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 flex items-center justify-center">
+                <div className="size-11 rounded-xl bg-primary/20 text-primary-text dark:text-primary-text flex items-center justify-center">
                   <Cpu size={24} />
                 </div>
                 <div>
-                  <h2 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>{t('pdfProcessorLiveTitle')}</h2>
-                  <p className={`text-xs ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+                  <h2 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-text'}`}>{t('pdfProcessorLiveTitle')}</h2>
+                  <p className={`text-xs ${isDark ? 'text-text' : 'text-text'}`}>
                     {t('pdfProcessorTelemetry', {
                       pipelines: telemetry.activePipelines,
                       today: telemetry.processedToday,
@@ -1386,7 +1391,7 @@ export function StirlingToolsHub({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button variant="secondary" size="sm"
                   type="button"
                   onClick={() => {
                     const input = document.createElement('input');
@@ -1405,28 +1410,28 @@ export function StirlingToolsHub({
                     input.click();
                   }}
                   className={`px-3 py-2 rounded-xl border ${
-                    isDark ? 'border-[#282d3b] bg-[#181a20] text-[#a0a6b7] hover:text-white' : 'border-[#cbd5e1] bg-white text-[#475569] hover:text-[#0f172a]'
+                    isDark ? 'border-border bg-canvas text-text hover:text-white' : 'border-border bg-white text-text hover:text-text'
                   } text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer`}
                 >
                   <Upload size={14} />
                   <span>{t('stirlingImportPipelineJson')}</span>
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary" size="sm"
                   type="button"
                   onClick={() => setIsConnectingFolder(true)}
-                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-primary hover:bg-primary text-white text-xs font-bold shadow-md shadow-primary/20 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <FolderPlus size={14} />
                   <span>{t('pdfWatchedFolderConnect')}</span>
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary" size="sm"
                   type="button"
                   onClick={() => setIsCreatingPipeline(true)}
-                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-primary hover:bg-primary text-white text-xs font-bold shadow-md shadow-primary/20 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus size={14} />
                   <span>{t('pdfPipelineNew')}</span>
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1434,24 +1439,24 @@ export function StirlingToolsHub({
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>{t('pdfWatchedFoldersTitle')}</h3>
-                  <p className={`text-xs ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfWatchedFoldersDesc')}</p>
+                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-text'}`}>{t('pdfWatchedFoldersTitle')}</h3>
+                  <p className={`text-xs ${isDark ? 'text-text' : 'text-text'}`}>{t('pdfWatchedFoldersDesc')}</p>
                 </div>
-                <button
+                <Button variant="secondary" size="sm"
                   type="button"
                   onClick={() => setIsConnectingFolder(true)}
-                  className="text-xs text-blue-500 hover:underline flex items-center gap-1 cursor-pointer font-semibold"
+                  className="text-xs text-primary-text hover:underline flex items-center gap-1 cursor-pointer font-semibold"
                 >
                   <Plus size={12} />
                   <span>{t('pdfWatchedFolderAdd')}</span>
-                </button>
+                </Button>
               </div>
 
               {watchedFolders.length === 0 ? (
                 <div className={`p-6 rounded-2xl border text-center ${
-                  isDark ? 'border-[#222631] bg-[#14161c] text-[#8b92a5]' : 'border-[#e2e8f0] bg-white text-[#64748b]'
+                  isDark ? 'border-border bg-canvas text-text' : 'border-border bg-white text-text'
                 }`}>
-                  <FolderInput className="size-8 mx-auto mb-2 opacity-40 text-blue-400" />
+                  <FolderInput className="size-8 mx-auto mb-2 opacity-40 text-primary-text" />
                   <p className="text-xs font-semibold">{t('pdfWatchedFoldersEmpty')}</p>
                 </div>
               ) : (
@@ -1460,33 +1465,33 @@ export function StirlingToolsHub({
                     <div
                       key={folder.id}
                       className={`p-4 rounded-xl border ${
-                        isDark ? 'bg-[#14161c] border-[#222631]' : 'bg-white border-[#e2e8f0] shadow-xs'
+                        isDark ? 'bg-canvas border-border' : 'bg-white border-border shadow-xs'
                       } space-y-2.5`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <FolderInput size={16} className="text-blue-500" />
-                          <span className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>{folder.name}</span>
+                          <FolderInput size={16} className="text-primary-text" />
+                          <span className={`font-bold text-xs ${isDark ? 'text-white' : 'text-text'}`}>{folder.name}</span>
                         </div>
-                        <span className="flex items-center gap-1 text-[10px] text-emerald-500 font-bold px-2 py-0.5 rounded-full bg-emerald-500/10">
-                          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="flex items-center gap-1 text-[10px] text-primary-text font-bold px-2 py-0.5 rounded-full bg-primary/10">
+                          <span className="size-1.5 rounded-full bg-primary animate-pulse" />
                           {t('pdfWatchedFolderStatusWatching')}
                         </span>
                       </div>
                       <div className="text-[11px] space-y-1 font-mono">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className="text-[#8b92a5]">{t('pdfWatchedFolderInput')}:</span>
+                          <span className="text-text">{t('pdfWatchedFolderInput')}:</span>
                           <span className="truncate">{folder.inputPath}</span>
                         </div>
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className="text-[#8b92a5]">{t('pdfWatchedFolderOutput')}:</span>
+                          <span className="text-text">{t('pdfWatchedFolderOutput')}:</span>
                           <span className="truncate">{folder.outputPath}</span>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between border-t border-[#1f2229] pt-2 text-[10px] text-[#8b92a5]">
+                      <div className="flex items-center justify-between border-t border-border pt-2 text-[10px] text-text">
                         <span>{t('pdfWatchedFolderProcessed', { count: folder.processedCount })}</span>
                         <div className="flex items-center gap-1">
-                          <button
+                          <Button variant="secondary" size="sm"
                             type="button"
                             title={t('stirlingExportFolderScanJson')}
                             onClick={async () => {
@@ -1502,18 +1507,18 @@ export function StirlingToolsHub({
                                 URL.revokeObjectURL(url);
                               }
                             }}
-                            className="p-1 rounded text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
+                            className="p-1 rounded text-primary-text hover:text-primary-text hover:bg-primary/10 cursor-pointer"
                           >
                             <Download size={13} />
-                          </button>
-                          <button
+                          </Button>
+                          <Button variant="secondary" size="sm"
                             type="button"
                             onClick={() => void handleDeleteWatchedFolder(folder.id)}
-                            className="text-rose-500 hover:text-rose-400 p-1 cursor-pointer"
+                            className="text-danger hover:text-danger p-1 cursor-pointer"
                             title={t('delete')}
                           >
                             <Trash2 size={13} />
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -1528,17 +1533,17 @@ export function StirlingToolsHub({
                 <form
                   onSubmit={handleConnectFolderSubmit}
                   className={`w-full max-w-md p-5 rounded-2xl border shadow-2xl ${
-                    isDark ? 'bg-[#14161c] border-[#222631] text-[#e1e4ea]' : 'bg-white border-[#e2e8f0] text-[#111827]'
+                    isDark ? 'bg-canvas border-border text-text' : 'bg-white border-border text-text'
                   } space-y-4`}
                 >
-                  <div className="flex items-center justify-between border-b pb-3 border-[#222631]">
+                  <div className="flex items-center justify-between border-b pb-3 border-border">
                     <h3 className="font-bold text-sm flex items-center gap-2">
-                      <FolderPlus size={16} className="text-blue-500" />
+                      <FolderPlus size={16} className="text-primary-text" />
                       {t('pdfWatchedFolderConnect')}
                     </h3>
-                    <button type="button" onClick={() => setIsConnectingFolder(false)} className="cursor-pointer text-[#8b92a5]">
+                    <Button variant="secondary" size="sm" type="button" onClick={() => setIsConnectingFolder(false)} className="cursor-pointer text-text">
                       <X size={16} />
-                    </button>
+                    </Button>
                   </div>
                   <div className="space-y-3 text-xs">
                     <div>
@@ -1550,7 +1555,7 @@ export function StirlingToolsHub({
                         onChange={e => setNewFolderName(e.target.value)}
                         placeholder={t('hubFolderNamePlaceholder')}
                         className={`w-full p-2 rounded-lg border outline-none ${
-                          isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                          isDark ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                         }`}
                       />
                     </div>
@@ -1563,7 +1568,7 @@ export function StirlingToolsHub({
                         onChange={e => setNewFolderInbox(e.target.value)}
                         placeholder={t('pdfWatchedFolderInboxPlaceholder')}
                         className={`w-full p-2 rounded-lg border outline-none ${
-                          isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                          isDark ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                         }`}
                       />
                     </div>
@@ -1576,7 +1581,7 @@ export function StirlingToolsHub({
                         onChange={e => setNewFolderOutput(e.target.value)}
                         placeholder={t('pdfWatchedFolderOutputPlaceholder')}
                         className={`w-full p-2 rounded-lg border outline-none ${
-                          isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                          isDark ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                         }`}
                       />
                     </div>
@@ -1586,7 +1591,7 @@ export function StirlingToolsHub({
                         value={newFolderRule}
                         onChange={e => setNewFolderRule(e.target.value as typeof newFolderRule)}
                         className={`w-full p-2 rounded-lg border outline-none ${
-                          isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                          isDark ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                         }`}
                       >
                         <option value="keep">{t('pdfWatchedFolderKeep')}</option>
@@ -1594,20 +1599,20 @@ export function StirlingToolsHub({
                       </select>
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2 pt-2 border-t border-[#222631]">
-                    <button
+                  <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                    <Button variant="secondary" size="sm"
                       type="button"
                       onClick={() => setIsConnectingFolder(false)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#8b92a5] cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-text cursor-pointer"
                     >
                       {t('cancel')}
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="secondary" size="sm"
                       type="submit"
-                      className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold cursor-pointer"
+                      className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary text-white text-xs font-bold cursor-pointer"
                     >
                       {t('save')}
-                    </button>
+                    </Button>
                   </div>
                 </form>
               </div>
@@ -1617,8 +1622,8 @@ export function StirlingToolsHub({
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>{t('pdfPipelineSteps')}</h3>
-                  <p className={`text-xs ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-text'}`}>{t('pdfPipelineSteps')}</h3>
+                  <p className={`text-xs ${isDark ? 'text-text' : 'text-text'}`}>
                     {t('hubPipelinesSubtitle')}
                   </p>
                 </div>
@@ -1629,19 +1634,19 @@ export function StirlingToolsHub({
                   <div
                     key={pipe.id}
                     className={`p-4 rounded-2xl border ${
-                      isDark ? 'bg-[#14161c] border-[#222631]' : 'bg-white border-[#e2e8f0] shadow-sm'
+                      isDark ? 'bg-canvas border-border' : 'bg-white border-border shadow-sm'
                     } flex flex-col justify-between space-y-4 transition-all`}
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">
-                        <h4 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>{pipe.name}</h4>
+                        <h4 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-text'}`}>{pipe.name}</h4>
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
                             pipe.trigger === 'editor'
-                              ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                              ? 'bg-primary/10 text-primary-text border border-border/20'
                               : pipe.trigger === 'folder'
-                              ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                              : 'bg-neutral-800 text-neutral-300'
+                              ? 'bg-warning/10 text-warning border border-warning/20'
+                              : 'bg-surface text-text-muted'
                           }`}
                         >
                           {pipe.trigger === 'editor'
@@ -1651,11 +1656,11 @@ export function StirlingToolsHub({
                             : t('pdfPipelineTriggerManual')}
                         </span>
                       </div>
-                      <p className={`text-xs ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} mt-1 line-clamp-2`}>{pipe.description || '—'}</p>
+                      <p className={`text-xs ${isDark ? 'text-text' : 'text-text'} mt-1 line-clamp-2`}>{pipe.description || '—'}</p>
 
                       {/* Steps sequence */}
                       <div className="mt-3 space-y-1.5">
-                        <span className="text-[10px] font-semibold text-[#686e80] block">
+                        <span className="text-[10px] font-semibold text-text block">
                           {pipe.steps.length} {t('pdfPipelineStepsCount')}:
                         </span>
                         <div className="flex flex-wrap gap-1">
@@ -1663,10 +1668,10 @@ export function StirlingToolsHub({
                             <span
                               key={st.id || i}
                               className={`px-2 py-0.5 rounded-md ${
-                                isDark ? 'bg-[#1d212b] border-[#282d3b] text-[#a0a6b7]' : 'bg-[#f1f5f9] border-[#cbd5e1] text-[#475569]'
+                                isDark ? 'bg-canvas border-border text-text' : 'bg-canvas border-border text-text'
                               } border text-[10px] flex items-center gap-1`}
                             >
-                              <span className="text-emerald-500 font-bold">{i + 1}.</span>
+                              <span className="text-primary-text font-bold">{i + 1}.</span>
                               {st.name}
                             </span>
                           ))}
@@ -1674,12 +1679,12 @@ export function StirlingToolsHub({
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-[#1f2229] pt-3">
-                      <span className="text-[10px] text-[#686e80]">
+                    <div className="flex items-center justify-between border-t border-border pt-3">
+                      <span className="text-[10px] text-text">
                         {pipe.active ? `● ${t('pdfPipelineActive')}` : `○ ${t('pdfPipelinePaused')}`}
                       </span>
                       <div className="flex items-center gap-1">
-                        <button
+                        <Button variant="secondary" size="sm"
                           type="button"
                           title={t('stirlingExportAutomateJson')}
                           onClick={async () => {
@@ -1695,12 +1700,12 @@ export function StirlingToolsHub({
                             }
                           }}
                           className={`p-1.5 rounded-lg border ${
-                            isDark ? 'border-[#282d3b] hover:bg-[#222631] text-[#a0a6b7]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9] text-[#475569]'
+                            isDark ? 'border-border hover:bg-canvas text-text' : 'border-border hover:bg-canvas text-text'
                           } text-xs transition-all cursor-pointer`}
                         >
                           <Download size={12} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="secondary" size="sm"
                           type="button"
                           title={t('hubPipelineEdit')}
                           onClick={() => {
@@ -1712,20 +1717,20 @@ export function StirlingToolsHub({
                             setIsCreatingPipeline(true);
                           }}
                           className={`p-1.5 rounded-lg border ${
-                            isDark ? 'border-[#282d3b] hover:bg-[#222631] text-[#a0a6b7]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9] text-[#475569]'
+                            isDark ? 'border-border hover:bg-canvas text-text' : 'border-border hover:bg-canvas text-text'
                           } text-xs transition-all cursor-pointer`}
                         >
                           <Pencil size={12} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="secondary" size="sm"
                           type="button"
                           title={t('delete')}
                           onClick={() => void handleDeletePipeline(pipe.id)}
-                          className="p-1.5 rounded-lg border border-rose-500/30 hover:bg-rose-500/10 text-rose-500 text-xs transition-all cursor-pointer"
+                          className="p-1.5 rounded-lg border border-danger/30 hover:bg-danger/10 text-danger text-xs transition-all cursor-pointer"
                         >
                           <Trash2 size={12} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="secondary" size="sm"
                           type="button"
                           onClick={() => {
                             setSelectedTool({
@@ -1739,11 +1744,11 @@ export function StirlingToolsHub({
                               colorScheme: 'orange',
                             });
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 dark:text-emerald-400 text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                          className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary-text dark:text-primary-text text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
                         >
                           <Play size={12} />
                           <span>{t('pdfPipelineRun')}</span>
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -1753,14 +1758,14 @@ export function StirlingToolsHub({
 
             {/* Collapsible POLICIES Accordion */}
             <section className={`p-5 rounded-2xl border ${
-              isDark ? 'bg-[#14161c] border-[#222631]' : 'bg-white border-[#e2e8f0] shadow-sm'
+              isDark ? 'bg-canvas border-border' : 'bg-white border-border shadow-sm'
             } space-y-4`}>
-              <div className="flex items-center justify-between border-b border-[#1f2229] pb-3">
+              <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">
-                  <ShieldCheck className="size-5 text-emerald-500 dark:text-emerald-400" />
-                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>{t('pdfPoliciesTitle')}</h3>
+                  <ShieldCheck className="size-5 text-primary-text dark:text-primary-text" />
+                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-text'}`}>{t('pdfPoliciesTitle')}</h3>
                 </div>
-                <span className="text-[11px] text-[#8b92a5]">
+                <span className="text-[11px] text-text">
                   {t('pdfPoliciesEnforced')}
                 </span>
               </div>
@@ -1768,13 +1773,13 @@ export function StirlingToolsHub({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* 1. Ingestion */}
                 <div className={`p-3.5 rounded-xl border ${
-                  isDark ? 'bg-[#191c24] border-[#262c3b]' : 'bg-[#f8fafc] border-[#e2e8f0]'
+                  isDark ? 'bg-canvas border-border' : 'bg-canvas border-border'
                 } space-y-2`}>
-                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} flex items-center gap-1.5`}>
-                    <FolderInput size={14} className="text-blue-500" />
+                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-text'} flex items-center gap-1.5`}>
+                    <FolderInput size={14} className="text-primary-text" />
                     {t('pdfPolicyIngestion')}
                   </h4>
-                  <ul className={`text-[11px] ${isDark ? 'text-[#a0a6b7]' : 'text-[#475569]'} space-y-1`}>
+                  <ul className={`text-[11px] ${isDark ? 'text-text' : 'text-text'} space-y-1`}>
                     <li>✓ {t('pdfPolicyIngestionRule1')}</li>
                     <li>✓ {t('pdfPolicyIngestionRule2')}</li>
                     <li>✓ {t('pdfPolicyIngestionRule3')}</li>
@@ -1783,13 +1788,13 @@ export function StirlingToolsHub({
 
                 {/* 2. Security */}
                 <div className={`p-3.5 rounded-xl border ${
-                  isDark ? 'bg-[#191c24] border-[#262c3b]' : 'bg-[#f8fafc] border-[#e2e8f0]'
+                  isDark ? 'bg-canvas border-border' : 'bg-canvas border-border'
                 } space-y-2`}>
-                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} flex items-center gap-1.5`}>
-                    <Shield size={14} className="text-rose-500" />
+                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-text'} flex items-center gap-1.5`}>
+                    <Shield size={14} className="text-danger" />
                     {t('pdfPolicySecurity')}
                   </h4>
-                  <ul className={`text-[11px] ${isDark ? 'text-[#a0a6b7]' : 'text-[#475569]'} space-y-1`}>
+                  <ul className={`text-[11px] ${isDark ? 'text-text' : 'text-text'} space-y-1`}>
                     <li>✓ {t('pdfPolicySecurityRule1')}</li>
                     <li>✓ {t('pdfPolicySecurityRule2')}</li>
                     <li>✓ {t('pdfPolicySecurityRule3')}</li>
@@ -1798,13 +1803,13 @@ export function StirlingToolsHub({
 
                 {/* 3. Compliance */}
                 <div className={`p-3.5 rounded-xl border ${
-                  isDark ? 'bg-[#191c24] border-[#262c3b]' : 'bg-[#f8fafc] border-[#e2e8f0]'
+                  isDark ? 'bg-canvas border-border' : 'bg-canvas border-border'
                 } space-y-2`}>
-                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} flex items-center gap-1.5`}>
-                    <FileArchive size={14} className="text-cyan-500" />
+                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-text'} flex items-center gap-1.5`}>
+                    <FileArchive size={14} className="text-primary-text" />
                     {t('pdfPolicyCompliance')}
                   </h4>
-                  <ul className={`text-[11px] ${isDark ? 'text-[#a0a6b7]' : 'text-[#475569]'} space-y-1`}>
+                  <ul className={`text-[11px] ${isDark ? 'text-text' : 'text-text'} space-y-1`}>
                     <li>✓ {t('pdfPolicyComplianceRule2')}</li>
                     <li>✓ {t('pdfPolicyComplianceRule3')}</li>
                   </ul>
@@ -1812,13 +1817,13 @@ export function StirlingToolsHub({
 
                 {/* 4. Routing */}
                 <div className={`p-3.5 rounded-xl border ${
-                  isDark ? 'bg-[#191c24] border-[#262c3b]' : 'bg-[#f8fafc] border-[#e2e8f0]'
+                  isDark ? 'bg-canvas border-border' : 'bg-canvas border-border'
                 } space-y-2`}>
-                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} flex items-center gap-1.5`}>
-                    <FolderOutput size={14} className="text-amber-500" />
+                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-text'} flex items-center gap-1.5`}>
+                    <FolderOutput size={14} className="text-warning" />
                     {t('pdfPolicyRouting')}
                   </h4>
-                  <ul className={`text-[11px] ${isDark ? 'text-[#a0a6b7]' : 'text-[#475569]'} space-y-1`}>
+                  <ul className={`text-[11px] ${isDark ? 'text-text' : 'text-text'} space-y-1`}>
                     <li>✓ {t('pdfPolicyRoutingRule1')}</li>
                     <li>✓ {t('pdfPolicyRoutingRule2')}</li>
                     <li>✓ {t('pdfPolicyRoutingRule3')}</li>
@@ -1827,13 +1832,13 @@ export function StirlingToolsHub({
 
                 {/* 5. Retention */}
                 <div className={`p-3.5 rounded-xl border ${
-                  isDark ? 'bg-[#191c24] border-[#262c3b]' : 'bg-[#f8fafc] border-[#e2e8f0]'
+                  isDark ? 'bg-canvas border-border' : 'bg-canvas border-border'
                 } space-y-2`}>
-                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} flex items-center gap-1.5`}>
-                    <BookmarkCheck size={14} className="text-emerald-500" />
+                  <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-text'} flex items-center gap-1.5`}>
+                    <BookmarkCheck size={14} className="text-primary-text" />
                     {t('pdfPolicyRetention')}
                   </h4>
-                  <ul className={`text-[11px] ${isDark ? 'text-[#a0a6b7]' : 'text-[#475569]'} space-y-1`}>
+                  <ul className={`text-[11px] ${isDark ? 'text-text' : 'text-text'} space-y-1`}>
                     <li>✓ {t('pdfPolicyRetentionRule1')}</li>
                     <li>✓ {t('pdfPolicyRetentionRule2')}</li>
                     <li>✓ {t('pdfPolicyRetentionRule3')}</li>
@@ -1851,7 +1856,7 @@ export function StirlingToolsHub({
             {!searchQuery && !favoritesOnly && (
               <section className="space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+                  <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-text' : 'text-text'}`}>
                     {t('pdfToolsRecentTitle')}
                   </h3>
                 </div>
@@ -1874,35 +1879,35 @@ export function StirlingToolsHub({
                         onClick={() => handleToolClick(tool)}
                         className={`group relative p-3.5 rounded-2xl border ${
                           isDark
-                            ? 'bg-[#14161c] border-[#222631] hover:border-emerald-500/50 hover:bg-[#181c24]'
-                            : 'bg-white border-[#e2e8f0] hover:border-emerald-500 hover:bg-emerald-50/20 shadow-xs'
+                            ? 'bg-canvas border-border hover:border-border/50 hover:bg-canvas'
+                            : 'bg-white border-border hover:border-border hover:bg-primary/20 shadow-xs'
                         } text-start transition-all shadow-sm flex flex-col justify-between min-h-[110px] cursor-pointer`}
                       >
                         <div className="flex items-start justify-between w-full">
                           <div
                             className={`size-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
                               tool.colorScheme === 'rose'
-                                ? 'bg-rose-500/10 text-rose-500'
+                                ? 'bg-danger/10 text-danger'
                                 : tool.colorScheme === 'blue'
-                                ? 'bg-blue-500/10 text-blue-500'
+                                ? 'bg-primary/10 text-primary-text'
                                 : tool.colorScheme === 'orange'
-                                ? 'bg-orange-500/10 text-orange-500'
-                                : 'bg-emerald-500/10 text-emerald-500'
+                                ? 'bg-warning/10 text-warning'
+                                : 'bg-primary/10 text-primary-text'
                             }`}
                           >
                             <Icon size={20} />
                           </div>
                           {tool.isNew && (
-                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[9px] font-black uppercase tracking-wider">
+                            <span className="px-1.5 py-0.5 rounded-full bg-primary/20 text-primary-text dark:text-primary-text text-[9px] font-black uppercase tracking-wider">
                               NEW
                             </span>
                           )}
                         </div>
                         <div className="mt-2">
-                          <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} group-hover:text-emerald-500 transition-colors line-clamp-1`}>
+                          <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-text'} group-hover:text-primary-text transition-colors line-clamp-1`}>
                             {toolName(tool, lang)}
                           </h4>
-                          <p className={`text-[10px] ${isDark ? 'text-[#686e80]' : 'text-[#64748b]'} mt-0.5 line-clamp-1`}>
+                          <p className={`text-[10px] ${isDark ? 'text-text' : 'text-text'} mt-0.5 line-clamp-1`}>
                             {toolDesc(tool, lang)}
                           </p>
                         </div>
@@ -1917,10 +1922,10 @@ export function StirlingToolsHub({
             {viewMode === 'columns' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-start">
                 {/* COLUMN 1: Organize */}
-                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-[#121419] border-[#1d212a]' : 'bg-[#f1f5f9]/70 border-[#e2e8f0]'} space-y-3`}>
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-blue-500/30">
-                    <span className="size-2 rounded-full bg-blue-500" />
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-blue-500 dark:text-blue-400">
+                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-canvas border-border' : 'bg-canvas/70 border-border'} space-y-3`}>
+                  <div className="flex items-center gap-2 pb-2 border-b-2 border-border/30">
+                    <span className="size-2 rounded-full bg-primary" />
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-primary-text dark:text-primary-text">
                       {t('pdfToolsColOrganize')} ({categorized['organize'].length})
                     </h3>
                   </div>
@@ -1940,10 +1945,10 @@ export function StirlingToolsHub({
                 </div>
 
                 {/* COLUMN 2: Convert to PDF */}
-                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-[#121419] border-[#1d212a]' : 'bg-[#f1f5f9]/70 border-[#e2e8f0]'} space-y-3`}>
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-emerald-500/30">
-                    <span className="size-2 rounded-full bg-emerald-500" />
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-emerald-500 dark:text-emerald-400">
+                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-canvas border-border' : 'bg-canvas/70 border-border'} space-y-3`}>
+                  <div className="flex items-center gap-2 pb-2 border-b-2 border-border/30">
+                    <span className="size-2 rounded-full bg-primary" />
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-primary-text dark:text-primary-text">
                       {t('pdfToolsColConvertToPdf')} ({categorized['convert-to-pdf'].length})
                     </h3>
                   </div>
@@ -1963,10 +1968,10 @@ export function StirlingToolsHub({
                 </div>
 
                 {/* COLUMN 3: Convert from PDF */}
-                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-[#121419] border-[#1d212a]' : 'bg-[#f1f5f9]/70 border-[#e2e8f0]'} space-y-3`}>
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-cyan-500/30">
-                    <span className="size-2 rounded-full bg-cyan-500" />
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-cyan-500 dark:text-cyan-400">
+                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-canvas border-border' : 'bg-canvas/70 border-border'} space-y-3`}>
+                  <div className="flex items-center gap-2 pb-2 border-b-2 border-border/30">
+                    <span className="size-2 rounded-full bg-primary" />
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-primary-text dark:text-primary-text">
                       {t('pdfToolsColConvertFromPdf')} ({categorized['convert-from-pdf'].length})
                     </h3>
                   </div>
@@ -1986,10 +1991,10 @@ export function StirlingToolsHub({
                 </div>
 
                 {/* COLUMN 4: Sign & Security */}
-                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-[#121419] border-[#1d212a]' : 'bg-[#f1f5f9]/70 border-[#e2e8f0]'} space-y-3`}>
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-rose-500/30">
-                    <span className="size-2 rounded-full bg-rose-500" />
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-rose-500 dark:text-rose-400">
+                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-canvas border-border' : 'bg-canvas/70 border-border'} space-y-3`}>
+                  <div className="flex items-center gap-2 pb-2 border-b-2 border-danger/30">
+                    <span className="size-2 rounded-full bg-danger" />
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-danger dark:text-danger">
                       {t('pdfToolsColSignSecurity')} ({categorized['sign-security'].length})
                     </h3>
                   </div>
@@ -2009,10 +2014,10 @@ export function StirlingToolsHub({
                 </div>
 
                 {/* COLUMN 5: View & Edit */}
-                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-[#121419] border-[#1d212a]' : 'bg-[#f1f5f9]/70 border-[#e2e8f0]'} space-y-3`}>
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-lime-500/30">
-                    <span className="size-2 rounded-full bg-lime-500" />
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-lime-600 dark:text-lime-400">
+                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-canvas border-border' : 'bg-canvas/70 border-border'} space-y-3`}>
+                  <div className="flex items-center gap-2 pb-2 border-b-2 border-border/30">
+                    <span className="size-2 rounded-full bg-primary" />
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-primary-text dark:text-primary-text">
                       {t('pdfToolsColViewEdit')} ({categorized['view-edit'].length})
                     </h3>
                   </div>
@@ -2032,10 +2037,10 @@ export function StirlingToolsHub({
                 </div>
 
                 {/* COLUMN 6: Advanced & Processor */}
-                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-[#121419] border-[#1d212a]' : 'bg-[#f1f5f9]/70 border-[#e2e8f0]'} space-y-3`}>
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-orange-500/30">
-                    <span className="size-2 rounded-full bg-orange-500" />
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-orange-500 dark:text-orange-400">
+                <div className={`p-3 rounded-2xl border ${isDark ? 'bg-canvas border-border' : 'bg-canvas/70 border-border'} space-y-3`}>
+                  <div className="flex items-center gap-2 pb-2 border-b-2 border-warning/30">
+                    <span className="size-2 rounded-full bg-warning" />
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-warning dark:text-warning">
                       {t('pdfToolsColAdvancedProcessor')} ({categorized['advanced-processor'].length})
                     </h3>
                   </div>
@@ -2073,43 +2078,43 @@ export function StirlingToolsHub({
                       onClick={() => handleToolClick(tool)}
                       className={`group relative p-3.5 rounded-2xl border ${
                         isDark
-                          ? 'bg-[#14161c] border-[#222631] text-white hover:border-emerald-500/50 hover:bg-[#181c24]'
-                          : 'bg-white border-[#e2e8f0] text-[#0f172a] hover:border-emerald-500 hover:bg-emerald-50/20 shadow-xs'
+                          ? 'bg-canvas border-border text-white hover:border-border/50 hover:bg-canvas'
+                          : 'bg-white border-border text-text hover:border-border hover:bg-primary/20 shadow-xs'
                       } text-start transition-all shadow-sm flex flex-col justify-between min-h-[125px] cursor-pointer`}
                     >
                       <div className="flex items-start justify-between w-full">
                         <div
                           className={`size-9 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
                             tool.colorScheme === 'rose'
-                              ? 'bg-rose-500/10 text-rose-500'
+                              ? 'bg-danger/10 text-danger'
                               : tool.colorScheme === 'blue'
-                              ? 'bg-blue-500/10 text-blue-500'
+                              ? 'bg-primary/10 text-primary-text'
                               : tool.colorScheme === 'orange'
-                              ? 'bg-orange-500/10 text-orange-500'
+                              ? 'bg-warning/10 text-warning'
                               : tool.colorScheme === 'cyan'
-                              ? 'bg-cyan-500/10 text-cyan-500'
+                              ? 'bg-primary/10 text-primary-text'
                               : tool.colorScheme === 'lime'
-                              ? 'bg-lime-500/10 text-lime-600 dark:text-lime-400'
-                              : 'bg-emerald-500/10 text-emerald-500'
+                              ? 'bg-primary/10 text-primary-text dark:text-primary-text'
+                              : 'bg-primary/10 text-primary-text'
                           }`}
                         >
                           <Icon size={18} />
                         </div>
-                        <button
+                        <Button variant="secondary" size="sm"
                           type="button"
                           onClick={e => toggleFavorite(tool.id, e)}
-                          className={`p-1 text-[#686e80] hover:text-amber-400 transition-colors ${
-                            favorites.includes(tool.id) ? 'text-amber-400' : ''
+                          className={`p-1 text-text hover:text-warning transition-colors ${
+                            favorites.includes(tool.id) ? 'text-warning' : ''
                           }`}
                         >
                           <Star size={13} fill={favorites.includes(tool.id) ? 'currentColor' : 'none'} />
-                        </button>
+                        </Button>
                       </div>
                       <div className="mt-2.5">
-                        <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} group-hover:text-emerald-500 transition-colors line-clamp-1`}>
+                        <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-text'} group-hover:text-primary-text transition-colors line-clamp-1`}>
                           {toolName(tool, lang)}
                         </h4>
-                        <p className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} mt-0.5 line-clamp-2`}>
+                        <p className={`text-[10px] ${isDark ? 'text-text' : 'text-text'} mt-0.5 line-clamp-2`}>
                           {toolDesc(tool, lang)}
                         </p>
                       </div>
@@ -2124,62 +2129,63 @@ export function StirlingToolsHub({
 
       {/* 3. STANDALONE TOOL EXECUTION DRAWER / MODAL */}
       {selectedTool && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div data-stirling-tool-modal className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div
             dir={dir}
             className={`w-full max-w-xl max-h-[90vh] rounded-2xl border ${
-              isDark ? 'bg-[#121418] border-[#222631] text-[#e1e4ea]' : 'bg-white border-[#e2e8f0] text-[#111827] shadow-2xl'
+              isDark ? 'bg-canvas border-border text-text' : 'bg-white border-border text-text shadow-2xl'
             } shadow-2xl flex flex-col overflow-hidden`}
           >
             {/* Modal Header */}
-            <div className={`p-4 border-b ${isDark ? 'border-[#1f2229] bg-[#14161c]' : 'border-[#e2e8f0] bg-[#f8fafc]'} flex items-center justify-between`}>
+            <div className={`p-4 border-b ${isDark ? 'border-border bg-canvas' : 'border-border bg-canvas'} flex items-center justify-between`}>
               <div className="flex items-center gap-2.5">
                 <div
                   className={`size-8 rounded-lg flex items-center justify-center ${
                     selectedTool.colorScheme === 'rose'
-                      ? 'bg-rose-500/10 text-rose-500'
+                      ? 'bg-danger/10 text-danger'
                       : selectedTool.colorScheme === 'blue'
-                      ? 'bg-blue-500/10 text-blue-500'
+                      ? 'bg-primary/10 text-primary-text'
                       : selectedTool.colorScheme === 'orange'
-                      ? 'bg-orange-500/10 text-orange-500'
+                      ? 'bg-warning/10 text-warning'
                       : selectedTool.colorScheme === 'cyan'
-                      ? 'bg-cyan-500/10 text-cyan-500'
+                      ? 'bg-primary/10 text-primary-text'
                       : selectedTool.colorScheme === 'lime'
-                      ? 'bg-lime-500/10 text-lime-600 dark:text-lime-400'
-                      : 'bg-emerald-500/10 text-emerald-500'
+                      ? 'bg-primary/10 text-primary-text dark:text-primary-text'
+                      : 'bg-primary/10 text-primary-text'
                   }`}
                 >
                   {React.createElement(selectedTool.icon, { size: 16 })}
                 </div>
                 <div>
-                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
+                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-text'}`}>
                     {toolName(selectedTool, lang)}
                   </h3>
-                  <p className={`text-[11px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+                  <p className={`text-[11px] ${isDark ? 'text-text' : 'text-text'}`}>
                     {toolDesc(selectedTool, lang)}
                   </p>
                 </div>
               </div>
-              <button
+              <Button variant="secondary" size="sm"
                 type="button"
+                aria-label={t('close')}
                 onClick={() => setSelectedTool(null)}
-                className={`p-1.5 rounded-lg text-[#8b92a5] ${isDark ? 'hover:bg-[#222631] hover:text-white' : 'hover:bg-[#f1f5f9] hover:text-[#0f172a]'} cursor-pointer`}
+                className={`p-1.5 rounded-lg text-text ${isDark ? 'hover:bg-canvas hover:text-white' : 'hover:bg-canvas hover:text-text'} cursor-pointer`}
               >
                 <X size={16} />
-              </button>
+              </Button>
             </div>
 
             {/* Modal Body */}
             <div className="p-5 overflow-y-auto space-y-4 flex-1">
               {/* File Selection Dropzone */}
               <div className="space-y-3">
-                <label className={`block text-xs font-bold ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
+                <label className={`block text-xs font-bold ${isDark ? 'text-white' : 'text-text'}`}>
                   {t('hubSelectTarget')}
                 </label>
 
                 {/* Option A: Select from Library */}
                 <div className="space-y-1.5">
-                  <span className="text-[11px] text-[#8b92a5] block">{t('pdfSelectFromLibrary')}</span>
+                  <span className="text-[11px] text-text block">{t('pdfSelectFromLibrary')}</span>
                   <select
                     value={selectedBookId}
                     onChange={e => {
@@ -2187,7 +2193,7 @@ export function StirlingToolsHub({
                       setLocalFilePath('');
                     }}
                     className={`w-full p-2 rounded-xl border outline-none text-xs ${
-                      isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                      isDark ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                     }`}
                   >
                     <option value="">{t('hubSelectBook')}</option>
@@ -2201,7 +2207,7 @@ export function StirlingToolsHub({
 
                 {/* Option B: Local File Dropzone */}
                 <div className="space-y-1.5">
-                  <span className="text-[11px] text-[#8b92a5] block">{t('hubChooseLocalFile')}</span>
+                  <span className="text-[11px] text-text block">{t('hubChooseLocalFile')}</span>
                   <div
                     onDragOver={e => e.preventDefault()}
                     onDrop={async e => {
@@ -2226,15 +2232,15 @@ export function StirlingToolsHub({
                       }
                     }}
                     className={`border-2 border-dashed ${
-                      isDark ? 'border-[#282d3b] bg-[#121418]/50 hover:border-emerald-500/50' : 'border-[#cbd5e1] bg-[#f8fafc] hover:border-emerald-500'
+                      isDark ? 'border-border bg-canvas/50 hover:border-border/50' : 'border-border bg-canvas hover:border-border'
                     } rounded-2xl p-4 text-center cursor-pointer transition-all`}
                   >
-                    <Upload className="size-6 text-[#8b92a5] mx-auto mb-2" />
-                    <p className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
+                    <Upload className="size-6 text-text mx-auto mb-2" />
+                    <p className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-text'}`}>
                       {localFilePath ? localFilePath.split(/[/\\]/).pop() : t('pdfDropFilesPrompt')}
                     </p>
                     {localFilePath && (
-                      <p className="text-[10px] text-emerald-500 font-mono mt-1 break-all">{localFilePath}</p>
+                      <p className="text-[10px] text-primary-text font-mono mt-1 break-all">{localFilePath}</p>
                     )}
                   </div>
                 </div>
@@ -2244,9 +2250,9 @@ export function StirlingToolsHub({
 
               {/* Execution Feedback */}
               {isExecuting && (
-                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-2">
-                  <RefreshCw className="size-6 text-emerald-500 animate-spin mx-auto" />
-                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-300">{t('pdfExecutingTool')}</p>
+                <div className="p-4 rounded-xl bg-primary/10 border border-border/20 text-center space-y-2">
+                  <RefreshCw className="size-6 text-primary-text animate-spin mx-auto" />
+                  <p className="text-xs font-bold text-primary-text dark:text-primary-text">{t('pdfExecutingTool')}</p>
                 </div>
               )}
 
@@ -2254,8 +2260,8 @@ export function StirlingToolsHub({
                 <div
                   className={`p-4 rounded-xl border text-xs space-y-2.5 ${
                     executionResult.success
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-200'
-                      : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+                      ? 'bg-primary/10 border-border/30 text-primary-text dark:text-primary-text'
+                      : 'bg-danger/10 border-danger/30 text-danger dark:text-danger'
                   }`}
                 >
                   <div className="flex items-center gap-2 font-bold">
@@ -2266,24 +2272,24 @@ export function StirlingToolsHub({
                   </div>
 
                   {executionResult.success && executionResult.outputPath && (
-                    <div className="space-y-2 pt-2 border-t border-emerald-500/20">
-                      <p className={`text-[11px] font-mono break-all ${isDark ? 'text-white/90' : 'text-[#0f172a]'}`}>
+                    <div className="space-y-2 pt-2 border-t border-border/20">
+                      <p className={`text-[11px] font-mono break-all ${isDark ? 'text-white/90' : 'text-text'}`}>
                         {executionResult.outputPath}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {onOpenInWorkstation && (
-                          <button
+                          <Button variant="secondary" size="sm"
                             type="button"
                             onClick={() => {
                               onOpenInWorkstation(executionResult.outputPath!);
                               setSelectedTool(null);
                               onClose();
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary text-white font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                           >
                             <ExternalLink size={13} />
                             <span>{t('pdfOpenInWorkstation')}</span>
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -2293,24 +2299,24 @@ export function StirlingToolsHub({
             </div>
 
             {/* Modal Footer */}
-            <div className={`p-4 border-t ${isDark ? 'border-[#1f2229] bg-[#121418]' : 'border-[#e2e8f0] bg-[#f8fafc]'} flex items-center justify-end gap-2`}>
-              {(missingOption || invalidOption) && <span role="status" className="me-auto text-[11px] text-amber-600 dark:text-amber-400">{missingOption ? t('stirlingOptRequired', { name: t(missingOption.label) }) : t(invalidOption!)}</span>}
-              <button
+            <div className={`p-4 border-t ${isDark ? 'border-border bg-canvas' : 'border-border bg-canvas'} flex items-center justify-end gap-2`}>
+              {(missingOption || invalidOption) && <span role="status" className="me-auto text-[11px] text-warning dark:text-warning">{missingOption ? t('stirlingOptRequired', { name: t(missingOption.label) }) : t(invalidOption!)}</span>}
+              <Button variant="secondary" size="sm"
                 type="button"
                 onClick={() => setSelectedTool(null)}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold ${isDark ? 'text-[#8b92a5] hover:text-white' : 'text-[#64748b] hover:text-[#0f172a]'} cursor-pointer`}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold ${isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'} cursor-pointer`}
               >
                 {t('cancel')}
-              </button>
-              <button
+              </Button>
+              <Button variant="primary" size="sm"
                 type="button"
                 disabled={isExecuting || Boolean(missingOption) || Boolean(invalidOption) || (!selectedBookId && !localFilePath && !TOOLS_WITHOUT_INPUT_FILE.has(selectedTool.id))}
                 onClick={() => void handleExecuteTool()}
-                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-primary hover:bg-primary disabled:opacity-40 text-white text-xs font-bold shadow-lg shadow-primary/20 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Play size={14} />
                 <span>{t('pdfExecuteTool')}</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -2323,92 +2329,92 @@ export function StirlingToolsHub({
             onSubmit={handleSavePipeline}
             dir={dir}
             className={`w-full max-w-2xl max-h-[calc(100dvh-2rem)] rounded-2xl border ${
-              isDark ? 'bg-[#121418] border-[#222631] text-[#e1e4ea]' : 'bg-white border-[#e2e8f0] text-[#111827] shadow-2xl'
+              isDark ? 'bg-canvas border-border text-text' : 'bg-white border-border text-text shadow-2xl'
             } shadow-2xl flex flex-col overflow-hidden`}
           >
             {/* Modal Header */}
-            <div className={`p-4 border-b ${isDark ? 'border-[#1f2229] bg-[#151820]' : 'border-[#e2e8f0] bg-[#f8fafc]'} flex items-center justify-between`}>
+            <div className={`p-4 border-b ${isDark ? 'border-border bg-canvas' : 'border-border bg-canvas'} flex items-center justify-between`}>
               <div className="flex items-center gap-2.5">
-                <div className="size-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                <div className="size-9 rounded-xl bg-primary/10 text-primary-text flex items-center justify-center">
                   <Cpu size={18} />
                 </div>
                 <div>
-                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
+                  <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-text'}`}>
                     {editingPipeline ? t('hubPipelineEditShort') : t('pdfPipelineNew')}
                   </h3>
-                  <p className={`text-[11px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+                  <p className={`text-[11px] ${isDark ? 'text-text' : 'text-text'}`}>
                     {t('hubPipelineBuilderHint')}
                   </p>
                 </div>
               </div>
-              <button
+              <Button variant="secondary" size="sm"
                 type="button"
                 onClick={() => {
                   setIsCreatingPipeline(false);
                   setEditingPipeline(null);
                 }}
-                className={`p-1.5 rounded-lg ${isDark ? 'text-[#8b92a5] hover:text-white hover:bg-[#1f2229]' : 'text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9]'} cursor-pointer`}
+                className={`p-1.5 rounded-lg ${isDark ? 'text-text hover:text-white hover:bg-canvas' : 'text-text hover:text-text hover:bg-canvas'} cursor-pointer`}
               >
                 <X size={16} />
-              </button>
+              </Button>
             </div>
 
             {/* Modal Scrollable Body */}
             <div className="min-h-0 p-3 sm:p-5 overflow-y-auto overscroll-contain space-y-4 text-xs">
               {/* 1-Click Suggested Presets */}
               <div className="space-y-1.5">
-                <span className={`font-bold text-[11px] uppercase tracking-wider ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+                <span className={`font-bold text-[11px] uppercase tracking-wider ${isDark ? 'text-text' : 'text-text'}`}>
                   {t('hubAutomationsTitle')}:
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
+                  <Button variant="secondary" size="sm"
                     type="button"
                     onClick={() => handleApplySuggestedAutomation('scholarly')}
                     className={`p-2 rounded-xl border text-start transition-all cursor-pointer ${
                       isDark
-                        ? 'border-[#262a34] bg-[#181a20] hover:border-emerald-500/50 hover:bg-[#1a1e27]'
-                        : 'border-[#cbd5e1] bg-[#f8fafc] hover:border-emerald-500 hover:bg-emerald-50/20'
+                        ? 'border-border bg-canvas hover:border-border/50 hover:bg-canvas'
+                        : 'border-border bg-canvas hover:border-border hover:bg-primary/20'
                     }`}
                   >
-                    <span className="font-bold block text-emerald-500 text-[11px]">
+                    <span className="font-bold block text-primary-text text-[11px]">
                       {t('hubAutomationScholarlyShort')}
                     </span>
-                    <span className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} line-clamp-1`}>
+                    <span className={`text-[10px] ${isDark ? 'text-text' : 'text-text'} line-clamp-1`}>
                       {t('hubAutomationScholarlyFlow')}
                     </span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="secondary" size="sm"
                     type="button"
                     onClick={() => handleApplySuggestedAutomation('prepublish')}
                     className={`p-2 rounded-xl border text-start transition-all cursor-pointer ${
                       isDark
-                        ? 'border-[#262a34] bg-[#181a20] hover:border-emerald-500/50 hover:bg-[#1a1e27]'
-                        : 'border-[#cbd5e1] bg-[#f8fafc] hover:border-emerald-500 hover:bg-emerald-50/20'
+                        ? 'border-border bg-canvas hover:border-border/50 hover:bg-canvas'
+                        : 'border-border bg-canvas hover:border-border hover:bg-primary/20'
                     }`}
                   >
-                    <span className="font-bold block text-blue-500 text-[11px]">
+                    <span className="font-bold block text-primary-text text-[11px]">
                       {t('hubAutomationPrepublishShort')}
                     </span>
-                    <span className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} line-clamp-1`}>
+                    <span className={`text-[10px] ${isDark ? 'text-text' : 'text-text'} line-clamp-1`}>
                       {t('hubAutomationPrepublishFlow')}
                     </span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="secondary" size="sm"
                     type="button"
                     onClick={() => handleApplySuggestedAutomation('confidential')}
                     className={`p-2 rounded-xl border text-start transition-all cursor-pointer ${
                       isDark
-                        ? 'border-[#262a34] bg-[#181a20] hover:border-emerald-500/50 hover:bg-[#1a1e27]'
-                        : 'border-[#cbd5e1] bg-[#f8fafc] hover:border-emerald-500 hover:bg-emerald-50/20'
+                        ? 'border-border bg-canvas hover:border-border/50 hover:bg-canvas'
+                        : 'border-border bg-canvas hover:border-border hover:bg-primary/20'
                     }`}
                   >
-                    <span className="font-bold block text-rose-500 text-[11px]">
+                    <span className="font-bold block text-danger text-[11px]">
                       {t('hubAutomationConfidentialShort')}
                     </span>
-                    <span className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} line-clamp-1`}>
+                    <span className={`text-[10px] ${isDark ? 'text-text' : 'text-text'} line-clamp-1`}>
                       {t('hubAutomationConfidentialFlow')}
                     </span>
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -2423,7 +2429,7 @@ export function StirlingToolsHub({
                     onChange={e => setPipelineName(e.target.value)}
                     placeholder={t('hubPipelineNamePlaceholder')}
                     className={`w-full p-2 rounded-lg border outline-none ${
-                      isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                      isDark ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                     }`}
                   />
                 </div>
@@ -2433,7 +2439,7 @@ export function StirlingToolsHub({
                     value={pipelineTrigger}
                     onChange={e => setPipelineTrigger(e.target.value as typeof pipelineTrigger)}
                     className={`w-full p-2 rounded-lg border outline-none ${
-                      isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                      isDark ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                     }`}
                   >
                     <option value="editor">{t('pdfPipelineTriggerEditor')}</option>
@@ -2451,22 +2457,22 @@ export function StirlingToolsHub({
                   onChange={e => setPipelineDesc(e.target.value)}
                   placeholder={t('hubPipelineDescPlaceholder')}
                   className={`w-full p-2 rounded-lg border outline-none ${
-                    isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                    isDark ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                   }`}
                 />
               </div>
 
               {/* Steps Sequence Section */}
-              <div className="space-y-2 pt-2 border-t border-[#1f2229]">
+              <div className="space-y-2 pt-2 border-t border-border">
                 <div className="flex items-center justify-between">
-                  <span className={`font-bold text-xs uppercase tracking-wider ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
+                  <span className={`font-bold text-xs uppercase tracking-wider ${isDark ? 'text-white' : 'text-text'}`}>
                     {t('pdfPipelineSteps')} ({pipelineSteps.length})
                   </span>
                 </div>
 
                 {pipelineSteps.length === 0 ? (
                   <div className={`p-4 rounded-xl border border-dashed text-center ${
-                    isDark ? 'border-[#262a34] text-[#8b92a5]' : 'border-[#cbd5e1] text-[#64748b]'
+                    isDark ? 'border-border text-text' : 'border-border text-text'
                   }`}>
                     <p className="text-xs font-semibold">{t('hubPipelineNoSteps')}</p>
                   </div>
@@ -2476,50 +2482,50 @@ export function StirlingToolsHub({
                       <div
                         key={step.id || idx}
                         className={`flex items-center justify-between p-2 rounded-xl border ${
-                          isDark ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f8fafc] border-[#e2e8f0]'
+                          isDark ? 'bg-canvas border-border' : 'bg-canvas border-border'
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="size-5 rounded-full bg-emerald-500/10 text-emerald-500 font-bold text-[10px] flex items-center justify-center shrink-0">
+                          <span className="size-5 rounded-full bg-primary/10 text-primary-text font-bold text-[10px] flex items-center justify-center shrink-0">
                             {idx + 1}
                           </span>
                           <div className="min-w-0">
-                            <span className={`font-bold text-xs block truncate ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
+                            <span className={`font-bold text-xs block truncate ${isDark ? 'text-white' : 'text-text'}`}>
                               {step.name}
                             </span>
-                            <span className="text-[10px] font-mono text-[#8b92a5] block truncate">
+                            <span className="text-[10px] font-mono text-text block truncate">
                               {step.operation}
                             </span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          <button
+                          <Button variant="secondary" size="sm"
                             type="button"
                             disabled={idx === 0}
                             onClick={() => handleMoveStep(idx, 'up')}
-                            className="p-1 text-[#8b92a5] hover:text-white disabled:opacity-20 cursor-pointer"
+                            className="p-1 text-text hover:text-white disabled:opacity-20 cursor-pointer"
                             title={t('hubStepMoveUp')}
                           >
                             <ArrowUp size={12} />
-                          </button>
-                          <button
+                          </Button>
+                          <Button variant="secondary" size="sm"
                             type="button"
                             disabled={idx === pipelineSteps.length - 1}
                             onClick={() => handleMoveStep(idx, 'down')}
-                            className="p-1 text-[#8b92a5] hover:text-white disabled:opacity-20 cursor-pointer"
+                            className="p-1 text-text hover:text-white disabled:opacity-20 cursor-pointer"
                             title={t('hubStepMoveDown')}
                           >
                             <ArrowDown size={12} />
-                          </button>
-                          <button
+                          </Button>
+                          <Button variant="secondary" size="sm"
                             type="button"
                             onClick={() => handleRemoveStep(idx)}
-                            className="p-1 text-rose-500 hover:text-rose-400 cursor-pointer"
+                            className="p-1 text-danger hover:text-danger cursor-pointer"
                             title={t('delete')}
                           >
                             <Trash2 size={12} />
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -2532,7 +2538,7 @@ export function StirlingToolsHub({
                     value={stepToAdd}
                     onChange={e => setStepToAdd(e.target.value)}
                     className={`flex-1 p-2 rounded-lg border outline-none text-xs ${
-                      isDark ? 'bg-[#181a20] border-[#262a34] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                      isDark ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                     }`}
                   >
                     <optgroup label={t('hubFilterGatesGroup')}>
@@ -2550,38 +2556,38 @@ export function StirlingToolsHub({
                       ))}
                     </optgroup>
                   </select>
-                  <button
+                  <Button variant="secondary" size="sm"
                     type="button"
                     onClick={handleAddStep}
-                    className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                    className="px-3.5 py-2 rounded-lg bg-primary hover:bg-primary text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
                     <Plus size={13} />
                     <span>{t('pdfPipelineAddStep')}</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className={`p-4 border-t ${isDark ? 'border-[#1f2229] bg-[#121418]' : 'border-[#e2e8f0] bg-[#f8fafc]'} flex items-center justify-end gap-2`}>
-              <button
+            <div className={`p-4 border-t ${isDark ? 'border-border bg-canvas' : 'border-border bg-canvas'} flex items-center justify-end gap-2`}>
+              <Button variant="secondary" size="sm"
                 type="button"
                 onClick={() => {
                   setIsCreatingPipeline(false);
                   setEditingPipeline(null);
                 }}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold ${isDark ? 'text-[#8b92a5] hover:text-white' : 'text-[#64748b] hover:text-[#0f172a]'} cursor-pointer`}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold ${isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'} cursor-pointer`}
               >
                 {t('cancel')}
-              </button>
-              <button
+              </Button>
+              <Button variant="secondary" size="sm"
                 type="submit"
                 disabled={!pipelineName.trim() || pipelineSteps.length === 0}
-                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-primary hover:bg-primary disabled:opacity-40 text-white text-xs font-bold shadow-lg shadow-primary/20 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <CheckCircle2 size={14} />
                 <span>{t('pdfPipelineSave')}</span>
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -2611,23 +2617,23 @@ function ToolCard({
       onClick={onClick}
       className={`group relative p-2.5 rounded-xl border ${
         isDark
-          ? 'bg-[#151820] hover:bg-[#1a1f2c] border-[#202532] text-[#e1e4ea]'
-          : 'bg-white hover:bg-emerald-50/40 border-[#e2e8f0] text-[#1e293b] shadow-xs'
+          ? 'bg-canvas hover:bg-canvas border-border text-text'
+          : 'bg-white hover:bg-primary/40 border-border text-text shadow-xs'
       } cursor-pointer transition-all shadow-sm flex items-start gap-2.5`}
     >
       <div
         className={`size-8 rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105 ${
           tool.colorScheme === 'blue'
-            ? 'bg-blue-500/10 text-blue-500'
+            ? 'bg-primary/10 text-primary-text'
             : tool.colorScheme === 'emerald'
-            ? 'bg-emerald-500/10 text-emerald-500'
+            ? 'bg-primary/10 text-primary-text'
             : tool.colorScheme === 'cyan'
-            ? 'bg-cyan-500/10 text-cyan-500'
+            ? 'bg-primary/10 text-primary-text'
             : tool.colorScheme === 'rose'
-            ? 'bg-rose-500/10 text-rose-500'
+            ? 'bg-danger/10 text-danger'
             : tool.colorScheme === 'lime'
-            ? 'bg-lime-500/10 text-lime-600 dark:text-lime-400'
-            : 'bg-orange-500/10 text-orange-500'
+            ? 'bg-primary/10 text-primary-text dark:text-primary-text'
+            : 'bg-warning/10 text-warning'
         }`}
       >
         <Icon size={16} />
@@ -2635,20 +2641,20 @@ function ToolCard({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1">
-          <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-[#0f172a]'} group-hover:text-emerald-500 transition-colors truncate`}>
+          <h4 className={`font-bold text-xs ${isDark ? 'text-white' : 'text-text'} group-hover:text-primary-text transition-colors truncate`}>
             {toolName(tool, lang)}
           </h4>
-          <button
+          <Button variant="secondary" size="sm"
             type="button"
             onClick={onFavorite}
-            className={`p-0.5 text-[#686e80] hover:text-amber-400 transition-colors ${
-              isFavorite ? 'text-amber-400' : ''
+            className={`p-0.5 text-text hover:text-warning transition-colors ${
+              isFavorite ? 'text-warning' : ''
             }`}
           >
             <Star size={12} fill={isFavorite ? 'currentColor' : 'none'} />
-          </button>
+          </Button>
         </div>
-        <p className={`text-[10px] ${isDark ? 'text-[#8b92a5]' : 'text-[#64748b]'} line-clamp-1 mt-0.5`}>
+        <p className={`text-[10px] ${isDark ? 'text-text' : 'text-text'} line-clamp-1 mt-0.5`}>
           {toolDesc(tool, lang)}
         </p>
       </div>

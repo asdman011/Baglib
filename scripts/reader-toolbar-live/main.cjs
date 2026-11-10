@@ -31,7 +31,9 @@ app.on('browser-window-created', (_, win) => {
     fs.writeFileSync(path.join(evidence, `${name}.png`), (await win.webContents.capturePage()).toPNG());
   };
   const touch = async selector => {
-    const point = await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.scrollIntoView({block:'nearest'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+    const point = await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)return null;e.scrollIntoView({block:'nearest'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,left:r.left,top:r.top,width:r.width,height:r.height,visible:r.width>0&&r.height>0};})()`);
+    console.log('TOUCH:', selector, point);
+    if (!point) return;
     await win.webContents.debugger.sendCommand('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...point, radiusX: 1, radiusY: 1, force: 1, id: 1 }] });
     await win.webContents.debugger.sendCommand('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await pause(250);
@@ -107,20 +109,28 @@ app.on('browser-window-created', (_, win) => {
       await touch('[data-reader-toolbar-toggle]');
       await pause(400);
       assert.equal((await geometry()).opacity, '1', `${prefix} touch reveals`);
-      if (await evaluate("!!document.querySelector('[data-markup-palette]')")) await touch('[data-markup-palette]');
+      if (await evaluate("!!document.querySelector('[data-markup-palette]')")) {
+        await touch('[data-markup-palette]');
+        await until("!!document.querySelector('[data-markup-palette-panel]')");
+      }
       await touch('[data-markup-tool-button="underline"]');
       await until("document.querySelector('[data-reader-markup-bar]')?.getAttribute('data-markup-tool')==='underline'");
       await shot(`${prefix}-touch`);
       const metrics = await geometry();
       assert.ok(metrics.scroll <= width, `${prefix} horizontal overflow`);
       // Use the real rendered text to check selection actions against the pinned toolbar.
-      if (await evaluate("!!document.querySelector('[data-markup-palette]')")) await touch('[data-markup-palette]');
+      if (await evaluate("!!document.querySelector('[data-markup-palette]')")) {
+        await touch('[data-markup-palette]');
+        await until("!!document.querySelector('[data-markup-palette-panel]')");
+      }
       await touch('[data-markup-tool-button="select"]');
+      await until("document.querySelector('[data-reader-markup-bar]')?.getAttribute('data-markup-tool')==='select'");
       await evaluate('document.activeElement?.blur()');
       if (file.kind === 'pdf') {
         const page = file.lang === 'en' ? 200 : 2;
-        await evaluate(`(()=>{const e=document.querySelector('[data-pdf-bottom-navigation] input[type=number]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(String(page))});e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+        await evaluate(`(()=>{const e=document.querySelector('[data-reader-go-to], [data-pdf-bottom-navigation] input[type=number]');if(!e)return;Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(String(page))});e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));e.form?.requestSubmit();})()`);
         await until(`document.querySelector('[data-reader-page]')?.getAttribute('data-reader-page')==='${page}' && [...document.querySelectorAll('.textLayer span')].some(e=>e.textContent.trim().length>5)`);
+        await pause(600);
       }
       if (file.kind === 'epub') for (let page = 0; page < 12; page++) {
         if (await evaluate("[...document.querySelectorAll('.prose p')].some(p=>p.textContent.trim().length>30)")) break;
@@ -128,11 +138,12 @@ app.on('browser-window-created', (_, win) => {
       }
       await evaluate(`(()=>{
         const nodes=[...document.querySelectorAll(${JSON.stringify(file.kind === 'epub' ? '.prose p' : '.textLayer span')})];
-        const text=nodes.flatMap(e=>{const walker=document.createTreeWalker(e,NodeFilter.SHOW_TEXT);const out=[];let n;while(n=walker.nextNode())if(n.textContent.trim().length>5)out.push(n);return out;})[0];
+        const text=nodes.flatMap(e=>{const walker=document.createTreeWalker(e,NodeFilter.SHOW_TEXT);const out=[];let n;while(n=walker.nextNode())if(n.textContent.trim().length>0)out.push(n);return out;}).find(t=>t.textContent.trim().length>5);
         if(!text)throw new Error('No real body text for selection');
         const range=document.createRange();range.setStart(text,0);range.setEnd(text,Math.min(25,text.length));
         const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
         text.parentElement.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
+        document.querySelector('.pdf-native-viewer-container')?.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
       })()`);
       await until("!!document.querySelector('[role=dialog] [data-reader-study-action]') || [...document.querySelectorAll('[role=dialog]')].some(e=>e.style.top.includes('reader-toolbar-bottom'))");
       const overlap = await evaluate(`(()=>{const h=document.querySelector('[data-reader-top-bar],[data-pdf-header]').getBoundingClientRect();const m=[...document.querySelectorAll('[role=dialog]')].find(e=>e.style.top.includes('reader-toolbar-bottom')).getBoundingClientRect();return {headerBottom:h.bottom,menuTop:m.top,menuBottom:m.bottom};})()`);

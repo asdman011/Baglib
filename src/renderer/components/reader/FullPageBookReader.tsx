@@ -44,6 +44,7 @@ import {
   Check,
   Search,
   ScanText,
+  CheckCircle2,
   BookA,
   Headphones,
   Cloud,
@@ -74,7 +75,8 @@ import { PdfMarksList } from './PdfMarksList';
 import { useReaderChrome } from './useReaderChrome';
 import type { PdfReview } from '../../../shared/types/pdf-collaboration';
 import chromeStyles from './reader-chrome.module.css';
-import { ZenBottomScrubber } from './ZenBottomScrubber';
+import { Chip } from '../ui/Chip';
+import { getOcrStatusChipInfo, type OcrStatusState } from './pdf-tool-catalogue';
 import { ZenCornerHotspots } from './ZenCornerHotspots';
 import { ReaderMarkupBar, ReaderShortcutSheet } from './ReaderMarkupBar';
 import { PdfMarkupProvider } from './PdfMarkupLayer';
@@ -152,7 +154,6 @@ import {
   applyStoredCorrections,
   resolveAndMigratePageCorrections,
 } from '../../../shared/ocr-suspects';
-import { OcrQuickActionPill } from './OcrQuickActionPill';
 import { OcrPageOverlay } from './OcrPageOverlay';
 import { ocrEngineName, ocrFallbackMessage } from './ocr-status';
 import { useOcrEngines } from './useOcrEngines';
@@ -3416,43 +3417,98 @@ const SourceBookReader: React.FC = () => {
     setIsBottomBarVisible(false);
     if (focus) panels.close();
   };
-  const renderChrome = (pdf?: Parameters<NonNullable<React.ComponentProps<typeof PdfWorkstationPanel>['renderReaderHeader']>>[0]) => (
-    <ReaderHeader title={activeBook.title} author={activeBook.author} format={effectiveFormat} dir={workspaceDir}
-      page={readingPage} total={maxBookPages} onPage={page => setReadingPage(page)}
-      viewMode={pdf?.viewMode ?? viewMode} onViewMode={pdf?.onViewMode ?? setViewMode}
-      zoom={pdf?.zoom ?? Math.round(readerFontSize / 18 * 100)}
-      onZoom={pdf?.onZoom ?? (value => setReaderFontSize(Math.max(9, Math.min(54, Math.round(value * 18 / 100)))))}
-      onFit={pdf?.onFit ?? (() => { setReaderFontSize(18); setMargin(28); })}
-      onReflow={pdf?.onReflow ?? (effectiveFormat === 'PDF' ? () => setIsReflowModalOpen(true) : undefined)}
-      onClose={handleCloseReader} onPanel={() => { pdf?.closeTools(); chrome.open ? panels.close() : chrome.select(chrome.tab); }} panelOpen={chrome.open}
-      onSearch={() => { pdf?.closeTools(); chrome.select('search'); }}
-      onTools={() => { panels.close(); pdf ? pdf.onTools() : handleToggleSettings(); }}
-      onSave={pdf?.onSave} saveState={pdf?.saveState} saveLabel={pdf?.saveLabel} saveDisabled={pdf?.saveDisabled}
-      focusMode={focusMode} onFocusMode={changeFocusMode} visible={pdf ? (!focusMode || isTopBarVisible) : (!focusMode && (isTopBarVisible || isSettingsOpen))}
-      onMouseEnter={() => { isTopBarHoveredRef.current = true; }} onMouseLeave={() => { isTopBarHoveredRef.current = false; }}
-      markupBar={<ReaderMarkupBar color={activeHighlightColor} onColor={setActiveHighlightColor} tool={markupTool} onTool={chooseMarkupTool}
-        locked={markupLocked} onToggleLock={toggleMarkupLock} allowedTools={isReflowable ? ['select', 'highlight', 'underline', 'strike', 'comment'] : undefined}
-        onShowShortcuts={() => setShowReaderShortcuts(true)} t={t} />}
-      overflowItems={[
-        ...(pdf?.overflowItems ?? []),
-        { label: t('tableOfContents'), onClick: () => { pdf?.closeTools(); chrome.select('toc'); } },
-        { label: t('readerPanelMarks'), onClick: () => { pdf?.closeTools(); chrome.select('knowledge'); } },
-        { label: t('readerPanelNotes'), onClick: () => { pdf?.closeTools(); chrome.select('annotations'); } },
-        { label: t('dictionaryLookupTitle'), onClick: () => { setDictionaryLookupWord(selectedText || ''); setIsDictionaryModalOpen(true); } },
-        { label: t('aiAssistantTitle'), onClick: handleToggleAIDrawer },
-        { label: t('pluginsTitle'), onClick: () => setIsPluginsModalOpen(true) },
-        { label: t('typographySettings'), onClick: handleToggleSettings },
-        { label: t('autoCropMargins'), onClick: () => setAutoCropMargins(previous => !previous) },
-        ...(!pdf && effectiveFormat === 'PDF' ? [{ label: t('fitPage'), onClick: () => setPdfFitMode(previous => previous === 'Fit' ? 'FitH' : 'Fit') }] : []),
-        { label: t(readerDirection === 'rtl' ? 'readingDirectionRtl' : 'readingDirectionLtr'), onClick: () => setReaderDirection(readerDirection === 'rtl' ? 'ltr' : 'rtl') },
-        ...(!pdf ? [
-          { label: t('ttsReadAloud'), onClick: () => startReadAloud() },
-          { label: t(isAutoScrolling ? 'autoScrollPause' : 'autoScrollPlay'), onClick: handleToggleAutoScroll },
-          { label: t('autoScrollSpeed') + ' ' + autoScrollSpeed, onClick: handleCycleAutoScrollSpeed },
-          ...(paginatedPages.length ? [{ label: t('readerSavePdf'), disabled: isSavingPdf, onClick: () => { void handleSaveBookAsPdf(); } }] : []),
-        ] : []),
-      ]} t={t} />
-  );
+  const renderChrome = (pdf?: Parameters<NonNullable<React.ComponentProps<typeof PdfWorkstationPanel>['renderReaderHeader']>>[0]) => {
+    const currentPageOcr = ocrPages.get(readingPage);
+    const hasOcrWords = !!currentPageOcr && ((currentPageOcr.words?.length ?? 0) > 0 || !!currentPageOcr.text);
+    const hasText = Boolean(scannedInfo?.totalChars || extractedFullText?.trim());
+    const ocrState: OcrStatusState = isOcrRunning ? 'running'
+      : hasOcrWords ? 'done'
+      : hasText ? 'text-layer'
+      : scannedInfo ? 'no-text-layer' : 'checking';
+    const words = currentPageOcr?.words || [];
+    const scoredWords = words.filter(word => word.confidence !== undefined);
+    const avgConfidence = scoredWords.length
+      ? scoredWords.reduce((sum, word) => sum + word.confidence!, 0) / scoredWords.length * 100
+      : undefined;
+    const ocrChipInfo = getOcrStatusChipInfo(ocrState, {
+      confidence: avgConfidence, wordCount: words.length,
+      current: ocrProgress?.current, total: ocrProgress?.total,
+    }, t);
+
+    const ocrChip = effectiveFormat === 'PDF' ? (
+      <span
+        title={ocrChipInfo.tooltip}
+        className="inline-flex cursor-pointer"
+        data-reader-ocr-chip
+        data-ocr-state={ocrChipInfo.state}
+      >
+        <Chip
+          onSelect={() => { panels.close(); pdf?.openOcrTool?.(); }}
+          label={
+            <span className="flex items-center gap-1.5 font-medium text-[11px]">
+              {ocrChipInfo.state === 'running' ? (
+                <Loader2 className="size-3 animate-spin text-primary-text" />
+              ) : ocrChipInfo.state === 'done' ? (
+                <CheckCircle2 className="size-3 text-success" />
+              ) : ocrChipInfo.state === 'no-text-layer' ? (
+                <ScanText className="size-3 text-warning" />
+              ) : (
+                <FileText className="size-3 text-text-muted" />
+              )}
+              <span className="sr-only sm:not-sr-only">{ocrChipInfo.label}</span>
+            </span>
+          }
+          className="cursor-pointer"
+        />
+      </span>
+    ) : undefined;
+
+    return (
+      <ReaderHeader title={activeBook.title} author={activeBook.author} format={effectiveFormat} dir={workspaceDir}
+        page={readingPage} total={maxBookPages} onPage={page => setReadingPage(page)}
+        viewMode={pdf?.viewMode ?? viewMode} onViewMode={pdf?.onViewMode ?? setViewMode}
+        zoom={pdf?.zoom ?? Math.round(readerFontSize / 18 * 100)}
+        onZoom={pdf?.onZoom ?? (value => setReaderFontSize(Math.max(9, Math.min(54, Math.round(value * 18 / 100)))))}
+        onFit={pdf?.onFit ?? (() => { setReaderFontSize(18); setMargin(28); })}
+        onReflow={pdf?.onReflow ?? (effectiveFormat === 'PDF' ? () => setIsReflowModalOpen(true) : undefined)}
+        onClose={handleCloseReader} onPanel={() => { pdf?.closeTools(); chrome.open ? panels.close() : chrome.select(chrome.tab); }} panelOpen={chrome.open}
+        onSearch={() => { pdf?.closeTools(); chrome.select('search'); }}
+        onTools={() => { panels.close(); pdf ? pdf.onTools() : handleToggleSettings(); }}
+        onSave={pdf?.onSave} saveState={pdf?.saveState} saveLabel={pdf?.saveLabel} saveDisabled={pdf?.saveDisabled}
+        focusMode={focusMode} onFocusMode={changeFocusMode} visible={pdf ? (!focusMode || isTopBarVisible) : (!focusMode && (isTopBarVisible || isSettingsOpen))}
+        onMouseEnter={() => { isTopBarHoveredRef.current = true; }} onMouseLeave={() => { isTopBarHoveredRef.current = false; }}
+        markupBar={<ReaderMarkupBar color={activeHighlightColor} onColor={setActiveHighlightColor} tool={markupTool} onTool={chooseMarkupTool}
+          locked={markupLocked} onToggleLock={toggleMarkupLock} allowedTools={isReflowable ? ['select', 'highlight', 'underline', 'strike', 'comment'] : undefined}
+          onShowShortcuts={() => setShowReaderShortcuts(true)} t={t} />}
+        ocrChip={ocrChip}
+        overflowItems={[
+          ...(previousJumpPage !== null ? [{
+            label: t('jumpToPreviousNotice', { page: previousJumpPage }),
+            onClick: () => {
+              setReadingPage(previousJumpPage);
+              setPreviousJumpPage(null);
+            },
+          }] : []),
+          ...(pdf?.overflowItems ?? []),
+          { label: t('tableOfContents'), onClick: () => { pdf?.closeTools(); chrome.select('toc'); } },
+          { label: t('readerPanelMarks'), onClick: () => { pdf?.closeTools(); chrome.select('knowledge'); } },
+          { label: t('readerPanelNotes'), onClick: () => { pdf?.closeTools(); chrome.select('annotations'); } },
+          { label: t('dictionaryLookupTitle'), onClick: () => { setDictionaryLookupWord(selectedText || ''); setIsDictionaryModalOpen(true); } },
+          { label: t('aiAssistantTitle'), onClick: handleToggleAIDrawer },
+          { label: t('pluginsTitle'), onClick: () => setIsPluginsModalOpen(true) },
+          { label: t('typographySettings'), onClick: handleToggleSettings },
+          { label: t('autoCropMargins'), onClick: () => setAutoCropMargins(previous => !previous) },
+          ...(!pdf && effectiveFormat === 'PDF' ? [{ label: t('fitPage'), onClick: () => setPdfFitMode(previous => previous === 'Fit' ? 'FitH' : 'Fit') }] : []),
+          { label: t(readerDirection === 'rtl' ? 'readingDirectionRtl' : 'readingDirectionLtr'), onClick: () => setReaderDirection(readerDirection === 'rtl' ? 'ltr' : 'rtl') },
+          ...(!pdf ? [
+            { label: t('ttsReadAloud'), onClick: () => startReadAloud() },
+            { label: t(isAutoScrolling ? 'autoScrollPause' : 'autoScrollPlay'), onClick: handleToggleAutoScroll },
+            { label: t('autoScrollSpeed') + ' ' + autoScrollSpeed, onClick: handleCycleAutoScrollSpeed },
+            ...(paginatedPages.length ? [{ label: t('readerSavePdf'), disabled: isSavingPdf, onClick: () => { void handleSaveBookAsPdf(); } }] : []),
+          ] : []),
+        ]} t={t} />
+    );
+  };
 
   return (
     <div
@@ -3494,36 +3550,6 @@ const SourceBookReader: React.FC = () => {
       {/* Floating Zen Top Bar */}
       {isDocumentPanelOpen && effectiveFormat === 'PDF' && legacyPdfWork === activeBook.id && <PdfWorkstationPanel key={activeBook.id} workId={activeBook.id} sourceId={currentSourceId ?? undefined} onClose={() => setIsDocumentPanelOpen(false)} />}
       {!isPdfWorkstationActive && renderChrome()}
-
-      {/* Floating Zen Bottom Scrubber */}
-      {!isPdfWorkstationActive && !focusMode && (
-      <ZenBottomScrubber
-        isVisible={isBottomBarVisible || isSettingsOpen}
-        readingPage={readingPage}
-        maxBookPages={maxBookPages}
-        onPageChange={(p) => setReadingPage(Math.min(maxBookPages, Math.max(1, p)))}
-        previousPage={previousJumpPage}
-        onReturnToPrevious={() => {
-          if (previousJumpPage !== null) {
-            setReadingPage(previousJumpPage);
-            setPreviousJumpPage(null);
-          }
-        }}
-        readerDirection={readerDirection}
-        chapterLabel={activeFormattedPage?.chapterLabel}
-        onMouseEnter={() => {
-          isBottomBarHoveredRef.current = true;
-          if (bottomHideTimerRef.current) {
-            clearTimeout(bottomHideTimerRef.current);
-            bottomHideTimerRef.current = null;
-          }
-        }}
-        onMouseLeave={() => {
-          isBottomBarHoveredRef.current = false;
-        }}
-        t={t}
-      />
-      )}
 
       {/* Zen Corner Hotspots */}
       {!isPdfWorkstationActive && !focusMode && (
@@ -4509,6 +4535,23 @@ const SourceBookReader: React.FC = () => {
                       setActiveHighlightPopover({ highlight, position: { x: event.clientX, y: event.clientY } });
                     },
                   }}
+                  ocrIntegration={{
+                    pageResult: ocrPages.get(readingPage) || null,
+                    readingPage,
+                    isOcrRunning,
+                    progress: ocrProgress,
+                    onRunOcrPage: () => handleRunOcrPage(readingPage),
+                    onRunOcrDocument: handleRunOcrDocument,
+                    showBoundingBoxes: showOcrDebug,
+                    onToggleBoundingBoxes: () => setShowOcrDebug(prev => !prev),
+                    onToggleInspector: () => {
+                      setIsInkModeActive(false);
+                      setIsOcrMenuOpen(prev => !prev);
+                    },
+                    engines: ocrEngines,
+                    selectedEngine: ocrEngine,
+                    onSelectEngine: selectOcrEngine,
+                  }}
                 />
                 {ocrPages.get(readingPage) && (
                   <OcrPageOverlay pageNumber={readingPage}>
@@ -4530,24 +4573,6 @@ const SourceBookReader: React.FC = () => {
                     isTagged={isReadingOrderTagged}
                   />
                 )}
-                <OcrQuickActionPill
-                  compact
-                  className="!bottom-20 !z-40"
-                  pageResult={ocrPages.get(readingPage) || null}
-                  readingPage={readingPage}
-                  isOcrRunning={isOcrRunning}
-                  onRunOcrPage={() => handleRunOcrPage(readingPage)}
-                  showBoundingBoxes={showOcrDebug}
-                  onToggleBoundingBoxes={() => setShowOcrDebug(prev => !prev)}
-                  isInspectorOpen={isOcrMenuOpen}
-                  onToggleInspector={() => {
-                    setIsInkModeActive(false);
-                    setIsOcrMenuOpen(prev => !prev);
-                  }}
-                  engines={ocrEngines}
-                  selectedEngine={ocrEngine}
-                  onSelectEngine={selectOcrEngine}
-                />
                 {closePrompt && <SaveCloseDialog title={activeBook.title} busy={closeSaving} t={t} onSave={() => closePrompt('save')} onDiscard={() => closePrompt('discard')} onCancel={() => closePrompt('cancel')} />}
                 {exportOpen && <ExportPdfDialog workId={activeBook.id} pages={maxBookPages} t={t} lang={workspaceLang} dir={workspaceDir} onClose={() => setExportOpen(false)} />}
                 {compareOpen && <PdfCompareDialog workId={activeBook.id} onClose={() => setCompareOpen(false)} onJump={page => setReadingPage(Math.min(maxBookPages, Math.max(1, page)))} />}
@@ -4612,23 +4637,6 @@ const SourceBookReader: React.FC = () => {
                       }}
                     />
                   )}
-                  {/* Floating OCR Quick-Action Toolbar Pill (Story 3.2 / KEY-141) */}
-                  <OcrQuickActionPill
-                    pageResult={ocrPages.get(readingPage) || null}
-                    readingPage={readingPage}
-                    isOcrRunning={isOcrRunning}
-                    onRunOcrPage={() => handleRunOcrPage(readingPage)}
-                    showBoundingBoxes={showOcrDebug}
-                    onToggleBoundingBoxes={() => setShowOcrDebug(prev => !prev)}
-                    isInspectorOpen={isOcrMenuOpen}
-                    onToggleInspector={() => {
-                      setIsInkModeActive(false);
-                      setIsOcrMenuOpen(prev => !prev);
-                    }}
-                    engines={ocrEngines}
-                    selectedEngine={ocrEngine}
-                    onSelectEngine={selectOcrEngine}
-                  />
                 </div>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-muted text-xs p-6 space-y-3">

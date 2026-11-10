@@ -122,7 +122,7 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
       </button>
       {paletteOpen && <>
         <div className="fixed inset-0 z-40" onClick={() => setPaletteOpen(false)} />
-        <div role="dialog" aria-label={t('markupPalette')} data-markup-palette-panel className="absolute end-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] space-y-2 rounded-xl border border-subtle bg-surface p-2 text-main shadow-2xl">
+        <div role="dialog" aria-label={t('markupPalette')} data-markup-palette-panel className="absolute start-0 top-full z-[70] mt-2 w-72 max-w-[calc(100vw-1rem)] space-y-2 rounded-xl border border-subtle bg-surface p-2 text-main shadow-2xl">
           <div className="grid grid-cols-2 gap-0.5">{availableTools.map(entry => toolButton(entry, true))}</div>
           <div className="flex items-center gap-2 border-t border-subtle px-1 pt-2">{swatches}</div>
           <div className="flex items-center justify-between gap-1 border-t border-subtle pt-2">{lockButton}{shortcutsButton}</div>

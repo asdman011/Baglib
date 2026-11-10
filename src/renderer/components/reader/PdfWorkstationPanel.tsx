@@ -71,7 +71,8 @@ import type { MaterialSaveStatus } from '../../../shared/material-save';
 import { SaveIncidentBanner } from './FileSaveUi';
 import { PdfNativeViewer } from './PdfNativeViewer';
 import { PdfSavedActions } from './PdfSavedActions';
-import { PdfToolDirectory } from './PdfToolDirectory';
+import type { PdfToolSectionId } from './pdf-tool-catalogue';
+import { PdfToolDirectory, type OcrIntegrationProps } from './PdfToolDirectory';
 import { PdfAccessibilityDrawer } from './PdfAccessibilityDrawer';
 import { PdfReflowModal } from './PdfReflowModal';
 import { PdfReadingOrderOverlay } from './PdfReadingOrderOverlay';
@@ -154,8 +155,9 @@ export function PdfWorkstationPanel({
   renderReaderHeader,
   focusMode,
   onReviewsChange,
+  ocrIntegration,
 }: {
-  renderReaderHeader?: (controls: Pick<ReaderHeaderProps, 'viewMode' | 'onViewMode' | 'zoom' | 'onZoom' | 'onFit' | 'onReflow' | 'onTools' | 'onSave' | 'saveState' | 'saveLabel' | 'saveDisabled' | 'overflowItems'> & { closeTools: () => void }) => React.ReactNode;
+  renderReaderHeader?: (controls: Pick<ReaderHeaderProps, 'viewMode' | 'onViewMode' | 'zoom' | 'onZoom' | 'onFit' | 'onReflow' | 'onTools' | 'onSave' | 'saveState' | 'saveLabel' | 'saveDisabled' | 'overflowItems'> & { closeTools: () => void; openOcrTool?: () => void }) => React.ReactNode;
   focusMode?: boolean;
   onReviewsChange?: (reviews: PdfReview[]) => void;
   workId?: string;
@@ -169,6 +171,7 @@ export function PdfWorkstationPanel({
   readingActions?: { onReadAloud: () => void; onAutoScroll: () => void; autoScrolling: boolean; onBookmark: () => void; bookmarked: boolean; onSearch?: () => void; onCompare?: () => void };
   annotationPanel?: { open: boolean; content: React.ReactNode; onToggle: () => void; onClose: () => void; count: number };
   markupBar?: React.ReactNode;
+  ocrIntegration?: OcrIntegrationProps;
   /** ADR-012: writing BagLib's marks into this PDF, and the selective export. */
   fileSave?: { state: FileSaveState; status: MaterialSaveStatus | null; notice: SaveNotice; onSave: () => Promise<boolean>; onClearNotice: () => void; onExport: () => void; onRestore: () => void; onKeep: () => void };
   readerIntegration?: Pick<React.ComponentProps<typeof PdfNativeViewer>, 'highlights' | 'activeSelectionInfo' | 'onSelectionChange' | 'onHighlightClick' | 'onPdfDocLoaded' | 'onOutlineLoaded' | 'onTotalPagesLoaded' | 'contentContainerRef' | 'autoCropMargins' | 'direction'>;
@@ -204,7 +207,7 @@ export function PdfWorkstationPanel({
   const [isReadingOrderTagged, setIsReadingOrderTagged] = useState(false);
   const [a11yReport, setA11yReport] = useState<PdfAccessibilityBaseReport | null>(null);
   const chromeLabels = { top: 'pdfChromeTop', rail: 'pdfChromeRail', library: 'pdfChromeLibrary', tools: 'pdfDirectoryTitle', bottom: 'pdfChromeBottom' } as const;
-  const pinChrome = (zone: keyof typeof chromeLabels) => <div className="flex shrink-0 items-center"><button type="button" aria-pressed={pinnedChrome.includes(zone)} title={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} aria-label={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} onClick={() => setPinnedChrome(previous => previous.includes(zone) ? previous.filter(item => item !== zone) : [...previous, zone])} className="rounded-lg p-2 hover:bg-emerald-500/20"><Pin size={14} className={pinnedChrome.includes(zone) ? 'text-emerald-500' : ''} /></button><button type="button" aria-label={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} title={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} onClick={() => setCollapsedChrome(previous => [...previous.filter(item => item !== zone), zone])} className="rounded-lg p-1 hover:bg-emerald-500/20"><X size={12} /></button></div>;
+  const pinChrome = (zone: keyof typeof chromeLabels) => <div className="flex shrink-0 items-center"><button type="button" aria-pressed={pinnedChrome.includes(zone)} title={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} aria-label={t(pinnedChrome.includes(zone) ? 'unpinDrawer' : 'pinDrawer')} onClick={() => setPinnedChrome(previous => previous.includes(zone) ? previous.filter(item => item !== zone) : [...previous, zone])} className="rounded-lg p-2 hover:bg-primary/20"><Pin size={14} className={pinnedChrome.includes(zone) ? 'text-primary-text' : ''} /></button><button type="button" aria-label={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} title={t('pdfChromeHide', { region: t(chromeLabels[zone]) })} onClick={() => setCollapsedChrome(previous => [...previous.filter(item => item !== zone), zone])} className="rounded-lg p-1 hover:bg-primary/20"><X size={12} /></button></div>;
   const workstationRoot = useRef<HTMLElement | null>(null);
   /**
    * How compact the header is: 0 shows everything; 1 moves the secondary actions into the More menu; 2 also shrinks the
@@ -251,6 +254,8 @@ export function PdfWorkstationPanel({
   });
   const [watchedFoldersList, setWatchedFoldersList] = useState<WatchedFolderSource[]>([]);
   const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
+  const [hubInitialTool, setHubInitialTool] = useState<string | undefined>();
+  const [directorySection, setDirectorySection] = useState<PdfToolSectionId | undefined>(undefined);
   const [toolDirectoryOpen, setToolDirectoryOpen] = useState(true);
   const [engineStatus, setEngineStatus] = useState<StirlingEngineInfo>({ status: 'stopped', version: '3.2.2' });
   const [viewMode, setViewMode] = useState<'single' | 'double' | 'scroll'>('single');
@@ -923,8 +928,8 @@ export function PdfWorkstationPanel({
       }}
       className={
         embedded
-          ? `relative w-full h-full min-h-0 ${workstationTheme === 'dark' ? 'bg-[#0f1115] text-[#e1e4ea]' : 'bg-[#f8f9fa] text-[#111827]'} flex flex-col overflow-hidden`
-          : `fixed top-12 bottom-6 inset-x-3 mx-auto z-50 max-w-[1600px] rounded-2xl border ${workstationTheme === 'dark' ? 'border-[#232733] bg-[#0f1115] text-[#e1e4ea]' : 'border-[#e5e7eb] bg-[#f8f9fa] text-[#111827]'} shadow-2xl flex flex-col overflow-hidden`
+          ? `relative w-full h-full min-h-0 ${workstationTheme === 'dark' ? 'bg-canvas text-text' : 'bg-canvas text-text'} flex flex-col overflow-hidden`
+          : `fixed top-12 bottom-6 inset-x-3 mx-auto z-50 max-w-[1600px] rounded-2xl border ${workstationTheme === 'dark' ? 'border-border bg-canvas text-text' : 'border-border bg-canvas text-text'} shadow-2xl flex flex-col overflow-hidden`
       }
     >
       {/* Keyboard focus continues to reveal the header through :focus-within. */}
@@ -939,23 +944,40 @@ export function PdfWorkstationPanel({
           setCollapsedChrome(previous => previous.filter(zone => zone !== 'top'));
           setPinnedChrome(previous => previous.includes('top') ? previous.filter(zone => zone !== 'top') : [...previous, 'top']);
         }}
-        className="absolute bottom-16 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-40 min-h-11 max-w-[calc(100vw-2rem)] text-primary-text shadow-sm motion-reduce:transition-none"
+        className="absolute top-1 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-40 min-h-9 max-w-[calc(100vw-2rem)] text-primary-text shadow-sm motion-reduce:transition-none"
       >{t(pinnedChrome.includes('top') ? 'readerToolbarUnpin' : 'readerToolbarShow')}</Button>}
       {/* HEADER RIBBON */}
-      {collapsedChrome.length > 0 && <details data-reader-recovery className="absolute end-2 top-2 z-[60] rounded-xl border border-subtle bg-surface p-2 text-main shadow-xl"><summary className="cursor-pointer text-xs">{t('pdfChromeRestore')}</summary><div className="mt-2 flex flex-col gap-1">{collapsedChrome.map(zone => <button key={zone} type="button" className="rounded-lg px-2 py-1 text-start text-xs hover:bg-canvas" onClick={() => setCollapsedChrome(previous => previous.filter(item => item !== zone))}>{t(chromeLabels[zone as keyof typeof chromeLabels])}</button>)}</div></details>}
+      {collapsedChrome.length > 0 && <details data-reader-recovery className="absolute end-2 top-2 z-[60] rounded-xl border border-border bg-surface p-2 text-text shadow-xl"><summary className="cursor-pointer text-xs">{t('pdfChromeRestore')}</summary><div className="mt-2 flex flex-col gap-1">{collapsedChrome.map(zone => <button key={zone} type="button" className="rounded-lg px-2 py-1 text-start text-xs hover:bg-canvas" onClick={() => setCollapsedChrome(previous => previous.filter(item => item !== zone))}>{t(chromeLabels[zone as keyof typeof chromeLabels])}</button>)}</div></details>}
+      {/* eslint-disable-next-line react-hooks/refs -- Header callbacks defer ref-dependent operations until user events. */}
       {renderReaderHeader ? renderReaderHeader({
         viewMode: viewMode === 'double' ? 'two-column' : viewMode === 'scroll' ? 'scrolled' : 'single',
         onViewMode: value => setViewMode(value === 'two-column' ? 'double' : value === 'scrolled' ? 'scroll' : 'single'),
         zoom, onZoom: setZoom,
         onFit: () => { setZoom(100); setFitMode(previous => previous === 'page' ? 'width' : 'page'); },
         onReflow: () => setIsReflowModalOpen(true),
-        onTools: () => { setReaderToolsVisible(value => !value); setCollapsedChrome(previous => previous.filter(zone => zone !== 'tools')); },
+        onTools: () => { setReaderToolsVisible(value => !value); setTool('inspect'); setToolDirectoryOpen(true); setDirectorySection(undefined); setCollapsedChrome(previous => previous.filter(zone => zone !== 'tools')); },
         closeTools: () => { setReaderToolsVisible(false); setTool('inspect'); },
+        openOcrTool: () => {
+          setReaderToolsVisible(true);
+          setToolDirectoryOpen(true);
+          setDirectorySection('ocr');
+          requestAnimationFrame(() => {
+            const section = workstationRoot.current?.querySelector<HTMLElement>('section[data-tool-section=ocr]');
+            section?.scrollIntoView({ block: 'start' });
+            section?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+          });
+          setTool('inspect');
+          setMode('convert');
+        },
         onSave: () => { void handleQuickSave(); },
         saveState: output?.outputs?.length ? 'staged' : fileSave?.state ?? 'saved',
         saveLabel: t(output?.outputs?.length ? 'pdfUnsavedPill' : fileSave?.state === 'saving' ? 'saveStateSaving' : fileSave?.state === 'saved' ? 'saveStateSaved' : 'saveStateRecorded'),
         saveDisabled: !session || starting || job?.state === 'running',
         overflowItems: [
+          { label: t('pdfNavFirst'), onClick: () => { setPage(1); if (!nativeReading) void start('preview', { page: 1 }); onPageChange?.(1); } },
+          { label: t('pdfNavPrevious'), disabled: page <= 1, onClick: () => { const previous = Math.max(1, page - 1); setPage(previous); if (!nativeReading) void start('preview', { page: previous }); onPageChange?.(previous); } },
+          { label: t('pdfNavNext'), disabled: page >= totalPages, onClick: () => { const next = Math.min(totalPages, page + 1); setPage(next); if (!nativeReading) void start('preview', { page: next }); onPageChange?.(next); } },
+          { label: t('pdfNavLast'), onClick: () => { setPage(totalPages); if (!nativeReading) void start('preview', { page: totalPages }); onPageChange?.(totalPages); } },
           ...(readingActions ? [
             { label: t('ttsReadAloud'), onClick: readingActions.onReadAloud },
             { label: t('autoScrollPlay'), onClick: readingActions.onAutoScroll },
@@ -970,22 +992,22 @@ export function PdfWorkstationPanel({
           { label: t('pdfOriginalPageColors'), icon: <Moon size={14} />, onClick: () => setTintPdfPages(value => !value) },
         ],
       }) : (
-      <header id={toolbarId} ref={headerRef} data-pdf-header data-density={headerDensity} className="flex h-11 min-h-11 flex-nowrap items-center gap-1.5 border-b border-subtle px-2 bg-canvas/60 shrink-0">
+      <header id={toolbarId} ref={headerRef} data-pdf-header data-density={headerDensity} className="flex h-11 min-h-11 flex-nowrap items-center gap-1.5 border-b border-border px-2 bg-canvas/60 shrink-0">
         {embedded && (
           <button
             type="button"
             onClick={onClose}
             aria-label={t('backToLibrary')}
             title={t('backToLibrary')}
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-subtle bg-surface hover:bg-canvas text-xs font-semibold text-main transition-all cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-border bg-surface hover:bg-canvas text-xs font-semibold text-text transition-all cursor-pointer shrink-0"
           >
-            <ArrowLeft size={14} className="rtl:rotate-180 text-muted" />
+            <ArrowLeft size={14} className="rtl:rotate-180 text-text-muted" />
             <span className="hidden lg:inline">{t('backToLibrary')}</span>
           </button>
         )}
         <h2 className={`${headerDensity >= 3 ? 'min-w-10' : 'min-w-16'} truncate font-bold text-sm`} dir="auto" title={session?.filename || undefined}>{session?.filename || t('pdfSuiteTitle')}</h2>
         {(inspection || nativeReading) && (
-          <span data-pdf-document-page-count className="hidden shrink-0 text-[11px] text-muted xl:inline">
+          <span data-pdf-document-page-count className="hidden shrink-0 text-[11px] text-text-muted xl:inline">
             {t('pdfDocumentPageCount', { count: totalPages })}
           </span>
         )}
@@ -994,7 +1016,7 @@ export function PdfWorkstationPanel({
           const state = staged ? 'staged' : fileSave?.state ?? 'saved';
           const label = staged ? t('pdfUnsavedPill') : state === 'recorded' ? t('saveStateRecorded') : state === 'saving' ? t('saveStateSaving') : state === 'no-engine' || state === 'incident' ? t('saveStateRecorded') : t('pdfSavedPill');
           const warm = staged || state === 'recorded' || state === 'no-engine' || state === 'incident';
-          const tone = warm ? `bg-amber-500/15 ${workstationTheme === 'dark' ? 'text-amber-300' : 'text-amber-900'}` : state === 'saving' ? 'bg-sky-500/15 text-sky-800 dark:text-sky-200' : `bg-emerald-500/15 ${workstationTheme === 'dark' ? 'text-emerald-300' : 'text-emerald-900'}`;
+          const tone = warm ? `bg-warning/15 ${workstationTheme === 'dark' ? 'text-warning' : 'text-warning'}` : state === 'saving' ? 'bg-primary/15 text-primary-text dark:text-primary-text' : `bg-primary/15 ${workstationTheme === 'dark' ? 'text-primary-text' : 'text-primary-text'}`;
           const title = state === 'no-engine' ? t('saveStateNoEngine') : state === 'saved' && fileSave?.status?.lastSavedAt ? `${t('saveStateSaved')} · ${new Date(fileSave.status.lastSavedAt).toLocaleString(lang === 'ar' ? 'ar' : 'en-GB')}` : label;
           return <span data-pdf-save-state={state} role="status" title={title} className={`flex min-w-0 shrink items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>
             {!warm && state !== 'saving' && <Check size={11} aria-hidden="true" className="shrink-0" />}
@@ -1006,7 +1028,7 @@ export function PdfWorkstationPanel({
           role="status"
           title={t(engineStatus.status === 'ready' ? 'stirlingEngineReady' : engineStatus.status === 'starting' ? 'stirlingEngineStarting' : engineStatus.status === 'processing' ? 'stirlingEngineProcessing' : engineStatus.status === 'error' ? 'stirlingEngineError' : 'stirlingEngineStatus')}
           aria-label={t(engineStatus.status === 'ready' ? 'stirlingEngineReady' : engineStatus.status === 'starting' ? 'stirlingEngineStarting' : engineStatus.status === 'processing' ? 'stirlingEngineProcessing' : engineStatus.status === 'error' ? 'stirlingEngineError' : 'stirlingEngineStatus')}
-          className={`inline-block size-2 shrink-0 rounded-full ${engineStatus.status === 'ready' ? 'bg-emerald-500' : engineStatus.status === 'starting' ? 'bg-amber-500 animate-pulse' : engineStatus.status === 'processing' ? 'bg-sky-500 animate-pulse' : engineStatus.status === 'error' ? 'bg-red-500' : 'bg-gray-400'}`}
+          className={`inline-block size-2 shrink-0 rounded-full ${engineStatus.status === 'ready' ? 'bg-primary' : engineStatus.status === 'starting' ? 'bg-warning animate-pulse' : engineStatus.status === 'processing' ? 'bg-primary animate-pulse' : engineStatus.status === 'error' ? 'bg-danger' : 'bg-surface'}`}
         />
 
         <div className="ms-auto flex shrink-0 items-center gap-1">
@@ -1018,10 +1040,10 @@ export function PdfWorkstationPanel({
             onClick={() => setTool(tool === 'accessibility' ? 'inspect' : 'accessibility')}
             aria-label={t('pdfA11yCheck')}
             title={t('pdfA11yCheck')}
-            className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-emerald-500 ${
+            className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-focus ${
               tool === 'accessibility'
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                : 'border-subtle bg-surface text-muted hover:text-main'
+                ? 'bg-primary text-white border-border shadow-sm'
+                : 'border-border bg-surface text-text-muted hover:text-text'
             }`}
           >
             <ShieldCheck size={14} />
@@ -1034,7 +1056,7 @@ export function PdfWorkstationPanel({
             onClick={() => setIsReflowModalOpen(true)}
             aria-label={t('pdfA11yReflowReader')}
             title={t('pdfA11yReflowReader')}
-            className="p-1.5 rounded-lg border border-subtle bg-surface text-muted hover:text-main transition-all cursor-pointer flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-emerald-500"
+            className="p-1.5 rounded-lg border border-border bg-surface text-text-muted hover:text-text transition-all cursor-pointer flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-focus"
           >
             <BookOpen size={14} />
             <span className="hidden xl:inline text-xs font-semibold">{t('pdfA11yReflowReader')}</span>
@@ -1045,7 +1067,7 @@ export function PdfWorkstationPanel({
               type="button"
               onClick={() => setQuickToolsOpen(!quickToolsOpen)}
               title={t('pdfCompactToolsBtn')}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 text-xs text-emerald-500 dark:text-emerald-400 font-semibold transition-all cursor-pointer"
+              className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 text-xs text-primary-text dark:text-primary-text font-semibold transition-all cursor-pointer"
             >
               <Cpu size={14} />
               <span className="hidden lg:inline">{t('pdfCompactToolsBtn')}</span>
@@ -1060,13 +1082,13 @@ export function PdfWorkstationPanel({
                 <div
                   className={`absolute end-0 top-full mt-2 w-72 rounded-xl border shadow-2xl p-3 space-y-3 z-50 ${
                     workstationTheme === 'dark'
-                      ? 'bg-[#14161c] border-[#262c3b] text-[#e1e4ea]'
-                      : 'bg-white border-[#e2e8f0] text-[#0f172a] shadow-xl'
+                      ? 'bg-canvas border-border text-text'
+                      : 'bg-white border-border text-text shadow-xl'
                   }`}
                   onClick={e => e.stopPropagation()}
                 >
                   <div className="relative">
-                    <Search className={`absolute inset-y-0 start-2.5 my-auto size-3.5 ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`} />
+                    <Search className={`absolute inset-y-0 start-2.5 my-auto size-3.5 ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`} />
                     <input
                       type="search"
                       placeholder={t('pdfQuickFilterPlaceholder')}
@@ -1074,9 +1096,9 @@ export function PdfWorkstationPanel({
                       onChange={e => setQuickToolsSearch(e.target.value)}
                       className={`w-full ${
                         workstationTheme === 'dark'
-                          ? 'bg-[#181a20] border-[#262a34] text-white'
-                          : 'bg-[#f1f5f9] border-[#cbd5e1] text-[#0f172a]'
-                      } border rounded-lg ps-8 pe-2 py-1 text-xs outline-none focus:border-emerald-500`}
+                          ? 'bg-canvas border-border text-white'
+                          : 'bg-canvas border-border text-text'
+                      } border rounded-lg ps-8 pe-2 py-1 text-xs outline-none focus:border-border`}
                     />
                   </div>
 
@@ -1102,12 +1124,12 @@ export function PdfWorkstationPanel({
                           }}
                           className={`w-full text-start px-2 py-1.5 rounded-lg ${
                             workstationTheme === 'dark'
-                              ? 'hover:bg-[#1e222d] text-[#a0a6b7] hover:text-white'
-                              : 'hover:bg-[#f1f5f9] text-[#475569] hover:text-[#0f172a]'
+                              ? 'hover:bg-canvas text-text hover:text-white'
+                              : 'hover:bg-canvas text-text hover:text-text'
                           } text-xs transition-all flex items-center justify-between cursor-pointer`}
                         >
                           <span>{item.name}</span>
-                          <ChevronRight size={12} className="rtl:rotate-180 text-[#686e80]" />
+                          <ChevronRight size={12} className="rtl:rotate-180 text-text" />
                         </button>
                       ))}
                   </div>
@@ -1118,7 +1140,7 @@ export function PdfWorkstationPanel({
                       setQuickToolsOpen(false);
                       setIsToolsHubOpen(true);
                     }}
-                    className="w-full py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold text-center block transition-all cursor-pointer"
+                    className="w-full py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary-text dark:text-primary-text border border-border/30 text-xs font-bold text-center block transition-all cursor-pointer"
                   >
                     {t('pdfMoreToolsLink')}
                   </button>
@@ -1128,12 +1150,12 @@ export function PdfWorkstationPanel({
           </div>
 
           <MarkupBarCompact.Provider value={headerDensity >= 2}>{markupBar}</MarkupBarCompact.Provider>
-          {headerDensity === 0 && readingActions?.onCompare && <button type="button" data-compare-open aria-label={t('compareTitle')} title={t('compareTitle')} onClick={readingActions.onCompare} className="shrink-0 rounded-lg border border-subtle bg-surface p-1.5 text-main hover:bg-canvas"><GitCompare size={14} aria-hidden="true" /></button>}
+          {headerDensity === 0 && readingActions?.onCompare && <button type="button" data-compare-open aria-label={t('compareTitle')} title={t('compareTitle')} onClick={readingActions.onCompare} className="shrink-0 rounded-lg border border-border bg-surface p-1.5 text-text hover:bg-canvas"><GitCompare size={14} aria-hidden="true" /></button>}
           {headerDensity === 0 && readingActions && (
             <>
-              <button type="button" onClick={readingActions.onReadAloud} aria-label={t('ttsReadAloud')} title={t('ttsReadAloud')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><BookOpen size={14} /></button>
-              <button type="button" onClick={readingActions.onAutoScroll} aria-pressed={readingActions.autoScrolling} aria-label={t(readingActions.autoScrolling ? 'autoScrollPause' : 'autoScrollPlay')} title={t(readingActions.autoScrolling ? 'autoScrollPause' : 'autoScrollPlay')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><ChevronDown size={14} /></button>
-              <button type="button" onClick={readingActions.onBookmark} aria-pressed={readingActions.bookmarked} aria-label={t('addBookmarkBtn')} title={t('addBookmarkBtn')} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><Bookmark size={14} fill={readingActions.bookmarked ? 'currentColor' : 'none'} /></button>
+              <button type="button" onClick={readingActions.onReadAloud} aria-label={t('ttsReadAloud')} title={t('ttsReadAloud')} className="rounded-lg border border-border p-1.5 text-text hover:bg-surface"><BookOpen size={14} /></button>
+              <button type="button" onClick={readingActions.onAutoScroll} aria-pressed={readingActions.autoScrolling} aria-label={t(readingActions.autoScrolling ? 'autoScrollPause' : 'autoScrollPlay')} title={t(readingActions.autoScrolling ? 'autoScrollPause' : 'autoScrollPlay')} className="rounded-lg border border-border p-1.5 text-text hover:bg-surface"><ChevronDown size={14} /></button>
+              <button type="button" onClick={readingActions.onBookmark} aria-pressed={readingActions.bookmarked} aria-label={t('addBookmarkBtn')} title={t('addBookmarkBtn')} className="rounded-lg border border-border p-1.5 text-text hover:bg-surface"><Bookmark size={14} fill={readingActions.bookmarked ? 'currentColor' : 'none'} /></button>
             </>
           )}
           {annotationPanel && headerDensity < 3 && <button
@@ -1143,14 +1165,14 @@ export function PdfWorkstationPanel({
             aria-label={t('annotationsDrawerTitle')}
             title={t('annotationsDrawerTitle')}
             onClick={toggleAnnotations}
-            className={`rounded-lg border border-subtle p-1.5 flex items-center gap-1 text-main hover:bg-surface ${annotationPanel.open ? 'ring-1 ring-emerald-500 bg-emerald-500/10' : ''}`}
+            className={`rounded-lg border border-border p-1.5 flex items-center gap-1 text-text hover:bg-surface ${annotationPanel.open ? 'ring-1 ring-focus bg-primary/10' : ''}`}
           ><MessageSquare size={14} />{annotationPanel.count > 0 && <span className="text-[10px] tabular-nums">{annotationPanel.count}</span>}</button>}
-          {headerDensity === 0 && fileSave && <button type="button" data-export-open aria-label={t('exportPdfMenu')} title={t('exportPdfMenu')} onClick={fileSave.onExport} className="rounded-lg border border-subtle p-1.5 text-main hover:bg-surface"><FileDown size={14} aria-hidden="true" /></button>}
+          {headerDensity === 0 && fileSave && <button type="button" data-export-open aria-label={t('exportPdfMenu')} title={t('exportPdfMenu')} onClick={fileSave.onExport} className="rounded-lg border border-border p-1.5 text-text hover:bg-surface"><FileDown size={14} aria-hidden="true" /></button>}
           {headerDensity === 0 && <><button
             type="button"
             disabled={!session || starting || job?.state === 'running'}
             onClick={() => void handleUndo()}
-            className="flex items-center gap-1 rounded-lg border border-subtle px-2.5 py-1.5 text-xs text-muted hover:text-main hover:bg-surface disabled:opacity-40 transition-all cursor-pointer"
+            className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-muted hover:text-text hover:bg-surface disabled:opacity-40 transition-all cursor-pointer"
             title={t('pdfUndo')}
           >
             <RotateCcw size={13} />
@@ -1164,7 +1186,7 @@ export function PdfWorkstationPanel({
               setIsVersionHistoryOpen(true);
               void loadVersions();
             }}
-            className="flex items-center gap-1 rounded-lg border border-subtle px-2.5 py-1.5 text-xs text-muted hover:text-main hover:bg-surface disabled:opacity-40 transition-all cursor-pointer"
+            className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-muted hover:text-text hover:bg-surface disabled:opacity-40 transition-all cursor-pointer"
             title={t('pdfVersionHistory')}
           >
             <History size={13} />
@@ -1175,7 +1197,7 @@ export function PdfWorkstationPanel({
             type="button"
             disabled={!session || starting || job?.state === 'running'}
             onClick={() => void handleQuickSave()}
-            className="flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold disabled:opacity-40 transition-all cursor-pointer"
+            className="flex items-center gap-1 rounded-lg border border-border/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 text-xs text-primary-text dark:text-primary-text font-semibold disabled:opacity-40 transition-all cursor-pointer"
             title={t('pdfSaveDocument')}
           >
             <Save size={13} />
@@ -1183,11 +1205,11 @@ export function PdfWorkstationPanel({
           </button>
 
           {headerDensity === 0 && <>
-            <button type="button" aria-pressed={immersive} title={t('zenModePurePage')} aria-label={t('zenModePurePage')} onClick={event => { event.currentTarget.blur(); setRevealedEdge(''); setImmersive(value => !value); }} className="rounded-lg p-1.5 text-main hover:bg-surface"><Maximize2 size={14} /></button>
+            <button type="button" aria-pressed={immersive} title={t('zenModePurePage')} aria-label={t('zenModePurePage')} onClick={event => { event.currentTarget.blur(); setRevealedEdge(''); setImmersive(value => !value); }} className="rounded-lg p-1.5 text-text hover:bg-surface"><Maximize2 size={14} /></button>
             {pinChrome('top')}
           </>}
           {headerDensity > 0 && <div className="relative shrink-0">
-            <button type="button" data-pdf-header-more aria-haspopup="menu" aria-expanded={headerMenuOpen} aria-label={t('pdfHeaderMore')} title={t('pdfHeaderMore')} onClick={() => setHeaderMenuOpen(open => !open)} className={`rounded-lg border border-subtle p-1.5 text-main hover:bg-surface ${headerMenuOpen ? 'bg-surface' : ''}`}><MoreHorizontal size={14} aria-hidden="true" /></button>
+            <button type="button" data-pdf-header-more aria-haspopup="menu" aria-expanded={headerMenuOpen} aria-label={t('pdfHeaderMore')} title={t('pdfHeaderMore')} onClick={() => setHeaderMenuOpen(open => !open)} className={`rounded-lg border border-border p-1.5 text-text hover:bg-surface ${headerMenuOpen ? 'bg-surface' : ''}`}><MoreHorizontal size={14} aria-hidden="true" /></button>
             {headerMenuOpen && <>
               <div className="fixed inset-0 z-40" onClick={() => setHeaderMenuOpen(false)} />
               <div
@@ -1202,7 +1224,7 @@ export function PdfWorkstationPanel({
                   const at = items.indexOf(document.activeElement as HTMLElement);
                   items[(at + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
                 }}
-                className="absolute end-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-1rem)] rounded-xl border border-subtle bg-surface p-1 text-main shadow-2xl"
+                className="absolute end-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-1rem)] rounded-xl border border-border bg-surface p-1 text-text shadow-2xl"
               >
                 {headerMenuItems.map(item => <button
                   key={item.id}
@@ -1214,30 +1236,30 @@ export function PdfWorkstationPanel({
                   onClick={() => runHeaderItem(item.id)}
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-xs hover:bg-canvas focus:bg-canvas focus:outline-none disabled:opacity-40"
                 >
-                  <span className="shrink-0 text-muted" aria-hidden="true">{item.icon}</span>
+                  <span className="shrink-0 text-text-muted" aria-hidden="true">{item.icon}</span>
                   <span className="min-w-0 flex-1 leading-snug">{item.label}</span>
-                  {item.checked && <Check size={13} aria-hidden="true" className="shrink-0 text-emerald-500" />}
+                  {item.checked && <Check size={13} aria-hidden="true" className="shrink-0 text-primary-text" />}
                 </button>)}
               </div>
             </>}
           </div>}
           {!embedded && (
-            <button type="button" aria-label={t('studyClose')} title={t('studyClose')} onClick={onClose} className="rounded-lg p-1.5 text-muted hover:text-main hover:bg-canvas"><X size={16} /></button>
+            <button type="button" aria-label={t('studyClose')} title={t('studyClose')} onClick={onClose} className="rounded-lg p-1.5 text-text-muted hover:text-text hover:bg-canvas"><X size={16} /></button>
           )}
         </div>
       </header>
       )}
-      {job?.operation === 'saved-action' && job.state === 'running' && <div role="status" data-action-progress className="flex shrink-0 items-center justify-between gap-2 border-b border-subtle bg-surface px-3 py-2 text-xs leading-relaxed text-main">
+      {job?.operation === 'saved-action' && job.state === 'running' && <div role="status" data-action-progress className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-surface px-3 py-2 text-xs leading-relaxed text-text">
         <span>{t('pdfActionStep', { step: job.actionStep ?? 1, total: job.actionSteps ?? 1 })}</span>
-        <button type="button" onClick={() => { void api().cancel(job.id); }} className="rounded border border-subtle px-2 py-1">{t('cancel')}</button>
+        <button type="button" onClick={() => { void api().cancel(job.id); }} className="rounded border border-border px-2 py-1">{t('cancel')}</button>
       </div>}
-      {job?.operation === 'saved-action' && job.state === 'failed' && <p role="alert" data-action-error className="shrink-0 border-b border-subtle bg-surface px-3 py-2 text-xs leading-relaxed text-red-600">{t('pdfActionFailed', { step: job.actionStep ?? 1 })}</p>}
+      {job?.operation === 'saved-action' && job.state === 'failed' && <p role="alert" data-action-error className="shrink-0 border-b border-border bg-surface px-3 py-2 text-xs leading-relaxed text-danger">{t('pdfActionFailed', { step: job.actionStep ?? 1 })}</p>}
 
       {fileSave?.status?.incident && <SaveIncidentBanner status={fileSave.status} onRestore={fileSave.onRestore} onKeep={fileSave.onKeep} t={t} />}
 
       {/* Floating Quick-Save / Undo Toast Feedback */}
       {(quickSaveFeedback || saveNoticeText) && (
-        <div role="status" data-save-feedback className="fixed top-14 inset-x-0 mx-auto w-fit z-50 flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xl animate-bounce">
+        <div role="status" data-save-feedback className="fixed top-14 inset-x-0 mx-auto w-fit z-50 flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-xl animate-bounce">
           <Check size={14} />
           <span>{quickSaveFeedback || saveNoticeText}</span>
         </div>
@@ -1246,9 +1268,9 @@ export function PdfWorkstationPanel({
       {/* WORKSPACE BODY: 4-ZONE WORKSTATION LAYOUT */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* ZONE 1: FAR-LEFT ACTIVITY RAIL (44px) */}
-        {!renderReaderHeader && <aside data-reader-chrome="rail" className="w-11 shrink-0 border-e border-subtle bg-canvas flex flex-col items-center py-3 space-y-2 z-10">
+        {!renderReaderHeader && <aside data-reader-chrome="rail" className="w-11 shrink-0 border-e border-border bg-canvas flex flex-col items-center py-3 space-y-2 z-10">
           {pinChrome('rail')}
-          <button type="button" title={t('pdfRailLibrary')} aria-label={t('pdfRailLibrary')} onClick={onClose} className="size-8 rounded-xl flex items-center justify-center text-main hover:bg-surface transition-all">
+          <button type="button" title={t('pdfRailLibrary')} aria-label={t('pdfRailLibrary')} onClick={onClose} className="size-8 rounded-xl flex items-center justify-center text-text hover:bg-surface transition-all">
             <BookOpen size={16} />
           </button>
           {[
@@ -1273,18 +1295,18 @@ export function PdfWorkstationPanel({
                 }}
                 className={`size-8 rounded-xl flex items-center justify-center transition-all ${
                   isActive
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                    : 'text-main hover:bg-surface'
+                    ? 'bg-primary text-white shadow-md shadow-primary/30'
+                    : 'text-text hover:bg-surface'
                 }`}
               >
                 <Icon size={16} />
               </button>
             );
           })}
-          <button type="button" title={t('pdfRailFiles')} aria-label={t('pdfRailFiles')} aria-pressed={!leftSidebarCollapsed && !collapsedChrome.includes('library')} onClick={() => { setCollapsedChrome(previous => previous.filter(zone => zone !== 'library')); setLeftSidebarCollapsed(value => !value); }} className="size-8 rounded-xl flex items-center justify-center text-main hover:bg-surface transition-all">
+          <button type="button" title={t('pdfRailFiles')} aria-label={t('pdfRailFiles')} aria-pressed={!leftSidebarCollapsed && !collapsedChrome.includes('library')} onClick={() => { setCollapsedChrome(previous => previous.filter(zone => zone !== 'library')); setLeftSidebarCollapsed(value => !value); }} className="size-8 rounded-xl flex items-center justify-center text-text hover:bg-surface transition-all">
             <Folder size={16} />
           </button>
-          <button type="button" title={t('pdfRailPipelines')} aria-label={t('pdfRailPipelines')} onClick={() => { setHubView('pipelines'); setIsToolsHubOpen(true); }} className="size-8 rounded-xl flex items-center justify-center text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 transition-all">
+          <button type="button" title={t('pdfRailPipelines')} aria-label={t('pdfRailPipelines')} onClick={() => { setHubView('pipelines'); setIsToolsHubOpen(true); }} className="size-8 rounded-xl flex items-center justify-center text-warning dark:text-warning hover:bg-warning/15 transition-all">
             <Cpu size={16} />
           </button>
           <button
@@ -1297,7 +1319,7 @@ export function PdfWorkstationPanel({
               setLeftSidebarCollapsed(false);
               requestAnimationFrame(() => pageSearch.current?.focus());
             }}
-            className="size-8 rounded-xl flex items-center justify-center text-main hover:bg-surface transition-all"
+            className="size-8 rounded-xl flex items-center justify-center text-text hover:bg-surface transition-all"
           >
             <Search size={16} />
           </button>
@@ -1312,14 +1334,14 @@ export function PdfWorkstationPanel({
             title={t(tintPdfPages ? 'pdfOriginalPageColors' : 'pdfEnableDarkPages')}
             aria-label={t(tintPdfPages ? 'pdfOriginalPageColors' : 'pdfEnableDarkPages')}
             onClick={() => setTintPdfPages(value => !value)}
-            className={`size-8 rounded-lg flex items-center justify-center hover:bg-emerald-500/20 focus-visible:outline-2 focus-visible:outline-emerald-500 ${tintPdfPages ? 'bg-emerald-500/20 text-emerald-500 ring-1 ring-inset ring-emerald-500' : 'text-main'}`}
+            className={`size-8 rounded-lg flex items-center justify-center hover:bg-primary/20 focus-visible:outline-2 focus-visible:outline-focus ${tintPdfPages ? 'bg-primary/20 text-primary-text ring-1 ring-inset ring-focus' : 'text-text'}`}
           ><Moon size={15} /></button>
           <button
             type="button"
             title={t(workstationTheme === 'dark' ? 'pdfThemeLight' : workstationTheme === 'light' ? 'pdfThemeSepia' : 'pdfThemeDark')}
             aria-label={t(workstationTheme === 'dark' ? 'pdfThemeLight' : workstationTheme === 'light' ? 'pdfThemeSepia' : 'pdfThemeDark')}
             onClick={() => setWorkstationTheme(workstationTheme === 'dark' ? 'light' : workstationTheme === 'light' ? 'sepia' : 'dark')}
-            className="size-8 rounded-xl flex items-center justify-center text-main hover:bg-surface transition-all"
+            className="size-8 rounded-xl flex items-center justify-center text-text hover:bg-surface transition-all"
           >
             {workstationTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
@@ -1329,20 +1351,20 @@ export function PdfWorkstationPanel({
         {!renderReaderHeader && !leftSidebarCollapsed && (
           <aside data-reader-chrome="library" className={`w-[250px] shrink-0 border-e ${
             workstationTheme === 'dark'
-              ? 'border-[#1f2229] bg-[#131519] text-[#e1e4ea]'
-              : 'border-[#e2e8f0] bg-white text-[#111827]'
+              ? 'border-border bg-canvas text-text'
+              : 'border-border bg-white text-text'
           } flex flex-col min-h-0 overflow-hidden hidden md:flex`}>
             {/* Header & Search */}
             {pinChrome('library')}
-            <div className={`p-3 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-2`}>
+            <div className={`p-3 border-b ${workstationTheme === 'dark' ? 'border-border' : 'border-border'} space-y-2`}>
               <div className="flex items-center justify-between">
-                <span className={`font-bold text-xs uppercase tracking-wider ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfChromeLibrary')}</span>
-                <span className="text-[10px] font-mono text-emerald-500 dark:text-emerald-400">
+                <span className={`font-bold text-xs uppercase tracking-wider ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`}>{t('pdfChromeLibrary')}</span>
+                <span className="text-[10px] font-mono text-primary-text dark:text-primary-text">
                   {t('pdfDocumentPageCount', { count: totalPages })}
                 </span>
               </div>
               <div className="relative">
-                <Search className={`absolute inset-y-0 start-2.5 my-auto size-3.5 ${workstationTheme === 'dark' ? 'text-[#686e80]' : 'text-[#94a3b8]'}`} />
+                <Search className={`absolute inset-y-0 start-2.5 my-auto size-3.5 ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`} />
                 <input
                   ref={pageSearch}
                   type="search"
@@ -1352,16 +1374,16 @@ export function PdfWorkstationPanel({
                   onChange={e => setFileFilter(e.target.value)}
                   className={`w-full ${
                     workstationTheme === 'dark'
-                      ? 'bg-[#181a20] border-[#222631] text-white placeholder-[#686e80]'
-                      : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a] placeholder-[#94a3b8]'
-                  } border rounded-lg ps-8 pe-2 py-1 text-xs outline-none focus:border-emerald-500`}
+                      ? 'bg-canvas border-border text-white placeholder-[#686e80]'
+                      : 'bg-canvas border-border text-text placeholder-[#94a3b8]'
+                  } border rounded-lg ps-8 pe-2 py-1 text-xs outline-none focus:border-border`}
                 />
               </div>
             </div>
 
             {/* RECENT PDFs with the active document as a blue pill */}
-            <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-1 text-[11px]`}>
-              <span className={`block font-bold uppercase tracking-wider text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfSidebarRecent')}</span>
+            <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-border' : 'border-border'} space-y-1 text-[11px]`}>
+              <span className={`block font-bold uppercase tracking-wider text-[10px] ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`}>{t('pdfSidebarRecent')}</span>
               {recentPdfBooks.map(book => (
                 <button
                   key={book.id}
@@ -1369,7 +1391,7 @@ export function PdfWorkstationPanel({
                   dir="auto"
                   aria-current={book.id === workId ? 'true' : undefined}
                   onClick={() => { if (book.id !== workId) openBookForReading(book); }}
-                  className={`block w-full truncate rounded-full px-2.5 py-1 text-start text-xs transition-colors ${book.id === workId ? 'bg-blue-600 font-semibold text-white' : workstationTheme === 'dark' ? 'text-[#c3c8d4] hover:bg-[#181c24]' : 'text-[#334155] hover:bg-slate-100'}`}
+                  className={`block w-full truncate rounded-full px-2.5 py-1 text-start text-xs transition-colors ${book.id === workId ? 'bg-primary font-semibold text-white' : workstationTheme === 'dark' ? 'text-text hover:bg-canvas' : 'text-text hover:bg-surface'}`}
                 >
                   {book.title}
                 </button>
@@ -1378,8 +1400,8 @@ export function PdfWorkstationPanel({
 
             {/* TYPES with document counts */}
             {pdfTypeCounts.length > 0 && (
-              <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-1`}>
-                <span className={`block font-bold uppercase tracking-wider text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfSidebarTypes')}</span>
+              <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-border' : 'border-border'} space-y-1`}>
+                <span className={`block font-bold uppercase tracking-wider text-[10px] ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`}>{t('pdfSidebarTypes')}</span>
                 <div className="flex flex-wrap gap-1">
                   {pdfTypeCounts.map(([type, count]) => (
                     <button
@@ -1387,7 +1409,7 @@ export function PdfWorkstationPanel({
                       type="button"
                       aria-pressed={typeFilter === type}
                       onClick={() => setTypeFilter(current => current === type ? null : type)}
-                      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${typeFilter === type ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : workstationTheme === 'dark' ? 'border-[#2a2f3c] text-[#c3c8d4]' : 'border-[#cbd5e1] text-[#334155]'}`}
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${typeFilter === type ? 'border-border bg-primary/15 text-primary-text dark:text-primary-text' : workstationTheme === 'dark' ? 'border-border text-text' : 'border-border text-text'}`}
                     >
                       {t(PDF_TYPE_LABELS[type] ?? 'pdfTypeOther')} <span className="tabular-nums opacity-80">{count}</span>
                     </button>
@@ -1397,16 +1419,16 @@ export function PdfWorkstationPanel({
             )}
 
             {/* FOLDERS with live Watching badge & Dynamic Watched Folders */}
-            <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-1.5 text-[11px]`}>
-              <div className={`flex items-center justify-between ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+            <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-border' : 'border-border'} space-y-1.5 text-[11px]`}>
+              <div className={`flex items-center justify-between ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`}>
                 <span className="font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
-                  <FolderInput size={11} className="text-blue-500" />
+                  <FolderInput size={11} className="text-primary-text" />
                   <span>{t('pdfWatchedFoldersTitle')}</span>
                 </span>
                 <button
                   type="button"
                   onClick={() => setIsToolsHubOpen(true)}
-                  className="text-[10px] text-blue-500 hover:underline flex items-center gap-0.5 font-semibold cursor-pointer"
+                  className="text-[10px] text-primary-text hover:underline flex items-center gap-0.5 font-semibold cursor-pointer"
                   title={t('pdfWatchedFolderAdd')}
                 >
                   <Plus size={10} />
@@ -1419,11 +1441,11 @@ export function PdfWorkstationPanel({
                   type="button"
                   onClick={() => setIsToolsHubOpen(true)}
                   className={`flex items-center justify-between p-1 rounded-md cursor-pointer transition-colors ${
-                    workstationTheme === 'dark' ? 'hover:bg-[#181c24]' : 'hover:bg-slate-100'
+                    workstationTheme === 'dark' ? 'hover:bg-canvas' : 'hover:bg-surface'
                   }`}
                 >
-                  <div className={`flex items-center gap-1.5 text-xs ${workstationTheme === 'dark' ? 'text-[#a0a6b7]' : 'text-[#475569]'}`}>
-                    <FolderInput size={13} className="text-blue-400" />
+                  <div className={`flex items-center gap-1.5 text-xs ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`}>
+                    <FolderInput size={13} className="text-primary-text" />
                     <span className="truncate">{t('pdfNoWatchedFolders')}</span>
                   </div>
                 </button>
@@ -1436,14 +1458,14 @@ export function PdfWorkstationPanel({
                       tabIndex={0}
                       onClick={() => setIsToolsHubOpen(true)}
                       className={`flex items-center justify-between p-1 rounded-md cursor-pointer transition-colors ${
-                        workstationTheme === 'dark' ? 'hover:bg-[#181c24]' : 'hover:bg-slate-100'
+                        workstationTheme === 'dark' ? 'hover:bg-canvas' : 'hover:bg-surface'
                       }`}
                     >
-                      <div className={`flex items-center gap-1.5 text-xs min-w-0 ${workstationTheme === 'dark' ? 'text-[#a0a6b7]' : 'text-[#475569]'}`}>
-                        <FolderInput size={13} className="text-blue-400 shrink-0" />
+                      <div className={`flex items-center gap-1.5 text-xs min-w-0 ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`}>
+                        <FolderInput size={13} className="text-primary-text shrink-0" />
                         <span className="truncate font-medium">{folder.name}</span>
                       </div>
-                      <span className={`flex items-center gap-1 text-[10px] font-bold shrink-0 ${folder.status === 'watching' ? 'text-emerald-600 dark:text-emerald-400' : folder.status === 'paused' ? 'text-amber-700 dark:text-amber-300' : 'text-red-600 dark:text-red-400'}`}>
+                      <span className={`flex items-center gap-1 text-[10px] font-bold shrink-0 ${folder.status === 'watching' ? 'text-primary-text dark:text-primary-text' : folder.status === 'paused' ? 'text-warning dark:text-warning' : 'text-danger dark:text-danger'}`}>
                         <span className={`size-1.5 rounded-full bg-current ${folder.status === 'watching' ? 'animate-pulse' : ''}`} />
                         {t(folder.status === 'watching' ? 'pdfWatchedFolderStatusWatching' : folder.status === 'paused' ? 'pdfWatchedFolderPaused' : 'pdfWatchedFolderError')}
                       </span>
@@ -1454,10 +1476,10 @@ export function PdfWorkstationPanel({
             </div>
 
             {/* FILES: the open document and its restorable versions */}
-            <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-[#1f2229]' : 'border-[#e2e8f0]'} space-y-1`}>
-              <span className={`block font-bold uppercase tracking-wider text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>{t('pdfSidebarFiles')}</span>
+            <div className={`px-3 py-2 border-b ${workstationTheme === 'dark' ? 'border-border' : 'border-border'} space-y-1`}>
+              <span className={`block font-bold uppercase tracking-wider text-[10px] ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`}>{t('pdfSidebarFiles')}</span>
               <div className="flex items-center gap-1.5 text-xs">
-                <FileText size={13} className="shrink-0 text-emerald-500" aria-hidden="true" />
+                <FileText size={13} className="shrink-0 text-primary-text" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate" dir="auto">{session?.filename || t('pdfSuiteTitle')}</span>
                 <button
                   type="button"
@@ -1465,7 +1487,7 @@ export function PdfWorkstationPanel({
                   aria-label={t('pdfVersionHistory')}
                   title={t('pdfVersionHistory')}
                   onClick={() => { setIsVersionHistoryOpen(true); void loadVersions(); }}
-                  className="shrink-0 rounded-md p-1 text-emerald-600 hover:bg-emerald-500/15 disabled:opacity-40 dark:text-emerald-400"
+                  className="shrink-0 rounded-md p-1 text-primary-text hover:bg-primary/15 disabled:opacity-40 dark:text-primary-text"
                 >
                   <History size={13} />
                 </button>
@@ -1473,7 +1495,7 @@ export function PdfWorkstationPanel({
             </div>
 
             {/* Zone 2 Sub-Navigation Tabs: Thumbnails | Bookmarks | Comments */}
-            <div className={`flex items-center border-b ${workstationTheme === 'dark' ? 'border-[#1f2229] bg-[#101216]' : 'border-[#e2e8f0] bg-[#f8fafc]'} text-xs font-semibold p-1 gap-1 shrink-0`}>
+            <div className={`flex items-center border-b ${workstationTheme === 'dark' ? 'border-border bg-canvas' : 'border-border bg-canvas'} text-xs font-semibold p-1 gap-1 shrink-0`}>
               {[
                 { id: 'thumbnails' as const, label: t('pdfThumbnailsTab'), icon: LayoutGrid },
                 { id: 'bookmarks' as const, label: t('pdfBookmarksTab'), icon: Bookmark },
@@ -1496,11 +1518,11 @@ export function PdfWorkstationPanel({
                     className={`${isActive ? 'flex-[2]' : 'flex-1'} min-w-0 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
                       isActive
                         ? workstationTheme === 'dark'
-                          ? 'bg-[#1e222d] text-white shadow-xs'
-                          : 'bg-white text-emerald-600 shadow-xs'
+                          ? 'bg-canvas text-white shadow-xs'
+                          : 'bg-white text-primary-text shadow-xs'
                         : workstationTheme === 'dark'
-                        ? 'text-[#8b92a5] hover:text-white'
-                        : 'text-[#64748b] hover:text-[#0f172a]'
+                        ? 'text-text hover:text-white'
+                        : 'text-text hover:text-text'
                     }`}
                   >
                     <Icon size={12} className="shrink-0" />
@@ -1536,20 +1558,20 @@ export function PdfWorkstationPanel({
                         }}
                         className={`w-full rounded-xl border p-1.5 text-center transition-all flex items-center gap-3 cursor-pointer ${
                           isCurrent
-                            ? 'border-emerald-500 bg-emerald-500/10 shadow-sm'
+                            ? 'border-border bg-primary/10 shadow-sm'
                             : workstationTheme === 'dark'
-                            ? 'border-[#222631] bg-[#171a21] hover:border-[#32384a]'
-                            : 'border-[#e2e8f0] bg-[#f8fafc] hover:border-[#cbd5e1]'
+                            ? 'border-border bg-canvas hover:border-border'
+                            : 'border-border bg-canvas hover:border-border'
                         }`}
                       >
-                        <div className={`w-14 aspect-[3/4] bg-white rounded border ${workstationTheme === 'dark' ? 'border-[#282d3b]' : 'border-[#e2e8f0]'} flex items-center justify-center overflow-hidden shrink-0`}>
-                          <PdfPageThumbnail document={pdfDocument} page={p} image={thumbUrl} alt={`${t('page')} ${p}`} fallback={<span className="text-xs font-mono text-neutral-400">{p}</span>} />
+                        <div className={`w-14 aspect-[3/4] bg-white rounded border ${workstationTheme === 'dark' ? 'border-border' : 'border-border'} flex items-center justify-center overflow-hidden shrink-0`}>
+                          <PdfPageThumbnail document={pdfDocument} page={p} image={thumbUrl} alt={`${t('page')} ${p}`} fallback={<span className="text-xs font-mono text-text-muted">{p}</span>} />
                         </div>
                         <div className="text-start min-w-0">
-                          <span className={`text-xs block font-bold ${isCurrent ? 'text-emerald-500 dark:text-emerald-400' : workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'}`}>
+                          <span className={`text-xs block font-bold ${isCurrent ? 'text-primary-text dark:text-primary-text' : workstationTheme === 'dark' ? 'text-white' : 'text-text'}`}>
                             {t('page')} {p}
                           </span>
-                          <span className={`text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} block truncate`}>
+                          <span className={`text-[10px] ${workstationTheme === 'dark' ? 'text-text' : 'text-text'} block truncate`}>
                             {isCurrent ? t('pdfActivePage') : ''}
                           </span>
                         </div>
@@ -1579,14 +1601,14 @@ export function PdfWorkstationPanel({
                           style={{ marginInlineStart: `${item.level * 12}px` }}
                           className={`w-full text-start p-2 rounded-lg border text-xs transition-all flex items-center justify-between cursor-pointer ${
                             isCurrent
-                              ? 'border-emerald-500 bg-emerald-500/10 font-bold text-emerald-500 dark:text-emerald-400'
+                              ? 'border-border bg-primary/10 font-bold text-primary-text dark:text-primary-text'
                               : workstationTheme === 'dark'
-                              ? 'border-[#222631] bg-[#171a21] hover:border-[#32384a] text-[#e1e4ea]'
-                              : 'border-[#e2e8f0] bg-[#f8fafc] hover:border-[#cbd5e1] text-[#0f172a]'
+                              ? 'border-border bg-canvas hover:border-border text-text'
+                              : 'border-border bg-canvas hover:border-border text-text'
                           }`}
                         >
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <Bookmark size={12} className="shrink-0 text-emerald-500" />
+                            <Bookmark size={12} className="shrink-0 text-primary-text" />
                             <span className="truncate">{item.title}</span>
                           </div>
                           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-subtle/20 shrink-0 ms-2">
@@ -1597,14 +1619,14 @@ export function PdfWorkstationPanel({
                     })
                 ) : (
                   <div className="text-center py-8 px-2 space-y-3">
-                    <Bookmark className="size-7 mx-auto text-muted/50" />
-                    <p className="text-xs text-muted">{t('pdfNoBookmarks')}</p>
+                    <Bookmark className="size-7 mx-auto text-text-muted/50" />
+                    <p className="text-xs text-text-muted">{t('pdfNoBookmarks')}</p>
                     <div className="space-y-1.5">
                       <button
                         type="button"
                         disabled={!session || starting || job?.state === 'running'}
                         onClick={() => void start('inspect')}
-                        className="w-full py-1.5 rounded-lg border border-subtle bg-surface hover:bg-canvas text-xs font-semibold"
+                        className="w-full py-1.5 rounded-lg border border-border bg-surface hover:bg-canvas text-xs font-semibold"
                       >
                         {t('pdfSuiteInspect')}
                       </button>
@@ -1615,7 +1637,7 @@ export function PdfWorkstationPanel({
                           setTool('edit-toc');
                           setToolDirectoryOpen(false);
                         }}
-                        className="w-full py-1.5 rounded-lg bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 text-emerald-500 dark:text-emerald-400 text-xs font-bold"
+                        className="w-full py-1.5 rounded-lg bg-primary/15 hover:bg-primary/25 border border-border/30 text-primary-text dark:text-primary-text text-xs font-bold"
                       >
                         {t('stirlingEditToc')}
                       </button>
@@ -1629,12 +1651,12 @@ export function PdfWorkstationPanel({
             {zone2Tab === 'comments' && (
               <div className="flex-1 overflow-y-auto p-3 flex flex-col space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-muted">{comments.length} {t('pdfCommentsTab')}</span>
+                  <span className="font-bold text-text-muted">{comments.length} {t('pdfCommentsTab')}</span>
                   {comments.length > 0 && (
                     <button
                       type="button"
                       onClick={() => void handleClearAllComments()}
-                      className="text-[11px] text-red-400 hover:text-red-500 underline cursor-pointer"
+                      className="text-[11px] text-danger hover:text-danger underline cursor-pointer"
                     >
                       {t('pdfClearAllComments')}
                     </button>
@@ -1642,7 +1664,7 @@ export function PdfWorkstationPanel({
                 </div>
 
                 {/* Add Comment Input */}
-                <div className={`p-2.5 rounded-xl border ${workstationTheme === 'dark' ? 'bg-[#171a21] border-[#262c3b]' : 'bg-[#f8fafc] border-[#e2e8f0]'} space-y-2`}>
+                <div className={`p-2.5 rounded-xl border ${workstationTheme === 'dark' ? 'bg-canvas border-border' : 'bg-canvas border-border'} space-y-2`}>
                   <span className="text-[11px] font-bold block">{t('pdfAddComment')} ({t('page')} {page})</span>
                   <textarea
                     dir="auto"
@@ -1651,7 +1673,7 @@ export function PdfWorkstationPanel({
                     value={newCommentText}
                     onChange={e => setNewCommentText(e.target.value)}
                     className={`w-full text-xs p-2 rounded-lg border outline-none ${
-                      workstationTheme === 'dark' ? 'bg-[#101216] border-[#282d3b] text-white' : 'bg-white border-[#cbd5e1] text-[#0f172a]'
+                      workstationTheme === 'dark' ? 'bg-canvas border-border text-white' : 'bg-white border-border text-text'
                     }`}
                   />
                   <div className="flex items-center gap-2">
@@ -1661,14 +1683,14 @@ export function PdfWorkstationPanel({
                       value={newCommentAuthor}
                       onChange={e => setNewCommentAuthor(e.target.value)}
                       className={`flex-1 text-[11px] px-2 py-1 rounded border outline-none ${
-                        workstationTheme === 'dark' ? 'bg-[#101216] border-[#282d3b] text-white' : 'bg-white border-[#cbd5e1] text-[#0f172a]'
+                        workstationTheme === 'dark' ? 'bg-canvas border-border text-white' : 'bg-white border-border text-text'
                       }`}
                     />
                     <button
                       type="button"
                       disabled={!newCommentText.trim() || !session?.id}
                       onClick={() => void handleAddComment()}
-                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold disabled:opacity-40 cursor-pointer"
+                      className="px-2.5 py-1 rounded-lg bg-primary hover:bg-primary text-white text-[11px] font-bold disabled:opacity-40 cursor-pointer"
                     >
                       <Plus size={13} className="inline me-0.5" />
                       {t('pdfAddComment')}
@@ -1678,12 +1700,12 @@ export function PdfWorkstationPanel({
 
                 {/* Comments List */}
                 {loadingComments ? (
-                  <div className="text-center py-6 text-xs text-muted">
-                    <div className="inline-block size-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-1" />
+                  <div className="text-center py-6 text-xs text-text-muted">
+                    <div className="inline-block size-4 border-2 border-border border-t-transparent rounded-full animate-spin mb-1" />
                   </div>
                 ) : comments.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-muted border border-dashed border-subtle rounded-xl p-4">
-                    <MessageSquare className="size-6 mx-auto mb-2 text-muted/50" />
+                  <div className="text-center py-8 text-xs text-text-muted border border-dashed border-border rounded-xl p-4">
+                    <MessageSquare className="size-6 mx-auto mb-2 text-text-muted/50" />
                     <p>{t('pdfNoComments')}</p>
                   </div>
                 ) : (
@@ -1693,15 +1715,15 @@ export function PdfWorkstationPanel({
                         key={c.id}
                         className={`p-2.5 rounded-xl border text-xs space-y-2 ${
                           page === c.page
-                            ? 'border-emerald-500/60 bg-emerald-500/5'
+                            ? 'border-border/60 bg-primary/5'
                             : workstationTheme === 'dark'
-                            ? 'border-[#222631] bg-[#161820]'
-                            : 'border-[#e2e8f0] bg-white'
+                            ? 'border-border bg-canvas'
+                            : 'border-border bg-white'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-[11px] text-emerald-500">{c.author || 'User'}</span>
-                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-subtle/30 text-muted">
+                          <span className="font-bold text-[11px] text-primary-text">{c.author || 'User'}</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-subtle/30 text-text-muted">
                             p. {c.page}
                           </span>
                         </div>
@@ -1709,18 +1731,18 @@ export function PdfWorkstationPanel({
 
                         {/* Replies list */}
                         {c.replies?.map(r => (
-                          <div key={r.id} className="border-s-2 border-emerald-500/40 ps-2 py-0.5 space-y-0.5">
-                            <span className="text-[10px] font-semibold text-muted block">{r.author}</span>
+                          <div key={r.id} className="border-s-2 border-border/40 ps-2 py-0.5 space-y-0.5">
+                            <span className="text-[10px] font-semibold text-text-muted block">{r.author}</span>
                             <p dir="auto" className="text-[11px]">{r.text}</p>
                           </div>
                         ))}
 
                         {/* Action Buttons */}
-                        <div className="flex items-center justify-between pt-1 border-t border-subtle/30 text-[11px]">
+                        <div className="flex items-center justify-between pt-1 border-t border-border/30 text-[11px]">
                           <button
                             type="button"
                             onClick={() => handleLocateComment(c)}
-                            className="text-emerald-500 hover:underline flex items-center gap-1 cursor-pointer"
+                            className="text-primary-text hover:underline flex items-center gap-1 cursor-pointer"
                           >
                             <ExternalLink size={11} />
                             <span>{t('pdfLocateInDocument')}</span>
@@ -1728,7 +1750,7 @@ export function PdfWorkstationPanel({
                           <button
                             type="button"
                             onClick={() => setReplyingToCommentId(replyingToCommentId === c.id ? null : c.id)}
-                            className="text-muted hover:text-main underline cursor-pointer"
+                            className="text-text-muted hover:text-text underline cursor-pointer"
                           >
                             {t('pdfCommentReply')}
                           </button>
@@ -1743,14 +1765,14 @@ export function PdfWorkstationPanel({
                               value={commentReplyText}
                               onChange={e => setCommentReplyText(e.target.value)}
                               className={`w-full text-xs p-1.5 rounded border outline-none ${
-                                workstationTheme === 'dark' ? 'bg-[#101216] border-[#282d3b] text-white' : 'bg-[#f8fafc] border-[#cbd5e1] text-[#0f172a]'
+                                workstationTheme === 'dark' ? 'bg-canvas border-border text-white' : 'bg-canvas border-border text-text'
                               }`}
                             />
                             <button
                               type="button"
                               disabled={!commentReplyText.trim()}
                               onClick={() => void handleReplyComment(c)}
-                              className="w-full py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold disabled:opacity-40 cursor-pointer"
+                              className="w-full py-1 rounded bg-primary hover:bg-primary text-white text-[11px] font-bold disabled:opacity-40 cursor-pointer"
                             >
                               <CornerDownRight size={11} className="inline me-1" />
                               {t('pdfCommentSendReply')}
@@ -1884,7 +1906,7 @@ export function PdfWorkstationPanel({
                             setSelectedImage({ xref: image.xref, originalRect: area });
                             setInlineBlock(null);
                           }}
-                          className="absolute z-10 border border-violet-500/30 hover:bg-violet-500/10"
+                          className="absolute z-10 border border-border/30 hover:bg-primary/10"
                           style={{
                             left: `${(area[0] / preview.width) * 100}%`,
                             top: `${(area[1] / preview.height) * 100}%`,
@@ -1906,7 +1928,7 @@ export function PdfWorkstationPanel({
                     onChange={event => setText(event.target.value)}
                     onPointerDown={event => event.stopPropagation()}
                     onPointerUp={event => event.stopPropagation()}
-                    className="absolute z-20 bg-white text-black border-2 border-emerald-600 leading-relaxed resize text-xs p-1"
+                    className="absolute z-20 bg-white text-black border-2 border-border leading-relaxed resize text-xs p-1"
                     style={{
                       left: `${(rect[0] / preview.width) * 100}%`,
                       top: `${(rect[1] / preview.height) * 100}%`,
@@ -1920,7 +1942,7 @@ export function PdfWorkstationPanel({
                 {/* Box drawn for a tool that places something on the page */}
                 {canvasUse === 'box' && boxPage === preview.page && (
                   <div
-                    className="absolute border-2 border-emerald-600 bg-emerald-500/15 pointer-events-none"
+                    className="absolute border-2 border-border bg-primary/15 pointer-events-none"
                     style={{
                       left: `${(rect[0] / preview.width) * 100}%`,
                       top: `${(rect[1] / preview.height) * 100}%`,
@@ -1953,7 +1975,7 @@ export function PdfWorkstationPanel({
                             Math.min(preview.height, block.y + block.height + (block.fontSize || 12)),
                           ]);
                         }}
-                        className="absolute z-10 border border-transparent hover:border-blue-500 hover:bg-blue-500/10 cursor-pointer"
+                        className="absolute z-10 border border-transparent hover:border-border hover:bg-primary/10 cursor-pointer"
                         style={{
                           left: `${(block.x / preview.width) * 100}%`,
                           top: `${(block.y / preview.height) * 100}%`,
@@ -1967,213 +1989,36 @@ export function PdfWorkstationPanel({
             )}
           </div>
 
-          {/* Floating Bottom Stepper / Pill */}
-          <div data-pdf-bottom-navigation className={`absolute bottom-4 inset-x-0 mx-auto w-fit z-30 flex items-center gap-3 px-4 py-2 rounded-2xl ${
-            workstationTheme === 'dark'
-              ? 'bg-[#14161c]/95 border-[#262c3b] text-[#e1e4ea]'
-              : 'bg-white/95 border-[#cbd5e1] text-[#0f172a] shadow-xl'
-          } border shadow-2xl backdrop-blur-md text-xs`}>
-            {/* Stepper |< < page > >| */}
-            {pinChrome('bottom')}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => {
-                  setPage(1);
-                  if (!nativeReading) void start('preview', { page: 1 });
-                  onPageChange?.(1);
-                }}
-                className={`p-1 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} disabled:opacity-30 cursor-pointer`}
-              >
-                <ChevronFirst size={15} aria-label={t('pdfNavFirst')} role="img" className="rtl:rotate-180" />
-              </button>
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => {
-                  const p = Math.max(1, page - 1);
-                  setPage(p);
-                  if (!nativeReading) void start('preview', { page: p });
-                  onPageChange?.(p);
-                }}
-                className={`p-1 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} disabled:opacity-30 cursor-pointer`}
-              >
-                <ChevronLeft size={15} aria-label={t('pdfNavPrevious')} role="img" className="rtl:rotate-180" />
-              </button>
-              <span className="font-mono font-bold px-2">
-                <input aria-label={t('page')} type="number" min={1} max={totalPages} value={page} onChange={event => {
-                  const requested = Number(event.target.value);
-                  const total = totalPages;
-                  if (!Number.isInteger(requested) || requested < 1 || requested > total) return;
-                  setPage(requested);
-                  if (!nativeReading) void start('preview', { page: requested });
-                  onPageChange?.(requested);
-                }} className="w-12 rounded border border-subtle bg-canvas px-1 py-0.5 text-center text-main" /> / {totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => {
-                  const p = Math.min(totalPages, page + 1);
-                  setPage(p);
-                  if (!nativeReading) void start('preview', { page: p });
-                  onPageChange?.(p);
-                }}
-                className={`p-1 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} disabled:opacity-30 cursor-pointer`}
-              >
-                <ChevronRight size={15} aria-label={t('pdfNavNext')} role="img" className="rtl:rotate-180" />
-              </button>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => {
-                  const p = totalPages;
-                  setPage(p);
-                  if (!nativeReading) void start('preview', { page: p });
-                  onPageChange?.(p);
-                }}
-                className={`p-1 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} disabled:opacity-30 cursor-pointer`}
-              >
-                <ChevronLast size={15} aria-label={t('pdfNavLast')} role="img" className="rtl:rotate-180" />
-              </button>
-            </div>
-
-            <div className={`h-4 border-e ${workstationTheme === 'dark' ? 'border-[#282d3b]' : 'border-[#e2e8f0]'}`} />
-
-            {/* Layout Toggle */}
-            <div className={`flex items-center gap-1 ${workstationTheme === 'dark' ? 'bg-[#181a20] border-[#262a34]' : 'bg-[#f1f5f9] border-[#cbd5e1]'} p-0.5 rounded-lg border`}>
-              <button
-                type="button"
-                onClick={() => setViewMode('single')}
-                title={t('pdfLayoutSingle')}
-                className={`p-1 rounded text-[11px] cursor-pointer ${viewMode === 'single' ? (workstationTheme === 'dark' ? 'bg-[#262a34] text-white' : 'bg-white text-[#0f172a] shadow-xs') : (workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]')}`}
-              >
-                1-p
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('double')}
-                title={t('pdfLayoutSpread')}
-                className={`p-1 rounded text-[11px] cursor-pointer ${viewMode === 'double' ? (workstationTheme === 'dark' ? 'bg-[#262a34] text-white' : 'bg-white text-[#0f172a] shadow-xs') : (workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]')}`}
-              >
-                2-p
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('scroll')}
-                title={t('pdfLayoutScroll')}
-                className={`p-1 rounded text-[11px] cursor-pointer ${viewMode === 'scroll' ? (workstationTheme === 'dark' ? 'bg-[#262a34] text-white' : 'bg-white text-[#0f172a] shadow-xs') : (workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]')}`}
-              >
-                Scroll
-              </button>
-            </div>
-
-            <div className={`h-4 border-e ${workstationTheme === 'dark' ? 'border-[#282d3b]' : 'border-[#e2e8f0]'}`} />
-
-            {/* Zoom Slider */}
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setZoom(Math.max(50, zoom - 10))}
-                className={`p-1 rounded ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} cursor-pointer`}
-              >
-                <ZoomOut size={13} />
-              </button>
-              <input
-                type="range"
-                min="50"
-                max="300"
-                step="10"
-                value={zoom}
-                onChange={e => setZoom(Number(e.target.value))}
-                className={`w-16 h-1 ${workstationTheme === 'dark' ? 'bg-[#282d3b]' : 'bg-[#cbd5e1]'} rounded-lg appearance-none cursor-pointer accent-emerald-500`}
-              />
-              <button
-                type="button"
-                onClick={() => setZoom(Math.min(300, zoom + 10))}
-                className={`p-1 rounded ${workstationTheme === 'dark' ? 'hover:bg-[#222631]' : 'hover:bg-[#f1f5f9]'} cursor-pointer`}
-              >
-                <ZoomIn size={13} />
-              </button>
-              <span className={`font-mono text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} w-9 text-end`}>{zoom}%</span>
-            </div>
-          </div>
           </div>
         </main>
 
-        {(!renderReaderHeader || readerToolsVisible || tool !== 'inspect') && <aside data-reader-chrome="tools" className={`w-[275px] shrink-0 border-s ${
-          workstationTheme === 'dark'
-            ? 'border-[#1f2229] bg-[#131519] text-[#e5e7eb]'
-            : 'border-[#e2e8f0] bg-white text-[#111827]'
-        } ${renderReaderHeader ? 'absolute end-0 top-14 bottom-0 z-40 max-w-full flex' : mode === 'organize' ? 'hidden md:flex' : 'flex'} flex-col min-h-0 overflow-y-auto p-3 space-y-3.5 text-sm`}>
-          {/* PDF Processor LIVE Header */}
-          {pinChrome('tools')}
+        {(!renderReaderHeader || readerToolsVisible || tool !== 'inspect') && <aside data-reader-chrome="tools" className={`w-[290px] shrink-0 border-s border-border bg-surface text-text ${
+          renderReaderHeader ? 'absolute end-0 top-14 bottom-0 z-40 max-w-full flex' : mode === 'organize' ? 'hidden md:flex' : 'flex'
+        } flex-col min-h-0 overflow-y-auto p-3 space-y-3.5 text-sm select-none backdrop-blur-md`}>
+          {renderReaderHeader ? <Button variant="ghost" size="sm" className="self-end" onClick={() => { setReaderToolsVisible(false); setTool('inspect'); }}>{t('close')}<X size={14} /></Button> : pinChrome('tools')}
           {annotationPanel?.open ? <div data-pdf-annotations-panel className="flex-1 min-h-0 overflow-hidden">{annotationPanel.content}</div> : <>
-          <div className={`p-3 rounded-xl ${
-            workstationTheme === 'dark'
-              ? 'bg-gradient-to-br from-[#181c25] to-[#141b18] border-[#232c3c]'
-              : 'bg-gradient-to-br from-[#f8fafc] to-[#f0fdf4] border-[#e2e8f0]'
-          } border shadow-sm space-y-1.5`}>
+          {/* PDF Processor Status Bar */}
+          <div className="p-3 rounded-xl border border-border bg-surface-raised space-y-1.5 shadow-xs">
             <div className="flex items-center justify-between">
-              <span className={`font-bold text-xs ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} flex items-center gap-1.5`}>
-                <Cpu size={14} className="text-emerald-500 dark:text-emerald-400" />
+              <span className="font-bold text-xs text-text flex items-center gap-1.5">
+                <Cpu size={14} className="text-primary-text" />
                 {t('pdfProcessorLiveTitle')}
               </span>
-              <span role="status" className={`px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider ${engineStatus.status === 'ready' || engineStatus.status === 'processing' ? `bg-emerald-500/20 ${workstationTheme === 'dark' ? 'text-emerald-300' : 'text-emerald-900'}` : `bg-amber-500/20 ${workstationTheme === 'dark' ? 'text-amber-300' : 'text-amber-900'}`}`}>
+              <span role="status" className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                engineStatus.status === 'ready' || engineStatus.status === 'processing'
+                  ? 'bg-primary/10 text-primary-text dark:text-primary-text border border-border/20'
+                  : 'bg-warning/10 text-warning dark:text-warning border border-warning/20'
+              }`}>
                 {t(engineStatus.status === 'ready' || engineStatus.status === 'processing' ? 'pdfEngineLive' : engineStatus.status === 'starting' ? 'stirlingEngineStarting' : 'pdfEngineOffline')}
               </span>
             </div>
-            <p className={`text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} font-mono`}>
+            <p className="text-[10px] text-text-muted font-mono">
               {t('pdfProcessorTelemetry', {
                 pipelines: processorTelemetry.activePipelines,
                 today: processorTelemetry.processedToday,
                 folders: processorTelemetry.watchedFolders ?? watchedFoldersList.length,
               })}
             </p>
-          </div>
-
-          {/* Collapsible POLICIES Accordion */}
-          <div className={`rounded-xl border ${
-            workstationTheme === 'dark'
-              ? 'border-[#222631] bg-[#161921]'
-              : 'border-[#e2e8f0] bg-[#f8fafc]'
-          } overflow-hidden`}>
-            <button
-              type="button"
-              onClick={() => setIsPoliciesOpen(!isPoliciesOpen)}
-              className={`w-full flex items-center justify-between p-2.5 text-start font-bold text-xs ${
-                workstationTheme === 'dark' ? 'text-white hover:bg-[#1a1e27]' : 'text-[#0f172a] hover:bg-[#f1f5f9]'
-              } transition-all cursor-pointer`}
-            >
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck size={14} className="text-emerald-500 dark:text-emerald-400" />
-                POLICIES
-              </span>
-              <ChevronDown size={14} className={`transition-transform ${isPoliciesOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {isPoliciesOpen && (
-              <div className={`p-2.5 border-t ${
-                workstationTheme === 'dark' ? 'border-[#222631] text-[#a0a6b7]' : 'border-[#e2e8f0] text-[#475569]'
-              } space-y-2 text-[11px]`}>
-                <div>
-                  <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicyIngestion')}</span>
-                  <span className="text-[10px]">{t('pdfPolicyIngestionRule1')}, {t('pdfPolicyIngestionRule2')}</span>
-                </div>
-                <div>
-                  <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicySecurity')}</span>
-                  <span className="text-[10px]">{t('pdfPolicySecurityRule1')} &amp; {t('pdfPolicySecurityRule3')}</span>
-                </div>
-                <div>
-                  <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicyCompliance')}</span>
-                  <span className="text-[10px]">{t('pdfPolicyComplianceRule2')}</span>
-                </div>
-                <div>
-                  <span className={`font-bold ${workstationTheme === 'dark' ? 'text-white' : 'text-[#0f172a]'} block`}>{t('pdfPolicyRouting')} &amp; {t('pdfPolicyRetention')}</span>
-                  <span className="text-[10px]">{t('pdfPolicyRetentionRule2')} &amp; {t('pdfPolicyRoutingRule2')}</span>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Tool Directory / Tools View */}
@@ -2183,21 +2028,29 @@ export function PdfWorkstationPanel({
               capabilities={capabilities}
               labels={featureKeys}
               disabled={!session || starting || job?.state === 'running'}
+              ocrIntegration={ocrIntegration}
+              defaultSection={directorySection}
               onSelect={(selected, selectedMode) => {
+                if (selected === 'convert-file-pdf') {
+                  setHubInitialTool('convert-file-to-pdf');
+                  setIsToolsHubOpen(true);
+                  return;
+                }
                 setTool(selected);
                 setMode(selectedMode);
                 setToolDirectoryOpen(false);
               }}
             />
           ) : (
-            <button
-              type="button"
-              className="flex items-center gap-2 text-start text-xs text-[#a0a6b7] hover:text-white"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-fit gap-1 text-xs text-text-muted hover:text-text"
               onClick={() => setToolDirectoryOpen(true)}
             >
               <ChevronLeft size={14} className="rtl:rotate-180" />
               {t('pdfDirectoryBack')}
-            </button>
+            </Button>
           )}
           {session && !toolDirectoryOpen && (
             <PdfWorkstationTools
@@ -2234,7 +2087,7 @@ export function PdfWorkstationPanel({
 
           {/* Job State & Diagnostics */}
           {(error || job?.error) && (
-            <p role="alert" className="text-xs text-red-500">
+            <p role="alert" className="text-xs text-danger">
               {t(
                 job?.error === 'text-does-not-fit'
                   ? 'pdfTextDoesNotFit'
@@ -2260,8 +2113,8 @@ export function PdfWorkstationPanel({
           )}
 
           {job?.state === 'running' && (
-            <div role="status" className="p-3 rounded-xl border border-sky-500/30 bg-sky-500/10 space-y-2">
-              <p className="text-xs text-sky-900 dark:text-sky-200">
+            <div role="status" className="p-3 rounded-xl border border-border/30 bg-primary/10 space-y-2">
+              <p className="text-xs text-primary-text dark:text-primary-text">
                 {job.operation === 'saved-action' ? t('pdfActionStep', { step: job.actionStep ?? 1, total: job.actionSteps ?? 1 }) : t('pdfSuiteProgress', { current: job.current, total: job.total })}
               </p>
               <button
@@ -2275,7 +2128,7 @@ export function PdfWorkstationPanel({
                     })
                     .catch(() => setError('storage'));
                 }}
-                className="text-xs underline text-sky-700 dark:text-sky-300"
+                className="text-xs underline text-primary-text dark:text-primary-text"
               >
                 {t('pdfSuiteCancel')}
               </button>
@@ -2284,14 +2137,14 @@ export function PdfWorkstationPanel({
 
           {/* Save Output Controls */}
           {output?.outputs && (
-            <section ref={stagedOutputs} data-pdf-staged-outputs className="space-y-3 border-t border-subtle pt-3">
-              <p className="text-xs text-muted">{t('pdfStagedHint')}</p>
+            <section ref={stagedOutputs} data-pdf-staged-outputs className="space-y-3 border-t border-border pt-3">
+              <p className="text-xs text-text-muted">{t('pdfStagedHint')}</p>
               <label className="block text-xs space-y-1">
                 <span>{t('pdfSaveMode')}</span>
                 <select
                   value={effectiveSaveMode}
                   onChange={event => setSaveMode(event.target.value as typeof saveMode)}
-                  className="block w-full rounded border border-subtle bg-canvas p-2 text-xs"
+                  className="block w-full rounded border border-border bg-canvas p-2 text-xs"
                 >
                   <option value="copy">{t('pdfSuiteSaveCopy')}</option>
                   {output.output?.format === 'pdf' && (
@@ -2310,16 +2163,16 @@ export function PdfWorkstationPanel({
                     dir="auto"
                     value={title}
                     onChange={event => setTitle(event.target.value)}
-                    className="block w-full rounded border border-subtle bg-canvas p-2 text-xs"
+                    className="block w-full rounded border border-border bg-canvas p-2 text-xs"
                   />
                 </label>
               )}
-              {effectiveSaveMode === 'overwrite' && <p className="text-xs text-muted">{t('pdfBackupWarning')}</p>}
+              {effectiveSaveMode === 'overwrite' && <p className="text-xs text-text-muted">{t('pdfBackupWarning')}</p>}
               {output.outputs.map((item, index) => (
                 <button
                   type="button"
                   key={item.filename}
-                  className="rounded-lg bg-emerald-700 text-white px-3 py-2 w-full text-xs font-semibold break-all hover:bg-emerald-800 transition-colors"
+                  className="rounded-lg bg-primary text-white px-3 py-2 w-full text-xs font-semibold break-all hover:bg-primary transition-colors"
                   disabled={starting || job?.state === 'running' || ((effectiveSaveMode === 'edition' || effectiveSaveMode === 'new-work') && !title.trim())}
                   onClick={() => {
                     void api()
@@ -2345,13 +2198,13 @@ export function PdfWorkstationPanel({
             </section>
           )}
 
-          {saved && <p role="status" className="text-xs text-emerald-600 font-bold">{t('pdfSuiteSaved')}</p>}
+          {saved && <p role="status" className="text-xs text-primary-text font-bold">{t('pdfSuiteSaved')}</p>}
 
           <button
             type="button"
             data-pdf-tools-home
             onClick={() => setIsToolsHubOpen(true)}
-            className="w-full py-2 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 text-xs font-bold transition-all text-center block mt-3"
+            className="w-full py-2 rounded-xl bg-primary/15 hover:bg-primary/25 border border-border/30 text-primary-text text-xs font-bold transition-all text-center block mt-3"
           >
             {t('pdfMoreToolsLink')}
           </button>
@@ -2363,8 +2216,9 @@ export function PdfWorkstationPanel({
       {isToolsHubOpen && (
         <StirlingToolsHub
           initialView={hubView}
+          initialToolId={hubInitialTool}
           actionsPanel={<PdfSavedActions disabled={!session || starting || job?.state === 'running'} available={capabilities.filter(item => item.available).map(item => item.feature)} labels={featureKeys} onRun={action => { setIsToolsHubOpen(false); void start('saved-action', { action }); }} />}
-          onClose={() => { setHubView('columns'); setIsToolsHubOpen(false); }}
+          onClose={() => { setHubView('columns'); setHubInitialTool(undefined); setIsToolsHubOpen(false); }}
           onOpenInWorkstation={() => {
             setIsToolsHubOpen(false);
           }}
@@ -2382,17 +2236,17 @@ export function PdfWorkstationPanel({
             dir={dir}
             className={`fixed top-0 bottom-0 end-0 z-50 w-80 sm:w-96 shadow-2xl border-s flex flex-col ${
               workstationTheme === 'dark'
-                ? 'bg-[#14161c] border-[#262c3b] text-[#e1e4ea]'
-                : 'bg-white border-[#cbd5e1] text-[#0f172a]'
+                ? 'bg-canvas border-border text-text'
+                : 'bg-white border-border text-text'
             }`}
           >
             {/* Drawer Header */}
-            <div className={`p-4 border-b ${workstationTheme === 'dark' ? 'border-[#262c3b]' : 'border-[#e2e8f0]'} flex items-center justify-between`}>
+            <div className={`p-4 border-b ${workstationTheme === 'dark' ? 'border-border' : 'border-border'} flex items-center justify-between`}>
               <div className="flex items-center gap-2">
-                <History className="size-5 text-emerald-500" />
+                <History className="size-5 text-primary-text" />
                 <div>
                   <h3 className="text-sm font-bold">{t('pdfVersionHistory')}</h3>
-                  <p className={`text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'}`}>
+                  <p className={`text-[10px] ${workstationTheme === 'dark' ? 'text-text' : 'text-text'}`}>
                     {session?.filename || 'PDF Document'}
                   </p>
                 </div>
@@ -2400,7 +2254,7 @@ export function PdfWorkstationPanel({
               <button
                 type="button"
                 onClick={() => setIsVersionHistoryOpen(false)}
-                className={`p-1.5 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-[#222631] text-[#8b92a5]' : 'hover:bg-[#f1f5f9] text-[#64748b]'} transition-colors cursor-pointer`}
+                className={`p-1.5 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-canvas text-text' : 'hover:bg-canvas text-text'} transition-colors cursor-pointer`}
               >
                 <X size={16} />
               </button>
@@ -2408,27 +2262,27 @@ export function PdfWorkstationPanel({
 
             {/* Notification Banner */}
             {versionActionMessage && (
-              <div className="mx-4 mt-3 p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">
+              <div className="mx-4 mt-3 p-2.5 rounded-xl bg-primary/15 border border-border/30 text-primary-text dark:text-primary-text text-xs font-semibold flex items-center gap-2">
                 <Check size={14} />
                 <span>{versionActionMessage}</span>
               </div>
             )}
 
-            <div className="p-4 text-[11px] text-muted">
+            <div className="p-4 text-[11px] text-text-muted">
               {t('pdfVersionHistoryDesc')}
             </div>
 
             {/* Versions List */}
             <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
               {loadingVersions ? (
-                <div className="text-center py-10 text-xs text-muted">
-                  <div className="inline-block size-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-2" />
+                <div className="text-center py-10 text-xs text-text-muted">
+                  <div className="inline-block size-5 border-2 border-border border-t-transparent rounded-full animate-spin mb-2" />
                   <p>{t('pdfVersionsLoading')}</p>
                 </div>
               ) : versions.length === 0 ? (
-                <div className="text-center py-12 px-4 rounded-xl border border-dashed border-subtle space-y-2">
-                  <History className="size-8 mx-auto text-muted/50" />
-                  <p className="text-xs text-muted">{t('pdfVersionEmpty')}</p>
+                <div className="text-center py-12 px-4 rounded-xl border border-dashed border-border space-y-2">
+                  <History className="size-8 mx-auto text-text-muted/50" />
+                  <p className="text-xs text-text-muted">{t('pdfVersionEmpty')}</p>
                 </div>
               ) : (
                 versions.map((ver, idx) => {
@@ -2440,8 +2294,8 @@ export function PdfWorkstationPanel({
                       key={ver.filename}
                       className={`p-3 rounded-xl border transition-all ${
                         workstationTheme === 'dark'
-                          ? 'bg-[#181a20] border-[#262a34] hover:border-[#383e4e]'
-                          : 'bg-[#f8fafc] border-[#cbd5e1] hover:border-[#94a3b8]'
+                          ? 'bg-canvas border-border hover:border-border'
+                          : 'bg-canvas border-border hover:border-border'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -2451,26 +2305,26 @@ export function PdfWorkstationPanel({
                               {idx === 0 ? t('pdfVersionLatest') : t('pdfVersionNumber', { number: versions.length - idx })}
                             </span>
                             {idx === 0 && (
-                              <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-500 text-[9px] font-bold">
+                              <span className="px-1.5 py-0.2 rounded-full bg-primary/20 text-primary-text text-[9px] font-bold">
                                 Current
                               </span>
                             )}
                           </div>
-                          <span className={`text-[10px] ${workstationTheme === 'dark' ? 'text-[#8b92a5]' : 'text-[#64748b]'} block font-mono mt-0.5`}>
+                          <span className={`text-[10px] ${workstationTheme === 'dark' ? 'text-text' : 'text-text'} block font-mono mt-0.5`}>
                             {ver.dateStr || new Date(ver.timestamp).toLocaleString(lang)}
                           </span>
                         </div>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-subtle/20 text-muted">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-subtle/20 text-text-muted">
                           {sizeFormatted}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-2 border-t border-subtle/40">
+                      <div className="flex items-center gap-2 pt-2 border-t border-border/40">
                         <button
                           type="button"
                           disabled={starting}
                           onClick={() => void handleRestoreVersion(ver.filename)}
-                          className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-40"
+                          className="flex-1 py-1.5 rounded-lg bg-primary hover:bg-primary text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-40"
                         >
                           <RotateCcw size={12} />
                           <span>{t('pdfVersionRestore')}</span>
@@ -2478,7 +2332,7 @@ export function PdfWorkstationPanel({
                         <button
                           type="button"
                           onClick={() => void handleDeleteVersion(ver.filename)}
-                          className={`p-1.5 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer`}
+                          className={`p-1.5 rounded-lg border border-danger/30 text-danger hover:bg-danger/10 transition-colors cursor-pointer`}
                           title={t('pdfVersionDelete')}
                         >
                           <Trash2 size={13} />

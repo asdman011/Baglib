@@ -1,3 +1,38 @@
+## KEY-314 verified — 2026-11-10, Codex continuing Antigravity
+
+Session `01a1c50c-559e-7681-8efc-aa5e1025e62e`, continuing Antigravity `509e74c2-3f90-40fe-a5b6-efb4b7157a29`. Antigravity supplied the uncommitted catalogue, grouped directory, initial OCR/header integration and bottom-bar removal. Codex continued in place, fixed keyboard access, actual text-layer detection, normalized confidence, repeated chip focus and engine/layout controls, completed shared-primitives forms and added regression coverage.
+
+The user now gets seven searchable icon-led tool sections with descriptions, result hints and disabled reasons. OCR actions/review/corrections are in OCR & text, opened by the header status chip. Both duplicate bottom bars are removed. Unique page/reading/export actions are in header overflow and the touch reveal handle is at the top. Arabic RTL/English LTR, mixed script and 480px were verified. File-to-PDF uses the existing hub form. Architecture/schema/dependencies are preserved.
+
+After power loss, checked Git and resumed existing edits. KEY-311 and KEY-304 are committed separately. Removed `.baglib-data/k314-candidate` only after detaching its node_modules junction and validating the target. Subsequent heavy verification was sequential. Focused 15/15, tsc zero errors, build pass, scoped lint zero errors and 114 warnings and diff check pass. The single final full `npm test -- --test-concurrency=2` passes 1,730/1,730 across 334 suites in 106.04 seconds, zero failures/cancellations/skips. Historical KEY-304/311 failures are superseded by this passing final run.
+
+Final native tools 24/24 with 245 PNGs, toolbar 8/8, chrome 24/24 and Save appearance 4/4 all pass. Single-page OCR ran only on the image-only Arabic PDF, with separate JSON outputs. All original real-file hashes are unchanged. Save modifies disposable copies. Ten final screenshots inspected directly, including joined Arabic APs and a narrow English saved reader. Evidence paths and exact inspected images are in `docs/agent-ops/reports/KEY-314.md`. Final tools evidence is `.baglib-data/KEY-314-evidence/2026-11-10T12-02-28-522Z/`.
+
+Remaining limitations are 114 lint warnings in the large reader/hub files, existing missing Mushaf-layout logs in fresh profiles, and no real Arabic EPUB in the corpus. EPUB regressions use the real English EPUB in both UI languages. Early duplicate-title/reload/power-interrupted harness attempts are historical, superseded by the final serial passes. Claude owns review/Jira.
+
+Exact 18 task files/hunks
+
+- `src/renderer/components/reader/FullPageBookReader.tsx`
+- `src/renderer/components/reader/PdfSavedActions.tsx`
+- `src/renderer/components/reader/PdfToolDirectory.tsx`
+- `src/renderer/components/reader/PdfWorkstationPanel.tsx`
+- `src/renderer/components/reader/PdfWorkstationTools.tsx`
+- `src/renderer/components/reader/ReaderHeader.tsx`
+- `src/renderer/components/reader/ReaderMarkupBar.tsx`
+- `src/renderer/components/reader/pdf-tool-catalogue.ts`
+- `src/renderer/components/pdf-workstation/StirlingToolsHub.tsx`
+- `tests/ui/pdf-tool-catalogue.test.ts`
+- `scripts/reader-toolbar-live/main.cjs`
+- `scripts/reader-toolbar-live/run.mjs`
+- `scripts/reader-tools-live/main.cjs`
+- `scripts/reader-tools-live/run.mjs`
+- `src/renderer/translations.ts`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `docs/features/feature - UI UX Vision Program.md`
+
+Local-only report and board updated. User explicitly authorizes one task-only attributed commit and normal push to origin/feature/library-domain through commit.lock. Implementation and verification complete. Publication pending. Stop after pushed.
+
 ## KEY-304 fix round 2 verified - 2026-11-10, Codex (continuing Antigravity)
 
 Session `codex-key304-fix2-20261110`. Continued Antigravity's uncommitted fix. Restored filtered-list Markdown/Word exports and saved-note menu labels, open-comments count/filter, boards entry and accessible workspace titles. Partial-load alerts now identify the failed source, preserve displayed notes and expose Retry. Details have localized empty-links guidance. Open questions and per-note graph remain reachable. Editor flex sizing now keeps all three panes inside a 1280 px viewport in RTL/LTR. Notes and board icon buttons display their SVG children. Editor tag placeholder uses existing i18n.

@@ -17,12 +17,13 @@ export interface ReaderHeaderProps {
   focusMode?: boolean; onFocusMode?: (focus: boolean) => void;
   visible?: boolean; onMouseEnter?: () => void; onMouseLeave?: () => void;
   markupBar?: React.ReactNode; overflowItems?: MenuItemProps[];
+  ocrChip?: React.ReactNode;
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
 }
 
 export function ReaderHeader({ title, author, format, dir, page, total, onPage, viewMode, onViewMode, zoom = 100, onZoom, onFit, onReflow,
   onClose, onPanel, panelOpen, onSearch, onTools, onSave, saveState = 'recorded', saveLabel, saveDisabled,
-  focusMode = false, onFocusMode, visible = true, onMouseEnter, onMouseLeave, markupBar, overflowItems = [], t }: ReaderHeaderProps) {
+  focusMode = false, onFocusMode, visible = true, onMouseEnter, onMouseLeave, markupBar, overflowItems = [], ocrChip, t }: ReaderHeaderProps) {
   const [hasFocus, setHasFocus] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [peek, setPeek] = useState(false);
@@ -90,7 +91,7 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
   ];
   return <>
     <Button variant="secondary" size="sm" data-reader-toolbar-toggle aria-controls={toolbarId} aria-expanded={shown} aria-keyshortcuts="Alt+M" onClick={() => setPinned(value => !value)}
-      className="fixed bottom-16 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-[60] min-h-11 max-w-[calc(100vw-2rem)] text-primary-text shadow-sm motion-reduce:transition-none">{t(pinned ? 'readerToolbarUnpin' : 'readerToolbarShow')}</Button>
+      className={`fixed ${shown ? 'top-14' : 'top-1'} start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-40 min-h-9 max-w-[calc(100vw-2rem)] text-primary-text shadow-sm motion-reduce:transition-none`}>{t(pinned ? 'readerToolbarUnpin' : 'readerToolbarShow')}</Button>
     {focusMode && <div data-reader-focus-zone className="absolute inset-x-0 top-0 z-30 h-3" onPointerEnter={() => setPeek(true)} onPointerDown={() => setPinned(true)} />}
     <header ref={headerRef} id={toolbarId} data-reader-top-bar data-reader-shared-header data-pdf-header={format === 'PDF' ? '' : undefined} role="toolbar" aria-label={t('a11yToolbarLandmark')} dir={dir}
       onFocusCapture={() => setHasFocus(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHasFocus(false); }}
@@ -102,7 +103,7 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
         <h2 className="truncate text-xs font-bold leading-relaxed" dir="auto">{title}</h2>
         {author && <p className="truncate text-[10px] text-text-muted leading-relaxed" dir="auto">{author}</p>}
       </div>
-      {onPage && <form className="flex shrink-0 items-center gap-1 text-[11px]" onSubmit={event => { event.preventDefault(); const next = Number(goTo); if (Number.isFinite(next) && next >= 1) onPage(Math.min(total ?? 1, Math.floor(next))); setGoTo(null); }}>
+      {onPage && <form className="flex shrink-0 items-center gap-1 text-[11px]" onSubmit={event => { event.preventDefault(); const val = event.currentTarget.querySelector('input')?.value ?? goTo; const next = Number(val); if (Number.isFinite(next) && next >= 1) onPage(Math.min(total ?? 1, Math.floor(next))); setGoTo(null); }}>
         <input data-reader-go-to type="number" min={1} max={total} aria-label={t('readerGoToPage')} value={goTo ?? page ?? 1} onChange={event => setGoTo(event.target.value)} onBlur={() => setGoTo(null)} className="w-11 rounded-md border border-border bg-canvas px-1 py-1.5 text-center tabular-nums focus-visible:outline-focus" />
         <span className="hidden sm:inline text-text-muted whitespace-nowrap">/ {number(total ?? 1)}</span>
       </form>}
@@ -118,7 +119,7 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
       <IconButton size="sm" label={t('readerPanelTitle')} data-reader-panel-toggle data-toggle-knowledge aria-pressed={panelOpen} onClick={onPanel} className="shrink-0"><PanelRight className="size-4 rtl:-scale-x-100" /></IconButton>
       <IconButton size="sm" label={t('searchInBook')} data-reader-search onClick={onSearch} className="shrink-0"><Search className="size-4" /></IconButton>
       <IconButton size="sm" label={t(format === 'PDF' ? 'pdfCompactToolsBtn' : 'typographySettings')} data-reader-tools onClick={onTools} className="shrink-0"><Wrench className="size-4" /></IconButton>
-      <span data-reader-ocr-status-slot className="empty:hidden" />
+      <span data-reader-ocr-status-slot className="inline-flex shrink-0 empty:hidden">{ocrChip}</span>
       <span data-pdf-save-state={saveState} role="status" title={saveLabel ?? t('readerMarksRecorded')} className="hidden min-[1100px]:inline-flex shrink-0 items-center gap-1 text-[10px] text-text-muted"><Check className="size-3" />{saveLabel ?? t('readerMarksRecorded')}</span>
       {onSave && <IconButton size="sm" label={t('pdfSaveDocument')} data-reader-save disabled={saveDisabled} onClick={onSave} className="shrink-0"><Save className="size-4" /></IconButton>}
       {onFocusMode && <IconButton size="sm" label={t('zenModePurePage')} aria-keyshortcuts="F11" aria-pressed={focusMode} data-reader-focus-toggle onClick={event => { event.currentTarget.blur(); setPinned(false); setPeek(false); onFocusMode(!focusMode); }} className="shrink-0"><Maximize2 className="size-4" /></IconButton>}

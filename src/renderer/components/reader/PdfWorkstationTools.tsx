@@ -1,5 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Bounded local data-URI thumbnails run offline in Electron; no image optimization server is available. */
+import { Button } from '../ui/Button';
+import { Tabs } from '../ui/Tabs';
 import React, { useEffect, useState } from 'react';
 import type { PdfAsset, PdfEditorAPI, PdfFeature, PdfInspection, PdfOperation, PdfSession, PdfJob } from '../../../shared/types/pdf-editor';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -104,7 +106,7 @@ export function PdfWorkstationTools({
   const [failure, setFailure] = useState(false);
 
   // New Stirling-PDF capability states
-  const [watermarkText, setWatermarkText] = useState('CONFIDENTIAL');
+  const [watermarkText, setWatermarkText] = useState(() => t('pdfWatermarkDefault'));
   const [watermarkFontSize, setWatermarkFontSize] = useState(36);
   const [watermarkOpacity, setWatermarkOpacity] = useState(0.25);
   const [watermarkRotation, setWatermarkRotation] = useState(45);
@@ -114,7 +116,7 @@ export function PdfWorkstationTools({
   const [pageNumberStyle, setPageNumberStyle] = useState('PAGE_NUMBER_ONLY');
   const [pageNumberPosition, setPageNumberPosition] = useState('BOTTOM_CENTER');
   const [pageNumberStart, setPageNumberStart] = useState(1);
-  const [activeEditSubtool, setActiveEditSubtool] = useState<'find-replace' | 'text' | 'ink' | 'image' | 'numbers' | 'forms'>(tool === 'add-image' ? 'image' : tool === 'unlock-forms' ? 'forms' : 'find-replace');
+  const [activeEditSubtool, setActiveEditSubtool] = useState<'find-replace' | 'text' | 'ink' | 'image' | 'numbers' | 'forms'>(tool === 'add-image' ? 'image' : tool === 'unlock-forms' ? 'forms' : tool === 'page-numbers' ? 'numbers' : 'find-replace');
   const [activeSecuritySubtool, setActiveSecuritySubtool] = useState<'redact' | 'sanitize' | 'watermark' | 'encrypt' | 'sign' | 'validate'>(tool === 'sanitize' || tool === 'watermark' || tool === 'encrypt' || tool === 'sign' ? tool : tool === 'verify-signatures' ? 'sign' : tool === 'validate' ? 'validate' : 'redact');
   const [redactMode, setRedactMode] = useState<'manual' | 'auto'>('manual');
   const [pendingRedactionMarks, setPendingRedactionMarks] = useState<{ id: string; page: number; rect: number[] }[]>([]);
@@ -136,20 +138,11 @@ export function PdfWorkstationTools({
   }, [canvasUse, onCanvasUse]);
 
   const api = (): PdfEditorAPI => window.electronAPI.pdfEditor;
-  const field = 'block w-full rounded-lg border border-subtle bg-canvas p-2 text-start text-sm';
+  const field = 'block w-full min-w-0 rounded-lg border border-border bg-canvas p-2 text-start text-sm leading-relaxed text-text focus-visible:outline-2 focus-visible:outline-focus';
   const button = (label: TranslationKey, action: () => void, disabled = false, primary = false) => (
-    <button
-      type="button"
-      disabled={busy || external || disabled}
-      onClick={action}
-      className={`rounded-lg border px-3 py-2 text-start text-xs font-semibold transition-colors disabled:opacity-40 ${
-        primary
-          ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
-          : 'border-subtle hover:bg-surface'
-      }`}
-    >
+    <Button size="sm" variant={primary ? 'primary' : 'secondary'} disabled={busy || external || disabled} onClick={action} className="h-auto min-h-8 text-start whitespace-normal leading-relaxed">
       {t(label)}
-    </button>
+    </Button>
   );
 
   const input = (label: TranslationKey, value: string, update: (value: string) => void, type = 'text') => (
@@ -259,8 +252,8 @@ export function PdfWorkstationTools({
         <div className="space-y-4">
 
           {inspection && (
-            <div className="rounded-xl border border-subtle p-3 space-y-2 text-xs">
-              <div className="flex justify-between text-muted">
+            <div className="rounded-xl border border-border p-3 space-y-2 text-xs">
+              <div className="flex justify-between text-text-muted">
                 <span>{t('pdfSuitePageCount', { count: inspection.totalPages })}</span>
                 <span>{inspection.signedSource ? t('pdfSignatureSigned') : t('pdfSignatureDraft')}</span>
               </div>
@@ -269,15 +262,15 @@ export function PdfWorkstationTools({
                   <summary className="font-semibold cursor-pointer py-1">{t('stirlingEditToc')}</summary>
                   <div className="max-h-48 overflow-y-auto space-y-1 mt-1 pe-1">
                     {inspection.outline.map((item, idx) => (
-                      <button
+                      <Button variant="secondary" size="sm"
                         key={idx}
                         type="button"
                         onClick={() => onPage(item.page)}
-                        className="block w-full text-start truncate py-0.5 text-muted hover:text-main"
+                        className="block w-full text-start truncate py-0.5 text-text-muted hover:text-text"
                         style={{ paddingInlineStart: `${item.level * 0.75}rem` }}
                       >
                         {item.title} ({item.page})
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </details>
@@ -290,7 +283,7 @@ export function PdfWorkstationTools({
       {/* MODE 2: ORGANIZE */}
       {effectiveMode === 'organize' && (
         <div className="space-y-4">
-          <p className="text-xs text-muted">{t('pdfPagePlanHint')}</p>
+          <p className="text-xs text-text-muted">{t('pdfPagePlanHint')}</p>
           {!onAppendPages && <>
           <div className="flex flex-wrap gap-1.5">
             {button('pdfSelectAll', () => setSelected(currentPlan.map((_, index) => index)))}
@@ -299,7 +292,7 @@ export function PdfWorkstationTools({
             {button('pdfClearSelection', () => setSelected([]))}
           </div>
 
-          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-subtle">
+          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border">
             {button('stirlingRotateLeft', () =>
               setPlan(currentPlan.map((item, index) => (selected.includes(index) || !selected.length ? { ...item, rotation: ((item.rotation || 0) + 270) % 360 } : item))),
             )}
@@ -319,7 +312,7 @@ export function PdfWorkstationTools({
           </div>
 
           {/* Page Plan Grid */}
-          <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto p-1 border border-subtle rounded-xl bg-canvas">
+          <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto p-1 border border-border rounded-xl bg-canvas">
             {currentPlan.slice(firstVisible, firstVisible + 36).map((item, offset) => {
               const index = firstVisible + offset;
               const isSel = selected.includes(index);
@@ -334,7 +327,7 @@ export function PdfWorkstationTools({
                     const from = Number(event.dataTransfer.getData('text/plain'));
                     if (Number.isInteger(from) && from >= 0 && from < currentPlan.length) reorder(from, index);
                   }}
-                  className={`rounded-lg border p-1.5 transition-all text-xs ${isSel ? 'border-emerald-600 bg-emerald-600/10' : 'border-subtle bg-surface'}`}
+                  className={`rounded-lg border p-1.5 transition-all text-xs ${isSel ? 'border-border bg-primary/10' : 'border-border bg-surface'}`}
                 >
                   <label className="flex items-center gap-1 cursor-pointer">
                     <input
@@ -353,7 +346,7 @@ export function PdfWorkstationTools({
                       style={{ transform: `rotate(${item.rotation || 0}deg)` }}
                     />
                   )}
-                  <div className="flex items-center justify-between text-[10px] text-muted">
+                  <div className="flex items-center justify-between text-[10px] text-text-muted">
                     <span>{item.blank ? t('pdfBlankPage') : `${item.page}`}</span>
                     <span className="font-mono bg-subtle/20 px-1 rounded">{item.rotation || 0}°</span>
                   </div>
@@ -408,7 +401,7 @@ export function PdfWorkstationTools({
           </div>
 
           {/* Advanced Transformations */}
-          <details className="border border-subtle rounded-xl p-3 space-y-3 text-xs">
+          <details className="border border-border rounded-xl p-3 space-y-3 text-xs">
             <summary className="font-semibold cursor-pointer">{t('stirlingMultiPageLayout')} & {t('stirlingScalePages')}</summary>
             <div className="space-y-3 pt-2">
               <div className="flex items-center gap-2">
@@ -440,33 +433,18 @@ export function PdfWorkstationTools({
       {/* MODE 3: EDIT & ANNOTATE */}
       {effectiveMode === 'edit' && (
         <div className="space-y-4">
-          <div className="flex gap-1 overflow-x-auto pb-1 border-b border-subtle">
-            {(
-              [
+          <Tabs className="max-w-full flex-wrap" activeTab={activeEditSubtool} onChange={id => setActiveEditSubtool(id as typeof activeEditSubtool)} ariaLabel={t('pdfDirectoryTitle')} tabs={([
                 ['find-replace', 'stirlingInplaceText'],
                 ['text', 'pdfAddText'],
                 ['ink', 'stirlingFreehandInk'],
                 ['image', 'stirlingInsertImage'],
                 ['numbers', 'stirlingPageNumbering'],
                 ['forms', 'stirlingUnlockForms'],
-              ] as const
-            ).map(([sub, lbl]) => (
-              <button
-                key={sub}
-                type="button"
-                onClick={() => setActiveEditSubtool(sub)}
-                className={`px-2.5 py-1 text-xs rounded-lg whitespace-nowrap font-medium transition-colors ${
-                  activeEditSubtool === sub ? 'bg-emerald-600 text-white' : 'border border-subtle hover:bg-surface'
-                }`}
-              >
-                {t(lbl)}
-              </button>
-            ))}
-          </div>
+              ] as const).map(([id, label]) => ({ id, label: t(label) }))} />
 
           {activeEditSubtool === 'find-replace' && (
-            <fieldset data-pdf-find-replace disabled={busy || external} className="min-w-0 space-y-3 rounded-lg border border-subtle p-3 text-start disabled:opacity-60">
-              <div className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 dark:text-amber-400 text-xs flex items-start gap-2">
+            <fieldset data-pdf-find-replace disabled={busy || external} className="min-w-0 space-y-3 rounded-lg border border-border p-3 text-start disabled:opacity-60">
+              <div className="p-2 rounded-lg border border-warning/30 bg-warning/10 text-warning dark:text-warning text-xs flex items-start gap-2">
                 <AlertTriangle size={15} className="shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
                   <span className="font-bold block">{t('stirlingTextEditorAlphaTitle')}</span>
@@ -474,9 +452,9 @@ export function PdfWorkstationTools({
                 </div>
               </div>
               <legend className="px-1 font-semibold leading-relaxed">{t('pdfFindReplace')}</legend>
-              <p className="text-xs text-muted leading-relaxed">{t('pdfFindReplaceHint')}</p>
+              <p className="text-xs text-text-muted leading-relaxed">{t('pdfFindReplaceHint')}</p>
               {replacements.map((replacement, index) => (
-                <div key={index} className="min-w-0 space-y-2 border-b border-subtle pb-3">
+                <div key={index} className="min-w-0 space-y-2 border-b border-border pb-3">
                   <label className="block leading-relaxed">
                     {t('pdfFindText')}
                     <input
@@ -504,9 +482,9 @@ export function PdfWorkstationTools({
                     />
                   </label>
                   {replacements.length > 1 && (
-                    <button type="button" onClick={() => setReplacements(prev => prev.filter((_, cur) => cur !== index))} className="py-1 text-start text-xs underline leading-relaxed">
+                    <Button variant="secondary" size="sm" type="button" onClick={() => setReplacements(prev => prev.filter((_, cur) => cur !== index))} className="py-1 text-start text-xs underline leading-relaxed">
                       {t('pdfRemoveReplacement')}
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}
@@ -523,7 +501,7 @@ export function PdfWorkstationTools({
 
           {activeEditSubtool === 'text' && (
             <div className="space-y-3">
-              <div className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 dark:text-amber-400 text-xs flex items-start gap-2">
+              <div className="p-2 rounded-lg border border-warning/30 bg-warning/10 text-warning dark:text-warning text-xs flex items-start gap-2">
                 <AlertTriangle size={15} className="shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
                   <span className="font-bold block">{t('stirlingTextEditorAlphaTitle')}</span>
@@ -553,7 +531,7 @@ export function PdfWorkstationTools({
 
           {activeEditSubtool === 'ink' && (
             <div className="space-y-3">
-              <p className="text-xs text-muted">{t('stirlingFreehandInk')}</p>
+              <p className="text-xs text-text-muted">{t('stirlingFreehandInk')}</p>
               <PdfColorSwatches value={inkColor} onChange={setInkColor} label={t('pdfTextColor')} />
               <PdfInkPad strokes={strokes} onChange={setStrokes} color={inkColor} />
               {button('pdfApplySignature', () => apply('edit-content', { edits: [{ kind: 'ink-signature', page, rect, strokes: strokes.filter(stroke => stroke.length >= 2), color: inkColor }] }), !strokes.some(stroke => stroke.length >= 2) || strokes.length > 100, true)}
@@ -584,7 +562,7 @@ export function PdfWorkstationTools({
 
           {activeEditSubtool === 'forms' && (
             <div className="space-y-3">
-              <p className="text-xs text-muted">{t('stirlingUnlockForms')}</p>
+              <p className="text-xs text-text-muted">{t('stirlingUnlockForms')}</p>
               {button('stirlingUnlockForms', () => apply('unlock-forms'), false, true)}
             </div>
           )}
@@ -594,67 +572,52 @@ export function PdfWorkstationTools({
       {/* MODE 4: SECURITY & REDACT */}
       {effectiveMode === 'security' && (
         <div className="space-y-4">
-          <div className="flex gap-1 overflow-x-auto pb-1 border-b border-subtle">
-            {(
-              [
+          <Tabs className="max-w-full flex-wrap" activeTab={activeSecuritySubtool} onChange={id => setActiveSecuritySubtool(id as typeof activeSecuritySubtool)} ariaLabel={t('pdfDirectoryTitle')} tabs={([
                 ['redact', 'pdfSuiteRedact'],
                 ['sanitize', 'stirlingSanitize'],
                 ['watermark', 'stirlingWatermark'],
                 ['encrypt', 'stirlingPasswordEncrypt'],
                 ['sign', 'stirlingCertSign'],
                 ['validate', 'pdfSuiteValidate'],
-              ] as const
-            ).map(([sub, lbl]) => (
-              <button
-                key={sub}
-                type="button"
-                onClick={() => setActiveSecuritySubtool(sub)}
-                className={`px-2.5 py-1 text-xs rounded-lg whitespace-nowrap font-medium transition-colors ${
-                  activeSecuritySubtool === sub ? 'bg-emerald-600 text-white' : 'border border-subtle hover:bg-surface'
-                }`}
-              >
-                {t(lbl)}
-              </button>
-            ))}
-          </div>
+              ] as const).map(([id, label]) => ({ id, label: t(label) }))} />
 
           {activeSecuritySubtool === 'redact' && (
             <div className="space-y-3.5">
               {/* Segmented Mode Selector: Manual vs Auto */}
-              <div className="flex rounded-lg border border-subtle bg-surface p-0.5 text-xs font-semibold">
-                <button
+              <div className="flex rounded-lg border border-border bg-surface p-0.5 text-xs font-semibold">
+                <Button variant="secondary" size="sm"
                   type="button"
                   onClick={() => setRedactMode('manual')}
                   className={`flex-1 py-1.5 rounded-md transition-all cursor-pointer ${
                     redactMode === 'manual'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-muted hover:text-main'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-text-muted hover:text-text'
                   }`}
                 >
                   {t('stirlingManualRedactMode')}
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary" size="sm"
                   type="button"
                   onClick={() => setRedactMode('auto')}
                   className={`flex-1 py-1.5 rounded-md transition-all cursor-pointer ${
                     redactMode === 'auto'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-muted hover:text-main'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-text-muted hover:text-text'
                   }`}
                 >
                   {t('stirlingAutoRedactMode')}
-                </button>
+                </Button>
               </div>
 
               {/* MANUAL REDACTION MODE */}
               {redactMode === 'manual' && (
                 <div className="space-y-3">
-                  <p className="text-xs text-muted leading-relaxed">
+                  <p className="text-xs text-text-muted leading-relaxed">
                     {t('pdfRedactManualHint')}
                   </p>
 
                   {/* Add Current Box Button */}
-                  <button
+                  <Button variant="secondary" size="sm"
                     type="button"
                     disabled={busy || !boxDrawn}
                     onClick={() => {
@@ -665,44 +628,44 @@ export function PdfWorkstationTools({
                       };
                       setPendingRedactionMarks(prev => [...prev, newMark]);
                     }}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-subtle hover:bg-surface text-xs font-semibold cursor-pointer"
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border hover:bg-surface text-xs font-semibold cursor-pointer"
                   >
                     <Plus size={13} />
                     <span>{t('stirlingAddCurrentBox')} ({t('page')} {page})</span>
-                  </button>
+                  </Button>
 
                   {/* Pending Marks List */}
                   {pendingRedactionMarks.length > 0 && (
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-[11px] uppercase tracking-wider text-muted">
+                        <span className="font-bold text-[11px] uppercase tracking-wider text-text-muted">
                           {t('stirlingPendingMarks')} ({pendingRedactionMarks.length})
                         </span>
-                        <button
+                        <Button variant="secondary" size="sm"
                           type="button"
                           onClick={() => setPendingRedactionMarks([])}
-                          className="text-[10px] text-red-500 hover:underline cursor-pointer"
+                          className="text-[10px] text-danger hover:underline cursor-pointer"
                         >
                           {t('stirlingClearAllMarks')}
-                        </button>
+                        </Button>
                       </div>
 
                       <div className="space-y-1 max-h-36 overflow-y-auto pe-1">
                         {pendingRedactionMarks.map((mark, idx) => (
                           <div
                             key={mark.id}
-                            className="flex items-center justify-between p-1.5 rounded-lg border border-subtle bg-canvas text-xs"
+                            className="flex items-center justify-between p-1.5 rounded-lg border border-border bg-canvas text-xs"
                           >
                             <span className="font-mono text-[11px]">
                               #{idx + 1} {t('page')} {mark.page} · [{Math.round(mark.rect[0])}, {Math.round(mark.rect[1])}, {Math.round(mark.rect[2])}, {Math.round(mark.rect[3])}]
                             </span>
-                            <button
+                            <Button variant="secondary" size="sm"
                               type="button"
                               onClick={() => setPendingRedactionMarks(prev => prev.filter(m => m.id !== mark.id))}
-                              className="text-red-500 hover:bg-red-500/10 p-1 rounded cursor-pointer"
+                              className="text-danger hover:bg-danger/10 p-1 rounded cursor-pointer"
                             >
                               <Trash2 size={12} />
-                            </button>
+                            </Button>
                           </div>
                         ))}
                       </div>
@@ -710,17 +673,17 @@ export function PdfWorkstationTools({
                   )}
 
                   {/* Rasterize PDF to PDF-Image Toggle */}
-                  <div className="rounded-xl border border-subtle bg-surface/50 p-2.5 space-y-1">
+                  <div className="rounded-xl border border-border bg-surface/50 p-2.5 space-y-1">
                     <label className="flex items-start gap-2 text-xs font-semibold cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={convertPdfToImage}
                         onChange={e => setConvertPdfToImage(e.target.checked)}
-                        className="mt-0.5 rounded accent-emerald-600 cursor-pointer"
+                        className="mt-0.5 rounded accent-primary cursor-pointer"
                       />
                       <span>{t('stirlingRasterizeRedact')}</span>
                     </label>
-                    <p className="text-[10px] text-muted leading-relaxed ps-5">
+                    <p className="text-[10px] text-text-muted leading-relaxed ps-5">
                       {t('stirlingRasterizeRedactDesc')}
                     </p>
                   </div>
@@ -749,18 +712,18 @@ export function PdfWorkstationTools({
               {/* AUTOMATIC REDACTION MODE */}
               {redactMode === 'auto' && (
                 <div className="space-y-3">
-                  <p className="text-xs text-muted leading-relaxed">{t('pdfRedactionWarning')}</p>
+                  <p className="text-xs text-text-muted leading-relaxed">{t('pdfRedactionWarning')}</p>
 
                   {/* 1-Click Regex Presets */}
                   <div className="space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted block">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted block">
                       {t('pdfRedactRegexPresets')}
                     </span>
                     <div className="grid grid-cols-2 gap-1.5">
                       {REDACTION_PRESETS.map(preset => {
                         const isSelected = pattern === preset.pattern;
                         return (
-                          <button
+                          <Button variant="secondary" size="sm"
                             key={preset.id}
                             type="button"
                             onClick={() => {
@@ -769,13 +732,13 @@ export function PdfWorkstationTools({
                             }}
                             className={`p-2 rounded-lg border text-start transition-all cursor-pointer ${
                               isSelected
-                                ? 'border-emerald-500 bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 font-bold'
-                                : 'border-subtle hover:bg-surface text-xs'
+                                ? 'border-border bg-primary/15 text-primary-text dark:text-primary-text font-bold'
+                                : 'border-border hover:bg-surface text-xs'
                             }`}
                           >
                             <span className="block text-xs font-semibold leading-tight">{t(preset.nameKey)}</span>
-                            <span className="block text-[10px] text-muted font-mono truncate">{preset.desc}</span>
-                          </button>
+                            <span className="block text-[10px] text-text-muted font-mono truncate">{preset.desc}</span>
+                          </Button>
                         );
                       })}
                     </div>
@@ -803,7 +766,7 @@ export function PdfWorkstationTools({
                         type="checkbox"
                         checked={useRegex}
                         onChange={e => setUseRegex(e.target.checked)}
-                        className="rounded accent-emerald-600 cursor-pointer"
+                        className="rounded accent-primary cursor-pointer"
                       />
                       <span>{t('pdfRedactUseRegex')}</span>
                     </label>
@@ -812,7 +775,7 @@ export function PdfWorkstationTools({
                         type="checkbox"
                         checked={wholeWordSearchAuto}
                         onChange={e => setWholeWordSearchAuto(e.target.checked)}
-                        className="rounded accent-emerald-600 cursor-pointer"
+                        className="rounded accent-primary cursor-pointer"
                       />
                       <span>{t('pdfWholeWord')}</span>
                     </label>
@@ -837,17 +800,17 @@ export function PdfWorkstationTools({
                   </div>
 
                   {/* Rasterize PDF to PDF-Image Toggle */}
-                  <div className="rounded-xl border border-subtle bg-surface/50 p-2.5 space-y-1">
+                  <div className="rounded-xl border border-border bg-surface/50 p-2.5 space-y-1">
                     <label className="flex items-start gap-2 text-xs font-semibold cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={convertPdfToImage}
                         onChange={e => setConvertPdfToImage(e.target.checked)}
-                        className="mt-0.5 rounded accent-emerald-600 cursor-pointer"
+                        className="mt-0.5 rounded accent-primary cursor-pointer"
                       />
                       <span>{t('stirlingRasterizeRedact')}</span>
                     </label>
-                    <p className="text-[10px] text-muted leading-relaxed ps-5">
+                    <p className="text-[10px] text-text-muted leading-relaxed ps-5">
                       {t('stirlingRasterizeRedactDesc')}
                     </p>
                   </div>
@@ -883,7 +846,7 @@ export function PdfWorkstationTools({
 
           {activeSecuritySubtool === 'sanitize' && (
             <div className="space-y-3">
-              <p className="text-xs text-muted">{t('stirlingSanitize')}</p>
+              <p className="text-xs text-text-muted">{t('stirlingSanitize')}</p>
               {button('stirlingSanitize', () => apply('sanitize'), false, true)}
             </div>
           )}
@@ -892,20 +855,20 @@ export function PdfWorkstationTools({
             <div className="space-y-3">
               {input('stirlingWatermarkText', watermarkText, setWatermarkText)}
               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                <span className="text-[10px] text-muted">{t('pdfDynamicVariablesLabel')}</span>
+                <span className="text-[10px] text-text-muted">{t('pdfDynamicVariablesLabel')}</span>
                 {[
                   { label: '{date}', val: '{date}' },
                   { label: '{filename}', val: '{filename}' },
                   { label: '{page}', val: '{page}' },
                 ].map(item => (
-                  <button
+                  <Button variant="secondary" size="sm"
                     key={item.label}
                     type="button"
                     onClick={() => setWatermarkText(prev => `${prev} ${item.val}`.trim())}
                     className="px-1.5 py-0.5 rounded bg-subtle/30 hover:bg-subtle/60 text-[10px] font-mono transition-colors"
                   >
                     + {item.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -914,12 +877,12 @@ export function PdfWorkstationTools({
                   <input type="number" min={10} max={120} value={watermarkFontSize} onChange={e => setWatermarkFontSize(Number(e.target.value))} className={field} />
                 </label>
                 <label className="text-xs">
-                  Rotation (°)
+                  {t('pdfToolRotation')}
                   <input type="number" min={0} max={360} value={watermarkRotation} onChange={e => setWatermarkRotation(Number(e.target.value))} className={field} />
                 </label>
               </div>
               <label className="text-xs">
-                Opacity: {watermarkOpacity}
+                {t('pdfToolOpacity')} · {watermarkOpacity}
                 <input type="range" min="0.05" max="1.0" step="0.05" value={watermarkOpacity} onChange={e => setWatermarkOpacity(Number(e.target.value))} className="w-full" />
               </label>
               {button('stirlingWatermark', () => {
@@ -934,7 +897,7 @@ export function PdfWorkstationTools({
 
           {activeSecuritySubtool === 'encrypt' && (
             <div className="space-y-3">
-              <p className="text-xs text-muted">{t('pdfPermissionsWarning')}</p>
+              <p className="text-xs text-text-muted">{t('pdfPermissionsWarning')}</p>
               {input('pdfUserPassword', user, setUser, 'password')}
               {input('pdfOwnerPassword', owner, setOwner, 'password')}
               <label className="text-xs block">
@@ -963,13 +926,13 @@ export function PdfWorkstationTools({
 
           {activeSecuritySubtool === 'sign' && (
             <div className="space-y-3">
-              <p className="text-xs text-muted">{t('pdfSignatureWarning')}</p>
+              <p className="text-xs text-text-muted">{t('pdfSignatureWarning')}</p>
               {input('pdfFieldName', fieldName, setFieldName)}
               {button('pdfChooseCertificate', () => { void choose('certificate', setCertificate); })}
               {certificate && <p dir="auto" className="text-xs font-mono">{certificate.filename}</p>}
               {input('pdfCertificatePassword', certificatePassword, setCertificatePassword, 'password')}
               {button('stirlingCertSign', () => apply('sign', { certificate: certificate!.id, certificatePassword, page, rect, fieldName }), !certificate, true)}
-              <div className="pt-2 border-t border-subtle">
+              <div className="pt-2 border-t border-border">
                 {button('pdfChooseTrustRoot', () => { void choose('trust-root', setTrustRoot); })}
                 {trustRoot && <p dir="auto" className="text-xs font-mono">{trustRoot.filename}</p>}
                 {button('pdfSuiteVerifySignatures', () => apply('verify-signatures', trustRoot ? { trustRoot: trustRoot.id } : {}))}
@@ -980,7 +943,7 @@ export function PdfWorkstationTools({
 
           {activeSecuritySubtool === 'validate' && (
             <div className="space-y-3">
-              <p className="text-xs text-muted">{t('pdfComplianceLimit')}</p>
+              <p className="text-xs text-text-muted">{t('pdfComplianceLimit')}</p>
               <label className="text-xs block">
                 {t('pdfProfile')}
                 <select value={profile} onChange={e => setProfile(e.target.value)} className={field}>
@@ -998,41 +961,42 @@ export function PdfWorkstationTools({
       {/* MODE 5: CONVERT & EXPORT */}
       {effectiveMode === 'convert' && (
         <div className="space-y-4">
-          <p className="text-xs text-muted">{t('pdfConversionLimit')}</p>
+          <p className="text-xs text-text-muted">{t('pdfConversionLimit')}</p>
           <div className="grid grid-cols-2 gap-2">
-            {button('stirlingExportDocx', () => apply('export-docx'))}
-            {button('stirlingExportPptx', () => apply('export-pptx'))}
-            {button('stirlingExportCsv', () => apply('export-csv'))}
-            {button('stirlingExportHtml', () => apply('export-html'))}
-            {button('stirlingExportMarkdown', () => apply('export-markdown'))}
-            {button('stirlingExportTxt', () => apply('export-text'))}
-            {button('stirlingCompress', () => apply('compress', { optimizeLevel }))}
-            {button('stirlingExtractImages', () => apply('extract-images'))}
+            {button('pdfSuiteXlsx', () => apply('export-xlsx'), false, tool === 'export-xlsx')}
+            {button('stirlingExportDocx', () => apply('export-docx'), false, tool === 'export-docx')}
+            {button('stirlingExportPptx', () => apply('export-pptx'), false, tool === 'export-pptx')}
+            {button('stirlingExportCsv', () => apply('export-csv'), false, tool === 'export-csv')}
+            {button('stirlingExportHtml', () => apply('export-html'), false, tool === 'export-html')}
+            {button('stirlingExportMarkdown', () => apply('export-markdown'), false, tool === 'export-markdown')}
+            {button('stirlingExportTxt', () => apply('export-text'), false, tool === 'export-text')}
+            {button('stirlingCompress', () => apply('compress', { optimizeLevel }), false, tool === 'compress')}
+            {button('stirlingExtractImages', () => apply('extract-images'), false, tool === 'extract-images')}
           </div>
 
-          <div className="p-3 rounded-xl border border-subtle bg-surface space-y-2">
+          <div className="p-3 rounded-xl border border-border bg-surface space-y-2">
             <span className="text-xs font-semibold block">{t('stirlingCompress')}</span>
             <div className="flex gap-2">
               {[1, 2, 3].map(lvl => (
-                <button
+                <Button variant="secondary" size="sm"
                   key={lvl}
                   type="button"
                   onClick={() => setOptimizeLevel(lvl)}
-                  className={`flex-1 py-1 text-xs rounded border ${optimizeLevel === lvl ? 'border-emerald-600 bg-emerald-600/10 text-emerald-600' : 'border-subtle'}`}
+                  className={`flex-1 py-1 text-xs rounded border ${optimizeLevel === lvl ? 'border-border bg-primary/10 text-primary-text' : 'border-border'}`}
                 >
-                  Level {lvl}
-                </button>
+                  {t('pdfToolLevel', { level: lvl })}
+                </Button>
               ))}
             </div>
           </div>
 
-          <div className="space-y-3 pt-2 border-t border-subtle">
-            {button('pdfRunOcr', () => apply('ocr', { languages: 'ara+eng' }), false, true)}
+          <div className="space-y-3 pt-2 border-t border-border">
+            {tool === 'ocr' && button('pdfRunOcr', () => apply('ocr', { languages: 'ara+eng' }), false, true)}
           </div>
         </div>
       )}
 
-      {failure && <p role="alert" className="text-xs text-red-500">{t('pdfSuiteFailure')}</p>}
+      {failure && <p role="alert" className="text-xs text-danger">{t('pdfSuiteFailure')}</p>}
     </section>
   );
 }
