@@ -453,3 +453,213 @@ export function filterAndSortBooks(
     return sort.direction === 'asc' ? comparison : -comparison;
   });
 }
+
+export interface ActiveFilterChipItem {
+  id: string;
+  type:
+    | 'search'
+    | 'topic'
+    | 'author'
+    | 'status'
+    | 'type'
+    | 'format'
+    | 'storage'
+    | 'location'
+    | 'lending'
+    | 'category'
+    | 'tag';
+  label: string;
+  onClear: Partial<LibraryFilterState>;
+}
+
+/**
+ * Counts the number of active advanced filters (excluding the basic search query).
+ * Used for the badge on the "Advanced filters" button (KEY-310).
+ */
+export function countActiveAdvancedFilters(filters: LibraryFilterState): number {
+  let count = 0;
+  if (filters.selectedTopics && filters.selectedTopics.length > 0) {
+    count += filters.selectedTopics.length;
+  }
+  if (filters.selectedAuthors && filters.selectedAuthors.length > 0) {
+    count += filters.selectedAuthors.length;
+  }
+  if (filters.selectedReadingStatus && filters.selectedReadingStatus !== 'ALL') {
+    count++;
+  }
+  if (filters.selectedBookType && filters.selectedBookType !== 'ALL') {
+    count++;
+  }
+  if (filters.selectedFormat && filters.selectedFormat !== 'ALL') {
+    count++;
+  }
+  if (filters.selectedStorageFilter && filters.selectedStorageFilter !== 'ALL') {
+    count++;
+  }
+  if (filters.selectedLocation && filters.selectedLocation !== 'ALL') {
+    count++;
+  }
+  if (filters.lendingStatus && filters.lendingStatus !== 'ALL') {
+    count++;
+  }
+  if (filters.activeLibraryCategory && filters.activeLibraryCategory !== 'ALL') {
+    count++;
+  }
+  if (filters.selectedTag && filters.selectedTag !== 'ALL') {
+    count++;
+  }
+  return count;
+}
+
+/**
+ * Builds the list of active filter chips to display directly below the search bar (KEY-310).
+ */
+export function getActiveFilterChipsList(
+  filters: LibraryFilterState,
+  options?: {
+    topicNameResolver?: (topicId: string) => string;
+    labels?: {
+      physical?: string;
+      digital?: string;
+      hybrid?: string;
+      readingStatusPrefix?: string;
+      locationPrefix?: string;
+      lendingPrefix?: string;
+      storagePrefix?: string;
+      statusUnread?: string;
+      statusReading?: string;
+      statusCompleted?: string;
+    };
+  }
+): ActiveFilterChipItem[] {
+  const chips: ActiveFilterChipItem[] = [];
+
+  // 1. Search Query
+  if (filters.searchQuery && filters.searchQuery.trim()) {
+    chips.push({
+      id: 'search',
+      type: 'search',
+      label: `"${filters.searchQuery.trim()}"`,
+      onClear: { searchQuery: '' },
+    });
+  }
+
+  // 2. Selected Topics
+  if (Array.isArray(filters.selectedTopics)) {
+    for (const topicId of filters.selectedTopics) {
+      const label = options?.topicNameResolver ? options.topicNameResolver(topicId) : topicId;
+      chips.push({
+        id: `topic-${topicId}`,
+        type: 'topic',
+        label,
+        onClear: {
+          selectedTopics: filters.selectedTopics.filter((id) => id !== topicId),
+        },
+      });
+    }
+  }
+
+  // 3. Selected Authors
+  if (Array.isArray(filters.selectedAuthors)) {
+    for (const author of filters.selectedAuthors) {
+      chips.push({
+        id: `author-${author}`,
+        type: 'author',
+        label: author,
+        onClear: {
+          selectedAuthors: filters.selectedAuthors.filter((a) => a !== author),
+        },
+      });
+    }
+  }
+
+  // 4. Reading Status
+  if (filters.selectedReadingStatus && filters.selectedReadingStatus !== 'ALL') {
+    const status = filters.selectedReadingStatus;
+    let label = status;
+    if (status === 'unread' && options?.labels?.statusUnread) label = options.labels.statusUnread;
+    else if (status === 'reading' && options?.labels?.statusReading) label = options.labels.statusReading;
+    else if (status === 'completed' && options?.labels?.statusCompleted) label = options.labels.statusCompleted;
+
+    const prefix = options?.labels?.readingStatusPrefix ? `${options.labels.readingStatusPrefix}: ` : '';
+    chips.push({
+      id: 'status',
+      type: 'status',
+      label: `${prefix}${label}`,
+      onClear: { selectedReadingStatus: 'ALL' },
+    });
+  }
+
+  // 5. Book / Material Type
+  if (filters.selectedBookType && filters.selectedBookType !== 'ALL') {
+    let typeLabel = filters.selectedBookType;
+    if (filters.selectedBookType === 'physical' && options?.labels?.physical) {
+      typeLabel = options.labels.physical;
+    } else if (filters.selectedBookType === 'digital' && options?.labels?.digital) {
+      typeLabel = options.labels.digital;
+    } else if (filters.selectedBookType === 'hybrid' && options?.labels?.hybrid) {
+      typeLabel = options.labels.hybrid;
+    }
+    chips.push({
+      id: 'bookType',
+      type: 'type',
+      label: typeLabel,
+      onClear: { selectedBookType: 'ALL' },
+    });
+  }
+
+  // 6. Format
+  if (filters.selectedFormat && filters.selectedFormat !== 'ALL') {
+    chips.push({
+      id: 'format',
+      type: 'format',
+      label: filters.selectedFormat,
+      onClear: { selectedFormat: 'ALL' },
+    });
+  }
+
+  // 7. Storage Filter
+  if (filters.selectedStorageFilter && filters.selectedStorageFilter !== 'ALL') {
+    const prefix = options?.labels?.storagePrefix ? `${options.labels.storagePrefix}: ` : '';
+    chips.push({
+      id: 'storage',
+      type: 'storage',
+      label: `${prefix}${filters.selectedStorageFilter}`,
+      onClear: { selectedStorageFilter: 'ALL' },
+    });
+  }
+
+  // 8. Physical Location
+  if (filters.selectedLocation && filters.selectedLocation !== 'ALL') {
+    const prefix = options?.labels?.locationPrefix ? `${options.labels.locationPrefix}: ` : '';
+    chips.push({
+      id: 'location',
+      type: 'location',
+      label: `${prefix}${filters.selectedLocation}`,
+      onClear: { selectedLocation: 'ALL' },
+    });
+  }
+
+  // 9. Lending Status
+  if (filters.lendingStatus && filters.lendingStatus !== 'ALL') {
+    const prefix = options?.labels?.lendingPrefix ? `${options.labels.lendingPrefix}: ` : '';
+    chips.push({
+      id: 'lending',
+      type: 'lending',
+      label: `${prefix}${filters.lendingStatus}`,
+      onClear: { lendingStatus: 'ALL' },
+    });
+  }
+
+  // 10. Tag
+  if (filters.selectedTag && filters.selectedTag !== 'ALL') {
+    chips.push({
+      id: 'tag',
+      type: 'tag',
+      label: filters.selectedTag,
+      onClear: { selectedTag: 'ALL' },
+    });
+  }
+
+  return chips;
+}

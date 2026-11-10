@@ -32,6 +32,8 @@ export interface WorkspaceState {
   isSearchHubOpen: boolean;
   isZenMode: boolean;
   isSidebarCollapsed: boolean;
+  isNavPinned: boolean;
+  isNavPeekOpen: boolean;
   
   // Real Books Library State
   books: BookItem[];
@@ -61,6 +63,14 @@ interface WorkspaceContextType extends WorkspaceState {
   toggleLanguage: () => void;
   toggleZenMode: () => void;
   toggleSidebar: () => void;
+  toggleNavPinned: () => void;
+  setNavPinned: (pinned: boolean) => void;
+  isNavPeekOpen: boolean;
+  setIsNavPeekOpen: (open: boolean) => void;
+  openNavPeek: () => void;
+  closeNavPeek: () => void;
+  scheduleCloseNavPeek: () => void;
+  cancelCloseNavPeek: () => void;
   isMobileNavOpen?: boolean;
   setIsMobileNavOpen: (open: boolean) => void;
   toggleMobileNav: () => void;
@@ -135,6 +145,100 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
   const [isZenMode, setIsZenMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Pin-or-Peek side navigation state (KEY-310)
+  const [isNavPinned, setIsNavPinnedState] = useState<boolean>(true);
+  const [isNavPeekOpen, setIsNavPeekOpen] = useState<boolean>(false);
+  const peekCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    void Promise.resolve().then(async () => {
+      try {
+        if (window.electronAPI?.settings?.get) {
+          const savedPinned = await window.electronAPI.settings.get('shell.navPinned.v1');
+          if (typeof savedPinned === 'boolean') {
+            setIsNavPinnedState(savedPinned);
+            return;
+          }
+        }
+        const local = localStorage.getItem('shell.navPinned.v1');
+        if (local !== null) {
+          setIsNavPinnedState(local === 'true');
+        }
+      } catch {}
+    });
+  }, []);
+
+  const cancelCloseNavPeek = React.useCallback(() => {
+    if (peekCloseTimerRef.current) {
+      clearTimeout(peekCloseTimerRef.current);
+      peekCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const setNavPinned = React.useCallback((pinned: boolean) => {
+    cancelCloseNavPeek();
+    setIsNavPinnedState(pinned);
+    setIsNavPeekOpen(false);
+    try {
+      if (window.electronAPI?.settings?.set) {
+        void window.electronAPI.settings.set('shell.navPinned.v1', pinned);
+      }
+      localStorage.setItem('shell.navPinned.v1', String(pinned));
+    } catch {}
+  }, [cancelCloseNavPeek]);
+
+  const toggleNavPinned = React.useCallback(() => {
+    cancelCloseNavPeek();
+    setIsNavPinnedState((prev) => {
+      const next = !prev;
+      setIsNavPeekOpen(false);
+      try {
+        if (window.electronAPI?.settings?.set) {
+          void window.electronAPI.settings.set('shell.navPinned.v1', next);
+        }
+        localStorage.setItem('shell.navPinned.v1', String(next));
+      } catch {}
+      return next;
+    });
+  }, [cancelCloseNavPeek]);
+
+  const openNavPeek = React.useCallback(() => {
+    cancelCloseNavPeek();
+    if (!isNavPinned) {
+      setIsNavPeekOpen(true);
+    }
+  }, [cancelCloseNavPeek, isNavPinned]);
+
+  const closeNavPeek = React.useCallback(() => {
+    cancelCloseNavPeek();
+    setIsNavPeekOpen(false);
+  }, [cancelCloseNavPeek]);
+
+  const scheduleCloseNavPeek = React.useCallback(() => {
+    cancelCloseNavPeek();
+    peekCloseTimerRef.current = setTimeout(() => {
+      setIsNavPeekOpen(false);
+      peekCloseTimerRef.current = null;
+    }, 300);
+  }, [cancelCloseNavPeek]);
+
+  useEffect(() => {
+    const handleNavKey = (e: KeyboardEvent) => {
+      // Ctrl+B / Cmd+B toggles pinned
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'b' || e.key === 'B' || e.key === 'لا')) {
+        e.preventDefault();
+        toggleNavPinned();
+        return;
+      }
+      // Esc closes peek if open and unpinned
+      if (e.key === 'Escape' && isNavPeekOpen && !isNavPinned) {
+        e.preventDefault();
+        closeNavPeek();
+      }
+    };
+    window.addEventListener('keydown', handleNavKey);
+    return () => window.removeEventListener('keydown', handleNavKey);
+  }, [toggleNavPinned, isNavPeekOpen, isNavPinned, closeNavPeek]);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSupportSheetOpen, setIsSupportSheetOpen] = useState(false);
   const toggleMobileNav = () => setIsMobileNavOpen((prev) => !prev);
@@ -234,6 +338,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     }
   };
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      void refreshBooks();
+    };
+    window.addEventListener('baglib:refresh-books', handleRefresh);
+    return () => window.removeEventListener('baglib:refresh-books', handleRefresh);
+  }, []);
 
   // Refresh category tree with direct and recursive counts
   const refreshCategoryTree = async () => {
@@ -581,6 +693,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isCommandPaletteOpen,
         isZenMode,
         isSidebarCollapsed,
+        isNavPinned,
+        isNavPeekOpen,
+        toggleNavPinned,
+        setNavPinned,
+        setIsNavPeekOpen,
+        openNavPeek,
+        closeNavPeek,
+        scheduleCloseNavPeek,
+        cancelCloseNavPeek,
         isMobileNavOpen,
         setIsMobileNavOpen,
         toggleMobileNav,

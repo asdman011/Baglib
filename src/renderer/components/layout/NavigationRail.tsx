@@ -5,18 +5,29 @@ import {
   ChevronRight,
   ChevronLeft,
   BookOpen,
+  Pin,
+  X,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { NAV_GROUPS, NAV_ITEMS, NAV_SECTIONS } from './nav-model';
 import { NewObjectMenu } from './NewObjectMenu';
 
-export const NavigationRail: React.FC = () => {
+export interface NavigationRailProps {
+  isOverlay?: boolean;
+  onCloseOverlay?: () => void;
+}
+
+export const NavigationRail: React.FC<NavigationRailProps> = ({
+  isOverlay = false,
+  onCloseOverlay,
+}) => {
   const {
     viewMode,
     setViewMode,
     isSidebarCollapsed,
     toggleSidebar,
+    toggleNavPinned,
     setSearchHubOpen,
     setIsSupportSheetOpen,
     activeBook,
@@ -42,6 +53,10 @@ export const NavigationRail: React.FC = () => {
       setIsSupportSheetOpen(true);
     } else if (item.viewMode) {
       setViewMode(item.viewMode);
+    }
+
+    if (isOverlay && onCloseOverlay) {
+      onCloseOverlay();
     }
   };
 
@@ -107,22 +122,34 @@ export const NavigationRail: React.FC = () => {
   return (
     <aside
       aria-label={t('navGlobal')}
-      className={`hidden md:flex h-full min-h-0 bg-surface border-e border-subtle flex-col transition-[width] duration-200 motion-reduce:transition-none z-30 shrink-0 select-none ${
-        isSidebarCollapsed ? 'w-14 sm:w-16' : 'w-14 sm:w-16 lg:w-56'
+      data-nav-rail-overlay={isOverlay ? 'true' : undefined}
+      className={`${
+        isOverlay
+          ? 'flex h-full w-56 bg-surface border-e border-subtle flex-col shadow-2xl select-none z-50'
+          : `hidden md:flex h-full min-h-0 bg-surface border-e border-subtle flex-col transition-[width] duration-200 motion-reduce:transition-none z-30 shrink-0 select-none ${
+              isSidebarCollapsed ? 'w-14 sm:w-16' : 'w-14 sm:w-16 lg:w-56'
+            }`
       }`}
     >
-      {/* Brand & Rail Collapse Header */}
+      {/* Brand & Rail Collapse / Pin Header */}
       <div className="p-2 shrink-0 border-b border-subtle/60 flex items-center justify-between gap-2">
-        {!isSidebarCollapsed ? (
-          <button
-            type="button"
-            onClick={() => setViewMode('dashboard')}
-            title={t('navDashboard')}
-            className="hidden lg:flex items-center gap-2 px-1 py-1 rounded-lg text-start focus-visible:outline-2 focus-visible:outline-focus min-w-0 flex-1"
-          >
-            <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text shrink-0">
-              <BookOpen className="w-4 h-4" />
-            </div>
+        <button
+          type="button"
+          onClick={() => {
+            setViewMode('dashboard');
+            if (isOverlay && onCloseOverlay) onCloseOverlay();
+          }}
+          title={t('navDashboard')}
+          className={`${
+            isOverlay || !isSidebarCollapsed
+              ? 'flex items-center gap-2 px-1 py-1 rounded-lg text-start focus-visible:outline-2 focus-visible:outline-focus min-w-0 flex-1'
+              : 'w-8 h-8 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text mx-auto shrink-0 focus-visible:outline-2 focus-visible:outline-focus'
+          }`}
+        >
+          <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text shrink-0">
+            <BookOpen className="w-4 h-4" />
+          </div>
+          {(isOverlay || !isSidebarCollapsed) && (
             <div className="min-w-0">
               <span className="font-display text-sm font-bold text-main tracking-wide block truncate leading-tight">
                 {t('brand')}
@@ -131,46 +158,64 @@ export const NavigationRail: React.FC = () => {
                 {t('brandSubtitle')}
               </span>
             </div>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setViewMode('dashboard')}
-            title={t('navDashboard')}
-            className="w-8 h-8 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text mx-auto shrink-0 focus-visible:outline-2 focus-visible:outline-focus"
-          >
-            <BookOpen className="w-4 h-4" />
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          aria-label={isSidebarCollapsed ? t('expandMenu') : t('collapseMenu')}
-          aria-expanded={!isSidebarCollapsed}
-          aria-controls="workspace-navigation"
-          title={isSidebarCollapsed ? t('expandMenu') : t('collapseMenu')}
-          className={`p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer shrink-0 ${
-            isSidebarCollapsed ? 'hidden' : 'hidden lg:flex'
-          }`}
-        >
-          {isSidebarCollapsed ? (
-            <ChevronRight className="w-4 h-4 rtl:rotate-180" />
-          ) : (
-            <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
           )}
         </button>
 
-        {isSidebarCollapsed && (
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            aria-label={t('expandMenu')}
-            title={t('expandMenu')}
-            className="p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer mx-auto mt-1"
-          >
-            <ChevronRight className="w-4 h-4 rtl:rotate-180" />
-          </button>
+        {isOverlay ? (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={toggleNavPinned}
+              title={t('navPinSidebar')}
+              aria-label={t('navPinSidebar')}
+              className="p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-primary-text transition-all cursor-pointer"
+            >
+              <Pin className="w-3.5 h-3.5" />
+            </button>
+            {onCloseOverlay && (
+              <button
+                type="button"
+                onClick={onCloseOverlay}
+                title={t('close')}
+                aria-label={t('close')}
+                className="p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label={isSidebarCollapsed ? t('expandMenu') : t('collapseMenu')}
+              aria-expanded={!isSidebarCollapsed}
+              aria-controls="workspace-navigation"
+              title={isSidebarCollapsed ? t('expandMenu') : t('collapseMenu')}
+              className={`p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer shrink-0 ${
+                isSidebarCollapsed ? 'hidden' : 'hidden lg:flex'
+              }`}
+            >
+              {isSidebarCollapsed ? (
+                <ChevronRight className="w-4 h-4 rtl:rotate-180" />
+              ) : (
+                <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
+              )}
+            </button>
+
+            {isSidebarCollapsed && (
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                aria-label={t('expandMenu')}
+                title={t('expandMenu')}
+                className="p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer mx-auto mt-1"
+              >
+                <ChevronRight className="w-4 h-4 rtl:rotate-180" />
+              </button>
+            )}
+          </>
         )}
       </div>
 

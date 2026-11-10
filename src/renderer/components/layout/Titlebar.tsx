@@ -40,6 +40,10 @@ export const Titlebar: React.FC = () => {
     activeBook,
     activeLibraryCategory,
     toggleMobileNav,
+    isNavPinned,
+    toggleNavPinned,
+    openNavPeek,
+    scheduleCloseNavPeek,
     t,
   } = useWorkspace();
 
@@ -67,6 +71,35 @@ export const Titlebar: React.FC = () => {
           aria-label={t('mobileNavOpen')}
           title={t('mobileNavOpen')}
           className="md:hidden p-1.5 rounded-lg text-muted hover:text-main hover:bg-canvas transition-colors focus-visible:outline-2 focus-visible:outline-focus cursor-pointer shrink-0"
+        >
+          <MenuIcon className="w-4 h-4" />
+        </button>
+
+        {/* Desktop Pin-or-Peek Menu Button (KEY-310) */}
+        <button
+          type="button"
+          onClick={toggleNavPinned}
+          onMouseEnter={() => {
+            if (!isNavPinned) openNavPeek();
+          }}
+          onMouseLeave={() => {
+            if (!isNavPinned) scheduleCloseNavPeek();
+          }}
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && !isNavPinned) {
+              e.preventDefault();
+              openNavPeek();
+            }
+          }}
+          aria-label={isNavPinned ? t('navUnpinSidebar') : t('navPinSidebar')}
+          aria-pressed={isNavPinned}
+          title={isNavPinned ? `${t('navUnpinSidebar')} (Ctrl+B)` : `${t('navPinSidebar')} (Ctrl+B)`}
+          data-nav-menu-button
+          className={`hidden md:flex p-1.5 rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-focus cursor-pointer shrink-0 ${
+            isNavPinned
+              ? 'text-primary-text bg-primary/10 hover:bg-primary/20'
+              : 'text-muted hover:text-main hover:bg-canvas'
+          }`}
         >
           <MenuIcon className="w-4 h-4" />
         </button>

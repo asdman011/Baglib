@@ -1,4 +1,42 @@
-## KEY-293 — 2026-11-10, Codex (implemented and verified, ready for publication)
+## KEY-310 — 2026-11-10, Antigravity (pushed)
+
+Session `7a52914d-61b5-4055-83f3-cdc819a39296`. Implemented library decluttering per user request and Figma vision mockup:
+1. Auto-hiding header: on scroll down past 48px threshold and 48px hysteresis (`computeScrollHeaderState`), full collection header, ribbon, and chips slide away leaving a slim sticky bar with collection title, search, sort, view toggles, and Advanced filters toggle. On scroll up (>= 24px) or top, full header restores. Focus entering controls restores it. Respects `prefers-reduced-motion`.
+2. Pin-or-peek side navigation: docked rail when pinned (`shell.navPinned.v1` in SQLite settings); when unpinned, content expands to 100% width, hovering start edge strip (`data-nav-peek-trigger-edge`) or menu button peeks rail as a floating overlay without content shift; mouse-leave auto-closes after 300ms; Esc closes overlay; Ctrl+B / Cmd+B toggles pinned. 480px drawer preserved.
+3. Simpler search, sort & filters: single top search input; sort dropdown and view mode toggles always visible; "Advanced filters" button with active count badge opens persistent side rail on desktop (>=768px) and Sheet on mobile (<768px); active filters show as removable chips under search with "Clear all". Single source of truth remains `library-filter-model.ts`.
+
+Verification & Tests:
+- 34/34 focused unit tests passing (`library-scroll-header.test.ts`, `nav-pin-peek.test.ts`, `library-active-filters.test.ts`, `library-filter-model.test.ts`).
+- `npx tsc --noEmit` clean (0 errors), `npx eslint` clean (0 errors, 0 warnings on changed files), `npx tsup` build clean, `git diff --check` clean.
+- Real-app Electron harness (`scripts/library-declutter-live/`) generated all 18 screenshots in `.baglib-data/KEY-310-evidence/` across ar/en, light/dark, and 1280/480px viewports with real files seeded. Five screenshots inspected directly with `read_file` (`01`, `02`, `04`, `08`, `14`, `16`).
+
+Exact own files changed:
+- `src/renderer/components/library/library-scroll-header.ts`
+- `src/renderer/components/layout/nav-pin-model.ts`
+- `tests/ui/library-scroll-header.test.ts`
+- `tests/ui/nav-pin-peek.test.ts`
+- `tests/ui/library-active-filters.test.ts`
+- `scripts/library-declutter-live/declutter-check.cjs`
+- `scripts/library-declutter-live/fixture.tsx`
+- `scripts/library-declutter-live/run.mjs`
+- `src/renderer/components/context/WorkspaceContext.tsx`
+- `src/renderer/components/layout/AppLayout.tsx`
+- `src/renderer/components/layout/NavigationRail.tsx`
+- `src/renderer/components/layout/Titlebar.tsx`
+- `src/renderer/components/library/LibraryFilterRail.tsx`
+- `src/renderer/components/library/LibraryGridView.tsx`
+- `src/renderer/components/library/library-filter-model.ts`
+- `src/renderer/translations.ts`
+- `docs/agent-ops/reports/KEY-310.md`
+- `docs/agent-ops/board.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
+## KEY-303 — 2026-11-10, Codex (active)
+
+Session aba579ea-d277-4d63-aa39-28cc05c92a1a. Shared PDF/EPUB reader header and tabbed resizable panel, narrow bottom sheet, keyboard/touch focus mode. Preserve KEY-291/293 and sibling KEY-304/310 files. Explicit one-task commit/push authorized with commit.lock and own-index patch. Jira delegated to Claude. Inspecting source and adding regression tests, implementation and verification pending.
+
+## KEY-293 — 2026-11-10, Codex (pushed)
 
 Session `01a1c392-f1d3-7be1-9e10-84af690d7cb1`. Harness-only real-app Arabic/English FreeText Save follow-up. The opt-in stage creates three text boxes in the reader, saves twice with Ctrl+S, inspects owned APs/Unicode/foreign annotation graphs/font counts, and verifies exactly one prior-file emergency copy. Four UI/document language combinations pass. Fonts remain 25/25 on Arabic input and 10/10 on English input. Eight actual 1280/480 RTL/LTR captures pass language/direction/root-overflow/overlay-count assertions. Sixteen PNGs inspected under `.baglib-data/key270-save-live-evidence/2026-11-10T04-04-57-602Z/`. Both original real-file SHA-256 values match. Native profiles removed by runner and owned renderer stopped.
 
@@ -17,7 +55,9 @@ Exact own files/hunks follow.
 - `scripts/save-live/appearance_pdf.py`
 - `tests/services/pdf-freetext-live.test.ts`
 
-## KEY-291 - 2026-11-10, Codex (implemented and verified)
+Publication receipt, 2026-11-10. Pushed `d5a73689352bcbda9e8772427debb38b03dc1e9c` normally to `origin/feature/library-domain`; exact remote hash verified. The commit contains exactly the ten KEY-293 files/hunks listed above and ends `Agent: Codex`. Sibling modifications and previous tasks' publication receipts were excluded by index patch. Commit lock released after push. Local post-commit receipt only. Claude owns review/Jira. Stopped after KEY-293.
+
+## KEY-291 - 2026-11-10, Codex (pushed)
 
 Session `01a1c372-0255-7e82-a6a2-3c957c36ff65`. Implemented focus-reveal and focus retention for the Zen reader header, Alt+M markup focus in PDF/EPUB, and a persistent bilingual 44px-high touch button near the bottom. The PDF control reuses immersive/collapsed header pinning. Header geometry keeps KEY-280 selection actions below the expanded bar. Existing hover and reduced motion verified. No schema, dependency, download or Jira action.
 
@@ -27,7 +67,7 @@ Final native `key291-live-gydiPv` passed eight cases across PDF/EPUB, Arabic/Eng
 
 The existing EPUB Markup and Marks feature document is updated. Local report `docs/agent-ops/reports/KEY-291.md` contains the exact evidence and open points. English toolbar keys were included in concurrent KEY-304 commit96c7d37, while their Arabic counterparts and this task's reader implementation remain in this commit. Existing KEY-271 publication receipt corrections and unrelated shared-file changes are excluded from KEY-291 staging.
 
-Explicit authorization covers one KEY-291 commit ending `Agent: Codex` and a normal push to `origin/feature/library-domain`. Publication pending under `docs/agent-ops/commit.lock`. Claude owns review/Jira. Stop after this task.
+Explicit authorization covers one KEY-291 commit ending `Agent: Codex` and a normal push to `origin/feature/library-domain`. Published `d5a88c0f8fb25bb9412c6a746802853d832c0c8e` normally to `origin/feature/library-domain`. Exact remote hash verified. Commit scope is exactly eleven KEY-291 files/hunks with `Agent: Codex` attribution. Commit lock released. All fourteen own live profiles and the isolated candidate were cleaned after detaching runtime/dependency junctions. Evidence retained. Claude owns review/Jira. Stopped after KEY-291.
 
 Exact KEY-291 files/hunks follow.
 
@@ -106,7 +146,8 @@ Exact KEY-291 files/hunks follow.
   - `scripts/notes-ui-live/notes-check.cjs`
   - `docs/agent-ops/reports/KEY-304.md`
 
-## KEY-271 - 2026-11-10, Codex (implemented and verified, ready for publication)
+
+## KEY-271 - 2026-11-10, Codex (pushed)
 
 Session `01a1c27f-6676-7ab3-915b-f97bd1d8dc99`. Ten bilingual vector PDF stamps, calibrated distance/rectangular area and settings-backed saved action sequences implemented using existing note/history/settings contracts. Labels use centralized translations. Stamp language stays as placed, while measurement digits follow the current interface. Five existing single-PDF tools run sequentially in one staged job. Progress/errors remain visible above the page. Save reuses ADR-012 and one emergency copy per source. No schema, dependency, download or Jira action.
 
@@ -114,7 +155,7 @@ Final full suite 1670/1670 with zero failures/skips, focused7/7, Python writer1/
 
 Existing PDF/Notes plan and Document Workstation feature docs updated. Local report `docs/agent-ops/reports/KEY-271.md` holds evidence and limitations. Area uses rectangles. Calibration controls reset on page remount, while stored measurements retain their scale. Step options use bounded JSON and five existing tools. Cancellation path was inspected; injected engine-failure isolation was tested. No Acrobat/physical print certification.
 
-Commit and normal push to origin/feature/library-domain are explicitly authorized. The prior shared-index blocker was resolved by KEY-302 commit d286896. Codex re-read the current shared handoffs, verified an empty index and acquired docs/agent-ops/commit.lock. The prepared patch is being regenerated against current HEAD with only KEY-271 hunks, including only its 76 translation lines. Exactly31files/hunks will be inspected before the authorized commit/push. Existing verification above is retained. Claude owns review/Jira. Publication receipt will follow after push. Preserve all sibling/unrelated files.
+Publication receipt, 2026-11-10T05:12:09.405300+02:00. Published 3df271c6617b7bbb33d3dd1ad11188289f231bde normally to origin/feature/library-domain. Exact remote hash verified. Exactly31KEY-271files/hunks committed with Agent: Codex attribution. Shared-file patch staging preserved sibling changes. Commit lock released. Existing1670full/7focused/Python1/static and bilingual native evidence retained. Claude owns review/Jira. Stop after KEY-271.
 
 Exact KEY-271 files/hunks intended for the commit follow.
 

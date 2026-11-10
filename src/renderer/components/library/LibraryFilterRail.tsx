@@ -30,6 +30,12 @@ import {
 } from './library-filter-model';
 import { Chip } from '../ui/Chip';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { ColumnSelectorDropdown } from './ColumnSelectorDropdown';
+import type {
+  CardDensity,
+  ListDensity,
+  ListColumnKey,
+} from '../../../shared/types/library-views';
 
 export interface LibraryFilterRailProps {
   filterState: LibraryFilterState;
@@ -43,6 +49,14 @@ export interface LibraryFilterRailProps {
   className?: string;
   isSheet?: boolean;
   onCloseSheet?: () => void;
+  cardDensity?: CardDensity;
+  onCardDensityChange?: (density: CardDensity) => void;
+  listDensity?: ListDensity;
+  onListDensityChange?: (density: ListDensity) => void;
+  viewMode?: 'grid' | 'list';
+  visibleColumns?: ListColumnKey[];
+  onToggleColumn?: (col: ListColumnKey) => void;
+  onResetColumns?: () => void;
 }
 
 export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
@@ -57,6 +71,14 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
   className = '',
   isSheet = false,
   onCloseSheet,
+  cardDensity = 'comfortable',
+  onCardDensityChange,
+  listDensity = 'normal',
+  onListDensityChange,
+  viewMode = 'grid',
+  visibleColumns,
+  onToggleColumn,
+  onResetColumns,
 }) => {
   const { t, lang } = useWorkspace();
   const [showAllTopics, setShowAllTopics] = useState(false);
@@ -486,6 +508,75 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Density & Layout Controls (KEY-310: density compact, merged, broad) */}
+      <div className="pt-2 border-t border-border/60 space-y-2" data-advanced-density-controls>
+        <div className="flex items-center justify-between text-xs font-semibold text-text">
+          <span>{t('libraryRibbonView') || 'العرض والكثافة'}</span>
+          <span className="text-[10px] text-text-muted font-normal">
+            {viewMode === 'grid' ? (t('viewGrid') || 'عرض الشبكة') : (t('viewList') || 'عرض القائمة')}
+          </span>
+        </div>
+
+        {viewMode === 'grid' && onCardDensityChange && (
+          <div className="flex items-center bg-canvas border border-border rounded-xl p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => onCardDensityChange('compact')}
+              className={`flex-1 py-1.5 rounded-lg transition-all text-center font-medium cursor-pointer ${
+                cardDensity === 'compact'
+                  ? 'bg-primary/15 text-primary-text font-bold'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {t('densityCompact').split(' ')[0]}
+            </button>
+            <button
+              type="button"
+              onClick={() => onCardDensityChange('comfortable')}
+              className={`flex-1 py-1.5 rounded-lg transition-all text-center font-medium cursor-pointer ${
+                cardDensity === 'comfortable'
+                  ? 'bg-primary/15 text-primary-text font-bold'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {t('densityComfortable').split(' ')[0]}
+            </button>
+            <button
+              type="button"
+              onClick={() => onCardDensityChange('spacious')}
+              className={`flex-1 py-1.5 rounded-lg transition-all text-center font-medium cursor-pointer ${
+                cardDensity === 'spacious'
+                  ? 'bg-primary/15 text-primary-text font-bold'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {t('densitySpacious').split(' ')[0]}
+            </button>
+          </div>
+        )}
+
+        {viewMode === 'list' && (
+          <div className="space-y-2">
+            {onListDensityChange && (
+              <button
+                type="button"
+                onClick={() => onListDensityChange(listDensity === 'compact' ? 'normal' : 'compact')}
+                className="w-full py-1.5 px-2.5 rounded-xl border border-border bg-canvas hover:bg-surface text-xs font-medium text-text-muted hover:text-text transition-colors text-center"
+              >
+                {listDensity === 'compact' ? t('densityNormal') : t('densityRowCompact')}
+              </button>
+            )}
+            {visibleColumns && onToggleColumn && onResetColumns && (
+              <ColumnSelectorDropdown
+                visibleColumns={visibleColumns}
+                onToggleColumn={onToggleColumn}
+                onResetColumns={onResetColumns}
+              />
+            )}
           </div>
         )}
       </div>

@@ -54,7 +54,20 @@ const readWindowMode = () => new URLSearchParams(window.location.search).get('wi
 const serverWindowMode = () => null;
 
 export const AppLayout: React.FC = () => {
-  const { dir, viewMode, setViewMode, t, theme, lang } = useWorkspace();
+  const {
+    dir,
+    viewMode,
+    setViewMode,
+    t,
+    theme,
+    lang,
+    isNavPinned,
+    isNavPeekOpen,
+    openNavPeek,
+    closeNavPeek,
+    scheduleCloseNavPeek,
+    cancelCloseNavPeek,
+  } = useWorkspace();
   useAppCloseBridge();
   // The companion note pane (decision S10) sits beside these views and keeps its note while you move between them.
   const companion = useCompanionPane();
@@ -161,10 +174,43 @@ export const AppLayout: React.FC = () => {
       {/* Zone 1: Titlebar */}
       <Titlebar />
 
-      {/* Main Body Layout with Collapsible Navigation Sidebar */}
+      {/* Invisible Hover Strip along the Start Edge to trigger Navigation Peek overlay when unpinned (KEY-310) */}
+      {!isNavPinned && (
+        <div
+          data-nav-peek-trigger-edge
+          aria-hidden="true"
+          className="fixed top-12 bottom-0 start-0 w-3 z-30 cursor-pointer pointer-events-auto"
+          onMouseEnter={openNavPeek}
+          onMouseOver={openNavPeek}
+          onPointerEnter={openNavPeek}
+          onMouseLeave={scheduleCloseNavPeek}
+        />
+      )}
+
+      {/* Main Body Layout with Collapsible / Pin-or-Peek Navigation Sidebar */}
       <div className="flex-1 flex min-h-0 relative overflow-hidden">
-        {/* Collapsible Navigation Rail */}
-        <NavigationRail />
+        {/* Pinned Navigation Rail in normal flow */}
+        {isNavPinned && <NavigationRail />}
+
+        {/* Unpinned Peek Overlay (Above Content without layout shift) */}
+        {!isNavPinned && isNavPeekOpen && (
+          <>
+            <div
+              data-nav-peek-backdrop
+              className="fixed inset-0 top-12 z-40 bg-black/15 backdrop-blur-[0.5px]"
+              onClick={closeNavPeek}
+              aria-hidden="true"
+            />
+            <div
+              data-nav-peek-overlay
+              className="fixed top-12 bottom-0 start-0 z-50 shadow-2xl flex flex-col"
+              onMouseEnter={cancelCloseNavPeek}
+              onMouseLeave={scheduleCloseNavPeek}
+            >
+              <NavigationRail isOverlay onCloseOverlay={closeNavPeek} />
+            </div>
+          </>
+        )}
 
         {/* Dynamic App Views */}
         <main data-workspace-motion={viewMode === 'reader' || viewMode === 'quran' ? 'reading' : 'browse'} className="flex-1 flex flex-col min-w-0 overflow-hidden relative">

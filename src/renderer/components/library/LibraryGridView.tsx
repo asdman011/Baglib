@@ -10,7 +10,6 @@ import {
   MapPin,
   Info,
   FolderOpen,
-  Filter,
   X,
   Layers,
   ArrowUpDown,
@@ -26,6 +25,7 @@ import {
   UploadCloud,
   AlertTriangle,
   UserCheck,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { BookItem } from '../../types/library';
 import { BookDetailModal } from './BookDetailModal';
@@ -41,7 +41,6 @@ import { AppLockModal } from '../security/AppLockModal';
 import { LendBookModal } from './LendBookModal';
 import { ReturnBookModal } from './ReturnBookModal';
 import { PaginationBar } from './PaginationBar';
-import { ColumnSelectorDropdown } from './ColumnSelectorDropdown';
 import { BulkActionsToolbar } from './BulkActionsToolbar';
 import { StirlingToolsHub } from '../pdf-workstation/StirlingToolsHub';
 import { MetadataAuditModal } from './MetadataAuditModal';
@@ -59,9 +58,15 @@ import {
   formatVolumesCount,
   getFeaturedBook,
   filterAndSortBooks,
+  countActiveAdvancedFilters,
+  getActiveFilterChipsList,
   type LibraryFilterState,
   type LibrarySortState,
 } from './library-filter-model';
+import {
+  computeScrollHeaderState,
+  type ScrollHeaderState,
+} from './library-scroll-header';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
 import { resolveDroppedFilePath, localAssetUrl } from '../../utils/file-path-helper';
@@ -137,6 +142,23 @@ export const LibraryGridView: React.FC = () => {
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState<boolean>(false);
+  const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState<boolean>(false);
+  const [scrollHeader, setScrollHeader] = useState<ScrollHeaderState>({
+    isCollapsed: false,
+    lastScrollTop: 0,
+  });
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const handleNativeScroll = () => {
+      const st = el.scrollTop;
+      setScrollHeader((prev) => computeScrollHeaderState(prev, st));
+    };
+    el.addEventListener('scroll', handleNativeScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleNativeScroll);
+  }, []);
 
   // Load View Preferences from SQLite app_settings on mount (Story 9: 9.7)
   useEffect(() => {
@@ -418,6 +440,31 @@ export const LibraryGridView: React.FC = () => {
     return t('allBooksTitle') || t('libraryTitle');
   }, [activeLibraryCategory, selectedTopics, selectedTag, searchQuery, allCategories, lang, t]);
 
+  const advancedFilterCount = useMemo(() => {
+    return countActiveAdvancedFilters(filterState);
+  }, [filterState]);
+
+  const activeChips = useMemo(() => {
+    return getActiveFilterChipsList(filterState, {
+      topicNameResolver: (topicId) => {
+        const cat = allCategories.find((c) => c.id === topicId);
+        if (cat) return lang === 'ar' ? cat.nameAr : cat.nameEn;
+        return topicId;
+      },
+      labels: {
+        physical: t('badgePhysical'),
+        digital: t('badgeDigital'),
+        readingStatusPrefix: t('colStatus') || 'الحالة',
+        locationPrefix: t('sortLocation') || 'الموقع',
+        lendingPrefix: t('filterLendingAll') || 'الإعارة',
+        storagePrefix: t('storageManagerTitle') || 'التخزين',
+        statusUnread: t('statusUnread') || 'لم يُقرأ',
+        statusReading: t('statusReading') || 'قيد القراءة',
+        statusCompleted: t('statusCompleted') || 'مكتمل',
+      },
+    });
+  }, [filterState, allCategories, lang, t]);
+
   const handleFilterChange = (updates: Partial<LibraryFilterState>) => {
     if (updates.searchQuery !== undefined) setSearchQuery(updates.searchQuery);
     if (updates.selectedTopics !== undefined) setSelectedTopics(updates.selectedTopics);
@@ -453,20 +500,6 @@ export const LibraryGridView: React.FC = () => {
     setSelectedLocation('ALL');
     setCurrentPage(1);
   };
-
-  const hasActiveFilters = Boolean(
-    (searchQuery && searchQuery.trim()) ||
-    selectedTopics.length > 0 ||
-    selectedAuthors.length > 0 ||
-    selectedReadingStatus !== 'ALL' ||
-    selectedBookType !== 'ALL' ||
-    selectedFormat !== 'ALL' ||
-    selectedStorageFilter !== 'ALL' ||
-    selectedLocation !== 'ALL' ||
-    lendingStatus !== 'ALL' ||
-    activeLibraryCategory !== 'ALL' ||
-    selectedTag !== 'ALL'
-  );
 
   // Pagination Calculations (Story 9: 9.1, 9.2)
   const totalCount = filteredAndSortedBooks.length;
@@ -804,25 +837,6 @@ export const LibraryGridView: React.FC = () => {
     }
   };
 
-  // Open Native Electron File Dialog with Progressive Metadata & Cover Discovery
-  const _handleOpenBookFromDevice = async () => {
-    const windowAPI = (window).electronAPI;
-
-    if (windowAPI?.openFileDialog) {
-      const fullPath: string | null = await windowAPI.openFileDialog();
-      if (!fullPath) return;
-
-      const pathSegments = fullPath.split(/[/\\]/);
-      const fileNameWithExt = pathSegments[pathSegments.length - 1];
-      const importedBook = await importDigitalBookFromFile(fullPath, fileNameWithExt);
-      if (importedBook) {
-        openBookForReading(importedBook);
-      }
-    } else {
-      fileInputRef.current?.click();
-    }
-  };
-
   // Handle HTML fallback selection with Progressive Metadata Discovery
   const handleFileSelectFallback = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -969,224 +983,343 @@ export const LibraryGridView: React.FC = () => {
         className="hidden"
       />
 
-      {/* Top Header & Actions: Calm Ribbon & Collection Header */}
-      <div data-library-controls className="p-3 sm:p-4 border-b border-border/70 bg-surface/40 space-y-3 shrink-0">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          {/* Primary Actions: Add Material & Import + Calm More Menu wrapped in LibraryRibbon */}
-          <LibraryRibbon className="w-auto border-0 bg-transparent p-0">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleAddNewBook}
-              icon={<Plus className="size-3.5" />}
-              title={lang === 'ar' ? 'إضافة مادة جديدة (رقمية، فيزيائية، أو عبر الإنترنت)' : 'Add new material (digital, physical, or online)'}
-              data-library-dialog="book"
+      {/* Top Header & Actions: Auto-hiding Decluttered Library Header (KEY-310) */}
+      <div
+        data-library-controls
+        onFocus={() => setScrollHeader((prev) => ({ ...prev, isCollapsed: false }))}
+        className="sticky top-0 z-20 border-b border-border/70 bg-surface/95 backdrop-blur-md shrink-0 transition-all duration-300 ease-in-out motion-reduce:transition-none"
+      >
+        {scrollHeader.isCollapsed ? (
+          /* SLIM STICKY BAR: Visible when scrolled down (Collection title + search field + essential tools) */
+          <div
+            data-library-sticky-header
+            className="px-3 sm:px-4 py-2 flex items-center justify-between gap-3 min-w-0"
+          >
+            {/* Title & Volume Count */}
+            <div
+              className="flex items-center gap-2 min-w-0 shrink max-w-[30%] sm:max-w-xs cursor-pointer select-none"
+              onClick={() => setScrollHeader((prev) => ({ ...prev, isCollapsed: false }))}
+              title={collectionTitle}
             >
-              <span>{t('addBook')}</span>
-            </Button>
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setIsImportWizardOpen(true)}
-              icon={<UploadCloud className="size-3.5" />}
-              title={t('openImportWizard')}
-              data-library-dialog="import"
-            >
-              <span>{t('importWizardTitle')}</span>
-            </Button>
-
-            <LibraryMoreMenu
-              onImportFolder={async () => {
-                try {
-                  const folder = await window.electronAPI?.openDirectoryDialog?.();
-                  if (folder) {
-                    setDroppedImportPaths([folder]);
-                    setIsImportWizardOpen(true);
-                  }
-                } catch (err) {
-                  console.error('Failed to open directory dialog:', err);
-                }
-              }}
-              onAddFromCover={() => void handleAddFromCover()}
-              onOpenWebClipper={() => setIsWebClipperOpen(true)}
-              onOpenPdfTools={() => setIsStirlingHubOpen(true)}
-              onOpenStorageManager={() => setIsStorageModalOpen(true)}
-              onOpenAudit={() => setIsAuditModalOpen(true)}
-              onOpenTrash={() => setIsTrashModalOpen(true)}
-              onOpenStats={() => setIsStatsModalOpen(true)}
-              onOpenSecurity={() => setIsSecurityModalOpen(true)}
-              onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
-              onOpenOpds={() => setIsOpdsHubOpen(true)}
-              storageIssueCount={storageIssueCount}
-              trashCount={trashCount}
-              selectedBooksCount={selectedBookIds.size}
-            />
-          </LibraryRibbon>
-
-          {/* Mobile Filter Button (Visible at 480 px / < md) */}
-          <div className="md:hidden flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Filter className="size-3.5 text-primary-text" />}
-              onClick={() => setIsFilterSheetOpen(true)}
-              data-mobile-filter-button
-            >
-              <span>{t('filterTopics')}</span>
-              {hasActiveFilters && (
-                <span className="size-2 rounded-full bg-accent inline-block ms-0.5" />
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Collection Header per Figma Vision Mockup */}
-        <div className="flex items-center justify-between gap-4 pt-1 flex-wrap" data-collection-header>
-          <div className="space-y-1 min-w-0">
-            <h2 className="font-display font-bold text-xl sm:text-2xl text-text truncate">
-              {collectionTitle}
-            </h2>
-            <p className="text-xs text-text-muted flex items-center gap-1.5 font-sans">
-              <span>{formatVolumesCount(filteredAndSortedBooks.length, lang)}</span>
-              <span className="opacity-60">•</span>
-              <span>{t('updatedRecently')}</span>
-            </p>
-          </div>
-
-          {/* Grid / List View Toggle & Densities */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center bg-canvas border border-border rounded-xl p-0.5" data-view-mode-toggle>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('grid');
-                  persistPreferences({ viewMode: 'grid' });
-                }}
-                title={t('viewGrid') || 'عرض الشبكة'}
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-primary text-primary-contrast shadow-xs'
-                    : 'text-text-muted hover:text-text'
-                }`}
-              >
-                <LayoutGrid className="size-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('list');
-                  persistPreferences({ viewMode: 'list' });
-                }}
-                title={t('viewList') || 'عرض القائمة'}
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === 'list'
-                    ? 'bg-primary text-primary-contrast shadow-xs'
-                    : 'text-text-muted hover:text-text'
-                }`}
-              >
-                <List className="size-4" aria-hidden="true" />
-              </button>
+              <h2 className="font-display font-bold text-sm text-text truncate">
+                {collectionTitle}
+              </h2>
+              <span className="hidden sm:inline-block text-[11px] px-1.5 py-0.5 rounded-full bg-canvas border border-border text-text-muted font-mono shrink-0">
+                {filteredAndSortedBooks.length}
+              </span>
             </div>
 
-            {/* Density controls */}
-            {viewMode === 'grid' && (
-              <div className="hidden sm:flex items-center bg-canvas border border-border rounded-xl p-0.5 text-xs">
+            {/* Compact Search Field */}
+            <div className="relative flex-1 min-w-[140px] max-w-sm">
+              <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 size-3.5 text-text-muted pointer-events-none" aria-hidden="true" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => handleFilterChange({ searchQuery: e.target.value })}
+                placeholder={t('simpleSearchPlaceholder')}
+                aria-label={t('simpleSearchPlaceholder')}
+                data-simple-search-input
+                className="w-full bg-canvas border border-border rounded-lg ps-8 pe-7 py-1 text-xs text-text placeholder:text-text-muted focus-visible:outline-2 focus-visible:outline-focus outline-none"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => handleFilterChange({ searchQuery: '' })}
+                  aria-label={t('searchClearQuery')}
+                  className="absolute end-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-text-muted hover:text-text cursor-pointer"
+                >
+                  <X className="size-3" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {/* Essential Controls: Sort, Grid/List, Advanced Filters */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Sort Dropdown */}
+              <div className="flex items-center gap-1 bg-canvas border border-border rounded-lg px-2 py-1 text-xs">
+                <ArrowUpDown className="size-3 text-primary-text shrink-0" aria-hidden="true" />
+                <select
+                  value={sortField}
+                  onChange={(e) => {
+                    const f = e.target.value as SortField;
+                    const defaultDir = f === 'newest' || f === 'progress' ? 'desc' : 'asc';
+                    handleSortChange({ field: f, direction: defaultDir });
+                  }}
+                  className="bg-transparent text-text text-xs outline-none cursor-pointer"
+                  aria-label={t('sortLabel')}
+                >
+                  <option value="newest">{t('sortRecentlyAdded')}</option>
+                  <option value="title">{t('sortTitle')}</option>
+                  <option value="author">{t('sortAuthor')}</option>
+                  <option value="progress">{t('sortRecentlyRead')}</option>
+                </select>
+              </div>
+
+              {/* Grid / List View Toggle */}
+              <div className="flex items-center bg-canvas border border-border rounded-lg p-0.5" data-view-mode-toggle>
                 <button
                   type="button"
                   onClick={() => {
-                    setCardDensity('compact');
-                    persistPreferences({ cardDensity: 'compact' });
+                    setViewMode('grid');
+                    persistPreferences({ viewMode: 'grid' });
                   }}
-                  className={`px-2 py-1 rounded-lg transition-all font-medium cursor-pointer ${
-                    cardDensity === 'compact'
-                      ? 'bg-primary/15 text-primary-text font-bold'
+                  title={t('viewGrid') || 'عرض الشبكة'}
+                  className={`p-1 rounded transition-all cursor-pointer ${
+                    viewMode === 'grid'
+                      ? 'bg-primary text-primary-contrast shadow-xs'
                       : 'text-text-muted hover:text-text'
                   }`}
                 >
-                  {t('densityCompact').split(' ')[0]}
+                  <LayoutGrid className="size-3.5" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setCardDensity('comfortable');
-                    persistPreferences({ cardDensity: 'comfortable' });
+                    setViewMode('list');
+                    persistPreferences({ viewMode: 'list' });
                   }}
-                  className={`px-2 py-1 rounded-lg transition-all font-medium cursor-pointer ${
-                    cardDensity === 'comfortable'
-                      ? 'bg-primary/15 text-primary-text font-bold'
+                  title={t('viewList') || 'عرض القائمة'}
+                  className={`p-1 rounded transition-all cursor-pointer ${
+                    viewMode === 'list'
+                      ? 'bg-primary text-primary-contrast shadow-xs'
                       : 'text-text-muted hover:text-text'
                   }`}
                 >
-                  {t('densityComfortable').split(' ')[0]}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCardDensity('spacious');
-                    persistPreferences({ cardDensity: 'spacious' });
-                  }}
-                  className={`px-2 py-1 rounded-lg transition-all font-medium cursor-pointer ${
-                    cardDensity === 'spacious'
-                      ? 'bg-primary/15 text-primary-text font-bold'
-                      : 'text-text-muted hover:text-text'
-                  }`}
-                >
-                  {t('densitySpacious').split(' ')[0]}
+                  <List className="size-3.5" aria-hidden="true" />
                 </button>
               </div>
-            )}
 
-            {viewMode === 'list' && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = listDensity === 'compact' ? 'normal' : 'compact';
-                    setListDensity(next);
-                    persistPreferences({ listDensity: next });
-                  }}
-                  className="px-2.5 py-1.5 rounded-xl border border-border bg-canvas hover:bg-surface text-xs font-medium text-text-muted hover:text-text transition-colors"
-                >
-                  {listDensity === 'compact' ? t('densityNormal') : t('densityRowCompact')}
-                </button>
-
-                <ColumnSelectorDropdown
-                  visibleColumns={visibleColumns}
-                  onToggleColumn={(col) => {
-                    setVisibleColumns((prev) => {
-                      const next = prev.includes(col)
-                        ? prev.filter((k) => k !== col)
-                        : [...prev, col];
-                      persistPreferences({ visibleColumns: next });
-                      return next;
-                    });
-                  }}
-                  onResetColumns={() => {
-                    const defaults: ListColumnKey[] = [
-                      'cover',
-                      'title',
-                      'category',
-                      'format',
-                      'location',
-                      'status',
-                      'actions',
-                    ];
-                    setVisibleColumns(defaults);
-                    persistPreferences({ visibleColumns: defaults });
-                  }}
-                />
-              </div>
-            )}
+              {/* Advanced Filters Button */}
+              <Button
+                variant={isAdvancedFiltersOpen ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                    setIsFilterSheetOpen(true);
+                  } else {
+                    setIsAdvancedFiltersOpen((prev) => !prev);
+                  }
+                }}
+                icon={<SlidersHorizontal className="size-3 text-primary-text" />}
+                data-advanced-filter-button
+                title={t('advancedFiltersToggle')}
+              >
+                <span className="hidden sm:inline">{t('advancedFiltersToggle')}</span>
+                {advancedFilterCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono bg-accent text-accent-contrast">
+                    {advancedFilterCount}
+                  </span>
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
+        ) : (
+          /* FULL HEADER: Visible when at top or scrolling up */
+          <div className="p-3 sm:p-4 space-y-3">
+            {/* Top Action Row: Search Field, Sort, View, Advanced Filters, and Ribbon */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              {/* One Search Field at the Top of the Library (KEY-310) */}
+              <div className="relative flex-1 min-w-[200px] max-w-md">
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-text-muted pointer-events-none" aria-hidden="true" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => handleFilterChange({ searchQuery: e.target.value })}
+                  placeholder={t('simpleSearchPlaceholder')}
+                  aria-label={t('simpleSearchPlaceholder')}
+                  data-simple-search-input
+                  className="w-full bg-canvas border border-border rounded-xl ps-9 pe-8 py-2 text-xs text-text placeholder:text-text-muted focus-visible:outline-2 focus-visible:outline-focus outline-none transition-all shadow-xs"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => handleFilterChange({ searchQuery: '' })}
+                    aria-label={t('searchClearQuery')}
+                    className="absolute end-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-text-muted hover:text-text cursor-pointer"
+                  >
+                    <X className="size-3.5" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+
+              {/* Always Visible: Sort Dropdown, Grid/List Toggle, Advanced Filters Button */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Sort Dropdown */}
+                <div className="flex items-center gap-1.5 bg-canvas border border-border rounded-xl px-2.5 py-1.5 text-xs shadow-xs">
+                  <ArrowUpDown className="size-3.5 text-primary-text shrink-0" aria-hidden="true" />
+                  <select
+                    value={sortField}
+                    onChange={(e) => {
+                      const f = e.target.value as SortField;
+                      const defaultDir = f === 'newest' || f === 'progress' ? 'desc' : 'asc';
+                      handleSortChange({ field: f, direction: defaultDir });
+                    }}
+                    className="bg-transparent text-text text-xs outline-none cursor-pointer pe-1"
+                    aria-label={t('sortLabel')}
+                  >
+                    <option value="newest">{t('sortRecentlyAdded')}</option>
+                    <option value="title">{t('sortTitle')}</option>
+                    <option value="author">{t('sortAuthor')}</option>
+                    <option value="progress">{t('sortRecentlyRead')}</option>
+                  </select>
+                </div>
+
+                {/* Grid / List View Toggle */}
+                <div className="flex items-center bg-canvas border border-border rounded-xl p-0.5 shadow-xs" data-view-mode-toggle>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('grid');
+                      persistPreferences({ viewMode: 'grid' });
+                    }}
+                    title={t('viewGrid') || 'عرض الشبكة'}
+                    className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                      viewMode === 'grid'
+                        ? 'bg-primary text-primary-contrast shadow-xs'
+                        : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    <LayoutGrid className="size-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('list');
+                      persistPreferences({ viewMode: 'list' });
+                    }}
+                    title={t('viewList') || 'عرض القائمة'}
+                    className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                      viewMode === 'list'
+                        ? 'bg-primary text-primary-contrast shadow-xs'
+                        : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    <List className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+
+                {/* Advanced Filters Button */}
+                <Button
+                  variant={isAdvancedFiltersOpen ? 'primary' : 'secondary'}
+                  size="sm"
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                      setIsFilterSheetOpen(true);
+                    } else {
+                      setIsAdvancedFiltersOpen((prev) => !prev);
+                    }
+                  }}
+                  icon={<SlidersHorizontal className="size-3.5 text-primary-text" />}
+                  data-advanced-filter-button
+                  title={t('advancedFiltersToggle')}
+                >
+                  <span>{t('advancedFiltersToggle')}</span>
+                  {advancedFilterCount > 0 && (
+                    <span className="ms-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono bg-accent text-accent-contrast">
+                      {advancedFilterCount}
+                    </span>
+                  )}
+                </Button>
+
+                {/* Library Ribbon (Add Book, Import, More menu) */}
+                <LibraryRibbon className="w-auto border-0 bg-transparent p-0">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleAddNewBook}
+                    icon={<Plus className="size-3.5" />}
+                    title={lang === 'ar' ? 'إضافة مادة جديدة' : 'Add new material'}
+                    data-library-dialog="book"
+                  >
+                    <span>{t('addBook')}</span>
+                  </Button>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsImportWizardOpen(true)}
+                    icon={<UploadCloud className="size-3.5" />}
+                    title={t('openImportWizard')}
+                    data-library-dialog="import"
+                  >
+                    <span>{t('importWizardTitle')}</span>
+                  </Button>
+
+                  <LibraryMoreMenu
+                    onImportFolder={async () => {
+                      try {
+                        const folder = await window.electronAPI?.openDirectoryDialog?.();
+                        if (folder) {
+                          setDroppedImportPaths([folder]);
+                          setIsImportWizardOpen(true);
+                        }
+                      } catch (err) {
+                        console.error('Failed to open directory dialog:', err);
+                      }
+                    }}
+                    onAddFromCover={() => void handleAddFromCover()}
+                    onOpenWebClipper={() => setIsWebClipperOpen(true)}
+                    onOpenPdfTools={() => setIsStirlingHubOpen(true)}
+                    onOpenStorageManager={() => setIsStorageModalOpen(true)}
+                    onOpenAudit={() => setIsAuditModalOpen(true)}
+                    onOpenTrash={() => setIsTrashModalOpen(true)}
+                    onOpenStats={() => setIsStatsModalOpen(true)}
+                    onOpenSecurity={() => setIsSecurityModalOpen(true)}
+                    onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+                    onOpenOpds={() => setIsOpdsHubOpen(true)}
+                    storageIssueCount={storageIssueCount}
+                    trashCount={trashCount}
+                    selectedBooksCount={selectedBookIds.size}
+                  />
+                </LibraryRibbon>
+              </div>
+            </div>
+
+            {/* Active Filter Chips Row (KEY-310: Chips under search with Clear all) */}
+            {activeChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1" data-active-filter-chips>
+                {activeChips.map((chip) => (
+                  <Chip
+                    key={chip.id}
+                    label={chip.label}
+                    selected
+                    removable
+                    onRemove={() => handleFilterChange(chip.onClear)}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  className="text-[11px] font-medium text-accent hover:underline cursor-pointer ms-1.5"
+                  title={t('clearAllFilters')}
+                >
+                  {t('clearAllFilters')}
+                </button>
+              </div>
+            )}
+
+            {/* Collection Title Row */}
+            <div className="flex items-center justify-between gap-4 pt-1" data-collection-header>
+              <div className="space-y-1 min-w-0">
+                <h2 className="font-display font-bold text-xl sm:text-2xl text-text truncate">
+                  {collectionTitle}
+                </h2>
+                <p className="text-xs text-text-muted flex items-center gap-1.5 font-sans">
+                  <span>{formatVolumesCount(filteredAndSortedBooks.length, lang)}</span>
+                  <span className="opacity-60">•</span>
+                  <span>{t('updatedRecently')}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Workspace Layout: Filter Rail + Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Desktop Persistent Side Filter Rail */}
-        {books.length > 0 && (
-          <div className="hidden md:block w-64 lg:w-72 shrink-0 border-e border-border/70 bg-surface/30 p-4 overflow-y-auto overscroll-contain">
+        {/* Desktop Side Filter Rail (shown when isAdvancedFiltersOpen on desktop) */}
+        {books.length > 0 && isAdvancedFiltersOpen && (
+          <div className="hidden md:block w-64 lg:w-72 shrink-0 border-e border-border/70 bg-surface/30 p-4 overflow-y-auto overscroll-contain animate-in fade-in duration-200">
             <LibraryFilterRail
               filterState={filterState}
               onFilterChange={handleFilterChange}
@@ -1196,6 +1329,30 @@ export const LibraryGridView: React.FC = () => {
               availableLocations={availableLocations}
               sortState={sortState}
               onSortChange={handleSortChange}
+              cardDensity={cardDensity}
+              onCardDensityChange={(d) => {
+                setCardDensity(d);
+                persistPreferences({ cardDensity: d });
+              }}
+              listDensity={listDensity}
+              onListDensityChange={(d) => {
+                setListDensity(d);
+                persistPreferences({ listDensity: d });
+              }}
+              viewMode={viewMode}
+              visibleColumns={visibleColumns}
+              onToggleColumn={(col) => {
+                setVisibleColumns((prev) => {
+                  const next = prev.includes(col) ? prev.filter((k) => k !== col) : [...prev, col];
+                  persistPreferences({ visibleColumns: next });
+                  return next;
+                });
+              }}
+              onResetColumns={() => {
+                const defaults: ListColumnKey[] = ['cover', 'title', 'category', 'format', 'location', 'status', 'actions'];
+                setVisibleColumns(defaults);
+                persistPreferences({ visibleColumns: defaults });
+              }}
             />
           </div>
         )}
@@ -1204,7 +1361,7 @@ export const LibraryGridView: React.FC = () => {
         <Sheet
           open={isFilterSheetOpen}
           onClose={() => setIsFilterSheetOpen(false)}
-          title={t('filterSheetToggle')}
+          title={t('advancedFiltersToggle')}
           side="start"
         >
           <LibraryFilterRail
@@ -1218,11 +1375,43 @@ export const LibraryGridView: React.FC = () => {
             onSortChange={handleSortChange}
             isSheet
             onCloseSheet={() => setIsFilterSheetOpen(false)}
+            cardDensity={cardDensity}
+            onCardDensityChange={(d) => {
+              setCardDensity(d);
+              persistPreferences({ cardDensity: d });
+            }}
+            listDensity={listDensity}
+            onListDensityChange={(d) => {
+              setListDensity(d);
+              persistPreferences({ listDensity: d });
+            }}
+            viewMode={viewMode}
+            visibleColumns={visibleColumns}
+            onToggleColumn={(col) => {
+              setVisibleColumns((prev) => {
+                const next = prev.includes(col) ? prev.filter((k) => k !== col) : [...prev, col];
+                persistPreferences({ visibleColumns: next });
+                return next;
+              });
+            }}
+            onResetColumns={() => {
+              const defaults: ListColumnKey[] = ['cover', 'title', 'category', 'format', 'location', 'status', 'actions'];
+              setVisibleColumns(defaults);
+              persistPreferences({ visibleColumns: defaults });
+            }}
           />
         </Sheet>
 
         {/* Main Books Display: Empty States, Featured Card, Grid View, or List View */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6"
+          data-library-scroll-container
+          onScroll={(e) => {
+            const st = e.currentTarget.scrollTop;
+            setScrollHeader((prev) => computeScrollHeaderState(prev, st));
+          }}
+        >
           {/* Featured Card (Shown on page 1 in Grid mode when not actively searching) */}
           {featuredBook && !filterState.searchQuery && currentPage === 1 && viewMode === 'grid' && (
             <FeaturedBookCard
