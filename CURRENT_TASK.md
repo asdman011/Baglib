@@ -1,3 +1,22 @@
+## KEY-293 — 2026-11-10, Codex (implemented and verified, ready for publication)
+
+Session `01a1c392-f1d3-7be1-9e10-84af690d7cb1`. Harness-only real-app Arabic/English FreeText Save follow-up. The opt-in stage creates three text boxes in the reader, saves twice with Ctrl+S, inspects owned APs/Unicode/foreign annotation graphs/font counts, and verifies exactly one prior-file emergency copy. Four UI/document language combinations pass. Fonts remain 25/25 on Arabic input and 10/10 on English input. Eight actual 1280/480 RTL/LTR captures pass language/direction/root-overflow/overlay-count assertions. Sixteen PNGs inspected under `.baglib-data/key270-save-live-evidence/2026-11-10T04-04-57-602Z/`. Both original real-file SHA-256 values match. Native profiles removed by runner and owned renderer stopped.
+
+Final focused8/8, tsc/eslint0errors0warnings/tsup and scoped diff checks pass. Bounded shared npm test has1701total1697pass3fail1timeout, all failing/cancelled files in concurrent KEY-304/310 scope. Final remainder with only those three sibling test files excluded passes1693/1693, zero failures/cancellations/skips in44.8s. An earlier90slarge-history timeout under concurrent load is superseded by this passing300s-bound run. Eight failed-attempt profiles also cleaned after retaining diagnostics. Side panes obstruct the page in natural480px captures, recorded as a layout limitation. PDFium2x actual saved pages and isolated existing AP renders show joined Naskh, readable English and correct RTL mixed reference. Viewer-specific copy ordering and Acrobat untested. No application source/schema/dependency/download/Jira changes. Claude owns review/Jira. Explicit one-task commit/push authorization to origin/feature/library-domain, commit lock required, stop afterward.
+
+Exact own files/hunks follow.
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `docs/features/PDF and Notes Experience Plan.md`
+- `scripts/save-live/main.cjs`
+- `scripts/save-live/run.mjs`
+- `scripts/save-live/appearance-run.mjs`
+- `scripts/save-live/appearance-stage.cjs`
+- `scripts/save-live/appearance-assertions.cjs`
+- `scripts/save-live/appearance_pdf.py`
+- `tests/services/pdf-freetext-live.test.ts`
+
 ## KEY-291 - 2026-11-10, Codex (implemented and verified)
 
 Session `01a1c372-0255-7e82-a6a2-3c957c36ff65`. Implemented focus-reveal and focus retention for the Zen reader header, Alt+M markup focus in PDF/EPUB, and a persistent bilingual 44px-high touch button near the bottom. The PDF control reuses immersive/collapsed header pinning. Header geometry keeps KEY-280 selection actions below the expanded bar. Existing hover and reduced motion verified. No schema, dependency, download or Jira action.

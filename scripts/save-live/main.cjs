@@ -35,7 +35,10 @@ app.on('browser-window-created', (_, owner) => {
     await until(`[...document.querySelectorAll('button')].some(b=>b.title===${JSON.stringify(labels[language].read)}||b.textContent.trim()===${JSON.stringify(labels[language].read)})`);
     await evaluate(`(()=>{const read=${JSON.stringify(labels[language].read)};const isRead=b=>b.title===read||b.textContent.trim()===read;const title=[...document.querySelectorAll('h3,h4')].find(e=>e.textContent.trim()==='علم — Save');if(!title)throw new Error('Fixture book heading missing');let node=title;while(node&&![...node.querySelectorAll('button')].some(isRead))node=node.parentElement;if(!node||node===document.body)throw new Error('Fixture card missing');[...node.querySelectorAll('button')].find(isRead).click();})()`);
     try {
-      await until("!!document.querySelector('[data-markup-tool-button]') && document.querySelectorAll('.textLayer span').length > 0 && !!document.querySelector('[data-pdf-save-state]')", 100);
+      const ready = process.env.BAGLIB_SAVE_APPEARANCE_ONLY
+        ? "!!document.querySelector('[data-markup-tool-button]') && !!document.querySelector('[data-pdf-width]') && !!document.querySelector('[data-pdf-save-state]')"
+        : "!!document.querySelector('[data-markup-tool-button]') && document.querySelectorAll('.textLayer span').length > 0 && !!document.querySelector('[data-pdf-save-state]')";
+      await until(ready, 100);
     } catch (error) {
       console.log(JSON.stringify({ reopenDiagnostics: await evaluate("({body:document.body.innerText.slice(-6000),canvases:[...document.querySelectorAll('canvas')].map(c=>({width:c.width,height:c.height,data:{...c.dataset}}))})") }));
       throw error;
@@ -407,6 +410,10 @@ app.on('browser-window-created', (_, owner) => {
   };
 
   (async () => {
+    if (process.env.BAGLIB_SAVE_APPEARANCE_ONLY) {
+      await require('./appearance-stage.cjs')({ owner, directory, python, book, evaluate, until, load, openBook, policy, tool, drag, pagePoint, key, waitState, inspect, sha, emergency });
+      app.exit(0); return;
+    }
     if (process.env.BAGLIB_SAVE_UNDO_ONLY) { await undoCheck(); return; }
     if (process.env.BAGLIB_SAVE_QUIT_ONLY) { await lifecycle(); return; }
     if (phase === 'first') {

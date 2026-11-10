@@ -5,6 +5,10 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import electron from 'electron';
 import { createHash } from 'node:crypto';
+if (process.env.BAGLIB_SAVE_APPEARANCE_ONLY === '1') {
+  await import('./appearance-run.mjs');
+  process.exit(process.exitCode ?? 0);
+}
 const dataRoot = fs.realpathSync('.baglib-data');
 const directory = fs.mkdtempSync(path.join(dataRoot, 'save-live-'));
 const engine = path.resolve('.baglib-data/pdf-engine');
