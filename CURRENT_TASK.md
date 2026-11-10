@@ -1,3 +1,31 @@
+## KEY-304 fix round 2 verified - 2026-11-10, Codex (continuing Antigravity)
+
+Session `codex-key304-fix2-20261110`. Continued Antigravity's uncommitted fix. Restored filtered-list Markdown/Word exports and saved-note menu labels, open-comments count/filter, boards entry and accessible workspace titles. Partial-load alerts now identify the failed source, preserve displayed notes and expose Retry. Details have localized empty-links guidance. Open questions and per-note graph remain reachable. Editor flex sizing now keeps all three panes inside a 1280 px viewport in RTL/LTR. Notes and board icon buttons display their SVG children. Editor tag placeholder uses existing i18n.
+
+The original SRS keyboard test left an empty review screen mounted with its next-due refresh timeout. Optional timer.unref prevents the timer retaining a Node host, with browser refresh and normal cleanup preserved. All protected existing tests match HEAD. Added separate bilingual export/filter/error-retry/single-note/preview regression coverage.
+
+Final verification performed sequentially after the power interruption under the user's low-load rule. Focused 24/24 pass. One final full npm test -- --test-concurrency=2 passes 1730/1730 across 334 suites in 143.65 s, with zero failures, cancellations or skips. TypeScript zero errors, scoped ESLint zero errors and warnings and git diff --check pass. The original SRS test alone previously exited with 3/3 in 657 ms and also passes in the final full suite. No repository candidate copies created in this run.
+
+Short real-app live check passes ar/en at an asserted1280×850 with Arabic and English real PDFs imported and bilingual linked notes seeded. Both final workspace PNGs inspected directly. Export controls, Word options, board entry, graph, questions, visible editor icons and pane bounds checked. Evidence in `.baglib-data/KEY-304-evidence/fix2/`. Originals were referenced without saving or OCR. The fresh profile reports existing missing Mushaf layout during background planner sync, which does not affect notes checks.
+
+Power loss zeroed the shared translations file. Recovered saved strings from the existing KEY-314 candidate backup and removed 34 identical duplicate definitions. notesNoLinks was restored, and notesFilterComments is superseded by commentsOnlyOpen. Obsolete KEY-310 aliases map updatedRecently→badgeNew, filterSheetToggle→advancedFiltersToggle and navPeekSidebar→expandMenu (pin controls use navPinSidebar/navUnpinSidebar). Only these notes/library translation hunks belong to this commit. Paused KEY-314 additions and reader directory/layout alias removals remain outside this commit. Reader/source ownership verified read-only. No schema/dependency/download/Jira changes. Claude owns review/Jira.
+
+Exact 11 task files/hunks
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `scripts/notes-ui-live/notes-check.cjs`
+- `scripts/notes-ui-live/run.mjs`
+- `src/renderer/components/knowledge/SrsReviewScreen.tsx`
+- `src/renderer/components/notes/BoardsWorkspace.tsx`
+- `src/renderer/components/notes/NoteDetailsPane.tsx`
+- `src/renderer/components/notes/NoteEditorPane.tsx`
+- `src/renderer/components/notes/NotesOverviewView.tsx`
+- `src/renderer/translations.ts`
+- `tests/ui/notes-workspace-actions.test.ts`
+
+Explicit authorization covers one task-only commit ending `Agent: Codex (continuing Antigravity)` and normal push to `origin/feature/library-domain` through `docs/agent-ops/commit.lock`. Implementation and verification complete. Publication pending, then stop.
+
 ## KEY-311 verified; publication pending — 2026-11-10, Codex
 
 Session `01a1c4f4-9ddd-7a60-8fe0-169c0ab76833`. 2026-11-10T12:48:28+02:00. Reviewer authorized the three obsolete test-file updates and publishing despite unfinished KEY-304 failures. 28/28 focused+updated tests, scoped eslint0errors0warnings and git diff --check pass. Optional-module behavior assertions retained through Customize in both languages. Prior task-only tsc/main build and native8/8 with real PDFs remain valid;60 PNGs/10 distinct paths inspected. No production changes during continuation. Shared KEY-304 failures and2 notes tsc errors are excluded by explicit authorization. Exact24 own files/hunks below. Commit/push authorized to origin/feature/library-domain using commit.lock. Jira Claude. Publication pending.

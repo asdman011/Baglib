@@ -5,36 +5,32 @@ import { spawn, execSync } from 'node:child_process';
 import electron from 'electron';
 import { setupThrowawayCorpus } from '../lib/corpus-copy.mjs';
 
-// 1. Ensure port 3000 is clean
-try {
-  execSync('node scripts/ensure-port-free.js', { stdio: 'inherit' });
-} catch {}
+// Preserve any renderer owned by a concurrent task.
 
-const profile = path.resolve('.baglib-data/key304-profile');
-const evidence = path.resolve('.baglib-data/KEY-304-evidence');
+fs.mkdirSync(path.resolve('.baglib-data'), { recursive: true });
+const profile = fs.mkdtempSync(path.resolve('.baglib-data/key304-profile-'));
+const evidence = path.resolve('.baglib-data/KEY-304-evidence', process.env.BAGLIB_NOTES_FIX2 ? 'fix2' : '.');
 
-try {
-  fs.rmSync(profile, { recursive: true, force: true });
-} catch {}
-fs.mkdirSync(profile, { recursive: true });
 fs.mkdirSync(evidence, { recursive: true });
 
 // 2. Setup throwaway corpus copies
 console.log('[live] Setting up throwaway corpus copies...');
-const corpus = setupThrowawayCorpus({
+const corpus = process.env.BAGLIB_NOTES_FIX2 ? null : setupThrowawayCorpus({
   targetDir: profile,
   includeMushafLayout: true,
 });
 
 console.log('[live] Corpus setup complete:', {
-  quran: corpus.quran.available,
-  sunnah: corpus.sunnah.available,
-  poetry: corpus.poetry.available,
+  quran: corpus?.quran.available,
+  sunnah: corpus?.sunnah.available,
+  poetry: corpus?.poetry.available,
 });
 
 // 3. Start Next.js dev server on port 3000
-console.log('[live] Starting Next.js dev server on port 3000...');
-const nextProcess = spawn(
+let existingRenderer = false;
+try { existingRenderer = (await fetch('http://127.0.0.1:3000')).ok; } catch {}
+console.log(existingRenderer ? '[live] Reusing existing renderer.' : '[live] Starting owned renderer.');
+const nextProcess = existingRenderer ? null : spawn(
   process.execPath,
   ['node_modules/next/dist/bin/next', 'dev', 'src/renderer', '-p', '3000', '-H', '127.0.0.1'],
   {
@@ -70,6 +66,7 @@ try {
   const child = spawn(electron, ['scripts/notes-ui-live/notes-check.cjs'], {
     env,
     stdio: 'inherit',
+    windowsHide: true,
   });
 
   const exitCode = await new Promise((resolve) => {
@@ -81,10 +78,10 @@ try {
 } finally {
   console.log('[live] Shutting down Next.js dev server...');
   try {
-    if (process.platform === 'win32' && nextProcess.pid) {
+    if (process.platform === 'win32' && nextProcess?.pid) {
       execSync(`taskkill /pid ${nextProcess.pid} /T /F`, { stdio: 'ignore' });
     } else {
-      nextProcess.kill('SIGTERM');
+      nextProcess?.kill('SIGTERM');
     }
   } catch {}
 }

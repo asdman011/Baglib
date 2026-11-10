@@ -66,7 +66,6 @@ app.on('browser-window-created', (_, win) => {
   const setDimensions = async (width, height) => {
     win.setMinimumSize(320, 300);
     win.setContentSize(width, height);
-    win.setSize(width, height);
     await pause(300);
   };
 
@@ -259,6 +258,45 @@ app.on('browser-window-created', (_, win) => {
       await setLanguage('ar');
       await setTheme('light');
       await navToNotes();
+
+      if (process.env.BAGLIB_NOTES_FIX2) {
+        for (const language of ['ar', 'en']) {
+          await setLanguage(language);
+          await until('document.querySelectorAll("[data-study-note]").length >= 2');
+          const controls = await evaluate(`(() => {
+            const word = document.querySelector('[data-notes-export-word]');
+            const markdown = document.querySelector('[data-notes-export-markdown]');
+            const filter = document.querySelector('[data-notes-list-pane] select');
+            word.click();
+            return {
+              word: !!word.getAttribute('aria-label') && !word.disabled,
+              markdown: !!markdown.getAttribute('aria-label') && !markdown.disabled,
+              comments: !!filter.querySelector('option[value="comments"]'),
+              boards: !!document.querySelector('[data-notes-boards][aria-label]'),
+              title: !!document.querySelector('[data-notes-overview][aria-label]'),
+              graph: !!document.querySelector('[data-graph-button]'),
+              editorIcons: [...document.querySelectorAll('[data-note-editor-pane] header button')].every(button => !!button.querySelector('svg')),
+              width: innerWidth,
+              overflow: document.documentElement.scrollWidth > innerWidth
+            };
+          })()`);
+          await until('!!document.querySelector("[data-word-options]")');
+          assert.deepEqual(controls, { word:true, markdown:true, comments:true, boards:true, title:true, graph:true, editorIcons:true, width:1280, overflow:false });
+          await shot('fix2-' + language + '-1280-word-options');
+          await evaluate(`document.querySelector('[data-word-options] button[type="button"]').click()`);
+          await evaluate(`document.querySelector('[data-tab-questions]').click()`);
+          await until('!!document.querySelector("[data-note-details-pane] [data-knowledge-tools]")');
+          const panesFit = await evaluate(`['[data-notes-list-pane]', '[data-note-editor-pane]', '[data-note-details-pane]'].every(selector => {
+            const rect = document.querySelector(selector).getBoundingClientRect();
+            return rect.left >= 0 && rect.right <= innerWidth;
+          })`);
+          assert.ok(panesFit, 'All three panes must remain inside the viewport');
+          await shot('fix2-' + language + '-1280-workspace');
+        }
+        console.log('[live] Fix2 ar/en 1280 controls, Word options, graph and open questions passed.');
+        app.exit(0);
+        return;
+      }
 
       const dir1 = await evaluate('document.documentElement.dir');
       assert.equal(dir1, 'rtl', 'Dir must be rtl in Arabic');

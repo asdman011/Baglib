@@ -284,19 +284,19 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
           },
         ]
       : []),
-    ...(onExportMarkdown
+    ...(note && onExportMarkdown
       ? [
           {
-            label: t('notesExportMarkdown', { count: 1 }),
+            label: t('noteExportMarkdown'),
             icon: <Download className="size-4" />,
             onClick: onExportMarkdown,
           },
         ]
       : []),
-    ...(onExportWord
+    ...(note && onExportWord
       ? [
           {
-            label: t('notesExportWord', { count: 1 }),
+            label: t('noteExportWord'),
             icon: <FileType className="size-4" />,
             onClick: onExportWord,
           },
@@ -321,7 +321,7 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
   return (
     <div
       data-note-editor-pane
-      className="flex-1 min-h-0 flex flex-col bg-surface border-subtle select-text overflow-hidden"
+      className="flex-1 min-w-0 min-h-0 flex flex-col bg-surface border-subtle select-text overflow-hidden"
       dir={dir}
     >
       {/* Editor Header Bar */}
@@ -384,18 +384,20 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
           <IconButton
             size="sm"
             label={preview ? t('dashScratchpadEdit') : t('dashScratchpadPreview')}
-            icon={preview ? <FileEdit className="size-3.5" /> : <Eye className="size-3.5" />}
             onClick={() => setPreview(!preview)}
-          />
+          >
+            {preview ? <FileEdit className="size-3.5" /> : <Eye className="size-3.5" />}
+          </IconButton>
 
           {/* Collapsible Panel Toggle */}
           {onTogglePanel && (
             <IconButton
               size="sm"
               label={t('notesTogglePanel')}
-              icon={<PanelToggleIcon className="size-3.5" />}
               onClick={onTogglePanel}
-            />
+            >
+              <PanelToggleIcon className="size-3.5" />
+            </IconButton>
           )}
 
           {/* Editor Header Action Menu */}
@@ -407,10 +409,11 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
                   ref={ref}
                   size="sm"
                   label={t('noteExportMenu')}
-                  icon={<MoreVertical className="size-4" />}
                   onClick={onClick}
                   {...props}
-                />
+                >
+                  <MoreVertical className="size-4" />
+                </IconButton>
               )}
               items={menuItems}
             />
@@ -495,7 +498,7 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
                   setNewTagVal('');
                 }
               }}
-              placeholder="وسم..."
+              placeholder={t('addTagPlaceholder')}
               className="w-16 bg-transparent text-xs text-main outline-none"
             />
             <button

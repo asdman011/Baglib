@@ -237,7 +237,6 @@ export const translations = {
     badgeFeatured: 'موصى به',
     noCoverText: 'بدون غلاف',
     volumesCount: '{count} مجلد',
-    updatedRecently: 'تم التحديث مؤخراً',
     filterTopics: 'المواضيع',
     filterAuthors: 'المؤلفون',
     filterMore: 'المزيد من الفلاتر',
@@ -246,7 +245,6 @@ export const translations = {
     clearAllFilters: 'مسح الكل',
     readingProgressPercent: 'قيد القراءة - {percent}%',
     ribbonMoreActions: 'المزيد',
-    filterSheetToggle: 'تصفية الكتب',
     // KEY-310: Library Declutter, Pin-or-peek Navigation, Simpler Search & Advanced Filters
     advancedFiltersToggle: 'تصفية متقدمة',
     simpleSearchPlaceholder: 'ابحث بالعنوان، المؤلف، أو الوسوم...',
@@ -254,7 +252,6 @@ export const translations = {
     sortRecentlyRead: 'آخر قراءة',
     navPinSidebar: 'تثبيت القائمة الجانبية',
     navUnpinSidebar: 'إلغاء تثبيت القائمة الجانبية',
-    navPeekSidebar: 'معاينة القائمة الجانبية',
     newPhysicalBookDefaultTitle: 'مادة جديدة في المكتبة',
     newMaterialDefaultLanguage: 'العربية',
     tagRemoveAction: 'إزالة الوسم',
@@ -4358,6 +4355,7 @@ export const translations = {
     dashModuleStudyRhythm: 'إعدادات توقف الصلاة والنية',
 
     // KEY-304: notes, cards and boards workspace
+    notesNoLinks: "لا توجد روابط في هذا القسم.",
     notesWorkspaceTitle: "مساحة الملاحظات والمعرفة",
     notesTabNotes: "الملاحظات",
     notesTabCards: "بطاقات المعرفة",
@@ -4366,7 +4364,6 @@ export const translations = {
     notesSortTitle: "العنوان (أ - ي)",
     notesSortOldest: "الأقدم أولًا",
     notesFilterAll: "كل الملاحظات",
-    notesFilterComments: "الملاحظات ذات التعليقات المفتوحة",
     notesFilterBook: "ملاحظات كتاب محدد",
     notesBackToList: "العودة إلى الملاحظات",
     notesTogglePanel: "لوحة التفاصيل والروابط",
@@ -4636,7 +4633,6 @@ export const translations = {
     badgeFeatured: 'Featured',
     noCoverText: 'No Cover',
     volumesCount: '{count} volumes',
-    updatedRecently: 'Updated recently',
     filterTopics: 'Topics',
     filterAuthors: 'Authors',
     filterMore: 'More filters',
@@ -4645,7 +4641,6 @@ export const translations = {
     clearAllFilters: 'Clear all',
     readingProgressPercent: 'In progress - {percent}%',
     ribbonMoreActions: 'More',
-    filterSheetToggle: 'Filter books',
     // KEY-310: Library Declutter, Pin-or-peek Navigation, Simpler Search & Advanced Filters
     advancedFiltersToggle: 'Advanced filters',
     simpleSearchPlaceholder: 'Search by title, author, or tags...',
@@ -4653,7 +4648,6 @@ export const translations = {
     sortRecentlyRead: 'Recently read',
     navPinSidebar: 'Pin sidebar',
     navUnpinSidebar: 'Unpin sidebar',
-    navPeekSidebar: 'Peek sidebar',
     newPhysicalBookDefaultTitle: 'New Library Material',
     newMaterialDefaultLanguage: 'English',
     tagRemoveAction: 'Remove tag',
@@ -8757,6 +8751,7 @@ export const translations = {
     dashModuleStudyRhythm: 'Prayer pause & intention settings',
 
     // KEY-304: notes, cards and boards workspace
+    notesNoLinks: "No links in this section.",
     notesWorkspaceTitle: "Notes & Knowledge Workspace",
     notesTabNotes: "Notes",
     notesTabCards: "Knowledge Cards",
@@ -8765,7 +8760,6 @@ export const translations = {
     notesSortTitle: "Title (A - Z)",
     notesSortOldest: "Oldest first",
     notesFilterAll: "All notes",
-    notesFilterComments: "Open comments only",
     notesFilterBook: "Book-attached notes",
     notesBackToList: "Back to notes",
     notesTogglePanel: "Toggle details & links panel",

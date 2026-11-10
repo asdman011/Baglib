@@ -79,6 +79,9 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
     if (!queue || queue.cards.length || !queue.nextDue) return;
     const delay = Math.min(2_147_483_647, Math.max(1000, Date.parse(queue.nextDue) - Date.now()));
     const timer = setTimeout(() => void refresh(), delay);
+    // A scheduled queue refresh must not keep a Node renderer/test host alive.
+    // Browser timers are numeric; mounted screens still refresh and clean up normally.
+    timer.unref?.();
     return () => clearTimeout(timer);
   }, [queue, refresh]);
 
@@ -224,7 +227,10 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
 
         {queue && (
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted tabular-nums">
+            <span
+              className="text-xs text-muted tabular-nums"
+              title={t('srsProgressCounter', { current: Math.min(totalToday, queue.reviewedToday + (card ? 1 : 0)), total: totalToday })}
+            >
               {t('srsCounts', { due: queue.due, reviewed: queue.reviewedToday })}
             </span>
             <Button
@@ -434,7 +440,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                         </kbd>
                         <span className="font-bold text-sm sm:text-base">{t('srsAgain')}</span>
                       </div>
-                      <span className="text-xs opacity-80 tabular-nums">{formatInterval(1, lang)}</span>
+                      <span className="text-xs opacity-80 tabular-nums" title={t('srsIntervalTenMin')}>{formatInterval(1, lang)}</span>
                     </button>
 
                     {/* Rating 2: Hard */}
@@ -451,7 +457,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                         </kbd>
                         <span className="font-bold text-sm sm:text-base">{t('srsHard')}</span>
                       </div>
-                      <span className="text-xs text-muted tabular-nums">{formatInterval(2, lang)}</span>
+                      <span className="text-xs text-muted tabular-nums" title={t('srsIntervalOneDay')}>{formatInterval(2, lang)}</span>
                     </button>
 
                     {/* Rating 3: Good */}
@@ -468,7 +474,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                         </kbd>
                         <span className="font-bold text-sm sm:text-base">{t('srsGood')}</span>
                       </div>
-                      <span className="text-xs opacity-85 tabular-nums">{formatInterval(3, lang)}</span>
+                      <span className="text-xs opacity-85 tabular-nums" title={t('srsIntervalThreeDays')}>{formatInterval(3, lang)}</span>
                     </button>
 
                     {/* Rating 4: Easy */}
@@ -485,7 +491,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                         </kbd>
                         <span className="font-bold text-sm sm:text-base">{t('srsEasy')}</span>
                       </div>
-                      <span className="text-xs opacity-85 tabular-nums">{formatInterval(4, lang)}</span>
+                      <span className="text-xs opacity-85 tabular-nums" title={t('srsIntervalSevenDays')}>{formatInterval(4, lang)}</span>
                     </button>
                   </div>
                   <p className="text-center text-[11px] text-muted">{t('srsKeysHint')}</p>

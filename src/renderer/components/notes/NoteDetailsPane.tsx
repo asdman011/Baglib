@@ -51,9 +51,10 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
         <IconButton
           size="sm"
           label={t('close')}
-          icon={<X className="size-4" />}
           onClick={onClose}
-        />
+        >
+          <X className="size-4" />
+        </IconButton>
       </div>
 
       {/* Internal Tabs */}
@@ -105,7 +106,7 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
       </div>
 
       {/* Pane Body */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5 text-xs">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5 text-xs break-words">
         {activeTab === 'links' && (
           <>
             {/* Incoming Backlinks */}
@@ -119,7 +120,7 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
               </div>
 
               {backlinks.length === 0 ? (
-                <p className="text-muted text-[11px] py-1">{t('studyNoResults')}</p>
+                <p className="text-muted text-[11px] py-1">{t('notesNoLinks')}</p>
               ) : (
                 <ul className="space-y-1.5">
                   {backlinks.map((link) => (
@@ -154,7 +155,7 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
               </div>
 
               {outgoingLinks.length === 0 ? (
-                <p className="text-muted text-[11px] py-1">{t('studyNoResults')}</p>
+                <p className="text-muted text-[11px] py-1">{t('notesNoLinks')}</p>
               ) : (
                 <ul className="space-y-1.5">
                   {outgoingLinks.map((link) => (

@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   FileText,
+  FileType,
+  Download,
   Filter,
   LayoutGrid,
   Plus,
@@ -349,6 +351,7 @@ export const NotesOverviewView: React.FC = () => {
   return (
     <section
       data-notes-overview
+      aria-label={t('notesWorkspaceTitle')}
       className="flex-1 min-h-0 flex flex-col bg-canvas select-none overflow-hidden"
       dir={dir}
     >
@@ -356,6 +359,9 @@ export const NotesOverviewView: React.FC = () => {
       {activeTab !== 'review' && (
         <header className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-subtle bg-surface">
           <div className="flex items-center gap-1 sm:gap-2">
+            <h1 className="sr-only" title={t('notesWorkspaceTitle')}>
+              {t('myNotesTitle')} — {t('myNotesDesc')}
+            </h1>
             {/* Notes Tab */}
             <button
               type="button"
@@ -412,6 +418,8 @@ export const NotesOverviewView: React.FC = () => {
               onClick={() => setActiveTab('boards')}
               data-notes-tab="boards"
               data-notes-boards
+              aria-label={t('boardsOpen')}
+              title={t('boardsOpen')}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
                 activeTab === 'boards'
                   ? 'bg-primary text-primary-contrast shadow-xs'
@@ -438,6 +446,36 @@ export const NotesOverviewView: React.FC = () => {
           <div className="flex items-center gap-2">
             {activeTab === 'notes' && (
               <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-notes-export-word
+                  disabled={!filteredNotes.length}
+                  title={t('notesExportWordHint')}
+                  aria-label={t('notesExportWord', { count: filteredNotes.length })}
+                  aria-expanded={Boolean(wordOptions)}
+                  onClick={() => {
+                    setWordNoteId(null);
+                    setWordOptions((current) => (current ? null : savedWordLayout()));
+                  }}
+                  icon={<FileType className="size-3.5" />}
+                >
+                  <span className="hidden lg:inline">{t('notesExportWord', { count: filteredNotes.length })}</span>
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-notes-export-markdown
+                  disabled={!filteredNotes.length}
+                  title={t('notesExportMarkdownHint')}
+                  aria-label={t('notesExportMarkdown', { count: filteredNotes.length })}
+                  onClick={() => void exportMarkdown()}
+                  icon={<Download className="size-3.5" />}
+                >
+                  <span className="hidden lg:inline">{t('notesExportMarkdown', { count: filteredNotes.length })}</span>
+                </Button>
+
                 <Button
                   variant="ghost"
                   size="sm"
@@ -584,8 +622,17 @@ export const NotesOverviewView: React.FC = () => {
 
       {/* Load error banner */}
       {error && (
-        <div role="alert" className="mx-4 mt-2 p-2 rounded-lg bg-danger/10 text-danger text-xs">
-          {t('studyLoadFailed')} {failedSources.length > 0 && `(${failedSources.join(' · ')})`}
+        <div role="alert" className="mx-4 mt-2 p-3 rounded-xl border border-amber-500/40 text-sm leading-loose space-y-2 bg-amber-500/10">
+          <p>{t('studyLoadFailed')}</p>
+          <p>{failedSources.map(source => t(source === 'notes' ? 'studyLoadPersonalSource' : 'studyLoadKnowledgeSource')).join(' · ')}</p>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void refresh()}
+            className="rounded-lg border border-subtle px-3 py-1 hover:bg-surface disabled:opacity-50 text-xs"
+          >
+            {t('lookupRetry')}
+          </button>
         </div>
       )}
 
@@ -636,7 +683,7 @@ export const NotesOverviewView: React.FC = () => {
                     className="bg-transparent text-xs text-muted outline-none cursor-pointer"
                   >
                     <option value="all">{t('notesFilterAll')}</option>
-                    <option value="comments">{t('notesFilterComments')}</option>
+                    <option value="comments">{t('commentsOnlyOpen', { count: Object.values(openComments).reduce((sum, count) => sum + count, 0) })}</option>
                     <option value="questions">{t('waveQuestions')}</option>
                     <option value="book">{t('notesFilterBook')}</option>
                   </select>
@@ -690,18 +737,21 @@ export const NotesOverviewView: React.FC = () => {
                   <p className="p-4 text-center text-xs text-muted">{t('studyLoadingNotes')}</p>
                 )}
 
-                {filteredNotes.length === 0 && !loading && (
-                  <EmptyState
-                    icon={<FileText className="size-6 text-muted" />}
-                    title={t('notesEmptyTitle')}
-                    description={t('notesEmptyDesc')}
-                    action={
-                      <Button variant="primary" size="sm" onClick={handleStartNewNote}>
-                        {t('studyNewNote')}
-                      </Button>
-                    }
-                    className="py-6"
-                  />
+                {filteredNotes.length === 0 && !error && !loading && (
+                  <div className="py-6 text-center space-y-3">
+                    <p className="text-xs text-muted">{t('studyNoResults')}</p>
+                    <EmptyState
+                      icon={<FileText className="size-6 text-muted" />}
+                      title={t('notesEmptyTitle')}
+                      description={t('notesEmptyDesc')}
+                      action={
+                        <Button variant="primary" size="sm" onClick={handleStartNewNote}>
+                          {t('studyNewNote')}
+                        </Button>
+                      }
+                      className="py-2"
+                    />
+                  </div>
                 )}
 
                 {filteredNotes.map((note) => {
@@ -773,7 +823,7 @@ export const NotesOverviewView: React.FC = () => {
 
           {/* PANE 2: NOTE EDITOR (Visible if desktop or mobileScreen === 'editor') */}
           <main
-            className={`flex-1 min-h-0 flex flex-col bg-surface ${
+            className={`flex-1 min-w-0 min-h-0 flex flex-col bg-surface ${
               mobileScreen === 'list' ? 'hidden md:flex' : 'flex'
             }`}
           >

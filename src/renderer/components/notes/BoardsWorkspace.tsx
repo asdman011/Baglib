@@ -406,24 +406,32 @@ function BoardCanvas({
           <IconButton
             size="sm"
             label={t('boardsZoomOut')}
-            icon={<ZoomOut className="size-3.5" />}
             onClick={() => zoomBy(1 / 1.2)}
-          />
-          <span className="w-11 text-center text-xs tabular-nums text-muted font-mono" dir="ltr">
+          >
+            <ZoomOut className="size-3.5" />
+          </IconButton>
+          <span
+            className="w-11 text-center text-xs tabular-nums text-muted font-mono"
+            dir="ltr"
+            title={t('boardsZoomLevel')}
+            aria-label={t('boardsZoomLevel')}
+          >
             {Math.round(view.zoom * 100)}%
           </span>
           <IconButton
             size="sm"
             label={t('boardsZoomIn')}
-            icon={<ZoomIn className="size-3.5" />}
             onClick={() => zoomBy(1.2)}
-          />
+          >
+            <ZoomIn className="size-3.5" />
+          </IconButton>
           <IconButton
             size="sm"
             label={t('boardsZoomReset')}
-            icon={<Maximize className="size-3.5" />}
             onClick={fit}
-          />
+          >
+            <Maximize className="size-3.5" />
+          </IconButton>
         </div>
       </div>
 
@@ -716,7 +724,7 @@ function BoardCanvas({
             <EmptyState
               icon={<LayoutGrid className="size-8 text-muted" />}
               title={t('boardsEmptyCanvasTitle')}
-              description={t('boardsEmptyCanvasDesc')}
+              description={`${t('boardsEmptyCanvasDesc')} ${t('boardsEmpty')}`}
               className="pointer-events-auto max-w-md"
             />
           </div>
@@ -864,9 +872,10 @@ export function BoardsWorkspace({
                 <IconButton
                   size="sm"
                   label={t('close')}
-                  icon={<X className="size-4" />}
                   onClick={onClose}
-                />
+                >
+                  <X className="size-4" />
+                </IconButton>
               )}
             </div>
           </div>
