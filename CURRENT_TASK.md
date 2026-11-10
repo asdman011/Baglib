@@ -1,3 +1,57 @@
+## KEY-299 — 2026-11-10, Antigravity (implemented and verified)
+
+- Implementation & Verification: UI/UX U5 Library Home to the Vision Mockup (`library-shell-mockup.png` and `library-sketches.png`).
+  - Collection Header (`src/renderer/components/library/LibraryGridView.tsx`):
+    - Clean collection title matching active collection/category/filter.
+    - Localized volume count (`formatVolumesCount(count, lang)`: e.g. "٢٨ مجلد" / "28 volumes") using `Intl.NumberFormat`.
+    - "Updated recently" indicator (`• تم التحديث مؤخراً` / `• Updated recently`).
+    - Grid and list view toggle keeping list table columns, sort headers, and selection checkboxes.
+    - Card density toggle for `compact`, `comfortable`, and `spacious`.
+  - Persistent Filter Rail (`src/renderer/components/library/LibraryFilterRail.tsx`):
+    - Persistent side rail on desktop, collapsed to slide-over `Sheet` at 480 px.
+    - Filter search query with clear button.
+    - Selectable topic pill chips with localized counts and active filter chips summary with "clear all".
+    - Authors checklist with localized counts.
+    - Collapsible "More filters" preserving reading status, format, storage health, location, lending, and sort selector.
+  - Consistent Cards & Cover (`src/renderer/components/library/LibraryBookCover.tsx`):
+    - Strict `aspect-[2/3]` cover ratio with loading skeleton and styled no-cover placeholder (`بدون غلاف` / `No Cover`).
+    - Design system type tier titles (`font-display font-bold`), author, and subject `Chip`.
+    - Recent items "New" badge (`variant="accent"`).
+    - Decision D2 source badges (`variant="default"` physical, `variant="primary"` digital, `variant="outline"` wishlist).
+    - All legacy `pale-sky-500` styles replaced with U2 semantic tokens.
+  - Featured Book Card (`src/renderer/components/library/FeaturedBookCard.tsx`):
+    - Wide card for in-progress or most recently opened read with reading progress bar.
+  - Calm Ribbon & Grouped More Menu (`src/renderer/components/library/LibraryMoreMenu.tsx`, `LibraryRibbon.tsx`):
+    - Primary actions visible ("Add material", "Import").
+    - Secondary actions grouped into More dropdown (Import & add, PDF tools, Library management, Sync & security).
+  - KEY-297 Follow-up:
+    - `baglib:add-physical-book` calls `handleAddNewBook` directly.
+    - Hardcoded default title and language strings moved to `translations.ts` (`newPhysicalBookDefaultTitle`, `newMaterialDefaultLanguage`).
+  - Pure Filter Model & Unit Tests (`src/renderer/components/library/library-filter-model.ts`, `tests/ui/library-filter-model.test.ts`):
+    - 14/14 unit tests pass for search normalization, D2 badge mapping, topic/author aggregation, and multi-criteria filtering.
+  - Tests & Verification:
+    - `tests/ui/library-filter-model.test.ts`: 14/14 pass.
+    - `tests/ui/book-volumes.test.ts`: 3/3 pass.
+    - `npx tsc --noEmit`: 0 errors.
+    - `npx eslint` on changed library files: 0 errors.
+    - `npx tsup`: 142ms build success.
+    - `git diff --check`: 0 errors.
+    - Live harness (`scripts/library-ui-live/run.mjs`): 10 screenshots captured in `.baglib-data/KEY-299-evidence/` in Arabic RTL & English LTR, Light & Dark, 1280px & 480px using real files (`tests/real-files/`).
+- Exact files changed:
+  - `src/renderer/components/library/FeaturedBookCard.tsx`
+  - `src/renderer/components/library/LibraryBookCover.tsx`
+  - `src/renderer/components/library/LibraryFilterRail.tsx`
+  - `src/renderer/components/library/LibraryGridView.tsx`
+  - `src/renderer/components/library/LibraryMoreMenu.tsx`
+  - `src/renderer/components/library/LibraryRibbon.tsx`
+  - `src/renderer/components/library/library-filter-model.ts`
+  - `src/renderer/translations.ts`
+  - `tests/ui/library-filter-model.test.ts`
+  - `scripts/library-ui-live/run.mjs`
+  - `scripts/library-ui-live/library-check.cjs`
+  - `docs/agent-ops/board.md`
+  - `docs/agent-ops/reports/KEY-299.md`
+
 ## KEY-302 — 2026-11-10, Antigravity (implemented and verified)
 
 - Implementation & Verification: UI/UX U8 Home Dashboard to the FigJam wish-list (`dashboard-wishlist.png`).
