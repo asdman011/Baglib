@@ -1,6 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { ContextMenu } from '../ui/ContextMenu';
+import { Menu } from '../ui/Menu';
+import { getCardActions } from './library-card-actions';
+import type { MenuItemProps } from '../ui/Menu';
 import { LibraryBookCard } from './LibraryBookCard';
 import {
   BookOpen,
@@ -234,6 +238,7 @@ export const LibraryGridView: React.FC = () => {
 
   // Modal States
   const [selectedBook, setSelectedBook] = useState<BookItem | null>(null);
+  const [detailTab, setDetailTab] = useState<'info' | 'physical' | 'classification' | 'lending'>('info');
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isNewBook, setIsNewBook] = useState(false);
   const [saveToast, setSaveToast] = useState<string | null>(null);
@@ -940,6 +945,39 @@ export const LibraryGridView: React.FC = () => {
     setTimeout(() => setSaveToast(null), 3500);
   };
 
+  const bookMenu = (book: BookItem): MenuItemProps[] => {
+    if (selectedBookIds.size > 1 && selectedBookIds.has(book.id)) {
+      return [
+        { id: 'bulk-category', label: t('ctxBulk') + ' · ' + t('bulkAssignCategory'), onClick: () => window.dispatchEvent(new CustomEvent('baglib:bulk-menu', { detail: 'category' })) },
+        { id: 'bulk-tags', label: t('ctxTags'), onClick: () => window.dispatchEvent(new CustomEvent('baglib:bulk-menu', { detail: 'tags' })) },
+        { id: 'bulk-status', label: t('readingStatus'), onClick: () => window.dispatchEvent(new CustomEvent('baglib:bulk-menu', { detail: 'status' })) },
+        { id: 'bulk-export', label: t('ctxExportBooks'), onClick: () => exportBooks(books.filter(item => selectedBookIds.has(item.id))) },
+        { id: 'bulk-delete', label: t('delete'), danger: true, onClick: () => window.dispatchEvent(new CustomEvent('baglib:bulk-menu', { detail: 'delete' })) },
+      ];
+    }
+    const actions = getCardActions(book, {
+      onRead: handleSafeOpenBook,
+      onOpenDetails: item => { setDetailTab('info'); setSelectedBook(item); setIsNewBook(false); setIsDetailModalOpen(true); },
+      onLend: item => { if(item.lendingHistory?.some(entry => !entry.isReturned))setQuickReturnBook(item);else setQuickLendBook(item); },
+      onDelete: handleDeleteBook,
+      onUpdateReadingStatus: updateBookReadingStatus,
+      onAction: async (id, item) => {
+        if (id === 'last') { handleSafeOpenBook(item); return; }
+        if (id === 'folder' && item.filePath) { await window.electronAPI.showItemInFolder(item.filePath); return; }
+        if (id === 'duplicates') { setSelectedStorageFilter('DUPLICATES'); return; }
+        if (id === 'export') { exportBooks([item]); return; }
+        if (id === 'wishlist') { await updateBook({ ...item, tags: [...new Set([...item.tags, '#wishlist'])] }); return; }
+        setDetailTab(id === 'category' || id === 'tags' ? 'classification' : id === 'physical' ? 'physical' : 'info');
+        setSelectedBook(item); setIsNewBook(false); setIsDetailModalOpen(true);
+      },
+    }, t);
+    return actions.map(action => ({ id: action.id, label: action.label, icon: <Info size={14} />, danger: action.danger, disabled: !!action.disabledReason, disabledReason: action.disabledReason, onClick: action.onSelect }));
+  };
+  const exportBooks = (items: BookItem[]) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a'); link.href = url; link.download = 'baglib-books.json'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   return (
     <div
       onDragEnter={handleDragEnter}
@@ -1383,7 +1421,7 @@ export const LibraryGridView: React.FC = () => {
         >
           {/* Featured Card (Shown on page 1 in Grid mode when not actively searching) */}
           {featuredBook && !filterState.searchQuery && currentPage === 1 && viewMode === 'grid' && (
-            <FeaturedBookCard
+            <ContextMenu onOpenMenu={() => bookMenu(featuredBook)}><FeaturedBookCard
               book={featuredBook}
               onOpenBook={handleSafeOpenBook}
               onOpenDetails={(b) => {
@@ -1391,7 +1429,7 @@ export const LibraryGridView: React.FC = () => {
                 setIsNewBook(false);
                 setIsDetailModalOpen(true);
               }}
-            />
+            /></ContextMenu>
           )}
 
           {books.length === 0 ? (
@@ -1440,6 +1478,7 @@ export const LibraryGridView: React.FC = () => {
                   <LibraryBookCard
                     key={book.id}
                     book={book}
+                    onOpenMenu={() => bookMenu(book)}
                     isSelected={selectedBookIds.has(book.id)}
                     onToggleSelect={handleToggleSelectBook}
                     onOpenBook={handleSafeOpenBook}
@@ -1614,7 +1653,7 @@ export const LibraryGridView: React.FC = () => {
                         const cellPad = listDensity === 'compact' ? 'py-1.5 px-3' : 'py-3 px-4';
 
                         return (
-                          <tr
+                          <ContextMenu as="tr" onOpenMenu={()=>bookMenu(book)}
                             key={`${book.id || 'book'}-${idx}`}
                             className={`transition-colors group ${
                               isSelected ? 'bg-primary/5' : 'hover:bg-canvas/40'
@@ -1825,36 +1864,18 @@ export const LibraryGridView: React.FC = () => {
 
                                   <button
                                     onClick={() => handleSafeOpenBook(book)}
-                                    title="قراءة الكتاب"
+                                    title={t('readBook')}
                                     className="px-2.5 py-1 rounded-xl bg-primary text-primary-contrast font-bold text-xs hover:opacity-90 transition-all flex items-center gap-1 cursor-pointer"
                                   >
                                     <BookOpen className="w-3.5 h-3.5" />
                                     <span>{t('readBook')}</span>
                                   </button>
 
-                                  <button
-                                    onClick={() => {
-                                      setSelectedBook(book);
-                                      setIsNewBook(false);
-                                      setIsDetailModalOpen(true);
-                                    }}
-                                    title={t('bookDetailsBtn')}
-                                    className="p-1 rounded-xl bg-canvas border border-subtle text-text-muted hover:text-primary-text hover:bg-surface transition-colors cursor-pointer"
-                                  >
-                                    <Info className="w-3.5 h-3.5" />
-                                  </button>
-
-                                  <button
-                                    onClick={() => handleDeleteBook(book.id)}
-                                    title={t('delete')}
-                                    className="p-1 rounded-xl bg-canvas border border-subtle text-text-muted hover:text-danger hover:bg-surface transition-colors cursor-pointer"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  <Menu portal items={[]} onOpenMenu={() => bookMenu(book)} trigger={properties => <button {...properties} type="button" data-row-menu-button aria-label={t('ribbonMoreActions')} title={t('ribbonMoreActions')} className="rounded-lg border border-border bg-surface px-2 py-1 text-primary-text">⋯</button>} />
                                 </div>
                               </td>
                             )}
-                          </tr>
+                          </ContextMenu>
                         );
                       })}
                     </tbody>
@@ -1931,6 +1952,7 @@ export const LibraryGridView: React.FC = () => {
 
       {/* Book Detail & Edit Modal */}
       <BookDetailModal
+        initialTab={detailTab}
         book={selectedBook}
         isOpen={isDetailModalOpen}
         isNew={isNewBook}

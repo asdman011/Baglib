@@ -1,4 +1,6 @@
 'use client';
+import { colorKeys } from './ReaderMarkupBar';
+import { ActionMenu } from '../actions/ActionMenu';
 import { measurementLabel } from '../../../shared/pdf-study-tools';
 import { useWorkspace } from '../context/WorkspaceContext';
 import React, { useEffect, useState } from 'react';
@@ -19,7 +21,8 @@ export const shapeKindKeys: Record<ShapeKind, TranslationKey> = {
  * A study shape, text mark, or comment pin opened on the page: its text, colour, delete and comment threads
  * (reply, resolve, reopen) through the same threads as notes (ADR-010, KEY-274).
  */
-export function PdfMarkPopover({ item, at, onClose, onSaved, onDeleted, onThreadsChanged, t }: {
+export function PdfMarkPopover({ item, at, initialContext, onClose, onSaved, onDeleted, onThreadsChanged, t }: {
+  initialContext?: boolean;
   item: KnowledgeItemDTO;
   at: { x: number; y: number };
   onClose: () => void;
@@ -29,6 +32,8 @@ export function PdfMarkPopover({ item, at, onClose, onSaved, onDeleted, onThread
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }) {
   const { lang } = useWorkspace();
+  const [contextAt, setContextAt] = useState(initialContext ? at : null);
+  const contextChosen = React.useRef(false);
   const mark = parseShapeMark(item.location);
   const epubLoc = parseEpubLocation(item.location);
   const kind = markKind(item);
@@ -116,6 +121,12 @@ export function PdfMarkPopover({ item, at, onClose, onSaved, onDeleted, onThread
   const top = Math.max(8, Math.min(at.y + 12, window.innerHeight - 420));
   const titleKey = mark ? shapeKindKeys[mark.shape] : markKindKeys[kind] || 'markKindNote';
 
+  if(contextAt) return <ActionMenu portal surface="mark" t={t} anchor={contextAt} onClose={()=>{setContextAt(null);if(!contextChosen.current)onClose();}} handlers={{
+    edit: () => {contextChosen.current=true;setTab('content');},
+    comment: () => {contextChosen.current=true;setTab('comments');},
+    colors: mark?.shape === 'stamp' ? undefined : {children:HIGHLIGHT_COLORS.map(color=>({id:color.id,label:t(colorKeys[color.id]),icon:<span className="inline-block size-3 rounded-full" style={{backgroundColor:color.hex}} />,onClick:()=>{contextChosen.current=true;return save({color:color.id});}}))},
+    delete: () => {contextChosen.current=true;return remove();},
+  }} />;
   return (
     <div
       role="dialog"

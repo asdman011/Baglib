@@ -21,6 +21,7 @@ import type { TranslationKey } from '../../translations';
 import { HIGHLIGHT_COLORS } from '../../libs/reader/highlight-manager';
 
 export interface ZenSelectionMenuProps {
+  initialTab?: 'toolbar' | 'note';
   studyActions?: React.ReactNode;
   selectedText: string;
   readingPage: number;
@@ -43,6 +44,7 @@ export interface ZenSelectionMenuProps {
 
 export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   selectedText,
+  initialTab = 'toolbar',
   studyActions,
   readingPage,
   bookTitle,
@@ -61,7 +63,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   onClose,
   t,
 }) => {
-  const [activeTab, setActiveTab] = useState<'toolbar' | 'note' | 'quote' | 'question'>('toolbar');
+  const [activeTab, setActiveTab] = useState<'toolbar' | 'note' | 'quote' | 'question'>(initialTab);
   const [noteContent, setNoteContent] = useState('');
   const [quoteContextNote, setQuoteContextNote] = useState('');
   const [questionText, setQuestionText] = useState('');

@@ -1,5 +1,6 @@
 'use client';
 
+import { QuranActionMenu } from '../actions/QuranActionMenu';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpen, Languages, Layers, Lightbulb, ListTree, Play, Type, X } from 'lucide-react';
 import type { QuranAyahTheme, QuranSimilarAyah, QuranTopic } from '../../../shared/types/quran';
@@ -250,14 +251,13 @@ export function QuranMushafWorkspace(props: Props) {
       <header className="shrink-0 border-b border-subtle flex items-center justify-between gap-2 p-3"><h2 className="text-sm font-semibold">{t(labels[panel.tool])}</h2>{panel.tool === 'topics' && page.profile === 'hafs' && <button type="button" onClick={() => setTopicDrawer({ topics: [], active: null })} className="ms-auto text-xs underline">{t('quranTopicBrowse')}</button>}<button type="button" aria-label={t('quranClosePanel')} onClick={() => setWindows([])} className="rounded-lg p-2 focus-visible:outline-emerald-500"><X className="size-4" /></button></header>
       <div tabIndex={0} aria-label={t(labels[panel.tool])} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] break-words select-text p-4 leading-loose focus-visible:outline-emerald-500">{(panel.tool === 'explore' ? ['morphology', 'meanings', 'transliteration', 'mutashabihat', 'similar'] as Tool[] : [panel.tool]).map(tool => <section key={tool}><h3 className="font-semibold text-sm">{t(labels[tool])}</h3>{['similar', 'mutashabihat', 'topics', 'themes'].includes(tool) && <p className="text-xs text-muted leading-relaxed">{t('quranConnectionSource', { resource: t(labels[tool]) })}</p>}<StudyContent tool={tool} reference={panel.reference} page={page} selection={selection} metadata={metadata} t={t} lang={props.lang} onNavigateAyah={onNavigateAyah} onOpenTopics={openTopics} onOpenSimilar={openSimilar} /></section>)}</div>
     </aside>)}
-    {menu && <><div className="fixed inset-0 z-40" onPointerDown={() => setMenu(null)} /><div ref={menuElement} role="menu" onKeyDown={event => {
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const buttons = [...(menuElement.current?.querySelectorAll<HTMLButtonElement>('button') || [])];
-      const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
-      buttons[next]?.focus();
-    }} className="fixed z-50 rounded-xl border border-subtle bg-surface p-2 shadow-xl max-h-[70vh] overflow-auto" style={{ left: Math.max(0, Math.min(menu.x, globalThis.innerWidth - 240)), top: Math.max(0, Math.min(menu.y, globalThis.innerHeight - 340)), width: 230 }}>{(['morphology', 'meanings', 'transliteration', 'mutashabihat', 'similar', 'tafsir', 'translation', 'topics', 'themes'] as Tool[]).map(tool => <button key={tool} type="button" role="menuitem" onClick={() => open(tool, menu.reference, 'left')} className="block w-full text-start px-3 py-2 text-sm rounded-lg hover:bg-emerald-500/15">{t(labels[tool])}</button>)}</div></>}
+    {menu && <QuranActionMenu portal anchor={{ x: menu.x, y: menu.y }} onClose={() => setMenu(null)} input={{ reference: menu.reference, script: selection.script, profile: page.profile, language: props.lang, t,
+        tafsir: selection.tafsir ? () => open('tafsir',menu.reference,'left') : undefined,
+        translation: selection.translation ? () => open('translation',menu.reference,'left') : undefined,
+        play: props.canPlay ? () => props.onStartAudio(menu.reference) : undefined,
+      }} toolsLabel={t('quranReadingOptions')}
+      tools={(['morphology','meanings','transliteration','mutashabihat','similar','topics','themes'] as Tool[]).map(tool => ({id:tool,label:t(labels[tool])}))}
+      onTool={tool=>open(tool as Tool,menu.reference,'left')} />}
     {topicDrawer && <QuranTopicDrawer topics={topicDrawer.topics} activeTopic={topicDrawer.active} onSelectTopic={topic => setTopicDrawer(current => ({ topics: current?.topics.some(item => item.topicId === topic.topicId) ? current.topics : [...(current?.topics || []), topic], active: topic }))} onSelectAyah={navigateFromDrawer} onClose={() => setTopicDrawer(null)} t={t} lang={props.lang} dir={props.dir} onSearch={searchTopics} onLoadTopics={loadTopics} />}
     {similarDrawer && <QuranSimilarAyahsDrawer surah={similarDrawer.reference.surah} ayah={similarDrawer.reference.ayah} similarAyahs={similarDrawer.items} surahs={props.surahs} script={selection.script} t={t} lang={props.lang} dir={props.dir} onClose={() => setSimilarDrawer(null)} onNavigateAyah={navigateFromDrawer} onCopy={props.onCopyText} />}
   </div>;

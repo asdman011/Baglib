@@ -7,20 +7,7 @@ import { Menu, type MenuItemProps } from '../ui/Menu';
 import { NEW_OBJECT_ACTIONS } from './nav-model';
 import { openStudyNote } from '../../utils/study-navigation';
 
-export interface NewObjectMenuProps {
-  collapsed?: boolean;
-  className?: string;
-  onActionComplete?: () => void;
-}
-
-export const NewObjectMenu: React.FC<NewObjectMenuProps> = ({
-  collapsed = false,
-  className = '',
-  onActionComplete,
-}) => {
-  const { t, setViewMode, setIsImportWizardOpen } = useWorkspace();
-
-  const handleAction = (id: string) => {
+export function runNewObjectAction(id: string, { setViewMode, setIsImportWizardOpen }: Pick<ReturnType<typeof useWorkspace>, 'setViewMode' | 'setIsImportWizardOpen'>) {
     switch (id) {
       case 'import-book':
         setIsImportWizardOpen(true);
@@ -46,6 +33,23 @@ export const NewObjectMenu: React.FC<NewObjectMenuProps> = ({
         window.dispatchEvent(new CustomEvent('baglib:new-pathway'));
         break;
     }
+}
+
+export interface NewObjectMenuProps {
+  collapsed?: boolean;
+  className?: string;
+  onActionComplete?: () => void;
+}
+
+export const NewObjectMenu: React.FC<NewObjectMenuProps> = ({
+  collapsed = false,
+  className = '',
+  onActionComplete,
+}) => {
+  const { t, setViewMode, setIsImportWizardOpen } = useWorkspace();
+
+  const handleAction = (id: string) => {
+    runNewObjectAction(id, { setViewMode, setIsImportWizardOpen });
     onActionComplete?.();
   };
 

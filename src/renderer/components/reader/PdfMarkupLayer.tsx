@@ -71,7 +71,7 @@ export function PdfMarkupLayer({ pageNumber, items }: { pageNumber: number; item
   return <>
     {/* Outlines are drawn without catching the mouse, so the text under them stays selectable; their edges take clicks. */}
     <svg className="pdf-markup-shapes pointer-events-none absolute inset-0 z-[25] h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      {marks.filter(({ mark }) => mark.shape !== 'pin' && mark.shape !== 'text' && mark.shape !== 'stamp').map(({ item, mark }) => <g key={item.id} data-pdf-mark={mark.shape} data-mark-id={item.id} className="pointer-events-auto cursor-pointer" style={{ pointerEvents: 'visibleStroke' }} onClick={open(item)}>
+      {marks.filter(({ mark }) => mark.shape !== 'pin' && mark.shape !== 'text' && mark.shape !== 'stamp').map(({ item, mark }) => <g key={item.id} data-pdf-mark={mark.shape} data-mark-id={item.id} tabIndex={0} className="pointer-events-auto cursor-pointer" style={{ pointerEvents: 'visibleStroke' }} onClick={open(item)}>
         <ShapeSvg mark={mark} />
       </g>)}
       {preview && preview.shape !== 'pin' && preview.shape !== 'text' && <ShapeSvg mark={preview} preview />}

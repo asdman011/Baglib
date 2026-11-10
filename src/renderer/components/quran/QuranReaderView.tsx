@@ -1,5 +1,7 @@
 'use client';
 
+import { ContextMenu } from '../ui/ContextMenu';
+import { quranActions } from '../actions/quran-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Copy, CopyCheck, Download, Layers, Play, Pause, Settings2, X, Maximize2, Minimize2 } from 'lucide-react';
 import type { QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranPassage, QuranReaderCatalog, QuranStructure, QuranSurahIntro } from '../../../shared/types/quran';
@@ -76,7 +78,11 @@ export function QuranPassageView({
             </span>
           </div>
         )}
-        <article
+        <ContextMenu as="article" items={quranActions({ reference: { surah: passage.surah, ayah: ayah.number }, script: '', profile: passage.profile, language: lang, text: ayah.words.filter(word => !word.marker).map(word => word.text).join(' '), t,
+          tafsir: onCommentary ? () => onCommentary(ayah.number) : undefined,
+          translation: ayah.translation ? () => document.querySelector<HTMLElement>('[data-quran-translation="'+ayah.number+'"]')?.scrollIntoView({block:'nearest'}) : undefined,
+          play: onPlayAyah ? () => onPlayAyah(ayah.number) : undefined,
+        })}
           className={`min-w-0 rounded-2xl border bg-surface p-4 sm:p-6 transition-all ${
             isAyahPlaying || hoveredWord?.ayah === ayah.number
               ? 'border-emerald-500/80 bg-emerald-500/5 ring-1 ring-emerald-500/30 shadow-sm'
@@ -93,7 +99,7 @@ export function QuranPassageView({
               </span>{' '}</React.Fragment>;
             })}
           </div>
-          {ayah.translation && <div dir="ltr" lang="en" className="mt-5 border-t border-subtle pt-4 text-base leading-loose text-start">
+          {ayah.translation && <div data-quran-translation={ayah.number} dir="ltr" lang="en" className="mt-5 border-t border-subtle pt-4 text-base leading-loose text-start">
             <QuranTranslationText translation={ayah.translation} t={t} />
           </div>}
           <div className="flex flex-wrap justify-between items-center gap-3 mt-4 text-sm text-muted">
@@ -110,7 +116,7 @@ export function QuranPassageView({
           {selected === ayah.number && <aside className="mt-4 border-t border-subtle pt-4" aria-label={t('quranCatTafsir')}>
             {commentary ? <><p dir="ltr" className="text-sm text-muted mb-3">{commentary.from} – {commentary.to}</p><div dir="rtl" lang="ar" className="font-reading text-xl leading-[2.2] break-words space-y-3"><QuranRichText nodes={commentary.nodes} /></div></> : <p role="status">{t('quranLoading')}</p>}
           </aside>}
-        </article>
+        </ContextMenu>
       </React.Fragment>;
     })}
   </div>;

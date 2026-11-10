@@ -1,5 +1,6 @@
 'use client';
 
+import { shortcutForEvent } from '../actions/shortcuts';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle, ArrowLeft, ArrowRight, Sparkles, RotateCw, ExternalLink } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -138,6 +139,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Don't intercept if user is typing in a text field
+      const shortcut = shortcutForEvent(event, 'review');
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -156,21 +158,21 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
       if (!card) return;
 
       if (!revealed) {
-        if (event.key === ' ' || event.code === 'Space') {
+        if (shortcut?.id === 'review-reveal') {
           event.preventDefault();
           setRevealed(true);
         }
       } else {
-        if (event.key === '1' || event.code === 'Digit1' || event.code === 'Numpad1') {
+        if (shortcut?.id === 'review-grade-1') {
           event.preventDefault();
           void grade(1);
-        } else if (event.key === '2' || event.code === 'Digit2' || event.code === 'Numpad2') {
+        } else if (shortcut?.id === 'review-grade-2') {
           event.preventDefault();
           void grade(2);
-        } else if (event.key === '3' || event.code === 'Digit3' || event.code === 'Numpad3') {
+        } else if (shortcut?.id === 'review-grade-3') {
           event.preventDefault();
           void grade(3);
-        } else if (event.key === '4' || event.code === 'Digit4' || event.code === 'Numpad4') {
+        } else if (shortcut?.id === 'review-grade-4') {
           event.preventDefault();
           void grade(4);
         }

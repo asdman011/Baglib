@@ -48,6 +48,11 @@ export const SearchHubModal: React.FC = () => {
 
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<SearchScope>('all');
+  useEffect(() => {
+    const search=(event:Event)=>{setQuery((event as CustomEvent<string>).detail);setScope('local');setSearchHubOpen(true);};
+    window.addEventListener('baglib:search-selection',search);
+    return ()=>window.removeEventListener('baglib:search-selection',search);
+  },[setSearchHubOpen]);
   const [ftsResults, setFtsResults] = useState<LibraryFtsResult[]>([]);
   const [selectedProviders, setSelectedProviders] = useState<SearchProviderId[]>([
     'local',

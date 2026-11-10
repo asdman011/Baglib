@@ -1,4 +1,5 @@
 'use client';
+import { matchesShortcut } from '../actions/shortcuts';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { ArrowLeft, Search, PanelRight, Maximize2, MoreHorizontal, Save, Wrench, ZoomIn, ZoomOut, Check } from 'lucide-react';
 import { Button, IconButton } from '../ui/Button';
@@ -52,7 +53,7 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
-      if (event.key === 'F11' && onFocusMode) { event.preventDefault(); setHasFocus(false); setPeek(false); if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); onFocusMode(!focusMode); }
+      if (matchesShortcut(event, 'reader-focus', 'reader') && onFocusMode) { event.preventDefault(); setHasFocus(false); setPeek(false); if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); onFocusMode(!focusMode); }
       if (event.key === 'Escape' && focusMode) { setHasFocus(false); setPeek(false); onFocusMode?.(false); }
     };
     window.addEventListener('keydown', key);

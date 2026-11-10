@@ -99,6 +99,10 @@ import { selectionStudyLocation, resolveStudyCfi, revealStudyRange } from '../..
 import { bookCfiTarget, bookStudyTarget } from '../../../shared/study-notes';
 import { consumePendingPage, consumePendingCfi } from '../../utils/study-navigation';
 import { markHistoryShortcut, readerShortcut } from '../../libs/reader/reader-shortcuts';
+import { colorKeys } from './ReaderMarkupBar';
+import { matchesShortcut } from '../actions/shortcuts';
+import { ActionMenu } from '../actions/ActionMenu';
+import { isTextEntry } from '../actions/context-actions';
 import { ZenSelectionMenu } from './ZenSelectionMenu';
 import { ZenTocDrawer } from './ZenTocDrawer';
 import { ZenFootnotePopover } from './ZenFootnotePopover';
@@ -346,7 +350,7 @@ const SourceBookReader: React.FC = () => {
   const stopMarkup = useCallback(() => { setMarkupTool('select'); setMarkupLocked(false); }, []);
   const finishMarkup = useCallback(() => { if (!markupLocked) setMarkupTool('select'); }, [markupLocked]);
   const [compareOpen, setCompareOpen] = useState(false);
-  const [openMark, setOpenMark] = useState<{ item: KnowledgeItemDTO; at: { x: number; y: number } } | null>(null);
+  const [openMark, setOpenMark] = useState<{ item: KnowledgeItemDTO; at: { x: number; y: number }; context?: boolean; request?: number } | null>(null);
   const [markThreadCounts, setMarkThreadCounts] = useState<Record<string, { open: number; total: number }>>({});
   const refreshMarkCounts = useCallback(() => { void window.electronAPI?.knowledgeHistory?.commentTotals?.().then(setMarkThreadCounts, () => {}); }, []);
   // Pin colours need the thread counts as soon as the book opens.
@@ -1434,7 +1438,7 @@ const SourceBookReader: React.FC = () => {
   // Global Ctrl+F / Cmd+F shortcut to open in-book search drawer
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      if (matchesShortcut(e, 'reader-find', 'reader')) {
         e.preventDefault();
         handleToggleSearch();
       }
@@ -3115,10 +3119,63 @@ const SourceBookReader: React.FC = () => {
   };
 
   // Floating Zen Selection Menu (KEY-137 / KEY-12)
+  const [selectionAt, setSelectionAt] = useState<{ x: number; y: number } | null>(null);
+  const [selectionEditor, setSelectionEditor] = useState({ key: 0, tab: 'toolbar' as 'toolbar' | 'note' });
+  useEffect(() => {
+    const context = (event: MouseEvent) => {
+      if (isTextEntry(event.target)) return;
+      const markId = (event.target as Element).closest?.('[data-mark-id]')?.getAttribute('data-mark-id');
+      const mark = markId && knowledgeItems.find(item => item.id === markId);
+      if (mark) { event.preventDefault(); event.stopPropagation(); setOpenMark(previous => ({ item: mark, at: { x: event.clientX, y: event.clientY }, context: true, request: (previous?.request ?? 0) + 1 })); return; }
+      if (!selectedText || !(event.target as Element).closest?.('[data-reader-content],.pdf-native-viewer-container,[data-reader-main],.reader-container')) return;
+      event.preventDefault(); event.stopPropagation(); setSelectionAt({ x: event.clientX, y: event.clientY });
+    };
+    const keyboard = (event: KeyboardEvent) => {
+      if (isTextEntry(event.target) || !(event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10')) return;
+      const element = event.target as HTMLElement;
+      const id = element.closest?.('[data-mark-id]')?.getAttribute('data-mark-id');
+      const item = id && knowledgeItems.find(mark => mark.id === id);
+      const bounds = element.getBoundingClientRect?.();
+      if (item) { event.preventDefault(); event.stopPropagation(); setOpenMark(previous => ({item,at:{x:bounds?.x??200,y:bounds?.bottom??120},context:true,request:(previous?.request??0)+1})); return; }
+      if (!selectedText) return;
+      event.preventDefault(); event.stopPropagation(); const selection = window.getSelection();
+      const r = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null;
+      setSelectionAt({ x: r?.x ?? 200, y: r?.bottom ?? 120 });
+    };
+    let touchOpened = false;
+    let press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
+    const cancel = () => { if (press) clearTimeout(press.timer); press = null; };
+    const down = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (event.pointerType !== 'touch' || isTextEntry(target) || !target.closest?.('[data-reader-content]')) return;
+      cancel();
+      touchOpened = false;
+      const x = event.clientX, y = event.clientY;
+      press = { x, y, timer: setTimeout(() => { touchOpened = true; target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y })); }, 550) };
+    };
+    const move = (event: PointerEvent) => { if (event.pointerType === 'touch' && press && Math.hypot(event.clientX-press.x,event.clientY-press.y)>10) cancel(); };
+    const touchClick = (event: MouseEvent) => {
+      const native = event as MouseEvent & { pointerType?: string; sourceCapabilities?: { firesTouchEvents?: boolean } };
+      if (touchOpened && (native.pointerType === 'touch' || native.sourceCapabilities?.firesTouchEvents)) { event.preventDefault(); event.stopImmediatePropagation(); }
+      touchOpened = false;
+    };
+    document.addEventListener('click', touchClick, true);
+    document.addEventListener('contextmenu',context); document.addEventListener('keydown',keyboard);
+    document.addEventListener('pointerdown',down); document.addEventListener('pointermove',move); document.addEventListener('pointerup',cancel); document.addEventListener('pointercancel',cancel);
+    return () => { cancel(); document.removeEventListener('click', touchClick, true); document.removeEventListener('contextmenu',context);document.removeEventListener('keydown',keyboard);document.removeEventListener('pointerdown',down);document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',cancel);document.removeEventListener('pointercancel',cancel); };
+  },[selectedText,knowledgeItems]);
+  const selectionHandlers = {
+    explain: () => studySelection('explain'), practice: () => studySelection('practice'), review: () => studySelection('review'),
+    note: () => setSelectionEditor(current => ({ key: current.key + 1, tab: 'note' })),
+    colors: { children: HIGHLIGHT_COLORS.map(color => ({id:color.id,label:t(colorKeys[color.id]),icon:<span className="inline-block size-3 rounded-full" style={{backgroundColor:color.hex}} />,onClick:()=>handleSaveKnowledge('highlight',color.id)})) },
+    copy: () => navigator.clipboard.writeText(selectedText+'\n['+(activeBook?.title || '')+' · '+t('page')+' '+readingPage+']'),
+    search: () => { window.dispatchEvent(new CustomEvent('baglib:search-selection',{detail:selectedText})); },
+    dictionary: () => { closeAllPanelsExcept();setDictionaryLookupWord(selectedText);setIsDictionaryModalOpen(true); },
+  };
   const renderSelectionPopover = () => {
     if (!activeBook || !selectedText || isInstantHighlightMode) return null;
     return (
-      <ZenSelectionMenu
+      <><ActionMenu portal surface="selection" handlers={selectionHandlers} t={t} anchor={selectionAt} onClose={()=>setSelectionAt(null)} /><ZenSelectionMenu key={selectionEditor.key} initialTab={selectionEditor.tab}
         studyActions={<div role="group" aria-label={t('readerStudyActions')} className="flex flex-wrap gap-2 border-b border-subtle pb-2 mb-2" dir={workspaceDir}>
           {(['explain', 'practice', 'review'] as const).map(action => (
             <button
@@ -3191,7 +3248,7 @@ const SourceBookReader: React.FC = () => {
           setSelectedText('');
         }}
         t={t}
-      />
+      /></>
     );
   };
 
@@ -4679,8 +4736,9 @@ const SourceBookReader: React.FC = () => {
       {/* Unified Mark Popover (PDF & EPUB: details, colors, notes, comments, threads, delete) */}
       {openMark && (
         <PdfMarkPopover
-          key={openMark.item.id}
+          key={openMark.item.id + ':' + (openMark.request ?? 0)}
           item={openMark.item}
+          initialContext={openMark.context}
           at={openMark.at}
           t={t}
           onClose={() => {

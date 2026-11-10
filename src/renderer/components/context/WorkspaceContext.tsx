@@ -1,6 +1,7 @@
 'use client';
 
 import { openStudyNote } from '../../utils/study-navigation';
+import { matchesShortcut } from '../actions/shortcuts';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BookItem } from '../../types/library';
 import { translations, TranslationKey } from '../../translations';
@@ -225,7 +226,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     const handleNavKey = (e: KeyboardEvent) => {
       // Ctrl+B / Cmd+B toggles pinned
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'b' || e.key === 'B' || e.key === 'لا')) {
+      if (matchesShortcut(e, 'navigation')) {
         e.preventDefault();
         toggleNavPinned();
         return;
@@ -661,12 +662,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl+Shift+N anywhere: a new note, ready to type.
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+      if (matchesShortcut(e, 'new-note')) {
         e.preventDefault();
         openStudyNote({ content: '' });
         return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if (matchesShortcut(e, 'palette')) {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
       }

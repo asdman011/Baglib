@@ -1,4 +1,5 @@
 'use client';
+import { matchesShortcut } from '../actions/shortcuts';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Clock, Link2, NotebookPen, Quote, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -109,10 +110,7 @@ export function findNonCollidingTopPercent(
 export function isCompanionShortcut(
   event: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'defaultPrevented' | 'repeat'>
 ): boolean {
-  if (event.defaultPrevented || event.repeat) return false;
-  if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.altKey) return false;
-  const key = (event.key || '').toLowerCase();
-  return key === 'm' || key === 'ة' || key === '’' || event.code === 'KeyM';
+  return matchesShortcut(event, 'companion', 'reader');
 }
 
 export function readCompanionSavedState(): Saved {

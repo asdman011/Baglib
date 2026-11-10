@@ -144,6 +144,9 @@ export function parseHighlightLocation(locStr: string): { page: number; rects: N
   try {
     if (locStr.startsWith('{')) {
       const parsed = JSON.parse(locStr);
+      if (parsed.shape && Number.isInteger(parsed.page) && parsed.page > 0) {
+        return { page: parsed.page, rects: [] };
+      }
       if (parsed.rects && Array.isArray(parsed.rects)) {
         return {
           page: Number(parsed.page) || 1,
@@ -404,6 +407,8 @@ const PdfPageItem = React.memo(function PdfPageItem({
                 <div
                   key={idx}
                   data-pdf-text-mark={style}
+                  data-mark-id={highlight.id}
+                  tabIndex={0}
                   className="pdf-highlight-rect absolute rounded-xs cursor-pointer pointer-events-auto transition-opacity hover:opacity-80"
                   onClick={(e) => {
                     e.stopPropagation();

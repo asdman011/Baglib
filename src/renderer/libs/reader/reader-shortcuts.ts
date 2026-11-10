@@ -1,3 +1,4 @@
+import { shortcutForEvent } from '../../components/actions/shortcuts';
 import { HIGHLIGHT_COLORS } from './highlight-manager';
 import type { MarkupTool } from '../../../shared/pdf-markup';
 
@@ -22,9 +23,9 @@ export interface ShortcutKeyEvent {
 
 export function markHistoryShortcut(event: ShortcutKeyEvent, dialogOpen: boolean): 'undo' | 'redo' | null {
   if (dialogOpen || event.defaultPrevented || event.repeat || event.altKey || !(event.ctrlKey || event.metaKey) || isTyping(event.target)) return null;
-  const key = event.key.toLowerCase();
-  if (key === 'y' || key === 'z' && event.shiftKey) return 'redo';
-  return key === 'z' ? 'undo' : null;
+  const id = shortcutForEvent(event, 'reader')?.id;
+  if(id === 'reader-redo' || id === 'reader-redo-alt')return 'redo';
+  return id === 'reader-undo' ? 'undo' : null;
 }
 
 function isTyping(target: unknown): boolean {
@@ -37,15 +38,13 @@ function isTyping(target: unknown): boolean {
 }
 
 export function readerShortcut(event: ShortcutKeyEvent, highlighterOn: boolean): ReaderShortcut | null {
-  if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return null;
-  if (event.key === 'Escape') return highlighterOn ? { kind: 'stop-highlighter' } : null;
-  if (event.key === '?') return { kind: 'shortcuts' };
-  if (event.key.toLowerCase() === 'h') return { kind: 'toggle-highlighter' };
-  // Acrobat's single keys for markup tools: U underline, C comment on the page.
-  if (event.key.toLowerCase() === 'u') return { kind: 'tool', tool: 'underline' };
-  if (event.key.toLowerCase() === 'c') return { kind: 'tool', tool: 'comment' };
-  // Physical digits only; Arabic-Indic digits come from the same keys on Arabic layouts.
-  const digit = '١٢٣٤٥'.indexOf(event.key) + 1 || Number(event.key);
-  if (Number.isInteger(digit) && digit >= 1 && digit <= HIGHLIGHT_COLORS.length) return { kind: 'color', color: HIGHLIGHT_COLORS[digit - 1].id };
+  if (isTyping(event.target)) return null;
+  const id = shortcutForEvent(event, 'reader')?.id;
+  if (id === 'reader-stop') return highlighterOn ? { kind: 'stop-highlighter' } : null;
+  if (id === 'help') return { kind: 'shortcuts' };
+  if (id === 'reader-highlight') return { kind: 'toggle-highlighter' };
+  if (id === 'reader-underline') return { kind: 'tool', tool: 'underline' };
+  if (id === 'reader-comment') return { kind: 'tool', tool: 'comment' };
+  if (id?.startsWith('reader-color-')) return { kind: 'color', color: HIGHLIGHT_COLORS[Number(id.at(-1)) - 1].id };
   return null;
 }

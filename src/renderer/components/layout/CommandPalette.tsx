@@ -1,4 +1,5 @@
 'use client';
+import { SHORTCUTS, shortcutHint } from '../actions/shortcuts';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
@@ -25,6 +26,7 @@ import { matchesStudyQuery } from '../../../shared/study-notes';
 import { openStudyNote } from '../../utils/study-navigation';
 
 interface CommandItem {
+  shortcut?: string;
   id: string;
   title: string;
   subtitle: string;
@@ -34,6 +36,7 @@ interface CommandItem {
 
 export const CommandPalette: React.FC = () => {
   const {
+    toggleNavPinned,
     isCommandPaletteOpen,
     setCommandPaletteOpen,
     setSearchHubOpen,
@@ -81,6 +84,17 @@ export const CommandPalette: React.FC = () => {
     ];
 
     const items: CommandItem[] = [];
+    if(!scope) {
+      for(const shortcut of SHORTCUTS.filter(entry=>['help','new-note','navigation'].includes(entry.id))) {
+        const title=t(shortcut.labelKey);
+        if(keyword && !matchesStudyQuery(title,keyword))continue;
+        items.push({id:'shortcut:'+shortcut.id,title,subtitle:t('readerShortcutsTitle'),shortcut:shortcutHint(shortcut.id),icon:FileText,action:()=>{
+          if(shortcut.id==='help')window.dispatchEvent(new CustomEvent('baglib:shortcut-help'));
+          if(shortcut.id==='new-note')openStudyNote({content:''});
+          if(shortcut.id==='navigation')toggleNavPinned();
+        }});
+      }
+    }
 
     // 1. Workspace navigation commands
     if (scope !== 'notes' && scope !== 'books') {
@@ -141,7 +155,7 @@ export const CommandPalette: React.FC = () => {
     }
 
     return items.slice(0, 20);
-  }, [books, notes, scope, keyword, t, openBookForReading, setSearchHubOpen, setViewMode]);
+  }, [books, notes, scope, keyword, t, openBookForReading, setSearchHubOpen, setViewMode, toggleNavPinned]);
 
   if (!isCommandPaletteOpen) return null;
 
@@ -241,6 +255,7 @@ export const CommandPalette: React.FC = () => {
                     {item.subtitle}
                   </span>
                 </span>
+                {item.shortcut && <kbd dir="ltr" className="text-[10px] text-muted">{item.shortcut}</kbd>}
                 <ArrowRight size={16} className="rtl:rotate-180 shrink-0 text-muted" />
               </button>
             );

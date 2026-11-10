@@ -1,7 +1,9 @@
 'use client';
 
+import { ContextMenu } from '../ui/ContextMenu';
+import { contextActions } from '../actions/context-actions';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, Repeat2, Search, Sparkles, Trash2, BookOpen, Layers } from 'lucide-react';
+import { Plus, Repeat2, Search, Sparkles, BookOpen, Layers } from 'lucide-react';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { CARD_HOVER_SETTING, cardHoverEnabled, KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
@@ -186,7 +188,12 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
       {cards.length > 0 && (
         <ul className="space-y-3">
           {cards.map((card) => (
-            <li
+            <ContextMenu as="li" items={contextActions('card', {
+              edit: ['quran', 'hadith', 'poetry'].includes(card.sourceKind) ? undefined : () => setEditing(card.id), review: () => setPracticing(card.id),
+              copy: () => navigator.clipboard.writeText(card.front + '\n\n' + card.back),
+              srs: () => act(() => window.electronAPI.knowledgeCards.setMemorizing(card.id,true)),
+              delete: () => { if(window.confirm(t('markDeleteConfirm')))return act(() => window.electronAPI.knowledgeCards.remove(card.id)); },
+            },t)}
               key={card.id}
               data-saved-card={card.id}
               className="rounded-xl border border-subtle bg-canvas/60 p-4 space-y-3 hover:border-subtle/80 transition-colors"
@@ -245,15 +252,6 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
                   >
                     <Repeat2 className="size-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void act(() => window.electronAPI.knowledgeCards.remove(card.id))}
-                    title={t('savedCardsDelete')}
-                    aria-label={t('savedCardsDelete')}
-                    className="rounded-lg p-2 text-muted hover:text-danger hover:bg-surface transition-colors"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
                 </div>
               </div>
 
@@ -309,7 +307,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
               )}
 
               <NoteHistory id={card.id} onChanged={() => void refresh()} />
-            </li>
+            </ContextMenu>
           ))}
         </ul>
       )}

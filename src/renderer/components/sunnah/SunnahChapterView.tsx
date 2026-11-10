@@ -5,7 +5,10 @@ import { Focus } from 'lucide-react';
 import type { SunnahChapter, SunnahHadith, SunnahLanguage, SunnahPassage, SunnahText } from '../../../shared/types/sunnah';
 import type { TranslationKey } from '../../translations';
 import { isnadTokens, splitSunnahPassage } from '../../libs/sunnah/text';
-import { HadithActions } from './HadithActions';
+import { ContextMenu } from '../ui/ContextMenu';
+import { contextActions } from '../actions/context-actions';
+import { addPassageToSrs, openPassageComment, passageNote, linkPassageToNote, sharePassage } from '../actions/passage-actions';
+import { HadithActions, formatHadith } from './HadithActions';
 import { SunnahResearchPanel } from './SunnahResearchPanel';
 
 export type SunnahTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string;
@@ -54,7 +57,22 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
       const section = hadith.section;
       const showSection = index === 0 || previous.number !== section.number || previous.title.ar !== section.title.ar || previous.title.en !== section.title.en;
       const hasSection = section.number || section.title.ar || section.title.en;
-      return <div key={hadith.id} className="sunnah-entry" data-hadith-id={hadith.id} data-card-kind="hadith" data-card-ref={`hadith:${chapter.collection}:${hadith.id}`} data-card-label={`${chapter.collection} ${hadith.number}`} data-card-research={hadith.researchId}>
+      const target = 'sunnah:' + chapter.collection + ':' + chapter.number + ':' + hadith.id;
+      const label = chapter.title.ar + ' · ' + hadith.number;
+      const reference = formatHadith(chapter, hadith, showEnglish, false, true);
+      const items = contextActions('hadith', {
+        copy: () => navigator.clipboard.writeText(reference),
+        copyFull: () => navigator.clipboard.writeText(formatHadith(chapter, hadith, showEnglish, true, true)),
+        share: () => sharePassage(reference),
+        comment: () => hadith.researchId ? openPassageComment('hadith:'+hadith.researchId) : passageNote(target,label,reference),
+        srs: () => addPassageToSrs({ text: reference, sourceKind: 'hadith', sourceRef: target, sourceLabel: label, language: showEnglish ? 'en' : 'ar' }),
+        commentary: hadith.comment || hadith.researchId ? () => {
+          const root = [...document.querySelectorAll<HTMLElement>('[data-hadith-id]')].find(element => element.dataset.hadithId === hadith.id);
+          const details = root?.querySelector<HTMLDetailsElement>('details'); if(details){ details.open=true; details.scrollIntoView({block:'nearest'}); }
+        } : undefined,
+        link: () => linkPassageToNote(target,label),
+      },t);
+      return <ContextMenu items={items} key={hadith.id} className="sunnah-entry" data-hadith-id={hadith.id} data-card-kind="hadith" data-card-ref={`hadith:${chapter.collection}:${hadith.id}`} data-card-label={`${chapter.collection} ${hadith.number}`} data-card-research={hadith.researchId}>
         {showSection && hasSection && <ParallelRow showEnglish={showEnglish} className="sunnah-section-heading"
           arabic={<h3><NumberedTitle number={section.number} title={section.title} language="ar" fallback="" /></h3>}
           english={<h3><NumberedTitle number={section.number} title={section.title} language="en" fallback="" /></h3>} />}
@@ -89,7 +107,7 @@ export function SunnahChapterView({ chapter, hadiths, showEnglish, single, t, on
           {hadith.researchId !== undefined && <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} matn={hadith.text.ar.matn || hadith.text.ar.full} initialOpen={single} showGrading={gradingRequest.id === hadith.researchId ? gradingRequest.count : undefined} sourceBook={Boolean(hadith.sourceBook)} t={t} />}
           <HadithActions chapter={chapter} hadith={hadith} showEnglish={showEnglish} t={t} />
         </article>
-      </div>;
+      </ContextMenu>;
     })}
   </div>;
 }

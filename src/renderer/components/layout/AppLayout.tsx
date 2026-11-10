@@ -3,6 +3,8 @@
 import { CompanionNotePane, CompanionToggle, isCompanionShortcut, useCompanionPane } from '../notes/CompanionNotePane';
 import React from 'react';
 import { Titlebar } from './Titlebar';
+import { GlobalContextMenu } from '../actions/GlobalContextMenu';
+import { ActionOverlays } from '../actions/ActionOverlays';
 import { CommandPalette } from './CommandPalette';
 import { KnowledgeCardLayer } from '../knowledge/KnowledgeCardLayer';
 import { StudyRhythmLayer } from '../dashboard/StudyRhythm';
@@ -258,6 +260,8 @@ export const AppLayout: React.FC = () => {
 
       {/* Global Search Command Palette (Cmd + K) */}
       <CommandPalette />
+      <GlobalContextMenu />
+      <ActionOverlays />
       <KnowledgeCardLayer />
 
       {/* Global Book Discovery & Search Hub (Story 11) */}

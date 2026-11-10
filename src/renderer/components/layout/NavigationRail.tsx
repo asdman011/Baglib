@@ -93,6 +93,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
     return (
       <button
         key={item.id}
+        data-nav-item={item.id}
         type="button"
         onClick={() => handleItemClick(item.id)}
         title={tooltip}

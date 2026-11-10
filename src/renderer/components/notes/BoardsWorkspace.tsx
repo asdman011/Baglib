@@ -1,5 +1,8 @@
 'use client';
 
+import { shortcutForEvent } from '../actions/shortcuts';
+import { ContextMenu } from '../ui/ContextMenu';
+import { contextActions } from '../actions/context-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -260,12 +263,13 @@ function BoardCanvas({
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      const typing = (event.target as HTMLElement)?.closest?.('textarea,input,select');
+      const shortcut = shortcutForEvent(event, 'board');
+      const menu = (event.target as HTMLElement)?.closest?.('[role=menu]');
       if (event.key === 'Escape') {
         if (connectFrom !== undefined) setConnectFrom(undefined);
         return;
       }
-      if (typing || !selection) return;
+      if (!shortcut?.id.startsWith('board-') || menu || !selection) return;
       if (event.key === 'Delete') {
         event.preventDefault();
         removeSelected();
@@ -628,7 +632,12 @@ function BoardCanvas({
             const chosen = selection?.kind === 'item' && selection.id === item.id;
             const source = connectFrom === item.id;
             return (
-              <div
+              <ContextMenu items={contextActions('board', {
+                open: item.target ? () => navigateStudyReference(item.target!,books,openBookForReading,(id,anchor)=>openStudyNote({id,anchor})) : undefined,
+                copy: () => navigator.clipboard.writeText(item.text || item.label || ''),
+                edit: () => { setSelection({kind:'item',id:item.id}); document.querySelector<HTMLTextAreaElement>('[data-board-item="'+item.id+'"] textarea')?.focus(); },
+                delete: () => change(current => removeBoardItems(current,new Set([item.id]))),
+              },t)}
                 key={item.id}
                 data-board-item={item.id}
                 data-board-kind={item.kind}
@@ -713,7 +722,7 @@ function BoardCanvas({
                     surface.current?.setPointerCapture(event.pointerId);
                   }}
                 />
-              </div>
+              </ContextMenu>
             );
           })}
         </div>

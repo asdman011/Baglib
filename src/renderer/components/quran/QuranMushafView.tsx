@@ -38,6 +38,7 @@ export function svgWordLocation(element: Element | null): Location | null {
 export function QuranMushafView({ page, t, lang, dir, selectedAyah, onSelectAyah, onNavigatePage, onCopyText, cardSource, activeAudio, loading = false, onContextAyah, onExploreAyah }: QuranMushafViewProps) {
   const [zoom, setZoom] = useState(100);
   const surface = useRef<HTMLDivElement>(null);
+  const touchOpened = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontLoaded, setFontLoaded] = useState('');
   const [fontError, setFontError] = useState('');
@@ -153,15 +154,28 @@ export function QuranMushafView({ page, t, lang, dir, selectedAyah, onSelectAyah
         const reference = svgWordLocation(target);
         onSelectAyah(null);
         if (reference) onExploreAyah?.({ ...reference, wordText: target?.getAttribute('data-canonical') || target?.getAttribute('data-hafs') || undefined });
+      }} onClickCapture={event => {
+        const native=event.nativeEvent as MouseEvent & {pointerType?:string;sourceCapabilities?:{firesTouchEvents?:boolean}};
+        if(touchOpened.current&&(native.pointerType==='touch'||native.sourceCapabilities?.firesTouchEvents)){event.preventDefault();event.stopPropagation();}
+        touchOpened.current=false;
       }} onContextMenu={event => {
         if (clickTimer.current) clearTimeout(clickTimer.current);
         const target = targetAt(event);
         const reference = svgWordLocation(target);
         if (reference && onContextAyah) { event.preventDefault(); onContextAyah({ ...reference, wordText: target?.getAttribute('data-canonical') || target?.getAttribute('data-hafs') || undefined }, { x: event.clientX, y: event.clientY }); }
-      }} onPointerMove={event => highlight(targetAt(event))} onPointerOver={event => highlight(targetAt(event))} onPointerLeave={() => highlight(null)} onFocus={event => highlight(event.target as Element)} onBlur={() => highlight(null)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(event.target as Element); } }}>
+      }} onPointerMove={event => highlight(targetAt(event))} onPointerOver={event => highlight(targetAt(event))} onPointerLeave={() => highlight(null)} onFocus={event => highlight(event.target as Element)} onBlur={() => highlight(null)} onPointerDown={event => {
+        if(event.pointerType !== 'touch')return;
+        const target = targetAt(event); const reference = svgWordLocation(target); if(!reference)return;
+        const x=event.clientX,y=event.clientY;
+        touchOpened.current=false;
+        const timer=setTimeout(()=>{touchOpened.current=true;if(clickTimer.current)clearTimeout(clickTimer.current);onContextAyah?.(reference,{x,y});},550);
+        const cancel=()=>{clearTimeout(timer); document.removeEventListener('pointerup',cancel);document.removeEventListener('pointercancel',cancel);document.removeEventListener('pointermove',move);};
+        const move=(next:PointerEvent)=>{if(next.pointerType==='touch'&&Math.hypot(next.clientX-x,next.clientY-y)>10)cancel();};
+        document.addEventListener('pointerup',cancel,{once:true});document.addEventListener('pointercancel',cancel,{once:true});document.addEventListener('pointermove',move);
+      }} onKeyDown={event => { if(event.key==='ContextMenu' || event.shiftKey && event.key==='F10'){const target=targetAt(event as unknown as React.MouseEvent);const reference=svgWordLocation(target);if(reference){event.preventDefault();event.stopPropagation();const r=(event.target as Element).getBoundingClientRect();onContextAyah?.(reference,{x:r.x+r.width/2,y:r.bottom});}return;} if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(event.target as Element); } }}>
         {page.glyphLines ? fontLoaded !== page.fontUrl ? <p role={fontError === page.fontUrl ? 'alert' : 'status'}>{t(fontError === page.fontUrl ? 'quranReaderError' : 'quranLoading')}</p> : <div dir="rtl" lang="ar" style={{ fontSize: page.layoutMode === 'adapted' ? '4.2cqw' : '5.5cqw', lineHeight: 1.8, aspectRatio: page.layoutMode === 'adapted' ? '382.68 / 547.09' : undefined }}>
           {page.glyphLines.map(line => <div key={line.number} data-quran-unicode-line={page.layoutMode === 'adapted' || undefined} style={page.layoutMode === 'adapted' ? { height: `${100 / 15}%`, alignItems: 'center' } : undefined} className={`flex min-h-[1.8em] ${line.centered || line.type !== 'ayah' ? 'justify-center' : 'justify-between'}`}>
-            {line.type === 'ayah' ? line.words.map(word => <span key={`${word.surah}:${word.ayah}:${word.position}`} data-surah={word.surah} data-aya={word.ayah} data-word-index-in-ayah={word.position} data-canonical={word.text} style={{ fontFamily: word.marker ? 'sans-serif' : fontName, fontSize: word.marker ? '.6em' : undefined, whiteSpace: 'nowrap' }}>{word.glyph}</span>) : <span className="font-reading text-[.7em]">{line.type === 'surah_name' ? t('quranSurahNumber', { number: line.surah }) : page.basmala}</span>}
+            {line.type === 'ayah' ? line.words.map(word => <span key={`${word.surah}:${word.ayah}:${word.position}`} tabIndex={0} role="button" aria-label={t('quranAyahInspector')+' '+word.surah+':'+word.ayah} data-surah={word.surah} data-aya={word.ayah} data-word-index-in-ayah={word.position} data-canonical={word.text} style={{ fontFamily: word.marker ? 'sans-serif' : fontName, fontSize: word.marker ? '.6em' : undefined, whiteSpace: 'nowrap' }}>{word.glyph}</span>) : <span className="font-reading text-[.7em]">{line.type === 'surah_name' ? t('quranSurahNumber', { number: line.surah }) : page.basmala}</span>}
           </div>)}
         </div> : <div dangerouslySetInnerHTML={markup} />}
       </div>

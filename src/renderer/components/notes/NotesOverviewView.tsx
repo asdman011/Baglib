@@ -1,5 +1,7 @@
 'use client';
 
+import { ContextMenu } from '../ui/ContextMenu';
+import { contextActions } from '../actions/context-actions';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   FileText,
@@ -760,7 +762,13 @@ export const NotesOverviewView: React.FC = () => {
                   const commentsCount = openComments[note.id] ?? 0;
 
                   return (
-                    <article
+                    <ContextMenu as="article" items={contextActions('note', {
+                        open: () => handleSelectNote(note.id),
+                        copy: () => navigator.clipboard.writeText(note.content),
+                        export: () => exportMarkdown([note.id]),
+                        srs: () => handleMemorizeNote(note),
+                        delete: () => { if(window.confirm(t('markDeleteConfirm')))return handleRemoveNote(note); },
+                      },t)}
                       key={note.id}
                       data-study-note={note.id}
                       onClick={() => handleSelectNote(note.id)}
@@ -814,7 +822,7 @@ export const NotesOverviewView: React.FC = () => {
                           </span>
                         ))}
                       </div>
-                    </article>
+                    </ContextMenu>
                   );
                 })}
               </div>

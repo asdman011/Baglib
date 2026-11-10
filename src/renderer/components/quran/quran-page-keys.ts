@@ -1,6 +1,7 @@
+import { shortcutForEvent } from '../actions/shortcuts';
 /** Direction-aware reading keys. Focused controls and study text retain their native keys. */
 export function quranPageKeyDelta(event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'altKey' | 'ctrlKey' | 'metaKey' | 'defaultPrevented' | 'isComposing' | 'repeat'>, direction: 'rtl' | 'ltr'): number {
-  if (event.defaultPrevented || event.isComposing || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return 0;
+  if (!shortcutForEvent(event, 'quran')?.id.startsWith('quran-')) return 0;
   if (event.key === ' ' || event.key === 'Spacebar') return event.shiftKey ? -1 : 1;
   if (event.key === 'PageDown') return 1;
   if (event.key === 'PageUp') return -1;

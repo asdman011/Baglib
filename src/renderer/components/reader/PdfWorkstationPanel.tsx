@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { readerEdge } from '../../../shared/reader-immersive';
 import { PdfMarksList } from './PdfMarksList';
 import { setReaderOverlay, type ReaderOverlay } from '../../../shared/reader-overlay';
+import { matchesShortcut } from '../actions/shortcuts';
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   X,
@@ -843,7 +844,7 @@ export function PdfWorkstationPanel({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      if (matchesShortcut(e, 'reader-save', 'reader')) {
         e.preventDefault();
         void handleQuickSave();
       }

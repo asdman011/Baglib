@@ -1,3 +1,4 @@
+import { installEditorContextMenu } from './services/editor-context-menu';
 import { parseDeepLink, protocolRegistrationArgs } from '../shared/deep-link';
 import { errorMessage } from '../shared/errors';
 import { confirmedQuitCleanup } from './services/quit-cleanup';
@@ -258,6 +259,7 @@ async function createWindow() {
     },
   });
 
+  installEditorContextMenu(mainWindow);
   studyNavigationReady = false;
   mainWindow.webContents.on('did-start-loading', () => { studyNavigationReady = false; });
   mainWindow.webContents.on('did-finish-load', flushStudyTargets);

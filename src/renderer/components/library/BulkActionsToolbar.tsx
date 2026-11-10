@@ -50,6 +50,15 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   const [bulkTags, setBulkTags] = useState<string[]>([]);
   const [targetStatus, setTargetStatus] = useState<ReadingStatus>('reading');
 
+  React.useEffect(() => {
+    const open = (event: Event) => {
+      const action = (event as CustomEvent).detail;
+      if (selectedBookIds.length && ['category', 'tags', 'status', 'delete'].includes(action)) setActiveModal(action);
+    };
+    window.addEventListener('baglib:bulk-menu', open);
+    return () => window.removeEventListener('baglib:bulk-menu', open);
+  }, [selectedBookIds.length]);
+
   if (selectedBookIds.length === 0) return null;
 
   const count = selectedBookIds.length;

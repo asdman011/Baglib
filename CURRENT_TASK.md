@@ -1,3 +1,69 @@
+## KEY-316 verified — 2026-11-10T19:18:45.043Z, Codex
+
+Session 01a1c58e-3bd8-7440-badb-6d219525adc6. Continued in place and preserved reviewed KEY-313. Shared portal menus support mouse, Shift+F10/Menu key, touch, RTL placement, submenus, icons, disabled reasons and keyboard navigation. Library regular/featured/row/bulk actions share existing flows. Reader selection/mark, Quran/hadith/poetry, notes/cards/board items and nav/empty surfaces use context actions. Localized native text editing is installed in the main window. One scoped shortcut registry drives matching, help, palette and menu hints. Duplicate library-row buttons and saved-card delete moved into menus. Primary controls remain available. Existing canonical-source card edit restrictions are retained. PDF shape grouping now preserves the saved page and mark targets are keyboard focusable. No schema, dependency, download or Jira change.
+
+TypeScript passed. Changed-file eslint passed with 0 errors and 101 warnings in existing components. Focused tests passed 198/198 and final menu regressions passed12/12. Main build passed. Live matrix passed 8/8 with zero renderer errors. A further en-dark-480 run passed the direct mark-menu reopening regression on both real PDFs. Final full npm test ran once at concurrency 2 and passed 1756/1756. Whitespace checks passed.
+
+Evidence is in `.baglib-data/KEY-316-evidence/2026-11-10T19-04-58-728Z/`, including results.json, inputs.json and screenshots. Five final screenshots were inspected directly, covering ar/en, light/dark, 1280/480, portal overflow, a colour submenu, and RTL placement at the window edge. Defaults and live procedure are in scripts/context-menu-live/README.md. Report is local docs/agent-ops/reports/KEY-316.md.
+
+Native editor verification intercepts the production Electron menu template/popup and checks localized editing roles. OS popup operation and system clipboard mutation are outside this check. There is no real Arabic EPUB in the fixture inventory, so the real English EPUB was tested in both UI languages. Acquiring an Arabic EPUB would require the download gate, which was skipped. Poetry was opened through its normal browser because a cold direct study link previously raced lazy mounting. Existing corpus text and original document hashes remain unchanged. SRS scheduling failure retains the saved card for a safe retry because save can reuse an existing card.
+
+Exact 51 task files/hunks
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `scripts/context-menu-live/README.md`
+- `scripts/context-menu-live/main.cjs`
+- `scripts/context-menu-live/run.mjs`
+- `src/main/index.ts`
+- `src/main/services/editor-context-menu.ts`
+- `src/renderer/components/actions/ActionMenu.tsx`
+- `src/renderer/components/actions/ActionOverlays.tsx`
+- `src/renderer/components/actions/GlobalContextMenu.tsx`
+- `src/renderer/components/actions/QuranActionMenu.tsx`
+- `src/renderer/components/actions/context-actions.ts`
+- `src/renderer/components/actions/passage-actions.ts`
+- `src/renderer/components/actions/quran-actions.ts`
+- `src/renderer/components/actions/shortcuts.ts`
+- `src/renderer/components/context/WorkspaceContext.tsx`
+- `src/renderer/components/knowledge/SavedCardsPanel.tsx`
+- `src/renderer/components/knowledge/SrsReviewScreen.tsx`
+- `src/renderer/components/layout/AppLayout.tsx`
+- `src/renderer/components/layout/CommandPalette.tsx`
+- `src/renderer/components/layout/NavigationRail.tsx`
+- `src/renderer/components/layout/NewObjectMenu.tsx`
+- `src/renderer/components/library/BookDetailModal.tsx`
+- `src/renderer/components/library/BulkActionsToolbar.tsx`
+- `src/renderer/components/library/LibraryBookCard.tsx`
+- `src/renderer/components/library/LibraryGridView.tsx`
+- `src/renderer/components/library/library-card-actions.ts`
+- `src/renderer/components/notes/BoardsWorkspace.tsx`
+- `src/renderer/components/notes/CompanionNotePane.tsx`
+- `src/renderer/components/notes/NotesOverviewView.tsx`
+- `src/renderer/components/poetry/PoetryReader.tsx`
+- `src/renderer/components/quran/QuranMushafView.tsx`
+- `src/renderer/components/quran/QuranMushafWorkspace.tsx`
+- `src/renderer/components/quran/QuranReaderView.tsx`
+- `src/renderer/components/quran/quran-page-keys.ts`
+- `src/renderer/components/reader/FullPageBookReader.tsx`
+- `src/renderer/components/reader/PdfMarkPopover.tsx`
+- `src/renderer/components/reader/PdfMarkupLayer.tsx`
+- `src/renderer/components/reader/PdfNativeViewer.tsx`
+- `src/renderer/components/reader/PdfWorkstationPanel.tsx`
+- `src/renderer/components/reader/ReaderHeader.tsx`
+- `src/renderer/components/reader/ReaderMarkupBar.tsx`
+- `src/renderer/components/reader/ZenSelectionMenu.tsx`
+- `src/renderer/components/search/SearchHubModal.tsx`
+- `src/renderer/components/sunnah/SunnahChapterView.tsx`
+- `src/renderer/components/ui/ContextMenu.tsx`
+- `src/renderer/components/ui/Menu.tsx`
+- `src/renderer/libs/reader/reader-shortcuts.ts`
+- `src/renderer/translations.ts`
+- `tests/ui/context-actions.test.ts`
+- `tests/ui/context-menu.test.ts`
+
+Publication is authorized as one KEY-316 commit ending Agent: Codex, through commit.lock and a task-only git apply --cached patch, then normal push to origin/feature/library-domain. Publication pending. Excluded files and sibling state receipts remain unstaged. Claude owns review and Jira. Stop after publication.
+
 ## KEY-313 verified — 2026-11-10, Codex continuing Antigravity
 
 Session 01a1c58e-3bd8-7440-badb-6d219525adc6. Continued Antigravity f10a55bf-f7f5-4bd9-ba44-f3360eeee5d5 in place. Antigravity supplied the centred poem layout, calmer discovery cards, layout model, line-action table, new tests and live harness. Codex added missing Share to the shared actions/header and synchronized the fixture root theme with WorkspaceContext.

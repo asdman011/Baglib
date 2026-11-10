@@ -2,10 +2,13 @@
 import React, { useMemo, useState } from 'react';
 import type { PoetryDetail } from '../../../shared/types/poetry';
 import { poetryDisplayText, poetryDescriptionText, togglePoetryPanel, type PoetryPanel } from '../../../shared/poetry';
+import { ContextMenu } from '../ui/ContextMenu';
+import { shortcutForEvent, shortcutHint } from '../actions/shortcuts';
+import { addPassageToSrs } from '../actions/passage-actions';
 import { Copy, Share2, NotebookPen, SquareCheck } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { buildPoetryRows, poetryCopyText, poetryRhymeLetter, poetryRowLineClass, type PoetryRowModel } from './poetry-layout';
-import { isPoetryLongPress, POETRY_LINE_ACTIONS, POETRY_LONG_PRESS_MS, poetryLineActionForKey, runPoetryLineAction, type PoetryLineActionHandlers } from './poetry-line-actions';
+import { POETRY_LINE_ACTIONS, runPoetryLineAction, type PoetryLineActionHandlers } from './poetry-line-actions';
 import { EnglishPoetryNarration } from './EnglishPoetryNarration';
 import { PoetryNarrations } from './PoetryNarrations';
 import { SavedPoetryNotes } from './SavedPoetryNotes';
@@ -90,9 +93,6 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
   const [actionsRow, setActionsRow] = useState<number | null>(null);
   const [activeRow, setActiveRow] = useState(targetRow);
   const listElement = React.useRef<HTMLDivElement>(null);
-  const press = React.useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number; at: number; moved: number } | null>(null);
-  const clearPress = () => { if (press.current) clearTimeout(press.current.timer); press.current = null; };
-  React.useEffect(() => clearPress, []);
   React.useEffect(() => {
     if (actionsRow === null) return;
     const close = (event: Event) => { if (!(event.target instanceof Element) || !event.target.closest(`[data-poetry-row-index="${actionsRow}"]`)) setActionsRow(null); };
@@ -161,23 +161,20 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
           if (row.kind === 'single' && !row.sadr.trim()) return <div key={row.index} aria-hidden="true" className="h-6" />;
           const selected = !!selection && row.index >= selection[0] && row.index <= selection[1];
           const number = lineNumber(row);
-          return <div key={row.index} data-poetry-row data-poetry-row-index={row.index} data-poetry-kind={row.kind} data-actions-open={actionsRow === row.index} data-card-kind="poetry" data-card-ref={`poetry:${poem.id}:${row.index}`} data-card-label={[poem.poet_name, poem.title].filter(Boolean).join(' · ')} data-poetry-source-index={row.sourceFrom} aria-selected={selected} ref={row.index === targetRow ? targetElement : undefined} tabIndex={row.index === activeRow ? 0 : -1}
+          return <ContextMenu items={[
+            ...POETRY_LINE_ACTIONS.map(action => ({ id: action.id, label: t(action.labelKey), icon: React.createElement(lineIcons[action.icon], { size: 14 }), shortcut: shortcutHint('poetry-' + action.id), onClick: () => runPoetryLineAction(action.id, row, lineHandlers) })),
+            { id: 'copy-line', label: t('ctxCopyText'), onClick: () => copyRow({ sadr: row.sadr, ajuz: null }) },
+            { id: 'srs', label: t('ctxAddSrs'), onClick: () => addPassageToSrs({ text: poetryCopyText([row], poem), sourceKind: 'poetry', sourceRef: 'poetry:ashaar:' + poem.id + ':' + row.sourceFrom + ':' + row.sourceTo, sourceLabel: [poem.poet_name, poem.title].filter(Boolean).join(' — '), language: poem.language }) },
+          ]} key={row.index} data-poetry-row data-poetry-row-index={row.index} data-poetry-kind={row.kind} data-actions-open={actionsRow === row.index} data-card-kind="poetry" data-card-ref={`poetry:${poem.id}:${row.index}`} data-card-label={[poem.poet_name, poem.title].filter(Boolean).join(' · ')} data-poetry-source-index={row.sourceFrom} aria-selected={selected} ref={row.index === targetRow ? targetElement : undefined} tabIndex={row.index === activeRow ? 0 : -1}
             onFocus={() => setActiveRow(row.index)}
             onKeyDown={event => {
               if (event.target !== event.currentTarget) return;
               if (event.key === 'ArrowDown') { event.preventDefault(); moveFocus(row.index + 1); return; }
               if (event.key === 'ArrowUp') { event.preventDefault(); moveFocus(row.index - 1); return; }
-              const action = poetryLineActionForKey(event);
-              if (action) { event.preventDefault(); runPoetryLineAction(action, row, lineHandlers); }
+              const shortcut = shortcutForEvent(event, 'poetry-line');
+              const action = POETRY_LINE_ACTIONS.find(entry => 'poetry-' + entry.id === shortcut?.id);
+              if (action) { event.preventDefault(); runPoetryLineAction(action.id, row, lineHandlers); }
             }}
-            onPointerDown={event => {
-              if (event.pointerType !== 'touch') return;
-              clearPress();
-              const entry = { timer: setTimeout(() => { if (press.current === entry && isPoetryLongPress({ heldMs: Date.now() - entry.at, movedPx: entry.moved })) setActionsRow(row.index); }, POETRY_LONG_PRESS_MS), x: event.clientX, y: event.clientY, at: Date.now(), moved: 0 };
-              press.current = entry;
-            }}
-            onPointerMove={event => { if (press.current) press.current.moved = Math.max(press.current.moved, Math.hypot(event.clientX - press.current.x, event.clientY - press.current.y)); }}
-            onPointerUp={clearPress} onPointerCancel={clearPress}
             className={`group relative rounded-xl px-9 py-1 outline-none max-sm:py-3 transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-pale-sky-500 sm:px-24 ${selected ? 'bg-primary/10 ring-1 ring-primary/50' : ''}`}>
             {number && <span aria-hidden="true" data-poetry-line-number className="pointer-events-none absolute start-2 top-1/2 -translate-y-1/2 text-xs leading-none text-muted/70 tabular-nums">{number}</span>}
             <div data-poetry-line className={poetryRowLineClass(row.kind, centred)}>
@@ -187,7 +184,7 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
             <div role="group" aria-label={t('bayanLineActions')} data-poetry-line-actions data-open={actionsRow === row.index} className="pointer-events-none absolute end-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 rounded-lg border border-subtle bg-surface-raised p-0.5 text-base leading-none opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[open=true]:pointer-events-auto data-[open=true]:opacity-100 max-sm:flex-col">
               {POETRY_LINE_ACTIONS.map(action => { const Icon = lineIcons[action.icon]; return <button key={action.id} type="button" tabIndex={row.index === activeRow ? 0 : -1} title={t(action.labelKey)} aria-label={t(action.labelKey)} aria-pressed={action.id === 'select' ? selected : undefined} onClick={event => { if (action.id === 'select' && event.shiftKey) selectRow(row, true); else runPoetryLineAction(action.id, row, lineHandlers); setActionsRow(null); }} className="inline-flex size-8 items-center justify-center rounded-md text-muted hover:bg-canvas hover:text-primary-text focus-visible:outline-2 focus-visible:outline-pale-sky-500 aria-pressed:bg-primary/15 aria-pressed:text-primary-text"><Icon size={16} aria-hidden="true" /></button>; })}
             </div>
-          </div>;
+          </ContextMenu>;
         })}
       </div>
       <div className="mt-5 flex justify-between gap-3"><button type="button" disabled={!offset} onClick={() => setOffset(value => Math.max(0, value - 100))}>{t('bayanPrevious')}</button><button type="button" disabled={offset + 100 >= rows.length} onClick={() => setOffset(value => value + 100)}>{t('bayanNext')}</button></div>

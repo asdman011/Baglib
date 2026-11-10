@@ -83,6 +83,7 @@ import { bookVolumeIssue } from '../../../shared/book-volumes';
 interface BookDetailModalProps {
   book: BookItem | null;
   isOpen: boolean;
+  initialTab?: 'info' | 'physical' | 'classification' | 'lending';
   isNew?: boolean;
   allCategories?: { id: string; nameAr: string; nameEn: string }[];
   onClose: () => void;
@@ -95,6 +96,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   book,
   isOpen,
   isNew,
+  initialTab = 'info',
   allCategories = [],
   onClose,
   onSave,
@@ -229,7 +231,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       setFormData(initial);
       setInitialSnapshot(JSON.stringify(initial));
       setShowConfirmDiscard(false);
-      setActiveTab('info');
+      setActiveTab(initialTab);
       setCurrentPdfPage(1);
       setPdfCoverPages([]);
       setIsExtractingPdfCover(false);
@@ -271,7 +273,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         }
       }
     }
-  }, [book, isOpen]);
+  }, [book, isOpen, initialTab]);
 
   // Dirty state tracking comparing formData with initial snapshot
   const isDirty = useMemo(() => {

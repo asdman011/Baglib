@@ -6,10 +6,12 @@ export interface CardAction {
   label: string;
   icon: 'BookOpen' | 'Info' | 'Bookmark' | 'ArrowLeftRight' | 'Trash2';
   danger?: boolean;
-  onSelect: () => void;
+  disabledReason?: string;
+  onSelect: () => void | Promise<unknown>;
 }
 
 export interface CardActionHandlers {
+  onAction?: (id: string, book: BookItem) => void | Promise<unknown>;
   onRead: (book: BookItem) => void;
   onOpenDetails: (book: BookItem) => void;
   onUpdateReadingStatus?: (bookId: string, status: ReadingStatus) => void;
@@ -81,5 +83,16 @@ export function getCardActions(
     });
   }
 
+  if (handlers.onAction) {
+    const extra: { id: string; key: TranslationKey }[] = [
+      { id: 'last', key: 'ctxLastPage' }, { id: 'metadata', key: 'ctxEditMetadata' },
+      { id: 'category', key: 'ctxClassify' }, { id: 'tags', key: 'ctxTags' },
+      { id: 'physical', key: 'ctxPhysical' }, { id: 'wishlist', key: 'ctxWishlist' },
+      { id: 'duplicates', key: 'ctxDuplicates' }, { id: 'folder', key: 'ctxShowFolder' }, { id: 'export', key: 'ctxExport' },
+    ];
+    actions.splice(2, 0, ...extra.map(entry => ({ id: entry.id, label: t(entry.key), icon: 'Info' as const,
+      disabledReason: entry.id === 'folder' && !book.filePath ? t('ctxUnavailable') : undefined,
+      onSelect: () => handlers.onAction!(entry.id, book) })));
+  }
   return actions;
 }
