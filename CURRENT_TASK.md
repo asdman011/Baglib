@@ -1,3 +1,24 @@
+## KEY-308 part 4 verified — 2026-11-10, Claude Code (at the user's request)
+
+**Task counts now use real plural forms.** A new `src/renderer/utils/task-count.ts` uses `Intl.PluralRules`, plus four keys in each language (`taskCountOne`, `taskCountTwo`, `taskCountFew`, `taskCountOther`):
+- **Arabic:** «مهمة واحدة», «مهمتان», «٣ مهام» for 3–10, «١١ مهمة» for 11 and up.
+- **English:** "1 task" and "N tasks".
+
+The dashboard calendar and the study planner use it. The old keys `plannerTaskCount`, `dashCalendarTasksCount` and `dashCalendarSingleTask` were removed, because nothing references them any more.
+
+**Verification:**
+- `npx tsc --noEmit` passes. ESLint: 0 errors.
+- New test `tests/ui/task-count.test.ts`: 2 tests covering ar 1, 2, 3, 10, 11 and 100, and en 1, 2 and 11.
+- Full `npm test --test-concurrency=2`: 1779/1779.
+
+**Files:**
+- `src/renderer/utils/task-count.ts`
+- `src/renderer/translations.ts`
+- `src/renderer/components/dashboard/DashboardCalendarModule.tsx`
+- `src/renderer/components/dashboard/StudyPlannerView.tsx`
+- `tests/ui/task-count.test.ts`
+- `CURRENT_TASK.md`
+
 ## KEY-308 part 3 verified — 2026-11-10, Claude Code (at the user's request)
 
 **RTL / logical-property sweep in the renderer.**

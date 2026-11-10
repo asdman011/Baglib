@@ -8,6 +8,7 @@ import {
   GraduationCap,
   ListTodo,
 } from 'lucide-react';
+import { taskCountLabel } from '../../utils/task-count';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/Card';
 import { Skeleton } from '../ui/Skeleton';
@@ -363,9 +364,7 @@ export const DashboardCalendarModule: React.FC = () => {
                 <div className="flex items-center gap-2">
                   {selectedDayTasks.length > 0 && (
                     <span className="text-xs text-text-muted font-medium">
-                      {selectedDayTasks.length === 1
-                        ? t('dashCalendarSingleTask')
-                        : t('dashCalendarTasksCount', { count: selectedDayTasks.length })}
+                      {taskCountLabel(selectedDayTasks.length, lang, t)}
                     </span>
                   )}
                   <Button
@@ -430,7 +429,7 @@ export const DashboardCalendarModule: React.FC = () => {
                           </Badge>
                         ) : (
                           <Badge variant="primary">
-                            {t('dashCalendarSingleTask')}
+                            {taskCountLabel(1, lang, t)}
                           </Badge>
                         )}
                       </div>
