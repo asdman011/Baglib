@@ -1,3 +1,37 @@
+## KEY-292 — 2026-11-10, Antigravity (implemented and verified)
+
+- Implementation & Verification: OCR word corrections update full-text search (`book_content_fts`) per-page (follow-up to KEY-275).
+  - Implemented `reindexPage(bookId, page)` in `src/main/database/repositories/content-fts.repository.ts` to delete and re-insert single-page text chunk in `book_content_fts` with canonical and normalized Arabic text, preserving existing metadata (`location_cfi_or_page`, `chapter_title`). Added `deletePage` and `getPageContent`.
+  - Added IPC handlers `search:reindex-page-content` (with source-to-work resolution) and `search:get-page-content` in `src/main/ipc/database.ts`.
+  - Exposed `reindexPageContent` and `getPageContent` in `src/preload/index.ts`.
+  - Updated `applyStoredCorrections` in `src/shared/ocr-suspects.ts` to check `targetWord.text === entry.corrected` so existing corrections are not falsely flagged as stale text mismatches.
+  - Updated `OcrInspectorDrawer.tsx` to automatically reindex page content on save, re-apply, and discard; added discard handler and "Applied Corrections" review UI with discard button.
+  - Added 1:1 bilingual translation keys for `ocrSavedCorrectionsTitle`, `ocrDiscardCorrection`, `ocrDiscardCorrectionToast` in `src/renderer/translations.ts`.
+  - Created 7 comprehensive tests in `tests/services/ocr-fts-reindex.test.ts` (per-page re-indexing, metadata preservation, single-page deletion, stale correction rejection, discard restoring indexing, vowelled Arabic normalized lookup, source ID resolution). All 7 pass (128ms).
+  - Executed full test suite: `1635 passed, 0 failed` across 330 suites.
+  - Executed live benchmark (`node scripts/ocr-review-live/run.mjs`) on real scanned Arabic PDF (`tests/real-files/pdf/ar/scanned-image-only/تفسير الموعذتين لابن تيمية.pdf`) without overwriting original:
+    - Edited word on page 1 → FTS search found corrected Arabic text (`<mark>تصحيح-اختباري</mark>`).
+    - Discarded correction → FTS search verified corrected word no longer found, restoring original indexing.
+    - Verified stale correction detection and warning in drawer.
+    - Verified English LTR OCR flow and review drawer layout.
+    - Evidence screenshots saved in `.baglib-data/key292-evidence/`.
+  - Static checks: `npx tsc --noEmit` passed (0 errors), `git diff --check` passed (0 errors), `npx eslint` passed (0 errors on task files).
+- Exact files changed:
+  - `src/main/database/repositories/content-fts.repository.ts`
+  - `src/main/ipc/database.ts`
+  - `src/preload/index.ts`
+  - `src/shared/ocr-suspects.ts`
+  - `src/renderer/components/reader/OcrInspectorDrawer.tsx`
+  - `src/renderer/translations.ts`
+  - `tests/services/ocr-fts-reindex.test.ts`
+  - `scripts/ocr-review-live/main.cjs`
+  - `scripts/ocr-review-live/run.mjs`
+  - `docs/agent-ops/reports/KEY-292.md`
+  - `docs/agent-ops/board.md`
+  - `CURRENT_TASK.md`
+  - `IMPLEMENTATION_PLAN.md`
+
+
 ## KEY-295 — 2026-11-10, Antigravity (implemented and verified)
 
 - Implementation & Verification: UI baseline audit of every screen against the user's FigJam vision (U1).

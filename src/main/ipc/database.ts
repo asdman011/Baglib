@@ -543,6 +543,63 @@ export function setupDatabaseIPC() {
     }
   });
 
+  /**
+   * Re-indexes a single page's text chunk in FTS5 virtual table (KEY-292).
+   * Resolves target to work ID if a source ID is supplied.
+   */
+  ipcMain.handle('search:reindex-page-content', (_, target: string, page: import('../../shared/types/full-text-search').IndexedBookPage) => {
+    try {
+      const db = getDatabase();
+      let workId = target;
+      try {
+        const workRow = db.prepare('SELECT id FROM work WHERE id = ? LIMIT 1').get(target) as { id: string } | undefined;
+        if (!workRow?.id) {
+          const sourceRow = db.prepare(`
+            SELECT e.work_id
+            FROM source s
+            JOIN edition e ON e.id = s.edition_id
+            WHERE s.id = ?
+            LIMIT 1
+          `).get(target) as { work_id: string } | undefined;
+          if (sourceRow?.work_id) workId = sourceRow.work_id;
+        }
+      } catch {}
+
+      const repo = new (ipcModule3.ContentFtsRepository)(db);
+      repo.reindexPage(workId, page);
+      return { success: true, workId, pageNumber: page.pageNumber };
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to reindex page content:', err);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('search:get-page-content', (_, target: string, pageNumber: number) => {
+    try {
+      const db = getDatabase();
+      let workId = target;
+      try {
+        const workRow = db.prepare('SELECT id FROM work WHERE id = ? LIMIT 1').get(target) as { id: string } | undefined;
+        if (!workRow?.id) {
+          const sourceRow = db.prepare(`
+            SELECT e.work_id
+            FROM source s
+            JOIN edition e ON e.id = s.edition_id
+            WHERE s.id = ?
+            LIMIT 1
+          `).get(target) as { work_id: string } | undefined;
+          if (sourceRow?.work_id) workId = sourceRow.work_id;
+        }
+      } catch {}
+
+      const repo = new (ipcModule3.ContentFtsRepository)(db);
+      return repo.getPageContent(workId, pageNumber);
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to get page content:', err);
+      return null;
+    }
+  });
+
   ipcMain.handle('search:delete-book-content', (_, bookId: string) => {
     try {
       const db = getDatabase();
