@@ -80,7 +80,7 @@ export const DashboardCalendarModule: React.FC = () => {
               if (config && config.examDate) {
                 examResults.push({
                   pathwayId: p.id,
-                  pathwayTitle: p.title || p.id,
+                  pathwayTitle: p.name || p.title || p.id, // KEY-308: pathways carry `name`; `title` was always undefined, so the UUID showed.
                   examDate: config.examDate,
                 });
               }
@@ -430,7 +430,7 @@ export const DashboardCalendarModule: React.FC = () => {
                           </Badge>
                         ) : (
                           <Badge variant="primary">
-                            {t('plannerTaskCount', { count: 1 })}
+                            {t('dashCalendarSingleTask')}
                           </Badge>
                         )}
                       </div>

@@ -1,10 +1,14 @@
 import type { BookItem, ReadingStatus } from '../../types/library';
 import type { TranslationKey } from '../../translations';
 
+/** Icon names for card actions; the menu maps each to its lucide icon. */
+export type CardActionIcon = 'BookOpen' | 'Info' | 'Bookmark' | 'ArrowLeftRight' | 'Trash2' | 'History' | 'FilePenLine'
+  | 'FolderTree' | 'Tags' | 'BookMarked' | 'Heart' | 'CopyCheck' | 'FolderOpen' | 'Download';
+
 export interface CardAction {
   id: string;
   label: string;
-  icon: 'BookOpen' | 'Info' | 'Bookmark' | 'ArrowLeftRight' | 'Trash2';
+  icon: CardActionIcon;
   danger?: boolean;
   disabledReason?: string;
   onSelect: () => void | Promise<unknown>;
@@ -84,13 +88,13 @@ export function getCardActions(
   }
 
   if (handlers.onAction) {
-    const extra: { id: string; key: TranslationKey }[] = [
-      { id: 'last', key: 'ctxLastPage' }, { id: 'metadata', key: 'ctxEditMetadata' },
-      { id: 'category', key: 'ctxClassify' }, { id: 'tags', key: 'ctxTags' },
-      { id: 'physical', key: 'ctxPhysical' }, { id: 'wishlist', key: 'ctxWishlist' },
-      { id: 'duplicates', key: 'ctxDuplicates' }, { id: 'folder', key: 'ctxShowFolder' }, { id: 'export', key: 'ctxExport' },
+    const extra: { id: string; key: TranslationKey; icon: CardActionIcon }[] = [
+      { id: 'last', key: 'ctxLastPage', icon: 'History' }, { id: 'metadata', key: 'ctxEditMetadata', icon: 'FilePenLine' },
+      { id: 'category', key: 'ctxClassify', icon: 'FolderTree' }, { id: 'tags', key: 'ctxTags', icon: 'Tags' },
+      { id: 'physical', key: 'ctxPhysical', icon: 'BookMarked' }, { id: 'wishlist', key: 'ctxWishlist', icon: 'Heart' },
+      { id: 'duplicates', key: 'ctxDuplicates', icon: 'CopyCheck' }, { id: 'folder', key: 'ctxShowFolder', icon: 'FolderOpen' }, { id: 'export', key: 'ctxExport', icon: 'Download' },
     ];
-    actions.splice(2, 0, ...extra.map(entry => ({ id: entry.id, label: t(entry.key), icon: 'Info' as const,
+    actions.splice(2, 0, ...extra.map(entry => ({ id: entry.id, label: t(entry.key), icon: entry.icon,
       disabledReason: entry.id === 'folder' && !book.filePath ? t('ctxUnavailable') : undefined,
       onSelect: () => handlers.onAction!(entry.id, book) })));
   }

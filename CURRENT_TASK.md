@@ -1,3 +1,46 @@
+## KEY-308 part 1 verified — 2026-11-10, Claude Code (at the user's request: "work on KEY-308 yourself until codex resets")
+
+This is the first slice of the U14 polish pass. It covers the review follow-ups collected in section 8 of "feature - UI UX Vision Program.md".
+
+**Fixes:**
+- **New Object** showed its "+" twice. The label is now «كائن جديد» / "New Object", and the icon stays.
+- **Library card right-click and ⋯ menu.** Every action has its own icon instead of the placeholder ⓘ. `CardActionIcon` is mapped in `LibraryGridView`.
+- **Context menus on every surface** (selection: Explain, Practice, Review later; plus play, export, import and card) no longer fall back to ⓘ.
+- **Reader:** the floating selection toolbar steps aside while the right-click menu is open, so only one selection surface shows at a time.
+- **Arabic display headings** (Reem Kufi) get wider word spacing in RTL and `:lang(ar)`, so «لا ملاحظات ولا روابط» no longer reads as one word.
+- **Dashboard calendar:** exam badges showed the curriculum UUID because pathways carry `name`, not `title`. They now show the name. "1 tasks" now reads "1 task" / «مهمة واحدة» in the calendar and the planner.
+- **Pathways customize panel:** the "Draft with AI" row wraps instead of squeezing.
+
+**Verification:**
+- `npx tsc --noEmit` passes. ESLint on the changed files: 0 errors.
+- Focused tests: 48/48. New tests pass: `tests/ui/library-card-icons.test.ts` (2) and `tests/ui/context-action-icons.test.ts` (1).
+- `scripts/context-menu-live` passed 8/8. I inspected the screenshots: the ar card menu with one icon per action, the single "+" on New Object, and the reader selection menu with no floating toolbar behind it.
+
+**Files:**
+- `src/renderer/translations.ts`
+- `src/renderer/components/library/library-card-actions.ts`
+- `src/renderer/components/library/LibraryGridView.tsx`
+- `src/renderer/components/actions/context-actions.ts`
+- `src/renderer/components/reader/FullPageBookReader.tsx`
+- `src/renderer/app/globals.css`
+- `src/renderer/components/dashboard/DashboardCalendarModule.tsx`
+- `src/renderer/components/dashboard/StudyPlannerView.tsx`
+- `src/renderer/components/dashboard/PathwaysView.tsx`
+- `tests/ui/library-card-icons.test.ts`
+- `tests/ui/context-action-icons.test.ts`
+- `CURRENT_TASK.md`
+
+**Still open in KEY-308:**
+- motion set;
+- full Scholar Night contrast pass;
+- spacing and type sweep;
+- RTL grep sweep;
+- mushaf fit-to-height zoom;
+- poetry toolbar grouping;
+- library at 480 px re-check;
+- side-note tip near the reader panel;
+- planner plural forms for 2 and 11+ in Arabic.
+
 ## KEY-306 verified — 2026-11-10, Antigravity, finished by Claude Code
 
 Antigravity (conversation faf3dd6a) built the One Research space, then hit its weekly quota on every model at the verification stage. As the user instructed, Claude Code finished the task in place.

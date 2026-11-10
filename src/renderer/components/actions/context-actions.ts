@@ -1,5 +1,5 @@
 import { createElement } from 'react';
-import { Bookmark, BookOpen, Copy, FilePenLine, Highlighter, Info, Languages, MessageSquare, Search, Share2, Trash2 } from 'lucide-react';
+import { Bookmark, BookOpen, Brain, Copy, Download, FilePenLine, Highlighter, History, Info, Languages, Layers, Lightbulb, MessageSquare, Play, Search, Share2, Trash2, Upload } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
 import type { MenuItemProps } from '../ui/Menu';
 export interface ContextActionDefinition {
@@ -30,7 +30,9 @@ export const CONTEXT_ACTIONS = {
     board: [{ id: 'open', labelKey: 'ctxOpen' }, { id: 'copy', labelKey: 'sunnahCopy' }, { id: 'edit', labelKey: 'ctxEdit' }, { id: 'delete', labelKey: 'delete', danger: true }],
     empty: [{ id: 'note', labelKey: 'studyNewNote' }, { id: 'card', labelKey: 'newObjectNewCard' }, { id: 'import', labelKey: 'newObjectImportBook' }],
 } as const satisfies Record<string, readonly ContextActionDefinition[]>;
-const ACTION_ICONS = { copy: Copy, copyFull: Copy, copyPlain: Copy, copyReference: Copy, share: Share2, comment: MessageSquare, note: FilePenLine, srs: Bookmark, bookmark: Bookmark, link: FilePenLine, colors: Highlighter, search: Search, dictionary: Languages, tafsir: BookOpen, commentary: BookOpen, translation: Languages, delete: Trash2, open: BookOpen, edit: FilePenLine };
+const ACTION_ICONS = { copy: Copy, copyFull: Copy, copyPlain: Copy, copyReference: Copy, share: Share2, comment: MessageSquare, note: FilePenLine, srs: Bookmark, bookmark: Bookmark, link: FilePenLine, colors: Highlighter, search: Search, dictionary: Languages, tafsir: BookOpen, commentary: BookOpen, translation: Languages, delete: Trash2, open: BookOpen, edit: FilePenLine,
+    // KEY-308: these fell back to the placeholder Info icon.
+    explain: Lightbulb, practice: Brain, review: History, play: Play, export: Download, import: Upload, card: Layers };
 export type ContextSurface = keyof typeof CONTEXT_ACTIONS;
 export type ActionHandler = (() => void | Promise<unknown>) | {
     onClick?: () => void | Promise<unknown>;

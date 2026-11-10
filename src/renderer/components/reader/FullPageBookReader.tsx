@@ -3175,7 +3175,7 @@ const SourceBookReader: React.FC = () => {
   const renderSelectionPopover = () => {
     if (!activeBook || !selectedText || isInstantHighlightMode) return null;
     return (
-      <><ActionMenu portal surface="selection" handlers={selectionHandlers} t={t} anchor={selectionAt} onClose={()=>setSelectionAt(null)} /><ZenSelectionMenu key={selectionEditor.key} initialTab={selectionEditor.tab}
+      <><ActionMenu portal surface="selection" handlers={selectionHandlers} t={t} anchor={selectionAt} onClose={()=>setSelectionAt(null)} />{/* KEY-308: one selection surface at a time; the floating toolbar steps aside while the right-click menu is open. */}{!selectionAt && <ZenSelectionMenu key={selectionEditor.key} initialTab={selectionEditor.tab}
         studyActions={<div role="group" aria-label={t('readerStudyActions')} className="flex flex-wrap gap-2 border-b border-subtle pb-2 mb-2" dir={workspaceDir}>
           {(['explain', 'practice', 'review'] as const).map(action => (
             <button
@@ -3248,7 +3248,7 @@ const SourceBookReader: React.FC = () => {
           setSelectedText('');
         }}
         t={t}
-      /></>
+      />}</>
     );
   };
 

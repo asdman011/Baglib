@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import React, { createElement, useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { ContextMenu } from '../ui/ContextMenu';
 import { Menu } from '../ui/Menu';
-import { getCardActions } from './library-card-actions';
+import { getCardActions, type CardActionIcon } from './library-card-actions';
 import type { MenuItemProps } from '../ui/Menu';
 import { LibraryBookCard } from './LibraryBookCard';
 import {
@@ -27,8 +27,24 @@ import {
   UploadCloud,
   AlertTriangle,
   SlidersHorizontal,
+  Bookmark,
+  ArrowLeftRight,
+  History,
+  FilePenLine,
+  FolderTree,
+  Tags,
+  BookMarked,
+  Heart,
+  CopyCheck,
+  Download,
+  type LucideIcon,
 } from 'lucide-react';
 import { BookItem } from '../../types/library';
+
+/** One icon per card action, so the right-click and ⋯ menus are scannable (KEY-308). */
+const CARD_ACTION_ICONS: Record<CardActionIcon, LucideIcon> = {
+  BookOpen, Info, Bookmark, ArrowLeftRight, Trash2, History, FilePenLine, FolderTree, Tags, BookMarked, Heart, CopyCheck, FolderOpen, Download,
+};
 import { BookDetailModal } from './BookDetailModal';
 import { BookVolumeBadge } from './BookVolumesPanel';
 import { OnlineLibraryHub } from './OnlineLibraryHub';
@@ -971,7 +987,7 @@ export const LibraryGridView: React.FC = () => {
         setSelectedBook(item); setIsNewBook(false); setIsDetailModalOpen(true);
       },
     }, t);
-    return actions.map(action => ({ id: action.id, label: action.label, icon: <Info size={14} />, danger: action.danger, disabled: !!action.disabledReason, disabledReason: action.disabledReason, onClick: action.onSelect }));
+    return actions.map(action => ({ id: action.id, label: action.label, icon: createElement(CARD_ACTION_ICONS[action.icon] ?? Info, { size: 14 }), danger: action.danger, disabled: !!action.disabledReason, disabledReason: action.disabledReason, onClick: action.onSelect }));
   };
   const exportBooks = (items: BookItem[]) => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' }));

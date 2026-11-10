@@ -95,7 +95,7 @@ export function StudyPlannerView({ adjustment = 0 }: { adjustment?: number }) {
         const count = tasks.filter(task => task.status === 'open' && overlap(task, civilDate(cellRange.start), civilDate(cellRange.end))).length;
         return <button key={value} className={`${control} text-start min-h-20 ${value === civilDate(new Date()) ? 'ring-1 ring-pale-sky-500' : ''}`} onClick={() => { setAnchor(value); if (period === 'year') setPeriod('month'); else setDraft({ ...emptyTask(), startDate: value, dueDate: value }); }}>
           <time dateTime={value} className="block text-xs leading-relaxed">{period === 'year' ? format(date) : `${new Intl.DateTimeFormat(lang, { weekday: 'short' }).format(date)} ${calendarParts(date, calendar, adjustment).day}`}</time>
-          {count > 0 && <span className="block text-pale-sky-500 text-xs mt-2">{t('plannerTaskCount', { count })}</span>}
+          {count > 0 && <span className="block text-pale-sky-500 text-xs mt-2">{count === 1 ? t('dashCalendarSingleTask') : t('plannerTaskCount', { count })}</span>}
         </button>;
       })}
     </div>
