@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   MoreHorizontal,
+  Plus,
+  UploadCloud,
   FolderPlus,
   Camera,
   Scissors,
@@ -20,6 +22,8 @@ import { Button } from '../ui/Button';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 export interface LibraryMoreMenuProps {
+  onAddNewBook?: () => void;
+  onOpenImportWizard?: () => void;
   onImportFolder: () => void;
   onAddFromCover: () => void;
   onOpenWebClipper: () => void;
@@ -37,6 +41,8 @@ export interface LibraryMoreMenuProps {
 }
 
 export const LibraryMoreMenu: React.FC<LibraryMoreMenuProps> = ({
+  onAddNewBook,
+  onOpenImportWizard,
   onImportFolder,
   onAddFromCover,
   onOpenWebClipper,
@@ -111,6 +117,28 @@ export const LibraryMoreMenu: React.FC<LibraryMoreMenuProps> = ({
           <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-text-muted">
             {t('libraryRibbonAdd')}
           </div>
+          {onAddNewBook && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => handleAction(onAddNewBook)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-start hover:bg-canvas transition-colors cursor-pointer text-text"
+            >
+              <Plus className="size-3.5 text-primary-text shrink-0" aria-hidden="true" />
+              <span className="truncate">{t('addBook')}</span>
+            </button>
+          )}
+          {onOpenImportWizard && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => handleAction(onOpenImportWizard)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-start hover:bg-canvas transition-colors cursor-pointer text-text"
+            >
+              <UploadCloud className="size-3.5 text-primary-text shrink-0" aria-hidden="true" />
+              <span className="truncate">{t('importWizardTitle')}</span>
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"

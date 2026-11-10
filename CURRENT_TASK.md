@@ -1,3 +1,41 @@
+## KEY-310 (Review Fix 1) — 2026-11-10, Antigravity (pushed)
+
+Session `7a52914d-61b5-4055-83f3-cdc819a39296`. Addressed Claude's review comments on commit `60c9386`:
+1. Real Auto-Hide in Live App:
+   - Fixed live seeding harness to call valid `window.electronAPI.addBook(b)` instead of undefined `insertBook`, allowing the catalog to render 34 books and enabling full scrollable container geometry (`scrollHeight > clientHeight`).
+   - Scrolling down past downHysteresis collapses the header into a slim sticky bar (~48px) with collection title, search, sort, view toggles, and advanced filters. Scrolling up restores the full header. Asserted `isStickyVisible === true` in both Arabic RTL and English LTR.
+2. One Calm Header Row:
+   - Single unified row: `[Title + count] … [Search] [Sort ▾] [Grid/List] [Advanced filters (n)] [⋯ More]`.
+   - Moved "Add material" and "Import wizard" off the header row into an "Add" group in `LibraryMoreMenu.tsx`.
+   - Title uses Reem Kufi display font (`font-display font-bold text-base sm:text-lg`) at moderate size on the same row.
+3. Calm Cards Matching Mockup (`library-shell-mockup.png`):
+   - At rest: card strictly displays cover, "New" badge (if recent), title, author, and single subject/format chip.
+   - Removed from resting card: reading-status dropdown, ⓘ info icon, location (room/shelf), lending buttons, and full-width "قراءة" button.
+   - Interactive actions moved to:
+     - Cover hover/focus overlay with primary "Read" button and `⋯` actions button.
+     - Card actions `⋯` dropdown holding Details, Status cycle, Lend/Return, and Delete.
+     - Centralized pure generator `getCardActions(book, handlers, t)` in `src/renderer/components/library/library-card-actions.ts` reusable by KEY-316 context menu.
+   - Keyboard: focusing card displays overlay; pressing Enter opens the book.
+
+Verification & Tests:
+- 38/38 focused unit tests pass (`library-scroll-header.test.ts`, `nav-pin-peek.test.ts`, `library-active-filters.test.ts`, `library-card-actions.test.ts`, `library-filter-model.test.ts`).
+- `npx tsc --noEmit` clean (0 errors), `npx eslint` clean (0 errors, 0 warnings), `npx tsup` build clean, `git diff --check` clean.
+- Live runner `scripts/library-declutter-live/` passed with exit code 0, capturing 22 screenshots in `.baglib-data/KEY-310-evidence/fix1/`. Inspected 5 screenshots (`01-ar-light-1280-top.png`, `02-ar-light-1280-scrolled.png`, `03-ar-light-1280-card-hover.png`, `04-ar-light-1280-card-menu.png`, `14-en-light-1280-scrolled.png`).
+
+Exact own files changed in this fix:
+- `src/renderer/components/library/library-card-actions.ts`
+- `tests/ui/library-card-actions.test.ts`
+- `src/renderer/components/library/LibraryBookCard.tsx`
+- `src/renderer/components/library/LibraryGridView.tsx`
+- `src/renderer/components/library/LibraryMoreMenu.tsx`
+- `src/renderer/translations.ts`
+- `scripts/library-declutter-live/declutter-check.cjs`
+- `scripts/library-declutter-live/run.mjs`
+- `docs/agent-ops/reports/KEY-310.md`
+- `docs/agent-ops/board.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
 ## KEY-310 — 2026-11-10, Antigravity (pushed)
 
 Session `7a52914d-61b5-4055-83f3-cdc819a39296`. Implemented library decluttering per user request and Figma vision mockup:

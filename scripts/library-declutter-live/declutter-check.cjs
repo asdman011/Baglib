@@ -155,7 +155,7 @@ app.on('browser-window-created', (_, win) => {
           const books = ${JSON.stringify(realFiles)};
           for (const b of books) {
             try {
-              await window.electronAPI.insertBook(b);
+              await window.electronAPI.addBook(b);
             } catch (e) {
               console.warn('[live seed error]', e);
             }
@@ -164,7 +164,7 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       console.log('[live] Real files seeded.');
-      await pause(800);
+      await pause(1000);
 
       // Navigate to Library View
       console.log('[live] Navigating to library view...');
@@ -177,6 +177,10 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(1000);
+
+      // Wait until cards are rendered
+      await until("document.querySelectorAll('[data-library-book-card]').length >= 10", 30000);
+      console.log('[live] Books rendered in library grid.');
 
       // Dismiss splash if present
       await evaluate(`
@@ -241,6 +245,7 @@ app.on('browser-window-created', (_, win) => {
       await pause(500);
       const isStickyVisible = await evaluate('!!document.querySelector("[data-library-sticky-header]")');
       console.log('[live] Is sticky header visible after scroll down?', isStickyVisible);
+      assert.strictEqual(isStickyVisible, true, 'Sticky header must be visible after scrolling down');
       await shot('02-ar-light-1280-scrolled');
 
       // Restore scroll to top
@@ -255,7 +260,40 @@ app.on('browser-window-created', (_, win) => {
       `);
       await pause(400);
 
-      // Shot 3: Pin-or-peek side menu: Toggle Unpinned (Menu button / Ctrl+B)
+      // Shot 3: Card Hover / Focus overlay on cover
+      console.log('[live] Testing card hover / focus overlay...');
+      await evaluate(`
+        (() => {
+          const card = document.querySelector('[data-library-book-card]');
+          if (card) {
+            card.focus();
+            card.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+          }
+        })()
+      `);
+      await pause(400);
+      await shot('03-ar-light-1280-card-hover');
+
+      // Shot 4: Card ⋯ actions menu
+      console.log('[live] Testing card actions ⋯ menu dropdown...');
+      await evaluate(`
+        (() => {
+          const menuBtn = document.querySelector('[data-library-book-card] [data-card-menu-button]');
+          if (menuBtn) menuBtn.click();
+        })()
+      `);
+      await pause(400);
+      await shot('04-ar-light-1280-card-menu');
+
+      // Close card menu
+      await evaluate(`
+        (() => {
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        })()
+      `);
+      await pause(300);
+
+      // Shot 5: Pin-or-peek side menu: Toggle Unpinned (Menu button / Ctrl+B)
       console.log('[live] Testing unpinned side navigation...');
       await evaluate(`
         (() => {
@@ -264,9 +302,9 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(500);
-      await shot('03-ar-light-1280-unpinned');
+      await shot('05-ar-light-1280-unpinned');
 
-      // Shot 4: Hover start edge strip -> Peek overlay appears without content shift
+      // Shot 6: Hover start edge strip -> Peek overlay appears without content shift
       console.log('[live] Triggering peek overlay via start edge trigger strip...');
       await evaluate(`
         (() => {
@@ -280,9 +318,9 @@ app.on('browser-window-created', (_, win) => {
       await pause(500);
       const isPeekActive = await evaluate('!!document.querySelector("[data-nav-peek-overlay]")');
       console.log('[live] Is peek overlay visible?', isPeekActive);
-      await shot('04-ar-light-1280-peek');
+      await shot('06-ar-light-1280-peek');
 
-      // Shot 5: Pin back in flow
+      // Shot 7: Pin back in flow
       console.log('[live] Pinning side navigation back in normal flow...');
       await evaluate(`
         (() => {
@@ -291,9 +329,9 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(400);
-      await shot('05-ar-light-1280-pinned');
+      await shot('07-ar-light-1280-pinned');
 
-      // Shot 6: Simple Search with query + active filter chip
+      // Shot 8: Simple Search with query + active filter chip
       console.log('[live] Testing simple search...');
       await evaluate(`
         (() => {
@@ -306,7 +344,7 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(500);
-      await shot('06-ar-light-1280-search');
+      await shot('08-ar-light-1280-search');
 
       // Clear search
       await evaluate(`
@@ -321,7 +359,7 @@ app.on('browser-window-created', (_, win) => {
       `);
       await pause(300);
 
-      // Shot 7: Advanced Filters Panel open on desktop (side rail with topics, authors, and density)
+      // Shot 9: Advanced Filters Panel open on desktop (side rail with topics, authors, and density)
       console.log('[live] Opening Advanced filters panel on desktop...');
       await evaluate(`
         (() => {
@@ -330,7 +368,16 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(500);
-      await shot('07-ar-light-1280-advanced-panel');
+      await shot('09-ar-light-1280-advanced-panel');
+
+      // Close advanced panel
+      await evaluate(`
+        (() => {
+          const advBtn = document.querySelector('[data-advanced-filter-button]');
+          if (advBtn) advBtn.click();
+        })()
+      `);
+      await pause(300);
 
       // ----------------------------------------------------
       // SECTION 2: Arabic Dark Mode ("Scholar Night")
@@ -338,7 +385,7 @@ app.on('browser-window-created', (_, win) => {
       console.log('[live] Switching to Dark mode...');
       await setLocale('ar', 'dark');
       await pause(400);
-      await shot('08-ar-dark-1280-top');
+      await shot('10-ar-dark-1280-top');
 
       // ----------------------------------------------------
       // SECTION 3: Arabic 480px Viewport (Narrow / Mobile)
@@ -349,9 +396,9 @@ app.on('browser-window-created', (_, win) => {
       await setLocale('ar', 'light');
       dir = await evaluate('document.documentElement.getAttribute("dir")');
       assert.strictEqual(dir, 'rtl');
-      await shot('09-ar-light-480-top');
+      await shot('11-ar-light-480-top');
 
-      // Shot 10: 480px Advanced Filter Sheet
+      // Shot 12: 480px Advanced Filter Sheet
       console.log('[live] Opening Advanced filters Sheet at 480px...');
       await evaluate(`
         (() => {
@@ -360,7 +407,7 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(500);
-      await shot('10-ar-light-480-advanced-sheet');
+      await shot('12-ar-light-480-advanced-sheet');
 
       // Close sheet
       await evaluate(`
@@ -381,10 +428,11 @@ app.on('browser-window-created', (_, win) => {
       dir = await evaluate('document.documentElement.getAttribute("dir")');
       assert.strictEqual(dir, 'ltr', 'Expected LTR for English');
 
-      // Shot 11: English top of library list
-      await shot('11-en-light-1280-top');
+      // Shot 13: English top of library list
+      await shot('13-en-light-1280-top');
 
-      // Shot 12: English scrolled down -> slim sticky bar
+      // Shot 14: English scrolled down -> slim sticky bar
+      console.log('[live] Testing English auto-hiding header on scroll down...');
       await evaluate(`
         (() => {
           const container = document.querySelector('[data-library-scroll-container]');
@@ -395,7 +443,10 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(500);
-      await shot('12-en-light-1280-scrolled');
+      const isEnStickyVisible = await evaluate('!!document.querySelector("[data-library-sticky-header]")');
+      console.log('[live] Is English sticky header visible after scroll down?', isEnStickyVisible);
+      assert.strictEqual(isEnStickyVisible, true, 'English sticky header must be visible after scrolling down');
+      await shot('14-en-light-1280-scrolled');
 
       // Reset scroll
       await evaluate(`
@@ -409,7 +460,40 @@ app.on('browser-window-created', (_, win) => {
       `);
       await pause(300);
 
-      // Shot 13: English unpinned
+      // Shot 15: English Card Hover / Focus overlay on cover
+      console.log('[live] Testing English card hover / focus overlay...');
+      await evaluate(`
+        (() => {
+          const card = document.querySelector('[data-library-book-card]');
+          if (card) {
+            card.focus();
+            card.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+          }
+        })()
+      `);
+      await pause(400);
+      await shot('15-en-light-1280-card-hover');
+
+      // Shot 16: English Card ⋯ actions menu
+      console.log('[live] Testing English card actions ⋯ menu dropdown...');
+      await evaluate(`
+        (() => {
+          const menuBtn = document.querySelector('[data-library-book-card] [data-card-menu-button]');
+          if (menuBtn) menuBtn.click();
+        })()
+      `);
+      await pause(400);
+      await shot('16-en-light-1280-card-menu');
+
+      // Close card menu
+      await evaluate(`
+        (() => {
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        })()
+      `);
+      await pause(300);
+
+      // Shot 17: English unpinned
       await evaluate(`
         (() => {
           const menuBtn = document.querySelector('[data-nav-menu-button]');
@@ -417,9 +501,9 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(400);
-      await shot('13-en-light-1280-unpinned');
+      await shot('17-en-light-1280-unpinned');
 
-      // Shot 14: English peek overlay on left edge
+      // Shot 18: English peek overlay on left edge
       await evaluate(`
         (() => {
           const edge = document.querySelector('[data-nav-peek-trigger-edge]');
@@ -430,7 +514,7 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(500);
-      await shot('14-en-light-1280-peek');
+      await shot('18-en-light-1280-peek');
 
       // Pin back in English
       await evaluate(`
@@ -441,7 +525,7 @@ app.on('browser-window-created', (_, win) => {
       `);
       await pause(300);
 
-      // Shot 15: English Advanced panel open
+      // Shot 19: English Advanced panel open
       await evaluate(`
         (() => {
           const advBtn = document.querySelector('[data-advanced-filter-button]');
@@ -449,12 +533,21 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(500);
-      await shot('15-en-light-1280-advanced-panel');
+      await shot('19-en-light-1280-advanced-panel');
 
-      // Shot 16: English dark mode
+      // Close advanced panel
+      await evaluate(`
+        (() => {
+          const advBtn = document.querySelector('[data-advanced-filter-button]');
+          if (advBtn) advBtn.click();
+        })()
+      `);
+      await pause(300);
+
+      // Shot 20: English dark mode
       await setLocale('en', 'dark');
       await pause(400);
-      await shot('16-en-dark-1280-top');
+      await shot('20-en-dark-1280-top');
 
       // ----------------------------------------------------
       // SECTION 5: English 480px Viewport
@@ -464,9 +557,9 @@ app.on('browser-window-created', (_, win) => {
       await setLocale('en', 'light');
       dir = await evaluate('document.documentElement.getAttribute("dir")');
       assert.strictEqual(dir, 'ltr');
-      await shot('17-en-light-480-top');
+      await shot('21-en-light-480-top');
 
-      // Shot 18: English 480px Advanced Sheet
+      // Shot 22: English 480px Advanced Sheet
       await evaluate(`
         (() => {
           const advBtn = document.querySelector('[data-advanced-filter-button]');
@@ -474,9 +567,9 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(500);
-      await shot('18-en-light-480-advanced-sheet');
+      await shot('22-en-light-480-advanced-sheet');
 
-      console.log('[live] All 18 screenshots captured successfully!');
+      console.log('[live] All 22 screenshots captured successfully!');
       app.exit(0);
     } catch (err) {
       console.error('[live failure]', err);

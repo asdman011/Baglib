@@ -11,7 +11,7 @@ try {
 } catch {}
 
 const profile = path.resolve('.baglib-data/key310-profile');
-const evidence = path.resolve('.baglib-data/KEY-310-evidence');
+const evidence = path.resolve('.baglib-data/KEY-310-evidence/fix1');
 
 fs.mkdirSync(profile, { recursive: true });
 fs.mkdirSync(evidence, { recursive: true });
