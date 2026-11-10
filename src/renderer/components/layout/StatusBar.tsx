@@ -15,7 +15,7 @@ export const StatusBar: React.FC = () => {
       <div className="flex min-w-0 items-center gap-3">
         {/* Total Book Notes Count */}
         <button type="button" onClick={() => setViewMode('notes')} title={t('navNotes')} className="flex shrink-0 items-center gap-1 rounded py-1 hover:text-main focus-visible:outline-2 focus-visible:outline-focus">
-          <FileText className="w-3 h-3 text-primary" />
+          <FileText className="w-3 h-3 text-primary-text" />
           <span>{loading ? t('studyLoadingNotes') : error ? t('studyNotesUnavailable') : `${notes.length.toLocaleString(lang)} ${t('recordedNotes')}`}</span>
         </button>
 

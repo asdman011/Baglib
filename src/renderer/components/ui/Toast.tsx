@@ -98,7 +98,7 @@ const SingleToast: React.FC<{
             toast.action?.onClick();
             onDismiss(toast.id);
           }}
-          className="shrink-0 font-bold text-primary hover:underline px-2 py-1 rounded focus-visible:outline-2 focus-visible:outline-focus cursor-pointer"
+          className="shrink-0 font-bold text-primary-text hover:underline px-2 py-1 rounded focus-visible:outline-2 focus-visible:outline-focus cursor-pointer"
         >
           {toast.action.label}
         </button>

@@ -87,6 +87,7 @@ function PlaygroundContent() {
     { name: 'text', cssVar: '--color-text-val', lightHex: '#2c221a', darkHex: '#efece4', role: 'Main Text Ink' },
     { name: 'text-muted', cssVar: '--color-text-muted-val', lightHex: '#6e5e4f', darkHex: '#95a8b5', role: 'Muted Ink' },
     { name: 'primary', cssVar: '--color-primary-val', lightHex: '#1e3e2b', darkHex: '#2d5a3f', role: 'Dark Evergreen Primary Action (D1)' },
+    { name: 'primary-text', cssVar: '--color-primary-text-val', lightHex: '#1e3e2b', darkHex: '#8fd0a8', role: 'Text-Safe Primary (Light Evergreen in Dark Mode)' },
     { name: 'primary-contrast', cssVar: '--color-primary-contrast-val', lightHex: '#ffffff', darkHex: '#ffffff', role: 'Primary Contrast Text' },
     { name: 'accent', cssVar: '--color-accent-val', lightHex: '#b45309', darkHex: '#fbbf24', role: 'Baghdad Amber Accent' },
     { name: 'success', cssVar: '--color-success-val', lightHex: '#166534', darkHex: '#4ade80', role: 'Evergreen Success' },
@@ -101,7 +102,7 @@ function PlaygroundContent() {
       <header className="sticky top-0 z-40 border-b backdrop-blur-md bg-surface/90 border-border px-4 sm:px-6 py-3">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="size-9 rounded-xl border border-border/80 shadow-xs overflow-hidden bg-primary/10 flex items-center justify-center text-primary font-bold">
+            <div className="size-9 rounded-xl border border-primary-text/30 shadow-xs overflow-hidden bg-primary/10 flex items-center justify-center text-primary-text font-bold">
               <Layers className="size-5" />
             </div>
             <div>

@@ -31,8 +31,9 @@ The application uses unified semantic design tokens mapped across both light and
 | `border` | `#dcd4c3` | `#223440` | Subtle dividers | Dividers, card borders, input borders |
 | `text` | `#2c221a` | `#efece4` | **13.17:1** (L) / **15.48:1** (D) [AAA] | Primary body text and headers |
 | `text-muted` | `#6e5e4f` | `#95a8b5` | **5.75:1** (L) / **6.82:1** (D) [AA+] | Subtitles, secondary metadata, placeholders |
-| `primary` | `#1e3e2b` | `#2d5a3f` | **11.80:1** (L) / **7.94:1** (D) [AAA] | Primary buttons ("New Object +"), selected chips |
-| `primary-contrast` | `#ffffff` | `#ffffff` | High contrast | Text on primary backgrounds |
+| `primary` | `#1e3e2b` | `#2d5a3f` | **11.80:1** (L) / **7.94:1** (D) [AAA] | Filled primary action backgrounds ("New Object +", selected chips) |
+| `primary-text` | `#1e3e2b` | `#8fd0a8` | **11.80:1** (L) / **9.29:1** (D) [AAA] | Text-safe primary tone for active nav items, ghost buttons, tabs, menu items, badges |
+| `primary-contrast` | `#ffffff` | `#ffffff` | High contrast | Text on primary filled backgrounds |
 | `accent` | `#b45309` | `#fbbf24` | **4.65:1** (L) / **10.03:1** (D) [AA/AAA] | Baghdad Amber accent, badges, ayah marks |
 | `success` | `#166534` | `#4ade80` | **6.60:1** (L) / **9.61:1** (D) [AAA] | Success notices, verified badges |
 | `warning` | `#92400e` | `#fbbf24` | **6.80:1** (L) / **10.20:1** (D) [AAA] | Warnings, quota thresholds |
@@ -40,6 +41,9 @@ The application uses unified semantic design tokens mapped across both light and
 | `focus` | `#2a576f` | `#6ba7c7` | **7.22:1** (L) / **6.36:1** (D) [AAA/AA] | Pale Sky focus rings and hyperlinks |
 
 All text foreground-to-background combinations meet or exceed **WCAG 2.1 AA** (4.5:1 for normal text, 3:1 for large text / UI boundaries) and reach **WCAG AAA** for core reading text.
+
+> [!NOTE]
+> **Primary vs. Primary Text Separation (Dark Mode Fix)**: Solid filled buttons use `bg-primary text-primary-contrast` (`#2d5a3f` with `#ffffff` text, yielding 7.94:1 AAA). However, for text, icons, borders, or translucent backgrounds against dark surfaces (`#0e161b` canvas or `#141f26` surface), `text-primary-text` (`#8fd0a8`) is used, providing **9.29:1** to **10.27:1** (WCAG AAA) contrast instead of the illegible 2:1 ratio of raw dark evergreen on dark slate.
 
 ---
 

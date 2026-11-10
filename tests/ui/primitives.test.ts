@@ -534,3 +534,35 @@ test('EmptyState, Skeleton, and Tooltip render correctly', async () => {
 
   root.unmount();
 });
+
+test('Dark-mode primary-text token exists and differs from primary for accessible contrast', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require('fs');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require('path');
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/renderer/app/globals.css'), 'utf8');
+
+  // Verify .dark contains --color-primary-text-val
+  const darkMatch = css.match(/\.dark\s*\{([\s\S]*?)\}/);
+  assert.ok(darkMatch, '.dark class block exists in globals.css');
+  const darkBlock = darkMatch[1];
+
+  const primaryValMatch = darkBlock.match(/--color-primary-val:\s*([^;]+);/);
+  const primaryTextValMatch = darkBlock.match(/--color-primary-text-val:\s*([^;]+);/);
+
+  assert.ok(primaryValMatch, '--color-primary-val defined in .dark');
+  assert.ok(primaryTextValMatch, '--color-primary-text-val defined in .dark');
+
+  const darkPrimary = primaryValMatch[1].trim();
+  const darkPrimaryText = primaryTextValMatch[1].trim();
+
+  // Dark-mode primary text MUST differ from primary action color
+  assert.notEqual(
+    darkPrimaryText,
+    darkPrimary,
+    `Dark mode primary-text (${darkPrimaryText}) must differ from primary (${darkPrimary})`
+  );
+
+  // Validate dark primary text is light evergreen #8fd0a8 for AAA contrast
+  assert.equal(darkPrimaryText, '#8fd0a8');
+});

@@ -39,7 +39,7 @@ export const Titlebar: React.FC = () => {
       {/* Left Group: Single Authoritative Brand Logo */}
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => setViewMode('dashboard')} title={t('navDashboard')} aria-label={t('navDashboard')} className="flex items-center gap-2 px-1 rounded-lg focus-visible:outline-2 focus-visible:outline-focus">
-          <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
+          <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text">
             <BookOpen className="w-4 h-4" />
           </div>
           <span className="hidden sm:inline font-display text-base font-bold text-main tracking-wide">{t('brand')}</span>

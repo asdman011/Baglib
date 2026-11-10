@@ -25,6 +25,12 @@
     - `npx eslint` on changed files: 0 errors, 0 warnings.
     - `npx tsup`: success in 174ms.
     - `git diff --check`: clean (0 errors).
+  - Fix 1 (Review remediation): Dark-mode primary text contrast.
+    - Added `--color-primary-text` (`primary-text`) in `globals.css` and `tailwind.config.ts`: `#1e3e2b` in light mode (11.80:1 AAA) and `#8fd0a8` in dark mode (9.29:1 to 10.27:1 AAA on dark canvas/surfaces).
+    - Migrated active nav items and active book indicator in `NavigationRail.tsx`, notes icon in `StatusBar.tsx`, brand icon in `Titlebar.tsx`, and settings icon in `AppLayout.tsx` to `text-primary-text`.
+    - Updated primitives: `Button` ghost (`text-primary-text hover:bg-primary/10`), `Chip` unselected (`text-text hover:text-primary-text`), `Tabs` active tab (`text-primary-text ring-1 ring-inset ring-primary-text/20`), `Menu` active item (`bg-primary/15 text-primary-text`), `Badge` primary (`bg-primary/15 text-primary-text border-primary-text/30`), `Toast` undo button (`text-primary-text`).
+    - Added dark-mode token contrast test in `tests/ui/primitives.test.ts` (10/10 tests pass).
+    - Captured 8 dark mode screenshots across ar/en and 1280px/480px in `.baglib-data/KEY-296-evidence/fix1/`.
   - Live harness (`scripts/ui-primitives-live/`): verified playground and shell across matrix (Arabic RTL, English LTR, light/dark themes, 1280px and 480px viewports) with real files imported (`tests/real-files/` Arabic text PDF, English academic PDF, English EPUB, physical book). 20 evidence screenshots captured in `.baglib-data/KEY-296-evidence/`. Original corpus verified unchanged.
 - Exact files changed:
   - `src/renderer/app/globals.css`

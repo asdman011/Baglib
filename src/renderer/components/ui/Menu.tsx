@@ -179,7 +179,7 @@ export const Menu: React.FC<MenuProps> = ({
                       ? 'bg-danger/10 text-danger'
                       : 'text-danger hover:bg-danger/10'
                     : isFocused
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/15 text-primary-text'
                     : 'text-text hover:bg-canvas'
                 }`}
               >

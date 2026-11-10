@@ -16,6 +16,7 @@ const config: Config = {
         text: 'var(--color-text-val)',
         'text-muted': 'var(--color-text-muted-val)',
         primary: 'var(--color-primary-val)',
+        'primary-text': 'var(--color-primary-text-val)',
         'primary-contrast': 'var(--color-primary-contrast-val)',
         accent: 'var(--color-accent-val)',
         success: 'var(--color-success-val)',

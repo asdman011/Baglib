@@ -46,7 +46,7 @@ export const Chip: React.FC<ChipProps> = ({
       className={`inline-flex items-center text-xs font-medium rounded-full transition-all select-none border ${
         selected
           ? 'bg-primary text-primary-contrast border-primary shadow-xs'
-          : 'bg-surface text-text-muted border-border hover:bg-canvas hover:text-text'
+          : 'bg-surface text-text border-border hover:bg-canvas hover:text-primary-text hover:border-primary-text/40'
       } ${removable ? 'ps-3 pe-1.5' : 'px-3'} py-1 gap-1.5 ${
         disabled ? 'opacity-50 cursor-not-allowed' : ''
       } ${className}`}

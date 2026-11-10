@@ -19,7 +19,7 @@ const variantStyles: Record<ButtonVariant, string> = {
   secondary:
     'bg-surface text-text border border-border hover:bg-canvas active:scale-[0.98] focus-visible:outline-focus',
   ghost:
-    'text-text-muted hover:text-text hover:bg-surface/80 active:scale-[0.98] focus-visible:outline-focus',
+    'text-primary-text hover:bg-primary/10 active:scale-[0.98] focus-visible:outline-focus',
   danger:
     'bg-danger text-white hover:opacity-95 active:scale-[0.98] shadow-sm focus-visible:outline-danger',
 };

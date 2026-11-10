@@ -90,7 +90,7 @@ export const Tabs: React.FC<TabsProps> = ({
             onKeyDown={(e) => handleKeyDown(e, tab.id)}
             className={`flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus ${
               isSelected
-                ? 'bg-surface text-text shadow-xs border border-border/50'
+                ? 'bg-surface text-primary-text shadow-xs border border-border/50 ring-1 ring-inset ring-primary-text/20'
                 : 'text-text-muted hover:text-text hover:bg-surface/50 border border-transparent'
             }`}
           >
