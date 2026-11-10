@@ -295,7 +295,7 @@ async function createWindow() {
   });
 
   if (isDev) {
-    const devUrl = "http://localhost:3000";
+    const devUrl = process.env.BAGLIB_DEV_URL || "http://localhost:3000";
     let loaded = false;
     const maxRetries = 60;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {

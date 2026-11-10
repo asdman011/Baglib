@@ -44,6 +44,7 @@ interface AthanDashboardModuleProps {
   onSyncMawaqit: (slug?: string) => Promise<unknown>;
   onTriggerTestAlert: (prayer?: PrayerName) => Promise<unknown>;
   onDismissAlert: () => void;
+  onOpenSnooze?: () => void;
 }
 
 const PRAYER_ICONS: Record<PrayerName, React.ComponentType<{ className?: string }>> = {
@@ -65,6 +66,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
   onSyncMawaqit,
   onTriggerTestAlert,
   onDismissAlert,
+  onOpenSnooze,
 }) => {
   const { lang, dir } = useWorkspace();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -192,6 +194,19 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
               <Volume2 className="w-4 h-4" />
             )}
           </button>
+
+          {onOpenSnooze && (
+            <button
+              type="button"
+              data-athan-snooze-btn
+              onClick={onOpenSnooze}
+              title={tr.dashPrayerSnoozeBtn}
+              className="px-2.5 py-1.5 rounded-xl border border-subtle bg-canvas hover:bg-surface text-xs font-bold text-main inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Moon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden sm:inline">{tr.dashPrayerSnoozeBtn}</span>
+            </button>
+          )}
 
           <button
             type="button"

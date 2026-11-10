@@ -1,3 +1,58 @@
+## KEY-302 — 2026-11-10, Antigravity (implemented and verified)
+
+- Implementation & Verification: UI/UX U8 Home Dashboard to the FigJam wish-list (`dashboard-wishlist.png`).
+  - Calm Home Header (`HomeDashboardView.tsx`):
+    - Greeting with time-of-day dynamic greeting (`dashGreetingMorning`, `dashGreetingAfternoon`, `dashGreetingEvening`).
+    - Dual Gregorian and Hijri date header using `calculateHijriDate` and `Intl.DateTimeFormat` with `islamic-umalqura` calendar (`٣٠ جمادى الأولى ١٤٤٨ هـ` for 2026-11-10).
+    - Top header actions: Layout Customization button and Prayer Snooze entry button.
+    - Today panel (`TodayStudyPanel`) placed first, followed by a customizable, responsive grid of dashboard modules.
+  - Dual Gregorian & Hijri Calendar Module (`DashboardCalendarModule.tsx`):
+    - Monthly grid view displaying the Gregorian day on top and the corresponding Hijri day directly beneath via `Intl.DateTimeFormat` with `islamic-umalqura` (`formatHijriForDay`).
+    - Integrates planner tasks (`window.electronAPI.planner.list`) and curriculum exam dates (`window.electronAPI.pathwayExam.getConfig`) onto their respective calendar days with visual indicator dots.
+    - Selected-day inspector panel showing detailed scheduled tasks, curriculum exams, and direct navigation links.
+    - Standard U2 `Card` chrome, with `Skeleton` loading state and `EmptyState`.
+  - Module Customization & Persistence (`DashboardCustomizeModal.tsx`, `dashboard-layout-config.ts`):
+    - Accessible modal (`Modal` primitive, `size="xl"`, focus trap) allowing users to reorder modules (Up/Down) and toggle module visibility.
+    - Includes "Reset to default" order action.
+    - Settings persisted under key `dashboard.layout.v1` in `app_settings` via `window.electronAPI.settings`.
+    - Layout and module order survive application restarts.
+  - Prayer & Worship Snooze Entry (`DashboardSnoozeModal.tsx`, `AthanDashboardModule.tsx`):
+    - Direct snooze trigger button on `AthanDashboardModule` and top dashboard header.
+    - Accessible modal linking directly to prayer, zikr, and wird pause settings (`StudyRhythmSettings`) without duplicating the snooze engine (KEY-239).
+  - Responsive Layout (1280px & 480px Viewports):
+    - At 1280px: Multi-column responsive grid (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`).
+    - At 480px: Stacks cleanly into a single column (`grid-cols-1`) with zero horizontal overflow (`scrollWidth <= clientWidth + 2`).
+  - Translations (`src/renderer/translations.ts`):
+    - Added 30 bilingual keys to `ar` and `en` with 1:1 parity and zero trailing whitespace.
+    - Localized Arabic digits (`٠١٢٣٤٥٦٧٨٩`) in calendar cells and Hijri dates.
+  - Tests & Verification:
+    - `tests/ui/dashboard-calendar.test.ts`: 2/2 pass.
+    - `tests/ui/dashboard-hijri-date.test.ts`: 3/3 pass.
+    - `tests/ui/dashboard-layout-settings.test.ts`: 5/5 pass.
+    - `tests/ui/translation-keys.test.ts`: 2/2 pass.
+    - Full test suite: 1,670 / 1,670 tests pass across 331 suites (0 failures, 0 skips).
+    - `npx eslint`: 0 errors, 0 warnings.
+    - `npx tsup`: success in 143ms.
+    - `git diff --check`: 0 errors.
+    - Live harness (`scripts/dashboard-ui-live/run.mjs`): 14 screenshots captured across Arabic/English, Light/Dark, 1280px/480px with real files imported into `.baglib-data/KEY-302-evidence/`. Original corpus verified unchanged.
+- Exact files changed:
+  - `src/renderer/components/dashboard/dashboard-layout-config.ts`
+  - `src/renderer/components/dashboard/DashboardCalendarModule.tsx`
+  - `src/renderer/components/dashboard/DashboardCustomizeModal.tsx`
+  - `src/renderer/components/dashboard/DashboardSnoozeModal.tsx`
+  - `src/renderer/components/dashboard/HomeDashboardView.tsx`
+  - `src/renderer/components/dashboard/AthanDashboardModule.tsx`
+  - `src/renderer/components/dashboard/index.ts`
+  - `src/renderer/translations.ts`
+  - `src/main/index.ts`
+  - `tests/ui/dashboard-calendar.test.ts`
+  - `tests/ui/dashboard-hijri-date.test.ts`
+  - `tests/ui/dashboard-layout-settings.test.ts`
+  - `scripts/dashboard-ui-live/run.mjs`
+  - `scripts/dashboard-ui-live/dashboard-check.cjs`
+  - `src/renderer/app/dashboard-live/page.tsx`
+  - `docs/agent-ops/reports/KEY-302.md`
+
 ## KEY-297 — 2026-11-10, Antigravity (implemented and verified)
 
 - Implementation & Verification: UI/UX U3 App Shell to the Vision Mockup (`library-shell-mockup.png`, D3, D4).

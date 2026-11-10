@@ -6,3 +6,7 @@ export { QuickNoteScratchpad, detectTextDirection } from './QuickNoteScratchpad'
 export { AthanDashboardModule } from './AthanDashboardModule';
 export { TodayStudyPanel } from './TodayStudyPanel';
 export { StudyProgressPanel } from './StudyProgressPanel';
+export { DashboardCalendarModule } from './DashboardCalendarModule';
+export { DashboardCustomizeModal } from './DashboardCustomizeModal';
+export { DashboardSnoozeModal } from './DashboardSnoozeModal';
+export * from './dashboard-layout-config';
