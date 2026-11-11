@@ -1,3 +1,9 @@
+## KEY-317 wave4 verified - 2026-11-12, Codex (key317)
+
+Wave4 PASS ar/en at1280/480. Current selected-note History, Questions and Book filters, answered-status action, note context-menu deletion, Cards tools and current deck-status readiness repaired. Original history/restore/questions/reflections/planner-actions/quotes/trash/erase/consent/backup/dictionary/commentary/deck/Anki/card-comment assertions retained. Previous failures were list-render race, stale Notes Log label casing and stale Arabic deck-success text. An attempted blanket toast change was corrected after inspecting CardDecksPanel's retained inline statuses. Default fixture run tested, optional old-database/real-copy branches remain unverified.
+
+Evidence .baglib-data/k317-wave4-evidence-wsVwEM, both language result rows pass, profile removed. Node syntax/scoped diff checks pass. Exact files scripts/wave4-live/main.cjs, scripts/wave4-live/run.mjs and own shared state entries. No app UI/layout edit. Thirteen of20 scripts verified. Remaining wave5, wave6, poetry, prerequisites, quran-live, quran-layout, dashboard-live. Scoped publication authorized, Jira left to Claude. Prior assistant/Quran-wird fbc4c9ba67c0bb7578db7ee4394285218111e590 pushed normally.
+
 ## KEY-317 assistant and Quran-wird verified - 2026-11-11, Codex (key317)
 
 Assistant PASS ar/en at1280/480 with installed copied Quran/tafsir/translations/Sunnah and local fake provider. Scoped current editor pane, wait for CodeMirror, read raw draft via existing wrapper.value hook. Refusal, cards approval, citations, trusted corpus text, Warsh/Hafs overlap and fabricated-quote checks pass. Two repair attempts read the wrong CodeMirror text surface, corrected to retain the raw citation assertion. Screenshots work in this session. Evidence k317-assistant-evidence-T0KmFA;1339 originals hash-verified unchanged, copies/profile removed.

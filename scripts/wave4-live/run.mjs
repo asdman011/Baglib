@@ -11,5 +11,14 @@ if(process.env.BAGLIB_WAVE4_REAL_COPY){
 }
 const env={...process.env,BAGLIB_DATA_DIR:directory,BAGLIB_WAVE4_LIVE_DIR:directory};delete env.ELECTRON_RUN_AS_NODE;
 const child=spawn(electron,['scripts/wave4-live/main.cjs',`--user-data-dir=${directory}`],{env,stdio:'inherit',windowsHide:true});
-const timer=setTimeout(()=>child.kill(),240000);
-child.once('exit',code=>{clearTimeout(timer);console.log(JSON.stringify({directory,code}));process.exitCode=code??1;});
+child.once('exit', code => {
+  const evidence = fs.mkdtempSync(path.resolve('.baglib-data/k317-wave4-evidence-'));
+  for (const name of fs.readdirSync(directory)) {
+    if (/\.(png|json|txt)$/.test(name)) fs.copyFileSync(path.join(directory, name), path.join(evidence, name));
+  }
+  const resolved = fs.realpathSync(directory);
+  if (path.dirname(resolved) !== fs.realpathSync('.baglib-data')) throw Error('Unexpected profile path');
+  fs.rmSync(resolved, { recursive: true, force: true });
+  console.log(JSON.stringify({ evidence, code, profileDeleted: true }));
+  process.exitCode = code ?? 1;
+});

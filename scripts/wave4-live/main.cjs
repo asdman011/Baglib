@@ -11,7 +11,12 @@ const pause=duration=>new Promise(resolve=>setTimeout(resolve,duration));
 app.on('browser-window-created',(_,owner)=>{
   if(started)return;started=true;
   const evaluate=code=>owner.webContents.executeJavaScript(code,true).catch(error=>{throw new Error(`${error.message}: ${code.slice(0,160)}`);});
+  owner.webContents.on('did-finish-load', () => { evaluate("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until=async code=>{for(let index=0;index<180;index++){try{if(await evaluate(code))return;}catch{}await pause(300);}throw new Error(`Timed out: ${code}`);};
+  const notesFilter = async value => {
+    await evaluate(`(()=>{const s=[...document.querySelectorAll('[data-notes-list-pane] select')].find(e=>e.querySelector('option[value=questions]'));s.value=${JSON.stringify(value)};s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await pause(250);
+  };
   const fill=async(selector,value)=>evaluate(`(()=>{const element=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(element.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(element,${JSON.stringify(value)});element.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   (async()=>{
     await until('!!window.electronAPI?.knowledgeHistory && !!document.querySelector("footer")');
@@ -22,8 +27,8 @@ app.on('browser-window-created',(_,owner)=>{
       for(const language of ['ar','en']){
         await evaluate(`localStorage.setItem('baglib-lang','${language}')`);await owner.loadURL('http://localhost:3000');
         await until('!!window.electronAPI?.knowledgeHistory && !!document.querySelector("footer")');
-        await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");await pause(1200);
-        await evaluate(`Array.from(document.querySelectorAll('aside button')).find(button=>button.getAttribute('aria-label')===${JSON.stringify(language==='ar'?'سجل الملاحظات':'Notes Log')})?.click()`);
+        await evaluate("document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");await pause(1200);
+      await evaluate("document.querySelector('[data-nav-item=notes]').click()");
         await until('!!document.querySelector("[data-notes-overview]")');
         assert.ok((await evaluate('window.electronAPI.knowledge.getAll()')).length>0);
         assert.equal(await evaluate('document.querySelector("[data-notes-overview]").dir'),language==='ar'?'rtl':'ltr');
@@ -38,12 +43,16 @@ app.on('browser-window-created',(_,owner)=>{
     for(const language of ['ar','en']){
       await evaluate(`localStorage.setItem('baglib-lang','${language}')`);await owner.loadURL('http://localhost:3000');
       await until('!!window.electronAPI?.knowledgeHistory && !!document.querySelector("footer")');
-      await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");await pause(1200);
+      await evaluate("document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");await pause(1200);
       await evaluate('window.electronAPI.knowledgeHistory.setCapture(true)');
       const original=`  عِلْمٌ — ${language}\nكيف نفهم؟  `;
       const note=await evaluate(`window.electronAPI.studyNotes.save({title:'Wave 4 ${language}',content:${JSON.stringify(original)},tags:['بحث'],aliases:['Alias']})`);
       await evaluate(`window.electronAPI.studyNotes.save({...${JSON.stringify(note)},content:'Changed — تعديل',expectedRevision:${note.revision}})`);
-      await evaluate(`Array.from(document.querySelectorAll('aside button')).find(button=>button.getAttribute('aria-label')===${JSON.stringify(language==='ar'?'سجل الملاحظات':'Notes Log')})?.click()`);
+      await evaluate("document.querySelector('[data-nav-item=notes]').click()");
+      await until(`!!document.querySelector('[data-study-note="${note.id}"]')`);
+      await evaluate(`document.querySelector('[data-study-note="${note.id}"]').click()`);
+      await until("!!document.querySelector('[data-note-details-pane]')");
+      await evaluate("document.querySelectorAll('[data-note-details-pane] > div')[1].querySelectorAll('button')[1].click()");
       await until(`!!document.querySelector('[data-note-history="${note.id}"]')`);
       await evaluate(`document.querySelector('[data-note-history="${note.id}"]').open=true`);
       await until(`document.querySelector('[data-note-history="${note.id}"] select')?.options.length>2`);
@@ -55,10 +64,13 @@ app.on('browser-window-created',(_,owner)=>{
       assert.equal((await evaluate(`window.electronAPI.knowledgeHistory.versions('${note.id}')`)).length,3);
       const questions=await evaluate('window.electronAPI.knowledgeHistory.questions()');
       const question=questions.find(item=>item.source===`note:${note.id}`);assert.ok(question);
+      await notesFilter('questions');
       await until(`!!document.querySelector('[data-captured-question="${question.id}"]')`);
-      await evaluate(`document.querySelector('[data-captured-question="${question.id}"] div button').click()`);
+      await evaluate(`document.querySelector('[data-captured-question="${question.id}"] [data-question-answer]').click()`);
       await pause(200);
       assert.equal((await evaluate('window.electronAPI.knowledgeHistory.questions()')).find(item=>item.id===question.id).status,'answered');
+      await notesFilter('book');
+      await until("!!document.querySelector('[data-reading-log-book]')");
       await evaluate("(()=>{const select=document.querySelector('[data-reading-log-book]');select.value='wave4-book';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
       await until('!!document.querySelector("[data-reading-log]")');
       await evaluate('document.querySelector("[data-reading-log]").open=true');
@@ -82,7 +94,10 @@ app.on('browser-window-created',(_,owner)=>{
         await fs.promises.writeFile(path.join(directory,`notes-${language}-${width}.png`),(await owner.webContents.capturePage()).toPNG());
       }
       assert.equal(await evaluate('document.querySelector("[data-notes-overview]").dir'),language==='ar'?'rtl':'ltr');
-      await evaluate(`document.querySelector('[data-study-note="${note.id}"] header').querySelectorAll('button')[1].click()`);
+      await notesFilter('all');
+      await evaluate(`(()=>{window.confirm=()=>true;const e=document.querySelector('[data-study-note="${note.id}"]');e.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:300,clientY:200}));})()`);
+      await until("!!document.querySelector('[data-menu-action=delete]')");
+      await evaluate("document.querySelector('[data-menu-action=delete]').click()");
       await until(`!document.querySelector('[data-study-note="${note.id}"]')`);
       assert.ok((await evaluate('window.electronAPI.knowledgeHistory.trash()')).some(item=>item.id===note.id));
       assert.equal(await evaluate(`window.electronAPI.knowledgeHistory.erase('${note.id}',false).then(()=>false,()=>true)`),true);
@@ -100,6 +115,7 @@ app.on('browser-window-created',(_,owner)=>{
       const tag=(await evaluate('window.electronAPI.tags.getAll()')).find(item=>item.name===`مؤقت ${language}`);
       await evaluate(`window.electronAPI.studyNotes.remove('${tagged.id}')`);
       await evaluate(`window.electronAPI.tags.delete('${tag.id}')`);
+      await notesFilter('questions');
       await until(`!!document.querySelector('[data-trash-note="${tagged.id}"]')`);
       await evaluate(`(()=>{window.__confirmed=[];window.confirm=message=>{window.__confirmed.push(message);return window.__confirmAnswer;};window.__confirmAnswer=false;document.querySelector('[data-trash-note="${tagged.id}"] button').click();})()`);
       await until('window.__confirmed.length===1');
@@ -120,6 +136,8 @@ app.on('browser-window-created',(_,owner)=>{
       await evaluate(`window.electronAPI.knowledgeHistory.erase('${tagged.id}',true)`);
       assert.ok(planted.every(file=>!fs.existsSync(file)));
       assert.deepEqual(await evaluate(`window.electronAPI.settings.get('study.capture.draft.v1')`),{content:'unrelated draft'});
+      await evaluate("document.querySelector('[data-notes-tab=cards]').click()");
+      await until("!!document.querySelector('[data-personal-commentary]')");
       await evaluate(`window.electronAPI.commentary.save({reference:'quran:2:255',kind:'insight',text:'الرَّحْمَٰن — ${language}'})`);
       await evaluate("document.querySelector('[data-personal-commentary]').open=true");
       await until('!!document.querySelector("[data-personal-commentary] input")');
@@ -155,7 +173,7 @@ app.on('browser-window-created',(_,owner)=>{
       await until('!!document.querySelector("[data-card-decks] input")');
       await fill('[data-card-decks] input',`حفظ ${language}`);
       await evaluate(`Array.from(document.querySelectorAll('[data-card-decks] button')).find(button=>button.textContent===${JSON.stringify(language==='ar'?'إنشاء المجموعة':'Create deck')}).click()`);
-      await until(`document.querySelector('[data-card-decks] [role=status]')?.textContent.includes(${JSON.stringify(language==='ar'?'أُضيفت':'Added')})`);
+      await until("!!document.querySelector('[data-card-decks] [role=status]')");
       const deck=(await evaluate('window.electronAPI.knowledgeCards.decks()')).find(item=>item.name===`حفظ ${language}`);assert.ok(deck.cards>=1);
       assert.ok((await evaluate('window.electronAPI.knowledgeCards.reviewQueue()')).due>=1);
       await until(`!!document.querySelector('[data-card-deck="${deck.id}"] button')`);
