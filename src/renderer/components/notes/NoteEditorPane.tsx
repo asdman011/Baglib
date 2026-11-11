@@ -50,6 +50,10 @@ export interface NoteEditorPaneProps {
   isPanelOpen?: boolean;
   onTogglePanel?: () => void;
   draftKey?: string;
+  /** KEY-320: open study links (note:, book:, quran: ...) through the parent's navigator. */
+  onOpenTarget?: (target: string) => void;
+  /** KEY-320: a paragraph to show; switches to preview so the parent can highlight it. */
+  focusAnchor?: { anchor: string; at: number } | null;
 }
 
 const DRAFT_KEY = 'dashboard.scratchpad.draft.v1';
@@ -69,6 +73,8 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
   isPanelOpen = true,
   onTogglePanel,
   draftKey: ownDraftKey,
+  onOpenTarget,
+  focusAnchor,
 }) => {
   const { books, dir, t, lang, openBookForReading, refreshTags } = useWorkspace();
   const { notes: hookNotes } = useStudyNotes();
@@ -81,7 +87,13 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
   const [tagsInput, setTagsInput] = useState(note?.tags.join(', ') || '');
   const [aliasesInput, setAliasesInput] = useState(note?.aliases.join(', ') || '');
   const [workId, setWorkId] = useState(note?.workId || '');
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState(!!focusAnchor);
+  // KEY-320: a link to one paragraph opens the rendered note, where the paragraph can be found.
+  const [shownAnchor, setShownAnchor] = useState(focusAnchor);
+  if (focusAnchor !== shownAnchor) {
+    setShownAnchor(focusAnchor);
+    if (focusAnchor) setPreview(true);
+  }
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [addingTag, setAddingTag] = useState(false);
@@ -384,6 +396,7 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
           <IconButton
             size="sm"
             label={preview ? t('dashScratchpadEdit') : t('dashScratchpadPreview')}
+            data-note-preview-toggle={preview ? 'preview' : 'edit'}
             onClick={() => setPreview(!preview)}
           >
             {preview ? <FileEdit className="size-3.5" /> : <Eye className="size-3.5" />}
@@ -541,11 +554,12 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
       {/* Editor Body */}
       <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 bg-surface">
         {preview ? (
-          <div className="max-w-3xl mx-auto py-2">
+          <div className="max-w-3xl mx-auto py-2" data-note-preview={note?.id ?? ''}>
             <StudyNoteContent
               content={content}
               notes={notes}
               onOpen={(target) => {
+                if (onOpenTarget) { onOpenTarget(target); return; }
                 const parts = target.split(':');
                 if (parts[0] === 'book') {
                   const b = books.find((book) => book.id === parts[1]);

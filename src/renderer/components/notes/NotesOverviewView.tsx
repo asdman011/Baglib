@@ -198,16 +198,23 @@ export const NotesOverviewView: React.FC = () => {
       element?.classList.remove('bg-amber-400/30');
       element?.removeAttribute('data-paragraph-focused');
     };
-    const frame = requestAnimationFrame(() => {
+    // KEY-320: paragraphs render in the editor's preview, which may appear a few frames after the note is selected.
+    let frame = 0;
+    let tries = 0;
+    const find = () => {
       element = document.querySelector(
-        `[data-study-note="${CSS.escape(focusParagraph.id)}"] [data-paragraph="${CSS.escape(focusParagraph.anchor)}"]`
+        `[data-note-preview="${CSS.escape(focusParagraph.id)}"] [data-paragraph="${CSS.escape(focusParagraph.anchor)}"]`
       );
-      if (!element) return;
+      if (!element) {
+        if (++tries < 60) frame = requestAnimationFrame(find);
+        return;
+      }
       element.scrollIntoView({ block: 'center', behavior: 'smooth' });
       element.classList.add('bg-amber-400/30');
       element.setAttribute('data-paragraph-focused', 'true');
       timer = setTimeout(clear, 2200);
-    });
+    };
+    frame = requestAnimationFrame(find);
     return () => {
       cancelAnimationFrame(frame);
       if (timer) clearTimeout(timer);
@@ -842,6 +849,8 @@ export const NotesOverviewView: React.FC = () => {
                 key={activeNote ? activeNote.id : `new-${editorDraft?.key ?? 0}`}
                 note={activeNote}
                 notes={notes}
+                onOpenTarget={(target) => void openTarget(target)}
+                focusAnchor={activeNote && focusParagraph?.id === activeNote.id ? focusParagraph : null}
                 initialContent={editorDraft?.content}
                 showBack={mobileScreen === 'editor'}
                 onBack={() => setMobileScreen('list')}

@@ -14,6 +14,8 @@ app.on('browser-window-created', (_, owner) => {
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  // KEY-317: scratchpad and first-run guide for throwaway profiles.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && Promise.all([window.electronAPI.settings.set('onboarding.v1',{seen:true}), window.electronAPI.settings.get('dashboard.layout.v1').then(v => v ? null : window.electronAPI.settings.set('dashboard.layout.v1',{version:1,modules:[{id:'today',visible:true},{id:'calendar',visible:true},{id:'readingGoals',visible:false},{id:'activeReads',visible:false},{id:'studyProgress',visible:false},{id:'studyInsights',visible:false},{id:'scratchpad',visible:true},{id:'athan',visible:false},{id:'khatmah',visible:false},{id:'studyRhythm',visible:false}]}))])").catch(() => {}); });
   const until = async (code, tries = 150) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(200); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(400); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const press = (keyCode, modifiers = []) => { owner.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); owner.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
@@ -29,8 +31,15 @@ app.on('browser-window-created', (_, owner) => {
     await until(`!!window.electronAPI && !!document.querySelector('${editor} .cm-content')`); await pause(800);
   };
   const notesView = async language => {
-    await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')}).click()`);
+    await evaluate("document.querySelector('[data-nav-item=\"notes\"]').click()");
     await until("!!document.querySelector('[data-study-note=\"source-note\"]')");
+  };
+  // Since KEY-304 the Notes page is a list plus an editor; links, embeds and paragraphs render in the preview.
+  const openPreview = async id => {
+    await evaluate(`document.querySelector('[data-study-note="${id}"]').click()`);
+    await until(`!!document.querySelector('[data-note-preview-toggle]')`);
+    await evaluate("(()=>{const b=document.querySelector('[data-note-preview-toggle]');if(b.getAttribute('data-note-preview-toggle')==='edit')b.click();})()");
+    await until(`!!document.querySelector('[data-note-preview="${id}"]')`);
   };
   (async () => {
     const results = {};
@@ -78,10 +87,12 @@ app.on('browser-window-created', (_, owner) => {
       await until("window.electronAPI.studyNotes.list().then(n=>n.length===2)");
       await notesView(language);
       const linking = await evaluate("window.electronAPI.studyNotes.list().then(n=>n.find(x=>x.id!=='source-note').id)");
-      const card = `[data-study-note="${linking}"]`;
+      const card = `[data-note-preview="${linking}"]`;
+      await openPreview(linking);
       await until(`!!document.querySelector('${card} [data-embedded-note]')`);
       result.embed = await evaluate(`document.querySelector('${card} [data-embedded-note]').textContent`);
       result.sourceShownText = await evaluate("document.querySelector('[data-study-note=\"source-note\"]').textContent");
+      result.embedHidesAnchor = await evaluate(`!document.querySelector('${card}').textContent.includes('^')`);
       // 5. Hover shows only the paragraph.
       const box = await evaluate(`(()=>{const el=document.querySelector('${card} [data-study-link="note:source-note#^${anchor}"]');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -94,15 +105,18 @@ app.on('browser-window-created', (_, owner) => {
       owner.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 }); await pause(300);
       // 6. Clicking opens the note at that paragraph and highlights it.
       await evaluate(`document.querySelector('${card} [data-study-link="note:source-note#^${anchor}"]').click()`);
-      await until(`document.querySelector('[data-study-note="source-note"] [data-paragraph="${anchor}"]')?.getAttribute('data-paragraph-focused')==='true'`, 50);
-      result.highlighted = await evaluate(`document.querySelector('[data-study-note="source-note"] [data-paragraph="${anchor}"]').textContent`);
-      result.inView = await evaluate(`(()=>{const r=document.querySelector('[data-study-note="source-note"] [data-paragraph="${anchor}"]').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;})()`);
+      await until(`document.querySelector('[data-note-preview="source-note"] [data-paragraph="${anchor}"]')?.getAttribute('data-paragraph-focused')==='true'`, 50);
+      result.highlighted = await evaluate(`document.querySelector('[data-note-preview="source-note"] [data-paragraph="${anchor}"]').textContent`);
+      await pause(900);
+      result.inView = await evaluate(`(()=>{const r=document.querySelector('[data-note-preview="source-note"] [data-paragraph="${anchor}"]').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;})()`);
+      result.sourcePreviewHidesAnchors = await evaluate(`!document.querySelector('[data-note-preview="source-note"]').textContent.includes('^')`);
       await shot(`highlight-${language}-1280`);
       // 7. A missing anchor opens the whole note with nothing highlighted.
-      await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===" + JSON.stringify(language === 'ar' ? 'الملاحظات المرتبطة' : 'Linked notes') + ")?.click()");
+      await pause(2600);
+      await openPreview(linking);
       await until(`!!document.querySelector('${card} [data-study-link="note:source-note#^gone99"]')`);
       await evaluate(`document.querySelector('${card} [data-study-link="note:source-note#^gone99"]').click()`);
-      await until("document.querySelectorAll('[data-study-note]').length===1 && !!document.querySelector('[data-study-note=\"source-note\"]')");
+      await until("!!document.querySelector('[data-note-preview=\"source-note\"]')");
       await pause(600);
       result.missingFocused = await evaluate("!!document.querySelector('[data-paragraph-focused]')");
       result.alert = await evaluate("!!document.querySelector('[data-notes-overview] [role=alert]')");
@@ -117,7 +131,7 @@ app.on('browser-window-created', (_, owner) => {
       assert.equal(result.faint, true);
       assert.equal(result.afterBackspace, 'نص قصير');
       assert.equal(result.embed.trim(), 'الشكر قيد النعم');
-      assert.ok(!result.sourceShownText.includes('^'), 'anchors hidden');
+      assert.ok(result.embedHidesAnchor && result.sourcePreviewHidesAnchors, 'anchors hidden in preview');
       assert.ok(result.preview && result.preview.includes('الصبر حبس النفس') && !result.preview.includes('قيد النعم'), 'preview is only the paragraph');
       assert.ok(result.highlighted.includes('وهو ثلاثة أنواع') && result.inView);
       assert.equal(result.missingFocused, false); assert.equal(result.alert, false);

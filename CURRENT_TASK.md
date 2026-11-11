@@ -1,3 +1,26 @@
+## KEY-320 paragraph links open and highlight again - 2026-11-11, Claude Code
+
+The bug: since the KEY-304 redesign, a link to a note paragraph no longer scrolled to and highlighted it. The highlight looked for paragraphs inside the list card, which only shows an excerpt. Note links clicked in a note's preview did nothing, because only book: links were handled there.
+
+The fix:
+- NoteEditorPane takes `onOpenTarget`, so every study link in its preview goes through the overview's own navigator.
+- It also takes `focusAnchor`. A link with an anchor opens the target note in preview, marked `data-note-preview=<id>`.
+- The highlight effect looks for the paragraph there, retrying for a few frames while the preview renders.
+- The preview button carries `data-note-preview-toggle` for live scripts.
+- A missing anchor opens the note with nothing highlighted and no error.
+
+No schema change and no new strings.
+
+Verification:
+- New tests/ui/note-paragraph-link.test.ts, ar and en (2/2).
+- The other notes UI tests pass (10/10 together with the new one), and tsc and eslint pass.
+- Full suite 1862/1862.
+- scripts/note-paragraphs-live (KEY-317) is updated for the list-plus-editor page, with the nav item, the scratchpad and guide hook, select plus preview, and the highlight in preview. It passes live in ar and en; the screenshot shows the paragraph highlighted.
+
+Seen, not fixed: the list excerpts show raw link markup and ^anchors (UX polish, KEY-309).
+
+Files: src/renderer/components/notes/NoteEditorPane.tsx, src/renderer/components/notes/NotesOverviewView.tsx, tests/ui/note-paragraph-link.test.ts, scripts/note-paragraphs-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-318 deck from a range of ayahs - 2026-11-11, Claude Code
 
 The Cards deck panel has a "From a range of ayahs" picker: surah (localized names), from ayah and to ayah, bounded by the Hafs ayah counts. It makes one card per ayah. The front is "<surah> S:A", the back is the installed mushaf text unchanged, and the source is quran:hafs:S:A. The range is read through the existing readAyahTexts. A missing or partial pack is refused with a localized "Quran text isn't installed" message.
