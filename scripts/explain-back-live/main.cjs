@@ -52,8 +52,8 @@ app.on('browser-window-created',(_,win)=>{
   const invoke=input=>evaluate(`window.electronAPI.studyAssistant.explainBack(${JSON.stringify(input)})`);
   const close=async()=>{await evaluate("document.querySelector('[data-explain-back] header button').click()");await until('!!document.querySelector("[data-study-assistant]")');};
   const notesAssistant=async()=>{
-   await evaluate(`Array.from(document.querySelectorAll('aside button')).find(b=>b.getAttribute('aria-label')===${JSON.stringify(lang==='ar'?'سجل الملاحظات':'Notes Log')})?.click()`);
-   await until(`(()=>{if(document.querySelector('[data-notes-assistant]'))return true;[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(lang==='ar'?'سجل الملاحظات':'Notes Log')})?.click();return false;})()`);
+   await evaluate(`document.querySelector('[data-nav-item="notes"]')?.click()`);
+   await until(`(()=>{if(document.querySelector('[data-notes-assistant]'))return true;document.querySelector('[data-nav-item="notes"]')?.click();return false;})()`);
    await click('[data-notes-assistant]');await until('!!document.querySelector("[data-study-assistant]")');
   };
   const checkUi=async(target,width,label)=>{
@@ -103,6 +103,8 @@ app.on('browser-window-created',(_,win)=>{
   }
   // Resume a still-pending comparison from the visible practice history.
   await notesAssistant();await closeAssistant();
+  // Since KEY-304 practice history sits in the Notes page's Cards tab.
+  await click('[data-notes-tab="cards"]');
   await until('!!document.querySelector("[data-practice-history] button[data-explain-resume]")');
   await click('[data-explain-resume]');await until('!!document.querySelector("[data-explain-back] [data-explain-claim]")');await shot('history-resumed-480');
   assert.ok(!await evaluate('document.querySelector("[data-explain-check]")'));

@@ -1,3 +1,15 @@
+## KEY-317 practice-live and explain-back-live repaired - 2026-11-11, Claude Code
+
+Both scripts are updated for the current app:
+- the notes nav item;
+- the review screen opened with baglib:start-review and left with its Exit button;
+- the confidence radio of the review screen (`srs-confidence-screen`);
+- practice history and "New question" in the Cards tab.
+
+Both pass live in ar and en with the real Arabic and English PDFs. An earlier explain-back failure was the page reloading while another agent edited files; the clean re-run passed.
+
+Files: scripts/practice-live/main.cjs, scripts/explain-back-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-300 part 2 verified - 2026-11-11, Codex (key300p2)
 
 User experience

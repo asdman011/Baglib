@@ -23,7 +23,10 @@ app.on('browser-window-created',(_,win)=>{
   const sourceRef=require(path.join(evidence,'study-target.cjs')).bookStudyTarget(book,file.page);
   win.reload();await until('!!window.electronAPI&&!!document.querySelector("footer")');
   await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");await pause(1000);
-  await evaluate(`Array.from(document.querySelectorAll('aside button')).find(b=>b.getAttribute('aria-label')===${JSON.stringify(lang==='ar'?'سجل الملاحظات':'Notes Log')})?.click()`);
+  // Since KEY-304 the review screen opens from the Notes page (baglib:start-review); history lives in the Cards tab.
+  await evaluate("document.querySelector('[data-nav-item=\"notes\"]')?.click()");
+  await until("!!document.querySelector('[data-notes-tab=\"cards\"]')");
+  await evaluate("window.dispatchEvent(new CustomEvent('baglib:start-review'))");
   await until('!!document.querySelector("[data-srs-review]")');
   const input={front:(lang==='ar'?'اختر النص المطابق للمقتطف: ':'Choose the matching passage: ')+file.passage,back:file.passage,sourceKind:'book',sourceRef,workId:id};
   const results=[];
@@ -38,7 +41,7 @@ app.on('browser-window-created',(_,win)=>{
     const root='[data-srs-review]';
     assert.equal(await evaluate(`document.querySelector('${root}').dir`),lang==='ar'?'rtl':'ltr');
     assert.equal(await evaluate(`document.querySelector('${root} [data-practice-reveal],${root} [data-srs-reveal]').disabled`),true);
-    await click(`${root} input[name="${kind==='recall'?'srs-confidence':`confidence-${card.id}`} "]`.replace(' "]','"]')+'[value="3"]');
+    await click(`${root} input[name="${kind==='recall'?'srs-confidence-screen':`confidence-${card.id}`} "]`.replace(' "]','"]')+'[value="3"]');
     if(kind==='recall'){
      await click(`${root} [data-srs-reveal]`);await until(`!!document.querySelector('${root} [data-srs-answer]')`);
     } else {
@@ -67,11 +70,16 @@ app.on('browser-window-created',(_,win)=>{
    }
   }
   await evaluate("window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'))");
+  // Leave the review screen (it returns to the Cards tab), where practice history lives.
+  await evaluate("document.querySelector('[data-srs-exit-button]')?.click()");
+  await until("!!document.querySelector('[data-notes-tab=\"cards\"]')");
+  await click('[data-notes-tab="cards"]');
   await until('!!document.querySelector("[data-practice-history]")');
   await evaluate("document.querySelector('[data-practice-history]').scrollIntoView({block:'start'})");await shot('history-480');
   // Drive the real saved-card editor, including kind-specific fields.
   const before=await api('list',{});
-  await click('[data-saved-cards] > button');await until('!!document.querySelector("[data-question-editor]")');
+  // Since KEY-301 the "New question" button sits in the panel's banner.
+  await evaluate(`Array.from(document.querySelectorAll('[data-saved-cards] button')).find(b=>b.textContent.trim()===${JSON.stringify(lang==='ar'?'سؤال جديد':'New question')}).click()`);await until('!!document.querySelector("[data-question-editor]")');
   await evaluate(`(()=>{const form=document.querySelector('[data-question-editor]');const a=form.querySelector('textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(a,${JSON.stringify('Editor '+lang+' - '+file.passage)});a.dispatchEvent(new Event('input',{bubbles:true}));const s=form.querySelector('select');s.value='numeric';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await until(`!!document.querySelector('[data-question-editor] input[type="number"]')`);
   await evaluate(`(()=>{const e=document.querySelector('[data-question-editor] input[type="number"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'7');e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
