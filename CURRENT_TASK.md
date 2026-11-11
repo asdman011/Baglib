@@ -1,3 +1,11 @@
+## KEY-234 confidence rule - 2026-11-11, Claude Code (user decision: "Yes, require it")
+
+The review screen now needs a confidence choice before Reveal for recall cards, as SrsReviewPanel already did. Before Reveal, keys 1-4 choose confidence and never grade. The Reveal button and Space stay inactive until a choice is made. Every review therefore records its practice attempt; before, the service rejected confidence 0 and the record was silently lost. srs-live chooses a confidence first.
+
+Verification: new tests/ui/srs-review-confidence.test.ts (1/1); the existing srs-review-keyboard test 3/3 unchanged; tsc and eslint pass; full suite 1843/1843; srs-live passes both launches in ar and en with no knowledge-cards:attempt errors. Only Claude's lines are committed: Codex's uncommitted landmark edit in the same file stays out.
+
+Files: src/renderer/components/knowledge/SrsReviewScreen.tsx (Claude's hunks only), tests/ui/srs-review-confidence.test.ts, scripts/srs-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-312 research step - 2026-11-11, Claude Code
 
 Wrote docs/features/feature - Adhan Recordings.md. It lists 4 Commons recordings with a verified reuse licence, each with its licence, format, length and file size, and it names the sources that are not usable without permission: famous muezzins, AlAdhan.com, a mislabelled Sabah Fakhri file, and the Cambridge NC-ND set. Nothing was downloaded. The choice of files is waiting for the user. The settings and notification parts of KEY-312 are not started.

@@ -50,6 +50,10 @@ app.on('browser-window-created', (_, owner) => {
       await until('!!document.querySelector("[data-srs-card]")');
       assert.equal(await evaluate('document.querySelector("[data-srs-review]").dir'), language === 'ar' ? 'rtl' : 'ltr');
       assert.equal(await evaluate('!!document.querySelector("[data-srs-answer]")'), false);
+      // Since KEY-234's confidence rule, a recall card needs "how sure were you" before Reveal.
+      assert.equal(await evaluate('document.querySelector("[data-srs-reveal]").disabled'), true);
+      await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'2',code:'Digit2',bubbles:true}))");
+      await until('!document.querySelector("[data-srs-reveal]").disabled');
       await evaluate('document.querySelector("[data-srs-reveal]").click()');
       await until('!!document.querySelector("[data-srs-answer]")');
       assert.ok((await evaluate('document.querySelector("[data-srs-review]").textContent')).includes('إجابة — Answer'));
