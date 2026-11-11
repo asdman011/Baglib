@@ -83,9 +83,9 @@ app.on('browser-window-created', (_, owner) => {
       result.sourcesSent = requests.at(-1).user.sources.map(source => source.id + ':' + source.label);
       await shot(`answer-${language}`);
       await evaluate("document.querySelector('[data-assistant-save]').click()");
-      await until("!!document.querySelector('[data-notes-overview] [data-study-note-editor]')");
+      await until("!!document.querySelector('[data-note-editor-pane] [data-study-note-editor] .cm-content')");
       await pause(500);
-      result.noteDraft = await evaluate("document.querySelector('[data-notes-overview] [data-study-note-editor]').value");
+      result.noteDraft = await evaluate("document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value");
       // 4. Draft cards: each waits for approval; one approved, one skipped.
       await openAssistant();
       await setValue('[data-assistant-task]', 'cards', 'HTMLSelectElement');

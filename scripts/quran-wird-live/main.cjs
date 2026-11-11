@@ -25,6 +25,7 @@ app.on('browser-window-created', (_, win) => {
   });
 
   const evaluate = (code) => win.webContents.executeJavaScript(code, true);
+  win.webContents.on('did-finish-load', () => { evaluate("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (code, timeoutMs = 60000) => {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -56,7 +57,7 @@ app.on('browser-window-created', (_, win) => {
     await evaluate(`localStorage.setItem('baglib-lang', ${JSON.stringify(lang)})`);
     win.reload();
     await until('!!window.electronAPI && !!document.querySelector("footer")');
-    await evaluate("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    await evaluate("document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
     await pause(800);
 
     // 1. Configure and seed Quran wird settings
@@ -152,6 +153,8 @@ app.on('browser-window-created', (_, win) => {
 
     await evaluate('document.querySelector(\'[data-today-step*="wird"] [data-today-step-open]\')?.click()');
     await pause(1500);
+
+    await until("!!document.querySelector('[data-quran-reader][data-quran-profile=hafs] .mushaf-svg-surface [data-surah][data-aya]')");
 
     // Screenshot 5: Quran view opened
     await shot('05-quran-view-opened');

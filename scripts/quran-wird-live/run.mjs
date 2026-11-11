@@ -1,14 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { spawn, execSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import electron from 'electron';
 import { setupThrowawayCorpus } from '../lib/corpus-copy.mjs';
-
-// 1. Ensure port 3000 is clean before starting
-try {
-  execSync('node scripts/ensure-port-free.js', { stdio: 'inherit' });
-} catch {}
 
 const directory = fs.mkdtempSync(path.resolve('.baglib-data/quran-wird-live-'));
 const profile = path.join(directory, 'profile');
@@ -26,17 +21,7 @@ const corpus = setupThrowawayCorpus({
 });
 console.log(`[live] Copied ${corpus.quran.copiedFiles} Quran files safely to throwaway profile.`);
 
-// 2. Start Next dev server
-console.log('[live] Starting Next.js dev server on port 3000...');
-const nextProcess = spawn(
-  process.execPath,
-  ['node_modules/next/dist/bin/next', 'dev', 'src/renderer', '-p', '3000', '-H', '127.0.0.1'],
-  {
-    stdio: 'ignore',
-    windowsHide: true,
-  }
-);
-
+// Reuse the caller's dev renderer without replacing another session's server.
 let devServerReady = false;
 for (let i = 0; i < 60; i++) {
   try {
@@ -73,12 +58,7 @@ try {
           windowsHide: true,
         }
       );
-      const timer = setTimeout(() => {
-        console.error(`[live] Timeout exceeded for ${lang}`);
-        child.kill();
-      }, 180_000);
       child.once('exit', (exitCode) => {
-        clearTimeout(timer);
         resolve(exitCode ?? 1);
       });
     });
@@ -98,14 +78,8 @@ try {
   );
   console.log('[live] All Quran wird live tests passed successfully!');
 } finally {
-  console.log('[live] Cleaning up dev server and profile directory...');
-  try {
-    nextProcess.kill('SIGTERM');
-  } catch {}
-  try {
-    execSync('node scripts/ensure-port-free.js', { stdio: 'ignore' });
-  } catch {}
-
+  const cleanup = corpus.cleanup();
+  fs.writeFileSync(path.join(evidence, 'cleanup.json'), JSON.stringify(cleanup));
   assert.equal(path.dirname(path.resolve(profile)), path.resolve(directory));
   fs.rmSync(profile, { recursive: true, force: true });
   console.log(

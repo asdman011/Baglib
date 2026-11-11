@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-11, Codex] KEY-317 assistant and Quran-wird ar/en1280/480 PASS,12/20 scripts verified. Current raw-editor hook and rendered Hafs navigation asserted, shared dev server retained, corpora hash-verified/profiles removed. Four scripts/own state entries in handoff. Eight remaining, next wave4.
+
 - [2026-11-11, Codex] KEY-317 next-upgrade dev ar/en(16nav,0errors), shutdown en/ar(122works/sources,2realPDFcovers,integrityok) and book-assistant ar/en1280/480 PASS. Profiles removed, syntax/diff pass. Five task scripts/own state entries in handoff. Static export unverified. Assistant active, remaining queue pending.
 
 - [2026-11-11, Codex] KEY-317 PDF-tools4/4 and reader-study ar/en1280/480 PASS, comments/export checked-in selectors confirmed ar/en. Six script files/own state entries, profiles deleted, native drawing and current Cards/review paths retained. Syntax/diff pass. Remaining scripts pending.
