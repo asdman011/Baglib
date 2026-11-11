@@ -184,7 +184,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
           onClick={onClose}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-canvas/80 border border-subtle hover:bg-canvas text-muted hover:text-main text-xs font-bold transition-all cursor-pointer shrink-0"
           title={t('backToLibrary')}
-        >
+         aria-label={t('backToLibrary')}>
           <ArrowRight className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
           <span className="hidden sm:inline">{t('backToLibrary')}</span>
         </button>
@@ -198,7 +198,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
               : 'bg-canvas/80 border-subtle text-muted hover:text-main'
           }`}
           title={t('tableOfContents')}
-        >
+         aria-label={t('tableOfContents')}>
           <ListTree className="w-4 h-4" />
           <span className="hidden md:inline">{t('tableOfContents')}</span>
         </button>
@@ -214,7 +214,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
                 : 'bg-canvas/80 border-subtle text-muted hover:text-main'
             }`}
             title={t('tabHighlights')}
-          >
+           aria-label={t('tabHighlights')}>
             <Highlighter className="w-4 h-4" />
             <span className="hidden md:inline">{t('tabHighlights')}</span>
           </button>
@@ -249,7 +249,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
       {/* Center: View Mode, Zoom/Fit, Direction */}
       <div className="flex flex-1 basis-full 2xl:basis-auto min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 [&>button]:shrink-0 [&>div]:shrink-0">
         {markupBar && <div className="shrink-0 flex items-center">{markupBar}</div>}
-        <button onClick={onReadAloud} title={t('ttsReadAloud')} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl hover:bg-canvas text-xs leading-relaxed whitespace-nowrap cursor-pointer">
+        <button onClick={onReadAloud} title={t('ttsReadAloud')} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl hover:bg-canvas text-xs leading-relaxed whitespace-nowrap cursor-pointer" aria-label={t('ttsReadAloud')}>
           <Play className="w-4 h-4 rtl:rotate-180" />
           <span>{t('ttsReadAloud')}</span>
         </button>
@@ -263,7 +263,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
                 ? 'bg-pale-sky-500 text-white shadow-xs'
                 : 'text-muted hover:text-main'
             }`}
-          >
+           aria-label={t('viewModeSingle')}>
             <FileText className="w-3.5 h-3.5" />
             <span className="hidden xl:inline">{t('viewModeSingle')}</span>
           </button>
@@ -275,7 +275,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
                 ? 'bg-pale-sky-500 text-white shadow-xs'
                 : 'text-muted hover:text-main'
             }`}
-          >
+           aria-label={t('viewModeTwoColumn')}>
             <Columns2 className="w-3.5 h-3.5" />
             <span className="hidden xl:inline">{t('viewModeTwoColumn')}</span>
           </button>
@@ -287,7 +287,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
                 ? 'bg-pale-sky-500 text-white shadow-xs'
                 : 'text-muted hover:text-main'
             }`}
-          >
+           aria-label={t('viewModeScrolled')}>
             <Scroll className="w-3.5 h-3.5" />
             <span className="hidden xl:inline">{t('viewModeScrolled')}</span>
           </button>
@@ -335,7 +335,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
               onClick={() => setPdfFitMode(pdfFitMode === 'Fit' ? 'FitH' : 'Fit')}
               title={pdfFitMode === 'Fit' ? t('fitWidth') : t('fitPage')}
               className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-surface font-bold transition-all cursor-pointer flex items-center gap-1"
-            >
+             aria-label={pdfFitMode === 'Fit' ? t('fitWidth') : t('fitPage')}>
               {pdfFitMode === 'Fit' ? (
                 <Maximize className="w-3.5 h-3.5" />
               ) : (
@@ -355,7 +355,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
                   ? 'bg-amber-500 text-white shadow-xs'
                   : 'text-muted hover:text-main hover:bg-surface'
               }`}
-            >
+             aria-label={t('autoCropMargins')}>
               <Crop className="w-3.5 h-3.5" />
               <span className="text-[11px] hidden xl:inline">{t('autoCropMargins')}</span>
             </button>
@@ -371,7 +371,11 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
               : t('readingDirectionLtr')
           }
           className="flex items-center gap-1 px-2 py-1 rounded-xl bg-canvas/80 border border-subtle text-muted hover:text-main text-xs font-mono font-bold transition-all cursor-pointer"
-        >
+         aria-label={
+            readerDirection === 'rtl'
+              ? t('readingDirectionRtl')
+              : t('readingDirectionLtr')
+          }>
           <ArrowRightLeft className="w-3.5 h-3.5" />
           <span className="text-[10px]">{readerDirection.toUpperCase()}</span>
         </button>
@@ -381,7 +385,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
           onClick={onToggleSearch}
           title={t('searchInBook')}
           className="p-1.5 rounded-xl bg-canvas/80 border border-subtle text-muted hover:text-main transition-all cursor-pointer"
-        >
+         aria-label={t('searchInBook')}>
           <Search className="w-4 h-4" />
         </button>
 
@@ -461,7 +465,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
           onClick={onToggleAIDrawer}
           title={t('aiAssistantTitle')}
           className="p-1.5 rounded-xl bg-canvas/80 border border-subtle text-indigo-500 hover:text-indigo-600 transition-all cursor-pointer"
-        >
+         aria-label={t('aiAssistantTitle')}>
           <Sparkles className="w-4 h-4" />
         </button>
 
@@ -470,7 +474,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
           onClick={onToggleDictionary}
           title={t('dictionaryLookupTitle')}
           className="p-1.5 rounded-xl bg-canvas/80 border border-subtle text-pale-sky-600 hover:text-pale-sky-700 transition-all cursor-pointer"
-        >
+         aria-label={t('dictionaryLookupTitle')}>
           <BookA className="w-4 h-4" />
         </button>
 
@@ -479,7 +483,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
           onClick={onTogglePlugins}
           title={t('pluginsTitle')}
           className="p-1.5 rounded-xl bg-canvas/80 border border-subtle text-muted hover:text-main transition-all cursor-pointer"
-        >
+         aria-label={t('pluginsTitle')}>
           <Puzzle className="w-4 h-4" />
         </button>
 
@@ -492,7 +496,7 @@ export const ZenTopBar: React.FC<ZenTopBarProps> = ({
               ? 'bg-pale-sky-500 text-white border-pale-sky-500 shadow-sm'
               : 'bg-canvas/80 border-subtle text-muted hover:text-main'
           }`}
-        >
+         aria-label={t('typographySettings')}>
           <SlidersHorizontal className="w-4 h-4" />
         </button>
       </div>

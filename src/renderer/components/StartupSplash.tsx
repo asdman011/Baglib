@@ -423,6 +423,11 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({
         <div className="w-72 sm:w-80 flex flex-col items-center">
           {/* Ultra-Thin Glowing Progress Bar */}
           <div
+            role="progressbar"
+            aria-label={t('loading')}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.min(100, Math.max(0, progress))}
             className={`w-full h-[3px] rounded-full overflow-hidden relative mb-3 ${
               isDark ? 'bg-amber-950/40' : 'bg-amber-200/60'
             }`}

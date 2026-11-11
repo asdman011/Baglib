@@ -895,7 +895,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
                         <button
                           onClick={() => void perform(() => handleDeleteSnapshot(snap.fileName))}
                           className="p-1.5 text-stone-400 hover:text-rose-500 transition-colors rounded-lg hover:bg-stone-200 dark:hover:bg-stone-700"
-                        >
+                         aria-label={t('delete')}>
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>

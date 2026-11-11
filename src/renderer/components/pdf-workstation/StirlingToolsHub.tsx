@@ -73,6 +73,7 @@ import type {
   StirlingProcessorTelemetry,
   StirlingGovernancePolicies,
 } from '../../../shared/types/pdf-editor';
+import { Modal } from '../ui/Modal';
 
 export type StirlingCategory =
   | 'organize'
@@ -1263,7 +1264,7 @@ export function StirlingToolsHub({
                 ? 'bg-canvas border-border text-text hover:text-white'
                 : 'bg-canvas border-border text-text hover:text-text'
             }`}
-          >
+           aria-label={t('pdfToolsFavorites')}>
             <Star size={16} fill={favoritesOnly ? 'currentColor' : 'none'} />
           </Button>
 
@@ -1304,7 +1305,7 @@ export function StirlingToolsHub({
                   ? isDark ? 'bg-canvas text-white' : 'bg-white text-text shadow-xs'
                   : isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'
               }`}
-            >
+             aria-label={t('pdfToolsViewColumns')}>
               <Columns3 size={15} />
             </Button>
             <Button variant="secondary" size="sm"
@@ -1316,7 +1317,7 @@ export function StirlingToolsHub({
                   ? isDark ? 'bg-canvas text-white' : 'bg-white text-text shadow-xs'
                   : isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'
               }`}
-            >
+             aria-label={t('pdfToolsViewGrid')}>
               <LayoutGrid size={15} />
             </Button>
             <Button variant="secondary" size="sm"
@@ -1328,7 +1329,7 @@ export function StirlingToolsHub({
                   ? 'bg-primary text-white'
                   : isDark ? 'text-text hover:text-white' : 'text-text hover:text-text'
               }`}
-            >
+             aria-label={t('pdfToolsViewPipelines')}>
               <Cpu size={15} />
             </Button>
           </div>
@@ -1343,7 +1344,7 @@ export function StirlingToolsHub({
                 ? 'bg-canvas border-border text-text hover:text-white'
                 : 'bg-canvas border-border text-text hover:text-text'
             }`}
-          >
+           aria-label={isDark ? t('pdfThemeLight') : t('pdfThemeDark')}>
             {isDark ? <Sun size={16} /> : <Moon size={16} />}
           </Button>
 
@@ -1364,7 +1365,7 @@ export function StirlingToolsHub({
       </header>
 
       {/* 2. MAIN SCROLLABLE CONTENT AREA */}
-      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-6 py-3 sm:py-5">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-6 py-3 sm:py-5">
         {actionsPanel && <div className="mb-4 max-w-2xl">{actionsPanel}</div>}
         {viewMode === 'pipelines' ? (
           /* ============================================================ */
@@ -1508,7 +1509,7 @@ export function StirlingToolsHub({
                               }
                             }}
                             className="p-1 rounded text-primary-text hover:text-primary-text hover:bg-primary/10 cursor-pointer"
-                          >
+                           aria-label={t('stirlingExportFolderScanJson')}>
                             <Download size={13} />
                           </Button>
                           <Button variant="secondary" size="sm"
@@ -1516,7 +1517,7 @@ export function StirlingToolsHub({
                             onClick={() => void handleDeleteWatchedFolder(folder.id)}
                             className="text-danger hover:text-danger p-1 cursor-pointer"
                             title={t('delete')}
-                          >
+                           aria-label={t('delete')}>
                             <Trash2 size={13} />
                           </Button>
                         </div>
@@ -1530,7 +1531,7 @@ export function StirlingToolsHub({
             {/* Connect Folder Inbox Modal */}
             {isConnectingFolder && (
               <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-                <form
+                <Modal asChild open={true} onClose={() => setIsConnectingFolder(false)} label={t('pdfWatchedFolderConnect')}><form
                   onSubmit={handleConnectFolderSubmit}
                   className={`w-full max-w-md p-5 rounded-2xl border shadow-2xl ${
                     isDark ? 'bg-canvas border-border text-text' : 'bg-white border-border text-text'
@@ -1541,7 +1542,7 @@ export function StirlingToolsHub({
                       <FolderPlus size={16} className="text-primary-text" />
                       {t('pdfWatchedFolderConnect')}
                     </h3>
-                    <Button variant="secondary" size="sm" type="button" onClick={() => setIsConnectingFolder(false)} className="cursor-pointer text-text">
+                    <Button variant="secondary" size="sm" type="button" onClick={() => setIsConnectingFolder(false)} className="cursor-pointer text-text" aria-label={t('close')}>
                       <X size={16} />
                     </Button>
                   </div>
@@ -1614,7 +1615,7 @@ export function StirlingToolsHub({
                       {t('save')}
                     </Button>
                   </div>
-                </form>
+                </form></Modal>
               </div>
             )}
 
@@ -1702,7 +1703,7 @@ export function StirlingToolsHub({
                           className={`p-1.5 rounded-lg border ${
                             isDark ? 'border-border hover:bg-canvas text-text' : 'border-border hover:bg-canvas text-text'
                           } text-xs transition-all cursor-pointer`}
-                        >
+                         aria-label={t('stirlingExportAutomateJson')}>
                           <Download size={12} />
                         </Button>
                         <Button variant="secondary" size="sm"
@@ -1719,7 +1720,7 @@ export function StirlingToolsHub({
                           className={`p-1.5 rounded-lg border ${
                             isDark ? 'border-border hover:bg-canvas text-text' : 'border-border hover:bg-canvas text-text'
                           } text-xs transition-all cursor-pointer`}
-                        >
+                         aria-label={t('hubPipelineEdit')}>
                           <Pencil size={12} />
                         </Button>
                         <Button variant="secondary" size="sm"
@@ -1727,7 +1728,7 @@ export function StirlingToolsHub({
                           title={t('delete')}
                           onClick={() => void handleDeletePipeline(pipe.id)}
                           className="p-1.5 rounded-lg border border-danger/30 hover:bg-danger/10 text-danger text-xs transition-all cursor-pointer"
-                        >
+                         aria-label={t('delete')}>
                           <Trash2 size={12} />
                         </Button>
                         <Button variant="secondary" size="sm"
@@ -2106,7 +2107,7 @@ export function StirlingToolsHub({
                           className={`p-1 text-text hover:text-warning transition-colors ${
                             favorites.includes(tool.id) ? 'text-warning' : ''
                           }`}
-                        >
+                         aria-label={t('toggleFavorite')}>
                           <Star size={13} fill={favorites.includes(tool.id) ? 'currentColor' : 'none'} />
                         </Button>
                       </div>
@@ -2125,12 +2126,12 @@ export function StirlingToolsHub({
             )}
           </div>
         )}
-      </main>
+      </div>
 
       {/* 3. STANDALONE TOOL EXECUTION DRAWER / MODAL */}
       {selectedTool && (
         <div data-stirling-tool-modal className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div
+          <Modal asChild open={true} onClose={() => { if (!isExecuting) setSelectedTool(null); }} label={toolName(selectedTool, lang)}><div
             dir={dir}
             className={`w-full max-w-xl max-h-[90vh] rounded-2xl border ${
               isDark ? 'bg-canvas border-border text-text' : 'bg-white border-border text-text shadow-2xl'
@@ -2250,7 +2251,7 @@ export function StirlingToolsHub({
 
               {/* Execution Feedback */}
               {isExecuting && (
-                <div className="p-4 rounded-xl bg-primary/10 border border-border/20 text-center space-y-2">
+                <div className="p-4 rounded-xl bg-primary/10 border border-border/20 text-center space-y-2" role="status">
                   <RefreshCw className="size-6 text-primary-text animate-spin mx-auto" />
                   <p className="text-xs font-bold text-primary-text dark:text-primary-text">{t('pdfExecutingTool')}</p>
                 </div>
@@ -2318,14 +2319,14 @@ export function StirlingToolsHub({
                 <span>{t('pdfExecuteTool')}</span>
               </Button>
             </div>
-          </div>
+          </div></Modal>
         </div>
       )}
 
       {/* Pipeline Builder Modal */}
       {isCreatingPipeline && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <form
+          <Modal asChild open={true} onClose={() => setIsCreatingPipeline(false)} label={t(editingPipeline ? 'hubPipelineEditShort' : 'pdfPipelineNew')}><form
             onSubmit={handleSavePipeline}
             dir={dir}
             className={`w-full max-w-2xl max-h-[calc(100dvh-2rem)] rounded-2xl border ${
@@ -2354,7 +2355,7 @@ export function StirlingToolsHub({
                   setEditingPipeline(null);
                 }}
                 className={`p-1.5 rounded-lg ${isDark ? 'text-text hover:text-white hover:bg-canvas' : 'text-text hover:text-text hover:bg-canvas'} cursor-pointer`}
-              >
+               aria-label={t('close')}>
                 <X size={16} />
               </Button>
             </div>
@@ -2506,7 +2507,7 @@ export function StirlingToolsHub({
                             onClick={() => handleMoveStep(idx, 'up')}
                             className="p-1 text-text hover:text-white disabled:opacity-20 cursor-pointer"
                             title={t('hubStepMoveUp')}
-                          >
+                           aria-label={t('hubStepMoveUp')}>
                             <ArrowUp size={12} />
                           </Button>
                           <Button variant="secondary" size="sm"
@@ -2515,7 +2516,7 @@ export function StirlingToolsHub({
                             onClick={() => handleMoveStep(idx, 'down')}
                             className="p-1 text-text hover:text-white disabled:opacity-20 cursor-pointer"
                             title={t('hubStepMoveDown')}
-                          >
+                           aria-label={t('hubStepMoveDown')}>
                             <ArrowDown size={12} />
                           </Button>
                           <Button variant="secondary" size="sm"
@@ -2523,7 +2524,7 @@ export function StirlingToolsHub({
                             onClick={() => handleRemoveStep(idx)}
                             className="p-1 text-danger hover:text-danger cursor-pointer"
                             title={t('delete')}
-                          >
+                           aria-label={t('delete')}>
                             <Trash2 size={12} />
                           </Button>
                         </div>
@@ -2589,7 +2590,7 @@ export function StirlingToolsHub({
                 <span>{t('pdfPipelineSave')}</span>
               </Button>
             </div>
-          </form>
+          </form></Modal>
         </div>
       )}
     </div>
@@ -2650,7 +2651,7 @@ function ToolCard({
             className={`p-0.5 text-text hover:text-warning transition-colors ${
               isFavorite ? 'text-warning' : ''
             }`}
-          >
+           aria-label={translations[lang].toggleFavorite}>
             <Star size={12} fill={isFavorite ? 'currentColor' : 'none'} />
           </Button>
         </div>

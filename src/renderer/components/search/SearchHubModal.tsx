@@ -529,7 +529,7 @@ export const SearchHubModal: React.FC = () => {
         <div className="px-5 py-2.5 bg-canvas/50 border-b border-subtle flex items-center justify-between text-xs text-muted relative z-10 shrink-0">
           <div className="flex items-center gap-2">
             {isSearching ? (
-              <div className="flex items-center gap-2 text-pale-sky-500 font-medium">
+              <div className="flex items-center gap-2 text-pale-sky-500 font-medium" role="status">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>{t('searchingProviders', { active: selectedProviders.length })}</span>
               </div>

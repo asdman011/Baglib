@@ -196,13 +196,13 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
             onClick={onOpenSettings}
             title={t('aiSettingsBtn')}
             className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
-          >
+           aria-label={t('aiSettingsBtn')}>
             <Settings className="w-4 h-4" />
           </button>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
-          >
+           aria-label={t('close')}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -344,7 +344,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
                 disabled={isLoading}
                 title={t('aiSaveToNotesBtn')}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-indigo-300 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition disabled:opacity-50"
-              >
+               aria-label={t('aiSaveToNotesBtn')}>
                 <BookmarkPlus className="w-3.5 h-3.5" />
                 <span>{t('aiSaveToNotesBtn')}</span>
               </button>
@@ -365,7 +365,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
                   onClick={handleCopy}
                   className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 transition"
                   title={t('aiCopyOutputBtn')}
-                >
+                 aria-label={t('aiCopyOutputBtn')}>
                   {isCopied ? (
                     <Check className="w-3.5 h-3.5 text-emerald-500" />
                   ) : (
@@ -377,7 +377,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
                     onClick={handleSaveToNotes}
                     className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 transition"
                     title={t('aiSaveToNotesBtn')}
-                  >
+                   aria-label={t('aiSaveToNotesBtn')}>
                     <BookmarkPlus className="w-3.5 h-3.5" />
                   </button>
                 )}

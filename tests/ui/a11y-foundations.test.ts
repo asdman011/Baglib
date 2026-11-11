@@ -1,3 +1,8 @@
+import { QuranAyahInspector } from '../../src/renderer/components/quran/QuranAyahInspector';
+import { QuranSimilarAyahsDrawer } from '../../src/renderer/components/quran/QuranSimilarAyahsDrawer';
+import ts from 'typescript';
+import { readdirSync } from 'node:fs';
+import path from 'node:path';
 ﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import React, { act, useLayoutEffect, createElement as h } from 'react';
@@ -9,7 +14,7 @@ import { WorkspaceProvider } from '../../src/renderer/components/context/Workspa
 import { Modal } from '../../src/renderer/components/ui/Modal';
 import { Sheet } from '../../src/renderer/components/ui/Sheet';
 import { ShortcutList } from '../../src/renderer/components/actions/ShortcutList';
-import { SHORTCUTS, SHORTCUT_SCOPES, shortcutCollisions, shortcutForEvent } from '../../src/renderer/components/actions/shortcuts';
+import { SHORTCUTS, SHORTCUT_SCOPES, shortcutCollisions, shortcutForEvent, shortcutHint } from '../../src/renderer/components/actions/shortcuts';
 import { translations } from '../../src/renderer/translations';
 
 test('KEY-298 registry has unique keys in every overlapping scope and complete ar/en labels', () => {
@@ -19,6 +24,8 @@ test('KEY-298 registry has unique keys in every overlapping scope and complete a
     for (const scope of shortcut.scopes) assert.ok(SHORTCUT_SCOPES[scope], scope);
     for (const lang of ['ar', 'en'] as const) assert.ok(translations[lang][shortcut.labelKey].trim(), shortcut.id);
   }
+  assert.equal(shortcutHint('ocr-next'), 'J / N / ENTER');
+  assert.equal(shortcutHint('compare-next'), 'F3 / N');
   const first = SHORTCUTS[0];
   assert.deepEqual(shortcutCollisions([first, { ...first, id: 'duplicate' }]), ['palette/duplicate']);
 });
@@ -152,4 +159,73 @@ test('KEY-298 asynchronous result dialogs return to an explicit opener after a b
   await dom.render(content(false));
   assert.equal(document.activeElement, returnFocus.current);
   await dom.unmount();
+});
+
+
+test('KEY-298 Quran modal modes share containment and restore focus in ar and en', async () => {
+  for (const lang of ['ar', 'en'] as const) {
+    const dom = setup();
+    const t = (key: keyof typeof translations.ar) => translations[lang][key];
+    let closed = 0;
+    await dom.render(h(QuranAyahInspector, { details: null, reference: { surah: 1, ayah: 1 }, surahName: 'KEY298', error: false, t, dir: lang === 'ar' ? 'rtl' : 'ltr', onClose: () => closed++, onCopy: () => {}, onStudy: () => {} }));
+    const panel = dom.container.querySelector('[data-ui-dialog]')!;
+    assert.ok(panel.contains(document.activeElement));
+    await act(async () => dom.opener.focus());
+    assert.ok(panel.contains(document.activeElement));
+    await dom.key('Escape');
+    assert.equal(closed, 1);
+    await dom.unmount();
+    assert.equal(document.activeElement, dom.opener);
+    const similar = setup();
+    await similar.render(h(QuranSimilarAyahsDrawer, { surah: 1, ayah: 1, similarAyahs: [], t, lang, dir: lang === 'ar' ? 'rtl' : 'ltr', onClose: () => closed++, onNavigateAyah: () => {} }));
+    await act(async () => similar.opener.focus());
+    assert.ok(similar.container.querySelector('[data-ui-dialog]')?.contains(document.activeElement));
+    await similar.key('Escape');
+    assert.equal(closed, 2);
+    await similar.unmount();
+    assert.equal(document.activeElement, similar.opener);
+  }
+});
+
+test('KEY-298 floating Quran inspector allows focus to leave its nonmodal panel', async () => {
+  const dom = setup();
+  await dom.render(h(QuranAyahInspector, { floating: true, details: null, reference: { surah: 1, ayah: 1 }, surahName: 'KEY298', error: false, t: key => translations.en[key], dir: 'ltr', onClose: () => {}, onCopy: () => {}, onStudy: () => {} }));
+  assert.equal(dom.container.querySelector('[aria-modal=true]'), null);
+  assert.equal(dom.container.querySelector('[data-ui-dialog]'), null);
+  await act(async () => dom.opener.focus());
+  assert.equal(document.activeElement, dom.opener);
+  await dom.unmount();
+});
+
+function rendersOnlyIcons(node: ts.Node): boolean {
+  if (ts.isJsxText(node)) return !node.text.trim();
+  if (ts.isJsxExpression(node)) return !node.expression || rendersOnlyIcons(node.expression);
+  if (ts.isParenthesizedExpression(node)) return rendersOnlyIcons(node.expression);
+  if (ts.isJsxSelfClosingElement(node)) return /^[A-Z]|^svg$/.test(node.tagName.getText());
+  if (ts.isJsxElement(node)) return node.children.every(rendersOnlyIcons);
+  if (ts.isConditionalExpression(node)) return rendersOnlyIcons(node.whenTrue) && rendersOnlyIcons(node.whenFalse);
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) return rendersOnlyIcons(node.right);
+  return node.kind === ts.SyntaxKind.NullKeyword || node.kind === ts.SyntaxKind.FalseKeyword;
+}
+
+test('KEY-298 renderer icon-only buttons carry explicit accessible names', () => {
+  const missing: string[] = [];
+  for (const relative of readdirSync('src/renderer', { recursive: true })) {
+    if (typeof relative !== 'string' || !relative.endsWith('.tsx')) continue;
+    const filename = path.join('src/renderer', relative);
+    const source = ts.createSourceFile(filename, readFileSync(filename, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const visit = (node: ts.Node) => {
+      const element = ts.isJsxElement(node) ? node.openingElement : ts.isJsxSelfClosingElement(node) ? node : null;
+      if (element && ['button', 'Button'].includes(element.tagName.getText(source))) {
+        const named = element.attributes.properties.some(attribute => ts.isJsxSpreadAttribute(attribute) || ['aria-label', 'aria-labelledby'].includes(attribute.name.getText(source)));
+        const children = ts.isJsxElement(node) ? node.children.filter(child => !ts.isJsxText(child) || child.text.trim()) : [];
+        if (!named && children.every(rendersOnlyIcons)) {
+          missing.push(`${filename}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  assert.deepEqual(missing, []);
 });

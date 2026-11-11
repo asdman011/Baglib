@@ -161,7 +161,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
         <button
           onClick={onClose}
           className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main transition-colors"
-        >
+         aria-label={t('close')}>
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -190,7 +190,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
             <button
               onClick={() => setQuery('')}
               className="absolute end-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-main p-0.5"
-            >
+             aria-label={t('searchClearQuery')}>
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -207,7 +207,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
                   ? 'bg-pale-sky-500/15 text-pale-sky-600 dark:text-pale-sky-400 border-pale-sky-500/30'
                   : 'border-subtle hover:bg-canvas'
               }`}
-            >
+             aria-label={t('morphologyAware')}>
               {t('morphologyAware')}
             </button>
             <button
@@ -218,7 +218,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
                   ? 'bg-pale-sky-500/15 text-pale-sky-600 dark:text-pale-sky-400 border-pale-sky-500/30'
                   : 'border-subtle hover:bg-canvas'
               }`}
-            >
+             aria-label={t('matchWholeWord')}>
               {t('matchWholeWord')}
             </button>
             <button
@@ -229,7 +229,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
                   ? 'bg-pale-sky-500/15 text-pale-sky-600 dark:text-pale-sky-400 border-pale-sky-500/30'
                   : 'border-subtle hover:bg-canvas'
               }`}
-            >
+             aria-label={t('caseSensitive')}>
               Aa
             </button>
           </div>
@@ -244,14 +244,14 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
                 onClick={handlePrevMatch}
                 title={t('prevMatch')}
                 className="p-1 rounded hover:bg-canvas text-muted hover:text-main"
-              >
+               aria-label={t('prevMatch')}>
                 <ChevronUp className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={handleNextMatch}
                 title={t('nextMatch')}
                 className="p-1 rounded hover:bg-canvas text-muted hover:text-main"
-              >
+               aria-label={t('nextMatch')}>
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -262,7 +262,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
         {isSearching && progress && (
           <div className="space-y-1 pt-1">
             <div className="flex justify-between text-[10px] text-muted">
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1" role="status">
                 <Loader2 className="w-3 h-3 animate-spin text-pale-sky-500" />
                 {t('scanningPageProgress', {
                   current: progress.currentSection,
@@ -271,7 +271,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
               </span>
               <span>{Math.round((progress.currentSection / (progress.totalSections || 1)) * 100)}%</span>
             </div>
-            <div className="w-full h-1 bg-subtle/40 rounded-full overflow-hidden">
+            <div className="w-full h-1 bg-subtle/40 rounded-full overflow-hidden" role="progressbar" aria-label={t('searchPlaceholder')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((progress.currentSection / (progress.totalSections || 1)) * 100)}>
               <div
                 className="h-full bg-pale-sky-500 transition-all duration-100"
                 style={{

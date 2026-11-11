@@ -335,7 +335,7 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
               icon={<BackIcon className="size-4" />}
               data-notes-back-button
               className="shrink-0"
-            >
+             aria-label={t('notesBackToList')}>
               <span className="hidden sm:inline">{t('notesBackToList')}</span>
             </Button>
           )}
@@ -505,7 +505,7 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
               type="button"
               onClick={handleAddTag}
               className="text-xs text-primary-text font-bold"
-            >
+             aria-label={t('bulkAddTagsBtn')}>
               ✓
             </button>
             <button
@@ -515,7 +515,7 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
                 setNewTagVal('');
               }}
               className="text-muted"
-            >
+             aria-label={t('cancel')}>
               <X className="size-3" />
             </button>
           </span>

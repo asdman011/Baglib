@@ -172,6 +172,7 @@ import { useMaterialSave } from '../../hooks/useMaterialSave';
 import { saveReaderKnowledge } from '../../libs/reader/save-reader-knowledge';
 import { registerCloseGuard } from '../../utils/close-guard';
 import { ExportPdfDialog, SaveCloseDialog } from './FileSaveUi';
+import { Modal } from '../ui/Modal';
 
 const PDF_TEXT_DELAY_MS = 2500;
 
@@ -3323,7 +3324,7 @@ const SourceBookReader: React.FC = () => {
           onClick={() => setSplitOrientation('none')}
           className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main cursor-pointer"
           title={t('closeNotesPanel')}
-        >
+         aria-label={t('closeNotesPanel')}>
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -3396,7 +3397,7 @@ const SourceBookReader: React.FC = () => {
                   onClick={() => deletePageNote(note.id)}
                   className="opacity-0 group-hover:opacity-100 hover:text-rose-500 transition-opacity p-0.5 cursor-pointer"
                   title={t('deleteNote')}
-                >
+                 aria-label={t('deleteNote')}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -3570,7 +3571,7 @@ const SourceBookReader: React.FC = () => {
   return (
     <div
       role="region"
-      aria-label={t('a11yReaderLandmark') || 'Digital Book Reader'}
+      aria-label={t('a11yReaderLandmark')}
       data-reader-source={currentSourceId ?? undefined}
       data-reader-page={readingPage}
       data-reader-panel-open={chrome.open && !focusMode || undefined}
@@ -3919,7 +3920,7 @@ const SourceBookReader: React.FC = () => {
               <button
                 onClick={() => setIsSettingsOpen(false)}
                 className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main"
-              >
+               aria-label={t('close')}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -3945,7 +3946,7 @@ const SourceBookReader: React.FC = () => {
                         : 'border-subtle'
                     }`}
                     style={{ backgroundColor: th.bg, color: th.text }}
-                  >
+                   aria-label={th.label}>
                     A
                   </button>
                 ))}
@@ -4113,7 +4114,7 @@ const SourceBookReader: React.FC = () => {
               }`}
             >
               {isLoadingFile ? (
-                <div className="h-64 flex flex-col items-center justify-center text-muted gap-3">
+                <div className="h-64 flex flex-col items-center justify-center text-muted gap-3" role="status">
                   <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
                   <span className="text-xs font-bold font-sans">{t('loadingDocument')}</span>
                 </div>
@@ -4156,7 +4157,7 @@ const SourceBookReader: React.FC = () => {
                         )
                       }
                       className="p-1.5 rounded-lg hover:bg-canvas disabled:opacity-30 cursor-pointer"
-                    >
+                     aria-label={t('previousCoverPage')}>
                       <ChevronRight className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
                     </button>
                     <span>
@@ -4177,7 +4178,7 @@ const SourceBookReader: React.FC = () => {
                         )
                       }
                       className="p-1.5 rounded-lg hover:bg-canvas disabled:opacity-30 cursor-pointer"
-                    >
+                     aria-label={t('nextCoverPage')}>
                       <ChevronLeft className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
                     </button>
                   </div>
@@ -4212,7 +4213,7 @@ const SourceBookReader: React.FC = () => {
                       )
                     }
                     className="p-1 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-40 cursor-pointer"
-                  >
+                   aria-label={t('previousCoverPage')}>
                     <ChevronRight className="w-3.5 h-3.5 rtl:rotate-0 ltr:rotate-180" />
                   </button>
                   <span className="font-bold text-main font-sans">
@@ -4233,7 +4234,7 @@ const SourceBookReader: React.FC = () => {
                       )
                     }
                     className="p-1 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-40 cursor-pointer"
-                  >
+                   aria-label={t('nextCoverPage')}>
                     <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-0 ltr:rotate-180" />
                   </button>
                 </div>
@@ -4252,7 +4253,7 @@ const SourceBookReader: React.FC = () => {
                 }}
               >
                 {isLoadingFile || isPaginating ? (
-                  <div className="h-64 flex flex-col items-center justify-center text-muted gap-3">
+                  <div className="h-64 flex flex-col items-center justify-center text-muted gap-3" role="status">
                     <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
                     <span className="text-xs font-bold font-sans">
                       {isPaginating ? t('loadingDocument') : t('loadingDocument')}
@@ -4373,7 +4374,7 @@ const SourceBookReader: React.FC = () => {
                     disabled={readingPage <= 1}
                     onClick={() => setReadingPage(Math.max(1, readingPage - 1))}
                     className="p-1 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-40 cursor-pointer"
-                  >
+                   aria-label={t('previousCoverPage')}>
                     <ChevronRight className="w-3.5 h-3.5 rtl:rotate-0 ltr:rotate-180" />
                   </button>
                   <span className="font-bold text-main font-sans">
@@ -4383,7 +4384,7 @@ const SourceBookReader: React.FC = () => {
                     disabled={readingPage >= maxBookPages}
                     onClick={() => setReadingPage(Math.min(maxBookPages, readingPage + 1))}
                     className="p-1 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-40 cursor-pointer"
-                  >
+                   aria-label={t('nextCoverPage')}>
                     <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-0 ltr:rotate-180" />
                   </button>
                 </div>
@@ -4405,7 +4406,7 @@ const SourceBookReader: React.FC = () => {
                 }}
               >
                 {isExtractingText ? (
-                  <div className="h-64 flex flex-col items-center justify-center text-muted gap-3">
+                  <div className="h-64 flex flex-col items-center justify-center text-muted gap-3" role="status">
                     <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
                     <span className="text-xs font-bold font-sans">{t('extractingText')}</span>
                   </div>
@@ -4493,7 +4494,7 @@ const SourceBookReader: React.FC = () => {
               style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
             >
               {isLoadingFile || (!pdfBlobUrl && effectiveFormat === 'PDF' && activeBook?.filePath) ? (
-                <div className="w-full h-full bg-surface flex flex-col items-center justify-center text-muted gap-2">
+                <div className="w-full h-full bg-surface flex flex-col items-center justify-center text-muted gap-2" role="status">
                   <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
                   <span className="text-xs font-bold">{t('loadingNativePdf')}</span>
                 </div>
@@ -4696,11 +4697,11 @@ const SourceBookReader: React.FC = () => {
       {renderSelectionPopover()}
       {studySource && <StudyAssistant readerSource={studySource} notes={[]} initialNotes={[]} onClose={() => setStudySource(null)} />}
       {studyDraft && <div className="fixed inset-0 z-[90] bg-black/40 p-3 flex items-center justify-center" onClick={() => setStudyDraft(null)}>
-        <section role="dialog" aria-modal="true" aria-label={t('readerStudyPractice')} dir={workspaceDir} data-reader-study-editor className="w-full max-w-xl max-h-full overflow-y-auto rounded-xl bg-surface text-main p-4" onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setStudyDraft(null); } }}>
+        <Modal asChild open={true} onClose={() => setStudyDraft(null)} label={t('readerStudyPractice')}><section role="dialog" aria-modal="true" aria-label={t('readerStudyPractice')} dir={workspaceDir} data-reader-study-editor className="w-full max-w-xl max-h-full overflow-y-auto rounded-xl bg-surface text-main p-4" onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setStudyDraft(null); } }}>
           <button autoFocus type="button" className="mb-3 rounded-lg border border-subtle p-2" onClick={() => setStudyDraft(null)}>{t('close')}</button>
           <p dir="auto" className="mb-3 break-words leading-loose">{studyDraft.sourceLabel}</p>
           <QuestionCardEditor initial={studyDraft} onSaved={() => setStudyDraft(null)} />
-        </section>
+        </section></Modal>
       </div>}
       {showReaderShortcuts && <ReaderShortcutSheet onClose={() => setShowReaderShortcuts(false)} t={t} />}
 

@@ -164,7 +164,7 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
                 type="button"
                 onClick={(e) => toggleCollapse(String(item.id), e)}
                 className="p-0.5 rounded hover:bg-black/10 text-muted hover:text-main"
-              >
+               aria-label={t(isCollapsed ? 'expandItem' : 'collapseItem', { name: item.label })}>
                 {isCollapsed ? (
                   <ChevronRight className="w-3 h-3 rtl:rotate-180" />
                 ) : (
@@ -262,13 +262,13 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
                 ? 'bg-pale-sky-500/15 border-pale-sky-500/30 text-pale-sky-600'
                 : 'border-transparent text-muted hover:text-main'
             }`}
-          >
+           aria-label={isPinned ? t('unpinDrawer') : t('pinDrawer')}>
             {isPinned ? <Pin className="w-3.5 h-3.5" /> : <PinOff className="w-3.5 h-3.5" />}
           </button>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-canvas cursor-pointer"
-          >
+           aria-label={t('close')}>
             <X className="w-3.5 h-3.5" />
           </button>
         </div>

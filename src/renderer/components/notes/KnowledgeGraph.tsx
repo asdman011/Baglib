@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Network, X } from 'lucide-react';
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type SimulationLinkDatum, type SimulationNodeDatum } from 'd3-force';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -8,6 +8,7 @@ import type { StudyNote } from '../../../shared/study-notes';
 import type { TranslationKey } from '../../translations';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { relationLabel } from '../../utils/relation-labels';
+import { Modal } from '../ui/Modal';
 
 type Placed = GraphNode & SimulationNodeDatum & { x: number; y: number };
 type PlacedEdge = SimulationLinkDatum<Placed> & { source: Placed; target: Placed; kind: string; relation?: string };
@@ -62,11 +63,6 @@ function GraphDialog({ noteId, graph, onClose }: { noteId: string; graph: Knowle
   const svg = useRef<SVGSVGElement>(null);
   const dense = placed.nodes.length > 120;
   const [hovered, setHovered] = useState<string | null>(null);
-  useEffect(() => {
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [onClose]);
   const open = (node: GraphNode) => {
     if (!node.target) return;
     onClose();
@@ -81,7 +77,7 @@ function GraphDialog({ noteId, graph, onClose }: { noteId: string; graph: Knowle
     .map(edge => ({ node: shown.nodes.find(node => node.id === (edge.source === center ? edge.target : edge.source))!, relation: edge.relation, incoming: edge.target === center }))
     .filter(entry => entry.node);
   return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-3" onClick={onClose}>
-    <div role="dialog" aria-modal="true" aria-labelledby="graph-title" data-knowledge-graph className="flex h-[min(720px,92vh)] w-[min(1000px,96vw)] flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
+    <Modal asChild open={true} onClose={onClose} label={t(whole ? 'graphWholeTitle' : 'graphLocalTitle')}><div role="dialog" aria-modal="true" aria-labelledby="graph-title" data-knowledge-graph className="flex h-[min(720px,92vh)] w-[min(1000px,96vw)] flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
       <header className="flex flex-wrap items-center gap-3 border-b border-subtle px-4 py-2">
         <Network size={16} aria-hidden="true" />
         <h2 id="graph-title" className="text-sm font-bold">{t(whole ? 'graphWholeTitle' : 'graphLocalTitle')}</h2>
@@ -143,7 +139,7 @@ function GraphDialog({ noteId, graph, onClose }: { noteId: string; graph: Knowle
           <button type="button" disabled={!node.target} onClick={() => open(node)} className="underline disabled:no-underline" dir="auto">{t(kindKeys[node.kind])}: {node.label}</button>
         </li>)}</ul>
       </details>
-    </div>
+    </div></Modal>
   </div>;
 }
 

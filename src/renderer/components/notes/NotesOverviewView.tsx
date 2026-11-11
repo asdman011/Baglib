@@ -487,7 +487,7 @@ export const NotesOverviewView: React.FC = () => {
                   data-notes-assistant
                   onClick={() => setAssistantOpen(true)}
                   icon={<Sparkles className="size-3.5 text-amber-500" />}
-                >
+                 aria-label={t('assistantOpen')}>
                   <span className="hidden sm:inline">{t('assistantOpen')}</span>
                 </Button>
 
@@ -671,7 +671,7 @@ export const NotesOverviewView: React.FC = () => {
                   className="w-full min-w-0 bg-transparent outline-none text-main placeholder:text-muted"
                 />
                 {query && (
-                  <button type="button" onClick={() => setQuery('')} className="text-muted">
+                  <button type="button" onClick={() => setQuery('')} className="text-muted" aria-label={t('searchClearQuery')}>
                     <X className="size-3" />
                   </button>
                 )}

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { ClipFormat, ClippedArticle, ClipResult } from '../../../shared/types/web-clipper';
+import { Modal } from '../ui/Modal';
 
 interface WebClipperModalProps {
   isOpen: boolean;
@@ -225,7 +226,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div
+      <Modal asChild open={true} onClose={onClose} label={t('webClipperTitle')}><div
         className="relative flex flex-col w-full max-w-3xl max-h-[calc(100dvh-2rem)] bg-surface rounded-2xl shadow-2xl border border-white/10 overflow-hidden"
         dir={isRtl ? 'rtl' : 'ltr'}
       >
@@ -512,7 +513,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
             </div>
           )}
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

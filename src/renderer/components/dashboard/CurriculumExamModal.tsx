@@ -17,6 +17,7 @@ import {
   type CurriculumExamConfig,
   type ReplanResult,
 } from '../../../shared/curriculum-exam';
+import { Modal } from '../ui/Modal';
 
 const control = 'rounded-lg border border-subtle bg-surface p-2 text-sm text-main min-w-0';
 const button = 'inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-sm disabled:opacity-50 cursor-pointer';
@@ -149,13 +150,13 @@ export function CurriculumExamModal({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="exam-modal-title"
+
+
+
       data-curriculum-exam-modal
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
     >
-      <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl border border-subtle bg-surface shadow-2xl overflow-hidden">
+      <Modal asChild open={true} onClose={onClose} label={t('pathwayExamModalTitle')}><div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl border border-subtle bg-surface shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-subtle/60 p-4">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -418,7 +419,7 @@ export function CurriculumExamModal({
             </div>
           )}
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 }

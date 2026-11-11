@@ -106,7 +106,7 @@ export const ColumnSelectorDropdown: React.FC<ColumnSelectorDropdownProps> = ({
               onClick={onResetColumns}
               className="text-[11px] text-muted hover:text-pale-sky-500 flex items-center gap-1 transition-colors"
               title={t('resetColumns')}
-            >
+             aria-label={t('resetColumns')}>
               <RotateCcw className="w-3 h-3" />
               <span>{t('resetColumns')}</span>
             </button>

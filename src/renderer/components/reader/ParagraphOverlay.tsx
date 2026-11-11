@@ -3,6 +3,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, Eye } from 'lucide-react';
 import { transformClassicalGlosses } from '../../libs/reader/typography';
 import type { ReaderTheme } from '../../libs/reader/types';
+import { Modal } from '../ui/Modal';
 
 interface ParagraphOverlayProps {
   paragraphs: string[];
@@ -138,7 +139,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
       `}</style>
 
       {/* Main Focus Card */}
-      <div
+      <Modal asChild open={true} onClose={onClose} label={t('paragraphFocusBtn')}><div
         className={`w-full max-w-3xl max-h-[85vh] rounded-3xl flex flex-col overflow-hidden transition-all duration-300 ${
           themeClasses[theme] || themeClasses.light
         }`}
@@ -160,7 +161,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
                 onClick={() => setScale((s) => Math.max(0.9, s - 0.15))}
                 title={t('readerZoomOut')}
                 className="p-1 rounded-full hover:bg-canvas text-muted hover:text-main cursor-pointer"
-              >
+               aria-label={t('readerZoomOut')}>
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
               <span className="text-[10px] font-mono">{Math.round(scale * 100)}%</span>
@@ -168,7 +169,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
                 onClick={() => setScale((s) => Math.min(2.5, s + 0.15))}
                 title={t('readerZoomIn')}
                 className="p-1 rounded-full hover:bg-canvas text-muted hover:text-main cursor-pointer"
-              >
+               aria-label={t('readerZoomIn')}>
                 <ZoomIn className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -177,7 +178,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
               onClick={onClose}
               title={t('paragraphFocusClose')}
               className="p-1.5 rounded-full hover:bg-rose-500/10 text-muted hover:text-rose-500 transition-colors cursor-pointer"
-            >
+             aria-label={t('paragraphFocusBtn')}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -228,7 +229,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

@@ -44,6 +44,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { OcrCompare } from './OcrCompare';
 import type { OcrEngineId, OcrPageResult, OcrWord, OcrEngineInfo } from '../../../shared/types/ocr';
 import { OCR_ENGINE_ORDER, ocrEngineBlocker, ocrEngineInfo, ocrEngineName, ocrFallbackMessage } from './ocr-status';
+import { Sheet } from '../ui/Sheet';
 
 interface OcrInspectorDrawerProps {
   isOpen: boolean;
@@ -567,7 +568,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
   };
 
   return (
-    <aside
+    <Sheet asChild open={true} onClose={() => { if (isEditing) setIsEditing(false); else onClose(); }} label={t('ocrInspectorTitle')}><aside
       role="dialog"
       aria-modal="true"
       aria-label={t('ocrInspectorTitle')}
@@ -1174,7 +1175,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                             onClick={() => handleDiscardCorrection(String(idx))}
                             className="px-2 py-1 rounded-md text-[11px] font-semibold text-red-600 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
                             title={t('ocrDiscardCorrection')}
-                          >
+                           aria-label={t('ocrDiscardCorrection')}>
                             {t('ocrDiscardCorrection')}
                           </button>
                         </div>
@@ -1231,7 +1232,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                           disabled={activeSuspectsCount <= 1}
                           title={t('ocrSuspectPrev')}
                           className="p-1 rounded-md text-muted hover:text-main hover:bg-canvas border border-subtle transition-colors cursor-pointer disabled:opacity-40"
-                        >
+                         aria-label={t('ocrSuspectPrev')}>
                           <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
                         </button>
                         <button
@@ -1240,7 +1241,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                           disabled={activeSuspectsCount <= 1}
                           title={t('ocrSuspectNext')}
                           className="p-1 rounded-md text-muted hover:text-main hover:bg-canvas border border-subtle transition-colors cursor-pointer disabled:opacity-40"
-                        >
+                         aria-label={t('ocrSuspectNext')}>
                           <ChevronRight className="w-4 h-4 rtl:rotate-180" />
                         </button>
                       </div>
@@ -1315,7 +1316,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                               }}
                               className="p-1 rounded-md text-muted hover:text-main hover:bg-canvas transition-colors cursor-pointer"
                               title={t('ocrSuspectEdit')}
-                            >
+                             aria-label={t('ocrSuspectEdit')}>
                               <Edit3 className="w-4 h-4" />
                             </button>
                           </div>
@@ -1384,7 +1385,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                       type="button"
                       onClick={() => setWordFilter('')}
                       className="absolute end-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-main cursor-pointer"
-                    >
+                     aria-label={t('searchClearQuery')}>
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -1411,7 +1412,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                         onClick={() => onSelectWord(null)}
                         className="p-1 rounded-md text-muted hover:text-main hover:bg-canvas cursor-pointer shrink-0"
                         title={t('studyClose')}
-                      >
+                       aria-label={t('studyClose')}>
                         <X className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -1464,6 +1465,6 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
           </div>
         )}
       </div>
-    </aside>
+    </aside></Sheet>
   );
 };

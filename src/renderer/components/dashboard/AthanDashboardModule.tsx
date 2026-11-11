@@ -233,7 +233,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
                 ? 'bg-emerald-600 text-white border-emerald-600'
                 : 'border-subtle bg-canvas hover:bg-surface text-main'
             }`}
-          >
+           aria-label={tr.athanSettingsBtn}>
             <SlidersHorizontal className="w-4 h-4" />
           </button>
         </div>
@@ -336,7 +336,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
               }
               title={tr.athanHijriAdjustMinus}
               className="px-2 py-1 rounded-lg border border-subtle bg-surface hover:bg-canvas text-xs font-mono font-bold text-main cursor-pointer"
-            >
+             aria-label={tr.athanHijriAdjustMinus}>
               -1
             </button>
             <span className="text-xs font-mono text-muted px-1">
@@ -354,7 +354,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
               }
               title={tr.athanHijriAdjustPlus}
               className="px-2 py-1 rounded-lg border border-subtle bg-surface hover:bg-canvas text-xs font-mono font-bold text-main cursor-pointer"
-            >
+             aria-label={tr.athanHijriAdjustPlus}>
               +1
             </button>
           </div>

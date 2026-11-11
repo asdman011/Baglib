@@ -506,7 +506,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
               className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer disabled:opacity-30 ${
                 isDark ? 'border-[#2b303d] hover:bg-[#1f222b]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9]'
               }`}
-            >
+             aria-label={t('pdfUndo')}>
               <Undo size={13} />
             </button>
             <button
@@ -517,7 +517,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
               className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer disabled:opacity-30 ${
                 isDark ? 'border-[#2b303d] hover:bg-[#1f222b]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9]'
               }`}
-            >
+             aria-label={t('pdfPageEditorRedo')}>
               <Redo size={13} />
             </button>
           </div>
@@ -532,7 +532,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
               className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer disabled:opacity-40 ${
                 isDark ? 'border-[#2b303d] hover:bg-[#1f222b]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9]'
               }`}
-            >
+             aria-label={t('pdfPageEditorRotateSelectedLeft90')}>
               <RotateCcw size={14} />
             </button>
             <button
@@ -543,7 +543,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
               className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer disabled:opacity-40 ${
                 isDark ? 'border-[#2b303d] hover:bg-[#1f222b]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9]'
               }`}
-            >
+             aria-label={t('pdfPageEditorRotateSelectedRight90')}>
               <RotateCw size={14} />
             </button>
           </div>
@@ -555,7 +555,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
             onClick={batchDelete}
             title={t('pdfPageEditorDeleteSelected', { count: selectedIds.size })}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40"
-          >
+           aria-label={t('pdfPageEditorDeleteSelected', { count: selectedIds.size })}>
             <Trash2 size={13} />
             <span className="hidden sm:inline">{t('delete')}</span>
             {selectedIds.size > 0 && <span className="font-mono">({selectedIds.size})</span>}
@@ -570,7 +570,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
             className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40 ${
               isDark ? 'border-[#2b303d] hover:bg-[#1f222b] text-[#a0a6b7]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9] text-[#475569]'
             }`}
-          >
+           aria-label={t('pdfPageEditorInsertBlankPagesAfterSelected')}>
             <Plus size={13} />
             <span className="hidden md:inline">{t('pdfPageEditorBlankAfter')}</span>
           </button>
@@ -584,7 +584,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
             className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40 ${
               isDark ? 'border-[#2b303d] hover:bg-[#1f222b] text-[#a0a6b7]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9] text-[#475569]'
             }`}
-          >
+           aria-label={t('pdfPageEditorSplitAfterSelectedPages')}>
             <Scissors size={13} />
             <span className="hidden md:inline">{t('pdfPageEditorSplitAfter')}</span>
           </button>
@@ -598,7 +598,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
               className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer ${
                 isDark ? 'border-[#2b303d] hover:bg-[#1f222b]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9]'
               }`}
-            >
+             aria-label={t('pdfPageEditorZoomOut')}>
               <ZoomOut size={13} />
             </button>
             <button
@@ -608,7 +608,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
               className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer ${
                 isDark ? 'border-[#2b303d] hover:bg-[#1f222b]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9]'
               }`}
-            >
+             aria-label={t('pdfPageEditorZoomIn')}>
               <ZoomIn size={13} />
             </button>
           </div>
@@ -622,7 +622,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
             className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer ${
               isDark ? 'border-[#2b303d] hover:bg-[#1f222b] text-[#8b92a5]' : 'border-[#cbd5e1] hover:bg-[#f1f5f9] text-[#64748b]'
             }`}
-          >
+           aria-label={t('pdfPageEditorResetAll')}>
             <ResetIcon size={14} />
           </button>
 
@@ -723,7 +723,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
                         onClick={() => insertBlankPageAt(index)}
                         title={t('pdfPageEditorInsertBlankPageHere')}
                         className="p-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                      >
+                       aria-label={t('pdfPageEditorInsertBlankPageHere')}>
                         <Plus size={11} />
                       </button>
                       <button
@@ -742,7 +742,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
                         }}
                         title={t('pdfPageEditorSplitHere')}
                         className="p-1 rounded bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
-                      >
+                       aria-label={t('pdfPageEditorSplitHere')}>
                         <Scissors size={11} />
                       </button>
                     </div>
@@ -824,7 +824,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
                           onClick={() => moveItem(index, index - 1)}
                           title={t('pdfPageEditorMoveLeft')}
                           className="p-1 rounded bg-black/60 hover:bg-black/90 text-white disabled:opacity-20 cursor-pointer"
-                        >
+                         aria-label={t('pdfPageEditorMoveLeft')}>
                           <ArrowLeft size={12} className="rtl:rotate-180" />
                         </button>
                         <button
@@ -833,7 +833,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
                           onClick={() => moveItem(index, index + 1)}
                           title={t('pdfPageEditorMoveRight')}
                           className="p-1 rounded bg-black/60 hover:bg-black/90 text-white disabled:opacity-20 cursor-pointer"
-                        >
+                         aria-label={t('pdfPageEditorMoveRight')}>
                           <ArrowRight size={12} className="rtl:rotate-180" />
                         </button>
                       </div>
@@ -844,7 +844,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
                           onClick={() => rotateItem(index, -90)}
                           title={t('pdfPageEditorRotateLeft')}
                           className="p-1.5 rounded-lg bg-black/70 hover:bg-black/90 text-white cursor-pointer"
-                        >
+                         aria-label={t('pdfPageEditorRotateLeft')}>
                           <RotateCcw size={13} />
                         </button>
                         {item.page && onViewPage && (
@@ -853,7 +853,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
                             onClick={() => onViewPage(item.page!)}
                             title={t('pdfPageEditorView')}
                             className="p-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white cursor-pointer"
-                          >
+                           aria-label={t('pdfPageEditorView')}>
                             <Eye size={13} />
                           </button>
                         )}
@@ -862,7 +862,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
                           onClick={() => rotateItem(index, 90)}
                           title={t('pdfPageEditorRotateRight')}
                           className="p-1.5 rounded-lg bg-black/70 hover:bg-black/90 text-white cursor-pointer"
-                        >
+                         aria-label={t('pdfPageEditorRotateRight')}>
                           <RotateCw size={13} />
                         </button>
                       </div>
@@ -873,7 +873,7 @@ export const PdfPageEditor = forwardRef<PdfPageEditorHandle, PdfPageEditorProps>
                           onClick={() => deleteItem(index)}
                           title={t('pdfPageEditorDeletePage')}
                           className="p-1 rounded bg-red-600/80 hover:bg-red-600 text-white cursor-pointer"
-                        >
+                         aria-label={t('pdfPageEditorDeletePage')}>
                           <Trash2 size={12} />
                         </button>
                       </div>

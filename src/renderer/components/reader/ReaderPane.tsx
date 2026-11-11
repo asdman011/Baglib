@@ -571,7 +571,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
                   : 'bg-canvas border-subtle text-muted hover:text-main'
               }`}
               title={t('tableOfContents')}
-            >
+             aria-label={t('tableOfContents')}>
               <ListTree className="w-3.5 h-3.5" />
             </button>
           )}
@@ -587,7 +587,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
                     ? 'bg-pale-sky-500 text-white shadow-xs'
                     : 'text-muted hover:text-main'
                 }`}
-              >
+               aria-label={t('readerViewPdf')}>
                 <FileCode className="w-3 h-3" />
               </button>
               <button
@@ -598,7 +598,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
                     ? 'bg-pale-sky-500 text-white shadow-xs'
                     : 'text-muted hover:text-main'
                 }`}
-              >
+               aria-label={t('readerViewText')}>
                 <FileText className="w-3 h-3" />
               </button>
             </div>
@@ -638,7 +638,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
                     backgroundColor: bgColors[th],
                     color: textColors[th],
                   }}
-                >
+                 aria-label={t(th === 'light' ? 'themeLight' : th === 'sepia' ? 'themeSepia' : 'themeDark')}>
                   A
                 </button>
               );
@@ -650,14 +650,14 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
             <button
               onClick={() => setReaderFontSize((s) => Math.max(12, s - 2))}
               className="p-0.5 text-muted hover:text-main cursor-pointer"
-            >
+             aria-label={t('readerZoomOut')}>
               <ZoomOut className="w-3 h-3" />
             </button>
             <span className="text-[10px] font-mono px-0.5">{readerFontSize}</span>
             <button
               onClick={() => setReaderFontSize((s) => Math.min(32, s + 2))}
               className="p-0.5 text-muted hover:text-main cursor-pointer"
-            >
+             aria-label={t('readerZoomIn')}>
               <ZoomIn className="w-3 h-3" />
             </button>
           </div>
@@ -689,7 +689,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
             className={`p-1 rounded bg-canvas hover:bg-surface border border-subtle cursor-pointer ${
               isOcrRunning ? 'text-amber-500 animate-pulse' : 'text-muted hover:text-main'
             }`}
-          >
+           aria-label={t('ocrRecognizePageBtn')}>
             {isOcrRunning ? (
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
@@ -703,7 +703,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
               disabled={currentPage <= 1}
               onClick={() => handlePageStep(-1)}
               className="p-1 rounded bg-canvas hover:bg-surface border border-subtle disabled:opacity-30 cursor-pointer"
-            >
+             aria-label={t('previousCoverPage')}>
               <ChevronRight className="w-3 h-3 rtl:rotate-0 ltr:rotate-180" />
             </button>
             <span className="font-bold text-[11px] font-sans">
@@ -713,7 +713,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
               disabled={currentPage >= maxPages}
               onClick={() => handlePageStep(1)}
               className="p-1 rounded bg-canvas hover:bg-surface border border-subtle disabled:opacity-30 cursor-pointer"
-            >
+             aria-label={t('nextCoverPage')}>
               <ChevronLeft className="w-3 h-3 rtl:rotate-0 ltr:rotate-180" />
             </button>
           </div>
@@ -733,7 +733,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
               <button
                 onClick={() => setIsTocOpen(false)}
                 className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main"
-              >
+               aria-label={t('close')}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -754,7 +754,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
 
         {/* Content Renderers */}
         {isLoadingFile ? (
-          <div className="h-64 flex flex-col items-center justify-center text-muted gap-2 my-auto">
+          <div className="h-64 flex flex-col items-center justify-center text-muted gap-2 my-auto" role="status">
             <Loader2 className="w-5 h-5 animate-spin text-pale-sky-500" />
             <span className="text-xs font-bold">{t('loadingDocument')}</span>
           </div>
@@ -780,7 +780,7 @@ export const ReaderPane: React.FC<ReaderPaneProps> = ({
             }}
           >
             {isLoadingFile || isPaginating ? (
-              <div className="h-48 flex flex-col items-center justify-center text-muted gap-2 my-auto">
+              <div className="h-48 flex flex-col items-center justify-center text-muted gap-2 my-auto" role="status">
                 <Loader2 className="w-5 h-5 animate-spin text-pale-sky-500" />
                 <span className="text-xs font-bold">{t('loadingDocument')}</span>
               </div>

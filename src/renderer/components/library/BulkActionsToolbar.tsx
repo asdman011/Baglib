@@ -16,6 +16,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import type { BookItem, ReadingStatus } from '../../types/library';
 import { CategoryCascader } from '../categories/CategoryCascader';
 import { TagEditor } from '../tags/TagEditor';
+import { Modal } from '../ui/Modal';
 
 
 interface BulkActionsToolbarProps {
@@ -229,7 +230,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
             <button
               onClick={() => setActiveModal('category')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/60 bg-surface/60 hover:bg-surface text-foreground font-medium transition-all"
-            >
+             aria-label={t('bulkAssignCategory')}>
               <FolderPlus className="w-4 h-4 text-amber-500 shrink-0" />
               <span className="hidden sm:inline">{t('bulkAssignCategory')}</span>
             </button>
@@ -238,7 +239,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
             <button
               onClick={() => setActiveModal('tags')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/60 bg-surface/60 hover:bg-surface text-foreground font-medium transition-all"
-            >
+             aria-label={t('bulkAddTagsBtn')}>
               <Tag className="w-4 h-4 text-emerald-500 shrink-0" />
               <span className="hidden sm:inline">{t('bulkAddTagsBtn')}</span>
             </button>
@@ -247,7 +248,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
             <button
               onClick={() => setActiveModal('status')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/60 bg-surface/60 hover:bg-surface text-foreground font-medium transition-all"
-            >
+             aria-label={t('bulkChangeStatus')}>
               <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
               <span className="hidden sm:inline">{t('bulkChangeStatus')}</span>
             </button>
@@ -258,7 +259,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 onClick={onOpenAudit}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 dark:text-amber-400 font-semibold transition-all shadow-sm cursor-pointer"
                 title={t('auditAndRefreshMetadata')}
-              >
+               aria-label={t('auditAndRefreshMetadata')}>
                 <Sparkles className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">{t('auditAndRefreshMetadata')}</span>
               </button>
@@ -273,7 +274,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 font-medium transition-all"
               title={t('bulkDownloadMetadata')}
-            >
+             aria-label={t('bulkDownloadMetadata')}>
               <Sparkles className="w-4 h-4 shrink-0" />
               <span className="hidden sm:inline">{t('bulkDownloadMetadata')}</span>
             </button>
@@ -283,7 +284,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               onClick={handleBulkExport}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/60 bg-surface/60 hover:bg-surface text-foreground font-medium transition-all"
               title={t('bulkExportData')}
-            >
+             aria-label={t('bulkExportData')}>
               <Download className="w-4 h-4 text-purple-500 shrink-0" />
               <span className="hidden sm:inline">{t('bulkExportData')}</span>
             </button>
@@ -293,7 +294,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               onClick={() => setActiveModal('delete')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-medium transition-all"
               title={t('bulkDeleteBtn')}
-            >
+             aria-label={t('bulkDeleteBtn')}>
               <Trash2 className="w-4 h-4 shrink-0" />
               <span className="hidden sm:inline">{t('bulkDeleteBtn')}</span>
             </button>
@@ -306,7 +307,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
             onClick={onClearSelection}
             className="p-1.5 rounded-xl hover:bg-surface text-muted hover:text-foreground transition-colors"
             title={t('batchDeselectAll')}
-          >
+           aria-label={t('batchDeselectAll')}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -315,7 +316,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
       {/* 1. Modal: Assign Category */}
       {activeModal === 'category' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+          <Modal asChild open={true} onClose={() => { if (!isLoading) setActiveModal(null); }} label={t('bulkCategoryModalTitle', { count })}><div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 shadow-2xl space-y-4">
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
               <FolderPlus className="w-5 h-5 text-amber-500" />
               <span>{t('bulkCategoryModalTitle', { count })}</span>
@@ -351,14 +352,14 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 <span>{t('bulkApplyBtn')}</span>
               </button>
             </div>
-          </div>
+          </div></Modal>
         </div>
       )}
 
       {/* 2. Modal: Add Tags */}
       {activeModal === 'tags' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+          <Modal asChild open={true} onClose={() => { if (!isLoading) setActiveModal(null); }} label={t('bulkTagsModalTitle', { count })}><div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 shadow-2xl space-y-4">
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
               <Tag className="w-5 h-5 text-emerald-500" />
               <span>{t('bulkTagsModalTitle', { count })}</span>
@@ -393,14 +394,14 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 <span>{t('bulkApplyBtn')}</span>
               </button>
             </div>
-          </div>
+          </div></Modal>
         </div>
       )}
 
       {/* 3. Modal: Change Reading Status */}
       {activeModal === 'status' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+          <Modal asChild open={true} onClose={() => { if (!isLoading) setActiveModal(null); }} label={t('bulkStatusModalTitle', { count })}><div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 shadow-2xl space-y-4">
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-blue-500" />
               <span>{t('bulkStatusModalTitle', { count })}</span>
@@ -441,14 +442,14 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 <span>{t('bulkApplyBtn')}</span>
               </button>
             </div>
-          </div>
+          </div></Modal>
         </div>
       )}
 
       {/* 4. Modal: Bulk Delete Confirmation */}
       {activeModal === 'delete' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-surface-raised border border-red-500/40 rounded-2xl p-6 shadow-2xl space-y-4">
+          <Modal asChild open={true} onClose={() => { if (!isLoading) setActiveModal(null); }} label={t('bulkDeleteConfirmTitle', { count })}><div className="w-full max-w-md bg-surface-raised border border-red-500/40 rounded-2xl p-6 shadow-2xl space-y-4">
             <h3 className="text-base font-semibold text-red-500 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
               <span>{t('bulkDeleteConfirmTitle', { count })}</span>
@@ -489,14 +490,14 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 <span>{t('bulkDeleteBtn')}</span>
               </button>
             </div>
-          </div>
+          </div></Modal>
         </div>
       )}
 
       {/* 5. Modal: Bulk Download Online Metadata */}
       {activeModal === 'enrich' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+          <Modal asChild open={true} onClose={() => { if (!isLoading) setActiveModal(null); }} label={t('bulkEnrichModalTitle', { count })}><div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 shadow-2xl space-y-4">
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-sky-400" />
               <span>{t('bulkEnrichModalTitle', { count })}</span>
@@ -519,7 +520,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                     {Math.round((enrichProgress.current / (enrichProgress.total || 1)) * 100)}%
                   </span>
                 </div>
-                <div className="w-full bg-border/40 h-2 rounded-full overflow-hidden">
+                <div className="w-full bg-border/40 h-2 rounded-full overflow-hidden" role="progressbar" aria-label={t('bulkEnrichModalTitle', { count })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((enrichProgress.current / (enrichProgress.total || 1)) * 100)}>
                   <div
                     className="bg-sky-500 h-full transition-all duration-300"
                     style={{
@@ -571,7 +572,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 </button>
               )}
             </div>
-          </div>
+          </div></Modal>
         </div>
       )}
     </>

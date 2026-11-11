@@ -28,6 +28,7 @@ import { INITIAL_RSS_FEEDS } from '../../data/libraryMockData';
 import { BookItem } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { SourceUrlsPanel } from './SourceUrlsPanel';
+import { Modal } from '../ui/Modal';
 
 interface OnlineLibraryHubProps {
   isOpen: boolean;
@@ -413,7 +414,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
-      <div
+      <Modal asChild open={true} onClose={onClose} label={t('onlineHubTitle')}><div
         className="w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[85vh] font-sans"
         dir={dir}
       >
@@ -431,7 +432,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
           <button
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main cursor-pointer"
-          >
+           aria-label={t('close')}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -486,7 +487,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                         type="button"
                         onClick={() => setSearchQuery('')}
                         className="text-muted hover:text-main cursor-pointer"
-                      >
+                       aria-label={t('searchClearQuery')}>
                         <X className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -568,7 +569,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
               {/* Loading State */}
               {((activeSource === 'LibGen' && isSearchingLibgen) ||
                 (activeSource === 'AnnasArchive' && isSearchingAnnas)) && (
-                <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
+                <div className="py-12 flex flex-col items-center justify-center text-center space-y-3" role="status">
                   <Loader2 className="w-8 h-8 animate-spin text-pale-sky-500" />
                   <p className="text-xs font-bold text-main">
                     {activeSource === 'LibGen'
@@ -655,7 +656,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                             disabled={downloadingId === item.id}
                             title={t('shieldDownloadBtn')}
                             className="p-2 rounded-xl bg-evergreen-500/10 border border-evergreen-500/20 text-evergreen-600 dark:text-evergreen-400 hover:bg-evergreen-500 hover:text-white text-xs flex items-center gap-1.5 cursor-pointer transition-all"
-                          >
+                           aria-label={t('shieldDownloadBtn')}>
                             {downloadingId === item.id ? (
                               <>
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -683,7 +684,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                             }}
                             title={t('detailsLink')}
                             className="p-2 rounded-xl bg-surface border border-subtle text-muted hover:text-main text-xs flex items-center gap-1 cursor-pointer transition-colors"
-                          >
+                           aria-label={t('detailsLink')}>
                             <ExternalLink className="w-3.5 h-3.5" />
                           </button>
 
@@ -887,7 +888,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                     }}
                     className="px-3 py-1.5 rounded-xl bg-evergreen-500/10 hover:bg-evergreen-500/20 text-evergreen-600 dark:text-evergreen-400 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-evergreen-500/20"
                     title={t('showInFolder') || 'عرض في المجلد'}
-                  >
+                   aria-label={t('showInFolder')}>
                     <FolderOpen className="w-3.5 h-3.5" />
                     <span>{t('showInFolder') || 'عرض في المجلد'}</span>
                   </button>
@@ -901,7 +902,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                     }}
                     className="px-3 py-1.5 rounded-xl bg-pale-sky-500/10 hover:bg-pale-sky-500/20 text-pale-sky-600 dark:text-pale-sky-400 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-pale-sky-500/20"
                     title={t('openDownloadedFile') || 'فتح الملف'}
-                  >
+                   aria-label={t('openDownloadedFile')}>
                     <BookOpen className="w-3.5 h-3.5" />
                     <span>{t('openDownloadedFile') || 'فتح الملف'}</span>
                   </button>
@@ -911,8 +912,8 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                 type="button"
                 onClick={() => setDownloadToast(null)}
                 className="p-1 rounded-lg hover:bg-surface text-muted hover:text-main cursor-pointer"
-                title="إغلاق"
-              >
+                title={t('close')}
+               aria-label={t('close')}>
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -928,7 +929,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
             {t('onlineHubClose')}
           </button>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

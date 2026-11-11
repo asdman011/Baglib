@@ -243,7 +243,7 @@ export const SplitPaneReader: React.FC<SplitPaneReaderProps> = ({
                 : 'bg-canvas border border-subtle text-muted hover:text-main'
             }`}
             title={t('linkPanesToggle')}
-          >
+           aria-label={t('linkPanesToggle')}>
             {isSyncLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">
               {isSyncLocked ? t('panesLinked') : t('panesIndependent')}
@@ -273,7 +273,7 @@ export const SplitPaneReader: React.FC<SplitPaneReaderProps> = ({
                   ? 'bg-pale-sky-500 text-white shadow-sm'
                   : 'text-muted hover:text-main'
               }`}
-            >
+             aria-label={t('splitVertical')}>
               <Columns2 className="w-3.5 h-3.5" />
             </button>
             <button
@@ -284,7 +284,7 @@ export const SplitPaneReader: React.FC<SplitPaneReaderProps> = ({
                   ? 'bg-pale-sky-500 text-white shadow-sm'
                   : 'text-muted hover:text-main'
               }`}
-            >
+             aria-label={t('splitHorizontal')}>
               <Rows2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -293,7 +293,7 @@ export const SplitPaneReader: React.FC<SplitPaneReaderProps> = ({
             onClick={onClose}
             title={t('closeParallelReading')}
             className="p-2 rounded-xl bg-canvas border border-subtle hover:bg-rose-500/10 text-muted hover:text-rose-500 transition-colors cursor-pointer"
-          >
+           aria-label={t('closeParallelReading')}>
             <X className="w-4 h-4" />
           </button>
         </div>

@@ -688,7 +688,7 @@ export function QuranAudioPlayer({
                       ? 'bg-pale-sky-600 text-white font-semibold'
                       : 'text-muted hover:text-main'
                   }`}
-                >
+                 aria-label={t('playbackRateLabel', { rate: s })}>
                   {s}x
                 </button>
               ))}

@@ -12,6 +12,7 @@ import type { QuranReaderCatalog } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import type { ReaderStudySource } from '../../../shared/reader-study-selection';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { Modal } from '../ui/Modal';
 
 const taskKeys: Record<AssistantTask, TranslationKey> = {
   qa: 'assistantTaskQa', guide: 'assistantTaskGuide', questions: 'assistantTaskQuestions', terms: 'assistantTaskTerms', organise: 'assistantTaskOrganise', cards: 'assistantTaskCards',
@@ -80,10 +81,10 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
   const [explainBack,setExplainBack]=useState(false);
   const explainTarget=readerSource?.target ?? (book ? bookStudyTarget({id:book,sourceId:pdfBooks.find(entry=>entry.id===book)?.sourceId},from) : passages.length===1?passages[0].target:undefined);
   const explainLabel=readerSource?.label ?? (book ? (pdfBooks.find(entry=>entry.id===book)?.title??'')+' · '+t('page')+' '+from : passages[0]?.label??'');
-  if(explainBack&&explainTarget)return <ExplainBack target={explainTarget} label={explainLabel} onClose={()=>setExplainBack(false)} onOpen={open}/>;
+
   const field = 'w-full rounded-lg border border-subtle bg-canvas px-2 py-1.5 text-sm';
   return <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/40 p-2 sm:p-4" dir={dir} onClick={onClose}>
-    <div role="dialog" aria-modal="true" aria-labelledby="assistant-title" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }} data-study-assistant className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
+    <Modal asChild open={true} onClose={onClose} label={t('assistantTitle')}><div role="dialog" aria-modal="true" aria-labelledby="assistant-title"  data-study-assistant className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
       <header className="flex items-center gap-2 border-b border-subtle px-4 py-2">
         <Sparkles size={16} aria-hidden="true" />
         <h2 id="assistant-title" className="text-sm font-bold">{t('assistantTitle')}</h2>
@@ -192,6 +193,7 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
           </>}
         </section>
       </div>
-    </div>
+      {explainBack && explainTarget && <ExplainBack target={explainTarget} label={explainLabel} onClose={() => setExplainBack(false)} onOpen={open} />}
+    </div></Modal>
   </div>;
 }

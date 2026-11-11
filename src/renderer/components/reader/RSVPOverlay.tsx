@@ -13,6 +13,7 @@ import {
 import { useWorkspace } from '../context/WorkspaceContext';
 import { RSVPController } from '../../libs/reader/rsvp-controller';
 import { RSVPState, RSVPWordToken, ReaderTheme } from '../../libs/reader/types';
+import { Modal } from '../ui/Modal';
 
 interface RSVPOverlayProps {
   text: string;
@@ -140,7 +141,7 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div
+      <Modal asChild open={true} onClose={onClose} label={t('speedReaderBtn')}><div
         className={`w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col p-6 space-y-6 ${
           themeCardClasses[theme] || themeCardClasses.light
         }`}
@@ -163,7 +164,7 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
               onClick={onClose}
               title={t('rsvpClose')}
               className="p-1 rounded-full hover:bg-rose-500/10 text-muted hover:text-rose-500 transition-colors cursor-pointer"
-            >
+             aria-label={t('rsvpClose')}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -226,14 +227,14 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
               onClick={() => controller?.jumpToIndex(0)}
               title={t('rsvpRestart')}
               className="p-2 rounded-xl hover:bg-surface text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={t('rsvpRestart')}>
               <RotateCcw className="w-4 h-4" />
             </button>
             <button
               onClick={() => controller?.prevWord()}
               title={t('rsvpPreviousWord')}
               className="p-2 rounded-xl hover:bg-surface text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={t('rsvpPreviousWord')}>
               <SkipBack className="w-4 h-4" />
             </button>
           </div>
@@ -253,7 +254,7 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
               onClick={() => controller?.nextWord()}
               title={t('rsvpNextWord')}
               className="p-2 rounded-xl hover:bg-surface text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={t('rsvpNextWord')}>
               <SkipForward className="w-4 h-4" />
             </button>
           </div>
@@ -280,19 +281,19 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
             <button
               onClick={() => setFontSize((s) => Math.max(28, s - 4))}
               className="px-2 py-0.5 rounded bg-surface border border-subtle hover:text-main cursor-pointer"
-            >
+             aria-label={t('readerZoomOut')}>
               A-
             </button>
             <span className="font-mono text-[10px]">{fontSize}px</span>
             <button
               onClick={() => setFontSize((s) => Math.min(64, s + 4))}
               className="px-2 py-0.5 rounded bg-surface border border-subtle hover:text-main cursor-pointer"
-            >
+             aria-label={t('readerZoomIn')}>
               A+
             </button>
           </div>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

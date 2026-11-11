@@ -36,6 +36,6 @@ export function QuranStructureNav({ structure, page, t, lang, onNavigate }: {
       {selector('quranHizb', structure.hizb, hizb)}
     </div>
     {facts.length > 0 && <p className="mt-1 px-1 text-[11px] leading-relaxed text-muted">{facts.join(' · ')}</p>}
-    {sajdah.map(item => <button key={item.number} type="button" title={t('quranSajdaSourceHint')} onClick={() => { const [surah, ayah] = item.reference.split(':').map(Number); onNavigate({ surah, ayah }); }} className="mt-1 block w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-start text-[11px] leading-relaxed">{t(item.type === 'required' ? 'quranSajdaRequired' : 'quranSajdaOptional', { reference: item.reference })}</button>)}
+    {sajdah.map(item => <button key={item.number} type="button" title={t('quranSajdaSourceHint')} onClick={() => { const [surah, ayah] = item.reference.split(':').map(Number); onNavigate({ surah, ayah }); }} className="mt-1 block w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-start text-[11px] leading-relaxed" aria-label={t('quranSajdaSourceHint')}>{t(item.type === 'required' ? 'quranSajdaRequired' : 'quranSajdaOptional', { reference: item.reference })}</button>)}
   </div>;
 }

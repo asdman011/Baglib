@@ -87,7 +87,7 @@ export const FeaturedBookCard: React.FC<FeaturedBookCardProps> = ({
                   </span>
                   <span className="font-mono text-[11px]">{progress}%</span>
                 </div>
-                <div className="w-full bg-canvas rounded-full h-1.5 overflow-hidden border border-border/60">
+                <div className="w-full bg-canvas rounded-full h-1.5 overflow-hidden border border-border/60" role="progressbar" aria-label={t('readingProgressPercent', { percent: progress })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.max(0, progress))}>
                   <div
                     className="bg-accent h-full rounded-full transition-all duration-300"
                     style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}

@@ -2,9 +2,11 @@
 
 import React, { useState } from 'react';
 import { BookOpen, Copy, Check } from 'lucide-react';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { SAMPLE_CITATIONS } from '../../data/mockData';
 
 export const CitationSection: React.FC = () => {
+  const { t } = useWorkspace();
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
 
   const citationData = SAMPLE_CITATIONS;
@@ -60,7 +62,7 @@ export const CitationSection: React.FC = () => {
             <button
               onClick={() => copyCitation('APA', `${citationData.author}. (${citationData.year}). ${citationData.title}. ${citationData.publisher}.`)}
               className="p-1 rounded hover:bg-surface text-muted hover:text-pale-sky-500 transition-colors"
-            >
+             aria-label={t('copyCitationFormat', { format: 'APA' })}>
               {copiedFormat === 'APA' ? <Check className="w-3.5 h-3.5 text-evergreen-500" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           </div>
@@ -76,7 +78,7 @@ export const CitationSection: React.FC = () => {
             <button
               onClick={() => copyCitation('BibTeX', citationData.bibtex)}
               className="p-1 rounded hover:bg-surface text-muted hover:text-amber-500 transition-colors"
-            >
+             aria-label={t('copyCitationFormat', { format: 'BibTeX' })}>
               {copiedFormat === 'BibTeX' ? <Check className="w-3.5 h-3.5 text-evergreen-500" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           </div>

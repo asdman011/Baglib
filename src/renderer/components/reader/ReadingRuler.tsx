@@ -194,7 +194,7 @@ export const ReadingRuler: React.FC<ReadingRulerProps> = ({
             onClick={() => setRulerHeight((h) => Math.max(24, h - 6))}
             title={t('rulerNarrow')}
             className="p-0.5 rounded hover:bg-canvas text-muted hover:text-main cursor-pointer"
-          >
+           aria-label={t('rulerNarrow')}>
             <Minus className="w-3 h-3" />
           </button>
           <span className="text-[10px] font-mono text-muted">{rulerHeight}px</span>
@@ -202,7 +202,7 @@ export const ReadingRuler: React.FC<ReadingRulerProps> = ({
             onClick={() => setRulerHeight((h) => Math.min(96, h + 6))}
             title={t('rulerExpand')}
             className="p-0.5 rounded hover:bg-canvas text-muted hover:text-main cursor-pointer"
-          >
+           aria-label={t('rulerExpand')}>
             <Plus className="w-3 h-3" />
           </button>
           <div className="w-[1px] h-3 bg-subtle mx-0.5" />
@@ -210,7 +210,7 @@ export const ReadingRuler: React.FC<ReadingRulerProps> = ({
             onClick={onClose}
             title={t('rulerClose')}
             className="p-0.5 rounded hover:bg-rose-500/10 text-muted hover:text-rose-500 cursor-pointer"
-          >
+           aria-label={t('rulerClose')}>
             <X className="w-3 h-3" />
           </button>
         </div>

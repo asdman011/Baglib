@@ -626,7 +626,7 @@ function PlaygroundContent() {
                       onClick={() => copyToClipboard(`var(${token.cssVar})`)}
                       title="Copy CSS var"
                       className="p-1 rounded text-text-muted hover:text-text hover:bg-canvas transition-colors"
-                    >
+                     aria-label={t('copyTextBtn')}>
                       {copiedToken === `var(${token.cssVar})` ? (
                         <Check className="size-3.5 text-success" />
                       ) : (

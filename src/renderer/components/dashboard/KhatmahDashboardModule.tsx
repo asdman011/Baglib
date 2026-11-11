@@ -387,7 +387,7 @@ export const CompanionMiniWidget: React.FC<{
               onClick={onPopoutDesktop}
               title={tr.dashboardPopoutMiniWindow}
               className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={tr.dashboardPopoutMiniWindow}>
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
           )}

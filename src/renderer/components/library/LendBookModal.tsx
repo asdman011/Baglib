@@ -20,6 +20,7 @@ import { BookItem } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { BorrowerSummary } from '../../../shared/types/physical-library';
 import { formatCoverUrl } from '../../utils/file-path-helper';
+import { Modal } from '../ui/Modal';
 
 interface LendBookModalProps {
   isOpen: boolean;
@@ -113,7 +114,7 @@ const LendBookModalContent: React.FC<LendBookModalProps> = ({
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
       dir={dir}
     >
-      <div className="relative w-full max-w-lg bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto transition-all animate-in fade-in zoom-in-95 duration-200">
+      <Modal asChild open={true} onClose={() => { if (!isSubmitting) onClose(); }} label={t('lendModalTitle')}><div className="relative w-full max-w-lg bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto transition-all animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-subtle flex items-center justify-between bg-canvas/60">
           <div className="flex items-center gap-3">
@@ -133,7 +134,7 @@ const LendBookModalContent: React.FC<LendBookModalProps> = ({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl text-muted hover:text-main hover:bg-canvas transition-colors cursor-pointer"
-          >
+           aria-label={t('close')}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -312,7 +313,7 @@ const LendBookModalContent: React.FC<LendBookModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
+      </div></Modal>
     </div>
   );
 };

@@ -262,7 +262,7 @@ export const CategoryCascader: React.FC<CategoryCascaderProps> = ({
                 type="button"
                 onClick={() => setSearchQuery('')}
                 className="text-muted hover:text-main p-0.5 rounded"
-              >
+               aria-label={t('searchClearQuery')}>
                 <X className="w-3.5 h-3.5" />
               </button>
             )}

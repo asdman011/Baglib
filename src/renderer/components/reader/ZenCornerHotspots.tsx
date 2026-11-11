@@ -71,14 +71,14 @@ export const ZenCornerHotspots: React.FC<ZenCornerHotspotsProps> = ({
                 ? 'bg-amber-500 text-white'
                 : 'text-muted hover:text-amber-500 hover:bg-canvas'
             }`}
-          >
+           aria-label={t('oneClickBookmark')}>
             <Bookmark className={`w-3.5 h-3.5 ${isCurrentPageBookmarked ? 'fill-current' : ''}`} />
           </button>
           <button
             onClick={toggleFullscreen}
             title={t('fullscreenToggle')}
             className="p-1.5 rounded-full text-muted hover:text-main hover:bg-canvas transition-colors cursor-pointer"
-          >
+           aria-label={t('fullscreenToggle')}>
             {isFullscreen ? (
               <Minimize2 className="w-3.5 h-3.5" />
             ) : (

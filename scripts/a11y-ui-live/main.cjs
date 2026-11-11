@@ -12,7 +12,9 @@ app.setPath('userData', profile);
 app.setAppPath(path.resolve(__dirname, '../..'));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let started = false;
+const createdWindows = [];
 app.on('browser-window-created', (_, win) => {
+  createdWindows.push(win.id);
   if (started) { win.destroy(); throw new Error('Only one Electron window permitted'); }
   started = true;
   const evaluate = code => win.webContents.executeJavaScript(code, true);
@@ -31,14 +33,20 @@ app.on('browser-window-created', (_, win) => {
     await pause(20);
   };
   const click = selector => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw new Error('Missing '+${JSON.stringify(selector)});e.focus();e.click();})()`);
+  const mouse = async (selector, index = 0, shift = false) => {
+    const point = await evaluate(`(()=>{const e=document.querySelectorAll(${JSON.stringify(selector)})[${index}];if(!e)throw new Error('Missing native target');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()`);
+    win.webContents.sendInputEvent({ type: 'mouseDown', ...point, button: 'left', clickCount: 1, modifiers: shift ? ['shift'] : [] });
+    win.webContents.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1, modifiers: shift ? ['shift'] : [] });
+    await pause(80);
+  };
   const input = (selector, value) => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-  const button = text => evaluate(`(()=>{const b=[...document.querySelectorAll('[data-ui-dialog] button')].find(e=>e.textContent.trim()===${JSON.stringify(text)});if(!b)throw new Error('Missing button '+${JSON.stringify(text)});b.focus();b.click();})()`);
+  const button = text => evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(text)});if(!b)throw new Error('Missing button '+${JSON.stringify(text)});b.focus();b.click();})()`);
   const shot = async name => { await pause(120); fs.writeFileSync(path.join(evidence, name + '.png'), (await win.webContents.capturePage()).toPNG()); };
   const count = () => evaluate('document.querySelectorAll("[data-ui-dialog]").length');
   const results = [];
   const unnamed = [];
   const errors = [];
-  const save = () => fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ results, unnamed, errors }, null, 2));
+  const save = () => fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ results, unnamed, errors, createdWindows }, null, 2));
   win.webContents.on('console-message', (_, level, message) => { if (level >= 3) errors.push(message); });
   const setupTop = `window.a11yTop=[...document.querySelectorAll('[data-ui-dialog]')].at(-1);window.a11yFocusables=()=>[...window.a11yTop.querySelectorAll('button,a[href],input,select,textarea,[tabindex],[contenteditable]')].filter(e=>e.tabIndex>=0&&!e.matches(':disabled')&&!e.closest('[hidden],[inert],[aria-hidden="true"]')&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden');`;
   const trap = async (name, screenshot = true) => {
@@ -67,7 +75,7 @@ app.on('browser-window-created', (_, win) => {
       await key('Tab', ['shift']);
       assert.equal(await evaluate('window.a11yTop.contains(document.activeElement)'), true, name + ' reverse containment ' + i);
     }
-    await evaluate('document.querySelector("[data-case]").focus()');
+    await evaluate('(document.querySelector("[data-case]") || document.querySelector("aside button")).focus()');
     assert.equal(await evaluate('window.a11yTop.contains(document.activeElement)'), true, name + ' external focus containment');
     const motion = await evaluate(`(()=>{const d=window.a11yTop;return [d,...d.querySelectorAll('*')].filter(e=>{const s=getComputedStyle(e);return (s.animationName!=='none'&&s.animationDuration.split(',').some(v=>parseFloat(v)>.001))||s.transitionDuration.split(',').some(v=>parseFloat(v)>.001);}).map(e=>e.tagName+':'+e.className);})()`);
     assert.deepEqual(motion, [], name + ' reduced motion');
@@ -89,7 +97,26 @@ app.on('browser-window-created', (_, win) => {
       const result = await pipeline.importFile({ filePath: file.filename, duplicateAction: 'import_anyway', customTitle: file.title });
       assert.equal(result.success, true, JSON.stringify(result)); file.id = result.workId;
     }
+    // Keep the two imported work identities stable. Duplicate imports can enrich/merge work records.
+    await evaluate(`window.electronAPI.addBook(${JSON.stringify({id:'key298-trash',title:'KEY298 Trash',author:'KEY298',workType:'book',bookType:'digital',digitalFormat:'PDF',filePath:files[1].filename,coverImage:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aP1cAAAAASUVORK5CYII='})})`);
+    await evaluate("window.electronAPI.deleteBook('key298-trash')");
+    const persisted = await evaluate('window.electronAPI.getAllBooks()');
+    assert.ok(persisted.length >= 4, 'four production books for range selection');
+    for (const file of files) {
+      const book = persisted.find(book => book.id === file.id);
+      assert.ok(book, 'real imported work remains active');
+      file.title = book.title;
+    }
     fs.writeFileSync(path.join(evidence, 'inputs.json'), JSON.stringify(files, null, 2));
+    for (const file of files) {
+      const extracted = await evaluate(`window.electronAPI.extractPdfText(${JSON.stringify(file.filename)})`);
+      file.pageText = extracted?.text?.slice(0, 2500) || '';
+      assert.ok(file.pageText.length > 20, file.lang + ' real extracted text');
+    }
+    const pathway = await evaluate("window.electronAPI.pathways.save({name:'KEY298',description:'',kind:'curriculum'})");
+    await evaluate("window.electronAPI.categories.create({nameAr:'KEY298',nameEn:'KEY298'})");
+    await evaluate("window.electronAPI.tags.create('KEY298')");
+    await evaluate("window.electronAPI.tags.create('KEY298-second')");
     const styles = await evaluate('[...document.querySelectorAll("link[rel=stylesheet]")].map(e=>e.href)');
     assert.ok(styles.length, 'production stylesheet');
     const css = (await Promise.all(styles.map(async href => { const response = await fetch(href); assert.ok(response.ok, href); return response.text(); }))).join('\n');
@@ -105,19 +132,21 @@ app.on('browser-window-created', (_, win) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [profile] });
     win.webContents.debugger.attach('1.3');
     const bundle = fs.readFileSync(path.join(profile, 'fixture.js'), 'utf8');
-    const cases = ['modal', 'sheet', 'book', 'import', 'search', 'palette', 'providers', 'storage', 'geek', 'candidates', 'diff', 'editions', 'sync', 'ai', 'plugins', 'lock', 'statistics', 'wird', 'save-close', 'export-pdf', 'compare', 'reader-shortcuts'];
+    const cases = ['lend', 'return', 'audit', 'online', 'trash', 'dictionary', 'export-notes', 'ocr', 'accessibility', 'reflow', 'paragraph', 'rsvp', 'pairing', 'clipper', 'opds', 'exam', 'explain', 'assistant', 'ayah', 'similar', 'tool', 'modal', 'sheet', 'book', 'import', 'search', 'palette', 'providers', 'storage', 'geek', 'candidates', 'diff', 'editions', 'sync', 'ai', 'plugins', 'lock', 'statistics', 'wird', 'save-close', 'export-pdf', 'compare', 'reader-shortcuts'];
     for (const language of ['ar', 'en']) for (const theme of ['light', 'dark']) for (const width of [1280, 480]) {
       if (process.env.BAGLIB_A11Y_DEBUG && (language !== 'ar' || theme !== 'light' || width !== 1280)) continue;
       const text = translations[language]; const prefix = `${language}-${theme}-${width}`;
       console.log('CASE', prefix);
       win.setContentSize(width, 900);
-      await win.loadFile(path.join(profile, 'fixture.html'), { query: { book: files.find(file => file.lang === language).id } });
+      await win.loadFile(path.join(profile, 'fixture.html'), { query: { book: files.find(file => file.lang === language).id, pathway: pathway.id } });
       await evaluate(`localStorage.setItem('baglib-lang',${JSON.stringify(language)});localStorage.setItem('baglib-theme',${JSON.stringify(theme)})`);
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+      await evaluate('window.a11yPageText=' + JSON.stringify(files.find(file => file.lang === language).pageText));
       await evaluate(bundle);
       await until('!!document.querySelector("[data-a11y-fixture]") && document.querySelector("[data-typing-editable]")?.textContent.includes("KEY298")');
       assert.equal(await evaluate('document.documentElement.dir'), language === 'ar' ? 'rtl' : 'ltr');
       assert.equal(await evaluate('matchMedia("(prefers-reduced-motion: reduce)").matches'), true);
+      if (!process.env.BAGLIB_A11Y_TAIL) {
       for (const id of cases) {
         console.log('DIALOG', prefix, id);
         await click(`[data-case="${id}"]`); await until('!!document.querySelector("[data-ui-dialog]")');
@@ -154,6 +183,66 @@ app.on('browser-window-created', (_, win) => {
       await trap(prefix + '-storage-prune'); await key('Escape'); await until('document.querySelectorAll("[data-ui-dialog]").length===1');
       assert.equal(await evaluate('document.activeElement.textContent.trim()==='+JSON.stringify(text.storageActionPrune)), true); results.at(-1).escape = true; results.at(-1).focusReturn = true;
       await key('Escape'); await until('!document.querySelector("[data-ui-dialog]")');
+      }
+      await click('[data-case="trash"]');await until('!!document.querySelector("[data-ui-dialog]")');
+      for (const label of ['emptyTrash', 'permanentlyDelete', 'deletePermanentlyBtn']) {
+        if (label === 'deletePermanentlyBtn') await button(text.selectAllTrash);
+        await evaluate(`(()=>{const b=[...document.querySelectorAll('[data-ui-dialog] button')].find(e=>e.getAttribute('aria-label')===${JSON.stringify(text[label])}||e.textContent.trim()===${JSON.stringify(text[label])});window.a11ySurfaceOpener=b;b.focus();b.click();})()`);
+        await until('document.querySelectorAll("[data-ui-dialog]").length===2');await trap(prefix+'-trash-'+label);
+        await key('Escape');await until('document.querySelectorAll("[data-ui-dialog]").length===1');
+        assert.equal(await evaluate('document.activeElement===window.a11ySurfaceOpener'),true,label+' return');results.at(-1).escape=true;results.at(-1).focusReturn=true;save();
+      }
+      await key('Escape');await until('!document.querySelector("[data-ui-dialog]")');
+      await click('[data-case="assistant"]');await until('!!document.querySelector("[data-study-assistant]")');
+      await click('[data-assistant-explain-back]');await until('document.querySelectorAll("[data-ui-dialog]").length===2');
+      await trap(prefix+'-assistant-explain-back');await key('Escape');await until('document.querySelectorAll("[data-ui-dialog]").length===1');
+      assert.equal(await evaluate('document.activeElement===document.querySelector("[data-assistant-explain-back]")'),true,'assistant nested return');results.at(-1).escape=true;results.at(-1).focusReturn=true;save();
+      await key('Escape');await until('!document.querySelector("[data-ui-dialog]")');
+      // Production surfaces open each converted nested panel through its own control.
+      for (const [surface, labels] of [
+        ['bulk', ['bulkAssignCategory', 'bulkAddTagsBtn', 'bulkChangeStatus', 'bulkDeleteBtn', 'bulkDownloadMetadata']],
+        ['today', ['todayRhythmSettings']], ['toc', ['pdfTocImportTitle']],
+        ['categories', ['addCategory', 'editCategory', 'deleteCategory']],
+        ['tools', ['pdfWatchedFolderAdd', 'pdfPipelineNew']],
+      ]) {
+        await click(`[data-case="${surface}"]`); await pause(200);
+        for (const label of labels) {
+          const opener = await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.getAttribute('aria-label')===${JSON.stringify(text[label])}||e.textContent.trim()===${JSON.stringify(text[label])});if(!b)throw new Error('Missing launch '+${JSON.stringify(label)});window.a11ySurfaceOpener=b;b.focus();b.click();return true;})()`);
+          assert.ok(opener); await until('!!document.querySelector("[data-ui-dialog]")');
+          await trap(prefix + '-' + surface + '-' + label);
+          await key('Escape'); await until('!document.querySelector("[data-ui-dialog]")');
+          assert.equal(await evaluate('document.activeElement===window.a11ySurfaceOpener'), true, label + ' return');
+          results.at(-1).escape = true; results.at(-1).focusReturn = true; save();
+        }
+      }
+      await click('[data-case="categories"]');
+      await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent.includes(${JSON.stringify(text.tagsTab)}));b.focus();b.click();})()`);
+      for (const label of ['renameTag', 'mergeTags', 'deleteTag']) {
+        await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.getAttribute('aria-label')===${JSON.stringify(text[label])});if(!b)throw new Error('Missing '+${JSON.stringify(label)});window.a11ySurfaceOpener=b;b.focus();b.click();})()`);
+        await until('!!document.querySelector("[data-ui-dialog]")');await trap(prefix+'-tags-'+label);
+        await key('Escape');await until('!document.querySelector("[data-ui-dialog]")');
+        assert.equal(await evaluate('document.activeElement===window.a11ySurfaceOpener'),true,label+' return');results.at(-1).escape=true;results.at(-1).focusReturn=true;save();
+      }
+      await click('[data-case="graph"]');await click('[data-graph-button]');await until('!!document.querySelector("[data-ui-dialog]")');
+      await trap(prefix+'-graph');await close(prefix+'-graph','[data-graph-button]');
+      await click('[data-case="library"]');
+      for (const mode of ['grid', 'list']) {
+        const label = text[mode === 'grid' ? 'viewGrid' : 'viewList'];
+        await evaluate(`(()=>{const b=[...document.querySelectorAll('[data-view-mode-toggle] button')].find(e=>e.getAttribute('aria-label')===${JSON.stringify(label)});b.focus();b.click();})()`);
+        const selector = mode === 'grid' ? '[data-library-book-card] input[type=checkbox]' : 'tbody input[type=checkbox]';
+        await until(`document.querySelectorAll(${JSON.stringify(selector)}).length>=4`);
+        await evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).forEach(e=>{if(e.checked)e.click()})`);
+        await mouse(selector, 0); await mouse(selector, 3, true);
+        assert.equal(await evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].filter(e=>e.checked).length`), 4, mode + ' Shift range');
+        const labels = await evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].map(e=>e.getAttribute('aria-label'))`);
+        const libraryBooks = await evaluate('window.electronAPI.getAllBooks()');
+        assert.ok(labels.every(label => libraryBooks.some(book => label === text.selectBook.replace('{title}', book.title) || label === text.deselectBook.replace('{title}', book.title))), mode + ' per-book labels ' + JSON.stringify(labels));
+        await evaluate(`document.querySelectorAll(${JSON.stringify(selector)})[0].focus()`); await key('Space');
+        assert.equal(await evaluate(`document.querySelectorAll(${JSON.stringify(selector)})[0].checked`), false, mode + ' Space toggle');
+        await shot(prefix+'-'+mode+'-selection-focus');
+        results.push({name:prefix+'-'+mode+'-selection',shiftRange:true,spaceToggle:true,localizedLabels:true});save();
+      }
+      await click('[data-case="modal"]'); await key('Escape'); await until('!document.querySelector("[data-ui-dialog]")');
       // Help opens in every scope through the actual production registry handler.
       for (const selector of ['[data-typing-input]', '[data-typing-textarea]', '[data-typing-editable]']) {
         await evaluate(`document.querySelector(${JSON.stringify(selector)}).focus();document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'?',shiftKey:true,bubbles:true,cancelable:true}))`);
@@ -164,9 +253,40 @@ app.on('browser-window-created', (_, win) => {
       const registered = await evaluate('[...document.querySelectorAll("[data-shortcut-id]")].map(e=>e.dataset.shortcutId)');
       assert.deepEqual([...new Set(registered)].sort(), SHORTCUTS.map(shortcut => shortcut.id).sort());
       await trap(prefix + '-global-shortcuts'); await close(prefix + '-global-shortcuts', '[data-case=modal]');
+      // Exercise the study-draft editor from a real PDF selection in the whole app.
+      const file = files.find(file => file.lang === language);
+      await win.loadURL('http://localhost:3000');
+      await until('!!window.electronAPI && !!document.querySelector("footer")');
+      await evaluate(`localStorage.setItem('baglib-lang',${JSON.stringify(language)});localStorage.setItem('baglib-theme',${JSON.stringify(theme)})`);
+      await win.loadURL('http://localhost:3000');await until('!!document.querySelector("footer")');
+      await evaluate(`document.querySelector('aside button[aria-label='+${JSON.stringify(JSON.stringify(text.navLibrary))}+']').click()`);
+      await until('!!document.querySelector("[data-view-mode-toggle]")');
+      await evaluate(`(()=>{const b=[...document.querySelectorAll('[data-view-mode-toggle] button')].find(e=>e.getAttribute('aria-label')===${JSON.stringify(text.viewGrid)});b.click();})()`);
+      await until(`[...document.querySelectorAll('[data-library-book-card] h3')].some(e=>e.textContent.trim()===${JSON.stringify(file.title)})`);
+      await evaluate(`(()=>{const title=[...document.querySelectorAll('[data-library-book-card] h3')].find(e=>e.textContent.trim()===${JSON.stringify(file.title)});title.closest('[data-library-book-card]').querySelector('[data-card-read-button]').click();})()`);
+      await until('!!document.querySelector("[data-reader-shared-header]") && !!document.querySelector("[data-reader-go-to]")');
+      // Claude: the smallest English text-layer PDF opens on an image-only cover, so step forward until a page has text.
+      for (let page = 2; page <= 6; page++) {
+        await pause(1200);
+        if (await evaluate('[...document.querySelectorAll(".textLayer span")].some(e=>e.textContent.trim().length>3)')) break;
+        await evaluate(`(()=>{const input=document.querySelector('[data-reader-go-to]');input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'${page}');input.dispatchEvent(new Event('input',{bubbles:true}));input.form.requestSubmit();})()`);
+      }
+      await until('[...document.querySelectorAll(".textLayer span")].some(e=>e.textContent.trim().length>3)');
+      await evaluate(`(()=>{const spans=[...document.querySelectorAll('.textLayer span')].filter(e=>e.firstChild?.nodeType===3&&e.textContent.trim().length>3);const first=spans[0],last=spans[Math.min(2,spans.length-1)];const range=document.createRange();range.setStart(first.firstChild,0);range.setEnd(last.firstChild,last.firstChild.textContent.length);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);last.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));})()`);
+      await until(`[...document.querySelectorAll('button')].some(e=>e.textContent.trim()===${JSON.stringify(text.readerStudyPractice)})`);
+      await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(text.readerStudyPractice)});window.a11yReaderOpener=b;b.focus();b.click();})()`);
+      await until('!!document.querySelector("[data-reader-study-editor]")');
+      await trap(prefix+'-reader-study-draft');await key('Escape');await until('!document.querySelector("[data-reader-study-editor]")');
+      assert.equal(await evaluate('document.activeElement===window.a11yReaderOpener'),true,'reader draft opener return');results.at(-1).escape=true;results.at(-1).focusReturn=true;save();
+      assert.equal(await evaluate('document.querySelectorAll("main").length'),1,'one main landmark in whole app');
+      const workspaceUnnamed = await evaluate(`[...document.querySelectorAll('button')].filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&!e.innerText.trim()&&!e.getAttribute('aria-label')&&!e.getAttribute('aria-labelledby')&&!e.querySelector('img[alt]')).map(e=>e.outerHTML.slice(0,600))`);
+      unnamed.push(...workspaceUnnamed.map(html => ({name:prefix+'-whole-reader',html})));
+      assert.deepEqual(workspaceUnnamed, [], 'whole-reader icon names');
+
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       save();
     }
+    assert.equal(createdWindows.length, 1, 'one Electron window throughout the run');
     assert.deepEqual(unnamed, [], 'Every icon-only button in the converted panels has an explicit localized name');
     assert.deepEqual(errors, [], 'Renderer errors');
     save(); app.quit();

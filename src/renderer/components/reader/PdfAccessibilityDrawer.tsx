@@ -18,6 +18,7 @@ import type {
   PdfAccessibilityFixResult,
   PdfAccessibilityReadingOrderItem,
 } from '../../../shared/types/pdf-accessibility';
+import { Sheet } from '../ui/Sheet';
 
 interface PdfAccessibilityDrawerProps {
   isOpen: boolean;
@@ -139,7 +140,7 @@ export function PdfAccessibilityDrawer({
   const base = report?.base;
 
   return (
-    <div
+    <Sheet asChild open={true} onClose={onClose} label={t('pdfA11yTitle')}><div
       role="dialog"
       aria-modal="true"
       aria-label={t('pdfA11yTitle')}
@@ -195,7 +196,7 @@ export function PdfAccessibilityDrawer({
         )}
 
         {loading && (
-          <div className="flex items-center justify-center p-8 text-muted gap-2">
+          <div className="flex items-center justify-center p-8 text-muted gap-2" role="status">
             <RefreshCw size={16} className="animate-spin" />
             <span>{t('loading')}</span>
           </div>
@@ -501,6 +502,6 @@ export function PdfAccessibilityDrawer({
           </>
         )}
       </div>
-    </div>
+    </div></Sheet>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { colorKeys } from './ReaderMarkupBar';
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   PenTool,
@@ -260,7 +261,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
                   ? 'bg-pale-sky-500 text-white shadow-xs'
                   : 'text-muted hover:text-main'
               }`}
-            >
+             aria-label={t('inkPen')}>
               <PenTool className="w-3.5 h-3.5" />
             </button>
             <button
@@ -271,7 +272,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
                   ? 'bg-pale-sky-500 text-white shadow-xs'
                   : 'text-muted hover:text-main'
               }`}
-            >
+             aria-label={t('inkHighlighter')}>
               <Highlighter className="w-3.5 h-3.5" />
             </button>
             <button
@@ -282,7 +283,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
                   ? 'bg-pale-sky-500 text-white shadow-xs'
                   : 'text-muted hover:text-main'
               }`}
-            >
+             aria-label={t('inkEraser')}>
               <Eraser className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -294,7 +295,8 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
                 <button
                   key={c.id}
                   onClick={() => setActiveColor(c.hex)}
-                  title={c.label}
+                  title={t(c.id === 'charcoal' ? 'pdfColorBlack' : colorKeys[c.id])}
+                  aria-label={t(c.id === 'charcoal' ? 'pdfColorBlack' : colorKeys[c.id])}
                   className={`w-4 h-4 rounded-full transition-transform ${
                     activeColor === c.hex ? 'scale-125 ring-2 ring-pale-sky-500 ring-offset-1' : 'opacity-80'
                   }`}
@@ -309,14 +311,14 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
             <button
               onClick={() => setStrokeWidth((w) => Math.max(1, w - 1))}
               className="hover:text-main cursor-pointer"
-            >
+             aria-label={t('strokeThinner')}>
               <Minus className="w-3 h-3" />
             </button>
             <span className="w-4 text-center font-bold text-main">{strokeWidth}</span>
             <button
               onClick={() => setStrokeWidth((w) => Math.min(10, w + 1))}
               className="hover:text-main cursor-pointer"
-            >
+             aria-label={t('strokeThicker')}>
               <Plus className="w-3 h-3" />
             </button>
           </div>
@@ -328,7 +330,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
               onClick={handleUndo}
               title={t('undo')}
               className="p-1.5 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-30 cursor-pointer text-muted hover:text-main"
-            >
+             aria-label={t('undo')}>
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
             <button
@@ -336,7 +338,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
               onClick={handleRedo}
               title={t('inkRedo')}
               className="p-1.5 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-30 cursor-pointer text-muted hover:text-main"
-            >
+             aria-label={t('inkRedo')}>
               <RotateCw className="w-3.5 h-3.5" />
             </button>
             <button
@@ -344,7 +346,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
               onClick={handleClear}
               title={t('inkClear')}
               className="p-1.5 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-30 cursor-pointer text-muted hover:text-rose-600"
-            >
+             aria-label={t('inkClear')}>
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -356,7 +358,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-canvas text-muted hover:text-main cursor-pointer"
             title={t('inkExit')}
-          >
+           aria-label={t('inkExit')}>
             <X className="w-4 h-4" />
           </button>
         </div>

@@ -13,7 +13,7 @@ function NarratorLinks({ title, total, links, t, onNarrator }: { title: Translat
   if (!total) return null;
   return <section>
     <h5>{t(title, { count: total })}</h5>
-    <div className="sunnah-root-chips">{links.map(link => <button type="button" key={link.id} dir="rtl" lang="ar" title={t(tierKeys[link.tier] || 'sunnahTierUngraded')} onClick={() => onNarrator(link.id)}>{link.name}</button>)}</div>
+    <div className="sunnah-root-chips">{links.map(link => <button type="button" key={link.id} dir="rtl" lang="ar" title={t(tierKeys[link.tier] || 'sunnahTierUngraded')} onClick={() => onNarrator(link.id)} aria-label={t(tierKeys[link.tier] || 'sunnahTierUngraded')}>{link.name}</button>)}</div>
     {total > links.length && <p>{t('sunnahNarratorMore', { shown: links.length, total })}</p>}
   </section>;
 }

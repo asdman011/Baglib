@@ -288,7 +288,7 @@ export function StudyProgressPanel() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="w-full h-2 rounded-full bg-surface border border-subtle overflow-hidden mt-2">
+                <div className="w-full h-2 rounded-full bg-surface border border-subtle overflow-hidden mt-2" role="progressbar" aria-label={t('readingProgressPercent', { percent: summary.readingCoverage.coveragePercent })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={summary.readingCoverage.coveragePercent}>
                   <div
                     className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300"
                     style={{ width: `${summary.readingCoverage.coveragePercent}%` }}

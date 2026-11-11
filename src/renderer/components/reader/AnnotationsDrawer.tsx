@@ -1,5 +1,6 @@
 'use client';
 
+import { colorKeys } from './ReaderMarkupBar';
 import React, { useState, useMemo } from 'react';
 import {
   Highlighter,
@@ -162,7 +163,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
               onClick={handleOpenExport}
               title={t('exportAnnotationsTitle')}
               className="p-1.5 rounded-lg hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={t('exportAnnotationsTitle')}>
               <Download className="w-4 h-4" />
             </button>
             <button
@@ -195,7 +196,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
               ? 'bg-pale-sky-500 text-white shadow-sm'
               : 'text-muted hover:text-main'
           }`}
-        >
+         aria-label={t('tabHighlights')}>
           <Highlighter className="w-3 h-3" />
           <span className={embedded ? 'sr-only' : undefined}>{t('tabHighlights')}</span>
           <span className="opacity-75 text-[10px]">({counts.highlight})</span>
@@ -208,7 +209,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
               ? 'bg-pale-sky-500 text-white shadow-sm'
               : 'text-muted hover:text-main'
           }`}
-        >
+         aria-label={t('tabNotes')}>
           <MessageSquare className="w-3 h-3" />
           <span className={embedded ? 'sr-only' : undefined}>{t('tabNotes')}</span>
           <span className="opacity-75 text-[10px]">({counts.note})</span>
@@ -221,7 +222,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
               ? 'bg-pale-sky-500 text-white shadow-sm'
               : 'text-muted hover:text-main'
           }`}
-        >
+         aria-label={t('tabBookmarks')}>
           <BookMarked className="w-3 h-3" />
           <span className={embedded ? 'sr-only' : undefined}>{t('tabBookmarks')}</span>
           <span className="opacity-75 text-[10px]">({counts.bookmark})</span>
@@ -234,7 +235,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
               ? 'bg-pale-sky-500 text-white shadow-sm'
               : 'text-muted hover:text-main'
           }`}
-        >
+         aria-label={t('tabInk')}>
           <PenTool className="w-3 h-3" />
           <span className={embedded ? 'sr-only' : undefined}>{t('tabInk')}</span>
           <span className="opacity-75 text-[10px]">({counts.ink})</span>
@@ -299,14 +300,15 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
                   ? 'border-pale-sky-500 ring-2 ring-pale-sky-500/30'
                   : 'border-subtle bg-canvas text-muted'
               }`}
-            >
+             aria-label={t('filterAllColors')}>
               *
             </button>
             {HIGHLIGHT_COLORS.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setSelectedColor(c.id)}
-                title={c.label}
+                title={t(colorKeys[c.id])}
+                  aria-label={t(colorKeys[c.id])}
                 className={`w-5 h-5 rounded-full cursor-pointer transition-transform ${
                   selectedColor === c.id
                     ? 'ring-2 ring-offset-1 ring-pale-sky-500 scale-110'
@@ -341,7 +343,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
                       onClick={() => onJumpToPage(pageNum)}
                       className="px-2 py-0.5 rounded-full bg-surface border border-subtle hover:border-pale-sky-500 text-main flex items-center gap-1 cursor-pointer transition-colors"
                       title={t('goToPage', { page: pageNum })}
-                    >
+                     aria-label={t('goToPage', { page: pageNum })}>
                       <span className="text-[10px]">{t('page')}</span>
                       <span>{pageNum}</span>
                       <ExternalLink className="w-2.5 h-2.5 text-pale-sky-500" />
@@ -369,7 +371,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
                     onClick={() => onDeleteAnnotation(item.id)}
                     className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-rose-500 transition-opacity p-1 cursor-pointer"
                     title={t('deleteNote')}
-                  >
+                   aria-label={t('deleteNote')}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>

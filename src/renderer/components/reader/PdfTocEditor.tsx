@@ -15,6 +15,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { Modal } from '../ui/Modal';
 
 export interface TocTreeNode {
   id: string;
@@ -221,7 +222,7 @@ export function PdfTocEditor({
               onClick={loadFromPdfOutline}
               title={t('pdfTocLoadSource')}
               className="p-1 rounded-lg border border-subtle hover:bg-surface text-[11px] text-muted hover:text-main flex items-center gap-1 cursor-pointer"
-            >
+             aria-label={t('pdfTocLoadSource')}>
               <BookOpen size={12} />
               <span className="hidden sm:inline">{t('pdfTocLoadSourceShort')}</span>
             </button>
@@ -232,7 +233,7 @@ export function PdfTocEditor({
             onClick={() => setShowImportModal(true)}
             title={t('pdfTocImportTitle')}
             className="p-1 rounded-lg border border-subtle hover:bg-surface text-[11px] text-muted hover:text-main flex items-center gap-1 cursor-pointer"
-          >
+           aria-label={t('pdfTocImportTitle')}>
             <Upload size={12} />
             <span className="hidden sm:inline">{t('pdfTocImportAction')}</span>
           </button>
@@ -242,7 +243,7 @@ export function PdfTocEditor({
             onClick={downloadJson}
             title={t('pdfTocDownloadJson')}
             className="p-1 rounded-lg border border-subtle hover:bg-surface text-[11px] text-muted hover:text-main flex items-center gap-1 cursor-pointer"
-          >
+           aria-label={t('pdfTocDownloadJson')}>
             <Download size={12} />
           </button>
         </div>
@@ -283,7 +284,7 @@ export function PdfTocEditor({
                     onClick={() => changeLevel(index, -1)}
                     title={t('pdfTocOutdent')}
                     className="p-0.5 rounded hover:bg-surface disabled:opacity-30 cursor-pointer"
-                  >
+                   aria-label={t('pdfTocOutdent')}>
                     <ArrowLeft size={11} className="rtl:rotate-180" />
                   </button>
                   {/* Indent (Right in LTR, Left in RTL) */}
@@ -293,7 +294,7 @@ export function PdfTocEditor({
                     onClick={() => changeLevel(index, 1)}
                     title={t('pdfTocIndent')}
                     className="p-0.5 rounded hover:bg-surface disabled:opacity-30 cursor-pointer"
-                  >
+                   aria-label={t('pdfTocIndent')}>
                     <ArrowRight size={11} className="rtl:rotate-180" />
                   </button>
                   {/* Move Up */}
@@ -303,7 +304,7 @@ export function PdfTocEditor({
                     onClick={() => moveChapter(index, index - 1)}
                     title={t('pdfTocMoveUp')}
                     className="p-0.5 rounded hover:bg-surface disabled:opacity-30 cursor-pointer"
-                  >
+                   aria-label={t('pdfTocMoveUp')}>
                     <ChevronUp size={12} />
                   </button>
                   {/* Move Down */}
@@ -313,7 +314,7 @@ export function PdfTocEditor({
                     onClick={() => moveChapter(index, index + 1)}
                     title={t('pdfTocMoveDown')}
                     className="p-0.5 rounded hover:bg-surface disabled:opacity-30 cursor-pointer"
-                  >
+                   aria-label={t('pdfTocMoveDown')}>
                     <ChevronDown size={12} />
                   </button>
                   {/* Delete */}
@@ -323,7 +324,7 @@ export function PdfTocEditor({
                     onClick={() => removeChapter(index)}
                     title={t('pdfTocRemove')}
                     className="p-0.5 rounded hover:bg-red-500/10 text-red-500 disabled:opacity-30 cursor-pointer"
-                  >
+                   aria-label={t('pdfTocRemove')}>
                     <Trash2 size={11} />
                   </button>
                 </div>
@@ -418,7 +419,7 @@ export function PdfTocEditor({
       {/* Import JSON Modal */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-subtle bg-canvas p-4 space-y-3 shadow-2xl">
+          <Modal asChild open={true} onClose={() => setShowImportModal(false)} label={t('pdfTocImportTitle')}><div className="w-full max-w-md rounded-2xl border border-subtle bg-canvas p-4 space-y-3 shadow-2xl">
             <h4 className="font-bold text-sm">{t('pdfTocImportTitle')}</h4>
             <p className="text-xs text-muted">
               {t('pdfTocImportHelp')}
@@ -451,7 +452,7 @@ export function PdfTocEditor({
                 {t('pdfTocImportAction')}
               </button>
             </div>
-          </div>
+          </div></Modal>
         </div>
       )}
     </section>

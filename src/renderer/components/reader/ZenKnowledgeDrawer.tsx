@@ -143,13 +143,13 @@ export const ZenKnowledgeDrawer: React.FC<ZenKnowledgeDrawerProps> = ({
                 ? 'bg-pale-sky-500/15 border-pale-sky-500/30 text-pale-sky-600'
                 : 'border-transparent text-muted hover:text-main'
             }`}
-          >
+           aria-label={isPinned ? t('unpinDrawer') : t('pinDrawer')}>
             {isPinned ? <Pin className="w-3.5 h-3.5" /> : <PinOff className="w-3.5 h-3.5" />}
           </button>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-canvas cursor-pointer"
-          >
+           aria-label={t('close')}>
             <X className="w-3.5 h-3.5" />
           </button>
         </div>

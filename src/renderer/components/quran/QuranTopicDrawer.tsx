@@ -259,7 +259,7 @@ export function QuranTopicDrawer({
                           onClick={() => onSelectAyah(loc.surah, loc.ayah)}
                           className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border border-subtle bg-surface hover:bg-emerald-500/10 hover:border-emerald-500/40 text-xs text-foreground transition-all"
                           title={t('quranJumpToAyah')}
-                        >
+                         aria-label={t('quranJumpToAyah')}>
                           <BookOpen className="size-3 text-muted" />
                           <span dir="ltr">{loc.surah}:{loc.ayah}</span>
                         </button>

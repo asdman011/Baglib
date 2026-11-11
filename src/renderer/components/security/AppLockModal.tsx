@@ -357,7 +357,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
                     type="button"
                     onClick={() => setShowPin(!showPin)}
                     className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200"
-                  >
+                   aria-label={showPin ? t.hidePin : t.showPin}>
                     {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>

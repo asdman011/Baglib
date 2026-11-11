@@ -41,7 +41,7 @@ export const ZenFootnotePopover: React.FC<ZenFootnotePopoverProps> = ({
             onClick={onClose}
             title={t('closeFootnote')}
             className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main cursor-pointer"
-          >
+           aria-label={t('closeFootnote')}>
             <X className="w-3.5 h-3.5" />
           </button>
         </div>

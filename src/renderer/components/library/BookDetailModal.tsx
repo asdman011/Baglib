@@ -1089,7 +1089,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* Searching Status Banner */}
         {lookupHook.status === 'searching' && (
           <div className="bg-pale-sky-500/10 border-b border-pale-sky-500/20 px-4 py-2.5 text-xs text-pale-sky-600 dark:text-pale-sky-400 font-semibold flex items-center justify-between gap-2 animate-in fade-in duration-150">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" role="status">
               <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
               <span>{t('lookupSearching')}</span>
             </div>
@@ -1114,7 +1114,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               type="button"
               onClick={lookupHook.reset}
               className="p-1 hover:bg-amber-500/20 rounded cursor-pointer text-amber-600 dark:text-amber-400"
-            >
+             aria-label={t('cancel')}>
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -1139,7 +1139,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 type="button"
                 onClick={lookupHook.reset}
                 className="p-1 hover:bg-red-500/20 rounded cursor-pointer"
-              >
+               aria-label={t('cancel')}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1376,7 +1376,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="p-3.5 rounded-2xl bg-canvas border border-subtle flex flex-col sm:flex-row items-start sm:items-center gap-3.5">
                 <div className="w-16 h-22 rounded-xl bg-surface border border-subtle overflow-hidden shrink-0 flex items-center justify-center relative shadow-sm">
                   {isDiscoveringFile ? (
-                    <div className="flex flex-col items-center justify-center text-pale-sky-500 p-1 text-center animate-pulse">
+                    <div className="flex flex-col items-center justify-center text-pale-sky-500 p-1 text-center animate-pulse" role="status">
                       <RefreshCw className="w-5 h-5 animate-spin mb-1" />
                       <span className="text-[9px] font-bold">{t('providerStatusRunning')}</span>
                     </div>
@@ -2321,7 +2321,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         type="button"
                         onClick={() => handleRemoveContributor(idx)}
                         className="text-muted hover:text-red-500 cursor-pointer"
-                      >
+                       aria-label={t('delete')}>
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -2597,7 +2597,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   type="button"
                   onClick={() => onDelete(formData.id)}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-red-500 hover:bg-red-500/10 text-xs font-bold transition-all cursor-pointer"
-                >
+                 aria-label={t('deleteFromLibrary')}>
                   <Trash2 className="w-4 h-4" />
                   <span className="hidden sm:inline">{t('deleteFromLibrary')}</span>
                 </button>

@@ -366,7 +366,7 @@ function BoardCanvas({
             title={t('boardsConnectHint')}
             onClick={() => setConnectFrom(connectFrom === undefined ? null : undefined)}
             icon={<ArrowUpRight className="size-3.5 rtl:-scale-x-100" />}
-          >
+           aria-label={t('boardsConnectHint')}>
             {t('boardsConnect')}
           </Button>
         </div>

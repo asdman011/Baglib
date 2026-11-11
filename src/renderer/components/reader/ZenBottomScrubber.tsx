@@ -54,7 +54,7 @@ export const ZenBottomScrubber: React.FC<ZenBottomScrubberProps> = ({
           onClick={() => onPageChange(Math.max(1, readingPage - 1))}
           className="p-1 rounded-full hover:bg-canvas border border-subtle/60 text-muted hover:text-main disabled:opacity-30 transition-all cursor-pointer"
           title={t('paginationPrevious')}
-        >
+         aria-label={t('paginationPrevious')}>
           <ChevronRight className="w-3.5 h-3.5 rtl:rotate-0 ltr:rotate-180" />
         </button>
 
@@ -64,7 +64,7 @@ export const ZenBottomScrubber: React.FC<ZenBottomScrubberProps> = ({
             onClick={onReturnToPrevious}
             className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-pale-sky-500/10 hover:bg-pale-sky-500/20 text-pale-sky-600 dark:text-pale-sky-300 font-bold text-[11px] border border-pale-sky-500/20 transition-all cursor-pointer"
             title={t('returnToPrevPos')}
-          >
+           aria-label={t('returnToPrevPos')}>
             <RotateCcw className="w-3 h-3" />
             <span>{t('jumpToPreviousNotice', { page: previousPage })}</span>
           </button>
@@ -100,7 +100,7 @@ export const ZenBottomScrubber: React.FC<ZenBottomScrubberProps> = ({
           onClick={() => onPageChange(Math.min(maxBookPages, readingPage + 1))}
           className="p-1 rounded-full hover:bg-canvas border border-subtle/60 text-muted hover:text-main disabled:opacity-30 transition-all cursor-pointer"
           title={t('paginationNext')}
-        >
+         aria-label={t('paginationNext')}>
           <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-0 ltr:rotate-180" />
         </button>
       </div>

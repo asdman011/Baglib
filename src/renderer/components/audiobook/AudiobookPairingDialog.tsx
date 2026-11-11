@@ -34,6 +34,7 @@ import type {
 } from '../../../shared/types/audio';
 import { buildSequentialAudiobookMappings } from '../../../shared/utils/audiobook-mapping';
 import type { TOCItem } from '../../libs/reader/types';
+import { Modal } from '../ui/Modal';
 
 export type WizardStep = 'summary' | 'select' | 'abs' | 'anchor' | 'review';
 const EMPTY_TOC: TOCItem[] = [];
@@ -375,7 +376,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-surface border border-subtle rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] animate-in fade-in zoom-in-95 duration-150">
+      <Modal asChild open={true} onClose={onClose} label={t('audiobookPairingWizard')}><div className="bg-surface border border-subtle rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] animate-in fade-in zoom-in-95 duration-150">
         {/* Dialog Header */}
         <div className="px-3 sm:px-6 py-4 border-b border-subtle flex items-center justify-between gap-2 shrink-0">
           <div className="flex min-w-0 items-center gap-2.5 [&>div]:min-w-0">
@@ -436,7 +437,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
         {/* Step Body */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-4">
           {isLoading ? (
-            <div className="h-48 flex flex-col items-center justify-center text-muted gap-2">
+            <div className="h-48 flex flex-col items-center justify-center text-muted gap-2" role="status">
               <Loader2 className="w-6 h-6 animate-spin text-pale-sky-500" />
               <span className="text-xs font-bold">{t('loading')}</span>
             </div>
@@ -679,7 +680,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
                               ? 'bg-pale-sky-500 text-white border-pale-sky-500'
                               : 'hover:bg-canvas text-muted hover:text-main border-subtle'
                           }`}
-                        >
+                         aria-label={isPlayingThis ? t('ttsStopBtn') : t('ttsPreviewAudio')}>
                           {isPlayingThis ? (
                             <Square className="w-3.5 h-3.5 fill-current" />
                           ) : (
@@ -748,7 +749,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
             )}
           </div>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

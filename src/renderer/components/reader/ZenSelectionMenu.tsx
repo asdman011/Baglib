@@ -18,6 +18,7 @@ import {
   Strikethrough,
 } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
+import { colorKeys } from './ReaderMarkupBar';
 import { HIGHLIGHT_COLORS } from '../../libs/reader/highlight-manager';
 
 export interface ZenSelectionMenuProps {
@@ -118,7 +119,8 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                     e.stopPropagation();
                     onApplyHighlight(c.id);
                   }}
-                  title={`Highlight (${c.label})`}
+                  title={t(colorKeys[c.id])}
+                  aria-label={t(colorKeys[c.id])}
                   className="w-5 h-5 rounded-full hover:scale-125 transition-transform cursor-pointer shadow-xs border border-white/20"
                   style={{ backgroundColor: c.hex }}
                 />
@@ -139,7 +141,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                   }}
                   title={t('markupToolUnderline')}
                   className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-                >
+                 aria-label={t('markupToolUnderline')}>
                   <Underline className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -156,7 +158,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                   }}
                   title={t('markupToolStrike')}
                   className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-                >
+                 aria-label={t('markupToolStrike')}>
                   <Strikethrough className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -173,7 +175,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 title={t('addNoteAction')}
                 className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-              >
+               aria-label={t('addNoteAction')}>
                 <MessageSquare className="w-3.5 h-3.5" />
               </button>
 
@@ -189,7 +191,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 title={t('saveQuoteAction')}
                 className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-              >
+               aria-label={t('saveQuoteAction')}>
                 <Quote className="w-3.5 h-3.5" />
               </button>
 
@@ -205,7 +207,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 title={t('askQuestionAction')}
                 className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-              >
+               aria-label={t('askQuestionAction')}>
                 <HelpCircle className="w-3.5 h-3.5" />
               </button>
 
@@ -221,7 +223,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 title={t('dictionaryLookupBtn')}
                 className="p-1.5 rounded-xl hover:bg-canvas text-pale-sky-600 dark:text-pale-sky-400 hover:text-pale-sky-700 transition-colors cursor-pointer"
-              >
+               aria-label={t('dictionaryLookupBtn')}>
                 <BookA className="w-3.5 h-3.5" />
               </button>
 
@@ -237,7 +239,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 title={t('knowledgeCardOpen')}
                 className="p-1.5 rounded-xl hover:bg-canvas text-amber-600 dark:text-amber-400 transition-colors"
-              >
+               aria-label={t('knowledgeCardOpen')}>
                 <Library className="w-3.5 h-3.5" />
               </button>
 
@@ -253,7 +255,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 title={t('aiAssistantTitle')}
                 className="p-1.5 rounded-xl hover:bg-canvas text-indigo-500 hover:text-indigo-600 transition-colors cursor-pointer"
-              >
+               aria-label={t('aiAssistantTitle')}>
                 <Sparkles className="w-3.5 h-3.5" />
               </button>
 
@@ -269,7 +271,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 title={t('ttsReadAloudSelection')}
                 className="p-1.5 rounded-xl hover:bg-canvas text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors cursor-pointer"
-              >
+               aria-label={t('ttsReadAloudSelection')}>
                 <Headphones className="w-3.5 h-3.5" />
               </button>
 
@@ -285,7 +287,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 title={t('copyScholarlyCitation')}
                 className="p-1.5 rounded-xl hover:bg-canvas text-amber-600 dark:text-amber-400 hover:text-amber-700 transition-colors cursor-pointer"
-              >
+               aria-label={t('copyScholarlyCitation')}>
                 {copiedCitation ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
 
@@ -302,7 +304,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                   onClose();
                 }}
                 className="p-1 rounded-lg text-muted hover:text-main hover:bg-canvas cursor-pointer"
-              >
+               aria-label={t('close')}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -324,7 +326,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 onClick={() => setActiveTab('toolbar')}
                 className="text-muted hover:text-main cursor-pointer"
-              >
+               aria-label={t('close')}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -381,7 +383,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 onClick={() => setActiveTab('toolbar')}
                 className="text-muted hover:text-main cursor-pointer"
-              >
+               aria-label={t('close')}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -453,7 +455,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 onClick={() => setActiveTab('toolbar')}
                 className="text-muted hover:text-main cursor-pointer"
-              >
+               aria-label={t('close')}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>

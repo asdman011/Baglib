@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import {
   BookOpen,
   MoreHorizontal,
-  CheckCircle2,
 } from 'lucide-react';
 import { BookItem, ReadingStatus } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -115,20 +114,21 @@ export const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
         )}
 
         {/* Selection Checkbox in Cover Corner */}
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelect(book.id, e);
+        <input
+          type="checkbox"
+          checked={isSelected}
+          aria-checked={isSelected}
+          aria-label={t(isSelected ? 'deselectBook' : 'selectBook', { title: book.title })}
+          title={t(isSelected ? 'deselectBook' : 'selectBook', { title: book.title })}
+          onChange={() => {}}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleSelect(book.id, event);
           }}
-          className={`absolute top-2 end-2 z-20 size-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
-            isSelected
-              ? 'bg-primary border-primary text-primary-contrast shadow-sm opacity-100'
-              : 'border-border/70 bg-surface/90 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 hover:border-primary-text'
+          className={`absolute top-2 end-2 z-30 size-5 cursor-pointer rounded accent-primary transition-opacity focus:opacity-100 ${
+            isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
           }`}
-          title={t(isSelected ? 'batchDeselectAll' : 'batchSelectAllPage')}
-        >
-          {isSelected && <CheckCircle2 className="size-3.5 stroke-[3]" />}
-        </div>
+        />
 
         {/* Hover / Focus Overlay on Cover */}
         <div
@@ -146,7 +146,7 @@ export const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
             className="px-3 py-1.5 rounded-xl bg-primary text-primary-contrast hover:opacity-95 text-xs font-bold font-sans shadow-md flex items-center gap-1.5 cursor-pointer transition-transform active:scale-95"
             title={t('readBook')}
             data-card-read-button
-          >
+           aria-label={t('readBook')}>
             <BookOpen className="size-3.5" aria-hidden="true" />
             <span>{t('readBook')}</span>
           </button>

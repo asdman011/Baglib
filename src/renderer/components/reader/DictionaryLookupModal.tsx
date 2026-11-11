@@ -19,6 +19,7 @@ import type {
   DictionaryLookupCandidate,
 } from '../../../shared/types/dictionary';
 import { TranslationKey } from '../../translations';
+import { Modal } from '../ui/Modal';
 
 interface DictionaryLookupModalProps {
   isOpen: boolean;
@@ -128,12 +129,12 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t('dictionaryLookupTitle')}
+
+
+
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
     >
-      <div className="bg-surface text-main border border-subtle w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+      <Modal asChild open={true} onClose={onClose} label={t('dictionaryLookupTitle')}><div className="bg-surface text-main border border-subtle w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-subtle bg-canvas/50">
           <div className="flex items-center gap-3">
@@ -169,7 +170,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {isLoading ? (
-            <div className="py-12 flex flex-col items-center justify-center gap-3 text-muted">
+            <div className="py-12 flex flex-col items-center justify-center gap-3 text-muted" role="status">
               <Loader2 className="w-8 h-8 animate-spin text-pale-sky-500" />
               <p className="text-xs font-medium">{t('dictionarySearching')}</p>
             </div>
@@ -239,7 +240,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                           onClick={() => handleCopy(entry.definitionText, idx)}
                           title={t('dictionaryCopyDefinition')}
                           className="p-1 rounded-lg text-muted hover:text-main hover:bg-surface transition-colors cursor-pointer"
-                        >
+                         aria-label={t('dictionaryCopyDefinition')}>
                           {copiedIndex === idx ? (
                             <Check className="w-3.5 h-3.5 text-emerald-500" />
                           ) : (
@@ -337,7 +338,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
             {t('dictionaryClose')}
           </button>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

@@ -139,7 +139,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
             onClick={onClearFilters}
             className="flex items-center gap-1 text-[11px] font-medium text-accent hover:underline cursor-pointer"
             title={t('clearAllFilters')}
-          >
+           aria-label={t('clearAllFilters')}>
             <RotateCcw className="size-3" aria-hidden="true" />
             <span>{t('clearAllFilters')}</span>
           </button>
@@ -499,7 +499,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
                   }
                   title={sortState.direction === 'asc' ? t('sortDirectionAsc') : t('sortDirectionDesc')}
                   className="p-1.5 rounded-lg bg-surface border border-border text-primary-text hover:bg-canvas transition-colors cursor-pointer shrink-0"
-                >
+                 aria-label={sortState.direction === 'asc' ? t('sortDirectionAsc') : t('sortDirectionDesc')}>
                   {sortState.direction === 'asc' ? (
                     <ArrowUp className="size-3.5" aria-hidden="true" />
                   ) : (

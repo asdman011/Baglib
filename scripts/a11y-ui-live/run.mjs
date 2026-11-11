@@ -38,7 +38,7 @@ try {
   code = await new Promise((resolve, reject) => {
     const log = fs.openSync(path.join(evidence, 'electron.log'), 'a');
     const child = spawn(electron, ['scripts/a11y-ui-live/main.cjs', `--user-data-dir=${profile}`, '--disable-features=CalculateNativeWinOcclusion'], { env, stdio: ['ignore', log, log], windowsHide: true });
-    const timer = setTimeout(() => child.kill(), 1200000);
+    const timer = setTimeout(() => child.kill(), 2700000);
     child.once('error', reject);
     child.once('exit', status => { clearTimeout(timer); resolve(status ?? 1); });
   });

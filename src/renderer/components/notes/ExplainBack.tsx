@@ -1,8 +1,9 @@
 'use client';
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useRef, useState} from 'react';
 import {useWorkspace} from '../context/WorkspaceContext';
 import {VERDICTS, verdictKey, type ExplainCheck, type VerdictStatus} from '../../../shared/explain-back';
 import type {TranslationKey} from '../../translations';
+import { Modal } from '../ui/Modal';
 const errors:Record<string,TranslationKey>={
  'no-text-layer':'assistantNoTextLayer','passage-too-short':'explainBackShort','passage-too-long':'explainBackLong',
  'missing-source':'assistantMissingBookSource','missing-page':'assistantMissingBookPage','permission-denied':'assistantErrorRemote',
@@ -14,8 +15,7 @@ export function ExplainBack({target,label,initialCheck,onClose,onOpen}:{target:s
  const [summary,setSummary]=useState(initialCheck?.summary??''),[allowRemote,setAllowRemote]=useState(false),[busy,setBusy]=useState(false);
  const [check,setCheck]=useState<ExplainCheck|null>(initialCheck??null),[error,setError]=useState<string|null>(null),[saved,setSaved]=useState(false);
  const [decisions,setDecisions]=useState<(VerdictStatus|null)[]>(initialCheck?.verdicts.map(()=>null)??[]);
- const dialog=useRef<HTMLDivElement>(null),locked=useRef(false);
- useEffect(()=>{const previous=document.activeElement as HTMLElement;dialog.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus();return()=>previous?.focus();},[]);
+ const locked=useRef(false);
  async function run(){if(locked.current)return;locked.current=true;setBusy(true);setError(null);
   try{const r=await window.electronAPI.studyAssistant.explainBack({target,summary,allowRemote,language:lang==='ar'?'ar':'en'});
    if(r.ok){setCheck(r.data);setDecisions(r.data.verdicts.map(()=>null));window.dispatchEvent(new CustomEvent('baglib:practice-recorded'));}else setError(r.error);
@@ -28,10 +28,7 @@ export function ExplainBack({target,label,initialCheck,onClose,onOpen}:{target:s
  }
  const field='w-full rounded-lg border border-subtle bg-canvas p-2 text-start leading-loose';
  return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-2 sm:p-4" dir={dir}>
-  <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="explain-back-title" data-explain-back className="flex max-h-full w-full max-w-3xl flex-col rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onKeyDown={e=>{
-   if(e.key==='Escape'&&!busy){e.stopPropagation();onClose();}
-   if(e.key==='Tab'){const controls=dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),textarea:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]');if(!controls?.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
-  }}>
+  <Modal asChild open={true} onClose={() => { if (!busy) onClose(); }} label={t('explainBackTitle')}><div role="dialog" aria-modal="true" aria-labelledby="explain-back-title" data-explain-back className="flex max-h-full w-full max-w-3xl flex-col rounded-2xl border border-subtle bg-surface text-main shadow-2xl" >
    <header className="flex items-center gap-3 border-b border-subtle p-3"><h2 id="explain-back-title" className="font-bold">{t('explainBackTitle')}</h2><button type="button" disabled={busy} onClick={onClose} className="ms-auto rounded-lg border border-subtle px-3 py-1.5">{t('close')}</button></header>
    <div className="min-h-0 space-y-4 overflow-y-auto p-4 text-sm leading-loose">
     <p>{t('explainBackIntro')}</p><button type="button" data-explain-source={target} onClick={()=>onOpen(target)} className="max-w-full break-all text-start underline" dir="auto">{label}</button>
@@ -52,6 +49,6 @@ export function ExplainBack({target,label,initialCheck,onClose,onOpen}:{target:s
      {saved&&<p role="status" data-explain-saved>{t('explainBackSaved')}</p>}
     </section>}
    </div>
-  </div>
+  </div></Modal>
  </div>;
 }

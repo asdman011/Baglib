@@ -621,7 +621,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                 {reviewFailures.slice(0, visibleCount).map((file, index) => <p key={index} className="text-sm break-words" dir="auto">{file.fileName}</p>)}
               </div>}
               {isScanningDuplicates ? (
-                <div className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+                <div className="p-12 text-center flex flex-col items-center justify-center space-y-4" role="status">
                   <RefreshCw className="w-10 h-10 text-pale-sky-500 animate-spin" />
                   <p className="text-sm font-bold text-main">
                     {t('scanningDuplicatesProgress')}
@@ -893,7 +893,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
               {/* Progress Bar */}
               <div className="w-full max-w-md mx-auto space-y-2">
-                <div className="h-2.5 w-full bg-canvas border border-subtle rounded-full overflow-hidden p-0.5">
+                <div className="h-2.5 w-full bg-canvas border border-subtle rounded-full overflow-hidden p-0.5" role="progressbar" aria-label={t('importingLiveHeading')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressEvent?.progressPercentage || 0}>
                   <div
                     className="h-full bg-gradient-to-r from-pale-sky-500 to-emerald-500 rounded-full transition-all duration-300"
                     style={{ width: `${progressEvent?.progressPercentage || 0}%` }}

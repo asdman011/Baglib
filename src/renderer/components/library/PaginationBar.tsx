@@ -104,8 +104,8 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
           onClick={() => onPageChange(1)}
           disabled={currentPage <= 1}
           className="p-1.5 rounded-lg border border-border/50 bg-surface/50 text-foreground hover:bg-surface-raised disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-          title={isRtl ? 'الصفحة الأولى' : 'First Page'}
-        >
+          title={t('firstPage')}
+         aria-label={t('firstPage')}>
           {isRtl ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
         </button>
 
@@ -114,7 +114,7 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
           onClick={handlePrev}
           disabled={currentPage <= 1}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border/50 bg-surface/50 text-foreground hover:bg-surface-raised disabled:opacity-30 disabled:cursor-not-allowed transition-all font-medium"
-        >
+         aria-label={t('paginationPrevious')}>
           {isRtl ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           <span className="hidden sm:inline">{t('paginationPrevious')}</span>
         </button>
@@ -139,7 +139,7 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
                     ? 'bg-pale-sky-600 text-white shadow-sm shadow-pale-sky-500/20 font-semibold'
                     : 'bg-surface/50 text-foreground/80 hover:bg-surface-raised border border-border/40'
                 }`}
-              >
+               aria-label={t('paginationPage', { page: p })}>
                 {p}
               </button>
             );
@@ -151,7 +151,7 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
           onClick={handleNext}
           disabled={currentPage >= safeTotalPages}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border/50 bg-surface/50 text-foreground hover:bg-surface-raised disabled:opacity-30 disabled:cursor-not-allowed transition-all font-medium"
-        >
+         aria-label={t('paginationNext')}>
           <span className="hidden sm:inline">{t('paginationNext')}</span>
           {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
@@ -161,8 +161,8 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
           onClick={() => onPageChange(safeTotalPages)}
           disabled={currentPage >= safeTotalPages}
           className="p-1.5 rounded-lg border border-border/50 bg-surface/50 text-foreground hover:bg-surface-raised disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-          title={isRtl ? 'الصفحة الأخيرة' : 'Last Page'}
-        >
+          title={t('lastPage')}
+         aria-label={t('lastPage')}>
           {isRtl ? <ChevronsLeft className="w-4 h-4" /> : <ChevronsRight className="w-4 h-4" />}
         </button>
       </div>

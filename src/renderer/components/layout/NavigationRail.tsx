@@ -146,7 +146,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
               ? 'flex items-center gap-2 px-1 py-1 rounded-lg text-start focus-visible:outline-2 focus-visible:outline-focus min-w-0 flex-1'
               : 'w-8 h-8 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text mx-auto shrink-0 focus-visible:outline-2 focus-visible:outline-focus'
           }`}
-        >
+         aria-label={t('navDashboard')}>
           <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary-text/30 flex items-center justify-center text-primary-text shrink-0">
             <BookOpen className="w-4 h-4" />
           </div>

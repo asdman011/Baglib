@@ -34,6 +34,7 @@ import {
 } from '../../libs/export/annotation-exporter';
 import { AnkiConnectClient } from '../../libs/export/pkm-sync';
 import { TranslationKey } from '../../translations';
+import { Modal } from '../ui/Modal';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -253,7 +254,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       dir={direction}
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 font-sans animate-in fade-in duration-150"
     >
-      <div className="bg-surface border border-subtle w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <Modal asChild open={true} onClose={onClose} label={t('exportAnnotationsTitle')}><div className="bg-surface border border-subtle w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-subtle flex items-center justify-between bg-canvas/40 shrink-0">
           <div className="flex items-center gap-3">
@@ -272,7 +273,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           <button
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-          >
+           aria-label={t('close')}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -470,7 +471,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

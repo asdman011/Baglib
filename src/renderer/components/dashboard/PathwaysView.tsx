@@ -216,7 +216,7 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
   </ContextMenu>;
 
   return <>
-    <main className="min-w-0 space-y-4" data-pathway-steps>
+    <div className="min-w-0 space-y-4" data-pathway-steps>
       <Card className="space-y-3 p-4" data-pathway-header>
         <ContextMenu as="div" items={headerMenu} className="space-y-3 outline-none">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -291,7 +291,7 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
           <details><summary className="cursor-pointer text-sm">{t('pathwayAddResource')}</summary><div className="pt-2"><StudyLinkPicker notes={notes} onInsert={addResource} /></div></details>
         </div>
       </section>
-    </main>
+    </div>
 
     <aside className="min-w-0 space-y-3 @min-[44rem]:col-start-2 @min-[60rem]:col-start-3 @min-[60rem]:row-start-1" data-pathway-end aria-label={t('pathwayNotesLinksHeading')}>
       <Card className="space-y-3 p-4">
@@ -435,7 +435,7 @@ export function PathwaysView() {
         {startColumn}
         {tab === 'templates'
           ? <>
-              <main className="min-w-0" data-pathway-steps><Card className="p-4"><h3 className="mb-3 font-display text-base font-bold">{t('pathwayTemplatesTitle')}</h3><TemplateGallery templates={templates} onUse={template => void createFromTemplate(template)} onCustomize={customize} onRemove={removeTemplate} /></Card></main>
+              <div className="min-w-0" data-pathway-steps><Card className="p-4"><h3 className="mb-3 font-display text-base font-bold">{t('pathwayTemplatesTitle')}</h3><TemplateGallery templates={templates} onUse={template => void createFromTemplate(template)} onCustomize={customize} onRemove={removeTemplate} /></Card></div>
               <aside className="min-w-0 @min-[44rem]:col-start-2 @min-[60rem]:col-start-3 @min-[60rem]:row-start-1" data-pathway-end data-pathway-creator>
                 <Creator key={draft?.nonce ?? 'blank'} templates={templates} setTemplates={setTemplates} draft={draft} onError={fail} onCreated={pathway => { setFailed(false); setTab('all'); void load(pathway.id).catch(fail); }} />
               </aside>
@@ -443,7 +443,7 @@ export function PathwaysView() {
           : selected
             ? <Detail key={selected.id} pathway={selected} onChange={() => void load(selected.id).catch(fail)} onRemoved={() => void load(null).catch(fail)} onError={fail} onOpen={openItem} onSaveTemplate={pathway => void saveAsTemplate(pathway)} />
             : <>
-                <main className="min-w-0" data-pathway-steps><Card><EmptyState icon={<Route className="size-5" />} title={t('pathwayPick')} action={<Button size="sm" variant="secondary" icon={<Layers className={ico} />} onClick={() => setTab('templates')}>{t('pathwaysListEmptyAction')}</Button>} /></Card></main>
+                <div className="min-w-0" data-pathway-steps><Card><EmptyState icon={<Route className="size-5" />} title={t('pathwayPick')} action={<Button size="sm" variant="secondary" icon={<Layers className={ico} />} onClick={() => setTab('templates')}>{t('pathwaysListEmptyAction')}</Button>} /></Card></div>
                 <aside className="min-w-0 @min-[44rem]:col-start-2 @min-[60rem]:col-start-3 @min-[60rem]:row-start-1" data-pathway-end><Card><EmptyState icon={<Link2 className="size-5" />} title={t('pathwayNotesLinksEmptyDesc')} /></Card></aside>
               </>}
       </TabPanel>

@@ -663,7 +663,7 @@ export function PdfWorkstationTools({
                               type="button"
                               onClick={() => setPendingRedactionMarks(prev => prev.filter(m => m.id !== mark.id))}
                               className="text-danger hover:bg-danger/10 p-1 rounded cursor-pointer"
-                            >
+                             aria-label={t('delete')}>
                               <Trash2 size={12} />
                             </Button>
                           </div>

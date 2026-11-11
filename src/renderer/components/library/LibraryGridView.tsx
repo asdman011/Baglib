@@ -524,9 +524,9 @@ export const LibraryGridView: React.FC = () => {
   }, [filteredAndSortedBooks, safeCurrentPage, pageSize]);
 
   // Batch Selection Helpers with Shift-Click Range Support (Story 9: 9.6 / KEY-44)
-  const handleToggleSelectBook = (id: string, e?: React.SyntheticEvent) => {
+  const handleToggleSelectBook = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const isShift = (e as React.MouseEvent)?.shiftKey;
+    const isShift = e?.shiftKey;
 
     setSelectedBookIds((prev) => {
       const next = new Set(prev);
@@ -1108,7 +1108,7 @@ export const LibraryGridView: React.FC = () => {
                       ? 'bg-primary text-primary-contrast shadow-xs'
                       : 'text-text-muted hover:text-text'
                   }`}
-                >
+                 aria-label={t('viewGrid')}>
                   <LayoutGrid className="size-3.5" aria-hidden="true" />
                 </button>
                 <button
@@ -1123,7 +1123,7 @@ export const LibraryGridView: React.FC = () => {
                       ? 'bg-primary text-primary-contrast shadow-xs'
                       : 'text-text-muted hover:text-text'
                   }`}
-                >
+                 aria-label={t('viewList')}>
                   <List className="size-3.5" aria-hidden="true" />
                 </button>
               </div>
@@ -1142,7 +1142,7 @@ export const LibraryGridView: React.FC = () => {
                 icon={<SlidersHorizontal className="size-3 text-primary-text" />}
                 data-advanced-filter-button
                 title={t('advancedFiltersToggle')}
-              >
+               aria-label={t('advancedFiltersToggle')}>
                 <span className="hidden sm:inline">{t('advancedFiltersToggle')}</span>
                 {advancedFilterCount > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono bg-accent text-accent-contrast">
@@ -1226,7 +1226,7 @@ export const LibraryGridView: React.FC = () => {
                         ? 'bg-primary text-primary-contrast shadow-xs'
                         : 'text-text-muted hover:text-text'
                     }`}
-                  >
+                   aria-label={t('viewGrid')}>
                     <LayoutGrid className="size-3.5" aria-hidden="true" />
                   </button>
                   <button
@@ -1241,7 +1241,7 @@ export const LibraryGridView: React.FC = () => {
                         ? 'bg-primary text-primary-contrast shadow-xs'
                         : 'text-text-muted hover:text-text'
                     }`}
-                  >
+                   aria-label={t('viewList')}>
                     <List className="size-3.5" aria-hidden="true" />
                   </button>
                 </div>
@@ -1260,7 +1260,7 @@ export const LibraryGridView: React.FC = () => {
                   icon={<SlidersHorizontal className="size-3.5 text-primary-text" />}
                   data-advanced-filter-button
                   title={t('advancedFiltersToggle')}
-                >
+                 aria-label={t('advancedFiltersToggle')}>
                   <span className="hidden sm:inline">{t('advancedFiltersToggle')}</span>
                   {advancedFilterCount > 0 && (
                     <span className="ms-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono bg-accent text-accent-contrast">
@@ -1318,7 +1318,7 @@ export const LibraryGridView: React.FC = () => {
                   onClick={resetAllFilters}
                   className="text-[11px] font-medium text-accent hover:underline cursor-pointer ms-1.5"
                   title={t('clearAllFilters')}
-                >
+                 aria-label={t('clearAllFilters')}>
                   {t('clearAllFilters')}
                 </button>
               </div>
@@ -1519,6 +1519,7 @@ export const LibraryGridView: React.FC = () => {
                             checked={isAllPageSelected}
                             onChange={handleToggleSelectAllOnPage}
                             className="w-3.5 h-3.5 accent-primary rounded cursor-pointer"
+                            aria-label={isAllPageSelected ? t('batchDeselectAll') : t('batchSelectAllPage')}
                             title={isAllPageSelected ? t('batchDeselectAll') : t('batchSelectAllPage')}
                           />
                         </th>
@@ -1649,7 +1650,10 @@ export const LibraryGridView: React.FC = () => {
                               <input
                                 type="checkbox"
                                 checked={isSelected}
-                                onChange={(e) => handleToggleSelectBook(book.id, e)}
+                                onChange={() => {}}
+                                onClick={(event) => handleToggleSelectBook(book.id, event)}
+                                aria-checked={isSelected}
+                                aria-label={t(isSelected ? 'deselectBook' : 'selectBook', { title: book.title })}
                                 className="w-3.5 h-3.5 accent-primary rounded cursor-pointer"
                               />
                             </td>
@@ -1746,7 +1750,7 @@ export const LibraryGridView: React.FC = () => {
                                     <option value="completed">{t('statusCompleted') || 'مكتمل'}</option>
                                   </select>
                                   {readingStatus === 'reading' && typeof book.readingProgress === 'number' && (
-                                    <div className="w-full bg-canvas rounded-full h-1 overflow-hidden border border-subtle">
+                                    <div className="w-full bg-canvas rounded-full h-1 overflow-hidden border border-subtle" role="progressbar" aria-label={book.title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.max(0, book.readingProgress))}>
                                       <div
                                         className="bg-primary h-full rounded-full transition-all duration-300"
                                         style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
@@ -1828,7 +1832,7 @@ export const LibraryGridView: React.FC = () => {
                                           onClick={() => setQuickReturnBook(book)}
                                           title={t('returnBookBtn')}
                                           className="px-2 py-1 rounded-xl bg-evergreen-500/15 text-evergreen-600 dark:text-evergreen-400 text-[10px] font-bold hover:bg-evergreen-500/25 transition-colors cursor-pointer"
-                                        >
+                                         aria-label={t('returnBookBtn')}>
                                           {t('returnBookBtn')}
                                         </button>
                                       );
@@ -1839,7 +1843,7 @@ export const LibraryGridView: React.FC = () => {
                                           onClick={() => setQuickLendBook(book)}
                                           title={t('lendBookBtn')}
                                           className="px-2 py-1 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold hover:bg-amber-500/20 transition-colors cursor-pointer"
-                                        >
+                                         aria-label={t('lendBookBtn')}>
                                           {t('lendBookBtn')}
                                         </button>
                                       );
@@ -1851,7 +1855,7 @@ export const LibraryGridView: React.FC = () => {
                                     onClick={() => handleSafeOpenBook(book)}
                                     title={t('readBook')}
                                     className="px-2.5 py-1 rounded-xl bg-primary text-primary-contrast font-bold text-xs hover:opacity-90 transition-all flex items-center gap-1 cursor-pointer"
-                                  >
+                                   aria-label={t('readBook')}>
                                     <BookOpen className="w-3.5 h-3.5" />
                                     <span>{t('readBook')}</span>
                                   </button>

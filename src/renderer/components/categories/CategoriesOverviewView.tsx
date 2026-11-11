@@ -27,6 +27,215 @@ import type { CategoryNode, CategoryCreateInput, CategoryUpdateInput, CategoryDe
 import type { TagWithCount } from '../../../shared/types/tag';
 import { CategoryCascader } from './CategoryCascader';
 import { getTagColorClass } from '../tags/TagEditor';
+import { Modal } from '../ui/Modal';
+
+// Recursive Category Item Component
+const CategoryRow: React.FC<{
+  node: CategoryNode;
+  siblings: CategoryNode[];
+  index: number;
+  depth?: number;
+  onCreate: (node?: CategoryNode) => void;
+  onEdit: (node: CategoryNode) => void;
+  onDelete: (node: CategoryNode) => void;
+  onMove: (siblings: CategoryNode[], index: number, direction: 'up' | 'down') => void;
+}> = ({ node, siblings, index, depth = 0, onCreate, onEdit, onDelete, onMove }) => {
+  const { lang, dir, t, setActiveLibraryCategory, setViewMode } = useWorkspace();
+  const [isExpanded, setIsExpanded] = useState(true);
+  const hasChildren = node.children && node.children.length > 0;
+  const name = lang === 'ar' ? node.nameAr : (node.nameEn || node.nameAr);
+  const secondaryName = lang === 'ar' ? node.nameEn : node.nameAr;
+
+  const ArrowIcon = dir === 'rtl' ? ChevronLeft : ChevronRight;
+
+  return (
+    <div className="flex flex-col">
+      <div
+        className={`flex items-center justify-between gap-3 py-2 px-3 rounded-2xl transition-all select-none group border
+          ${
+            depth === 0
+              ? 'bg-surface/90 border-subtle shadow-sm hover:border-pale-sky-500/50 mb-1.5'
+              : 'hover:bg-subtle/50 border-transparent hover:border-subtle/40'
+          }`}
+        style={{ marginInlineStart: depth > 0 ? `${depth * 16}px` : '0px' }}
+      >
+        {/* Main Info & Expand Toggle */}
+        <div
+          className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer"
+          onClick={() => {
+            setActiveLibraryCategory(node.id);
+            setViewMode('library');
+          }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasChildren) setIsExpanded(!isExpanded);
+            }}
+            aria-label={hasChildren ? t(isExpanded ? 'categoryCollapse' : 'categoryExpand', { name }) : name}
+            aria-expanded={hasChildren ? isExpanded : undefined}
+            disabled={!hasChildren}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+              depth === 0
+                ? 'bg-pale-sky-500/10 text-pale-sky-500 hover:bg-pale-sky-500/20'
+                : 'bg-subtle/50 text-muted hover:bg-pale-sky-500/15 hover:text-pale-sky-500'
+            }`}
+          >
+            {hasChildren ? (
+              isExpanded ? (
+                <FolderOpen className="w-4 h-4" />
+              ) : (
+                <Folder className="w-4 h-4" />
+              )
+            ) : (
+              <Layers className="w-4 h-4 opacity-70" />
+            )}
+          </button>
+
+          <div className="flex items-center gap-2 truncate">
+            <span className={`font-semibold ${depth === 0 ? 'text-sm' : 'text-xs'} text-main truncate`}>
+              {name}
+            </span>
+            {secondaryName && secondaryName !== name && (
+              <span className="text-[11px] text-muted truncate hidden sm:inline opacity-70">
+                ({secondaryName})
+              </span>
+            )}
+          </div>
+
+          {/* Work Count Badges */}
+          <div className="flex items-center gap-1.5 shrink-0 ms-1">
+            {(node.totalWorkCount !== undefined ? node.totalWorkCount : 0) > 0 && (
+              <span
+                title={t('categoryTotalCount', { count: node.totalWorkCount ?? 0 })}
+                className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pale-sky-500/15 text-pale-sky-500"
+              >
+                {node.totalWorkCount}
+              </span>
+            )}
+            {hasChildren && node.directWorkCount !== undefined && node.directWorkCount > 0 && (
+              <span
+                title={t('categoryDirectCount', { count: node.directWorkCount })}
+                className="px-1.5 py-0.5 rounded-full text-[10px] bg-subtle text-muted hidden md:inline"
+              >
+                {node.directWorkCount} {t('bookSingle')}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Action Buttons & Reorder Controls */}
+        <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
+          {/* Reorder Buttons */}
+          {siblings.length > 1 && (
+            <div className="flex items-center gap-0.5 bg-subtle/40 rounded-lg p-0.5 border border-subtle/50">
+              <button
+                type="button"
+                disabled={index === 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMove(siblings, index, 'up');
+                }}
+                title={t('categoryMoveUp')}
+                className="p-1 hover:text-pale-sky-500 disabled:opacity-30 disabled:hover:text-inherit rounded"
+               aria-label={t('categoryMoveUp')}>
+                <ArrowUp className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                disabled={index === siblings.length - 1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMove(siblings, index, 'down');
+                }}
+                title={t('categoryMoveDown')}
+                className="p-1 hover:text-pale-sky-500 disabled:opacity-30 disabled:hover:text-inherit rounded"
+               aria-label={t('categoryMoveDown')}>
+                <ArrowDown className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Add Child Category */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCreate(node);
+            }}
+            title={t('addCategory')}
+            className="p-1.5 text-muted hover:text-pale-sky-500 hover:bg-pale-sky-500/10 rounded-lg transition-colors"
+           aria-label={t('addCategory')}>
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Edit Category */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(node);
+            }}
+            title={t('editCategory')}
+            className="p-1.5 text-muted hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
+           aria-label={t('editCategory')}>
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Delete Category */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(node);
+            }}
+            title={t('deleteCategory')}
+            className="p-1.5 text-muted hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+           aria-label={t('deleteCategory')}>
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Expand / Collapse Chevron */}
+          {hasChildren && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(!isExpanded);
+              }}
+              aria-label={t(isExpanded ? 'categoryCollapse' : 'categoryExpand', { name })}
+              aria-expanded={isExpanded}
+              className="p-1 text-muted hover:text-main rounded-md"
+            >
+              {isExpanded ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ArrowIcon className="w-4 h-4" />
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Children Sub-tree */}
+      {isExpanded && hasChildren && (
+        <div className="flex flex-col gap-1 border-s-2 border-subtle/30 ms-4 ps-2 mb-1">
+          {node.children.map((child, cIdx) => (
+            <CategoryRow
+              onCreate={onCreate} onEdit={onEdit} onDelete={onDelete} onMove={onMove}
+              key={child.id}
+              node={child}
+              siblings={node.children}
+              index={cIdx}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const CategoriesOverviewView: React.FC = () => {
   const {
@@ -255,203 +464,10 @@ export const CategoriesOverviewView: React.FC = () => {
     }
   };
 
-  // Recursive Category Item Component
-  const CategoryRow: React.FC<{
-    node: CategoryNode;
-    siblings: CategoryNode[];
-    index: number;
-    depth?: number;
-  }> = ({ node, siblings, index, depth = 0 }) => {
-    const [isExpanded, setIsExpanded] = useState(true);
-    const hasChildren = node.children && node.children.length > 0;
-    const name = lang === 'ar' ? node.nameAr : (node.nameEn || node.nameAr);
-    const secondaryName = lang === 'ar' ? node.nameEn : node.nameAr;
-
-    const ArrowIcon = dir === 'rtl' ? ChevronLeft : ChevronRight;
-
-    return (
-      <div className="flex flex-col">
-        <div
-          className={`flex items-center justify-between gap-3 py-2 px-3 rounded-2xl transition-all select-none group border
-            ${
-              depth === 0
-                ? 'bg-surface/90 border-subtle shadow-sm hover:border-pale-sky-500/50 mb-1.5'
-                : 'hover:bg-subtle/50 border-transparent hover:border-subtle/40'
-            }`}
-          style={{ marginInlineStart: depth > 0 ? `${depth * 16}px` : '0px' }}
-        >
-          {/* Main Info & Expand Toggle */}
-          <div
-            className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer"
-            onClick={() => {
-              setActiveLibraryCategory(node.id);
-              setViewMode('library');
-            }}
-          >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (hasChildren) setIsExpanded(!isExpanded);
-              }}
-              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                depth === 0
-                  ? 'bg-pale-sky-500/10 text-pale-sky-500 hover:bg-pale-sky-500/20'
-                  : 'bg-subtle/50 text-muted hover:bg-pale-sky-500/15 hover:text-pale-sky-500'
-              }`}
-            >
-              {hasChildren ? (
-                isExpanded ? (
-                  <FolderOpen className="w-4 h-4" />
-                ) : (
-                  <Folder className="w-4 h-4" />
-                )
-              ) : (
-                <Layers className="w-4 h-4 opacity-70" />
-              )}
-            </button>
-
-            <div className="flex items-center gap-2 truncate">
-              <span className={`font-semibold ${depth === 0 ? 'text-sm' : 'text-xs'} text-main truncate`}>
-                {name}
-              </span>
-              {secondaryName && secondaryName !== name && (
-                <span className="text-[11px] text-muted truncate hidden sm:inline opacity-70">
-                  ({secondaryName})
-                </span>
-              )}
-            </div>
-
-            {/* Work Count Badges */}
-            <div className="flex items-center gap-1.5 shrink-0 ms-1">
-              {(node.totalWorkCount !== undefined ? node.totalWorkCount : 0) > 0 && (
-                <span
-                  title={t('categoryTotalCount', { count: node.totalWorkCount ?? 0 })}
-                  className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pale-sky-500/15 text-pale-sky-500"
-                >
-                  {node.totalWorkCount}
-                </span>
-              )}
-              {hasChildren && node.directWorkCount !== undefined && node.directWorkCount > 0 && (
-                <span
-                  title={t('categoryDirectCount', { count: node.directWorkCount })}
-                  className="px-1.5 py-0.5 rounded-full text-[10px] bg-subtle text-muted hidden md:inline"
-                >
-                  {node.directWorkCount} {t('bookSingle')}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Action Buttons & Reorder Controls */}
-          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
-            {/* Reorder Buttons */}
-            {siblings.length > 1 && (
-              <div className="flex items-center gap-0.5 bg-subtle/40 rounded-lg p-0.5 border border-subtle/50">
-                <button
-                  type="button"
-                  disabled={index === 0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMoveCategory(siblings, index, 'up');
-                  }}
-                  title={t('categoryMoveUp')}
-                  className="p-1 hover:text-pale-sky-500 disabled:opacity-30 disabled:hover:text-inherit rounded"
-                >
-                  <ArrowUp className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  disabled={index === siblings.length - 1}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMoveCategory(siblings, index, 'down');
-                  }}
-                  title={t('categoryMoveDown')}
-                  className="p-1 hover:text-pale-sky-500 disabled:opacity-30 disabled:hover:text-inherit rounded"
-                >
-                  <ArrowDown className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-
-            {/* Add Child Category */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                openCreateChildModal(node);
-              }}
-              title={t('addCategory')}
-              className="p-1.5 text-muted hover:text-pale-sky-500 hover:bg-pale-sky-500/10 rounded-lg transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Edit Category */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                openEditModal(node);
-              }}
-              title={t('editCategory')}
-              className="p-1.5 text-muted hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Delete Category */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeletingCategory(node);
-                setDeleteStrategy('orphan');
-                setDeleteReassignTargetId(null);
-              }}
-              title={t('deleteCategory')}
-              className="p-1.5 text-muted hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Expand / Collapse Chevron */}
-            {hasChildren && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsExpanded(!isExpanded);
-                }}
-                className="p-1 text-muted hover:text-main rounded-md"
-              >
-                {isExpanded ? (
-                  <ChevronDown className="w-4 h-4" />
-                ) : (
-                  <ArrowIcon className="w-4 h-4" />
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Children Sub-tree */}
-        {isExpanded && hasChildren && (
-          <div className="flex flex-col gap-1 border-s-2 border-subtle/30 ms-4 ps-2 mb-1">
-            {node.children.map((child, cIdx) => (
-              <CategoryRow
-                key={child.id}
-                node={child}
-                siblings={node.children}
-                index={cIdx}
-                depth={depth + 1}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    );
+  const handleRequestDeleteCategory = (node: CategoryNode) => {
+    setDeletingCategory(node);
+    setDeleteStrategy('orphan');
+    setDeleteReassignTargetId(null);
   };
 
   return (
@@ -529,7 +545,7 @@ export const CategoriesOverviewView: React.FC = () => {
               type="button"
               onClick={() => setSearchQuery('')}
               className="absolute top-2.5 end-3 text-muted hover:text-main"
-            >
+             aria-label={t('searchClearQuery')}>
               <X className="w-4 h-4" />
             </button>
           )}
@@ -558,6 +574,7 @@ export const CategoriesOverviewView: React.FC = () => {
               <div className="space-y-2">
                 {displayedCategoryTree.map((rootNode, idx) => (
                   <CategoryRow
+                    onCreate={openCreateChildModal} onEdit={openEditModal} onDelete={handleRequestDeleteCategory} onMove={handleMoveCategory}
                     key={rootNode.id}
                     node={rootNode}
                     siblings={displayedCategoryTree}
@@ -607,7 +624,7 @@ export const CategoriesOverviewView: React.FC = () => {
                           }}
                           title={t('renameTag')}
                           className="p-1 hover:text-amber-500 hover:bg-subtle rounded-md transition-colors"
-                        >
+                         aria-label={t('renameTag')}>
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
@@ -619,7 +636,7 @@ export const CategoriesOverviewView: React.FC = () => {
                           }}
                           title={t('mergeTags')}
                           className="p-1 hover:text-indigo-400 hover:bg-subtle rounded-md transition-colors"
-                        >
+                         aria-label={t('mergeTags')}>
                           <GitMerge className="w-3.5 h-3.5" />
                         </button>
                         <button
@@ -627,7 +644,7 @@ export const CategoriesOverviewView: React.FC = () => {
                           onClick={() => setDeletingTag(tag)}
                           title={t('deleteTag')}
                           className="p-1 hover:text-rose-500 hover:bg-subtle rounded-md transition-colors"
-                        >
+                         aria-label={t('deleteTag')}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -647,7 +664,7 @@ export const CategoriesOverviewView: React.FC = () => {
       {/* 1. Create / Edit Category Modal */}
       {categoryModalMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-surface border border-subtle rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <Modal asChild open={true} onClose={() => setCategoryModalMode(null)} label={t(categoryModalMode === 'create' ? 'addCategory' : 'editCategory')}><div className="bg-surface border border-subtle rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-subtle">
               <h2 className="text-lg font-display font-bold text-main flex items-center gap-2">
                 <Folder className="w-5 h-5 text-pale-sky-500" />
@@ -657,7 +674,7 @@ export const CategoriesOverviewView: React.FC = () => {
                 type="button"
                 onClick={() => setCategoryModalMode(null)}
                 className="text-muted hover:text-main p-1 rounded-lg"
-              >
+               aria-label={t('close')}>
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -725,14 +742,14 @@ export const CategoriesOverviewView: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
+          </div></Modal>
         </div>
       )}
 
       {/* 2. Delete Category with Strategies Modal */}
       {deletingCategory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-surface border border-subtle rounded-3xl w-full max-w-lg p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <Modal asChild open={true} onClose={() => setDeletingCategory(null)} label={t('deleteCategory')}><div className="bg-surface border border-subtle rounded-3xl w-full max-w-lg p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-3 text-rose-500 pb-3 border-b border-subtle">
               <AlertTriangle className="w-6 h-6" />
               <h2 className="text-base font-bold">
@@ -822,14 +839,14 @@ export const CategoriesOverviewView: React.FC = () => {
                 {t('confirmDeleteCategory')}
               </button>
             </div>
-          </div>
+          </div></Modal>
         </div>
       )}
 
       {/* 3. Rename Tag Modal */}
       {renamingTag && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-surface border border-subtle rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <Modal asChild open={true} onClose={() => setRenamingTag(null)} label={t('renameTagTitle')}><div className="bg-surface border border-subtle rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <h3 className="text-base font-bold text-main flex items-center gap-2 pb-3 border-b border-subtle">
               <Edit2 className="w-4 h-4 text-amber-500" />
               <span>{t('renameTagTitle')}</span>
@@ -871,14 +888,14 @@ export const CategoriesOverviewView: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
+          </div></Modal>
         </div>
       )}
 
       {/* 4. Merge Tag Modal */}
       {mergingTag && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-surface border border-subtle rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <Modal asChild open={true} onClose={() => setMergingTag(null)} label={t('mergeTagsTitle', { name: mergingTag.name })}><div className="bg-surface border border-subtle rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <h3 className="text-base font-bold text-main flex items-center gap-2 pb-3 border-b border-subtle">
               <GitMerge className="w-4 h-4 text-indigo-400" />
               <span>{t('mergeTagsTitle', { name: mergingTag.name })}</span>
@@ -929,14 +946,14 @@ export const CategoriesOverviewView: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
+          </div></Modal>
         </div>
       )}
 
       {/* 5. Delete Tag Confirmation Modal */}
       {deletingTag && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-surface border border-subtle rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <Modal asChild open={true} onClose={() => setDeletingTag(null)} label={t('delete')}><div className="bg-surface border border-subtle rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <h3 className="text-base font-bold text-rose-500 flex items-center gap-2 pb-3 border-b border-subtle">
               <Trash2 className="w-4 h-4" />
               <span>{t('confirmDeleteTagTitle', { name: deletingTag.name })}</span>
@@ -962,7 +979,7 @@ export const CategoriesOverviewView: React.FC = () => {
                 {t('deleteTag')}
               </button>
             </div>
-          </div>
+          </div></Modal>
         </div>
       )}
     </div>

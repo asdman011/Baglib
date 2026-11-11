@@ -22,6 +22,7 @@ import {
   sanitizePdfExtractedText,
   type ReflowParagraph,
 } from '../../../shared/pdf-accessibility-utils';
+import { Modal } from '../ui/Modal';
 
 interface PdfReflowModalProps {
   isOpen: boolean;
@@ -238,16 +239,6 @@ export function PdfReflowModal({
   };
 
   // Keyboard navigation: Escape to close
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -255,13 +246,13 @@ export function PdfReflowModal({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t('pdfA11yReflowTitle')}
+
+
+
       data-pdf-reflow-modal
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4 backdrop-blur-sm animate-in fade-in duration-150"
     >
-      <div className="flex h-full max-h-[92vh] w-full max-w-4xl flex-col rounded-2xl border border-subtle bg-surface text-main shadow-2xl overflow-hidden">
+      <Modal asChild open={true} onClose={handleClose} label={t('pdfA11yReflowTitle')}><div className="flex h-full max-h-[92vh] w-full max-w-4xl flex-col rounded-2xl border border-subtle bg-surface text-main shadow-2xl overflow-hidden">
         {/* Header Bar */}
         <div className="flex shrink-0 items-center justify-between border-b border-subtle px-3 py-2.5 sm:px-4">
           <div className="flex items-center gap-2 min-w-0">
@@ -378,7 +369,7 @@ export function PdfReflowModal({
               onClick={() => handlePageChange(currentPage - 1)}
               className="rounded-lg p-1 text-muted hover:bg-surface hover:text-main disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-emerald-500 rtl:rotate-180"
               title={t('pdfNavPrevious')}
-            >
+             aria-label={t('pdfNavPrevious')}>
               <ChevronLeft size={16} />
             </button>
 
@@ -394,7 +385,7 @@ export function PdfReflowModal({
               onClick={() => handlePageChange(currentPage + 1)}
               className="rounded-lg p-1 text-muted hover:bg-surface hover:text-main disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-emerald-500 rtl:rotate-180"
               title={t('pdfNavNext')}
-            >
+             aria-label={t('pdfNavNext')}>
               <ChevronRight size={16} />
             </button>
           </div>
@@ -470,7 +461,7 @@ export function PdfReflowModal({
             })
           )}
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 }

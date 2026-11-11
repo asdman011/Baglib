@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CopyCheck, X, BookOpen, Copy } from 'lucide-react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import type { QuranSimilarAyah } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 
@@ -41,9 +42,7 @@ export function QuranSimilarAyahsDrawer({
   fetchAyahText,
 }: QuranSimilarAyahsDrawerProps) {
   const [verseTexts, setVerseTexts] = useState<Record<string, string>>({});
-  const drawerRef = useRef<HTMLElement>(null);
-  const closeRef = useRef(onClose);
-  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  const drawerRef = useDialogFocus(true, onClose);
 
   useEffect(() => {
     let alive = true;
@@ -87,18 +86,14 @@ export function QuranSimilarAyahsDrawer({
   return (
     <aside
       ref={drawerRef}
+      tabIndex={-1}
+      data-ui-dialog="sheet"
       role="dialog"
       aria-modal="true"
       aria-label={t('quranSimilarAyahs')}
       dir={dir}
       data-quran-similar-drawer
       className="absolute inset-y-0 end-0 z-50 w-full sm:w-96 md:w-[460px] bg-surface/95 backdrop-blur-md border-s border-subtle shadow-2xl flex flex-col transition-transform duration-300"
-      onKeyDown={e => {
-        if (e.key === 'Escape') {
-          e.stopPropagation();
-          closeRef.current();
-        }
-      }}
     >
       {/* Drawer Header */}
       <div className="flex items-center justify-between p-4 border-b border-subtle">
@@ -223,7 +218,7 @@ export function QuranSimilarAyahsDrawer({
                   onClick={() => onNavigateAyah(item.surah, item.ayah)}
                   className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-medium hover:underline py-1"
                   title={t('quranJumpToSimilarAyah')}
-                >
+                 aria-label={t('quranJumpToSimilarAyah')}>
                   <BookOpen className="size-3.5" />
                   <span>{t('quranJumpToSimilarAyah')}</span>
                 </button>

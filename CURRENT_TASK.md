@@ -1,3 +1,29 @@
+## KEY-298 part 2 verified - 2026-11-11, Codex then Claude Code
+
+Codex implemented part 2. It hit its usage limit at 14:33 before the final matrix and publication, and Claude Code finished it in place (takeover rule).
+
+What part 2 adds, on top of part 1 (b36ce02):
+- The remaining 40 dialogs and overlays now use the shared Modal/Sheet + useDialogFocus behaviour (focus trap, Esc, focus return). This covers the library (bulk actions, lend, return, metadata audit, online hub, trash), the reader (dictionary, export, OCR inspector, accessibility, reflow, paragraph, RSVP, TOC import, study-draft editor), audiobook, web clipper, OPDS, Stirling overlays, the categories dialogs (CategoryRow moved out of its parent so rows no longer re-mount), the curriculum exam, today settings, ExplainBack, the knowledge graph and the study assistant. QuranAyahInspector and QuranSimilarAyahsDrawer keep their floating nonmodal mode.
+- A whole-app pass that gives icon-only buttons translated labels, adds progressbar/status semantics and landmark fixes (for example SrsReviewScreen's inner main becomes a div), and adds missing shortcuts to the registry.
+- KEY-44 fixes 1-3:
+  - list-view Shift-range selection now uses the click event;
+  - the grid selection box is a real checkbox, keyboard reachable, with a per-book label «تحديد {title}» / "Select {title}";
+  - the list checkboxes are labelled.
+
+Claude's fix before publishing: the a11y-ui-live study-draft step waited for text on page 1. The smallest English text-layer PDF opens on an image-only cover, so the step now moves forward until a page has text.
+
+Verification:
+- tsc passes; focused tests pass: a11y-foundations 12/12, translation keys.
+- a11y-ui-live passed in ar/en, light/dark, 1280/480: 560 dialog checks (accessible name, trap, Esc, focus return, visible focus ring, reduced motion), all passing, plus 16 grid and list selection checks (Shift range, Space toggle, localized labels), all passing.
+- No unnamed controls, no renderer errors, and one window.
+- The profile was removed and the originals were unchanged.
+- Full suite 1843/1843.
+- Evidence: `.baglib-data/KEY-298-evidence/2026-11-11T12-42-29-009Z/`.
+
+Not included: KEY-44 item 4 (a bulk shelf action) is still open.
+
+Files: the 87 KEY-298 part 2 files (src/renderer components, translations.ts, shortcuts.ts, playground page, scripts/a11y-ui-live, tests/ui/a11y-foundations.test.ts), CURRENT_TASK.md.
+
 ## KEY-234 confidence rule - 2026-11-11, Claude Code (user decision: "Yes, require it")
 
 The review screen now needs a confidence choice before Reveal for recall cards, as SrsReviewPanel already did. Before Reveal, keys 1-4 choose confidence and never grade. The Reveal button and Space stay inactive until a choice is made. Every review therefore records its practice attempt; before, the service rejected confidence 0 and the record was silently lost. srs-live chooses a confidence first.

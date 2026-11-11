@@ -1076,7 +1076,7 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
           />
         </div>
       ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center text-muted gap-3 select-none">
+        <div className="w-full h-full flex flex-col items-center justify-center text-muted gap-3 select-none" role="status">
           <Loader2 className="w-8 h-8 animate-spin text-pale-sky-500" />
           <span className="text-xs font-bold tracking-wide">{t('loadingNativePdf')}</span>
         </div>

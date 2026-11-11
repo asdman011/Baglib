@@ -279,7 +279,7 @@ export function PdfToolDirectory({
                       onClick={ocrIntegration.onToggleInspector}
                       title={t('ocrReviewUncertainDesc')}
                       className="text-xs"
-                    >
+                     aria-label={t('ocrReviewUncertainDesc')}>
                       {t('ocrReviewUncertainWords')}
                     </Button>
 
@@ -341,7 +341,7 @@ export function PdfToolDirectory({
                         }
                       }}
                       title={[t(tool.descriptionKey), disabledReason].filter(Boolean).join(' · ')}
-                    >
+                     aria-label={[t(tool.descriptionKey), disabledReason].filter(Boolean).join(' · ')}>
                       <div className="flex items-start gap-2.5">
                         <div className="p-2 rounded-lg bg-canvas text-primary-text border border-border shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
                           {renderIcon(tool.iconName, 15)}

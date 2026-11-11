@@ -39,6 +39,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
 import { formatCoverUrl } from '../../utils/file-path-helper';
 import { useMetadataLookup, CandidateMetadataItem } from '../../hooks/useMetadataLookup';
+import { Modal } from '../ui/Modal';
 
 export interface MetadataAuditModalProps {
   isOpen: boolean;
@@ -674,7 +675,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-5xl max-h-[calc(100dvh-1.5rem)] flex flex-col rounded-3xl bg-surface border border-subtle shadow-2xl overflow-hidden font-sans text-main">
+      <Modal asChild open={true} onClose={onClose} label={t('auditMetadataTitle')}><div className="relative w-full max-w-5xl max-h-[calc(100dvh-1.5rem)] flex flex-col rounded-3xl bg-surface border border-subtle shadow-2xl overflow-hidden font-sans text-main">
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-subtle bg-surface-raised/40">
           <div className="flex items-center gap-3">
@@ -700,7 +701,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
             type="button"
             onClick={onClose}
             className="w-9 h-9 rounded-xl bg-canvas border border-subtle text-muted hover:text-main hover:bg-surface flex items-center justify-center transition-colors cursor-pointer"
-          >
+           aria-label={t('close')}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -746,7 +747,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                     onClick={handleRescanFiles}
                     title={t('rescanFilesFirstDesc')}
                     className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 transition-all cursor-pointer shadow-sm"
-                  >
+                   aria-label={t('rescanFilesFirstDesc')}>
                     <RefreshCw className={`w-3.5 h-3.5 ${isRescanning ? 'animate-spin' : ''}`} />
                     <span>{t('rescanFilesFirst')}</span>
                   </button>
@@ -758,7 +759,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                     onClick={handleAutoEnrichAll}
                     title={t('autoEnrichAllDesc')}
                     className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500 text-white font-bold text-xs hover:bg-amber-600 disabled:opacity-50 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
-                  >
+                   aria-label={t('autoEnrichAllDesc')}>
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>{t('autoEnrichAll')}</span>
                   </button>
@@ -770,7 +771,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                     onClick={() => handleStartReviewOneByOne(0)}
                     title={t('reviewOneByOneDesc')}
                     className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-pale-sky-500 text-white font-bold text-xs hover:bg-pale-sky-600 disabled:opacity-50 shadow-md shadow-pale-sky-500/20 transition-all cursor-pointer"
-                  >
+                   aria-label={t('reviewOneByOneDesc')}>
                     <ListOrdered className="w-3.5 h-3.5" />
                     <span>{t('reviewOneByOne')}</span>
                   </button>
@@ -868,7 +869,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                     <button
                       onClick={() => setSearchFilter('')}
                       className="absolute top-1/2 -translate-y-1/2 end-2 text-muted hover:text-main cursor-pointer"
-                    >
+                     aria-label={t('searchClearQuery')}>
                       <X className="w-3 h-3" />
                     </button>
                   )}
@@ -1162,7 +1163,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                     {t('candidatesModalTitle')} ({reviewLookup.candidates.length})
                   </h4>
                   {reviewLookup.status === 'searching' && (
-                    <div className="flex items-center gap-1.5 text-xs text-pale-sky-500 font-semibold">
+                    <div className="flex items-center gap-1.5 text-xs text-pale-sky-500 font-semibold" role="status">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       <span>{t('candidateSearchingDeeper')}</span>
                     </div>
@@ -1170,7 +1171,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                 </div>
 
                 {reviewLookup.status === 'searching' ? (
-                  <div className="p-8 rounded-2xl bg-canvas border border-subtle flex flex-col items-center justify-center text-center space-y-3">
+                  <div className="p-8 rounded-2xl bg-canvas border border-subtle flex flex-col items-center justify-center text-center space-y-3" role="status">
                     <Loader2 className="w-8 h-8 animate-spin text-pale-sky-500" />
                     <p className="text-xs text-muted">{t('candidateSearchingDeeper')}</p>
                   </div>
@@ -1268,7 +1269,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
             </div>
           </div>
         )}
-      </div>
+      </div></Modal>
     </div>
   );
 };

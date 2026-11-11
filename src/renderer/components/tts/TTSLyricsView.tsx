@@ -65,7 +65,7 @@ export const TTSLyricsView: React.FC<TTSLyricsViewProps> = ({
         <button
           onClick={onClose}
           className="p-2 rounded-xl hover:bg-canvas text-muted hover:text-main border border-subtle transition-colors cursor-pointer"
-        >
+         aria-label={t('close')}>
           <X className="w-4 h-4" />
         </button>
       </div>

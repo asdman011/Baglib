@@ -1069,7 +1069,7 @@ export function PdfWorkstationPanel({
               onClick={() => setQuickToolsOpen(!quickToolsOpen)}
               title={t('pdfCompactToolsBtn')}
               className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 text-xs text-primary-text dark:text-primary-text font-semibold transition-all cursor-pointer"
-            >
+             aria-label={t('pdfCompactToolsBtn')}>
               <Cpu size={14} />
               <span className="hidden lg:inline">{t('pdfCompactToolsBtn')}</span>
             </button>
@@ -1175,7 +1175,7 @@ export function PdfWorkstationPanel({
             onClick={() => void handleUndo()}
             className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-muted hover:text-text hover:bg-surface disabled:opacity-40 transition-all cursor-pointer"
             title={t('pdfUndo')}
-          >
+           aria-label={t('pdfUndo')}>
             <RotateCcw size={13} />
             <span className="hidden 2xl:inline">{t('pdfUndo')}</span>
           </button>
@@ -1189,7 +1189,7 @@ export function PdfWorkstationPanel({
             }}
             className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-muted hover:text-text hover:bg-surface disabled:opacity-40 transition-all cursor-pointer"
             title={t('pdfVersionHistory')}
-          >
+           aria-label={t('pdfVersionHistory')}>
             <History size={13} />
             <span className="hidden 2xl:inline">{t('pdfVersionHistory')}</span>
           </button></>}
@@ -1200,7 +1200,7 @@ export function PdfWorkstationPanel({
             onClick={() => void handleQuickSave()}
             className="flex items-center gap-1 rounded-lg border border-border/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 text-xs text-primary-text dark:text-primary-text font-semibold disabled:opacity-40 transition-all cursor-pointer"
             title={t('pdfSaveDocument')}
-          >
+           aria-label={t('pdfSaveDocument')}>
             <Save size={13} />
             <span className="hidden md:inline">{t('save')}</span>
           </button>
@@ -1431,7 +1431,7 @@ export function PdfWorkstationPanel({
                   onClick={() => setIsToolsHubOpen(true)}
                   className="text-[10px] text-primary-text hover:underline flex items-center gap-0.5 font-semibold cursor-pointer"
                   title={t('pdfWatchedFolderAdd')}
-                >
+                 aria-label={t('pdfWatchedFolderAdd')}>
                   <Plus size={10} />
                   <span>{t('pdfWatchedFolderAdd')}</span>
                 </button>
@@ -1790,7 +1790,7 @@ export function PdfWorkstationPanel({
         )}
 
         {/* CENTER HIGH-DPI CANVAS VIEWPORT OR MULTI-TOOL PAGE EDITOR */}
-        <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden relative" style={{ backgroundColor: workstationTheme === 'dark' ? '#0b0c0e' : workstationTheme === 'sepia' ? '#efece4' : '#f1f5f9' }}>
+        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden relative" style={{ backgroundColor: workstationTheme === 'dark' ? '#0b0c0e' : workstationTheme === 'sepia' ? '#efece4' : '#f1f5f9' }}>
           {session && (mode === 'organize' || organizerOpenedFor === session.id) && (
             <div aria-hidden={mode !== 'organize' || undefined} style={{ display: mode === 'organize' ? 'flex' : 'none' }} className="w-full h-full overflow-hidden flex-col">
               <PdfPageEditor
@@ -1991,7 +1991,7 @@ export function PdfWorkstationPanel({
           </div>
 
           </div>
-        </main>
+        </div>
 
         {(!renderReaderHeader || readerToolsVisible || tool !== 'inspect') && <aside data-reader-chrome="tools" className={`w-[290px] shrink-0 border-s border-border bg-surface text-text ${
           renderReaderHeader ? 'absolute end-0 top-14 bottom-0 z-40 max-w-full flex' : mode === 'organize' ? 'hidden md:flex' : 'flex'
@@ -2256,7 +2256,7 @@ export function PdfWorkstationPanel({
                 type="button"
                 onClick={() => setIsVersionHistoryOpen(false)}
                 className={`p-1.5 rounded-lg ${workstationTheme === 'dark' ? 'hover:bg-canvas text-text' : 'hover:bg-canvas text-text'} transition-colors cursor-pointer`}
-              >
+               aria-label={t('close')}>
                 <X size={16} />
               </button>
             </div>
@@ -2335,7 +2335,7 @@ export function PdfWorkstationPanel({
                           onClick={() => void handleDeleteVersion(ver.filename)}
                           className={`p-1.5 rounded-lg border border-danger/30 text-danger hover:bg-danger/10 transition-colors cursor-pointer`}
                           title={t('pdfVersionDelete')}
-                        >
+                         aria-label={t('pdfVersionDelete')}>
                           <Trash2 size={13} />
                         </button>
                       </div>

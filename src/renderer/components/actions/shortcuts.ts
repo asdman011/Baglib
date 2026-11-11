@@ -46,6 +46,38 @@ export const SHORTCUTS: readonly ShortcutDefinition[] = [
     ...['poetry-line', 'board'].flatMap(scope => ['ArrowUp', 'ArrowDown', ...(scope === 'board' ? ['ArrowLeft', 'ArrowRight'] : [])].flatMap(key => [false, ...(scope === 'board' ? [true] : [])].map(shift => ({ id: scope + '-' + key + (shift ? '-large' : ''), key, shift, scopes: [scope], labelKey: 'ctxNavigate' as const })))),
     { id: 'review-close', key: 'Escape', scopes: ['review'], labelKey: 'close' },
     { id: 'board-delete', key: 'Delete', scopes: ['board'], labelKey: 'delete' },
+    { id: 'dialog-close', key: 'Escape', scopes: ['dialog'], labelKey: 'close' },
+    { id: 'dialog-next-control', key: 'Tab', scopes: ['dialog'], labelKey: 'shortcutNextControl' },
+    { id: 'dialog-previous-control', key: 'Tab', shift: true, scopes: ['dialog'], labelKey: 'shortcutPreviousControl' },
+    { id: 'rsvp-pause', key: ' ', scopes: ['rsvp'], labelKey: 'ttsPauseBtn' },
+    ...['ArrowLeft', 'ArrowRight'].map(key => ({ id: 'rsvp-' + key, key, scopes: ['rsvp'], labelKey: 'ctxNavigate' as const })),
+    { id: 'rsvp-faster', key: 'ArrowUp', scopes: ['rsvp'], labelKey: 'shortcutRsvpFaster' },
+    { id: 'rsvp-slower', key: 'ArrowDown', scopes: ['rsvp'], labelKey: 'shortcutRsvpSlower' },
+    { id: 'rsvp-close', key: 'Escape', scopes: ['rsvp'], labelKey: 'close' },
+    ...['ArrowLeft', 'ArrowRight'].map(key => ({ id: 'paragraph-' + key, key, scopes: ['paragraph'], labelKey: 'ctxNavigate' as const })),
+    { id: 'paragraph-close', key: 'Escape', scopes: ['paragraph'], labelKey: 'close' },
+    { id: 'ocr-next', key: 'j', aliases: ['n', 'Enter'], scopes: ['ocr-review'], labelKey: 'ocrSuspectNext' },
+    { id: 'ocr-previous', key: 'k', aliases: ['p'], scopes: ['ocr-review'], labelKey: 'ocrSuspectPrev' },
+    { id: 'ocr-accept', key: 'a', scopes: ['ocr-review'], labelKey: 'ocrSuspectAccept' },
+    { id: 'ocr-skip', key: 's', scopes: ['ocr-review'], labelKey: 'ocrSuspectSkip' },
+    { id: 'ocr-edit', key: 'e', scopes: ['ocr-review'], labelKey: 'ocrSuspectEdit' },
+    { id: 'ocr-close', key: 'Escape', scopes: ['ocr-review'], labelKey: 'close' },
+    { id: 'compare-next', key: 'F3', aliases: ['n'], scopes: ['pdf-compare'], labelKey: 'ctxNavigate' },
+    { id: 'compare-previous-p', key: 'p', scopes: ['pdf-compare'], labelKey: 'ctxNavigate' },
+    { id: 'note-save', key: 's', mod: true, scopes: ['notes'], labelKey: 'save' },
+    { id: 'comment-submit', key: 'Enter', mod: true, scopes: ['comments'], labelKey: 'commentsSaveEdit' },
+    { id: 'compare-previous', key: 'F3', shift: true, scopes: ['pdf-compare'], labelKey: 'ctxNavigate' },
+    ...['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].map(key => ({ id: 'controls-' + key, key, scopes: ['controls'], labelKey: 'ctxNavigate' as const })),
+    ...['Enter', ' '].map(key => ({ id: 'controls-activate-' + key, key, scopes: ['controls'], labelKey: 'shortcutActivate' as const })),
+    { id: 'controls-dismiss', key: 'Escape', scopes: ['controls'], labelKey: 'close' },
+    { id: 'tag-commit', key: 'Enter', aliases: [',', '،'], scopes: ['tags'], labelKey: 'bulkAddTagsBtn' },
+    { id: 'tag-remove', key: 'Backspace', scopes: ['tags'], labelKey: 'tagRemoveAction' },
+    ...['ArrowUp', 'ArrowDown'].map(key => ({ id: 'tag-' + key, key, scopes: ['tags'], labelKey: 'ctxNavigate' as const })),
+    { id: 'tag-dismiss', key: 'Escape', scopes: ['tags'], labelKey: 'close' },
+    { id: 'chip-remove', key: 'Delete', aliases: ['Backspace'], scopes: ['controls'], labelKey: 'delete' },
+    ...['ArrowUp', 'ArrowDown', 'Enter'].map(key => ({ id: 'palette-' + key, key, scopes: ['palette'], labelKey: 'ctxNavigate' as const })),
+    { id: 'ruler-close', key: 'Escape', scopes: ['ruler'], labelKey: 'close' },
+    ...['ArrowUp', 'ArrowDown'].map(key => ({ id: 'ruler-' + key, key, scopes: ['ruler'], labelKey: 'ctxNavigate' as const })),
 ];
 export interface ShortcutEvent {
     key: string;
@@ -71,7 +103,9 @@ export function shortcutForEvent(event: ShortcutEvent, scope: string): ShortcutD
 export function matchesShortcut(event: ShortcutEvent, id: string, scope = 'global'): boolean { return shortcutForEvent(event, scope)?.id === id; }
 export function shortcutHint(id: string): string {
     const s = SHORTCUTS.find(entry => entry.id === id);
-    return s ? [s.mod && 'Ctrl/Cmd', s.alt && 'Alt', s.shift && 'Shift', s.key === ' ' ? 'Space' : s.key.toUpperCase()].filter(Boolean).join(' + ') : '';
+    if (!s) return '';
+    const keys = [...new Set([s.key, ...(s.aliases ?? [])].map(key => key === ' ' || key === 'Spacebar' ? 'Space' : key.toUpperCase()))];
+    return [s.mod && 'Ctrl/Cmd', s.alt && 'Alt', s.shift && 'Shift', keys.join(' / ')].filter(Boolean).join(' + ');
 }
 export function shortcutCollisions(shortcuts: readonly ShortcutDefinition[]): string[] {
     const collisions: string[] = [];
@@ -85,5 +119,8 @@ export function shortcutCollisions(shortcuts: readonly ShortcutDefinition[]): st
 
 export const SHORTCUT_SCOPES: Readonly<Record<string, TranslationKey>> = {
     global: 'shortcutGlobalScope', reader: 'navReader', quran: 'navQuran', sunnah: 'navSunnah',
+    dialog: 'shortcutDialogsScope', rsvp: 'speedReaderBtn', paragraph: 'paragraphFocusBtn',
+    'ocr-review': 'ocrInspectorTitle', 'pdf-compare': 'compareTitle', controls: 'shortcutControlsScope',
+    notes: 'notesWorkspaceTitle', comments: 'commentsTitle', tags: 'columnTags', palette: 'navSearch', ruler: 'readingRulerBtn',
     bayan: 'navBayan', 'poetry-line': 'bayanSelectVerse', review: 'srsStartReview', board: 'notesWorkspaceTitle',
 };

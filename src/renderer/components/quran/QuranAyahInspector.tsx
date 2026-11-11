@@ -5,6 +5,7 @@ import { Copy, CopyCheck, ExternalLink, X } from 'lucide-react';
 import type { QuranAyahDetails } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { openStudyNote } from '../../utils/study-navigation';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { studyLinkText } from '../../../shared/study-notes';
 
 export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar, floating = false, commentary }: {
@@ -13,25 +14,21 @@ export function QuranAyahInspector({ details, reference, surahName, error, t, di
   onClose: () => void; onCopy: (text: string) => void; onStudy: () => void; onSimilar?: () => void;
   floating?: boolean; commentary?: React.ReactNode;
 }) {
-  const drawer = useRef<HTMLElement>(null);
+  const drawer = useDialogFocus(!floating, onClose);
   const close = useRef(onClose);
   useEffect(() => { close.current = onClose; }, [onClose]);
   useEffect(() => {
+    if (!floating) return;
     const previous = document.activeElement as HTMLElement | null;
     drawer.current?.querySelector<HTMLButtonElement>('button')?.focus();
     return () => { if (previous?.isConnected) previous.focus(); };
-  }, []);
+  }, [floating]);
   const copy = (text: string) => onCopy(`${text}\n[${reference.surah}:${reference.ayah}]`);
   return <div dir={dir} className={floating ? 'absolute top-20 start-3 sm:start-14 z-[80] w-[min(28rem,calc(100%-1.5rem))] h-[65%] min-w-44 min-h-28 max-h-[calc(100%-6rem)] resize overflow-hidden rounded-2xl border border-subtle shadow-xl' : 'fixed inset-0 z-[80]'} data-quran-inspector-layer>
     {!floating && <button type="button" aria-label={t('quranClosePanel')} onClick={onClose} className="absolute inset-0 bg-black/20" tabIndex={-1} />}
-    <aside ref={drawer} role="dialog" aria-modal={floating ? undefined : true} aria-labelledby="quran-inspector-title" className={floating ? 'h-full w-full min-h-0 flex flex-col bg-surface text-main overflow-hidden' : 'absolute inset-y-0 start-0 w-[min(28rem,100%)] min-h-0 flex flex-col bg-surface text-main border-e border-subtle shadow-2xl overflow-hidden'} onKeyDown={event => {
-      if (event.key === 'Escape') { event.stopPropagation(); close.current(); }
-      if (event.key === 'Tab' && !floating) {
-        const buttons = [...(drawer.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])];
-        const first = buttons[0], last = buttons[buttons.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-      }
+    <aside ref={drawer} tabIndex={-1} data-ui-dialog={floating ? undefined : "sheet"} role="dialog" aria-modal={floating ? undefined : true} aria-labelledby="quran-inspector-title" className={floating ? 'h-full w-full min-h-0 flex flex-col bg-surface text-main overflow-hidden' : 'absolute inset-y-0 start-0 w-[min(28rem,100%)] min-h-0 flex flex-col bg-surface text-main border-e border-subtle shadow-2xl overflow-hidden'} onKeyDown={event => {
+      if (floating && event.key === 'Escape') { event.stopPropagation(); close.current(); }
+
     }}>
       <header className="shrink-0 flex items-start justify-between gap-3 p-4 border-b border-subtle"><div><h2 id="quran-inspector-title" className="font-semibold">{t('quranAyahInspector')}</h2><p className="mt-2 leading-relaxed">{surahName} <bdi>{reference.surah}:{reference.ayah}</bdi></p></div><button type="button" aria-label={t('quranClosePanel')} onClick={onClose} className="p-2 rounded-lg border border-subtle"><X className="size-4" /></button></header>
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] break-words p-5 space-y-5" tabIndex={0}>

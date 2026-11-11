@@ -194,7 +194,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
                 onClick={() => setIsSpeedOpen(!isSpeedOpen)}
                 title={t('ttsPlaybackSpeed')}
                 className="px-2 py-0.5 rounded-lg hover:bg-canvas border border-subtle text-[11px] font-mono font-bold flex items-center gap-1 cursor-pointer"
-              >
+               aria-label={t('ttsPlaybackSpeed')}>
                 <Gauge className="w-3 h-3 text-pale-sky-500" />
                 <span>{rate}x</span>
               </button>
@@ -214,7 +214,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
                           ? 'bg-pale-sky-500 text-white font-bold'
                           : 'hover:bg-canvas text-muted hover:text-main'
                       }`}
-                    >
+                     aria-label={t('playbackRateLabel', { rate: s })}>
                       {s}x
                     </button>
                   ))}
@@ -227,7 +227,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
               onClick={onStop}
               title={t('ttsStopBtn')}
               className="p-1 rounded-lg hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={t('ttsStopBtn')}>
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -235,7 +235,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
 
         {/* Progress Bar & Indicators */}
         <div className="space-y-1 mb-3">
-          <div className="relative w-full h-1.5 bg-subtle/40 rounded-full overflow-hidden cursor-pointer">
+          <div className="relative w-full h-1.5 bg-subtle/40 rounded-full overflow-hidden cursor-pointer" role="progressbar" aria-label={t('readingProgressPercent', { percent: Math.round(progressPercent) })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.max(0, progressPercent))}>
             <div
               className="h-full bg-gradient-to-r from-pale-sky-500 to-indigo-500 rounded-full transition-all duration-200"
               style={{ width: `${progressPercent}%` }}
@@ -269,7 +269,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
                     ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
                     : 'hover:bg-canvas text-muted hover:text-main'
                 }`}
-              >
+               aria-label={t('ttsSleepTimer')}>
                 <Clock className="w-4 h-4" />
               </button>
 
@@ -333,7 +333,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
                   ? 'bg-pale-sky-500 text-white shadow-xs'
                   : 'hover:bg-canvas text-muted hover:text-main'
               }`}
-            >
+             aria-label={t('ttsKaraokeLyrics')}>
               <FileText className="w-4 h-4" />
             </button>
           </div>
@@ -345,7 +345,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
               onClick={() => (playbackMode === 'audiobook' ? onSkipBackward(15) : onPrevSentence())}
               title={playbackMode === 'audiobook' ? t('ttsSkipBackward15') : t('ttsPrevSentence')}
               className="p-2 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={playbackMode === 'audiobook' ? t('ttsSkipBackward15') : t('ttsPrevSentence')}>
               {playbackMode === 'audiobook' ? (
                 <RotateCcw className="w-4 h-4" />
               ) : (
@@ -358,7 +358,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
               onClick={onTogglePlay}
               title={isPlaying ? t('ttsPauseBtn') : t('ttsPlayBtn')}
               className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-pale-sky-600 to-indigo-600 hover:from-pale-sky-500 hover:to-indigo-500 text-white flex items-center justify-center shadow-lg hover:shadow-pale-sky-500/25 hover:scale-105 active:scale-95 transition-all cursor-pointer"
-            >
+             aria-label={isPlaying ? t('ttsPauseBtn') : t('ttsPlayBtn')}>
               {isBuffering ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : isPlaying ? (
@@ -373,7 +373,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
               onClick={() => (playbackMode === 'audiobook' ? onSkipForward(30) : onNextSentence())}
               title={playbackMode === 'audiobook' ? t('ttsSkipForward30') : t('ttsNextSentence')}
               className="p-2 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={playbackMode === 'audiobook' ? t('ttsSkipForward30') : t('ttsNextSentence')}>
               {playbackMode === 'audiobook' ? (
                 <RotateCw className="w-4 h-4" />
               ) : (
@@ -393,7 +393,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
                   ? 'text-emerald-500 hover:bg-emerald-500/10'
                   : 'text-muted hover:text-main hover:bg-canvas'
               }`}
-            >
+             aria-label={t('audiobookPairingWizard')}>
               <Headphones className="w-4 h-4" />
             </button>
 
@@ -406,7 +406,7 @@ export const TTSMiniPlayer: React.FC<TTSMiniPlayerProps> = ({
                   ? 'bg-pale-sky-500 text-white'
                   : 'hover:bg-canvas text-muted hover:text-main'
               }`}
-            >
+             aria-label={t('ttsVoiceSettings')}>
               <Settings2 className="w-4 h-4" />
             </button>
           </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useWorkspace } from '../context/WorkspaceContext';
+import { colorKeys } from './ReaderMarkupBar';
 import React, { useState } from 'react';
 import { Trash2, MessageSquare, Copy, Check, X } from 'lucide-react';
 import type { KnowledgeItemDTO } from '../../../shared/types/knowledge';
@@ -62,7 +63,8 @@ export const HighlightActionPopover: React.FC<HighlightActionPopoverProps> = ({
               <button
                 key={c.id}
                 onClick={() => onChangeColor(highlight.id, c.id)}
-                title={c.label}
+                title={t(colorKeys[c.id])}
+                  aria-label={t(colorKeys[c.id])}
                 className={`w-5 h-5 rounded-full hover:scale-125 transition-transform cursor-pointer shadow-xs border ${
                   highlight.color === c.id ? 'ring-2 ring-pale-sky-500 scale-110' : 'border-white/30'
                 }`}
@@ -81,28 +83,28 @@ export const HighlightActionPopover: React.FC<HighlightActionPopoverProps> = ({
                   ? 'bg-pale-sky-500/15 border-pale-sky-500/40 text-pale-sky-600'
                   : 'border-subtle hover:bg-canvas text-muted hover:text-main'
               }`}
-            >
+             aria-label={t('readerHighlightNote')}>
               <MessageSquare className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={handleCopy}
               title={t('readerHighlightCopy')}
               className="p-1.5 rounded-lg border border-subtle hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={t('readerHighlightCopy')}>
               {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
             <button
               onClick={() => onDelete(highlight.id)}
               title={t('readerHighlightDelete')}
               className="p-1.5 rounded-lg border border-subtle hover:bg-rose-500/10 text-muted hover:text-rose-500 transition-colors cursor-pointer"
-            >
+             aria-label={t('readerHighlightDelete')}>
               <Trash2 className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={onClose}
               title={t('close')}
               className="p-1.5 rounded-lg hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
-            >
+             aria-label={t('close')}>
               <X className="w-3.5 h-3.5" />
             </button>
           </div>

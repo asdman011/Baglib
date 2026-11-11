@@ -38,6 +38,7 @@ import {
   type DayActivityRecord,
   type WeeklyGoalUnit,
 } from '../../../shared/study-rhythm';
+import { Modal } from '../ui/Modal';
 
 export function TodayStudyPanel() {
   const { t, lang, dir, books, openBookForReading, setViewMode } = useWorkspace();
@@ -740,14 +741,14 @@ export function TodayStudyPanel() {
       {/* Settings Modal */}
       {isSettingsOpen && (
         <div
-          role="dialog"
+
           data-today-settings-modal
-          aria-modal="true"
-          aria-label={t('todayRhythmSettings')}
+
+
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={() => setIsSettingsOpen(false)}
         >
-          <div
+          <Modal asChild open={true} onClose={() => setIsSettingsOpen(false)} label={t('todayRhythmSettings')}><div
             className="w-full max-w-md rounded-2xl border border-subtle bg-surface p-5 shadow-xl space-y-4 text-main"
             onClick={(e) => e.stopPropagation()}
             dir={dir}
@@ -761,7 +762,7 @@ export function TodayStudyPanel() {
                 type="button"
                 onClick={() => setIsSettingsOpen(false)}
                 className="rounded-lg p-1 text-muted hover:text-main cursor-pointer"
-              >
+               aria-label={t('close')}>
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -894,7 +895,7 @@ export function TodayStudyPanel() {
                 </button>
               </div>
             </form>
-          </div>
+          </div></Modal>
         </div>
       )}
 

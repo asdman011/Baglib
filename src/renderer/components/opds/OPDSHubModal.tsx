@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { OPDSCatalog, OPDSEntry, OPDSFeed, OPDSServerStatus } from '../../../shared/types/opds';
+import { Modal } from '../ui/Modal';
 
 interface OPDSHubModalProps {
   isOpen: boolean;
@@ -211,7 +212,7 @@ export const OPDSHubModal: React.FC<OPDSHubModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div
+      <Modal asChild open={true} onClose={onClose} label={t('opdsHubTitle')}><div
         className="relative flex flex-col w-full max-w-5xl h-[85dvh] max-h-[calc(100dvh-2rem)] bg-surface rounded-2xl shadow-2xl border border-white/10 overflow-hidden"
         dir={isRtl ? 'rtl' : 'ltr'}
       >
@@ -377,7 +378,7 @@ export const OPDSHubModal: React.FC<OPDSHubModalProps> = ({
                   </h3>
                 </div>
                 {isLoadingFeed && (
-                  <div className="flex items-center gap-2 text-xs text-text-secondary">
+                  <div className="flex items-center gap-2 text-xs text-text-secondary" role="status">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
                     <span>{t('opdsDownloading')}</span>
                   </div>
@@ -624,7 +625,7 @@ export const OPDSHubModal: React.FC<OPDSHubModalProps> = ({
             </div>
           )}
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

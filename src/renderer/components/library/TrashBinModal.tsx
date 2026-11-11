@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { BookItem } from '../../types/library';
+import { Modal } from '../ui/Modal';
 
 interface TrashBinModalProps {
   isOpen: boolean;
@@ -72,24 +73,6 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
     };
   }, [isOpen]);
 
-  // Escape key handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        if (confirmEmptyOpen) {
-          setConfirmEmptyOpen(false);
-        } else if (confirmPermanentId) {
-          setConfirmPermanentId(null);
-        } else if (confirmPermanentBulk) {
-          setConfirmPermanentBulk(false);
-        } else {
-          onClose();
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, confirmEmptyOpen, confirmPermanentId, confirmPermanentBulk, onClose]);
 
   if (!isOpen) return null;
 
@@ -206,7 +189,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
       dir={dir}
     >
-      <div className="relative flex flex-col w-full max-w-4xl max-h-[calc(100dvh-2rem)] bg-surface border border-border shadow-2xl rounded-2xl overflow-hidden text-main">
+      <Modal asChild open={true} onClose={() => { if (!actionLoading) onClose(); }} label={t('trashBinTitle')}><div className="relative flex flex-col w-full max-w-4xl max-h-[calc(100dvh-2rem)] bg-surface border border-border shadow-2xl rounded-2xl overflow-hidden text-main">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-surface-raised/40">
           <div className="flex items-center gap-3">
@@ -240,7 +223,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
               type="button"
               onClick={onClose}
               className="p-2 text-muted hover:text-main rounded-xl hover:bg-surface-raised/60 transition-colors cursor-pointer"
-            >
+             aria-label={t('close')}>
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -387,7 +370,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
                         disabled={actionLoading}
                         title={t('restoreBook')}
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-pale-sky-500/40 text-pale-sky-600 dark:text-pale-sky-400 bg-pale-sky-500/10 hover:bg-pale-sky-500/20 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
-                      >
+                       aria-label={t('restoreBook')}>
                         <RotateCcw className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">{t('restore')}</span>
                       </button>
@@ -398,7 +381,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
                         disabled={actionLoading}
                         title={t('permanentlyDelete')}
                         className="p-1.5 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/15 transition-all cursor-pointer disabled:opacity-50"
-                      >
+                       aria-label={t('permanentlyDelete')}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -412,7 +395,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
         {/* Confirmation Modal: Empty Trash */}
         {confirmEmptyOpen && (
           <div className="absolute inset-0 z-60 flex items-center justify-center p-6 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="w-full max-w-md p-6 bg-surface border border-red-500/40 rounded-2xl shadow-2xl text-center space-y-4">
+            <Modal asChild open={true} onClose={() => { if (!actionLoading) setConfirmEmptyOpen(false); }} label={t('emptyTrash')}><div className="w-full max-w-md p-6 bg-surface border border-red-500/40 rounded-2xl shadow-2xl text-center space-y-4">
               <div className="w-12 h-12 mx-auto rounded-full bg-red-500/15 text-red-500 flex items-center justify-center border border-red-500/30">
                 <AlertTriangle className="w-6 h-6" />
               </div>
@@ -437,14 +420,14 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
                   <span>{t('emptyTrash')}</span>
                 </button>
               </div>
-            </div>
+            </div></Modal>
           </div>
         )}
 
         {/* Confirmation Modal: Single Permanent Delete */}
         {confirmPermanentId && (
           <div className="absolute inset-0 z-60 flex items-center justify-center p-6 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="w-full max-w-md p-6 bg-surface border border-red-500/40 rounded-2xl shadow-2xl text-center space-y-4">
+            <Modal asChild open={true} onClose={() => { if (!actionLoading) setConfirmPermanentId(null); }} label={t('permanentlyDelete')}><div className="w-full max-w-md p-6 bg-surface border border-red-500/40 rounded-2xl shadow-2xl text-center space-y-4">
               <div className="w-12 h-12 mx-auto rounded-full bg-red-500/15 text-red-500 flex items-center justify-center border border-red-500/30">
                 <AlertTriangle className="w-6 h-6" />
               </div>
@@ -469,14 +452,14 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
                   <span>{t('permanentlyDelete')}</span>
                 </button>
               </div>
-            </div>
+            </div></Modal>
           </div>
         )}
 
         {/* Confirmation Modal: Bulk Permanent Delete */}
         {confirmPermanentBulk && (
           <div className="absolute inset-0 z-60 flex items-center justify-center p-6 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="w-full max-w-md p-6 bg-surface border border-red-500/40 rounded-2xl shadow-2xl text-center space-y-4">
+            <Modal asChild open={true} onClose={() => { if (!actionLoading) setConfirmPermanentBulk(false); }} label={t('permanentlyDelete')}><div className="w-full max-w-md p-6 bg-surface border border-red-500/40 rounded-2xl shadow-2xl text-center space-y-4">
               <div className="w-12 h-12 mx-auto rounded-full bg-red-500/15 text-red-500 flex items-center justify-center border border-red-500/30">
                 <AlertTriangle className="w-6 h-6" />
               </div>
@@ -501,12 +484,12 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
                   <span>{t('deletePermanentlyBtn')}</span>
                 </button>
               </div>
-            </div>
+            </div></Modal>
           </div>
         )}
 
         {/* Floating Success Toast */}
-      </div>
+      </div></Modal>
     </div>
   );
 };

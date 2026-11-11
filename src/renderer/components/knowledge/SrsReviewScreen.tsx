@@ -270,7 +270,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
       </div>
 
       {/* Main Review Stage */}
-      <main className="flex-1 min-h-0 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 overflow-y-auto">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 overflow-y-auto">
         {failed && (
           <div
             role="alert"
@@ -540,7 +540,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
             }
           />
         )}
-      </main>
+      </div>
     </div>
   );
 };

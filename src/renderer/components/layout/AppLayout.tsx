@@ -217,7 +217,7 @@ export const AppLayout: React.FC = () => {
         )}
 
         {/* Dynamic App Views */}
-        <main data-workspace-motion={viewMode === 'reader' || viewMode === 'quran' ? 'reading' : 'browse'} className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        <main aria-label={t('shortcutGlobalScope')} data-workspace-motion={viewMode === 'reader' || viewMode === 'quran' ? 'reading' : 'browse'} className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           {/* Quota-Saver & Search Limit Banner */}
           <QuotaWarningBanner />
 
