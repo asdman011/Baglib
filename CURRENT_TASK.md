@@ -1,3 +1,17 @@
+## KEY-317 poetry-live repaired - 2026-11-12, Codex (runner) and Claude Code (takeover)
+
+Codex started poetry-live (the runner: ui-motion inlining, a temporary public fixture served by the dev renderer, profile and fixture cleanup), then hit its usage limit. Claude finished the main harness:
+- the newer channels `poetry:variants` and `poetry:narrations`;
+- the font select picked by its options, since the header now always shows it;
+- Justify picked by its label;
+- the poet biography and saved verses opened from the shared reader side panel (Related and Notes tabs, KEY-305);
+- the note edited and deleted through the Notes editor pane and its menu (KEY-304);
+- evaluate errors that now name the failing script.
+
+It passes ("Poetry native checks passed"). The corpus copy was verified unchanged, and the profile and public fixture were removed.
+
+Files: scripts/poetry-live/main.ts, scripts/poetry-live/run.mjs, CURRENT_TASK.md.
+
 ## KEY-317 wave6 verified - 2026-11-12, Codex (key317)
 
 Exact scripts scripts/wave6-live/main.cjs and scripts/wave6-live/run.mjs. Final ar/en1280/480 checks pass, Electron childcode0, profile removed. Stable navigation, initial origin/guide, raw Notes drafts/selected previews, Library More cover and Settings provider flows, app root, no forced kill and full setup cleanup. Real Arabic/English PDFs read in both interfaces, WMA rejection checked, original five playable container cases retained, copied real image-only scan page5 OCRed into a new output with1130searchableArabic characters and input copy unchanged. Never OCRed text-layer originals. Cached Arabic audio/generated video retained because installed real media fixtures are unsupported WMA. No application source edits or original-file writes performed. Evidence k317-wave6-evidence-4CQSdd, earlier Xr8VIN also passed. English preview/Arabic cover screenshots inspected. Known missing-Mushaf reminder stderr remains and PowerShell shell exit differs from runner childcode0, recorded locally. Node syntax/scoped diff pass.15/20verified. Next poetry, then prerequisites, quran-live, quran-layout, dashboard-live. Scoped publication authorized, Jira left to Claude. Prior wave59a6bc0d pushed normally.

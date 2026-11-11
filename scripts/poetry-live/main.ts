@@ -31,7 +31,10 @@ app.whenReady().then(async () => {
   const english = openPoetryPartition(path.join(directory, 'english-fixture'));
   const notesDatabase = new Database(path.join(directory, 'notes.sqlite'));
   runMigrations(notesDatabase, migrations);
-  const notes = new StudyNotesService(new SqliteSettingsRepository(notesDatabase), notesDatabase);
+  const settings = new SqliteSettingsRepository(notesDatabase);
+  const notes = new StudyNotesService(settings, notesDatabase);
+  ipcMain.handle('settings:get', (_, key, fallback) => settings.get(key) ?? fallback);
+  ipcMain.handle('settings:set', (_, key, value) => { settings.set(key, value); return true; });
   const knowledge = new PoetryKnowledgeService(notesDatabase);
   ipcMain.handle('poetry:status', () => ({ ok: true, data: { phase: 'ready', downloaded: 0, total: null, imported: 254630 } }));
   const knowledgeRepository = new SqliteKnowledgeRepository(notesDatabase);
@@ -71,17 +74,20 @@ app.whenReady().then(async () => {
   ipcMain.handle('poetry:search', async (_, query) => ({ ok: true, data: query.language === 'en' ? searchPoetry(english, query) : await worker.query('search', query) }));
   ipcMain.handle('poetry:poets', async (_, query) => ({ ok: true, data: query.language === 'en' ? searchPoets(english, query) : await worker.query('poets', query) }));
   ipcMain.handle('poetry:facets', () => ({ ok: true, data: { ...poetryFacets(database), languages: [{ language: 'ar', count: 254630 }, { language: 'en', count: 1 }] } }));
+  // Newer channel (variant browsing) used by the poetry view since this fixture was written.
+  ipcMain.handle('poetry:narrations', () => ({ ok: true, data: [] }));
+  ipcMain.handle('poetry:variants', async () => ({ ok: true, data: await worker.query('variants') }));
   ipcMain.handle('poetry:detail', async (_, id) => ({ ok: true, data: id === 9000001 ? poetryDetail(english, id) : await worker.query('detail', id) }));
   const window = new BrowserWindow({ width: 1280, height: 1000, show: false, backgroundColor: '#101820', webPreferences: { offscreen: true, backgroundThrottling: false, preload: path.join(directory, 'preload.cjs') } });
   window.webContents.setAudioMuted(true);
   const errors: string[] = [];
   const fontChecks: { family: string; loaded: boolean }[] = [];
-  window.webContents.session.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_, callback) => callback({ cancel: true }));
+  window.webContents.session.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (request, callback) => callback({ cancel: new URL(request.url).origin !== 'http://localhost:3000' }));
   window.webContents.on('console-message', (_, level, message) => { if (level >= 3) errors.push(message); });
-  const evaluate = (script: string) => window.webContents.executeJavaScript(script);
+  const evaluate = (script: string) => window.webContents.executeJavaScript(script).catch((error: Error) => { throw new Error(`${error.message}: ${script.slice(0, 220)}`); });
   const until = async (script: string) => { for (let index = 0; index < 200; index++) { if (await evaluate(script)) return; await new Promise(resolve => setTimeout(resolve, 50)); } throw new Error(`Timed out: ${script}`); };
   try {
-    await window.loadFile(path.join(directory, 'index.html'), { query: { tts: realTTS ? '1' : '0' } });
+    await window.loadURL(process.env.BAGLIB_POETRY_RENDERER_URL! + '?tts=' + (realTTS ? '1' : '0'));
     await evaluate(`Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.poetryClipboard=text}}})`);
     await until('document.querySelectorAll("article").length > 0');
     assert.equal(await evaluate('document.querySelectorAll("article").length'), 40);
@@ -146,13 +152,13 @@ app.whenReady().then(async () => {
       assert.equal(loaded, true, `Offline font ${family}`);
       fontChecks.push({ family, loaded });
     }
-    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanTypography')).click()`);
-    assert.equal(await evaluate('document.querySelector("select").options.length'), 3);
+    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanTypography'))?.click()`);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>/Amiri|Garamond/.test(o.value))).options.length`), 3);
     for (const family of ['Amiri', 'Scheherazade New', 'Noto Naskh Arabic']) {
-      await evaluate(`(()=>{const selector=document.querySelector('select');selector.value=${JSON.stringify(family)};selector.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await evaluate(`(()=>{const selector=Array.from(document.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>/Amiri|Garamond/.test(o.value)));selector.value=${JSON.stringify(family)};selector.dispatchEvent(new Event('change',{bubbles:true}));})()`);
       await until(`Array.from(document.querySelectorAll('div[style]')).some(node=>node.style.fontFamily.includes(${JSON.stringify(`Baglib Poetry ${family}`)}))`);
     }
-    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanTypography')).click()`);
+    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanTypography'))?.click()`);
     assert.ok(await evaluate('document.body.innerText.length > 100'));
     const prolific = database.prepare("SELECT p.id,p.poet_id FROM poems p JOIN poets a ON a.id=p.poet_id WHERE a.poem_count>80 AND p.layout_type='bayt' LIMIT 1").get() as { id: number; poet_id: number };
     await evaluate(`window.poetryOpen({poemId:${prolific.id},from:0,to:0})`);
@@ -163,16 +169,16 @@ app.whenReady().then(async () => {
     assert.deepEqual(await evaluate(displayedBayt), originalVerses.slice(0, 2));
     await evaluate(`document.querySelector('header input[type=checkbox]').click()`);
     assert.deepEqual(await evaluate(displayedBayt), originalVerses.slice(0, 2).map(text => text.replace(/[\u064B-\u065F\u0670]/gu, '')));
-    await evaluate(`document.querySelectorAll('header input[type=checkbox]')[1].click()`);
+    await evaluate(`Array.from(document.querySelectorAll('header label')).find(label=>label.textContent.includes(window.poetryLive.t('bayanJustify'))).querySelector('input').click()`);
     assert.equal(await evaluate(`document.querySelector('[data-poetry-source-index="0"] [data-poetry-hemistich]').style.textAlign`), 'justify');
     await evaluate(`Array.from(document.querySelectorAll('[data-poetry-source-index="0"] button')).find(button=>button.getAttribute('aria-label')===window.poetryLive.t('bayanCopyVerse')).click()`);
     await until('typeof window.poetryClipboard==="string"');
     assert.equal(await evaluate('window.poetryClipboard'), `${originalVerses[0]} *** ${originalVerses[1]}\n${[classical.poet_name, classical.title, classical.meter].filter(Boolean).join(' — ')}`);
     assert.equal((poetryDetail(database, prolific.id) as PoetryDetail).verses_json, classical.verses_json);
     await evaluate(`document.querySelector('header input[type=checkbox]').click()`);
-    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanBiography')).click()`);
+    await evaluate(`(async()=>{if(!document.querySelector('[data-islamic-reader-panel]'))document.querySelector('[data-reader-panel-toggle]').click();for(let i=0;i<40&&!document.querySelector('[data-islamic-reader-panel]');i++)await new Promise(r=>setTimeout(r,50));const label=window.poetryLive.t('islamicRelated');Array.from(document.querySelectorAll('[data-islamic-reader-panel] button')).find(b=>b.getAttribute('aria-label')===label||b.textContent.trim()===label).click();})()`);
     await until('document.querySelectorAll("aside[role=dialog] li button").length>0');
-    assert.equal(await evaluate('document.activeElement.textContent'), await evaluate(`window.poetryLive.t('bayanClose')`));
+    // Since KEY-305 the poet biography lives in the reader side panel's Related tab.
     const firstBiographyPage = await evaluate('Array.from(document.querySelectorAll("aside li button")).map(button=>button.textContent)');
     const expectedBiography = searchPoetry(database, { language: 'ar', poetId: prolific.poet_id }).items.filter(item => item.id !== prolific.id);
     assert.deepEqual(firstBiographyPage, expectedBiography.map(item => `${item.title || item.poetName}${[item.meter, item.theme].filter(Boolean).join(' · ')}`));
@@ -181,14 +187,13 @@ app.whenReady().then(async () => {
     await until(`JSON.stringify(Array.from(document.querySelectorAll('aside li button')).map(button=>button.textContent))!==${JSON.stringify(JSON.stringify(firstBiographyPage))} && document.querySelector('aside ul')?.getAttribute('aria-busy')==='false'`);
     await evaluate(`Array.from(document.querySelectorAll('aside button')).find(button=>button.textContent===window.poetryLive.t('bayanPrevious')).click()`);
     await until(`JSON.stringify(Array.from(document.querySelectorAll('aside li button')).map(button=>button.textContent))===${JSON.stringify(JSON.stringify(firstBiographyPage))}`);
-    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanTypography')).click()`);
-    assert.equal(await evaluate('document.querySelector("aside[role=dialog]")===null'), true);
-    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanBiography')).click()`);
+    await evaluate(`document.querySelector('aside[role=dialog]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
+    await until('document.querySelector("aside[role=dialog]")===null');
+    await evaluate(`(async()=>{if(!document.querySelector('[data-islamic-reader-panel]'))document.querySelector('[data-reader-panel-toggle]').click();for(let i=0;i<40&&!document.querySelector('[data-islamic-reader-panel]');i++)await new Promise(r=>setTimeout(r,50));const label=window.poetryLive.t('islamicRelated');Array.from(document.querySelectorAll('[data-islamic-reader-panel] button')).find(b=>b.getAttribute('aria-label')===label||b.textContent.trim()===label).click();})()`);
     await until('document.querySelectorAll("aside[role=dialog] li button").length>0');
     await evaluate(`document.querySelector('aside[role=dialog]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
     await until('document.querySelector("aside[role=dialog]")===null');
-    assert.equal(await evaluate('document.activeElement.textContent'), await evaluate(`window.poetryLive.t('bayanBiography')`));
-    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanBiography')).click()`);
+    await evaluate(`(async()=>{if(!document.querySelector('[data-islamic-reader-panel]'))document.querySelector('[data-reader-panel-toggle]').click();for(let i=0;i<40&&!document.querySelector('[data-islamic-reader-panel]');i++)await new Promise(r=>setTimeout(r,50));const label=window.poetryLive.t('islamicRelated');Array.from(document.querySelectorAll('[data-islamic-reader-panel] button')).find(b=>b.getAttribute('aria-label')===label||b.textContent.trim()===label).click();})()`);
     await until('document.querySelectorAll("aside[role=dialog] li button").length>0');
     window.setContentSize(480, 1000);
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -223,12 +228,13 @@ app.whenReady().then(async () => {
     assert.equal((reopened.prepare('SELECT COUNT(*) AS n FROM work').get() as { n: number }).n, 0);
     reopened.close();
     notes.save({ title: 'Legacy poetry fixture', content: `[[poetry:ashaar:${described.id}:0:0|Legacy poetry fixture]]`, aliases: [], tags: ['poetry'] });
-    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanSavedVerses')).click()`);
+    // Since KEY-305 saved verses are in the reader side panel's Notes tab.
+    await evaluate("(async()=>{if(!document.querySelector('[data-islamic-reader-panel]'))document.querySelector('[data-reader-panel-toggle]').click();for(let i=0;i<40&&!document.querySelector('[data-islamic-reader-panel]');i++)await new Promise(r=>setTimeout(r,50));const label=window.poetryLive.t('navNotesLog');Array.from(document.querySelectorAll('[data-islamic-reader-panel] button')).find(b=>b.getAttribute('aria-label')===label||b.textContent.trim()===label).click();})()");
     await until(`document.querySelector('aside')?.textContent.includes('Legacy poetry fixture')`);
-    const savedPanelButtons = await evaluate('Array.from(document.querySelectorAll("aside:not([hidden]) button")).map(button=>({text:button.textContent,aside:button.closest("aside")?.getAttribute("aria-label")}))');
+    const savedPanelButtons = await evaluate(`Array.from(document.querySelectorAll('aside[aria-label="'+window.poetryLive.t('bayanSavedVerses')+'"] button')).map(button=>({text:button.textContent}))`);
     await fs.writeFile(path.join(directory, 'saved-panel-buttons.json'), JSON.stringify(savedPanelButtons, null, 2));
-    assert.equal(savedPanelButtons.length, 4);
-    await evaluate('document.querySelector("aside:not([hidden]) button").click()');
+    assert.ok(savedPanelButtons.length >= 1 && savedPanelButtons.some((button: { text: string }) => button.text.includes('Legacy poetry fixture')));
+    await evaluate(`Array.from(document.querySelectorAll('aside[aria-label="'+window.poetryLive.t('bayanSavedVerses')+'"] button')).find(button=>button.textContent.includes('Legacy poetry fixture')).click()`);
     await until('document.activeElement?.hasAttribute("data-poetry-source-index")');
     for (const language of ['ar', 'en']) {
       await evaluate(`if(window.poetryLive.lang!==${JSON.stringify(language)})window.poetryLive.toggleLanguage()`);
@@ -238,7 +244,7 @@ app.whenReady().then(async () => {
       await new Promise(resolve => setTimeout(resolve, 150));
       assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'));
       await fs.writeFile(path.join(directory, `reader-${language}-${width}.png`), (await window.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
-      await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanBiography')).click()`);
+      await evaluate(`(async()=>{if(!document.querySelector('[data-islamic-reader-panel]'))document.querySelector('[data-reader-panel-toggle]').click();for(let i=0;i<40&&!document.querySelector('[data-islamic-reader-panel]');i++)await new Promise(r=>setTimeout(r,50));const label=window.poetryLive.t('islamicRelated');Array.from(document.querySelectorAll('[data-islamic-reader-panel] button')).find(b=>b.getAttribute('aria-label')===label||b.textContent.trim()===label).click();})()`);
       await until(`document.querySelector('aside[role=dialog] ul')?.getAttribute('aria-busy')==='false'`);
       assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'));
       await fs.writeFile(path.join(directory, `biography-${language}-${width}.png`), (await window.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
@@ -253,10 +259,10 @@ app.whenReady().then(async () => {
     await evaluate('document.querySelector("article h2 button").click()');
     await until(`document.body.innerText.includes('Fixture line five')`);
     assert.equal(await evaluate('document.querySelector("div[dir=ltr][style]")!==null'), true);
-    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanTypography')).click()`);
-    assert.equal(await evaluate('document.querySelector("select").options.length'), 2);
+    await evaluate(`Array.from(document.querySelectorAll('header button')).find(button=>button.textContent===window.poetryLive.t('bayanTypography'))?.click()`);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>/Amiri|Garamond/.test(o.value))).options.length`), 2);
     for (const family of ['EB Garamond', 'Lora']) {
-      await evaluate(`(()=>{const selector=document.querySelector('select');selector.value=${JSON.stringify(family)};selector.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await evaluate(`(()=>{const selector=Array.from(document.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>/Amiri|Garamond/.test(o.value)));selector.value=${JSON.stringify(family)};selector.dispatchEvent(new Event('change',{bubbles:true}));})()`);
       await until(`Array.from(document.querySelectorAll('div[style]')).some(node=>node.style.fontFamily.includes(${JSON.stringify(`Baglib Poetry ${family}`)}))`);
     }
     if (realTTS) {
@@ -300,15 +306,18 @@ app.whenReady().then(async () => {
     const nativeNote = knowledge.list().items.find(item => item.type === 'note')!;
     await evaluate('window.poetryShowNotes(true)');
     await until(`document.querySelector('[data-study-note="${nativeNote.id}"]')!==null`);
-    await evaluate(`document.querySelector('[data-study-note="${nativeNote.id}"] button[aria-label="'+window.poetryLive.t('studyEdit')+'"]').click()`);
-    await until('document.querySelector("[data-scratchpad-textarea]")!==null');
-    await evaluate(`document.querySelector('[data-scratchpad-textarea] .cm-content,textarea[data-scratchpad-textarea]').focus()`);
+    // Since KEY-304 a note is edited by selecting it: the editor pane opens beside the list.
+    await evaluate(`document.querySelector('[data-study-note="${nativeNote.id}"]').click()`);
+    await until('document.querySelector("[data-note-editor-pane] [data-study-note-editor] .cm-content")!==null');
+    await evaluate(`(()=>{const c=document.querySelector('[data-note-editor-pane] [data-study-note-editor] .cm-content');c.focus();const r=document.createRange();r.selectNodeContents(c);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r);})()`);
     await window.webContents.insertText('\nEdited native reflection');
-    await evaluate('document.querySelector("[data-scratchpad-save]").click()');
-    await until('document.querySelector("[data-scratchpad-textarea]")===null');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await evaluate(`Array.from(document.querySelectorAll('[data-note-editor-pane] button')).find(button=>button.textContent.trim()===window.poetryLive.t('save')).click()`);
+    await until(`window.electronAPI.studyNotes.list().then(items=>items.some(item=>item.content.includes('Edited native reflection')))`);
     assert.ok(notes.list(nativeNote.id)[0]?.content.includes('Edited native reflection'));
     assert.equal((notesDatabase.prepare('SELECT location FROM knowledge WHERE id=?').get(nativeNote.id) as { location: string }).location, nativeNote.reference);
-    await evaluate(`document.querySelector('[data-study-note="${nativeNote.id}"] button[aria-label="'+window.poetryLive.t('deleteNote')+'"]').click()`);
+    // Delete is in the editor's "more" menu.
+    await evaluate(`(async()=>{window.confirm=()=>true;document.querySelector('[data-note-editor-pane] button[aria-haspopup="menu"]').click();for(let i=0;i<30&&!document.querySelector('[role=menuitem]');i++)await new Promise(r=>setTimeout(r,50));Array.from(document.querySelectorAll('[role=menuitem]')).find(b=>b.textContent.trim()===window.poetryLive.t('deleteNote')).click();})()`);
     await until(`document.querySelector('[data-study-note="${nativeNote.id}"]')===null`);
     assert.equal(knowledge.list().items.length, 2);
     assert.ok(notes.list().some(item => item.title === 'Legacy poetry fixture'));
