@@ -1,3 +1,16 @@
+## KEY-317 deeplink-live repaired - 2026-11-11, Claude Code
+
+The script is updated for the current app:
+- the first-run-guide hook;
+- the deep-linked note is selected in the list-plus-editor page;
+- single-note exports go through the editor's "more" menu;
+- the bulk export now holds every note, so the same note's file is compared;
+- the Quran target is checked through the shared reader panel (KEY-305).
+
+All 8 launches pass (seed, note with anchor, book page, Quran ayah, in en and ar), including the real second-instance dispatch and the missing-note notice. The corpus copy was cleaned up.
+
+Files: scripts/deeplink-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-322 new board arrows are selected again, plus KEY-317 compare and boards scripts - 2026-11-11, Claude Code
 
 KEY-322 (bug): BoardsWorkspace selects the newly drawn arrow, so its label field appears with focus. This was the original behaviour, lost in a rewrite.

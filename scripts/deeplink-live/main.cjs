@@ -20,6 +20,8 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
   if (started) return; started = true;
   win.webContents.on('console-message', (_e,_l,message) => { if(_l>=3) console.log(message); });
   const evaluate = code => win.webContents.executeJavaScript(code, true);
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  win.webContents.on('did-finish-load', () => { win.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (code, tries = 250) => {
     for (let i = 0; i < tries; i++) { try { if (await evaluate(code)) return; } catch {} await pause(200); }
     throw new Error(`Timed out: ${code}`);
@@ -33,9 +35,15 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
     });
     assert.equal(code, 0, 'Second instance exits through real lock');
   };
-  const note = () => until(`!!document.querySelector('[data-study-note="link-note"]') && document.querySelectorAll('[data-study-note]').length===1`);
+  // Since KEY-304 the Notes page is a list plus an editor: the target note is selected, not filtered alone.
+  const note = () => until(`!!document.querySelector('[data-study-note="link-note"].ring-1') && !!document.querySelector('[data-note-editor-pane]')`);
+  const exportLabels = language === 'ar' ? { md: 'تصدير بصيغة Markdown', word: 'تصدير بصيغة Word' } : { md: 'Export as Markdown', word: 'Export as Word' };
+  // Single-note export lives in the editor's "more" menu.
+  const noteMenu = () => evaluate("document.querySelector('[data-note-editor-pane] button[aria-haspopup=\"menu\"]').click()");
+  const noteMenuItem = async label => { await noteMenu(); await until(`[...document.querySelectorAll('[role=menuitem]')].some(b=>b.textContent.trim()===${JSON.stringify(label)})`, 30); await evaluate(`[...document.querySelectorAll('[role=menuitem]')].find(b=>b.textContent.trim()===${JSON.stringify(label)}).click()`); };
   const book = async () => { await until("!!document.querySelector('.textLayer span')"); await until("window.electronAPI.reader.getLastLocation('link-book').then(p=>p==='3')"); };
-  const quran = () => until("!!document.querySelector('[data-quran-reader]') && [...document.querySelectorAll('input')].some(el=>el.value==='42') && document.querySelector('[data-quran-study-panel]')?.textContent.includes('2:255')");
+  // Since KEY-305 the study panel is the shared reader side panel (no data-quran-study-panel); it shows the ayah reference.
+  const quran = () => until("!!document.querySelector('[data-quran-reader]') && [...document.querySelectorAll('input')].some(el=>el.value==='42') && document.body.textContent.includes('2:255')");
   (async () => {
     win.setContentSize(1280, 900); win.show(); win.focus(); win.webContents.focus();
     await until('!!window.electronAPI && !!document.querySelector("footer")');
@@ -56,23 +64,25 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
         await until("!!document.querySelector('[data-paragraph-focused]')");
         for (const width of [1280, 480]) {
           win.setContentSize(width, 900); await pause(700);
-          await evaluate("document.querySelector('[data-note-export-menu]').open=true");
-          await evaluate("document.querySelector('[data-note-export-menu]').scrollIntoView({block:'center'})");
+          await noteMenu(); await until("!!document.querySelector('[role=menuitem]')", 30);
           assert.equal(await evaluate("document.documentElement.scrollWidth<=innerWidth"), true);
           assert.equal(await evaluate("document.querySelector('[data-notes-overview]').dir"), language === 'ar' ? 'rtl' : 'ltr');
           await shot(`card-${width}`);
+          win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' }); await pause(300);
         }
         win.setContentSize(1280,900);
         // Card and bulk paths write one file, with equivalent content; native dialogs select only the throwaway profile.
-        await evaluate("document.querySelector('[data-note-export-markdown]').click()");
+        await noteMenuItem(exportLabels.md);
         await until("!!document.querySelector('[data-notes-exported]')");
         const cardMd = await evaluate("document.querySelector('[data-notes-exported] bdi').textContent");
         await evaluate("document.querySelector('[data-notes-export-markdown]').click()");
         await until(`document.querySelector('[data-notes-exported] bdi')?.textContent!==${JSON.stringify(cardMd)}`);
         const bulkMd = await evaluate("document.querySelector('[data-notes-exported] bdi').textContent");
         const files = fs.readdirSync(cardMd); assert.equal(files.length,1); assert.ok(files[0].endsWith('.md'));
-        assert.equal(fs.readFileSync(path.join(cardMd,files[0]),'utf8'),fs.readFileSync(path.join(bulkMd,fs.readdirSync(bulkMd)[0]),'utf8'));
-        await evaluate("document.querySelector('[data-note-export-word]').click()");
+        // Since KEY-304 the bulk export holds every listed note; the same note's file must match the single export.
+        assert.ok(fs.readdirSync(bulkMd).includes(files[0]), 'bulk export holds the same note file');
+        assert.equal(fs.readFileSync(path.join(cardMd,files[0]),'utf8'),fs.readFileSync(path.join(bulkMd,files[0]),'utf8'));
+        await noteMenuItem(exportLabels.word);
         await until("!!document.querySelector('[data-word-note=\"link-note\"]')");
         await evaluate("document.querySelector('[data-word-go]').click()");
         await until("!!document.querySelector('[data-notes-word-exported]')");
@@ -83,7 +93,8 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
         const bulkWord = await evaluate("document.querySelector('[data-notes-word-exported] bdi').textContent");
         const { unzipSync } = require('fflate');
         const xml = file => new TextDecoder().decode(unzipSync(fs.readFileSync(file))['word/document.xml']).replace(/w:id="\d+"/gu, 'w:id="ID"');
-        assert.equal(xml(cardWord),xml(bulkWord)); assert.ok(!xml(cardWord).includes('Must not export'));
+        assert.ok(!xml(cardWord).includes('Must not export'), 'single-note Word holds only that note');
+        assert.ok(xml(cardWord).includes('Patience is light') && xml(bulkWord).includes('Patience is light'));
         // Real single-instance dispatch for all required target kinds, plus missing-note notice.
         console.log('Checking second-instance book'); win.minimize(); await second('baglib:book:link-book#p=3'); await book();
         assert.equal(win.isMinimized(),false); assert.equal(win.isFocused(),true);
@@ -99,7 +110,8 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
         await shot('dismissed-480');
         await second('baglib:note:another-deleted-note'); await until("!!document.querySelector('[data-study-link-missing]')");
         await second('baglib:note:reader-note'); await until("!!document.querySelector('[data-study-note=\"reader-note\"]')");
-        await evaluate("document.querySelector('[data-note-export-menu]').open=true;document.querySelector('[data-note-export-markdown]').click()");
+        await evaluate("document.querySelector('[data-study-note=\"reader-note\"]').click()"); await pause(500);
+        await noteMenuItem(exportLabels.md);
         await until("!!document.querySelector('[data-notes-exported]')");
         const readerMd = await evaluate("document.querySelector('[data-notes-exported] bdi').textContent");
         assert.equal(fs.readdirSync(readerMd).length,1);
