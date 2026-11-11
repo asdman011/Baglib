@@ -72,7 +72,7 @@ export interface AthanAudioConfig {
   enabled: boolean;
   volume: number; // 0.0 to 1.0
   muted: boolean;
-  soundPreset: 'makkah-short' | 'madinah-short' | 'takbeer-only' | 'custom';
+  soundPreset: 'makkah-short' | 'madinah-short' | 'takbeer-only' | 'madinah-recorded' | 'adhan-recorded' | 'custom';
   customAudioPath?: string;
 }
 

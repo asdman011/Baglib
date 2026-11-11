@@ -241,8 +241,22 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
 
       {/* Active Prayer Window Status Banner ("Time for [X] Prayer" / "حان الآن وقت صلاة [X]") */}
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+        {/* KEY-312: built-in chime, two licensed recorded adhans, or the user's own recording. */}
+        <label className="flex flex-wrap items-center gap-2">
+          <span>{tr.athanSoundLabel}</span>
+          <select data-athan-sound value={settings.audio.soundPreset === 'madinah-recorded' || settings.audio.soundPreset === 'adhan-recorded' || settings.audio.soundPreset === 'custom' ? settings.audio.soundPreset : 'makkah-short'}
+            onChange={event => { const preset = event.target.value as AthanSettings['audio']['soundPreset']; if (preset === 'custom' && !settings.audio.customAudioPath) { void chooseRecording(); return; } void onUpdateSettings({ audio: { ...settings.audio, soundPreset: preset } }); }}
+            className="rounded-lg border border-subtle bg-canvas px-2 py-1.5 text-main">
+            <option value="makkah-short">{tr.athanSoundChime}</option>
+            <option value="madinah-recorded">{tr.athanSoundMadinah}</option>
+            <option value="adhan-recorded">{tr.athanSoundShort}</option>
+            <option value="custom">{settings.audio.customAudioPath ? recordingName : tr.athanSoundCustom}</option>
+          </select>
+        </label>
         <button type="button" className="rounded-lg border border-subtle px-3 py-2 text-main" onClick={() => void chooseRecording()}>{tr.athanChooseRecording}</button>
-        <span dir="auto" className="break-all">{settings.audio.soundPreset === 'custom' ? recordingName : tr.athanBuiltInChime}</span>
+        {settings.audio.soundPreset === 'madinah-recorded' && <span data-athan-sound-credit className="w-full">{tr.athanCreditMadinah}</span>}
+        {settings.audio.soundPreset === 'adhan-recorded' && <span data-athan-sound-credit className="w-full">{tr.athanCreditShort}</span>}
+        {settings.audio.soundPreset !== 'madinah-recorded' && settings.audio.soundPreset !== 'adhan-recorded' && settings.audio.soundPreset !== 'custom' && <span className="w-full">{tr.athanBuiltInChime}</span>}
         {recordingError && <p role="alert">{tr.athanPlaybackFailed}</p>}
       </div>
       {activeWindow && (

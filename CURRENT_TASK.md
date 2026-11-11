@@ -1,3 +1,22 @@
+## KEY-312 recorded adhans - 2026-11-11, Claude Code (user approved downloading #1 and #2)
+
+Downloaded the two approved Wikimedia Commons recordings into src/renderer/public/assets/audio/:
+- madinah-prophets-mosque.ogg: CC BY 3.0, 2,974,689 bytes, SHA-1 matching Commons;
+- adhan-short-aaqib-azeez.mp3: CC BY-SA 4.0, 1,448,294 bytes.
+
+Both are unmodified, and ADHAN-CREDITS.md records the authors and licences.
+
+The adhan module has a sound picker: short chime, the Prophet's Mosque adhan (full), short adhan, or your own recording. Recorded choices show their credit line. New presets `madinah-recorded` and `adhan-recorded` are stored in the existing athan settings JSON, with no schema change. `athanSoundUrl()` in shared/athan-calculator maps a preset to its file, and useAthan plays it.
+
+Verification:
+- New tests/services/athan-recordings.test.ts (3/3): the preset mapping, that the files exist with their SHA-1, and the credits.
+- tsc, eslint and translation keys pass; full suite 1849/1849.
+- A live probe in ar and en: both files load and decode in the app (187 s and 87 s); choosing each preset saves it and shows its localized credit. The profile was deleted.
+
+Not done in KEY-312: the dhikr times and the notification service and history. No free-licence Fajr adhan was found.
+
+Files: src/renderer/public/assets/audio/{madinah-prophets-mosque.ogg, adhan-short-aaqib-azeez.mp3, ADHAN-CREDITS.md}, src/shared/types/athan.ts, src/shared/athan-calculator.ts, src/renderer/hooks/useAthan.ts, src/renderer/components/dashboard/AthanDashboardModule.tsx, src/renderer/translations.ts, tests/services/athan-recordings.test.ts, CURRENT_TASK.md.
+
 ## KEY-44 item 4: bulk shelf action - 2026-11-11, Claude Code
 
 The bulk toolbar has an "Assign shelf" action. It sets `physical_source_detail.shelf` on every physical copy of the selected books in one transaction (WorkRepository.bulkUpdateShelf, IPC library:bulk-update-shelf, preload bulkUpdateShelf), and leaves digital-only books unchanged, reporting them as skipped. The dialog uses the shared Modal behaviour. There are 6 new ar/en strings, and no schema change.

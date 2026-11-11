@@ -335,6 +335,18 @@ export const PRAYER_LABELS: Record<PrayerName, { ar: string; en: string }> = {
   isha: { ar: 'العشاء', en: 'Isha' },
 };
 
+/** KEY-312: the audio file a sound preset plays. Recorded presets are licensed files (see ADHAN-CREDITS.md). */
+export const ATHAN_RECORDINGS = {
+  'madinah-recorded': '/assets/audio/madinah-prophets-mosque.ogg',
+  'adhan-recorded': '/assets/audio/adhan-short-aaqib-azeez.mp3',
+} as const;
+export const ATHAN_DEFAULT_CHIME = '/assets/audio/athan-short.wav';
+export function athanSoundUrl(audio: Pick<AthanSettings['audio'], 'soundPreset' | 'customAudioPath'>): string {
+  if (audio.soundPreset === 'custom' && audio.customAudioPath) return audio.customAudioPath;
+  if (audio.soundPreset === 'madinah-recorded' || audio.soundPreset === 'adhan-recorded') return ATHAN_RECORDINGS[audio.soundPreset];
+  return ATHAN_DEFAULT_CHIME;
+}
+
 export const DEFAULT_ATHAN_SETTINGS: AthanSettings = {
   locationMode: 'manual',
   manualLocation: {

@@ -1,5 +1,6 @@
 'use client';
 
+import { ATHAN_DEFAULT_CHIME, athanSoundUrl } from '../../shared/athan-calculator';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AthanAlertPayload,
@@ -15,7 +16,7 @@ import {
 
 export function playLocalAthanSound(volume = 0.8, customPath?: string, onEnd = () => {}, onError = () => {}): { stop: () => void } {
   let stopped = false;
-  const audio = new Audio(customPath || '/assets/audio/athan-short.wav');
+  const audio = new Audio(customPath || ATHAN_DEFAULT_CHIME);
   audio.volume = Math.max(0, Math.min(1, volume));
   audio.onended = () => { if (!stopped) onEnd(); };
   audio.onerror = () => { if (!stopped) { stopped = true; onError(); } };
@@ -53,7 +54,7 @@ export function useAthan(audioOwner = false) {
       stopAudio();
       setIsPlayingAudio(true);
       try {
-        audioControllerRef.current = playLocalAthanSound(settings.audio.volume, settings.audio.customAudioPath,
+        audioControllerRef.current = playLocalAthanSound(settings.audio.volume, athanSoundUrl(settings.audio),
           () => setIsPlayingAudio(false), () => { setIsPlayingAudio(false); setAudioFailed(true); });
       } catch { setIsPlayingAudio(false); setAudioFailed(true); }
     },

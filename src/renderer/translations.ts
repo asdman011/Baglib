@@ -1,5 +1,12 @@
 export const translations = {
   ar: {
+    athanSoundLabel: "صوت الأذان",
+    athanSoundChime: "نغمة قصيرة",
+    athanSoundMadinah: "أذان المسجد النبوي (كامل)",
+    athanSoundShort: "أذان قصير",
+    athanSoundCustom: "تسجيلي الخاص…",
+    athanCreditMadinah: "تسجيل ejaz215 عبر freesound، برخصة CC BY 3.0.",
+    athanCreditShort: "تسجيل Atcovi (Aaqib Azeez) عبر ويكيميديا كومنز، برخصة CC BY-SA 4.0.",
     bulkAssignShelf: "تعيين الرف",
     bulkShelfModalTitle: "تعيين الرف للكتب المحددة ({count})",
     bulkShelfInputLabel: "اسم الرف أو رقمه",
@@ -4741,6 +4748,13 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    athanSoundLabel: "Adhan sound",
+    athanSoundChime: "Short chime",
+    athanSoundMadinah: "Adhan from the Prophet's Mosque (full)",
+    athanSoundShort: "Short adhan",
+    athanSoundCustom: "My own recording…",
+    athanCreditMadinah: "Recording by ejaz215 via freesound, CC BY 3.0.",
+    athanCreditShort: "Recording by Atcovi (Aaqib Azeez) via Wikimedia Commons, CC BY-SA 4.0.",
     bulkAssignShelf: "Assign shelf",
     bulkShelfModalTitle: "Assign a shelf to the selected books ({count})",
     bulkShelfInputLabel: "Shelf name or number",
