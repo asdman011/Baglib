@@ -6,7 +6,9 @@ const {execFileSync}=require('node:child_process');
 const assert=require('node:assert/strict');
 const directory=process.env.BAGLIB_WAVE6_LIVE_DIR;
 const media=path.join(directory,'media');
+const realFiles = JSON.parse(fs.readFileSync(path.join(directory, 'real-files.json'), 'utf8'));
 app.setPath('userData',directory);
+app.setAppPath(path.resolve(__dirname, '../..'));
 const openQueue=[];
 dialog.showOpenDialog=async()=>{const next=openQueue.shift();return next?{canceled:false,filePaths:next}:{canceled:true,filePaths:[]};};
 // Coursera stand-in: one token endpoint and a two-page report with another learner mixed in.
@@ -26,9 +28,10 @@ let started=false;
 app.on('browser-window-created',(_,owner)=>{
   if(started)return;started=true;
   const evaluate=code=>owner.webContents.executeJavaScript(code,true).catch(error=>{throw new Error(`${error.message}: ${code.slice(0,200)}`);});
-  const until=async(code,tries=200)=>{for(let index=0;index<tries;index++){try{if(await evaluate(code))return;}catch{}await pause(300);}throw new Error(`Timed out: ${code}`);};
+  owner.webContents.on('did-finish-load', () => { evaluate("window.electronAPI?.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
+  const until=async(code,tries=200)=>{for(let index=0;index<tries;index++){try{if(await evaluate(code))return;}catch{}await pause(300);}throw new Error(`Timed out: ${code}\n${await evaluate("document.body.innerText.slice(-1800)")}`);};
   const press=text=>evaluate(`(()=>{const item=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)}||b.getAttribute('aria-label')===${JSON.stringify(text)}||b.title===${JSON.stringify(text)});if(!item)throw new Error('no button '+${JSON.stringify(text)});item.click();})()`);
-  const nav=text=>evaluate(`document.querySelector('aside button[aria-label=${JSON.stringify(text)}]').click()`);
+  const nav=id=>evaluate(`document.querySelector('[data-nav-item="${id}"]').click()`);
   const fill=(label,value)=>evaluate(`(()=>{const element=[...document.querySelectorAll('input,textarea,select')].find(item=>item.getAttribute('aria-label')===${JSON.stringify(label)});if(!element)throw new Error('no field '+${JSON.stringify(label)});const proto=element.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:element.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(element,${JSON.stringify(value)});element.dispatchEvent(new Event(element.tagName==='SELECT'?'change':'input',{bubbles:true}));})()`);
   const shot=async name=>{await pause(500);owner.webContents.invalidate();await pause(300);fs.writeFileSync(path.join(directory,`${name}.png`),(await owner.webContents.capturePage()).toPNG());};
   const load=async language=>{owner.setContentSize(1280,900);await evaluate(`localStorage.setItem('baglib-lang','${language}')`);await owner.loadURL('http://localhost:3000');await until('!!window.electronAPI?.lectures && !!document.querySelector("footer")');await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");await pause(1200);};
@@ -37,8 +40,10 @@ app.on('browser-window-created',(_,owner)=>{
   (async()=>{
     await new Promise(resolve=>coursera.listen(0,'127.0.0.1',resolve));
     process.env.BAGLIB_COURSERA_API=`http://127.0.0.1:${coursera.address().port}`;
+    await until('!!window.electronAPI && !!document.querySelector("footer")');
     await load('ar');
     const results={formats:{}};
+    for (const file of realFiles.pdfs) await evaluate(`window.electronAPI.addBook(${JSON.stringify({ id: file.id, title: `Wave6 ${file.lang} real PDF`, bookType: 'digital', digitalFormat: 'PDF', workType: 'book', filePath: file.filename, categories: [], tags: [], lendingHistory: [] })})`);
     // Media the app's own Chromium can encode, so no sample files are downloaded.
     const recorded=await evaluate(`(async()=>{const out={};const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const g=canvas.getContext('2d');let frame=0;const timer=setInterval(()=>{g.fillStyle='hsl('+(frame++*12%360)+',70%,50%)';g.fillRect(0,0,320,180);g.fillStyle='#fff';g.font='40px Arial';g.fillText(String(frame),20,100);},40);
       for(const [name,type] of [['webm','video/webm;codecs=vp9'],['mp4','video/mp4;codecs=avc1'],['mkv','video/x-matroska;codecs=avc1']]){
@@ -58,8 +63,16 @@ app.on('browser-window-created',(_,owner)=>{
     for(const language of ['ar','en']){
       const L=labels[language];const result={language};
       await load(language);
-      await nav(L.lectures);await until(`[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===${JSON.stringify(L.add)})`);
-      if(language==='ar'){openQueue.push(files);await press(L.add);await until(`window.electronAPI.lectures.list().then(rows=>rows.length===${files.length})`);}
+      for (const file of realFiles.pdfs) {
+        owner.webContents.send('study:navigate', 'book:' + file.id + '#p=' + file.page);
+        await until(`document.querySelector('[data-reader-page]')?.dataset.readerPage === '${file.page}' && [...document.querySelectorAll('.textLayer span')].some(span => span.textContent.trim().length > 2)`);
+      }
+      result.realPdfs = realFiles.pdfs.map(file => ({ lang: file.lang, page: file.page }));
+      await nav('lectures');await until(`[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===${JSON.stringify(L.add)})`);
+      if(language==='ar'){
+        openQueue.push([realFiles.unsupportedAudio]);await press(L.add);
+        await pause(300);assert.equal((await evaluate('window.electronAPI.lectures.list()')).length,0,'WMA remains outside supported lecture formats');
+        openQueue.push(files);await press(L.add);await until(`window.electronAPI.lectures.list().then(rows=>rows.length===${files.length})`);}
       const lectures=await evaluate('window.electronAPI.lectures.list()');
       assert.equal(await evaluate("document.querySelector('[dir]').dir"),language==='ar'?'rtl':'ltr');
       result.playable={};
@@ -84,37 +97,45 @@ app.on('browser-window-created',(_,owner)=>{
       assert.equal(saved.rate,1.5);assert.ok(saved.position>=2);
       await fill(L.section,`قسم ${language}`);await press(L.addSection);
       await until(`window.electronAPI.lectures.list().then(rows=>rows.find(r=>r.id==='${mp3.id}').sections.some(s=>s.title==='قسم ${language}'))`);
-      await load(language);await nav(L.lectures);
+      await load(language);await nav('lectures');
       await until(`[...document.querySelectorAll('ul button')].some(b=>b.querySelector('span')?.textContent===${JSON.stringify(mp3.title)})`);
       await evaluate(`[...document.querySelectorAll('ul button')].find(b=>b.querySelector('span')?.textContent===${JSON.stringify(mp3.title)}).click()`);
       await until(`(()=>{const v=document.querySelector('[data-lecture-player]');return v&&v.readyState>=1&&v.playbackRate===1.5&&v.currentTime>=2})()`);
       result.resume={rate:1.5,position:saved.position};
       // The note button opens Notes with a timestamped link; saving it and following it seeks back.
       await press(L.noteHere);
-      await until(`!!document.querySelector('textarea') && document.querySelector('textarea').value.includes('media:${mp3.id}:')`);
-      const draft=await evaluate("document.querySelector('textarea').value");
+      await until(`!!document.querySelector('[data-note-editor-pane] [data-study-note-editor] .cm-content') && document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value.includes('media:${mp3.id}:')`);
+      const draft=await evaluate("document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value");
       const note=await evaluate(`window.electronAPI.studyNotes.save({title:'ملاحظة محاضرة ${language}',content:${JSON.stringify(draft+'فائدة')},tags:[],aliases:[]})`);
       result.timestampNote=draft.trim();
       // A video frame saved to a note shows as an image.
       const video=lectures.find(item=>item.kind==='video'&&result.playable[path.extname(item.path)]?.played);
       if(video){
-        await nav(L.lectures);await until(`[...document.querySelectorAll('ul button')].some(b=>b.querySelector('span')?.textContent===${JSON.stringify(video.title)})`);
+        await nav('lectures');await until(`[...document.querySelectorAll('ul button')].some(b=>b.querySelector('span')?.textContent===${JSON.stringify(video.title)})`);
         await evaluate(`[...document.querySelectorAll('ul button')].filter(b=>b.querySelector('span')?.textContent===${JSON.stringify(video.title)})[${JSON.stringify(lectures.filter(item=>item.title===video.title).indexOf(video))}].click()`);
         await until(`document.querySelector('[data-lecture-player]')?.readyState>=2`);
         await evaluate("document.querySelector('[data-lecture-player]').currentTime=1");await pause(800);
         await shot(`lectures-${language}-1280`);
         owner.setContentSize(480,1000);await pause(500);assert.ok(await evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'));await shot(`lectures-${language}-480`);owner.setContentSize(1280,900);
         await press(L.shot);
-        await until(`!!document.querySelector('textarea') && document.querySelector('textarea').value.includes('![[media:${video.id}:')`);
-        const embed=await evaluate("document.querySelector('textarea').value");
-        await evaluate(`window.electronAPI.studyNotes.save({title:'لقطة ${language}',content:${JSON.stringify(embed)},tags:[],aliases:[]})`);
-        await load(language);await nav(L.notes);
-        await until(`[...document.querySelectorAll('img[data-lecture-shot]')].some(img=>img.complete&&img.naturalWidth>0)`);
+        await until(`!!document.querySelector('[data-note-editor-pane] [data-study-note-editor] .cm-content') && document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value.includes('![[media:${video.id}:')`);
+        const embed=await evaluate("document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value");
+        const screenshotNote = await evaluate(`window.electronAPI.studyNotes.save({title:'لقطة ${language}',content:${JSON.stringify(embed)},tags:[],aliases:[]})`);
+        await load(language);await nav('notes');
+        await until(`!!document.querySelector('[data-study-note="${screenshotNote.id}"]')`);
+        await evaluate(`document.querySelector('[data-study-note="${screenshotNote.id}"]').click()`);
+        await until('!!document.querySelector("[data-note-preview-toggle]")');
+        await evaluate("document.querySelector('[data-note-preview-toggle]').click()");
+        await until(`[...document.querySelectorAll('[data-note-preview="${screenshotNote.id}"] img[data-lecture-shot]')].some(img=>img.complete&&img.naturalWidth>0)`);
         await shot(`note-shot-${language}-1280`);
         result.screenshotNote=true;
       }
       // Following the note's link opens the lecture at its moment.
-      await load(language);await nav(L.notes);
+      await load(language);await nav('notes');
+      await until(`!!document.querySelector('[data-study-note="${note.id}"]')`);
+      await evaluate(`document.querySelector('[data-study-note="${note.id}"]').click()`);
+      await until('!!document.querySelector("[data-note-preview-toggle]")');
+      await evaluate("document.querySelector('[data-note-preview-toggle]').click()");
       const seconds=Number(/media:[^:]+:(\d+)/u.exec(draft)[1]);
       await until(`[...document.querySelectorAll('button')].some(b=>b.textContent.includes(${JSON.stringify(mp3.title)})&&b.textContent.includes(':'))`);
       await evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes(${JSON.stringify(mp3.title)})&&b.textContent.includes(':')).click()`);
@@ -123,7 +144,7 @@ app.on('browser-window-created',(_,owner)=>{
       void note;
 
       // KEY-257 through the panel, against the stand-in.
-      await nav(L.pathways);await until("!!document.querySelector('[data-online-courses]')");
+      await nav('pathways');await until("!!document.querySelector('[data-online-courses]')");
       await evaluate("document.querySelector('[data-online-courses]').open=true");
       await fill(L.org,'org-123');await fill(L.learner,'learner@example.com');await fill(L.key,'live-key');await fill(L.secret,'live-secret');
       await press(L.save);await until(`[...document.querySelectorAll('[data-online-courses] button')].some(b=>b.textContent.includes(${JSON.stringify(L.import)})&&!b.disabled)`);
@@ -134,14 +155,20 @@ app.on('browser-window-created',(_,owner)=>{
       result.coursera={courses:2,secureStorage:true};
 
       // KEY-259 cover photo, then KEY-260 address file through the provider settings it sits beside.
-      await nav(L.library);await until("!!document.querySelector('[data-cover-photo]')");
+      await nav('library');await until('!!document.querySelector("[data-library-dialog=more-menu]")');
+      await evaluate("document.querySelector('[data-library-dialog=more-menu]').click()");
+      await until('!!document.querySelector("[role=menuitem]")');
       openQueue.push([path.join(media,'cover.png')]);
-      await evaluate("document.querySelector('[data-cover-photo]').click()");
+      await press(L.cover);
       await until(`[...document.querySelectorAll('input')].some(i=>i.value.includes('رياض'))`,400);
       const proposed=await evaluate(`[...document.querySelectorAll('input')].map(i=>i.value).filter(v=>v.includes('رياض')||v.includes('النووي'))`);
       result.cover=proposed;
       await shot(`cover-${language}-1280`);
-      await evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('RSS')).click()`);
+      await evaluate("document.querySelector('[role=dialog] button svg.lucide-x').closest('button').click()");
+      await until('!document.querySelector("[role=dialog]")');
+      await evaluate("document.querySelector('[data-nav-item=settings]').click()");
+      await until('!!document.querySelector("[data-settings-entry=providers]")');
+      await evaluate("document.querySelector('[data-settings-entry=providers]').click()");
       await until("!!document.querySelector('[data-source-urls]')");
       openQueue.push([path.join(media,'sources.json')]);
       await evaluate(`[...document.querySelectorAll('[data-source-urls] button')][1].click()`);
@@ -162,6 +189,16 @@ app.on('browser-window-created',(_,owner)=>{
     const expected=bag(truth),found=bag(read);let hits=0;for(const [word,count] of expected)hits+=Math.min(count,found.get(word)||0);
     // pdftotext lists each hemistich column on its own, so order-sensitive error overstates; word recall shows what is searchable.
     results.hubLines={letterCer:Math.round(distance(truth,read)/truth.length*1000)/10,wordRecall:Math.round(hits/truth.split(' ').length*1000)/10,seconds:(Date.now()-started)/1000};
+    const scanBefore = fs.readFileSync(realFiles.scanSample);
+    const originalScanText = execFileSync(path.join(process.env.BAGLIB_WAVE6_POPPLER,'pdftotext.exe'), ['-enc','UTF-8',realFiles.scanSample,'-']).toString('utf8');
+    assert.equal(originalScanText.trim(), '', 'Real scanned sample starts without a text layer');
+    const realOcr = await evaluate(`window.electronAPI.pdfEditor.executePipeline({filePaths:[${JSON.stringify(realFiles.scanSample)}],pipelineConfig:{name:'real-arabic-ocr',singleTool:true,pipeline:[{operation:'/api/v1/misc/ocr-pdf',parameters:{languages:['ara'],layout:'lines',ocrType:'force-ocr',deskew:true}}]}})`);
+    assert.equal(realOcr.ok,true,JSON.stringify(realOcr));
+    assert.notEqual(path.resolve(realOcr.data.outputPath),path.resolve(realFiles.scanSample));
+    const realText = execFileSync(path.join(process.env.BAGLIB_WAVE6_POPPLER,'pdftotext.exe'), ['-enc','UTF-8',realOcr.data.outputPath,'-']).toString('utf8');
+    assert.ok(letters(realText).length > 10, 'Real scanned Arabic page gains searchable text in a new output');
+    assert.ok(fs.readFileSync(realFiles.scanSample).equals(scanBefore), 'Input scan sample unchanged');
+    results.realScan = { searchableArabicCharacters: letters(realText).length, originalUnchanged: fs.readFileSync(realFiles.scanSample).equals(scanBefore) };
     fs.writeFileSync(path.join(directory,'results.json'),JSON.stringify(results,null,2));console.log(JSON.stringify({directory,passed:results}));coursera.close();app.quit();
   })().catch(error=>{console.error(error);fs.writeFileSync(path.join(directory,'failure.txt'),String(error.stack||error));owner.webContents.capturePage().then(image=>fs.writeFileSync(path.join(directory,'failure.png'),image.toPNG())).finally(()=>app.exit(1));});
 });

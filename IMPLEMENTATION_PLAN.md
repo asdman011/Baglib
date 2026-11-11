@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-12, Codex] KEY-317 wave6 final ar/en1280/480 PASS, childcode0, profile removed. Real PDFs both interfaces, WMA rejection and real Arabic scan OCR new output1130chars, input copy unchanged. Current origin/nav/Notes preview/Library/Settings repaired. Two scripts/own state entries, syntax/diff pass.15/20verified, next poetry. No app UX/layout edit. Known non-Quran reminder stderr retained.
+
 - [2026-11-12, Codex] KEY-317 wave5 ar/en1280/480 PASS. Current gallery/menus/scoped nav and shared Islamic research panel. All1340 corpus originals unchanged, profile removed, syntax/diff pass. Two scripts/own state entries.14/20 verified, next wave6. No app UX/layout edit.
 
 - [2026-11-12, Codex] KEY-317 context-menu layout/re-mount synchronization verified ar/en light1280. Profiles removed, original hashes unchanged. First English failure corrected, final pass. One script/own state entries, wave5 remains in progress. No app UX/layout edit.

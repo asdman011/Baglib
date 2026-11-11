@@ -3,6 +3,9 @@ import path from 'node:path';
 import {spawn, spawnSync} from 'node:child_process';
 import electron from 'electron';
 const directory=fs.mkdtempSync(path.resolve('.baglib-data/wave6-live-'));
+const evidence = fs.mkdtempSync(path.resolve('.baglib-data/k317-wave6-evidence-'));
+let code = 1;
+try {
 const engine=path.resolve('.baglib-data/pdf-engine');
 const media=path.join(directory,'media');fs.mkdirSync(media);
 // A copy of a cached recitation MP3 with a chapter tag put in front; the cached file is only read.
@@ -27,7 +30,30 @@ const python=path.join(engine,'venv','Scripts','python.exe');
 spawnSync(python,['-c',`from PIL import Image;Image.open(r"${path.resolve('.baglib-data/ocr-benchmark/set/verse-layout-scan.png')}").convert("RGB").save(r"${path.join(media,'verse.pdf')}",resolution=300)`]);
 fs.copyFileSync(path.resolve('.baglib-data/ocr-benchmark/set/verse-layout-scan.txt'),path.join(media,'verse.txt'));
 fs.writeFileSync(path.join(media,'sources.json'),JSON.stringify({version:1,updated:'2026-12-01',sources:{libgen:['https://libgen.example'],annas:['https://annas.example']}}));
-const env={...process.env,BAGLIB_DATA_DIR:directory,BAGLIB_WAVE6_LIVE_DIR:directory,BAGLIB_WAVE6_POPPLER:path.dirname(pdftoppm)};delete env.ELECTRON_RUN_AS_NODE;
-const child=spawn(electron,['scripts/wave6-live/main.cjs',`--user-data-dir=${directory}`,'--disable-features=CalculateNativeWinOcclusion','--autoplay-policy=no-user-gesture-required'],{env,stdio:'inherit',windowsHide:true});
-const timer=setTimeout(()=>child.kill(),540000);
-child.once('exit',code=>{clearTimeout(timer);console.log(JSON.stringify({directory,code}));process.exitCode=code??1;});
+const manifest = JSON.parse(fs.readFileSync('tests/real-files/manifest.json', 'utf8'));
+const realPdf = lang => manifest.files.filter(file => file.kind === 'pdf' && file.lang === lang && file.textLayer === 'yes').sort((a, b) => a.bytes - b.bytes)[0];
+const realFiles = ['ar', 'en'].map(lang => ({ id: `wave6-real-${lang}`, lang, page: lang === 'ar' ? 2 : 200, filename: path.resolve('tests/real-files', realPdf(lang).path) }));
+const wma = manifest.files.find(file => file.kind === 'audio' && file.lang === 'en');
+const wmaCopy = path.join(media, 'real-english.wma');
+fs.copyFileSync(path.resolve('tests/real-files', wma.path), wmaCopy);
+const scan = manifest.files.find(file => file.kind === 'pdf' && file.textLayer === 'no');
+const scanSample = path.join(media, 'real-arabic-scan.pdf');
+const sampled = spawnSync(python, ['-c', 'import sys,fitz;r=fitz.open(sys.argv[1]);w=fitz.open();w.insert_pdf(r,from_page=4,to_page=4);w.save(sys.argv[2]);w.close();r.close()', path.resolve('tests/real-files', scan.path), scanSample], { encoding: 'utf8' });
+if (sampled.status !== 0) throw Error(sampled.stderr || 'Real scanned PDF sampling failed');
+fs.writeFileSync(path.join(directory, 'real-files.json'), JSON.stringify({ pdfs: realFiles, unsupportedAudio: wmaCopy, scanSample }));
+const env={...process.env,BAGLIB_REGISTER_PROTOCOL: '0',BAGLIB_DATA_DIR:directory,BAGLIB_WAVE6_LIVE_DIR:directory,BAGLIB_WAVE6_POPPLER:path.dirname(pdftoppm)};delete env.ELECTRON_RUN_AS_NODE;
+code = await new Promise((resolve, reject) => {
+  const child=spawn(electron,['scripts/wave6-live/main.cjs',`--user-data-dir=${directory}`,'--disable-features=CalculateNativeWinOcclusion','--autoplay-policy=no-user-gesture-required'],{env,stdio:'inherit',windowsHide:true});
+  child.once('error', reject);
+  child.once('exit', result => resolve(result ?? 1));
+});
+} finally {
+  for (const name of fs.readdirSync(directory)) {
+    if (/\.(png|json|txt)$/.test(name)) fs.copyFileSync(path.join(directory, name), path.join(evidence, name));
+  }
+  const resolved = fs.realpathSync(directory);
+  if (path.dirname(resolved) !== fs.realpathSync('.baglib-data')) throw Error('Unexpected profile path');
+  fs.rmSync(resolved, { recursive: true, force: true });
+  console.log(JSON.stringify({ evidence, code, profileDeleted: true }));
+}
+process.exitCode = code;
