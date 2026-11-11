@@ -14,6 +14,8 @@ app.on('browser-window-created', (_, owner) => {
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  // KEY-317: scratchpad and first-run guide for throwaway profiles.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && Promise.all([window.electronAPI.settings.set('onboarding.v1',{seen:true}), window.electronAPI.settings.get('dashboard.layout.v1').then(v => v ? null : window.electronAPI.settings.set('dashboard.layout.v1',{version:1,modules:[{id:'today',visible:true},{id:'calendar',visible:true},{id:'readingGoals',visible:false},{id:'activeReads',visible:false},{id:'studyProgress',visible:false},{id:'studyInsights',visible:false},{id:'scratchpad',visible:true},{id:'athan',visible:false},{id:'khatmah',visible:false},{id:'studyRhythm',visible:false}]}))])").catch(() => {}); });
   const until = async (code, tries = 150) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(200); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(400); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const press = (keyCode, modifiers = []) => { owner.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); owner.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
@@ -28,6 +30,15 @@ app.on('browser-window-created', (_, owner) => {
   };
   const load = async language => { owner.setContentSize(1280, 900); await until('!!window.electronAPI && !!document.querySelector("footer")', 200); await evaluate(`localStorage.setItem('baglib-lang','${language}')`); await navigateHome(); await until('!!window.electronAPI && !!document.querySelector("[data-study-note-editor] .cm-content")', 200); await pause(800); };
   const settle = () => pause(1500);
+  // Since KEY-304 the Notes page is a list plus an editor; a saved note's links render in its preview.
+  const openSavedNote = async id => {
+    await evaluate("document.querySelector('[data-nav-item=\"notes\"]').click()");
+    await until(`!!document.querySelector('[data-study-note="${id}"]')`);
+    await evaluate(`document.querySelector('[data-study-note="${id}"]').click()`);
+    await until("!!document.querySelector('[data-note-preview-toggle]')");
+    await evaluate("(()=>{const b=document.querySelector('[data-note-preview-toggle]');if(b.getAttribute('data-note-preview-toggle')==='edit')b.click();})()");
+    await until(`[...document.querySelectorAll('[data-note-preview="${id}"] button')].some(b=>b.textContent==='رياض الصالحين (3)')`);
+  };
   // Real mouse moves onto a link until its preview card has loaded (moves can be dropped while the page lays out).
   const hover = async box => {
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -151,11 +162,10 @@ app.on('browser-window-created', (_, owner) => {
       await evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes(${JSON.stringify(language === 'ar' ? 'تحرير' : 'Edit')}))?.click()`);
       await evaluate("document.querySelector('[data-study-note-editor]')&&(document.querySelector('[data-study-note-editor]').value='')");
       // The page link opens the PDF at page 3 from the Notes view.
-      await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')}).click()`);
-      await until(`[...document.querySelectorAll('[data-notes-overview] button')].some(b=>b.textContent==='رياض الصالحين (3)')`);
+      await openSavedNote(saved.id);
       // Hover (focus) card on the ayah link shows its text without leaving the note.
       if (hasQuran) {
-        const box = await evaluate(`(()=>{const el=document.querySelector('[data-notes-overview] [data-study-link="quran:hafs:2:255"]');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
+        const box = await evaluate(`(()=>{const el=document.querySelector('[data-note-preview] [data-study-link="quran:hafs:2:255"]');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
         await hover(box);
         result.preview = await evaluate("document.querySelector('[data-study-link-preview]').textContent.slice(0,80)");
         await shot(`preview-${language}-1280`);
@@ -166,7 +176,7 @@ app.on('browser-window-created', (_, owner) => {
       }
       // Poem link hover shows its verses.
       if (hasPoetry) {
-        const poemBox = await evaluate(`(()=>{const el=document.querySelector('[data-notes-overview] [data-study-link^="poetry:ashaar:"]');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
+        const poemBox = await evaluate(`(()=>{const el=document.querySelector('[data-note-preview] [data-study-link^="poetry:ashaar:"]');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
         await hover(poemBox);
         result.poemPreview = await evaluate("document.querySelector('[data-study-link-preview]').textContent.slice(0,120)");
         await shot(`poem-preview-${language}-1280`);
@@ -175,18 +185,18 @@ app.on('browser-window-created', (_, owner) => {
         console.log('SKIPPED: no installed poetry partition');
         skipped.push(`${language}:poetry-hover-preview`);
       }
-      await evaluate(`[...document.querySelectorAll('[data-notes-overview] button')].find(b=>b.textContent==='رياض الصالحين (3)').click()`);
+      await evaluate(`[...document.querySelectorAll('[data-note-preview] button')].find(b=>b.textContent==='رياض الصالحين (3)').click()`);
       await until("!!document.querySelector('.textLayer span')", 200);
       await pause(2600);
       result.openedPage = await evaluate("window.electronAPI.reader.getLastLocation('editor-book')");
       // Note from the book's annotations: two highlights, out of page order, become one note with page links.
       await evaluate(`Promise.all([window.electronAPI.saveAnnotation({bookId:'editor-book',type:'highlight',locationCfiOrPage:JSON.stringify({page:3,rects:[]}),selectedText:'Page three',noteContent:'Highlight on Page 3'}),window.electronAPI.saveAnnotation({bookId:'editor-book',type:'note',locationCfiOrPage:'1',selectedText:'Page one',noteContent:'${language === 'ar' ? 'فكرتي' : 'My thought'}'})])`);
       await load(language);
-      await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')}).click()`);
-      await until(`[...document.querySelectorAll('[data-notes-overview] button')].some(b=>b.textContent==='رياض الصالحين (3)')`);
-      await evaluate(`[...document.querySelectorAll('[data-notes-overview] button')].find(b=>b.textContent==='رياض الصالحين (3)').click()`);
-      await until("!!document.querySelector('[data-pdf-annotations-toggle]')", 150);
-      await evaluate("document.querySelector('[data-pdf-annotations-toggle]').click()");
+      await openSavedNote(saved.id);
+      await evaluate(`[...document.querySelectorAll('[data-note-preview] button')].find(b=>b.textContent==='رياض الصالحين (3)').click()`);
+      // The reader's annotations list opens from the header's "more" menu (Notes panel).
+      await until("!!document.querySelector('[data-pdf-header-more]')", 150);
+      await evaluate(`(async()=>{for(const more of document.querySelectorAll('[data-pdf-header-more]')){more.click();for(let i=0;i<20;i++){const item=[...document.querySelectorAll('[role=menuitem]')].find(b=>b.textContent.trim()===${JSON.stringify(language === 'ar' ? 'الملاحظات' : 'Notes')});if(item){item.click();return;}await new Promise(r=>setTimeout(r,100));}more.click();}throw new Error('no Notes item');})()`);
       await until("!!document.querySelector('[data-annotations-to-note]:not([disabled])')", 100);
       await evaluate("document.querySelector('[data-annotations-to-note]').click()");
       await until("!!document.querySelector('[data-notes-overview] [data-study-note-editor]') && document.querySelector('[data-notes-overview] [data-study-note-editor]')?.value?.includes('#p=3')", 100);
@@ -207,7 +217,8 @@ app.on('browser-window-created', (_, owner) => {
       assert.ok(result.ayahOptions[0].includes('2:255'), 'ayah suggestion');
       assert.match(result.text, /\[\[note:patience-note\|الصبر عند البلاء\]\]/u);
       assert.match(result.text, /\[\[quran:hafs:2:255-257\|2:255-257\]\]/u);
-      assert.match(result.text, /\[\[book:editor-book#p=3\|رياض الصالحين \(3\)\]\]/u);
+      // Book links carry the source after '@' (Work -> Edition -> Source).
+      assert.match(result.text, /\[\[book:editor-book(?:@[^#|\]]+)?#p=3\|رياض الصالحين \(3\)\]\]/u);
       assert.match(result.text, /ﷺ/u); assert.match(result.text, /14\d\d|١٤[٠-٩]{2}/u);
       assert.deepEqual(result.previewLines.slice(1), ['2:255-257', 'رياض الصالحين (3)']);
       assert.ok(result.previewLines[0].endsWith('الصبر عند البلاء') && !result.previewLines[0].includes('note:'));
@@ -227,7 +238,7 @@ app.on('browser-window-created', (_, owner) => {
         assert.ok(result.poemPreview.length > 20 && !/لا تتوفر|No preview/u.test(result.poemPreview), 'poem preview');
       }
       assert.ok(result.callout.length > 0); assert.deepEqual(result.footnotes, [true, true]);
-      assert.equal(result.annotationNote, `## رياض الصالحين\n\n> Page one [[book:editor-book#p=1|رياض الصالحين (1)]]\n\n${language === 'ar' ? 'فكرتي' : 'My thought'}\n\n> Page three [[book:editor-book#p=3|رياض الصالحين (3)]]`);
+      assert.equal(result.annotationNote.replace(/book:editor-book@[^#|\]]+/gu, 'book:editor-book'), `## رياض الصالحين\n\n> Page one [[book:editor-book#p=1|رياض الصالحين (1)]]\n\n${language === 'ar' ? 'فكرتي' : 'My thought'}\n\n> Page three [[book:editor-book#p=3|رياض الصالحين (3)]]`);
       assert.match(result.text, /\*\*Patience is light\.\*\*/u);
       assert.deepEqual(result.lineDirections.slice(0, 4), ['rtl', 'rtl', 'rtl', 'ltr']);
       assert.equal(result.firstLineFits, true); assert.equal(result.cleared, true);

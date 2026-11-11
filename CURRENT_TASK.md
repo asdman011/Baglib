@@ -1,3 +1,18 @@
+## KEY-317 note-editor-live repaired - 2026-11-11, Claude Code
+
+The script is updated for the current app:
+- the scratchpad and first-run-guide hook;
+- the notes nav item;
+- the saved note opened in the list-plus-editor page and switched to preview for its links (KEY-304);
+- the reader's Notes panel opened from the header's "more" menu, since the old annotations toggle prop is no longer passed;
+- book links may carry `@sourceId`, as study-notes.ts writes them.
+
+It passes live in ar and en with a throwaway corpus copy; the cleanup verified the originals were unchanged.
+
+Seen, not fixed: `annotationPanel` in PdfWorkstationPanel is never passed (a dead prop with the toggle and menu item behind it).
+
+Files: scripts/note-editor-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-300 part 1 verified - 2026-11-11, Codex (key300)
 
 The import flow is implemented and verified. KEY-300 remains open for part 2. The user explicitly authorized a tested part-1 commit/push when the complete scope exceeds one pass. Claude Code owns review and Jira.
