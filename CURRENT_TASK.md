@@ -1,3 +1,15 @@
+## KEY-45 review passed - 2026-11-11, Claude Code
+
+Claude Code reviewed soft-delete, Undo and Trash Bin restore against the KEY-45 acceptance criteria.
+- New test tests/repositories/trash-restore-preserves.test.ts proves that single and bulk restore keep title, author, language, description, status, progress and categories (2/2).
+- The existing soft-delete-trash tests cover active-view exclusion, trash counts, permanent delete and Empty Trash.
+- KEY-301's feedback-ui-live already verifies the immediate Undo toast after trashing, in 8 configurations.
+- A throwaway live probe of the Trash Bin UI passed 8/8 (ar/en, light/dark, 1280/480): bulk "restore selected" kept every book's data; permanent delete asks first, and Cancel keeps the book; Empty Trash asks first and then clears; no horizontal overflow. The probe and its profile were deleted.
+
+Finding passed to KEY-300: the Arabic restore toast says «تم استرجاع 3 كتاب»; it needs the plural form.
+
+Files: tests/repositories/trash-restore-preserves.test.ts, CURRENT_TASK.md.
+
 ## KEY-317 part 1 - 2026-11-11, Claude Code (overnight run)
 
 Two more live scripts now mark the KEY-307 first-run guide as seen and pass with it: curriculum-exam-live and library-declutter-live. They use the same did-finish-load hook as the ui-live scripts in KEY-308 part 11.
