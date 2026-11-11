@@ -30,6 +30,7 @@ app.on('browser-window-created',(_,win)=>{
   const errors=[];
   win.webContents.on('console-message',(_,level,message)=>{if(level>=3)errors.push(message);});
   const evaluate=script=>win.webContents.executeJavaScript(script,true);
+  win.webContents.on('did-finish-load', () => { evaluate("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until=async(script,timeout=60000)=>{
     const end=Date.now()+timeout;
     while(Date.now()<end){try{if(await evaluate(script))return;}catch{}await sleep(150);}
@@ -38,7 +39,15 @@ app.on('browser-window-created',(_,win)=>{
   const click=selector=>evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
   const key=async(keyCode,modifiers=[])=>{win.show();win.focus();win.webContents.focus();win.webContents.sendInputEvent({type:'keyDown',keyCode,modifiers});win.webContents.sendInputEvent({type:'keyUp',keyCode,modifiers});await sleep(150);};
   const shot=async name=>{await sleep(250);fs.writeFileSync(path.join(evidence,name+'.png'),(await win.webContents.capturePage()).toPNG());};
-  const navigate=async id=>{await key('Escape');await click(`[data-nav-item="${id}"]`);await sleep(250);};
+  const navigate = async id => {
+    await key('Escape');
+    await click(`[data-nav-item="${id.startsWith('notes-') ? 'notes' : id}"]`);
+    if (id.startsWith('notes-')) {
+      await until('!!document.querySelector("[data-notes-tab]")');
+      await click(`[data-notes-tab="${id.slice(6)}"]`);
+    }
+    await sleep(250);
+  };
   const study=async target=>{await key('Escape');win.webContents.send('study:navigate',target);await sleep(300);};
   const context=async(selector,mode='mouse',edge=false)=>{
     console.log('MENU',selector,mode);

@@ -41,20 +41,17 @@ try {
   if (!ready) throw Error('Renderer did not start');
   code = await new Promise((resolve,reject) => {
     const child = spawn(electron, ['scripts/context-menu-live/main.cjs',`--user-data-dir=${directory}`,'--disable-features=CalculateNativeWinOcclusion'], { env, windowsHide:true, stdio:'inherit' });
-    const timer=setTimeout(()=>child.kill(),900000);
     child.once('error',reject);
-    child.once('exit',result=>{clearTimeout(timer);resolve(result ?? 1);});
+    child.once('exit',result=>{resolve(result ?? 1);});
   });
 } finally {
   if (server) spawnSync('taskkill',['/PID',String(server.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});
   for (const file of files) if (hash(file.filename)!==file.before) throw Error(`Original changed ${file.filename}`);
   const originals=corpus.cleanup();
   fs.writeFileSync(path.join(evidence,'inputs.json'),JSON.stringify({directory,code,files,originals,missingArabicEpub:true},null,2));
-  if (code===0) {
-    const resolved=fs.realpathSync(directory);
-    if (!resolved.startsWith(dataRoot+path.sep+'k316-')) throw Error('Cleanup outside task profile refused');
-    fs.rmSync(resolved,{recursive:true,force:true});
-  }
+  const resolved=fs.realpathSync(directory);
+  if (!resolved.startsWith(dataRoot+path.sep+'k316-')) throw Error('Cleanup outside task profile refused');
+  fs.rmSync(resolved,{recursive:true,force:true});
 }
 console.log('KEY-316 evidence',evidence);
 process.exitCode=code;

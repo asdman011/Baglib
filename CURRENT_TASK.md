@@ -1,3 +1,9 @@
+## KEY-317 context-menu live repair verified - 2026-11-11, Codex (key317)
+
+Updated first-run guide dismissal and Notes Cards/Boards tab navigation. Removed forced Electron termination and clean private profiles on every completed run. User-facing application behavior/layout stays as implemented by KEY-301..316. The harness now reaches the current Notes tabs.
+
+Verification passed ar-light-1280 and en-light-1280 against localhost:3000, with real Arabic/English text-layer PDFs and a real English EPUB. Mouse/keyboard/touch, all ten surfaces, submenu and mark reopening checks passed. Corpus/original hashes unchanged, both profiles removed. Default dark/480 cases remain unverified in this batch. Real Arabic EPUB is unavailable. Exact files scripts/context-menu-live/main.cjs, scripts/context-menu-live/run.mjs, own entries in CURRENT_TASK.md and IMPLEMENTATION_PLAN.md. Report/board updated locally. Remaining dispatched scripts pending. Commit/push authorized by current dispatch, Jira left to Claude.
+
 ## KEY-317 runners: inline ui-motion.css into the temporary renderer builds - 2026-11-11, Claude Code
 
 Eight live runners copy globals.css into a temporary build, where its relative `@import "./ui-motion.css"` failed ("Can't resolve './ui-motion.css'"). Each runner now inlines that file.
