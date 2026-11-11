@@ -1,5 +1,6 @@
 export const translations = {
   ar: {
+    quranMakeDeck: "إنشاء مجموعة حفظ من هذه الآية",
     cardDeckHadithRange: "من نطاق أحاديث",
     cardDeckFromHadith: "من الحديث رقم",
     cardDeckToHadith: "إلى الحديث رقم",
@@ -4776,6 +4777,7 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    quranMakeDeck: "Make a memorization deck from here",
     cardDeckHadithRange: "From a range of hadiths",
     cardDeckFromHadith: "From hadith no.",
     cardDeckToHadith: "To hadith no.",

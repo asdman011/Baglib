@@ -1,3 +1,23 @@
+## KEY-319 part 2: memorization deck from the Quran reader - 2026-11-11, Claude Code
+
+The Quran reader's ayah menu (Hafs) has "Make a memorization deck from here". It opens a small dialog with the name, from and to (prefilled from that ayah, bounded by the surah's length) and memorize. It calls the same generate-ayah-deck IPC as the deck panel, so the cards and their exact text are identical, and a toast reports the result. One new key, `quranMakeDeck`.
+
+Verification:
+- The new scripts/quran-deck-live passes in ar and en with a disposable Quran pack and layout copy: page 42, menu, dialog, 2:255-257 gives 3 cards.
+- Making the same range from the panel API reuses those 3 cards, with no duplicates.
+- The dialog is RTL in Arabic.
+- Full suite 1871/1871.
+
+KEY-319 is now complete; part 1 was 9f449ec.
+
+Files:
+- src/renderer/components/quran/QuranAyahDeckDialog.tsx (new)
+- src/renderer/components/quran/QuranMushafWorkspace.tsx
+- src/renderer/components/actions/QuranActionMenu.tsx
+- src/renderer/translations.ts (1 key)
+- scripts/quran-deck-live/*
+- CURRENT_TASK.md
+
 ## KEY-319 part 1: deck from a range of hadiths - 2026-11-11, Claude Code
 
 The Cards deck panel has a "From a range of hadiths" section:

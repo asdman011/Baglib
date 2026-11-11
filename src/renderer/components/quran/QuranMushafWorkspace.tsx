@@ -14,6 +14,7 @@ import { QuranTranslationText } from './QuranTranslationText';
 import { QuranRichText, quranHtmlText } from './QuranRichText';
 import { QuranTopicDrawer } from './QuranTopicDrawer';
 import { QuranSimilarAyahsDrawer } from './QuranSimilarAyahsDrawer';
+import { QuranAyahDeckDialog } from './QuranAyahDeckDialog';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { openSunnahReference } from '../../utils/study-navigation';
 import { groupThemeLabels } from './quran-theme-labels';
@@ -164,6 +165,7 @@ export function QuranMushafWorkspace(props: Props) {
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [menu, setMenu] = useState<{ reference: Reference; x: number; y: number } | null>(null);
   const [showThemes, setShowThemes] = useState(false);
+  const [deckFrom, setDeckFrom] = useState<Reference | null>(null);
   const [themes, setThemes] = useState<QuranAyahTheme[]>([]);
   const [positions, setPositions] = useState<{ theme: QuranAyahTheme; top: number; height: number; left: number }[]>([]);
   const [topicDrawer, setTopicDrawer] = useState<{ topics: QuranTopic[]; active: QuranTopic | null } | null>(null);
@@ -278,7 +280,9 @@ export function QuranMushafWorkspace(props: Props) {
         play: props.canPlay ? () => props.onStartAudio(menu.reference) : undefined,
       }} toolsLabel={t('quranReadingOptions')}
       tools={(['morphology','meanings','transliteration','mutashabihat','similar','topics','themes'] as Tool[]).map(tool => ({id:tool,label:t(labels[tool])}))}
-      onTool={tool=>open(tool as Tool,menu.reference,'left')} />}
+      onTool={tool=>open(tool as Tool,menu.reference,'left')}
+      makeDeck={page.profile === 'hafs' ? { label: t('quranMakeDeck'), onClick: () => setDeckFrom(menu.reference) } : undefined} />}
+    {deckFrom && <QuranAyahDeckDialog reference={deckFrom} lang={props.lang} t={t} onClose={() => setDeckFrom(null)} />}
     {topicDrawer && <QuranTopicDrawer topics={topicDrawer.topics} activeTopic={topicDrawer.active} onSelectTopic={topic => setTopicDrawer(current => ({ topics: current?.topics.some(item => item.topicId === topic.topicId) ? current.topics : [...(current?.topics || []), topic], active: topic }))} onSelectAyah={navigateFromDrawer} onClose={() => setTopicDrawer(null)} t={t} lang={props.lang} dir={props.dir} onSearch={searchTopics} onLoadTopics={loadTopics} />}
     {similarDrawer && <QuranSimilarAyahsDrawer surah={similarDrawer.reference.surah} ayah={similarDrawer.reference.ayah} similarAyahs={similarDrawer.items} surahs={props.surahs} script={selection.script} t={t} lang={props.lang} dir={props.dir} onClose={() => setSimilarDrawer(null)} onNavigateAyah={navigateFromDrawer} onCopy={props.onCopyText} />}
   </div>;
