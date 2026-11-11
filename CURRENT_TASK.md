@@ -1,3 +1,11 @@
+## KEY-317 context-menu race verified - 2026-11-12, Codex (key317)
+
+Exact script scripts/context-menu-live/main.cjs adds mark re-mount and visible layout waits plus two animation frames before context actions. Arabic and English light1280 live pass, input/corpus hashes unchanged, profiles removed. First English retry exposed a second Missing surface race after Escape, corrected with existence synchronization. Evidence/report recorded locally. Dark/narrow not rerun. No app UX/layout edits. Wave5 edits remain unverified and excluded from this batch. Scoped commit/push authorized, Jira left to Claude.
+
+## KEY-317 resumed - 2026-11-12, Codex (key317)
+
+Resume remaining seven scripts and context-menu mark layout race. Read state/history and preserve unrelated work. Sequential dev-renderer ar/en runs pending. Scoped commits/push authorized by dispatch, Jira left to Claude.
+
 ## KEY-317 wave4 verified - 2026-11-12, Codex (key317)
 
 Wave4 PASS ar/en at1280/480. Current selected-note History, Questions and Book filters, answered-status action, note context-menu deletion, Cards tools and current deck-status readiness repaired. Original history/restore/questions/reflections/planner-actions/quotes/trash/erase/consent/backup/dictionary/commentary/deck/Anki/card-comment assertions retained. Previous failures were list-render race, stale Notes Log label casing and stale Arabic deck-success text. An attempted blanket toast change was corrected after inspecting CardDecksPanel's retained inline statuses. Default fixture run tested, optional old-database/real-copy branches remain unverified.

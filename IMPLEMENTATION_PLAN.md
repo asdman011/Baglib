@@ -2,6 +2,10 @@
 
 ## Recent Agent Updates
 
+- [2026-11-12, Codex] KEY-317 context-menu layout/re-mount synchronization verified ar/en light1280. Profiles removed, original hashes unchanged. First English failure corrected, final pass. One script/own state entries, wave5 remains in progress. No app UX/layout edit.
+
+- [2026-11-12, Codex] KEY-317 resumed remaining seven scripts plus mark layout synchronization. Verification pending, scoped publication authorized, Jira left to Claude.
+
 - [2026-11-12, Codex] KEY-317 wave4 ar/en1280/480 PASS with current Notes History/filters/Cards/actions and deck wording. Retained all default fixture assertions, optional old-DB branches unverified. Profile removed, syntax/diff pass. Two scripts/own state entries.13/20 verified, seven remaining.
 
 - [2026-11-11, Codex] KEY-317 assistant and Quran-wird ar/en1280/480 PASS,12/20 scripts verified. Current raw-editor hook and rendered Hafs navigation asserted, shared dev server retained, corpora hash-verified/profiles removed. Four scripts/own state entries in handoff. Eight remaining, next wave4.

@@ -29,7 +29,7 @@ app.on('browser-window-created',(_,win)=>{
   const results=[];
   const errors=[];
   win.webContents.on('console-message',(_,level,message)=>{if(level>=3)errors.push(message);});
-  const evaluate=script=>win.webContents.executeJavaScript(script,true);
+  const evaluate=script=>win.webContents.executeJavaScript(script,true).catch(error => { throw Error(error.message + '\n' + script); });
   win.webContents.on('did-finish-load', () => { evaluate("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until=async(script,timeout=60000)=>{
     const end=Date.now()+timeout;
@@ -52,7 +52,17 @@ app.on('browser-window-created',(_,win)=>{
   const context=async(selector,mode='mouse',edge=false)=>{
     console.log('MENU',selector,mode);
     if(!selector.includes('textLayer')&&!selector.includes('.prose'))await key('Escape');
+    await until(`!!document.querySelector(${JSON.stringify(selector)})`);
     await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw Error('Missing surface');e.scrollIntoView({block:'center'});e.focus({preventScroll:true});})()`);
+    if (selector === '[data-mark-id]') {
+      await until(`(() => {
+        const mark = document.querySelector('[data-mark-id]');
+        if (!mark) return false;
+        const bounds = mark.getBoundingClientRect();
+        return bounds.width > 0 && bounds.height > 0 && bounds.bottom > 0 && bounds.top < innerHeight;
+      })()`);
+      await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    }
     if(mode==='keyboard')await key('F10',['shift']);
     else if(mode==='touch'){
       await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)}),r=e.getBoundingClientRect();e.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,cancelable:true,pointerType:'touch',clientX:r.x+Math.min(r.width/2,20),clientY:r.y+Math.min(r.height/2,20)}));})()`);
@@ -158,6 +168,7 @@ app.on('browser-window-created',(_,win)=>{
           await context('[data-mark-id]','mouse');await assertActions(['edit','colors','comment','delete']);await shot('15-reader-mark-'+file.lang+'-'+tag);
           await choose('edit');await until('!!document.querySelector("[data-mark-text]")');await key('Escape');
           await context('[data-mark-id]','mouse');await choose('edit');await until('!!document.querySelector("[data-mark-text]")');
+          await until(`!!document.querySelector('[data-mark-id]')`);
           await evaluate(`(()=>{const e=document.querySelector('[data-mark-id]'),r=e.getBoundingClientRect();e.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.x,clientY:r.y}));})()`);
           await until('document.querySelectorAll("[data-baglib-menu]").length===1');await assertActions(['edit','colors','comment','delete']);await key('Escape');
           await context('[data-mark-id]','keyboard');await key('Escape');await context('[data-mark-id]','touch');await key('Escape');
