@@ -35,6 +35,8 @@ export const StatusBar: React.FC = () => {
         </div>
       </div>
 
+      <div id="import-status-slot" className="min-w-0 shrink" />
+
       {/* Right Items */}
       <div className="flex items-center gap-4">
         {/* Active Shortcuts Quick Help */}

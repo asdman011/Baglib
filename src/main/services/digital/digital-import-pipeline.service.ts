@@ -1,3 +1,4 @@
+import { cancelledImport, summarizeImports } from '../../../shared/import-batch';
 import { errorMessage, errorCode } from '../../../shared/errors';
 import path from 'path';
 import { hashImportFile } from './import-files';
@@ -418,7 +419,8 @@ export class DigitalImportPipelineService {
    */
   public async importFiles(
     optionsList: DigitalImportOptions[],
-    onProgress?: (progress: ImportProgressEvent) => void
+    onProgress?: (progress: ImportProgressEvent) => void,
+    signal?: AbortSignal
   ): Promise<BatchImportSummary> {
     const results: DigitalImportResult[] = [];
     const totalFiles = optionsList.length;
@@ -435,13 +437,17 @@ export class DigitalImportPipelineService {
       await new Promise<void>(resolve => setImmediate(resolve));
       const opt = optionsList[i];
       const fileName = path.basename(opt.filePath);
+      if (signal?.aborted) {
+        results.push(cancelledImport(opt.filePath, fileName));
+        continue;
+      }
 
       onProgress?.({
         currentFileIndex: i + 1,
         totalFiles,
         currentFilename: fileName,
         status: 'validating',
-        progressPercentage: Math.round(((i + 0.1) / totalFiles) * 100),
+        progressPercentage: Math.round((i / totalFiles) * 100),
       });
 
       try {
@@ -450,7 +456,7 @@ export class DigitalImportPipelineService {
           totalFiles,
           currentFilename: fileName,
           status: 'extracting',
-          progressPercentage: Math.round(((i + 0.5) / totalFiles) * 100),
+          progressPercentage: Math.round((i / totalFiles) * 100),
         });
 
         const result = await this.importFile(opt);
@@ -487,18 +493,7 @@ export class DigitalImportPipelineService {
       }
     }
 
-    const successfulImports = results.filter((r) => r.success && !r.skipped).length;
-    const skippedImports = results.filter((r) => r.skipped).length;
-    const failedImports = results.filter((r) => !r.success).length;
-
-    return {
-      totalFiles,
-      successfulImports,
-      skippedImports,
-      failedImports,
-      results,
-      bulkAutoFillSuppressed: isBatch && isConservation,
-    };
+    return summarizeImports(results, isBatch && isConservation);
   }
 
   /**

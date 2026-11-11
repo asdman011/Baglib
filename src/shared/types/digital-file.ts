@@ -242,6 +242,7 @@ export type ImportProgressStatus =
   | 'skipped';
 
 export interface ImportProgressEvent {
+  jobId?: string;
   currentFileIndex: number;
   totalFiles: number;
   currentFilename: string;
@@ -274,6 +275,7 @@ export interface DigitalImportResult {
   fileHash?: string;
   fileSizeBytes: number;
   skipped?: boolean;
+  cancelled?: boolean;
   duplicateReason?: string;
   duplicateMatchType?: DuplicateMatchType;
   extractedMetadata?: {

@@ -5,6 +5,11 @@ import { spawn, execSync } from 'node:child_process';
 import electron from 'electron';
 import { setupThrowawayCorpus } from '../lib/corpus-copy.mjs';
 
+if (process.argv.includes('--import')) {
+  await import('./import-run.mjs');
+  process.exit(process.exitCode || 0);
+}
+
 // 1. Ensure port 3000 is clean
 try {
   execSync('node scripts/ensure-port-free.js', { stdio: 'inherit' });

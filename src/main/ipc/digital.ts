@@ -18,6 +18,13 @@ export function setupDigitalIPC(): void {
   const pipeline = new DigitalImportPipelineService(undefined, validator, extractor, undefined, duplicateDetector);
   const queue = new ImportQueue(() => extractor.dispose());
   confirmedQuitCleanup.registerDrain(() => queue.close());
+  const batches = new Map<string, AbortController>();
+  ipcMain.handle('digital:cancel-import', (event, jobId: string) => {
+    if (typeof jobId !== 'string') return false;
+    const controller = batches.get(event.sender.id + ':' + jobId);
+    controller?.abort();
+    return Boolean(controller);
+  });
   const enqueue = <Value>(action: () => Promise<Value>): Promise<Value> => queue.enqueue(action);
   ipcMain.handle('digital:discover-files', (_event, paths: string[]) => {
     if (!Array.isArray(paths) || paths.some(value => typeof value !== 'string')) throw new Error('Invalid import paths');
@@ -106,7 +113,12 @@ export function setupDigitalIPC(): void {
   /**
    * Batch import multiple digital files with streaming progress reporting
    */
-  ipcMain.handle('digital:import-files', async (event, optionsList: DigitalImportOptions[]) => {
+  ipcMain.handle('digital:import-files', async (event, optionsList: DigitalImportOptions[], jobId?: string) => {
+    if (jobId !== undefined && (typeof jobId !== 'string' || !jobId || jobId.length > 128)) throw new Error('Invalid import job');
+    const key = jobId ? event.sender.id + ':' + jobId : undefined;
+    if (key && batches.has(key)) throw new Error('Import job already active');
+    const controller = new AbortController();
+    if (key) batches.set(key, controller);
     try {
       if (!Array.isArray(optionsList)) {
         return { totalFiles: 0, successfulImports: 0, failedImports: 0, skippedImports: 0, results: [] };
@@ -114,15 +126,17 @@ export function setupDigitalIPC(): void {
       return await enqueue(() => pipeline.importFiles(optionsList, (progress) => {
         try {
           if (!event.sender.isDestroyed()) {
-            event.sender.send('digital:import-progress', progress);
+            event.sender.send('digital:import-progress', { ...progress, jobId });
           }
         } catch {
           // ignore if sender window closed
         }
-      }));
+      }, controller.signal));
     } catch (err: unknown) {
       console.error('[DigitalIPC] Error batch importing digital files:', err);
       throw err;
+    } finally {
+      if (key) batches.delete(key);
     }
   });
 

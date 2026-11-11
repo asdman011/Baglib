@@ -1,6 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Button } from '../ui/Button';
+import { useToast } from '../ui/Toast';
+import { importResultCounts } from '../../../shared/import-batch';
 import { Modal } from '../ui/Modal';
 import {
   UploadCloud,
@@ -50,6 +54,15 @@ interface ImportWizardModalProps {
 
 type WizardStep = 'select' | 'duplicates' | 'importing' | 'summary';
 
+const importResultGroups = {
+  imported: { label: 'metricImported', next: 'importImportedNext' },
+  duplicates: { label: 'importDuplicates', next: 'importDuplicatesNext' },
+  failures: { label: 'metricFailed', next: 'importFailuresNext' },
+  cancelled: { label: 'importCancelled', next: 'importCancelledNext' },
+} as const;
+type ImportResultGroup = keyof typeof importResultGroups;
+const importResultGroupKeys = Object.keys(importResultGroups) as ImportResultGroup[];
+
 export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   isOpen,
   onClose,
@@ -57,8 +70,21 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   initialPaths,
   requestId = 0,
 }) => {
-  const { t, dir, lang, refreshBooks } = useWorkspace();
+  const { t, dir, lang, refreshBooks, setViewMode } = useWorkspace();
+  const { showToast, dismissToast } = useToast();
+  const completionToast = useRef<string | null>(null);
+  const jobId = useRef<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [resultFilter, setResultFilter] = useState<ImportResultGroup>('imported');
   const [minimized, setMinimized] = useState(false);
+  const minimizedRef = useRef(false);
+  useEffect(() => {
+    minimizedRef.current = minimized;
+    if (!minimized && completionToast.current) {
+      dismissToast(completionToast.current);
+      completionToast.current = null;
+    }
+  }, [minimized, dismissToast]);
   const [previousRequest, setPreviousRequest] = useState(requestId);
   if (previousRequest !== requestId) {
     setPreviousRequest(requestId);
@@ -122,7 +148,10 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   // Reset states when closed
   const handleModalClose = () => {
     if (isImporting || isScanningDuplicates || scanActive.current || importActive.current) return;
+    if (completionToast.current) dismissToast(completionToast.current);
+    completionToast.current = null;
     setStep('select');
+    setCancelling(false);
     clear();
     setOperationError(false);
     setVisibleCount(100);
@@ -138,11 +167,14 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   const dialogRef = React.useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
-  if (minimized) return <button type="button" data-import-resume onClick={() => setMinimized(false)} className="fixed bottom-10 end-4 z-40 max-w-[calc(100vw-2rem)] rounded-xl border border-pale-sky-500/50 bg-surface p-3 text-start text-sm text-main shadow-xl">
-    <span className="block font-bold">{t('importResume')}</span>
-    <span role="status" className="block text-xs text-muted leading-relaxed">{importSummary ? t('importBackgroundFinished') : t('importBackgroundHint')}</span>
-    {progressEvent && <span className="block text-xs" dir="auto">{progressEvent.currentFilename} · {progressEvent.progressPercentage}%</span>}
-  </button>;
+  if (minimized) {
+    const item = <button type="button" data-import-resume onClick={() => setMinimized(false)} className="max-w-52 truncate rounded px-2 py-1 text-start text-xs text-main hover:bg-canvas" title={t(importSummary ? 'importBackgroundFinished' : 'importBackgroundHint')}>
+      <span className="font-semibold">{t('importResume')}</span>
+      <span role="status" className="ms-2">{importSummary ? t('importBackgroundFinished') : progressEvent ? progressEvent.progressPercentage + '%' : t('importBackgroundHint')}</span>
+    </button>;
+    const slot = document.getElementById('import-status-slot');
+    return slot ? createPortal(item, slot) : <div className="fixed bottom-10 end-4 z-40 max-w-[calc(100vw-2rem)] rounded-xl border border-subtle bg-surface p-2 shadow-xl">{item}</div>;
+  }
 
   const formatBytes = (bytes: number): string => {
     if (!bytes || bytes <= 0) return '0 B';
@@ -291,6 +323,10 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     if (stagedFiles.length === 0 || importActive.current) return;
     importActive.current = true;
     setIsImporting(true);
+    setCancelling(false);
+    setOperationError(false);
+    setProgressEvent(null);
+    jobId.current = crypto.randomUUID();
     setStep('importing');
     setVisibleCount(100);
 
@@ -300,7 +336,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     try {
       if (api?.onDigitalImportProgress) {
         unsubscribeProgress = api.onDigitalImportProgress((progress: ImportProgressEvent) => {
-          setProgressEvent(progress);
+          if (!progress.jobId || progress.jobId === jobId.current) setProgressEvent(progress);
         });
       }
       const optionsList = stagedFiles.map((s) => ({
@@ -314,13 +350,21 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
           ?.existingWork?.id
       }));
 
-      const summary: BatchImportSummary = await api.importDigitalFiles(optionsList);
+      const summary: BatchImportSummary = await api.importDigitalFiles(optionsList, jobId.current || undefined);
       setImportSummary(summary);
       setStep('summary');
+      setResultFilter('imported');
+      if (minimizedRef.current) {
+        completionToast.current = showToast({ message: t('importBackgroundFinished'), action: { label: t('importReviewResults'), onClick: () => setMinimized(false) } });
+      }
 
-      // Refresh workspace library books immediately without manual page reload
-      await refreshBooks();
-      onImportComplete?.();
+      // A failed refresh must never send a completed batch back to the import action.
+      try {
+        await refreshBooks();
+        onImportComplete?.();
+      } catch {
+        showToast({ message: t('importRefreshFailed'), type: 'warning' });
+      }
     } catch (err) {
       console.error('[ImportWizard] Batch import failed:', err);
       setOperationError(true);
@@ -331,8 +375,42 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
       }
       setIsImporting(false);
       importActive.current = false;
+      jobId.current = null;
+      setCancelling(false);
     }
   };
+
+  const cancelImport = async () => {
+    if (!jobId.current || cancelling) return;
+    setCancelling(true);
+    try {
+      await window.electronAPI.cancelDigitalImport(jobId.current);
+    } catch {
+      setCancelling(false);
+      showToast({ message: t('importCancelFailed'), type: 'danger' });
+    }
+  };
+
+  const retryResults = () => {
+    const retryPaths = new Set(importSummary?.results.filter(result => !result.success || result.cancelled).map(result => result.filePath));
+    setStagedFiles(files => files.filter(file => retryPaths.has(file.path)));
+    setImportSummary(null);
+    setProgressEvent(null);
+    setOperationError(false);
+    setDuplicateResults([]);
+    setFileActions({});
+    setStep('select');
+  };
+
+  const counts = importResultCounts(importSummary?.results || []);
+  const filteredResults = importSummary?.results.filter(result => {
+    switch (resultFilter) {
+      case 'imported': return result.success && !result.skipped;
+      case 'duplicates': return result.skipped && !result.cancelled;
+      case 'cancelled': return result.cancelled;
+      case 'failures': return !result.success;
+    }
+  }) || [];
 
   const handleStartImport = () => {
     if (!operationError) return startImport(duplicateResults, fileActions);
@@ -370,17 +448,16 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
           <button type="button" data-import-minimize onClick={() => setMinimized(true)} title={t('importMinimize')} aria-label={t('importMinimize')} className="ms-auto p-2 rounded-xl text-muted hover:text-main hover:bg-canvas"><Minimize2 className="w-5 h-5" /></button>
           <button
-            onClick={handleModalClose}
-            disabled={isImporting || isScanningDuplicates}
+            onClick={() => { if (isImporting || isScanningDuplicates) setMinimized(true); else handleModalClose(); }}
             className="p-2 rounded-xl text-muted hover:text-main hover:bg-canvas transition-colors disabled:opacity-40 cursor-pointer"
-            title={t('closeImportWizard')}
-            aria-label={t('closeImportWizard')}
+            title={t(isImporting || isScanningDuplicates ? 'importMinimize' : 'closeImportWizard')}
+            aria-label={t(isImporting || isScanningDuplicates ? 'importMinimize' : 'closeImportWizard')}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {(isImporting || isScanningDuplicates) && <p role="status" className="px-3 sm:px-6 py-2 text-xs leading-relaxed text-muted border-b border-subtle">{t('importWaitSafely')}</p>}
+        {(isImporting || isScanningDuplicates) && <p role="status" className="px-3 sm:px-6 py-2 text-xs leading-relaxed text-muted border-b border-subtle">{t(isImporting ? cancelling ? 'importCancelPending' : 'importCancelHint' : 'importBackgroundHint')}</p>}
         {/* Stepper Navigation Indicator */}
         <div className="px-3 sm:px-6 py-3 bg-canvas/50 border-b border-subtle grid grid-cols-3 gap-2 text-xs leading-relaxed font-semibold shrink-0 [&>span]:hidden [&>div]:min-w-0 [&>div]:flex-wrap [&>div>span:first-child]:shrink-0">
           <div className="flex items-center gap-2">
@@ -929,57 +1006,38 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                   </div>
                   <div>
                     <h3 className="font-bold text-base text-main">
-                      {t('importCompletedHeading')}
+                      {t(counts.cancelled > 0 ? 'importStoppedHeading' : counts.failures > 0 ? 'importIssuesHeading' : 'importCompletedHeading')}
                     </h3>
-                    <p className="text-xs text-muted">{t('importCompletedSummary')}</p>
+                    <p className="text-xs text-muted">{t(counts.cancelled > 0 ? 'importStoppedSummary' : 'importCompletedSummary')} · {t('metricTotal')}: {importSummary.totalFiles.toLocaleString(lang)}</p>
                   </div>
                 </div>
 
-                {/* 4 Metric Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3.5 rounded-2xl bg-surface border border-subtle text-center">
-                    <span className="text-[11px] text-muted block mb-1 font-medium">
-                      {t('metricTotal')}
-                    </span>
-                    <span className="text-lg font-bold text-main font-mono">
-                      {importSummary.totalFiles}
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center">
-                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 block mb-1 font-medium">
-                      {t('metricImported')}
-                    </span>
-                    <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                      {importSummary.successfulImports}
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-pale-sky-500/10 border border-pale-sky-500/20 text-center">
-                    <span className="text-[11px] text-pale-sky-600 dark:text-pale-sky-400 block mb-1 font-medium">
-                      {t('metricSkipped')}
-                    </span>
-                    <span className="text-lg font-bold text-pale-sky-600 dark:text-pale-sky-400 font-mono">
-                      {importSummary.skippedImports}
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-center">
-                    <span className="text-[11px] text-red-600 dark:text-red-400 block mb-1 font-medium">
-                      {t('metricFailed')}
-                    </span>
-                    <span className="text-lg font-bold text-red-600 dark:text-red-400 font-mono">
-                      {importSummary.failedImports}
-                    </span>
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-import-summary>
+                  {importResultGroupKeys.map(kind => (
+                    <button
+                      key={kind}
+                      type="button"
+                      data-import-result={kind}
+                      aria-pressed={resultFilter === kind}
+                      onClick={() => { setResultFilter(kind); setVisibleCount(100); }}
+                      className={'rounded-xl border p-3 text-start ' + (resultFilter === kind ? 'border-primary bg-primary/10' : 'border-subtle bg-surface')}
+                    >
+                      <span className="block text-xs text-muted">{t(importResultGroups[kind].label)}</span>
+                      <span className="block text-lg font-semibold" data-import-count={kind}>{counts[kind].toLocaleString(lang)}</span>
+                    </button>
+                  ))}
                 </div>
+                <p className="text-sm text-muted leading-relaxed">{t(importResultGroups[resultFilter].next)}</p>
+                {(resultFilter === 'failures' || resultFilter === 'cancelled') && (counts.failures + counts.cancelled > 0) && (
+                  <Button data-import-retry variant="secondary" onClick={retryResults}>{t('importRetryRemaining')}</Button>
+                )}
               </div>
 
               {/* Individual Item Results */}
               <div className="space-y-2">
                 <h4 className="text-xs font-bold text-main">{t('processedImportFiles')}</h4>
                 <div className="max-h-52 overflow-y-auto space-y-2 pe-1">
-                  {importSummary.results.slice(0, visibleCount).map((res: DigitalImportResult, i: number) => (
+                  {filteredResults.slice(0, visibleCount).map((res: DigitalImportResult, i: number) => (
                     <div
                       key={i}
                       className="px-4 py-2.5 rounded-2xl bg-canvas border border-subtle flex items-center justify-between text-xs"
@@ -1013,8 +1071,8 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                             : 'bg-red-500/10 text-red-500'
                         }`}
                       >
-                        {res.skipped
-                          ? t('metricSkipped')
+                        {res.cancelled ? t('importCancelled') : res.skipped
+                          ? t('importDuplicates')
                           : res.success
                           ? t('metricImported')
                           : t('metricFailed')}
@@ -1028,7 +1086,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
         </div>
 
         {operationError && <p role="alert" className="px-6 py-2 text-sm text-red-500">{t('bulkImportFailed')}</p>}
-        {(step === 'select' ? stagedFiles.length : step === 'duplicates' ? conflictedResults.length : step === 'summary' ? importSummary?.results.length || 0 : 0) > visibleCount &&
+        {(step === 'select' ? stagedFiles.length : step === 'duplicates' ? conflictedResults.length : step === 'summary' ? filteredResults.length : 0) > visibleCount &&
           <button type="button" className="px-6 py-2 text-sm text-main" onClick={() => setVisibleCount(count => count + 100)}>{t('showMoreImportFiles')}</button>}
         {/* Modal Footer Controls */}
         <div className="px-3 sm:px-6 py-4 bg-canvas/80 border-t border-subtle flex flex-wrap items-center justify-between gap-2 shrink-0">
@@ -1079,10 +1137,9 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
           )}
 
           {step === 'importing' && (
-            <div className="w-full flex justify-end">
-              <span className="text-xs text-muted font-medium animate-pulse">
-                {t('waitingBulkImport')}
-              </span>
+            <div className="w-full flex flex-wrap justify-end gap-2">
+              <Button variant="secondary" onClick={() => setMinimized(true)}>{t('importMinimize')}</Button>
+              <Button data-import-cancel variant="ghost" disabled={cancelling} onClick={cancelImport}>{t(cancelling ? 'importCancelPending' : 'importCancelRemaining')}</Button>
             </div>
           )}
 
@@ -1090,7 +1147,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
             <div className="w-full flex justify-end">
               <button
                 type="button"
-                onClick={handleModalClose}
+                onClick={() => { setViewMode('library'); handleModalClose(); }}
                 className="px-6 py-2.5 rounded-2xl bg-pale-sky-500 text-white text-xs font-bold hover:bg-pale-sky-600 shadow-md shadow-pale-sky-500/20 transition-all cursor-pointer"
               >
                 {t('finishAndExploreBtn')}

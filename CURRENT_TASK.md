@@ -1,3 +1,55 @@
+## KEY-300 part 1 verified - 2026-11-11, Codex (key300)
+
+The import flow is implemented and verified. KEY-300 remains open for part 2. The user explicitly authorized a tested part-1 commit/push when the complete scope exceeds one pass. Claude Code owns review and Jira.
+
+User experience changes
+
+- Active Close and Escape hide the wizard and release modal focus. A compact StatusBar item resumes the same running-app session.
+- Cancel finishes the current file, retains saved books, and skips every unstarted file. Cancellation is scoped to the sender and batch identifier and can reach jobs while the import queue is busy.
+- Results distinguish imported files, duplicates, failures and unprocessed files. Retry includes only failures/unprocessed paths. Finish opens Library. Background completion uses the shared toast and clears it on resume, keeping narrow footer actions visible.
+- Progress percentage follows completed items. Cancelled results explicitly say import stopped safely. A library-refresh failure keeps the completed summary.
+- New strings use ar/en translations, two superseded keys were removed, and new layout uses logical properties. Canonical titles and existing Work → Edition → Source persistence are preserved.
+
+Sequential verification
+
+- npx tsc --noEmit passes. Changed-file ESLint has zero errors and zero warnings. Focused import/translation tests pass 27/27, including nine new tests. Existing tests were preserved.
+- npx tsup and git diff --check pass.
+- Native ar/en, light/dark, 1280/480 matrix passes 8/8. Every case imports all five real text-layer PDF/EPUB files across cancel and retry. Two completed items remain and three unprocessed items are skipped, then retry completes all five. Re-import in ar/en desktop yields five duplicates and zero added books. Eighteen real batches total, one window and zero renderer errors.
+- Six final screenshots inspected out of 42. Evidence is .baglib-data/KEY-300-evidence/2026-11-11T16-18-03-810Z/. All throwaway profiles and three earlier evidence runs were removed.
+- Final npm test -- --test-concurrency=2 passes 1862/1862 across 338 suites in 146608.7783 ms, with zero failures, skips or cancellations.
+
+Verification boundaries
+The live run uses the production renderer/preload and current source digital IPC registered in the isolated app. Validation, metadata-worker extraction, hashing and SQLite writes are real. Empty cover rendering keeps one Electron window. A 1.2-second pacing delay per file makes cancellation deterministic. The source metadata service points at the built worker. No original file was saved or OCRed. The scanned PDF was excluded. This verifies file-boundary cancellation, with generated PDF covers outside its scope. Duplicate scanning can be hidden while it finishes. Restart recovery remains open. Existing missing-Mushaf-layout startup warnings occur in the isolated profile.
+
+Remaining part 2
+
+- Calm book detail sheet, cover zoom, editions/sources, progress, notes/cards counts and primary/secondary actions. Keep ReadingLogPanel reachable.
+- Shared metadata layout and diff view across Metadata*Modal, GeekMetadataModal and EditionComparisonModal, with BookVolumesPanel integrated.
+- Remove inline Arabic/English interface literals in those changed files and implement Arabic book-count plurals in the trash restore messages.
+- Verify those remaining surfaces and their keyboard flows on real Arabic/English books.
+
+Exact task files for publication
+
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+- docs/features/Usability Inspection.md
+- docs/features/feature - Digital Library Import and Deduplication.md
+- scripts/library-ui-live/run.mjs
+- scripts/library-ui-live/import-run.mjs
+- scripts/library-ui-live/import-main.cjs
+- src/main/ipc/digital.ts
+- src/main/services/digital/digital-import-pipeline.service.ts
+- src/preload/index.ts
+- src/renderer/components/layout/StatusBar.tsx
+- src/renderer/components/library/ImportWizardModal.tsx
+- src/renderer/translations.ts
+- src/shared/types/digital-file.ts
+- src/shared/import-batch.ts
+- tests/services/import-batch-state.test.ts
+- tests/ui/import-cancellation.test.ts
+
+Local-only report and board are updated under docs/agent-ops. Other agents' files and state hunks remain outside this commit. Commit/push receipt will be added locally after publication. No Jira change by Codex.
+
 ## KEY-320 paragraph links open and highlight again - 2026-11-11, Claude Code
 
 The bug: since the KEY-304 redesign, a link to a note paragraph no longer scrolled to and highlighted it. The highlight looked for paragraphs inside the list card, which only shows an excerpt. Note links clicked in a note's preview did nothing, because only book: links were handled there.

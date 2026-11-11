@@ -2,6 +2,19 @@
 
 ## 1. Overview & Objective
 
+### KEY-300 part 1 follow-up - 2026-11-11, Codex
+
+This follow-up supersedes the earlier cancellation limit for the wizard's import phase. The shared batch pipeline accepts an optional AbortSignal. The IPC handler owns an AbortController keyed by the sending webContents and a request identifier. Cancellation bypasses the serialized import queue, so it can mark a queued or active batch while the queue is busy. The pipeline checks the signal before each file and lets any already-started importFile finish. Completed works stay in the existing Work → Edition → Source storage. Unstarted files receive skipped/cancelled result flags, with no file access or database insert. These are transient API fields.
+
+Minimize, active Escape and active Close release modal focus. A Resume item lives in StatusBar while the app runs, with the existing floating fallback when a footer is absent. Reopening retains the same batch. The summary separates imported files, duplicates, failures and unprocessed files, with library navigation or a retry action. Retry stages only failed and unprocessed paths. A completed import stays in its summary if the library refresh fails. Background completion uses the shared KEY-301 toast service, and resuming clears that toast so summary actions stay visible at 480 px. Cancelled results explicitly say that import stopped safely.
+
+Duplicate scanning can be hidden while it finishes. Cancellation applies to the import phase at file boundaries. Running-app sessions retain their state across workspace navigation. Restart recovery remains a future requirement.
+
+Final verification passes 27 focused tests and 1862 full tests at concurrency two. The real-file matrix passes all eight ar/en, light/dark, 1280/480 configurations with 18 batches and zero renderer errors. Six of 42 final screenshots were inspected. The final run is .baglib-data/KEY-300-evidence/2026-11-11T16-18-03-810Z/. Profiles and three earlier evidence runs were removed.
+
+Verification boundaries are recorded in the local KEY-300 report. The native harness uses the production renderer/preload and registers the current source digital IPC handlers in the isolated app. It runs the actual validator, background metadata worker, hashing and SQLite writes on all five available real text-layer PDF/EPUB files. The cover renderer is replaced with an empty-cover result to keep one Electron window. A 1.2-second per-file pacing delay makes UI cancellation deterministic. The source metadata service is pointed at the built worker. The scanned PDF is excluded and OCR is never invoked. Native PDF cover extraction is outside this run's verification boundary.
+
+
 ### Confirmed shutdown drain — 2026-11-07, Codex
 
 **Native follow-up:** `scripts/import-shutdown-live` uses the real built Electron app/preload/metadata workers with disposable English- and Arabic-configured profiles. Each submits120unique TXT files and2generated one-page PDFs, requests Quit on the first validating progress event, waits for process exit, then reads SQLite with the existing local Python runtime. Final en-cu8G61/ar-EVEgmV each contain122imported works,122file sources, both PDF cover records/pagecounts and integrity_check=ok; no renderer errors or closed-database failures. Harnesslint/diff-check pass. This supersedes the native-import-during-Quit coverage gap below for this generated corpus, not for hundreds of large PDFs. It tests backend IPC, not wizard/dragdrop interactions or visualRTL. No production change in this follow-up; prior suite/build results were not rerun. Test server stopped/3000free.

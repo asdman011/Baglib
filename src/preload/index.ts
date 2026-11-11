@@ -279,8 +279,10 @@ export const API = {
     ipcRenderer.invoke('digital:get-supported-formats'),
   importDigitalFile: (options: unknown) =>
     ipcRenderer.invoke('digital:import-file', options),
-  importDigitalFiles: (optionsList: unknown[]) =>
-    ipcRenderer.invoke('digital:import-files', optionsList),
+  importDigitalFiles: (optionsList: unknown[], jobId?: string) =>
+    ipcRenderer.invoke('digital:import-files', optionsList, jobId),
+  cancelDigitalImport: (jobId: string): Promise<boolean> =>
+    ipcRenderer.invoke('digital:cancel-import', jobId),
   extractDigitalMetadata: (filePath: string, formatHint?: string) =>
     ipcRenderer.invoke('digital:extract-metadata', filePath, formatHint),
   checkDigitalDuplicates: (inputs: unknown[]) =>
