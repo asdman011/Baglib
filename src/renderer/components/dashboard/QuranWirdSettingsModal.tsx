@@ -1,7 +1,7 @@
 'use client';
 
-import { useDialogFocus } from '../../hooks/useDialogFocus';
 import React, { useState, useEffect } from 'react';
+import { Modal } from '../ui/Modal';
 import { X, BookOpen, AlertCircle, CheckCircle2, RotateCw } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import {
@@ -55,7 +55,7 @@ export function QuranWirdSettingsModal({ isOpen, onClose, onSaved }: QuranWirdSe
     };
   }, [isOpen]);
 
-  const dialogRef = useDialogFocus(isOpen, () => { if (!isSaving) onClose(); });
+  const dialogRef = React.useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
 
@@ -136,7 +136,7 @@ export function QuranWirdSettingsModal({ isOpen, onClose, onSaved }: QuranWirdSe
   ];
 
   return (
-    <div
+    <Modal open={isOpen} onClose={() => { if (!isSaving) onClose(); }} asChild focusRef={dialogRef} label={t('quranWirdSettingsTitle')}><div
       ref={dialogRef}
       tabIndex={-1}
       role="dialog"
@@ -157,7 +157,7 @@ export function QuranWirdSettingsModal({ isOpen, onClose, onSaved }: QuranWirdSe
           </div>
           <button
             type="button"
-            data-wird-settings-close
+            aria-label={t('close')} data-wird-settings-close
             onClick={onClose}
             className="rounded-lg p-1 text-muted hover:text-main hover:bg-surface/80 cursor-pointer"
           >
@@ -393,6 +393,6 @@ export function QuranWirdSettingsModal({ isOpen, onClose, onSaved }: QuranWirdSe
           </div>
         </form>
       </div>
-    </div>
+    </div></Modal>
   );
 }

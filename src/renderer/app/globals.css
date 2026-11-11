@@ -639,3 +639,9 @@ mark.baglib-highlight-violet, mark.baglib-highlight-purple {
 [data-immersive] [data-reader-recovery]:focus-within { opacity: 1; pointer-events: auto; }
 [data-reader-chrome="rail"] > div:first-child { flex-direction: column; }
 [data-immersive][data-collapsed-chrome~="rail"] [data-reader-chrome="library"] { inset-inline-start: 0; }
+
+/* KEY-298: one keyboard focus token, including legacy outline-none controls. */
+:where(button, a[href], input, select, textarea, summary, [tabindex], [contenteditable]):focus-visible {
+  outline: 2px solid var(--color-focus) !important;
+  outline-offset: 2px !important;
+}

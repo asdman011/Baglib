@@ -1,5 +1,7 @@
 'use client';
-import { SHORTCUTS, matchesShortcut, shortcutHint } from '../actions/shortcuts';
+import { matchesShortcut } from '../actions/shortcuts';
+import { ShortcutList } from '../actions/ShortcutList';
+import { Modal } from '../ui/Modal';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Stamp, Ruler, ChevronDown, Circle, Palette, Highlighter, Keyboard, Lock, LockOpen, MessageSquarePlus, MousePointer2, MoveUpRight, Square, SquareDashed, Strikethrough, Type, Underline } from 'lucide-react';
 import { Button, IconButton } from '../ui/Button';
@@ -143,19 +145,12 @@ export function ReaderMarkupBar({ color, onColor, locked, onToggleLock, onShowSh
   </div>;
 }
 
-const rows = SHORTCUTS.map(shortcut => ({ id: shortcut.id, keys: shortcutHint(shortcut.id), label: shortcut.labelKey }));
-
 export function ReaderShortcutSheet({ onClose, t }: { onClose: () => void; t: (key: TranslationKey) => string }) {
   return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-    <div role="dialog" aria-modal="true" aria-labelledby="reader-shortcuts-title" data-reader-shortcuts className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-4 text-main shadow-2xl" onClick={event => event.stopPropagation()}>
+    <Modal open={true} onClose={onClose} asChild label={t('readerShortcutsTitle')}><div role="dialog" aria-modal="true" aria-labelledby="reader-shortcuts-title" data-reader-shortcuts className="w-full max-w-sm max-h-[90dvh] overflow-y-auto rounded-2xl border border-subtle bg-surface p-4 text-main shadow-2xl" onClick={event => event.stopPropagation()}>
       <h2 id="reader-shortcuts-title" className="mb-3 text-sm font-bold">{t('readerShortcutsTitle')}</h2>
-      <dl className="space-y-2 text-xs leading-relaxed">
-        {rows.map(row => <div key={row.id} className="flex items-center justify-between gap-3">
-          <dt className="text-muted">{t(row.label)}</dt>
-          <dd><kbd dir="ltr" className="rounded border border-subtle bg-canvas px-1.5 py-0.5 font-mono text-[11px]">{row.keys}</kbd></dd>
-        </div>)}
-      </dl>
+      <ShortcutList t={t} />
       <button type="button" autoFocus onClick={onClose} className="mt-4 w-full rounded-lg border border-subtle py-1.5 text-xs font-semibold hover:bg-canvas">{t('close')}</button>
-    </div>
+    </div></Modal>
   </div>;
 }

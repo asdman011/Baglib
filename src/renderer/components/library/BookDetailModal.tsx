@@ -1,10 +1,10 @@
 'use client';
 import { ReadingLogPanel } from '../notes/ReadingLogPanel';
+import { Modal } from '../ui/Modal';
 import { errorMessage } from '../../../shared/errors';
 
 
 import React, { useState, useRef, useMemo } from 'react';
-import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   X,
   BookOpen,
@@ -290,8 +290,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     }
   };
 
-  const dialogRef = useDialogFocus(isOpen && !!book, handleAttemptClose);
-  const discardRef = useDialogFocus(isOpen && !!book && showConfirmDiscard, () => setShowConfirmDiscard(false));
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  const discardRef = React.useRef<HTMLDivElement>(null);
 
   // Real-time type-aware validation
   const validation = useMemo(() => {
@@ -957,7 +957,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         className="hidden"
       />
 
-      <div
+      <Modal open={isOpen && !!book} onClose={handleAttemptClose} asChild focusRef={dialogRef}><div
         onDragEnter={handleModalDragEnter}
         ref={dialogRef}
         role="dialog"
@@ -987,7 +987,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* Unsaved Changes Confirmation Dialog Overlay */}
         {showConfirmDiscard && (
           <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div ref={discardRef} role="dialog" aria-modal="true" aria-label={t('unsavedChangesTitle')} tabIndex={-1} className="bg-surface border border-subtle rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4">
+            <Modal open={isOpen && !!book && showConfirmDiscard} onClose={() => setShowConfirmDiscard(false)} asChild focusRef={discardRef} label={t('unsavedChangesTitle')}><div ref={discardRef} role="dialog" aria-modal="true" aria-label={t('unsavedChangesTitle')} tabIndex={-1} className="bg-surface border border-subtle rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
                   <AlertCircle className="w-5 h-5" />
@@ -1021,7 +1021,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   {t('discardAndClose')}
                 </button>
               </div>
-            </div>
+            </div></Modal>
           </div>
         )}
 
@@ -1057,7 +1057,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsFindOnlineModalOpen(true)}
-                title={t('findOnlineDesc')}
+                aria-label={t('findOnlineDesc')} title={t('findOnlineDesc')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all cursor-pointer shadow-sm"
               >
                 <Compass className="w-3.5 h-3.5" />
@@ -1068,7 +1068,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             <button
               type="button"
               onClick={() => setIsOnlineHubOpen(true)}
-              title={t('openLibraryHubTooltip') || (lang === 'ar' ? 'البحث والاستيراد من المكتبات المفتوحة وخلاصات RSS' : 'Search and import from open libraries and RSS feeds')}
+              aria-label={t('openLibraryHubTooltip') || (lang === 'ar' ? 'البحث والاستيراد من المكتبات المفتوحة وخلاصات RSS' : 'Search and import from open libraries and RSS feeds')} title={t('openLibraryHubTooltip') || (lang === 'ar' ? 'البحث والاستيراد من المكتبات المفتوحة وخلاصات RSS' : 'Search and import from open libraries and RSS feeds')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pale-sky-500/10 border border-pale-sky-500/30 text-pale-sky-600 dark:text-pale-sky-300 text-xs font-bold hover:bg-pale-sky-500/20 transition-all cursor-pointer"
             >
               <Globe className="w-3.5 h-3.5" />
@@ -1077,7 +1077,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               </span>
             </button>
 
-            <button
+            <button aria-label={t('close')}
               onClick={handleAttemptClose}
               className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
             >
@@ -1340,7 +1340,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       type="button"
                       onClick={handleLocateAndRelink}
                       disabled={isRelinking || isDiscoveringFile}
-                      title={t('storageActionLocate')}
+                      aria-label={t('storageActionLocate')} title={t('storageActionLocate')}
                       className="px-3 py-1.5 rounded-xl bg-amber-500 text-white font-bold flex items-center gap-1.5 hover:bg-amber-600 transition-all cursor-pointer shadow-sm text-xs disabled:opacity-50"
                     >
                       <MapPin className="w-3.5 h-3.5" />
@@ -1353,7 +1353,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       type="button"
                       onClick={handleRemoveFile}
                       disabled={isDiscoveringFile || isRelinking}
-                      title={t('removeLinkedFile') || (lang === 'ar' ? 'إزالة الملف المربوط' : 'Remove Linked File')}
+                      aria-label={t('removeLinkedFile') || (lang === 'ar' ? 'إزالة الملف المربوط' : 'Remove Linked File')} title={t('removeLinkedFile') || (lang === 'ar' ? 'إزالة الملف المربوط' : 'Remove Linked File')}
                       className="px-2.5 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-red-500/10 hover:border-red-500/30 text-muted hover:text-red-500 font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-50"
                     >
                       <Trash2 className="w-4 h-4 text-red-500" />
@@ -1416,7 +1416,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         onClick={() => handleExtractPdfCover(1)}
                         disabled={isExtractingPdfCover || isDiscoveringFile}
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-pale-sky-500/30 bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-400 hover:bg-pale-sky-500/20 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0"
-                        title={t('extractPdfCoverBtn')}
+                        aria-label={t('extractPdfCoverBtn')} title={t('extractPdfCoverBtn')}
                       >
                         {isExtractingPdfCover ? (
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -1432,7 +1432,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         onClick={handleExtractEpubCover}
                         disabled={isExtractingEpubCover}
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-pale-sky-500/30 bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-400 hover:bg-pale-sky-500/20 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0"
-                        title={t('extractEpubCoverBtn')}
+                        aria-label={t('extractEpubCoverBtn')} title={t('extractEpubCoverBtn')}
                       >
                         {isExtractingEpubCover ? (
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -1447,7 +1447,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       onClick={handleFetchOnlineCover}
                       disabled={isFetchingOnlineCover}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0 shadow-xs"
-                      title={t('fetchCover')}
+                      aria-label={t('fetchCover')} title={t('fetchCover')}
                     >
                       {isFetchingOnlineCover ? (
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -1487,7 +1487,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                             onClick={() => handleSwitchPdfPage(currentPdfPage - 1)}
                             disabled={isExtractingPdfCover || !pdfCoverPages.length || currentPdfPage <= 1}
                             className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-canvas text-muted hover:text-main disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer border border-transparent hover:border-subtle"
-                            title={t('previousCoverPage')}
+                            aria-label={t('previousCoverPage')} title={t('previousCoverPage')}
                           >
                             {dir === 'rtl' ? (
                               <ChevronRight className="w-3.5 h-3.5" />
@@ -1505,7 +1505,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                             onClick={() => handleSwitchPdfPage(currentPdfPage + 1)}
                             disabled={isExtractingPdfCover || !pdfCoverPages.length || currentPdfPage >= totalPdfPages}
                             className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-canvas text-muted hover:text-main disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer border border-transparent hover:border-subtle"
-                            title={t('nextCoverPage')}
+                            aria-label={t('nextCoverPage')} title={t('nextCoverPage')}
                           >
                             {dir === 'rtl' ? (
                               <ChevronLeft className="w-3.5 h-3.5" />
@@ -1550,7 +1550,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           type="button"
                           onClick={() => handleTriggerAutoFill()}
                           disabled={lookupHook.status === 'searching'}
-                          title={t('autoFillTooltip')}
+                          aria-label={t('autoFillTooltip')} title={t('autoFillTooltip')}
                           className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer disabled:opacity-50 animate-in fade-in duration-200"
                         >
                           <Sparkles className={`w-3.5 h-3.5 ${lookupHook.status === 'searching' ? 'animate-spin' : ''}`} />
@@ -1710,7 +1710,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                             onClick={() => handleTriggerAutoFill(formData.isbn)}
                             disabled={!formData.isbn?.trim() || lookupHook.status === 'searching'}
                             className="text-[10px] font-bold text-pale-sky-600 dark:text-pale-sky-400 hover:underline flex items-center gap-1 disabled:opacity-40 cursor-pointer"
-                            title={t('lookupByIsbnBtn')}
+                            aria-label={t('lookupByIsbnBtn')} title={t('lookupByIsbnBtn')}
                           >
                             <Sparkles className="w-2.5 h-2.5" />
                             <span>{t('lookupByIsbnBtn')}</span>
@@ -2616,7 +2616,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
+            <button aria-label={t('close')}
               type="button"
               onClick={handleAttemptClose}
               className="px-4 py-2 rounded-xl border border-subtle text-muted hover:text-main hover:bg-surface text-xs font-semibold transition-all cursor-pointer"
@@ -2755,7 +2755,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           onClose={() => setShowGeekModal(false)}
           book={formData}
         />
-      </div>
+      </div></Modal>
     </div>
   );
 };

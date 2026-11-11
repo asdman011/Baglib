@@ -1,5 +1,7 @@
 export const translations = {
   ar: {
+    keyboardShortcutsTitle: "اختصارات لوحة المفاتيح",
+    shortcutGlobalScope: "كل مساحات العمل",
     clipperNovelTitlePlaceholder: "عنوان مخصص للرواية (اختياري)",
     clipperAuthorPlaceholder: "المؤلف (اختياري)",
     audiobookApiKeyPlaceholder: "رمز Bearer أو مفتاح API",
@@ -1847,7 +1849,6 @@ export const translations = {
     ctxWishlist: "إضافة إلى قائمة الرغبات",
     ctxDuplicates: "البحث عن النسخ المكررة",
     ctxShowFolder: "إظهار الملف في المجلد",
-    ctxShortcutsScope: "النطاق",
     ctxShortcutTip: "انقر بزر الفأرة الأيمن أو اضغط Shift+F10 أو اضغط مطولاً لفتح الإجراءات. تتوقف الاختصارات أثناء الكتابة.",
     ctxLinkExisting: "ربط بملاحظة موجودة",
     ctxChooseNote: "اختر الملاحظة",
@@ -4711,6 +4712,8 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    keyboardShortcutsTitle: "Keyboard shortcuts",
+    shortcutGlobalScope: "All workspaces",
     clipperNovelTitlePlaceholder: "Custom novel title (optional)",
     clipperAuthorPlaceholder: "Author (optional)",
     audiobookApiKeyPlaceholder: "Bearer token or API key",
@@ -6558,7 +6561,6 @@ export const translations = {
     ctxWishlist: "Mark as wishlist",
     ctxDuplicates: "Find duplicates",
     ctxShowFolder: "Show file in folder",
-    ctxShortcutsScope: "Scope",
     ctxShortcutTip: "Right-click, press Shift+F10, or long-press for actions. Shortcuts pause while typing.",
     ctxLinkExisting: "Link to an existing note",
     ctxChooseNote: "Choose a note",

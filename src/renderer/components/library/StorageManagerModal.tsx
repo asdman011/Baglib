@@ -1,11 +1,11 @@
 'use client';
 import { useProgressFeedback } from '../../hooks/useProgressFeedback';
+import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { errorMessage } from '../../../shared/errors';
 
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   HardDrive,
   RefreshCw,
@@ -80,9 +80,10 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   const closeSafely = () => {
     if (!repairActive.current && !isAuditing && !isBatchScanning) onClose();
   };
-  const dialogRef = useDialogFocus(isOpen, closeSafely);
-  const resultRef = useDialogFocus(isOpen && !!batchResult, () => { if (!repairActive.current) setBatchResult(null); });
-  const pruneRef = useDialogFocus(isOpen && !!pruneTarget, () => { if (!repairActive.current) setPruneTarget(null); });
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  const batchOpenerRef = useRef<HTMLElement | null>(null);
+  const resultRef = React.useRef<HTMLDivElement>(null);
+  const pruneRef = React.useRef<HTMLDivElement>(null);
 
   // Sync tab if initialTab changes
   const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
@@ -205,6 +206,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
     const api = window.electronAPI;
     if (!api?.openDirectoryDialog || !api?.storage?.batchAutoRebind) return;
     if (repairActive.current) return;
+    batchOpenerRef.current = document.activeElement as HTMLElement | null;
     repairActive.current = true;
     setIsRepairing(true);
 
@@ -302,7 +304,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div
+      <Modal open={isOpen} onClose={closeSafely} asChild focusRef={dialogRef} label={t('storageManagerTitle')}><div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
@@ -599,7 +601,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                           <button
                             onClick={() => handleReveal(it.filePath)}
                             className="p-1.5 rounded-lg border border-border-base dark:border-zinc-700 text-text-muted hover:text-text-primary hover:bg-surface-raised"
-                            title={t('storageActionReveal')}
+                            aria-label={t('storageActionReveal')} title={t('storageActionReveal')}
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </button>
@@ -751,7 +753,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                               <button
                                 onClick={() => handleReveal(item.filePath)}
                                 className="p-1.5 rounded-lg border border-border-base dark:border-zinc-700 text-text-muted hover:text-text-primary hover:bg-surface-raised transition"
-                                title={t('storageActionReveal')}
+                                aria-label={t('storageActionReveal')} title={t('storageActionReveal')}
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </button>
@@ -760,7 +762,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                             <button
                               onClick={() => handleVerifySingle(item.workId)}
                               className="p-1.5 rounded-lg border border-border-base dark:border-zinc-700 text-text-muted hover:text-text-primary hover:bg-surface-raised transition"
-                              title={t('storageActionVerify')}
+                              aria-label={t('storageActionVerify')} title={t('storageActionVerify')}
                             >
                               <RefreshCw className="w-3.5 h-3.5" />
                             </button>
@@ -792,7 +794,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         {/* Batch Re-bind Results Dialog */}
         {batchResult && (
           <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
-            <div ref={resultRef} role="dialog" aria-modal="true" aria-label={t('storageBatchScanTitle')} tabIndex={-1} className="w-full max-w-lg p-6 rounded-2xl bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 shadow-2xl space-y-4">
+            <Modal open={isOpen && !!batchResult} onClose={() => { if (!repairActive.current) setBatchResult(null); }} asChild focusRef={resultRef} returnFocus={batchOpenerRef} label={t('storageBatchScanTitle')}><div ref={resultRef} role="dialog" aria-modal="true" aria-label={t('storageBatchScanTitle')} tabIndex={-1} className="w-full max-w-lg p-6 rounded-2xl bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 shadow-2xl space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400">
                   <FolderSearch className="w-5 h-5" />
@@ -800,7 +802,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                     {t('storageBatchScanTitle')}
                   </h3>
                 </div>
-                <button
+                <button aria-label={t('close')}
                   onClick={() => setBatchResult(null)}
                   className="p-1 rounded-lg text-text-muted hover:text-text-primary"
                 >
@@ -840,20 +842,20 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                 </div>
               )}
 
-              <button
+              <button aria-label={t('close')}
                 onClick={() => setBatchResult(null)}
                 className="w-full py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold transition"
               >
                 {isRtl ? 'موافق ومتابعة' : 'Accept & Continue'}
               </button>
-            </div>
+            </div></Modal>
           </div>
         )}
 
         {/* Prune Confirmation Dialog */}
         {pruneTarget && (
           <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
-            <div ref={pruneRef} role="dialog" aria-modal="true" aria-label={t('storageActionPrune')} tabIndex={-1} className="w-full max-w-md p-6 rounded-2xl bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 shadow-2xl space-y-4">
+            <Modal open={isOpen && !!pruneTarget} onClose={() => { if (!repairActive.current) setPruneTarget(null); }} asChild focusRef={pruneRef} label={t('storageActionPrune')}><div ref={pruneRef} role="dialog" aria-modal="true" aria-label={t('storageActionPrune')} tabIndex={-1} className="w-full max-w-md p-6 rounded-2xl bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 shadow-2xl space-y-4">
               <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
                 <Trash2 className="w-5 h-5" />
                 <h3 className="font-bold text-sm text-text-primary dark:text-zinc-100">
@@ -898,10 +900,10 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                   {isRtl ? 'تأكيد الحذف' : 'Confirm Delete'}
                 </button>
               </div>
-            </div>
+            </div></Modal>
           </div>
         )}
-      </div>
+      </div></Modal>
     </div>
   );
 };

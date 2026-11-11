@@ -1,25 +1,31 @@
 'use client';
 
-import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { useInsertionEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 
 const dialogs: HTMLElement[] = [];
 const openers = new WeakMap<HTMLElement, HTMLElement | null>();
-const selector = 'button, a[href], input, select, textarea, [tabindex], [contenteditable="true"]';
+const selector = 'button, a[href], input, select, textarea, [tabindex], [contenteditable]:not([contenteditable="false"])';
 
-export function useDialogFocus(open: boolean, onEscape: () => void, initialFocus?: RefObject<HTMLElement | null>) {
-  const ref = useRef<HTMLDivElement>(null);
+export function useDialogFocus(open: boolean, onEscape: () => void, initialFocus?: RefObject<HTMLElement | null>, focusRef?: RefObject<HTMLDivElement | null>, returnFocus?: RefObject<HTMLElement | null>) {
+  const ownRef = useRef<HTMLDivElement>(null);
+  const ref = focusRef ?? ownRef;
   const escape = useRef(onEscape);
+  const beforeAutofocus = useRef<HTMLElement | null>(null);
+  // Capture before React's autoFocus and child layout effects move focus into a new dialog.
+  useInsertionEffect(() => {
+    if (open) beforeAutofocus.current = document.activeElement instanceof window.HTMLElement ? document.activeElement : null;
+  }, [open]);
   useLayoutEffect(() => { escape.current = onEscape; });
 
   useLayoutEffect(() => {
     const dialog = ref.current;
     if (!open || !dialog) return;
     const childIndex = dialogs.findIndex(entry => dialog.contains(entry));
-    const opener = childIndex >= 0 ? openers.get(dialogs[childIndex]) ?? null :
-      document.activeElement instanceof window.HTMLElement ? document.activeElement : null;
+    const opener = returnFocus?.current ?? (childIndex >= 0 ? openers.get(dialogs[childIndex]) ?? null :
+      beforeAutofocus.current);
     openers.set(dialog, opener);
     const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector)).filter(element =>
-      element.tabIndex >= 0 && !element.matches(':disabled') &&
+      (element.tabIndex >= 0 || element.isContentEditable && !element.hasAttribute('tabindex')) && !element.matches(':disabled') &&
       !element.closest('[hidden], [inert], [aria-hidden="true"]') &&
       (element.getClientRects?.().length ?? 0) > 0 && getComputedStyle(element).visibility !== 'hidden');
     const focusInside = () => (focusable()[0] ?? dialog).focus({ preventScroll: true });
@@ -47,10 +53,10 @@ export function useDialogFocus(open: boolean, onEscape: () => void, initialFocus
     const focusin = (event: FocusEvent) => {
       if (dialogs.at(-1) === dialog && !dialog.contains(event.target as Node)) focusInside();
     };
-    document.addEventListener('keydown', keydown, true);
+    window.addEventListener('keydown', keydown, true);
     document.addEventListener('focusin', focusin);
     return () => {
-      document.removeEventListener('keydown', keydown, true);
+      window.removeEventListener('keydown', keydown, true);
       document.removeEventListener('focusin', focusin);
       const top = dialogs.at(-1);
       const wasTop = !!top && (top === dialog || dialog.contains(top));
@@ -59,7 +65,7 @@ export function useDialogFocus(open: boolean, onEscape: () => void, initialFocus
       }
       if (wasTop && opener?.isConnected && !dialog.contains(opener)) opener.focus({ preventScroll: true });
     };
-  }, [open, initialFocus]);
+  }, [open, initialFocus, ref, returnFocus]);
 
   return ref;
 }

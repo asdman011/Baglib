@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { Modal } from '../ui/Modal';
 import {
   X,
   Sliders,
@@ -61,8 +61,8 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
     if (JSON.stringify(configs) !== baseline || sourceStatus.dirty) setConfirmDiscard(true);
     else onClose();
   };
-  const dialogRef = useDialogFocus(isOpen, closeSafely);
-  const discardRef = useDialogFocus(isOpen && confirmDiscard, () => setConfirmDiscard(false));
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  const discardRef = React.useRef<HTMLDivElement>(null);
 
   const [previousProviderOpen, setPreviousProviderOpen] = useState<readonly unknown[] | null>(null);
   const inputsProviderOpen = [isOpen];
@@ -194,12 +194,12 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
       className="fixed inset-0 z-70 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
       dir={dir}
     >
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('providerSettingsModalTitle')} tabIndex={-1} className="relative w-full max-w-xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
+      <Modal open={isOpen} onClose={closeSafely} asChild focusRef={dialogRef} label={t('unsavedChangesTitle')}><div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('providerSettingsModalTitle')} tabIndex={-1} className="relative w-full max-w-xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
         {confirmDiscard && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div ref={discardRef} role="dialog" aria-modal="true" aria-label={t('unsavedChangesTitle')} tabIndex={-1} className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-4 space-y-3 text-sm leading-relaxed">
+          <Modal open={isOpen && confirmDiscard} onClose={() => setConfirmDiscard(false)} asChild focusRef={discardRef} label={t('unsavedChangesTitle')}><div ref={discardRef} role="dialog" aria-modal="true" aria-label={t('unsavedChangesTitle')} tabIndex={-1} className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-4 space-y-3 text-sm leading-relaxed">
             <h4 className="font-bold">{t('unsavedChangesTitle')}</h4><p>{t('settingsDiscardPrompt')}</p>
             <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setConfirmDiscard(false)} className="rounded-lg border border-subtle p-2">{t('keepEditing')}</button><button type="button" onClick={() => { setConfirmDiscard(false); onClose(); }} className="rounded-lg bg-red-600 p-2 text-white">{t('discardAndClose')}</button></div>
-          </div>
+          </div></Modal>
         </div>}
         {/* Header */}
         <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
@@ -324,7 +324,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
                         type="button"
                         onClick={() => handleMoveUp(index)}
                         disabled={isFirst}
-                        title={lang === 'ar' ? 'رفع الأولوية للأعلى' : 'Move Up'}
+                        aria-label={lang === 'ar' ? 'رفع الأولوية للأعلى' : 'Move Up'} title={lang === 'ar' ? 'رفع الأولوية للأعلى' : 'Move Up'}
                         className="p-1 rounded-lg bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
                       >
                         <ArrowUp className="w-3.5 h-3.5" />
@@ -333,7 +333,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
                         type="button"
                         onClick={() => handleMoveDown(index)}
                         disabled={isLast}
-                        title={lang === 'ar' ? 'خفض الأولوية للأسفل' : 'Move Down'}
+                        aria-label={lang === 'ar' ? 'خفض الأولوية للأسفل' : 'Move Down'} title={lang === 'ar' ? 'خفض الأولوية للأسفل' : 'Move Down'}
                         className="p-1 rounded-lg bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
                       >
                         <ArrowDown className="w-3.5 h-3.5" />
@@ -400,7 +400,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

@@ -1,5 +1,6 @@
 'use client';
 import React, { useState } from 'react';
+import { Modal } from '../ui/Modal';
 import { AlertTriangle, FileDown, X } from 'lucide-react';
 import { ADDITION_KINDS, COLOR_HEX, EXPORT_CATEGORIES, type AdditionKind, type ExportCategory, type MaterialSaveStatus } from '../../../shared/material-save';
 import type { TranslationKey } from '../../translations';
@@ -10,7 +11,7 @@ type T = (key: TranslationKey, params?: Record<string, string | number>) => stri
 /** Closing a book (or the app) with changes not yet written into its file (ADR-012). */
 export function SaveCloseDialog({ title, busy, onSave, onDiscard, onCancel, t }: { title: string; busy: boolean; onSave: () => void; onDiscard: () => void; onCancel: () => void; t: T }) {
   return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
-    <div role="alertdialog" aria-modal="true" aria-labelledby="save-close-title" aria-describedby="save-close-body" data-save-close
+    <Modal open={true} onClose={onCancel} asChild label={t('saveCloseTitle')}><div role="alertdialog" aria-modal="true" aria-labelledby="save-close-title" aria-describedby="save-close-body" data-save-close
       onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onCancel(); } }}
       className="w-full max-w-md space-y-3 rounded-2xl border border-subtle bg-surface p-5 text-main shadow-2xl" onClick={event => event.stopPropagation()}>
       <h2 id="save-close-title" className="text-sm font-bold">{t('saveCloseTitle')}</h2>
@@ -23,7 +24,7 @@ export function SaveCloseDialog({ title, busy, onSave, onDiscard, onCancel, t }:
         <button type="button" data-save-close-discard onClick={onDiscard} className="rounded-lg border border-subtle px-3 py-1.5 hover:bg-canvas">{t('saveCloseDiscard')}</button>
         <button type="button" data-save-close-save autoFocus disabled={busy} onClick={onSave} className="rounded-lg bg-emerald-600 px-3 py-1.5 font-semibold text-white disabled:opacity-50">{busy ? t('saveStateSaving') : t('saveCloseSave')}</button>
       </div>
-    </div>
+    </div></Modal>
   </div>;
 }
 
@@ -74,7 +75,7 @@ export function ExportPdfDialog({ workId, pages, onClose, t, lang, dir }: { work
   };
   const chip = (active: boolean) => `rounded-full border px-2 py-0.5 text-xs ${active ? 'border-emerald-500 bg-emerald-500/15' : 'border-subtle hover:bg-canvas'}`;
   return <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-2 sm:p-4" dir={dir} onClick={onClose}>
-    <div role="dialog" aria-modal="true" aria-labelledby="export-pdf-title" data-export-pdf onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) onClose(); }}
+    <Modal open={true} onClose={onClose} asChild label={t('exportPdfTitle')}><div role="dialog" aria-modal="true" aria-labelledby="export-pdf-title" data-export-pdf onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) onClose(); }}
       className="flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
       <header className="flex items-center gap-2 border-b border-subtle px-4 py-2">
         <FileDown size={16} aria-hidden="true" />
@@ -130,6 +131,6 @@ export function ExportPdfDialog({ workId, pages, onClose, t, lang, dir }: { work
         <button type="button" onClick={onClose} className="rounded-lg border border-subtle px-3 py-1.5 text-sm hover:bg-canvas">{t('close')}</button>
         <button type="button" data-export-go disabled={busy} onClick={() => void run()} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? t('exportWorking') : t('exportGo')}</button>
       </footer>
-    </div>
+    </div></Modal>
   </div>;
 }

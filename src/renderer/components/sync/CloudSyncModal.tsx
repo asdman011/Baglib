@@ -1,9 +1,9 @@
 'use client';
 import { errorMessage } from '../../../shared/errors';
+import { Modal } from '../ui/Modal';
 
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   X,
   Cloud,
@@ -83,8 +83,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
     if (dirtyKo || dirtyCloud || newSnapshotDesc.trim()) setConfirmDiscard(true);
     else onClose();
   };
-  const dialogRef = useDialogFocus(isOpen, closeSafely);
-  const discardRef = useDialogFocus(isOpen && confirmDiscard, () => setConfirmDiscard(false));
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  const discardRef = React.useRef<HTMLDivElement>(null);
   const [previousOpen, setPreviousOpen] = useState(isOpen);
   if (previousOpen !== isOpen) {
     setPreviousOpen(isOpen);
@@ -342,12 +342,12 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" dir={dir}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('cloudSyncModalTitle')} tabIndex={-1} className="relative w-full max-w-4xl max-h-[calc(100dvh-2rem)] bg-white dark:bg-stone-900 rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 flex flex-col overflow-hidden text-stone-900 dark:text-stone-100">
+      <Modal open={isOpen} onClose={closeSafely} asChild focusRef={dialogRef} label={t('unsavedChangesTitle')}><div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('cloudSyncModalTitle')} tabIndex={-1} className="relative w-full max-w-4xl max-h-[calc(100dvh-2rem)] bg-white dark:bg-stone-900 rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 flex flex-col overflow-hidden text-stone-900 dark:text-stone-100">
         {confirmDiscard && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div ref={discardRef} role="dialog" aria-modal="true" aria-label={t('unsavedChangesTitle')} tabIndex={-1} className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-4 space-y-3 text-sm leading-relaxed text-main">
+          <Modal open={isOpen && confirmDiscard} onClose={() => setConfirmDiscard(false)} asChild focusRef={discardRef} label={t('unsavedChangesTitle')}><div ref={discardRef} role="dialog" aria-modal="true" aria-label={t('unsavedChangesTitle')} tabIndex={-1} className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-4 space-y-3 text-sm leading-relaxed text-main">
             <h4 className="font-bold">{t('unsavedChangesTitle')}</h4><p>{t('settingsDiscardPrompt')}</p>
             <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setConfirmDiscard(false)} className="rounded-lg border border-subtle p-2">{t('keepEditing')}</button><button type="button" onClick={() => { setConfirmDiscard(false); setNewSnapshotDesc(''); onClose(); }} className="rounded-lg bg-red-600 p-2 text-white">{t('discardAndClose')}</button></div>
-          </div>
+          </div></Modal>
         </div>}
         {operationBusy && <p role="status" className="shrink-0 px-4 py-2 text-xs leading-relaxed">{t('syncOperationBusy')}</p>}
         {operationFailed && <p role="alert" className="shrink-0 px-4 py-2 text-xs text-red-500 leading-relaxed">{t('syncOperationFailed')}</p>}
@@ -923,7 +923,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
           </button>
         </div>
 
-      </div>
+      </div></Modal>
     </div>
   );
 };

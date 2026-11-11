@@ -82,3 +82,8 @@ export function shortcutCollisions(shortcuts: readonly ShortcutDefinition[]): st
     }));
     return collisions;
 }
+
+export const SHORTCUT_SCOPES: Readonly<Record<string, TranslationKey>> = {
+    global: 'shortcutGlobalScope', reader: 'navReader', quran: 'navQuran', sunnah: 'navSunnah',
+    bayan: 'navBayan', 'poetry-line': 'bayanSelectVerse', review: 'srsStartReview', board: 'notesWorkspaceTitle',
+};

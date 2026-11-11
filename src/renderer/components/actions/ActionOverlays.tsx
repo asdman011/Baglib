@@ -3,10 +3,10 @@ import React, { useEffect, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { PersonalCommentary } from '../knowledge/PersonalCommentary';
 import { Modal } from '../ui/Modal';
-import { SHORTCUTS, matchesShortcut, shortcutHint } from './shortcuts';
+import { matchesShortcut } from './shortcuts';
+import { ShortcutList } from './ShortcutList';
 import { openStudyNote } from '../../utils/study-navigation';
 import { studyLinkText } from '../../../shared/study-notes';
-import type { TranslationKey } from '../../translations';
 import type { StudyNote } from '../../../shared/study-notes';
 export function ActionOverlays() {
     const { t, viewMode } = useWorkspace();
@@ -41,7 +41,6 @@ export function ActionOverlays() {
     }, [viewMode]);
     useEffect(() => { if (!status)
         return; const timer = setTimeout(() => setStatus(null), 4000); return () => clearTimeout(timer); }, [status]);
-    const scopeLabels: Record<string, TranslationKey> = { global: 'newObjectButton', reader: 'navReader', quran: 'navQuran', sunnah: 'navSunnah', bayan: 'navBayan', 'poetry-line': 'bayanSelectVerse', review: 'srsStartReview', board: 'notesWorkspaceTitle' };
     const attach = async (note: StudyNote) => {
         if (!link)
             return;
@@ -60,9 +59,9 @@ export function ActionOverlays() {
       {comment && <div ref={node => { const details = node?.querySelector('details'); if (details)
         details.open = true; }}><PersonalCommentary key={comment} reference={comment}/></div>}
     </Modal>
-    <Modal open={help} onClose={() => setHelp(false)} title={t('readerShortcutsTitle')}>
+    <Modal open={help} onClose={() => setHelp(false)} title={t('keyboardShortcutsTitle')}>
       <p className="mb-3 text-sm leading-relaxed">{t('ctxShortcutTip')}</p>
-      <dl data-shortcut-registry className="space-y-2 text-xs">{SHORTCUTS.map(s => <div key={s.id} className="flex items-center gap-3 rounded-lg border border-border p-2"><dt className="flex-1">{t(s.labelKey)}<small className="block text-text-muted">{t('ctxShortcutsScope')} <bdi>{s.scopes.map(scope => t(scopeLabels[scope])).join(' · ')}</bdi></small></dt><dd><kbd dir="ltr">{shortcutHint(s.id)}</kbd></dd></div>)}</dl>
+      <ShortcutList t={t} />
     </Modal>
     <Modal open={!!link} onClose={() => setLink(null)} title={t('ctxChooseNote')}>
       <div className="space-y-2">{notes.map(note => <button key={note.id} type="button" className="block w-full rounded-lg border border-border p-3 text-start" onClick={() => void attach(note)}>{note.title || note.content.slice(0, 80)}</button>)}{!notes.length && <button type="button" onClick={() => { if (link)

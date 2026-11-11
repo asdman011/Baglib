@@ -78,6 +78,56 @@ Finding passed to KEY-300: the Arabic restore toast says «تم استرجاع 3
 
 Files: tests/repositories/trash-restore-preserves.test.ts, CURRENT_TASK.md.
 
+## KEY-298 part 1 verified - 2026-11-11, Codex (key298-20261111)
+
+Dispatched by Claude Code under KEY-294 / Library. Explicit authorization covers a tested part-1 commit and normal push to origin/feature/library-domain. KEY-298 remains open for the remaining inventory in docs/agent-ops/reports/KEY-298.md.
+
+Converted 25 panels across search, import, book details and nested discard, metadata, provider/storage and nested confirmations, settings, statistics, sync, plugins and reader save/export/compare/shortcuts. Modal and Sheet share useDialogFocus through layout-preserving asChild composition. Native-discovered autofocus and async storage-result opener defects are fixed and have regression tests. Keyboard focus uses the focus token across legacy controls. Both shortcut sheets share the workspace-grouped registry, with localized global title and scope name, collision/label coverage and the unused scope-label key removed. The reader shortcut list scrolls within 90dvh. Existing panel geometry and guarded close callbacks are retained.
+
+Verification ran sequentially. Production and fixture-inclusive TypeScript pass. Changed-file ESLint has 0 errors and 30 existing warnings. Focused tests pass 35/35. The main build and whitespace checks pass. The final native matrix passes 8/8 configurations and 224/224 complete panel checks pass, with 0 unnamed icon-only buttons in covered panels and 0 renderer errors. Reduced motion is verified through Emulation.setEmulatedMedia. Eight final screenshots inspected across ar/en, both widths and dark focus rings. Final full npm test -- --test-concurrency=2 passes 1839/1839 across 337 suites, with 0 failures, skips or cancellations, in 143291.2233 ms.
+
+Evidence .baglib-data/KEY-298-evidence/2026-11-11T11-22-51-431Z/. The harness mounts production components in an isolated renderer fixture using production preload/IPC and real Arabic/English PDFs. Online-edition and storage result/group responses are controlled IPC fixtures. Actual provider, repair, deletion, export/save operations and the full reader/workspace tour remain outside this native pass. Original hashes pass and every throwaway profile is removed. Failed/earlier evidence and task scratch are cleaned before publication. U3 and the local report/board are updated.
+
+Exact 35 task files and own state entries for publication follow.
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `docs/features/Usability Inspection.md`
+- `scripts/a11y-ui-live/README.md`
+- `scripts/a11y-ui-live/fixture.tsx`
+- `scripts/a11y-ui-live/main.cjs`
+- `scripts/a11y-ui-live/run.mjs`
+- `src/renderer/app/globals.css`
+- `src/renderer/components/actions/ActionOverlays.tsx`
+- `src/renderer/components/actions/ShortcutList.tsx`
+- `src/renderer/components/actions/shortcuts.ts`
+- `src/renderer/components/ai/AISettingsModal.tsx`
+- `src/renderer/components/dashboard/QuranWirdSettingsModal.tsx`
+- `src/renderer/components/layout/CommandPalette.tsx`
+- `src/renderer/components/library/BookDetailModal.tsx`
+- `src/renderer/components/library/EditionComparisonModal.tsx`
+- `src/renderer/components/library/GeekMetadataModal.tsx`
+- `src/renderer/components/library/ImportWizardModal.tsx`
+- `src/renderer/components/library/MetadataCandidatesModal.tsx`
+- `src/renderer/components/library/MetadataDiffModal.tsx`
+- `src/renderer/components/library/ProviderSettingsModal.tsx`
+- `src/renderer/components/library/StorageManagerModal.tsx`
+- `src/renderer/components/plugins/ReaderPluginsModal.tsx`
+- `src/renderer/components/reader/FileSaveUi.tsx`
+- `src/renderer/components/reader/PdfCompareDialog.tsx`
+- `src/renderer/components/reader/ReaderMarkupBar.tsx`
+- `src/renderer/components/search/SearchHubModal.tsx`
+- `src/renderer/components/security/AppLockModal.tsx`
+- `src/renderer/components/statistics/ReadingStatisticsModal.tsx`
+- `src/renderer/components/sync/CloudSyncModal.tsx`
+- `src/renderer/components/ui/Modal.tsx`
+- `src/renderer/components/ui/Sheet.tsx`
+- `src/renderer/hooks/useDialogFocus.ts`
+- `src/renderer/translations.ts`
+- `tests/ui/a11y-foundations.test.ts`
+
+Local-only updates are docs/agent-ops/board.md and docs/agent-ops/reports/KEY-298.md. Remaining part2 includes library bulk/lending/audit/online/trash, reader dictionary/export/reflow/OCR/accessibility/focus/RSVP/TOC/study-editor, clipper/audiobook/OPDS/tools, categories/dashboard/notes/Quran overlays, the remaining native entry-point tour, registry audit beyond existing entries and whole-app landmarks/labels/live regions. Claude Code reviews and manages Jira after publication.
+
 ## KEY-317 part 1 - 2026-11-11, Claude Code (overnight run)
 
 Two more live scripts now mark the KEY-307 first-run guide as seen and pass with it: curriculum-exam-live and library-declutter-live. They use the same did-finish-load hook as the ui-live scripts in KEY-308 part 11.

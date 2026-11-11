@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { Modal } from '../ui/Modal';
 import {
   X,
   Terminal,
@@ -292,7 +293,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
       className="fixed inset-0 z-70 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
       dir={dir}
     >
-      <div className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] font-sans">
+      <Modal open={true} onClose={onClose} asChild label={t('geekDetailsTitle')}><div className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] font-sans">
         {/* Header */}
         <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -315,7 +316,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
             </div>
           </div>
 
-          <button
+          <button aria-label={t('close')}
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer shrink-0"
           >
@@ -550,7 +551,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
             <span>Baglib Bibliographic Provenance & Diagnostics Engine v1.0</span>
           </div>
 
-          <button
+          <button aria-label={t('close')}
             type="button"
             onClick={onClose}
             className="px-4 py-2 rounded-xl bg-canvas border border-subtle text-main font-bold hover:bg-surface transition-all cursor-pointer shadow-xs"
@@ -558,7 +559,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
             {t('geekClose')}
           </button>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { Modal } from '../ui/Modal';
 import {
   X,
   Check,
@@ -372,7 +373,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
       className="fixed inset-0 z-60 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
       dir={dir}
     >
-      <div className="relative w-full max-w-3xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
+      <Modal open={true} onClose={onClose} asChild label={t('diffModalTitle')}><div className="relative w-full max-w-3xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
         {/* Header */}
         <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -395,7 +396,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
             </div>
           </div>
 
-          <button
+          <button aria-label={t('close')}
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer shrink-0"
           >
@@ -540,7 +541,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
           </span>
 
           <div className="flex items-center gap-2">
-            <button
+            <button aria-label={t('close')}
               type="button"
               onClick={onClose}
               className="px-4 py-2 rounded-xl border border-subtle text-muted hover:text-main hover:bg-canvas text-xs font-bold transition-all cursor-pointer"
@@ -563,7 +564,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
 
           </div>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

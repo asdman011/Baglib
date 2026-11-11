@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Modal } from '../ui/Modal';
 import {
   X,
   Check,
@@ -370,7 +371,7 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
       className="fixed inset-0 z-60 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
       dir={dir}
     >
-      <div className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
+      <Modal open={true} onClose={onClose} asChild label={t('candidatesModalTitle')}><div className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
         {/* Header */}
         <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -395,7 +396,7 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
           <button
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer shrink-0"
-            title={t('cancel')}
+            aria-label={t('cancel')} title={t('cancel')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -570,7 +571,7 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
             </button>
           </div>
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

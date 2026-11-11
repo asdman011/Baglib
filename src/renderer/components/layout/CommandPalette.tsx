@@ -1,6 +1,7 @@
 'use client';
 import { SHORTCUTS, shortcutHint } from '../actions/shortcuts';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Modal } from '../ui/Modal';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Search,
   BookOpen,
@@ -53,20 +54,6 @@ export const CommandPalette: React.FC = () => {
   const dialog = useRef<HTMLDivElement>(null);
   const scope = /^\/(notes|books|workspaces)\b\s*/iu.exec(query)?.[1]?.toLowerCase();
   const keyword = query.replace(/^\/(notes|books|workspaces)\b\s*/iu, '').trim();
-
-  useEffect(() => {
-    if (!isCommandPaletteOpen) return;
-    const previous = document.activeElement as HTMLElement | null;
-    input.current?.focus();
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setCommandPaletteOpen(false);
-    };
-    window.addEventListener('keydown', escape);
-    return () => {
-      window.removeEventListener('keydown', escape);
-      if (previous?.isConnected) previous.focus();
-    };
-  }, [isCommandPaletteOpen, setCommandPaletteOpen]);
 
   const results = useMemo(() => {
     const workspaces: { id: WorkspaceViewMode; titleKey: Parameters<typeof t>[0]; groupKey: Parameters<typeof t>[0]; icon: LucideIcon }[] = [
@@ -171,27 +158,14 @@ export const CommandPalette: React.FC = () => {
         if (event.target === event.currentTarget) setCommandPaletteOpen(false);
       }}
     >
-      <div
+      <Modal open={true} onClose={() => setCommandPaletteOpen(false)} asChild focusRef={dialog} initialFocus={input}><div
         ref={dialog}
         role="dialog"
         aria-modal="true"
         aria-label={t('navSearch')}
         dir={dir}
         className="w-full max-w-2xl rounded-2xl border border-subtle bg-surface shadow-xl overflow-hidden"
-        onKeyDown={(event) => {
-          if (event.key === 'Tab') {
-            const focusable = [...(dialog.current?.querySelectorAll<HTMLElement>('input,button') || [])];
-            const first = focusable[0];
-            const last = focusable.at(-1);
-            if (event.shiftKey && document.activeElement === first) {
-              event.preventDefault();
-              last?.focus();
-            } else if (!event.shiftKey && document.activeElement === last) {
-              event.preventDefault();
-              first?.focus();
-            }
-          }
-        }}
+
       >
         <div className="flex items-center gap-3 border-b border-subtle p-4">
           <Search size={19} className="text-muted shrink-0" />
@@ -267,7 +241,7 @@ export const CommandPalette: React.FC = () => {
         <p className="px-4 py-2.5 border-t border-subtle text-xs text-muted" dir="ltr">
           /workspaces · /books · /notes
         </p>
-      </div>
+      </div></Modal>
     </div>
   );
 };

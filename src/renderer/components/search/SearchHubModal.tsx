@@ -1,10 +1,10 @@
 'use client';
 import { useToast } from '../ui/Toast';
+import { Modal } from '../ui/Modal';
 import { Button, Skeleton } from '../ui';
 
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   Search,
   X,
@@ -142,7 +142,7 @@ export const SearchHubModal: React.FC = () => {
     };
   }, []);
 
-  const dialogRef = useDialogFocus(isSearchHubOpen, () => setSearchHubOpen(false), inputRef);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
 
   // Execute search function
   const executeSearch = useCallback(
@@ -310,7 +310,7 @@ export const SearchHubModal: React.FC = () => {
       className="fixed inset-0 z-50 bg-black/65 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 transition-all"
       dir={dir}
     >
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('searchHubTitle')} tabIndex={-1} className="w-full max-w-5xl h-[90dvh] max-h-[calc(100dvh-1.5rem)] bg-surface border border-subtle rounded-3xl shadow-2xl flex flex-col overflow-hidden relative transition-all">
+      <Modal open={isSearchHubOpen} onClose={() => setSearchHubOpen(false)} asChild focusRef={dialogRef} initialFocus={inputRef} label={t('searchHubTitle')}><div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('searchHubTitle')} tabIndex={-1} className="w-full max-w-5xl h-[90dvh] max-h-[calc(100dvh-1.5rem)] bg-surface border border-subtle rounded-3xl shadow-2xl flex flex-col overflow-hidden relative transition-all">
         {/* Subtle Background Pattern */}
         <div className="absolute inset-0 bg-arabesque-pattern pointer-events-none opacity-20 z-0" />
 
@@ -682,7 +682,7 @@ export const SearchHubModal: React.FC = () => {
         </div>
 
 
-      </div>
+      </div></Modal>
     </div>
   );
 };

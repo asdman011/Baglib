@@ -1,10 +1,17 @@
 'use client';
 
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useId, type RefObject } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 export interface ModalProps {
+  /** Keep an existing panel's markup and layout while applying shared dialog behavior. */
+  asChild?: boolean;
+  focusRef?: RefObject<HTMLDivElement | null>;
+  initialFocus?: RefObject<HTMLElement | null>;
+  returnFocus?: RefObject<HTMLElement | null>;
+  label?: string;
   open: boolean;
   onClose: () => void;
   title?: React.ReactNode;
@@ -22,10 +29,12 @@ const sizeStyles: Record<'sm' | 'md' | 'lg' | 'xl', string> = {
   xl: 'max-w-2xl',
 };
 
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 export const Modal: React.FC<ModalProps> = ({
+  asChild = false,
+  focusRef,
+  initialFocus,
+  returnFocus,
+  label,
   open,
   onClose,
   title,
@@ -38,74 +47,26 @@ export const Modal: React.FC<ModalProps> = ({
   const { dir, t } = useWorkspace();
   const titleId = useId();
   const descId = useId();
-  const modalRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    openerRef.current = document.activeElement as HTMLElement | null;
-
-    const modalEl = modalRef.current;
-    if (!modalEl) return;
-
-    // Focus the first focusable element inside the modal
-    const focusables = Array.from(modalEl.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-    if (focusables.length > 0) {
-      focusables[0].focus();
-    } else {
-      modalEl.focus();
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        onClose();
-        return;
-      }
-
-      if (event.key === 'Tab') {
-        const currentFocusables = Array.from(modalEl.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-        if (currentFocusables.length === 0) {
-          event.preventDefault();
-          return;
-        }
-
-        const first = currentFocusables[0];
-        const last = currentFocusables[currentFocusables.length - 1];
-
-        if (event.shiftKey) {
-          if (document.activeElement === first || !modalEl.contains(document.activeElement)) {
-            event.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (document.activeElement === last || !modalEl.contains(document.activeElement)) {
-            event.preventDefault();
-            first.focus();
-          }
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown, true);
-      // Return focus to the opener
-      if (openerRef.current && typeof openerRef.current.focus === 'function') {
-        openerRef.current.focus();
-      }
-    };
-  }, [open, onClose]);
+  const modalRef = useDialogFocus(open, onClose, initialFocus, focusRef, returnFocus);
 
   if (!open) return null;
+
+  if (asChild) {
+    const panel = React.Children.only(children) as React.ReactElement<React.HTMLAttributes<HTMLDivElement>>;
+    return React.cloneElement(panel, {
+      ref: modalRef,
+      role: panel.props.role ?? 'dialog',
+      'aria-modal': true,
+      'aria-label': panel.props['aria-label'] ?? label,
+      tabIndex: panel.props.tabIndex ?? -1,
+      'data-ui-dialog': 'modal',
+    } as React.HTMLAttributes<HTMLDivElement> & { ref: typeof modalRef });
+  }
 
   return (
     <div
       role="presentation"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-xs transition-opacity duration-200"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-xs transition-opacity duration-200"
       onClick={closeOnBackdropClick ? (e) => {
         if (e.target === e.currentTarget) onClose();
       } : undefined}
@@ -115,6 +76,8 @@ export const Modal: React.FC<ModalProps> = ({
         ref={modalRef}
         role="dialog"
         aria-modal="true"
+        data-ui-dialog="modal"
+        aria-label={label}
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}

@@ -51,11 +51,15 @@ Evidence: `tests/ui/import-background.test.ts` controls an in-flight import and 
 
 Impact: a slow scan leaves the user waiting with no clear escape path. Recommendation: inspect backend cancellation first; distinguish a safe background/minimize action from actual cancellation. Never enable abrupt close if it can lose progress.
 
-### U3 — Search/import overlays do not expose modal semantics in their own components
+### U3 — Search/import focus, verified part-1 follow-up on 2026-11-11
 
-`SearchHubModal.tsx` and `ImportWizardModal.tsx` use ordinary fixed div overlays, without `role="dialog"`/`aria-modal` or a component focus trap. Search does handle Escape and focuses its input; this does not establish contained Tab navigation or focus restoration. No claim of a reproduced keyboard escape from the overlay is made yet.
+The original inspection recorded fixed-div overlays with incomplete modal semantics and unverified Tab containment. Earlier useDialogFocus follow-ups established their guarded focus behavior. KEY-298 part 1 now composes SearchHubModal and ImportWizardModal through the U2 Modal, with the same shared topmost stack used by Sheet and 23 other converted panels.
 
-Impact: assistive technology may not announce these as modal dialogs; keyboard users may be able to reach background actions. Recommendation: verify live Tab/Shift+Tab and opener focus return before implementing a shared dialog behavior.
+The production search and import panels pass native Tab and Shift+Tab traversal, boundary wrapping, external-focus containment, Escape and opener restoration in Arabic RTL and English LTR, light and dark, at 1280 and 480 px. The one-window harness uses production preload/IPC and real Arabic/English PDFs in a throwaway profile. It mounts production components in an isolated renderer fixture. Evidence is in `.baglib-data/KEY-298-evidence/2026-11-11T11-22-51-431Z/`, with 224/224 complete panel checks overall and eight screenshots inspected.
+
+Keyboard focus uses the focus token in both themes. React-autofocus opener loss and async storage-result opener loss were reproduced and fixed, each with a regression test. Both shortcut sheets list the current scoped registry by workspace. Reduced motion is checked with Emulation.setEmulatedMedia. Focused tests pass 35/35 and the final full suite passes 1839/1839.
+
+Remaining hand-made overlays, the remaining application-entry-point tour and the whole-app semantics audit are listed in the local KEY-298 report. KEY-298 remains open for part 2.
 
 ### KEY-301 part 2 - 2026-11-11, Codex then Claude Code
 

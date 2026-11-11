@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { Modal } from '../ui/Modal';
 import { ChevronLeft, ChevronRight, GitCompare, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { CompareResult } from '../../../shared/text-compare';
@@ -21,7 +21,7 @@ export function PdfCompareDialog({ workId, onJump, onClose }: { workId: string; 
   const request = useRef(0);
   const mounted = useRef(true);
   const inFlight = useRef(false);
-  const dialogRef = useDialogFocus(true, onClose);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
   const invalidate = useCallback(() => { request.current++; }, []);
   useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; invalidate(); }; }, [invalidate]);
   useLayoutEffect(() => invalidate, [workId, invalidate]);
@@ -53,7 +53,7 @@ export function PdfCompareDialog({ workId, onJump, onClose }: { workId: string; 
   const hunk = result?.hunks[current];
   const otherTitle = others.find(book => book.id === other)?.title ?? '';
   return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-2 sm:p-4" dir={dir} onClick={onClose}>
-    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="compare-title" tabIndex={-1} data-pdf-compare className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
+    <Modal open={true} onClose={onClose} asChild focusRef={dialogRef} label={t('compareTitle')}><div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="compare-title" tabIndex={-1} data-pdf-compare className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl" onClick={event => event.stopPropagation()}>
       <header className="flex items-center gap-2 border-b border-subtle px-4 py-2">
         <GitCompare size={16} aria-hidden="true" />
         <h2 id="compare-title" className="text-sm font-bold">{t('compareTitle')}</h2>
@@ -101,6 +101,6 @@ export function PdfCompareDialog({ workId, onJump, onClose }: { workId: string; 
         </ol>
         {hunk === undefined ? null : <p className="border-t border-subtle px-4 py-1.5 text-[11px] text-muted">{t('compareKeys')}</p>}
       </div>}
-    </div>
+    </div></Modal>
   </div>;
 }

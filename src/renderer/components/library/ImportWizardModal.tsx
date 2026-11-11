@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { Modal } from '../ui/Modal';
 import {
   UploadCloud,
   FileText,
@@ -135,10 +135,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     onClose();
   };
 
-  const dialogRef = useDialogFocus(isOpen && !minimized, () => {
-    if (isImporting || isScanningDuplicates || scanActive.current || importActive.current) setMinimized(true);
-    else handleModalClose();
-  });
+  const dialogRef = React.useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
   if (minimized) return <button type="button" data-import-resume onClick={() => setMinimized(false)} className="fixed bottom-10 end-4 z-40 max-w-[calc(100vw-2rem)] rounded-xl border border-pale-sky-500/50 bg-surface p-3 text-start text-sm text-main shadow-xl">
@@ -347,7 +344,10 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 font-sans">
-      <div
+      <Modal open={isOpen && !minimized} onClose={() => {
+    if (isImporting || isScanningDuplicates || scanActive.current || importActive.current) setMinimized(true);
+    else handleModalClose();
+  }} asChild focusRef={dialogRef} label={t('importWizardTitle')}><div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
@@ -552,7 +552,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                         <button
                           onClick={() => handleRemoveStaged(file.id)}
                           className="p-1.5 rounded-lg text-muted hover:text-red-500 hover:bg-surface transition-colors cursor-pointer"
-                          title={t('removeImportFile')}
+                          aria-label={t('removeImportFile')} title={t('removeImportFile')}
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -1098,7 +1098,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
             </div>
           )}
         </div>
-      </div>
+      </div></Modal>
     </div>
   );
 };

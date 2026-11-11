@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { Modal } from '../ui/Modal';
 import {
   X,
   Flame,
@@ -87,7 +87,7 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
     }
   }, [isOpen]);
 
-  const dialogRef = useDialogFocus(isOpen, onClose);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
   if (!isOpen) return null;
 
   const formatDuration = (totalSeconds: number) => {
@@ -125,7 +125,7 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
   };
 
   return (
-    <div
+    <Modal open={isOpen} onClose={onClose} asChild focusRef={dialogRef}><div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
       role="dialog"
       ref={dialogRef}
@@ -390,6 +390,6 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div></Modal>
   );
 };
