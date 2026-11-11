@@ -21,13 +21,14 @@ export const shapeKindKeys: Record<ShapeKind, TranslationKey> = {
  * A study shape, text mark, or comment pin opened on the page: its text, colour, delete and comment threads
  * (reply, resolve, reopen) through the same threads as notes (ADR-010, KEY-274).
  */
-export function PdfMarkPopover({ item, at, initialContext, onClose, onSaved, onDeleted, onThreadsChanged, t }: {
+export function PdfMarkPopover({ item, at, initialContext, onClose, onSaved, onDeleted, onDelete, onThreadsChanged, t }: {
   initialContext?: boolean;
   item: KnowledgeItemDTO;
   at: { x: number; y: number };
   onClose: () => void;
   onSaved: (item: KnowledgeItemDTO) => void;
   onDeleted: (id: string) => void;
+  onDelete?: (id: string) => Promise<boolean>;
   onThreadsChanged: () => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }) {
@@ -108,7 +109,8 @@ export function PdfMarkPopover({ item, at, initialContext, onClose, onSaved, onD
   const remove = async () => {
     if (!window.confirm(t('markDeleteConfirm'))) return;
     try {
-      await window.electronAPI.knowledge.delete(item.id, 'reader');
+      if (onDelete) { if (!await onDelete(item.id)) return; }
+      else await window.electronAPI.knowledge.delete(item.id, 'reader');
       onDeleted(item.id);
     } catch {
       setFailed(true);

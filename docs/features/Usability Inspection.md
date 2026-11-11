@@ -26,6 +26,13 @@ Verification: disposable real Electron profile `.baglib-data/layout-live-90e1cc7
 
 ### U1 — Readiness feedback is not connected to actual readiness
 
+#### KEY-301 part 1 follow-up - 2026-11-11, Codex
+
+The status bar consumes the existing FTS statistics probe and PDF-engine status endpoint. Statistics now reports whether SQLite is open and whether both indexed-book and indexed-page queries succeeded. Engine status also reports the existing configuration/file-availability check. The renderer refreshes on engine changes, window focus and a 30-second interval. It initially says Checking, then reports Ready or Some tools unavailable, with an Arabic/English tooltip identifying the unavailable component and a next step. A stopped, installed engine is available without starting its sidecar. This probe establishes index availability and engine configuration. Indexing coverage and successful rendering remain separate checks.
+
+The missing-engine simulation changes only pdf-editor.engine.v1 in a disposable profile to nonexistent Java/JAR paths. Real engine files remain in place. Bilingual controlled tests verify the status change and recovery. Native matrix evidence and the final full-suite result are recorded in the local KEY-301 report.
+
+
 **Implemented 2026-11-07:** StatusBar now describes local storage neutrally, without claiming database/index health. Notes count distinguishes loading and load failure. No synthetic health check or new storage was added. Arabic/English component and real-app checks cover the new wording/layout.
 
 `src/renderer/components/layout/StatusBar.tsx` always renders `localLibraryReady` with a green database icon. Its workspace values contain labels, navigation and language, but no database/index status subscription. `useStudyNotes` can fail independently and exposes an error state the status bar does not read.
@@ -53,6 +60,11 @@ Impact: assistive technology may not announce these as modal dialogs; keyboard u
 ## Additional recovery and discoverability findings
 
 ### U5 — Notes errors give little actionable recovery guidance
+
+#### KEY-301 part 1 follow-up - 2026-11-11, Codex
+
+Notes keeps the independent-source loading/retry implementation described below. Action failures retain their existing localized retry/reference next step. The existing note-list loading message becomes content-shaped U2 skeletons with its accessible loading label. Successful data and unsaved drafts retain their existing recovery behavior. Bilingual recovery regressions exercise the existing retry and retained-data paths. Wider empty-state, dashboard and progress coverage remains for KEY-301 part 2.
+
 
 **Implemented 2026-11-07:** study notes and knowledge load independently with all-settled results; successful sources and previous failed-source data remain visible. Obsolete concurrent loads are ignored. Notes identifies the failed source, offers disabled-while-loading Retry, separates load failures from action failures, and does not describe a failed/loading collection as empty. Retry does not close the editor or replace its unsaved draft. No stored note text was changed.
 
@@ -100,6 +112,13 @@ Disposable actual-app inspection `.baglib-data/layout-live-fddb4b7b/usability.js
 
 ### U4 — Clearing a search does not invalidate the pending request (source-verified risk)
 
+#### KEY-301 part 1 follow-up - 2026-11-11, Codex
+
+Search Hub retains the previously implemented request invalidation and now also suppresses obsolete error toasts. New delayed-response tests submit two different queries, complete the newer request first and verify that the older result stays absent. Saved cards and personal commentary now invalidate sequence IDs on query edits, clear and effect cleanup, and check them before committing successes, errors or loading completion. Reader search ignores aborted progress and aborted errors as well as final results. Existing Arabic normalization and canonical content are retained.
+
+Search Hub uses the shared toast service, content-shaped result skeletons and a single Clear action for zero results. Native tests inject delayed local responses into the disposable process while exercising the production renderer. These tests cover ordering and clearing. External provider/network behavior has separate verification requirements.
+
+
 **2026-11-07 implementation follow-up:** Search Hub now invalidates the old request before attempting cancellation, immediately on query edits (including whitespace/clear), and before empty/source-scope returns. It removes queued debounce work on scope/provider execution, close and unmount, rejects stale progress and both awaited result types through the existing ID checks, and uses a counter alongside timestamps to avoid same-millisecond ID reuse. Clearing also resets full-text results, timing and provider statuses. Closing resets the spinner without discarding the query.
 
 Controlled component regressions in `tests/ui/search-race.test.ts` cover Arabic/English, delayed provider results/progress after Clear, delayed full-text results after empty input, and debounce cancellation on clear/close. These use local fake providers, not external searches. Real app bilingual smoke/focus coverage passed on a disposable profile in layout-live-74565684; this is not a live network-latency reproduction. Final aggregate results are recorded in the state files.
@@ -107,3 +126,7 @@ Controlled component regressions in `tests/ui/search-race.test.ts` cover Arabic/
 `SearchHubModal.tsx` returns from its empty-query branch before cancelling or replacing `activeSearchIdRef`. The clear-button handler clears query/results but also does not invalidate that ref. A previously awaited result can therefore still satisfy the ID check and repopulate results. This is a call-path finding, not a live delayed-response reproduction. Ordinary nonempty searches do cancel previous requests and guard result IDs; do not incorrectly describe all request ordering as broken.
 
 - Follow-up implementation, if requested, should start with modal focus containment and a controlled stale-search reproduction. No commits, pushes, Jira actions, downloads or production changes are included in this inspection.
+
+### KEY-301 integration correction - hidden PDF measurement canvas
+
+Native screenshot inspection exposed an English-PDF shell compression. Runtime capture diagnostics found a canvas.hiddenCanvasElement appended directly to body, in normal flex flow, measuring 1280 by 640 CSS pixels at desktop width and consuming space alongside the shell. At 480 px it consumed 240 px. The installed node_modules/pdfjs-dist/web/pdf_viewer.css at line 3115 supplies display none for this element. BagLib's custom PDF styles omitted that rule. globals.css now includes it, with a new regression test and native footer-position assertions. A preliminary document-scroll hypothesis was disproved by scrollY zero in the diagnostics, and its attempted reset was removed.

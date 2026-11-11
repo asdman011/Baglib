@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PenLine, Search, Trash2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { Skeleton } from '../ui/Skeleton';
 import { NoteHistory } from '../notes/NoteHistory';
 import { COMMENTARY_KINDS, type CommentaryEntry, type CommentaryKind } from '../../../shared/personal-commentary';
 
@@ -17,15 +18,22 @@ export function PersonalCommentary({ reference }: { reference?: string }) {
   const [kind, setKind] = useState<CommentaryKind>('reflection');
   const [editing, setEditing] = useState<CommentaryEntry | null>(null);
   const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const requestSequence = useRef(0);
 
   const refresh = useCallback(async () => {
+    const request = ++requestSequence.current;
+    setLoading(true);
     try {
       const api = window.electronAPI.commentary;
-      setEntries(query.trim() ? await api.search(query) : reference ? await api.list(reference) : []);
+      const rows = query.trim() ? await api.search(query) : reference ? await api.list(reference) : [];
+      if (request !== requestSequence.current) return;
+      setEntries(rows);
       setFailed(false);
-    } catch { setFailed(true); }
+    } catch { if (request === requestSequence.current) setFailed(true); }
+    finally { if (request === requestSequence.current) setLoading(false); }
   }, [query, reference]);
-  useEffect(() => { queueMicrotask(() => void refresh()); }, [refresh]);
+  useEffect(() => { queueMicrotask(() => void refresh()); return () => { requestSequence.current++; }; }, [refresh]);
 
   const act = async (action: () => Promise<unknown>) => {
     try { await action(); await refresh(); window.dispatchEvent(new CustomEvent('baglib:notes-changed')); return true; } catch { setFailed(true); return false; }
@@ -39,8 +47,8 @@ export function PersonalCommentary({ reference }: { reference?: string }) {
     <summary className="flex cursor-pointer items-center gap-2 font-semibold text-main"><PenLine className="size-4 text-amber-500" />{t('commentaryTitle')}</summary>
     <div className="mt-2 space-y-2">
       <p className="text-xs leading-loose text-muted">{t('commentaryNotice')}</p>
-      <label className="flex items-center gap-2 rounded border border-subtle bg-canvas px-2 py-1.5"><Search className="size-3.5 text-muted" /><input dir="auto" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('commentarySearch')} aria-label={t('commentarySearch')} className="min-w-0 flex-1 bg-transparent outline-none" /></label>
-      {failed && <p role="alert" className="text-red-600 dark:text-red-400">{t('knowledgeCardFailed')}</p>}
+      <label className="flex items-center gap-2 rounded border border-subtle bg-canvas px-2 py-1.5"><Search className="size-3.5 text-muted" /><input dir="auto" value={query} onChange={event => { requestSequence.current++; setQuery(event.target.value); }} placeholder={t('commentarySearch')} aria-label={t('commentarySearch')} className="min-w-0 flex-1 bg-transparent outline-none" /></label>
+      {failed && <p role="alert" className="text-red-600 dark:text-red-400">{t('feedbackActionFailed')}</p>}
       {reference && <div className="space-y-2">
         <select aria-label={t('commentaryKind')} value={kind} onChange={event => setKind(event.target.value as CommentaryKind)} className="w-full rounded border border-subtle bg-canvas p-2">
           {COMMENTARY_KINDS.map(item => <option key={item} value={item}>{t(KIND_LABELS[item])}</option>)}
@@ -48,7 +56,8 @@ export function PersonalCommentary({ reference }: { reference?: string }) {
         <textarea dir="auto" rows={3} value={text} onChange={event => setText(event.target.value)} aria-label={t('commentaryTitle')} className="w-full rounded border border-subtle bg-canvas p-2 leading-loose" />
         <button type="button" disabled={!text.trim()} onClick={() => void save()} className="rounded border border-subtle p-2 disabled:opacity-50">{t('commentarySave')}</button>
       </div>}
-      {query.trim() && !entries.length && !failed && <p role="status" className="text-muted">{t('commentaryNone')}</p>}
+      {loading && <Skeleton className="h-16" />}
+      {query.trim() && !loading && !entries.length && !failed && <p role="status" className="text-muted">{t('commentaryNone')}</p>}
       <ul className="space-y-2">
         {entries.map(entry => <li key={entry.id} data-commentary-entry={entry.id} className="rounded border border-subtle p-2">
           <div className="flex items-start justify-between gap-2">

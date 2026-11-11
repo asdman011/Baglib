@@ -1,4 +1,5 @@
 'use client';
+import { Button, EmptyState, Skeleton } from '../ui';
 import { measurementLabel } from '../../../shared/pdf-study-tools';
 import { useWorkspace } from '../context/WorkspaceContext';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -23,7 +24,9 @@ const normalize = (text: string) => normalizeArabicText(text, { normalizeTaaMarb
  * by layer, with Acrobat's filters: layer, type, colour, date, status, search; sorted by chapter for EPUB
  * or by page for PDF (Waves 9.2, 9.3, and KEY-274).
  */
-export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflowable, t }: {
+export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflowable, loading = false, onStartMark, t }: {
+  loading?: boolean;
+  onStartMark?: () => void;
   items: KnowledgeItemDTO[];
   reviews?: PdfReview[];
   onJump: (page: number, cfi?: string) => void;
@@ -241,7 +244,8 @@ export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflow
       <p className="text-[11px] text-muted" data-marks-count>
         {t('marksCount', { shown: shown.length, total: marks.length })}
       </p>
-      {!shown.length && <p className="text-muted">{t('marksNone')}</p>}
+      {loading ? <div role="status" aria-label={t('loading')} className="space-y-3"><Skeleton className="h-20" /><Skeleton className="h-20" /></div> : !shown.length && <EmptyState title={t(marks.length ? 'marksNone' : 'feedbackMarksStart')}
+        action={<Button size="sm" onClick={() => { if (marks.length) set({ layer: 'all', kind: 'all', since: 'all', status: 'all', color: undefined, query: '' }); else onStartMark?.(); }}>{t(marks.length ? 'clearAllFilters' : 'markupToolHighlight')}</Button>} />}
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
         {groupedByChapter ? (

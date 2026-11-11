@@ -27,6 +27,7 @@ import { NoteEditorPane } from './NoteEditorPane';
 import { NoteDetailsPane } from './NoteDetailsPane';
 import { KnowledgeTools } from './KnowledgeTools';
 import { Button } from '../ui/Button';
+import { Skeleton } from '../ui/Skeleton';
 import { EmptyState } from '../ui/EmptyState';
 import { ReadingLogPanel } from './ReadingLogPanel';
 import {
@@ -736,7 +737,7 @@ export const NotesOverviewView: React.FC = () => {
             ) : (
               <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
                 {loading && (
-                  <p className="p-4 text-center text-xs text-muted">{t('studyLoadingNotes')}</p>
+                  <div role="status" aria-label={t('studyLoadingNotes')} className="space-y-3 p-3"><Skeleton className="h-16" /><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
                 )}
 
                 {filteredNotes.length === 0 && !error && !loading && (

@@ -1,5 +1,6 @@
 'use client';
 
+import { ToastProvider } from '../ui/Toast';
 import { openStudyNote } from '../../utils/study-navigation';
 import { matchesShortcut } from '../actions/shortcuts';
 import React, { createContext, useContext, useState, useEffect } from 'react';
@@ -38,6 +39,8 @@ export interface WorkspaceState {
   
   // Real Books Library State
   books: BookItem[];
+  booksLoading: boolean;
+  booksError: boolean;
   
   // Categories & Tags State (Story 10)
   categoryTree: CategoryNode[];
@@ -94,7 +97,7 @@ interface WorkspaceContextType extends WorkspaceState {
   addBook: (book: BookItem) => void;
 
   updateBook: (book: BookItem) => void;
-  deleteBook: (bookId: string) => void;
+  deleteBook: (bookId: string) => Promise<void>;
   updateBookReadingStatus: (bookId: string, status: import('../../types/library').ReadingStatus, progress?: number) => Promise<void>;
   
   // Reader Flow
@@ -250,6 +253,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   
   // Pure Real Data (Zero Mock Items)
   const [books, setBooks] = useState<BookItem[]>([]);
+  const [booksLoading, setBooksLoading] = useState(true);
+  const [booksError, setBooksError] = useState(false);
   const [categoryTree, setCategoryTree] = useState<CategoryNode[]>([]);
   const [allTags, setAllTags] = useState<TagWithCount[]>([]);
   const [activeBook, setActiveBook] = useState<BookItem | null>(null);
@@ -319,7 +324,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const refreshBooks = async () => {
     if (typeof window !== 'undefined' && window.electronAPI?.getAllBooks) {
       try {
+        setBooksLoading(true);
         const fetchedBooks: BookItem[] = await window.electronAPI.getAllBooks();
+        setBooksError(false);
         if (Array.isArray(fetchedBooks)) {
           // Deduplicate fetchedBooks by unique ID and unique filePath
           const seenIds = new Set<string>();
@@ -335,7 +342,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setBooks(uniqueBooks);
         }
       } catch (err: unknown) {
+        setBooksError(true);
         console.error('[baglib/ui] Failed to refresh books from database:', err);
+      } finally {
+        setBooksLoading(false);
       }
     }
   };
@@ -386,12 +396,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       void api.getAllBooks().then((fetchedBooks: BookItem[]) => {
         if (!alive || !Array.isArray(fetchedBooks)) return;
         const seenIds = new Set<string>(), seenPaths = new Set<string>();
+        setBooksError(false);
         setBooks(fetchedBooks.filter(book => {
           if (!book?.id || seenIds.has(book.id) || book.filePath && seenPaths.has(book.filePath)) return false;
           seenIds.add(book.id); if (book.filePath) seenPaths.add(book.filePath); return true;
         }));
-      }).catch(console.warn);
-    }
+      }).catch(() => { if (alive) setBooksError(true); }).finally(() => { if (alive) setBooksLoading(false); });
+    } else { queueMicrotask(() => { if (alive) setBooksLoading(false); }); }
     const categoriesRequest = api?.categories?.getTree?.({ includeCounts: true }) ?? api?.getCategoryTree?.({ includeCounts: true });
     void categoriesRequest?.then(tree => { if (alive) setCategoryTree(tree || []); }).catch(console.warn);
     void api?.tags?.getAll?.().then(tags => { if (alive) setAllTags(tags || []); }).catch(console.warn);
@@ -569,6 +580,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         await window.electronAPI.deleteBook(bookId);
       } catch (err) {
         console.error('[baglib/ui] Failed to delete book from SQLite:', err);
+        throw err;
       }
     }
 
@@ -709,6 +721,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isSupportSheetOpen,
         setIsSupportSheetOpen,
         books,
+        booksLoading,
+        booksError,
         categoryTree,
         allTags,
         activeBook,
@@ -751,8 +765,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         addHighlight,
       }}
     >
-      {children}
-      {importStarted && <React.Suspense fallback={null}><GlobalImportWizard isOpen={isImportWizardOpen} initialPaths={droppedImportPaths} requestId={importRequest} onClose={() => { setImportWizardOpen(false); setDroppedImportPaths([]); }} /></React.Suspense>}
+      <ToastProvider>
+        {children}
+        {importStarted && <React.Suspense fallback={null}><GlobalImportWizard isOpen={isImportWizardOpen} initialPaths={droppedImportPaths} requestId={importRequest} onClose={() => { setImportWizardOpen(false); setDroppedImportPaths([]); }} /></React.Suspense>}
+      </ToastProvider>
     </WorkspaceContext.Provider>
   );
 };

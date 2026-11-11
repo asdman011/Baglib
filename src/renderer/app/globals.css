@@ -281,6 +281,12 @@
   opacity: 0.2;
 }
 
+/* PDF.js adds this measurement canvas to body. Keep it out of the app's flex layout.
+   The bundled pdf_viewer.css supplies the same display rule. */
+.hiddenCanvasElement {
+  display: none;
+}
+
 /* PDF.js Strict LTR Isolation & Text Layer Styling */
 .pdf-page-container,
 .canvasWrapper,

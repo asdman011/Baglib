@@ -10,6 +10,7 @@ import { studyLinks } from '../../../shared/study-notes';
 import { parseOutline, type Pathway, type PathwayDetail, type PathwayItem, type PathwayKind, type PathwayTemplate, type ReferenceFormat } from '../../../shared/pathways';
 import { PATHWAY_TABS, copyTemplate, pathwayProgress, percentOf, placeItem, tabMatches, templateFromPathway, type PathwayTab } from '../../../shared/pathway-model';
 import { Button, Card, EmptyState, TabPanel, Tabs } from '../ui';
+import { useToast } from '../ui/Toast';
 import { ContextMenu } from '../ui/ContextMenu';
 import type { MenuItemProps } from '../ui';
 import { OnlineCoursesPanel } from './OnlineCoursesPanel';
@@ -80,6 +81,7 @@ function Creator({ templates, setTemplates, draft, onCreated, onError }: { templ
 function ItemRow({ item, first, last, onMove, onChange, onOpen, onError }: { item: PathwayItem; first: boolean; last: boolean; onMove: (delta: number) => void; onChange: () => void; onOpen: OpenItem; onError: () => void }) {
   const { t } = useWorkspace();
   const api = window.electronAPI.pathways;
+  const { showToast } = useToast();
   const act = (work: Promise<void>) => { void work.then(onChange).catch(onError); };
   const step = item.kind === 'step';
   const items: MenuItemProps[] = [
@@ -89,7 +91,7 @@ function ItemRow({ item, first, last, onMove, onChange, onOpen, onError }: { ite
          { id: 'pin', label: t(item.pinned ? 'pathwayUnpin' : 'pathwayPin'), icon: item.pinned ? <PinOff className={ico} /> : <Pin className={ico} />, onClick: () => act(api.setPinned(item.id, !item.pinned)) }]),
     { id: 'up', label: t('pathwayMoveUp'), icon: <ArrowUp className={ico} />, disabled: first, onClick: () => onMove(-1) },
     { id: 'down', label: t('pathwayMoveDown'), icon: <ArrowDown className={ico} />, disabled: last, onClick: () => onMove(1) },
-    { id: 'remove', label: t('pathwayRemoveItem'), icon: <Trash2 className={ico} />, danger: true, onClick: () => act(api.removeItem(item.id)) },
+    { id: 'remove', label: t('pathwayRemoveItem'), icon: <Trash2 className={ico} />, danger: true, onClick: () => act(api.removeItem(item.id).then(() => { showToast({ message: t('feedbackRemoved') }); })) },
   ];
   const sourceIcon = item.reference?.startsWith('note:') ? <FileText className="size-4 shrink-0 text-text-muted" /> : item.reference ? <BookOpen className="size-4 shrink-0 text-text-muted" /> : <ExternalLink className="size-4 shrink-0 text-text-muted rtl:-scale-x-100" />;
   return <ContextMenu as="li" items={items} data-pathway-item={item.id} data-pathway-item-kind={item.kind} className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3 py-2 outline-none focus-visible:outline-2 focus-visible:outline-focus">

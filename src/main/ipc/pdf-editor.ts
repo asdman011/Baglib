@@ -104,7 +104,7 @@ export function registerPdfEditorIpc(options: { viewCacheDirectory?: string } = 
       return { ok: false, error: (['invalid-request', 'invalid-source', 'source-required', 'source-changed', 'encrypted', 'permission-denied', 'unsupported', 'busy', 'cancelled', 'engine-missing', 'signed-document-locked', 'owner-password-required', 'invalid-output', 'no-output', 'no-tables', 'no-text', 'no-bookmarks', 'redaction-unverified', 'certificate-invalid'].includes(code) ? code : 'storage') as PdfError };
     }
   };
-  ipcMain.handle('pdf-editor:engine-status', event => result(event, () => defaultStirlingSidecar.getStatus()));
+  ipcMain.handle('pdf-editor:engine-status', event => result(event, () => ({ ...defaultStirlingSidecar.getStatus(), configured: isStirlingConfigured(pdfEngineTools()) })));
   ipcMain.handle('pdf-editor:warm-engine', event => result(event, () => {
     void resolveStirlingEndpoint(pdfEngineTools()).catch(error => console.warn('[baglib:pdf] Engine warm-up unavailable:', (error as Error).message));
     return null;

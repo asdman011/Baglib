@@ -635,16 +635,20 @@ export function setupDatabaseIPC() {
   });
 
   ipcMain.handle('search:get-fts-stats', () => {
+    let databaseReady = false;
     try {
       const db = getDatabase();
+      databaseReady = db.open;
       const repo = new (ipcModule3.ContentFtsRepository)(db);
       return {
+        databaseReady,
+        indexReady: true,
         booksCount: repo.getIndexedBooksCount(),
         pagesCount: repo.getIndexedPagesCount(),
       };
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to get FTS stats:', err);
-      return { booksCount: 0, pagesCount: 0 };
+      return { databaseReady, indexReady: false, booksCount: 0, pagesCount: 0 };
     }
   });
 }

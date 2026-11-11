@@ -3,11 +3,18 @@
 import React from 'react';
 import { Database, FileText } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useReadiness } from '../../hooks/useReadiness';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 
 export const StatusBar: React.FC = () => {
   const { t, lang, setViewMode, setCommandPaletteOpen, toggleZenMode } = useWorkspace();
   const { notes, loading, error } = useStudyNotes();
+  const readiness = useReadiness();
+  const checking = Object.values(readiness).some(value => value === null);
+  const issues = [!readiness.database && t('feedbackDatabaseUnavailable'), !readiness.index && t('feedbackIndexUnavailable'), !readiness.pdf && t('feedbackPdfUnavailable')].filter(Boolean).join(' ? ');
+  const ready = !checking && !issues;
+  const status = t(checking ? 'feedbackChecking' : ready ? 'feedbackReady' : 'feedbackLimited');
+  const detail = checking ? status : ready ? t('feedbackReadyDetail') : issues;
 
   return (
     <footer className="min-h-7 bg-surface border-t border-subtle flex items-center justify-between gap-2 px-3 text-[11px] leading-relaxed text-muted select-none z-20 shrink-0 font-sans">
@@ -22,9 +29,9 @@ export const StatusBar: React.FC = () => {
         <span className="hidden sm:inline text-subtle" aria-hidden="true">•</span>
 
         {/* Local Indexing Status */}
-        <div className="hidden sm:flex min-w-0 items-center gap-1.5" title={t('localLibraryStorage')}>
-          <Database className="w-3 h-3 text-muted" />
-          <span className="truncate">{t('localLibraryStorage')}</span>
+        <div data-readiness={checking ? 'checking' : ready ? 'ready' : 'limited'} className="flex min-w-0 items-center gap-1.5" title={detail} aria-label={`${status} ? ${detail}`}>
+          <Database className={`w-3 h-3 shrink-0 ${ready ? 'text-success' : 'text-muted'}`} />
+          <span className="truncate">{t('localLibraryStorage')} · {status}</span>
         </div>
       </div>
 

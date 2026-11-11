@@ -12,7 +12,7 @@ export interface ToastOptions {
   duration?: number;
   action?: {
     label: string;
-    onClick: () => void;
+    onClick: () => unknown;
   };
 }
 
@@ -48,7 +48,10 @@ const SingleToast: React.FC<{
   onDismiss: (id: string) => void;
 }> = ({ toast, onDismiss }) => {
   const { t } = useWorkspace();
+  const { showToast } = useToast();
   const [paused, setPaused] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const actionPending = useRef(false);
   const remainingTimeRef = useRef(toast.duration ?? 5000);
   const startTimeRef = useRef<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -82,9 +85,12 @@ const SingleToast: React.FC<{
     <div
       role={isAssertive ? 'alert' : 'status'}
       aria-live={isAssertive ? 'assertive' : 'polite'}
+      data-feedback-toast
+      onFocus={() => setPaused(true)}
+      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      className="flex items-center gap-3 p-3.5 bg-surface border border-border rounded-xl shadow-lg text-text font-sans text-xs min-w-72 max-w-md pointer-events-auto transition-all animate-in fade-in slide-in-from-bottom-2"
+      className="flex items-center gap-3 p-3.5 bg-surface border border-border rounded-xl shadow-lg text-text font-sans text-xs min-w-0 w-full max-w-md pointer-events-auto transition-all animate-in fade-in slide-in-from-bottom-2"
     >
       <span className="shrink-0">{iconMap[type]}</span>
       <div className="flex-1 min-w-0 font-medium leading-relaxed">
@@ -94,9 +100,18 @@ const SingleToast: React.FC<{
       {toast.action && (
         <button
           type="button"
-          onClick={() => {
-            toast.action?.onClick();
-            onDismiss(toast.id);
+          disabled={busy}
+          onClick={async () => {
+            if (actionPending.current) return;
+            actionPending.current = true;
+            setBusy(true);
+            try {
+              await toast.action?.onClick();
+            } catch {
+              showToast({ message: t('feedbackActionFailed'), type: 'danger' });
+            } finally {
+              onDismiss(toast.id);
+            }
           }}
           className="shrink-0 font-bold text-primary-text hover:underline px-2 py-1 rounded focus-visible:outline-2 focus-visible:outline-focus cursor-pointer"
         >
@@ -132,7 +147,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       id,
       createdAt: Date.now(),
     };
-    setToasts((prev) => [...prev, newToast]);
+    setToasts((prev) => [...prev.slice(-2), newToast]);
     return id;
   }, []);
 
@@ -142,7 +157,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {/* Toast live region container */}
       <div
         dir={dir}
-        className="fixed bottom-4 start-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm sm:max-w-md"
+        className="fixed bottom-9 start-4 end-4 z-[10000] flex flex-col gap-2 pointer-events-none sm:end-auto sm:w-96"
       >
         {toasts.map((toast) => (
           <SingleToast key={toast.id} toast={toast} onDismiss={dismissToast} />

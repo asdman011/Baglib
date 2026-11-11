@@ -1,5 +1,20 @@
 export const translations = {
   ar: {
+    feedbackRemoved: "تمت إزالة العنصر.",
+    feedbackActionFailed: "تعذّر إتمام الإجراء. حاول مرة أخرى من نفس الأداة.",
+    feedbackUndoFailed: "تعذّر التراجع. افتح سجل العنصر لاستعادته.",
+    feedbackMarkDeleted: "حُذفت العلامة.",
+    feedbackRestored: "تمت الاستعادة.",
+    feedbackSaved: "تم حفظ التعديلات.",
+    feedbackChecking: "جارٍ التحقق",
+    feedbackReady: "جاهز",
+    feedbackLimited: "بعض الأدوات غير جاهزة",
+    feedbackReadyDetail: "قاعدة البيانات وفهرس البحث ومحرك PDF متاحة.",
+    feedbackDatabaseUnavailable: "قاعدة البيانات غير متاحة. أعد فتح التطبيق.",
+    feedbackIndexUnavailable: "فهرس البحث غير متاح. أعد فتح التطبيق وحاول البحث مجددًا.",
+    feedbackPdfUnavailable: "محرك PDF غير متاح. راجع حالة المحرك في أدوات PDF.",
+    feedbackMarksStart: "حدّد نصًا في الصفحة لإضافة علامة.",
+
     settingSearchProviders: "مصادر البحث",
     settingSearchProvidersDescription: "فعّل مصادر اكتشاف الكتب أو عطّلها. تُحفظ اختياراتك على هذا الجهاز.",
     settingCourses: "حساب الدورات",
@@ -1982,7 +1997,6 @@ export const translations = {
     allCategories: "التصنيفات: الكل",
     emptySearchTitle: "لا توجد نتائج مطابقة",
     emptySearchDesc: "جرب البحث بكلمات مختلفة أو إزالة الفلاتر الحالية",
-    emptyLibraryTitle: "المكتبة فارغة",
     emptyLibraryDesc: "قم بإضافة أول مادة لبدء بناء مكتبتك المعرفية",
 
     readBook: "قراءة",
@@ -4670,6 +4684,21 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    feedbackRemoved: "Item removed.",
+    feedbackActionFailed: "Could not complete the action. Try again from the same tool.",
+    feedbackUndoFailed: "Could not undo. Open the item history to restore it.",
+    feedbackMarkDeleted: "Mark deleted.",
+    feedbackRestored: "Restored.",
+    feedbackSaved: "Changes saved.",
+    feedbackChecking: "Checking",
+    feedbackReady: "Ready",
+    feedbackLimited: "Some tools unavailable",
+    feedbackReadyDetail: "Database, search index and PDF engine are available.",
+    feedbackDatabaseUnavailable: "Database unavailable. Reopen the app.",
+    feedbackIndexUnavailable: "Search index unavailable. Reopen the app and retry search.",
+    feedbackPdfUnavailable: "PDF engine unavailable. Check engine status in PDF tools.",
+    feedbackMarksStart: "Select text on the page to add a mark.",
+
     settingSearchProviders: "Search sources",
     settingSearchProvidersDescription: "Enable or disable book discovery sources. Your choices are saved on this device.",
     settingCourses: "Course account",
@@ -6652,7 +6681,6 @@ export const translations = {
     allCategories: "Categories: All",
     emptySearchTitle: "No matching results",
     emptySearchDesc: "Try different search terms or remove current filters",
-    emptyLibraryTitle: "Library is empty",
     emptyLibraryDesc: "Add your first material to start building your knowledge base",
 
     readBook: "Read",

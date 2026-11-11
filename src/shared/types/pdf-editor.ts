@@ -92,6 +92,7 @@ export type PdfResult<T> = { ok: true; data: T } | { ok: false; error: PdfError 
 export interface PdfCapability { feature: PdfFeature; available: boolean; reason?: 'engine-missing' | 'text-only' | 'credentials-required' }
 export type StirlingEngineStatus = 'stopped' | 'starting' | 'ready' | 'processing' | 'error';
 export interface StirlingEngineInfo {
+  configured?: boolean;
   status: StirlingEngineStatus;
   port?: number;
   version?: string;

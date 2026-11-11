@@ -2,7 +2,7 @@
 
 import { ContextMenu } from '../ui/ContextMenu';
 import { contextActions } from '../actions/context-actions';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Repeat2, Search, Sparkles, BookOpen, Layers } from 'lucide-react';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -16,6 +16,7 @@ import { CardDecksPanel } from './CardDecksPanel';
 import { DictionariesPanel } from './DictionariesPanel';
 import { PersonalCommentary } from './PersonalCommentary';
 import { Button } from '../ui/Button';
+import { Skeleton } from '../ui/Skeleton';
 import { EmptyState } from '../ui/EmptyState';
 
 export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void }) {
@@ -28,21 +29,28 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
   const [search, setSearch] = useState('');
   const [hover, setHover] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const requestSequence = useRef(0);
   const [dueCount, setDueCount] = useState(0);
 
   const refresh = useCallback(async () => {
+    const request = ++requestSequence.current;
+    setLoading(true);
     try {
       const [cardList, presList, queue] = await Promise.all([
         window.electronAPI.knowledgeCards.list({ search }),
         window.electronAPI.knowledgeCards.listPreserved(),
         window.electronAPI.knowledgeCards.reviewQueue().catch(() => null),
       ]);
+      if (request !== requestSequence.current) return;
       setCards(cardList);
       setPreserved(presList);
       if (queue) setDueCount(queue.due);
       setFailed(false);
     } catch {
-      setFailed(true);
+      if (request === requestSequence.current) setFailed(true);
+    } finally {
+      if (request === requestSequence.current) setLoading(false);
     }
   }, [search]);
 
@@ -54,6 +62,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
     window.addEventListener(KNOWLEDGE_CARD_SAVED, load);
     window.addEventListener('baglib:srs-reviewed', load);
     return () => {
+      requestSequence.current++;
       window.removeEventListener('baglib:new-card', handleNewCard);
       window.removeEventListener(KNOWLEDGE_CARD_SAVED, load);
       window.removeEventListener('baglib:srs-reviewed', load);
@@ -147,7 +156,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
         <Search className="size-4 text-muted shrink-0" />
         <input
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => { requestSequence.current++; setSearch(event.target.value); }}
           placeholder={t('savedCardsSearch')}
           aria-label={t('savedCardsSearch')}
           className="min-w-0 flex-1 bg-transparent text-sm outline-none text-main placeholder:text-muted"
@@ -173,7 +182,8 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
       )}
 
       {/* Cards List */}
-      {!failed && cards.length === 0 && !creating && (
+      {loading && <div role="status" aria-label={t('loading')} className="space-y-3"><Skeleton className="h-24" /><Skeleton className="h-24" /></div>}
+      {!failed && !loading && cards.length === 0 && !creating && (
         <EmptyState
           icon={<Layers className="size-8 text-muted" />}
           title={t('savedCardsEmpty')}
@@ -187,6 +197,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
 
       {cards.length > 0 && (
         <ul className="space-y-3">
+          {/* eslint-disable-next-line react-hooks/refs -- contextActions stores event callbacks without invoking them during render. */}
           {cards.map((card) => (
             <ContextMenu as="li" items={contextActions('card', {
               edit: ['quran', 'hadith', 'poetry'].includes(card.sourceKind) ? undefined : () => setEditing(card.id), review: () => setPracticing(card.id),

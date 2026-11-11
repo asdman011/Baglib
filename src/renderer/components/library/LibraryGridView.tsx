@@ -9,7 +9,6 @@ import { LibraryBookCard } from './LibraryBookCard';
 import {
   BookOpen,
   Search,
-  Plus,
   MapPin,
   Info,
   FolderOpen,
@@ -20,12 +19,9 @@ import {
   RotateCcw,
   LayoutGrid,
   List,
-  CheckCircle2,
   Trash2,
   FileText,
   RefreshCw,
-  UploadCloud,
-  AlertTriangle,
   SlidersHorizontal,
   Bookmark,
   ArrowLeftRight,
@@ -65,6 +61,9 @@ import { LibraryBookCover } from './LibraryBookCover';
 import { FeaturedBookCard } from './FeaturedBookCard';
 import { LibraryFilterRail } from './LibraryFilterRail';
 import { LibraryMoreMenu } from './LibraryMoreMenu';
+import { useToast } from '../ui/Toast';
+import { Skeleton } from '../ui/Skeleton';
+import { EmptyState } from '../ui/EmptyState';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Chip } from '../ui/Chip';
@@ -100,6 +99,8 @@ export type SortDirection = 'asc' | 'desc';
 export const LibraryGridView: React.FC = () => {
   const {
     books,
+    booksLoading,
+    booksError,
     refreshBooks,
     addBook,
     updateBook,
@@ -139,11 +140,14 @@ export const LibraryGridView: React.FC = () => {
   // Trash Bin & Undo Deletion State (KEY-45)
   const [isTrashModalOpen, setIsTrashModalOpen] = useState<boolean>(false);
   const [trashCount, setTrashCount] = useState<number>(0);
-  const [undoToast, setUndoToast] = useState<{
-    id: string;
-    message: string;
-    onUndo: () => Promise<void>;
-  } | null>(null);
+  const { showToast } = useToast();
+  const feedbackError = () => showToast({ message: t('feedbackActionFailed'), type: 'danger' });
+  const setUndoToast = (toast: { id: string; message: string; onUndo: () => Promise<void> }) => {
+    showToast({ message: toast.message, duration: 8000, action: {
+      label: t('undo'),
+      onClick: async () => { try { await toast.onUndo(); } catch { feedbackError(); } },
+    } });
+  };
 
   // Scalable Filter States
   const [selectedBookType, setSelectedBookType] = useState<string>('ALL');
@@ -257,10 +261,10 @@ export const LibraryGridView: React.FC = () => {
   const [detailTab, setDetailTab] = useState<'info' | 'physical' | 'classification' | 'lending'>('info');
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isNewBook, setIsNewBook] = useState(false);
-  const [saveToast, setSaveToast] = useState<string | null>(null);
-  const [dropNotice, setDropNotice] = useState<{ text: string; error: boolean } | null>(null);
-  const dropNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (dropNoticeTimer.current) clearTimeout(dropNoticeTimer.current); }, []);
+  const setSaveToast = (message: string | null) => { if (message) showToast({ message, type: 'success' }); };
+  const setDropNotice = (notice: { text: string; error: boolean } | null) => {
+    if (notice) showToast({ message: notice.text, type: notice.error ? 'danger' : 'success' });
+  };
   const [isImportingBook, setIsImportingBook] = useState(false);
   const dropImporting = useRef(false);
   const [importMessage, setImportMessage] = useState<string>('');
@@ -310,15 +314,6 @@ export const LibraryGridView: React.FC = () => {
       alive = false;
     };
   }, [books]);
-
-  // Auto-dismiss Undo toast after 8 seconds (KEY-45)
-  useEffect(() => {
-    if (!undoToast) return;
-    const timer = setTimeout(() => {
-      setUndoToast(null);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, [undoToast]);
 
   // App Lock Security check on mount and periodic idle monitoring
   useEffect(() => {
@@ -598,7 +593,7 @@ export const LibraryGridView: React.FC = () => {
           ? t('storageCorruptedWarning')
           : t('storageMissingWarning')
       );
-      setTimeout(() => setSaveToast(null), 4000);
+
       return;
     }
     openBookForReading(book);
@@ -610,15 +605,12 @@ export const LibraryGridView: React.FC = () => {
     } else {
       updateBook(updatedBook);
     }
-    setSaveToast(lang === 'ar' ? 'تم حفظ التعديلات بنجاح!' : 'Changes saved successfully!');
-    setTimeout(() => setSaveToast(null), 3000);
+    setSaveToast(t('feedbackSaved'));
+
   };
 
   const handleDeleteBook = async (id: string) => {
-    const targetBook = books.find((b) => b.id === id);
-    const bookTitle = targetBook?.title || (lang === 'ar' ? 'الكتاب' : 'Book');
-
-    await deleteBook(id);
+    try { await deleteBook(id); } catch { feedbackError(); return; }
     setIsDetailModalOpen(false);
     setIsNewBook(false);
     void refreshTrashCount();
@@ -626,14 +618,14 @@ export const LibraryGridView: React.FC = () => {
     // Floating Interactive Undo Prompt (KEY-45)
     setUndoToast({
       id: String(Date.now()),
-      message: `${bookTitle} — ${t('bookMovedToTrash')}`,
+      message: t('bookMovedToTrash'),
       onUndo: async () => {
         if (typeof window !== 'undefined' && window.electronAPI?.restoreBook) {
           await window.electronAPI.restoreBook(id);
           await refreshBooks();
           void refreshTrashCount();
           setSaveToast(t('bookRestored'));
-          setTimeout(() => setSaveToast(null), 3500);
+
         }
       },
     });
@@ -668,7 +660,6 @@ export const LibraryGridView: React.FC = () => {
     return () => window.removeEventListener('baglib:add-physical-book', handler);
   }, [handleAddNewBook]);
 
-
   /** KEY-259: the cover photo proposes the entry; the reader reviews it in the usual form before saving. */
   const handleAddFromCover = async () => {
     try {
@@ -696,10 +687,10 @@ export const LibraryGridView: React.FC = () => {
       setIsNewBook(true);
       setIsDetailModalOpen(true);
       setSaveToast(t(proposal.title ? 'coverPhotoReview' : 'coverPhotoNoText'));
-      setTimeout(() => setSaveToast(null), 5000);
+
     } catch {
       setSaveToast(t('coverPhotoFailed'));
-      setTimeout(() => setSaveToast(null), 3500);
+
     }
   };
 
@@ -847,7 +838,7 @@ export const LibraryGridView: React.FC = () => {
           ? `تمت إضافة الكتاب "${newDigitalBook.title}" إلى المكتبة بنجاح!`
           : `Book "${newDigitalBook.title}" added to your library successfully!`)
       );
-      setTimeout(() => setSaveToast(null), 3500);
+
       return newDigitalBook;
     } finally {
       setIsImportingBook(false);
@@ -903,7 +894,6 @@ export const LibraryGridView: React.FC = () => {
     dropImporting.current = true;
     setDropNotice(null);
     setSaveToast(null);
-    if (dropNoticeTimer.current) clearTimeout(dropNoticeTimer.current);
     setIsImportingBook(true);
     setImportMessage(t('singleDropImporting'));
     try {
@@ -926,7 +916,6 @@ export const LibraryGridView: React.FC = () => {
     } finally {
       dropImporting.current = false;
       setIsImportingBook(false);
-      dropNoticeTimer.current = setTimeout(() => setDropNotice(null), 5000);
     }
   };
 
@@ -958,7 +947,7 @@ export const LibraryGridView: React.FC = () => {
         ? `تمت إضافة "${imported.title}" إلى مكتبتك بنجاح!`
         : `"${imported.title}" added to your library successfully!`
     );
-    setTimeout(() => setSaveToast(null), 3500);
+
   };
 
   const bookMenu = (book: BookItem): MenuItemProps[] => {
@@ -1448,35 +1437,15 @@ export const LibraryGridView: React.FC = () => {
             /></ContextMenu>
           )}
 
-          {books.length === 0 ? (
-            /* STATE A: Completely Empty Library (0 books in state) */
-            <div className="h-full flex flex-col items-center justify-center text-center p-8 max-w-xl mx-auto space-y-5">
-              <div className="size-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary-text shadow-lg">
-                <FolderOpen className="size-10" />
-              </div>
-              <div className="space-y-1.5">
-                <h3 className="font-display font-bold text-xl text-text">{t('emptyLibraryTitle')}</h3>
-                <p className="text-xs text-text-muted leading-relaxed font-sans">
-                  {t('emptyLibraryDesc')}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => setIsImportWizardOpen(true)}
-                  icon={<UploadCloud className="size-4" />}
-                >
-                  {t('importWizardTitle')}
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={handleAddNewBook}
-                  icon={<Plus className="size-4" />}
-                >
-                  {t('addBook')}
-                </Button>
-              </div>
+          {booksLoading ? (
+            <div role="status" aria-label={t('loading')} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[0, 1, 2, 3].map(id => <Skeleton key={id} className="h-64" />)}
             </div>
+          ) : booksError ? (
+            <EmptyState title={t('feedbackDatabaseUnavailable')} action={<Button onClick={() => void refreshBooks()}>{t('lookupRetry')}</Button>} />
+          ) : books.length === 0 ? (
+            <EmptyState title={t('emptyLibraryDesc')} icon={<FolderOpen className="size-6" />}
+              action={<Button onClick={() => setIsImportWizardOpen(true)}>{t('importWizardTitle')}</Button>} />
           ) : filteredAndSortedBooks.length > 0 ? (
             viewMode === 'grid' ? (
             /* STATE B1: Books matching filter — CALM CARDS (KEY-310) */
@@ -1949,7 +1918,7 @@ export const LibraryGridView: React.FC = () => {
         onOpenAudit={() => setIsAuditModalOpen(true)}
         onOperationComplete={(msg) => {
           setSaveToast(msg);
-          setTimeout(() => setSaveToast(null), 4000);
+
           refreshBooks();
         }}
         onUndoToast={(toast) => {
@@ -1960,7 +1929,7 @@ export const LibraryGridView: React.FC = () => {
               await toast.onUndo();
               void refreshTrashCount();
               setSaveToast(t('booksRestored'));
-              setTimeout(() => setSaveToast(null), 3500);
+
             },
           });
         }}
@@ -2061,7 +2030,7 @@ export const LibraryGridView: React.FC = () => {
         onClose={() => setQuickLendBook(null)}
         onSuccess={() => {
           setSaveToast(t('lendSuccess'));
-          setTimeout(() => setSaveToast(null), 4000);
+
           refreshBooks();
         }}
       />
@@ -2073,7 +2042,7 @@ export const LibraryGridView: React.FC = () => {
         onClose={() => setQuickReturnBook(null)}
         onSuccess={() => {
           setSaveToast(t('returnSuccess'));
-          setTimeout(() => setSaveToast(null), 4000);
+
           refreshBooks();
         }}
       />
@@ -2123,64 +2092,7 @@ export const LibraryGridView: React.FC = () => {
       )}
 
       {/* Save Success Toast */}
-      {dropNotice && <div role={dropNotice.error ? 'alert' : 'status'} className={`fixed bottom-6 end-6 z-50 px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold ${dropNotice.error ? 'bg-red-600 text-white' : 'bg-evergreen-600 text-white'}`}>
-        {dropNotice.error ? <AlertTriangle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
-        <span>{dropNotice.text}</span>
-      </div>}
-      {/* Floating Interactive Undo Toast (KEY-45) */}
-      {undoToast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-8 start-1/2 -translate-x-1/2 z-50 flex items-center gap-3.5 px-5 py-3 rounded-2xl bg-neutral-900/95 dark:bg-neutral-800/95 text-white border border-neutral-700/80 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-lg w-[calc(100%-2rem)] sm:w-auto"
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="p-1.5 rounded-xl bg-red-500/20 text-red-400 shrink-0">
-              <Trash2 className="w-4 h-4" />
-            </span>
-            <span className="text-sm font-medium truncate text-neutral-100">
-              {undoToast.message}
-            </span>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0 ms-auto">
-            <button
-              onClick={async () => {
-                const undoFn = undoToast.onUndo;
-                setUndoToast(null);
-                await undoFn();
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary hover:opacity-90 active:scale-95 text-primary-contrast text-xs font-bold transition-all shadow-md cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-              <span>{t('undo')}</span>
-            </button>
-
-            <button
-              onClick={() => setUndoToast(null)}
-              className="p-1.5 rounded-xl hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-              title={t('cancel')}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* 8-second animated countdown progress bar */}
-          <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10 rounded-b-2xl overflow-hidden pointer-events-none">
-            <div
-              className="h-full bg-primary"
-              style={{ animation: 'undo-shrink 8s linear forwards' }}
-            />
-          </div>
-        </div>
-      )}
-
-      {saveToast && (
-        <div className="fixed bottom-6 end-6 z-50 bg-evergreen-600 text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{saveToast}</span>
-        </div>
-      )}
     </div>
   );
 };

@@ -1,4 +1,5 @@
 'use client';
+import { useToast } from '../ui/Toast';
 import { STAMPS, measurementLabel } from '../../../shared/pdf-study-tools';
 import { translations } from '../../translations';
 
@@ -260,6 +261,7 @@ const SourceBookReader: React.FC = () => {
   const isKnowledgeDrawerOpen = panels.activePanel === 'knowledge';
   const setIsKnowledgeDrawerOpen = panels.setters['knowledge'];
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemDTO[]>([]);
+  const [marksLoading, setMarksLoading] = useState(true);
   const [previousJumpPage, setPreviousJumpPage] = useState<number | null>(null);
   const [autoCropMargins, setAutoCropMargins] = useState<boolean>(false);
   const [pdfFitMode, setPdfFitMode] = useState<'Fit' | 'FitH' | 'FitV'>('FitH');
@@ -357,9 +359,10 @@ const SourceBookReader: React.FC = () => {
   useEffect(() => { const timer = setTimeout(refreshMarkCounts, 0); return () => clearTimeout(timer); }, [activeBook?.id, refreshMarkCounts]);
   const [activeHighlightColor, setActiveHighlightColor] = useState<string>('amber');
   const [showReaderShortcuts, setShowReaderShortcuts] = useState(false);
-  const [showToast, setShowToast] = useState<string | null>(null);
+  const { showToast: notify } = useToast();
+  const setShowToast = useCallback((message: string | null) => { if (message) notify({ message }); }, [notify]);
   const [isSavingPdf, setIsSavingPdf] = useState(false);
-  const [showCopiedToast, setShowCopiedToast] = useState<boolean>(false);
+  const setShowCopiedToast = () => notify({ message: t('textCopiedToast') });
 
   // Hands-Free Auto-Scrolling / Auto-Reader Mode State
   const [isAutoScrolling, setIsAutoScrolling] = useState<boolean>(false);
@@ -797,7 +800,6 @@ const SourceBookReader: React.FC = () => {
       clearInterval(timer);
     };
   }, [isAutoScrolling, viewMode, autoScrollSpeed, readingPage, maxBookPages, handleNextPage]);
-
 
   // Full Screen-Reader Accessible Keyboard Navigation & Physics
   useEffect(() => {
@@ -1852,7 +1854,6 @@ const SourceBookReader: React.FC = () => {
     }
   };
 
-
   // Active Formatted Page & Text Content
   const activeFormattedPage = paginatedPages[readingPage - 1];
   const secondFormattedPage =
@@ -1956,11 +1957,6 @@ const SourceBookReader: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (!showToast) return;
-    const timer = setTimeout(() => setShowToast(null), 6000);
-    return () => clearTimeout(timer);
-  }, [showToast]);
 
   // Load existing audiobook pairing when active book changes
   useEffect(() => {
@@ -2022,7 +2018,6 @@ const SourceBookReader: React.FC = () => {
   const displayedNotes = filterMode === 'current_page' ? currentPageNotes : bookNotes;
 
   // Load annotations from SQLite for this book
-
 
   useEffect(() => {
     if (!activeBook?.id || !window.electronAPI?.getAnnotations) return;
@@ -2144,13 +2139,14 @@ const SourceBookReader: React.FC = () => {
       const api = (window).electronAPI;
       if (api?.deleteAnnotation) {
         if (knowledgeItems.some(item => item.id === id)) {
-          await api.knowledge.delete(id, 'reader');
-          setKnowledgeItems(previous => previous.filter(item => item.id !== id));
-        } else await api.deleteAnnotation(id);
+          await handleDeleteKnowledgeItem(id);
+          return;
+        } else { await api.deleteAnnotation(id); notify({ message: t('feedbackMarkDeleted') }); }
         setAnnotations((prev) => prev.filter((a) => a.id !== id));
       }
     } catch (err) {
       console.warn('[FullPageBookReader] Failed to delete annotation:', err);
+      notify({ message: t('feedbackActionFailed'), type: 'danger' });
     }
   };
 
@@ -2248,9 +2244,12 @@ const SourceBookReader: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- as above
   }, [markThreadCounts]);
   const markWorkId = activeBook?.id;
+  const markWorkRef = useRef(markWorkId);
+  useEffect(() => { markWorkRef.current = markWorkId; }, [markWorkId]);
   const reloadMarks = useCallback(async () => {
     if (!markWorkId) return;
     const [items, notes] = await Promise.all([window.electronAPI.knowledge.getByWork(markWorkId), window.electronAPI.getAnnotations?.(markWorkId)]);
+    if (markWorkRef.current !== markWorkId) return;
     if (items) setKnowledgeItems(items);
     if (notes) setAnnotations(notes);
     refreshMarkCounts();
@@ -2280,9 +2279,8 @@ const SourceBookReader: React.FC = () => {
         } else {
           setShowToast(t(result.error === 'nothing-to-redo' ? 'nothingToRedo' : result.error === 'nothing-to-undo' ? 'nothingToUndo' : result.error === 'history-unappliable' ? 'historyUnappliable' : 'studyActionFailed'));
         }
-        setTimeout(() => setShowToast(null), 2000);
         if (result.ok) await reloadMarks();
-      }).catch(error => { console.warn('[FullPageBookReader] Mark history failed:', error); setShowToast(t('studyActionFailed')); }).finally(() => { historyRequestPending.current = false; });
+      }).catch(error => { console.warn('[FullPageBookReader] Mark history failed:', error); setShowToast(t('feedbackActionFailed')); }).finally(() => { historyRequestPending.current = false; });
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -2318,14 +2316,17 @@ const SourceBookReader: React.FC = () => {
   useEffect(() => {
     if (!activeBook?.id) return;
     const api = (window).electronAPI;
+    let alive = true;
+    queueMicrotask(() => { if (alive) setMarksLoading(true); });
     if (api?.knowledge?.getByWork) {
       api.knowledge
         .getByWork(activeBook.id)
         .then((items: KnowledgeItemDTO[]) => {
-          if (items) { initialMarksLoad.current = true; setKnowledgeItems(items); }
+          if (alive && items) { initialMarksLoad.current = true; setKnowledgeItems(items); }
         })
-        .catch(console.warn);
+        .catch(console.warn).finally(() => { if (alive) setMarksLoading(false); });
     }
+    return () => { alive = false; };
   }, [activeBook?.id]);
 
   // Unified SQLite Knowledge Item Persistence (Supports PDF Normalized Rects & EPUB CFIs)
@@ -2399,7 +2400,7 @@ const SourceBookReader: React.FC = () => {
       window.dispatchEvent(new Event('baglib:notes-changed'));
     } catch (error) {
       console.warn('[FullPageBookReader] Save knowledge failed:', error);
-      setShowToast(t('studyActionFailed'));
+      setShowToast(t('feedbackActionFailed'));
       return false;
     }
 
@@ -2411,7 +2412,6 @@ const SourceBookReader: React.FC = () => {
     setActiveRange(null);
     setSelectedText('');
     setShowToast(t(type === 'highlight' ? 'highlightSavedToast' : type === 'bookmark' ? 'bookmarkAdded' : 'knowledgeSavedToast', { page: safePage }));
-    setTimeout(() => setShowToast(null), 2500);
     setTimeout(() => renderSavedEpubHighlights(), 50);
     return true;
   };
@@ -2479,17 +2479,27 @@ const SourceBookReader: React.FC = () => {
   };
 
   const handleDeleteKnowledgeItem = async (id: string) => {
-    const api = (window).electronAPI;
-    if (api?.knowledge?.delete) {
-      try {
-        await api.knowledge.delete(id, 'reader');
-        setKnowledgeItems((prev) => prev.filter((i) => i.id !== id));
-      } catch (e) {
-        console.warn('[FullPageBookReader] Delete knowledge failed:', e);
-      }
-    }
-    await handleDeleteAnnotation(id);
-    setActiveHighlightPopover(null);
+    try {
+      const api = window.electronAPI;
+      const previous = await api.knowledgeHistory.versions(id);
+      await api.knowledge.delete(id, 'reader');
+      setKnowledgeItems(items => items.filter(item => item.id !== id));
+      setAnnotations(items => items.filter(item => item.id !== id));
+      setActiveHighlightPopover(null);
+      const deleted = await api.knowledgeHistory.versions(id);
+      const revision = previous[0]?.revision;
+      const expected = deleted[0]?.revision;
+      notify({ message: t('feedbackMarkDeleted'), duration: 8000,
+        ...(revision && expected ? { action: { label: t('undo'), onClick: async () => {
+          try {
+            await api.knowledgeHistory.restore(id, revision, expected, true);
+            await reloadMarks();
+            notify({ message: t('feedbackRestored'), type: 'success' });
+          } catch { notify({ message: t('feedbackUndoFailed'), type: 'danger' }); }
+        } } } : {}),
+      });
+      return true;
+    } catch { notify({ message: t('feedbackActionFailed'), type: 'danger' }); return false; }
   };
 
   const colorHexMap: Record<string, string> = useMemo(
@@ -2740,8 +2750,7 @@ const SourceBookReader: React.FC = () => {
     );
     if (existingKnowledge) {
       await handleDeleteKnowledgeItem(existingKnowledge.id);
-      setShowToast(t('bookmarkRemoved', { page: readingPage }) || 'Bookmark removed');
-      setTimeout(() => setShowToast(null), 2000);
+      setShowToast(t('bookmarkRemoved', { page: readingPage }));
       return;
     }
     const existingAnnotation = annotations.find(
@@ -2749,8 +2758,7 @@ const SourceBookReader: React.FC = () => {
     );
     if (existingAnnotation) {
       await handleDeleteAnnotation(existingAnnotation.id);
-      setShowToast(t('bookmarkRemoved', { page: readingPage }) || 'Bookmark removed');
-      setTimeout(() => setShowToast(null), 2000);
+      setShowToast(t('bookmarkRemoved', { page: readingPage }));
       return;
     }
 
@@ -2817,15 +2825,12 @@ const SourceBookReader: React.FC = () => {
             ? ocrFallbackMessage(t, res.fallbackReason, res.missingPackages, res.requestedEngine)
             : `${t('ocrSuccessPage', { count: res.words?.length || res.text.split(/\s+/).length })} ${t('ocrRanWithEngine', { engine: ocrEngineName(t, res.engine) })}`
         );
-        setTimeout(() => setShowToast(null), res.fallbackReason ? 8000 : 3000);
       } else {
         setShowToast(res?.fallbackReason ? ocrFallbackMessage(t, res.fallbackReason, res.missingPackages, res.requestedEngine) : t('ocrFailedText'));
-        setTimeout(() => setShowToast(null), res?.fallbackReason ? 8000 : 2500);
       }
     } catch (err) {
       console.warn('[handleRunOcrPage] Error:', err);
       setShowToast(t('ocrFailedText'));
-      setTimeout(() => setShowToast(null), 2500);
     } finally {
       setIsOcrRunning(false);
     }
@@ -2882,15 +2887,12 @@ const SourceBookReader: React.FC = () => {
             ? ocrFallbackMessage(t, fallback.fallbackReason, fallback.missingPackages, fallback.requestedEngine)
             : `${t('ocrSuccessBook', { pages: res.pages.length, words: totalWords })} ${t('ocrRanWithEngine', { engine: ocrEngineName(t, ocrEngine) })}`
         );
-        setTimeout(() => setShowToast(null), fallback ? 8000 : 3500);
       } else {
         setShowToast(t('ocrFailedText'));
-        setTimeout(() => setShowToast(null), 2500);
       }
     } catch (err) {
       console.warn('[handleRunOcrDocument] Error:', err);
       setShowToast(t('ocrFailedText'));
-      setTimeout(() => setShowToast(null), 2500);
     } finally {
       setIsOcrRunning(false);
       setOcrProgress(null);
@@ -3050,8 +3052,7 @@ const SourceBookReader: React.FC = () => {
     if (!selectedText) return;
     try {
       await navigator.clipboard.writeText(selectedText);
-      setShowCopiedToast(true);
-      setTimeout(() => setShowCopiedToast(false), 2000);
+      setShowCopiedToast();
     } catch (err) {
       console.warn('Clipboard write failed:', err);
     }
@@ -3109,7 +3110,6 @@ const SourceBookReader: React.FC = () => {
       if (!await window.electronAPI.knowledgeCards.setMemorizing(card.id, true)) throw new Error('missing-card');
       window.dispatchEvent(new CustomEvent(KNOWLEDGE_CARD_SAVED));
       setShowToast(t('readerStudySaved'));
-      setTimeout(() => setShowToast(null), 3000);
     } catch {
       setShowToast(t('srsFailed'));
     } finally {
@@ -3270,7 +3270,6 @@ const SourceBookReader: React.FC = () => {
       setIsTocOpen(false);
     }
   };
-
 
   const getFontFamilyStyle = () => {
     switch (fontFamily) {
@@ -3650,7 +3649,7 @@ const SourceBookReader: React.FC = () => {
           pdfDoc={pdfDocProxy}
           paginatedPages={paginatedPages}
         />)}
-        {chrome.tab === 'knowledge' && <PdfMarksList items={knowledgeItems} reviews={pdfReviews} isReflowable={isReflowable} t={t}
+        {chrome.tab === 'knowledge' && <PdfMarksList loading={marksLoading} onStartMark={() => { setMarkupTool('highlight'); closeChromePanel(); }} items={knowledgeItems} reviews={pdfReviews} isReflowable={isReflowable} t={t}
           onOpenMark={(item, at) => { refreshMarkCounts(); setOpenMark({ item, at }); }}
           onJump={(page, cfi) => {
             if (cfi && isReflowable) { try { (bookDoc?.rendition as { display?: (target: string) => void } | undefined)?.display?.(cfi); } catch {} }
@@ -3695,7 +3694,6 @@ const SourceBookReader: React.FC = () => {
       >
         {/* Slide-out Table of Contents (TOC) & Bookmarks Drawer */}
 
-
         {/* Inline Footnote / Classical Gloss Popover */}
         <ZenFootnotePopover
           footnote={activeFootnote}
@@ -3705,9 +3703,7 @@ const SourceBookReader: React.FC = () => {
 
         {/* Slide-out Annotations & Highlights Drawer (KEY-137 / KEY-138) */}
 
-
         {/* Slide-out In-Book Full-Text Search Drawer (KEY-140) */}
-
 
         {/* Pluggable Offline Dictionary & Encyclopedia Modal (KEY-142) */}
         <DictionaryLookupModal
@@ -4106,20 +4102,6 @@ const SourceBookReader: React.FC = () => {
             onStrokesChange={handleStrokesChange}
             t={t}
           />
-
-          {/* Floating Action Feedback Toasts */}
-          {showToast && (
-            <div className="fixed top-20 start-1/2 -translate-x-1/2 z-50 bg-surface/95 backdrop-blur-md text-main px-4 py-2 rounded-2xl shadow-2xl text-xs font-bold animate-in fade-in slide-in-from-top-2 duration-150 border border-subtle flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-pale-sky-500" />
-              <span>{showToast}</span>
-            </div>
-          )}
-          {showCopiedToast && (
-            <div className="fixed top-20 start-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-4 py-2 rounded-2xl shadow-2xl text-xs font-bold animate-in fade-in slide-in-from-top-2 duration-150 flex items-center gap-2">
-              <Check className="w-3.5 h-3.5" />
-              <span>{t('textCopiedToast')}</span>
-            </div>
-          )}
 
           {/* Render Book Content by Format */}
           {isComic ? (
@@ -4537,7 +4519,7 @@ const SourceBookReader: React.FC = () => {
                         setOpenMark({ item: saved, at: page ? { x: page.left + (page.width * mark.box.x) / 100, y: page.top + (page.height * mark.box.y) / 100 } : { x: 200, y: 200 } });
                       }
                       finishMarkup();
-                    }, () => { setShowToast(t('studyActionFailed')); setTimeout(() => setShowToast(null), 2500); });
+                    }, () => { setShowToast(t('feedbackActionFailed')); });
                   },
                   onOpen: (item, at) => { refreshMarkCounts(); setOpenMark({ item, at }); },
                 }}>
@@ -4750,6 +4732,7 @@ const SourceBookReader: React.FC = () => {
             setOpenMark((current) => (current ? { ...current, item: saved } : current));
             setTimeout(() => renderSavedEpubHighlights(), 50);
           }}
+          onDelete={handleDeleteKnowledgeItem}
           onDeleted={(id) => {
             setKnowledgeItems((previous) => previous.filter((item) => item.id !== id));
             setOpenMark(null);

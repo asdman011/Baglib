@@ -1,5 +1,6 @@
 'use client';
-import { errorMessage } from '../../../shared/errors';
+import { useToast } from '../ui/Toast';
+import { Button, Skeleton } from '../ui';
 
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -14,7 +15,6 @@ import {
   BookOpen,
   Feather,
   Loader2,
-  CheckCircle2,
   AlertCircle,
   Download,
   Filter,
@@ -77,7 +77,7 @@ export const SearchHubModal: React.FC = () => {
 
   // Result filter (all, only in-library, only downloadable)
   const [filterMode, setFilterMode] = useState<'all' | 'in_library' | 'downloadable'>('all');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const { showToast: notify } = useToast();
 
   const activeSearchIdRef = useRef<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -98,13 +98,7 @@ export const SearchHubModal: React.FC = () => {
     return invalidateSearch;
   }, [isSearchHubOpen, invalidateSearch]);
 
-  // Show transient toast
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((cur) => (cur === msg ? null : cur));
-    }, 3500);
-  };
+  const showToast = (message: string) => notify({ message });
 
   // Load available providers info on mount
   useEffect(() => {
@@ -183,6 +177,7 @@ export const SearchHubModal: React.FC = () => {
             }
           } catch (e) {
             console.error('[baglib:search-hub] FTS search error:', e);
+            if (activeSearchIdRef.current === searchId) notify({ message: t('feedbackActionFailed'), type: 'danger' });
           } finally {
             if (activeSearchIdRef.current === searchId) {
               setIsSearching(false);
@@ -213,13 +208,14 @@ export const SearchHubModal: React.FC = () => {
         }
       } catch (err) {
         console.error('[baglib:search-hub] Search query error:', err);
+        if (activeSearchIdRef.current === searchId) notify({ message: t('feedbackActionFailed'), type: 'danger' });
       } finally {
         if (activeSearchIdRef.current === searchId) {
           setIsSearching(false);
         }
       }
     },
-    [invalidateSearch]
+    [invalidateSearch, notify, t]
   );
 
   // Debounced auto-search on typing
@@ -276,12 +272,12 @@ export const SearchHubModal: React.FC = () => {
         }
         return true;
       } else {
-        showToast(res.error || 'Import failed');
+        notify({ message: t('feedbackActionFailed'), type: 'danger' });
         return false;
       }
     } catch (err: unknown) {
       console.error('[baglib:search-hub] importResult error:', err);
-      showToast(errorMessage(err) || 'Import failed');
+      notify({ message: t('feedbackActionFailed'), type: 'danger' });
       return false;
     }
   };
@@ -638,14 +634,14 @@ export const SearchHubModal: React.FC = () => {
               </div>
             ) : isSearching ? (
               <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">
-                <Loader2 className="w-8 h-8 text-pale-sky-500 animate-spin" />
+                <Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" />
                 <p className="text-sm font-medium">{t('searchingInBook')}</p>
               </div>
             ) : query.trim() ? (
               <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">
                 <AlertCircle className="w-10 h-10 text-muted/60" />
                 <h3 className="text-base font-bold text-main font-display">{t('noSearchResults')}</h3>
-                <p className="text-xs text-muted max-w-md">{t('noMatchesHint')}</p>
+                <Button onClick={() => { handleQueryChange(''); inputRef.current?.focus(); }}>{t('searchClearQuery')}</Button>
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">
@@ -667,14 +663,14 @@ export const SearchHubModal: React.FC = () => {
             </div>
           ) : isSearching ? (
             <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">
-              <Loader2 className="w-8 h-8 text-pale-sky-500 animate-spin" />
+              <Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" />
               <p className="text-sm font-medium">{t('searchingProviders', { active: selectedProviders.length })}</p>
             </div>
           ) : query.trim() ? (
             <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">
               <AlertCircle className="w-10 h-10 text-muted/60" />
               <h3 className="text-base font-bold text-main font-display">{t('noSearchResults')}</h3>
-              <p className="text-xs text-muted max-w-md">{t('noSearchResultsHint')}</p>
+              <Button onClick={() => { handleQueryChange(''); inputRef.current?.focus(); }}>{t('searchClearQuery')}</Button>
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">
@@ -685,13 +681,7 @@ export const SearchHubModal: React.FC = () => {
           )}
         </div>
 
-        {/* Toast Notification Popup */}
-        {toastMessage && (
-          <div className="absolute bottom-5 end-5 z-50 bg-main text-canvas px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-2 duration-200">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{toastMessage}</span>
-          </div>
-        )}
+
       </div>
     </div>
   );

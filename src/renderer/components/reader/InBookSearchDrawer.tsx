@@ -97,6 +97,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
           normalizeArabic,
           signal: controller.signal,
           onProgress: (prog) => {
+            if (controller.signal.aborted) return;
             setProgress(prog);
             setMatches(prog.matches);
           },
@@ -110,7 +111,7 @@ export const InBookSearchDrawer: React.FC<InBookSearchDrawerProps> = ({
         if ((!(err instanceof Error) || err.name !== 'AbortError')) {
           console.error('[baglib:search-drawer] Search error:', err);
         }
-        setIsSearching(false);
+        if (!controller.signal.aborted) setIsSearching(false);
       }
     }, 200);
 

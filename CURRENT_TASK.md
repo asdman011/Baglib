@@ -1,3 +1,43 @@
+## KEY-301 part 1 verified - 2026-11-11, Codex (key301-20261111)
+
+Working first part under KEY-294 / Library. The existing U2 toast service now wraps the workspace and serves library, reader and Search Hub notifications. Trash/bulk Undo uses restoreBook/bulkRestore. Reader mark Undo uses the exact persisted pre-delete history revision with an expected-current guard, and deletion is a single write across annotation/popover paths. Collection item removal has a plain confirmation because its existing API physically deletes the row. Card/commentary searches reject stale responses; reader search ignores aborted progress/errors; existing Search Hub invalidation is retained and tested. Status bar reads actual DB/FTS availability and PDF-engine configuration/file checks with localized next steps. Library, notes, cards, marks and global search loading feedback uses U2 skeletons. Notes errors give a next step. The PDF.js hidden measurement canvas gets the bundled display rule, preventing English reader shell compression.
+
+UX changes. Shared auto-expiring, single-action toasts fit RTL/LTR at 480 px and remain visible above the reader. Trash and PDF mark deletion offer working Undo. Empty library has one sentence and Import, search zero-results has Clear, and marks offer Clear filters or Highlight. Readiness names unavailable components in its tooltip. Arabic/English strings use translations.ts, with the unused emptyLibraryTitle removed.
+
+Verification. Sequential tsc, changed-file eslint with zero errors, initial focused17/17 and final focused19/19, main build and diff checks pass. Eleven new tests, with existing tests preserved. Final native8/8 matrix passes in ar/en, light/dark, 1280/480 with real Arabic/English PDFs. Trash Undo, UI PDF-mark deletion/Undo, delayed search, missing-engine profile simulation, skeleton/empty states and post-reader footer layout pass with zero renderer errors and document overflow. Seventy-two final screenshots retained at .baglib-data/KEY-301-evidence/2026-11-11T00-31-11-133Z/. Six final screenshots directly inspected. Profiles and all five earlier evidence runs deleted. The single full suite ran once at concurrency two and exercised 1797 tests across 334 suites, with 1795 passes and two Notes action-error text assertion failures. Restored the existing translated action message, which already includes the retry/reference next step. Final focused rerun passed 19/19, including both previously failing tests. Final tsc and Notes lint pass. The full suite was run once as requested.
+
+Limits and remaining work. This is part 1. Boards/planner/research/dashboard feedback, wider Notes/mark-list error recovery, source-subtab empty feedback and remaining per-view toast/progress/destructive-action migrations are pending. The harness injects a cover renderer that omits covers to enforce one Electron window, and creates PDF pins through the existing bridge before UI deletion/Undo. Manual file-save policy is used. External-provider behavior, live bulk trash and every mark kind require separate coverage. Existing missing-Mushaf-layout startup warnings occur in the isolated profile. No schema, dependency, download or Jira change was made. Claude owns review/Jira and KEY-301 stays open.
+
+Publication. User explicitly authorizes this scoped first-part commit/push to origin/feature/library-domain. Git publication pending. Stage only the following 25 task files, with this entry alone from CURRENT_TASK and the KEY-301 entry alone from IMPLEMENTATION_PLAN. Preserve all protected paths and sibling planning/research edits.
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `docs/features/Usability Inspection.md`
+- `src/main/ipc/database.ts`
+- `src/main/ipc/pdf-editor.ts`
+- `src/shared/types/pdf-editor.ts`
+- `src/renderer/app/globals.css`
+- `src/renderer/components/context/WorkspaceContext.tsx`
+- `src/renderer/components/dashboard/PathwaysView.tsx`
+- `src/renderer/components/knowledge/PersonalCommentary.tsx`
+- `src/renderer/components/knowledge/SavedCardsPanel.tsx`
+- `src/renderer/components/layout/StatusBar.tsx`
+- `src/renderer/components/library/LibraryGridView.tsx`
+- `src/renderer/components/notes/NotesOverviewView.tsx`
+- `src/renderer/components/reader/FullPageBookReader.tsx`
+- `src/renderer/components/reader/InBookSearchDrawer.tsx`
+- `src/renderer/components/reader/PdfMarkPopover.tsx`
+- `src/renderer/components/reader/PdfMarksList.tsx`
+- `src/renderer/components/search/SearchHubModal.tsx`
+- `src/renderer/components/ui/Toast.tsx`
+- `src/renderer/hooks/useReadiness.ts`
+- `src/renderer/translations.ts`
+- `tests/ui/feedback-states.test.ts`
+- `scripts/feedback-ui-live/main.cjs`
+- `scripts/feedback-ui-live/run.mjs`
+
+Local-only handoff files are docs/agent-ops/board.md and docs/agent-ops/reports/KEY-301.md.
+
 ## KEY-307 verified - 2026-11-11, Codex (key307-20261111)
 
 Implemented U13 under KEY-294 / Library. Settings is one calm searchable page with 31 entries across the ten requested groups, bilingual name/description indexing through existing Arabic normalization, Advanced disclosure, and existing setting editors. Search-source switches persist through the existing provider API. The first-run guide waits for the KEY-150 splash callback, offers language/theme, an import-source folder, read-only pack status and first-import handoff, and persists completion/skip in existing settings storage. Help reopens it. About/Support shows native version/data path, fixed-path logs access, the KEY-316 shortcut sheet and a problem-report link. Existing bridge-less Support preview and Quran entry selector contracts remain compatible. Four reused dialogs gained existing shared focus/Escape handling.
