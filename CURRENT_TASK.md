@@ -1,3 +1,21 @@
+## KEY-308 part 10 verified - 2026-11-11, Claude Code (overnight run)
+
+**Motion set.** About 80 elements used tw-animate-style entry classes (`animate-in`, `fade-in`, `zoom-in-95`, `slide-in-from-*`) and `animate-fade-in`. The plugin that defines them is not installed, so none of those entry animations ever ran. ui-motion.css now defines these classes on the existing motion tokens (`--ui-motion-enter`, `--ui-motion-ease`), so dialogs, popovers, toasts and drawers get one short, consistent entrance. No dependency was added.
+
+The left/right slide classes sit on start-0/end-0 drawers, so they slide from that logical edge and mirror in RTL. Everything sits behind `prefers-reduced-motion: no-preference`, and the existing global reduce rule still stops all animation and transition. Reduced motion therefore needs no further work in KEY-298, and its brief now says so.
+
+New test: tests/ui/motion-set.test.ts. It checks that every entry class used by a component is defined, that the classes only run when motion is allowed, and that the drawer slides mirror in RTL.
+
+Verification:
+- reader-chrome-live passed every case, including the header opacity checks.
+- feedback-ui-live passed 8/8, settings-ui-live passed 8/8.
+- Full suite 1814/1814.
+- The regression evidence and profiles were deleted.
+
+KEY-308 status: every item on its open list is now done (parts 1-10). The Zen hotspots were checked by reading the code and through reader-chrome-live.
+
+Files: src/renderer/app/ui-motion.css, tests/ui/motion-set.test.ts, CURRENT_TASK.md.
+
 ## KEY-308 part 9 verified - 2026-11-11, Claude Code (overnight run)
 
 **Arabic type floor (part of the type-scale sweep).** The renderer had about 370 uses of 8-10 px arbitrary text sizes. Arabic glyphs read smaller than Latin at the same pixel size, and below 11 px the diacritics blur. In the Arabic interface only, globals.css now raises `text-[8px]` and `text-[9px]` to 10 px and `text-[10px]` to 11 px. The English layout is unchanged.

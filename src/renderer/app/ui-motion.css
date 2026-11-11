@@ -46,6 +46,30 @@
   }
 }
 
+/* KEY-308 motion set: components use the tw-animate-style entry classes (animate-in, fade-in,
+   zoom-in-95, slide-in-from-*), but that plugin is not installed, so they did nothing. These few
+   classes are defined here on the shared motion tokens instead of adding a dependency. The
+   slide-in-from-left/right classes sit on start-0/end-0 drawers, so they slide from that logical
+   edge and mirror in RTL. */
+@keyframes baglib-enter {
+  from {
+    opacity: var(--baglib-enter-opacity, 1);
+    transform: translate3d(var(--baglib-enter-x, 0), var(--baglib-enter-y, 0), 0) scale(var(--baglib-enter-scale, 1));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-in, .animate-fade-in { animation: baglib-enter var(--ui-motion-enter) var(--ui-motion-ease) both; }
+  .fade-in, .animate-fade-in { --baglib-enter-opacity: 0; }
+  .zoom-in, .zoom-in-95 { --baglib-enter-scale: 0.95; }
+  .slide-in-from-bottom-2 { --baglib-enter-y: 0.5rem; }
+  .slide-in-from-bottom-5 { --baglib-enter-y: 1.25rem; }
+  .slide-in-from-right { --baglib-enter-x: 1rem; }
+  .slide-in-from-left { --baglib-enter-x: -1rem; }
+  :root[dir="rtl"] .slide-in-from-right { --baglib-enter-x: -1rem; }
+  :root[dir="rtl"] .slide-in-from-left { --baglib-enter-x: 1rem; }
+}
+
 @media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
   [data-library-ribbon] button:not(:disabled):hover,
   [data-settings-entry]:hover {
