@@ -17,7 +17,7 @@ const AI = React.lazy(() => import('../ai/AISettingsModal').then(module => ({ de
 const Lock = React.lazy(() => import('../security/AppLockModal').then(module => ({ default: module.AppLockModal })));
 const Plugins = React.lazy(() => import('../plugins/ReaderPluginsModal').then(module => ({ default: module.ReaderPluginsModal })));
 const Wird = React.lazy(() => import('../dashboard/QuranWirdSettingsModal').then(module => ({ default: module.QuranWirdSettingsModal })));
-const Prayer = React.lazy(() => import('../dashboard/AthanDashboardModule').then(module => ({ default: module.AthanDashboardModule })));
+const Prayer = React.lazy(() => import('./PrayerReminderSettings').then(module => ({ default: module.PrayerReminderSettings })));
 
 function PreferenceToggle({ settingKey, fallback }: { settingKey: string; fallback: boolean }) {
   const { t } = useWorkspace();
@@ -112,7 +112,7 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
         {panel === 'reader' && <p className="leading-loose">{t('settingsReaderRequired')}</p>}
         {panel === 'honorifics' && <PreferenceToggle settingKey="notes.honorifics.autoExpand.v1" fallback />}
         {panel === 'questions' && <PreferenceToggle settingKey="knowledge.questions.enabled" fallback={false} />}
-        {panel === 'prayer' && (athan?.snapshot ? <Prayer snapshot={athan.snapshot} activeAlert={athan.activeAlert} syncing={athan.syncing} statusMessage={athan.statusMessage} onUpdateSettings={athan.updateSettings} onDetectLocation={athan.detectLocation} onSyncMawaqit={athan.syncMawaqit} onTriggerTestAlert={athan.triggerTestAlert} onDismissAlert={athan.dismissAlert} /> : <p role="status">{t('loading')}</p>)}
+        {panel === 'prayer' && (athan?.snapshot ? <Prayer athan={athan} /> : <p role="status">{t('loading')}</p>)}
       </Modal>}
     </React.Suspense>
   </section>;

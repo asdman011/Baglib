@@ -1,3 +1,6 @@
+import { translations } from '../../../renderer/translations';
+import { notificationMinutes } from '../../../shared/notification-text';
+import { prayerSchedule, validateReminderSettings } from '../../../shared/notifications';
 /**
  * Baglib — Main Process Athan & Prayer Times Service
  *
@@ -168,6 +171,7 @@ export class AthanService {
       notifications: {
         ...current.notifications,
         ...(partial.notifications || {}),
+        preReminderByPrayer: { ...current.notifications.preReminderByPrayer, ...partial.notifications?.preReminderByPrayer },
         enabledPrayers: {
           ...current.notifications.enabledPrayers,
           ...(partial.notifications?.enabledPrayers || {}),
@@ -176,6 +180,7 @@ export class AthanService {
       audio: {
         ...current.audio,
         ...(partial.audio || {}),
+        prayerSounds: { ...current.audio.prayerSounds, ...partial.audio?.prayerSounds },
       },
       localization: {
         ...current.localization,
@@ -183,6 +188,7 @@ export class AthanService {
       },
     };
 
+    validateReminderSettings(merged);
     this.settingsRepo.set(SETTINGS_KEY, merged);
     const snapshot = this.getState();
     this.dispatcher?.broadcastState(snapshot);
@@ -275,7 +281,7 @@ export class AthanService {
     const currentMinutes = clock.hour * 60 + clock.minute;
     const triggered: AthanAlertPayload[] = [];
     const prayers: PrayerName[] = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
-    const preMins = Math.max(1, Math.min(60, settings.notifications.preReminderMinutes || 15));
+    const schedule = prayerSchedule(times, settings);
 
     for (const prayer of prayers) {
       if (!settings.notifications.enabledPrayers[prayer]) continue;
@@ -284,16 +290,17 @@ export class AthanService {
       const iqamahTime =
         prayer !== 'sunrise' ? times.iqamah[prayer as MandatoryPrayerName] : undefined;
 
+      const preMins = settings.notifications.preReminderByPrayer?.[prayer] ?? settings.notifications.preReminderMinutes;
       // 1. Pre-prayer reminder check
       if (
         settings.notifications.enabled && settings.notifications.preReminderEnabled &&
         prayer !== 'sunrise' &&
-        currentMinutes === (pMins - preMins + 1440) % 1440
+        schedule.some(entry => entry.prayer === prayer && entry.type === 'pre-reminder' && entry.dayOffset === 0 && entry.minute === currentMinutes)
       ) {
         const key = `${times.date}:${prayer}:pre-reminder`;
         if (!this.notifiedKeys.has(key)) {
           this.notifiedKeys.add(key);
-          const alert = this.dispatchAlert(prayer, 'pre-reminder', scheduledTime, iqamahTime, preMins);
+          const alert = this.dispatchAlert(prayer, 'pre-reminder', scheduledTime, iqamahTime, preMins, key);
           triggered.push(alert);
         }
       }
@@ -303,12 +310,20 @@ export class AthanService {
         const key = `${times.date}:${prayer}:athan`;
         if (!this.notifiedKeys.has(key)) {
           this.notifiedKeys.add(key);
-          const alert = this.dispatchAlert(prayer, 'athan', scheduledTime, iqamahTime);
+          const alert = this.dispatchAlert(prayer, 'athan', scheduledTime, iqamahTime, undefined, key);
           triggered.push(alert);
         }
       }
     }
 
+    for (const delta of [-1, 1]) {
+      const adjacent = buildPrayerStatusSnapshot(settings, new Date(now.getTime() + delta * 86_400_000), this.mawaqitLive);
+      for (const entry of prayerSchedule(adjacent.times, settings)) {
+        if (entry.type !== 'pre-reminder' || entry.dayOffset !== -delta || entry.minute !== currentMinutes || !entry.prayer || this.notifiedKeys.has(entry.key)) continue;
+        this.notifiedKeys.add(entry.key);
+        triggered.push(this.dispatchAlert(entry.prayer, 'pre-reminder', adjacent.times[entry.prayer], undefined, entry.minutesRemaining, entry.key));
+      }
+    }
     return triggered;
   }
 
@@ -330,30 +345,19 @@ export class AthanService {
     type: 'athan' | 'pre-reminder',
     scheduledTime: string,
     iqamahTime?: string,
-    minutesRemaining?: number
+    minutesRemaining?: number,
+    scheduleKey?: string
   ): AthanAlertPayload {
     const settings = this.getSettings();
     const useAr = settings.localization.forceArabicWidgets;
     const label = PRAYER_LABELS[prayer];
     const iconDataUrl = getPrayerIconDataUrl(prayer);
 
-    const title =
-      type === 'athan'
-        ? useAr
-          ? `حان الآن وقت صلاة ${label.ar}`
-          : `Time for ${label.en} Prayer`
-        : useAr
-        ? `اقترب وقت صلاة ${label.ar}`
-        : `Upcoming: ${label.en} Prayer`;
-
-    const body =
-      type === 'athan'
-        ? useAr
-          ? `الأذان: ${scheduledTime}${iqamahTime ? ` · الإقامة: ${iqamahTime}` : ''}`
-          : `Athan: ${scheduledTime}${iqamahTime ? ` · Iqamah: ${iqamahTime}` : ''}`
-        : useAr
-        ? `متبقي ${minutesRemaining} دقيقة على أذان ${label.ar} (${scheduledTime})`
-        : `${minutesRemaining} minutes remaining until ${label.en} Athan (${scheduledTime})`;
+    const text = translations[useAr ? 'ar' : 'en'];
+    const title = type === 'athan'
+      ? text.athanTimeForPrayerBanner.replace('{prayer}', useAr ? label.ar : label.en)
+      : text.notificationPrePrayer.replace('{prayer}', useAr ? label.ar : label.en).replace('{minutes}', notificationMinutes(minutesRemaining ?? 0, useAr ? 'ar' : 'en'));
+    const body = `${text.athanAthanLabel} ${scheduledTime}${iqamahTime ? ` ? ${text.athanIqamahLabel} ${iqamahTime}` : ''}`;
 
     const payload: AthanAlertPayload = {
       id: randomUUID(),
@@ -362,6 +366,7 @@ export class AthanService {
       scheduledTime,
       iqamahTime,
       minutesRemaining,
+      scheduleKey,
       timestamp: this.now().toISOString(),
     };
 

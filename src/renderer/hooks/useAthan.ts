@@ -92,7 +92,9 @@ export function useAthan(audioOwner = false) {
       if (current.settings.notifications.modalDialogEnabled && alert.type === 'athan') setActiveAlert(alert);
       if (audioOwner && alert.type === 'athan' && lastAlert.current !== alert.id) {
         lastAlert.current = alert.id;
-        triggerAudioPlayback(current.settings);
+        triggerAudioPlayback({ ...current.settings, audio: { ...current.settings.audio,
+          soundPreset: current.settings.audio.prayerSounds?.[alert.prayer] ?? current.settings.audio.soundPreset,
+        } });
       }
     });
 
@@ -216,9 +218,6 @@ export function useAthan(audioOwner = false) {
       const api = typeof window !== 'undefined' ? window.electronAPI?.athan : undefined;
       if (api?.triggerTestAlert) {
         const alert = await api.triggerTestAlert(prayer, 'athan');
-        if (snapshot.settings.notifications.modalDialogEnabled) {
-          setActiveAlert(alert);
-        }
         // Main-window audio owner handles the broadcast exactly once.
         return alert;
       }

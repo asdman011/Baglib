@@ -1,3 +1,47 @@
+## KEY-312 adhan, prayer and dhikr settings with one notification service - 2026-11-11, Codex (implementation), finished by Claude Code
+
+Codex built the remaining KEY-312 scope, then hit its usage limit before live verification and commit. Claude Code took over in place, verified it, fixed two problems and committed.
+
+What changed for the user:
+- **Settings > Prayer times and alerts** (PrayerReminderSettings) holds:
+  - city, timezone and coordinates; calculation method; Asr madhab;
+  - per-prayer on/off and pre-reminder minutes;
+  - a sound per prayer, with a separate Fajr choice (the installed recordings or the chime);
+  - volume and a quiet window.
+- **Dhikr reminders**: morning, evening, after-prayer and custom. Each has a fixed time or an offset from a prayer, and on/off.
+- **One notification service in main** (src/main/services/notifications.ts, src/main/ipc/notifications.ts):
+  - OS notifications with Snooze and Done buttons; a click opens the app;
+  - an in-app toast with Open;
+  - history kept in the settings store (`notifications.history.v1`, the latest 500), surviving a restart;
+  - suppression during focus mode and the quiet window, plus snooze re-delivery.
+  Prayer, dhikr, wird, study and khatmah reminders now go through it. The KEY-239 snooze is wired in.
+- **Notification history**: a bell in the title bar opens the history sheet. Each item can be snoozed, marked done or opened.
+
+Claude's fixes:
+1. The history sheet rendered inside the title bar, whose backdrop blur confined the fixed sheet to 48 px, so only its header showed. It is now portaled to document.body.
+2. `notifications.history.v1` is classified as operational data in tests/ui/settings-directory-coverage.test.ts. It holds records, not a preference.
+3. The live script's `until` evaluated `await` expressions without an async wrapper, so it never saw saved settings.
+
+Verification:
+- tests/services/notifications.test.ts 7/7: offsets, midnight, quiet window, history, actions, plurals.
+- Full suite 1880/1880; tsc and eslint clean; tsup ok.
+- scripts/notifications-live passes in ar and en at 1280 and 480 (settings save, a near-future reminder fires, snooze, done, open, focus and quiet suppression). The restart phase kept 12 history records.
+- The screenshots show the full history sheet in RTL and the settings at 480 px. The profile was removed.
+
+No schema change, no dependency, no download.
+
+Files:
+- src/main/ipc/athan.ts, src/main/ipc/notifications.ts (new)
+- src/main/services/athan/athan.service.ts, src/main/services/notifications.ts (new), src/main/services/quran/khatmah-reminders.ts
+- src/preload/index.ts
+- src/renderer/components/dashboard/StudyRhythm.tsx
+- src/renderer/components/layout/NotificationCenter.tsx (new), PrayerReminderSettings.tsx (new), SettingsDirectory.tsx, Titlebar.tsx
+- src/renderer/hooks/useAthan.ts, src/renderer/translations.ts
+- src/shared/notifications.ts (new), src/shared/notification-text.ts (new), src/shared/types/athan.ts
+- tests/services/notifications.test.ts (new), tests/ui/settings-directory-coverage.test.ts
+- scripts/notifications-live/*
+- CURRENT_TASK.md
+
 ## KEY-309 polish: readable note excerpts in the notes list and backlinks - 2026-11-11, Claude Code
 
 The notes list cards and the details pane's backlinks used to show raw note markup: `[[note:...|label]]`, `^anchor`, `**`, callout and footnote marks. They now show plain text, built by the new `studyNoteExcerpt` in src/shared/study-notes.ts: link labels instead of links, no paragraph anchors or Markdown marks, capped with an ellipsis. Stored notes are unchanged.

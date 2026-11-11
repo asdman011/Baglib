@@ -1,3 +1,4 @@
+import type { NotificationRecord } from '../shared/notifications';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { SunnahAPI } from '../shared/types/sunnah';
 import type { QuranAPI } from '../shared/types/quran';
@@ -8,6 +9,19 @@ import type { PdfCloudAPI } from '../shared/types/pdf-cloud';
 import type { PdfCollaborationAPI } from '../shared/types/pdf-collaboration';
 
 const athan: AthanAPI = {
+  notificationHistory: () => ipcRenderer.invoke('notifications:history'),
+  notificationAction: (id, action) => ipcRenderer.invoke('notifications:action', id, action),
+  setNotificationContext: context => ipcRenderer.invoke('notifications:context', context),
+  onNotification: callback => {
+    const handler = (_: unknown, record: NotificationRecord) => callback(record);
+    ipcRenderer.on('notifications:received', handler);
+    return () => { ipcRenderer.removeListener('notifications:received', handler); };
+  },
+  onNotificationOpen: callback => {
+    const handler = (_: unknown, record: NotificationRecord) => callback(record);
+    ipcRenderer.on('notifications:open', handler);
+    return () => { ipcRenderer.removeListener('notifications:open', handler); };
+  },
   getState: () => ipcRenderer.invoke('athan:get-state'),
   updateSettings: (partial) => ipcRenderer.invoke('athan:update-settings', partial),
   detectAutoLocation: () => ipcRenderer.invoke('athan:detect-auto-location'),

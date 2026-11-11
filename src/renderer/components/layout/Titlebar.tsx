@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { NotificationCenter } from './NotificationCenter';
 import {
   Search,
   Moon,
@@ -134,6 +135,7 @@ export const Titlebar: React.FC = () => {
         </nav>
       </div>
 
+      <NotificationCenter />
       {/* Center Group: Global Search & Command Center (Cmd + K) */}
       <div className="flex-1 max-w-lg mx-1 sm:mx-3 flex items-center gap-1 sm:gap-2 min-w-0">
         <button

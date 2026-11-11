@@ -1,3 +1,4 @@
+import type { DhikrReminder, NotificationRecord, QuietWindow } from '../notifications';
 /**
  * Baglib — Comprehensive Offline-First Athan & Prayer Times Domain Contracts
  */
@@ -66,6 +67,8 @@ export interface AthanNotificationsConfig {
   preReminderMinutes: number;
   modalDialogEnabled: boolean;
   enabledPrayers: Record<PrayerName, boolean>;
+  preReminderByPrayer?: Partial<Record<PrayerName, number>>;
+  quietWindow?: QuietWindow;
 }
 
 export interface AthanAudioConfig {
@@ -74,6 +77,7 @@ export interface AthanAudioConfig {
   muted: boolean;
   soundPreset: 'makkah-short' | 'madinah-short' | 'takbeer-only' | 'madinah-recorded' | 'adhan-recorded' | 'custom';
   customAudioPath?: string;
+  prayerSounds?: Partial<Record<PrayerName, AthanAudioConfig['soundPreset']>>;
 }
 
 export interface AthanLocalizationConfig {
@@ -106,6 +110,7 @@ export interface AthanSettings {
   notifications: AthanNotificationsConfig;
   audio: AthanAudioConfig;
   localization: AthanLocalizationConfig;
+  dhikrReminders?: DhikrReminder[];
 }
 
 export interface DailyPrayerTimes {
@@ -167,6 +172,7 @@ export interface PrayerStatusSnapshot {
 export interface AthanAlertPayload {
   id: string;
   type: 'athan' | 'pre-reminder';
+  scheduleKey?: string;
   prayer: PrayerName;
   scheduledTime: string;
   iqamahTime?: string;
@@ -186,6 +192,11 @@ export interface MawaqitMosqueData {
 }
 
 export interface AthanAPI {
+  notificationHistory: () => Promise<NotificationRecord[]>;
+  notificationAction: (id: string, action: 'snooze' | 'done' | 'open') => Promise<NotificationRecord[]>;
+  setNotificationContext: (context: { focused: boolean; language: 'ar' | 'en' }) => Promise<void>;
+  onNotification: (callback: (record: NotificationRecord) => void) => () => void;
+  onNotificationOpen: (callback: (record: NotificationRecord) => void) => () => void;
   getState: () => Promise<PrayerStatusSnapshot>;
   updateSettings: (partial: Partial<AthanSettings>) => Promise<PrayerStatusSnapshot>;
   detectAutoLocation: () => Promise<{ ok: boolean; location?: CoordinatesConfig; error?: string; state: PrayerStatusSnapshot }>;

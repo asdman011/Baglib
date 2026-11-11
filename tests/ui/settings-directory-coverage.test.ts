@@ -20,6 +20,7 @@ const operational = new Set([
   'media.lectures.v1', // Lecture content records.
   'dashboard.scratchpad.draft.v1', // Unsaved note content.
   'islamic.continue.v1', // Last reading positions.
+  'notifications.history.v1', // Delivered notification records (KEY-312).
 ]);
 
 test('every registered setting key appears in the settings directory', () => {

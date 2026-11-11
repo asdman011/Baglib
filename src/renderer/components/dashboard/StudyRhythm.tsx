@@ -1,4 +1,5 @@
 'use client';
+import { NOTIFICATION_SNOOZE_EVENT } from '../layout/NotificationCenter';
 import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -51,6 +52,7 @@ export function StudyRhythmSettings() {
 export function StudyRhythmLayer({ snapshot }: { snapshot: PrayerStatusSnapshot }) {
   const { t, lang, dir } = useWorkspace();
   const [settings, setSettings] = useState<StudyRhythm>(defaults);
+  const [notificationPauseUntil, setNotificationPauseUntil] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [skipped, setSkipped] = useState<string | null>(null);
   const [intention, setIntention] = useState(false);
@@ -70,7 +72,12 @@ export function StudyRhythmLayer({ snapshot }: { snapshot: PrayerStatusSnapshot 
     retainedWindow.current = candidate || retained;
     setActive(previous => previous?.key === retainedWindow.current?.key ? previous : retainedWindow.current);
   }, [snapshot, settings, now, saved]);
-  const paused = !!active && active.key !== skipped;
+  useEffect(() => {
+    const snooze = () => setNotificationPauseUntil(Date.now() + 10 * 60_000);
+    window.addEventListener(NOTIFICATION_SNOOZE_EVENT, snooze);
+    return () => window.removeEventListener(NOTIFICATION_SNOOZE_EVENT, snooze);
+  }, []);
+  const paused = (!!active && active.key !== skipped) || notificationPauseUntil > now;
   const activeKey = active?.key || null;
   useEffect(() => {
     let alive = true;
@@ -108,7 +115,7 @@ export function StudyRhythmLayer({ snapshot }: { snapshot: PrayerStatusSnapshot 
     delete document.documentElement.dataset.studyPaused;
     void window.electronAPI?.studyInsights?.setPaused?.(false).catch(() => undefined);
   }, []);
-  const resume = () => { setSkipped(activeKey); setIntention(false); };
+  const resume = () => { setNotificationPauseUntil(0); setSkipped(activeKey); setIntention(false); };
   return <dialog ref={dialog} data-study-snooze dir={dir} className="m-auto rounded-2xl border border-subtle bg-surface text-main p-5 max-w-lg w-[calc(100%_-_2rem)] backdrop:bg-black/60" onCancel={event => { event.preventDefault(); resume(); }}>
     <h2 className="text-xl font-bold">{intention ? t('rhythmIntention') : t(active?.kind === 'zikr' ? 'rhythmZikr' : active?.kind === 'wird' ? 'rhythmWird' : 'rhythmPrayerPause')}</h2>
     {intention && <p dir="auto" className="whitespace-pre-wrap leading-loose py-4">{lang === 'ar' ? settings.intentionAr : settings.intentionEn}</p>}
