@@ -1,3 +1,9 @@
+## KEY-312 research step - 2026-11-11, Claude Code
+
+Wrote docs/features/feature - Adhan Recordings.md. It lists 4 Commons recordings with a verified reuse licence, each with its licence, format, length and file size, and it names the sources that are not usable without permission: famous muezzins, AlAdhan.com, a mislabelled Sabah Fakhri file, and the Cambridge NC-ND set. Nothing was downloaded. The choice of files is waiting for the user. The settings and notification parts of KEY-312 are not started.
+
+Files: docs/features/feature - Adhan Recordings.md, CURRENT_TASK.md.
+
 ## KEY-317 part 4 - 2026-11-11, Claude Code
 
 planner-live and scrollbars-sidenote-live pass again with the nav-selector fix and the first-run-guide hook. A batch over 20 scripts kept changes only where the script passed. The others fail on deeper KEY-304 layout changes (the note editor needs a selected note, the review screen opens through `baglib:start-review`), missing disposable Quran copies, or setting localStorage before a page loads. The list is in docs/agent-ops/reports/KEY-317.md.
