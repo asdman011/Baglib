@@ -12,6 +12,8 @@ app.on('browser-window-created', (_, owner) => {
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  // KEY-317: scratchpad and first-run guide for throwaway profiles.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && Promise.all([window.electronAPI.settings.set('onboarding.v1',{seen:true}), window.electronAPI.settings.get('dashboard.layout.v1').then(v => v ? null : window.electronAPI.settings.set('dashboard.layout.v1',{version:1,modules:[{id:'today',visible:true},{id:'calendar',visible:true},{id:'readingGoals',visible:false},{id:'activeReads',visible:false},{id:'studyProgress',visible:false},{id:'studyInsights',visible:false},{id:'scratchpad',visible:true},{id:'athan',visible:false},{id:'khatmah',visible:false},{id:'studyRhythm',visible:false}]}))])").catch(() => {}); });
   const until = async (code, tries = 150) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(200); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(400); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const press = (keyCode, modifiers = []) => { owner.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); owner.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
@@ -34,8 +36,18 @@ app.on('browser-window-created', (_, owner) => {
     await until('!!window.electronAPI && !!document.querySelector("[data-study-note-editor] .cm-content")'); await pause(800);
   };
   const notesView = async language => {
-    await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')}).click()`);
+    await evaluate("document.querySelector('[data-nav-item=\"notes\"]').click()");
     await until("document.querySelectorAll('[data-study-note]').length>=2");
+  };
+  // Since KEY-304 the Notes page is a list plus an editor: select a note; its links render in the preview,
+  // and its graph button sits in the editor header.
+  const selectNote = async (id, preview) => {
+    await evaluate(`document.querySelector('[data-study-note="${id}"]').click()`);
+    await until(`!!document.querySelector('[data-note-editor-pane] [data-graph-button]') && !!document.querySelector('[data-note-preview-toggle]')`);
+    if (preview) {
+      await evaluate("(()=>{const b=document.querySelector('[data-note-preview-toggle]');if(b.getAttribute('data-note-preview-toggle')==='edit')b.click();})()");
+      await until(`!!document.querySelector('[data-note-preview="${id}"]')`);
+    }
   };
   (async () => {
     const results = {};
@@ -80,10 +92,11 @@ app.on('browser-window-created', (_, owner) => {
       await evaluate(`window.electronAPI.studyNotes.save(${JSON.stringify({ id: `evidence-${language}`, title: language === 'ar' ? 'الدليل' : 'Evidence', content, aliases: [], tags: [], expectedRevision: 0 })})`);
       result.saved = content;
       await notesView(language);
-      await until(`!!document.querySelector('[data-study-note="evidence-${language}"] [data-link-relation]')`);
-      result.viewChip = await evaluate(`document.querySelector('[data-study-note="evidence-${language}"] [data-link-relation]').textContent`);
+      await selectNote(`evidence-${language}`, true);
+      await until(`!!document.querySelector('[data-note-preview="evidence-${language}"] [data-link-relation]')`);
+      result.viewChip = await evaluate(`document.querySelector('[data-note-preview="evidence-${language}"] [data-link-relation]').textContent`);
       await shot(`notes-${language}`);
-      await evaluate(`document.querySelector('[data-study-note="evidence-${language}"] [data-graph-button]').click()`);
+      await evaluate("document.querySelector('[data-note-editor-pane] [data-graph-button]').click()");
       await until("!!document.querySelector('[data-graph-relation]')");
       result.graphLabel = await evaluate("document.querySelector('[data-graph-relation] text')?.textContent");
       result.graphRelation = await evaluate("document.querySelector('[data-graph-relation]').getAttribute('data-graph-relation')");
@@ -98,7 +111,8 @@ app.on('browser-window-created', (_, owner) => {
       // From the claim's side the same line reads as incoming.
       await evaluate("document.querySelector('[data-knowledge-graph] header button[aria-label]').click()");
       await until("!document.querySelector('[data-knowledge-graph]')");
-      await evaluate("document.querySelector('[data-study-note=\"claim-note\"] [data-graph-button]').click()");
+      await selectNote('claim-note', false);
+      await evaluate("document.querySelector('[data-note-editor-pane] [data-graph-button]').click()");
       await until("!!document.querySelector('[data-graph-list-relation]')");
       result.incoming = await evaluate("[...document.querySelectorAll('[data-graph-list-relation]')].map(e=>e.textContent)");
       await evaluate("document.querySelector('[data-knowledge-graph] header button[aria-label]').click()");

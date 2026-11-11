@@ -12,6 +12,8 @@ app.on('browser-window-created', (_, owner) => {
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  // KEY-317: scratchpad and first-run guide for throwaway profiles.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && Promise.all([window.electronAPI.settings.set('onboarding.v1',{seen:true}), window.electronAPI.settings.get('dashboard.layout.v1').then(v => v ? null : window.electronAPI.settings.set('dashboard.layout.v1',{version:1,modules:[{id:'today',visible:true},{id:'calendar',visible:true},{id:'readingGoals',visible:false},{id:'activeReads',visible:false},{id:'studyProgress',visible:false},{id:'studyInsights',visible:false},{id:'scratchpad',visible:true},{id:'athan',visible:false},{id:'khatmah',visible:false},{id:'studyRhythm',visible:false}]}))])").catch(() => {}); });
   const until = async (code, tries = 150) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(200); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(400); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const press = (keyCode, modifiers = []) => { owner.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); owner.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
@@ -51,7 +53,10 @@ app.on('browser-window-created', (_, owner) => {
       // S2: a captured question moves Open → Investigating → Answered in the Notes view.
       await evaluate("window.electronAPI.knowledgeHistory.setCapture(true)");
       await evaluate(`window.electronAPI.studyNotes.save({id:'q-note-${language}',title:'سؤال',content:'ما معنى الصبر الجميل؟',aliases:[],tags:[],expectedRevision:0})`);
-      await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')}).click()`);
+      await evaluate("document.querySelector('[data-nav-item=\"notes\"]').click()");
+      // Since KEY-304 captured questions live behind the list filter's "Questions" view.
+      await until("!!document.querySelector('[data-notes-list-pane] select option[value=questions]')");
+      await evaluate("(()=>{const select=document.querySelector('[data-notes-list-pane] select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,'questions');select.dispatchEvent(new Event('change',{bubbles:true}));})()");
       await until("!!document.querySelector('[data-captured-question] [data-question-investigate]')");
       const id = await evaluate("document.querySelector('[data-captured-question]').getAttribute('data-captured-question')");
       result.chipOpen = await evaluate(`document.querySelector('[data-captured-question="${id}"] [data-question-status]').textContent`);

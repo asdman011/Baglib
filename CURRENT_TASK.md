@@ -1,3 +1,13 @@
+## KEY-317 relations-live and honorifics-questions-live repaired - 2026-11-11, Claude Code
+
+Both scripts are updated for the list-plus-editor Notes page (KEY-304), with the scratchpad and guide hook and the notes nav item.
+- relations: selects the note, reads the relation chip in the preview, and uses the graph button in the editor header.
+- honorifics-questions: opens captured questions through the list filter's "Questions" view.
+
+Both pass live in ar and en.
+
+Files: scripts/relations-live/main.cjs, scripts/honorifics-questions-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-317 note-editor-live repaired - 2026-11-11, Claude Code
 
 The script is updated for the current app:
