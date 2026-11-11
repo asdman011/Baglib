@@ -254,7 +254,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
           <div className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle">
             <button
               onClick={() => setCurrentTool('pen')}
-              title="Stylus Pen"
+              title={t('inkPen')}
               className={`p-1.5 rounded-lg font-bold transition-all ${
                 currentTool === 'pen'
                   ? 'bg-pale-sky-500 text-white shadow-xs'
@@ -265,7 +265,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
             </button>
             <button
               onClick={() => setCurrentTool('highlighter')}
-              title="Ink Highlighter"
+              title={t('inkHighlighter')}
               className={`p-1.5 rounded-lg font-bold transition-all ${
                 currentTool === 'highlighter'
                   ? 'bg-pale-sky-500 text-white shadow-xs'
@@ -276,7 +276,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
             </button>
             <button
               onClick={() => setCurrentTool('eraser')}
-              title="Eraser"
+              title={t('inkEraser')}
               className={`p-1.5 rounded-lg font-bold transition-all ${
                 currentTool === 'eraser'
                   ? 'bg-pale-sky-500 text-white shadow-xs'
@@ -326,7 +326,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
             <button
               disabled={strokes.length === 0}
               onClick={handleUndo}
-              title="Undo"
+              title={t('undo')}
               className="p-1.5 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-30 cursor-pointer text-muted hover:text-main"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -334,7 +334,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
             <button
               disabled={redoStack.length === 0}
               onClick={handleRedo}
-              title="Redo"
+              title={t('inkRedo')}
               className="p-1.5 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-30 cursor-pointer text-muted hover:text-main"
             >
               <RotateCw className="w-3.5 h-3.5" />
@@ -342,7 +342,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
             <button
               disabled={strokes.length === 0}
               onClick={handleClear}
-              title="Clear Canvas"
+              title={t('inkClear')}
               className="p-1.5 rounded-lg hover:bg-canvas border border-subtle disabled:opacity-30 cursor-pointer text-muted hover:text-rose-600"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -355,7 +355,7 @@ export const InkCanvasOverlay: React.FC<InkCanvasOverlayProps> = ({
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-canvas text-muted hover:text-main cursor-pointer"
-            title="Exit Ink Mode"
+            title={t('inkExit')}
           >
             <X className="w-4 h-4" />
           </button>

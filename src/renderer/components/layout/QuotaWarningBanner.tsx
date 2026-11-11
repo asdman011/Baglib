@@ -109,7 +109,7 @@ export const QuotaWarningBanner: React.FC = () => {
                 }`}
               >
                 {isDepleted
-                  ? (lang === 'ar' ? 'فهارس بديلة نشطة' : 'Alternative sources active')
+                  ? t('quotaAlternativeSources')
                   : t('quotaRemainingBadge').replace('{percent}', String(warning.remainingPercentage))}
               </span>
               <span className="text-[10px] text-muted hidden md:inline">

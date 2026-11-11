@@ -1,5 +1,6 @@
 'use client';
 
+import { useWorkspace } from '../context/WorkspaceContext';
 import React, { useState } from 'react';
 import { Trash2, MessageSquare, Copy, Check, X } from 'lucide-react';
 import type { KnowledgeItemDTO } from '../../../shared/types/knowledge';
@@ -22,6 +23,7 @@ export const HighlightActionPopover: React.FC<HighlightActionPopoverProps> = ({
   onDelete,
   onClose,
 }) => {
+  const { t } = useWorkspace();
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [noteText, setNoteText] = useState(highlight.noteContent || '');
   const [isCopied, setIsCopied] = useState(false);
@@ -42,7 +44,7 @@ export const HighlightActionPopover: React.FC<HighlightActionPopoverProps> = ({
   return (
     <div
       role="dialog"
-      aria-label="Highlight Options"
+      aria-label={t('readerHighlightOptions')}
       className="fixed z-50 animate-in fade-in zoom-in-95 duration-150 select-none"
       style={{
         top: `${Math.max(60, position.y - 65)}px`,
@@ -73,7 +75,7 @@ export const HighlightActionPopover: React.FC<HighlightActionPopoverProps> = ({
           <div className="flex items-center gap-1">
             <button
               onClick={() => setIsEditingNote(!isEditingNote)}
-              title="Add / Edit Note"
+              title={t('readerHighlightNote')}
               className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
                 isEditingNote || highlight.noteContent
                   ? 'bg-pale-sky-500/15 border-pale-sky-500/40 text-pale-sky-600'
@@ -84,21 +86,21 @@ export const HighlightActionPopover: React.FC<HighlightActionPopoverProps> = ({
             </button>
             <button
               onClick={handleCopy}
-              title="Copy Quoted Text"
+              title={t('readerHighlightCopy')}
               className="p-1.5 rounded-lg border border-subtle hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
             >
               {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
             <button
               onClick={() => onDelete(highlight.id)}
-              title="Delete Highlight"
+              title={t('readerHighlightDelete')}
               className="p-1.5 rounded-lg border border-subtle hover:bg-rose-500/10 text-muted hover:text-rose-500 transition-colors cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={onClose}
-              title="Close"
+              title={t('close')}
               className="p-1.5 rounded-lg hover:bg-canvas text-muted hover:text-main transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />

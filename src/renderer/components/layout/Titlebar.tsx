@@ -105,7 +105,7 @@ export const Titlebar: React.FC = () => {
         </button>
 
         {/* Breadcrumb Navigation */}
-        <nav aria-label={lang === 'ar' ? 'مسار التنقل' : 'Breadcrumbs'} className="flex items-center gap-1 text-xs min-w-0">
+        <nav aria-label={t('titlebarBreadcrumbs')} className="flex items-center gap-1 text-xs min-w-0">
           {breadcrumbs.parent.viewMode ? (
             <button
               type="button"

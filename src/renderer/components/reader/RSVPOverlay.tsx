@@ -161,7 +161,7 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
             )}
             <button
               onClick={onClose}
-              title="Close speed reader (Esc)"
+              title={t('rsvpClose')}
               className="p-1 rounded-full hover:bg-rose-500/10 text-muted hover:text-rose-500 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
@@ -224,14 +224,14 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
           <div className="flex items-center gap-1">
             <button
               onClick={() => controller?.jumpToIndex(0)}
-              title="Restart from beginning"
+              title={t('rsvpRestart')}
               className="p-2 rounded-xl hover:bg-surface text-muted hover:text-main transition-colors cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
             <button
               onClick={() => controller?.prevWord()}
-              title="Previous word"
+              title={t('rsvpPreviousWord')}
               className="p-2 rounded-xl hover:bg-surface text-muted hover:text-main transition-colors cursor-pointer"
             >
               <SkipBack className="w-4 h-4" />
@@ -251,7 +251,7 @@ export const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
           <div className="flex items-center gap-1">
             <button
               onClick={() => controller?.nextWord()}
-              title="Next word"
+              title={t('rsvpNextWord')}
               className="p-2 rounded-xl hover:bg-surface text-muted hover:text-main transition-colors cursor-pointer"
             >
               <SkipForward className="w-4 h-4" />

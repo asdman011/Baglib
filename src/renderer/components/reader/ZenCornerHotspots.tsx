@@ -48,7 +48,7 @@ export const ZenCornerHotspots: React.FC<ZenCornerHotspotsProps> = ({
       {/* Top-End Corner Hotspot (64px x 64px) */}
       <div
         className="fixed top-0 end-0 w-20 h-20 z-40 flex items-start justify-end p-2.5 pointer-events-auto group select-none"
-        aria-label="Corner Actions"
+        aria-label={t('zenCornerActions')}
       >
         {/* Bookmark Ribbon Hanging from Top Page Margin */}
         {isCurrentPageBookmarked && (

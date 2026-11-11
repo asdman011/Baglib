@@ -210,7 +210,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
               onClick={() => setIsExpanded(!isExpanded)}
               className="text-[11px] font-medium text-pale-sky-600 dark:text-pale-sky-400 flex items-center gap-0.5 hover:underline pt-0.5"
             >
-              <span>{isExpanded ? (lang === 'ar' ? 'عرض أقل' : 'Show less') : (lang === 'ar' ? 'المزيد من التفاصيل' : 'More details')}</span>
+              <span>{isExpanded ? t('searchResultShowLess') : t('searchResultMoreDetails')}</span>
               {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
           )}

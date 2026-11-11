@@ -220,7 +220,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                     type="text"
                     value={settings.baseUrl || 'https://api.openai.com/v1'}
                     onChange={(e) => setSettings({ ...settings, baseUrl: e.target.value })}
-                    placeholder="https://api.openai.com/v1 or custom proxy"
+                    placeholder={t('aiEndpointPlaceholder')}
                     className="w-full px-3 py-2 text-sm bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                   />
                 </div>
@@ -383,7 +383,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   type="password"
                   value={settings.translationApiKey || ''}
                   onChange={(e) => setSettings({ ...settings, translationApiKey: e.target.value })}
-                  placeholder="Translation API Key..."
+                  placeholder={t('aiTranslationKeyPlaceholder')}
                   className="w-full px-3 py-2 text-sm bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                 />
               </div>

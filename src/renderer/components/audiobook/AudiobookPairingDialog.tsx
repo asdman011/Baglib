@@ -552,7 +552,7 @@ export const AudiobookPairingDialog: React.FC<AudiobookPairingDialogProps> = ({
                   type="password"
                   value={absApiKey}
                   onChange={(e) => setAbsApiKey(e.target.value)}
-                  placeholder="Bearer Token / API Key"
+                  placeholder={t('audiobookApiKeyPlaceholder')}
                   className="w-full px-3 py-2 rounded-xl border border-subtle bg-canvas text-xs outline-none focus:ring-1 focus:ring-pale-sky-500"
                 />
               </div>

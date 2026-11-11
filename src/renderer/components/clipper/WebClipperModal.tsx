@@ -468,7 +468,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    placeholder="Custom Novel Title (optional)"
+                    placeholder={t('clipperNovelTitlePlaceholder')}
                     value={novelTitle}
                     onChange={(e) => setNovelTitle(e.target.value)}
                     className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
@@ -480,7 +480,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    placeholder="Author (optional)"
+                    placeholder={t('clipperAuthorPlaceholder')}
                     value={novelAuthor}
                     onChange={(e) => setNovelAuthor(e.target.value)}
                     className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"

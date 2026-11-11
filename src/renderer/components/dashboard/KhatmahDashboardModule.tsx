@@ -88,7 +88,7 @@ export const KhatmahDashboardModule: React.FC<KhatmahDashboardModuleProps> = ({
     await khatmah.mutate({
       action: 'create',
       config: {
-        title: lang === 'ar' ? 'ختمة ٣٠ يوماً' : '30-Day Khatmah',
+        title: t('khatmahDefaultTitle'),
         script: scriptId,
         layout: layoutId,
         startDate: today,

@@ -182,7 +182,7 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Baglib Startup Screen"
+      aria-label={t('startupSplashLabel')}
       onDoubleClick={handleSkip}
       dir={dir}
       suppressHydrationWarning

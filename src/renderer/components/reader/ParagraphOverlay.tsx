@@ -1,3 +1,4 @@
+import { useWorkspace } from '../context/WorkspaceContext';
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, Eye } from 'lucide-react';
 import { transformClassicalGlosses } from '../../libs/reader/typography';
@@ -20,6 +21,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
   onClose,
   onParagraphChange,
 }) => {
+  const { t } = useWorkspace();
   const [currentIndex, setCurrentIndex] = useState(
     Math.max(0, Math.min(paragraphs.length - 1, initialIndex))
   );
@@ -156,7 +158,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
             <div className="flex items-center gap-1 bg-surface/50 rounded-full px-2 py-0.5 border border-subtle/40">
               <button
                 onClick={() => setScale((s) => Math.max(0.9, s - 0.15))}
-                title="Zoom out"
+                title={t('readerZoomOut')}
                 className="p-1 rounded-full hover:bg-canvas text-muted hover:text-main cursor-pointer"
               >
                 <ZoomOut className="w-3.5 h-3.5" />
@@ -164,7 +166,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
               <span className="text-[10px] font-mono">{Math.round(scale * 100)}%</span>
               <button
                 onClick={() => setScale((s) => Math.min(2.5, s + 0.15))}
-                title="Zoom in"
+                title={t('readerZoomIn')}
                 className="p-1 rounded-full hover:bg-canvas text-muted hover:text-main cursor-pointer"
               >
                 <ZoomIn className="w-3.5 h-3.5" />
@@ -173,7 +175,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
 
             <button
               onClick={onClose}
-              title="Close focus mode (Esc)"
+              title={t('paragraphFocusClose')}
               className="p-1.5 rounded-full hover:bg-rose-500/10 text-muted hover:text-rose-500 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
@@ -207,14 +209,14 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface hover:bg-canvas border border-subtle text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span>{direction === 'rtl' ? 'الفقرة التالية' : 'Previous'}</span>
+            <span>{direction === 'rtl' ? t('paragraphNext') : t('paragraphPrevious')}</span>
           </button>
 
           <div className="text-[11px] text-muted font-sans">
             <kbd className="px-1.5 py-0.5 rounded bg-surface border border-subtle text-[10px]">←</kbd>
             {' '}/{' '}
             <kbd className="px-1.5 py-0.5 rounded bg-surface border border-subtle text-[10px]">→</kbd>
-            {' '}{direction === 'rtl' ? 'للتنقل بين الفقرات' : 'to navigate'}
+            {' '}{t('paragraphNavHint')}
           </div>
 
           <button
@@ -222,7 +224,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
             disabled={direction === 'rtl' ? currentIndex === 0 : currentIndex >= paragraphs.length - 1}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface hover:bg-canvas border border-subtle text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
           >
-            <span>{direction === 'rtl' ? 'الفقرة السابقة' : 'Next'}</span>
+            <span>{direction === 'rtl' ? t('paragraphPrevious') : t('paragraphNext')}</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

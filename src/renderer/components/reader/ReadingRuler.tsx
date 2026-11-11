@@ -1,3 +1,4 @@
+import { useWorkspace } from '../context/WorkspaceContext';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { RulerLineBox } from '../../libs/reader/types';
 import {
@@ -22,6 +23,7 @@ export const ReadingRuler: React.FC<ReadingRulerProps> = ({
   direction = 'ltr',
   isVertical = false,
 }) => {
+  const { t } = useWorkspace();
   const [lineBoxes, setLineBoxes] = useState<RulerLineBox[]>([]);
   const [rulerHeight, setRulerHeight] = useState(38);
   const [slot, setSlot] = useState<{ start: number; height: number }>({ start: 100, height: 38 });
@@ -190,7 +192,7 @@ export const ReadingRuler: React.FC<ReadingRulerProps> = ({
         <div className="flex items-center gap-1.5 bg-surface/90 backdrop-blur-md px-2 py-0.5 rounded-full border border-subtle shadow-md opacity-40 hover:opacity-100 transition-opacity">
           <button
             onClick={() => setRulerHeight((h) => Math.max(24, h - 6))}
-            title="Narrow slot"
+            title={t('rulerNarrow')}
             className="p-0.5 rounded hover:bg-canvas text-muted hover:text-main cursor-pointer"
           >
             <Minus className="w-3 h-3" />
@@ -198,7 +200,7 @@ export const ReadingRuler: React.FC<ReadingRulerProps> = ({
           <span className="text-[10px] font-mono text-muted">{rulerHeight}px</span>
           <button
             onClick={() => setRulerHeight((h) => Math.min(96, h + 6))}
-            title="Expand slot"
+            title={t('rulerExpand')}
             className="p-0.5 rounded hover:bg-canvas text-muted hover:text-main cursor-pointer"
           >
             <Plus className="w-3 h-3" />
@@ -206,7 +208,7 @@ export const ReadingRuler: React.FC<ReadingRulerProps> = ({
           <div className="w-[1px] h-3 bg-subtle mx-0.5" />
           <button
             onClick={onClose}
-            title="Close reading ruler (Esc)"
+            title={t('rulerClose')}
             className="p-0.5 rounded hover:bg-rose-500/10 text-muted hover:text-rose-500 cursor-pointer"
           >
             <X className="w-3 h-3" />

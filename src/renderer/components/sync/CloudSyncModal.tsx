@@ -722,7 +722,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ isOpen, onClose 
                       type="password"
                       value={currentToken}
                       onChange={(e) => setToken(e.target.value)}
-                      placeholder="Enter OAuth access token..."
+                      placeholder={t('cloudTokenPlaceholder')}
                       className="w-full px-3 py-2 text-sm rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800"
                     />
                   </div>

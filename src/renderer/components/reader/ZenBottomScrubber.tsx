@@ -36,7 +36,7 @@ export const ZenBottomScrubber: React.FC<ZenBottomScrubberProps> = ({
   return (
     <div
       role="region"
-      aria-label="Reading progress scrubber"
+      aria-label={t('zenProgressScrubber')}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       className="fixed bottom-4 left-1/2 z-40 select-none"
@@ -80,7 +80,7 @@ export const ZenBottomScrubber: React.FC<ZenBottomScrubberProps> = ({
             dir={readerDirection}
             onChange={(e) => onPageChange(parseInt(e.target.value, 10))}
             className="w-full h-1.5 bg-subtle/50 rounded-lg appearance-none cursor-pointer accent-pale-sky-500 transition-all"
-            aria-label="Page slider"
+            aria-label={t('zenPageSlider')}
           />
         </div>
 

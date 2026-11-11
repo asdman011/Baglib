@@ -1,3 +1,33 @@
+## KEY-308 part 8 verified - 2026-11-11, Claude Code (overnight run)
+
+**Localized the remaining hard-coded interface strings outside the library modals.** This was part of the U14 polish and the AGENTS.md i18n rule. Tooltips and accessible labels that were English-only now come from translations.ts in Arabic and English:
+- the highlight action popover;
+- the ink canvas tools;
+- the paragraph focus overlay (zoom, close and the next/previous labels, which were picked by the content's direction instead of the interface language);
+- the reading ruler;
+- the speed reader;
+- the Zen scrubber and corner actions;
+- the startup splash.
+
+Placeholders in the web clipper, audiobook pairing, cloud sync and AI settings were also localized, as were the inline Arabic/English literals in the search result card, titlebar breadcrumbs, quota banner and the default khatmah title. That is 38 new keys in total.
+
+The direction-icon audit found no unmirrored arrows: chevrons use a dir check or `rtl:rotate-180`, and ExternalLink icons don't need mirroring.
+
+Left for KEY-300: library/* still has about 138 inline `lang === 'ar' ? '...' : '...'` literals, 87 of them in BookDetailModal. KEY-300 rewrites those modals, and its brief now says to move them into translations.ts.
+
+Verification:
+- tsc passes; changed-file eslint has 0 errors.
+- translation-keys, startup-splash and viewport-and-focus tests pass; the full suite passes 1809/1809.
+- A live probe on localhost read the titlebar breadcrumbs label as «مسار التنقل» with dir=rtl and as "Breadcrumbs" with dir=ltr. Its profile was deleted.
+
+Files:
+- src/renderer/translations.ts
+- src/renderer/components/reader/: HighlightActionPopover, InkCanvasOverlay, ParagraphOverlay, ReadingRuler, RSVPOverlay, ZenBottomScrubber, ZenCornerHotspots
+- src/renderer/components/StartupSplash.tsx
+- src/renderer/components/clipper/WebClipperModal.tsx, audiobook/AudiobookPairingDialog.tsx, sync/CloudSyncModal.tsx, ai/AISettingsModal.tsx
+- src/renderer/components/search/SearchResultCard.tsx, layout/Titlebar.tsx, layout/QuotaWarningBanner.tsx, dashboard/KhatmahDashboardModule.tsx
+- CURRENT_TASK.md
+
 ## KEY-308 part 7 verified - 2026-11-11, Claude Code (overnight run)
 
 The side-note edge tip near the reader panel is now checked automatically. scripts/reader-chrome-live asserts that, with the reader panel open, the tip's box does not overlap any button, link, input, select or tab. No app change was needed: CompanionToggle already moves the tip away from edge controls when the page changes.
