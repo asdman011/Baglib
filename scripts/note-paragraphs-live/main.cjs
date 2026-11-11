@@ -104,6 +104,7 @@ app.on('browser-window-created', (_, owner) => {
       await shot(`preview-${language}-1280`);
       owner.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 }); await pause(300);
       // 6. Clicking opens the note at that paragraph and highlights it.
+      await until(`!!document.querySelector('${card} [data-study-link="note:source-note#^${anchor}"]')`, 50);
       await evaluate(`document.querySelector('${card} [data-study-link="note:source-note#^${anchor}"]').click()`);
       await until(`document.querySelector('[data-note-preview="source-note"] [data-paragraph="${anchor}"]')?.getAttribute('data-paragraph-focused')==='true'`, 50);
       result.highlighted = await evaluate(`document.querySelector('[data-note-preview="source-note"] [data-paragraph="${anchor}"]').textContent`);

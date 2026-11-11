@@ -35,6 +35,7 @@ import {
   studyBacklinks,
   studyLinks,
   matchesStudyQuery,
+  studyNoteExcerpt,
   type StudyNote,
 } from '../../../shared/study-notes';
 import {
@@ -815,7 +816,7 @@ export const NotesOverviewView: React.FC = () => {
                           fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)",
                         }}
                       >
-                        {note.content || '...'}
+                        {studyNoteExcerpt(note.content) || '...'}
                       </p>
 
                       <div className="flex flex-wrap items-center gap-1 pt-1 text-[10px] text-muted">

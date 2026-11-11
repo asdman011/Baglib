@@ -1,3 +1,21 @@
+## KEY-309 polish: readable note excerpts in the notes list and backlinks - 2026-11-11, Claude Code
+
+The notes list cards and the details pane's backlinks used to show raw note markup: `[[note:...|label]]`, `^anchor`, `**`, callout and footnote marks. They now show plain text, built by the new `studyNoteExcerpt` in src/shared/study-notes.ts: link labels instead of links, no paragraph anchors or Markdown marks, capped with an ellipsis. Stored notes are unchanged.
+
+Verification:
+- New tests/services/study-note-excerpt.test.ts 2/2; notes UI tests 14/14; tsc and eslint clean.
+- note-paragraphs-live passes in ar and en; the screenshots show clean excerpts in both places.
+- The script now waits for the paragraph link before clicking it; one run had flaked there.
+- Full suite 1879/1880. The one failure is the settings-directory key test, from Codex's uncommitted KEY-312 work, not these files.
+
+Files:
+- src/shared/study-notes.ts
+- src/renderer/components/notes/NotesOverviewView.tsx
+- src/renderer/components/notes/NoteDetailsPane.tsx
+- tests/services/study-note-excerpt.test.ts
+- scripts/note-paragraphs-live/main.cjs
+- CURRENT_TASK.md
+
 ## KEY-317 practice-live and explain-back-live repaired - 2026-11-11, Claude Code
 
 Both scripts are updated for the current app:

@@ -176,6 +176,23 @@ export function studyNoteHeading(content: string): string {
   return heading.replace(/[ \t]\^[A-Za-z0-9-]{1,64}[ \t]*$/u, '').replace(/^#{1,6}\s*|^>\s*|^[*-]\s+/u, '').replace(/[*`]/gu, '').slice(0, 100);
 }
 
+/** A plain-text preview for note lists: link labels instead of link markup, no paragraph anchors or Markdown marks. */
+export function studyNoteExcerpt(content: string, max = 240): string {
+  const lines = content.split('\n').map(line => {
+    let text = line;
+    for (const link of studyLinks(line).reverse()) text = text.slice(0, link.start) + link.label + text.slice(link.end);
+    return text
+      .replace(/[ \t]\^[A-Za-z0-9-]{1,64}[ \t]*$/u, '')
+      .replace(/^\s*(?:#{1,6}\s+|>\s?|[*-]\s+|\d+\.\s+)/u, '')
+      .replace(/\[!\w+\]\s*/gu, '')
+      .replace(/\[\^[^\]\s]+\]:?/gu, '')
+      .replace(/[*`]/gu, '')
+      .trim();
+  }).filter(Boolean);
+  const text = lines.join(' ').replace(/\s+/gu, ' ').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 export function studyLinkText(target: string, label: string, embed = false, relation?: string): string {
   if (!validStudyTarget(target)) return '';
   const named = relation ? studyRelation(relation) : undefined;

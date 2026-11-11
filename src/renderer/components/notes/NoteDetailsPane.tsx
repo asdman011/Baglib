@@ -12,7 +12,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { IconButton } from '../ui/Button';
 import { NoteHistory } from './NoteHistory';
 import { KnowledgeTools } from './KnowledgeTools';
-import { studyBacklinks, studyLinks, type StudyNote } from '../../../shared/study-notes';
+import { studyBacklinks, studyLinks, studyNoteExcerpt, type StudyNote } from '../../../shared/study-notes';
 
 export interface NoteDetailsPaneProps {
   note: StudyNote;
@@ -135,7 +135,7 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
                           {link.title || t('dashScratchpadGeneralNote')}
                         </span>
                         <span className="block text-[11px] text-muted truncate mt-0.5 line-clamp-1">
-                          {link.content.slice(0, 80)}
+                          {studyNoteExcerpt(link.content, 80)}
                         </span>
                       </button>
                     </li>
