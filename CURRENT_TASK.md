@@ -1,3 +1,13 @@
+## KEY-317 part 1 - 2026-11-11, Claude Code (overnight run)
+
+Two more live scripts now mark the KEY-307 first-run guide as seen and pass with it: curriculum-exam-live and library-declutter-live. They use the same did-finish-load hook as the ui-live scripts in KEY-308 part 11.
+
+A sequential run of the other non-ui live scripts, with a dev server on :3000, showed that most fail for reasons unrelated to the guide. Their expectations went stale with the UI program: renamed nav labels, the KEY-304 notes rework, the KEY-303 reader chrome, missing pack profiles, and harness copies that do not include ui-motion.css. Those scripts were left unchanged. The per-script failure list is in the local report docs/agent-ops/reports/KEY-317.md, and KEY-317 stays open.
+
+Verification: both changed scripts passed in that run. The run's profiles were deleted.
+
+Files: scripts/curriculum-exam-live/main.cjs, scripts/library-declutter-live/declutter-check.cjs, CURRENT_TASK.md.
+
 ## KEY-308 part 11 verified, KEY-308 complete - 2026-11-11, Claude Code (overnight run)
 
 **Every UI check script passes again.** KEY-308's acceptance asks for every `scripts/*-ui-live/` to be re-run with no regressions. All ten now pass: shell, library, dashboard, notes, statistics, research, islamic, poetry, feedback and settings. Four had expectations that went stale with earlier tasks. Only the scripts were changed, not the app:
