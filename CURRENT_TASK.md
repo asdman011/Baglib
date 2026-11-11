@@ -1,3 +1,13 @@
+## KEY-317 runners: inline ui-motion.css into the temporary renderer builds - 2026-11-11, Claude Code
+
+Eight live runners copy globals.css into a temporary build, where its relative `@import "./ui-motion.css"` failed ("Can't resolve './ui-motion.css'"). Each runner now inlines that file.
+
+Results:
+- layout-scroll-live passes 8/8 again.
+- book-details-live and import-live get past the CSS error, but their minimal harnesses lack newer IPC handlers. They are superseded by library-ui-live (KEY-300).
+
+Files: scripts/{book-details,import,layout-scroll,quran-layout,quran,sunnah,sunnah-merged,sunnah-research}-live/run.mjs, CURRENT_TASK.md.
+
 ## KEY-312 adhan, prayer and dhikr settings with one notification service - 2026-11-11, Codex (implementation), finished by Claude Code
 
 Codex built the remaining KEY-312 scope, then hit its usage limit before live verification and commit. Claude Code took over in place, verified it, fixed two problems and committed.

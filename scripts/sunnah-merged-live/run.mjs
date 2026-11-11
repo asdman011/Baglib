@@ -9,7 +9,7 @@ const root = path.resolve('.baglib-data/sunnah-merged-live'); fs.mkdirSync(root,
 const directory = fs.mkdtempSync(path.join(root, 'run-'));
 buildSync({ entryPoints: ['scripts/sunnah-merged-live/main.ts'], outfile: path.join(directory, 'main.cjs'), bundle: true, platform: 'node', format: 'cjs', packages: 'external' });
 buildSync({ entryPoints: ['scripts/sunnah-research-live/fixture.tsx'], outfile: path.join(directory, 'fixture.js'), bundle: true, platform: 'browser', define: { 'process.env.NODE_ENV': '"development"' } });
-const css = fs.readFileSync('src/renderer/app/globals.css', 'utf8') + '\n@source "../../../src/renderer/components";';
+const css = fs.readFileSync('src/renderer/app/globals.css', 'utf8').replace('@import "./ui-motion.css";', fs.readFileSync('src/renderer/app/ui-motion.css', 'utf8')) + '\n@source "../../../src/renderer/components";';
 fs.writeFileSync(path.join(directory, 'style.css'), (await postcss([tailwind()]).process(css, { from: path.join(directory, 'input.css') })).css);
 fs.writeFileSync(path.join(directory, 'index.html'), '<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="fixture.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>');
 const env = { ...process.env, BAGLIB_SUNNAH_LIVE: directory }; delete env.ELECTRON_RUN_AS_NODE;

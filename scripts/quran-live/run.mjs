@@ -14,7 +14,7 @@ fs.mkdirSync(root, { recursive: true });
 const directory = fs.mkdtempSync(path.join(root, 'run-'));
 for (const [entry, outfile] of [[`${fixture}/main.ts`, 'main.cjs'], ['src/preload/index.ts', 'preload.cjs'], ['src/main/quran-worker.ts', 'quran-worker.js'], ['src/main/quran-reader-worker.ts', 'quran-reader-worker.js']]) buildSync({ entryPoints: [entry], outfile: path.join(directory, outfile), bundle: true, platform: 'node', format: 'cjs', packages: 'external' });
 buildSync({ entryPoints: [`${fixture}/fixture.tsx`], outfile: path.join(directory, 'fixture.js'), bundle: true, platform: 'browser', define: { 'process.env.NODE_ENV': '"development"' } });
-let styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8') + '\n@source "../../../src/renderer/components/quran";\n@source "../../../src/renderer/components/layout/NavigationRail.tsx";\n';
+let styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8').replace('@import "./ui-motion.css";', fs.readFileSync('src/renderer/app/ui-motion.css', 'utf8')) + '\n@source "../../../src/renderer/components/quran";\n@source "../../../src/renderer/components/layout/NavigationRail.tsx";\n';
 const fonts = path.resolve('out/dev/static/chunks');
 if (fs.existsSync(fonts)) for (const file of fs.readdirSync(fonts).filter(name => /^\[next\]_internal_font_google_(amiri|tajawal|reem_kufi).*\.single\.css$/.test(name))) styles += fs.readFileSync(path.join(fonts, file), 'utf8').replace(/url\("(\.\.\/media\/[^" ]+)"\)/g, (_, target) => `url("${pathToFileURL(path.resolve(fonts, target)).href}")`);
 styles += '\n:root { --font-amiri: Amiri; --font-tajawal: Tajawal; --font-reem-kufi: "Reem Kufi"; }';

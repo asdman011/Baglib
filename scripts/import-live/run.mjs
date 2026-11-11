@@ -18,7 +18,7 @@ const archiveSource = path.join(directory, 'worker-package');
 fs.mkdirSync(archiveSource);
 fs.copyFileSync(path.join(directory, 'metadata-worker.js'), path.join(archiveSource, 'metadata-worker.js'));
 await createPackage(archiveSource, path.join(directory, 'worker.asar'));
-const styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8') + '\n@source "../../src/renderer/components/library/ImportWizardModal.tsx";';
+const styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8').replace('@import "./ui-motion.css";', fs.readFileSync('src/renderer/app/ui-motion.css', 'utf8')) + '\n@source "../../src/renderer/components/library/ImportWizardModal.tsx";';
 const css = await postcss([tailwind()]).process(styles, { from: path.join(directory, 'input.css') });
 fs.writeFileSync(path.join(directory, 'style.css'), css.css);
 fs.writeFileSync(path.join(directory, 'index.html'), '<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="style.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>');

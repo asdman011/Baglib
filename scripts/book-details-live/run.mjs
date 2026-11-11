@@ -11,7 +11,7 @@ fs.mkdirSync(root, { recursive: true });
 const directory = fs.mkdtempSync(path.join(root, 'run-'));
 buildSync({ entryPoints: ['scripts/book-details-live/fixture.tsx'], outfile: path.join(directory, 'fixture.js'), bundle: true, platform: 'browser', define: { 'process.env.NODE_ENV': '"development"' } });
 for (const [source, output] of [['scripts/book-details-live/main.ts', 'main.cjs'], ['src/preload/index.ts', 'preload.cjs']]) buildSync({ entryPoints: [source], outfile: path.join(directory, output), bundle: true, platform: 'node', format: 'cjs', packages: 'external' });
-const styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8') + '\n@source "../../../src/renderer/components/library";';
+const styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8').replace('@import "./ui-motion.css";', fs.readFileSync('src/renderer/app/ui-motion.css', 'utf8')) + '\n@source "../../../src/renderer/components/library";';
 fs.writeFileSync(path.join(directory, 'style.css'), (await postcss([tailwind()]).process(styles, { from: path.join(directory, 'input.css') })).css);
 fs.writeFileSync(path.join(directory, 'index.html'), '<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="style.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>');
 const environment = { ...process.env, BAGLIB_BOOK_DETAILS_TEST_DIRECTORY: directory };

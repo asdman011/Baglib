@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import electron from 'electron';
 
 const directory = fs.mkdtempSync(path.resolve('.baglib-data/layout-scroll-'));
-const css = fs.readFileSync('src/renderer/app/globals.css', 'utf8');
+const css = fs.readFileSync('src/renderer/app/globals.css', 'utf8').replace('@import "./ui-motion.css";', fs.readFileSync('src/renderer/app/ui-motion.css', 'utf8'));
 const result = await postcss([tailwind()]).process(css, { from: path.join(directory, 'input.css') });
 fs.writeFileSync(path.join(directory, 'style.css'), result.css);
 buildSync({ entryPoints: ['scripts/layout-scroll-live/main.ts'], outfile: path.join(directory, 'main.cjs'), bundle: true, platform: 'node', format: 'cjs', packages: 'external' });

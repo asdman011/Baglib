@@ -13,7 +13,7 @@ buildSync({ entryPoints: ['scripts/sunnah-live/fixture.tsx'], outfile: path.join
 for (const [source, name] of [['src/preload/index.ts', 'preload'], ['src/main/ipc/sunnah.ts', 'ipc'], ['src/main/services/sunnah/sunnah.service.ts', 'service']]) {
   buildSync({ entryPoints: [source], outfile: path.join(directory, `${name}.cjs`), bundle: true, platform: 'node', format: 'cjs', external: ['electron'] });
 }
-let styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8') + '\n@source "../../src/renderer/components/sunnah";\n@source "../../src/renderer/components/layout/NavigationRail.tsx";\n@source "../../scripts/sunnah-live/fixture.tsx";\n';
+let styles = fs.readFileSync('src/renderer/app/globals.css', 'utf8').replace('@import "./ui-motion.css";', fs.readFileSync('src/renderer/app/ui-motion.css', 'utf8')) + '\n@source "../../src/renderer/components/sunnah";\n@source "../../src/renderer/components/layout/NavigationRail.tsx";\n@source "../../scripts/sunnah-live/fixture.tsx";\n';
 styles += fs.readFileSync('src/renderer/components/sunnah/sunnah.css', 'utf8');
 const fonts = path.resolve('out/dev/static/chunks');
 if (fs.existsSync(fonts)) {
