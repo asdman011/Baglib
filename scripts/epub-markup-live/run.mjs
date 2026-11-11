@@ -142,13 +142,8 @@ async function main() {
     { env, stdio: 'inherit', windowsHide: true }
   );
 
-  const timeoutTimer = setTimeout(() => {
-    console.error('[epub-markup-live] Test timed out after 300 seconds!');
-    child.kill();
-  }, 300000);
 
   child.on('exit', (code) => {
-    clearTimeout(timeoutTimer);
     console.log(`[epub-markup-live] Electron process exited with code ${code}`);
 
     // 6. Verify EPUB File Hashes Remained 100% Byte-Identical (ADR-012)
@@ -198,7 +193,10 @@ async function main() {
       }
     } catch {}
 
-    process.exitCode = code ?? 0;
+    const resolved = fs.realpathSync(directory);
+    if (!resolved.startsWith(fs.realpathSync('.baglib-data') + path.sep + 'epub-markup-live-')) throw Error('Unexpected cleanup path');
+    fs.rmSync(resolved, { recursive: true, force: true });
+    process.exitCode = code ?? 1;
   });
 }
 

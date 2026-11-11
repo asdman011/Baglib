@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-11, Codex] KEY-317 EPUB ar/en1280/480 plus real English textbook PASS, PDF-markup4/4 real-file/interface combinations PASS. Current palette/shared Marks tab/keyboard/shortcut contracts, disposable inputs and cleanup. No app UI change. Exact four scripts/own state entries in handoff. Remaining scripts pending.
+
 - [2026-11-11, Codex] KEY-317 context-menu ar/en1280 PASS with real PDFs/English EPUB, ten menu surfaces and mouse/keyboard/touch. Guide/Notes tabs repaired, both profiles removed, original hashes retained. Dark/480 pending. Exact two scripts and own state entries in handoff, remaining scripts pending.
 
 - [2026-11-11, Codex] KEY-300 part 2 verified. Calm detail Sheet with preserved Reading Log/zoom/editor, all editions/sources and active counts, shared metadata chrome/diff, centralized copy and Arabic book plurals. Types/lint0errors52warnings/focused21/build/diff pass. Native8/8 with144PNGs/eightinspected/onewindow/0renderererrors and all profiles removed. Full1871/1871 at concurrency2. Exact24 own files/hunks in CURRENT_TASK/report. Scoped commit/push authorized. Claude owns review and Jira.

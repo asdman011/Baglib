@@ -29,6 +29,8 @@ app.on('browser-window-created', (_, owner) => {
       throw new Error(`${error.message}: ${code.slice(0, 200)}`);
     });
 
+  owner.webContents.on('did-finish-load', () => { evaluate("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
+
   const until = async (code, tries = 200) => {
     for (let index = 0; index < tries; index++) {
       try {
@@ -48,7 +50,15 @@ app.on('browser-window-created', (_, owner) => {
   };
 
   const key = (value, extra = '') =>
-    evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(value)},bubbles:true${extra}}))`);
+    evaluate(`document.body.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(value)},bubbles:true${extra}}))`);
+
+  const chooseTool = async tool => {
+    if (!await evaluate(`!!document.querySelector('[data-markup-tool-button="${tool}"]')`)) {
+      await evaluate("document.querySelector('[data-markup-palette]').click()");
+      await until(`!!document.querySelector('[data-markup-tool-button="${tool}"]')`);
+    }
+    await evaluate(`document.querySelector('[data-markup-tool-button="${tool}"]').click()`);
+  };
 
   const load = async (language, width = 1280, height = 900) => {
     owner.setContentSize(width, height);
@@ -113,7 +123,7 @@ app.on('browser-window-created', (_, owner) => {
       await load(language, 1280, 900);
 
       // Navigate to library and open the book
-      await evaluate(`document.querySelector('aside button[aria-label=${JSON.stringify(labels[language].library)}]')?.click()`);
+      await evaluate(`document.querySelector('[data-nav-item][aria-label=${JSON.stringify(labels[language].library)}]')?.click()`);
       await until(`[...document.querySelectorAll('button')].some(b=>b.title===${JSON.stringify(labels[language].read)}||b.textContent.trim()===${JSON.stringify(labels[language].read)})`);
 
       // Open book reader
@@ -183,28 +193,31 @@ app.on('browser-window-created', (_, owner) => {
       })()`);
 
       // 1. Highlight
-      await evaluate("document.querySelector('[data-markup-tool-button=\"highlight\"]')?.click()");
+      await chooseTool('highlight');
       await pause(300);
       const res1 = await selectRange(0, true);
+      assert.match(res1, /^OK:/);
       console.log('[epub-markup-live] res1:', res1);
       await pause(1000);
 
       // 2. Underline
-      await evaluate("document.querySelector('[data-markup-tool-button=\"underline\"]')?.click()");
+      await chooseTool('underline');
       await pause(300);
       const res2 = await selectRange(1, true);
+      assert.match(res2, /^OK:/);
       console.log('[epub-markup-live] res2:', res2);
       await pause(1000);
 
       // 3. Strike
-      await evaluate("document.querySelector('[data-markup-tool-button=\"strike\"]')?.click()");
+      await chooseTool('strike');
       await pause(300);
       const res3 = await selectRange(1, false);
+      assert.match(res3, /^OK:/);
       console.log('[epub-markup-live] res3:', res3);
       await pause(1000);
 
       // Reset tool to select
-      await evaluate("document.querySelector('[data-markup-tool-button=\"select\"]')?.click()");
+      await chooseTool('select');
       await pause(300);
 
       // Verify marks were persisted to SQLite with valid CFI locations
@@ -299,7 +312,9 @@ app.on('browser-window-created', (_, owner) => {
         // MARKS LIST: Grouped by Chapter
         // ==========================================
         // Open Knowledge Drawer
-        await evaluate("document.querySelector('[data-toggle-knowledge]')?.click()");
+        await evaluate("document.querySelector('[data-reader-panel-toggle]').click()");
+        await until("!!document.querySelector('[data-reader-panel-tab=knowledge]')");
+        await evaluate("document.querySelector('[data-reader-panel-tab=knowledge]').click()");
         await until("!!document.querySelector('[data-marks-chapter-section]') || !!document.querySelector('[data-marks-list]')", 100);
         await pause(800);
 
@@ -360,7 +375,7 @@ app.on('browser-window-created', (_, owner) => {
     await load('en', 1280, 900);
 
     // Navigate to library and open the textbook
-    await evaluate("document.querySelector('aside button[aria-label=\"Library\"]')?.click()");
+    await evaluate("document.querySelector('[data-nav-item][aria-label=\"Library\"]')?.click()");
     await until("[...document.querySelectorAll('button')].some(b=>b.title==='Read'||b.textContent.trim()==='Read')");
 
     await evaluate(`(()=>{
@@ -400,7 +415,7 @@ app.on('browser-window-created', (_, owner) => {
     }
 
     // Add Highlight in textbook
-    await evaluate("document.querySelector('[data-markup-tool-button=\"highlight\"]')?.click()");
+    await chooseTool('highlight');
     await pause(300);
     const textbookSelect = await evaluate(`(()=>{
       try {
@@ -444,8 +459,10 @@ app.on('browser-window-created', (_, owner) => {
     await shot('epub-en-textbook-1280');
 
     // Open Knowledge Drawer to check Marks list grouped by chapter
-    await evaluate("document.querySelector('[data-toggle-knowledge]')?.click()");
-    await until("!!document.querySelector('[role=\"complementary\"]')", 100);
+    await evaluate("document.querySelector('[data-reader-panel-toggle]').click()");
+        await until("!!document.querySelector('[data-reader-panel-tab=knowledge]')");
+        await evaluate("document.querySelector('[data-reader-panel-tab=knowledge]').click()");
+    await until("!!document.querySelector('[data-reader-side-panel]')", 100);
     await pause(800);
 
     const textbookChapterGroups = await evaluate(`(()=>{

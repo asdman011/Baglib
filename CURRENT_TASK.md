@@ -1,3 +1,11 @@
+## KEY-317 EPUB and PDF markup runners verified - 2026-11-11, Codex (key317)
+
+Repaired compact markup palette access, shared reader Marks tab (knowledge), HTMLElement-target keyboard navigation, current shortcut registry expectations and real-page highlight toasts. PDF runner now uses isolated copies of both real text-layer PDFs. Removed forced Electron kill timers and remove completed run folders.
+
+Verification passed EPUB ar/en at1280/480 plus real English textbook, retaining CFI/style/persistence/comments/chapter-group/undo-redo checks. Generated Arabic EPUB is used because the manifest has no real Arabic EPUB. Existing EPUB viewport-tap and jump observations remain informational, without assertions. All three EPUB hashes unchanged. PDF markup passed4/4 real-file-language/interface-language combinations, both sizes captured, color/lock/save/toast/shortcut assertions pass. Evidence key274-evidence and k317-pdf-markup-evidence-X90uQS. Missing Mushaf-layout reminder diagnostics appear in EPUB/PDF-only profiles, recorded for Claude. One introduced PDF diagnostic quoting error required closing its startup Error dialog normally and requesting Electron app.exit through a local debugger. Corrected before successful verification, with no OS process termination.
+
+Exact files scripts/epub-markup-live/main.cjs, scripts/epub-markup-live/run.mjs, scripts/pdf-markup-live/main.cjs, scripts/pdf-markup-live/run.mjs and own state entries in CURRENT_TASK.md, IMPLEMENTATION_PLAN.md. No application UI/layout change in this batch. Other scripts remain pending, pdf-tools repair active. Commit/push authorized by current dispatch, Jira left to Claude.
+
 ## KEY-317 context-menu live repair verified - 2026-11-11, Codex (key317)
 
 Updated first-run guide dismissal and Notes Cards/Boards tab navigation. Removed forced Electron termination and clean private profiles on every completed run. User-facing application behavior/layout stays as implemented by KEY-301..316. The harness now reaches the current Notes tabs.

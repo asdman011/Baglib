@@ -1,20 +1,34 @@
-// Live check for the PDF markup bar: throwaway BAGLIB_DATA_DIR and --user-data-dir, dev renderer on :3000, real built main.
+// Real PDF markup checks in both interface languages, with disposable input copies.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import electron from 'electron';
-const directory = fs.mkdtempSync(path.resolve('.baglib-data/pdf-markup-live-'));
-const weasyprint = path.resolve('.baglib-data/pdf-engine/weasyprint/weasyprint.exe');
-const html = `<html><meta charset="utf-8"><style>@page{size:A5;margin:1.5cm}body{font-family:Arial;font-size:15pt;line-height:1.8}</style><body>
-<p dir="rtl" lang="ar">العلم قبل القول والعمل، وطلب العلم فريضة على كل مسلم.</p>
-<p lang="en">Knowledge comes before speech and action; seeking it is a duty.</p></body></html>`;
-fs.writeFileSync(path.join(directory, 'source.html'), html);
-const made = spawnSync(weasyprint, [path.join(directory, 'source.html'), path.join(directory, 'markup.pdf')]);
-if (made.status !== 0) throw new Error(`weasyprint failed: ${made.stderr}`);
-const env = { ...process.env, BAGLIB_DATA_DIR: directory, BAGLIB_MARKUP_LIVE_DIR: directory };
-delete env.ELECTRON_RUN_AS_NODE;
-const child = spawn(electron, ['scripts/pdf-markup-live/main.cjs', `--user-data-dir=${directory}`, '--disable-features=CalculateNativeWinOcclusion'], { env, stdio: 'inherit', windowsHide: true });
-const timer = setTimeout(() => child.kill(), 300000);
-// Keep screenshots and results; drop the profile folders (the app installs about 630 MB of Quran packs into each).
-const trimProfile = () => { for (const entry of fs.readdirSync(directory, { withFileTypes: true })) if (entry.isDirectory()) fs.rmSync(path.join(directory, entry.name), { recursive: true, force: true }); };
-child.once('exit', code => { clearTimeout(timer); trimProfile(); console.log(JSON.stringify({ directory, code })); process.exitCode = code ?? 1; });
+
+const root = fs.realpathSync('.baglib-data');
+const evidence = fs.mkdtempSync(path.join(root, 'k317-pdf-markup-evidence-'));
+const manifest = JSON.parse(fs.readFileSync('tests/real-files/manifest.json', 'utf8'));
+for (const fileLanguage of ['ar', 'en']) {
+  const file = manifest.files.filter(file => file.kind === 'pdf' && file.lang === fileLanguage && file.textLayer === 'yes').sort((a, b) => a.bytes - b.bytes)[0];
+  assert.ok(file, `Missing real ${fileLanguage} PDF`);
+  const directory = fs.mkdtempSync(path.join(root, 'pdf-markup-live-'));
+  fs.copyFileSync(path.resolve('tests/real-files', file.path), path.join(directory, 'markup.pdf'));
+  const env = { ...process.env, BAGLIB_DATA_DIR: directory, BAGLIB_MARKUP_LIVE_DIR: directory, BAGLIB_MARKUP_PAGE: fileLanguage === 'en' ? '200' : '2', BAGLIB_REGISTER_PROTOCOL: '0' };
+  delete env.ELECTRON_RUN_AS_NODE;
+  try {
+    const code = await new Promise((resolve, reject) => {
+      const child = spawn(electron, ['scripts/pdf-markup-live/main.cjs', `--user-data-dir=${directory}`, '--disable-features=CalculateNativeWinOcclusion'], { env, stdio: 'inherit', windowsHide: true });
+      child.once('error', reject);
+      child.once('exit', code => resolve(code ?? 1));
+    });
+    for (const entry of fs.readdirSync(directory)) {
+      if (/\.(png|json|txt)$/.test(entry)) fs.copyFileSync(path.join(directory, entry), path.join(evidence, `${fileLanguage}-${entry}`));
+    }
+    assert.equal(code, 0, fileLanguage);
+  } finally {
+    const resolved = fs.realpathSync(directory);
+    assert.equal(path.dirname(resolved), root);
+    fs.rmSync(resolved, { recursive: true, force: true });
+  }
+}
+console.log(JSON.stringify({ passed: true, evidence }));
