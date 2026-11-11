@@ -9,6 +9,9 @@ import { translations } from '../../renderer/translations';
 let hadithReader: ((collection: string, chapter: number, id: string) => Promise<{ text: string; number: string } | null>) | null = null;
 /** One hadith's full Arabic text from the installed corpus, for other main-process features (the study assistant). */
 export const readHadithText = (collection: string, chapter: number, id: string) => hadithReader ? hadithReader(collection, chapter, id) : Promise.resolve(null);
+let chapterReader: ((collection: string, chapter: number) => Promise<{ id: string; number: string; text: string }[]>) | null = null;
+/** KEY-319: every hadith of one chapter with its exact Arabic matn (or full text), for memorization decks. */
+export const readChapterHadiths = (collection: string, chapter: number) => chapterReader ? chapterReader(collection, chapter) : Promise.resolve([]);
 
 export function registerSunnahIpc(): void {
   let service: SunnahService | undefined;
@@ -16,6 +19,8 @@ export function registerSunnahIpc(): void {
     const found = (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths.find(hadith => hadith.id === id);
     return found ? { text: found.text.ar.full || found.text.ar.matn, number: String(found.number) } : null;
   };
+  chapterReader = async (collection, chapter) => (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths
+    .map(hadith => ({ id: hadith.id, number: String(hadith.number), text: hadith.text.ar.matn || hadith.text.ar.full }));
   const getService = () => service ??= new SunnahService(path.join(app.getPath('userData'), 'sunnah'), app.isPackaged ? [] : [
     path.join(app.getAppPath(), 'repos', 'Hadith', 'LK-Hadith-Corpus-master.zip'),
     path.join(app.getAppPath(), 'repos', 'LK-Hadith-Corpus-master.zip'),

@@ -100,6 +100,8 @@ export interface KnowledgeCardsAPI {
   generateDeck(input: DeckInput): Promise<DeckResult>;
   /** KEY-318: one card per ayah in the range; rejects with quran-not-installed when the pack is missing. */
   generateAyahDeck(input: AyahDeckInput): Promise<DeckResult>;
+  /** KEY-319: rejects with hadith-not-installed or hadith-range-empty. */
+  generateHadithDeck(input: import('../hadith-deck').HadithDeckInput): Promise<DeckResult>;
   /** Resolves false when the save dialog is cancelled. */
   exportDeck(id: string): Promise<boolean>;
   reviewQueue(): Promise<import('../srs').ReviewQueue>;

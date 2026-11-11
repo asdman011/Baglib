@@ -1,3 +1,31 @@
+## KEY-319 part 1: deck from a range of hadiths - 2026-11-11, Claude Code
+
+The Cards deck panel has a "From a range of hadiths" section:
+- you pick a collection, then a book (kitab), then from/to hadith numbers, with the book's number range shown;
+- each hadith becomes one card: the front is "<collection> <number>", the back is the installed Arabic matn (or the full text) copied exactly, and the source is `sunnah:<collection>:<chapter>:<id>`, the existing study-link format;
+- a missing corpus and an empty range each get their own localized message.
+
+Main side: `readChapterHadiths` (sunnah IPC), the new IPC `knowledge-cards:generate-hadith-deck`, and the pure helpers in src/shared/hadith-deck.ts (validation capped at 300, drafts). No schema change: decks stay collections.
+
+Verification:
+- tests/services/hadith-range-deck.test.ts 3/3; full suite 1871/1871; tsc and eslint clean for these files.
+- New scripts/hadith-deck-live passes in ar and en with a disposable corpus copy: Bukhari, book 1, hadiths 1-3 gave 3 cards equal to the installed text, the empty-range message showed, and there was no overflow. The originals were verified unchanged.
+
+Still open in KEY-319: making a deck straight from a Quran reader selection.
+
+Committed alone: Codex's uncommitted KEY-300 part-2 lines in preload/index.ts and translations.ts are not included.
+
+Files:
+- src/shared/hadith-deck.ts
+- src/main/ipc/sunnah.ts, src/main/ipc/knowledge-cards.ts
+- src/shared/types/knowledge-cards.ts
+- src/preload/index.ts (one line)
+- src/renderer/components/knowledge/CardDecksPanel.tsx
+- src/renderer/translations.ts (7 keys)
+- tests/services/hadith-range-deck.test.ts
+- scripts/hadith-deck-live/*
+- CURRENT_TASK.md
+
 ## KEY-317 deeplink-live repaired - 2026-11-11, Claude Code
 
 The script is updated for the current app:

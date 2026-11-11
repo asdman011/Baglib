@@ -6,6 +6,8 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { DECK_SOURCES, type CardDeck, type DeckResult, type DeckSource } from '../../../shared/types/knowledge-cards';
 import { HAFS_SURAH_AYAH_COUNTS, SURAH_NAMES_AR, SURAH_NAMES_EN } from '../../../shared/quran-wird';
+import type { SunnahCatalog, SunnahCollectionId } from '../../../shared/types/sunnah';
+import { collectionKeys } from '../../utils/sunnah-collections';
 
 const SOURCE_LABELS = { notes: 'cardDeckNotes', highlights: 'cardDeckHighlights', quran: 'cardDeckQuran', hadith: 'cardDeckHadith', poetry: 'cardDeckPoetry' } as const;
 
@@ -27,6 +29,37 @@ export function CardDecksPanel() {
   const [quranMissing, setQuranMissing] = useState(false);
   const last = HAFS_SURAH_AYAH_COUNTS[surah - 1];
   const rangeValid = Number.isInteger(from) && Number.isInteger(to) && from >= 1 && to >= from && to <= last;
+  // KEY-319: a deck from a numbered range of hadiths in one book (kitab) of a collection.
+  const [catalog, setCatalog] = useState<SunnahCatalog['collections'] | null>(null);
+  const [collection, setCollection] = useState('');
+  const [chapter, setChapter] = useState(0);
+  const [numbers, setNumbers] = useState<{ first: number; last: number } | null>(null);
+  const [hadithFrom, setHadithFrom] = useState(1);
+  const [hadithTo, setHadithTo] = useState(1);
+  const [hadithIssue, setHadithIssue] = useState<'missing' | 'empty' | null>(null);
+  const loadChapter = async (id: string, number: number) => {
+    setChapter(number); setNumbers(null);
+    try {
+      const response = await window.electronAPI.sunnah.chapter(id as SunnahCollectionId, number);
+      const parsed = response.ok ? response.data.hadiths.map(hadith => Number.parseInt(String(hadith.number), 10)).filter(Number.isInteger) : [];
+      if (!parsed.length) return;
+      const first = Math.min(...parsed), lastNumber = Math.max(...parsed);
+      setNumbers({ first, last: lastNumber }); setHadithFrom(first); setHadithTo(Math.min(first + 4, lastNumber));
+    } catch { setHadithIssue('missing'); }
+  };
+  const loadCatalog = async () => {
+    if (catalog) return;
+    try {
+      const response = await window.electronAPI.sunnah.catalog();
+      const collections = response.ok && response.data ? response.data.collections.filter(item => item.id in collectionKeys && item.chapters.length) : [];
+      setCatalog(collections);
+      if (!collections.length) { setHadithIssue('missing'); return; }
+      setCollection(collections[0].id);
+      await loadChapter(collections[0].id, collections[0].chapters[0].number);
+    } catch { setCatalog([]); setHadithIssue('missing'); }
+  };
+  const chapters = catalog?.find(item => item.id === collection)?.chapters ?? [];
+  const hadithRangeValid = !!numbers && Number.isInteger(hadithFrom) && Number.isInteger(hadithTo) && hadithFrom >= 1 && hadithTo >= hadithFrom && hadithTo - hadithFrom < 300;
 
   const refresh = useCallback(async () => {
     try { setDecks(await window.electronAPI.knowledgeCards.decks()); setFailed(false); } catch { setFailed(true); }
@@ -51,6 +84,18 @@ export function CardDecksPanel() {
       window.dispatchEvent(new CustomEvent(KNOWLEDGE_CARD_SAVED));
     } catch (error) {
       if (String((error as Error)?.message).includes('quran-not-installed')) setQuranMissing(true); else setFailed(true);
+    } finally { setBusy(false); }
+  };
+  const generateFromHadiths = async () => {
+    setBusy(true); setExported(false); setHadithIssue(null); setFailed(false);
+    try {
+      setResult(await window.electronAPI.knowledgeCards.generateHadithDeck({ name, collection, chapter, from: hadithFrom, to: hadithTo, memorize }));
+      setName('');
+      await refresh();
+      window.dispatchEvent(new CustomEvent(KNOWLEDGE_CARD_SAVED));
+    } catch (error) {
+      const message = String((error as Error)?.message);
+      if (message.includes('hadith-not-installed')) setHadithIssue('missing'); else if (message.includes('hadith-range-empty')) setHadithIssue('empty'); else setFailed(true);
     } finally { setBusy(false); }
   };
   const exportDeck = async (id: string) => {
@@ -83,6 +128,28 @@ export function CardDecksPanel() {
         <button type="button" data-ayah-deck-generate disabled={busy || !name.trim() || !rangeValid} onClick={() => void generateFromAyahs()} className="rounded border border-subtle p-2 disabled:opacity-50">{t('cardDeckFromAyahs')}</button>
         {quranMissing && <p role="alert" className="text-red-600 dark:text-red-400">{t('cardDeckQuranMissing')}</p>}
       </fieldset>
+      <details data-hadith-deck className="space-y-2 rounded border border-subtle p-2" onToggle={event => { if ((event.currentTarget as HTMLDetailsElement).open) void loadCatalog(); }}>
+        <summary className="cursor-pointer px-1 text-xs font-semibold text-main">{t('cardDeckHadithRange')}</summary>
+        {catalog && catalog.length > 0 && <>
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            <label className="flex min-w-0 flex-col gap-1">{t('sunnahCollection')}
+              <select data-hadith-deck-collection value={collection} onChange={event => { const next = event.target.value; setCollection(next); const first = catalog.find(item => item.id === next)?.chapters[0]; if (first) void loadChapter(next, first.number); }} className="rounded border border-subtle bg-canvas p-2">
+                {catalog.map(item => <option key={item.id} value={item.id}>{t(collectionKeys[item.id])}</option>)}
+              </select>
+            </label>
+            <label className="flex min-w-0 max-w-full flex-col gap-1">{t('sunnahChapter')}
+              <select data-hadith-deck-chapter value={chapter} onChange={event => void loadChapter(collection, Number(event.target.value))} className="max-w-full rounded border border-subtle bg-canvas p-2">
+                {chapters.map(item => <option key={item.number} value={item.number}>{item.number}. {item.title[lang] || item.title.ar}</option>)}
+              </select>
+            </label>
+            <label className="flex w-24 flex-col gap-1">{t('cardDeckFromHadith')}<input data-hadith-deck-from type="number" min={numbers?.first ?? 1} max={numbers?.last} value={hadithFrom} onChange={event => setHadithFrom(Number(event.target.value))} className="rounded border border-subtle bg-canvas p-2" /></label>
+            <label className="flex w-24 flex-col gap-1">{t('cardDeckToHadith')}<input data-hadith-deck-to type="number" min={hadithFrom} max={numbers?.last} value={hadithTo} onChange={event => setHadithTo(Number(event.target.value))} className="rounded border border-subtle bg-canvas p-2" /></label>
+          </div>
+          {numbers && <p className="text-xs leading-loose text-muted">{t('cardDeckHadithHint', { first: numbers.first, last: numbers.last })}</p>}
+          <button type="button" data-hadith-deck-generate disabled={busy || !name.trim() || !hadithRangeValid} onClick={() => void generateFromHadiths()} className="rounded border border-subtle p-2 disabled:opacity-50">{t('cardDeckFromHadiths')}</button>
+        </>}
+        {hadithIssue && <p role="alert" className="text-red-600 dark:text-red-400">{t(hadithIssue === 'missing' ? 'cardDeckHadithMissing' : 'cardDeckHadithRangeEmpty')}</p>}
+      </details>
       {failed && <p role="alert" className="text-red-600 dark:text-red-400">{t('knowledgeCardFailed')}</p>}
       {result && <p role="status" className="text-muted">{t('cardDeckResult', { added: result.added, skipped: result.skipped })}</p>}
       {exported && <p role="status" className="text-muted">{t('cardDeckExported')}</p>}

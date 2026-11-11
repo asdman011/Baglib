@@ -5,6 +5,11 @@ import { KnowledgeCardRepository } from '../database/repositories/knowledge-card
 import { validateAyahDeckInput, validateCardInput, validateDeckInput } from '../../shared/types/knowledge-cards';
 import { HAFS_SURAH_AYAH_COUNTS, SURAH_NAMES_AR } from '../../shared/quran-wird';
 import { readAyahTexts } from './quran';
+import { readChapterHadiths } from './sunnah';
+import { hadithRangeDrafts, validateHadithDeckInput } from '../../shared/hadith-deck';
+import { collectionKeys } from '../../renderer/utils/sunnah-collections';
+import { translations } from '../../renderer/translations';
+import type { SunnahCollectionId } from '../../shared/types/sunnah';
 import { CardDeckService } from '../services/card-decks';
 import { PracticeService } from '../services/practice';
 import type { PracticeInput, JudgeAttemptInput, AttemptQuery } from '../../shared/practice';
@@ -51,6 +56,18 @@ export function registerKnowledgeCardIpc(): void {
       sourceLabel: `${surahName} ${request.surah}:${range}`,
       language: 'ar',
     })), request.memorize);
+  });
+  // KEY-319: one card per hadith in a numbered range of one chapter; the back is the installed text, unchanged.
+  ipcMain.handle('knowledge-cards:generate-hadith-deck', async (event, input: unknown) => {
+    const service = deckService(event);
+    const request = validateHadithDeckInput(input);
+    const key = collectionKeys[request.collection as SunnahCollectionId];
+    if (!key) throw new Error('invalid-request');
+    const hadiths = await readChapterHadiths(request.collection, request.chapter).catch(() => []);
+    if (!hadiths.length) throw new Error('hadith-not-installed');
+    const drafts = hadithRangeDrafts(hadiths, request, translations.ar[key]);
+    if (!drafts.length) throw new Error('hadith-range-empty');
+    return service.generateFromDrafts(request.name, drafts, request.memorize);
   });
   ipcMain.handle('knowledge-cards:export-deck', async (event, id: unknown) => {
     const { name, text } = deckService(event).exportText(cardId(id));

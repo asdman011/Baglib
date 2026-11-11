@@ -1,5 +1,12 @@
 export const translations = {
   ar: {
+    cardDeckHadithRange: "من نطاق أحاديث",
+    cardDeckFromHadith: "من الحديث رقم",
+    cardDeckToHadith: "إلى الحديث رقم",
+    cardDeckHadithHint: "بطاقة لكل حديث، والوجه الخلفي متن الحديث المثبت كما هو. أرقام أحاديث هذا الكتاب: {first}–{last}.",
+    cardDeckFromHadiths: "إنشاء مجموعة من هذه الأحاديث",
+    cardDeckHadithMissing: "مدونة الحديث غير مثبتة على هذا الجهاز؛ استوردها من قسم السنة النبوية ثم أعد المحاولة.",
+    cardDeckHadithRangeEmpty: "لا توجد أحاديث بهذه الأرقام في الكتاب المختار.",
     importStoppedHeading: "توقف الاستيراد بأمان",
     importStoppedSummary: "حُفظت الملفات المكتملة. يمكنك إعادة محاولة الملفات غير المعالجة.",
     importIssuesHeading: "انتهى الاستيراد مع نتائج تحتاج إلى مراجعة",
@@ -4769,6 +4776,13 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    cardDeckHadithRange: "From a range of hadiths",
+    cardDeckFromHadith: "From hadith no.",
+    cardDeckToHadith: "To hadith no.",
+    cardDeckHadithHint: "One card per hadith; the back is the installed matn, unchanged. Hadith numbers in this book: {first}–{last}.",
+    cardDeckFromHadiths: "Make a deck from these hadiths",
+    cardDeckHadithMissing: "The hadith corpus isn't installed on this device; import it from the Sunnah section, then try again.",
+    cardDeckHadithRangeEmpty: "No hadiths with these numbers in the chosen book.",
     importStoppedHeading: "Import stopped safely",
     importStoppedSummary: "Completed files are saved. You can retry the unprocessed files.",
     importIssuesHeading: "Import finished with results to review",
