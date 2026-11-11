@@ -1,3 +1,19 @@
+## KEY-44 review: changes requested - 2026-11-11, Claude Code
+
+Claude Code reviewed multi-book selection and bulk editing.
+
+Passes:
+- New test tests/repositories/bulk-edit-rollback.test.ts (3/3) proves bulk status and tag edits are all-or-nothing: a forced failure part-way leaves every book unchanged, and a successful edit touches only the selected books.
+- In the grid view, Shift-click selects the range correctly (a live probe in ar and en selected 4 books).
+
+Fix list (to do after KEY-298 commits, because these files may overlap it):
+1. List view: Shift-click range selection does not work; it selects 2 instead of 4 in ar and en. The list checkbox passes its change event, which has no shiftKey, to handleToggleSelectBook (LibraryGridView, list checkbox cell). Use the click event.
+2. Grid view: the selection box on each card is a `<div>` with no role and tabIndex -1, so the keyboard cannot reach it. Its tooltip says "Select all on page" / "Deselect all" for a single book. Make it a real checkbox with a per-book localized label (LibraryBookCard).
+3. The list-view row checkboxes have no accessible label.
+4. Acceptance lists a bulk "shelf" action, but there is none. Books have a shelf field (physical copies), and the toolbar offers only category, tags, status, metadata, export and delete. Add a bulk shelf action, or record a decision to drop it from the acceptance.
+
+Files committed now: tests/repositories/bulk-edit-rollback.test.ts, CURRENT_TASK.md.
+
 ## KEY-45 review passed - 2026-11-11, Claude Code
 
 Claude Code reviewed soft-delete, Undo and Trash Bin restore against the KEY-45 acceptance criteria.
