@@ -1,3 +1,31 @@
+## KEY-321 /card and new-note focus in the Notes editor, plus KEY-317 batch 4 - 2026-11-11, Claude Code
+
+KEY-321 (bug, found through note-cards-live):
+- NoteEditorPane now passes `onMakeCards`. /card in the Notes editor makes and schedules cards, with a toast using Arabic plurals, as the scratchpad does.
+- NoteEditorPane passes `autoFocus` for a new note.
+- StudyNoteEditor's autofocus now focuses the live editor in the next frame and cancels on cleanup. Under dev StrictMode it used to focus a destroyed instance.
+
+KEY-317 scripts repaired for the current app (nav items, guide hook, note selection, toasts, `@sourceId` in book links):
+- graph-live
+- note-cards-live
+- word-live
+- companion-live
+
+Each passes live in ar and en.
+
+Verification:
+- Notes and editor tests 20/20.
+- Full suite 1861/1862. The one failure is the unused key `diffField` from Codex's uncommitted KEY-300 part 2 work, not these files.
+- tsc is clean for these files; Codex's in-progress BookDetailOverview has type errors of its own.
+
+Not done: practice-live needs a rework for the review screen and the Cards tab; wave6-live was not attempted.
+
+Files:
+- src/renderer/components/notes/NoteEditorPane.tsx
+- src/renderer/components/notes/StudyNoteEditor.tsx
+- scripts/graph-live/main.cjs, scripts/note-cards-live/main.cjs, scripts/word-live/main.cjs, scripts/companion-live/main.cjs
+- CURRENT_TASK.md
+
 ## KEY-317 relations-live and honorifics-questions-live repaired - 2026-11-11, Claude Code
 
 Both scripts are updated for the list-plus-editor Notes page (KEY-304), with the scratchpad and guide hook and the notes nav item.

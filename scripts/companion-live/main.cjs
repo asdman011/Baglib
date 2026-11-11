@@ -17,13 +17,15 @@ app.on('browser-window-created', (_, owner) => {
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (code, tries = 150) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(200); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(500); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const press = (keyCode, modifiers = []) => { owner.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); owner.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
   const type = async text => { await pause(250); owner.webContents.insertText(text); await pause(250); };
   const pane = '[data-companion-pane]';
   const paneValue = () => evaluate(`document.querySelector('${pane} [data-study-note-editor]')?.value ?? null`);
-  const nav = label => evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(label)}).click()`);
+  const nav = label => evaluate(`[...document.querySelectorAll('[data-nav-item]')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(label)}).click()`);
   const load = async language => {
     owner.setContentSize(1280, 900);
     for (let i = 0; i < 150 && (!owner.webContents.getURL().startsWith('http://localhost:3000') || owner.webContents.isLoading()); i++) await pause(200);
@@ -55,13 +57,14 @@ app.on('browser-window-created', (_, owner) => {
       // Select text on the PDF page and send it with a link to the page.
       await evaluate("(()=>{const span=[...document.querySelectorAll('.textLayer span')].find(s=>s.textContent.trim().length>3);const r=document.createRange();r.selectNodeContents(span);const s=getSelection();s.removeAllRanges();s.addRange(r);})()");
       await evaluate(`document.querySelector('${pane} [data-companion-quote]').click()`);
-      await until(`(document.querySelector('${pane} [data-study-note-editor]')?.value||'').includes('book:companion-book#p=1')`);
+      await until(`/book:companion-book(?:@[\\w-]+)?#p=1/u.test(document.querySelector('${pane} [data-study-note-editor]')?.value||'')`);
       result.afterQuote = await paneValue();
       await shot(`reader-${language}-1280`);
       // Lectures: the same note stays open; new lines start with the playback time.
       await nav(labels[language].lectures);
       await until(`!!document.querySelector('${pane}')`);
-      result.keptAcrossViews = (await paneValue())?.includes('book:companion-book#p=1') ?? false;
+      // Book links carry the source after '@' (Work -> Edition -> Source).
+      result.keptAcrossViews = /book:companion-book(?:@[^#|\]]+)?#p=1/u.test((await paneValue()) || '');
       await until(`[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===${JSON.stringify(labels[language].add)}||b.textContent.includes('درس'))`);
       if (!(await evaluate("[...document.querySelectorAll('button')].some(b=>b.textContent.includes('درس'))"))) {
         await evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(labels[language].add)}).click()`);
@@ -112,7 +115,7 @@ app.on('browser-window-created', (_, owner) => {
       results[language] = result; console.log(JSON.stringify({ language, result }));
       assert.equal(result.toggleShown, true); assert.equal(result.paneVisible, true);
       assert.match(result.place, /\(1\)/u);
-      assert.match(result.afterQuote, /^> .+ \[\[book:companion-book#p=1\|كتاب الصبر — Patience \(1\)\]\]/u);
+      assert.match(result.afterQuote, /^> .+ \[\[book:companion-book(?:@[^#|\]]+)?#p=1\|كتاب الصبر — Patience \(1\)\]\]/u);
       assert.equal(result.keptAcrossViews, true);
       assert.equal(result.stampChecked, true);
       assert.match(result.afterLecture, /\n\[\[media:[0-9a-f-]{36}:12\|0:12\]\] (فائدة من الدرس|Point from the lecture) \[\[media:[0-9a-f-]{36}:12\|[^\]]+· 0:12\]\] $/u);

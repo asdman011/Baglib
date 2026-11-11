@@ -18,6 +18,8 @@ app.on('browser-window-created', (_, owner) => {
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (code, tries = 150) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(200); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(500); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const load = async language => {
@@ -25,8 +27,15 @@ app.on('browser-window-created', (_, owner) => {
     for (let i = 0; i < 150 && (!owner.webContents.getURL().startsWith('http://localhost:3000') || owner.webContents.isLoading()); i++) await pause(200);
     await evaluate(`localStorage.setItem('baglib-lang','${language}')`); await owner.loadURL('http://localhost:3000');
     await until('!!window.electronAPI && !!document.querySelector("footer")'); await pause(800);
-    await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')}).click()`);
+    await evaluate("document.querySelector('[data-nav-item=\"notes\"]').click()");
     await until("document.querySelectorAll('[data-study-note]').length>=4");
+  };
+  // Since KEY-304 the graph button sits in the selected note's editor header.
+  const graphButton = "document.querySelector('[data-note-editor-pane] [data-graph-button]')";
+  const selectNote = async id => {
+    await evaluate(`document.querySelector('[data-study-note="${id}"]').click()`);
+    await until(`!!document.querySelector('[data-study-note="${id}"].ring-1') && !!${graphButton}`);
+    await pause(600);
   };
   const nodeIds = () => evaluate("[...document.querySelectorAll('[data-knowledge-graph] [data-graph-node]')].map(n=>n.getAttribute('data-graph-node')).sort()");
   (async () => {
@@ -38,10 +47,13 @@ app.on('browser-window-created', (_, owner) => {
     for (const language of ['ar', 'en']) {
       const result = {};
       await load(language);
-      result.aloneDisabled = await evaluate("document.querySelector('[data-study-note=\"graph-c\"] [data-graph-button]').disabled");
-      result.linkedEnabled = await evaluate("!document.querySelector('[data-study-note=\"graph-a\"] [data-graph-button]').disabled");
+      await selectNote('graph-c');
+      result.aloneDisabled = await evaluate(`${graphButton}.disabled`);
+      await selectNote('graph-a');
+      await until(`!${graphButton}.disabled`, 50).catch(() => {});
+      result.linkedEnabled = await evaluate(`!${graphButton}.disabled`);
       const started = Date.now();
-      await evaluate("document.querySelector('[data-study-note=\"graph-a\"] [data-graph-button]').click()");
+      await evaluate(`${graphButton}.click()`);
       await until("!!document.querySelector('[data-knowledge-graph] [data-graph-node]')");
       result.openMs = Date.now() - started;
       result.localNodes = await nodeIds();
@@ -53,17 +65,17 @@ app.on('browser-window-created', (_, owner) => {
       await shot(`whole-${language}-1280`);
       // Clicking the Gratitude dot opens that note.
       await evaluate("document.querySelector('[data-graph-node=\"note:graph-b\"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
-      await until("!document.querySelector('[data-knowledge-graph]') && document.querySelectorAll('[data-study-note]').length===1 && !!document.querySelector('[data-study-note=\"graph-b\"]')");
+      await until("!document.querySelector('[data-knowledge-graph]') && !!document.querySelector('[data-study-note=\"graph-b\"].ring-1')");
       result.openedNote = true;
       // Editing a note shows the button in the editor toolbar too.
       await load(language);
-      await evaluate(`document.querySelector('[data-study-note="graph-a"] button[aria-label=${JSON.stringify(language === 'ar' ? 'تحرير الملاحظة' : 'Edit note')}]')?.click()`);
+      // The note's editor shows the button once its links are known.
+      await selectNote('graph-a');
       await until("!!document.querySelector('[data-notes-overview] [data-study-note-editor]')", 50).catch(() => {});
-      // The editor's own notes list loads after it opens; the button turns on once the links are known.
-      await until("!!document.querySelector('[data-scratchpad-dir-toggle]')?.parentElement?.querySelector('[data-graph-button]:not([disabled])')", 50).catch(() => {});
-      result.editorButton = await evaluate("!!document.querySelector('[data-scratchpad-dir-toggle]')?.parentElement?.querySelector('[data-graph-button]:not([disabled])')");
+      await until("!!document.querySelector('[data-note-editor-pane] [data-graph-button]:not([disabled])')", 50).catch(() => {});
+      result.editorButton = await evaluate("!!document.querySelector('[data-note-editor-pane] [data-graph-button]:not([disabled])')");
       owner.setContentSize(800, 900);
-      await evaluate("document.querySelector('[data-study-note=\"graph-a\"] [data-graph-button]')?.click()");
+      await evaluate(`${graphButton}?.click()`);
       await until("!!document.querySelector('[data-knowledge-graph] [data-graph-node]')").catch(() => {});
       await shot(`local-${language}-800`);
       results[language] = result; console.log(JSON.stringify({ language, result }));

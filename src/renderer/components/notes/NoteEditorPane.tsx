@@ -34,6 +34,8 @@ import { relationLabels } from '../../utils/relation-labels';
 import { searchCorpus } from '../../utils/corpus-lookup';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import type { StudyNote } from '../../../shared/study-notes';
+import { cardsFromLine } from '../../../shared/note-cards';
+import { useToast } from '../ui/Toast';
 
 export interface NoteEditorPaneProps {
   note?: StudyNote | null;
@@ -100,6 +102,25 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
   const [newTagVal, setNewTagVal] = useState('');
 
   const editorRef = useRef<StudyNoteEditorHandle>(null);
+  const { showToast } = useToast();
+  // KEY-321: /card in the Notes editor makes memorization cards, as it does in the dashboard scratchpad.
+  const makeCards = async (line: string, nextLine: string | null): Promise<boolean> => {
+    const cards = cardsFromLine(line, nextLine);
+    if (!cards.length) { showToast({ message: t('cardNeedsFormat') }); return false; }
+    try {
+      for (const card of cards) {
+        const saved = await window.electronAPI.knowledgeCards.save({ ...card, sourceKind: 'note', sourceRef: note?.id ? `note:${note.id}` : undefined, sourceLabel: title.trim() || undefined, workId: workId || undefined });
+        await window.electronAPI.knowledgeCards.setMemorizing(saved.id, true);
+      }
+      window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
+      const form = new Intl.PluralRules(lang).select(cards.length);
+      showToast({ message: t(form === 'one' ? 'cardsCreatedOne' : form === 'two' ? 'cardsCreatedTwo' : form === 'few' ? 'cardsCreatedFew' : 'cardsCreatedOther', { count: cards.length }) });
+      return true;
+    } catch {
+      showToast({ message: t('studySaveFailed'), type: 'danger' });
+      return false;
+    }
+  };
   const contentRef = useRef(content);
   useEffect(() => {
     contentRef.current = content;
@@ -593,6 +614,8 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
               relationLabels={relationLabels(t)}
               currentNoteId={note?.id}
               slashLabels={slashLabels}
+              onMakeCards={makeCards}
+              autoFocus={!note}
               searchCorpus={(kinds, q) => searchCorpus(kinds, q, (id) => t(collectionKeys[id]))}
               dateText={() => {
                 const today = new Date();

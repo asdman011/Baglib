@@ -495,9 +495,13 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   const focused = useRef(false);
   useEffect(() => {
     if (!autoFocus || disabled || focused.current || !view.current) return;
-    focused.current = true;
-    const editor = view.current;
-    requestAnimationFrame(() => editor.focus());
+    // KEY-321: focus whichever editor is live in the next frame; a re-run (StrictMode) may have replaced it.
+    const frame = requestAnimationFrame(() => {
+      if (!view.current) return;
+      focused.current = true;
+      view.current.focus();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [autoFocus, disabled]);
 
   useEffect(() => {
