@@ -241,10 +241,13 @@ function BoardCanvas({
       setConnectFrom(undefined);
       return;
     }
+    const edge = { id: newId(), from: connectFrom, to: id, label: '' };
     change((current) => ({
       items: current.items,
-      edges: [...current.edges, { id: newId(), from: connectFrom, to: id, label: '' }],
+      edges: [...current.edges, edge],
     }));
+    // KEY-322: the new arrow is selected so its label can be typed straight away.
+    setSelection({ kind: 'edge', id: edge.id });
     setConnectFrom(undefined);
   };
 

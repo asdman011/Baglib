@@ -1,3 +1,15 @@
+## KEY-322 new board arrows are selected again, plus KEY-317 compare and boards scripts - 2026-11-11, Claude Code
+
+KEY-322 (bug): BoardsWorkspace selects the newly drawn arrow, so its label field appears with focus. This was the original behaviour, lost in a rewrite.
+
+KEY-317 scripts:
+- compare-live: the nav item; at 1280 px Compare opens from the reader header's "more" menu, and focus returns to that button.
+- boards-live: the nav item, an optional close (Boards is a tab now), and save-status polling that no longer throws.
+
+Both pass live in ar and en. Board tests 25/25.
+
+Files: src/renderer/components/notes/BoardsWorkspace.tsx, scripts/compare-live/main.cjs, scripts/boards-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-321 /card and new-note focus in the Notes editor, plus KEY-317 batch 4 - 2026-11-11, Claude Code
 
 KEY-321 (bug, found through note-cards-live):

@@ -13,6 +13,8 @@ app.on('browser-window-created', (_, owner) => {
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (code, tries = 150) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(200); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(500); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const boardFiles = () => (fs.existsSync(boardsFolder) ? fs.readdirSync(boardsFolder).filter(name => name.endsWith('.json')) : []);
@@ -36,7 +38,7 @@ app.on('browser-window-created', (_, owner) => {
     for (let i = 0; i < 150 && (!owner.webContents.getURL().startsWith('http://localhost:3000') || owner.webContents.isLoading()); i++) await pause(200);
     await evaluate(`localStorage.setItem('baglib-lang','${language}')`); await owner.loadURL('http://localhost:3000');
     await until('!!window.electronAPI && !!document.querySelector("footer")'); await pause(800);
-    await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')}).click()`);
+    await evaluate("document.querySelector('[data-nav-item=\"notes\"]').click()");
     await until("document.querySelectorAll('[data-study-note]').length>=1");
   };
   (async () => {
@@ -83,9 +85,9 @@ app.on('browser-window-created', (_, owner) => {
       // A card for a note, chosen from the list.
       await evaluate("(() => { const select = document.querySelector('[data-board-note]'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(select, 'board-note'); select.dispatchEvent(new Event('change', { bubbles: true })); })()");
       await until("!!document.querySelector('[data-board-open]')");
-      await until("document.querySelector('[data-board-save]').getAttribute('data-board-save')==='saved'");
+      await until("document.querySelector('[data-board-save]')?.getAttribute('data-board-save')==='saved'");
       await pause(900);
-      await until("document.querySelector('[data-board-save]').getAttribute('data-board-save')==='saved'");
+      await until("document.querySelector('[data-board-save]')?.getAttribute('data-board-save')==='saved'");
       const saved = readBoard(mindId);
       result.saved = { title: saved.title, items: saved.items.length, edges: saved.edges.length, revision: saved.revision, sticky: saved.items.find(item => item.id === stickyId), labelled: saved.edges.find(edge => edge.label), linkCard: saved.items.find(item => item.target) };
       result.horizontalOverflow = await evaluate('document.documentElement.scrollWidth > document.documentElement.clientWidth');
@@ -120,7 +122,8 @@ app.on('browser-window-created', (_, owner) => {
       await evaluate(`window.confirm = () => true; document.querySelector('[data-boards-entry="${argumentId}"] button[aria-label]').click()`);
       await until(`!document.querySelector('[data-boards-entry="${argumentId}"]')`);
       result.argumentDeletedFile = !fs.existsSync(path.join(boardsFolder, `${argumentId}.json`)) && fs.readdirSync(path.join(boardsFolder, 'deleted')).some(name => name.startsWith(argumentId));
-      await evaluate("document.querySelector('[data-boards] header button[aria-label]:last-child').click()");
+      // Since KEY-304 Boards is a tab of the Notes page with no close button; the next language reloads the page.
+      await evaluate("document.querySelector('[data-boards] header button[aria-label]:last-child')?.click()");
       results[language] = result; console.log(JSON.stringify({ language, result: { ...result, mindOnDisk: { items: result.mindOnDisk.items.length, edges: result.mindOnDisk.edges.length, firstText: result.mindOnDisk.items[0].text } } }, null, 1));
       const words = language === 'ar' ? { centre: 'الفكرة الرئيسة', supports: 'يؤيد', opposes: 'يعترض', title: 'خريطة الصبر', sticky: 'الصبر عند الصدمة الأولى', label: 'مثال' } : { centre: 'Main idea', supports: 'supports', opposes: 'opposes', title: 'Patience map', sticky: 'Patience at the first blow', label: 'example' };
       assert.equal(result.dir, language === 'ar' ? 'rtl' : 'ltr');

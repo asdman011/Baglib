@@ -13,6 +13,8 @@ app.on('browser-window-created', (_, owner) => {
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (code, tries = 200) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(300); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(500); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const key = value => evaluate(`(document.activeElement||document).dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(value)},bubbles:true,cancelable:true}))`);
@@ -27,11 +29,12 @@ app.on('browser-window-created', (_, owner) => {
     for (const language of ['ar', 'en']) {
       const result = {};
       await load(language);
-      await evaluate(`document.querySelector('aside button[aria-label=${JSON.stringify(labels[language].library)}]').click()`);
+      await evaluate(`[...document.querySelectorAll('[data-nav-item]')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(labels[language].library)}).click()`);
       await until(`[...document.querySelectorAll('button')].some(b=>b.title===${JSON.stringify(labels[language].read)}||b.textContent.trim()===${JSON.stringify(labels[language].read)})`);
       await evaluate(`(()=>{const read=${JSON.stringify(labels[language].read)};const isRead=b=>b.title===read||b.textContent.trim()===read;const title=[...document.querySelectorAll('*')].find(e=>e.children.length===0&&e.textContent.includes('Edition A'));let node=title;while(node&&![...node.querySelectorAll('button')].some(isRead))node=node.parentElement;[...node.querySelectorAll('button')].find(isRead).click();})()`);
-      await until("!!document.querySelector('[data-compare-open]') && document.querySelectorAll('.textLayer span').length > 0", 100);
-      await evaluate("window.__compareOpener=document.querySelector('[data-compare-open]');window.__compareOpener.focus();window.__compareOpener.click()");
+      // At 1280 px the narrow header keeps Compare in its "more" menu; focus must come back to that button.
+      await until("(!!document.querySelector('[data-compare-open]') || !!document.querySelector('[data-pdf-header-more]')) && document.querySelectorAll('.textLayer span').length > 0", 100);
+      await evaluate(`(async()=>{const direct=document.querySelector('[data-compare-open]');if(direct){window.__compareOpener=direct;direct.focus();direct.click();return;}const label=${JSON.stringify(language === 'ar' ? 'مقارنة طبعتين' : 'Compare two editions')};for(const more of document.querySelectorAll('[data-pdf-header-more]')){window.__compareOpener=more;more.focus();more.click();for(let i=0;i<20;i++){const item=[...document.querySelectorAll('[role=menuitem]')].find(b=>b.textContent.trim()===label);if(item){item.click();return;}await new Promise(r=>setTimeout(r,100));}more.click();}throw new Error('no Compare item');})()`);
       await until("!!document.querySelector('[data-pdf-compare]')");
       owner.webContents.focus();
       for (const modifiers of [[], ['shift']]) for (let index = 0; index < 40; index++) {
