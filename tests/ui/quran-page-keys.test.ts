@@ -21,3 +21,9 @@ test('Quran page navigation leaves form controls, editable text, dialogs and lon
   assert.equal(quranReadingKeyTarget(document.querySelector('#page')), true);
   for (const selector of ['input', 'textarea', '#icon', '#edit', '#tafsir', '#dialog']) assert.equal(quranReadingKeyTarget(document.querySelector(selector)), false, selector);
 });
+
+test('the shared study panel (KEY-305) keeps Space for scrolling its text', () => {
+  const { document } = parseHTML('<html><body><div id="page"></div><aside data-islamic-reader-panel><div role="tabpanel" tabindex="0" id="body"><p id="text"></p></div></aside></body></html>');
+  assert.equal(quranReadingKeyTarget(document.querySelector('#page')), true);
+  for (const selector of ['#body', '#text']) assert.equal(quranReadingKeyTarget(document.querySelector(selector)), false, selector);
+});

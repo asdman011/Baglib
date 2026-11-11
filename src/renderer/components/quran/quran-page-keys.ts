@@ -12,5 +12,5 @@ export function quranPageKeyDelta(event: Pick<KeyboardEvent, 'key' | 'shiftKey' 
 export function quranReadingKeyTarget(target: EventTarget | null): boolean {
   if (!target || !('closest' in target)) return true;
   const element = target as Element;
-  return !element.closest('input,textarea,select,button,a,[contenteditable]:not([contenteditable="false"]),[role="button"],[role="dialog"],[role="menu"],[role="slider"],[role="textbox"],[data-quran-study-panel],[data-quran-popup]');
+  return !element.closest('input,textarea,select,button,a,[contenteditable]:not([contenteditable="false"]),[role="button"],[role="dialog"],[role="menu"],[role="slider"],[role="textbox"],[data-quran-study-panel],[data-islamic-reader-panel],[data-quran-popup]');
 }

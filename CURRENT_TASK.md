@@ -1,3 +1,26 @@
+## KEY-323 Quran theme markers and panel Space key, plus KEY-317 quran-layout-live - 2026-11-12, Claude Code
+
+KEY-323 (bug, found through quran-layout-live):
+- The margin theme-markers toggle lived only in the old edge tool rail, which is hidden whenever the reader has its side panel (always, since KEY-305). A toggle now sits beside the ayah-actions button (Hafs), in QuranMushafWorkspace.tsx.
+- Space inside the shared study panel turned the mushaf page. `[data-islamic-reader-panel]` is now excluded from the reading keys (quran-page-keys.ts). New test case in tests/ui/quran-page-keys.test.ts.
+
+KEY-317 quran-layout-live:
+- Self-contained: it copies the installed Quran packs into a throwaway profile (local copy, no download) and cleans up.
+- It uses the page input by aria-label, a temporary field for the input-key guard, and tafsir from the ayah menu in the shared panel.
+- The floating play-button check applies only when that button exists.
+- It passes ar/en at 1280/480; the originals were verified unchanged.
+
+quran-live is NOT run or changed: it performs a real network download (QUL quran-script/86). It needs the user's approval, or a local fixture. It was run once by mistake, into a throwaway profile (about 8 MB in total), which was deleted.
+
+Full suite 1881/1881.
+
+Files:
+- src/renderer/components/quran/QuranMushafWorkspace.tsx
+- src/renderer/components/quran/quran-page-keys.ts
+- tests/ui/quran-page-keys.test.ts
+- scripts/quran-layout-live/main.ts, scripts/quran-layout-live/run.mjs
+- CURRENT_TASK.md
+
 ## KEY-317 prerequisites-live: stop killing other renderers - 2026-11-12, Claude Code
 
 prerequisites-live passed on content, but it ran scripts/ensure-port-free.js, which kills whatever listens on port 3000, and then always started its own renderer. That repeatedly took down other agents' dev servers.
