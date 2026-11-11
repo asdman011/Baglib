@@ -1,3 +1,17 @@
+## KEY-308 part 9 verified - 2026-11-11, Claude Code (overnight run)
+
+**Arabic type floor (part of the type-scale sweep).** The renderer had about 370 uses of 8-10 px arbitrary text sizes. Arabic glyphs read smaller than Latin at the same pixel size, and below 11 px the diacritics blur. In the Arabic interface only, globals.css now raises `text-[8px]` and `text-[9px]` to 10 px and `text-[10px]` to 11 px. The English layout is unchanged.
+
+The one element that paired a tiny size with a responsive size, the weekly-rhythm day label (`text-[10px] sm:text-xs`), would have been pinned at 11 px. It now uses `text-[11px] sm:text-xs`. A new test, tests/ui/arabic-type-floor.test.ts, guards both the rule and that pairing.
+
+Verification:
+- The layout regression scripts all passed after the change: reader-chrome-live (every pdf/epub, ar/en, light/dark, 1280/480 case, with header-overflow and tip guards), feedback-ui-live 8/8 with no horizontal overflow, and settings-ui-live 8/8.
+- Claude checked the Arabic 480 px dashboard study-progress screenshot: readable, nothing clipped.
+- Full suite 1811/1811.
+- The regression evidence runs and profiles were deleted.
+
+Files: src/renderer/app/globals.css, src/renderer/components/dashboard/TodayStudyPanel.tsx, tests/ui/arabic-type-floor.test.ts, CURRENT_TASK.md.
+
 ## KEY-308 part 8 verified - 2026-11-11, Claude Code (overnight run)
 
 **Localized the remaining hard-coded interface strings outside the library modals.** This was part of the U14 polish and the AGENTS.md i18n rule. Tooltips and accessible labels that were English-only now come from translations.ts in Arabic and English:

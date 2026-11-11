@@ -265,6 +265,16 @@
   word-spacing: 0.22em;
 }
 
+/* KEY-308 type sweep: Arabic glyphs read smaller than Latin at the same pixel size, and below 11px
+   the diacritics blur. In the Arabic interface the tiny arbitrary sizes step up one notch. */
+:root[dir="rtl"] .text-\[8px\],
+:root[dir="rtl"] .text-\[9px\] {
+  font-size: 10px;
+}
+:root[dir="rtl"] .text-\[10px\] {
+  font-size: 11px;
+}
+
 .font-sans {
   font-family: var(--font-tajawal), sans-serif;
 }

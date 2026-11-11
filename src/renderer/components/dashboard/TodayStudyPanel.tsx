@@ -493,7 +493,7 @@ export function TodayStudyPanel() {
                   isToday ? 'ring-2 ring-emerald-500/50 shadow-sm' : ''
                 }`}
               >
-                <span className="text-[10px] sm:text-xs text-muted font-medium">
+                <span className="text-[11px] sm:text-xs text-muted font-medium">
                   {getDayLabel(day.dayOfWeek)}
                 </span>
                 <span className="text-xs sm:text-sm font-bold my-0.5">{dateNum}</span>
