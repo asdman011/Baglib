@@ -1,3 +1,13 @@
+## KEY-308 part 7 verified - 2026-11-11, Claude Code (overnight run)
+
+The side-note edge tip near the reader panel is now checked automatically. scripts/reader-chrome-live asserts that, with the reader panel open, the tip's box does not overlap any button, link, input, select or tab. No app change was needed: CompanionToggle already moves the tip away from edge controls when the page changes.
+
+While doing this, Claude found that reader-chrome-live had stopped working after KEY-307. Its throwaway profile shows the new first-run guide, which holds focus, so Escape went to the guide instead of closing the reader panel. The script now marks the guide as seen at startup. About 40 older live scripts have the same gap; that is filed as KEY-317. The KEY-298 and KEY-300 briefs now tell implementers to set the flag.
+
+Verification: reader-chrome-live passed every case (pdf/epub, ar/en UI, light/dark, 1280/480), including the new tip-overlap guard. The throwaway profile and evidence were deleted.
+
+Files: scripts/reader-chrome-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-308 part 6 verified - 2026-11-11, Claude Code (at the user's request, overnight run)
 
 **Dashboard modules no longer cramp at desktop width.** From 1280 px the dashboard puts modules in two columns, but their inner grids still used window breakpoints, so a half-width slot was laid out as if it were full width. The study-progress metrics were the clearest case.

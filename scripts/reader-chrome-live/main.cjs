@@ -46,6 +46,8 @@ app.on('browser-window-created', (_, win) => {
     const results = [];
     await until('!!window.electronAPI && !!document.querySelector("footer")');
     await evaluate(`window.electronAPI.settings.set('save.policy.v1',{mode:'manual',intervalMinutes:2})`);
+    // KEY-307 added a first-run guide; a throwaway profile has not seen it, and it would hold focus.
+    await evaluate(`window.electronAPI.settings.set('onboarding.v1',{seen:true})`);
     for (const file of files) await evaluate(`window.electronAPI.addBook(${JSON.stringify({ id: file.id, title: file.title, author: 'مُؤَلِّف Author', workType: 'book', bookType: 'digital', digitalFormat: file.kind.toUpperCase(), filePath: file.filename })})`);
     win.webContents.debugger.attach('1.3');
     for (const language of ['ar', 'en']) for (const theme of ['light', 'dark']) for (const width of [1280, 480]) for (const file of files) {
@@ -74,6 +76,10 @@ app.on('browser-window-created', (_, win) => {
         const open = await evaluate(`(()=>{const h=document.querySelector('[data-reader-shared-header]'),r=h.getBoundingClientRect();const last=[...h.querySelectorAll('button')].pop().getBoundingClientRect();return {overflow:h.scrollWidth-h.clientWidth,inside:last.left>=r.left-1&&last.right<=r.right+1};})()`);
         assert.ok(open.overflow <= 1 && open.inside, prefix + ' header overflows with the panel open ' + JSON.stringify(open));
       }
+      // KEY-308: the side-note edge tip must never sit on top of the open panel's edge controls.
+      await pause(450);
+      const tipHits = await evaluate(`(()=>{const t=document.querySelector('[data-companion-toggle]');if(!t)return [];const r=t.getBoundingClientRect();return [...document.querySelectorAll('button,a,input,select,[role=tab]')].filter(e=>e!==t).map(e=>({label:e.getAttribute('aria-label')||e.textContent.trim().slice(0,30),b:e.getBoundingClientRect()})).filter(({b})=>b.width&&b.height&&b.left<r.right-1&&b.right>r.left+1&&b.top<r.bottom-1&&b.bottom>r.top+1).map(e=>e.label);})()`);
+      assert.deepEqual(tipHits, [], prefix + ' side-note tip overlaps ' + JSON.stringify(tipHits));
       await click('[data-reader-panel-tab="knowledge"]');
       await until('document.querySelector("[data-reader-panel-tab=knowledge]")?.getAttribute("aria-selected")==="true"');
       await shot(prefix + '-panel');
