@@ -13,6 +13,8 @@ app.on('browser-window-created', (_, window) => {
   if (started) return;
   started = true;
   const evaluate = code => window.webContents.executeJavaScript(code, true);
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  window.webContents.on('did-finish-load', () => { window.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const waitFor = async code => {
     for (let attempt = 0; attempt < 150; attempt++) {
       try { if (await evaluate(code)) return; } catch {}
@@ -42,7 +44,7 @@ app.on('browser-window-created', (_, window) => {
       assert.ok(words.words.some(item => item.word === 'العلم' && item.count === 2));
       const title = language === 'ar' ? 'مُراجعة القرآن — Planner QA' : 'Study review — مُراجعة';
       await evaluate(`window.electronAPI.planner.save({title:${JSON.stringify(title)},description:'QA canonical النص',status:'open',startDate:'2026-11-01',dueDate:'2026-11-03',priority:2,sortOrder:0,references:[{target:'quran:hafs:2:1',label:'البقرة',scope:'surah'}]})`);
-      await evaluate(`Array.from(document.querySelectorAll('aside button')).find(button=>button.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'مخطط الدراسة' : 'Study planner')})?.click()`);
+      await evaluate(`Array.from(document.querySelectorAll('[data-nav-item]')).find(button=>button.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'مخطط الدراسة' : 'Study planner')})?.click()`);
       await waitFor('!!document.querySelector("[data-study-planner]") && document.querySelectorAll("[data-planner-task]").length > 0');
       assert.equal(await evaluate(`document.querySelector('[data-study-planner]').dir`), language === 'ar' ? 'rtl' : 'ltr');
       assert.equal(await evaluate(`Array.from(document.querySelectorAll('[data-planner-task]')).some(element=>element.textContent.includes(${JSON.stringify(title)}))`), true);

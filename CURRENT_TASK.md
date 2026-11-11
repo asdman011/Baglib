@@ -1,3 +1,9 @@
+## KEY-317 part 4 - 2026-11-11, Claude Code
+
+planner-live and scrollbars-sidenote-live pass again with the nav-selector fix and the first-run-guide hook. A batch over 20 scripts kept changes only where the script passed. The others fail on deeper KEY-304 layout changes (the note editor needs a selected note, the review screen opens through `baglib:start-review`), missing disposable Quran copies, or setting localStorage before a page loads. The list is in docs/agent-ops/reports/KEY-317.md.
+
+Files: scripts/planner-live/main.cjs, scripts/scrollbars-sidenote-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-317 part 3 - 2026-11-11, Claude Code
 
 comments-live passes again. It marks the first-run guide as seen, opens Notes through the nav item, selects the note and opens the History tab of its details pane (KEY-304 layout), and uses the notes filter option "comments" in place of the removed open-comments toggle. Script only.
