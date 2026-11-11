@@ -802,6 +802,7 @@ export const API = {
   knowledgeCards: {
     decks: () => ipcRenderer.invoke('knowledge-cards:decks'),
     generateDeck: input => ipcRenderer.invoke('knowledge-cards:generate-deck', input),
+    generateAyahDeck: input => ipcRenderer.invoke('knowledge-cards:generate-ayah-deck', input),
     exportDeck: id => ipcRenderer.invoke('knowledge-cards:export-deck', id),
     recordAttempt: input => ipcRenderer.invoke('knowledge-cards:attempt', input),
     judgeAttempt: input => ipcRenderer.invoke('knowledge-cards:judge-attempt', input),

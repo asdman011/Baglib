@@ -1,3 +1,20 @@
+## KEY-318 deck from a range of ayahs - 2026-11-11, Claude Code
+
+The Cards deck panel has a "From a range of ayahs" picker: surah (localized names), from ayah and to ayah, bounded by the Hafs ayah counts. It makes one card per ayah. The front is "<surah> S:A", the back is the installed mushaf text unchanged, and the source is quran:hafs:S:A. The range is read through the existing readAyahTexts. A missing or partial pack is refused with a localized "Quran text isn't installed" message.
+
+Internals: CardDeckService.generateFromDrafts with shared deckId/link steps (generate() reuses them), IPC knowledge-cards:generate-ayah-deck, validateAyahDeckInput. Re-running does not duplicate cards. The Arabic deck result string was reworded for correct number agreement.
+
+No schema change: decks stay collections. The hadith-range part of KEY-318 is not built yet.
+
+Verification:
+- New tests/services/ayah-range-deck.test.ts (2/2): validation, the exact text byte for byte, memorize scheduling, no duplicates, and the Anki export keeping diacritics. card-decks 6/6.
+- tsc, eslint and translation keys pass; full suite 1858/1858.
+- A live probe with a disposable copy of the installed Quran pack: Al-Baqarah 255-257 became a 3-card deck in ar and en with the exact pack text, the direct API made Al-Ikhlas 1-4 into 4 cards, and with no pack the localized error showed. The copy (1.1 GB) and the profile were deleted.
+
+Committed alone: Codex's uncommitted KEY-300 edits in preload/index.ts and translations.ts stay out; only the KEY-318 lines were staged.
+
+Files: src/shared/types/knowledge-cards.ts, src/main/services/card-decks.ts, src/main/ipc/knowledge-cards.ts, src/preload/index.ts (one line), src/renderer/components/knowledge/CardDecksPanel.tsx, src/renderer/translations.ts (KEY-318 keys only), tests/services/ayah-range-deck.test.ts, CURRENT_TASK.md.
+
 ## KEY-312 recorded adhans - 2026-11-11, Claude Code (user approved downloading #1 and #2)
 
 Downloaded the two approved Wikimedia Commons recordings into src/renderer/public/assets/audio/:

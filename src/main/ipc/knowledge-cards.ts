@@ -2,7 +2,9 @@ import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electro
 import { writeFile } from 'node:fs/promises';
 import { getDatabase } from '../database/connection';
 import { KnowledgeCardRepository } from '../database/repositories/knowledge-card.repository';
-import { validateCardInput, validateDeckInput } from '../../shared/types/knowledge-cards';
+import { validateAyahDeckInput, validateCardInput, validateDeckInput } from '../../shared/types/knowledge-cards';
+import { HAFS_SURAH_AYAH_COUNTS, SURAH_NAMES_AR } from '../../shared/quran-wird';
+import { readAyahTexts } from './quran';
 import { CardDeckService } from '../services/card-decks';
 import { PracticeService } from '../services/practice';
 import type { PracticeInput, JudgeAttemptInput, AttemptQuery } from '../../shared/practice';
@@ -33,6 +35,23 @@ export function registerKnowledgeCardIpc(): void {
   ipcMain.handle('knowledge-cards:grade-review', (event, input: unknown) => reviewService(event).grade(validateReview(input)));
   ipcMain.handle('knowledge-cards:decks', event => deckService(event).list());
   ipcMain.handle('knowledge-cards:generate-deck', (event, input: unknown) => deckService(event).generate(validateDeckInput(input)));
+  // KEY-318: sacred text is copied from the installed pack, never reworded; a partial read is refused.
+  ipcMain.handle('knowledge-cards:generate-ayah-deck', async (event, input: unknown) => {
+    const service = deckService(event);
+    const request = validateAyahDeckInput(input, HAFS_SURAH_AYAH_COUNTS);
+    const ayahs = await readAyahTexts(request.surah, request.from, request.to, { profile: 'hafs' });
+    if (ayahs.length !== request.to - request.from + 1 || ayahs.some(ayah => !ayah.text)) throw new Error('quran-not-installed');
+    const surahName = SURAH_NAMES_AR[request.surah - 1];
+    const range = request.from === request.to ? `${request.from}` : `${request.from}-${request.to}`;
+    return service.generateFromDrafts(request.name, ayahs.map(ayah => ({
+      front: `${surahName} ${request.surah}:${ayah.number}`,
+      back: ayah.text,
+      sourceKind: 'quran' as const,
+      sourceRef: `quran:hafs:${request.surah}:${ayah.number}`,
+      sourceLabel: `${surahName} ${request.surah}:${range}`,
+      language: 'ar',
+    })), request.memorize);
+  });
   ipcMain.handle('knowledge-cards:export-deck', async (event, id: unknown) => {
     const { name, text } = deckService(event).exportText(cardId(id));
     const options = { defaultPath: `${name.replace(/[\\/:*?"<>|]/gu, ' ').trim() || 'deck'}.txt`, filters: [{ name: 'Anki', extensions: ['txt'] }] };

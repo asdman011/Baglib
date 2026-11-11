@@ -65,6 +65,24 @@ export interface DeckResult {
   skipped: number;
 }
 
+/** KEY-318: a deck straight from a range of ayahs (Hafs). The back of each card is the pack text, exact. */
+export interface AyahDeckInput {
+  name: string;
+  surah: number;
+  from: number;
+  to: number;
+  memorize: boolean;
+}
+
+export function validateAyahDeckInput(input: unknown, ayahCounts: readonly number[]): AyahDeckInput {
+  const { name, surah, from, to, memorize } = (input ?? {}) as Record<string, unknown>;
+  if (typeof name !== 'string' || !name.trim() || name.length > 200) throw new Error('invalid-request');
+  if (!Number.isInteger(surah) || (surah as number) < 1 || (surah as number) > ayahCounts.length) throw new Error('invalid-request');
+  const last = ayahCounts[(surah as number) - 1];
+  if (!Number.isInteger(from) || !Number.isInteger(to) || (from as number) < 1 || (to as number) < (from as number) || (to as number) > last) throw new Error('invalid-request');
+  return { name: name.trim(), surah: surah as number, from: from as number, to: to as number, memorize: memorize === true };
+}
+
 export function validateDeckInput(input: unknown): DeckInput {
   const { name, sources, memorize } = (input ?? {}) as Record<string, unknown>;
   if (typeof name !== 'string' || !name.trim() || name.length > 200) throw new Error('invalid-request');
@@ -80,6 +98,8 @@ export interface KnowledgeCardsAPI {
   update(id: string, input: SaveCardInput, expectedRevision: number): Promise<KnowledgeCard>;
   decks(): Promise<CardDeck[]>;
   generateDeck(input: DeckInput): Promise<DeckResult>;
+  /** KEY-318: one card per ayah in the range; rejects with quran-not-installed when the pack is missing. */
+  generateAyahDeck(input: AyahDeckInput): Promise<DeckResult>;
   /** Resolves false when the save dialog is cancelled. */
   exportDeck(id: string): Promise<boolean>;
   reviewQueue(): Promise<import('../srs').ReviewQueue>;

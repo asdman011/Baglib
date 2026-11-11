@@ -52,23 +52,40 @@ export class CardDeckService {
     }));
   }
 
+  /** KEY-318: cards built by the caller (for example one per ayah), saved and linked into the named deck. */
+  generateFromDrafts(name: string, drafts: SaveCardInput[], memorize: boolean): DeckResult {
+    return this.db.transaction(() => {
+      const deckId = this.deckId(name);
+      const fits = drafts.filter(draft => draft.front.length <= MAX_CARD_TEXT && draft.back.length <= MAX_CARD_TEXT);
+      return this.link(deckId, fits.map(draft => this.cards.save(draft).id), memorize, drafts.length - fits.length);
+    })();
+  }
+
+  private deckId(name: string): string {
+    const existing = this.db.prepare(`SELECT id FROM collection WHERE collection_type = 'deck' AND name = ?`).get(name) as { id: string } | undefined;
+    const deckId = existing?.id ?? randomUUID();
+    if (!existing) this.db.prepare(`INSERT INTO collection (id, name, collection_type) VALUES (?, ?, 'deck')`).run(deckId, name);
+    return deckId;
+  }
+
+  private link(deckId: string, cardIds: string[], memorize: boolean, skipped: number): DeckResult {
+    const link = this.db.prepare(`INSERT OR IGNORE INTO knowledge_collection (knowledge_id, collection_id) VALUES (?, ?)`);
+    let added = 0;
+    for (const id of new Set(cardIds)) {
+      added += link.run(id, deckId).changes;
+      if (memorize) this.cards.setMemorizing(id, true);
+    }
+    return { deck: this.list().find(deck => deck.id === deckId)!, added, skipped };
+  }
+
   generate(input: DeckInput): DeckResult {
     return this.db.transaction(() => {
-      const existing = this.db.prepare(`SELECT id FROM collection WHERE collection_type = 'deck' AND name = ?`).get(input.name) as { id: string } | undefined;
-      const deckId = existing?.id ?? randomUUID();
-      if (!existing) this.db.prepare(`INSERT INTO collection (id, name, collection_type) VALUES (?, ?, 'deck')`).run(deckId, input.name);
+      const deckId = this.deckId(input.name);
       const drafts = [...(input.sources.includes('notes') ? this.fromNotes() : []), ...(input.sources.includes('highlights') ? this.fromPassages() : [])];
       const saved = this.db.prepare(`SELECT c.knowledge_id AS id FROM card_detail c JOIN knowledge k ON k.id = c.knowledge_id
         WHERE k.deleted_at IS NULL AND c.source_kind IN (SELECT value FROM json_each(?))`).all(JSON.stringify(input.sources.filter(source => source !== 'notes' && source !== 'highlights'))) as { id: string }[];
       const fits = drafts.filter(draft => draft.front.length <= MAX_CARD_TEXT && draft.back.length <= MAX_CARD_TEXT);
-      const ids = [...new Set([...saved.map(row => row.id), ...fits.map(draft => this.cards.save(draft).id)])];
-      const link = this.db.prepare(`INSERT OR IGNORE INTO knowledge_collection (knowledge_id, collection_id) VALUES (?, ?)`);
-      let added = 0;
-      for (const id of ids) {
-        added += link.run(id, deckId).changes;
-        if (input.memorize) this.cards.setMemorizing(id, true);
-      }
-      return { deck: this.list().find(deck => deck.id === deckId)!, added, skipped: drafts.length - fits.length };
+      return this.link(deckId, [...saved.map(row => row.id), ...fits.map(draft => this.cards.save(draft).id)], input.memorize, drafts.length - fits.length);
     })();
   }
 
