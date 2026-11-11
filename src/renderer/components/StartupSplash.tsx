@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { translations, TranslationKey } from '../translations';
+import { readReadiness, type Readiness } from '../hooks/useReadiness';
 
 export interface StartupSplashProps {
   onComplete: () => void;
@@ -67,6 +68,8 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({
   const [progress, setProgress] = useState<number>(10);
   const [isExiting, setIsExiting] = useState<boolean>(false);
   const [isMounted, setIsMounted] = useState<boolean>(true);
+  // KEY-150: real startup checks; a failure is shown here instead of being hidden behind "Ready".
+  const [issues, setIssues] = useState<TranslationKey[]>([]);
 
   const stepKeys: TranslationKey[] = useMemo(
     () => [
@@ -113,6 +116,13 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({
 
     const runOrchestrator = async () => {
       const startTime = Date.now();
+      // Run the app's real readiness probes once, bounded so the splash can never hang. Only the
+      // database and search index count as startup failures; the optional PDF engine is reported by
+      // the status bar instead, so its absence does not slow every launch.
+      const checks: Promise<Readiness | null> = Promise.race([
+        readReadiness().catch(() => null),
+        new Promise<null>((r) => setTimeout(() => r(null), 2500)),
+      ]);
 
       // Milestone 1: Local database & IPC initialization
       setStep(0);
@@ -127,9 +137,13 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({
           // graceful fallback
         }
       }
+      const readiness = await checks;
       if (cancelled) return;
-      await new Promise((r) => setTimeout(r, 200));
-      if (cancelled) return;
+      const found: TranslationKey[] = readiness ? [
+        ...(readiness.database === false ? ['feedbackDatabaseUnavailable' as const] : []),
+        ...(readiness.index === false ? ['feedbackIndexUnavailable' as const] : []),
+      ] : [];
+      setIssues(found);
 
       // Milestone 2: Taxonomy & catalog loading
       setStep(1);
@@ -151,10 +165,10 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({
       }
       if (cancelled) return;
 
-      // Milestone 4: Ready
+      // Milestone 4: Ready, or ready with limits. Hold a little longer so a problem can be read.
       setStep(3);
       setProgress(100);
-      await new Promise((r) => setTimeout(r, 120));
+      await new Promise((r) => setTimeout(r, found.length ? 1600 : 120));
       if (cancelled) return;
 
       // Trigger smooth choreographed exit
@@ -432,13 +446,20 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({
           <div className="h-6 flex items-center justify-center">
             <span
               key={step}
+              role="status"
+              aria-live="polite"
               className={`text-xs font-sans transition-all duration-200 animate-fadeIn ${
                 isDark ? 'text-pale-sky-300/90' : 'text-pale-sky-700'
               }`}
             >
-              {t(stepKeys[step] || 'splashStepDb')}
+              {step === 3 && issues.length ? t('feedbackLimited') : t(stepKeys[step] || 'splashStepDb')}
             </span>
           </div>
+          {issues.length > 0 && (
+            <ul data-splash-issues role="alert" className={`mt-2 max-w-sm space-y-1 text-center text-xs leading-relaxed ${isDark ? 'text-amber-200' : 'text-amber-900'}`}>
+              {issues.map((key) => <li key={key}>{t(key)}</li>)}
+            </ul>
+          )}
 
           {/* 4-Step Subtle Progress Dots */}
           <div className="flex items-center gap-1.5 mt-2" aria-hidden="true">

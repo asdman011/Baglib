@@ -1,3 +1,21 @@
+## KEY-150 review and fix - 2026-11-11, Claude Code
+
+The review found that the startup splash hid initialization failures, against its acceptance. Only its first step made a real call, which swallowed errors and timed out after 250 ms. The other steps were timers, and the splash always ended on "Ready".
+
+Fix:
+- useReadiness now exports readReadiness(), the same database, search-index and PDF-engine probes the status bar uses.
+- The splash runs these once, bounded to 2.5 s so it never hangs. If the database or search index is not ready, it shows the existing localized message under "Some tools unavailable" in an alert, holds 1.6 s so it can be read, and then still opens the app.
+- The optional PDF engine is not treated as a startup failure; the status bar reports it.
+- The status line is now a polite live region.
+- No new strings or schema.
+
+Verification:
+- New tests/ui/startup-readiness.test.ts passes 7/7. It covers the probe results and the splash in ar and en for a healthy app, a missing optional engine and a broken index, with exactly one hand-over to the app.
+- The existing startup-splash test passes 6/6; tsc and eslint pass; the full suite passes 1833/1833.
+- A live probe on a fresh profile: the splash shows no problem in ar or en, its label is localized, it closes into the app, and the status bar reads "ready".
+
+Files: src/renderer/components/StartupSplash.tsx, src/renderer/hooks/useReadiness.ts, tests/ui/startup-readiness.test.ts, CURRENT_TASK.md.
+
 ## KEY-44 review: changes requested - 2026-11-11, Claude Code
 
 Claude Code reviewed multi-book selection and bulk editing.
