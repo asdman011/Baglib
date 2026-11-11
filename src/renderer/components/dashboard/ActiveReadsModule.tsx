@@ -176,7 +176,7 @@ export const ActiveReadsModule: React.FC<ActiveReadsModuleProps> = ({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 @min-[44rem]:grid-cols-2 gap-3">
           {activeBooks.map(({ book, stat, loc, lastOpenTs }) => {
             const totalPages = Math.max(1, book.pagesCount || stat?.pages || 100);
             let parsedLocPage = NaN;

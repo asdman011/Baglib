@@ -41,6 +41,8 @@
 .sunnah-english .sunnah-passage { font-family: var(--font-tajawal), sans-serif; font-size: calc(var(--sunnah-font-size, 24px) * .7); line-height: 1.9; }
 .sunnah-narrator { color: rgb(96, 207, 208); border-radius: .18em; box-decoration-break: clone; }
 .sunnah-narrator:hover { background: rgb(96 207 208 / 12%); }
+/* KEY-308: light-theme contrast (the bright teal reads 1.7:1 on the light page). */
+html:not(.dark) .sunnah-narrator { color: #1d6a6c; }
 .sunnah-grade { margin-block-start: 1.25rem; padding-block-start: 1rem; border-block-start: 1px solid var(--border-subtle); font-size: .8rem; line-height: 1.8; }
 .sunnah-message { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .75rem; padding: 2rem; text-align: center; line-height: 1.8; }
 .sunnah-welcome { max-width: 32rem; margin: 4rem auto; padding: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center; line-height: 1.8; }

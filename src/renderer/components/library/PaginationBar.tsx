@@ -136,7 +136,7 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
                 onClick={() => onPageChange(p)}
                 className={`min-w-[32px] h-8 rounded-lg font-medium transition-all ${
                   isActive
-                    ? 'bg-pale-sky-500 text-white shadow-sm shadow-pale-sky-500/20 font-semibold'
+                    ? 'bg-pale-sky-600 text-white shadow-sm shadow-pale-sky-500/20 font-semibold'
                     : 'bg-surface/50 text-foreground/80 hover:bg-surface-raised border border-border/40'
                 }`}
               >

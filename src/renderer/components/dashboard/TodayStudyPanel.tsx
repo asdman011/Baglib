@@ -474,7 +474,7 @@ export function TodayStudyPanel() {
               badgeBg = 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 font-bold';
               icon = <CheckCircle2 className="h-3.5 w-3.5" />;
             } else if (day.status === 'rest') {
-              badgeBg = 'bg-pale-sky-500/15 border-pale-sky-500/40 text-pale-sky-600 dark:text-pale-sky-400';
+              badgeBg = 'bg-pale-sky-500/15 border-pale-sky-500/40 text-pale-sky-700 dark:text-pale-sky-400';
               icon = <Coffee className="h-3.5 w-3.5" />;
             } else if (day.status === 'unreached') {
               badgeBg = 'bg-canvas border-subtle/40 text-muted/60';
@@ -629,7 +629,7 @@ export function TodayStudyPanel() {
                         <p className="text-xs text-muted max-w-sm">{t('todayAllCaughtUpDesc')}</p><button type="button" className="underline text-sm" onClick={() => setViewMode('planner')}>{t('plannerNew')}</button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-today-steps-list>
+          <div className="grid grid-cols-1 @min-[44rem]:grid-cols-3 gap-3" data-today-steps-list>
             {activeSteps.map((step) => {
               const isOverdue = step.dueDate !== null && step.dueDate < todayStr;
               const isDueToday = step.dueDate === todayStr;

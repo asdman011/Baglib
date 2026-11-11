@@ -51,7 +51,7 @@ export function StudyInsightsModule() {
     {!summary ? (error ? <p>{unavailable}</p> : <FeedbackSkeleton />) : <>
       <p className="text-xs text-muted">{t(summary.timeSource === 'sessions' ? 'studySessionSource' : summary.timeSource === 'dwell' ? 'studyDwellSource' : 'studyNoTimeSource')}</p>
       {summary.partial && <p>{t('studyPartial')}</p>}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 @min-[40rem]:grid-cols-4 gap-3">
         <div>{t('studyTimeInvested')}<strong className="block">{(summary.seconds / 3600).toLocaleString(lang, { maximumFractionDigits: 2 })} {t('studyHours')}</strong></div>
         <div>{t('studyKnowledgeGrowth')}<strong className="block">{summary.knowledge.toLocaleString(lang)}</strong><small>{t('studyKnowledgeHint')}</small></div>
         <div>{t('studyIdeas')}<strong className="block">{summary.ideas.toLocaleString(lang)}</strong><small>{t('studyIdeasHint')}</small></div>
@@ -69,7 +69,7 @@ export function StudyInsightsModule() {
       {preferences.dailyMinutes > 0 && <progress className="w-full" aria-label={t('studyDailyMinutes')} value={Math.min((today?.seconds || 0) / 60, preferences.dailyMinutes)} max={preferences.dailyMinutes} />}
       {preferences.dailyPages > 0 && <progress className="w-full" aria-label={t('studyDailyPages')} value={Math.min(today?.pages || 0, preferences.dailyPages)} max={preferences.dailyPages} />}
       <h3 className="font-bold">{t('studyWeek')}</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">{summary.days.map(day => <div key={day.date} className={style}><time>{day.date}</time><p>{t('studyTodayProgress', { minutes: Math.floor(day.seconds / 60), pages: day.pages })}</p></div>)}</div>
+      <div className="grid grid-cols-2 @min-[28rem]:grid-cols-4 @min-[52rem]:grid-cols-7 gap-2">{summary.days.map(day => <div key={day.date} className={style}><time>{day.date}</time><p>{t('studyTodayProgress', { minutes: Math.floor(day.seconds / 60), pages: day.pages })}</p></div>)}</div>
       <h3 className="font-bold">{t('studySubjects')}</h3>
       {!summary.subjects.length && <p>{unavailable}</p>}
       {summary.subjects.map((subject, index) => <p key={index} dir="auto">{(lang === 'ar' ? subject.ar : subject.en) || t('studyUncategorized')}: {(subject.seconds / 3600).toLocaleString(lang, { maximumFractionDigits: 2 })} {t('studyHours')}</p>)}
@@ -80,7 +80,7 @@ export function StudyInsightsModule() {
       {!ordered.length && <p>{t('plannerEmpty')}</p>}
       <ol className="space-y-2">{ordered.map((task, index) => <li key={task.id} className="flex gap-2 items-center min-w-0"><span className="flex-1 break-words" dir="auto">{task.title}</span><button className={style} disabled={busy || index === 0} onClick={() => { const ids = ordered.map(item => item.id); [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]; void save({ ...preferences, taskOrder: ids }); }}>{t('plannerMoveEarlier')}</button></li>)}</ol>
       <button className={style} onClick={() => setViewMode('planner')}>{t('plannerTitle')}</button>
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid @min-[40rem]:grid-cols-2 gap-4">
         <div><h3 className="font-bold">{t('studyReflections')}</h3>{!summary.reflections.length && <p>{unavailable}</p>}{summary.reflections.map(note => <button key={note.id} className={`${style} block text-start w-full my-2 break-words`} dir="auto" onClick={() => openStudyNote({ id: note.id })}>{note.title || note.content}</button>)}</div>
         <div><h3 className="font-bold">{t('studyRecentEdits')}</h3><p className="text-xs text-muted">{t('studyEditsHint')}</p>{!summary.edits.length && <p>{unavailable}</p>}{summary.edits.map(item => <p key={item.id} className="text-sm break-words">{t('studyKnowledgeItem')} — {new Date(item.updatedAt).toLocaleDateString(lang)}</p>)}</div>
       </div>

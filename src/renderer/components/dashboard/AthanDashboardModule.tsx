@@ -269,7 +269,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
       )}
 
       {/* Next Prayer Highlight Card + Live Countdown + Hijri Date Bar */}
-      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 @min-[44rem]:grid-cols-2 gap-3">
         {/* Next Prayer & Live Countdown Timer */}
         <div
           data-athan-next-prayer-card
@@ -362,7 +362,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
       </div>
 
       {/* 6 Daily Prayer Times Grid (with Athan & Iqamah Times) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+      <div className="grid grid-cols-2 @min-[28rem]:grid-cols-3 @min-[52rem]:grid-cols-6 gap-2.5">
         {prayerOrder.map((p) => {
           const Icon = PRAYER_ICONS[p];
           const isNext = nextPrayer.name === p && !nextPrayer.isTomorrow;
@@ -480,7 +480,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
           </div>
 
           {/* 1. Location Source Mode */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 @min-[28rem]:grid-cols-3 gap-2">
             {(['manual', 'auto', 'mawaqit'] as LocationSourceMode[]).map((mode) => (
               <button
                 key={mode}
@@ -509,7 +509,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
 
           {/* Manual Location Coordinates */}
           {settings.locationMode === 'manual' && (
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
+            <div className="grid grid-cols-2 @min-[34rem]:grid-cols-5 gap-2 items-end">
               <label className="space-y-1">
                 <span className="text-muted block">{tr.athanLatitudeLabel}</span>
                 <input
@@ -584,7 +584,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
 
           {/* Mawaqit Mosque Configuration */}
           {settings.locationMode === 'mawaqit' && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+            <div className="grid grid-cols-1 @min-[28rem]:grid-cols-3 gap-2 items-end">
               <label className="space-y-1 sm:col-span-2">
                 <span className="text-muted block">{tr.athanMawaqitSlugLabel}</span>
                 <div className="flex gap-2">
@@ -629,7 +629,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
           )}
 
           {/* 2. Astronomical Calculation Method, Asr Ratio, High-Latitude Rule */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 @min-[28rem]:grid-cols-3 gap-3">
             <label className="space-y-1">
               <span className="text-muted block">{tr.athanCalcMethodLabel}</span>
               <select
@@ -729,7 +729,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
           )}
 
           {/* 3. Custom Jama'ah JSON Preset & Notification / Audio Settings */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div className="grid grid-cols-1 @min-[28rem]:grid-cols-3 gap-3 items-end">
             <label className="space-y-1">
               <span className="text-muted block">{tr.athanJamaahPresetLabel}</span>
               <input
@@ -789,7 +789,7 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
               <span className="text-sm font-semibold text-main">{tr.athanAdjustmentsTitle}</span>
               <span className="text-xs text-muted">{tr.athanAdjustmentsSubtitle}</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 @min-[36rem]:grid-cols-6 gap-2">
               {(['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).map((p) => {
                 const curVal = settings.adjustments?.[p] || 0;
                 return (

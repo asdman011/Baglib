@@ -256,7 +256,7 @@ export function StudyProgressPanel() {
           </div>
 
           {/* Three SEPARATE Measures (never merged into one score) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 items-stretch">
+          <div className="grid grid-cols-1 @min-[44rem]:grid-cols-3 gap-3.5 items-stretch">
             {/* ------------------------------------------------------------- */}
             {/* Measure 1: Reading Coverage                                   */}
             {/* ------------------------------------------------------------- */}
@@ -430,7 +430,7 @@ export function StudyProgressPanel() {
                   <Layers className="w-3.5 h-3.5" />
                   <span>{t('studyProgressSections')}</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 @min-[28rem]:grid-cols-2 @min-[44rem]:grid-cols-3 gap-2">
                   {summary.demonstratedKnowledge.sections.map((sec) => (
                     <div
                       key={sec.sectionName}

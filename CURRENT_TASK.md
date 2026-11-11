@@ -1,3 +1,29 @@
+## KEY-308 part 6 verified - 2026-11-11, Claude Code (at the user's request, overnight run)
+
+**Dashboard modules no longer cramp at desktop width.** From 1280 px the dashboard puts modules in two columns, but their inner grids still used window breakpoints, so a half-width slot was laid out as if it were full width. The study-progress metrics were the clearest case.
+- Every dashboard slot in HomeDashboardView is now a size container.
+- The inner grids now use container breakpoints (`@min-[28rem]`, `@min-[44rem]` and so on) in StudyProgressPanel, TodayStudyPanel, StudyInsightsModule, AthanDashboardModule (including its settings panel) and ActiveReadsModule.
+
+**Contrast pass.** A throwaway probe measured the text contrast of every visible text element in 10 views (dashboard, library, notes, planner, pathways, settings, quran, sunnah, bayan, statistics), in ar/en and dark/light. Dark (Scholar Night) had no failures. Light had four, now fixed:
+- Sunnah narrator names: 1.71:1, now a darker teal in light only.
+- The active page button: 3.49:1, now pale-sky-600.
+- The planned day in the weekly rhythm: 4.35:1, now pale-sky-700 in light.
+- Bayan's pressed language toggle: 2.96:1, now pale-sky-700 in light and 300 in dark.
+
+A re-run of the probe finds 0 failures across all 40 view, language and theme combinations. Screenshots checked: ar-dark and en-light dashboard and athan, and the study-progress and study-insights slots.
+
+New test: tests/ui/dashboard-container-layout.test.ts covers the slot containers, the absence of window breakpoints in module grids, and the light-theme contrast ratios.
+
+Verification: tsc passes; changed-file eslint has 0 errors; focused tests pass (dashboard-container-layout 3/3, sunnah 9/9); full suite 1809/1809. The probe and its profile were deleted.
+
+Not done in this part (KEY-308 stays open):
+- The motion set, left until after KEY-298 adds reduced motion.
+- The wider spacing and type sweep.
+- The side-note tip.
+- The Zen corner hotspots and TOC drawer were checked by reading the code and through reader-chrome-live (the drawer is now inside the reader panel), not by a separate screenshot.
+
+Files: src/renderer/components/dashboard/{HomeDashboardView,StudyProgressPanel,TodayStudyPanel,StudyInsightsModule,AthanDashboardModule,ActiveReadsModule}.tsx, src/renderer/components/library/PaginationBar.tsx, src/renderer/components/poetry/BayanView.tsx, src/renderer/components/sunnah/sunnah.css, tests/ui/dashboard-container-layout.test.ts, CURRENT_TASK.md.
+
 ## KEY-301 part 2 verified - 2026-11-11, Codex then Claude Code (key301p2-20261111)
 
 Codex implemented most of part 2, then hit its usage limit at 02:57 with the work uncommitted. Following the user's takeover rule, Claude Code finished it in place, verified it and published it.

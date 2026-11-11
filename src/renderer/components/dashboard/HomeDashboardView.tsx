@@ -155,19 +155,19 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
     switch (id) {
       case 'today':
         return (
-          <div key="today" data-dashboard-item="today" className="col-span-full">
+          <div key="today" data-dashboard-item="today" className="@container col-span-full">
             <TodayStudyPanel />
           </div>
         );
       case 'calendar':
         return (
-          <div key="calendar" data-dashboard-item="calendar" className="col-span-full xl:col-span-1">
+          <div key="calendar" data-dashboard-item="calendar" className="@container col-span-full xl:col-span-1">
             <DashboardCalendarModule />
           </div>
         );
       case 'readingGoals':
         return (
-          <div key="readingGoals" data-dashboard-item="readingGoals" className="col-span-full xl:col-span-1">
+          <div key="readingGoals" data-dashboard-item="readingGoals" className="@container col-span-full xl:col-span-1">
             <ReadingAnalyticsModule
               onStreakLoaded={setCurrentStreak}
               onOpenFullStatsModal={() => setIsStatsModalOpen(true)}
@@ -176,31 +176,31 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
         );
       case 'activeReads':
         return (
-          <div key="activeReads" data-dashboard-item="activeReads" className="col-span-full xl:col-span-1">
+          <div key="activeReads" data-dashboard-item="activeReads" className="@container col-span-full xl:col-span-1">
             <ActiveReadsModule onOpenImportWizard={() => setIsImportModalOpen(true)} />
           </div>
         );
       case 'studyProgress':
         return (
-          <div key="studyProgress" data-dashboard-item="studyProgress" className="col-span-full xl:col-span-1">
+          <div key="studyProgress" data-dashboard-item="studyProgress" className="@container col-span-full xl:col-span-1">
             <StudyProgressPanel />
           </div>
         );
       case 'studyInsights':
         return (
-          <div key="studyInsights" data-dashboard-item="studyInsights" className="col-span-full xl:col-span-1">
+          <div key="studyInsights" data-dashboard-item="studyInsights" className="@container col-span-full xl:col-span-1">
             <StudyInsightsModule />
           </div>
         );
       case 'scratchpad':
         return (
-          <div key="scratchpad" data-dashboard-item="scratchpad" className="col-span-full xl:col-span-1">
+          <div key="scratchpad" data-dashboard-item="scratchpad" className="@container col-span-full xl:col-span-1">
             <QuickNoteScratchpad />
           </div>
         );
       case 'athan':
         return (
-          <div key="athan" data-dashboard-item="athan" className="col-span-full xl:col-span-1">
+          <div key="athan" data-dashboard-item="athan" className="@container col-span-full xl:col-span-1">
             <AthanDashboardModule
               snapshot={athanState.snapshot}
               activeAlert={athanState.activeAlert}
@@ -217,7 +217,7 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
         );
       case 'khatmah':
         return (
-          <div key="khatmah" data-dashboard-item="khatmah" className="col-span-full xl:col-span-1">
+          <div key="khatmah" data-dashboard-item="khatmah" className="@container col-span-full xl:col-span-1">
             <KhatmahDashboardModule onOpenQuranKhatmah={() => setViewMode('quran')} />
           </div>
         );
@@ -227,7 +227,7 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
             key="studyRhythm"
             id="dashboard-study-rhythm-section"
             data-dashboard-item="studyRhythm"
-            className="col-span-full"
+            className="@container col-span-full"
           >
             <StudyRhythmSettings />
           </div>
