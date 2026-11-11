@@ -280,6 +280,14 @@ The following gaps identified in the audit require backend logic or capabilities
   - all 10 ui-live scripts passing (ab78379).
   - The Zen drawers were checked by reading the code and through reader-chrome-live.
 
+**Update at 18:00 on 2026-11-11 (Claude):**
+- KEY-298 is Done (e465ac1; 576/576 accessibility checks).
+- KEY-44 is Done, including the bulk shelf action (73a68b2).
+- KEY-312 now ships two licensed recorded adhans with a sound picker (25ecd99). Dhikr times and the notification service are still open.
+- KEY-234: confidence is required before Reveal (ba4ecfb).
+- KEY-239 is Done after a live reading-progress check.
+- KEY-300 started on Codex at 17:54.
+
 **Program status at 14:00 on 2026-11-11 (Claude):**
 - **Done:** KEY-295 to KEY-297, KEY-299, KEY-301 to KEY-308, KEY-310, KEY-311 and KEY-313 to KEY-316.
 - **In progress:**
