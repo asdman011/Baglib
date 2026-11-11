@@ -1,3 +1,9 @@
+## KEY-317 part 3 - 2026-11-11, Claude Code
+
+comments-live passes again. It marks the first-run guide as seen, opens Notes through the nav item, selects the note and opens the History tab of its details pane (KEY-304 layout), and uses the notes filter option "comments" in place of the removed open-comments toggle. Script only.
+
+Files: scripts/comments-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-317 part 2 - 2026-11-11, Claude Code
 
 assistant-live and export-live now mark the first-run guide as seen and open Notes through the nav item. The old "Notes Log" aria-label no longer exists. Both pass with a dev server on :3000. srs-live was fixed in e5c7c5e. Remaining stale scripts are listed in docs/agent-ops/reports/KEY-317.md.

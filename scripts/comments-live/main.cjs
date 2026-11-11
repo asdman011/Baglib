@@ -7,12 +7,15 @@ app.setPath('userData', directory);
 app.setAppPath(path.resolve(__dirname, '../..'));
 const pause = duration => new Promise(resolve => setTimeout(resolve, duration));
 const notesLabel = { ar: 'سجل الملاحظات', en: 'Notes Log' };
+const historyLabel = { ar: 'سجل التغييرات والتعليقات', en: 'Change history and comments' };
 let started = false;
 app.on('browser-window-created', (_, owner) => {
   if (started) return; started = true;
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (code, tries = 150) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(200); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(400); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const setText = (selector, value) => evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));})()`);
@@ -23,8 +26,13 @@ app.on('browser-window-created', (_, owner) => {
     for (let i = 0; i < 150 && (!owner.webContents.getURL().startsWith('http://localhost:3000') || owner.webContents.isLoading()); i++) await pause(200);
     await evaluate(`localStorage.setItem('baglib-lang','${language}')`); await owner.loadURL('http://localhost:3000');
     await until('!!window.electronAPI && !!document.querySelector("footer")'); await pause(800);
-    await evaluate(`[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(notesLabel[language])}).click()`);
+    // Since KEY-304: open Notes from the nav, select the note, then the History tab of its details pane.
+    await evaluate("document.querySelector('[data-nav-item=notes]').click()");
     await until(`!!document.querySelector('[data-study-note="comment-note"]')`);
+    await evaluate(`document.querySelector('[data-study-note="comment-note"]').click()`);
+    await until(`[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===${JSON.stringify(historyLabel[language])})`);
+    await evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(historyLabel[language])}).click()`);
+    await until(`!!document.querySelector('[data-note-history="comment-note"]')`);
     await evaluate(`document.querySelector('[data-note-history="comment-note"]').open=true`);
     await until(`!!document.querySelector('${thread} [data-comment-add]')`);
   };
@@ -64,9 +72,10 @@ app.on('browser-window-created', (_, owner) => {
       await click(`${thread} [data-comment-filter="open"]`);
       await until(`document.querySelectorAll('${thread} [data-comment-thread]').length===1`);
       // The list filter shows only notes with open comments.
-      await click('[data-notes-open-comments]');
+      // Since KEY-304 the open-comments view is an option of the notes filter.
+      await evaluate(`((v)=>{const s=[...document.querySelectorAll('select')].find(e=>e.querySelector('option[value=comments]'));Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,v);s.dispatchEvent(new Event('change',{bubbles:true}));})('comments')`); await pause(300);
       result.filteredNotes = await evaluate(`document.querySelectorAll('[data-study-note]').length`);
-      await click('[data-notes-open-comments]');
+      await evaluate(`((v)=>{const s=[...document.querySelectorAll('select')].find(e=>e.querySelector('option[value=comments]'));Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,v);s.dispatchEvent(new Event('change',{bubbles:true}));})('all')`); await pause(300);
       result.revisions = (await evaluate(`window.electronAPI.knowledgeHistory.versions('comment-note').then(v=>v[0].revision)`)) - before;
       owner.setContentSize(480, 900); await pause(600);
       await evaluate(`document.querySelector('${thread}').scrollIntoView({block:'center'})`); await shot(`thread-${language}-480`);
