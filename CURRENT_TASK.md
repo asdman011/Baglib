@@ -1,3 +1,9 @@
+## KEY-317 part 2 - 2026-11-11, Claude Code
+
+assistant-live and export-live now mark the first-run guide as seen and open Notes through the nav item. The old "Notes Log" aria-label no longer exists. Both pass with a dev server on :3000. srs-live was fixed in e5c7c5e. Remaining stale scripts are listed in docs/agent-ops/reports/KEY-317.md.
+
+Files: scripts/assistant-live/main.cjs, scripts/export-live/main.cjs, CURRENT_TASK.md.
+
 ## In Review pass - 2026-11-11, Claude Code
 
 - **KEY-241 Reading Log.** New test tests/services/reading-log.test.ts (4/4). It checks that the automatic fields (sessions, total time, pages, seconds per page, first and last read, the most recent streak, skipped days) match reading_session, that unfinished or backwards sessions are ignored, that self-made reflections persist and edit in place, and that bad input is refused. Done in Jira. The KEY-300 brief now says to keep the Reading Log in the redesigned book detail.
