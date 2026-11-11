@@ -22,8 +22,7 @@ try {
   for (const lang of languages) {
     const code = await new Promise(resolve => {
       const child = spawn(electron, ['scripts/reader-study-live/main.cjs', `--user-data-dir=${profile}`, '--disable-features=CalculateNativeWinOcclusion'], { env: { ...env, BAGLIB_SELECTION_LANG: lang }, stdio: 'inherit', windowsHide: true });
-      const timer = setTimeout(() => child.kill(), 420000);
-      child.once('exit', code => { clearTimeout(timer); resolve(code ?? 1); });
+      child.once('exit', code => { resolve(code ?? 1); });
     }); assert.equal(code, 0, lang);
   }
   fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ passed: true, directory, files }, null, 2));

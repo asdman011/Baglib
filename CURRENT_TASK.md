@@ -1,3 +1,11 @@
+## KEY-317 PDF tools, reader study, comments and export verified - 2026-11-11, Codex (key317)
+
+PDF tools passed4/4 real PDF/interface language combinations. Palette/shared Marks tab/persisted panel handling updated, native drawing uses the visible part of real pages, per-language works avoid overlapping fixture pins. Reader-study passed ar/en at1280/480 with both real PDFs, English EPUB and Arabic scan without OCR. Updated Cards tab/review entry, preserving source/CFI and native keyboard/practice assertions. Comments and export already pass with checked-in navigation changes, confirmed live ar/en at1280/480 and1280/420 respectively. Their runners now copy evidence before complete profile deletion. All touched runners' forced Electron kill timers removed. Syntax and scoped diff checks pass. No application UI/layout changes.
+
+Evidence k317-pdf-tools-evidence-5k9uUz, k280-FbBud6/evidence, k317-comments-evidence-AhCVZS, k317-export-evidence-4cCaBW under .baglib-data. Profiles deleted. Missing real Arabic EPUB and Mushaf-layout reminder diagnostics remain as recorded in the local report. Exact six task files scripts/pdf-tools-live/main.cjs, scripts/pdf-tools-live/run.mjs, scripts/reader-study-live/main.cjs, scripts/reader-study-live/run.mjs, scripts/comments-live/run.mjs, scripts/export-live/run.mjs plus own CURRENT_TASK.md/IMPLEMENTATION_PLAN.md entries. Remaining dispatched scripts pending. Scoped commit/push authorized, Jira left to Claude.
+
+Earlier batch f15ced49b3870931c77c1912302bed3ba4ebf712 was pushed successfully to origin/feature/library-domain.
+
 ## KEY-317 EPUB and PDF markup runners verified - 2026-11-11, Codex (key317)
 
 Repaired compact markup palette access, shared reader Marks tab (knowledge), HTMLElement-target keyboard navigation, current shortcut registry expectations and real-page highlight toasts. PDF runner now uses isolated copies of both real text-layer PDFs. Removed forced Electron kill timers and remove completed run folders.

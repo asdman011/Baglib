@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-11, Codex] KEY-317 PDF-tools4/4 and reader-study ar/en1280/480 PASS, comments/export checked-in selectors confirmed ar/en. Six script files/own state entries, profiles deleted, native drawing and current Cards/review paths retained. Syntax/diff pass. Remaining scripts pending.
+
 - [2026-11-11, Codex] KEY-317 EPUB ar/en1280/480 plus real English textbook PASS, PDF-markup4/4 real-file/interface combinations PASS. Current palette/shared Marks tab/keyboard/shortcut contracts, disposable inputs and cleanup. No app UI change. Exact four scripts/own state entries in handoff. Remaining scripts pending.
 
 - [2026-11-11, Codex] KEY-317 context-menu ar/en1280 PASS with real PDFs/English EPUB, ten menu surfaces and mouse/keyboard/touch. Guide/Notes tabs repaired, both profiles removed, original hashes retained. Dark/480 pending. Exact two scripts and own state entries in handoff, remaining scripts pending.

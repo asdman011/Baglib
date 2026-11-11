@@ -9,14 +9,18 @@ app.on('browser-window-created', (_, win) => {
   if (started) return; started = true;
   win.webContents.setBackgroundThrottling(false);
   const evaluate = code => win.webContents.executeJavaScript(code, true);
+  win.webContents.on('did-finish-load', () => { evaluate("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async code => { for (let i = 0; i < 300; i++) { try { if (await evaluate(code)) return; } catch {} await pause(200); } throw new Error(`Timeout ${code}`); };
   const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
   const shot = async name => { win.show(); win.focus(); win.webContents.focus(); await pause(700); fs.writeFileSync(path.join(evidence, `${lang}-${name}.png`), (await win.webContents.capturePage()).toPNG()); };
   const key = async (keyCode, modifiers = []) => { win.show(); win.focus(); win.webContents.focus(); win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); if (keyCode === 'Enter') win.webContents.sendInputEvent({type:'char',keyCode:'\r'}); await pause(80); win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); await pause(250); };
   const closeReader = async () => { await evaluate(`document.querySelector('button[title=${JSON.stringify(lang === 'ar' ? 'العودة للمكتبة' : 'Back to Library')} ]')?.click()`); await until('!document.querySelector("[data-reader-source]")'); };
   const notes = async () => {
-    await evaluate(`Array.from(document.querySelectorAll('aside button')).find(b=>b.getAttribute('aria-label')===${JSON.stringify(lang === 'ar' ? 'سجل الملاحظات' : 'Notes Log')})?.click()`);
-    await until('!!document.querySelector("[data-saved-cards]") && !!document.querySelector("[data-srs-review]")');
+    if (await evaluate('!!document.querySelector("[data-srs-exit-button]")')) await click('[data-srs-exit-button]');
+    await click('[data-nav-item="notes"]');
+    await until('!!document.querySelector("[data-notes-tab=cards]")');
+    await click('[data-notes-tab="cards"]');
+    await until('!!document.querySelector("[data-saved-cards]")');
   };
   const open = async (book, page) => {
     app.emit('open-url', { preventDefault() {} }, `baglib:book:${book.id}@${book.sourceId}#p=${page}`);
@@ -109,6 +113,7 @@ app.on('browser-window-created', (_, win) => {
           assert.equal((await evaluate('window.getSelection().toString()')).replace(/\s/gu, ''), text.replace(/\s/gu, ''));
         } else await until(`document.querySelector('[data-reader-page]')?.dataset.readerPage==='${file.page}'`);
         await shot(`${file.id}-card-source-${width}`); await closeReader(); await notes();
+        await evaluate("window.dispatchEvent(new CustomEvent('baglib:start-review'))");
         await until(`document.querySelector('[data-srs-card]')?.dataset.srsCard===${JSON.stringify(review.id)}`);
         await click(`[data-srs-card="${review.id}"] [data-card-source]`);
         await until(`document.querySelector('[data-reader-source]')?.dataset.readerSource===${JSON.stringify(book.sourceId)}`);

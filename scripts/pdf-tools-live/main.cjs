@@ -6,6 +6,7 @@ const directory = process.env.BAGLIB_TOOLS_LIVE_DIR;
 app.setPath('userData', directory);
 app.setAppPath(path.resolve(__dirname, '../..'));
 const pause = duration => new Promise(resolve => setTimeout(resolve, duration));
+const page = Number(process.env.BAGLIB_MARKUP_PAGE);
 const labels = { ar: { library: 'المكتبة', read: 'قراءة' }, en: { library: 'Library', read: 'Read' } };
 let started = false;
 app.on('browser-window-created', (_, owner) => {
@@ -13,31 +14,47 @@ app.on('browser-window-created', (_, owner) => {
   const consoleLines = [];
   owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3) consoleLines.push(message.slice(0, 400)); });
   const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(`${error.message}: ${code.slice(0, 200)}`); });
+  owner.webContents.on('did-finish-load', () => { evaluate("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (code, tries = 200) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(300); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(500); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
-  const key = value => evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(value)},bubbles:true}))`);
+  const key = value => evaluate(`document.body.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(value)},bubbles:true}))`);
   const load = async language => { owner.setContentSize(1280, 900); await evaluate(`localStorage.setItem('baglib-lang','${language}')`); await owner.loadURL('http://localhost:3000'); await until('!!window.electronAPI && !!document.querySelector("footer")'); await key('Escape'); await pause(1200); };
-  const selectSpan = index => evaluate(`(()=>{const spans=[...document.querySelectorAll('.textLayer span')].filter(s=>s.textContent.trim().length>3);const span=spans[${index}];if(!span)throw new Error('no span');const range=document.createRange();range.selectNodeContents(span);const sel=getSelection();sel.removeAllRanges();sel.addRange(range);span.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));return span.textContent;})()`);
-  const items = () => evaluate("window.electronAPI.knowledge.getByWork('tools-work')");
+  const selectSpan = index => evaluate(`(()=>{const spans=[...document.querySelectorAll('[data-page-number="${page}"] .textLayer span')].filter(s=>s.textContent.trim().length>3);const span=spans[${index}];if(!span)throw new Error('no span');const range=document.createRange();range.selectNodeContents(span);const sel=getSelection();sel.removeAllRanges();sel.addRange(range);span.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));return span.textContent;})()`);
+  let workId;
+  const items = () => evaluate(`window.electronAPI.knowledge.getByWork(${JSON.stringify(workId)})`);
   // A point on the first page, as fractions of its width and height, in window coordinates.
-  const pagePoint = (fx, fy) => evaluate(`(()=>{const r=document.querySelector('[data-page-number="1"]').getBoundingClientRect();return {x:Math.round(r.left+r.width*${fx}),y:Math.round(r.top+r.height*${fy})};})()`);
+  const pagePoint = (fx, fy) => evaluate(`(()=>{
+    const r=document.querySelector('.pdf-page-container[data-page-number="${page}"]').getBoundingClientRect();
+    const left=Math.max(16,r.left), right=Math.min(innerWidth-16,r.right);
+    const top=Math.max(80,r.top), bottom=Math.min(innerHeight-16,r.bottom);
+    return {x:Math.round(left+(right-left)*${fx}),y:Math.round(top+(bottom-top)*${fy})};
+  })()`);
   const mouse = (type, point) => owner.webContents.sendInputEvent({ type, x: point.x, y: point.y, button: 'left', clickCount: 1 });
   const drag = async (from, to) => { mouse('mouseMove', from); await pause(60); mouse('mouseDown', from); await pause(60); for (let step = 1; step <= 6; step++) { mouse('mouseMove', { x: Math.round(from.x + ((to.x - from.x) * step) / 6), y: Math.round(from.y + ((to.y - from.y) * step) / 6) }); await pause(40); } mouse('mouseUp', to); await pause(500); };
   const click = async point => { mouse('mouseMove', point); await pause(60); mouse('mouseDown', point); await pause(60); mouse('mouseUp', point); await pause(600); };
-  const tool = id => evaluate(`document.querySelector('[data-markup-tool-button="${id}"]').click()`);
+  const tool = async id => {
+    if (!await evaluate(`!!document.querySelector('[data-markup-palette-panel]')`)) {
+      await evaluate("document.querySelector('[data-markup-palette]').click()");
+      await until("!!document.querySelector('[data-markup-palette-panel]')");
+    }
+    await evaluate(`document.querySelector('[data-markup-tool-button="${id}"]').click()`);
+    await evaluate('document.activeElement?.blur()');
+  };
   const insert = async (selector, text) => { await evaluate(`document.querySelector('${selector}').focus()`); await pause(150); await owner.webContents.insertText(text); await pause(200); };
   (async () => {
+    owner.show(); owner.focus(); owner.webContents.focus();
+    owner.webContents.setBackgroundThrottling(false);
     const results = {};
+    await until('!!window.electronAPI && !!document.querySelector("footer")');
     await load('en');
-    await evaluate(`window.electronAPI.addBook({id:'tools-work',title:'علم — Tools',author:'',workType:'book',bookType:'digital',digitalFormat:'PDF',filePath:${JSON.stringify(path.join(directory, 'markup.pdf'))}})`);
+    for (const language of ['ar', 'en']) await evaluate(`window.electronAPI.addBook({id:'tools-work-${language}',title:'علم — Tools',author:'',workType:'book',bookType:'digital',digitalFormat:'PDF',filePath:${JSON.stringify(path.join(directory, 'markup.pdf'))}})`);
     for (const language of ['ar', 'en']) {
       const result = {};
+      workId = 'tools-work-' + language;
       const startCount = (await items()).length;
       await load(language);
-      await evaluate(`document.querySelector('aside button[aria-label=${JSON.stringify(labels[language].library)}]').click()`);
-      await until(`[...document.querySelectorAll('button')].some(b=>b.title===${JSON.stringify(labels[language].read)}||b.textContent.trim()===${JSON.stringify(labels[language].read)})`);
-      await evaluate(`(()=>{const read=${JSON.stringify(labels[language].read)};const isRead=b=>b.title===read||b.textContent.trim()===read;const title=[...document.querySelectorAll('*')].find(e=>e.children.length===0&&e.textContent.includes('Tools')&&e.textContent.includes('علم'));let node=title;while(node&&![...node.querySelectorAll('button')].some(isRead))node=node.parentElement;[...node.querySelectorAll('button')].find(isRead).click();})()`);
-      await until("!!document.querySelector('[data-markup-tool-button]') && document.querySelectorAll('.textLayer span').length > 0", 100);
+      owner.webContents.send('study:navigate', `book:${workId}#p=${page}`);
+      await until(`document.querySelector('[data-reader-page]')?.dataset.readerPage==='${page}' && document.querySelectorAll('[data-page-number="${page}"] .textLayer span').length > 1`);
       result.compactTools = await evaluate("[...document.querySelectorAll('[data-markup-tool-button]')].map(b=>b.dataset.markupToolButton)");
       // Underline tool: one selection is saved as an underline, then the tool returns to selecting text (not locked).
       await tool('underline');
@@ -48,7 +65,7 @@ app.on('browser-window-created', (_, owner) => {
       await tool('strike'); await selectSpan(1); await pause(1500);
       result.strikeDrawn = await evaluate("document.querySelectorAll('[data-pdf-text-mark=\"strike\"]').length > 0");
       // Expanded drawing tools; a rectangle dragged on the page.
-      await evaluate("document.querySelector('[data-markup-more]').click()"); await pause(200);
+      await evaluate("document.querySelector('[data-markup-palette]').click()"); await until("!!document.querySelector('[data-markup-palette-panel]')");
       result.expandedTools = await evaluate("document.querySelectorAll('[data-markup-tool-button]').length");
       await tool('rect');
       await until("!!document.querySelector('[data-pdf-draw-surface=\"rect\"]')", 30);
@@ -84,7 +101,11 @@ app.on('browser-window-created', (_, owner) => {
       result.savedCount = saved.length;
       await shot(`marks-page-${language}-1280`);
       // The marks list: both layers, filters.
-      await evaluate("document.querySelector('[data-zone2-tab=\"marks\"]').click()");
+      if (!await evaluate("!!document.querySelector('[data-reader-side-panel]')")) {
+        await evaluate("document.querySelector('[data-reader-panel-toggle]').click()");
+      }
+      await until("!!document.querySelector('[data-reader-panel-tab=knowledge]')");
+      await evaluate("document.querySelector('[data-reader-panel-tab=knowledge]').click()");
       await until("!!document.querySelector('[data-pdf-marks]')", 30);
       result.listRows = await evaluate("document.querySelectorAll('[data-marks-row]').length");
       const pick = (selector, value) => evaluate(`(()=>{const s=document.querySelector('${selector}');const set=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;set.call(s,'${value}');s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
@@ -97,15 +118,15 @@ app.on('browser-window-created', (_, owner) => {
       result.searchRows = await evaluate("[...document.querySelectorAll('[data-marks-row]')].map(r=>r.dataset.marksRowKind)");
       await shot(`marks-list-${language}-1280`);
       results[language] = result; console.log(JSON.stringify({ language, result }));
-      assert.deepEqual(result.compactTools, ['select', 'highlight', 'underline', 'strike', 'comment', 'rect']);
+      assert.deepEqual(result.compactTools, ['select']);
       assert.equal(result.underlineDrawn, true); assert.equal(result.toolAfterOne, 'select');
       assert.equal(result.strikeDrawn, true);
-      assert.equal(result.expandedTools, 10);
+      assert.equal(result.expandedTools, 13);
       assert.ok(result.textBox.includes(language === 'ar' ? 'راجع هذا الموضع' : 'Check this passage'), result.textBox);
       assert.equal(result.commentToolByKey, 'comment');
       assert.equal(result.pinColorAfterResolve, 'rgb(156, 163, 175)', 'a resolved pin turns grey');
-      // The same book in both rounds: the English round also lists the Arabic round's marks.
-      const round = language === 'ar' ? 1 : 2;
+      // Separate works keep native pin clicks clear of the preceding language's marks.
+      const round = 1;
       assert.deepEqual(result.rectRows, Array(round).fill('rect'));
       assert.deepEqual(result.resolvedRows, Array(round).fill('pin'));
       assert.deepEqual(result.searchRows, ['text']);
