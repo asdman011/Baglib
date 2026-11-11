@@ -20,6 +20,7 @@ const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));let started=false;
 app.on('browser-window-created',(_,win)=>{
  if(started)return;started=true;win.webContents.setBackgroundThrottling(false);
  const evaluate=code=>win.webContents.executeJavaScript(code,true);
+ win.webContents.on('did-finish-load', () => { evaluate("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
  const until=async code=>{for(let i=0;i<300;i++){try{if(await evaluate(code))return;}catch{}await pause(200);}throw new Error('Timeout '+code);};
  const click=selector=>evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
  const setValue=(selector,value,kind='HTMLTextAreaElement')=>evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(${kind}.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('${kind==='HTMLSelectElement'?'change':'input'}',{bubbles:true}));})()`);
@@ -68,8 +69,8 @@ app.on('browser-window-created',(_,win)=>{
    }
    // Scan through the visible book-page picker: typed failure, no provider call, then explicit page navigation.
    const scan=books.find(b=>b.id==='scan-ar');
-   await evaluate(`Array.from(document.querySelectorAll('aside button')).find(b=>b.getAttribute('aria-label')===${JSON.stringify(lang==='ar'?'سجل الملاحظات':'Notes Log')})?.click()`);
-   await until(`(()=>{if(document.querySelector('[data-notes-assistant]'))return true;[...document.querySelectorAll('aside button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(lang==='ar'?'سجل الملاحظات':'Notes Log')})?.click();return false;})()`);await click('[data-notes-assistant]');await until('!!document.querySelector("[data-study-assistant]")');
+   await click('[data-nav-item="notes"]');
+   await until('!!document.querySelector("[data-notes-assistant]")');await click('[data-notes-assistant]');await until('!!document.querySelector("[data-study-assistant]")');
    await setValue('[data-assistant-book]',scan.id,'HTMLSelectElement');
    await until('document.querySelectorAll("[data-study-assistant] input[type=number]").length===2');
    await setValue('[data-study-assistant] input[type=number]',2,'HTMLInputElement');

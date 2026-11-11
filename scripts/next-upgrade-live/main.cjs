@@ -1,6 +1,7 @@
 // Live check after a Next.js upgrade: the real main process and preload, the dev renderer and the static export, in Arabic and English.
 // Run through run.mjs, which sets a throwaway BAGLIB_DATA_DIR and --user-data-dir.
 const { app } = require('electron');
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const directory = process.env.BAGLIB_NEXT_LIVE_DIR;
@@ -18,31 +19,38 @@ app.on('browser-window-created', (_, owner) => {
   });
   owner.webContents.on('render-process-gone', (_event, details) => errors.push(`render-process-gone ${details.reason}`));
   const evaluate = code => owner.webContents.executeJavaScript(code, true);
+  owner.webContents.on('did-finish-load', () => { evaluate("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (code, tries = 200) => { for (let index = 0; index < tries; index++) { try { if (await evaluate(code)) return; } catch {} await pause(300); } throw new Error(`Timed out: ${code}`); };
   const shot = async name => { await pause(600); owner.webContents.invalidate(); await pause(300); fs.writeFileSync(path.join(directory, `${name}.png`), (await owner.webContents.capturePage()).toPNG()); };
   const check = async (target, url, language) => {
     errors.length = 0;
-    await evaluate(`localStorage.setItem('baglib-lang','${language}')`).catch(() => {});
     await owner.loadURL(url);
     await evaluate(`localStorage.setItem('baglib-lang','${language}')`);
     await owner.loadURL(url);
-    await until('!!window.electronAPI && !!document.querySelector("aside button[aria-label]")');
+    await until('!!window.electronAPI && !!document.querySelector("[data-nav-item][aria-label]")');
     await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
     await pause(1500);
-    const labels = await evaluate('[...document.querySelectorAll("aside button[aria-label]")].map(b=>b.getAttribute("aria-label"))');
+    const labels = await evaluate('[...document.querySelectorAll("[data-nav-item][aria-label]")].map(b=>b.getAttribute("aria-label"))');
     const visited = [];
     for (const [index, label] of labels.entries()) {
-      await evaluate(`document.querySelectorAll('aside button[aria-label]')[${index}]?.click()`);
+      await evaluate(`document.querySelectorAll('[data-nav-item][aria-label]')[${index}]?.click()`);
       await pause(700);
       visited.push({ label, mainText: (await evaluate('(document.querySelector("main")||document.body).innerText.length')) });
     }
-    await evaluate(`document.querySelector('aside button[aria-label]').click()`);
+    await evaluate(`document.querySelector('[data-nav-item][aria-label]').click()`);
     const page = await evaluate('({dir:document.documentElement.dir,lang:document.documentElement.lang,title:document.title,arabicLetters:(document.body.innerText.match(/[\\u0621-\\u064A]/g)||[]).length,latinLetters:(document.body.innerText.match(/[A-Za-z]/g)||[]).length})');
     await shot(`${target}-${language}`);
-    return { target, url, language, page, labels, visited, blankPages: visited.filter(item => item.mainText < 5).map(item => item.label), errors: [...errors] };
+    const blankPages = visited.filter(item => item.mainText < 5).map(item => item.label);
+    assert.equal(page.lang, language);
+    assert.equal(page.dir, language === 'ar' ? 'rtl' : 'ltr');
+    assert.ok(labels.length >= 6, 'Navigation items rendered');
+    assert.deepEqual(blankPages, []);
+    assert.deepEqual(errors, []);
+    return { target, url, language, page, labels, visited, blankPages, errors: [...errors] };
   };
   (async () => {
     owner.setContentSize(1280, 900);
+    await until('!!window.electronAPI && !!document.querySelector("[data-nav-item]")');
     const results = [];
     for (const target of (process.env.BAGLIB_NEXT_LIVE_TARGETS || 'dev,export').split(',')) {
       const url = target === 'dev' ? 'http://localhost:3000' : 'app://-/';
