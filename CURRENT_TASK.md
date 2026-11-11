@@ -1,3 +1,16 @@
+## KEY-234 re-check and srs-live repair - 2026-11-11, Claude Code
+
+srs-live had gone stale with KEY-304 (Notes rework) and KEY-307 (first-run guide), so it is updated:
+- it marks the guide as seen;
+- it opens reviews through the Notes nav item and the dedicated review screen (`baglib:start-review`);
+- it creates a card from a note through the note editor's header menu.
+
+It passes both launches (reveal, grade, reload and restart in ar and en, plus the note-to-card export with the original note unchanged). The existing srs unit tests already cover the day rollover, using local midnight.
+
+Finding: the review screen allows Reveal without a confidence choice. The practice service requires a confidence of 1-4, so those reviews save the schedule but drop the practice record silently (`knowledge-cards:attempt` returns invalid-request). The older review panel requires a confidence choice first. This is recorded as a decision for the user in docs/agent-ops/waiting-for-user.md.
+
+Files: scripts/srs-live/main.cjs, CURRENT_TASK.md.
+
 ## KEY-150 review and fix - 2026-11-11, Claude Code
 
 The review found that the startup splash hid initialization failures, against its acceptance. Only its first step made a real call, which swallowed errors and timed out after 250 ms. The other steps were timers, and the splash always ended on "Ready".

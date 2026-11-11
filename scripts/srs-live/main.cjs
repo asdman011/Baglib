@@ -9,7 +9,9 @@ const pause = duration => new Promise(resolve => setTimeout(resolve, duration));
 app.on('browser-window-created', (_, owner) => {
   if (started) return;
   started = true;
-  const evaluate = code => owner.webContents.executeJavaScript(code, true);
+  const evaluate = code => owner.webContents.executeJavaScript(code, true).catch(error => { throw new Error(error.message + ' :: ' + code.slice(0, 200)); });
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  owner.webContents.on('did-finish-load', () => { owner.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async code => {
     for (let attempt = 0; attempt < 150; attempt++) {
       try { if (await evaluate(code)) return; } catch {}
@@ -41,7 +43,10 @@ app.on('browser-window-created', (_, owner) => {
       const front = `نَصٌّ محفوظ — Review ${language}`;
       const card = await evaluate(`window.electronAPI.knowledgeCards.save({front:${JSON.stringify(front)},back:'إجابة — Answer',sourceKind:'note',sourceRef:'note:srs-live-${language}'})`);
       await evaluate(`window.electronAPI.knowledgeCards.setMemorizing(${JSON.stringify(card.id)},true)`);
-      await evaluate(`Array.from(document.querySelectorAll('aside button')).find(button=>button.getAttribute('aria-label')===${JSON.stringify(language === 'ar' ? 'سجل الملاحظات' : 'Notes Log')})?.click()`);
+      // Since KEY-304 reviews open in the dedicated review screen inside Notes.
+      await evaluate("document.querySelector('[data-nav-item=notes]').click()");
+      await until('!!document.querySelector("[data-notes-tab=notes]")');
+      await evaluate("window.dispatchEvent(new Event('baglib:start-review'))");
       await until('!!document.querySelector("[data-srs-card]")');
       assert.equal(await evaluate('document.querySelector("[data-srs-review]").dir'), language === 'ar' ? 'rtl' : 'ltr');
       assert.equal(await evaluate('!!document.querySelector("[data-srs-answer]")'), false);
@@ -63,10 +68,15 @@ app.on('browser-window-created', (_, owner) => {
     const note = await evaluate("window.electronAPI.studyNotes.save({title:'Note export — مُراجعة',content:'Exact source — العِلْمُ',aliases:[],tags:[]})");
     await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
     await pause(1500);
-    await evaluate("Array.from(document.querySelectorAll('aside button')).find(button=>button.getAttribute('aria-label')==='Notes Log')?.click()");
+    await evaluate("document.querySelector('[data-nav-item=notes]').click()");
     await until(`!!document.querySelector('[data-study-note="${note.id}"]')`);
-    await evaluate(`Array.from(document.querySelector('[data-study-note="${note.id}"]').querySelectorAll('button')).find(button=>button.textContent==='Create review card from note').click()`);
-    await until('!!document.querySelector("[data-srs-card]")');
+    // Since KEY-304 the action lives in the note editor's header menu.
+    await evaluate(`document.querySelector('[data-study-note="${note.id}"]').click()`);
+    await until('[...document.querySelectorAll("button[aria-haspopup]")].some(b => b.getAttribute("aria-label") === "Export note")');
+    await evaluate('[...document.querySelectorAll("button[aria-haspopup]")].find(b => b.getAttribute("aria-label") === "Export note").click()');
+    await until('[...document.querySelectorAll("[role=menuitem]")].some(e => e.textContent.includes("Create review card from note"))');
+    await evaluate('[...document.querySelectorAll("[role=menuitem]")].find(e => e.textContent.includes("Create review card from note")).click()');
+    await until('window.electronAPI.knowledgeCards.reviewQueue().then(q => q.cards.some(c => c.back === "Exact source — العِلْمُ"))');
     const exported = await evaluate('window.electronAPI.knowledgeCards.reviewQueue()');
     assert.equal(exported.cards[0].sourceRef, `note:${note.id}`);
     assert.equal(exported.cards[0].back, 'Exact source — العِلْمُ');
