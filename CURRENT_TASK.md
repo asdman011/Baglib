@@ -1,3 +1,12 @@
+## In Review pass - 2026-11-11, Claude Code
+
+- **KEY-241 Reading Log.** New test tests/services/reading-log.test.ts (4/4). It checks that the automatic fields (sessions, total time, pages, seconds per page, first and last read, the most recent streak, skipped days) match reading_session, that unfinished or backwards sessions are ignored, that self-made reflections persist and edit in place, and that bad input is refused. Done in Jira. The KEY-300 brief now says to keep the Reading Log in the redesigned book detail.
+- **KEY-240** closed: ADR-008, accepted 2026-11-02, covers the event_log relation, retention, trash and hashing.
+- **KEY-242** closed after a live ar/en probe of note history, compare and restore. Polish items went to KEY-309.
+- **KEY-235** re-checked: the Anki export format follows Anki's spec. The real Anki import is waiting for the user, and the ayah-range picker is filed as KEY-318.
+
+Files: tests/services/reading-log.test.ts, CURRENT_TASK.md.
+
 ## KEY-234 re-check and srs-live repair - 2026-11-11, Claude Code
 
 srs-live had gone stale with KEY-304 (Notes rework) and KEY-307 (first-run guide), so it is updated:
