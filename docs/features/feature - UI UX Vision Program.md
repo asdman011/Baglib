@@ -241,6 +241,55 @@ The following gaps identified in the audit require backend logic or capabilities
 - KEY-299: the en 480 library evidence shows the drawer. Re-check the single-column grid at 480.
 - KEY-302: exam entries show raw curriculum UUIDs instead of names. "1 tasks" needs plural forms in ar and en. Check the default module order on a fresh profile.
 - KEY-296: one harness screenshot was named for the wrong language.
+- KEY-315: the side-note edge tip sits close to the reader panel. Check that it never overlaps the panel's edge controls.
+- KEY-313: the poem page's top toolbar is still a long row of text buttons. Group copy, share and recitation into icons or a settings popover, matching the KEY-305 shared header.
+- KEY-316: every library-card menu item shows the same placeholder ⓘ icon. Give each action its own icon, as the hadith menu already does.
+- KEY-316: in the reader, the floating selection toolbar and the right-click menu can be open together. Opening one should close the other.
+- KEY-305: the mushaf page renders small, with wide empty margins at 1280 px. Consider a fit-to-height default zoom.
+- KEY-306: the display font (`font-display`) squeezes word spaces in Arabic headings, for example «لا ملاحظات ولا روابط» and «لا توجد مسارات بعد». The text is correct. Fix the font stack or the letter and word spacing for Arabic headings app-wide.
+- KEY-306: the "Draft with AI" button is cramped beside the subject field in the Pathways customize panel.
+
+**Status at 23:20 on 2026-11-10 (Claude, KEY-308 parts 1–3):**
+- **Fixed (8ecde07):**
+  - New Object's double "+";
+  - card menu icons;
+  - placeholder icons on every context surface;
+  - the selection toolbar and menu overlap;
+  - Arabic display-heading word spacing;
+  - the exam UUID;
+  - "1 tasks";
+  - the cramped AI draft row.
+- **Fixed (9ff9739):** the mushaf gutters, so the page renders larger.
+- **Already done by KEY-305:** the poetry toolbar is grouped into the shared header and settings popover.
+- **Fixed (part 3):**
+  - 18 uses of `inset-inline-start-N` / `inset-inline-end-N`, which Tailwind never generated, now use `start-N` / `end-N`. Those drawers, search icons and corner hotspots had no horizontal position.
+  - The remaining physical classes became logical where direction matters.
+- **Fixed in part 5 (e6fd4b2), found in part 3:** when the reader's reading panel is open on the PDF workstation, the end of the reader header is hidden in ar (left end) and en (right end). The hidden controls are save, full screen and ⋯.
+  - **Diagnosis so far:** the band is exactly the panel's width and spans y 0–56 at the end edge. `ReaderSidePanel`'s `<aside>` itself starts at `top-14`, so the cover is another element, or the header is narrowed to the viewport minus the panel and overflows (`flex-nowrap`, no overflow handling).
+  - **Next step:** probe in a live run with `document.elementFromPoint` at the header's end while the panel is open.
+  - **Fix options:** reserve the panel width in the header and let its middle group shrink, or move the overflowing items into ⋯.
+  - Evidence: `.baglib-data/KEY-303-evidence/2026-11-10T21-18-05-176Z/pdf-{ar-ar,en-en}-dark-1280-panel.png`. The same appears in the 12:08 run, so it is not a part 3 regression.
+- **Closed on 2026-11-11 (KEY-308 is Done):**
+  - plural forms (c377c11);
+  - the reader header with the panel open (e6fd4b2);
+  - dashboard containers and a contrast probe over 10 areas in both themes, with dark clean and 4 light failures fixed (7d64902);
+  - the side-note tip guard (c4560a3);
+  - 38 hard-coded strings (a7a2e3b);
+  - the Arabic type floor (d661a8f);
+  - the motion set, whose entry classes had never been defined (62f489f);
+  - all 10 ui-live scripts passing (ab78379).
+  - The Zen drawers were checked by reading the code and through reader-chrome-live.
+
+**Program status at 14:00 on 2026-11-11 (Claude):**
+- **Done:** KEY-295 to KEY-297, KEY-299, KEY-301 to KEY-308, KEY-310, KEY-311 and KEY-313 to KEY-316.
+- **In progress:**
+  - KEY-298: part 1 is b36ce02; Codex is on part 2, which also includes KEY-44's selection accessibility fixes.
+  - KEY-312: research done (see the adhan recordings note); downloads wait for the user.
+- **To do:**
+  - KEY-300 (book detail and import), next for Codex; its brief carries the library i18n debt and Arabic plurals.
+  - KEY-309 (the acceptance run); its Jira comment collects the inputs from the In Review pass.
+  - KEY-317 (older live scripts).
+  - KEY-318 (ayah-range decks).
 
 ## 9. Added on 2026-11-10 at the user's request: U16 (KEY-310)
 
