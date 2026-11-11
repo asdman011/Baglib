@@ -1,3 +1,21 @@
+## KEY-308 part 11 verified, KEY-308 complete - 2026-11-11, Claude Code (overnight run)
+
+**Every UI check script passes again.** KEY-308's acceptance asks for every `scripts/*-ui-live/` to be re-run with no regressions. All ten now pass: shell, library, dashboard, notes, statistics, research, islamic, poetry, feedback and settings. Four had expectations that went stale with earlier tasks. Only the scripts were changed, not the app:
+- All seven older ui-live scripts mark the KEY-307 first-run guide as seen on every page load. Otherwise the guide would hold focus on a throwaway profile; for example, dashboard reported "No modal should remain open".
+- library-ui-live: since KEY-310 the filter rail sits behind the Advanced button, so the script opens it first.
+- research-ui-live: since KEY-301 the pathway notice is a shared toast, so the script waits for `[data-feedback-toast]`.
+- poetry-ui-live: since KEY-316 a touch long-press opens the shared line context menu, so the script checks that the menu lists the line actions.
+
+**KEY-308 acceptance:**
+- The U1 gaps in plan section 6 are closed by U2-U13. The U6 book-detail and import rows are explicitly deferred to KEY-300, which has not run yet.
+- The physical-direction grep is clean or justified. Tailwind has 0 physical classes. The remaining inline left/right styles are page coordinates or measured anchors (PDF overlays, popovers at the pointer, getBoundingClientRect anchors) or symmetric padding. The paragraph text-left/right follows each paragraph's own content direction.
+- AA contrast was probed in 10 areas in both themes (part 6).
+- No regressions in any ui-live script.
+
+Housekeeping: the ui-live scripts leave fixed-name profiles of 2.6 GB each (key297, key299, key302, key304). Under the user's standing rule they were deleted, together with the run logs and the poetry run folders.
+
+Files: scripts/{dashboard-ui-live/dashboard-check.cjs, islamic-ui-live/main.cjs, library-ui-live/library-check.cjs, notes-ui-live/notes-check.cjs, poetry-ui-live/main.ts, research-ui-live/main.cjs, statistics-ui-live/statistics-check.cjs}, CURRENT_TASK.md.
+
 ## KEY-308 part 10 verified - 2026-11-11, Claude Code (overnight run)
 
 **Motion set.** About 80 elements used tw-animate-style entry classes (`animate-in`, `fade-in`, `zoom-in-95`, `slide-in-from-*`) and `animate-fade-in`. The plugin that defines them is not installed, so none of those entry animations ever ran. ui-motion.css now defines these classes on the existing motion tokens (`--ui-motion-enter`, `--ui-motion-ease`), so dialogs, popovers, toasts and drawers get one short, consistent entrance. No dependency was added.

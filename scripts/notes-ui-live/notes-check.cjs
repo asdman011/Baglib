@@ -24,6 +24,8 @@ app.on('browser-window-created', (_, win) => {
   });
 
   const evaluate = (code) => win.webContents.executeJavaScript(code, true);
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  win.webContents.on('did-finish-load', () => { win.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
 
   const until = async (code, timeoutMs = 30000) => {
     const start = Date.now();

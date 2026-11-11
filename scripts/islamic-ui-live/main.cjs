@@ -16,6 +16,8 @@ app.on('browser-window-created', (_, win) => {
   const errors = [];
   win.webContents.on('console-message', (_, level, message) => { if (level >= 3) errors.push(message); });
   const evaluate = script => win.webContents.executeJavaScript(script, true);
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  win.webContents.on('did-finish-load', () => { win.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async script => {
     const end = Date.now() + 90000;
     while (Date.now() < end) {

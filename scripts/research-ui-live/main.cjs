@@ -19,6 +19,8 @@ app.on('browser-window-created', (_, win) => {
   const errors = [];
   win.webContents.on('console-message', (_, level, message) => { if (level >= 3) errors.push(message); });
   const evaluate = script => win.webContents.executeJavaScript(script, true);
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  win.webContents.on('did-finish-load', () => { win.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until = async (script, ms = 60000) => {
     const end = Date.now() + ms;
     while (Date.now() < end) {
@@ -106,7 +108,7 @@ app.on('browser-window-created', (_, win) => {
       await until('!!document.querySelector("[data-pathway-title]")');
       assert.equal(await evaluate('document.querySelectorAll("[data-pathway-row]").length'), 1);
       assert.equal(await evaluate('document.querySelectorAll("[data-pathway-item-kind=step]").length'), 6);
-      assert.ok(await evaluate('!!document.querySelector("[data-pathway-notice]")'));
+      assert.ok(await evaluate('!!document.querySelector("[data-feedback-toast]")'));
       assert.equal(await evaluate('!!document.querySelector("[data-pathway-continue-main]")'), false, 'no source yet, so no continue button');
       assert.ok(await evaluate('!!document.querySelector("[data-pathway-next]")'));
 
@@ -149,7 +151,7 @@ app.on('browser-window-created', (_, win) => {
       await until('document.querySelector("[data-pathway-progress] [role=progressbar]")?.getAttribute("aria-valuenow") === "1"');
       assert.equal(await evaluate('document.querySelector("[data-pathway-row] [role=progressbar]").getAttribute("aria-valuenow")'), '1');
       await click('[data-pathway-save-template]');
-      await until('!!document.querySelector("[data-pathway-notice]")');
+      await until('!!document.querySelector("[data-feedback-toast]")');
       const saved = await evaluate('window.electronAPI.pathways.templates()');
       assert.equal(saved.length, 1);
       assert.equal(saved[0].kind, 'curriculum');

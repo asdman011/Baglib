@@ -49,6 +49,8 @@ app.whenReady().then(async () => {
   window.webContents.session.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_, callback) => callback({ cancel: true }));
   window.webContents.on('console-message', (_, level, message) => { if (level >= 3) errors.push(message); });
   const evaluate = (script: string) => window.webContents.executeJavaScript(script);
+  // KEY-317: throwaway profiles would show the KEY-307 first-run guide, which takes focus.
+  window.webContents.on('did-finish-load', () => { window.webContents.executeJavaScript("window.electronAPI && window.electronAPI.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   const until = async (script: string) => { for (let index = 0; index < 200; index++) { if (await evaluate(script)) return; await sleep(50); } throw new Error(`Timed out: ${script}`); };
   const shot = async (name: string) => fs.writeFile(path.join(evidence, `${name}.png`), (await window.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
@@ -166,9 +168,11 @@ app.whenReady().then(async () => {
         // Long-press on touch opens the actions group.
         await evaluate(`(()=>{const row=document.querySelector('[data-poetry-row-index="4"]');const r=row.getBoundingClientRect();row.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerType:'touch',clientX:r.x+20,clientY:r.y+10}))})()`);
         await sleep(700);
-        assert.equal(await evaluate('document.querySelector(\'[data-poetry-row-index="4"]\').getAttribute("data-actions-open")'), 'true', 'long-press opens line actions');
-        assert.equal(await visibleActions() >= 1, true);
+        // Since KEY-316 a touch long-press opens the shared line context menu with the same actions.
+        assert.equal(await evaluate('!!document.querySelector("[data-baglib-menu]")'), true, 'long-press opens the line action menu');
+        assert.ok((await evaluate('document.querySelectorAll("[data-baglib-menu] [role=menuitem]").length') as number) >= 4, 'menu lists the line actions');
         await shot(`06-longpress-${tag}`);
+        await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
       }
       if (width === 480 && lang === 'ar') await shot(`07-stacked-${tag}`);
       // Single-line form is centred.
