@@ -27,9 +27,19 @@ let started=false;
 app.on('browser-window-created',(_,owner)=>{
   if(started)return;started=true;
   const evaluate=code=>owner.webContents.executeJavaScript(code,true).catch(error=>{throw new Error(`${error.message}: ${code.slice(0,200)}`);});
-  const until=async(code,tries=200)=>{for(let index=0;index<tries;index++){try{if(await evaluate(code))return;}catch{}await pause(300);}throw new Error(`Timed out: ${code}`);};
-  const press=text=>evaluate(`(()=>{const items=[...document.querySelectorAll('button')];const item=items.find(b=>b.textContent.trim()===${JSON.stringify(text)}||b.getAttribute('aria-label')===${JSON.stringify(text)});if(!item)throw new Error('no button '+${JSON.stringify(text)});item.click();})()`);
+  owner.webContents.on('did-finish-load', () => { evaluate("window.electronAPI?.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
+  const until=async(code,tries=200)=>{for(let index=0;index<tries;index++){try{if(await evaluate(code))return;}catch{}await pause(300);}throw new Error(`Timed out: ${code}\n${await evaluate("document.body.innerText.slice(-2200)")}`);};
+  const press=(text,selector='button')=>evaluate(`(()=>{const items=[...document.querySelectorAll(${JSON.stringify(selector)})];const item=items.find(b=>b.textContent.trim()===${JSON.stringify(text)}||b.getAttribute('aria-label')===${JSON.stringify(text)});if(!item)throw new Error('no button '+${JSON.stringify(text)});item.click();})()`);
   const fill=(label,value)=>evaluate(`(()=>{const element=[...document.querySelectorAll('input,textarea,select')].find(item=>item.getAttribute('aria-label')===${JSON.stringify(label)});if(!element)throw new Error('no field '+${JSON.stringify(label)});const proto=element.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:element.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(element,${JSON.stringify(value)});element.dispatchEvent(new Event(element.tagName==='SELECT'?'change':'input',{bubbles:true}));})()`);
+  const menu = async (selector, action) => {
+    await evaluate(`(() => { const item = document.querySelector(${JSON.stringify(selector)}); item.scrollIntoView({block:'center'}); const r = item.getBoundingClientRect(); item.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2})); })()`);
+    await until(`!!document.querySelector('[data-menu-action="${action}"]')`);
+    await evaluate(`document.querySelector('[data-menu-action="${action}"]').click()`);
+  };
+  const templates = async () => {
+    await evaluate("window.dispatchEvent(new CustomEvent('baglib:new-pathway'))");
+    await until('!!document.querySelector("[data-template-card=research]")');
+  };
   const shot=async name=>{await pause(500);owner.webContents.invalidate();await pause(300);await fs.promises.writeFile(path.join(directory,`${name}.png`),(await owner.webContents.capturePage()).toPNG());};
   const noOverflow=async()=>assert.ok(await evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'page overflows sideways');
   (async()=>{
@@ -46,29 +56,30 @@ app.on('browser-window-created',(_,owner)=>{
       await until('!!window.electronAPI?.pathways && !!document.querySelector("footer")');
       await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");await pause(1500);
 
+      console.log('STAGE', language, 'pathways');
       // KEY-248 and KEY-249 through the real view
-      await press(L.nav);await until(`[...document.querySelectorAll('input')].some(item=>item.getAttribute('aria-label')===${JSON.stringify(L.name)})`);
+      await evaluate("document.querySelector('[data-nav-item=pathways]').click()");await until('!!document.querySelector("[data-pathways-space]")');await templates();await menu('[data-template-card=research]', 'customize');
       assert.equal(await evaluate("document.querySelector('[dir]').dir"),language==='ar'?'rtl':'ltr');
-      await fill(L.name,`بحث ${language}`);await fill(L.template,'research');
+      await fill(L.name,`بحث ${language}`);
       await until("document.querySelector('textarea').value.includes('#')");
-      await press(L.create);await until(`document.querySelector('h2')?.textContent===${JSON.stringify(`بحث ${language}`)}`);
+      await press(L.create);await until(`document.querySelector('[data-pathway-title]')?.textContent===${JSON.stringify(`بحث ${language}`)}`);
       const list=await evaluate('window.electronAPI.pathways.list()');
       const research=list.find(item=>item.name===`بحث ${language}`);assert.equal(research.kind,'research');assert.equal(research.steps,8);
       await fill(L.linkTitle,'مقال عن الموضوع');await fill(L.linkUrl,'https://example.com/مقال');await press(L.addLink);
       await until(`[...document.querySelectorAll('button')].some(b=>b.textContent==='مقال عن الموضوع')`);
-      await press(L.pin);await until(`window.electronAPI.pathways.get('${research.id}').then(row=>row.items.some(item=>item.pinned))`);
+      await menu('[data-pathway-item-kind=link]', 'pin');await until(`window.electronAPI.pathways.get('${research.id}').then(row=>row.items.some(item=>item.pinned))`);
       await evaluate(`window.electronAPI.pathways.addItem({pathwayId:'${research.id}',section:'',kind:'resource',reference:'book:wave5-book',title:'فتح الباري'})`);
       await fill(L.step,'خطوة مضافة');await press(L.addStep);await until(`document.body.textContent.includes('خطوة مضافة')`);
       await evaluate("document.querySelector('main input[type=checkbox]').click()");
-      await until(`document.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow')==='1'`);
+      await until(`document.querySelector('[data-pathway-progress] [role=progressbar]')?.getAttribute('aria-valuenow')==='1'`);
       const before=(await evaluate(`window.electronAPI.pathways.get('${research.id}')`)).items.map(item=>item.id);
-      await press(L.down);
+      await menu('[data-pathway-item-kind=step]', 'down');
       await until(`window.electronAPI.pathways.get('${research.id}').then(row=>row.items.map(item=>item.id).join()!==${JSON.stringify(before.join())})`);
       const detail=await evaluate(`window.electronAPI.pathways.get('${research.id}')`);
       assert.equal(detail.items.filter(item=>item.pinned).length,1);assert.equal(detail.done,1);assert.notDeepEqual(detail.items.map(item=>item.id),before);
-      await press(L.bib);await until(`document.querySelector('main [role=status]')`);
+      await menu('[data-pathway-header] [data-context-surface]', 'export-bib');await until(`!!document.querySelector('[data-pathway-header] [role=status]')`);
       const bib=fs.readFileSync(path.join(directory,`بحث ${language}.bib`),'utf8');assert.match(bib,/فتح الباري/u);assert.match(bib,/url = \{https:\/\/example.com/u);
-      await press(L.md);await pause(400);assert.match(fs.readFileSync(path.join(directory,`بحث ${language}.md`),'utf8'),/مقال عن الموضوع/u);
+      await menu('[data-pathway-header] [data-context-surface]', 'export-md');await pause(400);assert.match(fs.readFileSync(path.join(directory,`بحث ${language}.md`),'utf8'),/مقال عن الموضوع/u);
       await noOverflow();await shot(`pathways-${language}-1280`);
       owner.setContentSize(480,1000);await pause(500);await noOverflow();await shot(`pathways-${language}-480`);owner.setContentSize(1280,900);
       const tasks=await evaluate('window.electronAPI.planner.list()');
@@ -77,22 +88,23 @@ app.on('browser-window-created',(_,owner)=>{
       assert.equal((await evaluate(`window.electronAPI.pathways.get('${research.id}')`)).done,2);
       result.pathways={steps:detail.steps,planner:true,bibtex:true,markdown:true};
 
-      await fill(L.ai,'أصول الفقه');await press(L.draft);
+      await templates();await fill(L.ai,'أصول الفقه');await press(L.draft);
       await until(`document.querySelector('textarea').value.includes('قراءة المقدمة')`);
-      await fill(L.name,`منهج ${language}`);await press(L.create);await until(`document.querySelector('h2')?.textContent===${JSON.stringify(`منهج ${language}`)}`);
+      await fill(L.name,`منهج ${language}`);await press(L.create);await until(`document.querySelector('[data-pathway-title]')?.textContent===${JSON.stringify(`منهج ${language}`)}`);
       assert.equal((await evaluate('window.electronAPI.pathways.list()')).find(item=>item.name===`منهج ${language}`).kind,'curriculum');
-      await fill(L.ai,'stub-fail');await press(L.draft);await until("document.querySelector('[role=alert]')");
+      await templates();await fill(L.ai,'stub-fail');await press(L.draft);await until("document.querySelector('[role=alert]')");
       result.aiDraft={draft:true,refusedEmpty:true};
 
+      console.log('STAGE', language, 'discovery');
       // KEY-250
-      await press(L.search);await until(`[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===${JSON.stringify(L.sources)})`);
+      await evaluate("document.querySelector('[data-nav-item=search]').click()");await until(`[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===${JSON.stringify(L.sources)})`);
       await press(L.sources);
-      await evaluate(`(()=>{const input=document.querySelector('input[type=text]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'الرحمن الرحيم');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      await evaluate(`(()=>{const input=document.querySelector('[role=dialog] input[type=text]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'الرحمن الرحيم');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
       await until("[...document.querySelectorAll('.fixed button')].filter(b=>b.querySelector('bdi')).length>0");
       await until(`document.querySelector('.fixed').textContent.includes('صحيح')||document.querySelectorAll('.fixed button span[lang=ar]').length>0`);
       const plain=await evaluate("document.querySelectorAll('.fixed button .font-reading').length");assert.ok(plain>0);
-      await evaluate(`(()=>{const input=document.querySelector('input[type=text]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'الرَّحْمَٰنِ الرَّحِيمِ');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-      await pause(1800);
+      await evaluate(`(()=>{const input=document.querySelector('[role=dialog] input[type=text]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'الرَّحْمَٰنِ الرَّحِيمِ');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      await until("document.querySelectorAll('[role=dialog] button .font-reading').length>0");
       const marked=await evaluate("document.querySelectorAll('.fixed button .font-reading').length");assert.ok(marked>0);
       const hadiths=await evaluate("window.electronAPI.sunnah.search({text:'الرحمن الرحيم'}).then(result=>result.data.length)");assert.ok(hadiths>0);
       await press(L.islamweb);await pause(200);assert.ok(opened[opened.length-1].startsWith('https://www.islamweb.net/ar/index.php?page=websearch&stxt=%D8'));
@@ -101,6 +113,7 @@ app.on('browser-window-created',(_,owner)=>{
       await evaluate("document.querySelector('.fixed button .font-reading').closest('button').click()");
       await until("!document.querySelector('.fixed input[type=text]')");
 
+      console.log('STAGE', language, 'frequency');
       // KEY-252
       await until('!!document.querySelector("[data-quran-reader]")');
       await press(L.frequency);await until(`[...document.querySelectorAll('input')].some(item=>item.getAttribute('aria-label')===${JSON.stringify(L.freqSearch)})`);
@@ -116,10 +129,11 @@ app.on('browser-window-created',(_,owner)=>{
       await shot(`frequency-${language}-1280`);await noOverflow();
       result.frequency={rahm:339,hamd:[hamd.stated,hamd.count],lemma:lemma.ok?lemma.data.distinct:'missing',surah112:surah.total};
 
+      console.log('STAGE', language, 'ayah-commentary');
       // KEY-251 in the real Quran view
-      await evaluate(`document.querySelector('nav button').click()`);
-      await until('!!document.querySelector("[data-quran-reader] [data-surah][data-aya]")');
-      const mouse=kind=>`(()=>{const word=document.querySelector('[data-quran-reader] [data-surah][data-aya]');const box=word.getBoundingClientRect();word.dispatchEvent(new MouseEvent('${kind}',{bubbles:true,clientX:box.left+box.width/2,clientY:box.top+box.height/2}));})()`;
+      await evaluate(`document.querySelector('[data-quran-reader] nav button').click()`);
+      await until('!!document.querySelector("[data-quran-reader] .mushaf-svg-surface [data-surah][data-aya]")');
+      const mouse=kind=>`(()=>{const word=document.querySelector('[data-quran-reader] .mushaf-svg-surface [data-surah][data-aya]');const box=word.getBoundingClientRect();word.dispatchEvent(new MouseEvent('${kind}',{bubbles:true,clientX:box.left+box.width/2,clientY:box.top+box.height/2}));})()`;
       await evaluate(mouse('click'));
       await until('!!document.querySelector("[data-quran-inspector-layer] [data-personal-commentary]")');
       await evaluate(`document.querySelector('[data-quran-inspector-layer] [data-personal-commentary]').open=true`);
@@ -131,22 +145,26 @@ app.on('browser-window-created',(_,owner)=>{
       result.ayahCommentaryForm=true;
       await evaluate(`document.querySelector('#quran-inspector-title').closest('aside').querySelector('header button').click()`);await pause(400);
       await evaluate(mouse('dblclick'));
-      await until('!!document.querySelector("[data-quran-study-panel]")');
-      await until(`document.querySelector('[data-quran-study-panel]').textContent.includes('QUL')`);
+      await until('!!document.querySelector("[data-islamic-reader-panel]")');
+      await until(`document.querySelector('[data-islamic-reader-panel]').textContent.includes('QUL')`);
       await shot(`connections-${language}-1280`);
       result.connectionSource=true;
 
+      console.log('STAGE', language, 'sunnah');
       // KEY-253 and KEY-254 on the real corpus
-      await evaluate(`document.querySelector('aside button[aria-label=${JSON.stringify(L.sunnah)}]').click()`);await until(`[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===${JSON.stringify(L.insights)})`);
+      await evaluate(`document.querySelector('[data-nav-item][aria-label=${JSON.stringify(L.sunnah)}]').click()`);await until(`[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===${JSON.stringify(L.insights)})`);
       await press(L.insights);await until('!!document.querySelector(".sunnah-insights")');
       await fill(L.subjects,'الصلاة');await until("document.querySelectorAll('.sunnah-subjects > li').length>0");
       const stall=await evaluate(`(async()=>{let worst=0;let last=performance.now();const timer=setInterval(()=>{const now=performance.now();worst=Math.max(worst,now-last);last=now;},20);const start=performance.now();const ping=[];const pinger=(async()=>{for(;;){const t=performance.now();const list=await window.electronAPI.pathways.list().catch(()=>null);ping.push(performance.now()-t);if(window.__statsDone)break;await new Promise(r=>setTimeout(r,50));}})();const out=await window.electronAPI.sunnah.statistics();window.__statsDone=true;await pinger;clearInterval(timer);return {ms:performance.now()-start,worstPing:Math.max(...ping),hadiths:out.data.totals.hadiths,chain:out.data.totals.chainLinks};})()`);
       assert.equal(stall.hadiths,73325);assert.equal(stall.chain,325841);
-      await press(L.stats);await until("!!document.querySelector('.sunnah-stats tbody tr')");
+      await press(L.stats,'.sunnah-insights button');await until("!!document.querySelector('.sunnah-stats tbody tr')");
       await shot(`stats-${language}-1280`);
       await evaluate("document.querySelector('.sunnah-subjects button')?.click()");
       result.statistics=stall;
       await press(L.insights).catch(()=>{});
+      await evaluate("document.querySelector('.sunnah-workspace [data-reader-panel-toggle]').click()");
+      await until('!!document.querySelector("[data-islamic-reader-panel]")');
+      await evaluate(`document.querySelector('[data-islamic-reader-panel] [role=tab][id$="-related"]').click()`);
       await until("document.querySelectorAll('.sunnah-research').length>0");
       await evaluate("document.querySelector('.sunnah-research').open=true");
       await until("!!document.querySelector('.sunnah-research-tabs')");

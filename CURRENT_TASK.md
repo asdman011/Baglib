@@ -1,3 +1,9 @@
+## KEY-317 wave5 verified - 2026-11-12, Codex (key317)
+
+Wave5 PASS ar/en1280/480 using dev renderer. Exact scripts scripts/wave5-live/main.cjs and scripts/wave5-live/run.mjs. Current template-gallery/customization, context menus, scoped nav/title/progress/search, rendered search-result wait, shared Islamic reader research panel and complete profile cleanup. All original assertions retained,1340 corpus hashes unchanged, input copies/profile removed. Evidence .baglib-data/k317-wave5-evidence-iyDw68, English480 screenshot inspected. Expected AI-refusal and existing research-pathway exam-query diagnostics recorded in local report. No application UX/layout edit. Node syntax/scoped diff checks pass. Fourteen of20 verified, remaining wave6, poetry, prerequisites, quran-live, quran-layout, dashboard-live. Next wave6. Scoped commit/push authorized, Jira left to Claude. Context-menu8c92fa8 pushed normally.
+
+KEY-317 publication receipt - 2026-11-12, Codex. Context-menu race repair 8c92fa8fbebb7016d01cb99b8504f84b04bcdf73 pushed normally to origin/feature/library-domain, lock released. Wave5 in progress.
+
 ## KEY-317 context-menu race verified - 2026-11-12, Codex (key317)
 
 Exact script scripts/context-menu-live/main.cjs adds mark re-mount and visible layout waits plus two animation frames before context actions. Arabic and English light1280 live pass, input/corpus hashes unchanged, profiles removed. First English retry exposed a second Missing surface race after Escape, corrected with existence synchronization. Evidence/report recorded locally. Dark/narrow not rerun. No app UX/layout edits. Wave5 edits remain unverified and excluded from this batch. Scoped commit/push authorized, Jira left to Claude.
