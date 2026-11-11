@@ -1,3 +1,13 @@
+## KEY-317 prerequisites-live: stop killing other renderers - 2026-11-12, Claude Code
+
+prerequisites-live passed on content, but it ran scripts/ensure-port-free.js, which kills whatever listens on port 3000, and then always started its own renderer. That repeatedly took down other agents' dev servers.
+
+It now reuses a running renderer (checked on 127.0.0.1 and localhost) and stops only a server it started. It passes ar+en, and the shared dev server stays up.
+
+Follow-up: ten other runners call ensure-port-free.js; the list is in docs/agent-ops/reports/KEY-317.md.
+
+Files: scripts/prerequisites-live/run.mjs, CURRENT_TASK.md.
+
 ## KEY-317 poetry-live repaired - 2026-11-12, Codex (runner) and Claude Code (takeover)
 
 Codex started poetry-live (the runner: ui-motion inlining, a temporary public fixture served by the dev renderer, profile and fixture cleanup), then hit its usage limit. Claude finished the main harness:

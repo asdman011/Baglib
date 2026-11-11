@@ -4,10 +4,8 @@ import assert from 'node:assert/strict';
 import { spawn, execSync } from 'node:child_process';
 import electron from 'electron';
 
-// 1. Ensure port 3000 is clean
-try {
-  execSync('node scripts/ensure-port-free.js', { stdio: 'inherit' });
-} catch {}
+// 1. Do not free port 3000 by force: another agent's (or the user's) renderer may be serving it.
+//    A running renderer is reused below; one is started only when none answers.
 
 const directory = fs.mkdtempSync(path.resolve('.baglib-data/prereq-live-'));
 const profile = path.join(directory, 'profile');
@@ -49,8 +47,11 @@ const coursePdfs = [
 ];
 
 // 3. Start Next.js dev server on port 3000
-console.log('[live] Starting Next.js dev server on port 3000...');
-const nextProcess = spawn(
+// Reuse a renderer that is already running (another agent's or the user's); never start a second one.
+let alreadyRunning = false;
+for (const url of ['http://127.0.0.1:3000', 'http://localhost:3000']) { try { if ((await fetch(url)).ok) { alreadyRunning = true; break; } } catch {} }
+if (!alreadyRunning) console.log('[live] Starting Next.js dev server on port 3000...');
+const nextProcess = alreadyRunning ? null : spawn(
   process.execPath,
   ['node_modules/next/dist/bin/next', 'dev', 'src/renderer', '-p', '3000', '-H', '127.0.0.1'],
   {
@@ -113,11 +114,14 @@ try {
   }
   console.log(`[live] Copied evidence screenshots to ${persistentEvidence}`);
 } finally {
-  console.log('[live] Stopping Next.js dev server...');
-  nextProcess.kill();
-  try {
-    execSync(`taskkill /F /T /PID ${nextProcess.pid}`);
-  } catch {}
+  // Stop only a server this run started.
+  if (nextProcess) {
+    console.log('[live] Stopping Next.js dev server...');
+    nextProcess.kill();
+    try {
+      execSync(`taskkill /F /T /PID ${nextProcess.pid}`);
+    } catch {}
+  }
 
   console.log('[live] Cleaning up throwaway profile...');
   try {
