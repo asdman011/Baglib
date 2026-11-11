@@ -87,6 +87,8 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
   }, [queue, refresh]);
 
   const card = queue?.cards[0];
+  const needsConfidence = !!card && (card.questionKind ?? 'recall') === 'recall' && !practiceDone;
+  const canReveal = !needsConfidence || confidence > 0;
 
   const grade = useCallback(
     async (rating: ReviewRating) => {
@@ -158,9 +160,14 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
       if (!card) return;
 
       if (!revealed) {
-        if (shortcut?.id === 'review-reveal') {
+        // Before Reveal, 1-4 choose how sure you are; they never grade.
+        const chosen = shortcut?.id?.startsWith('review-grade-') ? Number(shortcut.id.slice(-1)) : 0;
+        if (chosen >= 1 && chosen <= 4 && needsConfidence) {
           event.preventDefault();
-          setRevealed(true);
+          setConfidence(chosen);
+        } else if (shortcut?.id === 'review-reveal') {
+          event.preventDefault();
+          if (canReveal) setRevealed(true);
         }
       } else {
         if (shortcut?.id === 'review-grade-1') {
@@ -181,7 +188,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [card, revealed, grade, onClose]);
+  }, [card, revealed, grade, onClose, needsConfidence, canReveal]);
 
   const handleOpenSource = () => {
     if (!card?.sourceRef) return;
@@ -415,7 +422,9 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                     variant="primary"
                     size="md"
                     data-srs-reveal
-                    onClick={() => setRevealed(true)}
+                    disabled={!canReveal}
+                    title={canReveal ? undefined : t('practiceConfidence')}
+                    onClick={() => { if (canReveal) setRevealed(true); }}
                     className="w-full max-w-sm h-12 text-base shadow-sm"
                   >
                     <span>{t('srsReveal')}</span>
