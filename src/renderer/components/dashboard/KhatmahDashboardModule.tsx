@@ -1,4 +1,5 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -186,7 +187,7 @@ export const KhatmahDashboardModule: React.FC<KhatmahDashboardModuleProps> = ({
         </div>
       </header>
 
-      {!plan || !stats ? (
+      {khatmah.loading ? <FeedbackSkeleton /> : !plan || !stats ? (
         <div
           data-khatmah-dashboard-empty
           className="rounded-2xl border border-dashed border-emerald-600/30 bg-emerald-500/5 p-6 text-center space-y-3"
@@ -360,6 +361,8 @@ export const CompanionMiniWidget: React.FC<{
   const remainingPages = kStats ? kStats.todayPages.length : 0;
   const effectiveStreak = Math.max(readingStreakDays, kStats?.streak || 0);
   const nextPrayerLabel = PRAYER_LABELS[prayerSnapshot.nextPrayer.name][effectiveLang];
+
+  if (khatmah.loading) return <FeedbackSkeleton />;
 
   return (
     <aside

@@ -385,6 +385,7 @@ export const DashboardCalendarModule: React.FC = () => {
                   className="p-4 sm:p-6"
                   icon={<CalendarIcon className="w-5 h-5 text-text-muted" />}
                   title={t('dashCalendarNoEvents')}
+                  action={<Button size="sm" onClick={() => setViewMode('planner')}>{t('plannerNew')}</Button>}
                 />
               ) : (
                 <div className="space-y-2">

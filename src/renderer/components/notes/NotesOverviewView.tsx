@@ -1,4 +1,5 @@
 'use client';
+import { useUndoFeedback } from '../../hooks/useUndoFeedback';
 
 import { ContextMenu } from '../ui/ContextMenu';
 import { contextActions } from '../actions/context-actions';
@@ -63,6 +64,7 @@ export type NoteFilter = 'all' | 'comments' | 'questions' | 'book';
 export const NotesOverviewView: React.FC = () => {
   const { books, dir, t, lang, openBookForReading } = useWorkspace();
   const { notes, refresh, error, failedSources, loading } = useStudyNotes();
+  const removeWithUndo = useUndoFeedback();
 
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('notes');
   const [mobileScreen, setMobileScreen] = useState<'list' | 'editor'>('list');
@@ -289,10 +291,10 @@ export const NotesOverviewView: React.FC = () => {
 
   const handleRemoveNote = async (note: StudyNote) => {
     try {
-      if (note.workId || note.knowledgeId) {
-        await window.electronAPI.knowledge.delete(note.knowledgeId || note.id);
-      }
-      await window.electronAPI.studyNotes.remove(note.id);
+      await removeWithUndo(note.knowledgeId || note.id, async () => {
+        if (note.workId || note.knowledgeId) await window.electronAPI.knowledge.delete(note.knowledgeId || note.id);
+        else await window.electronAPI.studyNotes.remove(note.id);
+      }, refresh);
       window.dispatchEvent(new CustomEvent('baglib:notes-changed'));
       if (selectedId === note.id) {
         setSelectedId(null);
@@ -742,10 +744,9 @@ export const NotesOverviewView: React.FC = () => {
 
                 {filteredNotes.length === 0 && !error && !loading && (
                   <div className="py-6 text-center space-y-3">
-                    <p className="text-xs text-muted">{t('studyNoResults')}</p>
                     <EmptyState
                       icon={<FileText className="size-6 text-muted" />}
-                      title={t('notesEmptyTitle')}
+                      title={t('studyNoResults')}
                       description={t('notesEmptyDesc')}
                       action={
                         <Button variant="primary" size="sm" onClick={handleStartNewNote}>
@@ -864,8 +865,7 @@ export const NotesOverviewView: React.FC = () => {
               <div className="flex-1 flex items-center justify-center p-8">
                 <EmptyState
                   icon={<FileText className="size-10 text-muted" />}
-                  title={t('studySearchNotes')}
-                  description={t('notesSelectPrompt')}
+                  title={t('notesSelectPrompt')}
                   action={
                     <Button variant="primary" size="md" onClick={handleStartNewNote}>
                       {t('studyNewNote')}

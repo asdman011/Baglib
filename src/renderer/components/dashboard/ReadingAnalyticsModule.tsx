@@ -1,4 +1,5 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -40,11 +41,12 @@ export const ReadingAnalyticsModule: React.FC<ReadingAnalyticsModuleProps> = ({
   onStreakLoaded,
   onOpenFullStatsModal,
 }) => {
-  const { books, bookNotes, highlights, categoryTree, lang, t } = useWorkspace();
+  const { books, bookNotes, highlights, categoryTree, lang, t, setViewMode } = useWorkspace();
   const { notes: studyNotes } = useStudyNotes();
   const [streakStats, setStreakStats] = useState<ReadingStreakStats | null>(null);
   const [weeklyHeatmap, setWeeklyHeatmap] = useState<DailyReadingHeatmapEntry[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemDTO[]>([]);
+  const [loading, setLoading] = useState(true);
   const [nowMs] = useState<number>(() => Date.now());
 
   useEffect(() => {
@@ -70,7 +72,7 @@ export const ReadingAnalyticsModule: React.FC<ReadingAnalyticsModuleProps> = ({
         }
       } catch {}
     };
-    void loadAnalytics();
+    void loadAnalytics().finally(() => { if (alive) setLoading(false); });
     return () => {
       alive = false;
     };
@@ -215,6 +217,8 @@ export const ReadingAnalyticsModule: React.FC<ReadingAnalyticsModuleProps> = ({
       : `${hrs} ${t('statsHoursUnit')}`;
   };
 
+  if (loading) return <FeedbackSkeleton />;
+
   return (
     <section
       data-dashboard-module="reading-analytics"
@@ -331,7 +335,7 @@ export const ReadingAnalyticsModule: React.FC<ReadingAnalyticsModuleProps> = ({
         </div>
 
         {categoryBreakdown.length === 0 ? (
-          <p className="text-xs text-muted">{t('statsNoData')}</p>
+          <div className="space-y-2"><p className="text-xs text-muted">{t('statsNoData')}</p><button type="button" className="underline text-xs" onClick={() => setViewMode('library')}>{t('dashOpenLibraryAction')}</button></div>
         ) : (
           <div className="space-y-2.5">
             {categoryBreakdown.map((cat) => (

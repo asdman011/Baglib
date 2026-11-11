@@ -1,4 +1,5 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
@@ -144,7 +145,7 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
   if (!athanState.ready) {
     return (
       <div className="flex-1 bg-canvas p-4" role="status">
-        {t('quranLoading')}
+        <FeedbackSkeleton />
       </div>
     );
   }

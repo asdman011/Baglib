@@ -1,4 +1,5 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -11,16 +12,18 @@ const defaults: StudyRhythm = { ...DEFAULT_STUDY_RHYTHM, intentionAr: translatio
 
 export function StudyRhythmSettings() {
   const { t } = useWorkspace();
+  const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<StudyRhythm>(defaults);
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let alive = true;
-    const load = () => window.electronAPI?.settings?.get?.(RHYTHM_SETTINGS_KEY, defaults).then(raw => { if (alive) setSettings(validateRhythm(raw)); }).catch(() => { if (alive) setError(true); });
+    const load = () => window.electronAPI?.settings?.get?.(RHYTHM_SETTINGS_KEY, defaults).then(raw => { if (alive) setSettings(validateRhythm(raw)); }).catch(() => { if (alive) setError(true); }).finally(() => { if (alive) setLoading(false); });
     void load();
     window.addEventListener(RHYTHM_CHANGED_EVENT, load);
     return () => { alive = false; window.removeEventListener(RHYTHM_CHANGED_EVENT, load); };
   }, []);
+  if (loading) return <FeedbackSkeleton />;
   return <details className="border border-subtle rounded-xl p-4 bg-surface">
     <summary className="font-bold cursor-pointer">{t('rhythmSettings')}</summary>
     <form className="space-y-3 pt-3" onSubmit={async event => {

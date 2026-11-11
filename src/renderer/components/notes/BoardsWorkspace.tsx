@@ -1,4 +1,6 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
+import { useToast } from '../ui/Toast';
 
 import { shortcutForEvent } from '../actions/shortcuts';
 import { ContextMenu } from '../ui/ContextMenu';
@@ -555,11 +557,11 @@ function BoardCanvas({
         }}
       >
         <div
-          className="absolute left-0 top-0 origin-top-left"
-          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}
+          dir="ltr" className="absolute start-0 top-0"
+          style={{ transformOrigin: '0 0', transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}
         >
           <svg
-            className="pointer-events-none absolute left-0 top-0 overflow-visible"
+            className="pointer-events-none absolute start-0 top-0 overflow-visible"
             width="1"
             height="1"
             aria-hidden="true"
@@ -621,7 +623,7 @@ function BoardCanvas({
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={() => setSelection({ kind: 'edge', id: edge.id })}
                 className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-subtle bg-surface px-2.5 py-0.5 text-xs text-main shadow-xs"
-                style={{ left: (x1 + x2) / 2, top: (y1 + y2) / 2 }}
+                style={{ insetInlineStart: (x1 + x2) / 2, top: (y1 + y2) / 2 }}
               >
                 {edge.label}
               </button>
@@ -644,7 +646,7 @@ function BoardCanvas({
                 className={`absolute flex flex-col rounded-xl border-2 text-main shadow-xs ${swatch[item.color]} ${
                   item.kind === 'sticky' ? 'rounded-sm shadow-sm' : ''
                 } ${chosen || source ? 'ring-2 ring-amber-600' : ''}`}
-                style={{ left: item.x, top: item.y, width: item.w, height: item.h }}
+                style={{ insetInlineStart: item.x, top: item.y, width: item.w, height: item.h }}
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   if (connectFrom !== undefined) return;
@@ -709,7 +711,7 @@ function BoardCanvas({
                 <div
                   data-board-resize
                   aria-hidden="true"
-                  className="absolute bottom-0 right-0 size-3 cursor-se-resize"
+                  className="absolute bottom-0 end-0 size-3 cursor-se-resize"
                   onPointerDown={(event) => {
                     event.stopPropagation();
                     drag.current = {
@@ -732,8 +734,8 @@ function BoardCanvas({
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <EmptyState
               icon={<LayoutGrid className="size-8 text-muted" />}
-              title={t('boardsEmptyCanvasTitle')}
-              description={`${t('boardsEmptyCanvasDesc')} ${t('boardsEmpty')}`}
+              title={t('boardsEmptyCanvasDesc')}
+              action={<Button size="sm" onClick={() => add('sticky')}>{t('boardsAddSticky')}</Button>}
               className="pointer-events-auto max-w-md"
             />
           </div>
@@ -758,12 +760,14 @@ export function BoardsWorkspace({
   onClose?: () => void;
 }) {
   const { t, dir } = useWorkspace();
+  const { showToast } = useToast();
+  const [loading, setLoading] = useState(true);
   const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [open, setOpen] = useState<Board | null>(null);
   const [failed, setFailed] = useState(false);
 
   const load = useCallback(
-    () => window.electronAPI.boards.list().then(setBoards, () => setFailed(true)),
+    () => { return window.electronAPI.boards.list().then(rows => { setBoards(rows); setFailed(false); }, () => setFailed(true)).finally(() => setLoading(false)); },
     []
   );
 
@@ -803,7 +807,12 @@ export function BoardsWorkspace({
   const remove = async (id: string) => {
     if (!window.confirm(t('boardsDeleteConfirm'))) return;
     try {
+      const previous = await window.electronAPI.boards.get(id);
       await window.electronAPI.boards.remove(id);
+      showToast({ message: t('feedbackRemoved'), duration: 8000, ...(previous ? { action: { label: t('undo'), onClick: async () => {
+        await window.electronAPI.boards.save({ ...previous, expectedRevision: 0 });
+        await load();
+      } } } : {}) });
       if (open?.id === id) setOpen(null);
       void load();
     } catch {
@@ -838,7 +847,7 @@ export function BoardsWorkspace({
     >
       {failed && (
         <p role="alert" className="px-4 py-2 text-xs text-danger bg-danger/10 border-b border-danger/20">
-          {t('boardsFailed')}
+          {t('boardsFailed')} <button type="button" className="underline" onClick={() => { setLoading(true); void load(); }}>{t('lookupRetry')}</button>
         </p>
       )}
 
@@ -890,25 +899,11 @@ export function BoardsWorkspace({
           </div>
 
           {/* Boards List or Empty State */}
-          {!boards.length ? (
+          {loading ? <FeedbackSkeleton /> : !boards.length && !failed ? (
             <EmptyState
               icon={<LayoutGrid className="size-8 text-muted" />}
               title={t('boardsNone')}
-              action={
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  {(['blank', 'mind', 'argument'] as const).map((preset) => (
-                    <Button
-                      key={preset}
-                      variant="primary"
-                      size="sm"
-                      onClick={() => void create(preset)}
-                      icon={presetIcon[preset]}
-                    >
-                      {t(presetKeys[preset])}
-                    </Button>
-                  ))}
-                </div>
-              }
+              action={<Button variant="primary" size="sm" onClick={() => void create('blank')}>{t('boardsPresetBlank')}</Button>}
             />
           ) : (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

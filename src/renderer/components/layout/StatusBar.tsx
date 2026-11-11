@@ -11,7 +11,7 @@ export const StatusBar: React.FC = () => {
   const { notes, loading, error } = useStudyNotes();
   const readiness = useReadiness();
   const checking = Object.values(readiness).some(value => value === null);
-  const issues = [!readiness.database && t('feedbackDatabaseUnavailable'), !readiness.index && t('feedbackIndexUnavailable'), !readiness.pdf && t('feedbackPdfUnavailable')].filter(Boolean).join(' ? ');
+  const issues = [!readiness.database && t('feedbackDatabaseUnavailable'), !readiness.index && t('feedbackIndexUnavailable'), !readiness.pdf && t('feedbackPdfUnavailable')].filter(Boolean).join(' \u00b7 ');
   const ready = !checking && !issues;
   const status = t(checking ? 'feedbackChecking' : ready ? 'feedbackReady' : 'feedbackLimited');
   const detail = checking ? status : ready ? t('feedbackReadyDetail') : issues;
@@ -29,7 +29,7 @@ export const StatusBar: React.FC = () => {
         <span className="hidden sm:inline text-subtle" aria-hidden="true">•</span>
 
         {/* Local Indexing Status */}
-        <div data-readiness={checking ? 'checking' : ready ? 'ready' : 'limited'} className="flex min-w-0 items-center gap-1.5" title={detail} aria-label={`${status} ? ${detail}`}>
+        <div data-readiness={checking ? 'checking' : ready ? 'ready' : 'limited'} className="flex min-w-0 items-center gap-1.5" title={detail} aria-label={`${status} \u00b7 ${detail}`}>
           <Database className={`w-3 h-3 shrink-0 ${ready ? 'text-success' : 'text-muted'}`} />
           <span className="truncate">{t('localLibraryStorage')} · {status}</span>
         </div>

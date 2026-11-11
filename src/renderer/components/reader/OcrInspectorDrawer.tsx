@@ -1,4 +1,5 @@
 'use client';
+import { useToast } from '../ui/Toast';
 
 import React, { useState } from 'react';
 import {
@@ -92,7 +93,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
   const [currentSuspectIndex, setCurrentSuspectIndex] = useState<number>(0);
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editText, setEditText] = useState<string>('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const { showToast: notify } = useToast();
   const [savedCorrections, setSavedCorrections] = useState<OcrWordCorrectionsMap>({});
   const [staleCorrections, setStaleCorrections] = useState<StaleCorrectionInfo[]>([]);
   const cropCanvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -352,8 +353,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
       }
     }
 
-    setToastMessage(t('ocrWordCorrectedToast'));
-    setTimeout(() => setToastMessage(null), 2500);
+    notify({ message: t('ocrWordCorrectedToast') });
   };
 
   const handleDiscardCorrection = async (wordIdxStr: string) => {
@@ -403,8 +403,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
       return next;
     });
 
-    setToastMessage(t('ocrDiscardCorrectionToast'));
-    setTimeout(() => setToastMessage(null), 2500);
+    notify({ message: t('ocrDiscardCorrectionToast') });
   };
 
   const handleAcceptSuspect = async () => {
@@ -473,8 +472,7 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
     // Accept after edit
     handleAcceptSuspect();
     setIsEditing(false);
-    setToastMessage(t('ocrWordCorrectedToast'));
-    setTimeout(() => setToastMessage(null), 2500);
+    notify({ message: t('ocrWordCorrectedToast') });
   };
 
   // Keyboard navigation shortcuts
@@ -1100,13 +1098,6 @@ export const OcrInspectorDrawer: React.FC<OcrInspectorDrawerProps> = ({
                     </span>
                   </div>
                 </div>
-
-                {toastMessage && (
-                  <div className="p-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
-                    <span>{toastMessage}</span>
-                  </div>
-                )}
 
                 {/* Stale Corrections Warning & Resolution */}
                 {staleCorrections.length > 0 && (

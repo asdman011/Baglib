@@ -1,4 +1,5 @@
 'use client';
+import { useToast } from '../ui/Toast';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -35,12 +36,9 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
   const [confirmEmptyOpen, setConfirmEmptyOpen] = useState(false);
   const [confirmPermanentId, setConfirmPermanentId] = useState<string | null>(null);
   const [confirmPermanentBulk, setConfirmPermanentBulk] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const { showToast: notify } = useToast();
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
+  const showToast = (message: string) => { notify({ message }); };
 
   const loadTrash = useCallback(async () => {
     if (typeof window === 'undefined' || !window.electronAPI?.getTrashWorks) return;
@@ -508,14 +506,6 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
         )}
 
         {/* Floating Success Toast */}
-        {toastMessage && (
-          <div className="absolute bottom-4 inset-x-0 flex justify-center pointer-events-none z-70">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white shadow-xl text-xs font-semibold animate-in fade-in slide-in-from-bottom-2 duration-150">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{toastMessage}</span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

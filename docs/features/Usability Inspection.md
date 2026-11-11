@@ -57,6 +57,10 @@ Impact: a slow scan leaves the user waiting with no clear escape path. Recommend
 
 Impact: assistive technology may not announce these as modal dialogs; keyboard users may be able to reach background actions. Recommendation: verify live Tab/Shift+Tab and opener focus return before implementing a shared dialog behavior.
 
+### KEY-301 part 2 - 2026-11-11, Codex then Claude Code
+
+The U1 readiness tooltip and accessible label now join unavailable components with a real middle dot. U5: the Notes list empty state names "no matching results" and offers New note. A failed marks-list load shows Retry. Boards, the planner, pathways and every dashboard module show content-shaped skeletons while loading, then a one-sentence empty state with one primary action. Notes, saved cards and review comments offer Undo through the existing knowledge-history restore; boards through their pre-delete snapshot. Deletions without a restore path show a confirmation only. Long metadata, storage and OCR operations show one persistent progress notification. Native verification: feedback-ui-live 8/8 in ar/en, light/dark, 1280/480. Full suite 1806/1806.
+
 ## Additional recovery and discoverability findings
 
 ### U5 — Notes errors give little actionable recovery guidance

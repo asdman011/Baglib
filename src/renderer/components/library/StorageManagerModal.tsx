@@ -1,4 +1,6 @@
 'use client';
+import { useProgressFeedback } from '../../hooks/useProgressFeedback';
+import { useToast } from '../ui/Toast';
 import { errorMessage } from '../../../shared/errors';
 
 
@@ -58,13 +60,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   const [isAuditing, setIsAuditing] = useState(false);
   const [summary, setSummary] = useState<StorageHealthSummary | null>(null);
   const [analytics, setAnalytics] = useState<StorageAnalytics | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clearToastTimer = React.useCallback(() => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = null;
-  }, []);
-  useEffect(() => clearToastTimer, [clearToastTimer]);
+  const { showToast: notify } = useToast();
 
   // Batch rebind state
   const [isBatchScanning, setIsBatchScanning] = useState(false);
@@ -80,6 +76,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   const [deletePhysicalFile, setDeletePhysicalFile] = useState(false);
   const repairActive = useRef(false);
   const [isRepairing, setIsRepairing] = useState(false);
+  useProgressFeedback(isRepairing || isAuditing || isBatchScanning, t('storageOperationInProgress'));
   const closeSafely = () => {
     if (!repairActive.current && !isAuditing && !isBatchScanning) onClose();
   };
@@ -144,11 +141,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
     }
   }, [isOpen]);
 
-  const showToast = (msg: string) => {
-    clearToastTimer();
-    setToastMessage(msg);
-    toastTimer.current = setTimeout(() => setToastMessage(null), 4000);
-  };
+  const showToast = (message: string) => { notify({ message }); };
 
   // Single-file locate / re-link handler
   const handleLocateFile = async (workId: string) => {
@@ -318,7 +311,6 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         className="relative flex flex-col w-full max-w-5xl h-[88dvh] max-h-[calc(100dvh-2rem)] bg-surface-base dark:bg-zinc-900 border border-border-base dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden"
         style={{ textAlign: 'start' }}
       >
-        {(isRepairing || isAuditing || isBatchScanning) && <p role="status" className="shrink-0 px-4 py-2 text-xs leading-relaxed text-text-muted">{t('storageOperationInProgress')}</p>}
         {/* Header */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 border-b border-border-base dark:border-zinc-800 bg-surface-raised dark:bg-zinc-900/90 [&>div:first-child]:basis-full sm:[&>div:first-child]:basis-auto [&_p]:hidden sm:[&_p]:block">
           <div className="flex items-center gap-3">
@@ -553,14 +545,6 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         {/* Content Area */}
         <div data-storage-results className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-4">
           {/* Toast Notification */}
-          {toastMessage && (
-            <div className="p-3 rounded-xl bg-primary-50 dark:bg-primary-950/60 border border-primary-200 dark:border-primary-800 text-xs font-medium text-primary-800 dark:text-primary-200 flex items-center justify-between animate-in slide-in-from-top-2">
-              <span>{toastMessage}</span>
-              <button onClick={() => setToastMessage(null)} className="text-primary-600 hover:text-primary-900">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
 
           {/* Duplicate Groups View when Tab is Duplicates */}
           {activeTab === 'duplicates' && analytics?.duplicateGroups && analytics.duplicateGroups.length > 0 ? (

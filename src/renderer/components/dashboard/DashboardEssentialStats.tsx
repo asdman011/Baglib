@@ -25,7 +25,7 @@ export function DashboardEssentialStats() {
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{tiles.map(({ key, value, icon: Icon, unit }) => <div key={key} data-essential-tile className="rounded-2xl border border-border bg-surface p-3 sm:p-4 min-w-0 space-y-2">
       <div className="flex items-start gap-2 text-xs text-text-muted leading-relaxed"><Icon aria-hidden="true" className="w-4 h-4 text-primary-text shrink-0 mt-0.5" /><span>{t(key)}</span></div>
-      <p className="text-2xl font-semibold tabular-nums leading-relaxed">{value === undefined ? '—' : value.toLocaleString(lang === 'ar' ? 'ar-EG-u-nu-arab' : 'en-US')} <span className="text-xs text-text-muted font-normal">{unit}</span></p>
+      <p className="text-2xl font-semibold tabular-nums leading-relaxed">{value === undefined ? <span aria-hidden="true" data-feedback-inline-skeleton className="inline-block h-8 w-16 animate-pulse rounded-md bg-border/50 align-middle" /> : value.toLocaleString(lang === 'ar' ? 'ar-EG-u-nu-arab' : 'en-US')} <span className="text-xs text-text-muted font-normal">{unit}</span></p>
     </div>)}</div>
     {error && <p role="alert" className="text-sm">{t('statisticsLoadError')} <button type="button" onClick={retry} className="underline">{t('statisticsRetry')}</button></p>}
   </section>;

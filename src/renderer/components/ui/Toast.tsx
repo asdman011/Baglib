@@ -24,6 +24,7 @@ export interface ToastItem extends ToastOptions {
 interface ToastContextValue {
   showToast: (options: ToastOptions) => string;
   dismissToast: (id: string) => void;
+  updateToast: (id: string, options: ToastOptions) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -140,6 +141,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const updateToast = useCallback((id: string, options: ToastOptions) => {
+    setToasts(previous => previous.map(toast => toast.id === id ? { ...toast, ...options } : toast));
+  }, []);
+
   const showToast = useCallback((options: ToastOptions): string => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const newToast: ToastItem = {
@@ -152,7 +157,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   return (
-    <ToastContext.Provider value={{ showToast, dismissToast }}>
+    <ToastContext.Provider value={{ showToast, dismissToast, updateToast }}>
       {children}
       {/* Toast live region container */}
       <div

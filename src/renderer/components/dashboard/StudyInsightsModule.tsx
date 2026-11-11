@@ -1,4 +1,5 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useEffect, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -47,7 +48,7 @@ export function StudyInsightsModule() {
     <h2 className="text-lg font-bold">{t('studyInsightsTitle')}</h2>
     {reviews && <button type="button" onClick={() => setViewMode('notes')} className="text-sm underline">{t('srsCounts', { due: reviews.due, reviewed: reviews.reviewedToday })}</button>}
     {error && <p role="alert">{t('plannerError')}</p>}
-    {!summary ? <p>{error ? unavailable : t('plannerLoading')}</p> : <>
+    {!summary ? (error ? <p>{unavailable}</p> : <FeedbackSkeleton />) : <>
       <p className="text-xs text-muted">{t(summary.timeSource === 'sessions' ? 'studySessionSource' : summary.timeSource === 'dwell' ? 'studyDwellSource' : 'studyNoTimeSource')}</p>
       {summary.partial && <p>{t('studyPartial')}</p>}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

@@ -1,4 +1,6 @@
 'use client';
+import { useToast } from '../ui/Toast';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import { relationLabels } from '../../utils/relation-labels';
 import { KnowledgeGraphButton } from '../notes/KnowledgeGraph';
@@ -52,8 +54,9 @@ export const QuickNoteScratchpad: React.FC<{
   const [linksOpen, setLinksOpen] = useState(false);
   const [ready, setReady] = useState(!!initialNote);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<TranslationKey | null>(null);
-  const [cardMessage, setCardMessage] = useState<string | null>(null);
+  const { showToast } = useToast();
+  const setStatus = (key: TranslationKey | null) => { if (key) showToast({ message: t(key), type: key === 'studySaveFailed' ? 'danger' : 'default' }); };
+  const setCardMessage = (message: string) => { showToast({ message }); };
   // Honorific expansion is on unless the user turned it off (decision S1).
   const [honorificsOn, setHonorificsOn] = useState(true);
   useEffect(() => {
@@ -173,8 +176,11 @@ export const QuickNoteScratchpad: React.FC<{
     finally { savingRef.current = false; setSaving(false); }
   };
   const tools = [[Bold, 'studyBold', '**', '**'], [Italic, 'studyItalic', '*', '*'], [Heading2, 'studyHeading', '## ', ''], [Quote, 'studyQuote', '> ', ''], [List, 'studyList', '- ', ''], [Code, 'studyCode', '`', '`']] as const;
+  if (!ready) return <FeedbackSkeleton />;
+
   return <section data-dashboard-module="quick-note-scratchpad" aria-label={t('dashScratchpadTitle')} className="rounded-2xl border border-subtle bg-surface p-4 space-y-3 min-w-0">
     <header className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-display font-bold leading-relaxed">{t('dashScratchpadTitle')}</h2><span data-scratchpad-autosave-status className="text-xs text-muted" role="status">{draftStatus && t(draftStatus)}</span></header>
+    {!content.trim() && <div className="space-y-2 text-sm leading-relaxed"><p>{t('dashScratchpadPlaceholder')}</p><button type="button" className="underline" onClick={() => editor.current?.focus()}>{t('studyNewNote')}</button></div>}
     <input disabled={!ready || saving} aria-label={t('studyNoteTitle')} placeholder={t('studyNoteTitle')} maxLength={300} value={title} onChange={event => setTitle(event.target.value)} className="w-full rounded-lg border border-subtle bg-canvas px-3 py-2 text-sm" dir="auto" />
     <div className="flex flex-wrap items-center gap-1 border-b border-subtle pb-2">
       {tools.map(([Icon, label, prefix, suffix]) => <button type="button" key={label} title={t(label)} aria-label={t(label)} className="p-2 rounded hover:bg-canvas" onClick={() => insert(prefix, suffix)}><Icon size={14} /></button>)}
@@ -189,8 +195,6 @@ export const QuickNoteScratchpad: React.FC<{
       <input aria-label={t('studyAliases')} value={aliasesInput} onChange={event => setAliasesInput(event.target.value)} placeholder={t('studyAliases')} className="rounded-lg border border-subtle bg-canvas px-3 py-2 text-xs min-w-0" />
     </div>
     <select aria-label={t('dashScratchpadAttachBook')} value={workId} disabled={!!initialNote?.workId || !!initialNote?.knowledgeId} onChange={event => setWorkId(event.target.value)} className="w-full rounded-lg border border-subtle bg-canvas px-3 py-2 text-xs"><option value="">{t('dashScratchpadGeneralNote')}</option>{books.map(book => <option key={book.id} value={book.id}>{book.title}</option>)}</select>
-    {status && <p role={status === 'studySaveFailed' ? 'alert' : 'status'} className="text-xs leading-relaxed">{t(status)}</p>}
-    {cardMessage && <p role="status" data-card-message className="text-xs leading-relaxed">{cardMessage}</p>}
     <div className="flex flex-wrap gap-2"><button type="button" data-scratchpad-save disabled={!ready || !content.trim() || saving} onClick={() => void save()} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 text-white px-4 py-2 text-sm disabled:opacity-40"><Save size={15} />{t('dashScratchpadSaveToKb')}</button><button type="button" data-scratchpad-clear onClick={clear} className="rounded-lg border border-subtle px-3 py-2 text-xs">{t('dashScratchpadClear')}</button></div>
   </section>;
 };

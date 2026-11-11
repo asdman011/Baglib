@@ -1,4 +1,6 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
+import { useToast } from '../ui/Toast';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays, Plus } from 'lucide-react';
@@ -16,6 +18,7 @@ const control = 'rounded-lg border border-subtle bg-surface p-2 text-sm text-mai
 export function StudyPlannerView({ adjustment = 0 }: { adjustment?: number }) {
   const { t, lang, dir, books, openBookForReading } = useWorkspace();
   const { notes } = useStudyNotes();
+  const { showToast } = useToast();
   const [tasks, setTasks] = useState<StudyTask[]>([]);
   const [draft, setDraft] = useState<StudyTaskInput>(emptyTask);
   const [anchor, setAnchor] = useState(() => civilDate(new Date()));
@@ -77,7 +80,7 @@ export function StudyPlannerView({ adjustment = 0 }: { adjustment?: number }) {
       <button className={control} onClick={() => setDraft(emptyTask())}><Plus className="w-4 h-4 inline" /> {t('plannerNew')}</button>
     </header>
     {error && <div role="alert" className="p-3 border border-red-500 rounded-lg">{t('plannerError')} <button className="underline" onClick={() => void perform(reload)}>{t('plannerReload')}</button></div>}
-    {loading && <p role="status">{t('plannerLoading')}</p>}
+    {loading && <FeedbackSkeleton />}
     {tasks.length >= 5000 && <p role="status">{t('plannerLimit')}</p>}
     <div className="flex gap-2 flex-wrap items-center">
       <select aria-label={t('plannerCalendar')} className={control} value={calendar} onChange={event => setCalendar(event.target.value as PlannerCalendar)}><option value="gregorian">{t('plannerGregorian')}</option><option value="hijri">{t('plannerHijri')}</option></select>
@@ -121,13 +124,13 @@ export function StudyPlannerView({ adjustment = 0 }: { adjustment?: number }) {
       <div className="space-y-3 min-w-0">
         <label className="block text-sm">{t('plannerSearch')}<input className={`${control} w-full block`} value={search} onChange={event => setSearch(event.target.value)} /></label>
         <select aria-label={t('plannerFilter')} className={control} value={scope} onChange={event => setScope(event.target.value as typeof scope)}><option value="all">{t('plannerAll')}</option><option value="scheduled">{t('plannerScheduled')}</option><option value="unscheduled">{t('plannerUnscheduled')}</option></select>
-        {!visible.length && !loading && <p>{t('plannerEmpty')}</p>}
+        {!visible.length && !loading && !error && <div className="space-y-3 p-4"><p>{t('plannerEmpty')}</p><button type="button" className={control} onClick={() => { setSearch(''); setScope('all'); setDraft(emptyTask()); document.querySelector<HTMLInputElement>('[data-study-planner] form input')?.focus(); }}>{t(search || scope !== 'all' ? 'clearAllFilters' : 'plannerNew')}</button></div>}
         {visible.map((task, index) => <article key={task.id} data-planner-task className="border border-subtle rounded-xl bg-surface p-3 space-y-2">
           <label className="flex items-start gap-2"><input type="checkbox" disabled={busy} checked={task.status === 'completed'} onChange={() => void perform(() => window.electronAPI.planner.save({ ...task, status: task.status === 'completed' ? 'open' : 'completed', expectedUpdatedAt: task.updatedAt }))} /><span dir="auto" className={`break-words min-w-0 ${task.status === 'completed' ? 'line-through' : ''}`}>{task.title}</span></label>
           <p dir="auto" className="whitespace-pre-wrap break-words text-sm">{task.description}</p>
           <p className="text-xs text-muted">{task.startDate || task.dueDate ? `${task.startDate ? format(parseCivilDate(task.startDate)) : ''} — ${task.dueDate ? format(parseCivilDate(task.dueDate)) : ''}` : t('plannerUnscheduled')}</p>
           <div className="flex flex-wrap gap-2">{task.references.map((reference, position) => <button key={`${reference.target}-${position}`} dir="auto" className="underline text-sm break-all" onClick={() => void openReference(plannerReferenceTarget(reference))}>{reference.label}{reference.scope === 'surah' && ` (${t('plannerWholeSurah')})`}</button>)}</div>
-          <div className="flex gap-2 flex-wrap text-sm"><button disabled={busy} className={control} onClick={() => edit(task)}>{t('plannerEdit')}</button><button disabled={busy || index === 0} className={control} onClick={() => void perform(() => window.electronAPI.planner.save({ ...task, sortOrder: (visible[index - 1]?.sortOrder || 0) - 1, expectedUpdatedAt: task.updatedAt }))}>{t('plannerMoveEarlier')}</button><button disabled={busy} className={control} onClick={() => { if (window.confirm(t('plannerDeleteConfirm'))) void perform(() => window.electronAPI.planner.remove(task.id, task.updatedAt)); }}>{t('plannerDelete')}</button></div>
+          <div className="flex gap-2 flex-wrap text-sm"><button disabled={busy} className={control} onClick={() => edit(task)}>{t('plannerEdit')}</button><button disabled={busy || index === 0} className={control} onClick={() => void perform(() => window.electronAPI.planner.save({ ...task, sortOrder: (visible[index - 1]?.sortOrder || 0) - 1, expectedUpdatedAt: task.updatedAt }))}>{t('plannerMoveEarlier')}</button><button disabled={busy} className={control} onClick={() => { if (window.confirm(t('plannerDeleteConfirm'))) void perform(async () => { await window.electronAPI.planner.remove(task.id, task.updatedAt); showToast({ message: t('feedbackRemoved') }); }); }}>{t('plannerDelete')}</button></div>
         </article>)}
       </div>
     </div>

@@ -1,4 +1,5 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useState } from 'react';
 import {
@@ -123,6 +124,8 @@ export const AthanDashboardModule: React.FC<AthanDashboardModuleProps> = ({
       },
     });
   };
+
+  if (syncing) return <FeedbackSkeleton />;
 
   return (
     <section

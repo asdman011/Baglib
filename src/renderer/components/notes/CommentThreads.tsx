@@ -1,4 +1,5 @@
 'use client';
+import { useUndoFeedback } from '../../hooks/useUndoFeedback';
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, CornerDownLeft, MessageSquare, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -21,6 +22,7 @@ function anchorLabel(anchor: CommentAnchor | null, t: (key: TranslationKey, para
 /** Threaded comments on one knowledge item: reply, resolve, reopen, edit, delete, with open/resolved filters (ADR-010). */
 export function CommentThreads({ id, onChanged, actor }: { id: string; onChanged: () => void; actor?: 'reader' }) {
   const { t, lang } = useWorkspace();
+  const removeWithUndo = useUndoFeedback();
   const [threads, setThreads] = useState<CommentThread[]>([]);
   const [filter, setFilter] = useState<CommentFilter>('open');
   const [draft, setDraft] = useState('');
@@ -57,7 +59,7 @@ export function CommentThreads({ id, onChanged, actor }: { id: string; onChanged
     </>;
   const actions = (entryId: string, content: string) => <>
     <button type="button" aria-label={t('commentsEdit')} title={t('commentsEdit')} onClick={() => { setEditing(entryId); setReplyTo(null); setText(content); }} className="p-1 rounded hover:bg-canvas"><Pencil size={13} /></button>
-    <button type="button" aria-label={t('commentsDelete')} title={t('commentsDelete')} onClick={() => { if (window.confirm(t('commentsDeleteConfirm'))) void run(() => api().removeComment(entryId, actor)); }} className="p-1 rounded hover:bg-canvas"><Trash2 size={13} /></button>
+    <button type="button" aria-label={t('commentsDelete')} title={t('commentsDelete')} onClick={() => { if (window.confirm(t('commentsDeleteConfirm'))) void run(() => removeWithUndo(id, () => api().removeComment(entryId, actor), async () => { await load(); onChanged(); })); }} className="p-1 rounded hover:bg-canvas"><Trash2 size={13} /></button>
   </>;
   return <section data-comment-threads={id} aria-label={t('commentsTitle')} className="space-y-2">
     <header className="flex flex-wrap items-center gap-2">

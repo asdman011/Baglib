@@ -1,4 +1,5 @@
 'use client';
+import { useProgressFeedback } from '../../hooks/useProgressFeedback';
 import { useToast } from '../ui/Toast';
 import { STAMPS, measurementLabel } from '../../../shared/pdf-study-tools';
 import { translations } from '../../translations';
@@ -262,6 +263,7 @@ const SourceBookReader: React.FC = () => {
   const setIsKnowledgeDrawerOpen = panels.setters['knowledge'];
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemDTO[]>([]);
   const [marksLoading, setMarksLoading] = useState(true);
+  const [marksError, setMarksError] = useState(false);
   const [previousJumpPage, setPreviousJumpPage] = useState<number | null>(null);
   const [autoCropMargins, setAutoCropMargins] = useState<boolean>(false);
   const [pdfFitMode, setPdfFitMode] = useState<'Fit' | 'FitH' | 'FitV'>('FitH');
@@ -396,6 +398,7 @@ const SourceBookReader: React.FC = () => {
   const [isReadingOrderTagged, setIsReadingOrderTagged] = useState<boolean>(false);
   const [a11yReport, setA11yReport] = useState<PdfAccessibilityBaseReport | null>(null);
   const [ocrProgress, setOcrProgress] = useState<{ current: number; total: number; words: number } | null>(null);
+  useProgressFeedback(isOcrRunning, ocrProgress ? t('feedbackOcrProgress', { current: ocrProgress.current, total: ocrProgress.total }) : t('ocrRunningText'));
   const [activeOcrWordIndex, setActiveOcrWordIndex] = useState<number | null>(null);
 
   // Pluggable Offline Dictionary & Encyclopedia State (Story 3.3 / KEY-142)
@@ -2134,14 +2137,14 @@ const SourceBookReader: React.FC = () => {
   };
 
   // Delete annotation from SQLite
-  const handleDeleteAnnotation = async (id: string) => {
+  const handleDeleteAnnotation = async (id: string, message = t('feedbackMarkDeleted')) => {
     try {
       const api = (window).electronAPI;
       if (api?.deleteAnnotation) {
         if (knowledgeItems.some(item => item.id === id)) {
-          await handleDeleteKnowledgeItem(id);
+          await handleDeleteKnowledgeItem(id, message);
           return;
-        } else { await api.deleteAnnotation(id); notify({ message: t('feedbackMarkDeleted') }); }
+        } else { await api.deleteAnnotation(id); notify({ message }); }
         setAnnotations((prev) => prev.filter((a) => a.id !== id));
       }
     } catch (err) {
@@ -2250,6 +2253,7 @@ const SourceBookReader: React.FC = () => {
     if (!markWorkId) return;
     const [items, notes] = await Promise.all([window.electronAPI.knowledge.getByWork(markWorkId), window.electronAPI.getAnnotations?.(markWorkId)]);
     if (markWorkRef.current !== markWorkId) return;
+    setMarksError(false);
     if (items) setKnowledgeItems(items);
     if (notes) setAnnotations(notes);
     refreshMarkCounts();
@@ -2322,9 +2326,9 @@ const SourceBookReader: React.FC = () => {
       api.knowledge
         .getByWork(activeBook.id)
         .then((items: KnowledgeItemDTO[]) => {
-          if (alive && items) { initialMarksLoad.current = true; setKnowledgeItems(items); }
+          if (alive && items) { initialMarksLoad.current = true; setMarksError(false); setKnowledgeItems(items); }
         })
-        .catch(console.warn).finally(() => { if (alive) setMarksLoading(false); });
+        .catch(() => { if (alive) setMarksError(true); }).finally(() => { if (alive) setMarksLoading(false); });
     }
     return () => { alive = false; };
   }, [activeBook?.id]);
@@ -2478,7 +2482,7 @@ const SourceBookReader: React.FC = () => {
     );
   };
 
-  const handleDeleteKnowledgeItem = async (id: string) => {
+  const handleDeleteKnowledgeItem = async (id: string, message = t('feedbackMarkDeleted')) => {
     try {
       const api = window.electronAPI;
       const previous = await api.knowledgeHistory.versions(id);
@@ -2489,7 +2493,7 @@ const SourceBookReader: React.FC = () => {
       const deleted = await api.knowledgeHistory.versions(id);
       const revision = previous[0]?.revision;
       const expected = deleted[0]?.revision;
-      notify({ message: t('feedbackMarkDeleted'), duration: 8000,
+      notify({ message, duration: 8000,
         ...(revision && expected ? { action: { label: t('undo'), onClick: async () => {
           try {
             await api.knowledgeHistory.restore(id, revision, expected, true);
@@ -2749,16 +2753,14 @@ const SourceBookReader: React.FC = () => {
       (k) => k.type === 'bookmark' && parseInt(k.location, 10) === readingPage
     );
     if (existingKnowledge) {
-      await handleDeleteKnowledgeItem(existingKnowledge.id);
-      setShowToast(t('bookmarkRemoved', { page: readingPage }));
+      await handleDeleteKnowledgeItem(existingKnowledge.id, t('bookmarkRemoved', { page: readingPage }));
       return;
     }
     const existingAnnotation = annotations.find(
       (a) => a.type === 'bookmark' && parseInt(a.locationCfiOrPage, 10) === readingPage
     );
     if (existingAnnotation) {
-      await handleDeleteAnnotation(existingAnnotation.id);
-      setShowToast(t('bookmarkRemoved', { page: readingPage }));
+      await handleDeleteAnnotation(existingAnnotation.id, t('bookmarkRemoved', { page: readingPage }));
       return;
     }
 
@@ -2790,7 +2792,6 @@ const SourceBookReader: React.FC = () => {
     if (!windowAPI?.ocrRecognizePage) return;
 
     setIsOcrRunning(true);
-    setShowToast(ocrEngine === 'paddleocr_vl' ? t('ocrCpuSlowHint') : t('ocrRunningText'));
     try {
       const res: OcrPageResult = await windowAPI.ocrRecognizePage({
         filePath: activeBook.filePath,
@@ -3649,7 +3650,7 @@ const SourceBookReader: React.FC = () => {
           pdfDoc={pdfDocProxy}
           paginatedPages={paginatedPages}
         />)}
-        {chrome.tab === 'knowledge' && <PdfMarksList loading={marksLoading} onStartMark={() => { setMarkupTool('highlight'); closeChromePanel(); }} items={knowledgeItems} reviews={pdfReviews} isReflowable={isReflowable} t={t}
+        {chrome.tab === 'knowledge' && <PdfMarksList error={marksError} onRetry={() => { setMarksLoading(true); void reloadMarks().catch(() => setMarksError(true)).finally(() => setMarksLoading(false)); }} loading={marksLoading} onStartMark={() => { setMarkupTool('highlight'); closeChromePanel(); }} items={knowledgeItems} reviews={pdfReviews} isReflowable={isReflowable} t={t}
           onOpenMark={(item, at) => { refreshMarkCounts(); setOpenMark({ item, at }); }}
           onJump={(page, cfi) => {
             if (cfi && isReflowable) { try { (bookDoc?.rendition as { display?: (target: string) => void } | undefined)?.display?.(cfi); } catch {} }

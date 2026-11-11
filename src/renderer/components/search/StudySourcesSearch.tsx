@@ -1,7 +1,8 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useEffect, useState } from 'react';
-import { ExternalLink, Loader2 } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { navigateStudyReference, openSunnahReference } from '../../utils/study-navigation';
 import { collectionKeys } from '../../utils/sunnah-collections';
@@ -25,6 +26,8 @@ export function StudySourcesSearch({ query, onLeave }: { query: string; onLeave:
   const { t, lang, setViewMode, books, openBookForReading } = useWorkspace();
   const [found, setFound] = useState<Found>(nothing);
   const [busy, setBusy] = useState(false);
+  const [completedQuery, setCompletedQuery] = useState('');
+  const [retry, setRetry] = useState(0);
   const text = query.trim();
 
   useEffect(() => {
@@ -43,11 +46,11 @@ export function StudySourcesSearch({ query, onLeave }: { query: string; onLeave:
       const sunnah = async () => { const result = await api.sunnah.search?.({ text }); return result?.ok ? result.data : null; };
       const poetry = async () => { const result = await api.poetry.search({ query: text, limit: SHOWN }); return result.ok ? result.data.items : null; };
       void Promise.all([quran().catch(() => null), sunnah().catch(() => null), poetry().catch(() => null)]).then(([ayahs, hadiths, poems]) => {
-        if (alive) { setFound({ quran: ayahs, sunnah: hadiths, poetry: poems }); setBusy(false); }
+        if (alive) { setCompletedQuery(text); setFound({ quran: ayahs, sunnah: hadiths, poetry: poems }); setBusy(false); }
       });
     }, SEARCH_DELAY_MS);
     return () => { alive = false; clearTimeout(timer); };
-  }, [text]);
+  }, [text, retry]);
 
   const go = (target: string, view: 'quran' | 'bayan') => {
     onLeave();
@@ -56,16 +59,17 @@ export function StudySourcesSearch({ query, onLeave }: { query: string; onLeave:
   };
   const group = <Item,>(title: TranslationKey, items: Item[] | null, row: (item: Item) => React.ReactNode) => <section className="space-y-2">
     <h3 className="text-xs font-bold text-muted">{t(title)}{items && items.length > 0 && <bdi> ({items.length > MAX_COUNTED ? `${MAX_COUNTED}+` : items.length})</bdi>}</h3>
-    {items === null ? <p className="text-xs text-muted">{t('sourcesUnavailable')}</p> : items.length === 0 ? <p className="text-xs text-muted">{t('noSearchResults')}</p> : items.slice(0, SHOWN).map(row)}
+    {items === null ? <div className="space-y-2"><p className="text-xs text-muted">{t('sourcesUnavailable')}</p><button type="button" className="underline text-xs" onClick={() => { onLeave(); setViewMode('settings'); }}>{t('navSettings')}</button></div> : items.length === 0 ? <div className="space-y-2"><p className="text-xs text-muted">{t('noSearchResults')}</p><button type="button" className="underline text-xs" onClick={() => setRetry(value => value + 1)}>{t('lookupRetry')}</button></div> : items.slice(0, SHOWN).map(row)}
   </section>;
   const rowStyle = 'block w-full text-start rounded-xl border border-subtle bg-canvas/40 hover:bg-canvas p-3 text-sm leading-loose';
 
   return <div className="space-y-5">
     {text && <div className="space-y-5">
-      {busy && <p role="status" className="flex items-center gap-2 text-xs text-muted"><Loader2 className="w-3.5 h-3.5 animate-spin" />{t('searchingInBook')}</p>}
+      {(busy || completedQuery !== text) ? <FeedbackSkeleton /> : <>
       {group('navQuran', found.quran, hit => <button type="button" key={`${hit.surah}:${hit.ayah}`} className={rowStyle} onClick={() => go(`quran:hafs:${hit.surah}:${hit.ayah}`, 'quran')}><bdi className="text-xs text-muted">{hit.surah}:{hit.ayah}</bdi> <span dir="rtl" lang="ar" className="font-reading">{hit.text}</span></button>)}
       {group('navSunnah', found.sunnah, hit => <button type="button" key={hit.hadith.id} className={rowStyle} onClick={() => { onLeave(); setViewMode('sunnah'); openSunnahReference({ collection: hit.chapter.collection, chapter: hit.chapter.number, hadith: hit.hadith.id }); }}><span className="block text-xs text-muted">{t(collectionKeys[hit.chapter.collection])} · {t('sunnahHadithNumber', { number: hit.hadith.number })}</span><span dir="rtl" lang="ar">{(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 180)}</span></button>)}
       {group('navBayan', found.poetry, poem => <button type="button" key={poem.id} className={rowStyle} onClick={() => { const from = poem.match?.from ?? 0; go(`poetry:ashaar:${poem.id}:${from}:${from + Math.max((poem.match?.lines.length ?? 1) - 1, 0)}`, 'bayan'); }}><span className="block text-xs text-muted" dir="auto">{poem.poetName} · {poem.title}</span><span dir="auto">{poem.match?.lines[0]}</span></button>)}
+    </>}
     </div>}
     <section className="space-y-3 border-t border-subtle pt-4">
       <h3 className="text-xs font-bold text-muted">{t('siteSearchTitle')}</h3>

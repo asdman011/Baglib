@@ -1,3 +1,52 @@
+## KEY-301 part 2 verified - 2026-11-11, Codex then Claude Code (key301p2-20261111)
+
+Codex implemented most of part 2, then hit its usage limit at 02:57 with the work uncommitted. Following the user's takeover rule, Claude Code finished it in place, verified it and published it.
+
+What part 2 adds, on top of part 1 (453be03):
+- The review fixes. The status-bar readiness separator is now a real middle dot, not a literal "?". Removing a bookmark shows one toast, with Undo.
+- A shared FeedbackSkeleton plus one-sentence, one-action empty states in boards, the board canvas, the planner, pathways (research) and the dashboard modules: active reads, study progress and insights, scratchpad, khatmah, rhythm, today, athan and the stats.
+- Notes: an empty-list title and next step, a retryable marks-list load failure, and source-search skeletons.
+- Shared Undo through the existing knowledge-history restore, via the new useUndoFeedback hook: notes, saved cards and review comments. Board deletion offers Undo by re-saving the snapshot taken just before the delete.
+- Planner, pathway and template deletion show a plain confirmation toast, because there is no restore path.
+- Long operations (metadata audit, storage manager, reader OCR) show one persistent progress toast through the new useProgressFeedback hook, with a Stop action where one existed. TrashBin, MetadataAudit and StorageManager no longer have their own toasts. The hard-coded Arabic counter in the metadata audit was removed.
+- Board canvas coordinates are explicitly LTR, with logical classes.
+- Unused keys were removed from translations.ts.
+
+Claude Code's fixes before publishing:
+- One lint error in BoardsWorkspace: a synchronous setState inside an effect. The loading flag is now set only by Retry.
+- A div skeleton nested in a p in DashboardEssentialStats is now an inline span.
+- The feedback-ui-live script opened boards from a side-menu item that does not exist. It now opens Notes and switches to the Boards tab.
+- Two usability-recovery tests expected the Notes "no results" text. The Notes empty state keeps it as its title, with the next step as the description. No existing test was edited.
+
+Verification:
+- tsc passes.
+- Changed-file eslint: 0 errors.
+- Focused: feedback-states-part2 9/9, usability-recovery 2/2, translation-keys pass.
+- tsup build and `git diff --check` pass.
+- feedback-ui-live passed 8/8 (ar/en, light/dark, 1280/480) with zero renderer errors. It covers trash, mark, review-comment, card, note and board Undo; planner and research deletion; the boards, planner and research empty states; delayed-load skeletons; 10 dashboard modules; stale search; the missing engine; and no horizontal overflow.
+- 224 PNGs are in `.baglib-data/KEY-301-evidence/2026-11-11T01-00-58-614Z/`. Claude inspected ar-dark-480 boards empty, en-light-1280 planner empty, ar-light-1280 research empty, en-dark-480 dashboard, en-light-480 boards skeleton and ar-dark-1280 active reads.
+- The throwaway profile was removed, and the failed first run was deleted.
+- The full suite failed 2 tests on the first run (the Notes text above). After the fix, the full suite passed 1806/1806.
+
+Limits:
+- Planner, pathway, template and legacy-annotation deletion have no restore path, so they show a confirmation only.
+- Board Undo re-creates the board from its pre-delete snapshot.
+- The study-progress panel is cramped at 1280 px. This predates part 2 and is noted for the KEY-308 spacing pass.
+- No schema, dependency or download.
+
+Files:
+- CURRENT_TASK.md, IMPLEMENTATION_PLAN.md, docs/features/Usability Inspection.md, scripts/feedback-ui-live/main.cjs
+- src/renderer/components/dashboard/: ActiveReadsModule, AthanDashboardModule, DashboardCalendarModule, DashboardEssentialStats, HomeDashboardView, KhatmahDashboardModule, PathwayTemplateGallery, PathwaysView, QuickNoteScratchpad, ReadingAnalyticsModule, StudyInsightsModule, StudyPlannerView, StudyProgressPanel, StudyRhythm, TodayStudyPanel
+- src/renderer/components/knowledge/SavedCardsPanel.tsx, layout/StatusBar.tsx
+- src/renderer/components/library/: MetadataAuditModal, StorageManagerModal, TrashBinModal
+- src/renderer/components/notes/: BoardsWorkspace, CommentThreads, NotesOverviewView
+- src/renderer/components/reader/: FullPageBookReader, OcrInspectorDrawer, PdfMarksList
+- src/renderer/components/search/StudySourcesSearch.tsx
+- src/renderer/components/ui/: Toast.tsx, FeedbackSkeleton.tsx (new)
+- src/renderer/hooks/useProgressFeedback.ts (new), src/renderer/hooks/useUndoFeedback.ts (new)
+- src/renderer/translations.ts
+- tests/ui/feedback-states-part2.test.ts (new)
+
 ## KEY-301 part 1 verified - 2026-11-11, Codex (key301-20261111)
 
 Working first part under KEY-294 / Library. The existing U2 toast service now wraps the workspace and serves library, reader and Search Hub notifications. Trash/bulk Undo uses restoreBook/bulkRestore. Reader mark Undo uses the exact persisted pre-delete history revision with an expected-current guard, and deletion is a single write across annotation/popover paths. Collection item removal has a plain confirmation because its existing API physically deletes the row. Card/commentary searches reject stale responses; reader search ignores aborted progress/errors; existing Search Hub invalidation is retained and tested. Status bar reads actual DB/FTS availability and PDF-engine configuration/file checks with localized next steps. Library, notes, cards, marks and global search loading feedback uses U2 skeletons. Notes errors give a next step. The PDF.js hidden measurement canvas gets the bundled display rule, preventing English reader shell compression.

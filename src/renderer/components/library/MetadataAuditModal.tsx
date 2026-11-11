@@ -1,4 +1,6 @@
 'use client';
+import { useProgressFeedback } from '../../hooks/useProgressFeedback';
+import { useToast } from '../ui/Toast';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
@@ -156,9 +158,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
   const [selectedCandidate, setSelectedCandidate] = useState<BibliographicWork | null>(null);
 
   // Toast / notification banner
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+  const { showToast: notify } = useToast();
 
   // Synchronize when booksToAudit prop changes
   const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
@@ -280,13 +280,11 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
   }
 
+  useProgressFeedback(isRescanning, t('rescanningFiles', { current: rescanProgress.current, total: rescanProgress.total }) + ' ' + rescanProgress.title, { label: t('stopEnrichment'), onClick: () => { abortRescanRef.current = true; } });
+  useProgressFeedback(isEnrichingAll, t('autoEnrichProgress', { current: enrichProgress.current, total: enrichProgress.total, title: enrichProgress.title }), { label: t('stopEnrichment'), onClick: () => { abortEnrichRef.current = true; } });
   if (!isOpen) return null;
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToastMessage(null), 4500);
-  };
+  const showToast = (message: string) => { notify({ message }); };
 
   // --------------------------------------------------------------------------
   // ACTION 1: Re-scan Local Files First
@@ -708,79 +706,10 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
         </div>
 
         {/* Toast / Status banner */}
-        {toastMessage && (
-          <div className="px-6 py-2.5 bg-pale-sky-500 text-white text-xs font-semibold flex items-center justify-between animate-slide-down">
-            <div className="flex items-center gap-2">
-              <Check className="w-4 h-4" />
-              <span>{toastMessage}</span>
-            </div>
-            <button onClick={() => setToastMessage(null)} className="text-white/80 hover:text-white">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
 
         {/* Live Re-scan Progress Banner */}
-        {isRescanning && (
-          <div className="px-6 py-3 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Loader2 className="w-4 h-4 animate-spin text-emerald-500 shrink-0" />
-              <div>
-                <span className="font-bold">
-                  {t('rescanningFiles', { current: rescanProgress.current, total: rescanProgress.total })}
-                </span>
-                <span className="text-muted ms-2 truncate max-w-md inline-block align-bottom font-serif">
-                  {rescanProgress.title}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => (abortRescanRef.current = true)}
-              className="px-2.5 py-1 rounded-lg bg-surface border border-subtle text-red-500 font-bold hover:bg-red-500/10 transition-colors text-[11px] cursor-pointer"
-            >
-              {t('stopEnrichment')}
-            </button>
-          </div>
-        )}
 
         {/* Live Auto-Enrich Progress Banner */}
-        {isEnrichingAll && (
-          <div className="px-6 py-3 bg-amber-500/10 border-b border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Loader2 className="w-4 h-4 animate-spin text-amber-500 shrink-0" />
-                <span className="font-bold">
-                  {t('autoEnrichProgress', {
-                    current: enrichProgress.current,
-                    total: enrichProgress.total,
-                    title: enrichProgress.title,
-                  })}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] text-muted">
-                  تم التحديث: <strong className="text-emerald-500">{enrichProgress.enrichedCount}</strong> | تم التخطي:{' '}
-                  <strong className="text-muted">{enrichProgress.skippedCount}</strong>
-                </span>
-                <button
-                  onClick={() => (abortEnrichRef.current = true)}
-                  className="px-2.5 py-1 rounded-lg bg-surface border border-subtle text-red-500 font-bold hover:bg-red-500/10 transition-colors text-[11px] cursor-pointer"
-                >
-                  {t('stopEnrichment')}
-                </button>
-              </div>
-            </div>
-            {/* Visual progress bar */}
-            <div className="w-full bg-canvas rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-amber-500 h-full rounded-full transition-all duration-300"
-                style={{
-                  width: `${enrichProgress.total > 0 ? (enrichProgress.current / enrichProgress.total) * 100 : 0}%`,
-                }}
-              />
-            </div>
-          </div>
-        )}
 
         {/* MAIN BODY: Table View vs Sequential Guided Review View */}
         {!isReviewMode ? (

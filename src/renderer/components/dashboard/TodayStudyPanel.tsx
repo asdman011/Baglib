@@ -1,4 +1,5 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -44,6 +45,7 @@ export function TodayStudyPanel() {
   const [todayStr] = useState(() => civilDate(new Date()));
   const [config, setConfig] = useState<WeeklyRhythmConfig>(DEFAULT_WEEKLY_RHYTHM);
   const [activities, setActivities] = useState<DayActivityRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [candidates, setCandidates] = useState<TodayCandidateStep[]>([]);
   const [skippedIds, setSkippedIds] = useState<string[]>([]);
   const [swappedIds, setSwappedIds] = useState<string[]>([]);
@@ -220,6 +222,7 @@ export function TodayStudyPanel() {
 
       if (alive) {
         setCandidates(candidateList);
+        setLoading(false);
       }
     };
 
@@ -382,6 +385,8 @@ export function TodayStudyPanel() {
       case 'pages': return t('todayGoalPages');
     }
   };
+
+  if (loading) return <FeedbackSkeleton />;
 
   return (
     <section
@@ -621,8 +626,7 @@ export function TodayStudyPanel() {
             className="flex flex-col items-center justify-center p-6 rounded-xl border border-dashed border-subtle bg-canvas/30 text-center space-y-1.5"
           >
             <CheckCircle2 className="h-8 w-8 text-emerald-500/80 mb-1" />
-            <p className="text-sm font-bold text-main">{t('todayAllCaughtUp')}</p>
-            <p className="text-xs text-muted max-w-sm">{t('todayAllCaughtUpDesc')}</p>
+                        <p className="text-xs text-muted max-w-sm">{t('todayAllCaughtUpDesc')}</p><button type="button" className="underline text-sm" onClick={() => setViewMode('planner')}>{t('plannerNew')}</button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-today-steps-list>

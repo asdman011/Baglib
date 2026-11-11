@@ -43,6 +43,17 @@ app.on('browser-window-created', (_, win) => {
   };
   const results = [];
   const errors = [];
+  const delayedView = async (channel, view, prefix, ready) => {
+    const handler = ipcMain._invokeHandlers.get(channel);
+    assert.ok(handler, channel);
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, async (...args) => { await pause(2200); return handler(...args); });
+    if (view === 'boards') { await navigate('notes'); await evaluate(`window.dispatchEvent(new Event('baglib:open-boards'))`); } else await navigate(view);
+    await until('!!document.querySelector("[data-feedback-skeleton]")');
+    await shot(prefix + '-' + view + '-skeleton');
+    await until(ready);
+    ipcMain.removeHandler(channel); ipcMain.handle(channel, handler);
+  };
   win.webContents.on('console-message', (_, level, message) => { if (level >= 3) errors.push(message); });
   (async () => {
     win.setMinimumSize(320, 400); win.setContentSize(1280, 900);
@@ -57,6 +68,7 @@ app.on('browser-window-created', (_, win) => {
       const result = await pipeline.importFile({ filePath: file.filename, duplicateAction: 'import_anyway', customTitle: 'KEY301 ' + file.lang + ' Knowledge علم' });
       assert.equal(result.success, true, JSON.stringify(result)); file.id = result.workId;
     }
+    await evaluate(`window.electronAPI.settings.set('dashboard.layout.v1',{version:1,modules:${JSON.stringify(['today','calendar','readingGoals','activeReads','studyProgress','studyInsights','scratchpad','athan','khatmah','studyRhythm'].map(id => ({ id, visible: true })))}})`);
     fs.writeFileSync(path.join(evidence, 'imports.json'), JSON.stringify(files, null, 2));
     const originalSearch = ipcMain._invokeHandlers.get('search:query');
     const installDelayedSearch = () => {
@@ -115,6 +127,18 @@ app.on('browser-window-created', (_, win) => {
       await shot(prefix + '-mark-undo'); await undo(text);
       await until(`!!document.querySelector('[data-mark-id="${markId}"]')`);
       assert.equal((await evaluate(`window.electronAPI.knowledge.getByWork(${JSON.stringify(book.id)})`)).some(item => item.id === markId), true);
+      // Review comments use the same persisted knowledge revision history as the mark.
+      const commentId = await evaluate(`window.electronAPI.knowledgeHistory.addComment(${JSON.stringify(markId)},'Review \u0639\u0650\u0644\u0652\u0645',{actor:'reader'})`);
+      await evaluate(`document.querySelector('[data-mark-id="${markId}"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
+      await until('!!document.querySelector("[data-mark-tab=comments]")');
+      await click('[data-mark-tab=comments]');
+      await until(`!!document.querySelector('[data-comment-thread="${commentId}"]')`);
+      await evaluate(`[...document.querySelector('[data-comment-thread="${commentId}"]').querySelectorAll('button')].find(e=>e.getAttribute('aria-label')===${JSON.stringify(text.commentsDelete)}).click()`);
+      await until(`!document.querySelector('[data-comment-thread="${commentId}"]')`);
+      await undo(text);
+      await until(`!!document.querySelector('[data-comment-thread="${commentId}"]')`);
+      await shot(prefix + '-review-comment-undo');
+      await key('Escape');
       // Use the existing status endpoint with deliberately missing paths in this profile.
       await navigate('library');
       const originalConfig = await evaluate(`window.electronAPI.settings.get('pdf-editor.engine.v1')`);
@@ -140,10 +164,65 @@ app.on('browser-window-created', (_, win) => {
       await pause(350); await shot(prefix + '-notes');
       await evaluate(`window.dispatchEvent(new Event('baglib:open-cards'))`);
       await until('!!document.querySelector("[data-saved-cards]")'); await shot(prefix + '-cards-empty');
+      const card = await evaluate(`window.electronAPI.knowledgeCards.save({front:'Knowledge \u0639\u0650\u0644\u0652\u0645',back:'Feedback answer',sourceKind:'note'})`);
+      await evaluate(`window.dispatchEvent(new Event('baglib:knowledge-card-saved'))`);
+      await until(`!!document.querySelector('[data-saved-card="${card.id}"]')`);
+      await context(`[data-saved-card="${card.id}"]`); await until('!!document.querySelector("[data-menu-action=delete]")');
+      await click('[data-menu-action=delete]'); await until(`!document.querySelector('[data-saved-card="${card.id}"]')`);
+      await undo(text); await until(`!!document.querySelector('[data-saved-card="${card.id}"]')`);
+      await shot(prefix + '-card-undo');
+      await evaluate(`window.electronAPI.knowledgeCards.remove(${JSON.stringify(card.id)})`);
+
+      const note = await evaluate(`window.electronAPI.studyNotes.save({id:crypto.randomUUID(),title:'Feedback \u0639\u0650\u0644\u0652\u0645',content:'Mixed Knowledge \u0639\u0650\u0644\u0652\u0645',aliases:[],tags:[]})`);
+      await navigate('library');
+      await navigate('notes');
+      await until(`!!document.querySelector('[data-study-note="${note.id}"]')`);
+      await context(`[data-study-note="${note.id}"]`); await until('!!document.querySelector("[data-menu-action=delete]")');
+      await click('[data-menu-action=delete]'); await until(`!document.querySelector('[data-study-note="${note.id}"]')`);
+      await undo(text); await until(`!!document.querySelector('[data-study-note="${note.id}"]')`);
+      await shot(prefix + '-note-undo');
+      await evaluate(`window.electronAPI.studyNotes.remove(${JSON.stringify(note.id)})`);
+
+      await delayedView('boards:list', 'boards', prefix, `document.body.textContent.includes(${JSON.stringify(text.boardsNone)})`);
+      await shot(prefix + '-boards-empty');
+      await click('[data-boards-new=blank]'); await until('!!document.querySelector("[data-boards-back]")');
+      await shot(prefix + '-board-canvas-empty'); await click('[data-boards-back]');
+      await until('document.querySelectorAll("[data-boards-entry]").length===1');
+      await click('[data-boards-entry] button[title]');
+      await until('document.querySelectorAll("[data-boards-entry]").length===0');
+      await undo(text); await until('document.querySelectorAll("[data-boards-entry]").length===1');
+      await shot(prefix + '-board-undo');
+      await evaluate(`(async()=>{for(const row of await window.electronAPI.boards.list())await window.electronAPI.boards.remove(row.id);})()`);
+
+      await delayedView('study-planner:list', 'planner', prefix, `document.body.textContent.includes(${JSON.stringify(text.plannerEmpty)})`);
+      await shot(prefix + '-planner-empty');
+      await input('[data-study-planner] form input', 'Feedback task \u0639\u0650\u0644\u0652\u0645');
+      await evaluate(`document.querySelector('[data-study-planner] form').requestSubmit()`);
+      await until('!!document.querySelector("[data-planner-task]")');
+      await evaluate(`[...document.querySelector('[data-planner-task]').querySelectorAll('button')].find(e=>e.textContent===${JSON.stringify(text.plannerDelete)}).click()`);
+      await until('!document.querySelector("[data-planner-task]")');
+      await until(`document.body.textContent.includes(${JSON.stringify(text.feedbackRemoved)})`);
+
+      await delayedView('pathways:list', 'pathways', prefix, `document.body.textContent.includes(${JSON.stringify(text.pathwaysListEmptyDesc)})`);
+      await shot(prefix + '-research-empty');
+      const pathway = await evaluate(`window.electronAPI.pathways.save({name:'Feedback research \u0639\u0650\u0644\u0652\u0645',description:'',kind:'research',outline:''})`);
+      await navigate('planner'); await navigate('pathways');
+      await until(`!!document.querySelector('[data-pathway-row="${pathway.id}"]')`);
+      await context(`[data-pathway-row="${pathway.id}"]`); await until('!!document.querySelector("[data-menu-action=delete]")');
+      await click('[data-menu-action=delete]'); await until(`!document.querySelector('[data-pathway-row="${pathway.id}"]')`);
+
+      await delayedView('study-planner:list', 'dashboard', prefix, '!!document.querySelector("[data-today-study-panel]")');
+      await until('!document.querySelector("[data-feedback-skeleton]")');
+      await shot(prefix + '-dashboard');
+      for (const id of ['activeReads','studyProgress','studyInsights','scratchpad','khatmah','studyRhythm']) {
+        await evaluate(`document.querySelector('[data-dashboard-item="${id}"]').scrollIntoView({block:'center'})`);
+        await shot(prefix + '-dashboard-' + id);
+      }
+      await evaluate(`document.querySelector('[data-dashboard-item="today"]').scrollIntoView({block:'start'})`);
       const overflow = await evaluate('document.documentElement.scrollWidth > innerWidth + 1');
       assert.equal(overflow, false);
       assert.equal(BrowserWindow.getAllWindows().length, 1);
-      results.push({ language, theme, width, trashUndo: true, markUndo: true, staleSearch: true, engineMissing: true, overflow });
+      results.push({ language, theme, width, trashUndo: true, markUndo: true, reviewCommentUndo: true, cardUndo: true, noteUndo: true, boardUndo: true, plannerDelete: true, researchDelete: true, dashboardModules: 10, staleSearch: true, engineMissing: true, overflow });
       fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ results, errors }, null, 2));
     }
     app.quit();

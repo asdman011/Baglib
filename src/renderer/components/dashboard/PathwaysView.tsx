@@ -1,4 +1,5 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ArrowDown, ArrowUp, BookOpen, Calendar, Check, CheckCircle2, Edit3, ExternalLink, FileText, Layers, Link2, Network, Pin, PinOff, Play, Plus, Route, Sparkles, Trash2, X } from 'lucide-react';
@@ -107,6 +108,7 @@ function ItemRow({ item, first, last, onMove, onChange, onOpen, onError }: { ite
 
 function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate }: { pathway: PathwayDetail; onChange: () => void; onRemoved: () => void; onError: () => void; onOpen: OpenItem; onSaveTemplate: (pathway: PathwayDetail) => void }) {
   const { t, setViewMode, lang } = useWorkspace();
+  const { showToast } = useToast();
   const [prereqMap, setPrereqMap] = useState<Record<string, string[]>>({});
   const [cycleError, setCycleError] = useState<string | null>(null);
   const [editingSectionPrereqs, setEditingSectionPrereqs] = useState<string | null>(null);
@@ -144,6 +146,7 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
   const handleDeleteSection = async (secName: string) => {
     if (window.confirm(`${t('pathwayDeleteSection')} "${secName}"?`)) {
       await window.electronAPI.pathwayPrerequisites?.deleteSection?.(pathway.id, secName);
+      showToast({ message: t('feedbackRemoved') });
       onChange();
     }
   };
@@ -175,7 +178,7 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
   const addLink = () => { void api.addItem({ pathwayId: pathway.id, section, kind: 'link', title: linkTitle, url: linkUrl }).then(() => { setLinkTitle(''); setLinkUrl(''); onChange(); }).catch(onError); };
   const addStep = () => { void api.addStep(pathway.id, section, step).then(() => { setStep(''); onChange(); }).catch(onError); };
   const exportAs = (format: ReferenceFormat) => { void api.exportReferences(pathway.id, format).then(setExported).catch(onError); };
-  const remove = () => { if (window.confirm(t('pathwayDeleteConfirm'))) void api.remove(pathway.id).then(onRemoved).catch(onError); };
+  const remove = () => { if (window.confirm(t('pathwayDeleteConfirm'))) void api.remove(pathway.id).then(() => { showToast({ message: t('feedbackRemoved') }); onRemoved(); }).catch(onError); };
   const headerMenu: MenuItemProps[] = [
     { id: 'save-template', label: t('pathwaySaveAsMine'), icon: <Layers className={ico} />, disabled: progress.total === 0, onClick: () => onSaveTemplate(pathway) },
     { id: 'planner', label: t('pathwayOpenPlanner'), icon: <Calendar className={ico} />, onClick: () => setViewMode('planner') },
@@ -257,7 +260,7 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
 
       <section className="space-y-3" aria-label={t('pathwayStepsHeading')}>
         <h3 className="text-sm font-bold">{t('pathwayStepsHeading')}</h3>
-        {middle.length === 0 && <EmptyState className="rounded-2xl border border-dashed border-border p-6 sm:p-8" icon={<Route className="size-5" />} title={t('pathwayStepsEmptyTitle')} description={t('pathwayStepsEmptyDesc')} />}
+        {middle.length === 0 && <EmptyState className="rounded-2xl border border-dashed border-border p-6 sm:p-8" icon={<Route className="size-5" />} title={t('pathwayStepsEmptyDesc')} action={<Button size="sm" onClick={() => document.querySelector<HTMLInputElement>('[data-pathway-step-input]')?.focus()}>{t('pathwayAddStep')}</Button>} />}
         {middleSections.map(name => {
           const rows = middle.filter(item => item.section === name);
           return <section key={name} className="space-y-2">
@@ -284,7 +287,7 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
         <div className="space-y-2 border-t border-border pt-3">
           <input className={`${control} w-full`} list="pathway-sections" value={section} onChange={event => setSection(event.target.value)} maxLength={200} placeholder={t('pathwaySection')} aria-label={t('pathwaySection')} dir="auto" />
           <datalist id="pathway-sections">{sections.filter(Boolean).map(name => <option key={name} value={name} />)}</datalist>
-          <div className="flex flex-wrap gap-2"><input className={`${control} flex-1`} value={step} onChange={event => setStep(event.target.value)} maxLength={300} placeholder={t('pathwayStepTitle')} aria-label={t('pathwayStepTitle')} dir="auto" /><Button size="sm" variant="secondary" className="self-center" disabled={!step.trim()} icon={<Check className={ico} />} onClick={addStep}>{t('pathwayAddStep')}</Button></div>
+          <div className="flex flex-wrap gap-2"><input className={`${control} flex-1`} data-pathway-step-input value={step} onChange={event => setStep(event.target.value)} maxLength={300} placeholder={t('pathwayStepTitle')} aria-label={t('pathwayStepTitle')} dir="auto" /><Button size="sm" variant="secondary" className="self-center" disabled={!step.trim()} icon={<Check className={ico} />} onClick={addStep}>{t('pathwayAddStep')}</Button></div>
           <details><summary className="cursor-pointer text-sm">{t('pathwayAddResource')}</summary><div className="pt-2"><StudyLinkPicker notes={notes} onInsert={addResource} /></div></details>
         </div>
       </section>
@@ -294,10 +297,10 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
       <Card className="space-y-3 p-4">
         <h3 className="text-sm font-bold">{t('pathwayNotesLinksHeading')}</h3>
         {end.length === 0
-          ? <EmptyState className="rounded-xl border border-dashed border-border p-5" icon={<Link2 className="size-5" />} title={t('pathwayNotesLinksEmptyTitle')} description={t('pathwayNotesLinksEmptyDesc')} />
+          ? <EmptyState className="rounded-xl border border-dashed border-border p-5" icon={<Link2 className="size-5" />} title={t('pathwayNotesLinksEmptyDesc')} action={<Button size="sm" onClick={() => document.querySelector<HTMLInputElement>('[data-pathway-link-input]')?.focus()}>{t('pathwayLinkTitle')}</Button>} />
           : <ul className="space-y-1.5">{end.map((item, index) => <ItemRow key={item.id} item={item} first={index === 0} last={index === end.length - 1} onMove={delta => move(item, delta)} onChange={onChange} onOpen={onOpen} onError={onError} />)}</ul>}
         <div className="space-y-2 border-t border-border pt-3">
-          <input className={`${control} w-full`} value={linkTitle} onChange={event => setLinkTitle(event.target.value)} maxLength={500} placeholder={t('pathwayLinkTitle')} aria-label={t('pathwayLinkTitle')} dir="auto" />
+          <input className={`${control} w-full`} data-pathway-link-input value={linkTitle} onChange={event => setLinkTitle(event.target.value)} maxLength={500} placeholder={t('pathwayLinkTitle')} aria-label={t('pathwayLinkTitle')} dir="auto" />
           <input className={`${control} w-full`} value={linkUrl} onChange={event => setLinkUrl(event.target.value)} maxLength={2000} placeholder="https://" aria-label={t('pathwayLinkUrl')} dir="ltr" />
           <Button size="sm" variant="secondary" disabled={!linkTitle.trim() || !linkUrl.trim()} icon={<Plus className={ico} />} onClick={addLink}>{t('pathwayAddLink')}</Button>
         </div>
@@ -328,23 +331,27 @@ async function fetchSnapshot(): Promise<Snapshot> {
 /** Research workspaces, roadmaps and curricula share one space and one three-part layout. See ADR-009 and KEY-306. */
 export function PathwaysView() {
   const { t, dir, books, openBookForReading } = useWorkspace();
+  const { showToast } = useToast();
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<PathwayTab>('all');
   const [pathways, setPathways] = useState<Pathway[]>([]);
   const [details, setDetails] = useState<Record<string, PathwayDetail>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<PathwayTemplate[]>([]);
   const [draft, setDraft] = useState<(Draft & { nonce: number }) | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const setNotice = (message: string | null) => { if (message) showToast({ message }); };
   const [failed, setFailed] = useState(false);
   const fail = useCallback(() => setFailed(true), []);
 
   const apply = useCallback(({ list, full }: Snapshot) => { setPathways(list); setDetails(Object.fromEntries(full.map(row => [row.id, row]))); }, []);
   const load = useCallback(async (select?: string | null) => {
-    const snapshot = await fetchSnapshot();
+    setLoading(true);
+    const snapshot = await fetchSnapshot().finally(() => setLoading(false));
+    setFailed(false);
     apply(snapshot);
     if (select !== undefined) setSelectedId(select && snapshot.list.some(row => row.id === select) ? select : null);
   }, [apply]);
-  useEffect(() => { void fetchSnapshot().then(apply).catch(fail); void window.electronAPI.pathways.templates().then(setTemplates).catch(fail); }, [apply, fail]);
+  useEffect(() => { void fetchSnapshot().then(apply).catch(fail).finally(() => setLoading(false)); void window.electronAPI.pathways.templates().then(setTemplates).catch(fail); }, [apply, fail]);
   useEffect(() => {
     const handleNewPathway = () => {
       setSelectedId(null); setTab('templates');
@@ -372,7 +379,7 @@ export function PathwaysView() {
     } catch { fail(); }
   };
   const customize = (template: GalleryTemplate) => { setDraft({ name: template.name, kind: template.kind, outline: template.outline, nonce: Date.now() }); window.setTimeout(() => document.querySelector('[data-pathway-creator]')?.scrollIntoView({ behavior: 'smooth' }), 50); };
-  const removeTemplate = (template: GalleryTemplate) => { void window.electronAPI.pathways.removeTemplate(template.id).then(() => setTemplates(current => current.filter((row: PathwayTemplate) => row.id !== template.id))).catch(fail); };
+  const removeTemplate = (template: GalleryTemplate) => { void window.electronAPI.pathways.removeTemplate(template.id).then(() => { setTemplates(current => current.filter((row: PathwayTemplate) => row.id !== template.id)); showToast({ message: t('feedbackRemoved') }); }).catch(fail); };
   const saveAsTemplate = async (pathway: PathwayDetail) => {
     try {
       const input = templateFromPathway(pathway);
@@ -383,7 +390,7 @@ export function PathwaysView() {
       setNotice(t('pathwaySavedAsMine'));
     } catch { fail(); }
   };
-  const removePathway = (row: Pathway) => { if (window.confirm(t('pathwayDeleteConfirm'))) void window.electronAPI.pathways.remove(row.id).then(() => load(selectedId === row.id ? null : undefined)).catch(fail); };
+  const removePathway = (row: Pathway) => { if (window.confirm(t('pathwayDeleteConfirm'))) void window.electronAPI.pathways.remove(row.id).then(() => { showToast({ message: t('feedbackRemoved') }); return load(selectedId === row.id ? null : undefined); }).catch(fail); };
 
   const listItem = (row: Pathway) => {
     const detail = details[row.id];
@@ -411,10 +418,9 @@ export function PathwaysView() {
 
   const startColumn = <aside className="min-w-0 space-y-3 @min-[44rem]:row-span-2 @min-[60rem]:row-span-1" data-pathway-list aria-label={t('pathwaysListLabel')}>
     <OnlineCoursesPanel />
-    {visible.length === 0
+    {loading ? <FeedbackSkeleton /> : visible.length === 0 && !failed
       ? <EmptyState className="rounded-2xl border border-dashed border-border p-6" icon={<Route className="size-5" />}
-          title={t(pathways.length === 0 ? 'pathwaysListEmptyTitle' : 'pathwaysTabEmptyTitle')}
-          description={t(pathways.length === 0 ? 'pathwaysListEmptyDesc' : 'pathwaysTabEmptyDesc')}
+          title={t(pathways.length === 0 ? 'pathwaysListEmptyDesc' : 'pathwaysTabEmptyDesc')}
           action={tab !== 'templates' ? <Button size="sm" variant="secondary" icon={<Layers className={ico} />} onClick={() => setTab('templates')}>{t('pathwaysListEmptyAction')}</Button> : undefined} />
       : <ul className="space-y-2">{visible.map(listItem)}</ul>}
   </aside>;
@@ -423,8 +429,7 @@ export function PathwaysView() {
     <div className="@container mx-auto max-w-6xl space-y-4">
       <header className="flex items-start gap-3"><Route className="mt-1 size-6 shrink-0 text-primary-text" /><div><h1 className="font-display text-xl font-bold leading-relaxed">{t('pathwaysTitle')}</h1><p className="text-xs leading-relaxed text-text-muted">{t('pathwaysIntro')}</p></div></header>
       <Tabs tabs={PATHWAY_TABS.map(id => ({ id, label: t(TAB_LABEL[id]) }))} activeTab={tab} onChange={id => { setTab(id as PathwayTab); setNotice(null); }} ariaLabel={t('pathwaysTabsLabel')} className="max-w-full flex-wrap" />
-      {failed && <p role="alert" className="text-sm">{t('pathwayError')}</p>}
-      {notice && <p role="status" data-pathway-notice className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm">{notice}</p>}
+      {failed && <p role="alert" className="text-sm">{t('pathwayError')} <button type="button" className="underline" onClick={() => void load().catch(fail)}>{t('lookupRetry')}</button></p>}
       <p className="text-xs text-text-muted">{t('pathwayContextHint')}</p>
       <TabPanel tabId={tab} activeTab={tab} className="grid gap-4 @min-[44rem]:grid-cols-[16rem_minmax(0,1fr)] @min-[60rem]:grid-cols-[16rem_minmax(0,1fr)_17rem]">
         {startColumn}
@@ -438,8 +443,8 @@ export function PathwaysView() {
           : selected
             ? <Detail key={selected.id} pathway={selected} onChange={() => void load(selected.id).catch(fail)} onRemoved={() => void load(null).catch(fail)} onError={fail} onOpen={openItem} onSaveTemplate={pathway => void saveAsTemplate(pathway)} />
             : <>
-                <main className="min-w-0" data-pathway-steps><Card><EmptyState icon={<Route className="size-5" />} title={t('pathwayPickTitle')} description={t('pathwayPick')} action={<Button size="sm" variant="secondary" icon={<Layers className={ico} />} onClick={() => setTab('templates')}>{t('pathwaysListEmptyAction')}</Button>} /></Card></main>
-                <aside className="min-w-0 @min-[44rem]:col-start-2 @min-[60rem]:col-start-3 @min-[60rem]:row-start-1" data-pathway-end><Card><EmptyState icon={<Link2 className="size-5" />} title={t('pathwayNotesLinksEmptyTitle')} description={t('pathwayNotesLinksEmptyDesc')} /></Card></aside>
+                <main className="min-w-0" data-pathway-steps><Card><EmptyState icon={<Route className="size-5" />} title={t('pathwayPick')} action={<Button size="sm" variant="secondary" icon={<Layers className={ico} />} onClick={() => setTab('templates')}>{t('pathwaysListEmptyAction')}</Button>} /></Card></main>
+                <aside className="min-w-0 @min-[44rem]:col-start-2 @min-[60rem]:col-start-3 @min-[60rem]:row-start-1" data-pathway-end><Card><EmptyState icon={<Link2 className="size-5" />} title={t('pathwayNotesLinksEmptyDesc')} /></Card></aside>
               </>}
       </TabPanel>
     </div>

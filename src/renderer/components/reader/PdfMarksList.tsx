@@ -24,8 +24,10 @@ const normalize = (text: string) => normalizeArabicText(text, { normalizeTaaMarb
  * by layer, with Acrobat's filters: layer, type, colour, date, status, search; sorted by chapter for EPUB
  * or by page for PDF (Waves 9.2, 9.3, and KEY-274).
  */
-export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflowable, loading = false, onStartMark, t }: {
+export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflowable, loading = false, error = false, onRetry, onStartMark, t }: {
   loading?: boolean;
+  error?: boolean;
+  onRetry?: () => void;
   onStartMark?: () => void;
   items: KnowledgeItemDTO[];
   reviews?: PdfReview[];
@@ -158,6 +160,7 @@ export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflow
 
   return (
     <section data-pdf-marks className="flex min-h-0 flex-1 flex-col gap-2 p-3 text-xs">
+      <>{error && <div role="alert" className="space-y-2 p-3"><p>{t('feedbackActionFailed')}</p><Button size="sm" onClick={onRetry}>{t('lookupRetry')}</Button></div>}</>
       <input
         type="search"
         data-marks-search
@@ -244,7 +247,7 @@ export function PdfMarksList({ items, reviews = [], onJump, onOpenMark, isReflow
       <p className="text-[11px] text-muted" data-marks-count>
         {t('marksCount', { shown: shown.length, total: marks.length })}
       </p>
-      {loading ? <div role="status" aria-label={t('loading')} className="space-y-3"><Skeleton className="h-20" /><Skeleton className="h-20" /></div> : !shown.length && <EmptyState title={t(marks.length ? 'marksNone' : 'feedbackMarksStart')}
+      {loading ? <div role="status" aria-label={t('loading')} className="space-y-3"><Skeleton className="h-20" /><Skeleton className="h-20" /></div> : !error && !shown.length && <EmptyState title={t(marks.length ? 'marksNone' : 'feedbackMarksStart')}
         action={<Button size="sm" onClick={() => { if (marks.length) set({ layer: 'all', kind: 'all', since: 'all', status: 'all', color: undefined, query: '' }); else onStartMark?.(); }}>{t(marks.length ? 'clearAllFilters' : 'markupToolHighlight')}</Button>} />}
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">

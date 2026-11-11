@@ -1,4 +1,5 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -78,7 +79,7 @@ function MasteryBadge({
 }
 
 export function StudyProgressPanel() {
-  const { t, dir } = useWorkspace();
+  const { t, dir, setViewMode } = useWorkspace();
 
   const [targets, setTargets] = useState<ProgressTargetItem[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<ProgressTargetItem | null>(null);
@@ -121,6 +122,7 @@ export function StudyProgressPanel() {
       return;
     }
     const fetchSummary = async () => {
+      setSummary(null);
       try {
         const api = window.electronAPI?.studyInsights;
         if (api?.progressSummary) {
@@ -147,7 +149,7 @@ export function StudyProgressPanel() {
         className="rounded-2xl border border-subtle bg-surface/70 backdrop-blur-sm p-4 text-xs text-muted"
         dir={dir}
       >
-        {t('studyProgressLoading')}
+        <FeedbackSkeleton />
       </div>
     );
   }
@@ -163,7 +165,7 @@ export function StudyProgressPanel() {
           <TrendingUp className="w-4 h-4 text-emerald-500" />
           <span>{t('studyProgressTitle')}</span>
         </div>
-        <p className="text-xs text-muted leading-relaxed">{t('studyProgressNoTargets')}</p>
+        <p className="text-xs text-muted leading-relaxed">{t('studyProgressNoTargets')}</p><button type="button" className="underline text-sm" onClick={() => setViewMode('pathways')}>{t('pathwaysTitle')}</button>
       </div>
     );
   }
@@ -237,6 +239,7 @@ export function StudyProgressPanel() {
       </div>
 
       {/* Target Content */}
+      {selectedTarget && !summary && <FeedbackSkeleton />}
       {summary && (
         <div className="space-y-4">
           {/* Target Title & Subtitle */}
@@ -366,7 +369,7 @@ export function StudyProgressPanel() {
                 </div>
                 <span>
                   {summary.demonstratedKnowledge.demonstratedCardsCount} /{' '}
-                  {summary.demonstratedKnowledge.totalCards} cards
+                  {t('feedbackCardsCount', { count: summary.demonstratedKnowledge.totalCards })}
                 </span>
               </div>
             </div>
@@ -436,7 +439,7 @@ export function StudyProgressPanel() {
                       <div className="min-w-0">
                         <div className="font-semibold text-main truncate">{sec.sectionName}</div>
                         <div className="text-[10px] text-muted">
-                          {sec.totalCards} cards ({sec.levelCounts.mastered} {t('masteryLevelMastered')})
+                          {t('feedbackCardsCount', { count: sec.totalCards })} ({sec.levelCounts.mastered} {t('masteryLevelMastered')})
                         </div>
                       </div>
                       <div className="shrink-0">

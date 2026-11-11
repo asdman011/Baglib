@@ -1,4 +1,5 @@
 'use client';
+import { useUndoFeedback } from '../../hooks/useUndoFeedback';
 
 import { ContextMenu } from '../ui/ContextMenu';
 import { contextActions } from '../actions/context-actions';
@@ -21,6 +22,7 @@ import { EmptyState } from '../ui/EmptyState';
 
 export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void }) {
   const { t, dir, books, openBookForReading } = useWorkspace();
+  const removeWithUndo = useUndoFeedback();
   const [editing, setEditing] = useState<string | null>(null);
   const [practicing, setPracticing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -203,7 +205,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
               edit: ['quran', 'hadith', 'poetry'].includes(card.sourceKind) ? undefined : () => setEditing(card.id), review: () => setPracticing(card.id),
               copy: () => navigator.clipboard.writeText(card.front + '\n\n' + card.back),
               srs: () => act(() => window.electronAPI.knowledgeCards.setMemorizing(card.id,true)),
-              delete: () => { if(window.confirm(t('markDeleteConfirm')))return act(() => window.electronAPI.knowledgeCards.remove(card.id)); },
+              delete: () => { if(window.confirm(t('markDeleteConfirm')))return act(() => removeWithUndo(card.id, () => window.electronAPI.knowledgeCards.remove(card.id), refresh)); },
             },t)}
               key={card.id}
               data-saved-card={card.id}

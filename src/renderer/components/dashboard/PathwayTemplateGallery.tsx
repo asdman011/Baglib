@@ -59,7 +59,7 @@ export function TemplateGallery({ templates, onUse, onCustomize, onRemove }: {
     <section className="space-y-2.5" aria-label={t('pathwayTemplatesMine')} data-template-mine>
       <h3 className="text-sm font-bold">{t('pathwayTemplatesMine')}</h3>
       {mine.length === 0
-        ? <EmptyState className="rounded-2xl border border-dashed border-border p-6 sm:p-8" icon={<Layers className="size-5" />} title={t('pathwayTemplatesMineEmptyTitle')} description={t('pathwayTemplatesMineEmptyDesc')} />
+        ? <EmptyState className="rounded-2xl border border-dashed border-border p-6 sm:p-8" icon={<Layers className="size-5" />} title={t('pathwayTemplatesMineEmptyDesc')} action={<Button size="sm" onClick={() => onCustomize(builtIn[0])}>{t('pathwayMenuCustomize')}</Button>} />
         : <ul className={grid}>{mine.map(template => <TemplateCard key={template.id} template={template} onUse={() => onUse(template)} onCustomize={() => onCustomize(template)} onRemove={() => onRemove(template)} />)}</ul>}
     </section>
   </div>;

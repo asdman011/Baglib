@@ -1,10 +1,10 @@
 'use client';
+import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
   Clock,
-  FileText,
   FolderOpen,
   Play,
   Sparkles,
@@ -19,11 +19,11 @@ interface ActiveReadsModuleProps {
 }
 
 export const ActiveReadsModule: React.FC<ActiveReadsModuleProps> = ({
-  onOpenImportWizard,
 }) => {
   const { books, openBookForReading, setViewMode, setReadingPage, lang, t } = useWorkspace();
   const [bookStatsMap, setBookStatsMap] = useState<Record<string, ReadingBookStat>>({});
   const [lastLocationsMap, setLastLocationsMap] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
   const [nowMs] = useState<number>(() => Date.now());
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export const ActiveReadsModule: React.FC<ActiveReadsModuleProps> = ({
         }
       } catch {}
     };
-    void loadStats();
+    void loadStats().finally(() => { if (alive) setLoading(false); });
     return () => {
       alive = false;
     };
@@ -124,6 +124,8 @@ export const ActiveReadsModule: React.FC<ActiveReadsModuleProps> = ({
     }
   };
 
+  if (loading) return <FeedbackSkeleton />;
+
   return (
     <section
       data-dashboard-module="active-reads"
@@ -160,9 +162,6 @@ export const ActiveReadsModule: React.FC<ActiveReadsModuleProps> = ({
             <Sparkles className="w-6 h-6" />
           </div>
           <div className="space-y-1 max-w-md mx-auto">
-            <h3 className={`font-bold text-sm text-main leading-relaxed ${lang === 'ar' ? 'font-sans' : 'font-display'}`}>
-              {t('dashEmptyReadsTitle')}
-            </h3>
             <p className="text-xs text-muted leading-relaxed">{t('dashEmptyReadsDesc')}</p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
@@ -174,16 +173,6 @@ export const ActiveReadsModule: React.FC<ActiveReadsModuleProps> = ({
               <FolderOpen className="w-3.5 h-3.5" />
               {t('dashOpenLibraryAction')}
             </button>
-            {onOpenImportWizard && (
-              <button
-                type="button"
-                onClick={onOpenImportWizard}
-                className="px-4 py-2 rounded-xl border border-subtle bg-surface hover:bg-canvas text-xs font-bold text-main inline-flex items-center gap-2 transition-colors cursor-pointer"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                {t('dashImportBookAction')}
-              </button>
-            )}
           </div>
         </div>
       ) : (
