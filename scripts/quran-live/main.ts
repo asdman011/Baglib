@@ -51,7 +51,8 @@ app.whenReady().then(async () => {
       console.log(JSON.stringify(await evaluate('window.electronAPI.quran.library()')));
       throw new Error('Native download did not finish');
     });
-    const installed = await evaluate('window.electronAPI.quran.library()');
+    // The default library view lists packs for its first page of resources only; ask for the installed view.
+    const installed = await evaluate("window.electronAPI.quran.library({ view: 'installed' })");
     assert.equal(installed.data.installed.length, 1);
     assert.equal(installed.data.installed[0].files[0].type, 'sqlite');
     assert.equal(remoteSandbox, true);
@@ -62,14 +63,15 @@ app.whenReady().then(async () => {
         owner.setContentSize(width, 960);
         await evaluate(`document.documentElement.classList.toggle('dark', ${dark}); if (window.quranWorkspace.isSidebarCollapsed !== ${width < 1000}) window.quranWorkspace.toggleSidebar()`);
         await new Promise(resolve => setTimeout(resolve, 450));
-        const geometry = await evaluate(`(() => { const region=document.querySelector('section'); const controls=[...region.querySelectorAll('button,input,select')].map(node=>node.getBoundingClientRect());let overlaps=0;for(let first=0;first<controls.length;first++)for(let next=first+1;next<controls.length;next++){const earlier=controls[first],later=controls[next];if(Math.min(earlier.right,later.right)-Math.max(earlier.left,later.left)>1&&Math.min(earlier.bottom,later.bottom)-Math.max(earlier.top,later.top)>1)overlaps++;}return {overlaps,overflow:region.scrollWidth>region.clientWidth+1,direction:region.getAttribute('dir')}; })()`);
+        const geometry = await evaluate(`(() => { const region=document.querySelector('section[dir]'); const controls=[...region.querySelectorAll('button,input,select')].map(node=>node.getBoundingClientRect());let overlaps=0;for(let first=0;first<controls.length;first++)for(let next=first+1;next<controls.length;next++){const earlier=controls[first],later=controls[next];if(Math.min(earlier.right,later.right)-Math.max(earlier.left,later.left)>1&&Math.min(earlier.bottom,later.bottom)-Math.max(earlier.top,later.top)>1)overlaps++;}return {overlaps,overflow:region.scrollWidth>region.clientWidth+1,direction:region.getAttribute('dir')}; })()`);
         assert.equal(geometry.overlaps, 0, JSON.stringify({ width, geometry }));
         assert.equal(geometry.overflow, false, JSON.stringify({ width, geometry }));
         assert.equal(geometry.direction, language === 'ar' ? 'rtl' : 'ltr');
         assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), true);
         if (width === 1280) {
           const rail = await evaluate("({className:document.querySelector('aside').className,width:document.querySelector('aside').getBoundingClientRect().width,collapsed:window.quranWorkspace.isSidebarCollapsed})");
-          assert.ok(rail.width > 200, JSON.stringify(rail));
+          // Since KEY-310 the rail stays slim unless the user pins navigation; it must still be shown.
+          assert.ok(rail.width >= 56, JSON.stringify(rail));
         }
         if ((language === 'ar' && dark && width === 480) || (language === 'en' && !dark && width === 1280)) {
           let png = (await owner.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG();
@@ -81,7 +83,7 @@ app.whenReady().then(async () => {
     }
     const removal = await evaluate(`window.electronAPI.quran.remove(${JSON.stringify(installed.data.installed[0].id)})`);
     assert.equal(removal.ok, true);
-    assert.equal((await evaluate('window.electronAPI.quran.library()')).data.installed.length, 0);
+    assert.equal((await evaluate("window.electronAPI.quran.library({ view: 'installed' })")).data.installed.length, 0);
     assert.deepEqual(errors, []);
     qul.protocol.unhandle('https');
     const live = await evaluate("window.electronAPI.quran.refresh('quran-script')");

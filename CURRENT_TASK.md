@@ -1,3 +1,16 @@
+## KEY-317 quran-live repaired, offline; correction of the earlier note - 2026-11-12, Claude Code
+
+Correction to the c954548 entry: quran-live does NOT download from the internet. It intercepts every https request in the app's `baglib-qul` session, which is used for all Quran catalog requests, downloads and browser windows, and serves the local fixture .baglib-data/qul-phase1/qpc-hafs-ayah-sqlite.zip. The earlier run reached no network. The user chose "use a local fixture", which is what the script already does.
+
+Script fixes:
+- It reads installed packs through `library({ view: 'installed' })`, because the default view lists packs for its first page of resources only.
+- It measures the Quran section (`section[dir]`), not the navigation rail's section.
+- It accepts the slim navigation rail that has been the default since KEY-310 (pinning makes it wide).
+
+It passes ar/en, dark/light, at 480/768/1280: native redirect download and utility-process install, remote sandbox, 1 locally served download, no renderer errors.
+
+Files: scripts/quran-live/main.ts, CURRENT_TASK.md.
+
 ## KEY-323 Quran theme markers and panel Space key, plus KEY-317 quran-layout-live - 2026-11-12, Claude Code
 
 KEY-323 (bug, found through quran-layout-live):
