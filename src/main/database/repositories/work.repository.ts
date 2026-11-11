@@ -1893,6 +1893,28 @@ export class SqliteWorkRepository implements IWorkRepository {
   }
 
   /**
+   * KEY-44: sets the shelf of every physical copy of the selected works, in one transaction.
+   * Works without a physical copy are left unchanged and counted as skipped.
+   */
+  bulkUpdateShelf(workIds: string[], shelf: string): { updated: number; skipped: number } {
+    if (!workIds || workIds.length === 0) return { updated: 0, skipped: 0 };
+    const value = shelf.trim() || null;
+    const sources = this.db.prepare(`SELECT s.id FROM source s JOIN edition e ON e.id = s.edition_id JOIN physical_source_detail psd ON psd.source_id = s.id WHERE e.work_id = ?`);
+    const update = this.db.prepare('UPDATE physical_source_detail SET shelf = ? WHERE source_id = ?');
+    const tx = this.db.transaction(() => {
+      let updated = 0, skipped = 0;
+      for (const id of workIds) {
+        const rows = sources.all(id) as { id: string }[];
+        if (!rows.length) { skipped++; continue; }
+        for (const row of rows) update.run(value, row.id);
+        updated++;
+      }
+      return { updated, skipped };
+    });
+    return tx();
+  }
+
+  /**
    * Bulk updates reading status and progress for multiple works.
    */
   bulkUpdateReadingStatus(workIds: string[], status: ReadingStatus, progress?: number): number {

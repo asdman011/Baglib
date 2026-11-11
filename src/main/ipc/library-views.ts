@@ -67,6 +67,22 @@ export function setupLibraryViewsIPC() {
   });
 
   /**
+   * KEY-44: bulk shelf assignment for the physical copies of the selected works.
+   */
+  ipcMain.handle('library:bulk-update-shelf', (_, input: { workIds: unknown; shelf: unknown }) => {
+    try {
+      if (!Array.isArray(input?.workIds) || input.workIds.length > 10000 || !input.workIds.every(id => typeof id === 'string' && id.length <= 200) || typeof input.shelf !== 'string' || input.shelf.length > 200) {
+        return { success: false, updated: 0, skipped: 0, error: 'invalid-request' };
+      }
+      const result = new SqliteWorkRepository(getDatabase()).bulkUpdateShelf(input.workIds as string[], input.shelf);
+      return { success: true, ...result };
+    } catch (err: unknown) {
+      console.error('[baglib/library-views-ipc] Failed to bulk update shelf:', err);
+      return { success: false, updated: 0, skipped: 0, error: errorMessage(err) || String(err) };
+    }
+  });
+
+  /**
    * Bulk updates reading status and progress for multiple works.
    */
   ipcMain.handle('library:bulk-update-reading-status', (_, input: BulkUpdateStatusInput) => {

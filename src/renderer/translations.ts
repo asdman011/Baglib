@@ -1,5 +1,11 @@
 export const translations = {
   ar: {
+    bulkAssignShelf: "تعيين الرف",
+    bulkShelfModalTitle: "تعيين الرف للكتب المحددة ({count})",
+    bulkShelfInputLabel: "اسم الرف أو رقمه",
+    bulkShelfHint: "يُطبَّق على النسخ الورقية فقط، وتبقى الكتب الرقمية كما هي.",
+    bulkShelfDone: "تم تعيين الرف للنسخ الورقية ({updated}).",
+    bulkShelfDoneSkipped: "تم تعيين الرف للنسخ الورقية ({updated})، وتُرك ({skipped}) بلا نسخة ورقية.",
     keyboardShortcutsTitle: "اختصارات لوحة المفاتيح",
     shortcutGlobalScope: "كل مساحات العمل",
     clipperNovelTitlePlaceholder: "عنوان مخصص للرواية (اختياري)",
@@ -4735,6 +4741,12 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    bulkAssignShelf: "Assign shelf",
+    bulkShelfModalTitle: "Assign a shelf to the selected books ({count})",
+    bulkShelfInputLabel: "Shelf name or number",
+    bulkShelfHint: "Applies to physical copies only; digital books stay as they are.",
+    bulkShelfDone: "Shelf set for the physical copies ({updated}).",
+    bulkShelfDoneSkipped: "Shelf set for the physical copies ({updated}). Skipped, no physical copy: {skipped}.",
     keyboardShortcutsTitle: "Keyboard shortcuts",
     shortcutGlobalScope: "All workspaces",
     clipperNovelTitlePlaceholder: "Custom novel title (optional)",

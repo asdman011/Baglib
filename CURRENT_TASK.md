@@ -1,3 +1,14 @@
+## KEY-44 item 4: bulk shelf action - 2026-11-11, Claude Code
+
+The bulk toolbar has an "Assign shelf" action. It sets `physical_source_detail.shelf` on every physical copy of the selected books in one transaction (WorkRepository.bulkUpdateShelf, IPC library:bulk-update-shelf, preload bulkUpdateShelf), and leaves digital-only books unchanged, reporting them as skipped. The dialog uses the shared Modal behaviour. There are 6 new ar/en strings, and no schema change.
+
+Verification:
+- New tests/repositories/bulk-shelf.test.ts (3/3): it sets the shelf and skips digital-only books, an empty name clears the shelf, and a failure part-way rolls everything back.
+- tsc passes; eslint 0 errors; translation keys pass; full suite 1846/1846.
+- A live probe in ar and en: selecting 2 physical books and 1 digital book through the grid checkboxes, then Assign shelf, set both physical shelves, skipped the digital book, kept focus inside the dialog and showed the localized notice. The profile was deleted.
+
+Files: src/main/database/repositories/work.repository.ts, src/main/ipc/library-views.ts, src/preload/index.ts, src/renderer/components/library/BulkActionsToolbar.tsx, src/renderer/translations.ts, tests/repositories/bulk-shelf.test.ts, CURRENT_TASK.md.
+
 ## KEY-298 part 2 verified - 2026-11-11, Codex then Claude Code
 
 Codex implemented part 2. It hit its usage limit at 14:33 before the final matrix and publication, and Claude Code finished it in place (takeover rule).

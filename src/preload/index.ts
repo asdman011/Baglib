@@ -198,6 +198,8 @@ export const API = {
     ipcRenderer.invoke('library:get-paginated-works', options),
   bulkUpdateCategory: (input: { workIds: string[]; categoryId: string }) =>
     ipcRenderer.invoke('library:bulk-update-category', input),
+  bulkUpdateShelf: (input: { workIds: string[]; shelf: string }) =>
+    ipcRenderer.invoke('library:bulk-update-shelf', input) as Promise<{ success: boolean; updated: number; skipped: number; error?: string }>,
   bulkUpdateReadingStatus: (input: { workIds: string[]; readingStatus: string; readingProgress?: number }) =>
     ipcRenderer.invoke('library:bulk-update-reading-status', input),
   bulkAddTags: (input: { workIds: string[]; tags: string[] }) =>
