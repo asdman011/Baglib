@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Modal } from '../ui/Modal';
+import { MetadataModalLayout } from './MetadataModalLayout';
 import {
   X,
   Terminal,
@@ -21,6 +21,8 @@ import {
   Hash,
   Server
 } from 'lucide-react';
+import { formatCoverUrl } from '../../utils/file-path-helper';
+import type { TranslationKey } from '../../translations';
 import { BookItem } from '../../types/library';
 import { MetadataProvenance } from '../../../shared/types/work';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -200,34 +202,34 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
     const p = (provider || '').toLowerCase();
     if (p.includes('google')) {
       return {
-        label: t('geekProviderGoogleBooks') || 'Google Books API v1',
+        label: t('geekProviderGoogleBooks'),
         classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30',
         icon: Globe,
       };
     }
     if (p.includes('open library') || p.includes('openlibrary')) {
       return {
-        label: t('geekProviderOpenLibrary') || 'Open Library REST API',
+        label: t('geekProviderOpenLibrary'),
         classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30',
         icon: Database,
       };
     }
     if (p.includes('archive')) {
       return {
-        label: t('geekProviderInternetArchive') || 'Internet Archive API',
+        label: t('geekProviderInternetArchive'),
         classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
         icon: Server,
       };
     }
     if (p.includes('embedded') || p.includes('container') || p.includes('stream')) {
       return {
-        label: t('geekProviderEmbedded') || 'Embedded File Metadata',
+        label: t('geekProviderEmbedded'),
         classes: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30',
         icon: Cpu,
       };
     }
     return {
-      label: provider || t('geekProviderManual') || 'Local Catalog',
+      label: provider || t('geekProviderManual'),
       classes: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30',
       icon: Terminal,
     };
@@ -293,9 +295,8 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
       className="fixed inset-0 z-70 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
       dir={dir}
     >
-      <Modal open={true} onClose={onClose} asChild label={t('geekDetailsTitle')}><div className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] font-sans">
-        {/* Header */}
-        <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
+      <MetadataModalLayout open={true} onClose={onClose} label={t('geekDetailsTitle')}
+        header={<>
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-600 dark:text-purple-400 shrink-0 shadow-sm">
               <Terminal className="w-5 h-5" />
@@ -322,27 +323,35 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* Top Diagnostic Badges */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-canvas/40 border-b border-subtle text-xs">
-          <div className="space-y-0.5">
+ </>}
+        footer={<>
+<button aria-label={t('close')}
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-canvas border border-subtle text-main font-bold hover:bg-surface transition-all cursor-pointer shadow-xs"
+          >
+            {t('geekClose')}
+          </button>
+ </>}
+      >
+<div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-canvas/40 border-b border-subtle text-xs">
+          <div className="min-w-0 space-y-0.5">
             <span className="text-[11px] text-muted font-medium">{t('geekPrimaryProvider')}</span>
-            <div className="font-bold text-main truncate flex items-center gap-1.5">
+            <div className="min-w-0 font-bold text-main flex items-center gap-1.5">
               <ProviderIcon className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
-              <span>{provenance.primaryProvider || 'Local'}</span>
+              <span>{provenance.primaryProvider || t('geekProviderManual')}</span>
             </div>
           </div>
 
-          <div className="space-y-0.5">
+          <div className="min-w-0 space-y-0.5">
             <span className="text-[11px] text-muted font-medium">{t('geekMethod')}</span>
-            <div className="font-bold text-main truncate flex items-center gap-1.5">
+            <div className="min-w-0 font-bold text-main flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-pale-sky-500 shrink-0" />
-              <span>{getMethodLabel(provenance.method)}</span>
+              <span className="min-w-0 break-words">{getMethodLabel(provenance.method)}</span>
             </div>
           </div>
 
-          <div className="space-y-0.5">
+          <div className="min-w-0 space-y-0.5">
             <span className="text-[11px] text-muted font-medium">{t('geekConfidence')}</span>
             <div className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
@@ -350,25 +359,23 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
             </div>
           </div>
 
-          <div className="space-y-0.5">
+          <div className="min-w-0 space-y-0.5">
             <span className="text-[11px] text-muted font-medium">{t('geekTimestamp')}</span>
             <div className="font-mono text-muted truncate flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 shrink-0" />
               <span>
                 {provenance.discoveredAt
-                  ? new Date(provenance.discoveredAt).toLocaleTimeString()
-                  : 'N/A'}
+                  ? new Date(provenance.discoveredAt).toLocaleTimeString(lang)
+                  : t('langUnspecified')}
               </span>
             </div>
           </div>
         </div>
-
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-1 px-4 pt-2 bg-canvas/20 border-b border-subtle text-xs font-bold">
+<div className="flex flex-wrap items-center gap-1 px-4 pt-2 bg-canvas/20 border-b border-subtle text-xs font-bold">
           <button
             type="button"
             onClick={() => setActiveTab('attribution')}
-            className={`px-4 py-2 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-2 sm:px-4 py-2 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'attribution'
                 ? 'border-pale-sky-500 text-pale-sky-600 dark:text-pale-sky-400 bg-surface/50 rounded-t-lg'
                 : 'border-transparent text-muted hover:text-main'
@@ -384,7 +391,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('audit')}
-            className={`px-4 py-2 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-2 sm:px-4 py-2 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'audit'
                 ? 'border-pale-sky-500 text-pale-sky-600 dark:text-pale-sky-400 bg-surface/50 rounded-t-lg'
                 : 'border-transparent text-muted hover:text-main'
@@ -400,7 +407,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('raw')}
-            className={`px-4 py-2 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-2 sm:px-4 py-2 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'raw'
                 ? 'border-pale-sky-500 text-pale-sky-600 dark:text-pale-sky-400 bg-surface/50 rounded-t-lg'
                 : 'border-transparent text-muted hover:text-main'
@@ -410,9 +417,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
             <span>{t('geekTabRawJson')}</span>
           </button>
         </div>
-
-        {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+<div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
           {/* 1. Field-by-Field Attribution Tab */}
           {activeTab === 'attribution' && (
             <div className="space-y-3">
@@ -422,48 +427,20 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
                   <p>{t('geekNoDiagnostics')}</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-2xl border border-subtle bg-canvas/30 shadow-xs">
-                  <table className="w-full text-xs text-start border-collapse">
-                    <thead>
-                      <tr className="border-b border-subtle bg-canvas/70 text-muted font-semibold">
-                        <th className="p-3 text-start">{t('geekFieldCol')}</th>
-                        <th className="p-3 text-start">{t('geekValueCol')}</th>
-                        <th className="p-3 text-start">{t('geekSourceCol')}</th>
-                        <th className="p-3 text-start">{t('geekStatusCol')}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-subtle">
-                      {fieldEntries.map(([fieldName, info]) => {
-                        const statusBadge = getStatusBadge(info.status);
-                        const displayVal =
-                          info.value !== undefined
-                            ? String(info.value)
-                            : String(book[fieldName as keyof BookItem] || '—');
-
-                        return (
-                          <tr key={fieldName} className="hover:bg-canvas/50 transition-colors">
-                            <td className="p-3 font-bold text-main capitalize whitespace-nowrap">
-                              {fieldName}
-                            </td>
-                            <td className="p-3 text-main max-w-xs sm:max-w-md truncate font-medium">
-                              {displayVal}
-                            </td>
-                            <td
-                              className="p-3 text-muted max-w-xs sm:max-w-md truncate font-mono text-[11px]"
-                              title={info.source || provenance.primaryProvider || 'Local'}
-                            >
-                              {info.source || provenance.primaryProvider || 'Local'}
-                            </td>
-                            <td className="p-3 whitespace-nowrap">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border ${statusBadge.classes}`}>
-                                <span>{statusBadge.label}</span>
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="space-y-3">
+                  {fieldEntries.map(([fieldName, info]) => {
+                    const statusBadge = getStatusBadge(info.status);
+                    const labels: Record<string, TranslationKey> = { title: 'diffFieldTitle', author: 'diffFieldAuthor', publisher: 'diffFieldPublisher', publicationYear: 'diffFieldYear', isbn: 'diffFieldIsbn', pagesCount: 'diffFieldPages', coverImage: 'diffFieldCover', language: 'languageLabel', edition: 'bookEditionLabel', description: 'diffFieldDescription' };
+                    const value = info.value ?? book[fieldName as keyof BookItem] ?? '—';
+                    return <section key={fieldName} className="rounded-xl border border-subtle p-3 space-y-2">
+                      <h4 className="font-semibold text-sm">{labels[fieldName] ? t(labels[fieldName]) : fieldName}</h4>
+                      <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs leading-loose">
+                        <div className="min-w-0"><dt className="text-muted">{t('geekValueCol')}</dt><dd className="break-words [overflow-wrap:anywhere]">{fieldName === 'coverImage' && book.coverImage ? <img src={formatCoverUrl(book.coverImage)} alt={book.title} className="h-24 max-w-full object-contain" /> : String(value)}</dd></div>
+                        <div className="min-w-0"><dt className="text-muted">{t('geekSourceCol')}</dt><dd className="break-words [overflow-wrap:anywhere]">{info.source || provenance.primaryProvider || t('geekProviderManual')}</dd></div>
+                        <div><dt className="text-muted">{t('geekStatusCol')}</dt><dd><span className={'inline-flex rounded-lg border px-2 py-0.5 leading-relaxed ' + statusBadge.classes}>{statusBadge.label}</span></dd></div>
+                      </dl>
+                    </section>;
+                  })}
                 </div>
               )}
 
@@ -472,7 +449,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
                 <div className="flex items-center justify-between p-3 rounded-xl bg-canvas border border-subtle text-xs">
                   <div className="flex items-center gap-2 min-w-0">
                     <Globe className="w-4 h-4 text-pale-sky-500 shrink-0" />
-                    <span className="text-muted">{lang === 'ar' ? 'رابط المصدر الأصلي:' : 'Origin Source URL:'}</span>
+                    <span className="text-muted">{t('libraryOriginSourceURL')}</span>
                     <span className="font-mono text-main truncate max-w-sm sm:max-w-lg">
                       {provenance.sourceUrl || book.sourceUrl}
                     </span>
@@ -483,7 +460,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
                     rel="noreferrer"
                     className="flex items-center gap-1 text-pale-sky-600 dark:text-pale-sky-400 font-bold hover:underline shrink-0"
                   >
-                    <span>{lang === 'ar' ? 'فتح' : 'Open'}</span>
+                    <span>{t('ctxOpen')}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
@@ -543,23 +520,7 @@ export const GeekMetadataModal: React.FC<GeekMetadataModalProps> = ({
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="p-4 bg-canvas/90 border-t border-subtle flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-1.5 text-muted">
-            <Terminal className="w-3.5 h-3.5 text-purple-500" />
-            <span>Baglib Bibliographic Provenance & Diagnostics Engine v1.0</span>
-          </div>
-
-          <button aria-label={t('close')}
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-canvas border border-subtle text-main font-bold hover:bg-surface transition-all cursor-pointer shadow-xs"
-          >
-            {t('geekClose')}
-          </button>
-        </div>
-      </div></Modal>
+      </MetadataModalLayout>
     </div>
   );
 };

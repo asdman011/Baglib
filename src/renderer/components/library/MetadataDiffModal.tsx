@@ -1,12 +1,11 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Modal } from '../ui/Modal';
+import { MetadataDiffView } from './MetadataDiffView';
+import { MetadataModalLayout } from './MetadataModalLayout';
 import {
   X,
   Check,
-  CheckSquare,
-  Square,
   AlertTriangle,
   ArrowRight,
   ArrowLeft,
@@ -70,7 +69,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
   const isArabicIncoming = incomingLanguage?.toLowerCase().startsWith('ar') || /[\u0600-\u06FF]/.test(incomingTitle || '');
   const incomingAuthor = (incomingWork.authors && incomingWork.authors.length > 0)
     ? incomingWork.authors.join(isArabicIncoming ? '، ' : ', ')
-    : (isArabicIncoming ? 'غير معروف' : 'Unknown Author');
+    : t('unknownAuthor');
   const incomingPublisher = primaryEdition?.publisher;
   const incomingYear = incomingWork.firstPublishYear || (primaryEdition?.publishDate ? parseInt(primaryEdition.publishDate.substring(0, 4)) : undefined);
   const incomingIsbn = primaryEdition?.isbn13 || primaryEdition?.isbn || primaryEdition?.isbn10;
@@ -190,7 +189,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
                 </span>
               ))
             ) : (
-              <span className="text-muted italic text-xs">{lang === 'ar' ? 'فارغ' : 'Empty'}</span>
+              <span className="text-muted italic text-xs">{t('libraryEmpty')}</span>
             )}
             {Array.isArray(val) && val.length > 4 && (
               <span className="text-[10px] text-muted self-center">+{val.length - 4}</span>
@@ -231,12 +230,12 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
           typeof val === 'string' && val ? (
             <div className="flex items-center gap-2">
               <div className="w-9 h-12 rounded-lg bg-surface border border-subtle overflow-hidden shrink-0 shadow-xs">
-                <img src={val} alt="Cover" className="w-full h-full object-cover" />
+                <img src={val} alt={t('libraryExampleCover')} className="w-full h-full object-cover" />
               </div>
               <span className="text-[11px] text-muted font-mono truncate max-w-xs">{val}</span>
             </div>
           ) : (
-            <span className="text-muted italic text-xs">{lang === 'ar' ? 'لا يوجد غلاف' : 'No cover'}</span>
+            <span className="text-muted italic text-xs">{t('libraryNoCover2')}</span>
           )
         )
       }
@@ -244,7 +243,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
 
     // Filter to fields where incoming has value
     return list.filter((f) => f.hasIncoming);
-  }, [currentBook, incomingWork, lang]);
+  }, [currentBook, incomingAuthor, incomingAuthorBio, incomingCategories, incomingCover, incomingDescription, incomingIsbn, incomingPages, incomingPublisher, incomingTitle, incomingYear, t]);
 
   // Default selection state:
   // When an online catalog candidate is approved, all incoming fields with valid values
@@ -258,9 +257,9 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
     return initial;
   });
 
-  // Re-sync selections whenever incoming candidate or current book diffFields change
+  // Reset for a different book or candidate. Context-only updates retain user choices.
   const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
-  const resetInputs1 = [diffFields];
+  const resetInputs1 = [currentBook, incomingWork];
   if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
     setPreviousResetInputs1(resetInputs1);
 
@@ -373,9 +372,8 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
       className="fixed inset-0 z-60 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
       dir={dir}
     >
-      <Modal open={true} onClose={onClose} asChild label={t('diffModalTitle')}><div className="relative w-full max-w-3xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
-        {/* Header */}
-        <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
+      <MetadataModalLayout open={true} onClose={onClose} label={t('diffModalTitle')}
+        header={<>
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 shadow-sm">
               <Sparkles className="w-5 h-5" />
@@ -402,141 +400,11 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* Action toolbar (Select All / Deselect All) */}
-        <div className="px-5 py-2.5 bg-canvas/50 border-b border-subtle flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={selectAll}
-              className="text-pale-sky-600 dark:text-pale-sky-400 font-bold hover:underline cursor-pointer"
-            >
-              {t('diffSelectAll')}
-            </button>
-            <span className="text-muted">•</span>
-            <button
-              type="button"
-              onClick={deselectAll}
-              className="text-muted hover:text-main cursor-pointer"
-            >
-              {t('diffDeselectAll')}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {onBackToCandidates && candidateCount && candidateCount > 1 && (
-              <button
-                type="button"
-                onClick={onBackToCandidates}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main text-xs font-semibold transition-colors cursor-pointer"
-              >
-                <ArrowIcon className="w-3.5 h-3.5" />
-                <span>{t('candidateBackToPicker', { count: candidateCount })}</span>
-              </button>
-            )}
-
-            {anyOverwritingExisting && (
-              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 text-[11px] font-semibold bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                <span>{t('diffWarningOverwrite')}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Diff List */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5 space-y-3 text-xs">
-          {diffFields.map((field) => {
-            const isChecked = Boolean(selectedFieldIds[field.id]);
-            const Icon = field.icon;
-
-            return (
-              <div
-                key={field.id}
-                onClick={() => toggleField(field.id)}
-                className={`p-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
-                  isChecked
-                    ? 'bg-pale-sky-500/5 border-pale-sky-500/40 shadow-xs'
-                    : 'bg-canvas/40 border-subtle hover:border-pale-sky-500/20'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className={`p-1.5 rounded-lg ${isChecked ? 'bg-pale-sky-500/15 text-pale-sky-500' : 'bg-surface text-muted'}`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <span className="font-bold text-main">
-                      {t(field.labelKey)}
-                    </span>
-                    {field.hasCurrent && field.isDifferent && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                        {lang === 'ar' ? 'تحديث لقيمة موجودة' : 'Updates existing value'}
-                      </span>
-                    )}
-                    {!field.hasCurrent && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-evergreen-500/15 text-evergreen-600 dark:text-evergreen-400 border border-evergreen-500/30">
-                        {lang === 'ar' ? 'حقل جديد فارغ' : 'Fills empty field'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="shrink-0 text-pale-sky-500">
-                    {isChecked ? (
-                      <CheckSquare className="w-5 h-5" />
-                    ) : (
-                      <Square className="w-5 h-5 text-muted opacity-60" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Side-by-side comparison */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  {/* Current Local Value */}
-                  <div className="p-2.5 rounded-xl bg-surface/70 border border-subtle">
-                    <span className="text-[10px] font-bold text-muted block mb-1">
-                      {t('diffCurrent')}
-                    </span>
-                    <div className="text-main leading-relaxed font-medium">
-                      {field.renderValue ? (
-                        field.renderValue(field.currentValue)
-                      ) : field.hasCurrent ? (
-                        String(field.currentValue)
-                      ) : (
-                        <span className="text-muted italic text-[11px]">{lang === 'ar' ? 'فارغ' : 'Empty'}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Incoming Remote Value */}
-                  <div className="p-2.5 rounded-xl bg-pale-sky-500/10 border border-pale-sky-500/20">
-                    <div className="flex items-center justify-between gap-1.5 mb-1">
-                      <span className="text-[10px] font-bold text-pale-sky-600 dark:text-pale-sky-400 block truncate">
-                        {t('diffIncoming')}
-                      </span>
-                      <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-md border shrink-0 ${providerBadgeInfo.classes}`}>
-                        {providerBadgeInfo.label}
-                      </span>
-                    </div>
-                    <div className="text-main leading-relaxed font-semibold">
-                      {field.renderValue ? (
-                        field.renderValue(field.incomingValue)
-                      ) : (
-                        String(field.incomingValue)
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 sm:p-5 bg-canvas/90 border-t border-subtle flex items-center justify-between gap-3">
+ </>}
+        footer={<>
           <span className="text-xs text-muted">
             {selectedCount > 0
-              ? (lang === 'ar' ? `سيتم تحديث ${selectedCount} حقول` : `${selectedCount} fields will be updated`)
+              ? (t('libraryFieldsWillBeUpdated', { value1: selectedCount }))
               : t('diffNoFieldsSelected')}
           </span>
 
@@ -563,8 +431,57 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
             </button>
 
           </div>
+ </>}
+      >
+<div className="px-5 py-2.5 bg-canvas/50 border-b border-subtle flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={selectAll}
+              className="text-pale-sky-600 dark:text-pale-sky-400 font-bold hover:underline cursor-pointer"
+            >
+              {t('diffSelectAll')}
+            </button>
+            <span className="text-muted">•</span>
+            <button
+              type="button"
+              onClick={deselectAll}
+              className="text-muted hover:text-main cursor-pointer"
+            >
+              {t('diffDeselectAll')}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {onBackToCandidates && candidateCount && candidateCount > 1 && (
+              <button
+                type="button"
+                onClick={onBackToCandidates}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <ArrowIcon className="w-3.5 h-3.5" />
+                <span>{t('candidateBackToPicker', { count: candidateCount })}</span>
+              </button>
+            )}
+
+            {anyOverwritingExisting && (
+              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 text-[11px] font-semibold bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('diffWarningOverwrite')}</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div></Modal>
+<div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5 space-y-3 text-xs">
+          <MetadataDiffView rows={diffFields.map(field => ({
+            id: field.id, label: t(field.labelKey),
+            current: field.renderValue ? field.renderValue(field.currentValue) : field.hasCurrent ? String(field.currentValue) : '',
+            incoming: field.renderValue ? field.renderValue(field.incomingValue) : String(field.incomingValue),
+            hasCurrent: field.hasCurrent, hasIncoming: field.hasIncoming, different: field.isDifferent,
+            selected: Boolean(selectedFieldIds[field.id]),
+          }))} onToggle={toggleField} />
+        </div>
+      </MetadataModalLayout>
     </div>
   );
 };

@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-11, Codex] KEY-300 part 2 verified. Calm detail Sheet with preserved Reading Log/zoom/editor, all editions/sources and active counts, shared metadata chrome/diff, centralized copy and Arabic book plurals. Types/lint0errors52warnings/focused21/build/diff pass. Native8/8 with144PNGs/eightinspected/onewindow/0renderererrors and all profiles removed. Full1871/1871 at concurrency2. Exact24 own files/hunks in CURRENT_TASK/report. Scoped commit/push authorized. Claude owns review and Jira.
+
 - [2026-11-11, Codex] KEY-300 part 1 verified. Safe file-boundary cancellation, status-bar resume and actionable import results. Types/lint0errors0warnings/focused27/build/diff pass. Final native8/8 with18realbatches,42PNGs/sixinspected,onewindow/0renderererrors. Full1862/1862 at concurrency2. Profiles and three preliminary evidence runs removed. Exact17 own files in CURRENT_TASK/report. Detail sheet, metadata consistency and trash plurals remain for part2. Task-scoped publication explicitly authorized.
 
 - [2026-11-11, Codex] KEY-298 part 1 verified. Layout-preserving U2 composition covers 25 panels, with shared topmost focus, autofocus and async-opener fixes, token focus rings and localized workspace shortcut lists. Native checks pass 8/8 configurations and 224/224 panels, with eight screenshots inspected. Focused tests pass 35/35 and the full suite passes 1839/1839. TypeScript, build and whitespace checks pass. ESLint has 0 errors and 30 existing warnings. Exact 35 own files are listed in CURRENT_TASK and the report. Remaining overlays and whole-app semantics stay open for part 2. Publication is explicitly authorized by the current dispatch.

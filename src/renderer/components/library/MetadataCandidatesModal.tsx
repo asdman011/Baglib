@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Modal } from '../ui/Modal';
+import { MetadataModalLayout } from './MetadataModalLayout';
 import {
   X,
   Check,
@@ -65,7 +65,7 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
   onSearchDeeper,
   isSearchingDeeper = false,
 }) => {
-  const { lang, dir, t } = useWorkspace();
+  const { dir, t } = useWorkspace();
   const ArrowIcon = dir === 'rtl' ? ArrowLeft : ArrowRight;
 
   const [activeSelected, setActiveSelected] = useState<BibliographicWork | null>(
@@ -206,6 +206,8 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
   return (
       <div
         key={work.workId}
+        role="radio" aria-checked={isSelected} tabIndex={0}
+        onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleCardClick(work); } }}
         onClick={() => handleCardClick(work)}
         onDoubleClick={() => handleCardDoubleClick(work)}
         className={`group relative p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer flex gap-3.5 sm:gap-4 items-start ${
@@ -240,7 +242,7 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
             <div className="flex flex-col items-center justify-center text-muted p-2 text-center">
               <BookOpen className="w-6 h-6 stroke-[1.5] opacity-50" />
               <span className="text-[9px] mt-1 font-sans opacity-70">
-                {lang === 'ar' ? 'بلا غلاف' : 'No Cover'}
+                {t('libraryNoCover')}
               </span>
             </div>
           )}
@@ -371,9 +373,8 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
       className="fixed inset-0 z-60 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
       dir={dir}
     >
-      <Modal open={true} onClose={onClose} asChild label={t('candidatesModalTitle')}><div className="relative w-full max-w-4xl bg-surface border border-subtle rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] font-sans">
-        {/* Header */}
-        <div className="p-4 sm:p-5 bg-canvas/90 border-b border-subtle flex items-center justify-between gap-3">
+      <MetadataModalLayout open={true} onClose={onClose} label={t('candidatesModalTitle')}
+        header={<>
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 shadow-sm">
               <Sparkles className="w-5 h-5" />
@@ -400,10 +401,50 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+ </>}
+        footer={<>
+          <div className="text-xs text-muted truncate">
+            {activeSelected ? (
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="text-main font-semibold truncate">
+                  {activeSelected.title}
+                </span>
+                <span className="opacity-75">
+                  ({getProviderName(activeSelected, getEvaluation(activeSelected))})
+                </span>
+              </span>
+            ) : (
+              <span>{t('candidateSelectPrompt')}</span>
+            )}
+          </div>
 
-        {/* Search Evidence Pill Bar */}
-        {(searchTitle || searchAuthor || searchIsbn) && (
+          <div className="flex items-center gap-2 justify-end shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl border border-subtle text-muted hover:text-main hover:bg-canvas text-xs font-semibold transition-colors cursor-pointer"
+            >
+              {t('cancel')}
+            </button>
+
+            <button
+              type="button"
+              disabled={!activeSelected}
+              onClick={handleProceedClick}
+              className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm ${
+                activeSelected
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                  : 'bg-muted/30 text-muted cursor-not-allowed'
+              }`}
+            >
+              <span>{t('candidateProceedToDiff')}</span>
+              <ArrowIcon className="w-4 h-4" />
+            </button>
+          </div>
+ </>}
+      >
+{(searchTitle || searchAuthor || searchIsbn) && (
           <div className="px-5 py-2.5 bg-canvas/50 border-b border-subtle flex flex-wrap items-center gap-2 text-xs">
             <span className="text-muted font-medium flex items-center gap-1">
               <Search className="w-3.5 h-3.5" />
@@ -421,14 +462,12 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
             )}
             {searchIsbn && (
               <span className="px-2.5 py-1 rounded-lg bg-surface border border-subtle text-muted font-mono">
-                ISBN: {searchIsbn}
+                {t('libraryExampleISBN')}{searchIsbn}
               </span>
             )}
           </div>
         )}
-
-        {/* Candidates List Container */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5 space-y-3">
+<div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5 space-y-3">
           {/* Collapsible File & Query Diagnostics Panel */}
           <FileQueryDiagnosticsPanel
             diagnostics={diagnostics}
@@ -528,50 +567,7 @@ export const MetadataCandidatesModal: React.FC<MetadataCandidatesModalProps> = (
             </>
           )}
         </div>
-
-        {/* Footer Actions */}
-        <div className="p-4 sm:p-5 bg-canvas/90 border-t border-subtle flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="text-xs text-muted truncate">
-            {activeSelected ? (
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                <span className="text-main font-semibold truncate">
-                  {activeSelected.title}
-                </span>
-                <span className="opacity-75">
-                  ({getProviderName(activeSelected, getEvaluation(activeSelected))})
-                </span>
-              </span>
-            ) : (
-              <span>{t('candidateSelectPrompt')}</span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 justify-end shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-subtle text-muted hover:text-main hover:bg-canvas text-xs font-semibold transition-colors cursor-pointer"
-            >
-              {t('cancel')}
-            </button>
-
-            <button
-              type="button"
-              disabled={!activeSelected}
-              onClick={handleProceedClick}
-              className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm ${
-                activeSelected
-                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
-                  : 'bg-muted/30 text-muted cursor-not-allowed'
-              }`}
-            >
-              <span>{t('candidateProceedToDiff')}</span>
-              <ArrowIcon className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div></Modal>
+      </MetadataModalLayout>
     </div>
   );
 };

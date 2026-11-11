@@ -1,3 +1,57 @@
+## KEY-300 part 2 verified - 2026-11-11, Codex (key300p2)
+
+User experience
+
+- Existing books open in a calm logical-end Sheet with the canonical title, author, real cover and bounded +/- zoom. Read, progress and notes/cards counts are visible. Edit metadata opens the retained editor. Lending and trash are behind More actions. Trash uses the existing parent callback and shared Undo toast.
+- Every persisted edition and source appears with digital/physical badges through a read-only repository/IPC projection of existing records. Source-specific Read uses the existing getBookSource API. Counts include all active notes/reflections and cards, beyond the card-list page size. BookVolumesPanel remains reachable in the editor.
+- ReadingLogPanel remains reachable from its disclosure and in the editor. Closed summary disclosures unmount their controls. An explicit opener reference survives the summary-to-editor transition and restores the original card menu button.
+- MetadataAuditModal, MetadataCandidatesModal, MetadataDiffModal, GeekMetadataModal and EditionComparisonModal share MetadataModalLayout on U2 Modal. Both comparison paths use MetadataDiffView with native labelled checkboxes and stacked mobile values. Candidate controls support Enter/Space. Technical attribution stacks on mobile, and audit cards fit their scroll container. Field labels use valid translation keys.
+- Edited legacy components use translations.ts for bilingual copy, role labels, placeholders and identifier validation. Canonical data, language/script values and placeholder detection remain exact. Book counts use Intl.PluralRules with all six Arabic forms, including the accusative dual for restore messages. Superseded translation keys were removed.
+
+Sequential verification
+
+- TypeScript passes. Scoped ESLint has zero errors and 52 warnings, including unused imports and image advisories. Focused tests pass 21/21. Existing tests were preserved. New repository/UI tests cover all editions/sources, active counts beyond 50 cards, mixed-script titles, cover zoom, editor/log reachability, selection application and retention across unrelated context updates, translated enrichment fields and plural forms.
+- tsup and git diff --check pass. Final full npm test -- --test-concurrency=2 passes 1871/1871, zero failures, skips or cancellations, in 138775.4829 ms.
+- Native matrix passes 8/8 in ar/en, light/dark, at 1280/480 with one Electron window and zero renderer errors. Each case checks two real text-layer PDFs, all five metadata dialogs, cover zoom, Reading Log, opening a real PDF reader, lending, shared trash Undo, three-book bulk restore, retained canonical metadata, nested Escape, forward/reverse focus wrapping, forced-focus containment and original-card opener restoration. Eight of 144 final screenshots were inspected.
+- Final evidence is .baglib-data/KEY-300-evidence/part2-2026-11-11T17-10-41-793Z/. Every throwaway profile is removed. Earlier part-2 evidence and task scratch files are removed during publication. The reviewed part-1 evidence remains with its existing handoff.
+
+Verification boundaries
+
+The live harness uses the production app, renderer, preload and existing SQLite database. It seeds real PDF paths and renders their real first pages with the bundled PDF.js in the same window. A second edition, physical sources, notes and cards are fixture records in the throwaway profile. Catalog candidates are deterministic local IPC responses. The production comparison computation, source reads, reader, restore operations and focus hooks run normally. External catalogue fetches and native hidden-window cover generation are outside these UI checks. No original file was saved or OCRed. Part 1 was already reviewed at d2f3f61 and its import implementation was preserved.
+
+Architecture and publication
+
+The new summary type/API projects existing Work → Edition → Source and knowledge records. There is no schema change, dependency or download. Notes/knowledge components and other agents' scripts were excluded. Claude owns review and Jira. Task-scoped commit/push is authorized by the dispatch, pending the scoped publication steps.
+
+Exact own files and hunks
+
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+- docs/features/Usability Inspection.md
+- scripts/library-ui-live/run.mjs
+- scripts/library-ui-live/detail-run.mjs
+- scripts/library-ui-live/detail-main.cjs
+- src/main/database/repositories/work.repository.ts
+- src/main/ipc/database.ts
+- src/preload/index.ts
+- src/shared/types/work.ts
+- src/renderer/components/library/BookDetailModal.tsx
+- src/renderer/components/library/BookDetailOverview.tsx
+- src/renderer/components/library/MetadataModalLayout.tsx
+- src/renderer/components/library/MetadataDiffView.tsx
+- src/renderer/components/library/MetadataAuditModal.tsx
+- src/renderer/components/library/MetadataCandidatesModal.tsx
+- src/renderer/components/library/MetadataDiffModal.tsx
+- src/renderer/components/library/GeekMetadataModal.tsx
+- src/renderer/components/library/EditionComparisonModal.tsx
+- src/renderer/components/library/TrashBinModal.tsx
+- src/renderer/utils/book-count.ts
+- src/renderer/translations.ts
+- tests/repositories/book-detail-summary.test.ts
+- tests/ui/book-detail-metadata.test.ts
+
+Shared CURRENT_TASK.md and IMPLEMENTATION_PLAN.md contain only Codex's own entry in the commit. Shared preload/index.ts and translations.ts are staged from task-owned hunks. docs/agent-ops remains local.
+
 ## KEY-319 part 2: memorization deck from the Quran reader - 2026-11-11, Claude Code
 
 The Quran reader's ayah menu (Hafs) has "Make a memorization deck from here". It opens a small dialog with the name, from and to (prefilled from that ayah, bounded by the surah's length) and memorize. It calls the same generate-ayah-deck IPC as the deck panel, so the cards and their exact text are identical, and a toast reports the result. One new key, `quranMakeDeck`.

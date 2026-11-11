@@ -31,6 +31,24 @@ type LoanRow = Omit<LendingRecord, 'isReturned'> & { isReturned: number; workId:
 export class SqliteWorkRepository implements IWorkRepository {
   constructor(private db: Database) {}
 
+  getDetailSummary(workId: string): import('../../../shared/types/work').BookDetailSummary | null {
+    if (!this.db.prepare('SELECT id FROM work WHERE id=? AND deleted_at IS NULL').get(workId)) return null;
+    type Summary = import('../../../shared/types/work').BookDetailSummary;
+    const editions = this.db.prepare(`SELECT id,label,publisher,publication_year AS publicationYear,language,isbn
+      FROM edition WHERE work_id=? ORDER BY rowid`).all(workId) as Omit<Summary['editions'][number], 'sources'>[];
+    const sources = this.db.prepare(`SELECT s.id,s.edition_id AS editionId,s.source_type AS type,s.status,
+      f.file_path AS filePath,f.file_format AS format,p.shelf,p.room
+      FROM source s JOIN edition e ON e.id=s.edition_id
+      LEFT JOIN file_source_detail f ON f.source_id=s.id
+      LEFT JOIN physical_source_detail p ON p.source_id=s.id
+      WHERE e.work_id=? ORDER BY s.rowid`).all(workId) as Summary['editions'][number]['sources'];
+    const counts = this.db.prepare(`SELECT
+      COALESCE(SUM(knowledge_type IN ('note','study_note','reading_reflection')),0) AS notes,
+      COALESCE(SUM(knowledge_type='card'),0) AS cards
+      FROM knowledge WHERE work_id=? AND deleted_at IS NULL`).get(workId) as { notes: number; cards: number };
+    return { ...counts, editions: editions.map(edition => ({ ...edition, sources: sources.filter(source => source.editionId === edition.id) })) };
+  }
+
   private formatFileSize(bytes: number): string {
     if (!bytes || bytes <= 0) return '0 B';
     const k = 1024;

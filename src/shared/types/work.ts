@@ -85,6 +85,30 @@ export interface MetadataProvenance {
   rawBibliographic?: unknown;
 }
 
+/** Read-only projection of the existing Work → Edition → Source records. */
+export interface BookDetailSummary {
+  notes: number;
+  cards: number;
+  editions: {
+    id: string;
+    label: string | null;
+    publisher: string | null;
+    publicationYear: number | null;
+    language: string | null;
+    isbn: string | null;
+    sources: {
+      id: string;
+      editionId: string;
+      type: string;
+      status: string | null;
+      filePath: string | null;
+      format: string | null;
+      shelf: string | null;
+      room: string | null;
+    }[];
+  }[];
+}
+
 export interface BookItem {
   id: string;
   /** Identity of the edition/source projected with filePath, never inferred from the filename. */

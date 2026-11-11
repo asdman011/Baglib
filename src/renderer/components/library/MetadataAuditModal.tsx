@@ -39,7 +39,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
 import { formatCoverUrl } from '../../utils/file-path-helper';
 import { useMetadataLookup, CandidateMetadataItem } from '../../hooks/useMetadataLookup';
-import { Modal } from '../ui/Modal';
+import { MetadataModalLayout } from './MetadataModalLayout';
 
 export interface MetadataAuditModalProps {
   isOpen: boolean;
@@ -661,7 +661,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
       setCurrentReviewIndex((i) => i + 1);
     } else {
       setIsReviewMode(false);
-      showToast(lang === 'ar' ? 'اكتملت مراجعة جميع الكتب بنجاح!' : 'Review completed successfully!');
+      showToast(t('libraryReviewCompletedSuccessfully'));
     }
   };
 
@@ -675,16 +675,15 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <Modal asChild open={true} onClose={onClose} label={t('auditMetadataTitle')}><div className="relative w-full max-w-5xl max-h-[calc(100dvh-1.5rem)] flex flex-col rounded-3xl bg-surface border border-subtle shadow-2xl overflow-hidden font-sans text-main">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-subtle bg-surface-raised/40">
+      <MetadataModalLayout open={true} onClose={onClose} label={t('auditMetadataTitle')}
+        header={<>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shadow-sm shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold font-display leading-none">
+                <h2 className="text-base sm:text-lg font-bold font-display leading-relaxed">
                   {t('auditMetadataTitle')}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-400 text-[11px] font-bold">
@@ -704,16 +703,10 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
            aria-label={t('close')}>
             <X className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Toast / Status banner */}
-
-        {/* Live Re-scan Progress Banner */}
-
-        {/* Live Auto-Enrich Progress Banner */}
-
-        {/* MAIN BODY: Table View vs Sequential Guided Review View */}
-        {!isReviewMode ? (
+ </>}
+        footer={<button type="button" onClick={onClose} className="ms-auto rounded-lg border border-subtle px-4 py-2 text-sm">{t('close')}</button>}
+      >
+{!isReviewMode ? (
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Action Bar (Re-scan Local + Online Options) */}
             <div className="p-4 sm:p-5 border-b border-subtle bg-surface space-y-4">
@@ -905,7 +898,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                         }`}
                       >
                         {/* Book Info */}
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto flex-1">
                           {/* Cover Thumbnail */}
                           <div className="w-12 h-16 rounded-lg bg-canvas border border-subtle overflow-hidden flex items-center justify-center shrink-0 shadow-inner relative">
                             {book.coverImage ? (
@@ -929,7 +922,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                           </div>
 
                           {/* Meta Details */}
-                          <div className="min-w-0 space-y-1">
+                          <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex items-center gap-2">
                               <h4 className="font-bold text-xs sm:text-sm text-main truncate" title={book.title}>
                                 {book.title}
@@ -1191,7 +1184,9 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                       return (
                         <div
                           key={cand.workId || idx}
-                          onClick={() => setSelectedCandidate(cand)}
+                          role="radio" aria-checked={isSelected} tabIndex={0}
+                      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedCandidate(cand); } }}
+                      onClick={() => setSelectedCandidate(cand)}
                           className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex gap-3.5 ${
                             isSelected
                               ? 'bg-pale-sky-500/10 border-pale-sky-500 ring-2 ring-pale-sky-500/30'
@@ -1227,7 +1222,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
                             </div>
 
                             <p className="text-xs text-muted font-serif truncate">
-                              {cand.authors?.join(', ') || 'Unknown Author'}
+                              {cand.authors?.join(', ') || t('unknownAuthor')}
                             </p>
 
                             <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted pt-1">
@@ -1269,7 +1264,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
             </div>
           </div>
         )}
-      </div></Modal>
+      </MetadataModalLayout>
     </div>
   );
 };

@@ -1,5 +1,6 @@
 'use client';
 import { useToast } from '../ui/Toast';
+import { bookCountLabel, restoredBookCountLabel } from '../../utils/book-count';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -98,7 +99,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
     setActionLoading(true);
     try {
       await window.electronAPI.restoreBook(book.id);
-      showToast(t('bookRestored'));
+      showToast(restoredBookCountLabel(1, lang, t));
       await loadTrash();
       await refreshBooks();
       onRestored?.();
@@ -115,7 +116,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
     const count = selectedIds.size;
     try {
       await window.electronAPI.bulkRestore({ workIds: Array.from(selectedIds) });
-      showToast(t('booksRestored', { count }));
+      showToast(restoredBookCountLabel(count, lang, t));
       await loadTrash();
       await refreshBooks();
       onRestored?.();
@@ -200,7 +201,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold">{t('trashBinTitle')}</h2>
                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
-                  {trashBooks.length}
+                  {bookCountLabel(trashBooks.length, lang, t)}
                 </span>
               </div>
               <p className="text-xs text-muted mt-0.5">{t('trashBinEmptyDesc')}</p>
@@ -231,7 +232,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
 
         {/* Action / Selection Bar */}
         {trashBooks.length > 0 && (
-          <div className="flex items-center justify-between px-6 py-2.5 border-b border-border/60 bg-surface-raised/20 text-xs">
+          <div className="flex flex-wrap gap-3 items-center justify-between px-4 sm:px-6 py-2.5 border-b border-border/60 bg-surface-raised/20 text-xs">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -251,7 +252,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
               </button>
               {selectedIds.size > 0 && (
                 <span className="text-pale-sky-500 font-semibold">
-                  ({selectedIds.size} {lang === 'ar' ? 'محدد' : 'selected'})
+                  {t('trashSelectedBooks', { books: bookCountLabel(selectedIds.size, lang, t) })}
                 </span>
               )}
             </div>
@@ -286,7 +287,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted">
               <Loader2 className="w-8 h-8 animate-spin text-pale-sky-500" />
-              <p className="text-sm">{lang === 'ar' ? 'جاري تحميل سلة المحذوفات...' : 'Loading trash...'}</p>
+              <p className="text-sm">{t('libraryLoadingTrash')}</p>
             </div>
           ) : trashBooks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
@@ -408,7 +409,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
                   disabled={actionLoading}
                   className="px-4 py-2 rounded-xl border border-border text-xs font-semibold hover:bg-surface-raised cursor-pointer"
                 >
-                  {t('bulkCancelBtn') || 'إلغاء'}
+                  {t('bulkCancelBtn')}
                 </button>
                 <button
                   type="button"
@@ -440,7 +441,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
                   disabled={actionLoading}
                   className="px-4 py-2 rounded-xl border border-border text-xs font-semibold hover:bg-surface-raised cursor-pointer"
                 >
-                  {t('bulkCancelBtn') || 'إلغاء'}
+                  {t('bulkCancelBtn')}
                 </button>
                 <button
                   type="button"
@@ -472,7 +473,7 @@ export const TrashBinModal: React.FC<TrashBinModalProps> = ({
                   disabled={actionLoading}
                   className="px-4 py-2 rounded-xl border border-border text-xs font-semibold hover:bg-surface-raised cursor-pointer"
                 >
-                  {t('bulkCancelBtn') || 'إلغاء'}
+                  {t('bulkCancelBtn')}
                 </button>
                 <button
                   type="button"

@@ -126,6 +126,7 @@ export const API = {
   // Database
   getDatabaseStatus: () => ipcRenderer.invoke('database:get-status'),
   getAllBooks: () => ipcRenderer.invoke('library:get-all-books'),
+  getBookDetailSummary: (workId: string): Promise<import('../shared/types/work').BookDetailSummary | null> => ipcRenderer.invoke('library:get-detail-summary', workId),
   getBookSource: (workId: string, sourceId: string): Promise<import('../shared/types/work').BookItem | null> => ipcRenderer.invoke('library:get-book-source', workId, sourceId),
   addBook: (bookData: unknown) => ipcRenderer.invoke('library:add-book', bookData),
   updateBook: (bookData: unknown) => ipcRenderer.invoke('library:update-book', bookData),

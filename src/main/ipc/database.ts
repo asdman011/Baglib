@@ -67,6 +67,11 @@ export function setupDatabaseIPC() {
     return book && !book.deletedAt ? book : null;
   });
 
+  ipcMain.handle('library:get-detail-summary', (_, workId: unknown) => {
+    if (typeof workId !== 'string' || !/^[^\s\[\]|:#@]{1,180}$/u.test(workId)) throw new Error('invalid-reference');
+    return new WorkRepository(getDatabase()).getDetailSummary(workId);
+  });
+
   ipcMain.handle('library:get-all-books', () => {
     try {
       const db = getDatabase();

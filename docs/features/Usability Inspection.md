@@ -41,6 +41,14 @@ Impact: users can see a reassuring ready/indexed message during data-loading fai
 
 ### U2 — Import progress cannot be dismissed or cancelled through the wizard
 
+### KEY-300 part 2 follow-up - 2026-11-11, Codex
+
+Book details now open in a logical-end Sheet with canonical title/author, cover +/- zoom, reading progress, active notes/cards counts and every persisted edition/source with physical/digital badges. The existing metadata editor and BookVolumesPanel remain reachable through Edit metadata. ReadingLogPanel stays reachable through its disclosure and in the editor. Read opens the selected persisted source. Lending and trash live behind More actions, with the existing shared Undo toast. Closed summary disclosures unmount controls, and explicit opener restoration survives the transition into editing.
+
+The five metadata dialogs share U2 Modal chrome and a responsive body/footer. Both enrichment paths use one labelled-checkbox diff that stacks on mobile. Technical field attribution also stacks, and mobile audit cards fit their container. Candidate selection supports Enter/Space. Touched bilingual copy, role labels, placeholders and validation labels are centralized. Book counts use six Intl.PluralRules forms in Arabic, including the restore dual and 3–10 plural.
+
+Final sequential verification passes TypeScript, scoped lint with zero errors/52 warnings, 21 focused tests, tsup, whitespace checks and all 1871 full tests at concurrency two. Native verification passes eight ar/en, light/dark, 1280/480 configurations with two real PDFs each, all five metadata dialogs, Reading Log, zoom, reader opening, lending, trash Undo, three-book restore, nested dismissal, focus containment and original-card opener return. Eight of 144 final screenshots were inspected. Evidence is .baglib-data/KEY-300-evidence/part2-2026-11-11T17-10-41-793Z/. Profiles and earlier part-2 evidence are cleaned. Catalog candidates are local deterministic responses, while production comparison/SQLite/focus code runs normally. Originals are read directly and remain unsaved, and OCR is never invoked. The reviewed part-1 import behavior remains as documented below.
+
 ### KEY-300 part 1 follow-up - 2026-11-11, Codex
 
 This follow-up supersedes the earlier cancellation limit for the wizard's import phase. The shared batch pipeline accepts an optional AbortSignal. The IPC handler owns an AbortController keyed by the sending webContents and a request identifier. Cancellation bypasses the serialized import queue, so it can mark a queued or active batch while the queue is busy. The pipeline checks the signal before each file and lets any already-started importFile finish. Completed works stay in the existing Work → Edition → Source storage. Unstarted files receive skipped/cancelled result flags, with no file access or database insert. These are transient API fields.

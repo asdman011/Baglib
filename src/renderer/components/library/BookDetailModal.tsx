@@ -1,5 +1,6 @@
 'use client';
 import { ReadingLogPanel } from '../notes/ReadingLogPanel';
+import { BookDetailOverview } from './BookDetailOverview';
 import { Modal } from '../ui/Modal';
 import { errorMessage } from '../../../shared/errors';
 
@@ -110,6 +111,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [formData, setFormData] = useState<BookItem>(book || ({} as BookItem));
   const [initialSnapshot, setInitialSnapshot] = useState<string>('');
   const [showConfirmDiscard, setShowConfirmDiscard] = useState<boolean>(false);
+  const [editing, setEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'physical' | 'classification' | 'lending'>('info');
   const lookupHook = useMetadataLookup();
   const [isDiscoveringFile, setIsDiscoveringFile] = useState<boolean>(false);
@@ -232,6 +234,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       setInitialSnapshot(JSON.stringify(initial));
       setShowConfirmDiscard(false);
       setActiveTab(initialTab);
+      setEditing(isCreateMode || initialTab !== 'info');
       setCurrentPdfPage(1);
       setPdfCoverPages([]);
       setIsExtractingPdfCover(false);
@@ -292,6 +295,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const discardRef = React.useRef<HTMLDivElement>(null);
+  const returnFocusRef = React.useRef<HTMLElement | null>(null);
+  React.useInsertionEffect(() => {
+    if (isOpen) returnFocusRef.current = document.activeElement instanceof window.HTMLElement ? document.activeElement : null;
+  }, [isOpen, book?.id]);
 
   // Real-time type-aware validation
   const validation = useMemo(() => {
@@ -338,9 +345,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         const valRes = await windowAPI.validateDigitalFile(fullPath);
         if (valRes && !valRes.isValid) {
           setPdfCoverMessage(
-            lang === 'ar'
-              ? `الملف المحدد غير صالح: ${valRes.error || 'صيغة غير مدعومة'}`
-              : `Selected file is invalid: ${valRes.error || 'unsupported format'}`
+            t('librarySelectedFileIsInvalid', { value1: valRes.error || t('libraryFallbackUnsupportedFormat') })
           );
           setTimeout(() => setPdfCoverMessage(null), 4000);
           setIsDiscoveringFile(false);
@@ -425,12 +430,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       const finalAuthor = hasCuratedAuthor
         ? prev.author
         : (discoveredAuthor ||
-          (discoveredLanguage?.toLowerCase().startsWith('ar') ||
-          discoveredLanguage === 'العربية' ||
-          /[\u0600-\u06FF]/.test(finalTitle) ||
-          lang === 'ar'
-            ? 'غير معروف'
-            : 'Unknown Author'));
+          (t('noAuthor')));
 
       const hasCuratedPublisher = Boolean(prev.publisher && prev.publisher.trim() !== '');
       const finalPublisher = hasCuratedPublisher ? prev.publisher : (discoveredPublisher || prev.publisher);
@@ -490,9 +490,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     setIsFileImported(true);
     setPdfCoverMessage(
       t('metadataUpdatedFromNewFile') ||
-        (lang === 'ar'
-          ? 'تم تحديث بيانات الكتاب والغلاف بناءً على الملف الجديد بنجاح!'
-          : 'Metadata and cover updated from the new file successfully!')
+        (t('metadataUpdatedFromNewFile'))
     );
     setTimeout(() => setPdfCoverMessage(null), 3500);
   };
@@ -678,17 +676,13 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           handleInputChange('coverImage', res.coverUrl);
           setEpubCoverMessage(
             t('epubCoverExtracted') ||
-              (lang === 'ar'
-                ? 'تم استخراج الغلاف من ملف EPUB وتعيينه كغلاف بنجاح!'
-                : 'Cover extracted from EPUB file and set as book cover successfully!')
+              (t('libraryCoverExtractedFromEPUBFileAndSetAs'))
           );
           setTimeout(() => setEpubCoverMessage(null), 3500);
         } else {
           setEpubCoverMessage(
             t('noEpubImagesFound') ||
-              (lang === 'ar'
-                ? 'تعذر العثور على صورة غلاف داخل ملف EPUB.'
-                : 'No cover image found inside EPUB file.')
+              (t('libraryNoCoverImageFoundInsideEPUBFile'))
           );
           setTimeout(() => setEpubCoverMessage(null), 3500);
         }
@@ -696,7 +690,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     } catch (err) {
       console.warn('[BookDetailModal] extractEpubCover error:', err);
       setEpubCoverMessage(
-        lang === 'ar' ? 'تعذر استخراج الغلاف من ملف EPUB.' : 'Failed to extract cover from EPUB.'
+        t('libraryFailedToExtractCoverFromEPUB')
       );
       setTimeout(() => setEpubCoverMessage(null), 3500);
     } finally {
@@ -865,9 +859,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
     if (!cleanIsbn && !title && !formData.filePath) {
       alert(
-        lang === 'ar'
-          ? 'يرجى إدخال عنوان العمل أو الرقم المعياري (ISBN) أو اختيار ملف للبحث.'
-          : 'Please enter a work title, ISBN, or select a file first.'
+        t('libraryPleaseEnterAWorkTitleISBNOrSelect')
       );
       return;
     }
@@ -893,9 +885,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       }
     } else {
       alert(
-        lang === 'ar'
-          ? t('candidateNoResults')
-          : t('candidateNoResults')
+        t('candidateNoResults')
       );
     }
   };
@@ -926,18 +916,21 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
   if (!isOpen || !book) return null;
 
+  if (!isCreateMode && !editing) return <BookDetailOverview key={book.id} book={formData} onClose={onClose} returnFocus={returnFocusRef}
+    onEdit={tab => { setActiveTab(tab); setEditing(true); }} onDelete={() => onDelete(book.id)} />;
+
   const currentTypeInfo = getWorkTypeInfo(formData.workType || formData.workTypeId);
 
-  const roleLabelMap: Record<ContributorRole, { ar: string; en: string }> = {
-    author: { ar: 'مؤلف', en: 'Author' },
-    co_author: { ar: 'مؤلف مشارك', en: 'Co-Author' },
-    translator: { ar: 'مترجم', en: 'Translator' },
-    editor: { ar: 'محقق / محرر', en: 'Editor' },
-    speaker: { ar: 'محاضر / متحدث', en: 'Speaker' },
-    narrator: { ar: 'راوٍ / قارئ', en: 'Narrator' },
-    commentator: { ar: 'شارح / معلق', en: 'Commentator' },
-    advisor: { ar: 'مشرف علمي', en: 'Advisor' },
-    scribe: { ar: 'ناسخ', en: 'Scribe' },
+  const roleLabelMap: Record<ContributorRole, string> = {
+    author: t('libraryContributorAuthor'),
+    co_author: t('libraryContributorCoAuthor'),
+    translator: t('libraryContributorTranslator'),
+    editor: t('libraryContributorEditor'),
+    speaker: t('libraryContributorSpeaker'),
+    narrator: t('libraryContributorNarrator'),
+    commentator: t('libraryContributorCommentator'),
+    advisor: t('libraryContributorAdvisor'),
+    scribe: t('libraryContributorScribe'),
   };
 
   return (
@@ -957,7 +950,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         className="hidden"
       />
 
-      <Modal open={isOpen && !!book} onClose={handleAttemptClose} asChild focusRef={dialogRef}><div
+      <Modal open={isOpen && !!book} onClose={handleAttemptClose} asChild focusRef={dialogRef} returnFocus={returnFocusRef}><div
         onDragEnter={handleModalDragEnter}
         ref={dialogRef}
         role="dialog"
@@ -977,7 +970,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <FolderOpen className="w-8 h-8 animate-bounce" />
             </div>
             <h3 className="text-lg font-bold font-display text-main mb-1 text-center">
-              {lang === 'ar' ? 'أفلت الملف هنا لتحديث بيانات وغلاف الكتاب' : 'Drop file here to update book metadata & cover'}
+              {t('libraryDropFileHereToUpdateBookMetadataCover')}
             </h3>
             <p className="text-xs text-muted text-center max-w-sm">
               {t('dropBookSubtitle')}
@@ -1068,12 +1061,12 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             <button
               type="button"
               onClick={() => setIsOnlineHubOpen(true)}
-              aria-label={t('openLibraryHubTooltip') || (lang === 'ar' ? 'البحث والاستيراد من المكتبات المفتوحة وخلاصات RSS' : 'Search and import from open libraries and RSS feeds')} title={t('openLibraryHubTooltip') || (lang === 'ar' ? 'البحث والاستيراد من المكتبات المفتوحة وخلاصات RSS' : 'Search and import from open libraries and RSS feeds')}
+              aria-label={t('openLibraryHubTooltip')} title={t('openLibraryHubTooltip')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pale-sky-500/10 border border-pale-sky-500/30 text-pale-sky-600 dark:text-pale-sky-300 text-xs font-bold hover:bg-pale-sky-500/20 transition-all cursor-pointer"
             >
               <Globe className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">
-                {t('openLibraryHubBtn') || (lang === 'ar' ? 'المكتبات المفتوحة & RSS' : 'Open Library & RSS')}
+                {t('openLibraryHubBtn')}
               </span>
             </button>
 
@@ -1212,7 +1205,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 : 'border-transparent text-muted hover:text-main'
             }`}
           >
-            {lang === 'ar' ? 'البيانات الأساسية والتخصصية' : 'Primary & Type Details'}
+            {t('libraryPrimaryTypeDetails')}
           </button>
           <button
             onClick={() => setActiveTab('physical')}
@@ -1222,7 +1215,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 : 'border-transparent text-muted hover:text-main'
             }`}
           >
-            {lang === 'ar' ? 'الموقع الفيزيائي والاقتناء' : 'Location & Holdings'}
+            {t('libraryLocationHoldings')}
           </button>
           <button
             onClick={() => setActiveTab('classification')}
@@ -1232,7 +1225,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 : 'border-transparent text-muted hover:text-main'
             }`}
           >
-            {lang === 'ar' ? 'المساهمون والتصنيف' : 'Contributors & Tags'}
+            {t('libraryContributorsTags')}
           </button>
           <button
             onClick={() => setActiveTab('lending')}
@@ -1242,9 +1235,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 : 'border-transparent text-muted hover:text-main'
             }`}
           >
-            {lang === 'ar'
-              ? `سجل الإعارة (${(formData.lendingHistory || []).length})`
-              : `Lending (${(formData.lendingHistory || []).length})`}
+            {t('libraryLending', { value1: (formData.lendingHistory || []).length })}
           </button>
         </div>
 
@@ -1264,8 +1255,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-main block truncate">
                         {formData.filePath
-                          ? (lang === 'ar' ? 'الملف الرقمي المربوط بالجهاز' : 'Linked Digital File')
-                          : (lang === 'ar' ? 'لم يتم ربط ملف رقمي' : 'No Digital File Linked')}
+                          ? (t('libraryLinkedDigitalFile'))
+                          : (t('libraryNoDigitalFileLinked'))}
                       </span>
 
                       {/* Storage Health Badge */}
@@ -1306,16 +1297,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     </div>
 
                     <span className="text-[11px] text-muted font-mono truncate max-w-md block">
-                      {formData.filePath || (lang === 'ar' ? 'اختر ملف من الجهاز لربطه بهذا العمل' : 'Select local PDF/EPUB to associate')}
+                      {formData.filePath || (t('librarySelectLocalPDFEPUBToAssociate'))}
                     </span>
 
                     {isDiscoveringFile && (
                       <span className="text-[11px] text-pale-sky-500 font-bold flex items-center gap-1.5 mt-1 animate-pulse">
                         <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
                         <span>
-                          {lang === 'ar'
-                            ? 'جاري استخراج بيانات الكتاب والبحث عن الغلاف...'
-                            : 'Extracting metadata & discovering cover...'}
+                          {t('libraryExtractingMetadataDiscoveringCover')}
                         </span>
                       </span>
                     )}
@@ -1324,9 +1313,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       <span className="text-[11px] text-amber-500 font-bold flex items-center gap-1.5 mt-1 animate-pulse">
                         <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
                         <span>
-                          {lang === 'ar'
-                            ? 'جاري فحص المسار الجديد وإعادة الربط...'
-                            : 'Validating new path and relinking...'}
+                          {t('libraryValidatingNewPathAndRelinking')}
                         </span>
                       </span>
                     )}
@@ -1353,11 +1340,11 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       type="button"
                       onClick={handleRemoveFile}
                       disabled={isDiscoveringFile || isRelinking}
-                      aria-label={t('removeLinkedFile') || (lang === 'ar' ? 'إزالة الملف المربوط' : 'Remove Linked File')} title={t('removeLinkedFile') || (lang === 'ar' ? 'إزالة الملف المربوط' : 'Remove Linked File')}
+                      aria-label={t('removeLinkedFile')} title={t('removeLinkedFile')}
                       className="px-2.5 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-red-500/10 hover:border-red-500/30 text-muted hover:text-red-500 font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-50"
                     >
                       <Trash2 className="w-4 h-4 text-red-500" />
-                      <span className="hidden sm:inline">{t('removeLinkedFile') || (lang === 'ar' ? 'إزالة' : 'Remove')}</span>
+                      <span className="hidden sm:inline">{t('removeLinkedFile') || (t('pathwayRemoveItem'))}</span>
                     </button>
                   )}
 
@@ -1367,7 +1354,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     className="px-3 py-1.5 rounded-xl bg-surface border border-subtle hover:bg-canvas text-main font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm disabled:opacity-50"
                   >
                     <FolderOpen className="w-4 h-4 text-amber-500" />
-                    <span>{formData.filePath ? (lang === 'ar' ? 'تغيير الملف' : 'Change File') : (lang === 'ar' ? 'اختيار ملف' : 'Select File')}</span>
+                    <span>{formData.filePath ? (t('libraryChangeFile')) : (t('librarySelectFile'))}</span>
                   </button>
                 </div>
               </div>
@@ -1462,7 +1449,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         onClick={() => handleInputChange('coverImage', '')}
                         className="px-2.5 py-2 rounded-xl border border-subtle text-muted hover:text-red-500 hover:bg-canvas text-xs font-bold transition-all cursor-pointer shrink-0"
                       >
-                        {lang === 'ar' ? 'إزالة' : 'Clear'}
+                        {t('libraryClear')}
                       </button>
                     )}
                   </div>
@@ -1539,7 +1526,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <div className="sm:col-span-2 space-y-1">
                   <div className="flex items-center justify-between">
                     <label className="font-bold text-main flex items-center gap-1">
-                      <span>{lang === 'ar' ? 'العنوان الرئيسي' : 'Title'}</span>
+                      <span>{t('diffFieldTitle')}</span>
                       <span className="text-red-500">*</span>
                     </label>
 
@@ -1585,7 +1572,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     type="text"
                     value={formData.title || ''}
                     onChange={(e) => handleInputChange('title', e.target.value)}
-                    placeholder={lang === 'ar' ? 'أدخل عنوان العمل...' : 'Enter work title...'}
+                    placeholder={t('libraryEnterWorkTitle')}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500 text-sm font-semibold"
                   />
                 </div>
@@ -1593,16 +1580,16 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <div className="space-y-1">
                   <label className="font-bold text-main">
                     {formData.workType === 'lecture'
-                      ? (lang === 'ar' ? 'المحاضر / المتحدث الرئيسي' : 'Speaker')
+                      ? (t('librarySpeaker'))
                       : formData.workType === 'manuscript'
-                      ? (lang === 'ar' ? 'المؤلف / المنسوب إليه' : 'Author')
-                      : (lang === 'ar' ? 'المؤلف الرئيسي' : 'Primary Author')}
+                      ? (t('libraryAuthor'))
+                      : (t('libraryPrimaryAuthor'))}
                   </label>
                   <input
                     type="text"
                     value={formData.author || ''}
                     onChange={(e) => handleInputChange('author', e.target.value)}
-                    placeholder={lang === 'ar' ? 'اسم المؤلف أو المحاضر...' : 'Author or speaker name...'}
+                    placeholder={t('libraryAuthorOrSpeakerName')}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   />
                 </div>
@@ -1642,7 +1629,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     </label>
                     {formData.authorBio && (
                       <span className="text-[10px] text-muted font-normal">
-                        {formData.authorBio.length} {lang === 'ar' ? 'حرف' : 'chars'}
+                        {formData.authorBio.length} {t('libraryChars')}
                       </span>
                     )}
                   </div>
@@ -1656,26 +1643,26 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-main">{lang === 'ar' ? 'سنة النشر أو الإنتاج' : 'Publication Year'}</label>
+                  <label className="font-bold text-main">{t('libraryPublicationYear')}</label>
                   <input
                     type="number"
                     value={formData.publicationYear || ''}
                     onChange={(e) => handleInputChange('publicationYear', e.target.value ? parseInt(e.target.value) : undefined)}
-                    placeholder="2026"
+                    placeholder={t('libraryExample2026')}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-main">{lang === 'ar' ? 'نوع الحيازة' : 'Holding Type'}</label>
+                  <label className="font-bold text-main">{t('libraryHoldingType')}</label>
                   <select
                     value={formData.bookType || 'physical'}
                     onChange={(e) => handleInputChange('bookType', e.target.value as BookItem['bookType'])}
                     className="w-full p-2.5 rounded-xl bg-canvas border border-subtle text-main outline-none focus:border-pale-sky-500"
                   >
-                    <option value="physical">{lang === 'ar' ? 'نسخة ورقية / فيزيائية' : 'Physical Copy'}</option>
-                    <option value="digital">{lang === 'ar' ? 'نسخة رقمية (ملف إلكتروني)' : 'Digital File'}</option>
-                    <option value="hybrid">{lang === 'ar' ? 'مزدوج (ورقي ورقمي معا)' : 'Hybrid (Both)'}</option>
+                    <option value="physical">{t('libraryPhysicalCopy')}</option>
+                    <option value="digital">{t('libraryDigitalFile')}</option>
+                    <option value="hybrid">{t('libraryHybridBoth')}</option>
                   </select>
                 </div>
               </div>
@@ -1687,9 +1674,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <div className="flex items-center gap-2 text-pale-sky-600 dark:text-pale-sky-400 font-bold border-b border-subtle pb-2">
                   <Compass className="w-4 h-4" />
                   <span>
-                    {lang === 'ar'
-                      ? `حقول مخصصة لـ: ${currentTypeInfo.nameAr}`
-                      : `Specific Fields for: ${currentTypeInfo.nameEn}`}
+                    {t('librarySpecificFieldsFor', { value1: currentTypeInfo[lang === 'ar' ? 'nameAr' : 'nameEn'] })}
                   </span>
                 </div>
 
@@ -1698,11 +1683,11 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <label className="font-bold text-main">{lang === 'ar' ? 'الرقم المعياري (ISBN):' : 'ISBN:'}</label>
+                        <label className="font-bold text-main">{t('libraryISBN')}</label>
                         <div className="flex items-center gap-2">
                           {formData.isbn && (
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isValidIsbn(formData.isbn) ? 'bg-evergreen-500/10 text-evergreen-600' : 'bg-red-500/10 text-red-600'}`}>
-                              {isValidIsbn(formData.isbn) ? '✓ ISBN صالح' : '✗ غير صالح'}
+                              {isValidIsbn(formData.isbn) ? t('libraryValidIsbn') : t('libraryInvalidIdentifier')}
                             </span>
                           )}
                           <button
@@ -1721,29 +1706,29 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         type="text"
                         value={formData.isbn || ''}
                         onChange={(e) => handleInputChange('isbn', e.target.value)}
-                        placeholder="978-9953-0-1234-5"
+                        placeholder={t('libraryExample9789953012345')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'دار النشر (Publisher):' : 'Publisher:'}</label>
+                      <label className="font-bold text-main">{t('libraryPublisher')}</label>
                       <input
                         type="text"
                         value={formData.publisher || ''}
                         onChange={(e) => handleInputChange('publisher', e.target.value)}
-                        placeholder={lang === 'ar' ? 'دار النشر...' : 'Publisher name...'}
+                        placeholder={t('libraryPublisherName')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <EditionInput key={formData.id} book={formData} onChange={value => handleInputChange('edition', value)} t={t} />
                     <BookVolumesPanel book={formData} books={books} t={t} saved={!isCreateMode && !isDirty} onChange={handleInputChange} onOpen={onOpenVolume ? volume => { if (!isDirty || window.confirm(t('bookVolumesDiscardConfirm'))) onOpenVolume(volume, false); } : undefined} onAdd={onOpenVolume ? volume => onOpenVolume(volume, true) : undefined} />
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'عدد الصفحات (Pages):' : 'Pages Count:'}</label>
+                      <label className="font-bold text-main">{t('libraryPagesCount')}</label>
                       <input
                         type="number"
                         value={formData.pagesCount || ''}
                         onChange={(e) => handleInputChange('pagesCount', e.target.value ? parseInt(e.target.value) : undefined)}
-                        placeholder="350"
+                        placeholder={t('libraryExample350')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
@@ -1756,10 +1741,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <label className="font-bold text-main">{lang === 'ar' ? 'المعرف الرقمي (DOI):' : 'DOI:'}</label>
+                          <label className="font-bold text-main">{t('libraryDOI')}</label>
                           {formData.doi && (
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isValidDoi(formData.doi) ? 'bg-evergreen-500/10 text-evergreen-600' : 'bg-red-500/10 text-red-600'}`}>
-                              {isValidDoi(formData.doi) ? '✓ DOI صالح' : '✗ غير صالح'}
+                              {isValidDoi(formData.doi) ? t('libraryValidDoi') : t('libraryInvalidIdentifier')}
                             </span>
                           )}
                         </div>
@@ -1767,47 +1752,47 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           type="text"
                           value={formData.doi || ''}
                           onChange={(e) => handleInputChange('doi', e.target.value)}
-                          placeholder="10.1000/182"
+                          placeholder={t('libraryExample101000182')}
                           className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none font-mono text-[11px]"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="font-bold text-main">{lang === 'ar' ? 'اسم المجلة العلمية (Journal):' : 'Journal Name:'}</label>
+                        <label className="font-bold text-main">{t('libraryJournalName')}</label>
                         <input
                           type="text"
                           value={formData.journalName || ''}
                           onChange={(e) => handleInputChange('journalName', e.target.value)}
-                          placeholder="Journal of Arabic Studies"
+                          placeholder={t('libraryExampleJournalOfArabicStudies')}
                           className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="font-bold text-main">{lang === 'ar' ? 'اسم المؤتمر (Conference):' : 'Conference Name:'}</label>
+                        <label className="font-bold text-main">{t('libraryConferenceName')}</label>
                         <input
                           type="text"
                           value={formData.conferenceName || ''}
                           onChange={(e) => handleInputChange('conferenceName', e.target.value)}
-                          placeholder="ACL 2026"
+                          placeholder={t('libraryExampleACL2026')}
                           className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="font-bold text-main">{lang === 'ar' ? 'نطاق الصفحات (Pages Range):' : 'Pages Range:'}</label>
+                        <label className="font-bold text-main">{t('libraryPagesRange')}</label>
                         <input
                           type="text"
                           value={formData.pagesRange || ''}
                           onChange={(e) => handleInputChange('pagesRange', e.target.value)}
-                          placeholder="120-145"
+                          placeholder={t('libraryExample120145')}
                           className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="font-bold text-main">{lang === 'ar' ? 'معرف ArXiv ID:' : 'ArXiv ID:'}</label>
+                        <label className="font-bold text-main">{t('libraryArXivID')}</label>
                         <input
                           type="text"
                           value={formData.arxivId || ''}
                           onChange={(e) => handleInputChange('arxivId', e.target.value)}
-                          placeholder="2601.12345"
+                          placeholder={t('libraryExample260112345')}
                           className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                         />
                       </div>
@@ -1820,17 +1805,17 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           className="w-4 h-4 accent-pale-sky-500 rounded cursor-pointer"
                         />
                         <label htmlFor="peerReviewedCheck" className="font-bold text-main cursor-pointer">
-                          {lang === 'ar' ? 'ورقة علمية محكمة (Peer-Reviewed)' : 'Peer-Reviewed Paper'}
+                          {t('libraryPeerReviewedPaper')}
                         </label>
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'المستخلص العلمي (Abstract):' : 'Abstract:'}</label>
+                      <label className="font-bold text-main">{t('libraryAbstract')}</label>
                       <textarea
                         rows={3}
                         value={formData.abstract || ''}
                         onChange={(e) => handleInputChange('abstract', e.target.value)}
-                        placeholder={lang === 'ar' ? 'ملخص البحث...' : 'Abstract of the paper...'}
+                        placeholder={t('libraryAbstractOfThePaper')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none resize-none leading-relaxed"
                       />
                     </div>
@@ -1841,52 +1826,52 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 {formData.workType === 'lecture' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'المحاضر (Speaker):' : 'Speaker:'}</label>
+                      <label className="font-bold text-main">{t('librarySpeaker2')}</label>
                       <input
                         type="text"
                         value={formData.speaker || ''}
                         onChange={(e) => handleInputChange('speaker', e.target.value)}
-                        placeholder={lang === 'ar' ? 'اسم المتحدث...' : 'Speaker name...'}
+                        placeholder={t('librarySpeakerName')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'المؤسسة المستضيفة (Host Institution):' : 'Host Institution:'}</label>
+                      <label className="font-bold text-main">{t('libraryHostInstitution')}</label>
                       <input
                         type="text"
                         value={formData.hostInstitution || ''}
                         onChange={(e) => handleInputChange('hostInstitution', e.target.value)}
-                        placeholder={lang === 'ar' ? 'الجامعة أو المعهد...' : 'Host university / institute...'}
+                        placeholder={t('libraryHostUniversityInstitute')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'عنوان الدورة أو الحدث:' : 'Course / Event Title:'}</label>
+                      <label className="font-bold text-main">{t('libraryCourseEventTitle')}</label>
                       <input
                         type="text"
                         value={formData.courseOrEventTitle || ''}
                         onChange={(e) => handleInputChange('courseOrEventTitle', e.target.value)}
-                        placeholder={lang === 'ar' ? 'اسم السلسلة أو المؤتمر...' : 'Series / course title...'}
+                        placeholder={t('librarySeriesCourseTitle')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'المدة بالدقائق (Duration Minutes):' : 'Duration (Minutes):'}</label>
+                      <label className="font-bold text-main">{t('libraryDurationMinutes')}</label>
                       <input
                         type="number"
                         value={formData.durationMinutes || ''}
                         onChange={(e) => handleInputChange('durationMinutes', e.target.value ? parseInt(e.target.value) : undefined)}
-                        placeholder="90"
+                        placeholder={t('libraryExample90')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="sm:col-span-2 space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'رابط التسجيل أو البث (Recording URL):' : 'Recording URL:'}</label>
+                      <label className="font-bold text-main">{t('libraryRecordingURL')}</label>
                       <input
                         type="url"
                         value={formData.recordingUrl || ''}
                         onChange={(e) => handleInputChange('recordingUrl', e.target.value)}
-                        placeholder="https://youtube.com/... or https://archive.org/..."
+                        placeholder={t('libraryExampleHttpsYoutubeComOrHttpsArchiveOrg')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
@@ -1897,21 +1882,21 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 {formData.workType === 'periodical' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'اسم الدورية / المجلة:' : 'Periodical Title:'}</label>
+                      <label className="font-bold text-main">{t('libraryPeriodicalTitle')}</label>
                       <input
                         type="text"
                         value={formData.periodicalTitle || ''}
                         onChange={(e) => handleInputChange('periodicalTitle', e.target.value)}
-                        placeholder={lang === 'ar' ? 'مجلة مجمع اللغة العربية' : 'Magazine / Journal Title'}
+                        placeholder={t('libraryMagazineJournalTitle')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <label className="font-bold text-main">{lang === 'ar' ? 'الرقم المعياري للدوريات (ISSN):' : 'ISSN:'}</label>
+                        <label className="font-bold text-main">{t('libraryISSN')}</label>
                         {formData.issn && (
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isValidIssn(formData.issn) ? 'bg-evergreen-500/10 text-evergreen-600' : 'bg-red-500/10 text-red-600'}`}>
-                            {isValidIssn(formData.issn) ? '✓ ISSN صالح' : '✗ غير صالح'}
+                            {isValidIssn(formData.issn) ? t('libraryValidIssn') : t('libraryInvalidIdentifier')}
                           </span>
                         )}
                       </div>
@@ -1919,37 +1904,37 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         type="text"
                         value={formData.issn || ''}
                         onChange={(e) => handleInputChange('issn', e.target.value)}
-                        placeholder="2049-3630"
+                        placeholder={t('libraryExample20493630')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none font-mono"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'رقم العدد (Issue Number):' : 'Issue Number:'}</label>
+                      <label className="font-bold text-main">{t('libraryIssueNumber')}</label>
                       <input
                         type="text"
                         value={formData.issueNumber || ''}
                         onChange={(e) => handleInputChange('issueNumber', e.target.value)}
-                        placeholder="120"
+                        placeholder={t('libraryExample120')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'رقم المجلد (Volume Number):' : 'Volume Number:'}</label>
+                      <label className="font-bold text-main">{t('libraryVolumeNumber')}</label>
                       <input
                         type="text"
                         value={formData.volumeNumber || ''}
                         onChange={(e) => handleInputChange('volumeNumber', e.target.value)}
-                        placeholder="45"
+                        placeholder={t('libraryExample45')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="sm:col-span-2 space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'فصل أو شهر الصدور:' : 'Season / Month:'}</label>
+                      <label className="font-bold text-main">{t('librarySeasonMonth')}</label>
                       <input
                         type="text"
                         value={formData.publicationSeasonOrMonth || ''}
                         onChange={(e) => handleInputChange('publicationSeasonOrMonth', e.target.value)}
-                        placeholder={lang === 'ar' ? 'ربيع 2024' : 'Spring 2024'}
+                        placeholder={t('librarySpring2024')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
@@ -1960,39 +1945,39 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 {formData.workType === 'thesis' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'الدرجة العلمية:' : 'Degree Level:'}</label>
+                      <label className="font-bold text-main">{t('libraryDegreeLevel')}</label>
                       <select
                         value={formData.degreeLevel || 'master'}
                         onChange={(e) => handleInputChange('degreeLevel', e.target.value)}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       >
-                        <option value="master">{lang === 'ar' ? 'ماجستير (Master’s)' : 'Master’s'}</option>
-                        <option value="phd">{lang === 'ar' ? 'دكتوراه (PhD)' : 'Doctorate / PhD'}</option>
-                        <option value="bachelor">{lang === 'ar' ? 'بحث تخرج بكالوريوس' : 'Bachelor’s'}</option>
+                        <option value="master">{t('libraryMasterS')}</option>
+                        <option value="phd">{t('libraryDoctoratePhD')}</option>
+                        <option value="bachelor">{t('libraryBachelorS')}</option>
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'المشرف العلمي (Advisor):' : 'Advisor:'}</label>
+                      <label className="font-bold text-main">{t('libraryAdvisor')}</label>
                       <input
                         type="text"
                         value={formData.advisor || ''}
                         onChange={(e) => handleInputChange('advisor', e.target.value)}
-                        placeholder={lang === 'ar' ? 'أ.د. فاروق السامرائي' : 'Prof. Advisor Name'}
+                        placeholder={t('libraryProfAdvisorName')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'الكلية / القسم:' : 'Faculty / Department:'}</label>
+                      <label className="font-bold text-main">{t('libraryFacultyDepartment')}</label>
                       <input
                         type="text"
                         value={formData.facultyOrDepartment || ''}
                         onChange={(e) => handleInputChange('facultyOrDepartment', e.target.value)}
-                        placeholder={lang === 'ar' ? 'كلية الآداب - قسم التاريخ' : 'Faculty of Arts'}
+                        placeholder={t('libraryFacultyOfArts')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'تاريخ المناقشة الدفاع:' : 'Defense Date:'}</label>
+                      <label className="font-bold text-main">{t('libraryDefenseDate')}</label>
                       <input
                         type="date"
                         value={formData.defenseDate || ''}
@@ -2007,58 +1992,58 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 {formData.workType === 'manuscript' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'جهة الحفظ / الخزانة:' : 'Holding Institution:'}</label>
+                      <label className="font-bold text-main">{t('libraryHoldingInstitution')}</label>
                       <input
                         type="text"
                         value={formData.holdingInstitution || ''}
                         onChange={(e) => handleInputChange('holdingInstitution', e.target.value)}
-                        placeholder={lang === 'ar' ? 'دار الكتب والوثائق القومية' : 'National Library / Archive'}
+                        placeholder={t('libraryNationalLibraryArchive')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'رقم الحفظ / Codex:' : 'Codex / Shelfmark:'}</label>
+                      <label className="font-bold text-main">{t('libraryCodexShelfmark')}</label>
                       <input
                         type="text"
                         value={formData.codexOrShelfmark || ''}
                         onChange={(e) => handleInputChange('codexOrShelfmark', e.target.value)}
-                        placeholder={lang === 'ar' ? 'مخطوط رقم 458 حديث' : 'MS 458 Hadith'}
+                        placeholder={t('libraryMS458Hadith')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none font-mono"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'اسم الناسخ (Scribe):' : 'Scribe:'}</label>
+                      <label className="font-bold text-main">{t('libraryScribe')}</label>
                       <input
                         type="text"
                         value={formData.scribe || ''}
                         onChange={(e) => handleInputChange('scribe', e.target.value)}
-                        placeholder={lang === 'ar' ? 'علي بن الحسين البغدادي' : 'Scribe Name'}
+                        placeholder={t('libraryScribeName')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'نوع الخط (Script):' : 'Script Type:'}</label>
+                      <label className="font-bold text-main">{t('libraryScriptType')}</label>
                       <select
                         value={formData.scriptType || 'نسخ'}
                         onChange={(e) => handleInputChange('scriptType', e.target.value)}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       >
-                        <option value="نسخ">{lang === 'ar' ? 'خط النسخ' : 'Naskh'}</option>
-                        <option value="ثلث">{lang === 'ar' ? 'خط الثلث' : 'Thuluth'}</option>
-                        <option value="كوفي">{lang === 'ar' ? 'الخط الكوفي' : 'Kufic'}</option>
-                        <option value="رقعة">{lang === 'ar' ? 'خط الرقعة' : 'Ruq\'ah'}</option>
-                        <option value="مغربي">{lang === 'ar' ? 'الخط المغربي' : 'Maghrebi'}</option>
-                        <option value="ديواني">{lang === 'ar' ? 'الخط الديواني' : 'Diwani'}</option>
-                        <option value="تعليق">{lang === 'ar' ? 'خط التعليق / الفارسي' : 'Nasta\'liq'}</option>
+                        <option value="نسخ">{t('libraryNaskh')}</option>
+                        <option value="ثلث">{t('libraryThuluth')}</option>
+                        <option value="كوفي">{t('libraryKufic')}</option>
+                        <option value="رقعة">{t('libraryRuqAh')}</option>
+                        <option value="مغربي">{t('libraryMaghrebi')}</option>
+                        <option value="ديواني">{t('libraryDiwani')}</option>
+                        <option value="تعليق">{t('libraryNastaLiq')}</option>
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'عدد الأوراق (Folios):' : 'Folio Count:'}</label>
+                      <label className="font-bold text-main">{t('libraryFolioCount')}</label>
                       <input
                         type="text"
                         value={formData.folioCount || ''}
                         onChange={(e) => handleInputChange('folioCount', e.target.value)}
-                        placeholder="284 ورقة"
+                        placeholder={t('libraryExample284')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
@@ -2069,17 +2054,17 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 {formData.workType === 'article' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'اسم الصحيفة / الموقع:' : 'Publication Name:'}</label>
+                      <label className="font-bold text-main">{t('libraryPublicationName')}</label>
                       <input
                         type="text"
                         value={formData.publicationName || ''}
                         onChange={(e) => handleInputChange('publicationName', e.target.value)}
-                        placeholder="Al-Jazeera / The Guardian"
+                        placeholder={t('libraryExampleAlJazeeraTheGuardian')}
                         className="w-full p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-main">{lang === 'ar' ? 'تاريخ النشر:' : 'Issue Date:'}</label>
+                      <label className="font-bold text-main">{t('libraryIssueDate')}</label>
                       <input
                         type="date"
                         value={formData.issueDate || ''}
@@ -2100,7 +2085,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   </label>
                   {formData.description && (
                     <span className="text-[10px] text-muted font-mono">
-                      {formData.description.length} {lang === 'ar' ? 'حرف' : 'chars'}
+                      {formData.description.length} {t('libraryChars')}
                     </span>
                   )}
                 </div>
@@ -2270,13 +2255,13 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
                 <h4 className="font-bold text-main flex items-center gap-1.5 text-xs text-pale-sky-600 dark:text-pale-sky-400">
                   <Users className="w-4 h-4" />
-                  <span>{lang === 'ar' ? 'المساهمون في العمل وأدوارهم' : 'Contributors & Roles'}</span>
+                  <span>{t('libraryContributorsRoles')}</span>
                 </h4>
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
                     type="text"
-                    placeholder={lang === 'ar' ? 'اسم المساهم (مؤلف، مترجم، محقق، إلخ)...' : 'Contributor name...'}
+                    placeholder={t('libraryContributorName')}
                     value={newContribName}
                     onChange={(e) => setNewContribName(e.target.value)}
                     className="flex-1 p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
@@ -2286,15 +2271,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     onChange={(e) => setNewContribRole(e.target.value as ContributorRole)}
                     className="p-2.5 rounded-xl bg-surface border border-subtle text-main outline-none"
                   >
-                    <option value="author">{roleLabelMap.author[lang === 'ar' ? 'ar' : 'en']}</option>
-                    <option value="co_author">{roleLabelMap.co_author[lang === 'ar' ? 'ar' : 'en']}</option>
-                    <option value="translator">{roleLabelMap.translator[lang === 'ar' ? 'ar' : 'en']}</option>
-                    <option value="editor">{roleLabelMap.editor[lang === 'ar' ? 'ar' : 'en']}</option>
-                    <option value="commentator">{roleLabelMap.commentator[lang === 'ar' ? 'ar' : 'en']}</option>
-                    <option value="advisor">{roleLabelMap.advisor[lang === 'ar' ? 'ar' : 'en']}</option>
-                    <option value="scribe">{roleLabelMap.scribe[lang === 'ar' ? 'ar' : 'en']}</option>
-                    <option value="speaker">{roleLabelMap.speaker[lang === 'ar' ? 'ar' : 'en']}</option>
-                    <option value="narrator">{roleLabelMap.narrator[lang === 'ar' ? 'ar' : 'en']}</option>
+                    <option value="author">{roleLabelMap.author}</option>
+                    <option value="co_author">{roleLabelMap.co_author}</option>
+                    <option value="translator">{roleLabelMap.translator}</option>
+                    <option value="editor">{roleLabelMap.editor}</option>
+                    <option value="commentator">{roleLabelMap.commentator}</option>
+                    <option value="advisor">{roleLabelMap.advisor}</option>
+                    <option value="scribe">{roleLabelMap.scribe}</option>
+                    <option value="speaker">{roleLabelMap.speaker}</option>
+                    <option value="narrator">{roleLabelMap.narrator}</option>
                   </select>
                   <button
                     type="button"
@@ -2302,7 +2287,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     className="px-4 py-2.5 rounded-xl bg-pale-sky-500 text-white font-bold hover:bg-pale-sky-600 transition-all flex items-center justify-center gap-1 cursor-pointer shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>{lang === 'ar' ? 'إضافة' : 'Add'}</span>
+                    <span>{t('libraryAdd')}</span>
                   </button>
                 </div>
 
@@ -2315,7 +2300,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     >
                       <span className="font-bold">{contrib.name}</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-pale-sky-500/10 text-pale-sky-600 dark:text-pale-sky-400 font-semibold">
-                        {roleLabelMap[contrib.role]?.[lang === 'ar' ? 'ar' : 'en'] || contrib.role}
+                        {roleLabelMap[contrib.role] || contrib.role}
                       </span>
                       <button
                         type="button"
@@ -2328,7 +2313,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   ))}
                   {(!formData.contributors || formData.contributors.length === 0) && (
                     <p className="text-[11px] text-muted py-1">
-                      {lang === 'ar' ? 'لم يُضف أي مساهم إضافي حتى الآن.' : 'No additional contributors added yet.'}
+                      {t('libraryNoAdditionalContributorsAddedYet')}
                     </p>
                   )}
                 </div>
@@ -2338,13 +2323,13 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="p-4 rounded-2xl bg-canvas border border-subtle space-y-3">
                 <h4 className="font-bold text-main flex items-center gap-1.5 text-xs text-pale-sky-600 dark:text-pale-sky-400">
                   <Tag className="w-4 h-4" />
-                  <span>{lang === 'ar' ? 'التصنيف الهرمي والوسوم' : 'Category & Tags'}</span>
+                  <span>{t('libraryCategoryTags')}</span>
                 </h4>
 
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="font-bold text-main text-xs">
-                      {lang === 'ar' ? 'التصنيف الرئيسي:' : 'Primary Category:'}
+                      {t('libraryPrimaryCategory')}
                     </label>
                     <CategoryCascader
                       value={formData.primaryCategory?.id || ''}
@@ -2354,7 +2339,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           primaryCategory: catId && catObj ? { id: catId, nameAr: catObj.nameAr, nameEn: catObj.nameEn || '' } : undefined,
                         }));
                       }}
-                      placeholder={lang === 'ar' ? '-- بدون تصنيف رئيسي --' : '-- No Category --'}
+                      placeholder={t('libraryNoCategory')}
                       allowClear={true}
                     />
                   </div>
@@ -2559,7 +2544,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                               <strong className="text-main">{rec.conditionOnReturn}</strong>
                             </p>
                           )}
-                          {rec.notes && <p className="text-[11px] text-muted italic">&quot;{rec.notes}&quot;</p>}
+                          {rec.notes && <p className="text-[11px] text-muted italic">{t('libraryExampleQuot')}{rec.notes}{t('libraryExampleQuot')}</p>}
                         </div>
 
                         <button

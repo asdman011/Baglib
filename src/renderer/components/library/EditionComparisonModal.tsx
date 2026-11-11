@@ -1,8 +1,10 @@
 import { errorMessage as getErrorMessage } from '../../../shared/errors';
-import { Modal } from '../ui/Modal';
+import { MetadataDiffView } from './MetadataDiffView';
+import { MetadataModalLayout } from './MetadataModalLayout';
 import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { BookItem } from '../../../shared/types/work';
+import type { TranslationKey } from '../../translations';
 import {
   EnrichmentCandidateEdition,
   EnrichmentComparison,
@@ -11,6 +13,13 @@ import {
   TechnicalSearchDiagnostics,
 } from '../../../shared/types/enrichment';
 import { FileQueryDiagnosticsPanel } from './FileQueryDiagnosticsPanel';
+
+const fieldLabels: Record<EnrichmentFieldKey, TranslationKey> = {
+  title: 'diffFieldTitle', author: 'diffFieldAuthor', publisher: 'diffFieldPublisher',
+  publicationYear: 'diffFieldYear', isbn: 'diffFieldIsbn', language: 'languageLabel',
+  description: 'diffFieldDescription', coverImage: 'diffFieldCover',
+  categories: 'diffFieldCategories', pagesCount: 'diffFieldPages',
+};
 
 interface EditionComparisonModalProps {
   isOpen: boolean;
@@ -119,15 +128,15 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
   }
   // Compute diffs whenever selected candidate changes
   useEffect(() => {
-    if (!selectedCandidate || !book) {
-      return;
-    }
+    if (!isOpen || !selectedCandidate || !book) return;
+    let active = true;
 
     const windowAPI = (window).electronAPI;
     if (windowAPI?.enrichment?.computeDiffs) {
       windowAPI.enrichment
         .computeDiffs({ book, candidate: selectedCandidate })
         .then((comp: EnrichmentComparison) => {
+          if (!active) return;
           setComparison(comp);
 
           // Default selection: select all new fields, deselect overwrites
@@ -168,7 +177,8 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
           console.warn('[baglib/ui] Compute diffs failed:', err);
         });
     }
-  }, [selectedCandidate, book]);
+    return () => { active = false; };
+  }, [isOpen, selectedCandidate, book]);
 
   if (!isOpen) return null;
 
@@ -298,7 +308,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
 
   const renderFieldValue = (val: unknown) => {
     if (val === undefined || val === null || val === '') {
-      return <span className="text-gray-500 italic text-xs">—</span>;
+      return <span className="text-muted italic text-xs">—</span>;
     }
     if (Array.isArray(val)) {
       return (
@@ -306,7 +316,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
           {val.map((item, idx) => (
             <span
               key={idx}
-              className="px-1.5 py-0.5 rounded text-[11px] bg-gray-800 text-gray-300 border border-gray-700"
+              className="px-1.5 py-0.5 rounded text-[11px] bg-canvas text-main border border-subtle"
             >
               {String(item)}
             </span>
@@ -314,7 +324,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
         </div>
       );
     }
-    return <span className="text-xs text-gray-200 line-clamp-2">{String(val)}</span>;
+    return <span className="text-xs text-main line-clamp-2">{String(val)}</span>;
   };
 
   return (
@@ -322,9 +332,8 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <Modal open={true} onClose={onClose} asChild label={t('editionComparisonTitle')}><div className="relative w-full max-w-5xl max-h-[calc(100dvh-2rem)] flex flex-col bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900/80">
+      <MetadataModalLayout open={true} onClose={() => { if (!isApplying) onClose(); }} label={t('editionComparisonTitle')}
+        header={<>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -337,24 +346,46 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
               </svg>
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white tracking-wide">
+              <h2 className="text-base font-semibold text-main tracking-wide">
                 {t('editionComparisonTitle')}
               </h2>
-              <p className="text-xs text-gray-400">{t('editionComparisonSubtitle')}</p>
+              <p className="text-xs text-muted">{t('editionComparisonSubtitle')}</p>
             </div>
           </div>
           <button aria-label={t('close')}
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition"
+            disabled={isApplying} onClick={onClose}
+            className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-canvas transition"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-        </div>
+ </>}
+        footer={<>
+          <button aria-label={t('close')}
+            disabled={isApplying} onClick={onClose}
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-muted hover:text-main hover:bg-canvas transition"
+          >
+            {t('cancel')}
+          </button>
 
-        {/* Content Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-6">
+          <button
+            onClick={handleApply}
+            disabled={isApplying || !selectedCandidate || Object.values(selectedFieldKeys).filter(Boolean).length === 0}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-950/40 transition"
+          >
+            {isApplying ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>{t('applyingBulkChanges')}</span>
+              </>
+            ) : (
+              <span>{t('applySelectedChanges')}</span>
+            )}
+          </button>
+ </>}
+      >
+<div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-6">
           {errorMessage && (
             <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-xl text-red-300 text-xs flex items-center gap-2">
               <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -377,7 +408,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
           {/* Candidate Editions Section */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+              <h3 className="text-xs font-semibold text-main uppercase tracking-wider">
                 {t('candidateEditions')} ({candidates.length})
               </h3>
               {isLoading && (
@@ -389,9 +420,9 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
             </div>
 
             {candidates.length === 0 && !isLoading ? (
-              <div className="p-6 text-center border border-dashed border-gray-800 rounded-xl bg-gray-900/40">
-                <p className="text-sm font-medium text-gray-400">{t('noEditionsFound')}</p>
-                <p className="text-xs text-gray-500 mt-1">{t('noEditionsHint')}</p>
+              <div className="p-6 text-center border border-dashed border-subtle rounded-xl bg-surface/40">
+                <p className="text-sm font-medium text-muted">{t('noEditionsFound')}</p>
+                <p className="text-xs text-muted mt-1">{t('noEditionsHint')}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-1">
@@ -401,14 +432,16 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                   return (
                     <div
                       key={cand.id}
+                      role="radio" aria-checked={isSelected} tabIndex={0}
+                      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedCandidate(cand); } }}
                       onClick={() => setSelectedCandidate(cand)}
                       className={`cursor-pointer relative p-3 rounded-xl border transition flex gap-3 text-start ${
                         isSelected
                           ? 'bg-emerald-950/20 border-emerald-500/60 ring-1 ring-emerald-500/30'
-                          : 'bg-gray-800/40 border-gray-800 hover:border-gray-700 hover:bg-gray-800/70'
+                          : 'bg-canvas/40 border-subtle hover:border-subtle hover:bg-canvas/70'
                       }`}
                     >
-                      <div className="w-12 h-16 bg-gray-950 rounded shrink-0 overflow-hidden border border-gray-800 flex items-center justify-center">
+                      <div className="w-12 h-16 bg-canvas rounded shrink-0 overflow-hidden border border-subtle flex items-center justify-center">
                         {cand.coverUrl ? (
                           <img
                             src={cand.coverUrl}
@@ -417,7 +450,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                             onError={(e) => ((e.target as HTMLElement).style.display = 'none')}
                           />
                         ) : (
-                          <span className="text-[10px] text-gray-600">No cover</span>
+                          <span className="text-[10px] text-muted">{t('libraryExampleNoCover')}</span>
                         )}
                       </div>
                       <div className="flex-1 min-w-0 flex flex-col justify-between">
@@ -433,15 +466,15 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                                     ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                                     : confidencePct >= 50
                                     ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                                    : 'bg-gray-800 text-gray-400 border-gray-700'
+                                    : 'bg-canvas text-muted border-subtle'
                                 }`}
                               >
-                                {confidencePct}% {language === 'ar' ? 'تطابق' : 'match'}
+                                {confidencePct}% {t('libraryMatch')}
                               </span>
                             )}
                           </div>
-                          <h4 className="text-xs font-semibold text-gray-200 truncate">{cand.title}</h4>
-                          <p className="text-[11px] text-gray-400 truncate">
+                          <h4 className="text-xs font-semibold text-main truncate">{cand.title}</h4>
+                          <p className="text-[11px] text-muted truncate">
                             {cand.authors?.join(', ') || t('unknownAuthor')}
                           </p>
 
@@ -464,14 +497,14 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                                 </span>
                               )}
                               {!cand.matchFactors && cand.matchReason && (
-                                <span className="text-[9px] text-gray-400 truncate">
+                                <span className="text-[9px] text-muted truncate">
                                   {cand.matchReason}
                                 </span>
                               )}
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center justify-between text-[10px] text-gray-500 mt-1">
+                        <div className="flex items-center justify-between text-[10px] text-muted mt-1">
                           <span>{cand.publicationYear || cand.publisher || '—'}</span>
                           {cand.downloadFormat && (
                             <span className="text-purple-400 font-medium">{cand.downloadFormat}</span>
@@ -490,7 +523,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                  <h3 className="text-xs font-semibold text-main uppercase tracking-wider">
                     {t('comparingWithEdition', { provider: selectedCandidate.providerName })}
                   </h3>
                   {selectedCandidate.sourceUrl && (
@@ -511,105 +544,44 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     onClick={handleSelectAllNew}
-                    className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
+                    className="px-2 py-1 rounded bg-canvas hover:bg-surface text-main transition"
                   >
                     {t('selectAllNewFields')} ({comparison.summary.newFieldsCount})
                   </button>
                   <button
                     onClick={handleSelectAll}
-                    className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
+                    className="px-2 py-1 rounded bg-canvas hover:bg-surface text-main transition"
                   >
                     {t('selectAllFields')}
                   </button>
                   <button
                     onClick={handleDeselectAll}
-                    className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition"
+                    className="px-2 py-1 rounded bg-canvas hover:bg-surface text-muted transition"
                   >
                     {t('deselectAll')}
                   </button>
                 </div>
               </div>
 
-              {/* Diff Table */}
-              <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900/60 divide-y divide-gray-800">
-                <div className="grid grid-cols-12 px-4 py-2 bg-gray-800/40 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                  <div className="col-span-1 text-center">✓</div>
-                  <div className="col-span-2">{t('diffField')}</div>
-                  <div className="col-span-4">{t('currentValue')}</div>
-                  <div className="col-span-2 text-center">{t('actionLabel')}</div>
-                  <div className="col-span-3">{t('incomingValue')}</div>
-                </div>
-
-                {(Object.keys(comparison.diffs) as EnrichmentFieldKey[]).map((fieldKey) => {
-                  const diff = comparison.diffs[fieldKey];
-                  const isChecked = Boolean(selectedFieldKeys[fieldKey]);
-                  const canSelect = diff.hasIncoming;
-
-                  return (
-                    <div
-                      key={fieldKey}
-                      className={`grid grid-cols-12 px-4 py-3 items-center text-xs transition ${
-                        isChecked ? 'bg-emerald-950/15' : 'hover:bg-gray-800/20'
-                      }`}
-                    >
-                      <div className="col-span-1 flex justify-center">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          disabled={!canSelect}
-                          onChange={() => handleToggleField(fieldKey)}
-                          className="w-4 h-4 rounded border-gray-700 text-emerald-500 focus:ring-emerald-500/20 bg-gray-800"
-                        />
-                      </div>
-                      <div className="col-span-2 font-medium text-gray-300">
-                        {t(diff.labelKey as import('../../translations').TranslationKey) || fieldKey}
-                      </div>
-                      <div className="col-span-4 px-3">
-                        {fieldKey === 'coverImage' && diff.currentValue ? (
-                          <div className="w-8 h-11 rounded border border-gray-700 overflow-hidden">
-                            <img src={String(diff.currentValue)} alt="current" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          renderFieldValue(diff.currentValue)
-                        )}
-                      </div>
-                      <div className="col-span-2 flex justify-center">
-                        {diff.isOverwriting ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                            {t('statusOverwrite')}
-                          </span>
-                        ) : !diff.hasCurrent && diff.hasIncoming ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                            {t('statusNew')}
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-gray-800 border border-gray-700">
-                            {t('statusIdentical')}
-                          </span>
-                        )}
-                      </div>
-                      <div className="col-span-3 px-3">
-                        {fieldKey === 'coverImage' && diff.incomingValue ? (
-                          <div className="w-8 h-11 rounded border border-emerald-500/40 overflow-hidden">
-                            <img src={String(diff.incomingValue)} alt="candidate" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          renderFieldValue(diff.incomingValue)
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <MetadataDiffView rows={(Object.keys(comparison.diffs) as EnrichmentFieldKey[]).map(fieldKey => {
+                const diff = comparison.diffs[fieldKey];
+                return {
+                  id: fieldKey, label: t(fieldLabels[fieldKey]),
+                  current: fieldKey === 'coverImage' && diff.currentValue ? <img src={String(diff.currentValue)} alt={t('diffCurrent')} className="h-20 max-w-full object-contain" /> : renderFieldValue(diff.currentValue),
+                  incoming: fieldKey === 'coverImage' && diff.incomingValue ? <img src={String(diff.incomingValue)} alt={t('diffIncoming')} className="h-20 max-w-full object-contain" /> : renderFieldValue(diff.incomingValue),
+                  hasCurrent: diff.hasCurrent, hasIncoming: diff.hasIncoming, different: diff.isDifferent,
+                  selected: Boolean(selectedFieldKeys[fieldKey]),
+                };
+              })} onToggle={id => handleToggleField(id as EnrichmentFieldKey)} />
 
               {/* Safety & Action Controls */}
-              <div className="p-4 rounded-xl bg-gray-800/30 border border-gray-800 space-y-2.5">
-                <label className="flex items-center gap-2.5 cursor-pointer text-xs text-gray-300">
+              <div className="p-4 rounded-xl bg-canvas/30 border border-subtle space-y-2.5">
+                <label className="flex items-center gap-2.5 cursor-pointer text-xs text-main">
                   <input
                     type="checkbox"
                     checked={allowOverwrite}
                     onChange={(e) => setAllowOverwrite(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-700 text-amber-500 focus:ring-amber-500/20 bg-gray-800"
+                    className="w-4 h-4 rounded border-subtle text-amber-500 focus:ring-amber-500/20 bg-canvas"
                   />
                   <span>{t('overwriteProtectionToggle')}</span>
                 </label>
@@ -619,12 +591,12 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                   </p>
                 )}
 
-                <label className="flex items-center gap-2.5 cursor-pointer text-xs text-gray-300">
+                <label className="flex items-center gap-2.5 cursor-pointer text-xs text-main">
                   <input
                     type="checkbox"
                     checked={downloadCoverLocally}
                     onChange={(e) => setDownloadCoverLocally(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-700 text-emerald-500 focus:ring-emerald-500/20 bg-gray-800"
+                    className="w-4 h-4 rounded border-subtle text-emerald-500 focus:ring-emerald-500/20 bg-canvas"
                   />
                   <span>{t('downloadCoverLocallyOption')}</span>
                 </label>
@@ -635,7 +607,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
                       type="checkbox"
                       checked={attachDigitalCopy}
                       onChange={(e) => setAttachDigitalCopy(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-700 text-purple-500 focus:ring-purple-500/20 bg-gray-800"
+                      className="w-4 h-4 rounded border-subtle text-purple-500 focus:ring-purple-500/20 bg-canvas"
                     />
                     <span>
                       {t('attachDigitalCopyOption', { format: selectedCandidate.downloadFormat })}
@@ -646,33 +618,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-800 bg-gray-900/80">
-          <button aria-label={t('close')}
-            onClick={onClose}
-            disabled={isApplying}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white hover:bg-gray-800 transition"
-          >
-            {t('cancel')}
-          </button>
-
-          <button
-            onClick={handleApply}
-            disabled={isApplying || !selectedCandidate || Object.values(selectedFieldKeys).filter(Boolean).length === 0}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-950/40 transition"
-          >
-            {isApplying ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>{t('applyingBulkChanges')}</span>
-              </>
-            ) : (
-              <span>{t('applySelectedChanges')}</span>
-            )}
-          </button>
-        </div>
-      </div></Modal>
+      </MetadataModalLayout>
     </div>
   );
 };

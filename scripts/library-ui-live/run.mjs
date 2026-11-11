@@ -10,6 +10,11 @@ if (process.argv.includes('--import')) {
   process.exit(process.exitCode || 0);
 }
 
+if (process.argv.includes('--detail')) {
+  await import('./detail-run.mjs');
+  process.exit(process.exitCode || 0);
+}
+
 // 1. Ensure port 3000 is clean
 try {
   execSync('node scripts/ensure-port-free.js', { stdio: 'inherit' });
