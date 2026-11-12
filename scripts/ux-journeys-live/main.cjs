@@ -511,6 +511,49 @@ app.on('browser-window-created', (_, win) => {
         }
         await shot('J13-pathway');
       });
+
+      // J14 (opt-in, BAGLIB_JOURNEY_IDS=14) — KEY-249 review: draft a curriculum with AI (a local stub provider), edit it,
+      // create it, and see a step completed in the planner count toward its progress.
+      if (journeysOnly.includes(14)) await journeyRun(14, 'Curriculum from AI, edited, progress via planner', async () => {
+        const http = require('node:http');
+        const outline = config.lang === 'ar' ? '# التمهيد\n- قراءة المقدمة\n- تلخيص الفصل الأول\n# التطبيق\n- حل التمارين' : '# Foundations\n- Read the introduction\n- Summarise chapter one\n# Practice\n- Work the exercises';
+        const stub = http.createServer((request, response) => { request.on('data', () => { }); request.on('end', () => { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ message: { content: outline }, models: [] })); }); });
+        await new Promise(resolve => stub.listen(0, '127.0.0.1', resolve));
+        try {
+          const saved = await evaluate('window.electronAPI.ai.getSettings()');
+          await evaluate('window.electronAPI.ai.saveSettings(' + JSON.stringify({ ...(saved || {}), enabled: true, provider: 'ollama', ollamaModel: 'stub', ollamaEndpoint: 'http://127.0.0.1:' + stub.address().port }) + ')');
+          await ui.nav('pathways', '[data-pathways-space]');
+          await ui.clickText('open "Templates"', '[role=tab]', tr('pathwaysTabTemplates'));
+          await ui.type('type a subject', '[data-pathway-creator-form] input[aria-label=' + JSON.stringify(tr('pathwayAiSubject')) + ']', config.lang === 'ar' ? 'أصول الفقه' : 'Principles of jurisprudence');
+          await ui.clickText('choose "Draft with AI"', '[data-pathway-creator-form] button', tr('pathwayAiDraft'));
+          await until('document.querySelector("[data-pathway-creator-form] textarea")?.value.includes(' + JSON.stringify(outline.split('\n')[1].slice(2)) + ')', 120);
+          const extra = config.lang === 'ar' ? '\n- مراجعة الملاحظات' : '\n- Review the notes';
+          await step('edit the draft (add a step)', async () => {
+            const current = await evaluate('document.querySelector("[data-pathway-creator-form] textarea").value');
+            await evaluate('(()=>{const e=document.querySelector("[data-pathway-creator-form] textarea");Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value").set.call(e,' + JSON.stringify(current + extra) + ');e.dispatchEvent(new Event("input",{bubbles:true}));})()');
+          });
+          const name = (config.lang === 'ar' ? 'منهج تجريبي ' : 'Trial curriculum ') + config.theme + config.width;
+          await ui.type('name it', '[data-pathway-creator-form] input[aria-label=' + JSON.stringify(tr('pathwayName')) + ']', name);
+          await ui.clickText('create it', '[data-pathway-creator-form] button', tr('pathwayCreate'));
+          await until('!!document.querySelector("[data-pathway-next]")', 200);
+          const pathway = (await evaluate('window.electronAPI.pathways.list()')).find(item => item.name === name);
+          if (!pathway) throw new Error('pathway not created');
+          const detail = await evaluate('window.electronAPI.pathways.get(' + JSON.stringify(pathway.id) + ')');
+          const steps = detail.items.filter(item => item.kind === 'step');
+          if (steps.length !== 4) throw new Error('expected 4 steps (3 drafted + 1 edited), got ' + steps.length);
+          journey.notes.push('AI-drafted curriculum "' + name + '" has ' + steps.length + ' steps, kind ' + pathway.kind);
+          // Progress tied to the planner: finish the first step in the Study planner, then see it counted here.
+          await ui.nav('planner', '[data-study-planner]');
+          const task = (await evaluate('window.electronAPI.planner.list()')).find(item => item.title === steps[0].title);
+          if (!task) throw new Error('the step is not in the planner');
+          await step('mark the step done in the planner', async () => { await evaluate('window.electronAPI.planner.save(' + JSON.stringify({ ...task, expectedUpdatedAt: task.updatedAt, status: 'completed' }) + ')'); });
+          await ui.nav('pathways', '[data-pathways-space]');
+          await ui.click('open the curriculum', '[data-pathway-row="' + pathway.id + '"] button');
+          await until('(window.electronAPI.pathways.get(' + JSON.stringify(pathway.id) + ').then(d=>d.done===1))');
+          await until('[...document.querySelectorAll("[data-pathway-progress], [role=progressbar]")].some(e=>/1/.test(e.getAttribute("aria-valuenow")||e.textContent))', 60);
+          await shot('J14-curriculum');
+        } finally { stub.close(); }
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');

@@ -1,3 +1,17 @@
+## KEY-249 review: curriculum from AI, edited, progress via the planner — 2026-11-12, Claude Code (review)
+
+I reviewed KEY-249 (built in 9a783a1) with the new opt-in journey 14 in ux-journeys-live. A local stub Ollama endpoint answers the draft request, and AI settings are set through `ai.saveSettings`. The journey runs:
+1. Pathways → Templates → type a subject → *Draft with AI*. The outline fills.
+2. Edit the draft by adding a step, name it, and *Create*. The result is a curriculum with 4 steps.
+3. Mark the first step completed in the Study planner.
+4. The pathway shows "1 of 4 · 25%".
+
+It passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-249-review`). The template path is covered by J6 in all 8 combinations. No product code changed. A hosted AI provider was not used.
+
+Exact files
+- scripts/ux-journeys-live/main.cjs (J14)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-248 review + fix: research pathway exports full book references — 2026-11-12, Claude Code
 
 I reviewed KEY-248 (built in 9a783a1) with the new opt-in journey 13 in ux-journeys-live. It runs: Pathways → use a template → *Add a source for this step* → pick the imported English book → add a link (title and address) → move the second step up through its row menu → export BibTeX and Markdown. The native save dialog is answered with a file in the evidence folder.
