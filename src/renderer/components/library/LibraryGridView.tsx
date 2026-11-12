@@ -1773,10 +1773,10 @@ export const LibraryGridView: React.FC = () => {
                                   className="font-display font-bold text-text hover:text-primary-text cursor-pointer truncate text-sm"
                                   title={book.title}
                                 >
-                                  {book.title}
+                                  <bdi>{book.title}</bdi>
                                 </div>
                                 <BookVolumeBadge book={book} t={t} />
-                                <div className="text-text-muted text-[11px] truncate font-serif">{book.author}</div>
+                                <div className="text-text-muted text-[11px] truncate font-serif"><bdi>{book.author}</bdi></div>
                               </div>
                             </td>
 

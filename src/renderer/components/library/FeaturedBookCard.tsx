@@ -55,12 +55,12 @@ export const FeaturedBookCard: React.FC<FeaturedBookCardProps> = ({
               className="font-display font-bold text-lg sm:text-xl text-text leading-snug line-clamp-2 hover:text-primary-text transition-colors cursor-pointer"
               title={book.title}
             >
-              {book.title}
+              <bdi>{book.title}</bdi>
             </h3>
 
             {/* Author and Date */}
             <p className="text-xs sm:text-sm text-text-muted font-serif line-clamp-1">
-              <span>{book.author}</span>
+              <bdi>{book.author}</bdi>
               {book.publicationYear && (
                 <span className="ms-1.5 opacity-80">
                   • {book.publicationYear}

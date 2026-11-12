@@ -261,7 +261,8 @@
 
 /* KEY-308: Reem Kufi's word space is very narrow, so Arabic headings such as «لا ملاحظات ولا روابط» read as one word. */
 :root[dir="rtl"] .font-display,
-.font-display:lang(ar) {
+.font-display:lang(ar),
+.font-display bdi:dir(rtl) {
   word-spacing: 0.22em;
 }
 

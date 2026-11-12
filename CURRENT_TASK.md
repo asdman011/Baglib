@@ -1,3 +1,28 @@
+## KEY-309 full UX sweep verified - 2026-11-12, Codex queue3-root
+
+Captured all 20 dispatched page states in Arabic RTL and English LTR, light and dark, at 1280 and 480 px. Both baseline and final matrices passed 160/160. Coverage includes Dashboard, Library grid/list/Recent opened/imported, book detail, real Arabic/English PDF readers and the real English EPUB, Notes list/editor/cards/boards/empty canvas, Quran, Sunnah, Al-Bayan, planner, Statistics and Settings.
+
+Baseline evidence lives in .baglib-data/ux-sweep-evidence-Lw6hDn. Final evidence lives in .baglib-data/ux-sweep-evidence-ZzxCZ4 with 160 primary and seven supplemental Quran-panel PNGs plus result.json. All 16 baseline/final review sheets were inspected, along with representative originals and four final originals for punctuation, Arabic spacing and Quran-base verification. Final title-direction assertions passed. Sampled heading/button/label text contained zero raw translation keys. The run recorded zero renderer errors and zero document horizontal overflow. Profiles were deleted and 1,340 corpus originals verified unchanged. The runner reused the renderer and kept one visible app window. Real documents received read-only import/open checks. The English EPUB ran under both interface languages. Arabic-content EPUB verification remains unavailable because the supplied manifest contains no real Arabic EPUB.
+
+Two visual corrections affect four production files. Library titles/authors now use bdi, correcting English punctuation order in RTL while retaining surrounding alignment and exact stored content. The existing Arabic display-font word-spacing treatment also applies to RTL bdi under English chrome. The new native harness captures every requested page and verifies language, theme, viewport and canonical-title direction. Early script construction and required-alias fixture faults were corrected before baseline. The initial missing-entry launcher exited, and the next runner waited for it. Electron processes exited themselves.
+
+Verification passed for npx tsc --noEmit, scoped ESLint with zero errors/warnings, 23 focused tests, npx tsup, script syntax, git diff --check and the full 1,905-test suite at concurrency two in 135,628.0552 ms.
+
+The local report docs/agent-ops/reports/KEY-309-sweep.md retains four larger follow-ups requested by the dispatch. They cover the narrow Notes editor toolbar/title, horizontal Library list layout, horizontal planner month layout and raw Markdown preview rendering. A state-dependent Quran related panel is documented with uncertainty. Final base captures close it through the existing control. Lower scroll regions and all error states remain beyond this screenshot matrix.
+
+Exact eight task files and own shared hunks
+
+- src/renderer/app/globals.css
+- src/renderer/components/library/FeaturedBookCard.tsx
+- src/renderer/components/library/LibraryBookCard.tsx
+- src/renderer/components/library/LibraryGridView.tsx
+- scripts/ux-sweep-live/main.cjs
+- scripts/ux-sweep-live/run.mjs
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+
+The report and board remain local/ignored for Claude. Claude owns review and Jira. Scoped publication is authorized to origin/feature/library-domain. Publication is the remaining step for this dispatched queue.
+
 ## KEY-64 safe Advanced settings verified - 2026-11-12, Codex queue3-root
 
 Implemented Settings / Advanced / Advanced tools with full catalog JSON/UTF-8 BOM CSV save-dialog export, existing book_content_fts rebuild progress/result toast and read-only integrity/page/size/table-count diagnostics. Canonical Arabic and all catalog columns/links, authors, source details and trash rows survive export. JSON preserves nulls; rectangular CSV has a table column and union of fields, with blank null/missing cells. Atomic sibling-file replacement protects existing destinations. Rebuild preserves existing content and rowids, coalesces concurrent calls and emits table-level progress. It runs synchronously after a short renderer-paint yield; very large indexes can briefly delay main-process operations. No extraction, partition rebuild, SQL console, reset, schema/dependency/download changes.
@@ -22,7 +47,7 @@ Exact15files/own shared hunks
 - CURRENT_TASK.md
 - IMPLEMENTATION_PLAN.md
 
-Docs describe implemented shape and limitations. Claude owns review/Jira. Scoped publication authorized to origin/feature/library-domain. KEY-309 sweep follows.
+Docs describe implemented shape and limitations. Claude owns review/Jira. Published 3682d647d7e2d8e11493723258dd024a3f0436fc normally to origin/feature/library-domain at 2026-11-12T08:03:34.276Z. Remote hash verified; lock released. Claude owns review/Jira. KEY-309 sweep follows.
 
 ## KEY-309 Library inline strings moved to translations - 2026-11-12, Codex (implementation), finished by Claude Code
 

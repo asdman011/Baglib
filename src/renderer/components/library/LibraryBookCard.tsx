@@ -164,10 +164,10 @@ export const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
             className="font-display font-bold text-text hover:text-primary-text cursor-pointer leading-snug line-clamp-2 text-xs sm:text-sm"
             title={book.title}
           >
-            {book.title}
+            <bdi>{book.title}</bdi>
           </h3>
           <p className="text-[11px] text-text-muted font-serif truncate mt-0.5">
-            {book.author || t('unknownAuthor')}
+            <bdi>{book.author || t('unknownAuthor')}</bdi>
           </p>
         </div>
 
