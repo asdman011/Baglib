@@ -64,16 +64,20 @@ function setupDOM() {
   return window;
 }
 
-test('formatInterval outputs correct interval strings in Arabic and English', () => {
-  assert.equal(formatInterval(1, 'ar'), '< ١٠ د');
-  assert.equal(formatInterval(2, 'ar'), '١ يوم');
-  assert.equal(formatInterval(3, 'ar'), '٣ أيام');
-  assert.equal(formatInterval(4, 'ar'), '٧ أيام');
+// The rating buttons show the scheduler's real next interval (minutes), formatted with locale units and digits.
+test('formatInterval formats scheduler minutes in Arabic and English', () => {
+  assert.equal(formatInterval(10, 'ar'), '١٠ د');
+  assert.equal(formatInterval(1440, 'ar'), 'يوم');
+  assert.equal(formatInterval(3 * 1440, 'ar'), '٣ أيام');
+  assert.equal(formatInterval(120, 'ar'), '٢ س');
 
-  assert.equal(formatInterval(1, 'en'), '< 10 min');
-  assert.equal(formatInterval(2, 'en'), '1 day');
-  assert.equal(formatInterval(3, 'en'), '3 days');
-  assert.equal(formatInterval(4, 'en'), '7 days');
+  assert.equal(formatInterval(10, 'en'), '10 min');
+  assert.equal(formatInterval(1440, 'en'), '1 day');
+  assert.equal(formatInterval(3 * 1440, 'en'), '3 days');
+  assert.equal(formatInterval(120, 'en'), '2 hr');
+
+  assert.equal(formatInterval(undefined, 'en'), '', 'no preview, no label');
+  assert.equal(formatInterval(0, 'ar'), '');
 });
 
 test('SRS review keyboard model: Space reveals card, 1-4 grades after reveal', async () => {

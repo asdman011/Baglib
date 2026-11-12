@@ -1,7 +1,11 @@
 import type { KnowledgeCard } from './types/knowledge-cards';
 
 export type ReviewRating = 1 | 2 | 3 | 4;
-export interface ReviewCard extends KnowledgeCard { revision: string }
+export interface ReviewCard extends KnowledgeCard {
+  revision: string;
+  /** Minutes until the next review for each rating, as the scheduler would set it now. */
+  intervals?: Partial<Record<ReviewRating, number>>;
+}
 export interface ReviewQueue {
   cards: ReviewCard[];
   due: number;

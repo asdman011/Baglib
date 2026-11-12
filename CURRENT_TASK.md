@@ -1,3 +1,26 @@
+## KEY-234 follow-up: the review screen shows real next intervals — 2026-11-12, Claude Code
+
+Under each rating, the daily review screen showed fixed guesses ("1 day", "3 days", "7 days") in a hardcoded Arabic/English branch. Those were not what the FSRS scheduler actually sets: a new card gets 1 min, 6 min, 10 min and 8 days. Changes:
+- The SRS service previews each rating with the same card state it uses to grade. Card construction is now one shared `cardFor` helper, so grading behaviour is unchanged.
+- The queue carries `intervals` (minutes per rating) on each ReviewCard, an optional TypeScript field with no schema change.
+- The screen formats those minutes with `Intl.NumberFormat` units (ar-EG digits and plurals, en-US).
+- The four fixed tooltip keys are replaced by `srsNextReviewIn` in ar and en.
+
+Verification:
+- New service tests check that each preview equals the due time grading then stores, and that previews grow with the rating. tests/services/srs.test.ts passed.
+- The formatInterval test was rewritten for real minutes, with exact Arabic and English outputs. Together with the confidence and keyboard tests, 22/22 passed.
+- ux-journeys-live J3 (review a card) passed in ar-light-1280 and en-dark-480. The screenshot shows ١ د / ٦ د / ١٠ د / ٨ أيام (evidence `.baglib-data/KEY-309-evidence/KEY-234-intervals`).
+- The full suite passed 1918/1918, and tsc and eslint are clean.
+
+Exact files
+- src/main/services/srs.ts
+- src/shared/srs.ts
+- src/renderer/components/knowledge/SrsReviewScreen.tsx
+- src/renderer/translations.ts (srsNextReviewIn added; srsIntervalTenMin, srsIntervalOneDay, srsIntervalThreeDays and srsIntervalSevenDays removed)
+- tests/services/srs.test.ts
+- tests/ui/srs-review-keyboard.test.ts
+- CURRENT_TASK.md (this entry)
+
 ## KEY-251 personal commentary results open their ayah — 2026-11-12, Claude Code (review + fix)
 
 Review of KEY-251 (built in 9a783a1). Entries attach to an ayah, are searchable ignoring diacritics, and carry history (NoteHistory). The one gap the build left open is now closed: in a commentary search, a result's reference is a link that opens its source through `navigateStudyReference`. Ayah-menu comments use the short `quran:<surah>:<ayah>` form, which is opened as Hafs. Hadith research references have no navigable address and stay plain text. The new exported helper `commentaryStudyTarget` decides which references open.

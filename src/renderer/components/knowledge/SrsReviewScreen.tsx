@@ -16,21 +16,15 @@ export interface SrsReviewScreenProps {
   onNavigateSource?: (target: string) => void;
 }
 
-export function formatInterval(rating: ReviewRating, lang: string): string {
-  if (lang === 'ar') {
-    switch (rating) {
-      case 1: return '< ١٠ د';
-      case 2: return '١ يوم';
-      case 3: return '٣ أيام';
-      case 4: return '٧ أيام';
-    }
-  }
-  switch (rating) {
-    case 1: return '< 10 min';
-    case 2: return '1 day';
-    case 3: return '3 days';
-    case 4: return '7 days';
-  }
+/** The scheduler's next interval (minutes) in the reader's language, with locale units, digits and plurals. */
+export function formatInterval(minutes: number | undefined, lang: string): string {
+  if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return '';
+  const [value, unit] = minutes < 60 ? [Math.round(minutes), 'minute']
+    : minutes < 1440 ? [Math.round(minutes / 60), 'hour']
+    : minutes < 43200 ? [Math.round(minutes / 1440), 'day']
+    : minutes < 525600 ? [Math.round(minutes / 43200), 'month']
+    : [Math.round(minutes / 52560) / 10, 'year'];
+  return new Intl.NumberFormat(lang === 'ar' ? 'ar-EG' : 'en-US', { style: 'unit', unit, unitDisplay: 'short' }).format(value);
 }
 
 export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNavigateSource }) => {
@@ -451,7 +445,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                         </kbd>
                         <span className="font-bold text-sm sm:text-base">{t('srsAgain')}</span>
                       </div>
-                      <span className="text-xs opacity-80 tabular-nums" title={t('srsIntervalTenMin')}>{formatInterval(1, lang)}</span>
+                      <span className="text-xs opacity-80 tabular-nums" title={t('srsNextReviewIn', { interval: formatInterval(card?.intervals?.[1], lang) })}>{formatInterval(card?.intervals?.[1], lang)}</span>
                     </button>
 
                     {/* Rating 2: Hard */}
@@ -468,7 +462,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                         </kbd>
                         <span className="font-bold text-sm sm:text-base">{t('srsHard')}</span>
                       </div>
-                      <span className="text-xs text-muted tabular-nums" title={t('srsIntervalOneDay')}>{formatInterval(2, lang)}</span>
+                      <span className="text-xs text-muted tabular-nums" title={t('srsNextReviewIn', { interval: formatInterval(card?.intervals?.[2], lang) })}>{formatInterval(card?.intervals?.[2], lang)}</span>
                     </button>
 
                     {/* Rating 3: Good */}
@@ -485,7 +479,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                         </kbd>
                         <span className="font-bold text-sm sm:text-base">{t('srsGood')}</span>
                       </div>
-                      <span className="text-xs opacity-85 tabular-nums" title={t('srsIntervalThreeDays')}>{formatInterval(3, lang)}</span>
+                      <span className="text-xs opacity-85 tabular-nums" title={t('srsNextReviewIn', { interval: formatInterval(card?.intervals?.[3], lang) })}>{formatInterval(card?.intervals?.[3], lang)}</span>
                     </button>
 
                     {/* Rating 4: Easy */}
@@ -502,7 +496,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                         </kbd>
                         <span className="font-bold text-sm sm:text-base">{t('srsEasy')}</span>
                       </div>
-                      <span className="text-xs opacity-85 tabular-nums" title={t('srsIntervalSevenDays')}>{formatInterval(4, lang)}</span>
+                      <span className="text-xs opacity-85 tabular-nums" title={t('srsNextReviewIn', { interval: formatInterval(card?.intervals?.[4], lang) })}>{formatInterval(card?.intervals?.[4], lang)}</span>
                     </button>
                   </div>
                   <p className="text-center text-[11px] text-muted">{t('srsKeysHint')}</p>

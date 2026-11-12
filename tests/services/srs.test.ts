@@ -128,3 +128,24 @@ test('daily review count rolls over without discarding review history', () => {
     assert.equal((db.prepare('SELECT COUNT(*) AS count FROM srs_review_log').get() as { count: number }).count, 1);
   } finally { db.close(); }
 });
+
+// The review screen's interval labels come from these previews, so each must match what grading then schedules.
+for (const rating of [1, 2, 3, 4] as const) test(`interval preview for rating ${rating} equals the scheduled due time`, () => {
+  const { db, service } = fixture();
+  try {
+    const first = service.queue().cards[0];
+    const preview = first.intervals?.[rating];
+    assert.ok(preview && preview > 0, 'preview present');
+    service.grade({ id: first.id, revision: first.revision, rating, durationMs: 10 });
+    const due = Date.parse((db.prepare('SELECT due_at FROM srs_state').get() as { due_at: string }).due_at);
+    assert.equal(Math.max(1, Math.round((due - Date.parse('2026-11-02T12:00:00Z')) / 60000)), preview);
+  } finally { db.close(); }
+});
+
+test('previews grow with the rating', () => {
+  const { db, service } = fixture();
+  try {
+    const intervals = service.queue().cards[0].intervals!;
+    assert.ok(intervals[1]! <= intervals[2]! && intervals[2]! <= intervals[3]! && intervals[3]! <= intervals[4]!, JSON.stringify(intervals));
+  } finally { db.close(); }
+});
