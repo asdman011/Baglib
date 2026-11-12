@@ -1,3 +1,4 @@
+import { setupAdvancedIPC } from './advanced';
 import * as ipcModule0 from '../database/repositories/knowledge.repository';
 import * as ipcModule1 from '../database/repositories/annotation.repository';
 import * as ipcModule2 from '../database/repositories/category.repository';
@@ -25,6 +26,7 @@ function normalizeIpcError(err: unknown, fallbackMessage: string): Error {
 }
 
 export function setupDatabaseIPC() {
+  setupAdvancedIPC();
   /**
    * Returns basic database status info for debugging / status bar.
    */

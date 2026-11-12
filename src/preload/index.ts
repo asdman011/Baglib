@@ -1,3 +1,4 @@
+import type { AdvancedAPI, RebuildProgress } from '../shared/catalog-export';
 import type { NotificationRecord } from '../shared/notifications';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { SunnahAPI } from '../shared/types/sunnah';
@@ -137,6 +138,16 @@ export const API = {
   readPdfBase64: (filePath: string) => ipcRenderer.invoke('system:read-pdf-base64', filePath),
   extractPdfText: (filePath: string) => ipcRenderer.invoke('system:extract-pdf-text', filePath),
 
+  advanced: {
+    exportCatalog: (format, language) => ipcRenderer.invoke('advanced:export', format, language),
+    health: () => ipcRenderer.invoke('advanced:health'),
+    rebuildSearch: () => ipcRenderer.invoke('advanced:rebuild'),
+    onRebuildProgress: callback => {
+      const handler = (_: unknown, progress: RebuildProgress) => callback(progress);
+      ipcRenderer.on('advanced:rebuild-progress', handler);
+      return () => { ipcRenderer.removeListener('advanced:rebuild-progress', handler); };
+    },
+  } satisfies AdvancedAPI,
   // Database
   getDatabaseStatus: () => ipcRenderer.invoke('database:get-status'),
   getAllBooks: () => ipcRenderer.invoke('library:get-all-books'),

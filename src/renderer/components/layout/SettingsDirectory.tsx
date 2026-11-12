@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button, Modal } from '../ui';
 import { SearchProviderSettings } from './SearchProviderSettings';
+import { AdvancedSettings } from './AdvancedSettings';
 import { SaveSettings } from './SaveSettings';
 import { PackStatus, ONBOARDING_KEY, type OnboardingPreferences } from './FirstRunGuide';
 import { SETTINGS_GROUPS, searchSettings } from './settings-directory-model';
@@ -103,8 +104,9 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
       {panel === 'lock' && <Lock {...modalProps} lang={lang} />}
       {panel === 'plugins' && <Plugins {...modalProps} lang={lang} />}
       {panel === 'wird' && <Wird {...modalProps} />}
-      {['saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'prayer', 'searchProviders'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
+      {['advanced', 'saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'prayer', 'searchProviders'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
         {panel === 'searchProviders' && <SearchProviderSettings />}
+        {panel === 'advanced' && <AdvancedSettings />}
         {panel === 'saving' && <SaveSettings />}
         {panel === 'rhythm' && <StudyRhythmSettings />}
         {panel === 'packs' && <PackStatus />}

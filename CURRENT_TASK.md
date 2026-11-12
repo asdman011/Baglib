@@ -1,3 +1,29 @@
+## KEY-64 safe Advanced settings verified - 2026-11-12, Codex queue3-root
+
+Implemented Settings / Advanced / Advanced tools with full catalog JSON/UTF-8 BOM CSV save-dialog export, existing book_content_fts rebuild progress/result toast and read-only integrity/page/size/table-count diagnostics. Canonical Arabic and all catalog columns/links, authors, source details and trash rows survive export. JSON preserves nulls; rectangular CSV has a table column and union of fields, with blank null/missing cells. Atomic sibling-file replacement protects existing destinations. Rebuild preserves existing content and rowids, coalesces concurrent calls and emits table-level progress. It runs synchronously after a short renderer-paint yield; very large indexes can briefly delay main-process operations. No extraction, partition rebuild, SQL console, reset, schema/dependency/download changes.
+
+Verification passed: npx tsc --noEmit, changed-file ESLint 0 errors/1 pre-existing database.ts unused-import warning, focused10/10, npx tsup, git diff --check and full1905/1905 at concurrency2 in135686.8918ms. Direct host-Node tests initially hit the installed native ABI mismatch; rerun via existing npm test/Electron runtime passed without rebuilding/installing anything. Final native8/8 ar/en x light/dark x 1280/480,16PNG/four inspected,16save-dialog exports,progress/toasts,health,cancellation and expected write-failure feedback,0renderererrors. Exactly one visible app window; normal hidden PDF cover helper retained. Initial harness faults (updateBook argument shape, unsubscribe serialization, hidden-window count and incorrect splash selector) corrected; final run exits0. Evidence .baglib-data/advanced-evidence-gfoMyF/result.json. Inspected en-light1280tools/ar-dark480tools/en-dark480health/ar-light1280health. Profile deleted;129copiedcorpusoriginals verified unchanged. Real Arabic/English PDFs imported read-only, no source documents saved/OCRed. Save dialogs are intercepted by the harness, with production IPC/file writes exercised.
+
+Exact15files/own shared hunks
+
+- src/shared/catalog-export.ts
+- src/main/services/catalog-maintenance.ts
+- src/main/ipc/advanced.ts
+- src/main/ipc/database.ts
+- src/preload/index.ts
+- src/renderer/components/layout/AdvancedSettings.tsx
+- src/renderer/components/layout/SettingsDirectory.tsx
+- src/renderer/components/layout/settings-directory-model.ts
+- src/renderer/translations.ts
+- tests/services/catalog-maintenance.test.ts
+- scripts/advanced-live/main.cjs
+- scripts/advanced-live/run.mjs
+- docs/features/Advanced Settings.md
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+
+Docs describe implemented shape and limitations. Claude owns review/Jira. Scoped publication authorized to origin/feature/library-domain. KEY-309 sweep follows.
+
 ## KEY-309 Library inline strings moved to translations - 2026-11-12, Codex (implementation), finished by Claude Code
 
 Codex moved the remaining inline `lang === 'ar' ? '...' : '...'` UI literals in the Library components into translations.ts:

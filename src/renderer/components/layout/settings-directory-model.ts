@@ -22,6 +22,7 @@ export interface SettingEntry {
   keys: readonly string[];
 }
 export const SETTINGS_DIRECTORY: readonly SettingEntry[] = [
+  { id: 'advanced', group: 'advanced', label: 'advancedTools', description: 'advancedToolsDescription', action: 'advanced', keys: [] },
   { id: 'language', group: 'general', label: 'settingLanguage', description: 'settingLanguageDescription', action: 'language', keys: ["baglib-lang"] },
   { id: 'guide', group: 'general', label: 'settingGuide', description: 'settingGuideDescription', action: 'guide', keys: ["onboarding.v1"] },
   { id: 'theme', group: 'appearance', label: 'settingTheme', description: 'settingThemeDescription', action: 'theme', keys: ["baglib-theme"] },

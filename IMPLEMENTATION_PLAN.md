@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-12, Codex queue3-root] KEY-64 safe Advanced settings verified. Catalog JSON/BOM-CSV save-dialog export, existing FTS rebuild/progress and read-only health, no schema/dependencies. Focused10/full1905/types/build/diff/native8pass,lint0errors1existingwarning,16PNGs/fourinspected,profiledeleted/129corpusoriginalsunchanged. Exact15ownfiles/hunks in CURRENT_TASK/report. CSV nulls blank and synchronous table-level rebuild documented. Scoped publication authorized; KEY-309 sweep next. Claude owns Jira.
+
 - [2026-11-12, Codex queue2-root] KEY-309 splash verified. Confirmed gradient-clipped Arabic ink, added line-height1.7/logical paddingBlock and centralized supplied brand spelling. Focused13/full1900/types/lint0warnings/build/diff/native8pass. Before/after PNGs and font ink bounds,4finalPNGinspected,profilesdeleted. Exact7files/hunks in CURRENT_TASK/report. Published ee68488a6893152221a72503dbbca7ac78831e17 normally to origin/feature/library-domain at 2026-11-12T03:40:46.114Z. Exact remote hash verified. Lock released. Claude owns review/Jira. Jira Claude. Queue5 pending.
 
 - [2026-11-12, Codex queue2-root] KEY-309 page numbers verified. Localized header spinbutton/input and shared legacy-slider formatter, one-based identity retained. RealArabicphysicalpage5 has printed4 and noPageLabels; historical retired-tooltip symptom unreproduced. Focused6/full1900/types/lint0warnings/build/diff/native24pass,24PNG/2inspected,profiledeleted. Exact9ownfiles/hunks in CURRENT_TASK/report. Publication via lock pending. Jira Claude. Queue4-5 pending.
