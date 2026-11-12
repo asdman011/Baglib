@@ -1,3 +1,33 @@
+## KEY-333 RSS feeds: opt-in notifications for new items — 2026-11-12, Claude Code
+
+Follow-up to KEY-50:
+- New opt-in setting Settings → Library → *Feed notifications* (`rss.notify.v1`, off by default).
+- While BagLib runs, the main process checks the registered feeds two minutes after start and then every two hours. It publishes one notification per feed about items not seen before, through the existing NotificationService, so quiet windows apply and opening the notification goes to the Library.
+- When a feed is added, its current items are remembered, and a feed seen for the first time is only recorded, so nothing floods.
+- Seen keys are kept in app_settings `rss.seen.v1`, at most 3000. No schema change.
+- The notification text uses Arabic plural forms through Intl.PluralRules.
+- NotificationRecord gains kind `rss` and target `library`.
+- There is a new `rss:check-now` IPC.
+
+Verification:
+- tests/services/rss.test.ts passed 6/6: seen-item logic with no flood and no repeats, plural keys.
+- The settings-coverage test lists `rss.seen.v1` as operational.
+- The new opt-in journey 18 in ux-journeys-live turns the setting on in Settings and registers a local feed. The existing item is not reported. After a new item is published, one notification "جديد في خلاصة التنبيهات / New in …" appears with that item, it is not repeated, and opening it shows the Library. It passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-333-notify`).
+- J17 still passes. The full suite passed 1931/1931, and tsc, tsup and eslint are clean.
+
+Exact files
+- src/shared/rss.ts
+- src/shared/notifications.ts (kind and target)
+- src/main/ipc/rss.ts
+- src/preload/index.ts (rss.checkNow)
+- src/renderer/components/layout/settings-directory-model.ts
+- src/renderer/components/layout/SettingsDirectory.tsx
+- src/renderer/translations.ts (settingRss*, rssNotify* keys)
+- tests/services/rss.test.ts
+- tests/ui/settings-directory-coverage.test.ts
+- scripts/ux-journeys-live/main.cjs (J18)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-50 RSS and Atom feed registration — 2026-11-12, Claude Code
 
 The online library hub's mock "Inoreader RSS Feed" tab, which only ever showed an empty list, is now **RSS feeds**:

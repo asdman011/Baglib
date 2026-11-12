@@ -732,6 +732,7 @@ export const API = {
     add: (url: string): Promise<import('../shared/rss').RssFeed> => ipcRenderer.invoke('rss:add', url),
     remove: (id: string): Promise<boolean> => ipcRenderer.invoke('rss:remove', id),
     items: (): Promise<{ items: import('../shared/rss').RssItem[]; failed: { feedId: string; error: string }[] }> => ipcRenderer.invoke('rss:items'),
+    checkNow: (): Promise<number> => ipcRenderer.invoke('rss:check-now'),
   },
   pathways: {
     list: () => ipcRenderer.invoke('pathways:list'),

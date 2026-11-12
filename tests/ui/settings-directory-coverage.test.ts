@@ -22,6 +22,7 @@ const operational = new Set([
   'islamic.continue.v1', // Last reading positions.
   'notifications.history.v1', // Delivered notification records (KEY-312).
   'rss.feeds.v1', // Registered feed addresses, managed in the online hub's RSS tab (KEY-50).
+  'rss.seen.v1', // Feed items already reported, so notifications only cover newer ones.
 ]);
 
 test('every registered setting key appears in the settings directory', () => {

@@ -643,6 +643,40 @@ app.on('browser-window-created', (_, win) => {
           journey.notes.push('Items: ' + JSON.stringify(rows));
         } finally { server.close(); }
       });
+
+      // J18 (opt-in, BAGLIB_JOURNEY_IDS=18) — KEY-50 follow-up: opt-in notifications report only items newer than the last check.
+      if (journeysOnly.includes(18)) await journeyRun(18, 'Feed notifications for new items', async () => {
+        const http = require('node:http');
+        let entries = ['<item><title>أول إصدار</title><link>https://example.org/1</link><guid>n1</guid><pubDate>Mon, 09 Nov 2026 08:00:00 GMT</pubDate></item>'];
+        const xml = () => '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>خلاصة التنبيهات</title>' + entries.join('') + '</channel></rss>';
+        const server = http.createServer((request, response) => { response.setHeader('Content-Type', 'application/rss+xml; charset=utf-8'); response.end(xml()); });
+        await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+        try {
+          for (const feed of await evaluate('window.electronAPI.rss.list()')) await evaluate('window.electronAPI.rss.remove(' + JSON.stringify(feed.id) + ')');
+          await evaluate('window.electronAPI.settings.set("rss.seen.v1", [])');
+          await ui.nav('settings', '[data-settings-directory]');
+          await ui.click('open "Feed notifications"', '[data-settings-entry="rss"]');
+          await step('turn them on', async () => { await until('!!document.querySelector("[role=dialog] input[type=checkbox]:not(:disabled)")'); await evaluate('(()=>{const c=document.querySelector("[role=dialog] input[type=checkbox]");if(!c.checked)c.click();})()'); await until('window.electronAPI.settings.get("rss.notify.v1").then(v=>v===true)'); });
+          press('Escape');
+          await step('register the feed', async () => { await evaluate('window.electronAPI.rss.add(' + JSON.stringify('http://127.0.0.1:' + server.address().port + '/feed') + ')'); });
+          const before = (await evaluate('window.electronAPI.athan.notificationHistory()')).filter(record => record.kind === 'rss').length;
+          if (await evaluate('window.electronAPI.rss.checkNow()') !== 0) throw new Error('the existing item was reported');
+          entries = ['<item><title>إصدار جديد: فتح الباري</title><link>https://example.org/2</link><guid>n2</guid><pubDate>Thu, 12 Nov 2026 08:00:00 GMT</pubDate></item>', ...entries];
+          await step('the background check runs', async () => { if (await evaluate('window.electronAPI.rss.checkNow()') !== 1) throw new Error('the new item was not reported'); });
+          const records = (await evaluate('window.electronAPI.athan.notificationHistory()')).filter(record => record.kind === 'rss');
+          if (records.length !== before + 1) throw new Error('expected one feed notification, got ' + (records.length - before));
+          const record = records[0];
+          if (record.title !== tr('rssNotifyTitle').replace('{feed}', 'خلاصة التنبيهات') || record.body !== 'إصدار جديد: فتح الباري' || record.target !== 'library') throw new Error('record ' + JSON.stringify(record));
+          if (await evaluate('window.electronAPI.rss.checkNow()') !== 0) throw new Error('the same item was reported twice');
+          journey.notes.push('Notification: ' + record.title + ' — ' + record.body);
+          await ui.nav('dashboard', '[data-dashboard-view]');
+          await step('open the notification', async () => { await evaluate('window.electronAPI.athan.notificationAction(' + JSON.stringify(record.id) + ', "open")'); await until('!!document.querySelector("[data-library-recent]")', 120); });
+          await shot('J18-opened');
+        } finally {
+          server.close();
+          await evaluate('window.electronAPI.settings.set("rss.notify.v1", false)').catch(() => { });
+        }
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');

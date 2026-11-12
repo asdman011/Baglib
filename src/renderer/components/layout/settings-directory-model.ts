@@ -31,6 +31,7 @@ export const SETTINGS_DIRECTORY: readonly SettingEntry[] = [
   { id: 'folder', group: 'library', label: 'settingFolder', description: 'settingFolderDescription', action: 'folder', keys: [] },
   { id: 'storage', group: 'library', label: 'settingStorage', description: 'settingStorageDescription', action: 'storage', keys: [] },
   { id: 'library', group: 'library', label: 'settingLibrary', description: 'settingLibraryDescription', action: 'library', keys: ["library_view_preferences"] },
+  { id: 'rss', group: 'library', label: 'settingRss', description: 'settingRssDescription', action: 'rss', keys: ["rss.notify.v1"] },
   { id: 'saving', group: 'reader', label: 'settingSaving', description: 'settingSavingDescription', action: 'saving', keys: ["save.policy.v1", "save.backupFolder.v1", "undo.scope.v1"] },
   { id: 'reader', group: 'reader', label: 'settingReader', description: 'settingReaderDescription', action: 'reader', keys: ['reader.chrome.v1:'] },
   { id: 'plugins', group: 'reader', label: 'settingPlugins', description: 'settingPluginsDescription', action: 'plugins', keys: ["reader_plugins:state"] },

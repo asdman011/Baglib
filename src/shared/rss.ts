@@ -106,3 +106,25 @@ export function mergeItems(feeds: { feed: RssFeed; parsed: ParsedFeed }[], limit
     .sort((a, b) => (b.date ? Date.parse(b.date) : -Infinity) - (a.date ? Date.parse(a.date) : -Infinity))
     .slice(0, limit);
 }
+
+/** KEY-50 follow-up: opt-in notifications for new feed items. */
+export const RSS_NOTIFY_KEY = 'rss.notify.v1';
+export const RSS_SEEN_KEY = 'rss.seen.v1';
+const SEEN_LIMIT = 3000;
+export const itemKey = (item: Pick<RssItem, 'feedId' | 'id'>) => item.feedId + '\u0000' + item.id;
+
+/**
+ * New items per feed. A feed seen for the first time only records its items, so adding a feed
+ * or turning notifications on never floods the user with its whole history.
+ */
+export function unseenItems(items: RssItem[], seen: string[]): { fresh: Map<string, RssItem[]>; seen: string[] } {
+  const known = new Set(seen);
+  const knownFeeds = new Set(seen.map(key => key.split('\u0000')[0]));
+  const fresh = new Map<string, RssItem[]>();
+  for (const item of items) {
+    if (known.has(itemKey(item)) || !knownFeeds.has(item.feedId)) continue;
+    fresh.set(item.feedId, [...(fresh.get(item.feedId) ?? []), item]);
+  }
+  const next = [...new Set([...items.map(itemKey), ...seen])].slice(0, SEEN_LIMIT);
+  return { fresh, seen: next };
+}

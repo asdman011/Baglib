@@ -104,7 +104,7 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
       {panel === 'lock' && <Lock {...modalProps} lang={lang} />}
       {panel === 'plugins' && <Plugins {...modalProps} lang={lang} />}
       {panel === 'wird' && <Wird {...modalProps} />}
-      {['advanced', 'saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'prayer', 'searchProviders'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
+      {['advanced', 'saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'rss', 'prayer', 'searchProviders'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
         {panel === 'searchProviders' && <SearchProviderSettings />}
         {panel === 'advanced' && <AdvancedSettings />}
         {panel === 'saving' && <SaveSettings />}
@@ -114,6 +114,7 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
         {panel === 'reader' && <p className="leading-loose">{t('settingsReaderRequired')}</p>}
         {panel === 'honorifics' && <PreferenceToggle settingKey="notes.honorifics.autoExpand.v1" fallback />}
         {panel === 'questions' && <PreferenceToggle settingKey="knowledge.questions.enabled" fallback={false} />}
+        {panel === 'rss' && <PreferenceToggle settingKey="rss.notify.v1" fallback={false} />}
         {panel === 'prayer' && (athan?.snapshot ? <Prayer athan={athan} /> : <p role="status">{t('loading')}</p>)}
       </Modal>}
     </React.Suspense>

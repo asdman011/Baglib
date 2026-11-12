@@ -14,13 +14,13 @@ export interface DhikrReminder {
 export interface NotificationRecord {
   id: string;
   key: string;
-  kind: 'prayer' | 'dhikr' | 'wird' | 'study' | 'khatmah';
+  kind: 'prayer' | 'dhikr' | 'wird' | 'study' | 'khatmah' | 'rss';
   title: string;
   body: string;
   createdAt: string;
   status: 'new' | 'done' | 'snoozed' | 'suppressed';
   snoozedUntil?: string;
-  target: 'dashboard' | 'planner' | 'quran';
+  target: 'dashboard' | 'planner' | 'quran' | 'library';
 }
 export const DEFAULT_QUIET_WINDOW: QuietWindow = { enabled: false, start: '22:00', end: '06:00' };
 export const DEFAULT_DHIKR_REMINDERS: DhikrReminder[] = [

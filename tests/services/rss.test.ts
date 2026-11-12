@@ -56,3 +56,25 @@ test('items merge newest first and keep their feed as the source', () => {
   ]);
   assert.equal(merged.at(-1)?.date, null, 'undated items come last');
 });
+
+import { unseenItems } from '../../src/shared/rss';
+import { translations } from '../../src/renderer/translations';
+
+// KEY-50 follow-up: notify only about items that arrived since the last check.
+test('a feed seen for the first time is only remembered; later items are reported once', () => {
+  const item = (feedId: string, id: string) => ({ id, feedId, feedTitle: feedId, title: id, link: '', date: null, summary: '' });
+  const first = unseenItems([item('a', '1'), item('a', '2')], []);
+  assert.equal(first.fresh.size, 0, 'no flood when a feed is first seen');
+  const second = unseenItems([item('a', '3'), item('a', '1'), item('a', '2'), item('b', 'x')], first.seen);
+  assert.deepEqual([...second.fresh.entries()].map(([feed, items]) => [feed, items.map(entry => entry.id)]), [['a', ['3']]]);
+  const third = unseenItems([item('a', '3'), item('b', 'x'), item('b', 'y')], second.seen);
+  assert.deepEqual([...third.fresh.entries()].map(([feed, items]) => [feed, items.map(entry => entry.id)]), [['b', ['y']]]);
+});
+
+test('the notification body has every Arabic plural form', () => {
+  for (const key of ['rssNotifyMany_two', 'rssNotifyMany_few', 'rssNotifyMany_many', 'rssNotifyMany_other', 'rssNotifyOne', 'rssNotifyTitle', 'settingRss', 'settingRssDescription'] as const) {
+    assert.ok(translations.ar[key] && translations.en[key], key);
+  }
+  assert.equal(translations.ar.rssNotifyMany_two.includes('عنصران'), true);
+  assert.equal(translations.ar.rssNotifyMany_many.includes('عنصرًا'), true);
+});
