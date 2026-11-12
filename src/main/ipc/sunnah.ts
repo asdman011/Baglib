@@ -5,6 +5,7 @@ import type { SunnahCollectionId, SunnahResearchQuery, SunnahResult } from '../.
 import { SunnahService } from '../services/sunnah/sunnah.service';
 import { shareHadith } from '../services/sunnah/native-share';
 import { translations } from '../../renderer/translations';
+import { sunnahResearchPaths } from '../services/sunnah/research-paths';
 
 let hadithReader: ((collection: string, chapter: number, id: string) => Promise<{ text: string; number: string } | null>) | null = null;
 /** One hadith's full Arabic text from the installed corpus, for other main-process features (the study assistant). */
@@ -24,8 +25,7 @@ export function registerSunnahIpc(): void {
   const getService = () => service ??= new SunnahService(path.join(app.getPath('userData'), 'sunnah'), app.isPackaged ? [] : [
     path.join(app.getAppPath(), 'repos', 'Hadith', 'LK-Hadith-Corpus-master.zip'),
     path.join(app.getAppPath(), 'repos', 'LK-Hadith-Corpus-master.zip'),
-  ], ['sunnah_merged_quranlab_v1.sqlite', 'sunnah_kutub_tisah_itqan.sqlite'].flatMap(name => [path.join(app.getPath('userData'), 'sunnah', name),
-    ...(!app.isPackaged ? [path.join(app.getAppPath(), 'tools', 'hadith-alignment', 'data', 'output', name)] : [])]));
+  ], sunnahResearchPaths({ packaged: app.isPackaged, userData: app.getPath('userData'), appPath: app.getAppPath(), resourcesPath: process.resourcesPath }));
   confirmedQuitCleanup.register(() => service?.close());
   const result = async <Value>(action: () => Promise<Value>, error: 'invalid-corpus' | 'read-failed'): Promise<SunnahResult<Value>> => {
     try { return { ok: true, data: await action() }; } catch (cause) {

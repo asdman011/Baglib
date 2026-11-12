@@ -1,3 +1,24 @@
+## KEY-265 (code part): installed builds read the merged Sunnah database from resources — 2026-11-12, Claude Code
+
+- The new pure helper `sunnahResearchPaths` (`src/main/services/sunnah/research-paths.ts`) gives the lookup order. A copy in the user's profile wins. Installed builds then use `resources/sunnah/<db>`. Development builds keep `tools/hadith-alignment/data/output`. `ipc/sunnah.ts` uses the helper, and the database is still opened read-only.
+- `electron-builder.yml` ships `sunnah_merged_quranlab_v1.sqlite` into `resources/sunnah`. The file is built locally and is never committed.
+- `docs/features/QuranLab-Hadith.md`: the earlier "do not bundle" note is replaced, citing the owners' authorization the user confirmed.
+
+Verification:
+- tests/services/sunnah-research-paths.test.ts passed 3/3.
+- The live Sunnah regression (ux-journeys-live J5 and J11, development build) passed.
+- The full suite passed 1934/1934, and tsc, tsup and eslint are clean.
+
+**Not done:** KEY-265's done-when needs an installer built and run on a clean profile. If NSIS tools must be fetched, that needs approval (see KEY-267). The issue stays In Progress.
+
+Exact files
+- src/main/services/sunnah/research-paths.ts (new)
+- src/main/ipc/sunnah.ts
+- electron-builder.yml
+- docs/features/QuranLab-Hadith.md
+- tests/services/sunnah-research-paths.test.ts (new)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-333 RSS feeds: opt-in notifications for new items — 2026-11-12, Claude Code
 
 Follow-up to KEY-50:

@@ -69,7 +69,7 @@ Provenance: 1,749,437 field values across 73,325 rows resolve to a source with a
 
 ## Licensing
 
-Arabic configs state public domain, but that does not cover the grades inside them. Translation configs are `reference-only` with `commercial_ok=False`, and gradings are stated as © their authors. `hadith-api` is Unlicense at repository level, which does not establish rights over that content. Local research use only: do not bundle in installers or commit to Git.
+Arabic configs state public domain, but that does not cover the grades inside them. Translation configs are `reference-only` with `commercial_ok=False`, and gradings are stated as © their authors. `hadith-api` is Unlicense at repository level, which does not establish rights over that content. The user has since confirmed the owners' authorization (Dataset Delivery Plan), which supersedes the earlier "do not bundle" note: the merged database `sunnah_merged_quranlab_v1.sqlite` ships in installers, opened read-only from `resources/sunnah` (KEY-265). It is still never committed to Git.
 
 ## Commands
 
