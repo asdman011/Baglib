@@ -81,7 +81,10 @@ import {
   getActiveFilterChipsList,
   type LibraryFilterState,
   type LibrarySortState,
+  formatLocalizedNumber,
+  booksWithoutTopic,
 } from './library-filter-model';
+import type { TranslationKey } from '../../translations';
 import {
   computeScrollHeaderState,
   type ScrollHeaderState,
@@ -542,6 +545,7 @@ export const LibraryGridView: React.FC = () => {
     persistPreferences({ sortBy: newSort.field, sortDirection: newSort.direction });
   };
 
+  const unclassifiedBooks = useMemo(() => booksWithoutTopic(books), [books]);
   const resetAllFilters = () => {
     setSearchQuery('');
     setSelectedTopics([]);
@@ -2004,6 +2008,19 @@ export const LibraryGridView: React.FC = () => {
               <h3 className="font-bold text-base text-main font-display">{t('emptySearchTitle')}</h3>
               <p className="text-xs text-muted">{t('emptySearchDesc')}</p>
             </div>
+            {selectedTopics.length > 0 && unclassifiedBooks.length > 0 && (
+              <div className="space-y-2 max-w-sm" data-library-topic-hint>
+                <p className="text-xs text-main leading-relaxed">{t(`libraryTopicEmptyHint_${new Intl.PluralRules(lang).select(unclassifiedBooks.length)}` as TranslationKey, { count: formatLocalizedNumber(unclassifiedBooks.length, lang) })}</p>
+                <button
+                  type="button"
+                  data-library-select-unclassified
+                  onClick={() => { resetAllFilters(); setSelectedBookIds(new Set(unclassifiedBooks.map(book => book.id))); }}
+                  className="px-4 py-2 rounded-xl bg-primary text-primary-contrast font-bold text-xs hover:opacity-90 transition-all cursor-pointer"
+                >
+                  {t('librarySelectUnclassified')}
+                </button>
+              </div>
+            )}
             <button
               onClick={resetAllFilters}
               className="px-4 py-2 rounded-xl bg-primary/10 border border-primary/20 text-primary-text font-bold text-xs hover:bg-primary/20 transition-all flex items-center gap-1.5 cursor-pointer"

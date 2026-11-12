@@ -210,7 +210,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
             ))}
             {filterState.selectedReadingStatus && filterState.selectedReadingStatus !== 'ALL' && (
               <Chip
-                label={`${t('readingStatus') || 'الحالة'}: ${filterState.selectedReadingStatus}`}
+                label={`${t('readingStatus')}: ${t(filterState.selectedReadingStatus === 'reading' ? 'statusReading' : filterState.selectedReadingStatus === 'completed' ? 'statusCompleted' : 'statusUnread')}`}
                 removable
                 onRemove={() => onFilterChange({ selectedReadingStatus: 'ALL' })}
               />
@@ -246,7 +246,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
             {visibleTopics.map((topic) => {
               const isSelected = selectedTopics.includes(topic.id);
               return (
-                <div key={topic.id} data-filter-topic-chip className="cursor-pointer">
+                <div key={topic.id} data-filter-topic-chip data-topic-count={topic.count} className={`cursor-pointer ${topic.count === 0 && !isSelected ? 'opacity-60' : ''}`}>
                   <Chip
                     label={
                       <span className="flex items-center gap-1">
@@ -271,7 +271,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
               onClick={() => setShowAllTopics((prev) => !prev)}
               className="text-[11px] text-primary-text hover:underline font-medium cursor-pointer pt-0.5"
             >
-              {showAllTopics ? '▲ عرض أقل' : `▼ المزيد (${availableTopics.length - 8})`}
+              {showAllTopics ? `▲ ${t('filterShowLess')}` : `▼ ${t('filterShowMore', { count: formatLocalizedNumber(availableTopics.length - 8, lang) })}`}
             </button>
           )}
         </div>
@@ -318,7 +318,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
               onClick={() => setShowAllAuthors((prev) => !prev)}
               className="text-[11px] text-primary-text hover:underline font-medium cursor-pointer pt-0.5"
             >
-              {showAllAuthors ? '▲ عرض أقل' : `▼ المزيد (${availableAuthors.length - 6})`}
+              {showAllAuthors ? `▲ ${t('filterShowLess')}` : `▼ ${t('filterShowMore', { count: formatLocalizedNumber(availableAuthors.length - 6, lang) })}`}
             </button>
           )}
         </div>

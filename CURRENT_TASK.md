@@ -1,3 +1,27 @@
+## KEY-328 Library topic filter explains empty results — 2026-11-12, Claude Code
+
+Changes in the Library:
+- When a topic filter finds nothing and some books have no topic yet, the empty state says how many books are without a topic (Arabic plural forms through Intl.PluralRules). It offers *Select the books without a topic to classify them*, which clears the filters and selects those books so the bulk toolbar with classification appears.
+- Topic chips with no books stay listed (the taxonomy) but are muted. Topic names sort in the interface language.
+- Also fixed in the rail: the "Show less / More (n)" toggles were hardcoded Arabic and are now translated with localized numbers, and the reading-status chip showed the raw value ("reading") and now shows the translated status.
+- New helper `booksWithoutTopic` in library-filter-model. No schema change.
+
+Verification:
+- ux-journeys-live J1 now filters by an empty topic, checks the hint, selects the unclassified books and clears the selection. It passed in all 8 configurations (evidence `.baglib-data/KEY-309-evidence/KEY-328-journey1-all`).
+- library-shortcuts-live passed.
+- The new test tests/ui/library-topic-hint.test.ts passed 3/3, with the filter model and inline i18n tests.
+- The full suite passed 1911/1911, and tsc and eslint are clean.
+- The KEY-327 J6 re-check also passed in all 8 configurations (evidence `KEY-327-journey6-all`).
+
+Exact files
+- src/renderer/components/library/LibraryGridView.tsx
+- src/renderer/components/library/LibraryFilterRail.tsx
+- src/renderer/components/library/library-filter-model.ts
+- src/renderer/translations.ts (libraryTopicEmptyHint_* six plural forms, librarySelectUnclassified, filterShowLess, filterShowMore)
+- tests/ui/library-topic-hint.test.ts
+- scripts/ux-journeys-live/main.cjs (J1 exercises the hint)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-327 pathway steps without a source can be followed — 2026-11-12, Claude Code
 
 When the next step of a pathway has no linked source, the Next-step card now shows *Add a source for this step* (new key `pathwayAddSourceForStep`, ar and en). It selects that step's section, opens the existing resource picker and focuses its search. Once a book, note, ayah or hadith is picked, the existing `nextTarget` logic offers *Continue*, which opens it. There is no schema change.

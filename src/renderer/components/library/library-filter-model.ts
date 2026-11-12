@@ -228,7 +228,7 @@ export function getAvailableTopicsWithCounts(
   // Return topics that have at least 1 book or are standard categories, sorted by count
   return Array.from(topicMap.values())
     .filter((t) => t.count > 0 || t.type === 'category')
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'ar'));
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, lang));
 }
 
 /**
@@ -662,4 +662,11 @@ export function getActiveFilterChipsList(
   }
 
   return chips;
+}
+
+/** KEY-328: books with no category and no topic tag cannot appear under any topic filter. */
+export function booksWithoutTopic(books: BookItem[]): BookItem[] {
+  return books.filter(book => !book.primaryCategory?.id
+    && !(Array.isArray(book.categories) && book.categories.length > 0)
+    && !(Array.isArray(book.tags) && book.tags.some(tag => { const clean = tag.trim(); return clean && clean !== '#جديد' && clean !== '#new'; })));
 }

@@ -137,12 +137,23 @@ app.on('browser-window-created', (_, win) => {
         }
         const topic = await evaluate('!!document.querySelector("[data-filter-topic-chip]")');
         if (topic) {
-          await ui.click('filter by a topic', '[data-filter-topic-chip]');
+          // An empty topic (count 0) is the case a new user meets right after importing.
+          await ui.click('filter by a topic', (await has('[data-filter-topic-chip][data-topic-count="0"]') ? '[data-filter-topic-chip][data-topic-count="0"]' : '[data-filter-topic-chip]') + ' button[aria-pressed]');
           await pause(400);
+          await until('document.querySelectorAll("[data-library-book-card]").length!==' + total + '||!!document.querySelector("[data-library-topic-hint]")', 20).catch(() => { });
           const shown = await evaluate('document.querySelectorAll("[data-library-book-card]").length');
-          if (shown === 0) journey.notes.push('Topic filter: the topic list is the full taxonomy, and freshly imported books carry no topic, so any topic shows no books until the book is classified.');
-          await ui.click('turn the topic off', '[data-filter-topic-chip]');
-          await until('document.querySelectorAll("[data-library-book-card]").length===' + total);
+          if (shown === 0) {
+            // KEY-328: the empty result explains why and offers to select the unclassified books.
+            await until('!!document.querySelector("[data-library-topic-hint]")');
+            await shot('J1-topic-hint');
+            await ui.click('choose "Select the books without a topic"', '[data-library-select-unclassified]');
+            await until('document.querySelectorAll("[data-library-book-card]").length===' + total + '&&document.querySelectorAll("[data-library-book-card] input[type=checkbox]:checked").length>0');
+            await ui.click('clear the selection', 'button[aria-label=' + JSON.stringify(tr('batchDeselectAll')) + ']:not([type=checkbox])');
+            await until('document.querySelectorAll("[data-library-book-card] input[type=checkbox]:checked").length===0');
+          } else {
+            await ui.click('turn the topic off', '[data-filter-topic-chip] button[aria-pressed=true]');
+            await until('document.querySelectorAll("[data-library-book-card]").length===' + total);
+          }
         } else journey.notes.push('No topic chips are offered.');
         await ui.clickText('filter by the English author', '[data-library-filter-rail] label', enBook.author);
         await until('[...document.querySelectorAll("[data-library-book-card]")].every(e=>e.getAttribute("aria-label")===' + JSON.stringify(enBook.title) + ')');
