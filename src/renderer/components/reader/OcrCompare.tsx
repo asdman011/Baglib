@@ -12,9 +12,9 @@ const tone: Record<CompareKind, string> = {
 };
 
 /** KEY-259: OCR text beside a pasted reference such as Shamela's. Neither text is changed. */
-export function OcrCompare({ text }: { text: string }) {
+export function OcrCompare({ text, initialReference = '' }: { text: string; initialReference?: string }) {
   const { t } = useWorkspace();
-  const [reference, setReference] = useState('');
+  const [reference, setReference] = useState(initialReference);
   const result = useMemo(() => reference.trim() ? compareTexts(text, reference) : null, [text, reference]);
   return <details className="rounded-xl border border-subtle p-3 space-y-2" data-ocr-compare>
     <summary className="cursor-pointer text-xs font-bold">{t('ocrCompareTitle')}</summary>

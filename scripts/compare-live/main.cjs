@@ -64,7 +64,7 @@ app.on('browser-window-created', (_, owner) => {
       // Go to page closes nothing but moves the reader to that page of this edition.
       await evaluate("[...document.querySelectorAll('[data-compare-hunk]')].find(h=>h.textContent.includes('المصنف')).querySelector('[data-compare-go]').click()"); await pause(800);
       await evaluate("document.querySelector('[data-pdf-compare] header button').click()"); await pause(500);
-      result.readerPage = await evaluate("document.querySelector('input[type=number]')?.value");
+      result.readerPage = await evaluate("document.querySelector('[data-reader-page]')?.dataset.readerPage"); // KEY-309 replaced the numeric page input
       result.focusRestored = await evaluate("document.activeElement===window.__compareOpener");
       results[language] = result; console.log(JSON.stringify({ language, result }));
       assert.deepEqual(result.choices, ['edition-b']);

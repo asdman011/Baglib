@@ -1,3 +1,19 @@
+## KEY-255, KEY-256, KEY-259 reviews — 2026-11-12, Claude Code (review)
+
+- **KEY-255 and KEY-256.** wave6-live was re-run on real files and passed in ar and en. For KEY-255, all five formats play, with sections from the file, speed 1.5, and position resumed after a reload. For KEY-256, the timestamp note jumps back to 0:02, and the screenshot is embedded in a study note. Evidence: `.baglib-data/k317-wave6-evidence-PnCR3y`. No code change.
+- **KEY-259.**
+  - The cover photo proposes «رياض الصالحين…» by «النووي» (wave6-live).
+  - The OCR-versus-reference comparison (OcrCompare in the OCR inspector) had only its diff logic tested. A new render test, tests/ui/ocr-compare-render.test.ts, shows changed and extra words highlighted, matching words left plain, and the reference kept as typed. For that, OcrCompare gained an optional `initialReference` prop; it defaults to empty, so behaviour is unchanged.
+- **compare-live repair.** While reviewing, I found that compare-live (the PDF edition comparison) failed only on a stale page-number selector after the KEY-309 reader-page change. It now reads `[data-reader-page]` and passes.
+
+Verification: the full suite passed 1923/1923, and tsc and eslint are clean. wave6-live and compare-live passed.
+
+Exact files
+- src/renderer/components/reader/OcrCompare.tsx
+- tests/ui/ocr-compare-render.test.ts
+- scripts/compare-live/main.cjs
+- CURRENT_TASK.md (this entry)
+
 ## KEY-254 follow-up: reading options close when they open the insights panel — 2026-11-12, Claude Code
 
 In the Sunnah reader, choosing "Subjects and statistics" opened the insights panel but left the reading-options popover covering it. The shared reader header's popover now closes when a control marked `data-closes-settings` is pressed, and the Sunnah insights toggle carries that mark. Other options, such as the translation toggle and text size, keep the popover open as before.
