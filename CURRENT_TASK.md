@@ -1,3 +1,19 @@
+## KEY-317 live runners stop killing other renderers - 2026-11-12, Claude Code
+
+Ten runners called scripts/ensure-port-free.js, killing whatever served port 3000 (other agents' or the user's dev server), and always started their own renderer.
+- The new scripts/lib/renderer.mjs checks whether a renderer already answers, on 127.0.0.1 or localhost.
+- Each runner reuses that renderer, and starts, stops or frees the port only for a server it launched.
+- `predev` (npm run dev) is unchanged.
+- study-progress-live also turns on its dashboard module (hidden by default since KEY-302) and skips the first-run guide.
+
+Verification: all ten pass in sequence (curriculum-exam, dashboard-ui, library-declutter, library-ui, scrollbars-sidenote, shell-ui, study-progress, today-study, ui-audit, ui-primitives), and the shared dev server answered 200 after each run.
+
+Files:
+- scripts/lib/renderer.mjs (new)
+- scripts/{curriculum-exam,dashboard-ui,library-declutter,library-ui,scrollbars-sidenote,shell-ui,study-progress,today-study,ui-audit,ui-primitives}-live/run.mjs
+- scripts/study-progress-live/main.cjs
+- CURRENT_TASK.md
+
 ## KEY-317 quran-live repaired, offline; correction of the earlier note - 2026-11-12, Claude Code
 
 Correction to the c954548 entry: quran-live does NOT download from the internet. It intercepts every https request in the app's `baglib-qul` session, which is used for all Quran catalog requests, downloads and browser windows, and serves the local fixture .baglib-data/qul-phase1/qpc-hafs-ayah-sqlite.zip. The earlier run reached no network. The user chose "use a local fixture", which is what the script already does.

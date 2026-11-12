@@ -55,6 +55,8 @@ app.on('browser-window-created', (_, win) => {
 
     await until('!!window.electronAPI && !!document.querySelector("footer")');
     await evaluate(`localStorage.setItem('baglib-lang', ${JSON.stringify(lang)})`);
+    // KEY-317: since KEY-302 the study-progress module is hidden by default; show it in this throwaway profile, and skip the first-run guide.
+    await evaluate("Promise.all([window.electronAPI.settings.set('onboarding.v1',{seen:true}), window.electronAPI.settings.set('dashboard.layout.v1',{version:1,modules:[{id:'today',visible:true},{id:'calendar',visible:true},{id:'readingGoals',visible:false},{id:'activeReads',visible:false},{id:'studyProgress',visible:true},{id:'studyInsights',visible:false},{id:'scratchpad',visible:false},{id:'athan',visible:false},{id:'khatmah',visible:false},{id:'studyRhythm',visible:false}]})])");
     win.reload();
     await until('!!window.electronAPI && !!document.querySelector("footer")');
     await evaluate("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");

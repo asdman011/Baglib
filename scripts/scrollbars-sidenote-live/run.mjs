@@ -3,11 +3,11 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawn, execSync } from 'node:child_process';
 import electron from 'electron';
+import { rendererAnswers } from '../lib/renderer.mjs';
 
 // 1. Ensure port 3000 is clean
-try {
-  execSync('node scripts/ensure-port-free.js', { stdio: 'inherit' });
-} catch {}
+// KEY-317: reuse a renderer that already answers on :3000 (another agent's or the user's); never free the port by force.
+const rendererAlreadyRunning = await rendererAnswers();
 
 const profile = path.resolve('.baglib-data/k315-profile');
 const evidence = path.resolve('.baglib-data/KEY-315-evidence');
@@ -20,7 +20,7 @@ fs.mkdirSync(evidence, { recursive: true });
 
 // 2. Start Next.js dev server on port 3000
 console.log('[live] Starting Next.js dev server on port 3000...');
-const nextProcess = spawn(
+const nextProcess = rendererAlreadyRunning ? null : spawn(
   process.execPath,
   ['node_modules/next/dist/bin/next', 'dev', 'src/renderer', '-p', '3000', '-H', '127.0.0.1'],
   {
@@ -67,10 +67,10 @@ try {
 } finally {
   console.log('[live] Shutting down Next.js dev server...');
   try {
-    if (process.platform === 'win32' && nextProcess.pid) {
-      execSync(`taskkill /pid ${nextProcess.pid} /T /F`, { stdio: 'ignore' });
+    if (process.platform === 'win32' && nextProcess?.pid) {
+      execSync(`taskkill /pid ${nextProcess?.pid} /T /F`, { stdio: 'ignore' });
     } else {
-      nextProcess.kill('SIGTERM');
+      nextProcess?.kill('SIGTERM');
     }
   } catch {}
   try {
