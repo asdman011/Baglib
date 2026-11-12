@@ -869,6 +869,8 @@ export const API = {
     save: (input: StudyNoteInput) => ipcRenderer.invoke('study-notes:save', input) as Promise<import('../shared/study-notes').StudyNote>,
     remove: (id: string) => ipcRenderer.invoke('study-notes:remove', id) as Promise<void>,
     exportMarkdown: (ids?: string[]) => ipcRenderer.invoke('study-notes:export-markdown', ids) as Promise<{ folder: string; count: number } | null>,
+    exportOpenFormat: (ids: string[], format: 'markdown' | 'csv' | 'latex') => ipcRenderer.invoke('study-notes:export-open-format', ids, format) as Promise<{ folder: string; count: number } | null>,
+    importMarkdown: () => ipcRenderer.invoke('study-notes:import-markdown') as Promise<{ count: number } | null>,
     exportWord: (ids: string[], language: string, layout?: import('../shared/word-export').WordLayout) => ipcRenderer.invoke('study-notes:export-word', ids, language, layout) as Promise<{ file: string; count: number } | null>,
     onChanged: (callback: () => void) => {
       const listener = () => callback();

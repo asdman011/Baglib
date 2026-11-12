@@ -33,7 +33,9 @@ test('each note becomes a file with front matter, and paragraph anchors stay', (
   assert.equal(files[0].name, 'الصبر ضياء.md');
   assert.equal(files[0].text, [
     '---', 'baglib_id: "a"', 'title: "الصبر \\"ضياء\\""', 'aliases:', '  - "Sabr"', 'tags:', '  - "أخلاق_حسنة"', 'book: "رياض الصالحين"',
-    'created: "2026-11-01T10:00:00.000Z"', 'updated: "2026-11-02T10:00:00.000Z"', '---', 'الصبر ضياء ^p1', '', '[[Gratitude|Gratitude]]', '',
+    'created: "2026-11-01T10:00:00.000Z"', 'updated: "2026-11-02T10:00:00.000Z"',
+    `baglib_roundtrip: ${JSON.stringify({ content: 'الصبر ضياء ^p1\n\n[[note:b|Gratitude]]', body: 'الصبر ضياء ^p1\n\n[[Gratitude|Gratitude]]\n', tags: ['أخلاق حسنة'], workId: 'w1' })}`,
+    '---', 'الصبر ضياء ^p1', '', '[[Gratitude|Gratitude]]', '',
   ].join('\n'));
   assert.equal(files[1].text.endsWith('---\nThanks\n'), true);
 });

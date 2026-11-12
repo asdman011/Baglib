@@ -1,7 +1,7 @@
 import { parseNoteTarget, studyLinks, type StudyLink, type StudyNote } from './study-notes';
 
 /**
- * One-way Markdown export of study notes (decision S7). BagLib's database stays the source of truth; the files
+ * Markdown export of study notes. BagLib's database stays the source of truth; the files
  * are a copy the user can open in Obsidian or any editor. Links between exported notes become Obsidian wikilinks
  * (paragraph anchors keep the ` ^id` block syntax, so `[[file#^id]]` still lands on the paragraph). Links to
  * books, ayahs, hadith, poems and lectures keep their BagLib reference as a `baglib:` link with the same label.
@@ -40,14 +40,16 @@ export function exportFileNames(notes: Pick<StudyNote, 'id' | 'title' | 'content
 /** YAML double-quoted scalar (JSON strings are valid YAML). */
 const yaml = (value: string) => JSON.stringify(value);
 
-function frontMatter(note: ExportNote, bookTitle?: string): string {
+function frontMatter(note: ExportNote, body: string, bookTitle?: string): string {
   const lines = ['---', `baglib_id: ${yaml(note.id)}`];
   if (note.title) lines.push(`title: ${yaml(note.title)}`);
   if (note.aliases.length) lines.push('aliases:', ...note.aliases.map(alias => `  - ${yaml(alias)}`));
   // Obsidian tags cannot hold spaces; keep the words joined so the tag still matches across files.
   if (note.tags.length) lines.push('tags:', ...note.tags.map(tag => `  - ${yaml(tag.replace(/\s+/gu, '_'))}`));
   if (bookTitle) lines.push(`book: ${yaml(bookTitle)}`);
-  lines.push(`created: ${yaml(note.createdAt)}`, `updated: ${yaml(note.updatedAt)}`, '---', '');
+  lines.push(`created: ${yaml(note.createdAt)}`, `updated: ${yaml(note.updatedAt)}`);
+  // Preserve canonical text when the readable export rewrites links, whitespace and tags.
+  lines.push(`baglib_roundtrip: ${JSON.stringify({ content: note.content, body, tags: note.tags, workId: note.workId ?? null })}`, '---', '');
   return lines.join('\n');
 }
 
@@ -80,10 +82,13 @@ function exportOneLink(link: StudyLink, names: Map<string, string>): string {
 /** Every note as a Markdown file with front matter. `books` maps a work id to its title. */
 export function exportNotesAsMarkdown(notes: ExportNote[], books: Map<string, string> = new Map()): ExportFile[] {
   const names = exportFileNames(notes);
-  return notes.map(note => ({
-    name: `${names.get(note.id)}.md`,
-    text: `${frontMatter(note, note.workId ? books.get(note.workId) : undefined)}${exportNoteBody(note.content, names).replace(/\s*$/u, '')}\n`,
-  }));
+  return notes.map(note => {
+    const body = `${exportNoteBody(note.content, names).replace(/\s*$/u, '')}\n`;
+    return {
+      name: `${names.get(note.id)}.md`,
+      text: `${frontMatter(note, body, note.workId ? books.get(note.workId) : undefined)}${body}`,
+    };
+  });
 }
 
 /** A new folder name inside the folder the user picked, so nothing already there is overwritten. */

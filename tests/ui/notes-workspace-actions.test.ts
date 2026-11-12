@@ -21,7 +21,8 @@ for (const language of ['ar', 'en'] as const) {
       getAllBooks: async () => [], getAllNotes: async () => [], getCategoryTree: async () => [],
       studyNotes: {
         list: async () => notes, onChanged: () => () => {},
-        exportMarkdown: async (ids: string[]) => { markdown.push(ids); if (exportFails) throw new Error('export unavailable'); return { folder: 'notes-export', count: ids.length }; },
+        exportOpenFormat: async (ids: string[], format: string) => { assert.equal(format, 'markdown'); markdown.push(ids); if (exportFails) throw new Error('export unavailable'); return { folder: 'notes-export', count: ids.length }; },
+        importMarkdown: async () => ({ count: 2 }),
         exportWord: async (ids: string[], lang: string, layout: unknown) => { word.push({ ids, lang, layout }); return { file: 'notes.docx', count: ids.length }; },
       },
       knowledge: { getAll: async () => [] },
@@ -47,10 +48,12 @@ for (const language of ['ar', 'en'] as const) {
       assert.equal(window.document.querySelector('[data-study-note="closed"]'), null);
       assert.ok(filter.textContent?.includes(translations[language].commentsOnlyOpen.replace('{count}', '2')));
       await click('[data-notes-export-markdown]');
+      assert.equal(window.document.querySelector('[data-notes-format-loss]')?.textContent, translations[language].notesMarkdownLoss);
+      await click('[data-notes-format-go]');
       assert.ok(window.document.querySelector('[role="alert"]')?.textContent?.includes(translations[language].studyActionFailed));
       assert.ok(window.document.querySelector('[data-study-note="open"]'), 'Export failure keeps displayed data');
       exportFails = false;
-      await click('[data-notes-export-markdown]');
+      await click('[data-notes-format-go]');
       assert.deepEqual(markdown, [['open'], ['open']]);
       assert.ok(window.document.querySelector('[data-notes-exported]'));
       await click('[data-notes-export-word]');
@@ -65,7 +68,10 @@ for (const language of ['ar', 'en'] as const) {
       const item = [...window.document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent?.trim() === translations[language].noteExportMarkdown)!;
       assert.ok(item);
       await act(async () => item.click());
+      await click('[data-notes-format-go]');
       assert.deepEqual(markdown.at(-1), ['closed']);
+      await click('[data-notes-import-markdown]');
+      assert.equal(window.document.querySelector('[data-notes-imported]')?.textContent, translations[language].notesImportDone.replace('{count}', '2'));
       assert.equal(window.document.documentElement.getAttribute('dir'), language === 'ar' ? 'rtl' : 'ltr');
     } finally {
       await act(async () => root.unmount());

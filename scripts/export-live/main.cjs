@@ -49,6 +49,8 @@ app.on('browser-window-created', (_, owner) => {
       result.dir = await evaluate("document.querySelector('[data-notes-overview]').getAttribute('dir')");
       const before = exportedFolders();
       await evaluate("document.querySelector('[data-notes-export-markdown]').click()");
+      await until("!!document.querySelector('[data-notes-format-go]')");
+      await evaluate("document.querySelector('[data-notes-format-go]').click()");
       await until("!!document.querySelector('[data-notes-exported]')");
       result.status = await evaluate("document.querySelector('[data-notes-exported]').textContent");
       const folder = newFolder(before);
@@ -64,6 +66,8 @@ app.on('browser-window-created', (_, owner) => {
       result.filteredButton = await evaluate("document.querySelector('[data-notes-export-markdown]').textContent");
       const beforeFiltered = exportedFolders();
       await evaluate("document.querySelector('[data-notes-export-markdown]').click()");
+      await until("!!document.querySelector('[data-notes-format-go]')");
+      await evaluate("document.querySelector('[data-notes-format-go]').click()");
       await until("(document.querySelector('[data-notes-exported]')?.textContent || '').includes('(1)')");
       result.filteredFiles = fs.readdirSync(path.join(picked, newFolder(beforeFiltered)));
       owner.setContentSize(420, 900);

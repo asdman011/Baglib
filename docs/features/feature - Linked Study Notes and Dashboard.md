@@ -12,6 +12,8 @@ Investigated and implemented from Baglib source on 2026-10-26 (Codex). This is a
 
 ## Storage and boundaries
 
+The following settings-backed storage description records the original implementation. ADR-008 and migration 021 superseded it with canonical knowledge-owned study notes and recoverable history. Current `StudyNotesService` reads `knowledge` / `study_note_detail`, with settings retained for legacy conversion and the service's compatibility mode. See `docs/data-dictionary.md` and `docs/ADR-008-version-history-and-recovery.md` for the approved storage contracts.
+
 `StudyNotesService` stores personal note documents in existing SQLite `app_settings` rows named `study.note.v1:<id>`. Each document contains its ID, title, content, aliases, tags, optional work attachment and timestamps. This introduces no SQL table, column, foreign key, canonical library entity or dependency. Each save updates one key rather than replacing a shared array. General, Quran and Sunnah notes do not require fabricated library works.
 
 Book-attached captures also use existing `knowledge.save`/`note_detail` contracts so they remain available in the book reader. The settings document supplies aliases/link metadata. The Notes view merges those documents with existing work notes by stable ID. Cross-window refreshes use `study-notes:changed`; same-renderer book-note refreshes use `baglib:notes-changed`.
@@ -61,3 +63,35 @@ This is investigation of BagLib source and its running development build, not re
 - `exportableStudyNotes` gives both export formats the canonical content of ordinary reader notes, study notes and reading reflections already displayed in the overview, deduplicated by ID. This closes an existing omission in export selection without changing storage or schemas. Study-note aliases are preserved; canonical tags/content come from existing knowledge contracts.
 
 Verification is recorded in the KEY-277 handoff and local report. Actual installed OS association dispatch and macOS runtime behavior require platform/build checks beyond the Windows development harness; no registry association is written by the harness. Markdown import and new reference kinds remain out of scope.
+
+## KEY-245 open note formats — 2026-11-12, Codex
+
+The KEY-277 Markdown-import exclusion is superseded by this implementation. Investigation covered BagLib's own serializer, knowledge repository, ADR-008, data dictionary and running Electron app. External applications were outside this investigation.
+
+The Notes export button, single-note context action and editor Markdown action now open the shared bilingual format dialog. The chosen note IDs stay fixed while the dialog is open. The overview exports its filtered results. Each export writes a fresh folder and offers Markdown, UTF-8 CSV or standalone LaTeX. The dialog explains each format's losses. The new Markdown import action uses a native multi-file picker.
+
+- Markdown keeps readable folder wikilinks and Dataview relationship wrappers. JSON-compatible YAML `baglib_roundtrip` metadata carries canonical body, rendered body, original tags and optional work ID. When the readable body is unchanged, import restores exact canonical text, including tashkeel, excluded-note references and trailing whitespace. Edited bodies reverse folder wikilinks, paragraph anchors, embeds, relationship wrappers and BagLib reference links. Select related exported files together so their filenames can resolve to IDs. Legacy BagLib exports remain importable, with losses from their original link/tag rewriting. Removing round-trip metadata also loses exact whitespace and excluded references.
+- CSV quotes every cell, doubles embedded quotes and uses CRLF rows plus a UTF-8 BOM. Columns carry ID, title, exact content, JSON aliases/tags, work ID and dates. Markdown and reference syntax stay literal. Spreadsheet consumers must import cells as text to retain exact values and avoid formula interpretation. CSV re-import is outside this implementation.
+- LaTeX escapes special characters, preserves Arabic code points and wraps Arabic script runs, combining marks and Arabic-Indic digits in `\textarabic{…}`. Titles become unnumbered sections and body lines become literal paragraphs. Markdown formatting, interactive links, tags, aliases, machine identity and dates are omitted. LaTeX layout also collapses ordinary whitespace. LaTeX re-import is outside this implementation.
+- All three formats omit attachments, comments, history, board layout, review scheduling and the underlying books/corpora. Book links require existing library works. Import into an existing reader note or reflection retains its type, location and reflection fields. New IDs become study notes. Missing works remain unlinked through the existing save contract.
+
+### LaTeX preamble
+
+The exported `.tex` includes this preamble. Compile with XeLaTeX or LuaLaTeX in an environment already providing these packages and the Amiri font.
+
+```tex
+\documentclass{article}
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{english}
+\setotherlanguage{arabic}
+\newfontfamily\arabicfont[Script=Arabic]{Amiri}
+```
+
+### Import consistency and evidence
+
+`src/shared/note-open-formats.ts` accepts the bounded JSON-compatible YAML subset emitted by BagLib. `baglib_id` controls upsert identity. Identical duplicate inputs collapse, conflicting duplicate IDs fail, and collisions with trashed or unrelated knowledge fail. `StudyNotesService.importMarkdown()` runs a database batch transaction through existing repository/history contracts. Unchanged imports preserve dates and revisions. A failed batch rolls back earlier changes. Main IPC bounds import to 1,000 files, 2 MB each and 20 MB total, authorizes the app's top-level frame and accepts paths solely from the native picker.
+
+All 18 focused regression tests pass and cover exact export/import equality, Arabic marks, excluded links, legacy and edited bodies, CSV quoting, LaTeX escaping, repeated import, update/create, batch rollback and reflection preservation. The live harness `scripts/note-formats-live/` passed all 12 ar/en × 1280/480 × format cases plus filtered exports, unchanged import and edited-body updates. It imported the real Arabic and English text-layer PDFs and attached a note to the real Arabic work. Twelve PNGs and `result.json` are retained locally at `.baglib-data/note-formats-evidence-ejuC5F/`, with three representative PNGs visually inspected. The profile was removed. Original PDFs received no Save or OCR.
+
+LaTeX compilation remains unverified. The harness checks generated syntax and exact Arabic output. OneNote and iCloud importers remain outside the authorized dependency-free scope.

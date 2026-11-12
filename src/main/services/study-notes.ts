@@ -4,6 +4,9 @@ import type { StudyNote, StudyNoteInput } from '../../shared/study-notes';
 import type { Database } from 'better-sqlite3';
 import { SqliteKnowledgeRepository } from '../database/repositories/knowledge.repository';
 import { headRevision, withKnowledgeHistory, trashKnowledge } from './knowledge-history';
+import { importNotesFromMarkdown } from '../../shared/note-open-formats';
+import { exportableStudyNotes } from '../../shared/study-note-export';
+import type { ExportFile } from '../../shared/markdown-export';
 
 const prefix = 'study.note.v1:';
 export class StudyNotesService {
@@ -55,6 +58,49 @@ export class StudyNotesService {
     if (typeof id !== 'string' || !/^[\w-]{1,180}$/u.test(id)) throw new Error('invalid-note');
     if (this.db) { trashKnowledge(this.db,id); return; }
     this.settings.delete(prefix + id);
+  }
+  importMarkdown(files: ExportFile[]): { count: number } {
+    const notes = importNotesFromMarkdown(files);
+    const apply = () => {
+      const repository = this.db ? new SqliteKnowledgeRepository(this.db) : undefined;
+      const knowledge = repository?.getAllKnowledge() ?? [];
+      const existing = new Map(exportableStudyNotes(this.list(), knowledge).map(note => [note.id, note]));
+      for (const note of notes) {
+        const previous = existing.get(note.id);
+        if (previous && note.title === previous.title && note.content === previous.content &&
+          JSON.stringify(note.aliases) === JSON.stringify(previous.aliases) &&
+          JSON.stringify([...note.tags].sort()) === JSON.stringify([...previous.tags].sort()) &&
+          (!note.workId || note.workId === previous.workId)) continue;
+        if (this.db && repository) {
+          const collision = this.db.prepare('SELECT knowledge_type,deleted_at FROM knowledge WHERE id=?').get(note.id) as { knowledge_type: string; deleted_at: string | null } | undefined;
+          if (collision && (collision.deleted_at || !['study_note', 'note', 'reading_reflection'].includes(collision.knowledge_type))) throw new Error('import-id-conflict');
+          const item = knowledge.find(item => item.id === note.id);
+          withKnowledgeHistory(this.db, [note.id], 'save', () => {
+            if (item && item.knowledgeType !== 'study_note') {
+              const tagIds = note.tags.map(name => {
+                const tag = this.db!.prepare('SELECT id FROM tag WHERE name=?').get(name) as { id: string } | undefined;
+                if (tag) return tag.id;
+                const id = randomUUID();
+                this.db!.prepare("INSERT INTO tag(id,name,origin) VALUES(?,?,'manual')").run(id, name);
+                return id;
+              });
+              const reflection = item.knowledgeType === 'reading_reflection'
+                ? this.db!.prepare('SELECT entry_date AS entryDate,mood,difficulty,rating,recommendations,lessons FROM reading_reflection_detail WHERE knowledge_id=?').get(note.id) as Record<string, string | number | null>
+                : {};
+              repository.saveKnowledge({ ...item, ...reflection, noteContent: note.content, tagIds });
+            } else {
+              this.save({ ...note, workId: note.workId ?? previous?.workId });
+            }
+            this.db!.prepare('UPDATE knowledge SET created_at=?,updated_at=? WHERE id=?').run(previous?.createdAt ?? note.createdAt, note.updatedAt, note.id);
+          });
+        } else {
+          const saved = this.save({ ...note, workId: note.workId ?? previous?.workId });
+          this.settings.set(prefix + note.id, { ...saved, createdAt: previous?.createdAt ?? note.createdAt, updatedAt: note.updatedAt });
+        }
+      }
+      return { count: notes.length };
+    };
+    return this.db ? this.db.transaction(apply)() : apply();
   }
   convertLegacy(): {converted:number;issues:{key:string;reason:string}[]} {
     const report = {converted:0,issues:[] as {key:string;reason:string}[]};

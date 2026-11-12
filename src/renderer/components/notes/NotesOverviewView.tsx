@@ -28,6 +28,7 @@ import { NoteEditorPane } from './NoteEditorPane';
 import { NoteDetailsPane } from './NoteDetailsPane';
 import { KnowledgeTools } from './KnowledgeTools';
 import { Button } from '../ui/Button';
+import { Modal } from '../ui/Modal';
 import { Skeleton } from '../ui/Skeleton';
 import { EmptyState } from '../ui/EmptyState';
 import { ReadingLogPanel } from './ReadingLogPanel';
@@ -95,6 +96,10 @@ export const NotesOverviewView: React.FC = () => {
   const [wordExported, setWordExported] = useState<{ file: string; count: number } | null>(null);
   const [wordOptions, setWordOptions] = useState<WordLayout | null>(null);
   const [wordNoteId, setWordNoteId] = useState<string | null>(null);
+  const [openExportIds, setOpenExportIds] = useState<string[] | null>(null);
+  const [openFormat, setOpenFormat] = useState<'markdown' | 'csv' | 'latex'>('markdown');
+  const [formatBusy, setFormatBusy] = useState(false);
+  const [imported, setImported] = useState<number | null>(null);
 
   // Refresh counts (due cards, boards, comments)
   useEffect(() => {
@@ -332,15 +337,40 @@ export const NotesOverviewView: React.FC = () => {
     }
   };
 
-  const exportMarkdown = async (ids = filteredNotes.map((n) => n.id)) => {
+  const exportMarkdown = (ids = filteredNotes.map((n) => n.id)) => {
+    setActionError(false);
+    setOpenFormat('markdown');
+    setOpenExportIds(ids);
+  };
+
+  const exportOpenFormat = async () => {
+    if (!openExportIds || formatBusy) return;
+    setFormatBusy(true);
     setActionError(false);
     setExported(null);
     setWordExported(null);
     try {
-      const result = await window.electronAPI.studyNotes.exportMarkdown(ids);
-      if (result) setExported(result);
+      const result = await window.electronAPI.studyNotes.exportOpenFormat(openExportIds, openFormat);
+      if (result) { setExported(result); setOpenExportIds(null); }
     } catch {
       setActionError(true);
+    } finally {
+      setFormatBusy(false);
+    }
+  };
+
+  const importMarkdown = async () => {
+    if (formatBusy) return;
+    setFormatBusy(true);
+    setActionError(false);
+    setImported(null);
+    try {
+      const result = await window.electronAPI.studyNotes.importMarkdown();
+      if (result) { setImported(result.count); await refresh(); }
+    } catch {
+      setActionError(true);
+    } finally {
+      setFormatBusy(false);
     }
   };
 
@@ -488,6 +518,9 @@ export const NotesOverviewView: React.FC = () => {
                 >
                   <span className="hidden lg:inline">{t('notesExportMarkdown', { count: filteredNotes.length })}</span>
                 </Button>
+                <Button variant="ghost" size="sm" data-notes-import-markdown disabled={formatBusy} onClick={() => void importMarkdown()} title={t('notesImportMarkdown')}>
+                  {t('notesImportMarkdown')}
+                </Button>
 
                 <Button
                   variant="ghost"
@@ -606,6 +639,23 @@ export const NotesOverviewView: React.FC = () => {
         </form>
       )}
 
+      <Modal open={openExportIds !== null} onClose={() => { if (!formatBusy) setOpenExportIds(null); }} title={t('notesOpenFormats')}>
+        <div className="space-y-4 p-4 text-sm leading-relaxed" data-notes-format-options>
+          <label className="flex flex-col gap-2">
+            {t('notesExportFormat')}
+            <select data-notes-format value={openFormat} disabled={formatBusy} onChange={event => setOpenFormat(event.target.value as typeof openFormat)} className="rounded-lg border border-subtle bg-surface p-2 text-start">
+              <option value="markdown">{t('notesFormatMarkdown')}</option>
+              <option value="csv">{t('notesFormatCsv')}</option>
+              <option value="latex">{t('notesFormatLatex')}</option>
+            </select>
+          </label>
+          <p data-notes-format-loss>{t(openFormat === 'markdown' ? 'notesMarkdownLoss' : openFormat === 'csv' ? 'notesCsvLoss' : 'notesLatexLoss')}</p>
+          <p>{t('notesAllFormatsLoss')}</p>
+          {actionError && <p role="alert" className="text-danger">{t('studyActionFailed')}</p>}
+          <Button variant="primary" disabled={formatBusy} onClick={() => void exportOpenFormat()} data-notes-format-go>{t('wordExportGo')}</Button>
+        </div>
+      </Modal>
+      {imported !== null && <p role="status" data-notes-imported className="mx-4 mt-2 text-sm leading-relaxed">{t('notesImportDone', { count: imported })}</p>}
       {/* Export Notifications */}
       {wordExported && (
         <p

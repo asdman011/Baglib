@@ -2,7 +2,7 @@ import { exportableStudyNotes } from '../../shared/study-note-export';
 import { SqliteKnowledgeRepository } from '../database/repositories/knowledge.repository';
 import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { existsSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { settingsRepository } from '../database/repositories/settings.repository';
 import { StudyNotesService } from '../services/study-notes';
@@ -12,6 +12,7 @@ import { getDatabase } from '../database/connection';
 import { notesToDocx } from '../services/notes-docx';
 import { wordLayout } from '../../shared/word-export';
 import { translations } from '../../renderer/translations';
+import { exportNotesAsCsv, exportNotesAsLatex } from '../../shared/note-open-formats';
 
 /** Only the app's own top-level page may write files to disk. */
 const authorize = (event: IpcMainInvokeEvent) => {
@@ -41,9 +42,10 @@ export function registerStudyNotesIpc(): void {
   ipcMain.handle('study-notes:list', () => service().list());
   ipcMain.handle('study-notes:save', (_, input: StudyNoteInput) => { const note = service().save(input); changed(); return note; });
   ipcMain.handle('study-notes:remove', (_, id: string) => { service().remove(id); changed(); });
-  // One-way Markdown export (S7): the chosen notes go into a new folder inside the folder the user picks.
-  ipcMain.handle('study-notes:export-markdown', async (event, ids: unknown) => {
+  // Every export uses a fresh folder, preserving the user's existing files.
+  const exportOpenFormat = async (event: IpcMainInvokeEvent, ids: unknown, format: unknown = 'markdown') => {
     authorize(event);
+    if (!['markdown', 'csv', 'latex'].includes(format as string)) throw new Error('invalid-request');
     if (ids !== undefined && (!Array.isArray(ids) || ids.length > 100_000 || ids.some(id => typeof id !== 'string'))) throw new Error('invalid-request');
     const wanted = ids ? new Set(ids as string[]) : null;
     const notes = exportNotes().filter(note => !wanted || wanted.has(note.id));
@@ -56,8 +58,31 @@ export function registerStudyNotesIpc(): void {
     const folder = path.join(parent, exportFolderName(new Date(), name => existsSync(path.join(parent, name))));
     const books = workTitles(notes);
     await mkdir(folder, { recursive: false });
-    for (const file of exportNotesAsMarkdown(notes, books)) await writeFile(path.join(folder, file.name), file.text, { encoding: 'utf8', flag: 'wx' });
+    const files = format === 'markdown' ? exportNotesAsMarkdown(notes, books)
+      : [{ name: format === 'csv' ? 'notes.csv' : 'notes.tex', text: format === 'csv' ? exportNotesAsCsv(notes) : exportNotesAsLatex(notes) }];
+    for (const file of files) await writeFile(path.join(folder, file.name), file.text, { encoding: 'utf8', flag: 'wx' });
     return { folder, count: notes.length };
+  };
+  ipcMain.handle('study-notes:export-markdown', (event, ids: unknown) => exportOpenFormat(event, ids));
+  ipcMain.handle('study-notes:export-open-format', exportOpenFormat);
+  ipcMain.handle('study-notes:import-markdown', async event => {
+    authorize(event);
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const options = { properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[], filters: [{ name: 'Markdown', extensions: ['md'] }] };
+    const choice = await (owner ? dialog.showOpenDialog(owner, options) : dialog.showOpenDialog(options));
+    if (choice.canceled || !choice.filePaths.length) return null;
+    if (choice.filePaths.length > 1000) throw new Error('invalid-request');
+    const files = [];
+    let bytes = 0;
+    for (const file of choice.filePaths) {
+      const info = await stat(file);
+      bytes += info.size;
+      if (!info.isFile() || info.size > 2_000_000 || bytes > 20_000_000) throw new Error('invalid-request');
+      files.push({ name: path.basename(file), text: await readFile(file, 'utf8') });
+    }
+    const result = service().importMarkdown(files);
+    changed();
+    return result;
   });
   // Word export (S8): the chosen notes as one .docx at a path the user picks; headings in the interface language.
   ipcMain.handle('study-notes:export-word', async (event, ids: unknown, language: unknown, layout: unknown) => {

@@ -1,3 +1,32 @@
+## KEY-245 verified ? 2026-11-12, Codex queue2-root
+
+Implemented dependency-free CSV and LaTeX alongside Markdown in a shared bilingual Notes export dialog, with per-format loss statements. Filtered overview and single-note/editor exports preserve their selected IDs. Markdown export adds portable round-trip metadata to retain exact Arabic, tags, canonical links and whitespace. Native Markdown import upserts by baglib_id in an atomic database batch through existing history/repository contracts. Unchanged imports preserve dates/revisions. Existing reader notes/reflections retain type, location and reflection context. Conflict batches roll back. No schema/dependency/download changes.
+
+Verification passed ? focused18/18, final full1896/1896 at concurrency2, tsc, changed-file ESLint0errors0warnings, tsup, script syntax and diff check. Initial full1894/1896 exposed two existing UI tests assuming immediate export; adapted them to the new dialog while retaining failure/retry/filtered/single-note assertions. Final native12/12 ar/en1280/480 ?3formats plus filtered export, unchanged re-import and edited-body updates pass. Real Arabic/English text-layer PDFs imported, Arabic note work association checked.12PNGs/result.json at .baglib-data/note-formats-evidence-ejuC5F; ar480LaTeX/en480CSV/ar1280Markdown inspected. Profiles removed, existing renderer reused, Electron serialized, original PDFs received no Save/OCR.
+
+Format decisions and limitations are in the updated existing linked-study-notes feature document. CSV preserves raw cells and requires text-mode spreadsheet import. LaTeX uses escaped literal Markdown and textarabic runs with the documented fontspec/polyglossia/Amiri preamble; compilation remains unverified. Older Markdown exports retain their historical link/tag losses, and edited folder links need related files selected together. OneNote/iCloud remain outside scope.
+
+Exact16 files/hunks
+
+- src/shared/markdown-export.ts
+- src/shared/note-open-formats.ts
+- src/main/services/study-notes.ts
+- src/main/ipc/study-notes.ts
+- src/preload/index.ts
+- src/renderer/components/notes/NotesOverviewView.tsx
+- src/renderer/translations.ts
+- tests/services/markdown-export.test.ts
+- tests/services/note-open-formats.test.ts
+- tests/ui/notes-workspace-actions.test.ts
+- scripts/note-formats-live/main.cjs
+- scripts/note-formats-live/run.mjs
+- scripts/export-live/main.cjs
+- docs/features/feature - Linked Study Notes and Dashboard.md
+- CURRENT_TASK.md (own KEY-245 entry)
+- IMPLEMENTATION_PLAN.md (own KEY-245 Recent Agent Updates entry)
+
+Scoped commit and normal push to origin/feature/library-domain authorized by current dispatch. Publication pending under commit.lock. Jira left to Claude. Queue items2?5 pending. Other-agent unfinished changes preserved.
+
 ## KEY-46 verified — 2026-11-12, Codex
 
 Implemented RTL-aware Library arrow focus, geometry-based grid rows, Home/End within the page, list-row Enter through safe-open, Escape clearing and visible inset row focus. The existing card focus ring, palette routing and native grid/list toggle keys are verified. Focus survives slim-header expansion. Nested controls keep their keyboard behavior. Library help entries use the existing centralized bilingual registry. Older browser/mock bridges without recent activity remain renderable.
