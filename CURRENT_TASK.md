@@ -1,3 +1,13 @@
+## KEY-328 follow-up: featured card hides when the filters exclude it — 2026-11-12, Claude Code
+
+The Library's featured ("Recommended") card was picked from all books and hidden only during a text search. With a topic or author filter that found nothing, it still showed a book above "No results". It now shows only when the active filters include that book.
+
+Verification: ux-journeys-live J1 passed in ar-light-1280 and en-dark-480, and the empty-topic screenshot now shows only the empty state, hint and actions (evidence `.baglib-data/KEY-309-evidence/KEY-328-featured-hidden`). library-shortcuts-live passed. The full suite passed 1911/1911, and tsc and eslint are clean.
+
+Exact files
+- src/renderer/components/library/LibraryGridView.tsx
+- CURRENT_TASK.md (this entry)
+
 ## KEY-328 Library topic filter explains empty results — 2026-11-12, Claude Code
 
 Changes in the Library:

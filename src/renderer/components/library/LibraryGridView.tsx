@@ -479,6 +479,7 @@ export const LibraryGridView: React.FC = () => {
   const featuredBook = useMemo(() => {
     return getFeaturedBook(books);
   }, [books]);
+  const featuredVisible = !!featuredBook && filteredAndSortedBooks.some(book => book.id === featuredBook.id);
 
   const collectionTitle = useMemo(() => {
     if (activeLibraryCategory && activeLibraryCategory !== 'ALL') {
@@ -1523,7 +1524,8 @@ export const LibraryGridView: React.FC = () => {
           }}
         >
           {/* Featured Card (Shown on page 1 in Grid mode when not actively searching) */}
-          {recentView === 'all' && featuredBook && !filterState.searchQuery && currentPage === 1 && viewMode === 'grid' && (
+          {/* The featured card only shows a book the active filters include (KEY-309: it showed above an empty result). */}
+          {recentView === 'all' && featuredBook && !filterState.searchQuery && currentPage === 1 && viewMode === 'grid' && featuredVisible && (
             <ContextMenu onOpenMenu={() => bookMenu(featuredBook)}><FeaturedBookCard
               book={featuredBook}
               onOpenBook={handleSafeOpenBook}
