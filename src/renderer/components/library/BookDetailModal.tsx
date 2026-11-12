@@ -309,7 +309,9 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       setTotalPdfPages(1);
       setIsExtractingPdfCover(false);
     }
-    setFormData((prev) => ({ ...prev, [field]: value, ...(field === 'coverImage' ? {
+    // KEY-309: a shelf location means the user holds a physical copy; a digital-only book becomes "both".
+    const locatesCopy = (field === 'room' || field === 'bookcase' || field === 'shelf' || field === 'shelfSection') && typeof value === 'string' && value.trim() !== '';
+    setFormData((prev) => ({ ...prev, [field]: value, ...(locatesCopy && prev.bookType === 'digital' ? { bookType: 'hybrid' as const } : {}), ...(field === 'coverImage' ? {
       metadataProvenance: { ...prev.metadataProvenance, fieldSources: { ...prev.metadataProvenance?.fieldSources, coverImage: { source: 'manual_cover_selection', status: 'user_override' as const, value, confidence: 1 } } },
     } : {}) }));
   };

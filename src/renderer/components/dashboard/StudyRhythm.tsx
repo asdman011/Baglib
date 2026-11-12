@@ -11,7 +11,7 @@ import { translations } from '../../translations';
 const field = 'border border-subtle bg-surface text-main rounded-lg p-2 min-w-0';
 const defaults: StudyRhythm = { ...DEFAULT_STUDY_RHYTHM, intentionAr: translations.ar.rhythmApprovedIntention, intentionEn: translations.en.rhythmApprovedIntention };
 
-export function StudyRhythmSettings() {
+export function StudyRhythmSettings({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
   const { t } = useWorkspace();
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<StudyRhythm>(defaults);
@@ -25,7 +25,7 @@ export function StudyRhythmSettings() {
     return () => { alive = false; window.removeEventListener(RHYTHM_CHANGED_EVENT, load); };
   }, []);
   if (loading) return <FeedbackSkeleton />;
-  return <details className="border border-subtle rounded-xl p-4 bg-surface">
+  return <details open={defaultOpen || undefined} className="border border-subtle rounded-xl p-4 bg-surface">
     <summary className="font-bold cursor-pointer">{t('rhythmSettings')}</summary>
     <form className="space-y-3 pt-3" onSubmit={async event => {
       event.preventDefault(); setBusy(true); setError(false);

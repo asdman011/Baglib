@@ -25,6 +25,7 @@ import { AthanDashboardModule } from './AthanDashboardModule';
 import { DashboardCalendarModule } from './DashboardCalendarModule';
 import { DashboardCustomizeModal } from './DashboardCustomizeModal';
 import { DashboardSnoozeModal } from './DashboardSnoozeModal';
+import { Modal } from '../ui/Modal';
 import { ReadingStatisticsModal } from '../statistics/ReadingStatisticsModal';
 import { ImportWizardModal } from '../library/ImportWizardModal';
 import { calculateHijriDate } from '../../../shared/athan-calculator';
@@ -54,6 +55,7 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState<boolean>(false);
   const [isSnoozeModalOpen, setIsSnoozeModalOpen] = useState<boolean>(false);
+  const [isRhythmModalOpen, setIsRhythmModalOpen] = useState<boolean>(false);
   const [currentStreak, setCurrentStreak] = useState<number>(0);
   const [modules, setModules] = useState<DashboardModuleItem[]>(DEFAULT_DASHBOARD_MODULES);
 
@@ -138,7 +140,11 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
   const scrollToStudyRhythm = () => {
     const el = document.getElementById('dashboard-study-rhythm-section');
     if (el) {
+      el.querySelector('details')?.setAttribute('open', '');
       el.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      // KEY-309: the study rhythm module is hidden by default, so "Configure" opens its settings in a dialog.
+      setIsRhythmModalOpen(true);
     }
   };
 
@@ -375,6 +381,11 @@ const DashboardContent: React.FC<{ athanState: AthanState }> = ({ athanState }) 
           onClose={() => setIsSnoozeModalOpen(false)}
           onOpenSettings={scrollToStudyRhythm}
         />
+      )}
+      {isRhythmModalOpen && (
+        <Modal open onClose={() => setIsRhythmModalOpen(false)} title={t('rhythmSettings')} size="lg">
+          <div data-dashboard-rhythm-modal><StudyRhythmSettings defaultOpen /></div>
+        </Modal>
       )}
 
       {/* Full Reading Statistics Modal */}

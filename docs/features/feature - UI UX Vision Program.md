@@ -233,7 +233,87 @@ The following gaps identified in the audit require backend logic or capabilities
 
 ## 7. U15 acceptance results (KEY-309)
 
-(The U15 implementer fills this in.)
+2026-11-12, Claude Code (Codex queue 4 taken over after Codex's weekly limit).
+
+**How it was run.** `scripts/ux-journeys-live` drives the six journeys through the real UI, one user action per step. It uses the real files from `tests/real-files/`: the Arabic text-layer PDF and the smallest English EPUB, copied into a throwaway profile so that saving marks never touches the originals. Installed Quran, Sunnah and poetry packs are reached through `setupThrowawayCorpus` copies. Every journey runs in Arabic and English, at 1280 and 480 px, in light and dark: 48 runs. Each run records its steps, time, notes and screenshots. Evidence: `.baglib-data/KEY-309-evidence/journeys-NjF0jp/` (result.json and PNGs, including the pdfium render of the saved PDF). A full-page sweep (`scripts/ux-sweep-live`, 20 pages × 8 configurations) also passed 160/160, with no document overflow, no off-screen controls, no raw translation keys and 0 renderer errors (`.baglib-data/ux-sweep-evidence-JqHIn1`).
+
+**What each journey does.**
+- J1: import both files; search the Arabic title; filter by topic, then by the English author; open the PDF's menu, choose *Physical copy*, enter a shelf room and save.
+- J2: open the PDF, pick the highlighter, select a line, then *Save into the PDF*. The saved file is reopened in a different engine (pdfium, with pikepdf counting the annotations).
+- J3: in the EPUB, turn past the cover, select a passage, *Add note*, write and save it. Select the passage again, *Review* to make a card. Then Notes → Cards → *Review due*, choose a confidence, reveal and rate.
+- J4: on the dashboard, *Prayer snooze* → *Configure*. Turn on the study rhythm and set a pause time to the current minute, because a real prayer time cannot be waited for and the zikr pause uses the same pause screen. Save, see the pause screen, resume.
+- J5: in Quran, ayah menu → *Tafsir*, then Reading options → a second tafsir, and check the text changes. Ayah menu → *New note*, title it and save. In Sunnah, right-click a hadith → *Link to an existing note* → pick that note.
+- J6: Pathways → *Templates* → *Use* the first template, then follow its first step.
+
+**Result.** All six journeys complete in every combination: 48 of 48 runs, 0 renderer errors. Steps per journey: J1 13, J2 7, J3 15, J4 7, J5 14, J6 4. The times in the table are the harness's wall-clock times. They include rendering waits but not a person's reading or typing time.
+
+**Fixed in this task** (each under about 20 lines):
+1. *Prayer snooze → Configure* did nothing on a default dashboard, because it scrolled to the study-rhythm module, which is hidden by default. It now opens the study-rhythm settings in a dialog when the module is hidden, or scrolls to it and expands it when it is shown (`HomeDashboardView.tsx`, `StudyRhythm.tsx`).
+2. Entering a shelf location through *Physical copy* left a digital-only book marked digital, so it never counted as physical. Giving a location now marks a digital-only book as *both* (hybrid); the Holding type select still overrides it (`BookDetailModal.tsx`).
+3. The reader's selection boxes for note, quote and question had hardcoded Arabic placeholders and buttons ("إلغاء", "حفظ الملاحظة"…), an English "p." and an Arabic-only citation format. These now use translations in ar and en (`ZenSelectionMenu.tsx`, ten `zen*` keys, guarded by `tests/ui/reader-selection-i18n.test.ts`).
+4. Earlier in this task: the Notes editor header, the Library list, the planner month grid and the Quran study panel at 480 px; the Quran study panel no longer opens by itself when the saved reading position is restored; the Library sort tooltips are localized (commits 3a2e6f0, 4cdd66b, 4fbf9ab, 895e0ff).
+
+**Friction recorded, not fixed here.**
+- Tafsir comparison means switching the tafsir in Reading options and reading again. There is no side-by-side view; this stays with KEY-170.
+- Steps from a pathway template have no linked source, so *Continue* is not offered for them; the first step can only be ticked. Filed as KEY-327.
+- Topic filtering lists the whole taxonomy, while a freshly imported book carries no topic, so filtering by topic finds the new book only after it is classified. Filed as KEY-328.
+- The English EPUB's own metadata gives the author as `Leah Cowan;`, with a trailing semicolon. BagLib keeps the stored name as given (canonical names are preserved).
+- Importing goes through the native file picker, which a test cannot drive. The harness calls the same import IPC, and that one step is counted as "choose the files".
+
+**Results table.**
+
+| Journey | Language | Width | Theme | Result | Steps | Time (s) | Issues |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| J1 Import, find, filter, mark physical | ar | 1280 | light | Pass | 13 | 6.3 | — |
+| J2 Mark up a PDF, save, reopen elsewhere | ar | 1280 | light | Pass | 7 | 3.6 | — |
+| J3 Note from a passage, card, review | ar | 1280 | light | Pass | 15 | 5.7 | — |
+| J4 Plan today, snooze for prayer | ar | 1280 | light | Pass | 7 | 1.6 | — |
+| J5 Ayah and hadith, compare tafsir, link to a note | ar | 1280 | light | Pass | 14 | 4.3 | Comparing means switching the tafsir in Reading options; there is no side-by-side view (KEY-170). |
+| J6 Curriculum from a template, first step | ar | 1280 | light | Pass | 4 | 1.4 | The template steps have no linked source, so "Continue" is not offered; the first step can only be ticked. |
+| J1 Import, find, filter, mark physical | ar | 480 | light | Pass | 13 | 5.7 | — |
+| J2 Mark up a PDF, save, reopen elsewhere | ar | 480 | light | Pass | 7 | 3.5 | — |
+| J3 Note from a passage, card, review | ar | 480 | light | Pass | 15 | 5.8 | — |
+| J4 Plan today, snooze for prayer | ar | 480 | light | Pass | 7 | 1.6 | — |
+| J5 Ayah and hadith, compare tafsir, link to a note | ar | 480 | light | Pass | 14 | 3.9 | Comparing means switching the tafsir in Reading options; there is no side-by-side view (KEY-170). |
+| J6 Curriculum from a template, first step | ar | 480 | light | Pass | 4 | 1.2 | The template steps have no linked source, so "Continue" is not offered; the first step can only be ticked. |
+| J1 Import, find, filter, mark physical | ar | 1280 | dark | Pass | 13 | 5.6 | — |
+| J2 Mark up a PDF, save, reopen elsewhere | ar | 1280 | dark | Pass | 7 | 3.5 | — |
+| J3 Note from a passage, card, review | ar | 1280 | dark | Pass | 15 | 5.8 | — |
+| J4 Plan today, snooze for prayer | ar | 1280 | dark | Pass | 7 | 1.6 | — |
+| J5 Ayah and hadith, compare tafsir, link to a note | ar | 1280 | dark | Pass | 14 | 3.9 | Comparing means switching the tafsir in Reading options; there is no side-by-side view (KEY-170). |
+| J6 Curriculum from a template, first step | ar | 1280 | dark | Pass | 4 | 1.4 | The template steps have no linked source, so "Continue" is not offered; the first step can only be ticked. |
+| J1 Import, find, filter, mark physical | ar | 480 | dark | Pass | 13 | 5.6 | — |
+| J2 Mark up a PDF, save, reopen elsewhere | ar | 480 | dark | Pass | 7 | 3.3 | — |
+| J3 Note from a passage, card, review | ar | 480 | dark | Pass | 15 | 5.7 | — |
+| J4 Plan today, snooze for prayer | ar | 480 | dark | Pass | 7 | 1.5 | — |
+| J5 Ayah and hadith, compare tafsir, link to a note | ar | 480 | dark | Pass | 14 | 3.8 | Comparing means switching the tafsir in Reading options; there is no side-by-side view (KEY-170). |
+| J6 Curriculum from a template, first step | ar | 480 | dark | Pass | 4 | 1.2 | The template steps have no linked source, so "Continue" is not offered; the first step can only be ticked. |
+| J1 Import, find, filter, mark physical | en | 1280 | light | Pass | 13 | 5.6 | — |
+| J2 Mark up a PDF, save, reopen elsewhere | en | 1280 | light | Pass | 7 | 3.4 | — |
+| J3 Note from a passage, card, review | en | 1280 | light | Pass | 15 | 5.8 | — |
+| J4 Plan today, snooze for prayer | en | 1280 | light | Pass | 7 | 1.6 | — |
+| J5 Ayah and hadith, compare tafsir, link to a note | en | 1280 | light | Pass | 14 | 3.8 | Comparing means switching the tafsir in Reading options; there is no side-by-side view (KEY-170). |
+| J6 Curriculum from a template, first step | en | 1280 | light | Pass | 4 | 1.2 | The template steps have no linked source, so "Continue" is not offered; the first step can only be ticked. |
+| J1 Import, find, filter, mark physical | en | 480 | light | Pass | 13 | 5.5 | — |
+| J2 Mark up a PDF, save, reopen elsewhere | en | 480 | light | Pass | 7 | 3.3 | — |
+| J3 Note from a passage, card, review | en | 480 | light | Pass | 15 | 5.7 | — |
+| J4 Plan today, snooze for prayer | en | 480 | light | Pass | 7 | 1.5 | — |
+| J5 Ayah and hadith, compare tafsir, link to a note | en | 480 | light | Pass | 14 | 3.8 | Comparing means switching the tafsir in Reading options; there is no side-by-side view (KEY-170). |
+| J6 Curriculum from a template, first step | en | 480 | light | Pass | 4 | 1.2 | The template steps have no linked source, so "Continue" is not offered; the first step can only be ticked. |
+| J1 Import, find, filter, mark physical | en | 1280 | dark | Pass | 13 | 5.6 | — |
+| J2 Mark up a PDF, save, reopen elsewhere | en | 1280 | dark | Pass | 7 | 3.5 | — |
+| J3 Note from a passage, card, review | en | 1280 | dark | Pass | 15 | 5.7 | — |
+| J4 Plan today, snooze for prayer | en | 1280 | dark | Pass | 7 | 1.6 | — |
+| J5 Ayah and hadith, compare tafsir, link to a note | en | 1280 | dark | Pass | 14 | 3.9 | Comparing means switching the tafsir in Reading options; there is no side-by-side view (KEY-170). |
+| J6 Curriculum from a template, first step | en | 1280 | dark | Pass | 4 | 1.2 | The template steps have no linked source, so "Continue" is not offered; the first step can only be ticked. |
+| J1 Import, find, filter, mark physical | en | 480 | dark | Pass | 13 | 5.5 | — |
+| J2 Mark up a PDF, save, reopen elsewhere | en | 480 | dark | Pass | 7 | 3.3 | — |
+| J3 Note from a passage, card, review | en | 480 | dark | Pass | 15 | 5.8 | — |
+| J4 Plan today, snooze for prayer | en | 480 | dark | Pass | 7 | 1.6 | — |
+| J5 Ayah and hadith, compare tafsir, link to a note | en | 480 | dark | Pass | 14 | 3.8 | Comparing means switching the tafsir in Reading options; there is no side-by-side view (KEY-170). |
+| J6 Curriculum from a template, first step | en | 480 | dark | Pass | 4 | 1.2 | The template steps have no linked source, so "Continue" is not offered; the first step can only be ticked. |
+
+48 of 48 journey runs passed; 0 renderer errors.
 
 ## 8. Follow-ups collected for U14 (KEY-308)
 

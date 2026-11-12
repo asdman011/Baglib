@@ -5,7 +5,6 @@ import {
   MessageSquare,
   Quote,
   HelpCircle,
-  Tag,
   Copy,
   BookA,
   Library,
@@ -13,7 +12,6 @@ import {
   Headphones,
   X,
   Check,
-  BookmarkCheck,
   Underline,
   Strikethrough,
 } from 'lucide-react';
@@ -73,7 +71,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   if (!selectedText.trim()) return null;
 
   const handleCopyCitation = () => {
-    const citation = `[${bookTitle} - ${bookAuthor || 'مؤلف غير معروف'}، ${bookPublisher || 'طبعة خاصة'}، ص ${readingPage}]`;
+    const citation = t('zenCitation', { title: bookTitle, author: bookAuthor || t('zenCitationUnknownAuthor'), publisher: bookPublisher || t('zenCitationPrivateEdition'), page: readingPage });
     navigator.clipboard.writeText(citation).then(() => {
       setCopiedCitation(true);
       setTimeout(() => setCopiedCitation(false), 2000);
@@ -317,7 +315,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
             <div className="flex items-center justify-between font-bold text-xs">
               <span className="flex items-center gap-1.5 text-pale-sky-600">
                 <MessageSquare className="w-3.5 h-3.5" />
-                {t('addNoteAction')} (p. {readingPage})
+                {t('addNoteAction')} ({t('zenPageRef', { page: readingPage })})
               </span>
               <button
                 onMouseDown={(e) => {
@@ -335,7 +333,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
               onMouseDown={(e) => e.stopPropagation()}
               value={noteContent}
               onChange={(e) => setNoteContent(e.target.value)}
-              placeholder="اكتب ملاحظتك البحثية هنا..."
+              placeholder={t('zenNotePlaceholder')}
               className="w-full h-20 p-2 rounded-xl bg-canvas border border-subtle text-main text-xs outline-none focus:border-pale-sky-500 font-sans resize-none"
             />
             <div className="flex justify-end gap-2">
@@ -347,7 +345,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 onClick={() => setActiveTab('toolbar')}
                 className="px-3 py-1 rounded-lg border border-subtle text-muted hover:text-main font-bold cursor-pointer"
               >
-                إلغاء
+                {t('cancel')}
               </button>
               <button
                 disabled={!noteContent.trim()}
@@ -362,7 +360,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 className="px-3 py-1 rounded-lg bg-pale-sky-500 text-white font-bold hover:bg-pale-sky-600 disabled:opacity-40 cursor-pointer"
               >
-                حفظ الملاحظة
+                {t('zenSaveNote')}
               </button>
             </div>
           </div>
@@ -395,7 +393,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
               onMouseDown={(e) => e.stopPropagation()}
               value={quoteContextNote}
               onChange={(e) => setQuoteContextNote(e.target.value)}
-              placeholder="سياق الاقتباس أو تعليق إضافي (اختياري)..."
+              placeholder={t('zenQuotePlaceholder')}
               className="w-full p-2 rounded-xl bg-canvas border border-subtle text-main text-xs outline-none focus:border-amber-500 font-sans"
             />
             <div className="flex items-center justify-between pt-1">
@@ -419,7 +417,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                   onClick={() => setActiveTab('toolbar')}
                   className="px-3 py-1 rounded-lg border border-subtle text-muted hover:text-main font-bold cursor-pointer"
                 >
-                  إلغاء
+                  {t('cancel')}
                 </button>
                 <button
                   onMouseDown={(e) => {
@@ -433,7 +431,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                   }}
                   className="px-3 py-1 rounded-lg bg-amber-500 text-white font-bold hover:bg-amber-600 cursor-pointer"
                 >
-                  حفظ الاقتباس
+                  {t('zenSaveQuote')}
                 </button>
               </div>
             </div>
@@ -464,7 +462,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
               onMouseDown={(e) => e.stopPropagation()}
               value={questionText}
               onChange={(e) => setQuestionText(e.target.value)}
-              placeholder="ما السؤال البحثي أو الإشكال الذي يثيره هذا النص؟"
+              placeholder={t('zenQuestionPlaceholder')}
               className="w-full h-20 p-2 rounded-xl bg-canvas border border-subtle text-main text-xs outline-none focus:border-indigo-500 font-sans resize-none"
             />
             <div className="flex justify-end gap-2">
@@ -476,7 +474,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 onClick={() => setActiveTab('toolbar')}
                 className="px-3 py-1 rounded-lg border border-subtle text-muted hover:text-main font-bold cursor-pointer"
               >
-                إلغاء
+                {t('cancel')}
               </button>
               <button
                 disabled={!questionText.trim()}
@@ -491,7 +489,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                 }}
                 className="px-3 py-1 rounded-lg bg-indigo-500 text-white font-bold hover:bg-indigo-600 disabled:opacity-40 cursor-pointer"
               >
-                حفظ السؤال
+                {t('zenSaveQuestion')}
               </button>
             </div>
           </div>

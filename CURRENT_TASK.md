@@ -1,3 +1,30 @@
+## KEY-309 U15 acceptance run: six journeys pass in all 48 combinations — 2026-11-12, Claude Code
+
+New `scripts/ux-journeys-live` drives the six journeys from the plan doc §4 through the real UI. It uses real files (the Arabic text-layer PDF and the smallest English EPUB, copied into a throwaway profile so the originals are never saved) and copies of the installed packs. Each journey runs in ar and en, at 1280 and 480 px, in light and dark, and records steps, time, notes and screenshots. The results table and the friction list are in section 7 of `docs/features/feature - UI UX Vision Program.md`.
+
+Result: 48 of 48 journey runs passed, with 0 renderer errors (evidence `.baglib-data/KEY-309-evidence/journeys-NjF0jp`). The full-page sweep (ux-sweep-live) passed 160/160, with no overflow, no off-screen controls and no raw keys (`.baglib-data/ux-sweep-evidence-JqHIn1`).
+
+Fixes made in this task:
+- Prayer snooze → Configure did nothing on a default dashboard, because the study-rhythm module is hidden by default. It now opens the rhythm settings in a dialog (HomeDashboardView, StudyRhythm `defaultOpen`).
+- A shelf location entered through Physical copy now marks a digital-only book as hybrid (BookDetailModal).
+- The reader selection note, quote and question boxes had hardcoded Arabic text, an English "p." and an Arabic-only citation format. They now use ten `zen*` keys in ar and en (ZenSelectionMenu, plus a guard test).
+
+Follow-ups filed under KEY-294: KEY-327 (pathway template steps lack sources, so there is no Continue) and KEY-328 (topic filter counts, and classifying new imports). Tafsir side-by-side comparison stays with KEY-170. The EPUB's own author metadata "Leah Cowan;" is kept as stored.
+
+Verification: the full suite passed 1906/1906 at concurrency 2. npx tsc --noEmit passed. eslint on the changed files gave 0 errors; the one `<img>` warning in BookDetailModal was already there. The focused tests passed 23/23, and git diff --check is clean. Throwaway profiles and copies were removed.
+
+Exact files
+- scripts/ux-journeys-live/main.cjs
+- scripts/ux-journeys-live/run.mjs
+- src/renderer/components/reader/ZenSelectionMenu.tsx
+- src/renderer/translations.ts (zen* keys, ar and en)
+- tests/ui/reader-selection-i18n.test.ts
+- src/renderer/components/dashboard/HomeDashboardView.tsx
+- src/renderer/components/dashboard/StudyRhythm.tsx
+- src/renderer/components/library/BookDetailModal.tsx
+- docs/features/feature - UI UX Vision Program.md (section 7)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-309 Quran study panel is a bottom sheet on phones; restored position no longer opens it — 2026-11-12, Claude Code (Codex queue4 item 5)
 
 Below the sm breakpoint the shared reader study panel (IslamicReaderPanel, used by Quran, Sunnah and Al-Bayan) is a bottom sheet across the reader, up to 60% of the height (28rem at most), instead of a side overlay. Desktop keeps the side panel.
