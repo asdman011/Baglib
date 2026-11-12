@@ -2,7 +2,9 @@
 
 ## Recent Agent Updates
 
-- [2026-11-12, Codex queue2-root] KEY-300 lint verified. Removed27unused-codewarnings,40to13 (12image/1hook remain to preserve behavior). Focused15/full1896/1896/types/build/diff pass, lint0errors. Detail native8/8 ar/en/light-dark/1280-480,0renderererrors,profiledeleted. Exact10ownfiles/hunks in CURRENT_TASK/report. Authorized publication via lock pending. Jira Claude. Queue3-5 pending.
+- [2026-11-12, Codex queue2-root] KEY-309 page numbers verified. Localized header spinbutton/input and shared legacy-slider formatter, one-based identity retained. RealArabicphysicalpage5 has printed4 and noPageLabels; historical retired-tooltip symptom unreproduced. Focused6/full1900/types/lint0warnings/build/diff/native24pass,24PNG/2inspected,profiledeleted. Exact9ownfiles/hunks in CURRENT_TASK/report. Publication via lock pending. Jira Claude. Queue4-5 pending.
+
+- [2026-11-12, Codex queue2-root] KEY-300 lint verified. Removed27unused-codewarnings,40to13 (12image/1hook remain to preserve behavior). Focused15/full1896/1896/types/build/diff pass, lint0errors. Detail native8/8 ar/en/light-dark/1280-480,0renderererrors,profiledeleted. Exact10ownfiles/hunks in CURRENT_TASK/report. Published 3f0d4006422a329cc13fbf9ab53b9395f9741870 normally to origin/feature/library-domain at 2026-11-12T03:32:01.229Z. Exact remote hash verified. Lock released. Claude owns review/Jira. Jira Claude. Queue3-5 pending.
 
 - [2026-11-12, Codex queue2-root] KEY-245 verified. Shared bilingual Markdown/CSV/LaTeX dialog with losses, exact round-trip metadata and transactional id-matched Markdown import. Focused18/18/full1896/1896, types/lint0errors0warnings/build/diff pass. Native12/12/ar-en1280-480 plus filtered/re-import/updates,12PNG/3inspected,profilesremoved. LaTeX compilation unverified. Exact16files/hunks in CURRENT_TASK/report. Published 641c2c89ce5a3545581f53693dfec7967a45913e normally to origin/feature/library-domain at 2026-11-12T03:23:15.344Z. Exact remote hash verified. Lock released. Claude owns review/Jira. Queue2?5 pending.
 

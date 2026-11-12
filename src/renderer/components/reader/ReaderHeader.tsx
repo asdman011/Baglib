@@ -7,6 +7,7 @@ import { Menu, type MenuItemProps } from '../ui/Menu';
 import { MarkupBarCompact } from './ReaderMarkupBar';
 import type { TranslationKey } from '../../translations';
 import type { ReaderViewMode } from '../../libs/reader/types';
+import { formatReaderNumber, parseReaderPage } from './reader-chrome-state';
 
 export interface ReaderHeaderProps {
   title: string; author?: string; format: string; dir: 'rtl' | 'ltr';
@@ -81,7 +82,7 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
     update(); const observer = new ResizeObserver(update); observer.observe(header);
     return () => { observer.disconnect(); region.style.removeProperty('--reader-toolbar-bottom'); };
   }, [shown]);
-  const number = (value: number) => value.toLocaleString(dir === 'rtl' ? 'ar' : 'en');
+  const number = (value: number) => formatReaderNumber(value, dir === 'rtl' ? 'ar' : 'en');
   const modes = [ ['single', 'viewModeSingle'], ['two-column', 'viewModeTwoColumn'], ['scrolled', 'viewModeScrolled'] ] as const;
   const overflow: MenuItemProps[] = [
     ...modes.map(([mode, label]) => ({ label: t(label), onClick: () => onViewMode(mode) })),
@@ -104,8 +105,25 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
         <h2 className="truncate text-xs font-bold leading-relaxed" dir="auto">{title}</h2>
         {author && <p className="truncate text-[10px] text-text-muted leading-relaxed" dir="auto">{author}</p>}
       </div>
-      {onPage && <form className="flex shrink-0 items-center gap-1 text-[11px]" onSubmit={event => { event.preventDefault(); const val = event.currentTarget.querySelector('input')?.value ?? goTo; const next = Number(val); if (Number.isFinite(next) && next >= 1) onPage(Math.min(total ?? 1, Math.floor(next))); setGoTo(null); }}>
-        <input data-reader-go-to type="number" min={1} max={total} aria-label={t('readerGoToPage')} value={goTo ?? page ?? 1} onChange={event => setGoTo(event.target.value)} onBlur={() => setGoTo(null)} className="w-11 rounded-md border border-border bg-canvas px-1 py-1.5 text-center tabular-nums focus-visible:outline-focus" />
+      {onPage && <form className="flex shrink-0 items-center gap-1 text-[11px]" onSubmit={event => {
+        event.preventDefault();
+        const value = event.currentTarget.querySelector('input')?.value ?? goTo ?? '';
+        const next = parseReaderPage(value, total ?? 1);
+        if (next !== undefined) onPage(next);
+        setGoTo(null);
+      }}>
+        <input data-reader-go-to type="text" inputMode="numeric" role="spinbutton" aria-valuemin={1} aria-valuemax={total}
+          aria-valuenow={parseReaderPage(goTo ?? String(page ?? 1), total ?? 1)} aria-valuetext={goTo ?? number(page ?? 1)}
+          aria-label={t('readerGoToPage')} title={number(page ?? 1)} value={goTo ?? number(page ?? 1)}
+          onChange={event => setGoTo(event.target.value)} onBlur={() => setGoTo(null)}
+          onKeyDown={event => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            const current = parseReaderPage(goTo ?? String(page ?? 1), total ?? 1) ?? page ?? 1;
+            const step = event.key === 'ArrowUp' ? 1 : -1;
+            setGoTo(number(Math.max(1, Math.min(total ?? 1, current + step))));
+          }}
+          className="w-11 rounded-md border border-border bg-canvas px-1 py-1.5 text-center tabular-nums focus-visible:outline-focus" />
         <span className="hidden sm:inline text-text-muted whitespace-nowrap">/ {number(total ?? 1)}</span>
       </form>}
       {/* KEY-308: breakpoints follow the header's own width; the open side panel narrows it while the window stays wide. These controls are also in the ⋯ menu. */}

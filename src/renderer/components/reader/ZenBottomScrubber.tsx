@@ -3,6 +3,7 @@
 import React from 'react';
 import { RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
+import { formatReaderNumber } from './reader-chrome-state';
 
 interface ZenBottomScrubberProps {
   isVisible: boolean;
@@ -12,6 +13,7 @@ interface ZenBottomScrubberProps {
   previousPage: number | null;
   onReturnToPrevious: () => void;
   readerDirection: 'rtl' | 'ltr';
+  language?: 'ar' | 'en';
   chapterLabel?: string;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -26,12 +28,13 @@ export const ZenBottomScrubber: React.FC<ZenBottomScrubberProps> = ({
   previousPage,
   onReturnToPrevious,
   readerDirection,
-  chapterLabel,
+  language = 'en',
   onMouseEnter,
   onMouseLeave,
   t,
 }) => {
   const percent = Math.min(100, Math.max(0, Math.round((readingPage / maxBookPages) * 100)));
+  const number = (value: number) => formatReaderNumber(value, language);
 
   return (
     <div
@@ -66,7 +69,7 @@ export const ZenBottomScrubber: React.FC<ZenBottomScrubberProps> = ({
             title={t('returnToPrevPos')}
            aria-label={t('returnToPrevPos')}>
             <RotateCcw className="w-3 h-3" />
-            <span>{t('jumpToPreviousNotice', { page: previousPage })}</span>
+            <span>{t('jumpToPreviousNotice', { page: number(previousPage) })}</span>
           </button>
         )}
 
@@ -81,16 +84,18 @@ export const ZenBottomScrubber: React.FC<ZenBottomScrubberProps> = ({
             onChange={(e) => onPageChange(parseInt(e.target.value, 10))}
             className="w-full h-1.5 bg-subtle/50 rounded-lg appearance-none cursor-pointer accent-pale-sky-500 transition-all"
             aria-label={t('zenPageSlider')}
+            aria-valuetext={number(readingPage)}
+            title={number(readingPage)}
           />
         </div>
 
         {/* Page counter & Percent */}
         <div className="flex items-center gap-1.5 font-mono text-[11px] text-main font-bold shrink-0">
-          <span>{readingPage}</span>
+          <span>{number(readingPage)}</span>
           <span className="text-muted font-normal">/</span>
-          <span className="text-muted font-normal">{maxBookPages}</span>
+          <span className="text-muted font-normal">{number(maxBookPages)}</span>
           <span className="text-[10px] px-1.5 py-0.2 rounded bg-canvas border border-subtle/50 text-muted font-normal ms-1">
-            {percent}%
+            {number(percent)}%
           </span>
         </div>
 

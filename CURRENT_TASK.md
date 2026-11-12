@@ -1,3 +1,25 @@
+## KEY-309 reader page numbers verified - 2026-11-12, Codex queue2-root
+
+Header page spinbutton now shows Arabic-Indic digits in ar and Latin digits in en, accepts Latin/Arabic-Indic/Persian digit entry and retains Up/Down editing and one-based bounded submission. The existing reader-chrome-state module supplies shared number formatting and page parsing. Legacy ZenBottomScrubber uses the same formatter, localized title/value and optional interface-language prop. Current production reader has no mounted slider; e25fa60 removed the stale scrubber import. Header and native viewer both use one-based readingPage.
+
+Investigation verified a source-number discrepancy: physical page5 of the real Arabic PDF contains printed Arabic4 in its gray page-number box. Direct PDF.js getPageLabels() returns null; first text item of getPage(5) is printed4. This may explain the reported tooltip appearance, but the historical tooltip symptom remains unreproduced. Current header correctly displays physical5 and references retain physical page identity. Source pages were read without Save/OCR.
+
+Verification: focused6/6 including header/legacy-slider equality at1/5/20, parsing and toolbar access; final shared-tree full1900/1900 at concurrency2; types, scoped ESLint0errors0warnings, tsup, script syntax and final diff check pass. A trailing EOF blank line was corrected after the first diff check. Native24/24 uses real Arabic and English text-layer PDFs x ar/en x1280/480 xpages1/5/4, checks localized input/title/accessibility and matching native page canvas.24PNGs/result.json at .baglib-data/pages-evidence-AF1TD2. Inspected ar-ar-480-5.png and en-ar-1280-5.png. Profile deleted, existing renderer reused, Electron serialized. Existing concurrent Quran edits/tests remain outside task scope.
+
+Exact9files/hunks
+
+- src/renderer/components/reader/ReaderHeader.tsx
+- src/renderer/components/reader/ZenBottomScrubber.tsx
+- src/renderer/components/reader/reader-chrome-state.ts
+- tests/ui/reader-page-number.test.ts
+- scripts/reader-pages-live/main.cjs
+- scripts/reader-pages-live/run.mjs
+- docs/features/feature - Built-in Document Reader.md
+- CURRENT_TASK.md (own page-number handoff and KEY-300 lint publication receipt)
+- IMPLEMENTATION_PLAN.md (own page-number entry and KEY-300 lint publication receipt)
+
+Publication pending under commit.lock. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue items4-5 pending.
+
 ## KEY-309 polish: tafsir editorial notes render as small notes - 2026-11-12, Claude Code
 
 Tafsir packs mark editorial notes (manuscript variants and references, for example [[في أ: "يفتتح".]]) with double brackets, and the panel showed them raw. QuranRichText now renders each one as a small muted inline note without brackets (`data-tafsir-note`); the stored text and the surrounding words are unchanged.
@@ -30,7 +52,7 @@ Exact10files/hunks
 - CURRENT_TASK.md (own KEY-300 lint handoff and KEY-245 publication receipt)
 - IMPLEMENTATION_PLAN.md (own KEY-300 lint entry and KEY-245 publication receipt)
 
-Publication pending under commit.lock. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue items3-5 pending.
+Published 3f0d4006422a329cc13fbf9ab53b9395f9741870 normally to origin/feature/library-domain at 2026-11-12T03:32:01.229Z. Exact remote hash verified. Lock released. Claude owns review/Jira. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue items3-5 pending.
 
 ## KEY-245 verified ? 2026-11-12, Codex queue2-root
 

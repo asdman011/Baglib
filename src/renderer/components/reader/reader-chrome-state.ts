@@ -21,3 +21,14 @@ export function parseReaderChrome(value: unknown): ReaderChromeState {
 export function resizeReaderPanel(width: number, delta: number, dir: 'rtl' | 'ltr', viewport: number) {
   return Math.max(280, Math.min(480, viewport - 500, width + (dir === 'rtl' ? delta : -delta)));
 }
+/** UI page numbers use explicit digit sets, independently of the document's script. */
+export function formatReaderNumber(value: number, language: 'ar' | 'en'): string {
+  return new Intl.NumberFormat(language, { numberingSystem: language === 'ar' ? 'arab' : 'latn', useGrouping: false }).format(value);
+}
+
+export function parseReaderPage(value: string, total: number): number | undefined {
+  const digits = value.trim().replace(/[٠-٩۰-۹]/gu, digit => String(digit.charCodeAt(0) - (digit >= '۰' ? 0x6f0 : 0x660)));
+  if (!/^\d+$/u.test(digits)) return undefined;
+  const page = Number(digits);
+  return Number.isSafeInteger(page) && page >= 1 ? Math.min(total, page) : undefined;
+}
