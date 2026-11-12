@@ -1,3 +1,18 @@
+## KEY-325 hadith narrator cards: source names and localized label - 2026-11-12, Claude Code
+
+The narrator card showed raw source keys (`mucin_tabaqat`) and the label "Bukhari 1" in the Arabic UI.
+- The card now maps sources through the narrator profile's `sourceKeys` (exported from SunnahNarratorCard).
+- The hadith card label uses the localized collection name.
+
+knowledge-cards-live asserts both and passes ar/en: «صحيح البخاري 1» / «المعين في طبقات المحدثين», and "Sahih al-Bukhari 1" / "Al-Mu'in fi Tabaqat al-Muhaddithin". Full suite 1881/1881.
+
+Files:
+- src/renderer/components/knowledge/KnowledgeCardPopover.tsx
+- src/renderer/components/sunnah/SunnahNarratorCard.tsx
+- src/renderer/components/sunnah/SunnahChapterView.tsx
+- scripts/knowledge-cards-live/main.cjs
+- CURRENT_TASK.md
+
 ## KEY-232 smart Knowledge Cards verified on real installed data - 2026-11-12, Claude Code
 
 The new scripts/knowledge-cards-live hovers real elements with real mouse moves, on disposable copies of the installed Quran packs (with the mushaf layout) and the merged Sunnah database, in ar and en.

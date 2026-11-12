@@ -89,6 +89,9 @@ app.on('browser-window-created', (_, owner) => {
       assert.match(result.unresolvedCard, language === 'ar' ? /لا توجد معلومات محلية/u : /No local information/u, 'honest empty state for an unresolved narrator');
       assert.match(result.hadithCard, language === 'ar' ? /الراوي|راو/u : /Narrator/u, 'narrator section for a resolved narrator');
       assert.ok(!/No local information|لا توجد معلومات محلية/u.test(result.hadithCard), 'the resolved narrator has local details');
+      // KEY-325: the label names the collection in the interface language, and sources show their names, not keys.
+      assert.ok(result.hadithCard.includes(language === 'ar' ? 'صحيح البخاري 1' : 'Sahih al-Bukhari 1'), 'localized collection label');
+      assert.ok(!/[a-z]+_[a-z]+/u.test(result.hadithCard), 'no raw source keys');
     }
     assert.deepEqual(consoleLines.filter(line => /uncaught/iu.test(line)), []);
     fs.writeFileSync(path.join(directory, 'results.json'), JSON.stringify(results, null, 2)); console.log(JSON.stringify({ directory, passed: true })); app.quit();

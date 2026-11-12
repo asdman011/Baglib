@@ -10,6 +10,7 @@ import { contextActions } from '../actions/context-actions';
 import { addPassageToSrs, openPassageComment, passageNote, linkPassageToNote, sharePassage } from '../actions/passage-actions';
 import type { ReaderTab } from '../islamic/reader-chrome';
 import { MoreHorizontal } from 'lucide-react';
+import { collectionKeys } from '../../utils/sunnah-collections';
 import { HadithActions, formatHadith } from './HadithActions';
 import { SunnahResearchPanel } from './SunnahResearchPanel';
 
@@ -77,7 +78,7 @@ export function SunnahChapterView({ calm = false, onStudy, chapter, hadiths, sho
         } : undefined,
         link: () => linkPassageToNote(target,label),
       },t);
-      return <ContextMenu items={items} key={hadith.id} className="sunnah-entry" data-hadith-id={hadith.id} data-card-kind="hadith" data-card-ref={`hadith:${chapter.collection}:${hadith.id}`} data-card-label={`${chapter.collection} ${hadith.number}`} data-card-research={hadith.researchId}>
+      return <ContextMenu items={items} key={hadith.id} className="sunnah-entry" data-hadith-id={hadith.id} data-card-kind="hadith" data-card-ref={`hadith:${chapter.collection}:${hadith.id}`} data-card-label={`${collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection} ${hadith.number}`} data-card-research={hadith.researchId}>
         {showSection && hasSection && <ParallelRow showEnglish={showEnglish} className="sunnah-section-heading"
           arabic={<h3><NumberedTitle number={section.number} title={section.title} language="ar" fallback="" /></h3>}
           english={<h3><NumberedTitle number={section.number} title={section.title} language="en" fallback="" /></h3>} />}

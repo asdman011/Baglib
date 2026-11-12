@@ -8,6 +8,7 @@ import type { AggregateDictionaryLookupResult, WikipediaSummaryCard } from '../.
 import type { QuranRichNode } from '../../../shared/types/quran';
 import type { KnowledgeCard } from '../../../shared/types/knowledge-cards';
 import type { TranslationKey } from '../../translations';
+import { sourceKeys } from '../sunnah/SunnahNarratorCard';
 
 const CARD_WIDTH = 380;
 const MAX_TEXT = 900;
@@ -46,7 +47,7 @@ async function narratorSections({ text, context }: CardRequest, t: (key: Transla
   if (!narrator.ok) return [];
   const { name, grade, deathText, tabaqah, sources } = narrator.data;
   const parts = [name, grade && `${t('knowledgeCardGrade')}: ${grade}`, deathText && `${t('knowledgeCardDeath')}: ${deathText}`, tabaqah].filter(Boolean);
-  return [{ title: t('knowledgeCardNarrator'), text: parts.join('\n'), source: sources.map(item => item.source).filter(Boolean).join('، ') || undefined }];
+  return [{ title: t('knowledgeCardNarrator'), text: parts.join('\n'), source: sources.map(item => item.source && (sourceKeys[item.source] ? t(sourceKeys[item.source]) : item.source)).filter(Boolean).join('، ') || undefined }];
 }
 
 export function KnowledgeCardPopover({ request, onClose, onPointerEnter, onPointerLeave }: { request: CardRequest; onClose: () => void; onPointerEnter: () => void; onPointerLeave: () => void }) {
