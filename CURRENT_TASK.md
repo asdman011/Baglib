@@ -1,3 +1,20 @@
+## KEY-232 smart Knowledge Cards verified on real installed data - 2026-11-12, Claude Code
+
+The new scripts/knowledge-cards-live hovers real elements with real mouse moves, on disposable copies of the installed Quran packs (with the mushaf layout) and the merged Sunnah database, in ar and en.
+
+- A mushaf word on page 1 (ٱللَّهِ, 1:1) opens a card with the root (ا ل ه) and the lemma from the installed morphology, and Ibn Kathir's tafsir from the installed pack.
+- In Bukhari 1, Yahya ibn Sa'id al-Ansari resolves to rijal 104662, and his card shows the narrator section and grade.
+- al-Humaydi has no resolved narrator in the merged database (rijal_id is null; only about 9.3k of 35.8k Bukhari chain mentions resolve), and his card honestly says there is no local information.
+
+Passes; corpus copies deleted and originals verified unchanged.
+
+Polish seen (filed separately):
+- the raw source key `mucin_tabaqat`;
+- an untranslated "Bukhari 1" label in the Arabic UI;
+- raw `[[...]]` footnotes in the card's tafsir.
+
+Files: scripts/knowledge-cards-live/main.cjs, scripts/knowledge-cards-live/run.mjs, CURRENT_TASK.md.
+
 ## KEY-324 Notes editor keeps reader locations and shows the link filter; KEY-317 dashboard-live - 2026-11-12, Claude Code
 
 KEY-324 (bug, found while rewriting dashboard-live):
