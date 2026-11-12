@@ -812,7 +812,7 @@ export const API = {
   studyWird: {
     getConfig: (): Promise<import('../shared/quran-wird').QuranWirdConfig> => ipcRenderer.invoke('study-planner:wird-get-config'),
     saveConfig: (input: unknown): Promise<import('../shared/quran-wird').QuranWirdConfig> => ipcRenderer.invoke('study-planner:wird-save-config', input),
-    syncToday: (todayStr: string): Promise<import('../shared/quran-wird').TodayWirdSyncResult> => ipcRenderer.invoke('study-planner:wird-sync-today', todayStr),
+    syncToday: (todayStr: string): Promise<import('../shared/quran-wird').TodayWirdSyncResult | null> => ipcRenderer.invoke('study-planner:wird-sync-today', todayStr),
     complete: (todayStr: string, taskId?: string): Promise<import('../shared/quran-wird').TodayWirdSyncResult> => ipcRenderer.invoke('study-planner:wird-complete', todayStr, taskId),
     hasLayout: (profile: import('../shared/quran-wird').QuranWirdProfile): Promise<boolean> => ipcRenderer.invoke('study-planner:wird-has-layout', profile),
   },

@@ -68,7 +68,12 @@ export function registerStudyPlannerIpc(): void {
   ipcMain.handle('study-planner:wird-save-config', (event, input: unknown) => wirdService(event).saveConfig(input));
   ipcMain.handle('study-planner:wird-sync-today', (event, todayStr: unknown) => {
     if (typeof todayStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(todayStr)) throw new Error('invalid-request');
-    return wirdService(event).syncTodayWird(todayStr);
+    // A page-based wird without an installed mushaf layout is an expected state, not a failure: report "nothing to
+    // show" instead of an IPC error (the Today panel treats null as no wird step).
+    return wirdService(event).syncTodayWird(todayStr).catch((error: unknown) => {
+      if (error && typeof error === 'object' && (error as { error?: unknown }).error === 'missing-layout') return null;
+      throw error;
+    });
   });
   ipcMain.handle('study-planner:wird-complete', (event, todayStr: unknown, taskId?: unknown) => {
     if (typeof todayStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(todayStr)) throw new Error('invalid-request');

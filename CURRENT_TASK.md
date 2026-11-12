@@ -1,3 +1,13 @@
+## KEY-326 wird sync no longer logs an error without a mushaf layout - 2026-11-12, Claude Code
+
+The default wird unit is pages. Without an installed mushaf layout, `syncTodayWird` threw the typed `missing-layout` error on every Today-panel load, logged as an IPC handler failure.
+- The handler now returns `null` for that expected case; real errors still throw.
+- The preload type is now `TodayWirdSyncResult | null`; the panel already treats null as "no wird step".
+
+Verification: note-cards-live on a pack-less profile logs 0 wird-sync errors (previously several per run). Full suite 1881/1881.
+
+Files: src/main/ipc/study-planner.ts, src/preload/index.ts (one type), CURRENT_TASK.md.
+
 ## KEY-236 planner audits completed: real source links and month-grid alignment - 2026-11-12, Claude Code
 
 The two limits left open at f492e12 are now verified live. The new scripts/planner-links-live runs on disposable copies of the installed Quran packs (with the mushaf layout) and the merged Sunnah database, in ar and en:
