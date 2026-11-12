@@ -1,3 +1,14 @@
+## KEY-309 polish: tafsir editorial notes render as small notes - 2026-11-12, Claude Code
+
+Tafsir packs mark editorial notes (manuscript variants and references, for example [[في أ: "يفتتح".]]) with double brackets, and the panel showed them raw. QuranRichText now renders each one as a small muted inline note without brackets (`data-tafsir-note`); the stored text and the surrounding words are unchanged.
+
+Verification:
+- New tests/ui/quran-editorial-notes.test.ts (2/2).
+- quran-layout-live passes; the Ibn Kathir 2:1 screenshot shows the notes styled.
+- Full suite 1900/1900.
+
+Files: src/renderer/components/quran/QuranRichText.tsx, tests/ui/quran-editorial-notes.test.ts, CURRENT_TASK.md.
+
 ## KEY-300 lint verified - 2026-11-12, Codex queue2-root
 
 Removed unused icon/type imports, destructured values, an unused pure audit calculation and the unused diagnostics setter binding from the requested Library files. Existing public props remain supported. Current baseline40warnings becomes13warnings: all27unused-codewarnings removed,12image-elementwarnings and1effect-dependencywarning remain. Rendering and effect dependencies were preserved to satisfy the behavior-preserving scope. BookDetailOverview and MetadataDiffView were inspected and required no unused-code edits.
