@@ -286,11 +286,17 @@ app.on('browser-window-created', (_, win) => {
         await ui.click('use the first template', '[data-template-use]');
         await until('!!document.querySelector("[data-pathway-next]")', 200);
         await shot('J6-pathway');
-        if (await has('[data-pathway-continue-main]')) await ui.click('continue to the first step', '[data-pathway-continue-main]');
-        else {
-          journey.notes.push('The template steps have no linked source, so "Continue" is not offered; the first step can only be ticked.');
-          await ui.click('tick the first step', '[data-pathway-steps] input[type=checkbox], [data-pathway-row] input[type=checkbox]');
+        if (!await has('[data-pathway-continue-main]')) {
+          // KEY-327: a step without a source offers to attach one; the English book from J1 becomes its source.
+          const enTitle = (await evaluate('window.electronAPI.getAllBooks()')).find(book => book.filePath === enEpubPath)?.title || '';
+          await ui.click('choose "Add a source for this step"', '[data-pathway-add-source]');
+          await ui.type('search the books', '[data-pathway-resource-picker] [data-study-link-picker] input', '/books ' + enTitle.split(/\s+/).slice(0, 2).join(' '));
+          await ui.clickText('pick the book', '[data-pathway-resource-picker] [data-study-link-picker] button', enTitle.slice(0, 20));
+          await until('!!document.querySelector("[data-pathway-continue-main]")');
         }
+        await ui.click('continue to the first step', '[data-pathway-continue-main]');
+        await until('!!document.querySelector("[data-reader-go-to], [data-study-epub-page], .pdf-page-container")', 200);
+        await shot('J6-first-step');
       });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));

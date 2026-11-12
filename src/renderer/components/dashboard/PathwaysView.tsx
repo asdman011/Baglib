@@ -1,7 +1,7 @@
 'use client';
 import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ArrowDown, ArrowUp, BookOpen, Calendar, Check, CheckCircle2, Edit3, ExternalLink, FileText, Layers, Link2, Network, Pin, PinOff, Play, Plus, Route, Sparkles, Trash2, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
@@ -158,6 +158,16 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
   const [step, setStep] = useState('');
   const [exported, setExported] = useState(false);
   const progress = useMemo(() => pathwayProgress(pathway.items), [pathway.items]);
+  const resourcePicker = useRef<HTMLDetailsElement>(null);
+  // KEY-327: a step without a source offers to attach one in its own section, so Continue can follow.
+  const addSourceForNext = () => {
+    if (progress.next) setSection(progress.next.section);
+    const picker = resourcePicker.current;
+    if (!picker) return;
+    picker.open = true;
+    picker.scrollIntoView({ block: 'center' });
+    requestAnimationFrame(() => picker.querySelector<HTMLElement>('input, textarea')?.focus());
+  };
   const sections = useMemo(() => [...new Set(pathway.items.map(item => item.section))], [pathway.items]);
   const middle = pathway.items.filter(item => placeItem(item) === 'middle');
   const end = pathway.items.filter(item => placeItem(item) === 'end');
@@ -248,6 +258,7 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p dir="auto" className="break-words text-sm font-semibold">{t('pathwayNextStep', { title: progress.next!.title })}</p>
                     {!progress.target && <p className="text-xs text-text-muted">{t('pathwayNextNoSource')}</p>}
+                    {!progress.target && <Button size="sm" variant="secondary" className="mt-1" data-pathway-add-source icon={<Link2 className={ico} />} onClick={addSourceForNext}>{t('pathwayAddSourceForStep')}</Button>}
                   </div>
                   {progress.target && <Button size="sm" data-pathway-continue-main icon={<Play className={`${ico} rtl:-scale-x-100`} />} onClick={() => onOpen(progress.target!)}>{t('pathwayContinue')}</Button>}
                 </>}
@@ -288,7 +299,7 @@ function Detail({ pathway, onChange, onRemoved, onError, onOpen, onSaveTemplate 
           <input className={`${control} w-full`} list="pathway-sections" value={section} onChange={event => setSection(event.target.value)} maxLength={200} placeholder={t('pathwaySection')} aria-label={t('pathwaySection')} dir="auto" />
           <datalist id="pathway-sections">{sections.filter(Boolean).map(name => <option key={name} value={name} />)}</datalist>
           <div className="flex flex-wrap gap-2"><input className={`${control} flex-1`} data-pathway-step-input value={step} onChange={event => setStep(event.target.value)} maxLength={300} placeholder={t('pathwayStepTitle')} aria-label={t('pathwayStepTitle')} dir="auto" /><Button size="sm" variant="secondary" className="self-center" disabled={!step.trim()} icon={<Check className={ico} />} onClick={addStep}>{t('pathwayAddStep')}</Button></div>
-          <details><summary className="cursor-pointer text-sm">{t('pathwayAddResource')}</summary><div className="pt-2"><StudyLinkPicker notes={notes} onInsert={addResource} /></div></details>
+          <details ref={resourcePicker} data-pathway-resource-picker><summary className="cursor-pointer text-sm">{t('pathwayAddResource')}</summary><div className="pt-2"><StudyLinkPicker notes={notes} onInsert={addResource} /></div></details>
         </div>
       </section>
     </div>

@@ -1,3 +1,17 @@
+## KEY-327 pathway steps without a source can be followed — 2026-11-12, Claude Code
+
+When the next step of a pathway has no linked source, the Next-step card now shows *Add a source for this step* (new key `pathwayAddSourceForStep`, ar and en). It selects that step's section, opens the existing resource picker and focuses its search. Once a book, note, ayah or hadith is picked, the existing `nextTarget` logic offers *Continue*, which opens it. There is no schema change.
+
+Verification: the journey 6 harness now follows the first template step into the reader. ux-journeys-live J1+J6 passed in ar-light-1280 and en-dark-480, 7 steps (evidence `.baglib-data/KEY-309-evidence/KEY-327-journey6`). The new test tests/ui/pathway-add-source.test.ts passed 2/2 and the pathway tests 19/19. The full suite passed 1908/1908, and tsc and eslint are clean.
+
+Exact files
+- src/renderer/components/dashboard/PathwaysView.tsx
+- src/renderer/translations.ts (pathwayAddSourceForStep)
+- tests/ui/pathway-add-source.test.ts
+- scripts/ux-journeys-live/main.cjs (J6 follows the step)
+- docs/features/feature - UI UX Vision Program.md (section 7 note)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-309 U15 acceptance run: six journeys pass in all 48 combinations — 2026-11-12, Claude Code
 
 New `scripts/ux-journeys-live` drives the six journeys from the plan doc §4 through the real UI. It uses real files (the Arabic text-layer PDF and the smallest English EPUB, copied into a throwaway profile so the originals are never saved) and copies of the installed packs. Each journey runs in ar and en, at 1280 and 480 px, in light and dark, and records steps, time, notes and screenshots. The results table and the friction list are in section 7 of `docs/features/feature - UI UX Vision Program.md`.

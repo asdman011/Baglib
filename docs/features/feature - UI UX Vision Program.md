@@ -255,7 +255,7 @@ The following gaps identified in the audit require backend logic or capabilities
 
 **Friction recorded, not fixed here.**
 - Tafsir comparison means switching the tafsir in Reading options and reading again. There is no side-by-side view; this stays with KEY-170.
-- Steps from a pathway template have no linked source, so *Continue* is not offered for them; the first step can only be ticked. Filed as KEY-327.
+- Steps from a pathway template have no linked source, so *Continue* is not offered for them; the first step can only be ticked. Filed as KEY-327 and fixed the same day: the Next-step card now offers *Add a source for this step*, and after a book is picked, *Continue* opens it (J6 re-run in ar-light-1280 and en-dark-480, 7 steps).
 - Topic filtering lists the whole taxonomy, while a freshly imported book carries no topic, so filtering by topic finds the new book only after it is classified. Filed as KEY-328.
 - The English EPUB's own metadata gives the author as `Leah Cowan;`, with a trailing semicolon. BagLib keeps the stored name as given (canonical names are preserved).
 - Importing goes through the native file picker, which a test cannot drive. The harness calls the same import IPC, and that one step is counted as "choose the files".
