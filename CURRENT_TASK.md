@@ -1,3 +1,17 @@
+## KEY-246 review: open questions from notes pass — 2026-11-12, Claude Code (review)
+
+I reviewed KEY-246, which Codex built in 9a783a1, against its "done when". A new opt-in journey 7 in ux-journeys-live (`BAGLIB_JOURNEY_IDS=7`) works only through the UI:
+1. Settings → Open questions: turn on capture.
+2. Notes: create a note with an Arabic question (؟) and an English question (?), then save it.
+3. Both questions appear under the Notes Open questions filter, each with "Open source note".
+4. The link opens the note; Answered sets the status.
+
+It passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-246-review`). Capture stays opt-in, off by default, as built. No product code changed.
+
+Exact files
+- scripts/ux-journeys-live/main.cjs (J7)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-328 follow-up: featured card hides when the filters exclude it — 2026-11-12, Claude Code
 
 The Library's featured ("Recommended") card was picked from all books and hidden only during a text search. With a topic or author filter that found nothing, it still showed a book above "No results". It now shows only when the active filters include that book.

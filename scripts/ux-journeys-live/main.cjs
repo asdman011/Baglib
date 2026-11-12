@@ -309,6 +309,39 @@ app.on('browser-window-created', (_, win) => {
         await until('!!document.querySelector("[data-reader-go-to], [data-study-epub-page], .pdf-page-container")', 200);
         await shot('J6-first-step');
       });
+
+      // J7 (opt-in, BAGLIB_JOURNEY_IDS=7) — KEY-246 review: a question typed in a note appears in Open questions, links back, and can be answered.
+      if (journeysOnly.includes(7)) await journeyRun(7, 'Question in a note becomes an open question', async () => {
+        await ui.nav('settings', '[data-settings-directory]');
+        await ui.click('open "Open questions" settings', '[data-settings-entry="questions"]');
+        await step('turn capture on', async () => { await until('!!document.querySelector("[role=dialog] input[type=checkbox]:not(:disabled)")'); await evaluate('(()=>{const c=document.querySelector("[role=dialog] input[type=checkbox]");if(!c.checked)c.click();})()'); await until('window.electronAPI.settings.get("knowledge.questions.enabled").then(v=>v===true)'); });
+        press('Escape');
+        await ui.nav('notes', '[data-notes-overview]');
+        await ui.click('open the notes tab', '[data-notes-tab=notes]');
+        await ui.click('create a new note', '[data-new-note-button]');
+        await until('!!document.querySelector("[data-note-editor-pane] .cm-content")', 200);
+        const title = config.lang === 'ar' ? 'أسئلة مفتوحة — ' + config.theme + config.width : 'Open questions — ' + config.theme + config.width;
+        await ui.type('title the note', '[data-note-editor-title]', title);
+        await step('write two questions', async () => {
+          await evaluate('document.querySelector("[data-note-editor-pane] .cm-content").focus()');
+          await win.webContents.insertText('ما حكم الدفاع عن الأرض؟ What does the author mean by policing?');
+          await pause(300);
+        });
+        await ui.clickText('save the note', '[data-note-editor-actions] button', tr('save'));
+        const note = await (async () => { for (let i = 0; i < 60; i++) { const found = (await evaluate('window.electronAPI.studyNotes.list()')).find(n => n.title === title); if (found) return found; await pause(200); } throw new Error('note not saved'); })();
+        await until('window.electronAPI.knowledgeHistory.questions().then(q=>q.filter(x=>x.source==="note:' + note.id + '").length>=2)', 120);
+        const questions = (await evaluate('window.electronAPI.knowledgeHistory.questions()')).filter(q => q.source === 'note:' + note.id);
+        journey.notes.push('Captured: ' + questions.map(q => q.text).join(' | '));
+        if (await has('[data-notes-back-button]')) await ui.click('back to the list', '[data-notes-back-button]');
+        await step('show Open questions', async () => { await evaluate('(()=>{const s=[...document.querySelectorAll("[data-notes-list-pane] select")].find(e=>e.querySelector("option[value=questions]"));s.value="questions";s.dispatchEvent(new Event("change",{bubbles:true}));})()'); await until('!!document.querySelector(\'[data-captured-question="' + questions[0].id + '"]\')'); });
+        await shot('J7-open-questions');
+        await ui.click('follow the source link', '[data-captured-question="' + questions[0].id + '"] button');
+        await until('document.querySelector("[data-note-editor-title]")?.value===' + JSON.stringify(title), 120);
+        if (await has('[data-notes-back-button]')) await ui.click('back to the list', '[data-notes-back-button]');
+        await step('show Open questions again', async () => { await evaluate('(()=>{const s=[...document.querySelectorAll("[data-notes-list-pane] select")].find(e=>e.querySelector("option[value=questions]"));s.value="questions";s.dispatchEvent(new Event("change",{bubbles:true}));})()'); await until('!!document.querySelector(\'[data-captured-question="' + questions[0].id + '"] [data-question-answer]\')'); });
+        await ui.click('mark it answered', '[data-captured-question="' + questions[0].id + '"] [data-question-answer]');
+        await until('window.electronAPI.knowledgeHistory.questions().then(q=>q.find(x=>x.id==="' + questions[0].id + '").status==="answered")');
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');
