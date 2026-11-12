@@ -11,7 +11,6 @@ import {
   Globe,
   Search,
   BookOpen,
-  Rss,
   ExternalLink,
   PlusCircle,
   X,
@@ -23,7 +22,7 @@ import {
   ArrowUpDown,
   FolderOpen
 } from 'lucide-react';
-import { INITIAL_RSS_FEEDS } from '../../data/libraryMockData';
+import { RssFeedsPanel } from './RssFeedsPanel';
 import { BookItem } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { SourceUrlsPanel } from './SourceUrlsPanel';
@@ -110,9 +109,9 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
     },
     {
       id: 'Inoreader',
-      label: 'Inoreader RSS Feed',
+      label: t('rssTabLabel'),
       color: 'text-orange-500',
-      desc: t('onlineInoreaderDesc'),
+      desc: t('rssTabDesc'),
     },
   ];
 
@@ -817,38 +816,8 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
               </div>
             </>
           ) : (
-            /* Inoreader RSS Stream View */
-            <div className="space-y-3">
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 text-xs font-semibold flex items-center gap-2">
-                <Rss className="w-4 h-4" />
-                <span>{t('onlineInoreaderSummary')}</span>
-              </div>
-
-              {INITIAL_RSS_FEEDS.map((feed) => (
-                <div
-                  key={feed.id}
-                  className="p-4 rounded-2xl bg-canvas border border-subtle space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-main text-sm">{feed.title}</span>
-                    <span className="text-[10px] text-muted">{feed.date}</span>
-                  </div>
-                  <p className="text-xs text-muted leading-relaxed">{feed.snippet}</p>
-                  <div className="pt-2 flex items-center justify-between border-t border-subtle/50 text-[11px]">
-                    <span className="text-pale-sky-500 font-semibold">{feed.source}</span>
-                    <a
-                      href={feed.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-amber-500 font-bold hover:underline flex items-center gap-1"
-                    >
-                      <span>{t('onlineReadFullArticle')}</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
+            /* KEY-50: the user's registered RSS and Atom feeds */
+            <RssFeedsPanel />
           )}
         </div>
 

@@ -602,6 +602,47 @@ app.on('browser-window-created', (_, win) => {
         if (files.filters[0].name !== tr('dialogFilterAllBooks')) throw new Error('filter name ' + files.filters[0].name);
         journey.notes.push('Picker titles: ' + files.title + ' | ' + folder.title);
       });
+
+      // J17 (opt-in, BAGLIB_JOURNEY_IDS=17) — KEY-50: register RSS and Atom feeds and read their items, from a local server.
+      if (journeysOnly.includes(17)) await journeyRun(17, 'Register RSS feeds and read new items', async () => {
+        const http = require('node:http');
+        const rssXml = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>مكتبة تجريبية — إصدارات</title>'
+          + '<item><title><![CDATA[صَحِيحُ مُسْلِمٍ — طبعة محققة]]></title><link>/b/1</link><guid>r1</guid><pubDate>Tue, 10 Nov 2026 08:00:00 GMT</pubDate><description>&lt;p&gt;وصل حديثًا إلى المكتبة&lt;/p&gt;</description></item>'
+          + '<item><title>New: The Muqaddimah</title><link>https://example.org/m</link><guid>r2</guid><pubDate>Wed, 11 Nov 2026 08:00:00 GMT</pubDate></item></channel></rss>';
+        const atomXml = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Atom Library Blog</title><entry><title>Atom arrival</title><id>a1</id><updated>2026-11-12T08:00:00Z</updated><link rel="alternate" href="https://example.org/a"/><summary>From the blog</summary></entry></feed>';
+        const server = http.createServer((request, response) => {
+          if (request.url === '/rss.xml') { response.setHeader('Content-Type', 'application/rss+xml; charset=utf-8'); response.end(rssXml); }
+          else if (request.url === '/atom.xml') { response.setHeader('Content-Type', 'application/atom+xml'); response.end(atomXml); }
+          else { response.setHeader('Content-Type', 'text/html'); response.end('<html><body>not a feed</body></html>'); }
+        });
+        await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+        const base = 'http://127.0.0.1:' + server.address().port;
+        try {
+          for (const feed of await evaluate('window.electronAPI.rss.list()')) await evaluate('window.electronAPI.rss.remove(' + JSON.stringify(feed.id) + ')');
+          await ui.nav('library', '[data-library-recent]');
+          await ui.click('open a book menu', '[data-library-book-card] [data-card-menu-button]');
+          await ui.click('choose "Edit metadata"', '[data-menu-action="metadata"]');
+          await ui.clickText('choose "Edit work details"', 'button', tr('editMaterialTitle'));
+          await ui.click('open the online library hub', 'button[aria-label=' + JSON.stringify(tr('openLibraryHubTooltip')) + ']');
+          await ui.clickText('open "RSS feeds"', 'button', tr('rssTabLabel'));
+          await until('!!document.querySelector("[data-rss-empty]")', 120);
+          const addFeed = async (label, url) => { await ui.type(label, '[data-rss-address]', url); await ui.click('choose "Add feed"', '[data-rss-add]'); };
+          await addFeed('enter an Arabic RSS feed', base + '/rss.xml');
+          await until('document.querySelectorAll("[data-rss-item]").length===2', 120);
+          await addFeed('enter an Atom feed', base + '/atom.xml');
+          await until('document.querySelectorAll("[data-rss-item]").length===3', 120);
+          const rows = await evaluate('[...document.querySelectorAll("[data-rss-item]")].map(e=>[e.querySelector("bdi").textContent,e.querySelector("[data-rss-item-source]").textContent])');
+          if (rows[0][0] !== 'Atom arrival' || rows[2][0] !== 'صَحِيحُ مُسْلِمٍ — طبعة محققة' || rows[2][1] !== 'مكتبة تجريبية — إصدارات') throw new Error('items/sources ' + JSON.stringify(rows));
+          await shot('J17-feeds');
+          await addFeed('enter the same feed again', base + '/rss.xml');
+          await until('document.querySelector("[data-rss-error]")?.textContent===' + JSON.stringify(tr('rssErrorExists')));
+          await addFeed('enter a page that is not a feed', base + '/page');
+          await until('document.querySelector("[data-rss-error]")?.textContent===' + JSON.stringify(tr('rssErrorNotFeed')));
+          await ui.click('remove the Atom feed', '[data-rss-feed]:last-of-type [data-rss-remove]');
+          await until('document.querySelectorAll("[data-rss-item]").length===2', 120);
+          journey.notes.push('Items: ' + JSON.stringify(rows));
+        } finally { server.close(); }
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');

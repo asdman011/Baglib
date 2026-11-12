@@ -726,6 +726,13 @@ export const API = {
     save: input => ipcRenderer.invoke('study-planner:save', input),
     remove: (id, expected) => ipcRenderer.invoke('study-planner:remove', id, expected),
   } satisfies import('../shared/study-planner').PlannerAPI,
+  // KEY-50: registered RSS and Atom feeds.
+  rss: {
+    list: (): Promise<import('../shared/rss').RssFeed[]> => ipcRenderer.invoke('rss:list'),
+    add: (url: string): Promise<import('../shared/rss').RssFeed> => ipcRenderer.invoke('rss:add', url),
+    remove: (id: string): Promise<boolean> => ipcRenderer.invoke('rss:remove', id),
+    items: (): Promise<{ items: import('../shared/rss').RssItem[]; failed: { feedId: string; error: string }[] }> => ipcRenderer.invoke('rss:items'),
+  },
   pathways: {
     list: () => ipcRenderer.invoke('pathways:list'),
     get: id => ipcRenderer.invoke('pathways:get', id),

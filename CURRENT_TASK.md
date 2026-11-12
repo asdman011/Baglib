@@ -1,3 +1,37 @@
+## KEY-50 RSS and Atom feed registration — 2026-11-12, Claude Code
+
+The online library hub's mock "Inoreader RSS Feed" tab, which only ever showed an empty list, is now **RSS feeds**:
+- Users register RSS 2.0 or Atom feed addresses (http or https).
+- Each feed's newest items appear newest first, with the feed named as the source, a localized date, a plain summary and *Read the full article*, which opens in the browser.
+- Feeds can be refreshed and removed.
+- Errors for an invalid address, a page that isn't a feed, a duplicate, an unreachable feed or one that is too large are shown in ar and en.
+
+Design:
+- The pure parser `src/shared/rss.ts` (no new dependency) handles CDATA, entities, relative links and Atom alternate links, drops non-http links, and keeps feed text exact.
+- Main IPC `src/main/ipc/rss.ts` (rss:list, rss:add, rss:remove, rss:items) runs only for the app's main frame. Fetches have a 15 s timeout and a 2 MB cap.
+- Only `{id, url, title, addedAt}` per feed is stored, in app_settings `rss.feeds.v1`, so there is no schema change. Items are not stored.
+- 17 rss* translation keys were added, and the two Inoreader mock keys removed. The settings-coverage test lists `rss.feeds.v1` as operational content.
+
+Verification:
+- tests/services/rss.test.ts passed 4/4: RSS and Atom parsing, Arabic kept exact, unsafe links dropped, URL validation, merge order.
+- The new opt-in journey 17 in ux-journeys-live serves an Arabic RSS feed and an Atom feed from a local server. It adds both through the hub, checks the items and sources, rejects a duplicate and a non-feed, and removes a feed. It passed in ar-light-1280 and en-dark-480, and the screenshots were inspected (evidence `.baglib-data/KEY-309-evidence/KEY-50-rss`).
+- The full suite passed 1929/1929, and tsc, tsup and eslint are clean.
+
+Not done: background polling and notifications for new items (the description's "planned" part). Feeds refresh when the tab opens or on Refresh.
+
+Exact files
+- src/shared/rss.ts (new)
+- src/main/ipc/rss.ts (new)
+- src/main/index.ts (register)
+- src/preload/index.ts (rss API)
+- src/renderer/components/library/RssFeedsPanel.tsx (new)
+- src/renderer/components/library/OnlineLibraryHub.tsx
+- src/renderer/translations.ts (rss* keys; Inoreader keys removed)
+- tests/services/rss.test.ts (new)
+- tests/ui/settings-directory-coverage.test.ts (operational key)
+- scripts/ux-journeys-live/main.cjs (J17)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-332 native file and folder pickers follow the interface language — 2026-11-12, Claude Code
 
 The book picker, the multi-book picker and the scan-folder picker (`src/main/ipc/system.ts`) showed Arabic titles and filter names in the English interface, and the folder picker used a mixed "Arabic / English" title. Each preload call now passes `document.documentElement.lang`. The main process takes the words from translations.ts through the new helpers `dialogWords` and `bookFileFilters`, using eight new `dialog*` keys in ar and en. No caller changes.
