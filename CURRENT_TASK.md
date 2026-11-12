@@ -1,3 +1,20 @@
+## KEY-329 storage manager and category counts use translations — 2026-11-12, Claude Code
+
+StorageManagerModal's about 20 `isRtl ? 'عربي' : 'English'` strings now use translations.ts keys (`storage*`, plus the existing `close` and `cancel`). The duplicate-cluster count has all six Arabic plural forms. The "{n} Book" counts in the storage manager and the Categories tree use the existing `bookCountLabel` helper, so they read "4 books" / "كتابان". The `bookSingle` key, now unused, was removed. No behaviour or schema change.
+
+Verification:
+- The new guard test tests/ui/storage-manager-i18n.test.ts passed, with translation-keys and library-inline-i18n.
+- The new opt-in journey 9 in ux-journeys-live opens Library → More → Storage manager and checks for raw keys, the dialog's language and overflow. It passed in ar-light-1280 and en-dark-480, and the screenshots were inspected (evidence `.baglib-data/KEY-309-evidence/KEY-329-storage`).
+- The full suite passed 1919/1919. tsc passed, and eslint gave 0 errors; the warnings in both files were already there.
+
+Exact files
+- src/renderer/components/library/StorageManagerModal.tsx
+- src/renderer/components/categories/CategoriesOverviewView.tsx
+- src/renderer/translations.ts (storage* keys; bookSingle removed)
+- tests/ui/storage-manager-i18n.test.ts
+- scripts/ux-journeys-live/main.cjs (J9)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-234 follow-up: the review screen shows real next intervals — 2026-11-12, Claude Code
 
 Under each rating, the daily review screen showed fixed guesses ("1 day", "3 days", "7 days") in a hardcoded Arabic/English branch. Those were not what the FSRS scheduler actually sets: a new card gets 1 min, 6 min, 10 min and 8 days. Changes:

@@ -22,6 +22,8 @@ import {
   X,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import type { TranslationKey } from '../../translations';
+import { bookCountLabel } from '../../utils/book-count';
 import type {
   StorageHealthSummary,
   StorageAnalytics,
@@ -51,7 +53,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
   initialTab = 'all',
   onRemoveDuplicate,
 }) => {
-  const { t, dir, refreshBooks } = useWorkspace();
+  const { t, dir, lang, refreshBooks } = useWorkspace();
   const isRtl = dir === 'rtl';
 
   const [activeTab, setActiveTab] = useState<'all' | 'missing' | 'duplicates' | 'healthy'>(initialTab);
@@ -245,7 +247,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
         });
 
         if (res.success) {
-          showToast(isRtl ? 'تم حذف النسخة المكررة بنجاح' : 'Duplicate copy removed successfully');
+          showToast(t('storageDuplicateRemoved'));
           setPruneTarget(null);
           await loadData(false);
           refreshBooks();
@@ -255,13 +257,13 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
 
       if (onRemoveDuplicate) {
         await onRemoveDuplicate(pruneTarget.duplicateWorkId);
-        showToast(isRtl ? 'تم حذف النسخة المكررة بنجاح' : 'Duplicate copy removed successfully');
+        showToast(t('storageDuplicateRemoved'));
         setPruneTarget(null);
         await loadData(false);
         refreshBooks();
       }
     } catch (err: unknown) {
-      showToast(errorMessage(err) || (isRtl ? 'خطأ أثناء الحذف' : 'Error pruning duplicate'));
+      showToast(errorMessage(err) || t('storageDuplicatePruneError'));
     } finally {
       repairActive.current = false;
       setIsRepairing(false);
@@ -370,7 +372,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
               {formatBytes(summary?.totalSizeBytes)}
             </div>
             <span className="text-[10px] text-text-muted dark:text-zinc-500">
-              {summary?.totalDigitalWorks ?? 0} {t('bookSingle')}
+              {bookCountLabel(summary?.totalDigitalWorks ?? 0, lang, t)}
             </span>
           </div>
 
@@ -412,7 +414,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
               {summary?.missingFiles ?? 0}
             </div>
             <span className="text-[10px] text-rose-600/80 dark:text-rose-400/80">
-              {isRtl ? 'يحتاج إعادة ربط' : 'Requires re-link'}
+              {t('storageNeedsRelink')}
             </span>
           </div>
 
@@ -429,7 +431,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
               {summary?.unmountedFiles ?? 0}
             </div>
             <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80">
-              {isRtl ? 'قرص مفصول' : 'Drive detached'}
+              {t('storageDriveDetached')}
             </span>
           </div>
 
@@ -446,7 +448,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
               {summary?.corruptedFiles ?? 0}
             </div>
             <span className="text-[10px] text-orange-600/80 dark:text-orange-400/80">
-              {isRtl ? '0 بايت / بصمة غير مطابقة' : '0-byte or bad hash'}
+              {t('storageBadHash')}
             </span>
           </div>
 
@@ -467,7 +469,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
               {summary?.duplicateFiles ?? 0}
             </div>
             <span className="text-[10px] text-purple-600/80 dark:text-purple-400/80">
-              {formatBytes(summary?.reclaimableSizeBytes)} {isRtl ? 'مهدور' : 'wasted'}
+              {t('storageWasted', { size: formatBytes(summary?.reclaimableSizeBytes) })}
             </span>
           </div>
         </div>
@@ -560,14 +562,14 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                     <div className="flex items-center gap-2">
                       <Copy className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                       <span className="text-xs font-bold text-text-primary dark:text-zinc-200">
-                        {isRtl ? 'مجموعة مكررة' : 'Duplicate Cluster'}: {group.count} {isRtl ? 'نسخ' : 'copies'}
+                        {t(`storageDuplicateCluster_${new Intl.PluralRules(isRtl ? 'ar' : 'en').select(group.count)}` as TranslationKey, { count: new Intl.NumberFormat(isRtl ? 'ar-EG' : 'en-US').format(group.count) })}
                       </span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-mono">
                         {formatBytes(group.fileSizeBytes)}
                       </span>
                     </div>
                     <span className="text-xs text-purple-700 dark:text-purple-300 font-medium">
-                      {isRtl ? 'مساحة مهدورة:' : 'Wasted space:'} {formatBytes(group.wastedBytes)}
+                      {t('storageWastedSpace', { size: formatBytes(group.wastedBytes) })}
                     </span>
                   </div>
 
@@ -588,7 +590,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                             </span>
                             {it.isPrimary && (
                               <span className="px-1.5 py-0.5 text-[9px] rounded font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
-                                {isRtl ? 'النسخة الأصلية' : 'Primary Master'}
+                                {t('storagePrimaryCopy')}
                               </span>
                             )}
                           </div>
@@ -634,12 +636,12 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-3 opacity-80" />
               <h3 className="text-sm font-semibold text-text-primary dark:text-zinc-200">
-                {isRtl ? 'لا توجد عناصر مطابقة في هذا التصنيف' : 'No matching files in this category'}
+                {t('storageNoCategoryItems')}
               </h3>
               <p className="text-xs text-text-muted dark:text-zinc-400 max-w-sm mt-1">
                 {activeTab === 'missing'
-                  ? isRtl ? 'جميع ملفات المكتبة متوفرة وسليمة على القرص!' : 'All library files are present and healthy on disk!'
-                  : isRtl ? 'لا توجد نتائج مطابقة لخيارات البحث المحددة.' : 'No items match your active search filters.'}
+                  ? t('storageAllHealthy')
+                  : t('storageNoFilterMatches')}
               </p>
             </div>
           ) : (
@@ -787,7 +789,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
             disabled={isRepairing || isAuditing || isBatchScanning}
             className="px-4 py-1.5 rounded-lg border border-border-base dark:border-zinc-700 font-medium hover:bg-surface-base dark:hover:bg-zinc-800 text-text-primary dark:text-zinc-200 transition"
           >
-            {isRtl ? 'إغلاق' : 'Close'}
+            {t('close')}
           </button>
         </div>
 
@@ -812,13 +814,13 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
 
               <div className="p-3 rounded-xl bg-surface-raised dark:bg-zinc-800/60 border border-border-base dark:border-zinc-700 text-xs space-y-1">
                 <div>
-                  {isRtl ? 'الملفات المفحوصة:' : 'Files Scanned:'} <strong>{batchResult.scannedFilesCount}</strong>
+                  {t('storageFilesScanned')} <strong>{batchResult.scannedFilesCount}</strong>
                 </div>
                 <div className="text-emerald-600 dark:text-emerald-400">
-                  {isRtl ? 'الملفات التي تمت معالجتها وربطها:' : 'Successfully Re-linked:'} <strong>{batchResult.resolvedCount}</strong>
+                  {t('storageRelinked')} <strong>{batchResult.resolvedCount}</strong>
                 </div>
                 <div className="text-text-muted">
-                  {isRtl ? 'ملفات متبقية لم يتم العثور عليها:' : 'Remaining Missing:'} <strong>{batchResult.unresolvedCount}</strong>
+                  {t('storageRemainingMissing')} <strong>{batchResult.unresolvedCount}</strong>
                 </div>
               </div>
 
@@ -846,7 +848,7 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                 onClick={() => setBatchResult(null)}
                 className="w-full py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold transition"
               >
-                {isRtl ? 'موافق ومتابعة' : 'Accept & Continue'}
+                {t('storageAcceptContinue')}
               </button>
             </div></Modal>
           </div>
@@ -890,14 +892,14 @@ export const StorageManagerModal: React.FC<StorageManagerModalProps> = ({
                   disabled={isRepairing}
                   className="px-4 py-1.5 rounded-lg border border-border-base dark:border-zinc-700 text-xs font-medium hover:bg-surface-raised text-text-primary dark:text-zinc-200 transition"
                 >
-                  {isRtl ? 'إلغاء' : 'Cancel'}
+                  {t('cancel')}
                 </button>
                 <button
                   onClick={handleConfirmPrune}
                   disabled={isRepairing}
                   className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm transition"
                 >
-                  {isRtl ? 'تأكيد الحذف' : 'Confirm Delete'}
+                  {t('storageConfirmDelete')}
                 </button>
               </div>
             </div></Modal>

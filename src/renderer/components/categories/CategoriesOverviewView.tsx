@@ -4,6 +4,7 @@ import { errorMessage } from '../../../shared/errors';
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { bookCountLabel } from '../../utils/book-count';
 import {
   Layers,
   ChevronDown,
@@ -119,7 +120,7 @@ const CategoryRow: React.FC<{
                 title={t('categoryDirectCount', { count: node.directWorkCount })}
                 className="px-1.5 py-0.5 rounded-full text-[10px] bg-subtle text-muted hidden md:inline"
               >
-                {node.directWorkCount} {t('bookSingle')}
+                {bookCountLabel(node.directWorkCount, lang, t)}
               </span>
             )}
           </div>

@@ -374,6 +374,26 @@ app.on('browser-window-created', (_, win) => {
         await until('(' + `Number(document.querySelector('input[aria-label="انتقال إلى صفحة..."],input[aria-label="Jump to page..."]')?.value)` + ')===' + savedPage, 200);
         await shot('J8-opened');
       });
+
+      // J9 (opt-in, BAGLIB_JOURNEY_IDS=9) — the storage manager opens from Library → More with translated labels.
+      if (journeysOnly.includes(9)) await journeyRun(9, 'Open the storage manager', async () => {
+        await ui.nav('library', '[data-library-recent]');
+        await ui.click('open "More"', '[data-library-dialog="more-menu"]');
+        await ui.clickText('choose the storage manager', '[role=menuitem]', tr('storageManagerTitle'));
+        await until('!!document.querySelector("[role=dialog]")');
+        await pause(800);
+        const check = await evaluate(`(() => {
+          const dialog = document.querySelector('[role=dialog]');
+          const text = dialog.innerText;
+          const arabic = (text.match(/[\\u0600-\\u06FF]/gu) || []).length, latin = (text.match(/[A-Za-z]/g) || []).length;
+          const keys = [...dialog.querySelectorAll('button,span,p,h2,h3,label')].map(e => e.textContent.trim()).filter(t => /^storage[A-Z]\\w+$/.test(t));
+          return { arabic, latin, keys, overflow: dialog.scrollWidth > dialog.clientWidth + 1 };
+        })()`);
+        journey.notes.push('Storage dialog text: ' + JSON.stringify(check));
+        if (check.keys.length) throw new Error('raw keys: ' + check.keys.join(','));
+        if (config.lang === 'ar' ? check.arabic === 0 : check.arabic > check.latin) throw new Error('wrong language in dialog');
+        await shot('J9-storage');
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');
