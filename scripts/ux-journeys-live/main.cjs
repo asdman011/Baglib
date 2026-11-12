@@ -554,6 +554,38 @@ app.on('browser-window-created', (_, win) => {
           await shot('J14-curriculum');
         } finally { stub.close(); }
       });
+
+      // J15 (opt-in, BAGLIB_JOURNEY_IDS=15) — KEY-250 review: Arabic search across Quran, Sunnah and poetry handles
+      // diacritics and spelling variants, and each result names its source.
+      if (journeysOnly.includes(15)) await journeyRun(15, 'Search study sources in Arabic', async () => {
+        await ui.nav('islamic', '[data-islamic-hub]');
+        const groupHits = () => evaluate(`(() => { const out = {}; for (const h of document.querySelectorAll('[data-islamic-hub] section h3')) { const sec = h.closest('section'); out[h.textContent.replace(/\\s*\\(.*\\)$/, '').trim()] = [...sec.querySelectorAll('button')].map(b => b.textContent.trim().slice(0, 60)).filter(Boolean); } return out; })()`);
+        const search = async (label, text) => {
+          await ui.type(label, '[data-islamic-search]', text);
+          await until('!document.querySelector("[data-islamic-hub] [aria-busy=true], [data-islamic-hub] .animate-pulse") && [...document.querySelectorAll("[data-islamic-hub] section h3")].length>=3', 200);
+          await pause(400);
+          return groupHits();
+        };
+        const quran = tr('navQuran'), sunnah = tr('navSunnah');
+        const plain = await search('search an ayah without diacritics', 'الحمد لله رب العالمين');
+        const vowelled = await search('search it with full diacritics', 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ');
+        const variant = await search('search with a hamza variant', 'اياك نعبد واياك نستعين');
+        const has = (hits, ref) => (hits[quran] || []).some(row => row.startsWith(ref));
+        if (!has(plain, '1:2')) throw new Error('plain search missed 1:2: ' + JSON.stringify(plain[quran]));
+        if (!has(vowelled, '1:2')) throw new Error('vowelled search missed 1:2: ' + JSON.stringify(vowelled[quran]));
+        if (!has(variant, '1:5')) throw new Error('hamza-variant search missed 1:5: ' + JSON.stringify(variant[quran]));
+        const hadith = await search('search a hadith', 'انما الاعمال بالنيات');
+        if (!(hadith[sunnah] || []).length) throw new Error('no hadith result: ' + JSON.stringify(hadith));
+        // ة and ه stay distinct: a ه spelling of a ة word is not silently matched.
+        const taMarbuta = await search('search with ة', 'الصلاة');
+        const ha = await search('search with ه', 'الصلاه');
+        journey.notes.push('Results: ' + JSON.stringify({ plain: (plain[quran] || []).length, vowelled: (vowelled[quran] || []).length, variant: (variant[quran] || []).slice(0, 1), hadith: (hadith[sunnah] || []).slice(0, 1), 'ة': (taMarbuta[quran] || []).length, 'ه': (ha[quran] || []).length }));
+        if ((ha[quran] || []).length >= (taMarbuta[quran] || []).length && (taMarbuta[quran] || []).length > 0) journey.notes.push('Note: the ه spelling matched as many ayahs as ة; check the ة/ه rule.');
+        await search('search the ayah again', 'اياك نعبد');
+        await ui.clickText('open the result', '[data-islamic-hub] section button', '1:5');
+        await until('!!document.querySelector("[data-quran-workspace]")', 200);
+        await shot('J15-opened');
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');

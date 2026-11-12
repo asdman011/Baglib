@@ -1,3 +1,18 @@
+## KEY-250 review: Arabic study-sources search passes — 2026-11-12, Claude Code (review)
+
+I reviewed KEY-250 (built in 9a783a1) with the new opt-in journey 15 in ux-journeys-live, using the Islamic Studies hub search:
+- "الحمد لله رب العالمين" without diacritics and with full diacritics both find the same 4 ayahs, including 1:2.
+- The hamza variant "اياك نعبد واياك نستعين" finds 1:5.
+- "انما الاعمال بالنيات" finds Sahih al-Bukhari hadith 1, with the source named on the result.
+- ة and ه stay distinct: "الصلاة" gives 20 results and "الصلاه" gives 1.
+- Clicking a result opens the Quran reader.
+
+It passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-250-review`). No product code changed. Still open from the build: no EKB site button; CORE and ScienceDirect not tried in a browser.
+
+Exact files
+- scripts/ux-journeys-live/main.cjs (J15)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-249 review: curriculum from AI, edited, progress via the planner — 2026-11-12, Claude Code (review)
 
 I reviewed KEY-249 (built in 9a783a1) with the new opt-in journey 14 in ux-journeys-live. A local stub Ollama endpoint answers the draft request, and AI settings are set through `ai.saveSettings`. The journey runs:
