@@ -117,9 +117,9 @@ export const API = {
   },
   getSystemInfo: () => ipcRenderer.invoke('system:get-info') as Promise<{ platform: string; arch: string; version: string; dataLocation: string; logsLocation: string }>,
   openLogsFolder: () => ipcRenderer.invoke('system:open-logs') as Promise<string>,
-  openFileDialog: () => ipcRenderer.invoke('system:open-file-dialog'),
-  openFilesDialog: () => ipcRenderer.invoke('system:open-files-dialog'),
-  openDirectoryDialog: () => ipcRenderer.invoke('system:open-directory-dialog'),
+  openFileDialog: () => ipcRenderer.invoke('system:open-file-dialog', document.documentElement.lang),
+  openFilesDialog: () => ipcRenderer.invoke('system:open-files-dialog', document.documentElement.lang),
+  openDirectoryDialog: () => ipcRenderer.invoke('system:open-directory-dialog', document.documentElement.lang),
   getPathForFile: (file: File & { path?: string }): string => {
     try {
       if (webUtils && typeof webUtils.getPathForFile === 'function') {

@@ -4,6 +4,17 @@ import { errorMessage } from '../../shared/errors';
 import { ipcMain, app, dialog, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import { translations } from '../../renderer/translations';
+
+/** Native dialogs follow the interface language the page reports; anything else falls back to English. */
+export const dialogWords = (language: unknown) => translations[language === 'ar' ? 'ar' : 'en'];
+export const bookFileFilters = (words: ReturnType<typeof dialogWords>) => [
+  { name: words.dialogFilterAllBooks, extensions: ['pdf', 'epub', 'mobi', 'azw3', 'txt', 'html', 'djvu', 'docx'] },
+  { name: words.dialogFilterPdf, extensions: ['pdf'] },
+  { name: words.dialogFilterEbooks, extensions: ['epub', 'mobi', 'azw3'] },
+  { name: words.dialogFilterText, extensions: ['txt', 'html', 'docx'] },
+  { name: words.dialogFilterAll, extensions: ['*'] },
+];
 
 import { Worker } from 'node:worker_threads';
 
@@ -38,18 +49,13 @@ export function setupSystemIPC() {
   });
 
   // Native Electron OS File Picker Dialog
-  ipcMain.handle('system:open-file-dialog', async () => {
+  ipcMain.handle('system:open-file-dialog', async (_event, language?: unknown) => {
     try {
+      const words = dialogWords(language);
       const result = await dialog.showOpenDialog({
         properties: ['openFile'],
-        title: 'اختر كتاباً أو ملفاً رقمياً من حاسوبك',
-        filters: [
-          { name: 'جميع كتب وملفات المكتبة الرقمية', extensions: ['pdf', 'epub', 'mobi', 'azw3', 'txt', 'html', 'djvu', 'docx'] },
-          { name: 'ملفات PDF', extensions: ['pdf'] },
-          { name: 'كتب EPUB و MOBI', extensions: ['epub', 'mobi', 'azw3'] },
-          { name: 'ملفات نصوص HTML / TXT', extensions: ['txt', 'html', 'docx'] },
-          { name: 'جميع الملفات (*.*)', extensions: ['*'] }
-        ]
+        title: words.dialogPickBook,
+        filters: bookFileFilters(words)
       });
 
       if (!result.canceled && result.filePaths.length > 0) {
@@ -63,18 +69,13 @@ export function setupSystemIPC() {
   });
 
   // Native Electron OS Multi-File Picker Dialog
-  ipcMain.handle('system:open-files-dialog', async () => {
+  ipcMain.handle('system:open-files-dialog', async (_event, language?: unknown) => {
     try {
+      const words = dialogWords(language);
       const result = await dialog.showOpenDialog({
         properties: ['openFile', 'multiSelections'],
-        title: 'اختر كتباً أو ملفات رقمية من حاسوبك',
-        filters: [
-          { name: 'جميع كتب وملفات المكتبة الرقمية', extensions: ['pdf', 'epub', 'mobi', 'azw3', 'txt', 'html', 'djvu', 'docx'] },
-          { name: 'ملفات PDF', extensions: ['pdf'] },
-          { name: 'كتب EPUB و MOBI', extensions: ['epub', 'mobi', 'azw3'] },
-          { name: 'ملفات نصوص HTML / TXT', extensions: ['txt', 'html', 'docx'] },
-          { name: 'جميع الملفات (*.*)', extensions: ['*'] }
-        ]
+        title: words.dialogPickBooks,
+        filters: bookFileFilters(words)
       });
 
       if (!result.canceled && result.filePaths.length > 0) {
@@ -88,11 +89,11 @@ export function setupSystemIPC() {
   });
 
   // Native Electron OS Directory Picker Dialog
-  ipcMain.handle('system:open-directory-dialog', async () => {
+  ipcMain.handle('system:open-directory-dialog', async (_event, language?: unknown) => {
     try {
       const result = await dialog.showOpenDialog({
         properties: ['openDirectory'],
-        title: 'اختر مجلداً للبحث عن الملفات المفقودة / Select Folder to Scan for Missing Files',
+        title: dialogWords(language).dialogPickScanFolder,
       });
 
       if (!result.canceled && result.filePaths.length > 0) {

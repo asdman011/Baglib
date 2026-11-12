@@ -586,6 +586,22 @@ app.on('browser-window-created', (_, win) => {
         await until('!!document.querySelector("[data-quran-workspace]")', 200);
         await shot('J15-opened');
       });
+
+      // J16 (opt-in, BAGLIB_JOURNEY_IDS=16) — native file pickers use the interface language.
+      if (journeysOnly.includes(16)) await journeyRun(16, 'Native pickers in the interface language', async () => {
+        const { dialog } = require('electron');
+        const seen = [];
+        dialog.showOpenDialog = async (...args) => { seen.push(args.find(arg => arg && typeof arg === 'object' && 'properties' in arg)); return { canceled: true, filePaths: [] }; };
+        await step('open the file picker', async () => { await evaluate('window.electronAPI.openFilesDialog()'); });
+        await step('open the folder picker', async () => { await evaluate('window.electronAPI.openDirectoryDialog()'); });
+        const [files, folder] = seen;
+        if (!files || !folder) throw new Error('pickers not opened');
+        const expect = tr('dialogPickBooks');
+        if (files.title !== expect) throw new Error('file picker title ' + files.title);
+        if (folder.title !== tr('dialogPickScanFolder')) throw new Error('folder picker title ' + folder.title);
+        if (files.filters[0].name !== tr('dialogFilterAllBooks')) throw new Error('filter name ' + files.filters[0].name);
+        journey.notes.push('Picker titles: ' + files.title + ' | ' + folder.title);
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');

@@ -1,3 +1,20 @@
+## KEY-332 native file and folder pickers follow the interface language — 2026-11-12, Claude Code
+
+The book picker, the multi-book picker and the scan-folder picker (`src/main/ipc/system.ts`) showed Arabic titles and filter names in the English interface, and the folder picker used a mixed "Arabic / English" title. Each preload call now passes `document.documentElement.lang`. The main process takes the words from translations.ts through the new helpers `dialogWords` and `bookFileFilters`, using eight new `dialog*` keys in ar and en. No caller changes.
+
+Verification:
+- The guard test tests/ui/native-dialog-i18n.test.ts passed.
+- The new opt-in journey 16 in ux-journeys-live captures the real picker options through the IPC path. It passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-332-pickers`).
+- The full suite passed 1925/1925, and tsc, tsup and eslint are clean.
+
+Exact files
+- src/main/ipc/system.ts
+- src/preload/index.ts (three picker methods only)
+- src/renderer/translations.ts (dialog* keys)
+- tests/ui/native-dialog-i18n.test.ts
+- scripts/ux-journeys-live/main.cjs (J16)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-250 review: Arabic study-sources search passes — 2026-11-12, Claude Code (review)
 
 I reviewed KEY-250 (built in 9a783a1) with the new opt-in journey 15 in ux-journeys-live, using the Islamic Studies hub search:
