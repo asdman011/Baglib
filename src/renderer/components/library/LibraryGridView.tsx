@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createElement, useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import React, { createElement, useState, useRef, useMemo, useEffect, useLayoutEffect, useCallback } from 'react';
 import { ContextMenu } from '../ui/ContextMenu';
 import { Menu } from '../ui/Menu';
 import { getCardActions, type CardActionIcon } from './library-card-actions';
@@ -36,6 +36,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { recentlyOpenedBooks, recentlyImportedBooks, type RecentReadingActivity } from '../../../shared/recent-books';
+import { isTextEntry } from '../actions/context-actions';
+import { shortcutForEvent } from '../actions/shortcuts';
+import { libraryNavigationIndex } from './library-keyboard';
 import { bookCountLabel } from '../../utils/book-count';
 import { BookItem } from '../../types/library';
 
@@ -120,7 +123,8 @@ export const LibraryGridView: React.FC = () => {
   const [recentRevision, setRecentRevision] = useState(0);
   useEffect(() => {
     let alive = true;
-    window.electronAPI.reader.getRecentActivity().then(activity => {
+    const activityRequest = window.electronAPI?.reader?.getRecentActivity?.();
+    Promise.resolve(activityRequest ?? []).then(activity => {
       if (alive) {
         setRecentActivity(activity);
         setRecentError(false);
@@ -193,6 +197,16 @@ export const LibraryGridView: React.FC = () => {
     lastScrollTop: 0,
   });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const headerFocusRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const previous = headerFocusRef.current;
+    if (scrollHeader.isCollapsed || !previous) return;
+    headerFocusRef.current = null;
+    const label = previous.getAttribute('aria-label');
+    const replacement = Array.from(document.querySelectorAll<HTMLElement>('[data-library-controls] input, [data-library-controls] button, [data-library-controls] select'))
+      .find(control => control.tagName === previous.tagName && control.getAttribute('aria-label') === label);
+    replacement?.focus({ preventScroll: true });
+  }, [scrollHeader.isCollapsed]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -1013,8 +1027,47 @@ export const LibraryGridView: React.FC = () => {
     const link = document.createElement('a'); link.href = url; link.download = 'baglib-books.json'; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+  const handleLibraryEscape = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('[role="dialog"], [role="menu"], [role="listbox"]')) return;
+    if (event.nativeEvent.isComposing) return;
+    const searching = target.matches('[data-simple-search-input], [data-library-filter-search]');
+    if (isTextEntry(target) && !searching) return;
+    if (shortcutForEvent({ ...event, target: undefined }, 'library')?.id !== 'library-clear') return;
+    if (searching && searchQuery) setSearchQuery('');
+    else if (selectedBookIds.size > 0) handleClearSelection();
+    else if (isAdvancedFiltersOpen) setIsAdvancedFiltersOpen(false);
+    else if (searchQuery) setSearchQuery('');
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const handleBookNavigation = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const surface = target.closest<HTMLElement>('[data-library-book-card], [data-library-book-row]');
+    if (!surface || target !== surface) return;
+    const shortcut = shortcutForEvent(event, 'library');
+    if (!shortcut?.id.startsWith('library-') || shortcut.id === 'library-clear') return;
+    const surfaces = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[data-library-book-card], [data-library-book-row]'));
+    const index = surfaces.indexOf(surface);
+    if (shortcut.id === 'library-open') {
+      event.preventDefault();
+      if (paginatedBooks[index]) void handleSafeOpenBook(paginatedBooks[index]);
+      return;
+    }
+    const firstTop = surfaces[0]?.getBoundingClientRect().top;
+    const columns = surfaces.filter(node => Math.abs(node.getBoundingClientRect().top - firstTop) < 2).length;
+    const next = libraryNavigationIndex({ key: event.key, index, count: surfaces.length, columns, dir: lang === 'ar' ? 'rtl' : 'ltr' });
+    if (next === null) return;
+    event.preventDefault();
+    surfaces[next].focus();
+    surfaces[next].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+
   return (
     <div
+      onKeyDown={handleLibraryEscape}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -1055,7 +1108,12 @@ export const LibraryGridView: React.FC = () => {
       {/* Top Header & Actions: Auto-hiding Decluttered Library Header (KEY-310) */}
       <div
         data-library-controls
-        onFocus={() => setScrollHeader((prev) => ({ ...prev, isCollapsed: false }))}
+        onFocus={event => {
+          if (scrollHeader.isCollapsed) {
+            headerFocusRef.current = event.target as HTMLElement;
+            setScrollHeader(prev => ({ ...prev, isCollapsed: false }));
+          }
+        }}
         className="sticky top-0 z-20 border-b border-border/70 bg-surface/95 backdrop-blur-md shrink-0 transition-all duration-300 ease-in-out motion-reduce:transition-none"
       >
         {scrollHeader.isCollapsed ? (
@@ -1467,6 +1525,7 @@ export const LibraryGridView: React.FC = () => {
           ref={scrollContainerRef}
           className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6"
           data-library-scroll-container
+          onKeyDown={handleBookNavigation}
           onScroll={(e) => {
             const st = e.currentTarget.scrollTop;
             setScrollHeader((prev) => computeScrollHeaderState(prev, st));
@@ -1690,8 +1749,10 @@ export const LibraryGridView: React.FC = () => {
 
                         return (
                           <ContextMenu as="tr" onOpenMenu={()=>bookMenu(book)}
+                            data-library-book-row
+                            aria-label={book.title}
                             key={`${book.id || 'book'}-${idx}`}
-                            className={`transition-colors group ${
+                            className={`transition-colors group focus-visible:bg-primary/15 [&:focus-visible>td]:shadow-[inset_0_2px_0_var(--color-focus),inset_0_-2px_0_var(--color-focus)] ${
                               isSelected ? 'bg-primary/5' : 'hover:bg-canvas/40'
                             }`}
                           >

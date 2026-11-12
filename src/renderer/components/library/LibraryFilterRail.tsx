@@ -153,6 +153,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
         <Search className="absolute start-3 size-3.5 text-text-muted pointer-events-none" aria-hidden="true" />
         <input
           type="text"
+          data-library-filter-search
           value={filterState.searchQuery || ''}
           onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
           placeholder={t('filterSearchPlaceholder')}

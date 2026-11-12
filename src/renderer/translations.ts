@@ -1,5 +1,8 @@
 export const translations = {
   ar: {
+    shortcutLibraryBrowse: "التنقل بين الكتب (الأسهم حسب اتجاه القراءة، Home وEnd لأول وآخر كتاب في الصفحة)",
+    shortcutLibraryClear: "مسح البحث أو التحديد وإغلاق التصفية",
+
     libraryRecent: "الأخيرة",
     libraryRecentOpened: "المفتوحة مؤخرًا",
     libraryRecentImported: "المستوردة مؤخرًا",
@@ -4974,6 +4977,9 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    shortcutLibraryBrowse: "Browse books (arrows follow reading direction, Home/End reach the first/last book on the page)",
+    shortcutLibraryClear: "Clear search or selection and close filters",
+
     libraryRecent: "Recent",
     libraryRecentOpened: "Opened",
     libraryRecentImported: "Imported",

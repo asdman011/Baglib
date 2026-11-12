@@ -2,7 +2,9 @@
 
 ## Recent Agent Updates
 
-- [2026-11-12, Codex] KEY-47+KEY-52 verified. One-click Opened/Imported Library segments, existing-data recency and documented ten-minute import-window fallback, shared cards/filters/bulk/audit, Arabic plural header counts. Focused4/4, full1885/1885, types/build/diff and lint0errors1existingwarning pass; native8/8,24PNGs/fourinspected, profiles cleaned. Exact11ownfiles/hunks in CURRENT_TASK/report. Scoped publication pending, KEY-46 waits. Jira Claude.
+- [2026-11-12, Codex] KEY-46 verified. RTL-aware Library arrows/Home/End, list Enter, Escape clearing, inset row focus and header-expansion focus restoration with bilingual registry help. Focused25/25/full1889/1889/types/lint0errors0warnings/build/diff pass. Native8/8/ar-en1280-480/Arabicsearch,12PNG/sixinspected, profiles removed. Registry-order regression corrected. Exact10ownfiles/hunks in CURRENT_TASK/report. Scoped publication pending. Claude review/Jira.
+
+- [2026-11-12, Codex] KEY-47+KEY-52 verified. One-click Opened/Imported Library segments, existing-data recency and documented ten-minute import-window fallback, shared cards/filters/bulk/audit, Arabic plural header counts. Focused4/4, full1885/1885, types/build/diff and lint0errors1existingwarning pass; native8/8,24PNGs/fourinspected, profiles cleaned. Exact11ownfiles/hunks in CURRENT_TASK/report. Published 1c8f5bf085176c4ed2320c2fcbb56ed8e398140b normally to origin/feature/library-domain; exact remote verified. Commit lock released. Claude owns review/Jira. KEY-46 now active. Jira Claude.
 
 - [2026-11-12, Codex] KEY-317 wave6 final ar/en1280/480 PASS, childcode0, profile removed. Real PDFs both interfaces, WMA rejection and real Arabic scan OCR new output1130chars, input copy unchanged. Current origin/nav/Notes preview/Library/Settings repaired. Two scripts/own state entries, syntax/diff pass.15/20verified, next poetry. No app UX/layout edit. Known non-Quran reminder stderr retained.
 

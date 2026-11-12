@@ -78,6 +78,9 @@ export const SHORTCUTS: readonly ShortcutDefinition[] = [
     ...['ArrowUp', 'ArrowDown', 'Enter'].map(key => ({ id: 'palette-' + key, key, scopes: ['palette'], labelKey: 'ctxNavigate' as const })),
     { id: 'ruler-close', key: 'Escape', scopes: ['ruler'], labelKey: 'close' },
     ...['ArrowUp', 'ArrowDown'].map(key => ({ id: 'ruler-' + key, key, scopes: ['ruler'], labelKey: 'ctxNavigate' as const })),
+    ...['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].map(key => ({ id: 'library-' + key, key, scopes: ['library'], labelKey: 'shortcutLibraryBrowse' as const })),
+    { id: 'library-open', key: 'Enter', scopes: ['library'], labelKey: 'ctxOpen' },
+    { id: 'library-clear', key: 'Escape', scopes: ['library'], labelKey: 'shortcutLibraryClear' },
 ];
 export interface ShortcutEvent {
     key: string;
@@ -118,7 +121,7 @@ export function shortcutCollisions(shortcuts: readonly ShortcutDefinition[]): st
 }
 
 export const SHORTCUT_SCOPES: Readonly<Record<string, TranslationKey>> = {
-    global: 'shortcutGlobalScope', reader: 'navReader', quran: 'navQuran', sunnah: 'navSunnah',
+    global: 'shortcutGlobalScope', library: 'navLibrary', reader: 'navReader', quran: 'navQuran', sunnah: 'navSunnah',
     dialog: 'shortcutDialogsScope', rsvp: 'speedReaderBtn', paragraph: 'paragraphFocusBtn',
     'ocr-review': 'ocrInspectorTitle', 'pdf-compare': 'compareTitle', controls: 'shortcutControlsScope',
     notes: 'notesWorkspaceTitle', comments: 'commentsTitle', tags: 'columnTags', palette: 'navSearch', ruler: 'readingRulerBtn',

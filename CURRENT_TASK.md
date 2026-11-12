@@ -1,3 +1,26 @@
+## KEY-46 verified — 2026-11-12, Codex
+
+Implemented RTL-aware Library arrow focus, geometry-based grid rows, Home/End within the page, list-row Enter through safe-open, Escape clearing and visible inset row focus. The existing card focus ring, palette routing and native grid/list toggle keys are verified. Focus survives slim-header expansion. Nested controls keep their keyboard behavior. Library help entries use the existing centralized bilingual registry. Older browser/mock bridges without recent activity remain renderable.
+
+Verification passed — focused25/25 (navigation, a11y, context shortcuts and Recent), full1889/1889 with concurrency2, tsc, scoped eslint0errors0warnings, tsup and diff check. First full-suite run1888/1889 revealed a registry-order expectation, corrected by appending the Library definitions after existing entries. No test expectations weakened. Native8/8 in ar/en at1280/480 verifies four arrows, RTL reversal, Home/End, boundaries, row/grid focus, typing guards, Escape search/selection, native view toggle Enter, Ctrl+K routing and palette dismissal, and eight Library help keys. Arabic كِتَاب and أراضي searches pass, including the Imported view.
+
+Real Arabic/English text-layer PDFs imported through digital IPC and opened with row Enter. Six extra mixed-script physical records exercise grid geometry.12PNGs/result.json at .baglib-data/keys-evidence-gCzAX2, six focus/help PNGs inspected. Profiles removed after every run, renderer reused, Electron serialized without killing processes. Documents received no Save/OCR. Existing mobile table scroll is preserved with inset visible row focus.
+
+Exact10 task files/hunks
+
+- src/renderer/components/library/library-keyboard.ts
+- src/renderer/components/library/LibraryGridView.tsx
+- src/renderer/components/library/LibraryFilterRail.tsx (search-field hook)
+- src/renderer/components/actions/shortcuts.ts
+- src/renderer/translations.ts (two help labels per locale)
+- tests/ui/library-keyboard.test.ts
+- scripts/library-shortcuts-live/main.cjs
+- scripts/library-shortcuts-live/run.mjs
+- CURRENT_TASK.md (own KEY-46 entry and KEY-47/52 publication receipt)
+- IMPLEMENTATION_PLAN.md (own KEY-46 entry and KEY-47/52 publication receipt)
+
+Local detailed report docs/agent-ops/reports/KEY-46.md. Scoped publication authorized to origin/feature/library-domain and pending. Claude owns review/Jira. Other agents' unfinished changes are outside this commit scope.
+
 ## KEY-47 + KEY-52 verified — 2026-11-12, Codex
 
 Implemented one-click Library All / Opened / Imported segments with shared grid/list cards, filters, pagination, selection, bulk tags/shelf and scoped metadata audit. Opened aggregates existing reading_session end and reading_book_stat.last_open. Reader last-location storage has no timestamp. Imported uses the allowed fixed inclusive ten-minute created_at window ending at the newest digital/hybrid work with a file path because no durable session marker was found in the digital import path. This can merge nearby imports or truncate long sessions and is explained in ar/en UI. Bulk shelf retains KEY-44 physical-copy semantics, skipping digital-only books. Existing dashboard Continue reading covers that entry point.
@@ -6,7 +29,7 @@ Verification passed — 4/4 focused tests, full 1885/1885 at concurrency2, tsc, 
 
 Exact 11 task files/hunks — src/shared/recent-books.ts; src/main/ipc/database.ts (handler); src/preload/index.ts (one reader method); src/renderer/components/library/LibraryGridView.tsx; src/renderer/components/library/LibraryFilterRail.tsx; src/renderer/translations.ts (six keys per locale); tests/ui/recent-books.test.ts; scripts/recent-books-live/main.cjs; scripts/recent-books-live/run.mjs; own CURRENT_TASK.md entry; own IMPLEMENTATION_PLAN.md Recent Agent Updates entry. Local detailed report docs/agent-ops/reports/KEY-47-52.md.
 
-No schema change, dependency, download or Jira mutation. Scoped commit/push authorized by this dispatch to origin/feature/library-domain. Publication pending. KEY-46 begins after successful push. Other agents' unfinished changes preserved.
+No schema change, dependency, download or Jira mutation. Scoped commit/push authorized by this dispatch to origin/feature/library-domain. Published 1c8f5bf085176c4ed2320c2fcbb56ed8e398140b normally to origin/feature/library-domain; exact remote verified. Commit lock released. Claude owns review/Jira. KEY-46 now active. Other agents' unfinished changes preserved.
 
 ## KEY-309 polish: tafsir range label only for multi-ayah passages; Ibn Kathir 2:1 data note - 2026-11-12, Claude Code
 
