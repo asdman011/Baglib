@@ -22,6 +22,9 @@ app.whenReady().then(async () => {
   });
   registerQuranIpc();
   for (const channel of ['library:get-all-books', 'library:get-all-notes', 'categories:get-tree', 'tags:get-all']) ipcMain.handle(channel, () => []);
+  // KEY-309: a saved Continue-reading position (Ayat al-Kursi) is restored on open; restoring must not open the study panel.
+  ipcMain.handle('settings:get', (_event, key: string, fallback?: unknown) => key === 'islamic.continue.v1.quran' ? { target: 'quran:hafs:2:255', label: 'Al-Baqarah 255' } : fallback);
+  ipcMain.handle('settings:set', () => true);
   const window = new BrowserWindow({ show: false, width: 1280, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false, preload: path.join(root, 'dist/preload/index.js') } }); window.webContents.setAudioMuted(true);
   const errors: string[] = []; window.webContents.on('console-message', (_, level, message) => { if (level >= 3) errors.push(message); });
   const evaluate = (code: string) => window.webContents.executeJavaScript(code).catch((error: Error) => { throw new Error(`${error.message}: ${code.slice(0, 220)}`); });
@@ -32,6 +35,9 @@ app.whenReady().then(async () => {
   try {
     await window.loadFile(path.join(directory, 'index.html'));
     await until('Boolean(window.quranLayout && document.querySelector(".mushaf-svg-surface [data-surah]"))');
+    await until(`Number(document.querySelector('input[aria-label="انتقال إلى صفحة..."],input[aria-label="Jump to page..."]')?.value)===42`);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    assert.equal(await evaluate('document.querySelectorAll("[data-islamic-reader-panel]").length'), 0, 'restored position opened the study panel');
     for (const language of ['ar', 'en']) {
       await evaluate(`if(window.quranLayout.lang!==${JSON.stringify(language)})window.quranLayout.toggleLanguage()`);
       await evaluate(`if(window.quranLayout.theme!==${JSON.stringify(language === 'ar' ? 'dark' : 'light')})window.quranLayout.toggleTheme()`);
@@ -70,6 +76,10 @@ app.whenReady().then(async () => {
         await evaluate(`(()=>{const body=document.querySelector('[data-islamic-reader-panel] [role=tabpanel]');body.focus();body.scrollTop=150})()`);
         const before = await page(); await key('Space'); await new Promise(resolve => setTimeout(resolve, 150)); assert.equal(await page(), before);
         assert.ok(await evaluate(`(()=>{const p=document.querySelector('[data-islamic-reader-panel]').getBoundingClientRect();return p.left>=0&&p.right<=innerWidth+1&&p.bottom<=innerHeight+1})()`));
+        // KEY-309: phones get a bottom sheet across the reader; wide screens keep the side panel.
+        const sheet = await evaluate(`(()=>{const p=document.querySelector('[data-islamic-reader-panel]').getBoundingClientRect();return {wide:p.width>=innerWidth-40,lower:p.top>=innerHeight*0.3,side:p.width<=420}})()`);
+        if (width === 480) assert.ok(sheet.wide && sheet.lower, 'bottom sheet at 480: ' + JSON.stringify(sheet));
+        else assert.ok(sheet.side, 'side panel at 1280: ' + JSON.stringify(sheet));
         await fs.writeFile(path.join(directory, `tafsir-${language}-${width}.png`), (await window.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
         await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))`);
         await until(`!document.querySelector('[data-islamic-reader-panel]')`);

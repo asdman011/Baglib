@@ -39,7 +39,7 @@ export function IslamicReaderPanel({ active, onTab, onClose, children, t, recita
 }) {
   const id = useId();
   const tabs: ReaderTab[] = recitation ? ['commentary','translation','notes','related','recitation'] : ['commentary','translation','notes','related'];
-  return <aside data-islamic-reader-panel aria-label={t('islamicStudyPanel')} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }} className="absolute inset-y-3 end-5 z-30 flex w-[min(25rem,calc(100%-2.5rem))] min-h-0 flex-col overflow-hidden rounded-2xl border border-subtle bg-surface shadow-xl">
+  return <aside data-islamic-reader-panel aria-label={t('islamicStudyPanel')} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }} data-panel-layout="adaptive" className="absolute inset-y-3 end-5 z-30 flex w-[min(25rem,calc(100%-2.5rem))] max-sm:top-auto max-sm:bottom-2 max-sm:start-2 max-sm:end-2 max-sm:h-[min(60%,28rem)] max-sm:w-auto min-h-0 flex-col overflow-hidden rounded-2xl border border-subtle bg-surface shadow-xl">
     <div className="flex items-start border-b border-subtle p-2">
       <div role="tablist" aria-label={t('islamicStudyPanel')} className="grid min-w-0 flex-1 grid-cols-2 gap-1 sm:grid-cols-4" onKeyDown={event => {
         if (!['ArrowRight','ArrowLeft','Home','End'].includes(event.key)) return;

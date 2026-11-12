@@ -1,3 +1,20 @@
+## KEY-309 Quran study panel is a bottom sheet on phones; restored position no longer opens it — 2026-11-12, Claude Code (Codex queue4 item 5)
+
+Below the sm breakpoint the shared reader study panel (IslamicReaderPanel, used by Quran, Sunnah and Al-Bayan) is a bottom sheet across the reader, up to 60% of the height (28rem at most), instead of a side overlay. Desktop keeps the side panel.
+
+State bug fixed: opening the Quran reader restores the saved Continue-reading ayah through the same path as an ayah link, and that path also opened the study panel (explore) the user had not asked for. A restored position now only moves to its page; links from elsewhere still open the panel as before.
+
+Verification:
+- quran-layout-live passed in ar and en at 480 and 1280 px. It now restores a saved position (2:255) and checks that the reader lands on page 42 with no panel open, which would fail without the fix. It also checks the bottom sheet geometry at 480 px and the side panel at 1280 px. Screenshots inspected.
+- quran-deck-live passed.
+- npx tsup, npx tsc --noEmit and eslint on the changed files passed, and the full suite passed 1905/1905. Throwaway copies were removed, and the originals were verified unchanged.
+
+Exact files
+- src/renderer/components/islamic/IslamicReaderChrome.tsx
+- src/renderer/components/quran/QuranReaderView.tsx
+- scripts/quran-layout-live/main.ts
+- CURRENT_TASK.md (this entry)
+
 ## KEY-309 Library list rows fit phones — 2026-11-12, Claude Code (Codex queue4 item 4)
 
 Below the sm breakpoint the Library list stays a table but gets compact rows. Each row keeps the selection checkbox and cover. The title, author and reading-state select are stacked in one cell, and the Read button (icon only) and the row overflow menu sit at the end. Lend and return stay reachable from that menu. Year, publisher, ISBN, tags and the separate status column are hidden on phones. The desktop table is unchanged. The six column sort tooltips were hardcoded Arabic; they now use the new librarySortByColumn key (ar and en). The digital-file fallback label now uses badgeDigital.

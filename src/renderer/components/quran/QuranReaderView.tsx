@@ -302,11 +302,14 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
     return () => window.removeEventListener('keydown', handle);
   }, [visible, page, loading, loadedKey, queryKey, options, setup, inspected, showIntro, dir, pageNumber, navigatePage]);
   const clearStudyTarget = useCallback(() => setStudyTarget(null), []);
+  // A restored reading position only moves to its page; the study panel opens only for targets the user asked for.
+  const restoringTarget = useRef(false);
   useEffect(() => {
     const open = () => {
       const target = consumeQuranAyah();
       if (!target) return;
       setSelection(previous => previous.script === target.script ? previous : { ...emptySelection, script: target.script });
+      restoringTarget.current = false;
       setPendingTarget(target);
       if ('page' in target) { setLayoutId(target.layout); setTargetKhatmah(target.khatmah); }
       setAudioOpen(false); setAudioState(null);
@@ -329,7 +332,8 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
       if (!alive) return;
       if (result.ok) {
         setPageNumber(result.data.pageNumber);
-        setStudyTarget({ surah: pendingTarget.surah, ayah: pendingTarget.ayah });
+        setStudyTarget(restoringTarget.current ? null : { surah: pendingTarget.surah, ayah: pendingTarget.ayah });
+        restoringTarget.current = false;
         setPendingTarget(null);
       } else setError('quranReaderError');
     }).catch(() => { if (alive) setError('quranReaderError'); });
@@ -346,7 +350,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
       if (!alive || !saved) return;
       const [, savedProfile, surah, ayah] = saved.target.split(':');
       const script = catalog.sources.find(source => source.kind === 'script' && source.profile === savedProfile)?.id;
-      if (script) { setSelection(readerProfileSelection(catalog.sources, script)); setPendingTarget({ script, surah: +surah, ayah: +ayah }); }
+      if (script) { restoringTarget.current = true; setSelection(readerProfileSelection(catalog.sources, script)); setPendingTarget({ script, surah: +surah, ayah: +ayah }); }
     }).catch(() => setError('quranStorageError'));
     return () => { alive = false; };
   }, [catalog, pendingTarget]);
