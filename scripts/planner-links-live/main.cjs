@@ -47,6 +47,11 @@ app.on('browser-window-created', (_, owner) => {
       // Month grid: every date in one column falls on the same weekday (leading cells right in RTL and LTR).
       result.grid = await evaluate(`(()=>{const cells=[...document.querySelectorAll('[data-study-planner] .grid-cols-7 > button time')].map(t=>({date:t.getAttribute('datetime'),x:Math.round(t.closest('button').getBoundingClientRect().left)}));const columns={};for(const c of cells){const wd=new Date(c.date+'T12:00:00').getDay();(columns[c.x]??=new Set()).add(wd);}return {cells:cells.length,columns:Object.keys(columns).length,mixed:Object.values(columns).filter(s=>s.size>1).length,dir:document.querySelector('[data-study-planner]').getAttribute('dir'),firstColumnX:cells.length?cells[0].x:null};})()`);
       await shot(`month-${language}`);
+      // Phones: the month grid fits without horizontal scrolling and keeps one weekday per column.
+      owner.setContentSize(480, 900); await pause(500);
+      result.grid480 = await evaluate(`(()=>{const region=document.querySelector('[data-study-planner] [role=region]');const cells=[...document.querySelectorAll('[data-study-planner] .grid-cols-7 > button time')].map(t=>({date:t.getAttribute('datetime'),x:Math.round(t.closest('button').getBoundingClientRect().left)}));const columns={};for(const c of cells){const wd=new Date(c.date+'T12:00:00').getDay();(columns[c.x]??=new Set()).add(wd);}return {columns:Object.keys(columns).length,mixed:Object.values(columns).filter(s=>s.size>1).length,scrolls:region.scrollWidth>region.clientWidth+1,header:document.querySelectorAll('[data-study-planner] .grid-cols-7 > div.text-center').length};})()`);
+      await shot(`month-${language}-480`);
+      owner.setContentSize(1280, 900); await pause(300);
       // Quran link → the Quran reader at Al-Baqarah 255 (page 42 of the Madinah mushaf).
       await clickReference('آية الكرسي');
       await until("!!document.querySelector('[data-quran-mushaf]')", 200);
@@ -64,6 +69,7 @@ app.on('browser-window-created', (_, owner) => {
       assert.equal(result.grid.columns, 7, 'seven weekday columns');
       assert.equal(result.grid.mixed, 0, 'each column holds one weekday');
       assert.equal(result.grid.dir, language === 'ar' ? 'rtl' : 'ltr');
+      assert.equal(result.grid480.columns, 7); assert.equal(result.grid480.mixed, 0); assert.equal(result.grid480.scrolls, false, 'no horizontal scroll at 480'); assert.equal(result.grid480.header, 7, 'weekday header on phones');
       assert.match(result.hadithText, /إِنَّمَا الأَعْمَالُ|إنما الأعمال/u, 'the real text of Bukhari 1');
     }
     assert.deepEqual(consoleLines.filter(line => /uncaught/iu.test(line)), []);

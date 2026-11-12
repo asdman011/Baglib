@@ -91,15 +91,17 @@ export function StudyPlannerView({ adjustment = 0 }: { adjustment?: number }) {
       <p className="text-sm">{format(range.start)} — {format(range.end)}</p>
     </div>
     <div className="max-w-full overflow-x-auto overscroll-x-contain pb-2" tabIndex={0} role="region" aria-label={t('plannerCalendar')}>
-    <div className={`grid gap-1 ${period === 'year' ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'min-w-[42rem] grid-cols-7'}`}>
+    <div className={`grid gap-1 ${period === 'year' ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-7 sm:min-w-[42rem]'}`}>
+      {/* Phones: the seven columns fit without scrolling, so day cells show only the day number under a weekday header (Saturday first, like the grid). */}
+      {period !== 'year' && Array.from({ length: 7 }, (_, index) => <div key={`weekday-${index}`} aria-hidden="true" className="sm:hidden text-center text-[11px] leading-relaxed text-muted">{new Intl.DateTimeFormat(lang, { weekday: 'short' }).format(new Date(2024, 0, 6 + index))}</div>)}
       {period === 'month' && Array.from({ length: (range.start.getDay() + 1) % 7 }, (_, index) => <div key={`offset-${index}`} aria-hidden="true" />)}
       {(period === 'year' ? months : days).map(date => {
         const value = civilDate(date);
         const cellRange = period === 'year' ? plannerRange(date, 'month', calendar, adjustment) : { start: date, end: date };
         const count = tasks.filter(task => task.status === 'open' && overlap(task, civilDate(cellRange.start), civilDate(cellRange.end))).length;
-        return <button key={value} className={`${control} text-start min-h-20 ${value === civilDate(new Date()) ? 'ring-1 ring-pale-sky-500' : ''}`} onClick={() => { setAnchor(value); if (period === 'year') setPeriod('month'); else setDraft({ ...emptyTask(), startDate: value, dueDate: value }); }}>
-          <time dateTime={value} className="block text-xs leading-relaxed">{period === 'year' ? format(date) : `${new Intl.DateTimeFormat(lang, { weekday: 'short' }).format(date)} ${calendarParts(date, calendar, adjustment).day}`}</time>
-          {count > 0 && <span className="block text-pale-sky-500 text-xs mt-2">{taskCountLabel(count, lang, t)}</span>}
+        return <button key={value} className={`${control} text-start min-h-14 sm:min-h-20 max-sm:px-1 max-sm:py-1 ${value === civilDate(new Date()) ? 'ring-1 ring-pale-sky-500' : ''}`} onClick={() => { setAnchor(value); if (period === 'year') setPeriod('month'); else setDraft({ ...emptyTask(), startDate: value, dueDate: value }); }}>
+          <time dateTime={value} className="block text-xs leading-relaxed">{period === 'year' ? format(date) : <><span className="max-sm:hidden">{new Intl.DateTimeFormat(lang, { weekday: 'short' }).format(date)} </span>{calendarParts(date, calendar, adjustment).day}</>}</time>
+          {count > 0 && <span className="block text-pale-sky-500 text-xs mt-2 max-sm:text-[10px] max-sm:mt-1 break-words">{taskCountLabel(count, lang, t)}</span>}
         </button>;
       })}
     </div>

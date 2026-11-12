@@ -1,3 +1,16 @@
+## KEY-309 planner month grid fits phones — 2026-11-12, Claude Code (taking over Codex queue4 item 3 after its weekly limit)
+
+At phone widths the Study planner month grid drops its 42rem minimum and keeps seven columns. A Saturday-first short weekday header row shows on phones. Cells are compact, with the weekday hidden inside each cell and a smaller task-count label. Desktop layout is unchanged.
+
+Verification: planner-links-live passed in ar and en with the new 480 px check (7 columns, no mixed weekday per column, no horizontal scroll, 7 header cells). The 480 px Arabic month screenshot was inspected. Also passed: npx tsc --noEmit, eslint on the changed files, and the full suite 1905/1905 at concurrency 2. Throwaway profiles removed.
+
+Queue4 item 1 (notes preview Markdown) is not a defect: the literal markers are the editor's source mode, where they are deliberately dimmed. Codex's partial renderer is saved locally in docs/agent-ops/reports and not committed.
+
+Exact files
+- src/renderer/components/dashboard/StudyPlannerView.tsx
+- scripts/planner-links-live/main.cjs
+- CURRENT_TASK.md (this entry)
+
 ## KEY-309 full UX sweep verified - 2026-11-12, Codex queue3-root
 
 Captured all 20 dispatched page states in Arabic RTL and English LTR, light and dark, at 1280 and 480 px. Both baseline and final matrices passed 160/160. Coverage includes Dashboard, Library grid/list/Recent opened/imported, book detail, real Arabic/English PDF readers and the real English EPUB, Notes list/editor/cards/boards/empty canvas, Quran, Sunnah, Al-Bayan, planner, Statistics and Settings.
