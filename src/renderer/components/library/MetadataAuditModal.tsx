@@ -11,26 +11,12 @@ import {
   AlertTriangle,
   Search,
   BookOpen,
-  User,
   Calendar,
-  Barcode,
-  FileText,
-  Layers,
-  Globe,
   Loader2,
-  ArrowRight,
-  ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  SlidersHorizontal,
   Check,
   Building,
-  Image as ImageIcon,
-  StopCircle,
-  RotateCcw,
   ListOrdered,
-  Eye,
-  FileCheck
+  Eye
 } from 'lucide-react';
 import { BookItem } from '../../types/library';
 import { BibliographicWork } from '../../../shared/types/bibliographic';
@@ -38,7 +24,7 @@ import { isPlaceholderAuthor, isPlaceholderTitle } from '../../../shared/validat
 import { useWorkspace } from '../context/WorkspaceContext';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
 import { formatCoverUrl } from '../../utils/file-path-helper';
-import { useMetadataLookup, CandidateMetadataItem } from '../../hooks/useMetadataLookup';
+import { useMetadataLookup } from '../../hooks/useMetadataLookup';
 import { MetadataModalLayout } from './MetadataModalLayout';
 
 export interface MetadataAuditModalProps {
@@ -111,8 +97,7 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
   booksToAudit,
   onUpdateBook,
 }) => {
-  const { lang, dir, t } = useWorkspace();
-  const ArrowIcon = dir === 'rtl' ? ArrowLeft : ArrowRight;
+  const { t } = useWorkspace();
 
   // Local state of audited books (allows live update as fixes occur)
   const [auditedBooks, setAuditedBooks] = useState<BookItem[]>(booksToAudit);
@@ -608,7 +593,6 @@ export const MetadataAuditModal: React.FC<MetadataAuditModalProps> = ({
   const handleApproveCandidate = async () => {
     if (!currentReviewBook || !selectedCandidate) return;
 
-    const audit = auditMap.get(currentReviewBook.id) || auditBook(currentReviewBook);
     const primaryEdition = selectedCandidate.editions?.[0];
     const updatedBook: BookItem = { ...currentReviewBook };
 

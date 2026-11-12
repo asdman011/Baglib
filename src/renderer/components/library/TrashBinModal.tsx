@@ -7,7 +7,6 @@ import {
   X,
   Trash2,
   RotateCcw,
-  CheckCircle2,
   AlertTriangle,
   Loader2,
   Calendar,

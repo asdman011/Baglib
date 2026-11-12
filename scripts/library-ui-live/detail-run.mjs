@@ -1,7 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import electron from 'electron';
+import { rendererAnswers } from '../lib/renderer.mjs';
+
+if (process.platform === 'win32') {
+  while (execFileSync('tasklist', ['/FI', 'IMAGENAME eq electron.exe', '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true }).toLowerCase().includes('"electron.exe"')) {
+    console.log('Waiting for existing Electron processes to exit.');
+    await new Promise(resolve => setTimeout(resolve, 10000));
+  }
+}
 
 const dataRoot = fs.realpathSync('.baglib-data');
 const profile = fs.mkdtempSync(path.join(dataRoot, 'k300p2-'));
@@ -18,13 +26,12 @@ delete env.ELECTRON_RUN_AS_NODE;
 let server;
 let code = 1;
 try {
-  let ready = false;
-  try { ready = (await fetch('http://127.0.0.1:3000')).ok; } catch {}
+  let ready = await rendererAnswers();
   if (!ready) {
     const log = fs.openSync(path.join(evidence, 'next.log'), 'a');
     server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', 'src/renderer', '-p', '3000', '-H', '127.0.0.1'], { stdio: ['ignore', log, log], windowsHide: true });
     for (let attempt = 0; attempt < 180; attempt++) {
-      try { if ((await fetch('http://127.0.0.1:3000')).ok) { ready = true; break; } } catch {}
+      if (await rendererAnswers()) { ready = true; break; }
       if (server.exitCode !== null) throw new Error('Owned renderer failed to start');
       await new Promise(resolve => setTimeout(resolve, 500));
     }
@@ -33,9 +40,8 @@ try {
   code = await new Promise((resolve, reject) => {
     const log = fs.openSync(path.join(evidence, 'electron.log'), 'a');
     const child = spawn(electron, ['scripts/library-ui-live/detail-main.cjs', '--user-data-dir=' + profile, '--disable-features=CalculateNativeWinOcclusion'], { env, stdio: ['ignore', log, log], windowsHide: true });
-    const timer = setTimeout(() => child.kill(), 1800000);
     child.once('error', reject);
-    child.once('exit', status => { clearTimeout(timer); resolve(status ?? 1); });
+    child.once('exit', status => resolve(status ?? 1));
   });
 } finally {
   if (server) spawnSync('taskkill', ['/PID', String(server.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });

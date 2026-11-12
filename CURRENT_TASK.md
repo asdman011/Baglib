@@ -1,3 +1,26 @@
+## KEY-300 lint verified - 2026-11-12, Codex queue2-root
+
+Removed unused icon/type imports, destructured values, an unused pure audit calculation and the unused diagnostics setter binding from the requested Library files. Existing public props remain supported. Current baseline40warnings becomes13warnings: all27unused-codewarnings removed,12image-elementwarnings and1effect-dependencywarning remain. Rendering and effect dependencies were preserved to satisfy the behavior-preserving scope. BookDetailOverview and MetadataDiffView were inspected and required no unused-code edits.
+
+The required detail runner now waits for all existing Electron processes, reuses rendererAnswers(), and allows Electron to exit itself. Profile cleanup checks the resolved throwaway path.
+
+Verification passed: focused15/15, full1896/1896 at concurrency2, npx tsc --noEmit, scoped ESLint0errors13existingwarnings, npx tsup, script syntax and git diff --check. Detail live8/8 ar/en xlight/dark x1280/480, real Arabic/English PDFs, metadata/detail/zoom/log/audit/lending/trash/Undo and0renderererrors; profile removed. Evidence .baglib-data/KEY-300-evidence/part2-2026-11-12T03-25-03-264Z. Inspected ar-light-480-detail-ar-detail.png and en-dark-1280-detail-en-diff.png. No user-facing copy, behavior or layout changes were introduced by the unused-code removals.
+
+Exact10files/hunks
+
+- src/renderer/components/library/BookDetailModal.tsx
+- src/renderer/components/library/EditionComparisonModal.tsx
+- src/renderer/components/library/GeekMetadataModal.tsx
+- src/renderer/components/library/MetadataAuditModal.tsx
+- src/renderer/components/library/MetadataCandidatesModal.tsx
+- src/renderer/components/library/MetadataDiffModal.tsx
+- src/renderer/components/library/TrashBinModal.tsx
+- scripts/library-ui-live/detail-run.mjs
+- CURRENT_TASK.md (own KEY-300 lint handoff and KEY-245 publication receipt)
+- IMPLEMENTATION_PLAN.md (own KEY-300 lint entry and KEY-245 publication receipt)
+
+Publication pending under commit.lock. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue items3-5 pending.
+
 ## KEY-245 verified ? 2026-11-12, Codex queue2-root
 
 Implemented dependency-free CSV and LaTeX alongside Markdown in a shared bilingual Notes export dialog, with per-format loss statements. Filtered overview and single-note/editor exports preserve their selected IDs. Markdown export adds portable round-trip metadata to retain exact Arabic, tags, canonical links and whitespace. Native Markdown import upserts by baglib_id in an atomic database batch through existing history/repository contracts. Unchanged imports preserve dates/revisions. Existing reader notes/reflections retain type, location and reflection context. Conflict batches roll back. No schema/dependency/download changes.
@@ -25,7 +48,7 @@ Exact16 files/hunks
 - CURRENT_TASK.md (own KEY-245 entry)
 - IMPLEMENTATION_PLAN.md (own KEY-245 Recent Agent Updates entry)
 
-Scoped commit and normal push to origin/feature/library-domain authorized by current dispatch. Publication pending under commit.lock. Jira left to Claude. Queue items2?5 pending. Other-agent unfinished changes preserved.
+Scoped commit and normal push to origin/feature/library-domain authorized by current dispatch. Published 641c2c89ce5a3545581f53693dfec7967a45913e normally to origin/feature/library-domain at 2026-11-12T03:23:15.344Z. Exact remote hash verified. Lock released. Claude owns review/Jira. Jira left to Claude. Queue items2?5 pending. Other-agent unfinished changes preserved.
 
 ## KEY-46 verified — 2026-11-12, Codex
 

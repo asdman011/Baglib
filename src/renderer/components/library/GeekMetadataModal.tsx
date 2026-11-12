@@ -15,10 +15,7 @@ import {
   Clock,
   Cpu,
   Database,
-  Sparkles,
-  FileText,
   AlertCircle,
-  Hash,
   Server
 } from 'lucide-react';
 import { formatCoverUrl } from '../../utils/file-path-helper';

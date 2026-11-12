@@ -42,7 +42,7 @@ export const EditionComparisonModal: React.FC<EditionComparisonModalProps> = ({
   const [candidates, setCandidates] = useState<EnrichmentCandidateEdition[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<EnrichmentCandidateEdition | null>(null);
   const [comparison, setComparison] = useState<EnrichmentComparison | null>(null);
-  const [diagnostics, setDiagnostics] = useState<TechnicalSearchDiagnostics | null>(null);
+  const [diagnostics] = useState<TechnicalSearchDiagnostics | null>(null);
 
   // User selections
   const [selectedFieldKeys, setSelectedFieldKeys] = useState<Record<EnrichmentFieldKey, boolean>>({

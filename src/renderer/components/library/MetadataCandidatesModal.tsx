@@ -18,7 +18,6 @@ import {
   Search,
   CheckCircle2,
   FileQuestion,
-  ExternalLink,
   ChevronDown,
   ChevronUp,
   Layers,

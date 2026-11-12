@@ -57,7 +57,7 @@ export const MetadataDiffModal: React.FC<MetadataDiffModalProps> = ({
   onClose,
   onApply,
 }) => {
-  const { lang, dir, t } = useWorkspace();
+  const { dir, t } = useWorkspace();
   const ArrowIcon = dir === 'rtl' ? ArrowLeft : ArrowRight;
 
   // Extract primary edition from incoming work
