@@ -1629,7 +1629,7 @@ export const LibraryGridView: React.FC = () => {
                         <th
                           onClick={() => handleHeaderSort('title')}
                           className="py-3 px-4 text-start cursor-pointer hover:bg-canvas transition-colors select-none group"
-                          title="ترتيب حسب العنوان والمؤلف"
+                          title={t('librarySortByColumn', { column: t('colCoverTitle') })}
                         >
                           <div className="flex items-center gap-1.5">
                             <span>{t('colCoverTitle') || 'الكتاب والمؤلف'}</span>
@@ -1642,7 +1642,7 @@ export const LibraryGridView: React.FC = () => {
                           <th
                             onClick={() => handleHeaderSort('category')}
                             className="py-3 px-4 text-start hidden sm:table-cell cursor-pointer hover:bg-canvas transition-colors select-none group"
-                            title="ترتيب حسب التصنيف"
+                            title={t('librarySortByColumn', { column: t('colCategory') })}
                           >
                             <div className="flex items-center gap-1.5">
                               <span>{t('colCategory') || 'التصنيف'}</span>
@@ -1656,7 +1656,7 @@ export const LibraryGridView: React.FC = () => {
                           <th
                             onClick={() => handleHeaderSort('format')}
                             className="py-3 px-4 text-start hidden md:table-cell cursor-pointer hover:bg-canvas transition-colors select-none group"
-                            title="ترتيب حسب الصيغة والنوع"
+                            title={t('librarySortByColumn', { column: t('colFormat') })}
                           >
                             <div className="flex items-center gap-1.5">
                               <span>{t('colFormat') || 'الصيغة والنوع'}</span>
@@ -1669,8 +1669,8 @@ export const LibraryGridView: React.FC = () => {
                         {visibleColumns.includes('status') && (
                           <th
                             onClick={() => handleHeaderSort('status')}
-                            className="py-3 px-4 text-start cursor-pointer hover:bg-canvas transition-colors select-none group"
-                            title="ترتيب حسب حالة القراءة"
+                            className="py-3 px-4 text-start max-sm:hidden cursor-pointer hover:bg-canvas transition-colors select-none group"
+                            title={t('librarySortByColumn', { column: t('colStatus') })}
                           >
                             <div className="flex items-center gap-1.5">
                               <span>{t('colStatus') || 'حالة القراءة'}</span>
@@ -1684,7 +1684,7 @@ export const LibraryGridView: React.FC = () => {
                           <th
                             onClick={() => handleHeaderSort('location')}
                             className="py-3 px-4 text-start hidden lg:table-cell cursor-pointer hover:bg-canvas transition-colors select-none group"
-                            title="ترتيب حسب الرف والمسار"
+                            title={t('librarySortByColumn', { column: t('colLocation') })}
                           >
                             <div className="flex items-center gap-1.5">
                               <span>{t('colLocation') || 'الرف / المسار'}</span>
@@ -1697,8 +1697,8 @@ export const LibraryGridView: React.FC = () => {
                         {visibleColumns.includes('year') && (
                           <th
                             onClick={() => handleHeaderSort('year')}
-                            className="py-3 px-4 text-start cursor-pointer hover:bg-canvas transition-colors select-none group"
-                            title="ترتيب حسب سنة النشر"
+                            className="py-3 px-4 text-start max-sm:hidden cursor-pointer hover:bg-canvas transition-colors select-none group"
+                            title={t('librarySortByColumn', { column: t('columnYear') })}
                           >
                             <div className="flex items-center gap-1.5">
                               <span>{t('columnYear')}</span>
@@ -1709,17 +1709,17 @@ export const LibraryGridView: React.FC = () => {
 
                         {/* Publisher Column */}
                         {visibleColumns.includes('publisher') && (
-                          <th className="py-3 px-4 text-start">{t('columnPublisher')}</th>
+                          <th className="py-3 px-4 text-start max-sm:hidden">{t('columnPublisher')}</th>
                         )}
 
                         {/* ISBN Column */}
                         {visibleColumns.includes('isbn') && (
-                          <th className="py-3 px-4 text-start font-mono text-[10px]">{t('columnIsbn')}</th>
+                          <th className="py-3 px-4 text-start max-sm:hidden font-mono text-[10px]">{t('columnIsbn')}</th>
                         )}
 
                         {/* Tags Column */}
                         {visibleColumns.includes('tags') && (
-                          <th className="py-3 px-4 text-start">{t('columnTags')}</th>
+                          <th className="py-3 px-4 text-start max-sm:hidden">{t('columnTags')}</th>
                         )}
 
                         {/* Actions Column */}
@@ -1732,7 +1732,35 @@ export const LibraryGridView: React.FC = () => {
                       {paginatedBooks.map((book, idx) => {
                         const readingStatus = book.readingStatus || 'unread';
                         const isSelected = selectedBookIds.has(book.id);
-                        const cellPad = listDensity === 'compact' ? 'py-1.5 px-3' : 'py-3 px-4';
+                        const cellPad = `${listDensity === 'compact' ? 'py-1.5 px-3' : 'py-3 px-4'} max-sm:px-2`;
+                        // Phones show the reading state under the author instead of in its own column.
+                        const statusControl = (
+                          <div className="space-y-1 max-w-[140px]">
+                            <select
+                              value={readingStatus}
+                              onChange={(e) => updateBookReadingStatus(book.id, e.target.value as NonNullable<BookItem['readingStatus']>)}
+                              className={`text-[10px] font-bold rounded-full px-2 py-0.5 border cursor-pointer outline-none transition-all ${
+                                readingStatus === 'completed'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                  : readingStatus === 'reading'
+                                  ? 'bg-primary/10 text-primary-text border-primary/30'
+                                  : 'bg-canvas text-muted border-subtle'
+                              }`}
+                            >
+                              <option value="unread">{t('statusUnread') || 'لم يُقرأ'}</option>
+                              <option value="reading">{t('statusReading') || 'قيد القراءة'}</option>
+                              <option value="completed">{t('statusCompleted') || 'مكتمل'}</option>
+                            </select>
+                            {readingStatus === 'reading' && typeof book.readingProgress === 'number' && (
+                              <div className="w-full bg-canvas rounded-full h-1 overflow-hidden border border-subtle" role="progressbar" aria-label={book.title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.max(0, book.readingProgress))}>
+                                <div
+                                  className="bg-primary h-full rounded-full transition-all duration-300"
+                                  style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
 
                         return (
                           <ContextMenu as="tr" onOpenMenu={()=>bookMenu(book)}
@@ -1765,8 +1793,8 @@ export const LibraryGridView: React.FC = () => {
                               </td>
                             )}
 
-                            {/* Title & Author */}
-                            <td className={cellPad}>
+                            {/* Title & Author (phones: a narrower cell so long titles truncate instead of scrolling) */}
+                            <td className={`${cellPad} max-sm:max-w-[10rem]`} data-library-row-title>
                               <div className="min-w-0">
                                 <div
                                   onClick={() => handleSafeOpenBook(book)}
@@ -1777,6 +1805,7 @@ export const LibraryGridView: React.FC = () => {
                                 </div>
                                 <BookVolumeBadge book={book} t={t} />
                                 <div className="text-text-muted text-[11px] truncate font-serif"><bdi>{book.author}</bdi></div>
+                                {visibleColumns.includes('status') && <div className="sm:hidden mt-1" data-library-row-status>{statusControl}</div>}
                               </div>
                             </td>
 
@@ -1830,32 +1859,8 @@ export const LibraryGridView: React.FC = () => {
 
                             {/* Reading Status Selector & Progress */}
                             {visibleColumns.includes('status') && (
-                              <td className={cellPad}>
-                                <div className="space-y-1 max-w-[140px]">
-                                  <select
-                                    value={readingStatus}
-                                    onChange={(e) => updateBookReadingStatus(book.id, e.target.value as NonNullable<BookItem['readingStatus']>)}
-                                    className={`text-[10px] font-bold rounded-full px-2 py-0.5 border cursor-pointer outline-none transition-all ${
-                                      readingStatus === 'completed'
-                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                                        : readingStatus === 'reading'
-                                        ? 'bg-primary/10 text-primary-text border-primary/30'
-                                        : 'bg-canvas text-muted border-subtle'
-                                    }`}
-                                  >
-                                    <option value="unread">{t('statusUnread') || 'لم يُقرأ'}</option>
-                                    <option value="reading">{t('statusReading') || 'قيد القراءة'}</option>
-                                    <option value="completed">{t('statusCompleted') || 'مكتمل'}</option>
-                                  </select>
-                                  {readingStatus === 'reading' && typeof book.readingProgress === 'number' && (
-                                    <div className="w-full bg-canvas rounded-full h-1 overflow-hidden border border-subtle" role="progressbar" aria-label={book.title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.max(0, book.readingProgress))}>
-                                      <div
-                                        className="bg-primary h-full rounded-full transition-all duration-300"
-                                        style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
-                                      />
-                                    </div>
-                                  )}
-                                </div>
+                              <td className={`${cellPad} max-sm:hidden`}>
+                                {statusControl}
                               </td>
                             )}
 
@@ -1875,7 +1880,7 @@ export const LibraryGridView: React.FC = () => {
                                 ) : book.filePath ? (
                                   <div className="flex items-center gap-1">
                                     <FileText className="w-3.5 h-3.5 text-primary-text shrink-0" />
-                                    <span className="truncate max-w-[140px] font-mono text-[10px]">{book.fileSize || 'ملف رقمي'}</span>
+                                    <span className="truncate max-w-[140px] font-mono text-[10px]">{book.fileSize || t('badgeDigital')}</span>
                                   </div>
                                 ) : (
                                   <span>—</span>
@@ -1885,28 +1890,28 @@ export const LibraryGridView: React.FC = () => {
 
                             {/* Year */}
                             {visibleColumns.includes('year') && (
-                              <td className={`${cellPad} text-muted text-[11px]`}>
+                              <td className={`${cellPad} max-sm:hidden text-muted text-[11px]`}>
                                 {book.publicationYear || '—'}
                               </td>
                             )}
 
                             {/* Publisher */}
                             {visibleColumns.includes('publisher') && (
-                              <td className={`${cellPad} text-muted text-[11px] truncate max-w-[120px]`}>
+                              <td className={`${cellPad} max-sm:hidden text-muted text-[11px] truncate max-w-[120px]`}>
                                 {book.publisher || '—'}
                               </td>
                             )}
 
                             {/* ISBN */}
                             {visibleColumns.includes('isbn') && (
-                              <td className={`${cellPad} text-muted font-mono text-[10px] truncate max-w-[110px]`}>
+                              <td className={`${cellPad} max-sm:hidden text-muted font-mono text-[10px] truncate max-w-[110px]`}>
                                 {book.isbn || '—'}
                               </td>
                             )}
 
                             {/* Tags */}
                             {visibleColumns.includes('tags') && (
-                              <td className={`${cellPad} text-[10px]`}>
+                              <td className={`${cellPad} max-sm:hidden text-[10px]`}>
                                 <div className="flex flex-wrap gap-1 max-w-[150px]">
                                   {book.tags.slice(0, 2).map((tg, tIdx) => (
                                     <span key={`${tg}-${tIdx}`} className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
@@ -1929,7 +1934,7 @@ export const LibraryGridView: React.FC = () => {
                                           type="button"
                                           onClick={() => setQuickReturnBook(book)}
                                           title={t('returnBookBtn')}
-                                          className="px-2 py-1 rounded-xl bg-evergreen-500/15 text-evergreen-600 dark:text-evergreen-400 text-[10px] font-bold hover:bg-evergreen-500/25 transition-colors cursor-pointer"
+                                          className="max-sm:hidden px-2 py-1 rounded-xl bg-evergreen-500/15 text-evergreen-600 dark:text-evergreen-400 text-[10px] font-bold hover:bg-evergreen-500/25 transition-colors cursor-pointer"
                                          aria-label={t('returnBookBtn')}>
                                           {t('returnBookBtn')}
                                         </button>
@@ -1940,7 +1945,7 @@ export const LibraryGridView: React.FC = () => {
                                           type="button"
                                           onClick={() => setQuickLendBook(book)}
                                           title={t('lendBookBtn')}
-                                          className="px-2 py-1 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold hover:bg-amber-500/20 transition-colors cursor-pointer"
+                                          className="max-sm:hidden px-2 py-1 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold hover:bg-amber-500/20 transition-colors cursor-pointer"
                                          aria-label={t('lendBookBtn')}>
                                           {t('lendBookBtn')}
                                         </button>
@@ -1955,7 +1960,7 @@ export const LibraryGridView: React.FC = () => {
                                     className="px-2.5 py-1 rounded-xl bg-primary text-primary-contrast font-bold text-xs hover:opacity-90 transition-all flex items-center gap-1 cursor-pointer"
                                    aria-label={t('readBook')}>
                                     <BookOpen className="w-3.5 h-3.5" />
-                                    <span>{t('readBook')}</span>
+                                    <span className="max-sm:hidden">{t('readBook')}</span>
                                   </button>
 
                                   <Menu portal items={[]} onOpenMenu={() => bookMenu(book)} trigger={properties => <button {...properties} type="button" data-row-menu-button aria-label={t('ribbonMoreActions')} title={t('ribbonMoreActions')} className="rounded-lg border border-border bg-surface px-2 py-1 text-primary-text">⋯</button>} />

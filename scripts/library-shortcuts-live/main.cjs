@@ -96,6 +96,11 @@ app.on('browser-window-created', (_, win) => {
           assert.ok(focus.outline !== 'none' || focus.shadow !== 'none');
           if (view === 'list') assert.notEqual(focus.cellShadow, 'none', 'Inset focus remains visible inside a scrolling table');
           assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, 'Page overflow');
+          if (view === 'list' && width === 480) {
+            // KEY-309: phone rows fit the table without horizontal scrolling; the row menu stays reachable.
+            const fit = await evaluate('(() => { const table=document.querySelector("[data-library-book-row]").closest("table"); const box=table.parentElement; const menu=document.querySelector("[data-library-book-row] [data-row-menu-button]"); const r=menu&&menu.getBoundingClientRect(); return { scrolls: box.scrollWidth > box.clientWidth + 1, menuVisible: !!r && r.width > 0 && r.left >= 0 && r.right <= innerWidth }; })()');
+            assert.deepEqual(fit, { scrolls: false, menuVisible: true }, 'list rows at 480 px: ' + JSON.stringify(fit));
+          }
           await shot(lang + '-' + width + '-' + view + '-focus');
           // Text controls retain their own arrow handling and Escape clears the controlled query.
           await evaluate('document.querySelector("[data-simple-search-input]").focus()');

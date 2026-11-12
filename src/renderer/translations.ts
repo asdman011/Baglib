@@ -2440,6 +2440,7 @@ export const translations = {
     sortSizeDesc: "الحجم: الأكبر",
     sortFormatPriority: "الصيغة: PDF و EPUB أولاً",
     sortByLabel: "الترتيب حسب:",
+    librarySortByColumn: "ترتيب حسب {column}",
 
     // Anna's Archive Provider
     annasTabLabel: "Anna's Archive (أرشيف آنّا)",
@@ -7504,6 +7505,7 @@ export const translations = {
     sortSizeDesc: "Size: Largest",
     sortFormatPriority: "Format: PDF & EPUB first",
     sortByLabel: "Sort by:",
+    librarySortByColumn: "Sort by {column}",
 
     // Anna's Archive Provider
     annasTabLabel: "Anna's Archive",

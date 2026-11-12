@@ -1,3 +1,18 @@
+## KEY-309 Library list rows fit phones — 2026-11-12, Claude Code (Codex queue4 item 4)
+
+Below the sm breakpoint the Library list stays a table but gets compact rows. Each row keeps the selection checkbox and cover. The title, author and reading-state select are stacked in one cell, and the Read button (icon only) and the row overflow menu sit at the end. Lend and return stay reachable from that menu. Year, publisher, ISBN, tags and the separate status column are hidden on phones. The desktop table is unchanged. The six column sort tooltips were hardcoded Arabic; they now use the new librarySortByColumn key (ar and en). The digital-file fallback label now uses badgeDigital.
+
+Verification:
+- library-shortcuts-live passed (KEY-46 keyboard matrix) in ar and en at 1280 and 480 px. A new 480 px check confirms the list's scroll box does not scroll horizontally and the row menu is on screen.
+- Evidence is in .baglib-data/keys-evidence-wtmmVZ. The 480 px ar and en list screenshots were inspected.
+- npx tsc --noEmit, eslint on the changed files and the focused tests (library-inline-i18n, recent-books) 6/6 passed.
+
+Exact files
+- src/renderer/components/library/LibraryGridView.tsx
+- src/renderer/translations.ts (librarySortByColumn, ar and en)
+- scripts/library-shortcuts-live/main.cjs
+- CURRENT_TASK.md (this entry)
+
 ## KEY-309 notes editor header wraps on phones — 2026-11-12, Claude Code (Codex queue4 item 2)
 
 Below the sm breakpoint the note editor header wraps. The back button and title take their own full-width row, and the save state, Save, graph, preview, panel and overflow actions wrap to the row below, aligned to the end. Desktop keeps one row.
