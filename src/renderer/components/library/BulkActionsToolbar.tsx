@@ -33,13 +33,12 @@ interface BulkActionsToolbarProps {
 export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   selectedBookIds,
   selectedBooks,
-  allCategories: _allCategories,
   onClearSelection,
   onOperationComplete,
   onOpenAudit,
   onUndoToast,
 }) => {
-  const { t, lang, refreshBooks } = useWorkspace();
+  const { t, refreshBooks } = useWorkspace();
 
   // Modals state
   const [activeModal, setActiveModal] = useState<'category' | 'shelf' | 'tags' | 'status' | 'delete' | 'enrich' | null>(null);
@@ -472,8 +471,8 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 <option value="unread">{t('statusUnread')}</option>
                 <option value="reading">{t('statusReading')}</option>
                 <option value="completed">{t('statusCompleted')}</option>
-                <option value="paused">{lang === 'ar' ? 'متوقف مؤقتاً' : 'Paused'}</option>
-                <option value="abandoned">{lang === 'ar' ? 'متروك' : 'Abandoned'}</option>
+                <option value="paused">{t('bulkStatusPaused')}</option>
+                <option value="abandoned">{t('bulkStatusAbandoned')}</option>
               </select>
             </div>
 
@@ -520,7 +519,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               ))}
               {selectedBooks.length > 10 && (
                 <div className="text-muted italic pt-1">
-                  +{selectedBooks.length - 10} {lang === 'ar' ? 'عناصر أخرى...' : 'more items...'}
+                  +{selectedBooks.length - 10} {t('bulkMoreItems')}
                 </div>
               )}
             </div>
@@ -611,7 +610,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 onClick={() => setActiveModal(null)}
                 className="px-4 py-2 rounded-xl border border-border/60 hover:bg-surface text-xs font-medium text-muted transition-colors disabled:opacity-50"
               >
-                {enrichResult ? (lang === 'ar' ? 'إغلاق' : 'Close') : t('bulkCancelBtn')}
+                {enrichResult ? t('onlineHubClose') : t('bulkCancelBtn')}
               </button>
               {!enrichResult && (
                 <button
@@ -621,7 +620,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                   className="flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
                 >
                   {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{lang === 'ar' ? 'بدء التنزيل' : 'Start Download'}</span>
+                  <span>{t('bulkStartDownload')}</span>
                 </button>
               )}
             </div>

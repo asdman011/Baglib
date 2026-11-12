@@ -13,7 +13,6 @@ import {
   BookOpen,
   Rss,
   ExternalLink,
-  Download,
   PlusCircle,
   X,
   Sparkles,
@@ -29,6 +28,7 @@ import { BookItem } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { SourceUrlsPanel } from './SourceUrlsPanel';
 import { Modal } from '../ui/Modal';
+import { pageCountLabel, formatLibraryNumber } from '../../utils/book-count';
 
 interface OnlineLibraryHubProps {
   isOpen: boolean;
@@ -264,7 +264,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
         }
       } catch (err: unknown) {
         console.error('LibGen search error:', err);
-        setLibgenError(errorMessage(err) || (lang === 'ar' ? 'فشل الاتصال بـ Library Genesis' : 'Failed to connect to Library Genesis'));
+        setLibgenError(errorMessage(err) || t('onlineLibgenConnectionFailed'));
       } finally {
         setIsSearchingLibgen(false);
       }
@@ -281,7 +281,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
         }
       } catch (err: unknown) {
         console.error('Annas Archive search error:', err);
-        setAnnasError(errorMessage(err) || (lang === 'ar' ? 'فشل الاتصال بأرشيف آنّا' : 'Failed to connect to Anna\'s Archive'));
+        setAnnasError(errorMessage(err) || t('onlineAnnasConnectionFailed'));
       } finally {
         setIsSearchingAnnas(false);
       }
@@ -294,7 +294,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
     const targetUrl = isDirectDownload ? item.downloadUrl : null;
     if (!targetUrl && !item.md5) {
       setDownloadToast({
-        message: lang === 'ar' ? 'رابط التحميل المباشر غير متوفر لهذا الكتاب' : 'Direct download link is not available for this record',
+        message: t('onlineDirectDownloadUnavailable'),
         isError: true,
       });
       return;
@@ -371,14 +371,14 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
             isError: false,
           });
         } else {
-          const failMsg = res?.error || t('downloadFailed') || (lang === 'ar' ? 'فشل تحميل الكتاب من الخوادم' : 'Failed to download book from mirror servers');
+          const failMsg = res?.error || t('downloadFailed') || t('onlineMirrorDownloadFailed');
           setDownloadToast({
             message: failMsg,
             isError: true,
           });
         }
     } catch (err: unknown) {
-      const errDetail = errorMessage(err) || t('downloadFailed') || (lang === 'ar' ? 'فشل تحميل الكتاب' : 'Download failed');
+      const errDetail = errorMessage(err) || t('downloadFailed') || t('onlineDownloadFailed');
       setDownloadToast({
         message: errDetail,
         isError: true,
@@ -577,9 +577,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                       : t('searchingAnnas')}
                   </p>
                   <p className="text-[11px] text-muted">
-                    {lang === 'ar'
-                      ? 'جاري فحص الخوادم واستخراج البيانات...'
-                      : 'Querying mirror endpoints and parsing records...'}
+                    {t('onlineSearchProgress')}
                   </p>
                 </div>
               )}
@@ -591,15 +589,11 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-xs font-bold text-muted">
                       <span>
-                        {lang === 'ar'
-                          ? `النتائج (${(activeSource === 'LibGen' ? sortedLibgenResults : sortedAnnasResults).length})`
-                          : `Results (${(activeSource === 'LibGen' ? sortedLibgenResults : sortedAnnasResults).length})`}
+                        {t('onlineResultsCount', { count: formatLibraryNumber((activeSource === 'LibGen' ? sortedLibgenResults : sortedAnnasResults).length, lang) })}
                       </span>
                       <span className="text-[11px] text-pale-sky-500 font-medium">
                         {sortBy === 'relevance' &&
-                          (lang === 'ar'
-                            ? 'مرتب حسب الصلة (PDF و EPUB في المقدمة)'
-                            : 'Sorted by relevance (PDF & EPUB on top)')}
+                          t('onlineRelevanceHint')}
                       </span>
                     </div>
 
@@ -633,12 +627,12 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                             </div>
 
                             <p className="text-xs text-muted truncate">
-                              {lang === 'ar' ? 'المؤلف:' : 'Author:'} {item.author}
+                              {t('diagnosticsAuthorLabel')} {item.author}
                               {item.publisher &&
-                                ` • ${lang === 'ar' ? 'الناشر:' : 'Publisher:'} ${item.publisher}`}
+                                ` • ${t('diagnosticsPublisherLabel')} ${item.publisher}`}
                               {item.year && ` • ${item.year}`}
                               {item.pages &&
-                                ` • ${item.pages} ${lang === 'ar' ? 'صفحة' : 'pages'}`}
+                                ` • ${pageCountLabel(item.pages, lang, t)}`}
                             </p>
 
                             {item.isbn && (

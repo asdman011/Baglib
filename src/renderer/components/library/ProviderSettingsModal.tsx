@@ -12,11 +12,11 @@ import {
   ArrowUp,
   ArrowDown,
   Save,
-  ShieldAlert,
   Info,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { SourceUrlsPanel } from './SourceUrlsPanel';
+import { formatLibraryNumber } from '../../utils/book-count';
 
 export interface ProviderConfigItem {
   id: string;
@@ -233,7 +233,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
           {loading ? (
             <div className="py-12 text-center text-muted text-sm">
               <span className="inline-block animate-spin me-2">⟳</span>
-              {lang === 'ar' ? 'جارٍ تحميل الإعدادات...' : 'Loading provider configuration...'}
+              {t('providerConfigLoading')}
             </div>
           ) : (
             configs.map((item, index) => {
@@ -288,12 +288,8 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
                       </div>
                       <p className="text-[11px] text-muted truncate mt-0.5">
                         {item.enabled
-                          ? lang === 'ar'
-                            ? `الأولوية ${item.priority} في التسلسل`
-                            : `Priority ${item.priority} in sequence`
-                          : lang === 'ar'
-                          ? 'مصدر معطل حالياً'
-                          : 'Currently disabled'}
+                          ? t('providerPrioritySequence', { priority: formatLibraryNumber(item.priority, lang) })
+                          : t('providerCurrentlyDisabled')}
                       </p>
                     </div>
                   </div>
@@ -324,7 +320,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
                         type="button"
                         onClick={() => handleMoveUp(index)}
                         disabled={isFirst}
-                        aria-label={lang === 'ar' ? 'رفع الأولوية للأعلى' : 'Move Up'} title={lang === 'ar' ? 'رفع الأولوية للأعلى' : 'Move Up'}
+                        aria-label={t('providerMoveUp')} title={t('providerMoveUp')}
                         className="p-1 rounded-lg bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
                       >
                         <ArrowUp className="w-3.5 h-3.5" />
@@ -333,7 +329,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
                         type="button"
                         onClick={() => handleMoveDown(index)}
                         disabled={isLast}
-                        aria-label={lang === 'ar' ? 'خفض الأولوية للأسفل' : 'Move Down'} title={lang === 'ar' ? 'خفض الأولوية للأسفل' : 'Move Down'}
+                        aria-label={t('providerMoveDown')} title={t('providerMoveDown')}
                         className="p-1 rounded-lg bg-canvas border border-subtle hover:bg-surface text-muted hover:text-main disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
                       >
                         <ArrowDown className="w-3.5 h-3.5" />
@@ -355,14 +351,10 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
             <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-main">
-                {lang === 'ar'
-                  ? 'جلب شامل بدون حجب مصادر'
-                  : 'Comprehensive multi-source metadata discovery'}
+                {t('providerDiscoveryTitle')}
               </p>
               <p className="mt-0.5 text-[11px]">
-                {lang === 'ar'
-                  ? 'يتم الاستعلام من جميع المصادر المفعلة بالترتيب المحدد ودمج النتائج الذكي لمنحك أفضل غلاف وأدق بيانات، مع تطبيق الحماية التلقائية للحصة اليومية عند اللزوم.'
-                  : 'All enabled providers are queried in precedence order to aggregate candidates and combine the best covers and descriptions, respecting daily limits seamlessly.'}
+                {t('providerDiscoveryDescription')}
               </p>
             </div>
           </div>

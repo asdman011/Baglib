@@ -8,15 +8,12 @@ import {
   FileText,
   Search,
   HardDrive,
-  Cpu,
   Layers,
   AlertCircle,
-  ExternalLink,
-  Tag,
-  Hash,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { TechnicalSearchDiagnostics } from '../../../shared/types/enrichment';
+import { discardedArtifactCountLabel } from '../../utils/book-count';
 
 interface FileQueryDiagnosticsPanelProps {
   diagnostics?: TechnicalSearchDiagnostics | null;
@@ -85,7 +82,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
               </span>
               {discarded.length > 0 && (
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
-                  {lang === 'ar' ? `${discarded.length} شوائب مستبعدة` : `${discarded.length} discarded`}
+                  {discardedArtifactCountLabel(discarded.length, lang, t)}
                 </span>
               )}
             </div>
@@ -97,7 +94,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
 
         <div className="flex items-center gap-2 shrink-0 text-muted">
           <span className="text-[11px] hidden sm:inline font-mono opacity-80">
-            {isExpanded ? (lang === 'ar' ? 'إخفاء' : 'Collapse') : (lang === 'ar' ? 'عرض' : 'Expand')}
+            {isExpanded ? t('diagnosticsCollapse') : t('diagnosticsExpand')}
           </span>
           {isExpanded ? (
             <ChevronUp className="w-4 h-4 opacity-75" />
@@ -162,7 +159,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                   {embedded.title && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-muted text-[11px] shrink-0 w-16">
-                        {lang === 'ar' ? 'العنوان:' : 'Title:'}
+                        {t('diagnosticsTitleLabel')}
                       </span>
                       <span className="font-mono text-[11px] text-main break-all bg-canvas px-1.5 py-0.5 rounded border border-subtle">
                         {embedded.title}
@@ -172,7 +169,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                   {embedded.author && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-muted text-[11px] shrink-0 w-16">
-                        {lang === 'ar' ? 'المؤلف:' : 'Author:'}
+                        {t('diagnosticsAuthorLabel')}
                       </span>
                       <span className="font-mono text-[11px] text-main break-all bg-canvas px-1.5 py-0.5 rounded border border-subtle">
                         {embedded.author}
@@ -182,7 +179,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                   {embedded.publisher && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-muted text-[11px] shrink-0 w-16">
-                        {lang === 'ar' ? 'الناشر:' : 'Publisher:'}
+                        {t('diagnosticsPublisherLabel')}
                       </span>
                       <span className="font-mono text-[11px] text-muted">
                         {embedded.publisher}
@@ -192,7 +189,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                   {embedded.publicationYear && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-muted text-[11px] shrink-0 w-16">
-                        {lang === 'ar' ? 'السنة:' : 'Year:'}
+                        {t('diagnosticsYearLabel')}
                       </span>
                       <span className="font-mono text-[11px] text-muted">
                         {embedded.publicationYear}
@@ -202,7 +199,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                   {embedded.pagesCount && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-muted text-[11px] shrink-0 w-16">
-                        {lang === 'ar' ? 'الصفحات:' : 'Pages:'}
+                        {t('diagnosticsPagesLabel')}
                       </span>
                       <span className="font-mono text-[11px] text-muted">
                         {embedded.pagesCount}
@@ -212,9 +209,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                 </div>
               ) : (
                 <div className="text-[11px] text-muted italic">
-                  {lang === 'ar'
-                    ? 'لم يتم العثور على بيانات داخلية صالحة في حاوية الملف'
-                    : 'No valid internal embedded tags detected'}
+                  {t('diagnosticsNoEmbeddedTags')}
                 </div>
               )}
             </div>
@@ -236,7 +231,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                   {filename.parsedTitle && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-muted text-[11px] shrink-0 w-16">
-                        {lang === 'ar' ? 'العنوان:' : 'Title:'}
+                        {t('diagnosticsTitleLabel')}
                       </span>
                       <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 break-all bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/20">
                         {filename.parsedTitle}
@@ -246,7 +241,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                   {filename.parsedAuthor && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-muted text-[11px] shrink-0 w-16">
-                        {lang === 'ar' ? 'المؤلف:' : 'Author:'}
+                        {t('diagnosticsAuthorLabel')}
                       </span>
                       <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 break-all bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/20">
                         {filename.parsedAuthor}
@@ -256,7 +251,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                   {filename.parsedYear && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-muted text-[11px] shrink-0 w-16">
-                        {lang === 'ar' ? 'السنة:' : 'Year:'}
+                        {t('diagnosticsYearLabel')}
                       </span>
                       <span className="font-mono text-[11px] text-muted">
                         {filename.parsedYear}
@@ -266,7 +261,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                   {filename.parsedPublisher && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-muted text-[11px] shrink-0 w-16">
-                        {lang === 'ar' ? 'الناشر:' : 'Publisher:'}
+                        {t('diagnosticsPublisherLabel')}
                       </span>
                       <span className="font-mono text-[11px] text-muted">
                         {filename.parsedPublisher}
@@ -276,7 +271,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
                 </div>
               ) : (
                 <div className="text-[11px] text-muted italic">
-                  {lang === 'ar' ? 'لا يتوفر تحليل اسم الملف' : 'No filename heuristic tokens'}
+                  {t('diagnosticsNoFilenameTokens')}
                 </div>
               )}
             </div>
@@ -333,7 +328,7 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
 
             <div className="space-y-1.5">
               <div className="text-[11px] font-mono text-main bg-canvas p-2 rounded-lg border border-subtle break-all select-all flex items-center justify-between gap-2">
-                <span>{activeQueryString || (lang === 'ar' ? 'لا يوجد استعلام محدد' : 'No query string')}</span>
+                <span>{activeQueryString || t('diagnosticsNoQuery')}</span>
                 <span className="text-[9px] text-muted uppercase font-sans shrink-0">
                   {t('rawQueryString')}
                 </span>
@@ -342,13 +337,13 @@ export const FileQueryDiagnosticsPanel: React.FC<FileQueryDiagnosticsPanelProps>
               <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-[11px] text-muted pt-0.5">
                 {activeTitle && (
                   <div>
-                    <span className="font-semibold text-main">{lang === 'ar' ? 'العنوان المعياري: ' : 'Title: '}</span>
+                    <span className="font-semibold text-main">{t('diagnosticsNormalizedTitleLabel')}</span>
                     <span className="font-mono">{activeTitle}</span>
                   </div>
                 )}
                 {activeAuthor && (
                   <div>
-                    <span className="font-semibold text-main">{lang === 'ar' ? 'المؤلف: ' : 'Author: '}</span>
+                    <span className="font-semibold text-main">{t('diagnosticsQueryAuthorLabel')}</span>
                     <span className="font-mono">{activeAuthor}</span>
                   </div>
                 )}

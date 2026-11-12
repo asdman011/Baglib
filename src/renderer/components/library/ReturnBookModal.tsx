@@ -11,9 +11,6 @@ import {
   Clock,
   FileText,
   ShieldAlert,
-  ArrowRight,
-  Sparkles,
-  BookOpen
 } from 'lucide-react';
 import { BookItem, LendingRecord } from '../../types/library';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -34,7 +31,7 @@ const ReturnBookModalContent: React.FC<ReturnBookModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { lang, dir, t, refreshBooks } = useWorkspace();
+  const { dir, t, refreshBooks } = useWorkspace();
 
   const [actualReturnDate, setActualReturnDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [conditionOnReturn, setConditionOnReturn] = useState(() => String(book?.condition || 'good'));
@@ -104,7 +101,7 @@ const ReturnBookModalContent: React.FC<ReturnBookModalProps> = ({
       onClose();
     } catch (err: unknown) {
       console.error('[baglib/lending] Return book failed:', err);
-      setErrorMessage(getErrorMessage(err) || (lang === 'ar' ? 'فشلت عملية الإرجاع' : 'Return failed'));
+      setErrorMessage(getErrorMessage(err) || t('loanReturnFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -145,7 +142,7 @@ const ReturnBookModalContent: React.FC<ReturnBookModalProps> = ({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <span className="text-[10px] uppercase font-bold tracking-wider text-muted">
-                {lang === 'ar' ? 'الكتاب المستعار' : 'Loaned Work'}
+                {t('loanedWork')}
               </span>
               <h4 className="font-bold text-main text-sm truncate">{book.title}</h4>
             </div>
@@ -212,7 +209,7 @@ const ReturnBookModalContent: React.FC<ReturnBookModalProps> = ({
               </label>
               {book.condition && (
                 <span className="text-[10px] text-muted">
-                  {lang === 'ar' ? 'الحالة قبل الإعارة:' : 'Condition before loan:'}{' '}
+                  {t('loanConditionBefore')}{' '}
                   <strong className="text-main">{String(book.condition)}</strong>
                 </span>
               )}
@@ -237,9 +234,7 @@ const ReturnBookModalContent: React.FC<ReturnBookModalProps> = ({
               <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-[11px] flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 shrink-0" />
                 <span>
-                  {lang === 'ar'
-                    ? 'تنبيه تدقيق: تم تحديد حالة أقل من الحالة الأصلية للنسخة.'
-                    : 'Condition audit notice: Returned condition is marked lower than original condition.'}
+                  {t('loanConditionAuditNotice')}
                 </span>
               </div>
             )}
@@ -276,7 +271,7 @@ const ReturnBookModalContent: React.FC<ReturnBookModalProps> = ({
               className="px-5 py-2 rounded-xl bg-evergreen-600 hover:bg-evergreen-700 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{isSubmitting ? (lang === 'ar' ? 'جاري التأكيد...' : 'Confirming...') : t('confirmReturn')}</span>
+              <span>{isSubmitting ? t('loanConfirming') : t('confirmReturn')}</span>
             </button>
           </div>
         </form>

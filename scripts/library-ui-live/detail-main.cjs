@@ -4,6 +4,8 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 require('tsx/cjs');
 const { translations } = require('../../src/renderer/translations.ts');
+const { pageCountLabel, formatLibraryNumber } = require('../../src/renderer/utils/book-count.ts');
+const checkLocalization = process.env.BAGLIB_LIBRARY_I18N === '1';
 const profile = process.env.BAGLIB_KEY300_DIR;
 const evidence = process.env.BAGLIB_KEY300_EVIDENCE;
 const files = JSON.parse(fs.readFileSync(path.join(profile, 'inputs.json'))).filter(file => file.kind === 'pdf');
@@ -80,6 +82,7 @@ app.on('browser-window-created', (_, win) => {
     db.close();
     // Local deterministic metadata candidates exercise UI review without external traffic.
     const replace = (channel, handler) => { ipcMain.removeHandler(channel); ipcMain.handle(channel, handler); };
+    if (checkLocalization) replace('library:search-libgen', () => [{ id: 'local-i18n-result', title: 'عِلْم Knowledge', author: 'مؤلف Author', publisher: 'ناشر Publisher', pages: '3', format: 'PDF', detailUrl: 'https://example.invalid/book' }]);
     replace('library:lookup-metadata', (_, params) => {
       const work = { workId: 'test-first', title: params.title, authors: [params.author], editions: [{ editionId: 'candidate', title: params.title, publisher: 'ناشر مقترح Proposed publisher', sources: [{ provider: 'Open Library' }] }] };
       return { success: true, match: work, candidates: [work, { ...work, workId: 'test-second', firstPublishYear: 2025 }], evaluations: [] };
@@ -95,6 +98,16 @@ app.on('browser-window-created', (_, win) => {
       await pause(1600);
       await click('[data-nav-item=library]');
       await until('document.querySelectorAll("[data-card-menu-button]").length===2');
+      if (checkLocalization) {
+        await click('[data-library-book-card] input[type=checkbox]');
+        await button(text.bulkChangeStatus);
+        await until('!!document.querySelector("[role=dialog] option[value=paused]")');
+        assert.equal(await evaluate('document.querySelector("[role=dialog] option[value=paused]").textContent'), text.bulkStatusPaused);
+        assert.equal(await evaluate('document.querySelector("[role=dialog] option[value=abandoned]").textContent'), text.bulkStatusAbandoned);
+        await shot(prefix + '-localized-bulk-status');
+        await key('Escape');
+        await button(text.batchDeselectAll);
+      }
       for (const book of books) {
         await evaluate('(()=>{const title=[...document.querySelectorAll("[data-library-book-card] h3")].find(e=>e.textContent===' + JSON.stringify(book.title) + ');if(!title)throw new Error("Book missing");title.closest("[data-library-book-card]").querySelector("[data-card-menu-button]").click();})()');
         // Details is the shared action identified by its translated label.
@@ -113,6 +126,28 @@ app.on('browser-window-created', (_, win) => {
         await click('[data-detail-edit]');
         await until('!!document.querySelector("[role=dialog] input")');
         await trap();
+        if (checkLocalization) {
+          await button(text.providerSettingsBtn);
+          await until('document.body.innerText.includes(' + JSON.stringify(text.providerDiscoveryTitle) + ') && document.body.innerText.includes(' + JSON.stringify(text.providerPrioritySequence.replace('{priority}', formatLibraryNumber(1, language))) + ')');
+          await trap(); await shot(prefix + '-' + book.id + '-localized-providers');
+          await key('Escape');
+          await until('!document.body.innerText.includes(' + JSON.stringify(text.providerDiscoveryTitle) + ')');
+          await button(text.openLibraryHubTooltip);
+          const hub = '[role=dialog][aria-label=' + JSON.stringify(text.onlineHubTitle) + ']';
+          const query = hub + ' input';
+          await until('!!document.querySelector(' + JSON.stringify(query) + ')');
+          await evaluate('document.querySelector(' + JSON.stringify(query) + ').focus()');
+          await win.webContents.insertText('عِلْم Knowledge');
+          await pause(100);
+          await evaluate('document.querySelector(' + JSON.stringify(query) + ').closest("form").requestSubmit()');
+          const t = (key, params) => Object.entries(params ?? {}).reduce((value, [name, replacement]) => value.replaceAll('{' + name + '}', String(replacement)), text[key]);
+          const pages = pageCountLabel('3', language, t);
+          await until('document.querySelector(' + JSON.stringify(hub) + ')?.textContent.includes(' + JSON.stringify(pages) + ')');
+          assert.ok(await evaluate('document.querySelector(' + JSON.stringify(hub) + ').textContent.includes(' + JSON.stringify(text.onlineResultsCount.replace('{count}', formatLibraryNumber(1, language))) + ')'));
+          await trap(); await shot(prefix + '-' + book.id + '-localized-online');
+          await key('Escape');
+          await until('!document.querySelector(' + JSON.stringify(hub) + ')');
+        }
         await button(text.geekDetailsBtn);
         await until('!!document.querySelector("[data-metadata-layout]")');
         await trap(); await shot(prefix + '-' + book.id + '-technical');
@@ -120,6 +155,12 @@ app.on('browser-window-created', (_, win) => {
         await until('!document.querySelector("[data-metadata-layout]")');
         await button(text.autoFillTooltip);
         await until('!!document.querySelector("[data-metadata-layout] [role=radio]")');
+        if (checkLocalization) {
+          await evaluate('[...document.querySelectorAll("[data-metadata-layout] button")].find(button=>button.textContent.includes(' + JSON.stringify(text.diagnosticsPanelTitle) + ')).click()');
+          await until('document.querySelector("[data-metadata-layout]")?.textContent.includes(' + JSON.stringify(text.diagnosticsNoEmbeddedTags) + ')');
+          assert.ok(await evaluate('document.querySelector("[data-metadata-layout]").textContent.includes(' + JSON.stringify(text.diagnosticsNormalizedTitleLabel.trim()) + ')'));
+          await shot(prefix + '-' + book.id + '-localized-diagnostics');
+        }
         await trap(); await shot(prefix + '-' + book.id + '-candidates');
         await button(text.candidateProceedToDiff);
         await until('!!document.querySelector("[data-metadata-diff]")');

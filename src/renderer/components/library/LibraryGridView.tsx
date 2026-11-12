@@ -755,11 +755,7 @@ export const LibraryGridView: React.FC = () => {
     let discoveredLanguage: string | undefined;
 
     setIsImportingBook(true);
-    setImportMessage(
-      lang === 'ar'
-        ? 'جاري استيراد الكتاب واكتشاف بياناته بدون إنترنت...'
-        : 'Importing book & discovering offline metadata...'
-    );
+    setImportMessage(t('libraryOfflineImportProgress'));
 
     let discoveryResult: Awaited<ReturnType<typeof window.electronAPI.discoverMetadata>> | null = null;
 
@@ -876,12 +872,7 @@ export const LibraryGridView: React.FC = () => {
       };
 
       addBook(newDigitalBook);
-      setSaveToast(
-        t('bookAddedFromDrop', { title: newDigitalBook.title }) ||
-        (lang === 'ar'
-          ? `تمت إضافة الكتاب "${newDigitalBook.title}" إلى المكتبة بنجاح!`
-          : `Book "${newDigitalBook.title}" added to your library successfully!`)
-      );
+      setSaveToast(t('bookAddedFromDrop', { title: newDigitalBook.title }));
 
       return newDigitalBook;
     } finally {
@@ -986,11 +977,7 @@ export const LibraryGridView: React.FC = () => {
       publicationYear: partialBook.publicationYear,
     };
     addBook(imported);
-    setSaveToast(
-      lang === 'ar'
-        ? `تمت إضافة "${imported.title}" إلى مكتبتك بنجاح!`
-        : `"${imported.title}" added to your library successfully!`
-    );
+    setSaveToast(t('libraryDownloadAdded', { title: imported.title }));
 
   };
 

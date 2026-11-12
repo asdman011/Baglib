@@ -10,10 +10,8 @@ import {
   Phone,
   FileText,
   AlertCircle,
-  CheckCircle2,
   MapPin,
   Clock,
-  Sparkles,
   Users
 } from 'lucide-react';
 import { BookItem } from '../../types/library';
@@ -35,7 +33,7 @@ const LendBookModalContent: React.FC<LendBookModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { lang, dir, t, refreshBooks } = useWorkspace();
+  const { dir, t, refreshBooks } = useWorkspace();
 
   const [borrowerName, setBorrowerName] = useState('');
   const [borrowerContact, setBorrowerContact] = useState('');
@@ -74,7 +72,7 @@ const LendBookModalContent: React.FC<LendBookModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!borrowerName.trim()) {
-      setErrorMessage(lang === 'ar' ? 'يرجى إدخال اسم المستعير' : 'Please enter borrower name');
+      setErrorMessage(t('loanBorrowerRequired'));
       return;
     }
 
@@ -99,7 +97,7 @@ const LendBookModalContent: React.FC<LendBookModalProps> = ({
       onClose();
     } catch (err: unknown) {
       console.error('[baglib/lending] Borrow book failed:', err);
-      setErrorMessage(getErrorMessage(err) || (lang === 'ar' ? 'فشلت عملية الإعارة' : 'Loan failed'));
+      setErrorMessage(getErrorMessage(err) || t('loanFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -309,7 +307,7 @@ const LendBookModalContent: React.FC<LendBookModalProps> = ({
               className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
             >
               <UserCheck className="w-4 h-4" />
-              <span>{isSubmitting ? (lang === 'ar' ? 'جاري الحفظ...' : 'Saving...') : t('confirmLend')}</span>
+              <span>{isSubmitting ? t('loanSaving') : t('confirmLend')}</span>
             </button>
           </div>
         </form>

@@ -1,3 +1,23 @@
+## KEY-309 Library inline strings moved to translations - 2026-11-12, Codex (implementation), finished by Claude Code
+
+Codex moved the remaining inline `lang === 'ar' ? '...' : '...'` UI literals in the Library components into translations.ts:
+- BulkActionsToolbar, FileQueryDiagnosticsPanel, LendBookModal, LibraryGridView, OnlineLibraryHub, ProviderSettingsModal and ReturnBookModal;
+- 41 ordinary keys and 13 plural/fallback keys, with counts through Intl.PluralRules (src/renderer/utils/book-count.ts);
+- the library-ui-live detail run extended to cover them.
+
+Codex hit its usage limit before committing. Claude verified the work and committed it:
+- tsc and eslint pass (0 errors, 1 existing image warning); full suite 1902/1902;
+- scripts/library-ui-live/detail-run.mjs re-run passes (exit 0).
+
+The remaining `lang === 'ar'` uses only choose a data field, a date locale or the text direction.
+
+Files:
+- src/renderer/components/library/{BulkActionsToolbar,FileQueryDiagnosticsPanel,LendBookModal,LibraryGridView,OnlineLibraryHub,ProviderSettingsModal,ReturnBookModal}.tsx
+- src/renderer/translations.ts
+- src/renderer/utils/book-count.ts
+- scripts/library-ui-live/detail-main.cjs
+- CURRENT_TASK.md
+
 ## KEY-309 splash verified - 2026-11-12, Codex queue2-root
 
 Confirmed brand clipping in production startup splash in both themes and both widths. Baseline desktop title linebox48px, ink61.04px, inkTop-9.84/inkBottom51.2. Baseline mobile linebox40px, ink45.28px, inkTop-4.88/inkBottom40.4. Added line-height1.7 and logical paddingBlock0.1em. Brand now uses existing splashTitle translations, with the exact Arabic vocalization supplied by the queue and existing English Baglib. Updated the existing brand expectation.
