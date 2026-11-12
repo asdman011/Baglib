@@ -433,6 +433,41 @@ app.on('browser-window-created', (_, win) => {
         if (!reference) throw new Error('personal commentary not in the research panel');
         await shot('J11-shrouh-beside');
       });
+
+      // J12 (opt-in, BAGLIB_JOURNEY_IDS=12) — KEY-254 review: subject → chapter, statistics and top narrators, clicked live.
+      if (journeysOnly.includes(12)) await journeyRun(12, 'Hadith subjects and statistics', async () => {
+        await ui.nav('sunnah', '.sunnah-workspace');
+        await until('!!document.querySelector("[data-hadith-id]")', 200);
+        const chapterBefore = await evaluate('[...document.querySelectorAll(".sunnah-workspace select")].map(s=>s.value).join("|")');
+        if (await evaluate('!!document.querySelector("[data-reader-settings-popover]")?.hidden')) await ui.click('open reading options', '[data-reader-settings]');
+        await ui.clickText('open "Insights"', '[data-reader-settings-popover] button', tr('sunnahInsights'));
+        await ui.clickText('open "Subjects"', '.sunnah-insights .sunnah-research-tabs button', tr('sunnahSubjects'));
+        await until('!!document.querySelector(".sunnah-subjects button[aria-expanded]")', 200);
+        await ui.click('open a subject', '.sunnah-subjects button[aria-expanded]:nth-of-type(1)');
+        await until('!!document.querySelector(".sunnah-subjects .sunnah-research-results button")');
+        const target = await evaluate('[...document.querySelectorAll(".sunnah-subjects .sunnah-research-results button")].find(b=>!b.closest("li")?.textContent.includes("—"))?.textContent.trim().slice(0,80) || ""');
+        await step('open one of its chapters', async () => {
+          // Pick a chapter other than the one already open, so the move is visible.
+          for (let i = 0; i < 6; i++) {
+            const clicked = await evaluate('(()=>{const b=[...document.querySelectorAll(".sunnah-subjects .sunnah-research-results button")][' + i + '];if(!b)return false;b.click();return true;})()');
+            if (!clicked) break;
+            await pause(800);
+            if (await evaluate('[...document.querySelectorAll(".sunnah-workspace select")].map(s=>s.value).join("|")!==' + JSON.stringify(chapterBefore))) break;
+            if (!await has('.sunnah-subjects .sunnah-research-results button')) { await evaluate(`document.querySelector('[data-reader-settings-popover]')?.hidden&&document.querySelector('[data-reader-settings]').click()`); await pause(300); await evaluate('[...document.querySelectorAll("[data-reader-settings-popover] button")].find(b=>b.textContent.includes(' + JSON.stringify(tr('sunnahInsights')) + '))?.click()'); await pause(300); await evaluate('document.querySelector(".sunnah-subjects button[aria-expanded]")?.click()'); await pause(300); }
+          }
+          await until('[...document.querySelectorAll(".sunnah-workspace select")].map(s=>s.value).join("|")!==' + JSON.stringify(chapterBefore) + '&&!!document.querySelector("[data-hadith-id]")', 40);
+        });
+        journey.notes.push('Subject chapter opened: ' + target);
+        if (await evaluate('!!document.querySelector("[data-reader-settings-popover]")?.hidden')) await ui.click('open reading options', '[data-reader-settings]');
+        await ui.clickText('open "Insights" again', '[data-reader-settings-popover] button', tr('sunnahInsights'));
+        await ui.clickText('open "Statistics"', '.sunnah-insights .sunnah-research-tabs button', tr('sunnahStatistics'));
+        await until('!!document.querySelector(".sunnah-workspace ol.sunnah-subjects li button")', 300);
+        const stats = await evaluate('[...document.querySelectorAll(".sunnah-workspace dd, .sunnah-workspace .sunnah-stat strong, .sunnah-workspace [class*=stat] strong")].map(e=>e.textContent.trim()).slice(0,6)');
+        journey.notes.push('Statistics shown: ' + JSON.stringify(stats));
+        await ui.click('open the top narrator', '.sunnah-workspace ol.sunnah-subjects li button');
+        await until('document.querySelector(".sunnah-workspace ol.sunnah-subjects li button")?.getAttribute("aria-expanded")==="true"');
+        await shot('J12-statistics');
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');

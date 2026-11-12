@@ -1,3 +1,17 @@
+## KEY-254 review: hadith subjects and statistics pass live — 2026-11-12, Claude Code (review)
+
+I reviewed KEY-254 (built in 9a783a1) using the new opt-in journey 12 in ux-journeys-live. It clicks through the two paths the build had not tried live:
+1. Reading options → Subjects and statistics → Subjects → open a subject → open one of its chapters. The reader moves to that chapter.
+2. Statistics → per-collection counts table → top narrator, whose profile labels its computed grade "التصنيف الحاسوبي" (computational classification).
+
+The subjects notice says nothing is machine-assigned. It passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-254-review`). No product code changed.
+
+Friction recorded: the reading-options popover stays open over the panel after you choose "Subjects and statistics".
+
+Exact files
+- scripts/ux-journeys-live/main.cjs (J12)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-253 review: Shrouh beside a hadith with attribution passes — 2026-11-12, Claude Code (review)
 
 I reviewed KEY-253 (built in 9a783a1) after the KEY-305 Sunnah rework, using the new opt-in journey 11 in ux-journeys-live. It runs: Sunnah → study panel → Related. The research panel's Shrouh tab names the source (Fath al-Bari, Ibn Hajar, volume 1 page 9, Shamela reference), and *Beside the hadith* shows the sharh next to the matn. Personal commentary sits in the same panel, keyed by `hadith:<researchId>`. It passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-253-review`). No product code changed.
