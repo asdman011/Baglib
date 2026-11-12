@@ -1,3 +1,11 @@
+## KEY-253 review: Shrouh beside a hadith with attribution passes — 2026-11-12, Claude Code (review)
+
+I reviewed KEY-253 (built in 9a783a1) after the KEY-305 Sunnah rework, using the new opt-in journey 11 in ux-journeys-live. It runs: Sunnah → study panel → Related. The research panel's Shrouh tab names the source (Fath al-Bari, Ibn Hajar, volume 1 page 9, Shamela reference), and *Beside the hadith* shows the sharh next to the matn. Personal commentary sits in the same panel, keyed by `hadith:<researchId>`. It passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-253-review`). No product code changed.
+
+Exact files
+- scripts/ux-journeys-live/main.cjs (J11)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-331 remaining hardcoded labels translated — 2026-11-12, Claude Code
 
 These strings now use translations.ts keys in ar and en: the highlight-note popover (placeholder, Cancel, Save note), the reader bookmarks drawer (empty state, "Bookmark on page {page}"), the question-card choices placeholder, the app-lock "Or with PIN", the Khatmah page unit, and the two mixed "Arabic / English" category form errors. There are eight new keys. No behaviour change.

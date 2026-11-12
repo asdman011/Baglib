@@ -415,6 +415,24 @@ app.on('browser-window-created', (_, win) => {
         if (config.lang === 'en' && /[؀-ۿ]/u.test(check.placeholder)) throw new Error('Arabic placeholder in English: ' + check.placeholder);
         await shot('J10-online-hub');
       });
+
+      // J11 (opt-in, BAGLIB_JOURNEY_IDS=11) — KEY-253 review: Shrouh opens beside the hadith with attribution; commentary is keyed by the hadith.
+      if (journeysOnly.includes(11)) await journeyRun(11, 'Shrouh beside a hadith, personal commentary', async () => {
+        await ui.nav('sunnah', '.sunnah-workspace');
+        await until('!!document.querySelector("[data-hadith-id]")', 200);
+        await ui.click('open the study panel', '[data-reader-panel-toggle]');
+        await ui.click('open "Related"', '[data-islamic-reader-panel] [role=tab][id$="-related"]');
+        await until('!!document.querySelector("[data-islamic-reader-panel] .sunnah-research-citation, [data-islamic-reader-panel] .sunnah-research-empty")', 200);
+        const citation = await evaluate('(()=>{const c=document.querySelector("[data-islamic-reader-panel] .sunnah-research-citation");return c?{title:c.querySelector("strong")?.textContent.trim()||"",author:c.querySelectorAll("span")[0]?.textContent.trim()||"",page:c.querySelectorAll("span")[1]?.textContent.trim()||""}:null})()');
+        if (!citation) { journey.notes.push('The first hadith has no aligned Shrouh text in this pack.'); return; }
+        if (!citation.title || !citation.page) throw new Error('attribution missing ' + JSON.stringify(citation));
+        journey.notes.push('Shrouh source: ' + citation.title + ' — ' + citation.author + ' — ' + citation.page);
+        await ui.clickText('show it beside the hadith', '[data-islamic-reader-panel] button', tr('sunnahBesideHadith'));
+        await until('!!document.querySelector("[data-islamic-reader-panel] .sunnah-beside .sunnah-research-text")');
+        const reference = await evaluate('(()=>{const d=[...document.querySelectorAll("[data-islamic-reader-panel] details")].find(d=>d.querySelector("input[aria-label=' + JSON.stringify(tr('commentarySearch')).replace(/"/g, '\\"') + ']"));return !!d})()');
+        if (!reference) throw new Error('personal commentary not in the research panel');
+        await shot('J11-shrouh-beside');
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');
