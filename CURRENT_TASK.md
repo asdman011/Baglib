@@ -1,3 +1,13 @@
+## KEY-47 + KEY-52 verified — 2026-11-12, Codex
+
+Implemented one-click Library All / Opened / Imported segments with shared grid/list cards, filters, pagination, selection, bulk tags/shelf and scoped metadata audit. Opened aggregates existing reading_session end and reading_book_stat.last_open. Reader last-location storage has no timestamp. Imported uses the allowed fixed inclusive ten-minute created_at window ending at the newest digital/hybrid work with a file path because no durable session marker was found in the digital import path. This can merge nearby imports or truncate long sessions and is explained in ar/en UI. Bulk shelf retains KEY-44 physical-copy semantics, skipping digital-only books. Existing dashboard Continue reading covers that entry point.
+
+Verification passed — 4/4 focused tests, full 1885/1885 at concurrency2, tsc, tsup, scoped eslint (0 errors, one pre-existing database.ts unused-import warning) and diff check. Native scripts/recent-books-live passed eight ar/en × 1280/480 × Opened/Imported cases, grid/list order, real bulk tag persistence, shelf dialog, selected audit and filter rail; no page overflow. Real Arabic and English text-layer PDFs imported/read. 24 PNGs/result.json at .baglib-data/recent-evidence-LWsuwL, four representative screenshots inspected. Arabic shell-encoding corruption found during review was corrected and rerun successfully. All disposable profiles deleted, existing renderer reused, no Electron killed, original documents received no Save/OCR. Existing mobile list retains its horizontal table scroll.
+
+Exact 11 task files/hunks — src/shared/recent-books.ts; src/main/ipc/database.ts (handler); src/preload/index.ts (one reader method); src/renderer/components/library/LibraryGridView.tsx; src/renderer/components/library/LibraryFilterRail.tsx; src/renderer/translations.ts (six keys per locale); tests/ui/recent-books.test.ts; scripts/recent-books-live/main.cjs; scripts/recent-books-live/run.mjs; own CURRENT_TASK.md entry; own IMPLEMENTATION_PLAN.md Recent Agent Updates entry. Local detailed report docs/agent-ops/reports/KEY-47-52.md.
+
+No schema change, dependency, download or Jira mutation. Scoped commit/push authorized by this dispatch to origin/feature/library-domain. Publication pending. KEY-46 begins after successful push. Other agents' unfinished changes preserved.
+
 ## KEY-309 polish: tafsir range label only for multi-ayah passages; Ibn Kathir 2:1 data note - 2026-11-12, Claude Code
 
 The Quran panel's tafsir block printed "2:1-2:1" under the panel's own "2:1" header. It now shows a range only when the tafsir passage spans several ayahs (from ≠ to). quran-layout-live passes and the screenshot was reviewed; full suite 1881/1881.

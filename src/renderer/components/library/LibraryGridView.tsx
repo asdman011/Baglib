@@ -35,6 +35,8 @@ import {
   Download,
   type LucideIcon,
 } from 'lucide-react';
+import { recentlyOpenedBooks, recentlyImportedBooks, type RecentReadingActivity } from '../../../shared/recent-books';
+import { bookCountLabel } from '../../utils/book-count';
 import { BookItem } from '../../types/library';
 
 /** One icon per card action, so the right-click and ⋯ menus are scannable (KEY-308). */
@@ -70,7 +72,6 @@ import { Chip } from '../ui/Chip';
 import { Sheet } from '../ui/Sheet';
 import {
   getBookSourceBadgeType,
-  formatVolumesCount,
   getFeaturedBook,
   filterAndSortBooks,
   countActiveAdvancedFilters,
@@ -112,6 +113,30 @@ export const LibraryGridView: React.FC = () => {
     activeLibraryCategory,
     setActiveLibraryCategory,
   } = useWorkspace();
+  const [recentView, setRecentView] = useState<'all' | 'opened' | 'imported'>('all');
+  const [recentActivity, setRecentActivity] = useState<RecentReadingActivity[]>([]);
+  const [recentLoading, setRecentLoading] = useState(true);
+  const [recentError, setRecentError] = useState(false);
+  const [recentRevision, setRecentRevision] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    window.electronAPI.reader.getRecentActivity().then(activity => {
+      if (alive) {
+        setRecentActivity(activity);
+        setRecentError(false);
+      }
+    }).catch(() => {
+      if (alive) setRecentError(true);
+    }).finally(() => {
+      if (alive) setRecentLoading(false);
+    });
+    return () => { alive = false; };
+  }, [books, recentRevision]);
+  const changeRecentView = (view: 'all' | 'opened' | 'imported') => {
+    setRecentView(view);
+    setSelectedBookIds(new Set());
+    lastSelectedBookIdRef.current = null;
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [isStirlingHubOpen, setIsStirlingHubOpen] = useState(false);
 
@@ -219,6 +244,7 @@ export const LibraryGridView: React.FC = () => {
   // Reset to first page whenever any filter or search changes
   const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
   const resetInputs1 = [
+    recentView,
     searchQuery,
     selectedTopics,
     selectedAuthors,
@@ -280,14 +306,6 @@ export const LibraryGridView: React.FC = () => {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const dragCounterRef = useRef(0);
-
-  // Books scope for audit & refresh modal (selection vs entire library)
-  const booksToAudit = useMemo(() => {
-    if (selectedBookIds.size > 0) {
-      return books.filter((b) => selectedBookIds.has(b.id));
-    }
-    return books;
-  }, [books, selectedBookIds]);
 
   // Refresh trash count on mount and when books change (KEY-45)
   const refreshTrashCount = useCallback(async () => {
@@ -425,9 +443,21 @@ export const LibraryGridView: React.FC = () => {
     direction: sortDirection,
   }), [sortField, sortDirection]);
 
+  const recentBooks = useMemo(() => {
+    if (recentView === 'opened') return recentlyOpenedBooks(books, recentActivity);
+    if (recentView === 'imported') return recentlyImportedBooks(books);
+    return books;
+  }, [books, recentView, recentActivity]);
   const filteredAndSortedBooks = useMemo(() => {
-    return filterAndSortBooks(books, filterState, sortState);
-  }, [books, filterState, sortState]);
+    const filtered = filterAndSortBooks(recentBooks, filterState, sortState);
+    if (recentView === 'all') return filtered;
+    const matchingIds = new Set(filtered.map(book => book.id));
+    return recentBooks.filter(book => matchingIds.has(book.id));
+  }, [recentBooks, recentView, filterState, sortState]);
+  const booksToAudit = useMemo(() => {
+    if (selectedBookIds.size > 0) return books.filter(book => selectedBookIds.has(book.id));
+    return recentView === 'all' ? books : filteredAndSortedBooks;
+  }, [books, selectedBookIds, recentView, filteredAndSortedBooks]);
 
   const featuredBook = useMemo(() => {
     return getFeaturedBook(books);
@@ -1044,7 +1074,7 @@ export const LibraryGridView: React.FC = () => {
                 {collectionTitle}
               </h2>
               <span className="hidden sm:inline-block text-[11px] px-1.5 py-0.5 rounded-full bg-canvas border border-border text-text-muted font-mono shrink-0">
-                {filteredAndSortedBooks.length}
+                {bookCountLabel(filteredAndSortedBooks.length, lang, t)}
               </span>
             </div>
 
@@ -1078,7 +1108,8 @@ export const LibraryGridView: React.FC = () => {
               <div className="flex items-center gap-1 bg-canvas border border-border rounded-lg px-2 py-1 text-xs">
                 <ArrowUpDown className="size-3 text-primary-text shrink-0" aria-hidden="true" />
                 <select
-                  value={sortField}
+                  value={recentView === 'all' ? sortField : recentView}
+                  disabled={recentView !== 'all'}
                   onChange={(e) => {
                     const f = e.target.value as SortField;
                     const defaultDir = f === 'newest' || f === 'progress' ? 'desc' : 'asc';
@@ -1087,7 +1118,8 @@ export const LibraryGridView: React.FC = () => {
                   className="bg-transparent text-text text-xs outline-none cursor-pointer pe-1"
                   aria-label={t('sortLabel')}
                 >
-                  <option value="newest">{t('sortRecentlyAdded')}</option>
+                  {recentView !== 'all' && <option value={recentView}>{t(recentView === 'opened' ? 'libraryRecentOpened' : 'libraryRecentImported')}</option>}
+                    <option value="newest">{t('sortRecentlyAdded')}</option>
                   <option value="title">{t('sortTitle')}</option>
                   <option value="author">{t('sortAuthor')}</option>
                   <option value="progress">{t('sortRecentlyRead')}</option>
@@ -1162,7 +1194,7 @@ export const LibraryGridView: React.FC = () => {
                   {collectionTitle}
                 </h2>
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-canvas border border-border text-text-muted font-mono shrink-0">
-                  {formatVolumesCount(filteredAndSortedBooks.length, lang)}
+                  {bookCountLabel(filteredAndSortedBooks.length, lang, t)}
                 </span>
               </div>
 
@@ -1196,7 +1228,8 @@ export const LibraryGridView: React.FC = () => {
                 <div className="flex items-center gap-1.5 bg-canvas border border-border rounded-xl px-2.5 py-1.5 text-xs shadow-xs">
                   <ArrowUpDown className="size-3.5 text-primary-text shrink-0" aria-hidden="true" />
                   <select
-                    value={sortField}
+                    value={recentView === 'all' ? sortField : recentView}
+                    disabled={recentView !== 'all'}
                     onChange={(e) => {
                       const f = e.target.value as SortField;
                       const defaultDir = f === 'newest' || f === 'progress' ? 'desc' : 'asc';
@@ -1205,6 +1238,7 @@ export const LibraryGridView: React.FC = () => {
                     className="bg-transparent text-text text-xs outline-none cursor-pointer pe-1"
                     aria-label={t('sortLabel')}
                   >
+                    {recentView !== 'all' && <option value={recentView}>{t(recentView === 'opened' ? 'libraryRecentOpened' : 'libraryRecentImported')}</option>}
                     <option value="newest">{t('sortRecentlyAdded')}</option>
                     <option value="title">{t('sortTitle')}</option>
                     <option value="author">{t('sortAuthor')}</option>
@@ -1327,6 +1361,18 @@ export const LibraryGridView: React.FC = () => {
         )}
       </div>
 
+      <div className="px-3 sm:px-6 py-2 border-b border-border space-y-2" data-library-recent>
+        <div role="group" aria-label={t('libraryRecent')} className="flex flex-wrap items-center gap-1">
+          {(['all', 'opened', 'imported'] as const).map(view => (
+            <Button key={view} size="sm" variant={recentView === view ? 'primary' : 'ghost'}
+              aria-pressed={recentView === view} data-recent-view={view} onClick={() => changeRecentView(view)}>
+              {t(view === 'all' ? 'allBooksTitle' : view === 'opened' ? 'libraryRecentOpened' : 'libraryRecentImported')}
+            </Button>
+          ))}
+        </div>
+        {recentView === 'imported' && <p className="text-xs leading-relaxed text-text-muted">{t('libraryRecentImportWindow')}</p>}
+      </div>
+
       {/* Main Workspace Layout: Filter Rail + Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Desktop Side Filter Rail (shown when isAdvancedFiltersOpen on desktop) */}
@@ -1337,9 +1383,10 @@ export const LibraryGridView: React.FC = () => {
               onFilterChange={handleFilterChange}
               onClearFilters={resetAllFilters}
               allCategories={allCategories}
-              books={books}
+              books={recentBooks}
               availableLocations={availableLocations}
               sortState={sortState}
+            sortDisabled={recentView !== 'all'}
               onSortChange={handleSortChange}
               cardDensity={cardDensity}
               onCardDensityChange={(d) => {
@@ -1381,9 +1428,10 @@ export const LibraryGridView: React.FC = () => {
             onFilterChange={handleFilterChange}
             onClearFilters={resetAllFilters}
             allCategories={allCategories}
-            books={books}
+            books={recentBooks}
             availableLocations={availableLocations}
             sortState={sortState}
+              sortDisabled={recentView !== 'all'}
             onSortChange={handleSortChange}
             isSheet
             onCloseSheet={() => setIsFilterSheetOpen(false)}
@@ -1425,7 +1473,7 @@ export const LibraryGridView: React.FC = () => {
           }}
         >
           {/* Featured Card (Shown on page 1 in Grid mode when not actively searching) */}
-          {featuredBook && !filterState.searchQuery && currentPage === 1 && viewMode === 'grid' && (
+          {recentView === 'all' && featuredBook && !filterState.searchQuery && currentPage === 1 && viewMode === 'grid' && (
             <ContextMenu onOpenMenu={() => bookMenu(featuredBook)}><FeaturedBookCard
               book={featuredBook}
               onOpenBook={handleSafeOpenBook}
@@ -1437,15 +1485,17 @@ export const LibraryGridView: React.FC = () => {
             /></ContextMenu>
           )}
 
-          {booksLoading ? (
+          {(booksLoading || (recentView === 'opened' && recentLoading)) ? (
             <div role="status" aria-label={t('loading')} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[0, 1, 2, 3].map(id => <Skeleton key={id} className="h-64" />)}
             </div>
-          ) : booksError ? (
-            <EmptyState title={t('feedbackDatabaseUnavailable')} action={<Button onClick={() => void refreshBooks()}>{t('lookupRetry')}</Button>} />
+          ) : (booksError || (recentView === 'opened' && recentError)) ? (
+            <EmptyState title={t('feedbackDatabaseUnavailable')} action={<Button onClick={() => { void refreshBooks(); setRecentRevision(revision => revision + 1); }}>{t('lookupRetry')}</Button>} />
           ) : books.length === 0 ? (
             <EmptyState title={t('emptyLibraryDesc')} icon={<FolderOpen className="size-6" />}
               action={<Button onClick={() => setIsImportWizardOpen(true)}>{t('importWizardTitle')}</Button>} />
+          ) : recentView !== 'all' && recentBooks.length === 0 ? (
+            <EmptyState title={t(recentView === 'opened' ? 'libraryRecentOpenedEmpty' : 'libraryRecentImportedEmpty')} />
           ) : filteredAndSortedBooks.length > 0 ? (
             viewMode === 'grid' ? (
             /* STATE B1: Books matching filter — CALM CARDS (KEY-310) */

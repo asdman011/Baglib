@@ -461,6 +461,18 @@ export function setupDatabaseIPC() {
     }
   });
 
+  ipcMain.handle('reader:get-recent-activity', () => {
+    const db = getDatabase();
+    return db.prepare(`
+      SELECT workId, MAX(lastOpenedAt) AS lastOpenedAt FROM (
+        SELECT work_id AS workId, (julianday(ended_at) - 2440587.5) * 86400000 AS lastOpenedAt
+        FROM reading_session WHERE work_id IS NOT NULL AND ended_at IS NOT NULL
+        UNION ALL
+        SELECT id AS workId, last_open * 1000 AS lastOpenedAt FROM reading_book_stat
+      ) WHERE lastOpenedAt > 0 GROUP BY workId
+    `).all();
+  });
+
   ipcMain.handle('reader:get-sessions', (_, workId: string) => {
     try {
       const db = getDatabase();

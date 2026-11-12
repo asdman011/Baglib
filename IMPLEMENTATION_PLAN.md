@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-12, Codex] KEY-47+KEY-52 verified. One-click Opened/Imported Library segments, existing-data recency and documented ten-minute import-window fallback, shared cards/filters/bulk/audit, Arabic plural header counts. Focused4/4, full1885/1885, types/build/diff and lint0errors1existingwarning pass; native8/8,24PNGs/fourinspected, profiles cleaned. Exact11ownfiles/hunks in CURRENT_TASK/report. Scoped publication pending, KEY-46 waits. Jira Claude.
+
 - [2026-11-12, Codex] KEY-317 wave6 final ar/en1280/480 PASS, childcode0, profile removed. Real PDFs both interfaces, WMA rejection and real Arabic scan OCR new output1130chars, input copy unchanged. Current origin/nav/Notes preview/Library/Settings repaired. Two scripts/own state entries, syntax/diff pass.15/20verified, next poetry. No app UX/layout edit. Known non-Quran reminder stderr retained.
 
 - [2026-11-12, Codex] KEY-317 wave5 ar/en1280/480 PASS. Current gallery/menus/scoped nav and shared Islamic research panel. All1340 corpus originals unchanged, profile removed, syntax/diff pass. Two scripts/own state entries.14/20 verified, next wave6. No app UX/layout edit.

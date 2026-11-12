@@ -1,5 +1,12 @@
 export const translations = {
   ar: {
+    libraryRecent: "الأخيرة",
+    libraryRecentOpened: "المفتوحة مؤخرًا",
+    libraryRecentImported: "المستوردة مؤخرًا",
+    libraryRecentImportWindow: "الكتب الرقمية المضافة خلال عشر دقائق من آخر إضافة. قد تشمل أكثر من عملية استيراد.",
+    libraryRecentOpenedEmpty: "افتح كتابًا لتجده هنا لاحقًا",
+    libraryRecentImportedEmpty: "ستجد هنا كتب آخر استيراد",
+
     notificationEnable: "تفعيل تنبيهات الصلاة",
     notificationHistory: "سجل التنبيهات",
     notificationEmpty: "لا توجد تنبيهات بعد",
@@ -4967,6 +4974,13 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    libraryRecent: "Recent",
+    libraryRecentOpened: "Opened",
+    libraryRecentImported: "Imported",
+    libraryRecentImportWindow: "Digital books added within ten minutes of the latest addition. This may include several imports.",
+    libraryRecentOpenedEmpty: "Open a book to find it here later",
+    libraryRecentImportedEmpty: "Your latest imported books will appear here",
+
     notificationEnable: "Enable prayer notifications",
     notificationHistory: "Notification history",
     notificationEmpty: "No notifications yet",

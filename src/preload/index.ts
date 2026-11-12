@@ -925,6 +925,7 @@ export const API = {
 
   // Reader Session & Continuous Location Tracking
   reader: {
+    getRecentActivity: (): Promise<import('../shared/recent-books').RecentReadingActivity[]> => ipcRenderer.invoke('reader:get-recent-activity'),
     recordSession: (session: unknown) => ipcRenderer.invoke('reader:record-session', session),
     getSessions: (workId: string) => ipcRenderer.invoke('reader:get-sessions', workId),
     updateLastLocation: (workId: string, location: string) => ipcRenderer.invoke('reader:update-last-location', workId, location),

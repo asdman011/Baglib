@@ -46,6 +46,7 @@ export interface LibraryFilterRailProps {
   availableLocations: string[];
   sortState: LibrarySortState;
   onSortChange: (sort: LibrarySortState) => void;
+  sortDisabled?: boolean;
   className?: string;
   isSheet?: boolean;
   onCloseSheet?: () => void;
@@ -68,6 +69,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
   availableLocations,
   sortState,
   onSortChange,
+  sortDisabled = false,
   className = '',
   isSheet = false,
   onCloseSheet,
@@ -472,6 +474,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
               <div className="flex items-center gap-1">
                 <select
                   value={sortState.field}
+                  disabled={sortDisabled}
                   onChange={(e) => {
                     const f = e.target.value as SortField;
                     const defaultDir = f === 'newest' || f === 'year' || f === 'progress' ? 'desc' : 'asc';
@@ -497,6 +500,7 @@ export const LibraryFilterRail: React.FC<LibraryFilterRailProps> = ({
                       direction: sortState.direction === 'asc' ? 'desc' : 'asc',
                     })
                   }
+                  disabled={sortDisabled}
                   title={sortState.direction === 'asc' ? t('sortDirectionAsc') : t('sortDirectionDesc')}
                   className="p-1.5 rounded-lg bg-surface border border-border text-primary-text hover:bg-canvas transition-colors cursor-pointer shrink-0"
                  aria-label={sortState.direction === 'asc' ? t('sortDirectionAsc') : t('sortDirectionDesc')}>
