@@ -131,7 +131,7 @@ app.on('browser-window-created', (_, win) => {
         const arBook = books.find(book => book.filePath === arPdfPath), enBook = books.find(book => book.filePath === enEpubPath);
         await ui.type('search the Arabic title', '[data-simple-search-input]', arBook.title.split(/\s+/).slice(0, 2).join(' '));
         await until('[...document.querySelectorAll("[data-library-book-card]")].some(e=>e.getAttribute("aria-label")===' + JSON.stringify(arBook.title) + ')&&document.querySelectorAll("[data-library-book-card]").length<' + total);
-        await step('clear the search', async () => { await evaluate('document.querySelector("[data-simple-search-input]").focus()'); press('Escape'); await until('document.querySelectorAll("[data-library-book-card]").length===' + total); });
+        await step('clear the search', async () => { await evaluate('document.querySelector("[data-simple-search-input]").focus()'); await until('document.activeElement?.hasAttribute("data-simple-search-input")'); win.webContents.focus(); press('Escape'); await until('document.querySelectorAll("[data-library-book-card]").length===' + total); });
         if (!await evaluate('!!document.querySelector("[data-library-filter-rail]")?.offsetParent')) {
           await ui.clickText('open "Advanced filters"', 'button', tr('advancedFiltersToggle'));
         }
@@ -468,6 +468,48 @@ app.on('browser-window-created', (_, win) => {
         await ui.click('open the top narrator', '.sunnah-workspace ol.sunnah-subjects li button');
         await until('document.querySelector(".sunnah-workspace ol.sunnah-subjects li button")?.getAttribute("aria-expanded")==="true"');
         await shot('J12-statistics');
+      });
+
+      // J13 (opt-in, BAGLIB_JOURNEY_IDS=13) — KEY-248 review: a research pathway holds ordered books, notes and links, and exports references.
+      if (journeysOnly.includes(13)) await journeyRun(13, 'Research pathway: order resources, export references', async () => {
+        const exportDir = path.join(evidence, 'exports-' + [config.lang, config.theme, config.width].join('-'));
+        fs.mkdirSync(exportDir, { recursive: true });
+        // The save dialog is native; answer it with a file in the evidence folder (only this journey exports).
+        const { dialog } = require('electron');
+        dialog.showSaveDialog = async (_owner, options) => ({ canceled: false, filePath: path.join(exportDir, path.basename((options || _owner || {}).defaultPath || 'references.txt')) });
+        const books = await evaluate('window.electronAPI.getAllBooks()');
+        const enTitle = books.find(book => book.filePath === enEpubPath)?.title || books[0]?.title || '';
+        await ui.nav('pathways', '[data-pathways-space]');
+        await ui.clickText('open "Templates"', '[role=tab]', tr('pathwaysTabTemplates'));
+        await ui.click('use the research template', '[data-template-use]');
+        await until('!!document.querySelector("[data-pathway-next]")', 200);
+        await ui.click('choose "Add a source for this step"', '[data-pathway-add-source]');
+        await ui.type('search the books', '[data-pathway-resource-picker] [data-study-link-picker] input', '/books ' + enTitle.split(/\s+/).slice(0, 2).join(' '));
+        await ui.clickText('pick the book', '[data-pathway-resource-picker] [data-study-link-picker] button', enTitle.slice(0, 20));
+        await until('!!document.querySelector("[data-pathway-item-kind=resource]")');
+        await ui.type('name a link', '[data-pathway-link-input]', config.lang === 'ar' ? 'مكتبة الشاملة' : 'Shamela library');
+        await ui.type('give its address', 'input[aria-label=' + JSON.stringify(tr('pathwayLinkUrl')) + ']', 'https://shamela.ws/');
+        await ui.clickText('add the link', 'button', tr('pathwayAddLink'));
+        await until('!!document.querySelector("[data-pathway-end] [data-pathway-item-kind=link]")');
+        // Order: move the second step up through its row menu.
+        const order = () => evaluate('[...document.querySelectorAll("[data-pathway-item-kind=step]")].map(e=>e.dataset.pathwayItem)');
+        const before = await order();
+        await step('open the second step menu', async () => { await evaluate('(()=>{const e=document.querySelectorAll("[data-pathway-item-kind=step]")[1];const r=e.getBoundingClientRect();e.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:r.left+10,clientY:r.top+10}));})()'); await until('!!document.querySelector(\'[data-menu-action="up"]\')'); });
+        await ui.click('move it up', '[data-menu-action="up"]');
+        for (let i = 0; i < 40 && JSON.stringify(await order()) === JSON.stringify(before); i++) await pause(150);
+        const after = await order();
+        if (after[0] !== before[1] || after[1] !== before[0]) throw new Error('order did not change: ' + JSON.stringify({ before: before.slice(0, 2), after: after.slice(0, 2) }));
+        for (const [format, action] of [['bib', 'export-bib'], ['md', 'export-md']]) {
+          await step('open the pathway menu', async () => { await evaluate('(()=>{const e=document.querySelector("[data-pathway-next]").parentElement;const r=e.getBoundingClientRect();e.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:r.left+10,clientY:r.top+10}));})()'); await until('!!document.querySelector(\'[data-menu-action="' + action + '"]\')'); });
+          await ui.click('export ' + format, '[data-menu-action="' + action + '"]');
+          for (let i = 0; i < 40 && !fs.readdirSync(exportDir).some(f => f.endsWith('.' + format)); i++) await pause(150);
+          const file = fs.readdirSync(exportDir).find(f => f.endsWith('.' + format));
+          if (!file) throw new Error('no ' + format + ' export');
+          const text = fs.readFileSync(path.join(exportDir, file), 'utf8');
+          if (!text.includes(enTitle.split(/\s+/)[0]) || !text.includes('shamela.ws')) throw new Error(format + ' export lacks the book or the link: ' + text.slice(0, 200));
+          journey.notes.push(format + ' export: ' + file + ' (' + text.length + ' chars)');
+        }
+        await shot('J13-pathway');
       });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));

@@ -143,3 +143,20 @@ test('the AI draft prompt forbids naming books, scholars or quotations', () => {
   assert.match(systemPrompt, /Do not name books, authors or scholars, and do not quote or cite/u);
   assert.match(systemPrompt, /in Arabic/u);
 });
+
+// The resource picker writes book:<work>@<source> (and may add a page); the citation still finds the work's details.
+test('book references with a source or page still export author, publisher and year', () => {
+  const { db, service } = fixture();
+  try {
+    db.exec(`INSERT INTO work(id,title) VALUES('b2','Why Would Feminists Trust the Police?');
+      INSERT INTO author(id,name) VALUES('a2','Leah Cowan');
+      INSERT INTO work_author(work_id,author_id,role) VALUES('b2','a2','author');
+      INSERT INTO edition(id,work_id,publisher,publication_year) VALUES('e2','b2','Verso',2024);`);
+    const { id } = service.save({ name: 'Research', description: '', kind: 'research', outline: 'Step' });
+    service.addItem({ pathwayId: id, section: '', kind: 'resource', reference: 'book:b2@src-1', title: 'Why Would Feminists Trust the Police?' });
+    service.addItem({ pathwayId: id, section: '', kind: 'resource', reference: 'book:b2@src-1#p=12', title: 'page twelve' });
+    const { text } = service.exportText(id, 'bibtex');
+    assert.match(text, /@book\{baglib1,\n  title = \{Why Would Feminists Trust the Police\?\},\n  author = \{Leah Cowan\},\n  publisher = \{Verso\},\n  year = \{2024\}\n\}/u);
+    assert.match(text.split('@book{baglib2,')[1] ?? '', /author = \{Leah Cowan\}/u);
+  } finally { db.close(); }
+});

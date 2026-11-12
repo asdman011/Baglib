@@ -1,6 +1,7 @@
 import type { Database } from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { StudyPlannerRepository } from '../database/repositories/study-planner.repository';
+import { parseBookTarget } from '../../shared/study-notes';
 import { SqliteSettingsRepository } from '../database/repositories/settings.repository';
 import { parseOutline, type Pathway, type PathwayDetail, type PathwayInput, type PathwayItem, type PathwayItemInput, type PathwayTemplate, type ReferenceFormat } from '../../shared/pathways';
 
@@ -126,7 +127,8 @@ export class PathwayService {
       const key = `baglib${index + 1}`;
       if (item.kind === 'link') return { key, title: item.title, url: item.url! };
       if (!item.reference!.startsWith('book:')) return { key, title: item.title, note: item.reference! };
-      const row = book.get(item.reference!.slice(5)) as { title: string; author: string | null; publisher: string | null; year: number | null } | undefined;
+      // Book targets carry an optional source and position (book:<work>@<source>#p=…); the citation needs the work id.
+      const row = book.get(parseBookTarget(item.reference!)?.id ?? item.reference!.slice(5)) as { title: string; author: string | null; publisher: string | null; year: number | null } | undefined;
       return { key, title: row?.title ?? item.title, author: row?.author ?? undefined, publisher: row?.publisher ?? undefined, year: row?.year ?? undefined };
     });
   }

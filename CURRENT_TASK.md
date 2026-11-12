@@ -1,3 +1,22 @@
+## KEY-248 review + fix: research pathway exports full book references — 2026-11-12, Claude Code
+
+I reviewed KEY-248 (built in 9a783a1) with the new opt-in journey 13 in ux-journeys-live. It runs: Pathways → use a template → *Add a source for this step* → pick the imported English book → add a link (title and address) → move the second step up through its row menu → export BibTeX and Markdown. The native save dialog is answered with a file in the evidence folder.
+
+Found and fixed: book references written by the picker look like `book:<work>@<source>`, optionally with `#p=`. The export looked the work up with everything after `book:`, so it never matched, and the book exported as a title-only `@misc` with no author, publisher or year. It now uses `parseBookTarget`, and the book exports as `@book` with author, publisher and year. A new service test covers the `@source` and page forms.
+
+Also in this commit: the J1 "clear the search" step now waits for the field to have focus before pressing Escape. It had failed once from a timing race.
+
+Verification:
+- J1 and J13 passed in ar-light-1280 and en-dark-480. The exported files hold the ordered book and link (evidence `.baglib-data/KEY-309-evidence/KEY-248-review`).
+- tests/services/pathways.test.ts passed 12/12.
+- The full suite passed 1924/1924, and tsc and eslint are clean.
+
+Exact files
+- src/main/services/pathways.ts
+- tests/services/pathways.test.ts
+- scripts/ux-journeys-live/main.cjs (J13; J1 focus wait)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-255, KEY-256, KEY-259 reviews — 2026-11-12, Claude Code (review)
 
 - **KEY-255 and KEY-256.** wave6-live was re-run on real files and passed in ar and en. For KEY-255, all five formats play, with sections from the file, speed 1.5, and position resumed after a reload. For KEY-256, the timestamp note jumps back to 0:02, and the screenshot is embedded in a study note. Evidence: `.baglib-data/k317-wave6-evidence-PnCR3y`. No code change.
