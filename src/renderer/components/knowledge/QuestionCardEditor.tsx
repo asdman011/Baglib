@@ -185,7 +185,7 @@ export function QuestionCardEditor({ card, initial, onSaved, onCancel }: Questio
               rows={4}
               value={options}
               onChange={(e) => setOptions(e.target.value)}
-              placeholder="الخيار الأول&#10;الخيار الثاني&#10;الخيار الثالث"
+              placeholder={t('questionChoicesPlaceholder')}
               className={field}
             />
           </label>

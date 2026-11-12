@@ -378,7 +378,7 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
           {bookmarkedPages.length === 0 ? (
             <div className="h-48 flex flex-col items-center justify-center text-center text-muted text-xs space-y-1">
               <Bookmark className="w-8 h-8 opacity-30 text-amber-500" />
-              <span>لا توجد إشارات مرجعية محفوظة</span>
+              <span>{t('readerNoBookmarks')}</span>
             </div>
           ) : (
             bookmarkedPages.map((pg) => (
@@ -393,7 +393,7 @@ export const ZenTocDrawer: React.FC<ZenTocDrawerProps> = ({
               >
                 <div className="flex items-center gap-2">
                   <Bookmark className="w-3.5 h-3.5 text-amber-500 fill-current" />
-                  <span className="font-serif text-xs">إشارة مرجعية في الصفحة {pg}</span>
+                  <span className="font-serif text-xs">{t('readerBookmarkOnPage', { page: pg })}</span>
                 </div>
                 <ChevronRight className="w-3.5 h-3.5 text-muted rtl:rotate-180" />
               </button>

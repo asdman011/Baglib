@@ -1,3 +1,23 @@
+## KEY-331 remaining hardcoded labels translated — 2026-11-12, Claude Code
+
+These strings now use translations.ts keys in ar and en: the highlight-note popover (placeholder, Cancel, Save note), the reader bookmarks drawer (empty state, "Bookmark on page {page}"), the question-card choices placeholder, the app-lock "Or with PIN", the Khatmah page unit, and the two mixed "Arabic / English" category form errors. There are eight new keys. No behaviour change.
+
+Verification:
+- The new guard test tests/ui/misc-ui-i18n.test.ts passed 2/2.
+- The full suite passed 1921/1921, tsc passed, and eslint gave 0 errors, with warnings unchanged from HEAD in every changed file.
+- The live regression ux-journeys-live J1–J4 passed 8/8 in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-331-regression`).
+
+Exact files
+- src/renderer/components/reader/HighlightActionPopover.tsx
+- src/renderer/components/reader/ZenTocDrawer.tsx
+- src/renderer/components/knowledge/QuestionCardEditor.tsx
+- src/renderer/components/security/AppLockModal.tsx
+- src/renderer/components/dashboard/KhatmahDashboardModule.tsx
+- src/renderer/components/categories/CategoriesOverviewView.tsx
+- src/renderer/translations.ts (8 keys)
+- tests/ui/misc-ui-i18n.test.ts
+- CURRENT_TASK.md (this entry)
+
 ## KEY-330 online library hub labels use translations — 2026-11-12, Claude Code
 
 The online library hub (book details → Edit work details → Open library hub) showed hardcoded Arabic in the English interface: the Shamela, Noor and Inoreader labels and descriptions, the search placeholder, the author/publisher line, the Inoreader banner and "read the full article". These now use nine `online*` keys in ar and en, and the dead `|| 'عربي'` fallbacks on the LibGen and Anna's tabs were removed. Sample titles and stored category values are data and were left as they are.

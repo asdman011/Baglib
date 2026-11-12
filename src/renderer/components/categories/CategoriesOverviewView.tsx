@@ -334,7 +334,7 @@ export const CategoriesOverviewView: React.FC = () => {
     const nameEn = categoryFormNameEn.trim();
 
     if (!nameAr) {
-      setCategoryFormError('الاسم بالعربية مطلوب / Arabic name is required');
+      setCategoryFormError(t('categoryArabicNameRequired'));
       return;
     }
 
@@ -389,7 +389,7 @@ export const CategoriesOverviewView: React.FC = () => {
     if (!deletingCategory) return;
     try {
       if (deleteStrategy === 'reassign' && !deleteReassignTargetId) {
-        setCategoryFormError('يرجى اختيار التصنيف البديل / Target category required');
+        setCategoryFormError(t('categoryReassignTargetRequired'));
         return;
       }
 

@@ -411,7 +411,7 @@ export const CompanionMiniWidget: React.FC<{
             {tr.dashCompanionKhatmahTarget}
           </span>
           <span className="text-sm font-black text-main font-mono block">
-            {remainingPages} {effectiveLang === 'ar' ? 'ص' : 'p'}
+            {tr.khatmahPagesShort.replace('{count}', String(remainingPages))}
           </span>
         </div>
 

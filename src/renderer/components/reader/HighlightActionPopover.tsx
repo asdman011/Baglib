@@ -116,7 +116,7 @@ export const HighlightActionPopover: React.FC<HighlightActionPopoverProps> = ({
             <textarea
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
-              placeholder="اكتب ملاحظة حول هذا التظليل..."
+              placeholder={t('highlightNotePlaceholder')}
               rows={2}
               className="w-full p-2 rounded-xl bg-canvas border border-subtle text-xs text-main outline-none focus:border-pale-sky-500 resize-none font-sans"
               autoFocus
@@ -126,13 +126,13 @@ export const HighlightActionPopover: React.FC<HighlightActionPopoverProps> = ({
                 onClick={() => setIsEditingNote(false)}
                 className="px-2.5 py-1 rounded-lg text-[11px] text-muted hover:bg-canvas cursor-pointer"
               >
-                إلغاء
+                {t('cancel')}
               </button>
               <button
                 onClick={handleSaveNote}
                 className="px-3 py-1 rounded-lg text-[11px] bg-pale-sky-500 text-white font-bold hover:bg-pale-sky-600 shadow-xs cursor-pointer"
               >
-                حفظ الملاحظة
+                {t('zenSaveNote')}
               </button>
             </div>
           </div>

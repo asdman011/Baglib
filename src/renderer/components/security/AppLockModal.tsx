@@ -333,7 +333,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
                       <span className="bg-white dark:bg-zinc-900 px-2 text-gray-400">
-                        {isRtl ? 'أو عبر رمز PIN' : 'Or with PIN'}
+                        {t.appLockOrPin}
                       </span>
                     </div>
                   </div>
