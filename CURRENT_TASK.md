@@ -1,3 +1,14 @@
+## KEY-309 notes editor header wraps on phones — 2026-11-12, Claude Code (Codex queue4 item 2)
+
+Below the sm breakpoint the note editor header wraps. The back button and title take their own full-width row, and the save state, Save, graph, preview, panel and overflow actions wrap to the row below, aligned to the end. Desktop keeps one row.
+
+Verification: notes-ui-live passed, all 14 checks, with a new 480 px assertion in Arabic RTL and English LTR dark: title wider than 60% of the header, actions below it and inside it, no header overflow. The 480 px screenshots were inspected. Also passed: npx tsc --noEmit and eslint on the changed file. Throwaway profile removed.
+
+Exact files
+- src/renderer/components/notes/NoteEditorPane.tsx
+- scripts/notes-ui-live/notes-check.cjs
+- CURRENT_TASK.md (this entry)
+
 ## KEY-309 planner month grid fits phones — 2026-11-12, Claude Code (taking over Codex queue4 item 3 after its weekly limit)
 
 At phone widths the Study planner month grid drops its 42rem minimum and keeps seven columns. A Saturday-first short weekday header row shows on phones. Cells are compact, with the weekday hidden inside each cell and a smaller task-count label. Desktop layout is unchanged.

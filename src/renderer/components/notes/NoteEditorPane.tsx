@@ -346,8 +346,9 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
       dir={dir}
     >
       {/* Editor Header Bar */}
-      <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-subtle bg-surface">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+      <header className="shrink-0 flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 border-b border-subtle bg-surface" data-note-editor-header>
+        {/* Phones: the title takes its own full-width row; the actions wrap to the row below. */}
+        <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto sm:flex-1">
           {showBack && onBack && (
             <Button
               variant="secondary"
@@ -376,11 +377,12 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
                 void handleSave();
               }
             }}
+            data-note-editor-title
             className="flex-1 min-w-0 font-display font-bold text-base sm:text-lg text-main bg-transparent outline-none truncate placeholder:text-muted"
           />
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 ms-auto" data-note-editor-actions>
           {/* Save Status pill */}
           <span className="text-[11px] font-sans px-2 py-0.5 rounded-full bg-canvas border border-subtle text-muted tabular-nums">
             {saving ? t('notesSaving') : isDirty ? t('notesUnsaved') : t('notesSaved')}

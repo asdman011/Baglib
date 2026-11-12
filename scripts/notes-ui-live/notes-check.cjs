@@ -54,6 +54,18 @@ app.on('browser-window-created', (_, win) => {
     console.log(`[shot] ${name}.png saved (${image.getSize().width}x${image.getSize().height})`);
   };
 
+  const headerAt480 = async () => {
+    const h = await evaluate(`(() => {
+      const header = document.querySelector('[data-note-editor-header]');
+      const title = header?.querySelector('[data-note-editor-title]');
+      const actions = header?.querySelector('[data-note-editor-actions]');
+      if (!header || !title || !actions) return null;
+      const hr = header.getBoundingClientRect(), tr = title.getBoundingClientRect(), ar = actions.getBoundingClientRect();
+      return { titleWide: tr.width > hr.width * 0.6, actionsBelow: ar.top >= tr.bottom - 1, actionsInside: ar.left >= hr.left - 1 && ar.right <= hr.right + 1, overflow: header.scrollWidth > header.clientWidth + 1 };
+    })()`);
+    assert.deepEqual(h, { titleWide: true, actionsBelow: true, actionsInside: true, overflow: false }, 'editor header at 480 px: ' + JSON.stringify(h));
+  };
+
   const shotFix1 = async (name) => {
     win.show();
     win.focus();
@@ -456,6 +468,7 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(400);
+      await headerAt480();
       await shot('08-notes-editor-stacked-ar-480');
 
       // Dedicated review screen at 480px
@@ -579,6 +592,7 @@ app.on('browser-window-created', (_, win) => {
         })()
       `);
       await pause(400);
+      await headerAt480();
       await shot('14-notes-editor-en-dark-480');
 
       console.log('[live] All 14 live checks and screenshots completed successfully!');
