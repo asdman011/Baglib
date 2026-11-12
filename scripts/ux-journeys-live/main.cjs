@@ -342,6 +342,38 @@ app.on('browser-window-created', (_, win) => {
         await ui.click('mark it answered', '[data-captured-question="' + questions[0].id + '"] [data-question-answer]');
         await until('window.electronAPI.knowledgeHistory.questions().then(q=>q.find(x=>x.id==="' + questions[0].id + '").status==="answered")');
       });
+
+      // J8 (opt-in, BAGLIB_JOURNEY_IDS=8) — KEY-251 review: a personal comment on an ayah is searchable and its result opens the ayah.
+      if (journeysOnly.includes(8)) await journeyRun(8, 'Comment on an ayah, find it, open the ayah', async () => {
+        const words = config.lang === 'ar' ? 'تأمل خاص بآية ' + config.theme + config.width : 'Personal reflection ' + config.theme + config.width;
+        await ui.nav('quran', '[data-quran-workspace]');
+        const firstAyah = await evaluate('(()=>{const e=document.querySelector(\'.mushaf-svg-surface [data-surah="2"][data-aya]\');return e?{surah:+e.dataset.surah,ayah:+e.dataset.aya}:null})()');
+        await ui.click('open the ayah menu', '[data-quran-ayah-actions]');
+        await ui.click('choose "Comments"', '[data-menu-action="comment"]');
+        await ui.type('write a reflection', '[role=dialog] textarea', words);
+        await ui.clickText('save it', '[role=dialog] button', tr('commentarySave'));
+        await until('window.electronAPI.commentary.search(' + JSON.stringify(words) + ').then(r=>r.length===1)');
+        const saved = (await evaluate('window.electronAPI.commentary.search(' + JSON.stringify(words) + ')'))[0];
+        journey.notes.push('Saved on ' + saved.reference + (firstAyah ? ' (page starts at ' + firstAyah.surah + ':' + firstAyah.ayah + ')' : ''));
+        press('Escape');
+        // Move the reader to another surah, so opening the result has to bring the commented ayah back.
+        const pageOf = () => evaluate(`Number(document.querySelector('input[aria-label="انتقال إلى صفحة..."],input[aria-label="Jump to page..."]')?.value)`);
+        const savedPage = await pageOf();
+        const savedSurah = Number(saved.reference.split(':').slice(-2)[0]);
+        await step('go to another surah', async () => {
+          await evaluate('(()=>{const s=[...document.querySelectorAll("[data-reader-picker] select")].find(s=>[...s.options].some(o=>o.value==="2"));s.value="' + (savedSurah === 2 ? 1 : 2) + '";s.dispatchEvent(new Event("change",{bubbles:true}));})()');
+          await until('(' + `Number(document.querySelector('input[aria-label="انتقال إلى صفحة..."],input[aria-label="Jump to page..."]')?.value)` + ')!==' + savedPage, 200);
+        });
+        await ui.nav('notes', '[data-notes-overview]');
+        await ui.click('open the cards tab', '[data-notes-tab=cards]');
+        await step('open "My personal commentary"', async () => { await evaluate('(()=>{const i=document.querySelector("input[aria-label=' + JSON.stringify(tr('commentarySearch')).replace(/"/g, '\\"') + ']");i.closest("details").open=true;i.scrollIntoView({block:"center"});})()'); });
+        await ui.type('search the comment', 'input[aria-label=' + JSON.stringify(tr('commentarySearch')) + ']', words.split(' ').slice(0, 2).join(' '));
+        await until('!!document.querySelector(\'[data-commentary-open]\')');
+        await shot('J8-search');
+        await ui.click('open its ayah', '[data-commentary-open]');
+        await until('(' + `Number(document.querySelector('input[aria-label="انتقال إلى صفحة..."],input[aria-label="Jump to page..."]')?.value)` + ')===' + savedPage, 200);
+        await shot('J8-opened');
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');

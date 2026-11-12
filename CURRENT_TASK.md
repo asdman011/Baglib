@@ -1,3 +1,18 @@
+## KEY-251 personal commentary results open their ayah — 2026-11-12, Claude Code (review + fix)
+
+Review of KEY-251 (built in 9a783a1). Entries attach to an ayah, are searchable ignoring diacritics, and carry history (NoteHistory). The one gap the build left open is now closed: in a commentary search, a result's reference is a link that opens its source through `navigateStudyReference`. Ayah-menu comments use the short `quran:<surah>:<ayah>` form, which is opened as Hafs. Hadith research references have no navigable address and stay plain text. The new exported helper `commentaryStudyTarget` decides which references open.
+
+Verification:
+- The new opt-in journey 8 in ux-journeys-live runs: ayah menu → Comments → save a reflection → move the reader to another surah → Notes → Cards → My personal commentary → search → click the reference → the reader returns to the commented page. It passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-251-review`).
+- tests/ui/commentary-open-reference.test.ts passed 2/2.
+- The full suite passed 1918/1918, and tsc and eslint gave 0 errors. The one remaining warning in PersonalCommentary was already there.
+
+Exact files
+- src/renderer/components/knowledge/PersonalCommentary.tsx
+- tests/ui/commentary-open-reference.test.ts
+- scripts/ux-journeys-live/main.cjs (J8)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-246 review: open questions from notes pass — 2026-11-12, Claude Code (review)
 
 I reviewed KEY-246, which Codex built in 9a783a1, against its "done when". A new opt-in journey 7 in ux-journeys-live (`BAGLIB_JOURNEY_IDS=7`) works only through the UI:

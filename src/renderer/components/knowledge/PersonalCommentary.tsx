@@ -6,12 +6,21 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { Skeleton } from '../ui/Skeleton';
 import { NoteHistory } from '../notes/NoteHistory';
 import { COMMENTARY_KINDS, type CommentaryEntry, type CommentaryKind } from '../../../shared/personal-commentary';
+import { validStudyTarget } from '../../../shared/study-notes';
+import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+
+/** KEY-251: a commentary reference that names a readable source (an ayah, a note, a book, a hadith) opens it. */
+export function commentaryStudyTarget(reference: string): string | null {
+  // Ayah-menu comments use quran:<surah>:<ayah>; the reader's study target adds the Hafs profile.
+  const target = /^quran:\d{1,3}:\d{1,3}$/u.test(reference) ? reference.replace(/^quran:/u, 'quran:hafs:') : reference;
+  return validStudyTarget(target) ? target : null;
+}
 
 const KIND_LABELS = { reflection: 'commentaryReflection', question: 'commentaryQuestion', research: 'commentaryResearch', 'cross-reference': 'commentaryCrossReference', insight: 'commentaryInsight', academic: 'commentaryAcademic' } as const;
 
 /** The user's own words on a source. With no `reference` it only searches all of them. */
 export function PersonalCommentary({ reference }: { reference?: string }) {
-  const { t } = useWorkspace();
+  const { t, books, openBookForReading } = useWorkspace();
   const [entries, setEntries] = useState<CommentaryEntry[]>([]);
   const [query, setQuery] = useState('');
   const [text, setText] = useState('');
@@ -61,7 +70,9 @@ export function PersonalCommentary({ reference }: { reference?: string }) {
       <ul className="space-y-2">
         {entries.map(entry => <li key={entry.id} data-commentary-entry={entry.id} className="rounded border border-subtle p-2">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-xs text-muted">{t(KIND_LABELS[entry.kind])}{entry.reference !== reference && <> · <bdi>{entry.reference}</bdi></>}</p>
+            <p className="text-xs text-muted">{t(KIND_LABELS[entry.kind])}{entry.reference !== reference && <> · {commentaryStudyTarget(entry.reference)
+              ? <button type="button" data-commentary-open={entry.reference} className="underline" onClick={() => void navigateStudyReference(commentaryStudyTarget(entry.reference)!, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => setFailed(true))}><bdi>{entry.reference}</bdi></button>
+              : <bdi>{entry.reference}</bdi>}</>}</p>
             <button type="button" onClick={() => void act(() => window.electronAPI.commentary.remove(entry.id))} title={t('savedCardsDelete')} aria-label={t('savedCardsDelete')} className="shrink-0 rounded p-1 text-muted hover:bg-canvas"><Trash2 className="size-3.5" /></button>
           </div>
           <p dir="auto" className="whitespace-pre-wrap break-words leading-loose">{entry.text}</p>
