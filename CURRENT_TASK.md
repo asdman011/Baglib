@@ -1,3 +1,14 @@
+## KEY-236 planner audits completed: real source links and month-grid alignment - 2026-11-12, Claude Code
+
+The two limits left open at f492e12 are now verified live. The new scripts/planner-links-live runs on disposable copies of the installed Quran packs (with the mushaf layout) and the merged Sunnah database, in ar and en:
+- A study task's saved link 'آية الكرسي' (quran:hafs:2:255) opens the Quran reader at page 42.
+- Its link 'حديث النيات' (sunnah:Bukhari:1:Bukhari:1:1) opens Sahih al-Bukhari, book 1, hadith 1 with its real text (إنما الأعمال بالنيات).
+- Month grid: 30 cells in 7 columns, each column holding a single weekday, with Saturday-first leading cells correct in RTL and LTR. The screenshot was reviewed.
+
+Passes; copies deleted and originals unchanged.
+
+Files: scripts/planner-links-live/main.cjs, scripts/planner-links-live/run.mjs, CURRENT_TASK.md.
+
 ## KEY-325 hadith narrator cards: source names and localized label - 2026-11-12, Claude Code
 
 The narrator card showed raw source keys (`mucin_tabaqat`) and the label "Bukhari 1" in the Arabic UI.
