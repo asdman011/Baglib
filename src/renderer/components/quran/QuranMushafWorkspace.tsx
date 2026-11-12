@@ -117,7 +117,8 @@ function StudyContent({ tool, reference, page, selection, metadata, t, lang, onN
           const group = `${result.data.from}-${result.data.to}`;
           if (seen.has(group)) continue;
           seen.add(group);
-          body = <div dir="rtl" lang="ar" className="font-reading text-xl leading-[2.2]"><p dir="ltr" className="text-xs">{group}</p><QuranRichText nodes={result.data.nodes} /></div>;
+          // The panel header names the ayah; show the passage range only when the tafsir covers several ayahs.
+          body = <div dir="rtl" lang="ar" className="font-reading text-xl leading-[2.2]">{result.data.from !== result.data.to && <p dir="ltr" className="text-xs">{result.data.from}–{result.data.to}</p>}<QuranRichText nodes={result.data.nodes} /></div>;
         } else if (tool === 'topics') {
           const result = await api.ayahTopics({ ...location, pack: metadata.topics });
           if (!result.ok) throw new Error(result.error);

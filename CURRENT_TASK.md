@@ -1,3 +1,11 @@
+## KEY-309 polish: tafsir range label only for multi-ayah passages; Ibn Kathir 2:1 data note - 2026-11-12, Claude Code
+
+The Quran panel's tafsir block printed "2:1-2:1" under the panel's own "2:1" header. It now shows a range only when the tafsir passage spans several ayahs (from ≠ to). quran-layout-live passes and the screenshot was reviewed; full suite 1881/1881.
+
+Data finding, no app change: in the installed Ibn Kathir pack (QUL), the tafsir row for 2:1 begins with the end of the Fatiha (1:7) commentary. It is one row of about 63k characters: the rest of the Fatiha commentary, then the introduction to Al-Baqarah (from about character 23,500), then «الم». The app shows the stored row as it is; the Mukhtasar pack's 2:1 is aligned. If wanted, a later task could split this row at the surah introduction.
+
+Files: src/renderer/components/quran/QuranMushafWorkspace.tsx, CURRENT_TASK.md.
+
 ## KEY-326 wird sync no longer logs an error without a mushaf layout - 2026-11-12, Claude Code
 
 The default wird unit is pages. Without an installed mushaf layout, `syncTodayWird` threw the typed `missing-layout` error on every Today-panel load, logged as an IPC handler failure.
