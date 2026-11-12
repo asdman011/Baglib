@@ -441,6 +441,7 @@ app.on('browser-window-created', (_, win) => {
         const chapterBefore = await evaluate('[...document.querySelectorAll(".sunnah-workspace select")].map(s=>s.value).join("|")');
         if (await evaluate('!!document.querySelector("[data-reader-settings-popover]")?.hidden')) await ui.click('open reading options', '[data-reader-settings]');
         await ui.clickText('open "Insights"', '[data-reader-settings-popover] button', tr('sunnahInsights'));
+        await until('!!document.querySelector("[data-reader-settings-popover]")?.hidden'); // the popover steps aside for the panel it opened
         await ui.clickText('open "Subjects"', '.sunnah-insights .sunnah-research-tabs button', tr('sunnahSubjects'));
         await until('!!document.querySelector(".sunnah-subjects button[aria-expanded]")', 200);
         await ui.click('open a subject', '.sunnah-subjects button[aria-expanded]:nth-of-type(1)');

@@ -245,7 +245,8 @@ export function SunnahView() {
       </select></label>
       <label><span>{t('sunnahHadith')}</span><select value={hadith?.id || ''} disabled={loading || importing || !chapter} onChange={event => focusHadith(event.target.value)}>
         {chapter?.hadiths.map((item, index) => <option key={item.id} value={item.id}>{t('sunnahHadithPosition', { number: item.number || '—', index: index + 1, total: chapter.hadiths.length })}</option>)}
-      </select></label></div>} settings={<div className="space-y-4">        <div className="sunnah-mode" role="group" aria-label={t('sunnahViewMode')}>
+      </select></label>
+</div>} settings={<div className="space-y-4">        <div className="sunnah-mode" role="group" aria-label={t('sunnahViewMode')}>
           {(['single', 'chapter'] as const).map(mode => <button type="button" key={mode} aria-pressed={position.mode === mode}
             onClick={() => { setPosition(previous => ({ ...previous, mode })); setQuery(''); }}>
             {t(mode === 'single' ? 'sunnahSingle' : 'sunnahContinuous')}
@@ -254,7 +255,7 @@ export function SunnahView() {
         <button type="button" className="sunnah-button" aria-pressed={position.english} onClick={() => setPosition(previous => ({ ...previous, english: !previous.english }))}>
           <Languages size={17} /><span>{t('sunnahEnglish')}</span>{position.english && <Check size={14} />}
         </button>
-        {catalog?.research && <button type="button" className="sunnah-button" aria-pressed={insights} onClick={() => setInsights(value => !value)}><span>{t('sunnahInsights')}</span></button>}
+        {catalog?.research && <button type="button" className="sunnah-button" data-closes-settings aria-pressed={insights} onClick={() => setInsights(value => !value)}><span>{t('sunnahInsights')}</span></button>}
         <label className="sunnah-size"><span>{t('sunnahFontSize')}</span><input type="range" min={20} max={34} step={2} value={position.size}
           onChange={event => setPosition(previous => ({ ...previous, size: Number(event.target.value) }))} /></label>
 <button type="button" disabled={loading || importing} onClick={() => void importCorpus()}>{t('sunnahConnectResearch')}</button><p className="text-xs text-muted">{catalog && t(catalog.research ? 'sunnahResearchReady' : 'sunnahResearchFallback', {count:catalog.hadithCount,collections:catalog.collections.length})}</p><p className="text-xs text-muted">{t(catalog?.research ? 'sunnahResearchSubtitle' : 'sunnahSubtitle')}</p></div>} />

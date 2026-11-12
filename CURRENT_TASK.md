@@ -1,3 +1,18 @@
+## KEY-254 follow-up: reading options close when they open the insights panel — 2026-11-12, Claude Code
+
+In the Sunnah reader, choosing "Subjects and statistics" opened the insights panel but left the reading-options popover covering it. The shared reader header's popover now closes when a control marked `data-closes-settings` is pressed, and the Sunnah insights toggle carries that mark. Other options, such as the translation toggle and text size, keep the popover open as before.
+
+Verification:
+- ux-journeys-live J12 now checks that the popover closes. J5, J11 and J12 passed in ar-light-1280 and en-dark-480 (evidence `.baglib-data/KEY-309-evidence/KEY-254-popover`).
+- quran-layout-live passed, since the shared header is also used by Quran.
+- The full suite passed 1921/1921, and tsc and eslint are clean.
+
+Exact files
+- src/renderer/components/islamic/IslamicReaderChrome.tsx
+- src/renderer/components/sunnah/SunnahView.tsx
+- scripts/ux-journeys-live/main.cjs (J12 check)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-254 review: hadith subjects and statistics pass live — 2026-11-12, Claude Code (review)
 
 I reviewed KEY-254 (built in 9a783a1) using the new opt-in journey 12 in ux-journeys-live. It clicks through the two paths the build had not tried live:
