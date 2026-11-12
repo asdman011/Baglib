@@ -1,3 +1,24 @@
+## KEY-324 Notes editor keeps reader locations and shows the link filter; KEY-317 dashboard-live - 2026-11-12, Claude Code
+
+KEY-324 (bug, found while rewriting dashboard-live):
+- Saving a reader book note from the Notes editor reset its book location (`epubcfi(/6/2)` became `'1'`). This was a redundant, malformed `knowledge.save` in NoteEditorPane, now removed; `studyNotes.save` with workId already stores book-attached notes.
+- A capture containing a link silently narrowed the list to notes linking that target, with no way to clear it. A "Linked notes: <target>" chip with a clear button now shows that filter.
+
+KEY-317 dashboard-live is rewritten for the Notes editor pane:
+- the capture opens in the editor, the embed is added and saved;
+- global search finds a note by its alias;
+- the link filter chip shows, then clears to 4 notes (3 study notes and the book note);
+- the book note is edited and keeps its location;
+- backlinks are checked in the details pane.
+
+It passes. Full suite 1881/1881.
+
+Files:
+- src/renderer/components/notes/NoteEditorPane.tsx
+- src/renderer/components/notes/NotesOverviewView.tsx
+- scripts/dashboard-live/main.ts
+- CURRENT_TASK.md
+
 ## KEY-317 live runners stop killing other renderers - 2026-11-12, Claude Code
 
 Ten runners called scripts/ensure-port-free.js, killing whatever served port 3000 (other agents' or the user's dev server), and always started their own renderer.

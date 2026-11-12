@@ -92,33 +92,41 @@ app.whenReady().then(async () => {
     assert.ok(await evaluate(`Boolean(document.querySelector('[data-study-note="${first.id}"]'))`));
     await fill('input[type=search]', '');
     await until("document.querySelectorAll('[data-study-note]').length===3");
-    assert.ok(await evaluate(`document.querySelector('[data-study-note="${first.id}"]').textContent.includes('(1)')`));
+    // Since KEY-304 backlinks are listed in the selected note's details pane, not counted on the list card.
+    await evaluate(`document.querySelector('[data-study-note="${first.id}"]').click()`);
+    await until(`[...document.querySelectorAll('[data-note-details-pane] button')].some(b=>b.textContent.includes('روابط البحث'))`);
+    // Since KEY-304 a capture opens a new note in the Notes editor pane (no scratchpad, no link-picker button;
+    // links are typed with [[ completion, which note-editor-live covers). Save through the pane's Save button.
+    const saveNote = "[...document.querySelectorAll('[data-note-editor-pane] button')].find(b=>b.textContent.trim()===window.dashboardTest.workspace.t('save')).click()";
     await evaluate("window.dashboardTest.capture({content:'[[quran:hafs:2:255|البقرة]]\\n\\nملاحظة — mixed English'})");
-    await until("Boolean(document.querySelector('[data-scratchpad-save]:not([disabled])'))");
-    await evaluate("document.querySelector('button[aria-label='+JSON.stringify(window.dashboardTest.workspace.t('studyInsertLink'))+']').click()");
-    await fill('[data-study-link-picker] input:not([type=checkbox])', '/notes ايمان');
-    await until("document.querySelector('[data-study-link-picker] .max-h-44 button')?.textContent.includes('Guidance')");
-    await evaluate("document.querySelector('[data-study-link-picker] input[type=checkbox]').click();document.querySelector('[data-study-link-picker] .max-h-44 button').click()");
-    await until("document.querySelector('[data-scratchpad-textarea]').value.includes('![[note:')");
-    await evaluate("document.querySelector('[data-scratchpad-save]').click()");
+    await until("(document.querySelector('[data-note-editor-pane] [data-study-note-editor]')?.value||'').includes('mixed English')");
+    await evaluate(`(()=>{const el=document.querySelector('[data-note-editor-pane] [data-study-note-editor]');el.value=el.value+'\\n![[note:${first.id}|الهداية — Guidance]]';})()`);
+    await until(`(document.querySelector('[data-note-editor-pane] [data-study-note-editor]')?.value||'').includes('![[note:${first.id}|')`);
+    await evaluate(saveNote);
     await until('window.electronAPI.studyNotes.list().then(notes=>notes.length===3)');
     assert.equal(notes.list().length, 3);
     assert.ok(notes.list().some(note => note.content.includes('ملاحظة — mixed English')));
     assert.ok(notes.list().some(note => note.content.includes(`![[note:${first.id}|`)));
-    await until("!document.querySelector('[data-scratchpad-textarea]')");
+    // Global search finds notes by an alias with tashkeel.
     await evaluate("window.dashboardTest.workspace.setCommandPaletteOpen(true)");
     await until("Boolean(document.querySelector('[role=dialog] input[type=search]'))");
     await fill('[role=dialog] input[type=search]', '/notes ايمان');
     await until("document.querySelector('[role=dialog] .max-h-96 button')?.textContent.includes('Guidance')");
     await evaluate("window.dashboardTest.workspace.setCommandPaletteOpen(false)");
-    await until("!document.querySelector('[role=dialog]') && document.querySelectorAll('[data-study-note]').length===2");
-    await evaluate("[...document.querySelector('[data-notes-overview]').querySelectorAll('button')].find(button=>button.textContent===window.dashboardTest.workspace.t('studyLinkedNotes')).click()");
-    await until("document.querySelectorAll('[data-study-note]').length===4");
-    await evaluate("document.querySelector('[data-study-note=book-note-test] button[aria-label='+JSON.stringify(window.dashboardTest.workspace.t('studyEdit'))+']').click()");
-    await until("Boolean(document.querySelector('[data-scratchpad-textarea]'))");
-    await fill('[data-scratchpad-textarea]', 'Updated book note — ملاحظة معدلة');
-    await evaluate("document.querySelector('[data-scratchpad-save]').click()");
-    await until("!document.querySelector('[data-scratchpad-textarea]')");
+    await until("!document.querySelector('[role=dialog] input[type=search]')");
+    // The capture linked to 2:255, so the list shows the notes linking there, with a visible, clearable filter (KEY-324).
+    await until("document.querySelectorAll('[data-study-note]').length===2 && Boolean(document.querySelector('[data-notes-anchor-filter]'))");
+    assert.ok(await evaluate("document.querySelector('[data-notes-anchor-filter]').textContent.includes('quran:hafs:2:255')"));
+    await evaluate("document.querySelector('[data-notes-anchor-clear]').click()");
+    // Cleared, the list shows the three study notes and the reader's book note.
+    await until("document.querySelectorAll('[data-study-note]').length===4 && !document.querySelector('[data-notes-anchor-filter]')");
+    // Edit the book note through the editor pane; its reader location must be kept.
+    await evaluate("document.querySelector('[data-study-note=book-note-test]').click()");
+    await until("(document.querySelector('[data-note-editor-pane] [data-study-note-editor]')?.value||'').includes('Book note')");
+    await evaluate(`(()=>{const el=document.querySelector('[data-note-editor-pane] [data-study-note-editor]');el.value='Updated book note — ملاحظة معدلة';})()`);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await evaluate(saveNote);
+    for (let i = 0; i < 100 && knowledge.getKnowledgeByWork('study-book')[0]?.noteContent !== 'Updated book note — ملاحظة معدلة'; i++) await new Promise(resolve => setTimeout(resolve, 50));
     assert.equal(knowledge.getKnowledgeByWork('study-book')[0].location, 'epubcfi(/6/2)');
     assert.equal(knowledge.getKnowledgeByWork('study-book')[0].noteContent, 'Updated book note — ملاحظة معدلة');
     await new Promise(resolve => setTimeout(resolve, 300));

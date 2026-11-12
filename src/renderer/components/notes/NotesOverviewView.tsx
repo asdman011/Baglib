@@ -736,6 +736,16 @@ export const NotesOverviewView: React.FC = () => {
               )}
             </div>
 
+            {/* KEY-324: a capture with a link narrows the list to notes linking the same target; show it and let it be cleared. */}
+            {anchor && (
+              <div data-notes-anchor-filter className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-subtle bg-canvas px-2 py-1 text-xs text-muted">
+                <span className="min-w-0 flex-1 truncate">{t('studyLinkedNotes')}: <bdi dir="auto" className="text-main">{anchor}</bdi></span>
+                <button type="button" data-notes-anchor-clear onClick={() => setAnchor(null)} aria-label={t('searchClearQuery')} title={t('searchClearQuery')} className="shrink-0 rounded p-0.5 hover:bg-surface">
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* Reading Log Panel if book selected */}
             {readingWork && <ReadingLogPanel key={readingWork} workId={readingWork} />}
 

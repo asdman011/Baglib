@@ -193,20 +193,8 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
     try {
       const targetId = note?.id || crypto.randomUUID();
 
-      // If attached to a work, save via knowledge contract too
-      if (workId) {
-        await window.electronAPI.knowledge.save({
-          id: note?.knowledgeId || targetId,
-          workId,
-          type: 'note',
-          data: {
-            content: currentContent,
-            color: 'amber',
-            tags,
-          },
-        });
-      }
-
+      // KEY-324: studyNotes.save already stores book-attached notes (workId) and keeps a reader note's
+      // location. A separate knowledge.save here wrote a malformed payload and reset that location.
       const savedNote = await window.electronAPI.studyNotes.save({
         id: targetId,
         title: trimmedTitle,
