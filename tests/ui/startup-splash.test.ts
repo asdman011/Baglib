@@ -34,7 +34,7 @@ describe('Scholar-Grade Startup Splash Orchestrator Tests', () => {
   });
 
   it('validates bilingual brand subtitle and platform mission alignment', () => {
-    assert.strictEqual(translations.ar.splashTitle, 'بغلب');
+    assert.strictEqual(translations.ar.splashTitle, 'بَغْلِب');
     assert.strictEqual(translations.en.splashTitle, 'Baglib');
 
     assert.ok(translations.ar.splashFullBrand.includes('بغلب'));

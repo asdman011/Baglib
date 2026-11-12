@@ -1580,7 +1580,7 @@ export const translations = {
     clearTrashSelection: "إلغاء التحديد",
     deletePermanentlyBtn: "حذف نهائي",
     // Startup Splash Orchestrator Keys
-    splashTitle: "بغلب",
+    splashTitle: "بَغْلِب",
     splashSubtitle: "منصة البحث والمعرفة والتحقيق العلمي",
     splashFullBrand: "بغلب — منصة البحث والمعرفة والتحقيق العلمي",
     splashStepDb: "جاري تهيئة قاعدة البيانات المحلية...",

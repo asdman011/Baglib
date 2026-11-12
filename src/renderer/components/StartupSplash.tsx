@@ -401,13 +401,15 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({
 
         {/* Brand Display Title */}
         <h1
-          className={`text-4xl md:text-5xl font-bold tracking-tight font-display mb-2 drop-shadow-sm ${
+          data-splash-brand
+          style={{ paddingBlock: '0.1em' }}
+          className={`text-4xl md:text-5xl leading-[1.7] font-bold tracking-tight font-display mb-2 drop-shadow-sm ${
             isDark
               ? 'bg-clip-text text-transparent bg-gradient-to-r from-amber-200 via-amber-300 to-amber-100'
               : 'bg-clip-text text-transparent bg-gradient-to-r from-amber-900 via-amber-700 to-amber-900'
           }`}
         >
-          {lang === 'ar' ? 'بَغْلَبْ' : 'Baglib'}
+          {t('splashTitle')}
         </h1>
 
         {/* Subtitle / Platform Mission */}

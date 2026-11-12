@@ -1,3 +1,23 @@
+## KEY-309 splash verified - 2026-11-12, Codex queue2-root
+
+Confirmed brand clipping in production startup splash in both themes and both widths. Baseline desktop title linebox48px, ink61.04px, inkTop-9.84/inkBottom51.2. Baseline mobile linebox40px, ink45.28px, inkTop-4.88/inkBottom40.4. Added line-height1.7 and logical paddingBlock0.1em. Brand now uses existing splashTitle translations, with the exact Arabic vocalization supplied by the queue and existing English Baglib. Updated the existing brand expectation.
+
+Final Arabic desktop title box91.19px contains ink from15to77.4px; mobile box68.38px contains ink12to58.8px. The taller title linebox/padding give tashkeel visible space above/below the word. Existing font and gradient remain in use. Native8/8 ar/en xlight/dark x1280/480 asserts ink containment, localized title, direction and no overflow. Four final PNGs inspected (ar-dark480/ar-light1280/en-dark1280/en-light480), plus ar-dark480 baseline. Before evidence .baglib-data/splash-evidence-IVIvXf, after evidence .baglib-data/splash-evidence-6B8T3q. Both profiles deleted. The harness delays its own FTS response1.8s solely to capture the production splash with loaded fonts.
+
+Verification passed: focused13/13 splash/readiness, full1900/1900 at concurrency2, tsc, scoped ESLint0errors0warnings, tsup, script syntax and diff check. An initial focused invocation named a nonexistent readiness test file; rerun with the actual startup-readiness.test.ts passed. No document/media imports needed for this typography-only item.
+
+Exact7files/hunks
+
+- src/renderer/components/StartupSplash.tsx
+- src/renderer/translations.ts
+- tests/ui/startup-splash.test.ts
+- scripts/splash-live/main.cjs
+- scripts/splash-live/run.mjs
+- CURRENT_TASK.md (own splash handoff and reader page-number publication receipt)
+- IMPLEMENTATION_PLAN.md (own splash entry and reader page-number publication receipt)
+
+Publication pending under commit.lock. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue item5 pending.
+
 ## KEY-309 reader page numbers verified - 2026-11-12, Codex queue2-root
 
 Header page spinbutton now shows Arabic-Indic digits in ar and Latin digits in en, accepts Latin/Arabic-Indic/Persian digit entry and retains Up/Down editing and one-based bounded submission. The existing reader-chrome-state module supplies shared number formatting and page parsing. Legacy ZenBottomScrubber uses the same formatter, localized title/value and optional interface-language prop. Current production reader has no mounted slider; e25fa60 removed the stale scrubber import. Header and native viewer both use one-based readingPage.
@@ -18,7 +38,7 @@ Exact9files/hunks
 - CURRENT_TASK.md (own page-number handoff and KEY-300 lint publication receipt)
 - IMPLEMENTATION_PLAN.md (own page-number entry and KEY-300 lint publication receipt)
 
-Publication pending under commit.lock. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue items4-5 pending.
+Published ee68488a6893152221a72503dbbca7ac78831e17 normally to origin/feature/library-domain at 2026-11-12T03:40:46.114Z. Exact remote hash verified. Lock released. Claude owns review/Jira. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue items4-5 pending.
 
 ## KEY-309 polish: tafsir editorial notes render as small notes - 2026-11-12, Claude Code
 
