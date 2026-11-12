@@ -394,6 +394,27 @@ app.on('browser-window-created', (_, win) => {
         if (config.lang === 'ar' ? check.arabic === 0 : check.arabic > check.latin) throw new Error('wrong language in dialog');
         await shot('J9-storage');
       });
+
+      // J10 (opt-in, BAGLIB_JOURNEY_IDS=10) — the online library hub opens from a book's details with translated labels.
+      if (journeysOnly.includes(10)) await journeyRun(10, 'Open the online library hub', async () => {
+        await ui.nav('library', '[data-library-recent]');
+        await ui.click('open a book menu', '[data-library-book-card] [data-card-menu-button]');
+        await ui.click('choose "Edit metadata"', '[data-menu-action="metadata"]');
+        await ui.clickText('choose "Edit work details"', 'button', tr('editMaterialTitle'));
+        await ui.click('open the online library hub', 'button[aria-label=' + JSON.stringify(tr('openLibraryHubTooltip')) + ']');
+        await until('document.querySelectorAll("[role=dialog]").length>=2 || !!document.querySelector("input[placeholder*=\\"' + (config.lang === 'ar' ? 'ابحث في' : 'Search ') + '\\"]")');
+        await pause(500);
+        const check = await evaluate(`(() => {
+          const dialogs = [...document.querySelectorAll('[role=dialog]')]; const hub = dialogs[dialogs.length - 1];
+          const placeholder = [...hub.querySelectorAll('input')].map(i => i.placeholder).find(Boolean) || '';
+          const keys = [...hub.querySelectorAll('button,span,p,h2,h3,label')].map(e => e.textContent.trim()).filter(t => /^online[A-Z]\\w+$/.test(t));
+          return { placeholder, keys, overflow: hub.scrollWidth > hub.clientWidth + 1, text: hub.innerText.slice(0, 300) };
+        })()`);
+        journey.notes.push('Hub: ' + JSON.stringify({ placeholder: check.placeholder, keys: check.keys, overflow: check.overflow }));
+        if (check.keys.length) throw new Error('raw keys ' + check.keys.join(','));
+        if (config.lang === 'en' && /[؀-ۿ]/u.test(check.placeholder)) throw new Error('Arabic placeholder in English: ' + check.placeholder);
+        await shot('J10-online-hub');
+      });
     }
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ results, errors }, null, 2));
     console.log('DONE', results.filter(r => r.ok).length + '/' + results.length, 'journeys passed;', errors.length, 'renderer errors');

@@ -88,31 +88,31 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
       id: 'LibGen',
       label: t('libgenTabLabel') || 'LibGen (Library Genesis)',
       color: 'text-evergreen-500',
-      desc: t('libgenTabDesc') || 'الأوراق والأبحاث الأكاديمية والكتب العالمية',
+      desc: t('libgenTabDesc'),
     },
     {
       id: 'AnnasArchive',
-      label: t('annasTabLabel') || "Anna's Archive (أرشيف آنّا)",
+      label: t('annasTabLabel'),
       color: 'text-purple-500',
-      desc: t('annasTabDesc') || 'أرشيف الكتب العالمي المفتوح',
+      desc: t('annasTabDesc'),
     },
     {
       id: 'Shamela',
-      label: 'المكتبة الشاملة',
+      label: t('onlineShamelaLabel'),
       color: 'text-amber-500',
-      desc: 'تراث المصنفات والتفاسير',
+      desc: t('onlineShamelaDesc'),
     },
     {
       id: 'Noor Library',
-      label: 'مكتبة نور',
+      label: t('onlineNoorLabel'),
       color: 'text-pale-sky-500',
-      desc: 'الكتب العربية العامة والحديثة',
+      desc: t('onlineNoorDesc'),
     },
     {
       id: 'Inoreader',
       label: 'Inoreader RSS Feed',
       color: 'text-orange-500',
-      desc: 'تجميع المقالات والأخبار العلمية',
+      desc: t('onlineInoreaderDesc'),
     },
   ];
 
@@ -767,7 +767,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`ابحث في ${sources.find((s) => s.id === activeSource)?.label} عن كتب، مؤلفين، أو عناوين...`}
+                  placeholder={t('onlineSearchPlaceholder', { source: sources.find((s) => s.id === activeSource)?.label ?? '' })}
                   className="flex-1 bg-transparent outline-none text-main placeholder:text-muted font-sans text-xs"
                 />
               </div>
@@ -787,7 +787,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                         </span>
                       </div>
                       <p className="text-xs text-muted">
-                        المؤلف: {item.author} • الناشر: {item.publisher}
+                        {t('onlineAuthorPublisher', { author: item.author, publisher: item.publisher })}
                       </p>
                     </div>
 
@@ -821,7 +821,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
             <div className="space-y-3">
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 text-xs font-semibold flex items-center gap-2">
                 <Rss className="w-4 h-4" />
-                <span>تجميع خلاصة Inoreader والمجلات العلمية المتجددة</span>
+                <span>{t('onlineInoreaderSummary')}</span>
               </div>
 
               {INITIAL_RSS_FEEDS.map((feed) => (
@@ -842,7 +842,7 @@ export const OnlineLibraryHub: React.FC<OnlineLibraryHubProps> = ({
                       rel="noreferrer"
                       className="text-amber-500 font-bold hover:underline flex items-center gap-1"
                     >
-                      <span>قراءة المقال الكامل</span>
+                      <span>{t('onlineReadFullArticle')}</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>

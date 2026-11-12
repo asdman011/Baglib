@@ -1,3 +1,17 @@
+## KEY-330 online library hub labels use translations — 2026-11-12, Claude Code
+
+The online library hub (book details → Edit work details → Open library hub) showed hardcoded Arabic in the English interface: the Shamela, Noor and Inoreader labels and descriptions, the search placeholder, the author/publisher line, the Inoreader banner and "read the full article". These now use nine `online*` keys in ar and en, and the dead `|| 'عربي'` fallbacks on the LibGen and Anna's tabs were removed. Sample titles and stored category values are data and were left as they are.
+
+Note: the Library page's own OnlineLibraryHub instance (LibraryGridView `isOnlineHubOpen`) is never opened by any control. This is recorded, not changed.
+
+Verification: the new opt-in journey 10 in ux-journeys-live opens the hub from a book's editor and checks for raw keys, overflow and the placeholder's language. It passed in ar-light-1280, en-light-1280 and en-dark-480, and the screenshots were inspected (evidence `KEY-330-hub-ar`, `KEY-330-hub-en`). The full suite passed 1919/1919, and tsc and eslint are clean.
+
+Exact files
+- src/renderer/components/library/OnlineLibraryHub.tsx
+- src/renderer/translations.ts (online* keys)
+- scripts/ux-journeys-live/main.cjs (J10)
+- CURRENT_TASK.md (this entry)
+
 ## KEY-329 storage manager and category counts use translations — 2026-11-12, Claude Code
 
 StorageManagerModal's about 20 `isRtl ? 'عربي' : 'English'` strings now use translations.ts keys (`storage*`, plus the existing `close` and `cancel`). The duplicate-cluster count has all six Arabic plural forms. The "{n} Book" counts in the storage manager and the Categories tree use the existing `bookCountLabel` helper, so they read "4 books" / "كتابان". The `bookSingle` key, now unused, was removed. No behaviour or schema change.
