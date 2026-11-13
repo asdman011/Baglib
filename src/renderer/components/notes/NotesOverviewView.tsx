@@ -17,6 +17,8 @@ import {
   BookOpen,
   ArrowUpDown,
   MessageSquare,
+  ArrowLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
@@ -25,6 +27,8 @@ import { BoardsWorkspace } from './BoardsWorkspace';
 import { SavedCardsPanel } from '../knowledge/SavedCardsPanel';
 import { SrsReviewScreen } from '../knowledge/SrsReviewScreen';
 import { NoteEditorPane } from './NoteEditorPane';
+import { NotesFolderTree, folderName } from './NotesFolderTree';
+import { folderCounts, folderLabels, noteFolders, notePosition, notesInFolder, childFolders, targetFolder } from '../../../shared/notes-tree';
 import { NoteDetailsPane } from './NoteDetailsPane';
 import { KnowledgeTools } from './KnowledgeTools';
 import { Button } from '../ui/Button';
@@ -63,6 +67,7 @@ export type WorkspaceTab = 'notes' | 'cards' | 'boards' | 'review';
 export type NoteSortOrder = 'recent' | 'title' | 'oldest';
 export type NoteFilter = 'all' | 'comments' | 'questions' | 'book';
 
+const NOTES_FOLDER_KEY = 'baglib.notes.folder';
 export const NotesOverviewView: React.FC = () => {
   const { books, dir, t, lang, openBookForReading } = useWorkspace();
   const { notes, refresh, error, failedSources, loading } = useStudyNotes();
@@ -76,6 +81,13 @@ export const NotesOverviewView: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<NoteSortOrder>('recent');
   const [filterMode, setFilterMode] = useState<NoteFilter>('all');
   const [readingWork, setReadingWork] = useState('');
+  // KEY-338: folder navigation (the user's mock-up). null = all notes. Remembered between visits.
+  const [folder, setFolderState] = useState<string | null>(() => { try { return localStorage.getItem(NOTES_FOLDER_KEY) || null; } catch { return null; } });
+  const setFolder = (next: string | null) => { setFolderState(next); try { if (next) localStorage.setItem(NOTES_FOLDER_KEY, next); else localStorage.removeItem(NOTES_FOLDER_KEY); } catch { /* remembered for this session only */ } };
+  const [showEmpty, setShowEmpty] = useState(false);
+  const [tagFilter, setTagFilter] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('');
+  const [authorFilter, setAuthorFilter] = useState('');
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creatingNew, setCreatingNew] = useState(false);
@@ -248,9 +260,16 @@ export const NotesOverviewView: React.FC = () => {
   };
 
   // Filtered and sorted notes list
+  const folderNoteCounts = useMemo(() => folderCounts(notes), [notes]);
+  const folderNames = useMemo(() => folderLabels(notes), [notes]);
+  const noteBooks = (note: { id: string; content: string; workId?: string; sourceRef?: string }) => noteFolders(note).filter(path => path.startsWith('library/')).map(path => books.find(book => book.id === path.slice(8))).filter((book): book is NonNullable<typeof book> => !!book);
   const filteredNotes = useMemo(() => {
-    return notes
+    const scoped = notesInFolder(notes, folder);
+    return scoped
       .filter((note) => {
+        if (tagFilter && !note.tags.includes(tagFilter)) return false;
+        if (subjectFilter && !noteBooks(note).some(book => [...(book.categories ?? []), book.primaryCategory?.nameAr, book.primaryCategory?.nameEn].includes(subjectFilter))) return false;
+        if (authorFilter && !noteBooks(note).some(book => book.author === authorFilter)) return false;
         if (filterMode === 'comments' && (openComments[note.id] ?? 0) <= 0) {
           return false;
         }
@@ -271,13 +290,27 @@ export const NotesOverviewView: React.FC = () => {
         if (sortOrder === 'title') {
           return (a.title || '').localeCompare(b.title || '', lang === 'ar' ? 'ar' : 'en');
         }
+        // KEY-338: ids are random UUIDs, so date order uses the edit time. Inside a surah, poem or lecture the
+        // default order follows the text (ayah, verse, moment), as in the mock-up.
         if (sortOrder === 'oldest') {
-          return a.id.localeCompare(b.id);
+          return a.updatedAt.localeCompare(b.updatedAt);
         }
-        // 'recent' by default (descending)
-        return b.id.localeCompare(a.id);
+        if (folder && folder.includes('/')) {
+          const position = notePosition(a, folder) - notePosition(b, folder);
+          if (position) return position;
+        }
+        return b.updatedAt.localeCompare(a.updatedAt);
       });
-  }, [notes, filterMode, readingWork, anchor, query, books, openComments, sortOrder, lang]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes, folder, tagFilter, subjectFilter, authorFilter, filterMode, readingWork, anchor, query, books, openComments, sortOrder, lang]);
+  const allTags = useMemo(() => [...new Set(notesInFolder(notes, folder).flatMap(note => note.tags))].sort(), [notes, folder]);
+  const folderBooks = useMemo(() => [...new Map(notesInFolder(notes, folder).flatMap(noteBooks).map(book => [book.id, book])).values()],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [notes, folder, books]);
+  const allSubjects = useMemo(() => [...new Set(folderBooks.flatMap(book => [...(book.categories ?? []), (lang === 'ar' ? book.primaryCategory?.nameAr : book.primaryCategory?.nameEn) ?? ''].filter(Boolean)))].sort(), [folderBooks, lang]);
+  const allAuthors = useMemo(() => [...new Set(folderBooks.map(book => book.author).filter(Boolean))].sort(), [folderBooks]);
+  const folderTitle = folder ? folderName(folder, t, lang, folderNames, books) : t('notesFolderAll');
+  const crumbs = folder ? folder.split('/').map((_, index, parts) => parts.slice(0, index + 1).join('/')) : [];
 
   // Select first note automatically if none selected on desktop
   const activeNote = useMemo(() => {
@@ -709,6 +742,13 @@ export const NotesOverviewView: React.FC = () => {
       {/* TAB 1: 3-PART NOTES WORKSPACE */}
       {activeTab === 'notes' && (
         <div className="flex-1 min-h-0 flex overflow-hidden">
+          {/* KEY-338: folder tree (desktop); on narrow screens the breadcrumb and sub-folder chips drill down instead. */}
+          <aside data-notes-tree-pane className="hidden lg:flex w-64 shrink-0 flex-col border-e border-subtle bg-surface min-h-0 select-none">
+            <div className="flex items-center justify-between gap-2 border-b border-subtle px-3 py-2.5">
+              <h3 className="text-sm font-bold">{t('notesFoldersLabel')}</h3>
+            </div>
+            <NotesFolderTree counts={folderNoteCounts} labels={folderNames} books={books} folder={folder} onSelect={next => { setFolder(next); setTagFilter(''); setSubjectFilter(''); setAuthorFilter(''); }} showEmpty={showEmpty} t={t} lang={lang} />
+          </aside>
           {/* PANE 1: NOTES LIST (Visible if desktop or mobileScreen === 'list') */}
           <aside
             data-notes-list-pane
@@ -718,13 +758,22 @@ export const NotesOverviewView: React.FC = () => {
           >
             {/* Search and Filters Header */}
             <div className="p-3 border-b border-subtle space-y-2.5 bg-canvas/40">
+              {/* KEY-338: breadcrumb (Notes › Quran › 2. Al-Baqarah) with a back arrow, as in the mock-up. */}
+              <nav data-notes-breadcrumb aria-label={t('notesFoldersLabel')} className="flex min-w-0 items-center gap-1 text-xs">
+                {folder && <button type="button" data-notes-folder-up onClick={() => setFolder(crumbs.length > 1 ? crumbs[crumbs.length - 2] : null)} aria-label={t('bayanBack')} title={t('bayanBack')} className="shrink-0 rounded p-1 text-amber-700 hover:bg-surface dark:text-amber-300"><ArrowLeft className="size-3.5 rtl:rotate-180" /></button>}
+                <button type="button" onClick={() => setFolder(null)} className={`shrink-0 ${folder ? 'text-amber-700 hover:underline dark:text-amber-300' : 'font-bold text-main'}`}>{t('notesFolderAll')}</button>
+                {crumbs.map((path, index) => <React.Fragment key={path}><ChevronRight className="size-3 shrink-0 text-muted rtl:rotate-180" aria-hidden="true" />
+                  <button type="button" onClick={() => setFolder(path)} dir="auto" className={`min-w-0 truncate ${index === crumbs.length - 1 ? 'font-bold text-main' : 'text-amber-700 hover:underline dark:text-amber-300'}`}>{folderName(path, t, lang, folderNames, books)}</button></React.Fragment>)}
+              </nav>
+              {/* Narrow screens: the sub-folders of the current folder, so the tree can be walked without the side pane. */}
+              {(() => { const kids = folder ? (folder === 'other' ? [] : childFolders(folderNoteCounts, folder)) : (['quran', 'sunnah', 'library', 'poetry', 'lectures', 'other'] as const).filter(root => folderNoteCounts.get(root)); return kids.length ? <div data-notes-subfolders className="flex gap-1.5 overflow-x-auto pb-0.5 lg:hidden">{kids.map(path => <button key={path} type="button" data-notes-folder={path} onClick={() => setFolder(path)} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-subtle bg-surface px-2.5 py-1 text-xs"><span dir="auto" className="max-w-40 truncate">{folderName(path, t, lang, folderNames, books)}</span><span className="text-muted tabular-nums">{(folderNoteCounts.get(path) ?? 0).toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-US')}</span></button>)}</div> : null; })()}
               <label className="flex items-center gap-2 rounded-xl border border-subtle bg-surface px-3 py-1.5 text-xs">
                 <Search className="size-3.5 text-muted shrink-0" />
                 <input
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder={t('studySearchNotes')}
+                  placeholder={folder ? t('notesFolderSearch', { folder: folderTitle }) : t('studySearchNotes')}
                   aria-label={t('studySearchNotes')}
                   className="w-full min-w-0 bg-transparent outline-none text-main placeholder:text-muted"
                 />
@@ -765,6 +814,15 @@ export const NotesOverviewView: React.FC = () => {
                     <option value="oldest">{t('notesSortOldest')}</option>
                   </select>
                 </div>
+              </div>
+
+              {/* KEY-338: filter chips (Tag, Subject, Author) for the current folder, and "Show empty folders". */}
+              <div data-notes-filter-chips className="flex flex-wrap items-center gap-1.5 text-xs">
+                {([['tag', tagFilter, setTagFilter, allTags, 'notesFilterTag'], ['subject', subjectFilter, setSubjectFilter, allSubjects, 'notesFilterSubject'], ['author', authorFilter, setAuthorFilter, allAuthors, 'notesFilterAuthor']] as const).map(([id, value, set, options, label]) => (options.length > 0 || value) && (
+                  value ? <span key={id} data-notes-chip={id} className="inline-flex items-center gap-1 rounded-full bg-emerald-600/15 px-2.5 py-1 font-medium text-emerald-800 dark:text-emerald-200"><bdi>{t(label)}: {value}</bdi><button type="button" onClick={() => set('')} aria-label={t('notesFilterClear')} title={t('notesFilterClear')}><X className="size-3" /></button></span>
+                    : <label key={id} data-notes-chip={id} className="inline-flex items-center rounded-full border border-subtle bg-surface px-2.5 py-1 text-muted"><span className="sr-only">{t(label)}</span><select value="" onChange={event => set(event.target.value)} aria-label={t(label)} className="max-w-32 bg-transparent outline-none"><option value="">{t(label)}</option>{options.map(option => <option key={option} value={option}>{option}</option>)}</select></label>
+                ))}
+                <label className="ms-auto inline-flex cursor-pointer items-center gap-1.5 text-muted"><input type="checkbox" data-notes-show-empty checked={showEmpty} onChange={event => setShowEmpty(event.target.checked)} className="accent-amber-600" />{t('notesShowEmpty')}</label>
               </div>
 
               {/* Work Selector if Filter is 'book' */}
@@ -848,6 +906,8 @@ export const NotesOverviewView: React.FC = () => {
                           : 'bg-surface hover:bg-canvas border-subtle/80'
                       }`}
                     >
+                      {/* KEY-338: the passage the note is about (e.g. "البقرة ٢٥٥"), as a small badge. */}
+                      {(() => { const passage = studyLinks(note.content).find(link => targetFolder(link.target)); return passage ? <span data-note-reference className="inline-block max-w-full truncate rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200" dir="auto">{passage.label}</span> : null; })()}
                       <div className="flex items-start justify-between gap-2">
                         <h4
                           dir="auto"
@@ -891,6 +951,7 @@ export const NotesOverviewView: React.FC = () => {
                             #{tg}
                           </span>
                         ))}
+                        <span data-note-edited className="ms-auto">{t('notesEdited', { date: (() => { try { return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'medium' }).format(new Date(note.updatedAt)); } catch { return ''; } })() })}</span>
                       </div>
                     </ContextMenu>
                   );

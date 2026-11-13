@@ -23,6 +23,7 @@ const operational = new Set([
   'notifications.history.v1', // Delivered notification records (KEY-312).
   'rss.feeds.v1', // Registered feed addresses, managed in the online hub's RSS tab (KEY-50).
   'rss.seen.v1', // Feed items already reported, so notifications only cover newer ones.
+  'baglib.notes.folder', // The Notes tab's last open folder, so a return visit opens where the user left (KEY-338).
   'baglib.poetry.size', // Verse size, changed inside the poem's reading options or with Ctrl+wheel, like the Sunnah text size kept with its reading position (KEY-339).
 ]);
 

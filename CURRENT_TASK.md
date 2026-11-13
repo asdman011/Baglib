@@ -1,3 +1,38 @@
+## KEY-338: the Notes tab as folders, following the user's mock-up - 2026-11-13, Claude Code
+
+Implemented by Claude at the user's request, following the mock-up the user sent on 2026-11-13.
+
+**Changes**
+- New `src/shared/notes-tree.ts`. Notes are filed by the sources they are about: Quran › surah, Sunnah › collection › chapter, Library › book, Poetry › poem, Lectures › lecture, and Other for notes with no source. A note can sit in several folders.
+  - Inputs: study links, `workId`, the passage of a personal comment, and a poetry location.
+  - Helpers: counts that include ancestor folders, child folders in natural order, poem and lecture names taken from link labels, and the position of a note inside a folder (ayah, verse, moment).
+- New `src/renderer/components/notes/NotesFolderTree.tsx`: the folder tree, with disclosure arrows, counts and an amber highlight on the selected folder.
+  - Surah names come from `SURAH_NAMES_AR` and `SURAH_NAMES_EN`; collection names from `collectionKeys`.
+  - "Show empty folders" lists all 114 surahs, the six collections and every book.
+- `src/renderer/components/notes/NotesOverviewView.tsx`:
+  - the tree pane appears on desktop (`lg`);
+  - a breadcrumb with a back arrow (Notes › Quran › 2. Al-Baqarah);
+  - on narrow screens, sub-folder chips let you walk down the tree;
+  - search is scoped to the folder ("Search in …");
+  - filter chips for Tag, Subject and Author, plus "Show empty folders";
+  - cards have a reference badge (e.g. "البقرة ٢٥٥") and "Edited: <date>";
+  - inside a folder, cards are ordered by ayah, verse or moment;
+  - the last folder is remembered (localStorage `baglib.notes.folder`, listed as view state in the settings-coverage test).
+- Fixed the sort bug: "recent" and "oldest" sorted by random UUID; they now sort by edit time.
+- `translations.ts`: 18 keys in ar and en.
+- `tests/services/notes-tree.test.ts`: 4 tests.
+- `scripts/ux-journeys-live/main.cjs`: J23, opt-in with `BAGLIB_JOURNEY_IDS=23`.
+
+**Verification**
+- J23 passed 8/8 configurations with 0 renderer errors. It walks Quran → Al-Baqarah (only that surah's notes, in ayah order, with the breadcrumb), filters by tag and clears it, goes back up, checks that "Show empty folders" gives 114 surahs, then opens Sunnah and Other.
+- Screenshots inspected: ar light 1280 and en dark 480.
+- notes-tree 4/4; full suite 1957/1957; tsc clean; eslint 0 errors.
+
+**Limits**
+- Library browsing is book by book, with Subject, Author and Tag chips. The "Library → subject → material type" levels from the original description are covered by the chips, not by separate folders.
+- Sunnah chapters are named "Chapter N" unless a note's link label names them.
+- Import and Export from the mock-up's top bar belong to KEY-345.
+
 ## KEY-335 follow-up: the selection menu opens at the mouse release; the selection is one flat block - 2026-11-13, Claude Code
 
 The user reported two problems, comparing BagLib with Adobe Acrobat Pro:

@@ -778,6 +778,58 @@ app.on('browser-window-created', (_, win) => {
         }
       });
 
+      // J23 (opt-in, BAGLIB_JOURNEY_IDS=23) — KEY-338: the Notes tab as folders (the user's mock-up): Quran › surah,
+      // Sunnah › collection › chapter, Other; empty folders hidden unless asked; breadcrumb back; a tag chip filters.
+      if (journeysOnly.includes(23)) await journeyRun(23, 'Notes folders', async () => {
+        const stamp = config.lang + config.theme + config.width;
+        const seed = [
+          ['[[quran:hafs:2:255|البقرة ٢٥٥]]\n\nآية الكرسي ' + stamp, ['faith']],
+          ['[[quran:hafs:2:286|البقرة ٢٨٦]]\n\nلا يكلف الله نفسًا ' + stamp, []],
+          ['[[quran:hafs:1:1|الفاتحة ١]]\n\nالبسملة ' + stamp, []],
+          ['[[sunnah:Bukhari:1:1|صحيح البخاري ١]]\n\nحديث النية ' + stamp, []],
+          ['A free thought ' + stamp, []],
+        ];
+        for (const [content, tags] of seed) await evaluate('window.electronAPI.studyNotes.save(' + JSON.stringify({ title: content.split('\n').pop().slice(0, 40), content, aliases: [], tags }) + ')');
+        await ui.nav('notes', '[data-notes-overview]');
+        const wide = config.width >= 1024;
+        const open = async (label, path) => {
+          if (wide) await ui.click(label, '[data-notes-tree-pane] [data-notes-folder="' + path + '"]');
+          else await ui.click(label, '[data-notes-subfolders] [data-notes-folder="' + path + '"]');
+        };
+        await ui.click('start from all notes', '[data-notes-breadcrumb] button:not([data-notes-folder-up])');
+        await open('open Quran', 'quran');
+        await open('open Al-Baqarah', 'quran/2');
+        await step('only Al-Baqarah notes, in ayah order', async () => {
+          await until('[...document.querySelectorAll("[data-study-note]")].filter(e=>e.textContent.includes(' + JSON.stringify(stamp) + ')).length===2', 80);
+          const order = await evaluate('[...document.querySelectorAll("[data-study-note] [data-note-reference]")].map(e=>e.textContent)');
+          if (order.join('|').indexOf('٢٥٥') > order.join('|').indexOf('٢٨٦')) throw new Error('not in ayah order: ' + order.join(' | '));
+          if (await evaluate('[...document.querySelectorAll("[data-study-note]")].some(e=>e.textContent.includes("البسملة"))')) throw new Error('Al-Fatihah note leaked into Al-Baqarah');
+        });
+        const crumb = await evaluate('document.querySelector("[data-notes-breadcrumb]").textContent');
+        if (!crumb.includes(config.lang === 'ar' ? 'البقرة' : 'Al-Baqarah')) throw new Error('breadcrumb ' + crumb);
+        await shot('J23-baqarah');
+        await ui.click('filter by the tag "faith"', '[data-notes-chip="tag"] select');
+        await step('choose the tag', async () => { await evaluate('(()=>{const s=document.querySelector("[data-notes-chip=tag] select");Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,"value").set.call(s,"faith");s.dispatchEvent(new Event("change",{bubbles:true}));})()'); await until('[...document.querySelectorAll("[data-study-note]")].filter(e=>e.textContent.includes(' + JSON.stringify(stamp) + ')).length===1', 40); });
+        await ui.click('clear the tag', '[data-notes-chip="tag"] button');
+        await ui.click('go back up to Quran', '[data-notes-folder-up]');
+        await until('[...document.querySelectorAll("[data-study-note]")].filter(e=>e.textContent.includes(' + JSON.stringify(stamp) + ')).length===3', 40);
+        if (wide) {
+          const before = await evaluate('document.querySelectorAll("[data-notes-tree-pane] [data-notes-folder^=\\"quran/\\"]").length');
+          await ui.click('show empty folders', '[data-notes-show-empty]');
+          await until('document.querySelectorAll("[data-notes-tree-pane] [data-notes-folder^=\\"quran/\\"]").length===114', 40);
+          journey.notes.push('Quran folders: ' + before + ' with notes, 114 with empty folders shown');
+          await ui.click('hide empty folders again', '[data-notes-show-empty]');
+        }
+        await ui.click('back to all notes', '[data-notes-breadcrumb] button:not([data-notes-folder-up])');
+        await open('open Sunnah', 'sunnah');
+        await until('[...document.querySelectorAll("[data-study-note]")].some(e=>e.textContent.includes("حديث النية ' + stamp + '"))', 40);
+        await ui.click('back to all notes', '[data-notes-breadcrumb] button:not([data-notes-folder-up])');
+        await open('open Other', 'other');
+        await until('[...document.querySelectorAll("[data-study-note]")].some(e=>e.textContent.includes("A free thought ' + stamp + '"))', 40);
+        await shot('J23-other');
+        await ui.click('back to all notes', '[data-notes-breadcrumb] button:not([data-notes-folder-up])');
+      });
+
       // J20 (opt-in, BAGLIB_JOURNEY_IDS=20) — KEY-335: a real mouse drag over many PDF lines grows smoothly (no jumps to the
       // page start or end) and ends as one connected block per line, in an Arabic and an English PDF.
       if (journeysOnly.includes(20)) await journeyRun(20, 'Drag-select many lines in a PDF', async () => {
