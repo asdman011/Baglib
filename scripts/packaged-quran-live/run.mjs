@@ -1,4 +1,4 @@
-// KEY-264 packaged acceptance: an installed build (release/win-unpacked) on a clean throwaway profile, with Chromium
+// KEY-264 and KEY-265 packaged acceptance (Quran packs and the merged Sunnah database): an installed build (release/win-unpacked) on a clean throwaway profile, with Chromium
 // networking pointed at a dead proxy, must install the bundled Quran packs on first run and read the Quran at once in
 // Arabic (RTL) and English (LTR). Installed pack digests must match the SHA-256 of the shipped source files.
 // Run after `npm run build` and `electron-builder --dir`. Screenshots go to .baglib-data/KEY-264-evidence/.
@@ -100,11 +100,27 @@ async function run(language, port) {
     const shot = await page.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }, 60000);
     if (shot.result?.data) fs.writeFileSync(path.join(evidence, `packaged-quran-${language}.png`), Buffer.from(shot.result.data, 'base64'));
     result.screenshot = !!shot.result?.data;
+    // KEY-265: the merged Sunnah database shipped in resources/sunnah answers search, chapters and research offline.
+    const sunnah = await page.evaluate(`(async () => {
+      const api = window.electronAPI.sunnah;
+      const catalog = await api.catalog();
+      const search = await api.search({ text: 'إنما الأعمال بالنيات' });
+      const chapter = await api.chapter('Bukhari', 1);
+      const hits = search.ok ? (Array.isArray(search.data) ? search.data : (search.data.hits || search.data.hadiths || [])) : [];
+      const first = Array.isArray(hits) ? hits[0] : null;
+      const hadithId = first?.hadith?.researchId ?? chapter.data?.hadiths?.find(h => h.researchId !== undefined)?.researchId;
+      const research = hadithId !== undefined ? await api.research(hadithId) : { ok: false, error: 'no-hit' };
+      return { catalog: catalog.ok, catalogError: catalog.error, search: search.ok, searchError: search.error, hits: Array.isArray(hits) ? hits.length : -1,
+        chapter: chapter.ok, chapterError: chapter.error, chapterHadiths: chapter.ok ? chapter.data.hadiths.length : 0, research: research.ok, researchError: research.error };
+    })()`);
+    result.sunnah = sunnah;
+    await page.evaluate(`[...document.querySelectorAll('[data-nav-item]')].find(b => b.getAttribute('data-nav-item') === 'sunnah')?.click(); true`);
+    result.sunnahUi = await page.until(`document.querySelectorAll('[data-hadith-id], [data-sunnah-collection], .sunnah-entry').length > 0 || /البخاري|Bukhari/.test(document.querySelector('main')?.textContent || '')`, 60, 500).then(() => true, () => false);
     // Network: nothing may leave the machine (file:, devtools, data:, blob: and loopback are local).
     result.remoteRequests = [...new Set(page.events.filter(event => event.method === 'Network.requestWillBeSent').map(event => event.params.request.url).filter(url => !/^(app|file|data|blob|devtools|baglib-asset|chrome-extension):/.test(url) && !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(url)))];
     result.consoleErrors = page.events.filter(event => event.method === 'Runtime.exceptionThrown').length;
     page.close();
-    result.passed = result.installed > 0 && !mismatches.length && !library.failed.length && result.ayahWords > 20 && result.dir === (language === 'ar' ? 'rtl' : 'ltr');
+    result.passed = !!(sunnah.catalog && sunnah.search && sunnah.hits > 0 && sunnah.chapter && sunnah.chapterHadiths > 0 && sunnah.research && result.sunnahUi) && result.installed > 0 && !mismatches.length && !library.failed.length && result.ayahWords > 20 && result.dir === (language === 'ar' ? 'rtl' : 'ltr');
   } catch (error) {
     result.passed = false; result.error = String(error?.message || error);
   } finally {

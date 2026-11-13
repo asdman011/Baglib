@@ -1,3 +1,21 @@
+## KEY-265 packaged acceptance passed — 2026-11-14, Claude Code
+
+**What I tested:** the same packaged build as KEY-264 (`release/win-unpacked`, which includes `resources/sunnah/sunnah_merged_quranlab_v1.sqlite`, 1.6 GB). It ran on a clean throwaway profile, with Chromium pointed at a dead proxy and the guide skipped, in Arabic (RTL) and English (LTR).
+
+**Result, in each language:**
+- `sunnah.catalog` works.
+- The Arabic search "إنما الأعمال بالنيات" returns 17 hits.
+- Bukhari chapter 1 reads 7 hadiths.
+- `sunnah.research` returns the research data for a hadith's `researchId`.
+- The Sunnah tab opens.
+- There were no requests outside the app and no console errors.
+
+The Quran checks passed again in the same run. The Sunnah checks were added to `scripts/packaged-quran-live/run.mjs`. The `QuranLab-Hadith.md` bundling note was already updated in 650257d.
+
+**Files:**
+- `scripts/packaged-quran-live/run.mjs`
+- this entry
+
 ## KEY-169 verified handoff — 2026-11-13T21:50:35.935Z — Codex
 
 Implemented the dispatched reference/translation-search slice. QuranSearchDialog and global source search now show a localized first reference row; StudyLinkPicker inserts single-ayah or range links. Plain-text hits remain below references. The dialog offers remembered Arabic/translation/both source selection and source-labelled hits. Unicode direction isolation keeps range endpoints in order in Arabic RTL; existing Arabic typography and logical alignment remain. Installed translation text is indexed in disposable reader-v2 copies using the existing normalizer. No domain/main-database schema change, dependency or download.
