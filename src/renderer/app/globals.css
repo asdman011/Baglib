@@ -665,3 +665,16 @@ mark.baglib-highlight-violet, mark.baglib-highlight-purple {
   outline: 2px solid var(--color-focus) !important;
   outline-offset: 2px !important;
 }
+
+/* KEY-340: passage highlights on hadith text (CSS Custom Highlight API). */
+::highlight(baglib-sunnah-amber) { background-color: rgb(250 204 21 / .45); }
+::highlight(baglib-sunnah-emerald) { background-color: rgb(74 222 128 / .4); }
+::highlight(baglib-sunnah-rose) { background-color: rgb(248 113 113 / .38); }
+::highlight(baglib-sunnah-sky) { background-color: rgb(96 165 250 / .38); }
+::highlight(baglib-sunnah-violet) { background-color: rgb(192 132 252 / .38); }
+/* Poetry rows highlighted as a whole verse. */
+[data-poetry-mark="amber"] { background-color: rgb(250 204 21 / .28); }
+[data-poetry-mark="emerald"] { background-color: rgb(74 222 128 / .25); }
+[data-poetry-mark="rose"] { background-color: rgb(248 113 113 / .24); }
+[data-poetry-mark="sky"] { background-color: rgb(96 165 250 / .24); }
+[data-poetry-mark="violet"] { background-color: rgb(192 132 252 / .24); }

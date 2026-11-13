@@ -11,7 +11,10 @@ import { addPassageToSrs, passageNote } from '../actions/passage-actions';
 import { NoteMarker } from '../notes/NoteMarker';
 import { useNoteMarkers } from '../../hooks/useNoteMarkers';
 import { useCtrlWheelZoom } from '../../hooks/useCtrlWheelZoom';
-import { poetryRowCount } from '../../../shared/note-targets';
+import { poetryRange, poetryRowCount } from '../../../shared/note-targets';
+import { usePassageHighlightActions, usePassageHighlights } from '../../hooks/usePassageHighlights';
+import { PASSAGE_HIGHLIGHT_COLORS } from '../../../shared/passage-highlights';
+import { colorKeys } from '../reader/ReaderMarkupBar';
 import { Copy, Share2, NotebookPen, SquareCheck } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { buildPoetryRows, poetryCopyText, poetryRhymeLetter, poetryRowLineClass, type PoetryRowModel } from './poetry-layout';
@@ -83,6 +86,21 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
   const rows = useMemo(() => buildPoetryRows(verses, paired), [verses, paired]);
   const rhyme = useMemo(() => poem.language === 'ar' ? poetryRhymeLetter(rows) : null, [rows, poem.language]);
   const selectedRows = selection ? rows.slice(selection[0], selection[1] + 1) : [];
+  // KEY-340: drag across verses to select them (like selecting lines in a book), and colour highlights on verses.
+  const highlights = usePassageHighlights('poetry:ashaar:' + poem.id + ':');
+  const highlightActions = usePassageHighlightActions();
+  const dragFrom = React.useRef<number | null>(null);
+  React.useEffect(() => { const end = () => { dragFrom.current = null; }; document.addEventListener('pointerup', end); return () => document.removeEventListener('pointerup', end); }, []);
+  const rowMark = (row: PoetryRowModel) => highlights.find(item => { const range = poetryRange(item.location); return range && range.from <= row.sourceTo && row.sourceFrom <= range.to; })?.color;
+  const highlightItems = (row: PoetryRowModel) => {
+    const chosen = selection && row.index >= selection[0] && row.index <= selection[1] ? selectedRows : [row];
+    const from = chosen[0].sourceFrom, to = chosen[chosen.length - 1].sourceTo;
+    const overlapping = highlights.filter(item => { const range = poetryRange(item.location); return range && range.from <= to && from <= range.to; });
+    return { id: 'highlight', label: t('passageHighlight'), children: [
+      ...PASSAGE_HIGHLIGHT_COLORS.map(color => ({ id: 'highlight-' + color, label: t(colorKeys[color]), onClick: async () => { if (overlapping.length) await highlightActions.remove(overlapping.map(item => item.id)); await highlightActions.save('poetry:ashaar:' + poem.id + ':' + from + ':' + to, color, poetryCopyText(chosen, poem)); } })),
+      ...(overlapping.length ? [{ id: 'highlight-remove', label: t('passageHighlightRemove'), onClick: () => highlightActions.remove(overlapping.map(item => item.id)) }] : []),
+    ] };
+  };
   const saveSelection = async (type: 'note' | 'quote' | 'bookmark') => {
     if (!selection || !selectedRows.length) return;
     await saveNative(selectedRows[0].sourceFrom, selectedRows[selectedRows.length - 1].sourceTo, type);
@@ -146,7 +164,7 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
       <label><input type="checkbox" checked={diacritics} onChange={event => setDiacritics(event.target.checked)} /> {t('bayanDiacritics')}</label>
       <label><input type="checkbox" checked={numbers} onChange={event => setNumbers(event.target.checked)} /> {t('bayanLineNumbers')}</label>
       {paired && <label><input type="checkbox" checked={justify} onChange={event => setJustify(event.target.checked)} /> {t('bayanJustify')}</label>}</div>} />
-    {selection && <div role="toolbar" aria-label={t('bayanSelectVerse')} className="sticky top-0 z-10 flex flex-wrap gap-3 rounded-xl border border-subtle bg-surface p-3 shadow-lg">
+    {selection && <div role="toolbar" data-poetry-selection-toolbar aria-label={t('bayanSelectVerse')} className="absolute inset-x-4 top-20 z-20 flex flex-wrap gap-3 rounded-xl border border-subtle bg-surface p-3 shadow-lg">
       <button type="button" onClick={() => void copySelection()}>{t('bayanCopyVerse')}</button>
       <button type="button" onClick={() => void saveSelection('note')}>{t('bayanSaveNote')}</button>
       <button type="button" onClick={() => void saveSelection('quote')}>{t('bayanSaveQuote')}</button>
@@ -178,8 +196,23 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
           return <ContextMenu items={[
             ...POETRY_LINE_ACTIONS.map(action => ({ id: action.id, label: t(action.labelKey), icon: React.createElement(lineIcons[action.icon], { size: 14 }), shortcut: shortcutHint('poetry-' + action.id), onClick: () => runPoetryLineAction(action.id, row, lineHandlers) })),
             { id: 'copy-line', label: t('ctxCopyText'), onClick: () => copyRow({ sadr: row.sadr, ajuz: null }) },
+            highlightItems(row),
             { id: 'srs', label: t('ctxAddSrs'), onClick: () => addPassageToSrs({ text: poetryCopyText([row], poem), sourceKind: 'poetry', sourceRef: 'poetry:ashaar:' + poem.id + ':' + row.sourceFrom + ':' + row.sourceTo, sourceLabel: [poem.poet_name, poem.title].filter(Boolean).join(' — '), language: poem.language }) },
-          ]} key={row.index} data-poetry-row data-poetry-row-index={row.index} data-poetry-kind={row.kind} data-actions-open={actionsRow === row.index} data-card-kind="poetry" data-card-ref={`poetry:${poem.id}:${row.index}`} data-card-label={[poem.poet_name, poem.title].filter(Boolean).join(' · ')} data-poetry-source-index={row.sourceFrom} aria-selected={selected} ref={row.index === targetRow ? targetElement : undefined} tabIndex={row.index === activeRow ? 0 : -1}
+          ]} key={row.index} data-poetry-row data-poetry-row-index={row.index} data-poetry-kind={row.kind} data-actions-open={actionsRow === row.index} data-card-kind="poetry" data-card-ref={`poetry:${poem.id}:${row.index}`} data-card-label={[poem.poet_name, poem.title].filter(Boolean).join(' · ')} data-poetry-source-index={row.sourceFrom} data-poetry-mark={rowMark(row)} aria-selected={selected}
+            onPointerDown={event => {
+              if (event.pointerType === 'touch' || event.pointerType === 'pen' || event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+              const from = row.index;
+              dragFrom.current = from;
+              const move = (next: PointerEvent) => {
+                const over = (document.elementFromPoint(next.clientX, next.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-poetry-row-index]');
+                const to = over ? Number(over.dataset.poetryRowIndex) : NaN;
+                if (dragFrom.current === null || !Number.isFinite(to) || to === from) return;
+                window.getSelection()?.removeAllRanges();
+                setSelection([Math.min(from, to), Math.max(from, to)]);
+              };
+              document.addEventListener('pointermove', move);
+              document.addEventListener('pointerup', () => document.removeEventListener('pointermove', move), { once: true });
+            }} ref={row.index === targetRow ? targetElement : undefined} tabIndex={row.index === activeRow ? 0 : -1}
             onFocus={() => setActiveRow(row.index)}
             onKeyDown={event => {
               if (event.target !== event.currentTarget) return;

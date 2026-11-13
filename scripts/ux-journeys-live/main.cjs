@@ -830,6 +830,75 @@ app.on('browser-window-created', (_, win) => {
         await ui.click('back to all notes', '[data-notes-breadcrumb] button:not([data-notes-folder-up])');
       });
 
+      // J24 (opt-in, BAGLIB_JOURNEY_IDS=24) — KEY-340: drag across Quran words (crossing ayahs), right-click, highlight in a
+      // colour, survive a reload, remove; highlight selected hadith words; drag across poem verses and highlight them.
+      if (journeysOnly.includes(24)) await journeyRun(24, 'Select and highlight Quran, hadith and verses', async () => {
+        const centre = selector => evaluate('(()=>{const e=' + selector + ';e.scrollIntoView({block:"center"});const r=e.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()');
+        const drag = async (from, to) => {
+          win.webContents.sendInputEvent({ type: 'mouseMove', x: from.x, y: from.y });
+          win.webContents.sendInputEvent({ type: 'mouseDown', x: from.x, y: from.y, button: 'left', clickCount: 1 });
+          for (let i = 1; i <= 8; i++) { win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(from.x + (to.x - from.x) * i / 8), y: Math.round(from.y + (to.y - from.y) * i / 8), button: 'left', modifiers: ['leftButtonDown'] }); await pause(40); }
+          win.webContents.sendInputEvent({ type: 'mouseUp', x: to.x, y: to.y, button: 'left', clickCount: 1 });
+          await pause(400);
+        };
+        const rightClick = async point => { win.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'right', clickCount: 1 }); win.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'right', clickCount: 1 }); await pause(400); };
+        const pickColour = async (label, colour) => {
+          await ui.click(label + ': open "Highlight"', '[data-menu-action="highlight"]');
+          await ui.click(label + ': pick ' + colour, '[data-menu-action="highlight-' + colour + '"]');
+        };
+        // Quran: from the second ayah of the page to the third.
+        await ui.nav('quran', '[data-quran-workspace]');
+        await until('document.querySelectorAll("[data-quran-mushaf] [data-surah][data-aya]").length>10', 200);
+        const words = '[...document.querySelectorAll("[data-quran-mushaf] [data-surah][data-aya]")]';
+        const a = await centre(words + '.find(e=>Number(e.getAttribute("data-aya"))===2)');
+        const b = await centre(words + '.filter(e=>Number(e.getAttribute("data-aya"))===3).pop()');
+        await step('drag from ayah 2 to ayah 3', async () => { await drag(a, b); });
+        const selected = await evaluate('document.querySelectorAll("[data-quran-mushaf] [data-baglib-range]").length');
+        if (selected < 3) throw new Error('word range not selected: ' + selected);
+        await step('right-click the selection', async () => { await rightClick(b); await until('!!document.querySelector(\'[data-menu-action="copy-selection"]\')', 40); });
+        await pickColour('Quran', 'amber');
+        await until('document.querySelectorAll("[data-quran-mushaf] [data-baglib-mark=amber]").length===' + selected, 80);
+        const saved = (await evaluate('window.electronAPI.knowledge.getAll()')).filter(item => item.knowledgeType === 'highlight' && /^quran:hafs:\d+:\d+:\d+-\d+:\d+:\d+$/.test(item.location));
+        if (!saved.length || !saved[0].quotedText) throw new Error('highlight not saved with its words');
+        journey.notes.push('Quran range ' + saved[0].location + ' — ' + saved[0].quotedText.slice(0, 40));
+        await shot('J24-quran');
+        await step('reload the app', async () => { await win.loadURL('http://localhost:3000'); await until('!!window.electronAPI && !!document.querySelector("footer")'); await ready(); });
+        await ui.nav('quran', '[data-quran-workspace]');
+        await until('document.querySelectorAll("[data-quran-mushaf] [data-baglib-mark=amber]").length===' + selected, 200);
+        const marked = await centre('document.querySelector("[data-quran-mushaf] [data-baglib-mark=amber]")');
+        await step('right-click the highlight', async () => { await rightClick(marked); await until('!!document.querySelector(\'[data-menu-action="highlight"]\')', 40); });
+        await ui.click('open "Highlight"', '[data-menu-action="highlight"]');
+        await ui.click('remove it', '[data-menu-action="highlight-remove"]');
+        await until('document.querySelectorAll("[data-quran-mushaf] [data-baglib-mark]").length===0', 80);
+        // Sunnah: select a few words of the first hadith and highlight them.
+        await ui.nav('sunnah', '.sunnah-workspace');
+        await until('!!document.querySelector("[data-hadith-id] article")', 200);
+        const words2 = await evaluate(`(()=>{const a=document.querySelector("[data-hadith-id] article");const w=document.createTreeWalker(a,NodeFilter.SHOW_TEXT);let n;while((n=w.nextNode())&&n.data.trim().length<20){}const r=document.createRange();r.setStart(n,2);r.setEnd(n,Math.min(n.data.length,18));getSelection().removeAllRanges();getSelection().addRange(r);const b=r.getBoundingClientRect();return {text:r.toString().trim(),x:Math.round(b.left+b.width/2),y:Math.round(b.top+b.height/2)}})()`);
+        await step('right-click the selected words', async () => { await rightClick(words2); await until('!!document.querySelector(\'[data-menu-action="highlight"]\')', 40); });
+        await pickColour('Sunnah', 'sky');
+        await until('window.electronAPI.knowledge.getAll().then(r=>r.some(x=>x.knowledgeType==="highlight"&&x.location.startsWith("sunnah:")&&x.color==="sky"))', 80);
+        await until('typeof CSS!=="undefined"&&CSS.highlights&&CSS.highlights.has("baglib-sunnah-sky")', 80);
+        journey.notes.push('Hadith words highlighted: ' + words2.text);
+        await evaluate('getSelection().removeAllRanges()');
+        await shot('J24-hadith');
+        // Poetry: drag across three verses and highlight them.
+        await ui.nav('bayan', 'main');
+        if (await until('!!document.querySelector("article h2 button")', 120).then(() => true, () => false)) {
+          await ui.click('open a poem', 'article h2 button');
+          await until('document.querySelectorAll("[data-poetry-row]").length>4', 200);
+          const rowsWithText = '[...document.querySelectorAll("[data-poetry-row]")].filter(r=>r.querySelector("[data-poetry-line]"))';
+          const [r0, r2] = await evaluate('(()=>{const rows=' + rowsWithText + ';rows[1].scrollIntoView({block:"center"});return [rows[0],rows[2]].map(r=>{const b=r.querySelector("[data-poetry-line]").getBoundingClientRect();return {x:Math.round(b.left+b.width/2),y:Math.round(b.top+b.height/2)}})})()');
+          await evaluate('window.__j24=[];["pointerdown","pointermove","pointerup"].forEach(t=>document.addEventListener(t,e=>{if(window.__j24.length<40)window.__j24.push(t+":"+e.pointerType+":"+e.buttons+":"+(e.target.closest("[data-poetry-row-index]")?.dataset.poetryRowIndex??"-"))},true))');
+          await step('drag across three verses', async () => { await drag(r0, r2); });
+          try { await until('document.querySelectorAll("[data-poetry-row][aria-selected=true]").length>=3', 40); }
+          catch { throw new Error('verses not selected; events ' + (await evaluate('window.__j24.join(" ")')) + ' rows ' + JSON.stringify([r0, r2])); }
+          await step('right-click the verses', async () => { await rightClick(r2); await until('!!document.querySelector(\'[data-menu-action="highlight"]\')', 40); });
+          await pickColour('Poetry', 'emerald');
+          await until('document.querySelectorAll("[data-poetry-row][data-poetry-mark=emerald]").length>=3', 80);
+          await shot('J24-poetry');
+        } else journey.notes.push('No poetry corpus in this profile; poetry not driven.');
+      });
+
       // J20 (opt-in, BAGLIB_JOURNEY_IDS=20) — KEY-335: a real mouse drag over many PDF lines grows smoothly (no jumps to the
       // page start or end) and ends as one connected block per line, in an Arabic and an English PDF.
       if (journeysOnly.includes(20)) await journeyRun(20, 'Drag-select many lines in a PDF', async () => {

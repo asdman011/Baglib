@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { Focus } from 'lucide-react';
 import type { SunnahChapter, SunnahHadith, SunnahLanguage, SunnahPassage, SunnahText } from '../../../shared/types/sunnah';
 import type { TranslationKey } from '../../translations';
@@ -14,6 +14,10 @@ import { collectionKeys } from '../../utils/sunnah-collections';
 import { HadithActions, formatHadith } from './HadithActions';
 import { SunnahResearchPanel } from './SunnahResearchPanel';
 import { NoteMarker } from '../notes/NoteMarker';
+import { usePassageHighlightActions, usePassageHighlights } from '../../hooks/usePassageHighlights';
+import { PASSAGE_HIGHLIGHT_COLORS } from '../../../shared/passage-highlights';
+import { findTextRange, paintTextHighlights } from '../../libs/reader/text-highlights';
+import { colorKeys } from '../reader/ReaderMarkupBar';
 
 export type SunnahTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
@@ -58,7 +62,29 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCo
   onFocus: (id: string) => void;
 }) {
   const [gradingRequest, setGradingRequest] = useState({ id: 0, count: 0 });
-  return <div className="sunnah-chapter select-text" data-testid="sunnah-chapter">
+  // KEY-340: highlights on hadith text: the selected words (or the whole matn when nothing is selected).
+  const highlights = usePassageHighlights('sunnah:');
+  const highlightActions = usePassageHighlightActions();
+  const chapterRoot = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = chapterRoot.current;
+    if (!root) return;
+    const ranges = highlights.flatMap(item => {
+      const id = item.location.split(':').slice(3).join(':');
+      const article = [...root.querySelectorAll<HTMLElement>('[data-hadith-id]')].find(element => element.dataset.hadithId === id)?.querySelector('article');
+      const range = article ? findTextRange(article, item.quotedText) : null;
+      return range ? [{ range, color: item.color }] : [];
+    });
+    paintTextHighlights('sunnah', ranges);
+  }, [highlights, hadiths]);
+  const selectionIn = (id: string) => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return '';
+    const node = selection.getRangeAt(0).commonAncestorContainer;
+    const hadith = (node.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node.parentElement)?.closest<HTMLElement>('[data-hadith-id]');
+    return hadith?.dataset.hadithId === id ? selection.toString().trim() : '';
+  };
+  return <div ref={chapterRoot} className="sunnah-chapter select-text" data-testid="sunnah-chapter">
     <ParallelRow showEnglish={showEnglish} className="sunnah-chapter-heading"
       arabic={<h2><NumberedTitle number={String(chapter.number)} title={chapter.title} language="ar" fallback={t('sunnahUntitledChapter')} /></h2>}
       english={<h2><NumberedTitle number={String(chapter.number)} title={chapter.title} language="en" fallback={t('sunnahMissingEnglish')} /></h2>} />
@@ -83,6 +109,14 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCo
         } : undefined,
         link: () => linkPassageToNote(target,label),
       },t);
+      const mine = highlights.filter(item => item.location === target);
+      items.unshift(
+        { id: 'copy-selection', label: t('passageCopySelection'), onClick: () => navigator.clipboard.writeText(selectionIn(hadith.id) || hadith.text.ar.matn || hadith.text.ar.full) },
+        { id: 'highlight', label: t('passageHighlight'), children: [
+          ...PASSAGE_HIGHLIGHT_COLORS.map(color => ({ id: 'highlight-' + color, label: t(colorKeys[color]), onClick: () => highlightActions.save(target, color, selectionIn(hadith.id) || hadith.text.ar.matn || hadith.text.ar.full) })),
+          ...(mine.length ? [{ id: 'highlight-remove', label: t('passageHighlightRemove'), onClick: () => highlightActions.remove(mine.map(item => item.id)) }] : []),
+        ] },
+      );
       return <ContextMenu items={items} key={hadith.id} className="sunnah-entry" data-hadith-id={hadith.id} data-card-kind="hadith" data-card-ref={`hadith:${chapter.collection}:${hadith.id}`} data-card-label={`${collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection} ${hadith.number}`} data-card-research={hadith.researchId}>
         {showSection && hasSection && <ParallelRow showEnglish={showEnglish} className="sunnah-section-heading"
           arabic={<h3><NumberedTitle number={section.number} title={section.title} language="ar" fallback="" /></h3>}

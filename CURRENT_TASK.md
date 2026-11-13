@@ -1,3 +1,45 @@
+## KEY-340: select words, hadith text or verses naturally and highlight them in colours - 2026-11-13, Claude Code
+
+Implemented by Claude at the user's request.
+
+**Changes**
+- New `src/shared/passage-highlights.ts`. Highlights are stored as knowledge highlights with no book; no schema change. Locations:
+  - `quran:<profile>:S:A:W-S:A:W` for a word range, which may cross ayahs;
+  - `quran:<profile>:S:A` for a whole ayah;
+  - `sunnah:…` with the quoted words;
+  - `poetry:ashaar:<poem>:<from>:<to>`.
+
+  It provides range order and membership, and the five colours.
+- New `src/renderer/hooks/usePassageHighlights.ts`: loads highlights by location prefix (from `knowledge.getAll`), saves and removes them, and refreshes on `baglib:highlights-changed`.
+- New `src/renderer/libs/reader/text-highlights.ts`: `locateText` / `findTextRange` (text across inline elements) and `paintTextHighlights` (CSS Custom Highlight API).
+- `QuranMushafView.tsx`:
+  - drag across words to select a range; Shift+click extends it; Esc clears it;
+  - the range is drawn behind the glyphs (SVG hitbox or span background);
+  - highlights are drawn per word in colour;
+  - right-click inside the range passes the range to the menu;
+  - the ayah-number mark counts as the end of its ayah.
+- `QuranMushafWorkspace.tsx` and `QuranActionMenu.tsx` (`extra` items): "Copy the selected text", and a Highlight submenu with five colours plus "Remove highlight". A new highlight replaces any it overlaps.
+- `SunnahChapterView.tsx`: in the hadith menu, "Copy the selected text" and the Highlight submenu. The highlight covers the selected words, or the matn when nothing is selected, and is painted with `::highlight(baglib-sunnah-*)`.
+- `PoetryReader.tsx`:
+  - drag across verses to select them;
+  - a Highlight submenu in the verse menu tints the verse rows;
+  - the selection toolbar now floats over the poem instead of pushing the verses down. That shift moved verses under the pointer mid-drag.
+- `globals.css`: the highlight colours. `translations.ts`: 3 keys in ar and en.
+- `tests/services/passage-highlights.test.ts`: 3 tests.
+- `scripts/ux-journeys-live/main.cjs`: J24, opt-in with `BAGLIB_JOURNEY_IDS=24`.
+
+**Verification**
+- J24 passed 8/8 configurations, then 2/2 again after the last lint fix, with 0 renderer errors. It covers:
+  - a real mouse drag from ayah 2 to ayah 3 of Al-Fatihah, right-click, amber; the words are saved and still marked after a reload; removal works;
+  - selected hadith words highlighted sky, with a CSS highlight registered;
+  - a mouse drag across three verses of a real poem, right-click, emerald, three rows tinted.
+- Screenshots inspected: Quran ar, poetry ar, hadith en 480.
+- Full suite 1960/1960; tsc clean; eslint 0 errors.
+
+**Limits**
+- Hadith highlights mark the first occurrence of the quoted words in that hadith.
+- Quran highlights cover whole words, never parts of a word.
+
 ## KEY-338: the Notes tab as folders, following the user's mock-up - 2026-11-13, Claude Code
 
 Implemented by Claude at the user's request, following the mock-up the user sent on 2026-11-13.

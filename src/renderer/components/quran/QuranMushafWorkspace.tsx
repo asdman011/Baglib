@@ -6,6 +6,10 @@ import type { ReaderTab } from '../islamic/reader-chrome';
 import { QuranActionMenu } from '../actions/QuranActionMenu';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NoteMarker } from '../notes/NoteMarker';
+import { usePassageHighlightActions, usePassageHighlights } from '../../hooks/usePassageHighlights';
+import { PASSAGE_HIGHLIGHT_COLORS, compareWords, parseQuranHighlight, quranRangeLocation, wordInRange, type WordRef } from '../../../shared/passage-highlights';
+import type { MenuItemProps } from '../ui/Menu';
+import { colorKeys } from '../reader/ReaderMarkupBar';
 import { useNoteMarkers } from '../../hooks/useNoteMarkers';
 import { passageNote } from '../actions/passage-actions';
 import { BookOpen, Languages, Layers, Lightbulb, ListTree, Play, Type, MoreHorizontal } from 'lucide-react';
@@ -174,6 +178,22 @@ export function QuranMushafWorkspace(props: Props) {
   const [positions, setPositions] = useState<{ theme: QuranAyahTheme; top: number; height: number; left: number }[]>([]);
   // KEY-337: ayahs on this page that have notes show a small marker in the page margin; it opens them beside the text.
   const noteCounts = useNoteMarkers();
+  // KEY-340: colour highlights on ayahs and word ranges, and the menu items that set or remove them.
+  const quranHighlights = usePassageHighlights('quran:');
+  const highlightActions = usePassageHighlightActions();
+  const highlightItems = (reference: Reference & { range?: { start: WordRef; end: WordRef } }): MenuItemProps[] => {
+    const range = reference.range ?? { start: { surah: reference.surah, ayah: reference.ayah, word: 0 }, end: { surah: reference.surah, ayah: reference.ayah, word: Number.MAX_SAFE_INTEGER } };
+    const location = reference.range ? quranRangeLocation(page.profile, range.start, range.end) : `quran:${page.profile}:${reference.surah}:${reference.ayah}`;
+    const text = page.words.filter(word => word.type !== 'aya-mark' && wordInRange({ surah: word.surah, ayah: word.ayah, word: word.wordIndex }, range)).map(word => word.canonicalText || word.textHafs || '').join(' ').trim();
+    const overlapping = quranHighlights.filter(item => { const other = parseQuranHighlight(item.location); return other && other.profile === page.profile && compareWords(other.start, range.end) <= 0 && compareWords(range.start, other.end) <= 0; });
+    return [
+      ...(reference.range ? [{ id: 'copy-selection', label: t('passageCopySelection'), onClick: () => navigator.clipboard.writeText(text) }] : []),
+      { id: 'highlight', label: t('passageHighlight'), children: [
+        ...PASSAGE_HIGHLIGHT_COLORS.map(color => ({ id: 'highlight-' + color, label: t(colorKeys[color]), onClick: async () => { if (overlapping.length) await highlightActions.remove(overlapping.map(item => item.id)); await highlightActions.save(location, color, text); } })),
+        ...(overlapping.length ? [{ id: 'highlight-remove', label: t('passageHighlightRemove'), onClick: () => highlightActions.remove(overlapping.map(item => item.id)) }] : []),
+      ] },
+    ];
+  };
   const notedAyahs = useMemo(() => {
     const seen = new Map<string, Reference & { count: number }>();
     for (const word of page.words) {
@@ -292,7 +312,7 @@ export function QuranMushafWorkspace(props: Props) {
       [data-immersive] [data-quran-mushaf]>div:nth-child(2) { opacity:0; }
       [data-immersive] [data-quran-mushaf]>div:nth-child(2):hover,[data-immersive] [data-quran-mushaf]>div:nth-child(2):focus-within { opacity:1; }
     `}</style>
-    <QuranMushafView {...props} cardSource={props.selection} onContextAyah={(reference, point) => setMenu({ reference, ...point })} onExploreAyah={reference => open('explore', reference, 'left')} />
+    <QuranMushafView {...props} highlights={quranHighlights} cardSource={props.selection} onContextAyah={(reference, point) => setMenu({ reference, ...point })} onExploreAyah={reference => open('explore', reference, 'left')} />
     {props.panelOpen !== undefined && <button type="button" data-quran-ayah-actions title={t('ribbonMoreActions')} aria-label={t('ribbonMoreActions')} onClick={event => { const r = event.currentTarget.getBoundingClientRect(); setMenu({ reference: props.selectedAyah || pageStart, x:r.x, y:r.bottom }); }} className="absolute top-3 end-5 rounded-lg border border-subtle bg-surface p-2 opacity-0 group-hover/quran:opacity-100 group-focus-within/quran:opacity-100 focus:opacity-100"><MoreHorizontal size={18} /></button>}
     {/* KEY-323: with the study panel (KEY-305) the edge tools are hidden; keep the margin theme markers reachable. */}
     {props.panelOpen !== undefined && page.profile === 'hafs' && <button type="button" data-quran-theme-toggle title={t('quranCatTheme')} aria-label={t('quranCatTheme')} aria-pressed={showThemes} onClick={() => setShowThemes(value => !value)} className={`absolute top-3 end-16 rounded-lg border border-subtle bg-surface p-2 group-hover/quran:opacity-100 group-focus-within/quran:opacity-100 focus:opacity-100 ${showThemes ? 'opacity-100 text-emerald-600' : 'opacity-0'}`}><Lightbulb size={18} /></button>}
@@ -322,7 +342,7 @@ export function QuranMushafWorkspace(props: Props) {
         </>}
       </IslamicReaderPanel>;
     })()}
-    {menu && <QuranActionMenu portal anchor={{ x: menu.x, y: menu.y }} onClose={() => setMenu(null)} input={{ reference: menu.reference, script: selection.script, profile: page.profile, language: props.lang, t,
+    {menu && <QuranActionMenu portal anchor={{ x: menu.x, y: menu.y }} extra={highlightItems(menu.reference)} onClose={() => setMenu(null)} input={{ reference: menu.reference, script: selection.script, profile: page.profile, language: props.lang, t,
         tafsir: selection.tafsir ? () => open('tafsir',menu.reference,'left') : undefined,
         translation: selection.translation ? () => open('translation',menu.reference,'left') : undefined,
         play: props.canPlay ? () => props.onStartAudio(menu.reference) : undefined,
