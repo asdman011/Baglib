@@ -2,6 +2,9 @@
 
 ## Recent Agent Updates
 
+- [2026-11-13T22:50:08.930292+02:00, Codex] KEY-344: Implemented exactly the approved lecture_series and ordered lecture_series_item schema, series CRUD/membership/reordering, progress, manual or cancellable automatic next lecture, Library assignment and a series level in the Notes tree. Native acceptance passes; final full suites 2050/2050 twice after ten Notes mock fixes (targeted10/10); types pass, lint0errors. Exact files and evidence in CURRENT_TASK.md and docs/agent-ops/reports/KEY-344.md. Scoped publication authorized; unrelated agent work preserved.
+
+
 - [2026-11-13T22:50:08.930292+02:00, Codex] KEY-342: Imported audio/video as canonical Work / Edition / Source records, extracted embedded metadata with filename fallback, migrated legacy lecture settings, and routed video drops in Library and Lectures. Only approved media DigitalFormat values were added; existing document lecture Works still open in the reader. Native acceptance passes; final full suites 2050/2050 twice after ten Notes mock fixes (targeted10/10); types pass, lint0errors. Exact files and evidence in CURRENT_TASK.md and docs/agent-ops/reports/KEY-342.md. Scoped publication authorized; unrelated agent work preserved.
 
 

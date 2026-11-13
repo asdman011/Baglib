@@ -797,6 +797,14 @@ export const API = {
       ipcRenderer.invoke('pathways:apply-replan', pathwayId, schedule),
   },
   lectures: {
+    series: {
+      list: (): Promise<import('../shared/lecture-series').LectureSeries[]> => ipcRenderer.invoke('lectures:series-list'),
+      create: name => ipcRenderer.invoke('lectures:series-create', name),
+      update: (id, changes) => ipcRenderer.invoke('lectures:series-update', id, changes),
+      remove: id => ipcRenderer.invoke('lectures:series-remove', id),
+      assign: (workId, seriesId) => ipcRenderer.invoke('lectures:series-assign', workId, seriesId),
+      reorder: (id, workIds) => ipcRenderer.invoke('lectures:series-reorder', id, workIds),
+    },
     subtitles: (id, choose = false) => ipcRenderer.invoke('lectures:subtitles', id, choose),
     list: () => ipcRenderer.invoke('lectures:list'),
     add: () => ipcRenderer.invoke('lectures:add'),

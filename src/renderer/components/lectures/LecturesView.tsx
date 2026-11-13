@@ -15,6 +15,9 @@ import { localAssetUrl } from '../../utils/file-path-helper';
 import { useCompanionContext } from '../../utils/companion-context';
 
 import { activeCueIndex, isRtlCue, type SubtitleCue } from '../../../shared/subtitles';
+import { LectureSeriesList } from './LectureSeriesList';
+import { LectureContinueNext } from './LectureContinueNext';
+import { nextSeriesLecture, type LectureSeries } from '../../../shared/lecture-series';
 import { LectureTranscript } from './LectureTranscript';
 import { LectureMediaControls } from './LectureMediaControls';
 
@@ -22,7 +25,10 @@ const button = 'inline-flex items-center gap-1.5 rounded-lg border border-subtle
 const control = 'rounded-lg border border-subtle bg-surface p-2 text-sm text-main min-w-0';
 const SAVE_EVERY_MS = 5000;
 
-function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number | null; onChanged: (lecture: Lecture) => void }) {
+function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay }: {
+  lecture: Lecture; seek: number | null; onChanged: (lecture: Lecture) => void;
+  next: ReturnType<typeof nextSeriesLecture>; onNext: () => void; onProgress: () => Promise<void>; autoplay: boolean;
+}) {
   const { t, dir } = useWorkspace();
   const { notes } = useStudyNotes();
   const media = useRef<HTMLVideoElement>(null);
@@ -34,6 +40,7 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
     setLayout(next);
     try { localStorage.setItem('baglib.lectures.layout', next); } catch { /* Playback remains usable when storage is unavailable. */ }
   };
+  const [ended, setEnded] = useState<number | null>(null);
   const [cues, setCues] = useState<SubtitleCue[]>([]);
   const [captions, setCaptions] = useState(true);
   const [transcript, setTranscript] = useState(false);
@@ -64,7 +71,7 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
   const save = useCallback(() => {
     const element = media.current;
     if (!element || !Number.isFinite(element.duration)) return;
-    void api.saveProgress(lecture.id, { position: element.currentTime, rate: element.playbackRate, completed: element.duration - element.currentTime < 5 });
+    return api.saveProgress(lecture.id, { position: element.currentTime, rate: element.playbackRate, completed: element.duration > 0 && element.currentTime / element.duration >= 0.95 });
   }, [api, lecture.id]);
 
   useEffect(() => {
@@ -111,12 +118,14 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
     <div className="min-w-0 space-y-3">
     <LectureMediaControls audio={lecture.kind === 'audio'} study={layout === 'study'} sections={lecture.sections} onSave={save} subtitleControls={{ available: cues.length > 0, enabled: captions, toggle: () => setCaptions(value => !value) }}>
     {/* The player stays left-to-right so its timeline runs the way time is shown. */}
-    <video key={lecture.id} ref={media} src={localAssetUrl(lecture.path)} preload="metadata" dir="ltr" data-lecture-player
+    <video key={lecture.id} ref={media} src={localAssetUrl(lecture.path)} autoPlay={autoplay} preload="metadata" dir="ltr" data-lecture-player
       className={lecture.kind === 'audio' ? 'hidden' : 'w-full max-h-[60vh] rounded-xl bg-black'}
       onTimeUpdate={event => setNow(event.currentTarget.currentTime)} onPause={save} onRateChange={save}
+      onPlay={() => setEnded(null)} onEnded={event => { setEnded(event.timeStamp); void Promise.resolve(save()).then(onProgress); }}
       onError={() => setFailed(true)} onLoadedMetadata={() => setFailed(false)} />
     {captions && active >= 0 && <div data-lecture-subtitle dir={isRtlCue(cues[active].text) ? 'rtl' : 'ltr'} className={'pointer-events-none text-center whitespace-pre-wrap text-lg sm:text-xl leading-relaxed text-white ' + (lecture.kind === 'audio' ? 'relative px-3 py-4' : 'absolute inset-x-3 bottom-20')} style={{ textShadow: '0 1px 3px black, 1px 0 2px black, -1px 0 2px black' }}>{cues[active].text}</div>}
     </LectureMediaControls>
+    {ended !== null && next && <LectureContinueNext key={ended} title={next.next.title} autoplay={next.series.autoplayNext} onNext={onNext} />}
     {failed && <p role="alert" className="text-sm leading-relaxed">{t('lectureUnplayable')}</p>}
     <div className="flex flex-wrap items-center gap-2" dir={dir}>
       <button data-load-subtitles type="button" className={button} onClick={() => void loadSubtitles()}>{t('lectureLoadSubtitles')}</button>
@@ -156,21 +165,24 @@ export function LecturesView() {
   const { t, dir, refreshBooks } = useWorkspace();
   const [dropError, setDropError] = useState(false);
   const dropping = useRef(false);
+  const [series, setSeries] = useState<LectureSeries[]>([]);
   const [lectures, setLectures] = useState<Lecture[]>([]);
-  const [selected, setSelected] = useState<{ id: string; seek: number | null } | null>(null);
+  const [selected, setSelected] = useState<{ id: string; seek: number | null; autoplay?: boolean } | null>(null);
   const [failed, setFailed] = useState(false);
   const api = window.electronAPI.lectures;
   useEffect(() => {
     const open = () => { const target = consumeLecture(); if (target) setSelected({ id: target.id, seek: target.seconds }); };
-    void api.list().then(rows => { setLectures(rows); open(); }).catch(() => setFailed(true));
+    void Promise.all([api.list(), api.series.list()]).then(([rows, groups]) => { setLectures(rows); setSeries(groups); open(); }).catch(() => setFailed(true));
     window.addEventListener(LECTURE_OPEN_EVENT, open);
     return () => window.removeEventListener(LECTURE_OPEN_EVENT, open);
   }, [api]);
+  const refreshSeries = useCallback(async () => { setSeries(await api.series.list()); }, [api]);
   const lecture = lectures.find(item => item.id === selected?.id);
   const acceptAdded = async (added: Lecture[]) => {
     setLectures(await api.list());
     if (added[0]) setSelected({ id: added[0].id, seek: null });
     await refreshBooks();
+    await refreshSeries();
   };
   const add = () => { void api.add().then(acceptAdded).catch(error => { if (String(error).includes('unsupported-media')) setDropError(true); else setFailed(true); }); };
   const drop = async (event: React.DragEvent) => {
@@ -186,7 +198,7 @@ export function LecturesView() {
     } catch { setDropError(true); }
     finally { dropping.current = false; }
   };
-  const remove = (id: string) => { if (window.confirm(t('lectureRemoveConfirm'))) void api.remove(id).then(() => { setLectures(current => current.filter(item => item.id !== id)); setSelected(null); }).catch(() => setFailed(true)); };
+  const remove = (id: string) => { if (window.confirm(t('lectureRemoveConfirm'))) void api.remove(id).then(() => { setLectures(current => current.filter(item => item.id !== id)); setSelected(null); void refreshSeries(); void refreshBooks(); }).catch(() => setFailed(true)); };
 
   return <div dir={dir} data-lecture-drop onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={event => void drop(event)} className="flex-1 min-h-0 overflow-auto bg-canvas p-4 sm:p-6">
     <div className="mx-auto max-w-6xl space-y-4">
@@ -198,12 +210,9 @@ export function LecturesView() {
       <p className="text-xs text-muted">{t('lectureDropHint')}</p>
       {failed && <p role="alert" className="text-sm">{t('pathwayError')}</p>}
       <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <ul className="space-y-1 min-w-0 max-h-64 lg:max-h-[65vh] overflow-y-auto overscroll-contain rounded-xl border border-subtle p-2">{lectures.length === 0 && <li className="p-3 text-sm leading-relaxed text-muted">{t('lecturesEmpty')}</li>}{lectures.map(item => <li key={item.id} className="flex items-center gap-1">
-          <button type="button" aria-current={item.id === selected?.id} onClick={() => setSelected({ id: item.id, seek: null })} className={`flex-1 min-w-0 rounded-lg border px-3 py-2 text-start ${item.id === selected?.id ? 'border-pale-sky-500 bg-surface' : 'border-subtle'}`}><span dir="auto" className="block truncate text-sm font-bold">{item.title}</span><span className="block text-xs text-muted">{t(item.kind === 'audio' ? 'lectureAudio' : 'lectureVideo')} · <bdi>{item.path.split('.').pop()?.toUpperCase()}</bdi>{item.sections.length > 0 && ` · ${t('lectureSectionCount', { count: item.sections.length })}`}</span></button>
-          <button type="button" className="p-1.5 rounded-lg border border-subtle" aria-label={t('lectureRemove')} title={t('lectureRemove')} onClick={() => remove(item.id)}><Trash2 className="size-3" /></button>
-        </li>)}</ul>
+        <LectureSeriesList lectures={lectures} series={series} selected={selected?.id} onSelect={id => setSelected({ id, seek: null })} onRemove={remove} onChanged={refreshSeries} />
         <main className="min-w-0 rounded-xl border border-subtle bg-surface p-4">
-          {lecture ? <Player key={`${lecture.id}:${selected?.seek}`} lecture={lecture} seek={selected?.seek ?? null} onChanged={updated => setLectures(current => current.map(item => item.id === updated.id ? updated : item))} /> : <p className="text-sm text-muted">{t('lecturePick')}</p>}
+          {lecture ? <Player key={`${lecture.id}:${selected?.seek}`} lecture={lecture} seek={selected?.seek ?? null} autoplay={!!selected?.autoplay} next={nextSeriesLecture(series, lecture.id)} onNext={() => { const next = nextSeriesLecture(series, lecture.id); if (next) setSelected({ id: next.next.workId, seek: 0, autoplay: true }); }} onProgress={refreshSeries} onChanged={updated => setLectures(current => current.map(item => item.id === updated.id ? updated : item))} /> : <p className="text-sm text-muted">{t('lecturePick')}</p>}
         </main>
       </div>
     </div>

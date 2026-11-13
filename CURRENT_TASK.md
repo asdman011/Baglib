@@ -1,3 +1,45 @@
+KEY-342 publication - 2026-11-13T22:51:33.702952+02:00 - Codex: ae348d4cd5be5ec6efca384cc42f5ee513005783 committed and successfully pushed normally to origin/feature/library-domain; full2050/2050.
+
+## KEY-344 verified handoff ? 2026-11-13T22:50:08.930292+02:00 ? Codex
+
+Implemented exactly the approved lecture_series and ordered lecture_series_item schema, series CRUD/membership/reordering, progress, manual or cancellable automatic next lecture, Library assignment and a series level in the Notes tree.
+
+Series native seed and actual Electron restart: 8/8 language/width/phase configurations, zero renderer errors. Both original MP4s plus a generated third WebM; rename/delete, membership, drag/keyboard order, 94/96 percent completion, manual/automatic/cancelled next, Library menu and Notes hierarchy/persistence passed. Both original real Arabic/English MP4s were read in place and never modified. Filename fallback preserves the Arabic title/speaker; the English filename supplies the title and has no speaker. No real files cover other containers, embedded tags, chapters or three-member series; generated fixtures cover those gaps only. All live profiles were deleted and only PNG screenshots remain in .baglib-data/KEY-34x-evidence/.
+
+Verification: TypeScript passed; scoped lint zero errors (15 existing warnings). Three full-suite invocations used --test-concurrency=2: first 1989/1999 exposed ten Notes mocks missing the new series API; corrected in KEY-344, targeted 10/10 passed; second and third full suites both passed 2050/2050. Concurrent other-agent tests explain the additional 51 enumerated tests. Verification covers the corrected shared worktree. No Jira changes. Publication authorized to origin/feature/library-domain, one scoped commit per task.
+
+Exact files:
+
+- `src/main/database/migrations/028_lecture_series.ts`
+- `src/main/database/migrations/index.ts`
+- `src/main/database/repositories/lecture-series.repository.ts`
+- `src/shared/lecture-series.ts`
+- `src/shared/lectures.ts`
+- `src/main/ipc/lectures.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/lectures/LecturesView.tsx`
+- `src/renderer/components/lectures/LectureSeriesList.tsx`
+- `src/renderer/components/lectures/LectureContinueNext.tsx`
+- `src/renderer/components/lectures/LectureSeriesPicker.tsx`
+- `src/renderer/components/library/LibraryGridView.tsx`
+- `src/shared/notes-tree.ts`
+- `src/renderer/components/notes/NotesOverviewView.tsx`
+- `src/renderer/components/notes/NotesFolderTree.tsx`
+- `src/renderer/translations.ts`
+- `tests/repositories/lecture-series.repository.test.ts`
+- `tests/services/notes-tree.test.ts`
+- `docs/ADR-015-lecture-series.md`
+- `docs/data-dictionary.md`
+- `scripts/wave6-live/main.cjs`
+- `scripts/wave6-live/run.mjs`
+- `scripts/wave6-live/series-checks.cjs`
+- `tests/ui/note-paragraph-link.test.ts`
+- `tests/ui/notes-workspace-actions.test.ts`
+- `tests/ui/notes-workspace-layout.test.ts`
+- `tests/ui/usability-recovery.test.ts`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
 KEY-343 publication ? 2026-11-13T22:50:55.797300+02:00 ? Codex: 4ad4c2df0e099a8e790ef6ac6dae98d8d213f98f committed and successfully pushed normally to origin/feature/library-domain; full corrected verification2050/2050.
 
 ## KEY-342 verified handoff ? 2026-11-13T22:50:08.930292+02:00 ? Codex

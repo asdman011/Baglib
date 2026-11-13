@@ -18,6 +18,7 @@ for (const language of ['ar', 'en'] as const) {
     const word: { ids: string[]; lang: string; layout: unknown }[] = [];
     let exportFails = true;
     Object.defineProperty(window, 'electronAPI', { configurable: true, value: {
+      lectures: { series: { list: async () => [] } },
       getAllBooks: async () => [], getAllNotes: async () => [], getCategoryTree: async () => [],
       studyNotes: {
         list: async () => notes, onChanged: () => () => {},

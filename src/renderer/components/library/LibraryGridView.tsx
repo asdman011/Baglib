@@ -92,6 +92,8 @@ import {
 import { useWorkspace } from '../context/WorkspaceContext';
 import { renderPdfPage } from '../../utils/pdf-page-renderer';
 import { resolveDroppedFilePath, localAssetUrl } from '../../utils/file-path-helper';
+import { isLectureFormat } from '../../../shared/lectures';
+import { LectureSeriesPicker } from '../lectures/LectureSeriesPicker';
 import { routeBookDrop } from '../../utils/book-drop';
 import type {
   CardDensity,
@@ -119,6 +121,7 @@ export const LibraryGridView: React.FC = () => {
     activeLibraryCategory,
     setActiveLibraryCategory,
   } = useWorkspace();
+  const [seriesWork, setSeriesWork] = useState<string | null>(null);
   const [recentView, setRecentView] = useState<'all' | 'opened' | 'imported'>('all');
   const [recentActivity, setRecentActivity] = useState<RecentReadingActivity[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
@@ -1015,7 +1018,9 @@ export const LibraryGridView: React.FC = () => {
         setSelectedBook(item); setIsNewBook(false); setIsDetailModalOpen(true);
       },
     }, t);
-    return actions.map(action => ({ id: action.id, label: action.label, icon: createElement(CARD_ACTION_ICONS[action.icon] ?? Info, { size: 14 }), danger: action.danger, disabled: !!action.disabledReason, disabledReason: action.disabledReason, onClick: action.onSelect }));
+    const items = actions.map(action => ({ id: action.id, label: action.label, icon: createElement(CARD_ACTION_ICONS[action.icon] ?? Info, { size: 14 }), danger: action.danger, disabled: !!action.disabledReason, disabledReason: action.disabledReason, onClick: action.onSelect }));
+    if (book.workType === 'lecture' && book.filePath && isLectureFormat(book.digitalFormat)) items.push({ id: 'lecture-series', label: t('lectureAddToSeries'), icon: createElement(Info, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => setSeriesWork(book.id) });
+    return items;
   };
   const exportBooks = (items: BookItem[]) => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' }));
@@ -1069,6 +1074,7 @@ export const LibraryGridView: React.FC = () => {
       onDrop={handleDrop}
       className="flex-1 flex flex-col h-full bg-canvas overflow-hidden font-sans select-none relative"
     >
+      <LectureSeriesPicker workId={seriesWork} onClose={() => setSeriesWork(null)} />
       {/* Drag & Drop Visual Overlay */}
       {isDragActive && (
         <div className="absolute inset-0 z-50 bg-canvas/85 backdrop-blur-md flex flex-col items-center justify-center p-8 border-2 border-dashed border-primary rounded-2xl animate-in fade-in duration-200 pointer-events-none">

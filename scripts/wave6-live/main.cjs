@@ -6,9 +6,10 @@ const {execFileSync}=require('node:child_process');
 const assert=require('node:assert/strict');
 const directory=process.env.BAGLIB_WAVE6_LIVE_DIR;
 const realPlayerOnly = process.env.BAGLIB_WAVE6_REAL_PLAYER_ONLY === '1';
+const seriesOnly = process.env.BAGLIB_WAVE6_SERIES_ONLY === '1';
 const mediaOnly = process.env.BAGLIB_WAVE6_MEDIA_ONLY === '1';
 const captionsOnly = process.env.BAGLIB_WAVE6_CAPTIONS_ONLY === '1';
-const playerOnly = process.env.BAGLIB_WAVE6_PLAYER_ONLY === '1' || captionsOnly || mediaOnly || realPlayerOnly;
+const playerOnly = process.env.BAGLIB_WAVE6_PLAYER_ONLY === '1' || captionsOnly || mediaOnly || seriesOnly || realPlayerOnly;
 const verifyControls = require('./player-checks.cjs');
 const media=path.join(directory,'media');
 const realFiles = JSON.parse(fs.readFileSync(path.join(directory, 'real-files.json'), 'utf8'));
@@ -72,6 +73,12 @@ app.on('browser-window-created',(_,owner)=>{
       await require('./real-media-checks.cjs').runPlayer(realContext);
       assert.deepEqual(rendererErrors, []);
       console.log(JSON.stringify({ realPlayer: true, configurations: 16, rendererErrors }));
+      coursera.close(); app.quit(); return;
+    }
+    if (seriesOnly) {
+      await require('./series-checks.cjs')(realContext);
+      assert.deepEqual(rendererErrors, []);
+      console.log(JSON.stringify({ series: true, phase: process.env.BAGLIB_WAVE6_SERIES_PHASE, rendererErrors }));
       coursera.close(); app.quit(); return;
     }
     if (mediaOnly) {

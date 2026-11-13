@@ -1,5 +1,24 @@
 export const translations = {
   ar: {
+    // KEY-344 lecture series.
+    lectureSeriesName: "اسم السلسلة",
+    lectureSeriesCreate: "إنشاء سلسلة",
+    lectureSeriesRename: "إعادة التسمية",
+    lectureSeriesDelete: "حذف السلسلة",
+    lectureSeriesDeleteConfirm: "حذف السلسلة مع الاحتفاظ بمحاضراتها؟",
+    lectureSeriesAutoplay: "تشغيل المحاضرة التالية تلقائيًا",
+    lectureSeriesProgress: "اكتملت {finished} من {total}",
+    lectureSeriesError: "تعذّر حفظ السلسلة. حاول مجددًا.",
+    lectureSeriesUp: "تحريك لأعلى",
+    lectureSeriesDown: "تحريك لأسفل",
+    lectureAddToSeries: "إضافة إلى سلسلة",
+    lectureNoSeries: "دون سلسلة",
+    lectureOther: "محاضرات أخرى",
+    lectureSeriesNext: "التالي: {title}",
+    lectureSeriesCountdown: "يبدأ التشغيل خلال {seconds} ثوانٍ",
+    lectureSeriesCancelNext: "إلغاء التشغيل التلقائي",
+    lectureSeriesApply: "حفظ السلسلة",
+
     // KEY-342 lecture imports.
     lectureDropAdded: "تمت إضافة {count} محاضرة",
     lectureUnsupportedDrop: "صيغة الوسائط غير مدعومة أو الملف غير متاح. اختر MP4 أو M4V أو MOV أو MKV أو WebM أو MP3 أو M4A أو OGG أو OPUS أو WAV.",
@@ -5279,6 +5298,25 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    // KEY-344 lecture series.
+    lectureSeriesName: "Series name",
+    lectureSeriesCreate: "Create series",
+    lectureSeriesRename: "Rename",
+    lectureSeriesDelete: "Delete series",
+    lectureSeriesDeleteConfirm: "Delete this series and keep its lectures?",
+    lectureSeriesAutoplay: "Play the next lecture automatically",
+    lectureSeriesProgress: "{finished} of {total} finished",
+    lectureSeriesError: "Could not save the series. Try again.",
+    lectureSeriesUp: "Move up",
+    lectureSeriesDown: "Move down",
+    lectureAddToSeries: "Add to series",
+    lectureNoSeries: "No series",
+    lectureOther: "Other lectures",
+    lectureSeriesNext: "Next: {title}",
+    lectureSeriesCountdown: "Playback starts in {seconds} seconds",
+    lectureSeriesCancelNext: "Cancel automatic playback",
+    lectureSeriesApply: "Save series",
+
     // KEY-342 lecture imports.
     lectureDropAdded: "Added {count} lectures",
     lectureUnsupportedDrop: "Unsupported media format or unavailable file. Choose MP4, M4V, MOV, MKV, WebM, MP3, M4A, OGG, OPUS or WAV.",

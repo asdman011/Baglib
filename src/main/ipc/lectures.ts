@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises';
 import { getDatabase } from '../database/connection';
 import { LectureLibrary } from '../services/lectures/lecture-library';
 import { LECTURE_EXTENSIONS, validProgress, validSections } from '../../shared/lectures';
+import { LectureSeriesRepository } from '../database/repositories/lecture-series.repository';
 import { LectureSubtitles } from '../services/lectures/subtitles';
 
 const shots = () => path.join(app.getPath('userData'), 'lecture-shots');
@@ -20,6 +21,13 @@ const lectureId = (id: unknown) => {
 };
 
 export function registerLectureIpc(): void {
+  const series = (event: IpcMainInvokeEvent) => { library(event); return new LectureSeriesRepository(getDatabase()); };
+  ipcMain.handle('lectures:series-list', event => series(event).list());
+  ipcMain.handle('lectures:series-create', (event, name: unknown) => series(event).create(typeof name === 'string' ? name : ''));
+  ipcMain.handle('lectures:series-update', (event, id: unknown, changes: { name?: unknown; autoplayNext?: unknown }) => series(event).update(lectureId(id), changes));
+  ipcMain.handle('lectures:series-remove', (event, id: unknown) => series(event).remove(lectureId(id)));
+  ipcMain.handle('lectures:series-assign', (event, workId: unknown, seriesId: unknown) => series(event).assign(lectureId(workId), seriesId === null ? null : lectureId(seriesId)));
+  ipcMain.handle('lectures:series-reorder', (event, id: unknown, workIds: unknown) => series(event).reorder(lectureId(id), workIds));
   ipcMain.handle('lectures:subtitles', async (event, id: unknown, choose: unknown) => {
     const service = library(event);
     const lecture = service.list().find(item => item.id === lectureId(id));

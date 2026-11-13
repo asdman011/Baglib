@@ -596,3 +596,26 @@ Approved 2026-11-12. Migration 027 introduces `task_list(id TEXT PRIMARY KEY, na
 Lecture imports reuse Work → Edition → Source with work_type_id `wt-lecture`. The existing `work.metadata_json` stores `speaker` and `recordingDate`, using the approved LectureSpecificMetadata contract. The contributor relation uses role `speaker`. Recording dates are distinct from edition.publication_year. Canonical titles/names retain their original script and diacritics. No table or column is added for media formats.
 
 Operational app_settings records include media.lectures.v1 for legacy lecture section annotations, media.lectures-works.v1 for the transactional one-time conversion marker, and media.lecture-subtitles.v1 for per-lecture chosen subtitle paths. All remain keyed by the original lecture/Work id. See ADR-014.
+
+
+## lecture_series — KEY-344, migration 028
+
+Approved by the user on 2026-11-13. See ADR-015.
+
+| Column | Type and constraints | Meaning |
+| --- | --- | --- |
+| id | TEXT PRIMARY KEY | Series identity |
+| name | TEXT NOT NULL | Canonical user-entered series name |
+| autoplay_next | INTEGER NOT NULL DEFAULT 0, boolean CHECK | Start next lecture after the cancellable countdown |
+| created_at | TEXT NOT NULL | Creation timestamp |
+| updated_at | TEXT NOT NULL | Last series/membership edit timestamp |
+
+## lecture_series_item — KEY-344, migration 028
+
+| Column | Type and constraints | Meaning |
+| --- | --- | --- |
+| series_id | TEXT NOT NULL, FK lecture_series(id), ON DELETE CASCADE | Parent series |
+| work_id | TEXT NOT NULL UNIQUE, FK work(id), ON DELETE CASCADE | Lecture Work, at most one series |
+| position | INTEGER NOT NULL | Ordered membership position |
+
+The primary key is (series_id, work_id). Series deletion keeps Works. The existing playback completion flag supplies completed/total progress, with new lecture saves using 95% playback as the completion threshold. No additional duration or completion columns are introduced.

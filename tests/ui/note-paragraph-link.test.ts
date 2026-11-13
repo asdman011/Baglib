@@ -21,6 +21,7 @@ for (const language of ['ar', 'en'] as const) {
       { id: 'b', title: 'Source', content: 'مقدمة الكلام\n\nالصبر حبس النفس عن الجزع ^p1', aliases: [], tags: [], createdAt: '2026-11-10', updatedAt: '2026-11-10' },
     ];
     Object.defineProperty(window, 'electronAPI', { configurable: true, value: {
+      lectures: { series: { list: async () => [] } },
       getAllBooks: async () => [], getAllNotes: async () => [], getCategoryTree: async () => [],
       studyNotes: { list: async () => notes, onChanged: () => () => {} },
       knowledge: { getAll: async () => [] },

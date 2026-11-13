@@ -20,6 +20,7 @@ for (const language of ['ar', 'en'] as const) {
     let empty = false;
     const note = { id: 'retained', title: 'ملاحظة Test', content: 'Retained content', aliases: [], tags: [], createdAt: '2026-11-07', updatedAt: '2026-11-07' };
     Object.defineProperty(window, 'electronAPI', { configurable: true, value: {
+      lectures: { series: { list: async () => [] } },
       getAllBooks: async () => [], getAllNotes: async () => [], getCategoryTree: async () => [],
       studyNotes: { list: async () => { if (fail) throw new Error('fixture unavailable'); return empty ? [] : [note]; }, onChanged: () => () => {} },
       knowledge: { getAll: async () => { if (failKnowledge) throw new Error('fixture knowledge unavailable'); return []; } },

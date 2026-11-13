@@ -30,7 +30,7 @@ export function folderName(path: string, t: Translate, lang: string, labels: Map
     return labels.get(path) || t('notesChapter', { number: Number(parts[2]).toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-US') });
   }
   if (root === 'library') return books.find(book => book.id === parts[1])?.title || labels.get(path) || t('notesFolderLibrary');
-  return labels.get(path) || parts[1];
+  return labels.get(path) || parts[parts.length - 1];
 }
 
 export function NotesFolderTree({ counts, labels, books, folder, onSelect, showEmpty, t, lang }: {
@@ -45,7 +45,8 @@ export function NotesFolderTree({ counts, labels, books, folder, onSelect, showE
     if (!showEmpty) return found;
     const known = path === 'quran' ? Array.from({ length: 114 }, (_, index) => `quran/${index + 1}`)
       : path === 'sunnah' ? SUNNAH_COLLECTION_IDS.map(id => `sunnah/${id}`)
-        : path === 'library' ? books.map(book => `library/${book.id}`) : [];
+        : path === 'library' ? books.map(book => `library/${book.id}`)
+          : path === 'lectures' || path.startsWith('lectures/') ? [...labels.keys()].filter(key => key.startsWith(path + '/') && key.split('/').length === path.split('/').length + 1) : [];
     return [...new Set([...known, ...found])].sort((a, b) => {
       const x = Number(a.split('/').pop()), y = Number(b.split('/').pop());
       return Number.isFinite(x) && Number.isFinite(y) ? x - y : 0;

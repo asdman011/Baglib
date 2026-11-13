@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { childFolders, folderCounts, folderLabels, noteFolders, notePosition, notesInFolder, targetFolder } from '../../src/shared/notes-tree';
+import { childFolders, folderCounts, folderLabels, noteFolders, notePosition, notesInFolder, targetFolder, resolveLectureFolder } from '../../src/shared/notes-tree';
 
 const lecture = '0f3b0a2e-1111-4222-8333-444455556666';
 const note = (id: string, content: string, extra: { sourceRef?: string; workId?: string } = {}) => ({ id, content, ...extra });
@@ -48,4 +48,30 @@ test('poems and lectures are named from their link labels; notes sort by positio
   assert.equal(labels.get('poetry/12'), 'المتنبي — على قدر أهل العزم');
   assert.ok(notePosition(note('x', '[[quran:hafs:2:5|5]]'), 'quran/2') < notePosition(note('y', '[[quran:hafs:2:255|255]]'), 'quran/2'));
   assert.equal(notePosition(notes[0], `lectures/${lecture}`), 120);
+});
+
+
+test('lecture series adds exactly one folder level and leaves ungrouped lectures at the root', () => {
+  const group = { id: 'course', name: 'سلسلة العلم', autoplayNext: false, createdAt: '', updatedAt: '', items: [{ workId: lecture, title: 'الدرس الأول', completed: false }] };
+  const grouped = note('series-note', `[[media:${lecture}:45|الدرس الأول · 0:45]]`);
+  const path = `lectures/series-course/${lecture}`;
+  assert.equal(targetFolder(`media:${lecture}:45`, [group]), path);
+  assert.deepEqual(noteFolders(grouped, [group]), [path]);
+  assert.equal(folderCounts([grouped], [group]).get('lectures/series-course'), 1);
+  assert.equal(notesInFolder([grouped], 'lectures/series-course', [group]).length, 1);
+  assert.equal(folderLabels([grouped], [group]).get('lectures/series-course'), 'سلسلة العلم');
+  assert.equal(folderLabels([grouped], [group]).get(path), 'الدرس الأول');
+  assert.equal(notePosition(grouped, path, [group]), 45);
+  assert.equal(targetFolder(`media:${lecture}:45`, []), `lectures/${lecture}`);
+});
+
+
+test('remembered lecture folders follow assignment and survive series deletion', () => {
+  const group = { id: 'course', name: 'Course', autoplayNext: false, createdAt: '', updatedAt: '', items: [{ workId: lecture, title: 'Lecture', completed: false }] };
+  assert.equal(resolveLectureFolder(`lectures/${lecture}`, [group]), `lectures/series-course/${lecture}`);
+  assert.equal(resolveLectureFolder(`lectures/series-course/${lecture}`, []), `lectures/${lecture}`);
+  assert.equal(resolveLectureFolder('lectures/series-course', []), 'lectures');
+  assert.equal(resolveLectureFolder('lectures/series-course', [group]), 'lectures/series-course');
+  assert.equal(resolveLectureFolder('quran/2', [group]), 'quran/2');
+  assert.equal(resolveLectureFolder(null, [group]), null);
 });

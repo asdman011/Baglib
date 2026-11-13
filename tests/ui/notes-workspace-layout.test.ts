@@ -63,6 +63,7 @@ test('Notes workspace renders top tabs (Notes, Knowledge Cards, Boards)', async 
   Object.defineProperty(win, 'electronAPI', {
     configurable: true,
     value: {
+      lectures: { series: { list: async () => [] } },
       getAllBooks: async () => [],
       getAllNotes: async () => [],
       getCategoryTree: async () => [],
@@ -123,6 +124,7 @@ test('Workspace navigation switching: tabs and custom events', async () => {
   Object.defineProperty(win, 'electronAPI', {
     configurable: true,
     value: {
+      lectures: { series: { list: async () => [] } },
       getAllBooks: async () => [],
       getAllNotes: async () => [],
       getCategoryTree: async () => [],
@@ -187,6 +189,7 @@ test('Notes selection and stacked screen navigation (480px model)', async () => 
   Object.defineProperty(win, 'electronAPI', {
     configurable: true,
     value: {
+      lectures: { series: { list: async () => [] } },
       getAllBooks: async () => [],
       getAllNotes: async () => [],
       getCategoryTree: async () => [],
@@ -250,6 +253,7 @@ test('Notes workspace renders open-questions entry and per-note knowledge graph 
   Object.defineProperty(win, 'electronAPI', {
     configurable: true,
     value: {
+      lectures: { series: { list: async () => [] } },
       getAllBooks: async () => [],
       getAllNotes: async () => [],
       getCategoryTree: async () => [],

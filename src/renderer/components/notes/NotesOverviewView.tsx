@@ -28,9 +28,10 @@ import { BoardsWorkspace } from './BoardsWorkspace';
 import { SavedCardsPanel } from '../knowledge/SavedCardsPanel';
 import { SrsReviewScreen } from '../knowledge/SrsReviewScreen';
 import { NoteEditorPane } from './NoteEditorPane';
+import type { LectureSeries } from '../../../shared/lecture-series';
 import { NotesFolderTree, folderName } from './NotesFolderTree';
 import { NotesExportDialog, NotesImportDialog } from './NotesTransferDialog';
-import { folderCounts, folderLabels, noteFolders, notePosition, notesInFolder, childFolders, targetFolder } from '../../../shared/notes-tree';
+import { folderCounts, folderLabels, noteFolders, notePosition, notesInFolder, childFolders, targetFolder, resolveLectureFolder } from '../../../shared/notes-tree';
 import { NoteDetailsPane } from './NoteDetailsPane';
 import { KnowledgeTools } from './KnowledgeTools';
 import { Button } from '../ui/Button';
@@ -72,6 +73,8 @@ export type NoteFilter = 'all' | 'comments' | 'questions' | 'book';
 const NOTES_FOLDER_KEY = 'baglib.notes.folder';
 export const NotesOverviewView: React.FC = () => {
   const { books, dir, t, lang, openBookForReading } = useWorkspace();
+  const [lectureSeries, setLectureSeries] = useState<LectureSeries[]>([]);
+
   const { notes, refresh, error, failedSources, loading } = useStudyNotes();
   const removeWithUndo = useUndoFeedback();
 
@@ -86,6 +89,21 @@ export const NotesOverviewView: React.FC = () => {
   // KEY-338: folder navigation (the user's mock-up). null = all notes. Remembered between visits.
   const [folder, setFolderState] = useState<string | null>(() => { try { return localStorage.getItem(NOTES_FOLDER_KEY) || null; } catch { return null; } });
   const setFolder = (next: string | null) => { setFolderState(next); try { if (next) localStorage.setItem(NOTES_FOLDER_KEY, next); else localStorage.removeItem(NOTES_FOLDER_KEY); } catch { /* remembered for this session only */ } };
+  useEffect(() => {
+    let alive = true;
+    void window.electronAPI.lectures.series.list().then(rows => {
+      if (!alive) return;
+      setLectureSeries(rows);
+      setFolderState(current => {
+        const resolved = resolveLectureFolder(current, rows);
+        if (resolved !== current && resolved) {
+          try { localStorage.setItem(NOTES_FOLDER_KEY, resolved); } catch { /* The selected folder still works for this session. */ }
+        }
+        return resolved;
+      });
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
   const [showEmpty, setShowEmpty] = useState(false);
   const [transfer, setTransfer] = useState<'export' | 'import' | null>(null);
   const [tagFilter, setTagFilter] = useState('');
@@ -263,11 +281,11 @@ export const NotesOverviewView: React.FC = () => {
   };
 
   // Filtered and sorted notes list
-  const folderNoteCounts = useMemo(() => folderCounts(notes), [notes]);
-  const folderNames = useMemo(() => folderLabels(notes), [notes]);
-  const noteBooks = (note: { id: string; content: string; workId?: string; sourceRef?: string }) => noteFolders(note).filter(path => path.startsWith('library/')).map(path => books.find(book => book.id === path.slice(8))).filter((book): book is NonNullable<typeof book> => !!book);
+  const folderNoteCounts = useMemo(() => folderCounts(notes, lectureSeries), [notes, lectureSeries]);
+  const folderNames = useMemo(() => folderLabels(notes, lectureSeries), [notes, lectureSeries]);
+  const noteBooks = (note: { id: string; content: string; workId?: string; sourceRef?: string }) => noteFolders(note, lectureSeries).filter(path => path.startsWith('library/')).map(path => books.find(book => book.id === path.slice(8))).filter((book): book is NonNullable<typeof book> => !!book);
   const filteredNotes = useMemo(() => {
-    const scoped = notesInFolder(notes, folder);
+    const scoped = notesInFolder(notes, folder, lectureSeries);
     return scoped
       .filter((note) => {
         if (tagFilter && !note.tags.includes(tagFilter)) return false;
@@ -299,27 +317,27 @@ export const NotesOverviewView: React.FC = () => {
           return a.updatedAt.localeCompare(b.updatedAt);
         }
         if (folder && folder.includes('/')) {
-          const position = notePosition(a, folder) - notePosition(b, folder);
+          const position = notePosition(a, folder, lectureSeries) - notePosition(b, folder, lectureSeries);
           if (position) return position;
         }
         return b.updatedAt.localeCompare(a.updatedAt);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notes, folder, tagFilter, subjectFilter, authorFilter, filterMode, readingWork, anchor, query, books, openComments, sortOrder, lang]);
-  const allTags = useMemo(() => [...new Set(notesInFolder(notes, folder).flatMap(note => note.tags))].sort(), [notes, folder]);
-  const folderBooks = useMemo(() => [...new Map(notesInFolder(notes, folder).flatMap(noteBooks).map(book => [book.id, book])).values()],
+  }, [notes, folder, tagFilter, subjectFilter, authorFilter, filterMode, readingWork, anchor, query, books, openComments, sortOrder, lang, lectureSeries]);
+  const allTags = useMemo(() => [...new Set(notesInFolder(notes, folder, lectureSeries).flatMap(note => note.tags))].sort(), [notes, folder, lectureSeries]);
+  const folderBooks = useMemo(() => [...new Map(notesInFolder(notes, folder, lectureSeries).flatMap(noteBooks).map(book => [book.id, book])).values()],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [notes, folder, books]);
+    [notes, folder, books, lectureSeries]);
   const allSubjects = useMemo(() => [...new Set(folderBooks.flatMap(book => [...(book.categories ?? []), (lang === 'ar' ? book.primaryCategory?.nameAr : book.primaryCategory?.nameEn) ?? ''].filter(Boolean)))].sort(), [folderBooks, lang]);
   const allAuthors = useMemo(() => [...new Set(folderBooks.map(book => book.author).filter(Boolean))].sort(), [folderBooks]);
   const folderTitle = folder ? folderName(folder, t, lang, folderNames, books) : t('notesFolderAll');
   const crumbs = folder ? folder.split('/').map((_, index, parts) => parts.slice(0, index + 1).join('/')) : [];
   // KEY-345: for the folder-tree export, each note's full Notes path (Quran › 2. Al-Baqarah), as display names.
   const exportFolders = useMemo(() => Object.fromEntries(filteredNotes.map(note => {
-    const path = noteFolders(note).find(candidate => !folder || candidate === folder || candidate.startsWith(folder + '/')) ?? 'other';
+    const path = noteFolders(note, lectureSeries).find(candidate => !folder || candidate === folder || candidate.startsWith(folder + '/')) ?? 'other';
     const parts = path.split('/');
     return [note.id, parts.map((_, index) => parts.slice(0, index + 1).join('/')).map(segment => folderName(segment, t, lang, folderNames, books))];
-  })), [filteredNotes, folder, t, lang, folderNames, books]);
+  })), [filteredNotes, folder, t, lang, folderNames, books, lectureSeries]);
 
   // Select first note automatically if none selected on desktop
   const activeNote = useMemo(() => {
@@ -921,7 +939,7 @@ export const NotesOverviewView: React.FC = () => {
                       }`}
                     >
                       {/* KEY-338: the passage the note is about (e.g. "البقرة ٢٥٥"), as a small badge. */}
-                      {(() => { const passage = studyLinks(note.content).find(link => targetFolder(link.target)); return passage ? <span data-note-reference className="inline-block max-w-full truncate rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200" dir="auto">{passage.label}</span> : null; })()}
+                      {(() => { const passage = studyLinks(note.content).find(link => targetFolder(link.target, lectureSeries)); return passage ? <span data-note-reference className="inline-block max-w-full truncate rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200" dir="auto">{passage.label}</span> : null; })()}
                       <div className="flex items-start justify-between gap-2">
                         <h4
                           dir="auto"
