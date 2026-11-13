@@ -111,7 +111,7 @@ export interface QuranAPI {
   khatmahMutate: (query: import('./khatmah').KhatmahMutation) => Promise<QuranResult<import('./khatmah').KhatmahState>>;
   readerCatalog: () => Promise<QuranResult<QuranReaderCatalog>>;
   read: (query: QuranReadQuery) => Promise<QuranResult<QuranPassage>>;
-  searchAyahs: (query: { script: string; text: string }) => Promise<QuranResult<QuranSearchHit[]>>;
+  searchAyahs: (query: QuranSearchQuery) => Promise<QuranResult<QuranSearchHit[]>>;
   commentary: (query: { script: string; pack: string; surah: number; ayah: number }) => Promise<QuranResult<QuranCommentary>>;
   mushafPage: (query: { pack: string; page: number; script?: string }) => Promise<QuranResult<QuranMushafPage>>;
   mushafPageForAyah: (query: { pack: string; surah: number; ayah: number; script?: string }) => Promise<QuranResult<{ pageNumber: number }>>;
@@ -150,7 +150,8 @@ export interface QuranRichNode { tag: 'text' | 'p' | 'div' | 'br' | 'b' | 'i' | 
 export interface QuranAyah { number: number; words: { position: number; text: string; marker: boolean; meaning?: string; transliteration?: string }[]; translation?: QuranTranslation; transliteration?: QuranRichNode[]; }
 export interface QuranTranslation { text: string; notes: string[]; anchors?: { offset: number; note: number }[]; }
 export interface QuranPassage { profile: 'hafs' | 'warsh'; surah: number; surahs: { number: number; count: number; arabic?: string; name?: string; revelationPlace?: string; revelationOrder?: number }[]; basmala?: string; ayahs: QuranAyah[]; next: number | null; }
-export interface QuranSearchHit { surah: number; ayah: number; text: string; }
+export interface QuranSearchQuery { script: string; text: string; translations?: string[]; includeScript?: boolean; }
+export interface QuranSearchHit { surah: number; ayah: number; text: string; source?: { id: string; title: string; kind: 'script' | 'translation'; language?: string }; }
 export interface QuranCommentary { from: string; to: string; nodes: QuranRichNode[]; }
 export interface QuranAyahDetails { surah: number; ayah: number; profile: 'hafs' | 'warsh'; canonical: string; imlaey: string | null; }
 export interface QuranMorphology { location: string; root?: string; lemma?: string; stem?: string; }

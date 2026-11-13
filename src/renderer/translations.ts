@@ -1,5 +1,13 @@
 export const translations = {
   ar: {
+    quranSearchResultCount: "النتائج: {count}",
+    quranSearchReferenceHint: "ابحث بمرجع مثل ٢:٢٥٥ أو باسم السورة أو في النص العربي والترجمات المثبتة. افتح النتيجة في المصحف.",
+    quranReferenceJump: "انتقال إلى {reference}",
+    quranSearchSources: "مصادر البحث",
+    quranSearchArabic: "النص العربي",
+    quranSearchTranslations: "الترجمات",
+    quranSearchBoth: "النص العربي والترجمات",
+    quranSearchNoTranslations: "لا توجد ترجمات مثبتة لهذا المصحف.",
     // KEY-344 lecture series.
     lectureSeriesName: "اسم السلسلة",
     lectureSeriesCreate: "إنشاء سلسلة",
@@ -5298,6 +5306,14 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    quranSearchResultCount: "Results: {count}",
+    quranSearchReferenceHint: "Enter a reference such as 2:255 or a surah name, or search installed Arabic text and translations. Open a result in the Mushaf.",
+    quranReferenceJump: "Go to {reference}",
+    quranSearchSources: "Search sources",
+    quranSearchArabic: "Arabic text",
+    quranSearchTranslations: "Translations",
+    quranSearchBoth: "Arabic text and translations",
+    quranSearchNoTranslations: "No translations are installed for this reading profile.",
     // KEY-344 lecture series.
     lectureSeriesName: "Series name",
     lectureSeriesCreate: "Create series",

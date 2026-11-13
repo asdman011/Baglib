@@ -1,3 +1,35 @@
+## KEY-169 verified handoff — 2026-11-13T21:50:35.935Z — Codex
+
+Implemented the dispatched reference/translation-search slice. QuranSearchDialog and global source search now show a localized first reference row; StudyLinkPicker inserts single-ayah or range links. Plain-text hits remain below references. The dialog offers remembered Arabic/translation/both source selection and source-labelled hits. Unicode direction isolation keeps range endpoints in order in Arabic RTL; existing Arabic typography and logical alignment remain. Installed translation text is indexed in disposable reader-v2 copies using the existing normalizer. No domain/main-database schema change, dependency or download.
+
+Verification: full suite once with --test-concurrency=2 passed 2103/2103 (172106.5065 ms); focused service/parser31/31, three-surface UI6/6 and i18n2/2. Final native4/4 (ar/en ×1280/480), zero renderer errors,16screenshots in .baglib-data/KEY-169-evidence/. Actual installed Arabic script and English translation packs were used; all1338 tracked corpus originals unchanged and all own live profiles deleted. Own renderer stopped. Final types/scoped lint/diff check passed; main/worker build passed. Screenshot review caught and fixed RTL range reversal and misleading combined-source count; final native matrix covers both fixes. Native harness selector assumptions were corrected before the final run.
+
+Attribution: the inherited19-test parser was written by OpenCode DeepSeek and reviewed by Claude. Codex wrote integration, validation, extra service/UI tests and native runner. Claude's concurrent a53f807 also included Codex's two IPC-validation hunks from src/main/ipc/quran.ts; they are already published and have no remaining diff here. No rewrite is performed. The new validator module is included in this task's commit.
+
+Exact19 files changed for this work (18 remain for this commit, because IPC was published concurrently):
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `src/main/ipc/quran.ts`
+- `src/main/quran-reader-worker.ts`
+- `src/main/services/quran/quran-reader-process.ts`
+- `src/main/services/quran/quran-reader.ts`
+- `src/shared/types/quran.ts`
+- `src/shared/quran-reference.ts`
+- `src/shared/quran-search.ts`
+- `src/renderer/utils/quran-reference-label.ts`
+- `src/renderer/components/quran/QuranSearchDialog.tsx`
+- `src/renderer/components/search/StudySourcesSearch.tsx`
+- `src/renderer/components/notes/StudyLinkPicker.tsx`
+- `src/renderer/translations.ts`
+- `tests/services/quran-reference.test.ts`
+- `tests/services/quran-translation-search.test.ts`
+- `tests/ui/quran-reference-search.test.ts`
+- `scripts/quran-reference-live/run.mjs`
+- `scripts/quran-reference-live/main.cjs`
+
+Report: docs/agent-ops/reports/KEY-169.md. Current main Notes editor uses a separate corpus-completion path; the explicitly requested StudyLinkPicker component is verified in both languages, without expanding that separate path. Fresh-profile startup logs a pre-existing planner reminder warning before successful migrations; no renderer errors or Quran failures. No real document/media files were modified. No Jira changes. User explicitly authorized scoped commit and normal push to origin/feature/library-domain; publication pending. Claude owns review/Jira.
+
 ## KEY-264 packaged acceptance passed, plus two fixes for installed builds — 2026-11-13, Claude Code
 
 **Result:**

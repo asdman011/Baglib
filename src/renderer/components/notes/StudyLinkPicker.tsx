@@ -1,4 +1,6 @@
 'use client';
+import { parseQuranReference } from '../../../shared/quran-reference';
+import { quranReferenceLabel } from '../../utils/quran-reference-label';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { StudyNote } from '../../../shared/study-notes';
@@ -8,7 +10,7 @@ import { SUNNAH_COLLECTION_IDS } from '../../../shared/types/sunnah';
 import { collectionKeys } from '../../utils/sunnah-collections';
 
 export function StudyLinkPicker({ notes, onInsert }: { notes: StudyNote[]; onInsert: (text: string) => void }) {
-  const { books, t } = useWorkspace();
+  const { books, t, lang } = useWorkspace();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ target: string; label: string }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -37,15 +39,13 @@ export function StudyLinkPicker({ notes, onInsert }: { notes: StudyNote[]; onIns
           if (!catalog?.ok) throw new Error('unavailable');
           const source = catalog.data.sources.find(source => source.kind === 'script' && source.profile === profile);
           if (!source) throw new Error('unavailable');
-          const citation = /^(\d{1,3})\s*:\s*(\d{1,3})$/u.exec(keyword.replace(/[٠-٩]/gu, n => String(n.charCodeAt(0) - 0x660)));
-          if (citation) {
-            const passage = await api.read({ script: source.id, surah: +citation[1], from: +citation[2] });
-            if (!passage.ok) throw new Error('unavailable');
-            for (const ayah of passage.data.ayahs.filter(ayah => ayah.number === +citation[2])) found.push({ target: `quran:${profile}:${+citation[1]}:${ayah.number}`, label: `${citation[1]}:${ayah.number} · ${ayah.words.filter(word => !word.marker).map(word => word.text).join(' ')}` });
-          } else {
-            const response = await api.searchAyahs({ script: source.id, text: keyword });
-            if (!response.ok) throw new Error('unavailable');
-            for (const hit of response.data) found.push({ target: `quran:${profile}:${hit.surah}:${hit.ayah}`, label: `${hit.surah}:${hit.ayah} · ${hit.text}` });
+          const reference = parseQuranReference(keyword, profile);
+          if (reference) found.push({ target: `quran:${profile}:${reference.surah}:${reference.from}${reference.to === reference.from ? '' : '-' + reference.to}`, label: t('quranReferenceJump', { reference: quranReferenceLabel(reference, lang) }) });
+          const response = await api.searchAyahs({ script: source.id, text: keyword, translations: catalog.data.sources.filter(item => item.kind === 'translation' && item.profile === profile).map(item => item.id) });
+          if (!response.ok && !reference) throw new Error('unavailable');
+          if (response.ok) for (const hit of response.data) {
+            const target = `quran:${profile}:${hit.surah}:${hit.ayah}`;
+            if (!found.some(item => item.target === target)) found.push({ target, label: `${hit.surah}:${hit.ayah} · ${hit.source?.title || ''} · ${hit.text}` });
           }
         } else {
           // Search the installed corpus, yielding between chapter IPC reads; stale searches stop.
@@ -68,12 +68,12 @@ export function StudyLinkPicker({ notes, onInsert }: { notes: StudyNote[]; onIns
       })().catch(() => { if (alive) setError(true); }).finally(() => { if (alive) { setBusy(false); setLoadedKey(searchKey); } });
     }, 300);
     return () => { alive = false; clearTimeout(timer); };
-  }, [kind, keyword, profile, collection, t, searchKey]);
+  }, [kind, keyword, profile, collection, t, lang, searchKey]);
   const remote = ['quran', 'sunnah'].includes(kind);
   const searching = remote && !!keyword && (busy || loadedKey !== searchKey);
   const shown = remote ? (loadedKey === searchKey ? results : []) : local.slice(0, 12);
   return <div className="rounded-xl border border-subtle bg-canvas p-3 space-y-2" data-study-link-picker>
-    <label className="block text-xs space-y-1"><span>{t('studyLinkSearch')}</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t('studyLinkSearchPlaceholder')} className="w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm" /></label>
+    <label className="block text-xs space-y-1"><span>{t('studyLinkSearch')}</span><input maxLength={200} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('studyLinkSearchPlaceholder')} className="w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm" /></label>
     <div className="flex flex-wrap gap-2 text-xs">
       {(['notes', 'books', 'quran', 'sunnah'] as const).map(value => <button type="button" key={value} onClick={() => setQuery(`/${value} `)} className="rounded border border-subtle px-2 py-1" dir="ltr">/{value}</button>)}
       {kind === 'quran' && <select aria-label={t('quranReadingProfile')} value={profile} onChange={event => setProfile(event.target.value as typeof profile)}><option value="hafs">{t('quranProfileHafs')}</option><option value="warsh">{t('quranProfileWarsh')}</option></select>}

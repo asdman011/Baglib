@@ -1,3 +1,4 @@
+import { validQuranSearchQuery } from '../../../shared/quran-search';
 import Database from 'better-sqlite3';
 import { alignWarshSurah } from './warsh-overlap';
 import type { AssistantQuranQuery, AssistantQuranSource } from '../../../shared/study-assistant';
@@ -5,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, mkdir, rename, rm, realpath, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseHTML } from 'linkedom';
-import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranDivision, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchHit, QuranSimilarAyah, QuranStructure, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
+import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranDivision, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchQuery, QuranSearchHit, QuranSimilarAyah, QuranStructure, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
 import { normalizeQuranSearch, quranSearchText } from './qul-catalog';
 import type { QuranFrequency, QuranFrequencyFamily, QuranFrequencyPlace, QuranFrequencyQuery } from '../../../shared/types/quran';
 import { readerPreset, readerPresets } from './reader-resources';
@@ -77,8 +78,9 @@ export class QuranReader {
     const directory = path.join(this.root, 'derived');
     await mkdir(directory, { recursive: true });
     // Script databases moved to v2 when the search index gained ordinary-spelling forms (small alif, small yeh and waw).
-    // The v1 file is rebuilt from the installed pack, nothing is downloaded, and it stays in use if that rebuild fails.
-    const version = kind === 'script' ? 'reader-v2' : 'reader-v1';
+    // Translation v2 adds a normalized verse index. These disposable copies never change installed packs.
+    // The script v1 file stays in use if its rebuild fails; translation v1 remains available to older readers.
+    const version = kind === 'script' || kind === 'translation' ? 'reader-v2' : 'reader-v1';
     const key = createHash('sha256').update(`${pack.digest}:${version}:${kind}`).digest('hex');
     const filename = path.join(directory, `${key}.sqlite`);
     const previous = kind === 'script' ? path.join(directory, `${createHash('sha256').update(`${pack.digest}:reader-v1:${kind}`).digest('hex')}.sqlite`) : null;
@@ -168,6 +170,15 @@ export class QuranReader {
               const verses = working.prepare("SELECT surah, ayah, group_concat(text, ' ') AS text FROM (SELECT surah, ayah, text FROM words ORDER BY surah, ayah, word) GROUP BY surah, ayah").all() as { surah: number; ayah: number; text: string }[];
               if (!verses.length || verses.length > 7000) throw new Error('invalid-package');
               working.transaction(() => { for (const verse of verses) insert.run(verse.surah, verse.ayah, verse.text, quranSearchText(verse.text)); })();
+            } else if (kind === 'translation') {
+              working.exec('CREATE INDEX baglib_translation ON translation(sura, ayah); CREATE VIRTUAL TABLE baglib_search USING fts5(surah UNINDEXED, ayah UNINDEXED, original UNINDEXED, normalized);');
+              const verses = working.prepare('SELECT sura, ayah, text FROM translation LIMIT 7001').all() as { sura: number; ayah: number; text: string }[];
+              if (!verses.length || verses.length > 7000) throw new Error('invalid-package');
+              const insert = working.prepare('INSERT INTO baglib_search VALUES (?, ?, ?, ?)');
+              working.transaction(() => { for (const verse of verses) {
+                const text = inlineTranslation(verse.text).text;
+                insert.run(verse.sura, verse.ayah, text, quranSearchText(text));
+              } })();
             } else if (kind === 'ayah-topics') {
               working.exec(`
                 CREATE INDEX IF NOT EXISTS baglib_topics_id ON topics(topic_id);
@@ -360,13 +371,28 @@ export class QuranReader {
     }
     return { profile: preset.profile, surah: query.surah, surahs, basmala, ayahs, next: references[20]?.ayah ?? null };
   }
-  async search(script: string, text: string): Promise<QuranSearchHit[]> {
-    if (typeof text !== 'string' || text.length > 200) throw new Error('invalid-resource');
+  async search(script: string, text: string, options: Pick<QuranSearchQuery, 'translations' | 'includeScript'> = {}): Promise<QuranSearchHit[]> {
+    if (!validQuranSearchQuery({ ...options, script, text })) throw new Error('invalid-resource');
+    const active = this.source(script, 'script');
+    const translations = (options.translations || []).map(id => {
+      const source = this.source(id, 'translation');
+      if (source.preset.profile !== active.preset.profile) throw new Error('invalid-resource');
+      return id;
+    });
     const terms = normalizeQuranSearch(text).trim().split(/\s+/).filter(Boolean);
     if (!terms.length) return [];
-    const match = terms.map(term => `"${term.replaceAll('"', '""')}"`).join(' AND ');
-    const database = await this.database(script, 'script');
-    return database.prepare('SELECT surah, ayah, original AS text FROM baglib_search WHERE baglib_search MATCH ? ORDER BY rank LIMIT 30').all(match) as QuranSearchHit[];
+    const match = terms.map(term => '"' + term.replaceAll('"', '""') + '"').join(' AND ');
+    const sources = [...(options.includeScript === false ? [] : [{ id: script, kind: 'script' as const }]), ...translations.map(id => ({ id, kind: 'translation' as const }))];
+    const hits: QuranSearchHit[] = [];
+    // Bound both the source count and result count, giving every selected source a turn.
+    const limit = Math.max(1, Math.floor(100 / Math.max(sources.length, 1)));
+    for (const source of sources) {
+      const { pack, preset } = this.source(source.id, source.kind);
+      const database = await this.database(source.id, source.kind);
+      const rows = database.prepare('SELECT surah, ayah, original AS text FROM baglib_search WHERE baglib_search MATCH ? ORDER BY rank LIMIT ?').all(match, Math.min(30, limit)) as QuranSearchHit[];
+      hits.push(...rows.map(hit => ({ ...hit, source: { ...source, title: pack.resource.title, language: preset.language } })));
+    }
+    return hits;
   }
   async commentary(query: { script: string; pack: string; surah: number; ayah: number }): Promise<QuranCommentary> {
     const scriptSource = this.source(query.script, 'script');

@@ -26,7 +26,7 @@ const run = async (request: QuranReaderRequest) => {
         : request.action === 'read'
         ? await reader!.read(request.query)
         : request.action === 'search'
-        ? await reader!.search(request.query.script, request.query.text)
+        ? await reader!.search(request.query.script, request.query.text, request.query)
         : request.action === 'commentary'
         ? await reader!.commentary(request.query)
         : request.action === 'mushaf-page'

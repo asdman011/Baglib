@@ -1,6 +1,6 @@
 import { utilityProcess } from 'electron';
 import path from 'node:path';
-import type { QuranFrequencyFamily, QuranFrequencyQuery, QuranPack, QuranReadQuery, QuranResult } from '../../../shared/types/quran';
+import type { QuranSearchQuery, QuranFrequencyFamily, QuranFrequencyQuery, QuranPack, QuranReadQuery, QuranResult } from '../../../shared/types/quran';
 
 import type { AssistantQuranQuery } from '../../../shared/study-assistant';
 
@@ -12,7 +12,7 @@ type Action =
   | { action: 'mutashabihat'; script: string; surah: number; ayah: number }
   | { action: 'inspect-ayah'; query: { script: string; layout?: string; surah: number; ayah: number } }
   | { action: 'read'; query: QuranReadQuery }
-  | { action: 'search'; query: { script: string; text: string } }
+  | { action: 'search'; query: QuranSearchQuery }
   | { action: 'commentary'; query: { script: string; pack: string; surah: number; ayah: number } }
   | { action: 'mushaf-page'; pack: string; page: number; script?: string }
   | { action: 'mushaf-page-for-ayah'; pack: string; surah: number; ayah: number; script?: string }

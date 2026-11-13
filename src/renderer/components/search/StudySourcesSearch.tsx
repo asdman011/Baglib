@@ -1,6 +1,8 @@
 'use client';
 import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
+import { parseQuranReference } from '../../../shared/quran-reference';
+import { quranReferenceLabel } from '../../utils/quran-reference-label';
 import React, { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -24,6 +26,7 @@ const nothing: Found = { quran: null, sunnah: null, poetry: null };
 /** Each result group names its source, and a source that is not installed says so instead of showing nothing. */
 export function StudySourcesSearch({ query, onLeave }: { query: string; onLeave: () => void }) {
   const { t, lang, setViewMode, books, openBookForReading } = useWorkspace();
+  const [quranScript, setQuranScript] = useState<{ id: string; profile: 'hafs' | 'warsh'; query: string } | null>(null);
   const [found, setFound] = useState<Found>(nothing);
   const [busy, setBusy] = useState(false);
   const [completedQuery, setCompletedQuery] = useState('');
@@ -38,9 +41,10 @@ export function StudySourcesSearch({ query, onLeave }: { query: string; onLeave:
       const api = window.electronAPI;
       const quran = async () => {
         const catalog = await api.quran.readerCatalog();
-        const script = catalog.ok ? catalog.data.sources.find(source => source.kind === 'script' && source.profile === 'hafs') : undefined;
-        if (!script) return null;
-        const result = await api.quran.searchAyahs({ script: script.id, text });
+        const script = catalog.ok ? (catalog.data.sources.find(source => source.kind === 'script' && source.profile === 'hafs') || catalog.data.sources.find(source => source.kind === 'script')) : undefined;
+        if (alive) setQuranScript(script ? { id: script.id, profile: script.profile || 'hafs', query: text } : null);
+        if (!script || !catalog.ok) return null;
+        const result = await api.quran.searchAyahs({ script: script.id, text, translations: catalog.data.sources.filter(source => source.kind === 'translation' && source.profile === script.profile).map(source => source.id) });
         return result.ok ? result.data : null;
       };
       const sunnah = async () => { const result = await api.sunnah.search?.({ text }); return result?.ok ? result.data : null; };
@@ -61,12 +65,14 @@ export function StudySourcesSearch({ query, onLeave }: { query: string; onLeave:
     <h3 className="text-xs font-bold text-muted">{t(title)}{items && items.length > 0 && <bdi> ({items.length > MAX_COUNTED ? `${MAX_COUNTED}+` : items.length})</bdi>}</h3>
     {items === null ? <div className="space-y-2"><p className="text-xs text-muted">{t('sourcesUnavailable')}</p><button type="button" className="underline text-xs" onClick={() => { onLeave(); setViewMode('settings'); }}>{t('navSettings')}</button></div> : items.length === 0 ? <div className="space-y-2"><p className="text-xs text-muted">{t('noSearchResults')}</p><button type="button" className="underline text-xs" onClick={() => setRetry(value => value + 1)}>{t('lookupRetry')}</button></div> : items.slice(0, SHOWN).map(row)}
   </section>;
+  const reference = quranScript?.query === text ? parseQuranReference(text, quranScript.profile) : null;
   const rowStyle = 'block w-full text-start rounded-xl border border-subtle bg-canvas/40 hover:bg-canvas p-3 text-sm leading-loose';
 
   return <div className="space-y-5">
     {text && <div className="space-y-5">
       {(busy || completedQuery !== text) ? <FeedbackSkeleton /> : <>
-      {group('navQuran', found.quran, hit => <button type="button" key={`${hit.surah}:${hit.ayah}`} className={rowStyle} onClick={() => go(`quran:hafs:${hit.surah}:${hit.ayah}`, 'quran')}><bdi className="text-xs text-muted">{hit.surah}:{hit.ayah}</bdi> <span dir="rtl" lang="ar" className="font-reading">{hit.text}</span></button>)}
+      {reference && <button data-quran-reference type="button" className={rowStyle} onClick={() => go(`quran:${quranScript!.profile}:${reference.surah}:${reference.from}`, 'quran')}>{t('quranReferenceJump', { reference: quranReferenceLabel(reference, lang) })}</button>}
+      {group('navQuran', found.quran, hit => <button type="button" key={`${hit.source?.id}:${hit.surah}:${hit.ayah}`} className={rowStyle} onClick={() => go(`quran:${quranScript?.profile || 'hafs'}:${hit.surah}:${hit.ayah}`, 'quran')}><bdi className="text-xs text-muted">{hit.surah}:{hit.ayah}</bdi> <span dir="auto" className="block text-xs text-muted">{hit.source?.title}</span><span dir="auto" className="font-reading">{hit.text}</span></button>)}
       {group('navSunnah', found.sunnah, hit => <button type="button" key={hit.hadith.id} className={rowStyle} onClick={() => { onLeave(); setViewMode('sunnah'); openSunnahReference({ collection: hit.chapter.collection, chapter: hit.chapter.number, hadith: hit.hadith.id }); }}><span className="block text-xs text-muted">{t(collectionKeys[hit.chapter.collection])} · {t('sunnahHadithNumber', { number: hit.hadith.number })}</span><span dir="rtl" lang="ar">{(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 180)}</span></button>)}
       {group('navBayan', found.poetry, poem => <button type="button" key={poem.id} className={rowStyle} onClick={() => { const from = poem.match?.from ?? 0; go(`poetry:ashaar:${poem.id}:${from}:${from + Math.max((poem.match?.lines.length ?? 1) - 1, 0)}`, 'bayan'); }}><span className="block text-xs text-muted" dir="auto">{poem.poetName} · {poem.title}</span><span dir="auto">{poem.match?.lines[0]}</span></button>)}
     </>}
