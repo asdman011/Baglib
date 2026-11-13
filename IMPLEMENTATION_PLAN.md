@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-13T18:02:45+02:00, Codex] KEY-336 implementation passes full1984/1984 and final native fixture16configurations,0renderererrors, tsc/lint/syntax/diff. Switchable in-house controls retain lecture study workflows. Real Arabic/playable English media absent from required corpus, user sample/fixture-exception question pending. Exact8files in CURRENT_TASK.md/report. Uncommitted, blocked-on-user for real-media acceptance. All owned profiles/renderer removed. KEY-341 c672697 already pushed.
+
 - [2026-11-13, Claude Code] KEY-264, code part: installed builds now read the basic Quran packs from `resources/quran` and install them on first run. Recitation audio stays an in-app download. Unit tests pass. The packaged acceptance run (a clean installed profile, offline, in ar and en) has not been done, so KEY-264 stays open.
 - [2026-11-13, Claude Code] Took over dispatching from the archived fork session. Wrote the specs `docs/agent-ops/tasks/KEY-342.md`, `KEY-343.md` and `KEY-344.md` and the Codex brief `docs/agent-ops/reports/KEY-lectures.prompt.txt`, to run after KEY-336.
 - [2026-11-13, Claude Code] The user approved G6, the lecture series table for KEY-344, so it is no longer blocked. It has not been built yet. It waits for KEY-336 and KEY-342, because all three edit the lectures files. The table holds a series with a name and an ordered list of its lecture Works. The task that builds it adds the migration, the ADR and the data-dictionary entries.

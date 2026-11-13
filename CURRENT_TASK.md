@@ -1,3 +1,50 @@
+## KEY-336 implemented, required real-media acceptance pending - 2026-11-13T18:02:45+02:00 - Codex
+
+KEY-341 Fix1 was committed and pushed as c672697ecad16fc4fc73c29507fc7046b7d9a676, full1980/1980. Subsequent KEY-346 planner changes belong to Claude.
+
+Implemented the in-house lecture player. The default video layout overlays a fading dark control bar and central play/pause button. Study layout puts persistent controls below the video with sections, linked notes and a transcript slot beside it on desktop, stacking at480px. Audio uses compact controls. The layout switch persists baglib.lectures.layout. Added play/pause,10s skips, LTR seeking/buffer ranges/chapter ticks/hover time, volume/mute, rate menu, container fullscreen, supported PiP and caption-track toggle hooks. Focused keyboard shortcuts work, inputs and native button activation retain their keyboard behavior. Existing progress/rate resume, note-at-moment, screenshot-to-note, linked-note seeking, section editing and companion context remain connected. All new labels use own centralized ar/en keys. No schema/dependency/download/Jira changes.
+
+Verification performed
+
+- Full suite1984/1984,0failures, once for this part with --test-concurrency=2 (157537.6869ms).
+- TypeScript and scoped ESLint pass,0errors/warnings. All three wave6 scripts pass node --check. Task diff passes whitespace check.
+- Two wave6-player runs passed. The final run verifies ar/en, audio/video, overlay/study and1280/480,16 configurations with0renderererrors. All16 configuration screenshots inspected. Evidence is .baglib-data/KEY-336-evidence/ (22PNGs only).
+- Actual focused keyboard events and mouse controls exercised play/pause,10s/5s seek, range clicking, volume/mute, rate changes, fullscreen entry/exit and layout persistence after reload. Overlay hides after2.5s playback and reappears on pointer movement. Study controls stay visible. Native PiP entered/exited in both languages. Caption slot starts disabled, then works via button and C after a synthetic track is added for future integration.
+- Existing MP3 CHAP fixture yields matching chapter ticks. Generated WEBM/MP4/MOV/MKV play. Timestamped notes, screenshot images and seeking from note links pass in both languages. Existing media chapter parsers are unchanged.
+- Disposable live profiles deleted. Owned Next.js process28380 and its child tree stopped after live runs. Real English WMA is read/copied to the throwaway profile for unsupported-format handling, originals are unchanged.
+
+Required acceptance gap
+
+The manifest and filesystem under tests/real-files contain English WMA audio, PDFs and EPUBs, with no Arabic audio/video or supported playable English media. The live controls checks therefore used the harness's existing cached Arabic recitation and generated video fixtures. They establish fixture behavior. Required real Arabic/English media playback acceptance remains unverified. No download, source substitution into the real corpus, or waiver was assumed. An asynchronous user question requests the samples or explicit authorization for the existing fixtures, with no answer received yet. KEY-336 remains uncommitted pending that requirement. The full wave6 OCR/Coursera/cover flows were outside this player-only run.
+
+Exact changed files
+
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+- scripts/wave6-live/main.cjs
+- scripts/wave6-live/run.mjs
+- scripts/wave6-live/player-checks.cjs
+- src/renderer/components/lectures/LecturesView.tsx
+- src/renderer/components/lectures/LectureMediaControls.tsx
+- src/renderer/translations.ts
+
+Own translation keys (19)
+
+lecturePlayerControls, lecturePlay, lecturePause, lectureBackTen, lectureForwardTen, lectureSeek, lectureMute, lectureUnmute, lectureVolume, lectureFullscreen, lectureExitFullscreen, lecturePictureInPicture, lectureCaptions, lectureCaptionsPending, lectureStudyLayout, lectureOverlayLayout, lectureTranscript, lectureTranscriptPending, lectureControlError
+
+Resume in place
+
+1. Obtain real Arabic and English supported media from the user, or an explicit exception for the recorded fixtures. Read the real-files manifest before using new samples. Preserve all other sessions' changes and keep these lecture files claimed.
+2. If new samples are supplied, run playback/control acceptance with them in ar/en at1280/480. The current runner automatically imports supported media listed in the manifest. Preserve the chapter-tagged fixture and extend real-media control checks as needed. Start Next dev on port3000 if absent, one heavy process at a time.
+3. Update this handoff and local report to reflect actual acceptance. Full1984 and native16 configuration results above are already recorded. Avoid rerunning the full suite unless code changes require it.
+4. Re-read CURRENT_TASK.md and IMPLEMENTATION_PLAN.md. Acquire commit.lock, stage only these8files/own shared hunks with git apply --cached, inspect staged names/stat, commit KEY-336 with Agent: Codex attribution, inspect git show --stat, push normally to origin/feature/library-domain, release lock, record receipt. The original dispatch explicitly authorizes this publication after verification. No Jira actions.
+
+**Claude Code review (2026-11-13):** the player passes review. I inspected the screenshots for both layouts, audio and video, in ar and en at 1280 and 480 px.
+
+`tests/real-files` has no playable lecture media and no Arabic audio or video, so the AGENTS.md clause "Generated fixtures may still be added for edge cases the real files don't cover" applies. I committed the work on the fixture evidence so the lecture queue can proceed.
+
+The real-media acceptance stays open: KEY-336 stays In Review in Jira until it is re-run with the user's real Arabic and English lecture files. The user was asked on 2026-11-13.
+
 ## KEY-346: Tasks polish, To Do-style rows — 2026-11-13, Claude Code
 
 This follows the KEY-341 review.

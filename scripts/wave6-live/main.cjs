@@ -5,6 +5,8 @@ const http=require('node:http');
 const {execFileSync}=require('node:child_process');
 const assert=require('node:assert/strict');
 const directory=process.env.BAGLIB_WAVE6_LIVE_DIR;
+const playerOnly = process.env.BAGLIB_WAVE6_PLAYER_ONLY === '1';
+const verifyControls = require('./player-checks.cjs');
 const media=path.join(directory,'media');
 const realFiles = JSON.parse(fs.readFileSync(path.join(directory, 'real-files.json'), 'utf8'));
 app.setPath('userData',directory);
@@ -27,6 +29,8 @@ const labels={
 let started=false;
 app.on('browser-window-created',(_,owner)=>{
   if(started)return;started=true;
+  const rendererErrors = [];
+  owner.webContents.on('console-message', (_event, level, message) => { if (level >= 3 && /uncaught|hydration|error/iu.test(message)) rendererErrors.push(message); });
   const evaluate=code=>owner.webContents.executeJavaScript(code,true).catch(error=>{throw new Error(`${error.message}: ${code.slice(0,200)}`);});
   owner.webContents.on('did-finish-load', () => { evaluate("window.electronAPI?.settings.set('onboarding.v1',{seen:true})").catch(() => {}); });
   const until=async(code,tries=200)=>{for(let index=0;index<tries;index++){try{if(await evaluate(code))return;}catch{}await pause(300);}throw new Error(`Timed out: ${code}\n${await evaluate("document.body.innerText.slice(-1800)")}`);};
@@ -53,7 +57,7 @@ app.on('browser-window-created',(_,owner)=>{
         const bytes=new Uint8Array(await new Blob(chunks).arrayBuffer());let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));out[name]=btoa(text);
       }
       clearInterval(timer);return out;})()`);
-    const files=[path.join(media,'درس صوتي.mp3')];
+    const files=[path.join(media,'درس صوتي.mp3'), ...realFiles.mediaPaths];
     for(const [name,data] of Object.entries(recorded)){
       results.formats[name]=data?'recorded':'encoder unavailable';
       if(!data)continue;
@@ -90,9 +94,12 @@ app.on('browser-window-created',(_,owner)=>{
       assert.deepEqual(mp3.sections.map(item=>item.title).slice(0,2),['المقدمة','الباب الأول']);
       await evaluate(`[...document.querySelectorAll('ul button')].find(b=>b.querySelector('span')?.textContent===${JSON.stringify(mp3.title)}).click()`);
       await until(`document.querySelector('[data-lecture-player]')?.readyState>=1`);
+      result.audioControls = await verifyControls({ owner, evaluate, until, shot, language });
+      assert.equal(await evaluate("document.querySelectorAll('[data-lecture-chapter-tick]').length"),mp3.sections.length);
+
       await evaluate(`[...document.querySelectorAll('ol button')].find(b=>b.textContent.includes('الباب الأول')).click()`);
       await until(`document.querySelector('[data-lecture-player]').currentTime>=2`);
-      await fill(L.speed,'1.5');await evaluate("document.querySelector('[data-lecture-player]').pause()");await pause(600);
+      await evaluate("document.querySelector('[data-lecture-speed-menu] summary').click();document.querySelector('[data-lecture-speed=\"1.5\"]').click()");await evaluate("document.querySelector('[data-lecture-player]').pause()");await pause(600);
       const saved=await evaluate(`window.electronAPI.lectures.progress('${mp3.id}')`);
       assert.equal(saved.rate,1.5);assert.ok(saved.position>=2);
       await fill(L.section,`قسم ${language}`);await press(L.addSection);
@@ -124,6 +131,7 @@ app.on('browser-window-created',(_,owner)=>{
         await nav('lectures');await until(`[...document.querySelectorAll('ul button')].some(b=>b.querySelector('span')?.textContent===${JSON.stringify(video.title)})`);
         await evaluate(`[...document.querySelectorAll('ul button')].filter(b=>b.querySelector('span')?.textContent===${JSON.stringify(video.title)})[${JSON.stringify(lectures.filter(item=>item.title===video.title).indexOf(video))}].click()`);
         await until(`document.querySelector('[data-lecture-player]')?.readyState>=2`);
+        result.videoControls = await verifyControls({ owner, evaluate, until, shot, language, video:true });
         await evaluate("document.querySelector('[data-lecture-player]').currentTime=1");await pause(800);
         await shot(`lectures-${language}-1280`);
         owner.setContentSize(480,1000);await pause(500);assert.ok(await evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'));await shot(`lectures-${language}-480`);owner.setContentSize(1280,900);
@@ -151,6 +159,11 @@ app.on('browser-window-created',(_,owner)=>{
       await until(`(()=>{const v=document.querySelector('[data-lecture-player]');return v&&v.readyState>=1&&Math.abs(v.currentTime-${seconds})<1.5})()`);
       result.noteJump=seconds;
       void note;
+
+      assert.equal(await evaluate("localStorage.getItem('baglib.lectures.layout')"),'study');
+      assert.equal(await evaluate("document.querySelector('[data-lecture-controls]').dataset.lectureLayout"),'study');
+      result.layoutRestored = true;
+      if (playerOnly) { results[language]=result; console.log(JSON.stringify(result)); continue; }
 
       // KEY-257 through the panel, against the stand-in.
       await nav('pathways');await until("!!document.querySelector('[data-online-courses]')");
@@ -186,6 +199,11 @@ app.on('browser-window-created',(_,owner)=>{
       await evaluate("window.electronAPI.sources.reset()");
       result.sourceFile=true;
       results[language]=result;console.log(JSON.stringify(result));
+    }
+    if (playerOnly) {
+      assert.deepEqual(rendererErrors, []);
+      console.log(JSON.stringify({ passed: true, results, rendererErrors }));
+      coursera.close(); app.quit(); return;
     }
     // KEY-258 Hub fix through the real pipeline call: an image-only verse page with the lines layout.
     await load('en');

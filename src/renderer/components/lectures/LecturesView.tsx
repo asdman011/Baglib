@@ -1,16 +1,18 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Clapperboard, NotebookPen, Plus, Trash2 } from 'lucide-react';
+import { Camera, Clapperboard, Columns2, NotebookPen, Plus, Trash2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { openStudyNote } from '../../utils/study-navigation';
 import { consumeLecture, LECTURE_OPEN_EVENT, lectureTarget } from '../../utils/lecture-navigation';
 import { studyLinks } from '../../../shared/study-notes';
 import { passageNote } from '../actions/passage-actions';
-import { clockTime, PLAYBACK_RATES, type Lecture } from '../../../shared/lectures';
+import { clockTime, type Lecture } from '../../../shared/lectures';
 import { localAssetUrl } from '../../utils/file-path-helper';
 import { useCompanionContext } from '../../utils/companion-context';
+
+import { LectureMediaControls } from './LectureMediaControls';
 
 const button = 'inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-sm disabled:opacity-50';
 const control = 'rounded-lg border border-subtle bg-surface p-2 text-sm text-main min-w-0';
@@ -20,7 +22,14 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
   const { t, dir } = useWorkspace();
   const { notes } = useStudyNotes();
   const media = useRef<HTMLVideoElement>(null);
-  const [rate, setRate] = useState(1);
+  const [layout, setLayout] = useState<'overlay' | 'study'>(() => {
+    try { return localStorage.getItem('baglib.lectures.layout') === 'study' ? 'study' : 'overlay'; } catch { return 'overlay'; }
+  });
+  const switchLayout = () => {
+    const next = layout === 'study' ? 'overlay' : 'study';
+    setLayout(next);
+    try { localStorage.setItem('baglib.lectures.layout', next); } catch { /* Playback remains usable when storage is unavailable. */ }
+  };
   const [now, setNow] = useState(0);
   const [failed, setFailed] = useState(false);
   const [section, setSection] = useState('');
@@ -39,7 +48,7 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
       const element = media.current;
       if (!alive || !element) return;
       const start = seek ?? saved?.position ?? 0;
-      const apply = () => { element.currentTime = start; element.playbackRate = saved?.rate ?? 1; setRate(saved?.rate ?? 1); };
+      const apply = () => { element.currentTime = start; element.playbackRate = saved?.rate ?? 1; };
       if (element.readyState >= 1) apply(); else element.addEventListener('loadedmetadata', apply, { once: true });
     });
     const timer = setInterval(() => { if (media.current && !media.current.paused) save(); }, SAVE_EVERY_MS);
@@ -72,19 +81,24 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
   const current = [...lecture.sections].reverse().find(item => item.start <= now);
 
   return <div className="space-y-4">
-    <h2 dir="auto" className="font-display text-lg font-bold break-words">{lecture.title}</h2>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 dir="auto" className="font-display text-lg font-bold break-words">{lecture.title}</h2><button data-lecture-layout-switch type="button" className={button} aria-pressed={layout === 'study'} onClick={switchLayout}><Columns2 size={16} />{t(layout === 'study' ? 'lectureOverlayLayout' : 'lectureStudyLayout')}</button></div>
+    <div className={layout === 'study' ? 'grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_14rem]' : 'space-y-4'}>
+    <div className="min-w-0 space-y-3">
+    <LectureMediaControls audio={lecture.kind === 'audio'} study={layout === 'study'} sections={lecture.sections} onSave={save}>
     {/* The player stays left-to-right so its timeline runs the way time is shown. */}
-    <video key={lecture.id} ref={media} src={localAssetUrl(lecture.path)} controls preload="metadata" dir="ltr" data-lecture-player
-      className={lecture.kind === 'audio' ? 'w-full h-14' : 'w-full max-h-[60vh] rounded-xl bg-black'}
-      onTimeUpdate={event => setNow(event.currentTarget.currentTime)} onPause={save} onRateChange={event => setRate(event.currentTarget.playbackRate)}
+    <video key={lecture.id} ref={media} src={localAssetUrl(lecture.path)} preload="metadata" dir="ltr" data-lecture-player
+      className={lecture.kind === 'audio' ? 'hidden' : 'w-full max-h-[60vh] rounded-xl bg-black'}
+      onTimeUpdate={event => setNow(event.currentTarget.currentTime)} onPause={save} onRateChange={save}
       onError={() => setFailed(true)} onLoadedMetadata={() => setFailed(false)} />
+    </LectureMediaControls>
     {failed && <p role="alert" className="text-sm leading-relaxed">{t('lectureUnplayable')}</p>}
     <div className="flex flex-wrap items-center gap-2" dir={dir}>
-      <label className="flex items-center gap-2 text-sm"><span>{t('lectureSpeed')}</span><select className={control} aria-label={t('lectureSpeed')} value={rate} onChange={event => { const value = Number(event.target.value); if (media.current) media.current.playbackRate = value; setRate(value); save(); }}>{PLAYBACK_RATES.map(value => <option key={value} value={value}>{value}×</option>)}</select></label>
       <button type="button" className={button} onClick={note}><NotebookPen className="size-4" />{t('lectureNoteHere')}</button>
       <button type="button" className={button} disabled={lecture.kind === 'audio'} onClick={() => void shot()}><Camera className="size-4" />{t('lectureShot')}</button>
       <bdi className="text-xs text-muted">{clockTime(now)}{current && <> · <span dir="auto">{current.title}</span></>}</bdi>
     </div>
+    </div>
+    <aside data-lecture-study-tools className="min-w-0 space-y-4">
     <section className="space-y-2">
       <h3 className="text-sm font-bold">{t('lectureSections')}</h3>
       <p className="text-xs text-muted">{t(lecture.sectionSource === 'file' ? 'lectureSectionsFromFile' : lecture.sectionSource === 'user' ? 'lectureSectionsFromUser' : 'lectureSectionsNone')}</p>
@@ -102,6 +116,9 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
         <button type="button" dir="auto" className="min-w-0 truncate text-start" onClick={() => openStudyNote({ id: item.id })}>{item.title || item.content.replace(/\[\[[^\]]+\]\]/gu, '').trim().slice(0, 80)}</button>
       </li>)}</ul>
     </section>
+    {layout === 'study' && <section data-lecture-transcript-slot className="space-y-2"><h3 className="text-sm font-bold">{t('lectureTranscript')}</h3><p className="text-xs text-muted leading-relaxed">{t('lectureTranscriptPending')}</p></section>}
+    </aside>
+    </div>
   </div>;
 }
 

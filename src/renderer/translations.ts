@@ -1,5 +1,26 @@
 export const translations = {
   ar: {
+    // KEY-336 in-house lecture player.
+    lecturePlayerControls: "مشغّل المحاضرات",
+    lecturePlay: "تشغيل",
+    lecturePause: "إيقاف مؤقت",
+    lectureBackTen: "رجوع ١٠ ثوانٍ",
+    lectureForwardTen: "تقدّم ١٠ ثوانٍ",
+    lectureSeek: "موضع التشغيل",
+    lectureMute: "كتم الصوت",
+    lectureUnmute: "إلغاء كتم الصوت",
+    lectureVolume: "مستوى الصوت",
+    lectureFullscreen: "ملء الشاشة",
+    lectureExitFullscreen: "خروج من ملء الشاشة",
+    lecturePictureInPicture: "صورة في صورة",
+    lectureCaptions: "النص المصاحب",
+    lectureCaptionsPending: "سيتاح النص المصاحب عند إضافة دعم الترجمة",
+    lectureStudyLayout: "تخطيط الدراسة",
+    lectureOverlayLayout: "تخطيط العرض",
+    lectureTranscript: "التفريغ النصي",
+    lectureTranscriptPending: "سيظهر التفريغ النصي هنا عند إضافة دعم الترجمة.",
+    lectureControlError: "تعذّر إتمام هذا الإجراء. حاول مرّة أخرى.",
+
     // KEY-341 planner lists, quick-add and scheduling.
     plannerTasks: "المهام",
     plannerList: "القائمة",
@@ -5246,6 +5267,27 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    // KEY-336 in-house lecture player.
+    lecturePlayerControls: "Lecture player",
+    lecturePlay: "Play",
+    lecturePause: "Pause",
+    lectureBackTen: "Back 10 seconds",
+    lectureForwardTen: "Forward 10 seconds",
+    lectureSeek: "Playback position",
+    lectureMute: "Mute",
+    lectureUnmute: "Unmute",
+    lectureVolume: "Volume",
+    lectureFullscreen: "Full screen",
+    lectureExitFullscreen: "Exit full screen",
+    lecturePictureInPicture: "Picture in picture",
+    lectureCaptions: "Captions",
+    lectureCaptionsPending: "Captions will be available with subtitle support",
+    lectureStudyLayout: "Study layout",
+    lectureOverlayLayout: "Overlay layout",
+    lectureTranscript: "Transcript",
+    lectureTranscriptPending: "The transcript will appear here when subtitle support is added.",
+    lectureControlError: "This playback action could not be completed. Try again.",
+
     // KEY-341 planner lists, quick-add and scheduling.
     plannerTasks: "Tasks",
     plannerList: "List",
