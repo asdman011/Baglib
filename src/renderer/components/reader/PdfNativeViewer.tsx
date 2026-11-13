@@ -17,6 +17,7 @@ import { PdfBitmapCache } from '../../../shared/pdf-bitmap-cache';
 import { waitForReaderIdle } from '../../../shared/reader-idle';
 import { PdfCanvasPool } from '../../../shared/pdf-canvas-pool';
 import { idlePdfTextStream } from '../../../shared/pdf-text-stream';
+import { attachTextLayerSelection, mergeNormalizedRects, selectionBlocks } from '../../libs/reader/pdf-text-selection';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { usePdfViewSource } from '../../hooks/usePdfViewSource';
 import { PdfViewDocument, type PdfOutlineEntry } from '../../libs/reader/pdf-view-document';
@@ -108,34 +109,8 @@ export const HIGHLIGHT_COLOR_HEX: Record<string, string> = {
   purple: '#C084FC',
 };
 
-/**
- * Merge adjacent/overlapping rects on the same line so highlights look unified.
- */
-export function mergeNormalizedRects(rects: NormalizedRect[]): NormalizedRect[] {
-  const valid = rects.filter((r) => r.width >= 0.5 && r.height >= 0.5 && r.x >= 0 && r.y >= 0);
-  if (valid.length <= 1) return valid;
-  const sorted = [...valid].sort((a, b) => a.y - b.y || a.x - b.x);
-  const merged: NormalizedRect[] = [];
-  let current = { ...sorted[0] };
-
-  for (let i = 1; i < sorted.length; i++) {
-    const next = sorted[i];
-    const isSameLine = Math.abs(current.y - next.y) < 1.4 && Math.abs(current.height - next.height) < 1.8;
-    const overlapsOrAdjacent = next.x <= current.x + current.width + 1.2;
-
-    if (isSameLine && overlapsOrAdjacent) {
-      const newRight = Math.max(current.x + current.width, next.x + next.width);
-      current.width = newRight - current.x;
-      current.height = Math.max(current.height, next.height);
-      current.y = Math.min(current.y, next.y);
-    } else {
-      merged.push(current);
-      current = { ...next };
-    }
-  }
-  merged.push(current);
-  return merged;
-}
+// KEY-335: line merging and the endOfContent cover live in libs/reader/pdf-text-selection.
+export { mergeNormalizedRects };
 
 /**
  * Parses highlight location JSON storing { page: number, rects: NormalizedRect[] }
@@ -212,6 +187,7 @@ const PdfPageItem = React.memo(function PdfPageItem({
     let textGeneration = 0;
     let hydrateText: (() => Promise<void>) | undefined;
     let textReady = false;
+    let detachSelection: (() => void) | undefined;
     const scheduleText = () => {
       if (textReady || isCancelled) return;
       textGeneration++;
@@ -299,7 +275,11 @@ const PdfPageItem = React.memo(function PdfPageItem({
               const viewport = { scale, rotation: info.rotation, rawDims: info.rawDims } as unknown as pdfjsLib.PageViewport;
               textLayer = new pdfjsLib.TextLayer({ textContentSource: idlePdfTextStream(textContent as Parameters<typeof idlePdfTextStream>[0]) as ReadableStream, container: textLayerDiv, viewport });
               await textLayer.render();
-              if (!isCancelled && generation === textGeneration) textReady = true;
+              if (!isCancelled && generation === textGeneration) {
+                textReady = true;
+                detachSelection?.();
+                detachSelection = attachTextLayerSelection(textLayerDiv);
+              }
             } catch (error) {
               if (!isCancelled && generation === textGeneration) console.warn('[PdfNativeViewer] Text layer hydration failed:', error);
             }
@@ -323,6 +303,7 @@ const PdfPageItem = React.memo(function PdfPageItem({
       textGeneration++;
       clearTimeout(textTimer);
       textLayer?.cancel();
+      detachSelection?.();
       document.removeEventListener('scroll', handleScroll, true);
       canvas.remove();
       pool.release(canvas);
@@ -375,6 +356,8 @@ const PdfPageItem = React.memo(function PdfPageItem({
           mixBlendMode: isDarkTheme ? 'screen' : 'multiply',
         }}
       >
+        {/* KEY-335: merged blocks painted while dragging (filled imperatively, see the viewer's live-selection effect) */}
+        <div className="pdf-live-selection absolute inset-0 pointer-events-none" aria-hidden="true" />
         {/* Active transient selection highlight overlay */}
         {activeSelectionRects &&
           activeSelectionRects
@@ -621,6 +604,8 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [calculatedScale, setCalculatedScale] = useState<number>(1.2);
   const [isSelecting, setIsSelecting] = useState(false);
+  // KEY-335: the native selection hides only once the merged overlay for THIS selection is ready (no stale-overlay flash).
+  const [selectionLocked, setSelectionLocked] = useState(false);
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = contentContainerRef || internalContainerRef;
 
@@ -946,6 +931,37 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
     return () => observer.disconnect();
   }, [viewMode, pdfDoc, totalPages, calculatedScale, onPageChange, scrollContainerRef]);
 
+  // KEY-335: while dragging, paint the selection as merged per-line blocks (native per-span boxes are hidden by
+  // .pdf-live-selecting). The blocks stay until the locked overlay for the finished selection takes over.
+  useEffect(() => {
+    const root = scrollContainerRef.current;
+    if (!root) return;
+    const clear = () => root.querySelectorAll('.pdf-live-selection').forEach(layer => layer.replaceChildren());
+    if (!isSelecting) { if (selectionLocked || !window.getSelection()?.toString()) clear(); return; }
+    let frame = 0;
+    const paint = () => {
+      frame = 0;
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) { clear(); return; }
+      const rects = Array.from(selection.getRangeAt(0).getClientRects());
+      root.querySelectorAll<HTMLElement>('.pdf-page-container').forEach(page => {
+        const layer = page.querySelector<HTMLElement>('.pdf-live-selection');
+        if (!layer) return;
+        const box = page.getBoundingClientRect();
+        const inside = rects.filter(r => r.top + r.height / 2 >= box.top && r.top + r.height / 2 <= box.bottom);
+        layer.replaceChildren(...selectionBlocks(inside, box).map(r => {
+          const block = document.createElement('div');
+          block.className = 'pdf-live-selection-rect';
+          Object.assign(block.style, { left: r.x + '%', top: r.y + '%', width: r.width + '%', height: r.height + '%' });
+          return block;
+        }));
+      });
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(paint); };
+    document.addEventListener('selectionchange', schedule);
+    return () => { document.removeEventListener('selectionchange', schedule); if (frame) cancelAnimationFrame(frame); };
+  }, [isSelecting, selectionLocked, scrollContainerRef]);
+
   // 3. Selection & MouseUp Text Rect Calculation
   const lastSelectionKeyRef = useRef<string>('');
   const handleMouseUp = useCallback(() => {
@@ -992,22 +1008,11 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
       return;
     }
 
-    // Convert to percentage rects relative to the page container
-    const normalizedRects: NormalizedRect[] = validClientRects
-      .map((r) => {
-        const x = Math.max(0, Math.min(100, ((r.left - pageRect.left) / pageRect.width) * 100));
-        const y = Math.max(0, Math.min(100, ((r.top - pageRect.top) / pageRect.height) * 100));
-        const width = Math.max(0, Math.min(100 - x, (r.width / pageRect.width) * 100));
-        const height = Math.max(0, Math.min(100 - y, (r.height / pageRect.height) * 100));
-        return { x, y, width, height };
-      })
-      .filter((r) => r.width >= 0.5 && r.height >= 0.5 && !(r.x <= 0.2 && r.width < 2));
-
-    const merged = mergeNormalizedRects(normalizedRects);
+    const merged = selectionBlocks(validClientRects, pageRect);
 
     // Skip redundant parent updates (prevents re-render flicker on repeated mouseups)
     const selectionKey = `${pageNum}|${text}|${merged.length}`;
-    if (selectionKey === lastSelectionKeyRef.current) return;
+    if (selectionKey === lastSelectionKeyRef.current) { setSelectionLocked(true); return; }
     lastSelectionKeyRef.current = selectionKey;
 
     const minTop = Math.min(...validClientRects.map((r) => r.top));
@@ -1015,6 +1020,7 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
     const minLeft = Math.min(...validClientRects.map((r) => r.left));
     const maxRight = Math.max(...validClientRects.map((r) => r.right));
 
+    setSelectionLocked(true);
     onSelectionChange({
       pageNumber: pageNum,
       text,
@@ -1048,7 +1054,8 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
     <div
       ref={scrollContainerRef}
       onMouseDown={(e) => {
-        if (e.button === 0) setIsSelecting(true);
+        // A new drag always reports its selection, even when it repeats the last one (the popover may have been closed since).
+        if (e.button === 0) { setIsSelecting(true); setSelectionLocked(false); lastSelectionKeyRef.current = ''; }
       }}
       onMouseUp={() => {
         setIsSelecting(false);
@@ -1056,7 +1063,7 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
         requestAnimationFrame(handleMouseUp);
       }}
       dir="ltr"
-      className={`pdf-native-viewer-container pdf-viewer-workspace${!isSelecting && activeSelectionInfo ? ' pdf-selection-locked' : ''} w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center p-4 sm:p-6 select-text`}
+      className={`pdf-native-viewer-container pdf-viewer-workspace${!isSelecting && selectionLocked && activeSelectionInfo ? ' pdf-selection-locked' : ''}${isSelecting ? ' pdf-live-selecting' : ''} w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center p-4 sm:p-6 select-text`}
       style={{
         direction: 'ltr',
         unicodeBidi: 'isolate',

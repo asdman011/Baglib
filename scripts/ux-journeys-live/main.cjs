@@ -665,6 +665,101 @@ app.on('browser-window-created', (_, win) => {
         await shot('J19-judgments');
       });
 
+      // J20 (opt-in, BAGLIB_JOURNEY_IDS=20) — KEY-335: a real mouse drag over many PDF lines grows smoothly (no jumps to the
+      // page start or end) and ends as one connected block per line, in an Arabic and an English PDF.
+      if (journeysOnly.includes(20)) await journeyRun(20, 'Drag-select many lines in a PDF', async () => {
+        const enPdf = manifest.files.filter(file => file.kind === 'pdf' && file.lang === 'en' && file.path.includes('/text-layer/')).sort((a, b) => a.bytes - b.bytes)[0];
+        for (const file of [arPdf, enPdf]) {
+          const filePath = path.join(copies, path.basename(file.path));
+          if (!fs.existsSync(filePath)) fs.copyFileSync(path.resolve('tests/real-files', file.path), filePath);
+          let book = (await evaluate('window.electronAPI.getAllBooks()')).find(item => item.filePath === filePath);
+          if (!book) {
+            await evaluate('window.electronAPI.importDigitalFiles(' + JSON.stringify([{ filePath, duplicateAction: 'import_anyway' }]) + ',"ux-journeys")');
+            await win.loadURL('http://localhost:3000'); await until('!!window.electronAPI && !!document.querySelector("footer")'); await ready();
+            book = (await evaluate('window.electronAPI.getAllBooks()')).find(item => item.filePath === filePath);
+          }
+          await ui.nav('library', '[data-library-recent]');
+          await step('open ' + file.lang + ' PDF', async () => {
+            await until('[...document.querySelectorAll("[data-library-book-card]")].some(e=>e.getAttribute("aria-label")===' + JSON.stringify(book.title) + ')', 200);
+            await evaluate('[...document.querySelectorAll("[data-library-book-card]")].find(e=>e.getAttribute("aria-label")===' + JSON.stringify(book.title) + ').querySelector("[data-card-read-button]").click()');
+            await until('!!document.querySelector(".pdf-page-container")', 300);
+          });
+          // Find a page whose visible part has 6+ full lines; plan a drag from the start of one line to the middle of a line ~6 lines below.
+          const planCode = `(()=>{
+            const rtl=${JSON.stringify(file.lang === 'ar')};
+            const layer=[...document.querySelectorAll(".pdf-page-container .textLayer")].filter(l=>l.querySelectorAll("span").length>30).sort((a,b)=>Math.abs(a.getBoundingClientRect().top)-Math.abs(b.getBoundingClientRect().top))[0];
+            if(!layer)return null;
+            const box=layer.getBoundingClientRect();
+            if(box.top<40||box.top>innerHeight*0.4){layer.scrollIntoView({block:"start"});return "scrolled";}
+            const spans=[...layer.querySelectorAll("span")].filter(s=>s.textContent.trim().length>1).map(s=>s.getBoundingClientRect()).filter(r=>r.width>4&&r.top>60&&r.bottom<innerHeight-40);
+            const lines=[];for(const r of spans){const l=lines.find(x=>Math.abs(x.top-r.top)<r.height*0.5);if(l){l.left=Math.min(l.left,r.left);l.right=Math.max(l.right,r.right);}else lines.push({top:r.top,height:r.height,left:r.left,right:r.right});}
+            lines.sort((a,b)=>a.top-b.top);
+            const wide=lines.filter(l=>l.right-l.left>box.width*0.3);
+            if(wide.length<6)return null;
+            const a=wide[1],b=wide[Math.min(wide.length-1,7)];
+            return {start:{x:Math.round(rtl?a.right-3:a.left+3),y:Math.round(a.top+a.height/2)},end:{x:Math.round((b.left+b.right)/2),y:Math.round(b.top+b.height/2)},lines:wide.indexOf(b)-wide.indexOf(a)+1};
+          })()`;
+          let plan = null;
+          await step('go to a page full of text', async () => {
+            for (const page of [12, 16, 20, 24, 30, 6, 8]) {
+              if (page) await evaluate('(()=>{const i=document.querySelector("[data-reader-go-to]");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(i,"' + page + '");i.dispatchEvent(new Event("input",{bubbles:true}));i.form.requestSubmit();})()');
+              for (let i = 0; i < 16; i++) {
+                await pause(300);
+                const result = await evaluate(planCode);
+                if (!result || result === 'scrolled') continue;
+                // The text layer can still be re-hydrating; only drag once the line positions are stable.
+                await pause(1200);
+                const again = await evaluate(planCode);
+                if (again && again !== 'scrolled' && JSON.stringify(again) === JSON.stringify(result)) { plan = again; break; }
+              }
+              if (plan) break;
+            }
+          });
+          if (!plan) throw new Error('no page with enough lines in view');
+          const samples = [];
+          await step('drag over ' + plan.lines + ' lines with the mouse', async () => {
+            await evaluate('getSelection().removeAllRanges();window.__j20=1');
+            win.webContents.sendInputEvent({ type: 'mouseMove', x: plan.start.x, y: plan.start.y });
+            win.webContents.sendInputEvent({ type: 'mouseDown', x: plan.start.x, y: plan.start.y, button: 'left', clickCount: 1 });
+            await pause(150);
+            const steps = 24;
+            for (let i = 1; i <= steps; i++) {
+              const x = Math.round(plan.start.x + (plan.end.x - plan.start.x) * i / steps), y = Math.round(plan.start.y + (plan.end.y - plan.start.y) * i / steps);
+              win.webContents.sendInputEvent({ type: 'mouseMove', x, y, button: 'left' });
+              await pause(60);
+              samples.push(await evaluate('window.__j20?getSelection().toString().length:-1'));
+            }
+            win.webContents.sendInputEvent({ type: 'mouseUp', x: plan.end.x, y: plan.end.y, button: 'left', clickCount: 1 });
+            await pause(500);
+            if (!await evaluate('!!window.__j20')) throw new Error('the page reloaded during the drag; samples ' + samples.join(',') + ' plan ' + JSON.stringify(plan));
+          });
+          const final = await evaluate('getSelection().toString().length');
+          // A jump to the page start or end shows as a sample far larger than the final selection, or a drop back to nothing.
+          const peak = Math.max(...samples), started = samples.findIndex(n => n > 0);
+          if (final < 40) throw new Error('selection too short: ' + final + ' samples ' + samples.join(','));
+          if (peak > final * 1.25 + 40) throw new Error('selection jumped during the drag: peak ' + peak + ' final ' + final + ' samples ' + samples.join(','));
+          if (started >= 0 && samples.slice(started).some(n => n === 0)) throw new Error('selection vanished during the drag: ' + samples.join(','));
+          const blocks = await evaluate(`(()=>{
+            const page=[...document.querySelectorAll(".pdf-page-container")].find(p=>p.querySelector(".pdf-active-selection-rect"));
+            if(!page)return null;
+            const rects=[...page.querySelectorAll(".pdf-active-selection-rect")].map(e=>({y:parseFloat(e.style.top),h:parseFloat(e.style.height)})).sort((a,b)=>a.y-b.y);
+            let open=0;for(let i=1;i<rects.length;i++){const gap=rects[i].y-(rects[i-1].y+rects[i-1].h);if(gap>0.05)open++;}
+            // Two blocks on one line (overlapping vertically by more than half) means the line is broken into pieces.
+            // The first and last lines are partly selected; in RTL text their selected words need not be adjacent on screen.
+            const top=rects[0].y, bottom=Math.max(...rects.map(r=>r.y)), edge=r=>Math.abs(r.y-top)<r.h*0.5||Math.abs(r.y-bottom)<r.h*0.5;
+            let split=0;for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++){if(edge(rects[i])||edge(rects[j]))continue;const o=Math.min(rects[i].y+rects[i].h,rects[j].y+rects[j].h)-Math.max(rects[i].y,rects[j].y);if(o>Math.min(rects[i].h,rects[j].h)*0.5)split++;}
+            return {count:rects.length,open,split,locked:!!document.querySelector(".pdf-selection-locked"),live:document.querySelectorAll(".pdf-live-selection-rect").length};
+          })()`);
+          if (!blocks) throw new Error('no selection overlay after release');
+          if (blocks.split > 0) throw new Error('a line is split into several blocks: ' + JSON.stringify(blocks));
+          if (blocks.open > 1) throw new Error('gaps between lines: ' + JSON.stringify(blocks));
+          journey.notes.push(file.lang + ' PDF: ' + plan.lines + ' lines → ' + blocks.count + ' blocks, ' + blocks.split + ' split lines, ' + blocks.open + ' paragraph gaps; ' + samples.length + ' samples, peak ' + peak + ', final ' + final);
+          await shot('J20-' + file.lang + '-selection');
+          await evaluate('getSelection().removeAllRanges()');
+          press('Escape');
+        }
+      });
+
       // J18 (opt-in, BAGLIB_JOURNEY_IDS=18) — KEY-50 follow-up: opt-in notifications report only items newer than the last check.
       if (journeysOnly.includes(18)) await journeyRun(18, 'Feed notifications for new items', async () => {
         const http = require('node:http');

@@ -331,13 +331,27 @@
   unicode-bidi: normal !important;
 }
 
-.textLayer br,
-.textLayer .endOfContent {
+.textLayer br {
   user-select: none !important;
   -webkit-user-select: none !important;
   pointer-events: none !important;
   display: none !important;
 }
+
+/* KEY-335: pdf.js's endOfContent cover. Below the spans normally; it covers the page while selecting so a
+   pointer over the gaps between spans never makes the selection jump to the page start or end. */
+.textLayer > span { z-index: 1; }
+.textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.textLayer.selecting .endOfContent { top: 0; }
+.textLayer br::selection { background: transparent !important; }
 
 .textLayer span:empty {
   display: none !important;
@@ -534,7 +548,11 @@ mark.baglib-highlight-violet, mark.baglib-highlight-purple {
   }
 }
 
-/* Single-layer PDF selection: native selection while dragging, locked overlay after release (no double-blue flicker) */
+/* KEY-335: while dragging, the selection shows as merged per-line blocks instead of per-span native boxes. */
+.pdf-live-selecting .textLayer ::selection { background: transparent !important; }
+.pdf-live-selection-rect { position: absolute; background-color: rgba(59, 130, 246, 0.35); border-radius: 2px; }
+.pdf-selection-locked .pdf-live-selection { display: none; }
+/* Single-layer PDF selection: live blocks while dragging, locked overlay after release (no double-blue flicker) */
 .pdf-native-viewer-container:not(.pdf-selection-locked) .pdf-active-selection-rect {
   display: none !important;
 }

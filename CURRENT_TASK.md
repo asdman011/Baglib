@@ -1,3 +1,32 @@
+## KEY-335: PDF multi-line selection is smooth and connected - 2026-11-13, Claude Code
+
+Implemented by Claude at the user's request.
+
+**Cause:** the core pdf.js TextLayer was used without its `endOfContent` cover, and globals.css hid that element. A drag over the gaps between spans made the selection jump to the page start or end. Native `::selection` painted one box per span.
+
+**Changes**
+- New `src/renderer/libs/reader/pdf-text-selection.ts`:
+  - `mergeNormalizedRects`: one block per line; runs within 4% of the page width join; the leading to the next line is closed.
+  - `selectionBlocks`.
+  - `attachTextLayerSelection`: pdf.js's endOfContent behaviour (a selecting class, the cover moved after the moving end on selectionchange, and also moved on press so the first move cannot reach the page end).
+- `src/renderer/components/reader/PdfNativeViewer.tsx`:
+  - attaches the cover after each text-layer render;
+  - paints merged blocks live while dragging (`.pdf-live-selection`);
+  - locks the overlay only after this selection's blocks are ready (no stale-overlay flash);
+  - resets the repeat-selection guard on each new drag. This fixes a bug where selecting the same text again after closing the popover showed nothing.
+- `src/renderer/app/globals.css`: the pdf.js endOfContent rules replace `display:none`; spans get z-index 1; native selection is hidden while live blocks show.
+- `tests/reader/pdf-text-selection.test.ts`: 5 tests.
+- `scripts/ux-journeys-live/main.cjs`: J20, opt-in with `BAGLIB_JOURNEY_IDS=20`. It runs a real mouse drag with sendInputEvent over about 7 lines of the real Arabic text-layer PDF and the real English one ("Why lyrics last"). It samples the selection 24 times, then checks the blocks.
+
+**Verification**
+- J20 passed 8/8 configurations, twice (16/16), with 0 renderer errors.
+- Arabic: final 547-549 characters, peak within 3 characters of the final count (no jumps), 0 split middle lines, 0 gaps.
+- English: 437/437 characters, 0 split lines, 0 gaps.
+- Screenshots inspected for ar light, ar dark and en dark.
+- Unit tests 5/5; full suite 1941/1941; tsc clean; eslint 0 errors; `git diff --check` clean.
+
+**Limit:** in RTL text, the partly selected first and last lines can show two pieces. That is the PDF's own text order, so the merge does not hide it.
+
 ## KEY-334: the Sunnah grading button shows each scholar's judgment — 2026-11-13, Claude Code
 
 The user asked Claude to implement the queue while Codex and Antigravity are out of quota.
