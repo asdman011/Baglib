@@ -13,6 +13,7 @@ tests/real-files/
   pdf/ar/scanned-image-only/   Arabic scan, images only, no text layer
   epub/en/                     English EPUBs (one large, one small)
   audio/en/<album>/            English audiobook tracks (WMA)
+  video/ar/, video/en/         Arabic and English lecture videos (MP4)
   manifest.json                path, size, SHA-256, language, text-layer state, notes
 ```
 

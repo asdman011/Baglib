@@ -129,6 +129,22 @@
       "textLayer": "yes",
       "pages": 240,
       "notes": "Born-digital academic book; front-matter pages with little or no text."
+    },
+    {
+      "path": "video/ar/6.طريقة تربية الطفل  ايمن عبدالرحيم.mp4",
+      "bytes": 7817161,
+      "sha256": "c9b5290c2dc309417bd9401315fb44c243ed795820f7b935834127beca7a48e5",
+      "lang": "ar",
+      "kind": "video",
+      "notes": "Arabic lecture video (MP4). The file name has a leading number, a title and the speaker, with a double space. No title/artist tags found. Added by the user on 2026-11-13 for the lecture player, lecture import and drag-and-drop live checks (KEY-336, KEY-342 to KEY-344)."
+    },
+    {
+      "path": "video/en/10.A Plea for Balance.mp4",
+      "bytes": 29083540,
+      "sha256": "e09f93e9539f6eb1baf64b8a680f6a5b0e3640bf4b3fa59af7f392a6487bffd4",
+      "lang": "en",
+      "kind": "video",
+      "notes": "English lecture video (MP4). The file name has a leading number and a title. No title/artist tags found. Added by the user on 2026-11-13 for the lecture player, lecture import and drag-and-drop live checks (KEY-336, KEY-342 to KEY-344)."
     }
   ]
 }
