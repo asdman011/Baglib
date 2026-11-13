@@ -23,6 +23,15 @@ test('consecutive lines touch: the leading between them is closed', () => {
   assert.equal(merged[2].height, 2, 'the last line keeps its own height');
 });
 
+test('overlapping lines are trimmed so they meet edge to edge, never doubling the colour', () => {
+  const merged = mergeNormalizedRects([
+    { x: 10, y: 20, width: 70, height: 3 },
+    { x: 10, y: 22.4, width: 70, height: 3 },
+  ]);
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].y + merged[0].height, merged[1].y);
+});
+
 test('a far gap (another column) and a paragraph break stay separate', () => {
   const columns = mergeNormalizedRects([{ x: 5, y: 10, width: 35, height: 2 }, { x: 55, y: 10, width: 35, height: 2 }]);
   assert.equal(columns.length, 2);

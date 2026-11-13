@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import {
   MessageSquare,
   Quote,
@@ -21,6 +21,8 @@ import { HIGHLIGHT_COLORS } from '../../libs/reader/highlight-manager';
 
 export interface ZenSelectionMenuProps {
   initialTab?: 'toolbar' | 'note';
+  /** Where the mouse was released (viewport px). The menu opens beside that point, as in Acrobat; without it, at the top. */
+  anchor?: { x: number; y: number } | null;
   studyActions?: React.ReactNode;
   selectedText: string;
   readingPage: number;
@@ -44,6 +46,7 @@ export interface ZenSelectionMenuProps {
 export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   selectedText,
   initialTab = 'toolbar',
+  anchor = null,
   studyActions,
   readingPage,
   bookTitle,
@@ -67,6 +70,19 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   const [quoteContextNote, setQuoteContextNote] = useState('');
   const [questionText, setQuestionText] = useState('');
   const [copiedCitation, setCopiedCitation] = useState(false);
+  const menu = useRef<HTMLDivElement>(null);
+  const [placed, setPlaced] = useState<{ top: number; left: number } | null>(null);
+  // KEY-335 follow-up: open below the release point (above it near the bottom), kept inside the window.
+  useLayoutEffect(() => {
+    const element = menu.current;
+    if (!anchor || !element) { setPlaced(null); return; }
+    const box = element.getBoundingClientRect();
+    const margin = 8, gap = 14;
+    const left = Math.max(margin, Math.min(window.innerWidth - box.width - margin, anchor.x - box.width / 2));
+    let top = anchor.y + gap;
+    if (top + box.height > window.innerHeight - margin) top = Math.max(margin, anchor.y - box.height - gap);
+    setPlaced(current => current && current.top === top && current.left === left ? current : { top, left });
+  }, [anchor, activeTab, selectedText]);
 
   if (!selectedText.trim()) return null;
 
@@ -80,7 +96,15 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
 
   return (
     <div
-      style={{
+      ref={menu}
+      data-selection-menu-anchored={anchor ? 'true' : undefined}
+      style={anchor ? {
+        top: placed?.top ?? anchor.y + 14,
+        left: placed?.left ?? Math.max(8, anchor.x - 256),
+        maxHeight: 'calc(100dvh - 1rem)',
+        overflowY: 'auto',
+        visibility: placed ? 'visible' : 'hidden',
+      } : {
         top: 'max(4rem, calc(var(--reader-toolbar-bottom, 0px) + 0.75rem))',
         maxHeight: 'calc(100dvh - max(4rem, calc(var(--reader-toolbar-bottom, 0px) + 0.75rem)) - 1rem)',
         overflowY: 'auto',
@@ -92,7 +116,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
         e.stopPropagation();
         e.preventDefault();
       }}
-      className="fixed top-16 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-50 animate-in fade-in zoom-in-95 duration-150 select-none max-w-lg w-full px-4"
+      className={`fixed z-50 animate-in fade-in zoom-in-95 duration-150 select-none max-w-lg w-full px-4 ${anchor ? '' : 'top-16 start-1/2 -translate-x-1/2 rtl:translate-x-1/2'}`}
     >
       <div className="bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl rounded-2xl p-2.5 text-xs text-main">
         {studyActions}

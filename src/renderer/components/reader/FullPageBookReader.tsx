@@ -317,6 +317,18 @@ const SourceBookReader: React.FC = () => {
   const [fontFamily, setFontFamily] = useState<string>('amiri');
   const [readerFontSize, setReaderFontSize] = useState<number>(18);
   const zoomStepRef = useRef<((step: 1 | -1, event: WheelEvent) => void) | null>(null);
+  // KEY-335 follow-up: the selection menu opens where the mouse was released (as in Acrobat), not always at the top.
+  const [releaseAnchor, setReleaseAnchor] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const release = (event: PointerEvent) => {
+      if (event.button !== 0 || !contentContainerRef.current?.contains(event.target as Node)) return;
+      setReleaseAnchor({ x: event.clientX, y: event.clientY });
+    };
+    const keyboard = (event: KeyboardEvent) => { if (event.shiftKey && event.key.startsWith('Arrow')) setReleaseAnchor(null); };
+    document.addEventListener('pointerup', release, true);
+    document.addEventListener('keydown', keyboard, true);
+    return () => { document.removeEventListener('pointerup', release, true); document.removeEventListener('keydown', keyboard, true); };
+  }, []);
   const [lineSpacing, setLineSpacing] = useState<number>(1.85);
   const [paragraphSpacing, setParagraphSpacing] = useState<number>(0.8);
   const [margin, setMargin] = useState<number>(28);
@@ -3187,7 +3199,7 @@ const SourceBookReader: React.FC = () => {
   const renderSelectionPopover = () => {
     if (!activeBook || !selectedText || isInstantHighlightMode) return null;
     return (
-      <><ActionMenu portal surface="selection" handlers={selectionHandlers} t={t} anchor={selectionAt} onClose={()=>setSelectionAt(null)} />{/* KEY-308: one selection surface at a time; the floating toolbar steps aside while the right-click menu is open. */}{!selectionAt && <ZenSelectionMenu key={selectionEditor.key} initialTab={selectionEditor.tab}
+      <><ActionMenu portal surface="selection" handlers={selectionHandlers} t={t} anchor={selectionAt} onClose={()=>setSelectionAt(null)} />{/* KEY-308: one selection surface at a time; the floating toolbar steps aside while the right-click menu is open. */}{!selectionAt && <ZenSelectionMenu key={selectionEditor.key} anchor={releaseAnchor} initialTab={selectionEditor.tab}
         studyActions={<div role="group" aria-label={t('readerStudyActions')} className="flex flex-wrap gap-2 border-b border-subtle pb-2 mb-2" dir={workspaceDir}>
           {(['explain', 'practice', 'review'] as const).map(action => (
             <button

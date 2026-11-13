@@ -56,7 +56,8 @@ export function mergeNormalizedRects(rects: NormalizedRect[]): NormalizedRect[] 
       && other.x < current.x + current.width && other.x + other.width > current.x);
     if (!next) continue;
     const gap = next.y - (current.y + current.height);
-    if (gap > 0 && gap < current.height) current.height = next.y - current.y;
+    // Close a small gap, and trim an overlap, so each line ends exactly where the next begins (one flat block).
+    if ((gap > 0 && gap < current.height) || gap < 0) current.height = next.y - current.y;
   }
   return merged;
 }

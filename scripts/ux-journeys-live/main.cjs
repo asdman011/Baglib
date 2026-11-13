@@ -815,7 +815,7 @@ app.on('browser-window-created', (_, win) => {
           let plan = null;
           await step('go to a page full of text', async () => {
             for (const page of [12, 16, 20, 24, 30, 6, 8]) {
-              if (page) await evaluate('(()=>{const i=document.querySelector("[data-reader-go-to]");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(i,"' + page + '");i.dispatchEvent(new Event("input",{bubbles:true}));i.form.requestSubmit();})()');
+              if (page) await evaluate('(()=>{const i=document.querySelector("[data-reader-go-to]");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(i,"' + page + '");i.dispatchEvent(new Event("input",{bubbles:true}));i.form.requestSubmit();})()'); if (page) await pause(1500);
               for (let i = 0; i < 16; i++) {
                 await pause(300);
                 const result = await evaluate(planCode);
@@ -865,6 +865,20 @@ app.on('browser-window-created', (_, win) => {
           })()`);
           if (!blocks) throw new Error('no selection overlay after release');
           if (blocks.split > 0) throw new Error('a line is split into several blocks: ' + JSON.stringify(blocks));
+          // KEY-335 follow-up: one flat block (no line overlaps another, so no darker seams) and the menu at the release point.
+          const flat = await evaluate(`(()=>{
+            const page=[...document.querySelectorAll(".pdf-page-container")].find(p=>p.querySelector(".pdf-active-selection-rect"));
+            const group=page.querySelector(".pdf-active-selection-group");
+            const rects=[...page.querySelectorAll(".pdf-active-selection-rect")].map(e=>({x:parseFloat(e.style.left),y:parseFloat(e.style.top),w:parseFloat(e.style.width),h:parseFloat(e.style.height)}));
+            let overlaps=0;for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++){const a=rects[i],b=rects[j];const ox=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x),oy=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y);if(ox>0.01&&oy>0.01)overlaps++;}
+            const menu=document.querySelector("[data-selection-menu-anchored]");const m=menu&&menu.getBoundingClientRect();
+            return {overlaps,groupOpacity:group&&getComputedStyle(group).opacity,menu:m?{top:Math.round(m.top),bottom:Math.round(m.bottom),left:Math.round(m.left),right:Math.round(m.right)}:null};
+          })()`);
+          if (flat.overlaps) throw new Error('selection blocks overlap (darker seams): ' + JSON.stringify(flat));
+          if (!flat.menu) throw new Error('the selection menu is not placed at the release point');
+          const nearY = Math.min(Math.abs(flat.menu.top - plan.end.y), Math.abs(flat.menu.bottom - plan.end.y));
+          if (nearY > 40 || plan.end.x < flat.menu.left - 8 || plan.end.x > flat.menu.right + 8) throw new Error('menu ' + JSON.stringify(flat.menu) + ' is not beside the release point ' + JSON.stringify(plan.end));
+          journey.notes.push(file.lang + ' menu at ' + JSON.stringify(flat.menu) + ' for release ' + JSON.stringify(plan.end) + '; overlaps ' + flat.overlaps);
           if (blocks.open > 1) throw new Error('gaps between lines: ' + JSON.stringify(blocks));
           journey.notes.push(file.lang + ' PDF: ' + plan.lines + ' lines → ' + blocks.count + ' blocks, ' + blocks.split + ' split lines, ' + blocks.open + ' paragraph gaps; ' + samples.length + ' samples, peak ' + peak + ', final ' + final);
           await shot('J20-' + file.lang + '-selection');

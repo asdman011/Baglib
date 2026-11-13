@@ -359,24 +359,27 @@ const PdfPageItem = React.memo(function PdfPageItem({
         {/* KEY-335: merged blocks painted while dragging (filled imperatively, see the viewer's live-selection effect) */}
         <div className="pdf-live-selection absolute inset-0 pointer-events-none" aria-hidden="true" />
         {/* Active transient selection highlight overlay */}
-        {activeSelectionRects &&
-          activeSelectionRects
+        {/* KEY-335 follow-up: the blocks are opaque inside one translucent group, so where two lines meet the colour
+            stays the same (no darker seam) and the whole selection reads as one block, as in Acrobat. */}
+        {activeSelectionRects && <div className="pdf-active-selection-group absolute inset-0 pointer-events-none" style={{ opacity: 0.35 }}>
+          {activeSelectionRects
             .filter((r) => r.width >= 0.5 && r.height >= 0.5 && !(r.x <= 0.2 && r.width < 2))
             .map((r, idx) => (
               <div
                 key={`active-selection-${idx}`}
-                className="pdf-active-selection-rect absolute rounded-xs pointer-events-none"
+                className="pdf-active-selection-rect absolute pointer-events-none"
                 style={{
                   left: `${r.x}%`,
                   top: `${r.y}%`,
                   width: `${r.width}%`,
                   height: `${r.height}%`,
-                  backgroundColor: 'rgba(59, 130, 246, 0.35)',
+                  backgroundColor: 'rgb(59, 130, 246)',
                   outline: 'none',
                   border: 'none',
                 }}
               />
             ))}
+        </div>}
 
         {pageHighlights.map((highlight) => {
           const { rects } = parseHighlightLocation(highlight.location);

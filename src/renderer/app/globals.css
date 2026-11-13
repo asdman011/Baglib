@@ -550,7 +550,8 @@ mark.baglib-highlight-violet, mark.baglib-highlight-purple {
 
 /* KEY-335: while dragging, the selection shows as merged per-line blocks instead of per-span native boxes. */
 .pdf-live-selecting .textLayer ::selection { background: transparent !important; }
-.pdf-live-selection-rect { position: absolute; background-color: rgba(59, 130, 246, 0.35); border-radius: 2px; }
+.pdf-live-selection { opacity: 0.35; }
+.pdf-live-selection-rect { position: absolute; background-color: rgb(59, 130, 246); }
 .pdf-selection-locked .pdf-live-selection { display: none; }
 /* Single-layer PDF selection: live blocks while dragging, locked overlay after release (no double-blue flicker) */
 .pdf-native-viewer-container:not(.pdf-selection-locked) .pdf-active-selection-rect {

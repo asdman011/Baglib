@@ -1,3 +1,23 @@
+## KEY-335 follow-up: the selection menu opens at the mouse release; the selection is one flat block - 2026-11-13, Claude Code
+
+The user reported two problems, comparing BagLib with Adobe Acrobat Pro:
+- the selection pop-up always appeared at the top;
+- where two selected lines met, the overlap showed darker blue bars.
+
+**Changes**
+- `src/renderer/components/reader/ZenSelectionMenu.tsx`: an optional `anchor` (the release point in viewport pixels). The menu opens just below that point, flips above it near the bottom of the window, and stays inside the window. Without an anchor, it keeps the old top position.
+- `src/renderer/components/reader/FullPageBookReader.tsx`: records the left-button release inside the reader (`releaseAnchor`) and passes it to the menu. A keyboard selection (Shift+Arrow) clears the anchor, so the menu falls back to the top.
+- `src/renderer/components/reader/PdfNativeViewer.tsx` and `src/renderer/app/globals.css`: the blocks are opaque inside one group at 35% opacity, both after release and while dragging. Overlaps can no longer double the colour.
+- `src/renderer/libs/reader/pdf-text-selection.ts`: overlapping lines are trimmed so each line ends exactly where the next begins.
+- `tests/reader/pdf-text-selection.test.ts`: one new test.
+- `scripts/ux-journeys-live/main.cjs`: J20 now also checks that blocks have 0 overlaps and that the menu sits beside the release point. It waits for the page to settle after navigation.
+
+**Verification**
+- J20 passed 8/8 configurations, with 0 renderer errors.
+- Menu placement: for Arabic, the menu top is 505 for a release at y 491; for English, 388 for a release at y 374. The release x is inside the menu every time. 0 overlaps.
+- ar 1280 screenshot inspected.
+- Full suite 1953/1953; eslint 0 errors.
+
 ## KEY-339: Ctrl+mouse-wheel zoom in every reader - 2026-11-13, Claude Code
 
 Implemented by Claude at the user's request; the user chose Ctrl+wheel. The plain wheel keeps scrolling and turning pages.
