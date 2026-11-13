@@ -8,6 +8,10 @@ import { StudyInsightsService } from '../services/statistics/study-insights.serv
 import { StudyProgressService } from '../services/statistics/study-progress.service';
 import { readingTrackerService } from '../services/statistics/reading-tracker.service';
 import { SqliteSettingsRepository } from '../database/repositories/settings.repository';
+import { PlannerReminderScheduler } from '../services/planner-reminders';
+import { notificationService, notificationLanguage } from './notifications';
+import { translations } from '../../renderer/translations';
+import { confirmedQuitCleanup } from '../services/quit-cleanup';
 import { QuranWirdService } from '../services/quran-wird.service';
 
 function repository(event: IpcMainInvokeEvent): StudyPlannerRepository {
@@ -19,7 +23,19 @@ function repository(event: IpcMainInvokeEvent): StudyPlannerRepository {
 }
 
 export function registerStudyPlannerIpc(): void {
+  const reminderScheduler = new PlannerReminderScheduler(new StudyPlannerRepository(getDatabase()), notificationService,
+    new SqliteSettingsRepository(getDatabase()), () => translations[notificationLanguage()].plannerReminderTitle);
+  const checkReminders = () => {
+    try { reminderScheduler.check(); } catch (error) { console.warn('[baglib:planner] Reminder check failed', error); }
+  };
+  const reminderTimer = setInterval(checkReminders, 15_000);
+  checkReminders();
+  confirmedQuitCleanup.register(() => clearInterval(reminderTimer));
   const insights = (event: IpcMainInvokeEvent) => { repository(event); return new StudyInsightsService(getDatabase()); };
+  ipcMain.handle('study-planner:lists', event => repository(event).lists());
+  ipcMain.handle('study-planner:save-list', (event, input) => repository(event).saveList(input));
+  ipcMain.handle('study-planner:remove-list', (event, id, expected) => repository(event).removeList(id, expected));
+  ipcMain.handle('study-planner:rename-group', (event, name, nextName) => repository(event).renameGroup(name, nextName));
   ipcMain.handle('study-planner:list', event => repository(event).list());
   ipcMain.handle('study-planner:save', (event, input: unknown) => repository(event).save(validateTask(input)));
   ipcMain.handle('study-planner:remove', (event, id: string, expected: string) => repository(event).remove(id, expected));

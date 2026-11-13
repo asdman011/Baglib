@@ -13,6 +13,8 @@ const sources = (directory: string): string[] => fs.readdirSync(directory, { wit
   return /\.tsx?$/.test(entry.name) && entry.name !== 'translations.ts' ? [full] : [];
 });
 const operational = new Set([
+  'planner.groups.v1', // User-authored group names and display ordering, managed in Tasks (KEY-341).
+  'planner.reminder-delivery.v1', // Durable per-task notification delivery ledger (KEY-341).
   'athan.mawaqit.cache.v1', // Cached mosque response.
   'app_lock:pin_hash', 'app_lock:pin_salt', // Derived secrets owned by the lock editor.
   'courses.coursera.v1', // Catalog snapshot.

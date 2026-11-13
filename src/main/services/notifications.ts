@@ -13,7 +13,7 @@ export class NotificationService {
   setFocused(focused: boolean): void { this.focused = focused; }
   history(): NotificationRecord[] { return this.repo.get<NotificationRecord[]>(NOTIFICATION_HISTORY_KEY, []) ?? []; }
   isSuppressed(): boolean { return this.focused || this.suppressed(); }
-  publish(input: Pick<NotificationRecord, 'key' | 'kind' | 'title' | 'body' | 'target'>): NotificationRecord {
+  publish(input: Pick<NotificationRecord, 'key' | 'kind' | 'title' | 'body' | 'target' | 'taskId'>): NotificationRecord {
     const history = this.history();
     const existing = history.find(record => record.key === input.key);
     if (existing) return existing;

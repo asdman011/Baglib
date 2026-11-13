@@ -722,6 +722,10 @@ export const API = {
     ask: (session, question, language, allowRemote, password, options) => ipcRenderer.invoke('pdf-collab:ask', session, question, language, allowRemote, password, options),
   } satisfies PdfCollaborationAPI,
   planner: {
+    lists: () => ipcRenderer.invoke('study-planner:lists'),
+    saveList: input => ipcRenderer.invoke('study-planner:save-list', input),
+    removeList: (id, expected) => ipcRenderer.invoke('study-planner:remove-list', id, expected),
+    renameGroup: (name, nextName) => ipcRenderer.invoke('study-planner:rename-group', name, nextName),
     list: (): Promise<import('../shared/study-planner').StudyTask[]> => ipcRenderer.invoke('study-planner:list'),
     save: input => ipcRenderer.invoke('study-planner:save', input),
     remove: (id, expected) => ipcRenderer.invoke('study-planner:remove', id, expected),

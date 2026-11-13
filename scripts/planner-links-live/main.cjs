@@ -44,6 +44,8 @@ app.on('browser-window-created', (_, owner) => {
       const result = {};
       await load(language);
       await openPlanner(language);
+      await evaluate("document.querySelector('[data-planner-calendar-open]').click()");
+      await until("document.querySelector('[data-planner-calendar-dialog]').open");
       // Month grid: every date in one column falls on the same weekday (leading cells right in RTL and LTR).
       result.grid = await evaluate(`(()=>{const cells=[...document.querySelectorAll('[data-study-planner] .grid-cols-7 > button time')].map(t=>({date:t.getAttribute('datetime'),x:Math.round(t.closest('button').getBoundingClientRect().left)}));const columns={};for(const c of cells){const wd=new Date(c.date+'T12:00:00').getDay();(columns[c.x]??=new Set()).add(wd);}return {cells:cells.length,columns:Object.keys(columns).length,mixed:Object.values(columns).filter(s=>s.size>1).length,dir:document.querySelector('[data-study-planner]').getAttribute('dir'),firstColumnX:cells.length?cells[0].x:null};})()`);
       await shot(`month-${language}`);
@@ -52,6 +54,7 @@ app.on('browser-window-created', (_, owner) => {
       result.grid480 = await evaluate(`(()=>{const region=document.querySelector('[data-study-planner] [role=region]');const cells=[...document.querySelectorAll('[data-study-planner] .grid-cols-7 > button time')].map(t=>({date:t.getAttribute('datetime'),x:Math.round(t.closest('button').getBoundingClientRect().left)}));const columns={};for(const c of cells){const wd=new Date(c.date+'T12:00:00').getDay();(columns[c.x]??=new Set()).add(wd);}return {columns:Object.keys(columns).length,mixed:Object.values(columns).filter(s=>s.size>1).length,scrolls:region.scrollWidth>region.clientWidth+1,header:document.querySelectorAll('[data-study-planner] .grid-cols-7 > div.text-center').length};})()`);
       await shot(`month-${language}-480`);
       owner.setContentSize(1280, 900); await pause(300);
+      await evaluate("document.querySelector('[data-planner-calendar-dialog]').close()");
       // Quran link → the Quran reader at Al-Baqarah 255 (page 42 of the Madinah mushaf).
       await clickReference('آية الكرسي');
       await until("!!document.querySelector('[data-quran-mushaf]')", 200);

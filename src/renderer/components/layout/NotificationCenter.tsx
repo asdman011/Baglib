@@ -23,7 +23,14 @@ export function NotificationCenter() {
     const received = api?.onNotification?.(record => {
       showToast({ message: <span dir="auto">{record.title}</span>, duration: 10000, action: { label: t('notificationOpen'), onClick: () => { setOpen(true); } } });
     });
-    const opened = api?.onNotificationOpen?.(record => { setOpen(false); setViewMode(record.target); });
+    const opened = api?.onNotificationOpen?.(record => {
+      if (record.taskId) {
+        sessionStorage.setItem('baglib.planner.open-task', record.taskId);
+        window.dispatchEvent(new CustomEvent('baglib:open-task', { detail: record.taskId }));
+      }
+      setOpen(false);
+      setViewMode(record.target);
+    });
     return () => { received?.(); opened?.(); };
   }, [showToast, t, setViewMode]);
   useEffect(() => {

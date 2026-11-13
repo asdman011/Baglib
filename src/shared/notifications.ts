@@ -20,6 +20,7 @@ export interface NotificationRecord {
   createdAt: string;
   status: 'new' | 'done' | 'snoozed' | 'suppressed';
   snoozedUntil?: string;
+  taskId?: string;
   target: 'dashboard' | 'planner' | 'quran' | 'library';
 }
 export const DEFAULT_QUIET_WINDOW: QuietWindow = { enabled: false, start: '22:00', end: '06:00' };

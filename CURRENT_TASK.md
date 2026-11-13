@@ -1,3 +1,48 @@
+## KEY-341 verified — 2026-11-13T16:37:52+02:00 — Codex
+
+Implemented the approved Tasks redesign. Arabic RTL and English LTR have start-side lists/groups/search/subject filtering, central circular task rows and bottom quick-add, an end-side details editor, and stacking below lg. Enter creates a task due today, and Ctrl+Enter adds an indented description. List/due/reminder/repeat menus persist their choices. The modal calendar retains Gregorian/Hijri week/month/year views and scheduled/unscheduled filtering, with selectable day tasks. Existing start/priority/status/reference controls remain available.
+
+Migration 027 preserves earlier tasks and adds the approved task_list plus list_id/recurrence/reminder_at/subject. Existing producers remain compatible. List deletion retains tasks. Recurring completion is atomic/idempotent and preserves month-end anchors/reminder offsets. Subjects use existing Arabic query matching and source-target parsing, support source inference and manual clearing. Main reminders reuse NotificationService/history and exact-task targeting with a durable settings ledger. Fixed stale modal-close handling and missing notification target reload loops. Two hand-written planner test fixtures now apply migration027.
+
+Passed full1975/1975 (--test-concurrency=2), focused52/52, tsc, scoped eslint0errors/warnings, main/preload build, runner syntax and diff checks. The first full run exposed fixture/unused-translation regressions, both fixed before the passing final run. Native planner and real-source links passed ar/en1280/480 with zero renderer errors and no horizontal overflow. Verified keyboard creation, list/group CRUD/order, presets/custom recurrence, daily successors, native Notification.show plus simulated click, book-subject inference/clear/override, Arabic search variants, missing task targets, both calendars/all periods, calendar filters and retained rhythm behavior. Quran2:255 opens page42 and Bukhari1 opens its real text. All1339 original corpus files unchanged. Disposable profiles and owned renderer removed. Screenshots visually inspected under .baglib-data/KEY-341-evidence/.
+
+REA verified installed To Do2.178.8571.0 PE resources, evidence ev_05a9577e2db5b66ccd250e02c9c28fdf9b882cfd2fb9d19e32a2c43ba10589df. Windows native To Do UI observation is unsupported on this host, so the task’s screenshot description guided implementation. Actual screenshots were absent. To Do runtime and physical Windows-toast visibility/click remain unverified. Weekdays use Monday–Friday, custom weekly intervals use Monday-based weeks, and the reused calendar stays Saturday-first. Reopening a recurring occurrence retains its successor. Reminders require running main with overdue handling on startup. Research docs, ADR-007 and dictionary record these boundaries. No dependency/download/core-domain change or Jira mutation.
+
+Exact task files, with task-only hunks in shared state/translations/preload
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `docs/ADR-007-study-planner-storage.md`
+- `docs/data-dictionary.md`
+- `docs/features/Microsoft To Do.md`
+- `docs/features/feature - Tasks (To Do model).md`
+- `scripts/planner-live/main.cjs`
+- `scripts/planner-live/run.mjs`
+- `scripts/planner-live/runner.mjs`
+- `scripts/planner-links-live/main.cjs`
+- `scripts/planner-links-live/run.mjs`
+- `src/main/database/migrations/027_task_lists.ts`
+- `src/main/database/migrations/index.ts`
+- `src/main/database/repositories/study-planner.repository.ts`
+- `src/main/ipc/study-planner.ts`
+- `src/main/services/planner-reminders.ts`
+- `src/main/services/notifications.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/dashboard/StudyPlannerView.tsx`
+- `src/renderer/components/dashboard/PlannerCalendar.tsx`
+- `src/renderer/components/dashboard/PlannerScheduleFields.tsx`
+- `src/renderer/components/layout/NotificationCenter.tsx`
+- `src/renderer/translations.ts`
+- `src/shared/notifications.ts`
+- `src/shared/study-planner.ts`
+- `tests/services/planner-todo.test.ts`
+- `tests/services/study-planner.test.ts`
+- `tests/ui/settings-directory-coverage.test.ts`
+- `tests/services/quran-wird.test.ts`
+- `tests/services/curriculum-exam.test.ts`
+
+Publication is authorized by the dispatch to origin/feature/library-domain. Scoped commit/push pending under commit.lock. Claude owns review and Jira. Other sessions’ unfinished files and historical handoff changes are preserved.
+
 ## KEY-345: Notes tab Export of the filtered result, and Import from Markdown, Obsidian, Word and CSV - 2026-11-13, Claude Code
 
 Implemented by Claude at the user's request.

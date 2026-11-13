@@ -563,9 +563,9 @@ Append-only review history.
 
 A pathway is a `collection` row whose `collection_type` is `research` or `curriculum`. `pathway_item` holds its ordered contents, approved by the user on 2026-11-02. Its ten columns are `id`, `collection_id`, `section`, `kind`, `reference`, `title`, `url`, `pinned`, `sort_order` and `created_at`, with one index on `(collection_id, sort_order)`. `kind` is `resource`, `link` or `step`. A step points at `study_task` through `reference` as `task:<id>`, so the planner owns its status. Personal templates are an `app_settings` row, `pathways.templates.v1`.
 
-## Study planner — ADR-007 / migration 020
+## Study planner — ADR-007 / migrations 020 and 027
 
-`study_task` stores scheduling separately from library Works and scholarly knowledge. Approved through the user's continuation on 2026-11-01. Its twelve columns are `id`, `title`, `description`, `status`, `start_date`, `due_date`, `priority`, `sort_order`, `references_json`, `completed_at`, `created_at`, and `updated_at`. See ADR-007 for exact types, constraints and the two date/status indexes.
+`study_task` stores scheduling separately from library Works and scholarly knowledge. Approved through the user's continuation on 2026-11-01. Its original twelve columns are `id`, `title`, `description`, `status`, `start_date`, `due_date`, `priority`, `sort_order`, `references_json`, `completed_at`, `created_at`, and `updated_at`. Migration 027 adds `list_id` (TEXT NOT NULL DEFAULT 'tasks', FK to task_list), `recurrence` (nullable validated JSON text), `reminder_at` (nullable local YYYY-MM-DDTHH:mm), and `subject` (TEXT NOT NULL DEFAULT ''). Sixteen columns in total. See ADR-007 for constraints, recurrence anchoring and transactional successor behavior.
 
 Dates are local civil Gregorian YYYY-MM-DD values, projected into the existing adjusted Hijri calendar for display. Audit timestamps use UTC ISO values. References retain existing book/note/Quran-profile/hadith target patterns and saved labels; optional surah scope navigates to the first ayah. There is no foreign-key cascade to a Work: task data and source pointers survive linked-book deletion. Migration 019 remains unchanged.
 
@@ -580,3 +580,12 @@ Approved by the user on 2026-11-05 ("Approve as recommended", decision D3). `com
 ## Question status: Investigating — ADR-011 / migration 024
 
 Approved by the user on 2026-11-05 (decision S2). `question_detail.status` now accepts `open`, `investigating`, `answered` or `dismissed`; the interface orders them Open → Investigating → Answered, with Dismissed apart. SQLite cannot change a CHECK constraint, so migration 024 rebuilds `question_detail` with the same six columns (`knowledge_id`, `question_text`, `status`, `answered_at`, `source_ref`, `capture_hash`), the same data and the `idx_question_capture` partial unique index. `answered_at` is set only on Answered. The down migration restores the old constraint and turns `investigating` into `open`.
+
+
+### KEY-341 task lists and reminder delivery
+
+Approved 2026-11-12. Migration 027 introduces `task_list(id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT NULL, group_name TEXT NULL, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`. Names must be nonblank. Built-in ID `tasks` receives all pre-existing study tasks. Removing a list moves its tasks to that default list transactionally and invalidates stale editors. Group membership shares `group_name`; empty group names/display order reuse `app_settings['planner.groups.v1']` as a string array. The default list label is localized at render time.
+
+`recurrence` is JSON with kind daily/weekdays/weekly/monthly/yearly/custom, interval 1–365 with days/weeks/months for custom rules, optional weekday numbers 0–6, and anchorDay 1–31/anchorMonth 0–11 for month-end retention. `reminder_at` is local datetime, while created_at/updated_at/completed_at remain UTC ISO action timestamps. New indexes are `idx_study_task_list(list_id, sort_order)` and `idx_study_task_reminder(reminder_at) WHERE status='open' AND reminder_at IS NOT NULL`. The original due/start indexes remain.
+
+`app_settings['planner.reminder-delivery.v1']` maps task IDs to their delivered reminder_at values. This durable delivery ledger supplements existing notifications.history.v1, whose study records can carry an optional taskId. User-defined subject text and canonical reference labels remain unnormalized in storage. All new planner data stays separate from the library domain model.

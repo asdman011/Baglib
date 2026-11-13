@@ -1,3 +1,4 @@
+import taskListsMigration from '../../src/main/database/migrations/027_task_lists';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
@@ -59,6 +60,7 @@ function createTestDb(): Database.Database {
       CHECK(start_date IS NULL OR due_date IS NULL OR start_date <= due_date)
     );
   `);
+  taskListsMigration.up(db);
   return db;
 }
 

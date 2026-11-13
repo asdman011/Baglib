@@ -1,3 +1,4 @@
+import taskListsMigration from '../../src/main/database/migrations/027_task_lists';
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
@@ -305,6 +306,7 @@ describe('Curriculum Exam & Adaptive Re-planning (KEY-285)', () => {
         );
       `);
 
+      taskListsMigration.up(db);
       service = new CurriculumExamService(db);
       pathwayService = new PathwayService(db);
     });

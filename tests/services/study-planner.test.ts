@@ -18,11 +18,11 @@ const open = () => {
   return { db, tasks: new StudyPlannerRepository(db) };
 };
 
-test('planner migration is idempotent and has exactly twelve columns', () => {
+test('planner migration is idempotent and has the approved sixteen columns', () => {
   const { db } = open();
   try {
     assert.equal(runMigrations(db, migrations), 0);
-    assert.equal(db.prepare('PRAGMA table_info(study_task)').all().length, 12);
+    assert.equal(db.prepare('PRAGMA table_info(study_task)').all().length, 16);
   } finally { db.close(); }
 });
 
