@@ -1,3 +1,31 @@
+## KEY-264 packaged acceptance passed, plus two fixes for installed builds — 2026-11-13, Claude Code
+
+**Result:**
+- `release/win-unpacked` was built with `electron-builder --dir`. On a clean throwaway profile, with Chromium pointed at a dead proxy and the welcome guide skipped, it ran in Arabic (RTL) and English (LTR).
+- In each language it installed the 33 bundled Quran packs on first run, in 16–20 seconds.
+- Every pack's SHA-256 matches its shipped file, no job failed, and the Quran opened at once (38 ayah words of surah 1).
+- There were no requests outside the app and no console errors.
+- Bundled sizes: `resources/quran` is 290 MB and `resources/sunnah` 1.6 GB; the whole unpacked app is 4.5 GB.
+- The check is `scripts/packaged-quran-live/run.mjs`.
+
+**Bugs found and fixed:**
+- **Quran IPC refused the installed build's `app://-` page.** It returned `unavailable` for every call, so Quran never installed or opened in an installed BagLib. The other IPC modules already accepted `app://-`. `src/main/ipc/quran.ts` now uses the same sender check.
+- **The production renderer build had failed since 8 Nov.** The `s` regex flag in `src/shared/study-notes.ts` breaks the renderer's ES2017 type check. It is replaced by the equivalent `[\s\S]`. Notes tests pass 39/39.
+
+**Tests:**
+- The full suite passes 2103/2103, and eslint is clean.
+
+**Not done:**
+- The NSIS installer itself was not rebuilt or installed. Its size and a clean-Windows install are part of the shared "Packaged acceptance test" list in the Dataset Delivery Plan, not of KEY-264's done-when.
+- DevTools could not capture screenshots of the packaged window, so the checks are DOM-based.
+- The packaged app sets the `baglib://` handler. It was backed up and restored to its earlier value after every run.
+
+**Files:**
+- `src/main/ipc/quran.ts`
+- `src/shared/study-notes.ts`
+- `scripts/packaged-quran-live/run.mjs`
+- this entry
+
 KEY-342 publication - 2026-11-13T22:51:33.702952+02:00 - Codex: ae348d4cd5be5ec6efca384cc42f5ee513005783 committed and successfully pushed normally to origin/feature/library-domain; full2050/2050.
 
 ## KEY-344 verified handoff ? 2026-11-13T22:50:08.930292+02:00 ? Codex

@@ -1,3 +1,4 @@
+import { validQuranSearchQuery } from '../../shared/quran-search';
 import type { AssistantQuranQuery, AssistantQuranSource } from '../../shared/study-assistant';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, session, utilityProcess } from 'electron';
 import { mkdir, readFile, writeFile, rm, stat, rename, copyFile } from 'node:fs/promises';
@@ -177,7 +178,9 @@ export function registerQuranIpc(): void {
   const result = async <Value>(event: Electron.IpcMainInvokeEvent, action: () => Promise<Value>): Promise<QuranResult<Value>> => {
     try {
       const sender = event.sender.getURL();
-      if (event.senderFrame !== event.sender.mainFrame || !(new URL(sender).protocol === 'file:' || new URL(sender).origin === 'http://localhost:3000')) throw new Error('unavailable');
+      const url = new URL(sender);
+      // Installed builds load the renderer from app://-/ (like every other IPC module accepts); development uses localhost:3000.
+      if (event.senderFrame !== event.sender.mainFrame || url.username || url.password || !(url.protocol === 'app:' && url.hostname === '-' || url.protocol === 'file:' && !url.hostname || url.origin === 'http://localhost:3000')) throw new Error('unavailable');
       return { ok: true, data: await action() };
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : '';
@@ -290,7 +293,7 @@ export function registerQuranIpc(): void {
     return readRequest({ action: 'read', query });
   }));
   ipcMain.handle('quran:search-ayahs', (event, query) => result(event, async () => {
-    if (!query || typeof query.script !== 'string' || typeof query.text !== 'string' || query.text.length > 200) throw new Error('invalid-resource');
+    if (!validQuranSearchQuery(query)) throw new Error('invalid-resource');
     return readRequest({ action: 'search', query });
   }));
   ipcMain.handle('quran:commentary', (event, query) => result(event, async () => {

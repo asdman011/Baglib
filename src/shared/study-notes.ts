@@ -62,7 +62,7 @@ export function matchingStudyRelations(typed: string): StudyRelation[] {
 }
 /** Splits `relation::target` into its parts; a target without a relation comes back as is. */
 export function splitRelation(head: string): { relation?: string; target: string } {
-  const match = /^([^:\s|\[\]]{1,24})::(.*)$/su.exec(head);
+  const match = /^([^:\s|\[\]]{1,24})::([\s\S]*)$/u.exec(head);
   const relation = match ? studyRelation(match[1]) : undefined;
   return match && relation ? { relation, target: match[2] } : { target: head };
 }
