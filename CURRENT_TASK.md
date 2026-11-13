@@ -1,3 +1,21 @@
+## KEY-341 Fix 1 verified - 2026-11-13T17:43:55+02:00 - Codex
+
+Quick-add now has a 48px input row with circle, title and four compact list/due/reminder/repeat triggers. One anchored popover opens at a time, dismissed by Escape or an outside pointer press. Selected values appear compactly in the row. Due weekdays and reminder times occupy the trailing side. Repeat is a button menu with custom fields inside. Ctrl+Enter retains the marked indented description, and the hint stays below the row. Start-pane smart lists and management use plain rows, with icons and trailing task counts.
+
+Verified full1980/1980 (--test-concurrency=2, one full run), tsc, scoped eslint0errors/warnings and diff checks. Planner and planner-links passed ar/en1280/480 with zero renderer errors. All16 scheduling-menu screenshots inspected, confirming one-row input and one anchored menu. Existing keyboard creation, list/group CRUD, recurrence, reminders, subject inference/filtering, Gregorian/Hijri calendars and Quran/Sunnah source links pass. Disposable profiles deleted, all1339 real source files unchanged. Existing startup reminder check logs missing study_task before migrations in empty profiles, then runtime reminder delivery passes. REA resource inspection repeated with unchanged artifact evidence. To Do runtime and physical toast interaction retain their prior verification limits.
+
+Exact files
+
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+- docs/features/Microsoft To Do.md
+- docs/features/feature - Tasks (To Do model).md
+- scripts/planner-live/main.cjs
+- src/renderer/components/dashboard/PlannerScheduleFields.tsx
+- src/renderer/components/dashboard/StudyPlannerView.tsx
+
+KEY-336 remains next. Real Arabic media and playable English media are absent from tests/real-files. User clarification requested, implementation can proceed while that verification input is pending. Shared state/other agents' changes preserved. Publication pending.
+
 ## KEY-341 verified — 2026-11-13T16:37:52+02:00 — Codex
 
 Implemented the approved Tasks redesign. Arabic RTL and English LTR have start-side lists/groups/search/subject filtering, central circular task rows and bottom quick-add, an end-side details editor, and stacking below lg. Enter creates a task due today, and Ctrl+Enter adds an indented description. List/due/reminder/repeat menus persist their choices. The modal calendar retains Gregorian/Hijri week/month/year views and scheduled/unscheduled filtering, with selectable day tasks. Existing start/priority/status/reference controls remain available.

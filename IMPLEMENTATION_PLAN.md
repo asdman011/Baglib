@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-13T17:43:55+02:00, Codex] KEY-341 Fix1 verified. Compact48px quick-add, single anchored menus, repeat buttons and plain start rows. Full1980/1980, native planner+links ar/en1280/480, tsc/lint/diff pass. Exact7files in CURRENT_TASK.md. KEY-336 next, required real-media input pending. Publication pending.
+
 - [2026-11-13T16:37:52+02:00, Codex] KEY-341 verified. Approved migration027, lists/groups, circular task rows/quick-add/details/calendar, recurrence/reminders/subjects implemented. Full1975/1975, focused52/52, tsc/lint/build/diff and native ar/en1280/480 pass. Exact30files and REA/OS-click limits in CURRENT_TASK.md/report. Scoped publication authorized and pending. Claude owns review/Jira.
 
 - [2026-11-12, Claude Code] Planned the user's 10 reading, notes, media and planner requests and created Jira tasks KEY-334 to KEY-344:

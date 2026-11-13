@@ -71,9 +71,9 @@ app.on('browser-window-created', (_, window) => {
       await waitFor(`(async()=> (await window.electronAPI.planner.lists()).some(list=>list.name==='QA ${language}'))()`);
       const list = (await evaluate('window.electronAPI.planner.lists()')).find(item=>item.name===`QA ${language}`);
       await field('[data-planner-quick-title]', `Daily ${language}`);
-      await evaluate("document.querySelector('[data-planner-quick-add] [data-planner-list-menu]').open=true;document.querySelector('[data-planner-quick-add] [data-planner-repeat-menu]').open=true");
-      await field('[data-planner-quick-add] [data-planner-list]',list.id);
-      await field('[data-planner-quick-add] [data-planner-repeat]','daily');
+      await evaluate("document.querySelector('[data-planner-quick-add] [data-planner-list-menu] summary').click()");
+      await evaluate(`document.querySelector('[data-planner-quick-add] [data-planner-list="${list.id}"]').click()`);
+      await evaluate("document.querySelector('[data-planner-quick-add] [data-planner-repeat-menu] summary').click();document.querySelector('[data-planner-quick-add] [data-planner-repeat=daily]').click()");
       await evaluate("document.querySelector('[data-planner-quick-title]').focus()"); await key();
       await waitFor(`(async()=> (await window.electronAPI.planner.list()).some(task=>task.title==='Daily ${language}'))()`);
       const daily = (await evaluate('window.electronAPI.planner.list()')).find(task=>task.title===`Daily ${language}`);
@@ -82,16 +82,26 @@ app.on('browser-window-created', (_, window) => {
       await waitFor(`(async()=> (await window.electronAPI.planner.list()).filter(task=>task.title==='Daily ${language}').length===2)()`);
       // Preset due/reminder menus and custom recurrence persist their selected values.
       await field('[data-planner-quick-title]',`Presets ${language}`);
-      await evaluate("document.querySelectorAll('[data-planner-quick-add] details').forEach(menu=>menu.open=true)");
       for (const width of [1280,480]) {
         window.setContentSize(width,900); await pause(150);
         await evaluate("document.querySelector('[data-planner-quick-title]').scrollIntoView({block:'center'})");
         assert.equal(await evaluate("(()=>{const p=document.querySelector('[data-study-planner]');return p.scrollWidth<=p.clientWidth+1})()"),true);
-        await shot(`menus-${language}-${width}`);
+          for (const menu of ['list','due','reminder','repeat']) {
+            await evaluate(`document.querySelector('[data-planner-quick-add] [data-planner-${menu}-menu] summary').click()`);
+            await pause(100);
+            assert.equal(await evaluate("document.querySelectorAll('[data-planner-quick-add] details[open]').length"),1);
+            assert.ok(await evaluate("document.querySelector('[data-planner-quick-row]').getBoundingClientRect().height<=52"));
+            await shot(`menus-${menu}-${language}-${width}`);
+          }
+          window.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'}); await pause(100);
+          assert.equal(await evaluate("document.querySelectorAll('[data-planner-quick-add] details[open]').length"),0);
+          await evaluate("document.querySelector('[data-planner-quick-add] [data-planner-due-menu] summary').click()");
+          await evaluate("document.querySelector('[data-planner-quick-title]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
+          assert.equal(await evaluate("document.querySelectorAll('[data-planner-quick-add] details[open]').length"),0);
       }
       window.setContentSize(1280,900);
       await evaluate("document.querySelectorAll('[data-planner-quick-add] [data-planner-due-menu] button')[1].click();document.querySelectorAll('[data-planner-quick-add] [data-planner-reminder-menu] button')[1].click()");
-      await field('[data-planner-quick-add] [data-planner-repeat]','custom');
+      await evaluate("document.querySelector('[data-planner-quick-add] [data-planner-repeat-menu] summary').click();document.querySelector('[data-planner-quick-add] [data-planner-repeat=custom]').click()");
       await field('[data-planner-quick-add] [data-planner-repeat-menu] input[type=number]','2');
       await field('[data-planner-quick-add] [data-planner-repeat-menu] select[aria-label]','weeks');
       await evaluate("document.querySelectorAll('[data-planner-quick-add] [data-planner-repeat-menu] input[type=checkbox]')[1].click();document.querySelector('[data-planner-quick-title]').focus()");
