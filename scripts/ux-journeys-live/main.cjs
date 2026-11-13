@@ -720,6 +720,64 @@ app.on('browser-window-created', (_, win) => {
         await shot('J21-hadith-marker');
       });
 
+      // J22 (opt-in, BAGLIB_JOURNEY_IDS=22) — KEY-339: a real Ctrl+mouse-wheel over each reader zooms that reader (PDF, EPUB,
+      // Quran, Sunnah, poetry) and never the app; the plain wheel does not zoom.
+      if (journeysOnly.includes(22)) await journeyRun(22, 'Ctrl+wheel zoom in every reader', async () => {
+        const wheelOver = async (selector, deltaY, ctrl = true) => {
+          const point = await evaluate('(()=>{const e=document.querySelector(' + JSON.stringify(selector) + ');const r=e.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+Math.min(r.height/2,300))}})()');
+          win.webContents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y });
+          win.webContents.sendInputEvent({ type: 'mouseWheel', x: point.x, y: point.y, deltaX: 0, deltaY, wheelTicksY: Math.sign(deltaY), canScroll: true, modifiers: ctrl ? ['control'] : [] });
+          await pause(350);
+        };
+        const check = async (name, selector, read) => {
+          const before = await evaluate(read);
+          await step(name + ': Ctrl+wheel up', async () => { await wheelOver(selector, 120); });
+          const zoomedIn = await evaluate(read);
+          await step(name + ': Ctrl+wheel down twice', async () => { await wheelOver(selector, -120); await wheelOver(selector, -120); });
+          const zoomedOut = await evaluate(read);
+          await wheelOver(selector, 120); // back to where it started
+          await wheelOver(selector, 120, false); // a plain wheel scrolls, never zooms
+          const plain = await evaluate(read);
+          const appZoom = win.webContents.getZoomFactor();
+          journey.notes.push(name + ': ' + before + ' → in ' + zoomedIn + ' → out ' + zoomedOut + ' → plain wheel ' + plain + ', app zoom ' + appZoom);
+          if (!(Number(zoomedIn) > Number(before)) || !(Number(zoomedOut) < Number(before))) throw new Error(name + ' did not zoom: ' + [before, zoomedIn, zoomedOut].join(' / '));
+          if (Number(plain) !== Number(before)) throw new Error(name + ': the plain wheel changed the zoom');
+          if (appZoom !== 1) throw new Error('the app itself zoomed: ' + appZoom);
+        };
+        await ui.nav('quran', '[data-quran-workspace]');
+        await until('!!document.querySelector("[data-quran-mushaf] .mushaf-svg-surface")', 200);
+        await check('Quran', '[data-quran-mushaf]', 'parseInt(document.querySelector("[data-quran-mushaf] .mushaf-svg-surface").style.width)');
+        await ui.nav('sunnah', '.sunnah-workspace');
+        await until('!!document.querySelector("[data-hadith-id]")', 200);
+        await check('Sunnah', '.sunnah-scroll', 'parseInt(getComputedStyle(document.querySelector(".sunnah-scroll")).getPropertyValue("--sunnah-font-size"))');
+        await ui.nav('bayan', 'main');
+        if (await evaluate('!!document.querySelector("article h2 button")') || await evaluate('new Promise(r=>setTimeout(()=>r(!!document.querySelector("article h2 button")),4000))')) {
+          await ui.click('open a poem', 'article h2 button');
+          await until('!!document.querySelector("[data-poetry-poem]")', 200);
+          await check('Poetry', '[data-poetry-poem]', 'Number(document.querySelector("[data-poetry-poem]").dataset.poetrySize)');
+        } else journey.notes.push('No poetry corpus in this profile; poetry zoom not driven.');
+        for (const file of [arPdf, enEpub]) {
+          const filePath = path.join(copies, path.basename(file.path));
+          if (!fs.existsSync(filePath)) fs.copyFileSync(path.resolve('tests/real-files', file.path), filePath);
+          let book = (await evaluate('window.electronAPI.getAllBooks()')).find(item => item.filePath === filePath);
+          if (!book) {
+            await evaluate('window.electronAPI.importDigitalFiles(' + JSON.stringify([{ filePath, duplicateAction: 'import_anyway' }]) + ',"ux-journeys")');
+            await win.loadURL('http://localhost:3000'); await until('!!window.electronAPI && !!document.querySelector("footer")'); await ready();
+            book = (await evaluate('window.electronAPI.getAllBooks()')).find(item => item.filePath === filePath);
+          }
+          await ui.nav('library', '[data-library-recent]');
+          await step('open the ' + file.kind, async () => {
+            await until('[...document.querySelectorAll("[data-library-book-card]")].some(e=>e.getAttribute("aria-label")===' + JSON.stringify(book.title) + ')', 200);
+            await evaluate('[...document.querySelectorAll("[data-library-book-card]")].find(e=>e.getAttribute("aria-label")===' + JSON.stringify(book.title) + ').querySelector("[data-card-read-button]").click()');
+            await until('!!document.querySelector("[data-reader-zoom]") && !!document.querySelector(".pdf-page-container, [data-study-epub-page], iframe")', 300);
+            await pause(1200);
+          });
+          await check(file.kind.toUpperCase(), '.pdf-page-container, [data-study-epub-page], .epub-container, iframe', 'Number(document.querySelector("[data-reader-zoom]").dataset.readerZoom)');
+          await shot('J22-' + file.kind);
+          await evaluate('document.querySelector("[aria-label=' + JSON.stringify(tr('close')).replace(/"/g, '\\"') + ']")?.click()');
+        }
+      });
+
       // J20 (opt-in, BAGLIB_JOURNEY_IDS=20) — KEY-335: a real mouse drag over many PDF lines grows smoothly (no jumps to the
       // page start or end) and ends as one connected block per line, in an Arabic and an English PDF.
       if (journeysOnly.includes(20)) await journeyRun(20, 'Drag-select many lines in a PDF', async () => {

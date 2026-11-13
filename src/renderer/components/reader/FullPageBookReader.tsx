@@ -1,5 +1,6 @@
 'use client';
 import { useProgressFeedback } from '../../hooks/useProgressFeedback';
+import { ctrlWheelStep } from '../../hooks/useCtrlWheelZoom';
 import { useToast } from '../ui/Toast';
 import { STAMPS, measurementLabel } from '../../../shared/pdf-study-tools';
 import { translations } from '../../translations';
@@ -315,6 +316,7 @@ const SourceBookReader: React.FC = () => {
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>('sepia');
   const [fontFamily, setFontFamily] = useState<string>('amiri');
   const [readerFontSize, setReaderFontSize] = useState<number>(18);
+  const zoomStepRef = useRef<((step: 1 | -1, event: WheelEvent) => void) | null>(null);
   const [lineSpacing, setLineSpacing] = useState<number>(1.85);
   const [paragraphSpacing, setParagraphSpacing] = useState<number>(0.8);
   const [margin, setMargin] = useState<number>(28);
@@ -557,8 +559,16 @@ const SourceBookReader: React.FC = () => {
   useEffect(() => {
     const container = contentContainerRef.current;
     if (!container) return;
+    const zoomCarry = { value: 0 };
 
     const handleWheel = (e: WheelEvent) => {
+      // KEY-339: Ctrl/⌘ + wheel zooms the reader (PDF zoom or EPUB/text size) and never the whole app.
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const step = ctrlWheelStep(e, zoomCarry);
+        if (step) zoomStepRef.current?.(step, e);
+        return;
+      }
       // 1. Do not intercept if user is scrolling inside modals, dialogs, aside, or inputs
       const target = e.target as HTMLElement | null;
       if (
@@ -3476,6 +3486,18 @@ const SourceBookReader: React.FC = () => {
     if (focus) panels.close();
   };
   const renderChrome = (pdf?: Parameters<NonNullable<React.ComponentProps<typeof PdfWorkstationPanel>['renderReaderHeader']>>[0]) => {
+    // KEY-339: Ctrl+wheel uses the same zoom as the header buttons, keeping the point under the pointer in place.
+    zoomStepRef.current = (step, event) => {
+      const current = pdf?.zoom ?? Math.round(readerFontSize / 18 * 100);
+      const next = Math.max(50, Math.min(300, current + step * 10));
+      if (next === current) return;
+      (pdf?.onZoom ?? (value => setReaderFontSize(Math.max(9, Math.min(54, Math.round(value * 18 / 100))))))(next);
+      const scroller = contentContainerRef.current?.querySelector<HTMLElement>('.pdf-native-viewer-container') ?? null;
+      if (!pdf || !scroller) return;
+      const box = scroller.getBoundingClientRect();
+      const x = event.clientX - box.left, y = event.clientY - box.top, top = scroller.scrollTop, left = scroller.scrollLeft, ratio = next / current;
+      requestAnimationFrame(() => requestAnimationFrame(() => { scroller.scrollTop = (top + y) * ratio - y; scroller.scrollLeft = (left + x) * ratio - x; }));
+    };
     const currentPageOcr = ocrPages.get(readingPage);
     const hasOcrWords = !!currentPageOcr && ((currentPageOcr.words?.length ?? 0) > 0 || !!currentPageOcr.text);
     const hasText = Boolean(scannedInfo?.totalChars || extractedFullText?.trim());

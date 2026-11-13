@@ -10,6 +10,7 @@ import { shortcutForEvent, shortcutHint } from '../actions/shortcuts';
 import { addPassageToSrs, passageNote } from '../actions/passage-actions';
 import { NoteMarker } from '../notes/NoteMarker';
 import { useNoteMarkers } from '../../hooks/useNoteMarkers';
+import { useCtrlWheelZoom } from '../../hooks/useCtrlWheelZoom';
 import { poetryRowCount } from '../../../shared/note-targets';
 import { Copy, Share2, NotebookPen, SquareCheck } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -21,6 +22,7 @@ import { SavedPoetryNotes } from './SavedPoetryNotes';
 import { PoetBiography } from './PoetBiography';
 import { useCompanionContext } from '../../utils/companion-context';
 
+const POETRY_SIZE_KEY = 'baglib.poetry.size', POETRY_SIZE_MIN = 18, POETRY_SIZE_MAX = 40;
 export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: { poem: PoetryDetail; onBack: () => void; onPoet?: (id: number) => void; initialVerse?: number; initialTo?: number }) {
   const { t, dir, lang } = useWorkspace();
   const noteCounts = useNoteMarkers();
@@ -68,6 +70,11 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
   const [panelOpen, setPanelOpen] = useState(false);
   const [readerTab, setReaderTab] = useState<ReaderTab>('commentary');
   const [font, setFont] = useState(poem.language === 'ar' ? 'Amiri' : 'EB Garamond');
+  // KEY-339: a saved verse size (was a fixed 24px), changed by the slider or Ctrl+wheel over the poem.
+  const [size, setSize] = useState(() => { try { const saved = Number(localStorage.getItem(POETRY_SIZE_KEY)); return saved >= POETRY_SIZE_MIN && saved <= POETRY_SIZE_MAX ? saved : 24; } catch { return 24; } });
+  const changeSize = (next: number) => { const value = Math.max(POETRY_SIZE_MIN, Math.min(POETRY_SIZE_MAX, next)); setSize(value); try { localStorage.setItem(POETRY_SIZE_KEY, String(value)); } catch { /* the size still applies for this session */ } };
+  const poemScroller = React.useRef<HTMLDivElement>(null);
+  useCtrlWheelZoom(poemScroller, step => changeSize(size + step * 2));
   const fonts = poem.language === 'ar' ? ([['Amiri', 'bayanFontAmiri'], ['Scheherazade New', 'bayanFontScheherazade'], ['Noto Naskh Arabic', 'bayanFontNaskh']] as const) : ([['EB Garamond', 'bayanFontGaramond'], ['Lora', 'bayanFontLora']] as const);
   const description = useMemo(() => {
     try { return poetryDescriptionText(JSON.parse(poem.description_json || 'null')); } catch { return ''; }
@@ -133,7 +140,7 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
   const halfStyle = justify ? { textAlign: 'justify', textAlignLast: 'justify' } as const : undefined;
   const chips = [{ key: 'bayanEra', value: poem.poet_era }, { key: 'bayanMeter', value: poem.meter }, { key: 'bayanRhyme', value: rhyme }, { key: 'bayanTheme', value: poem.theme }, { key: 'bayanLanguageType', value: poem.language_variant === '-' ? null : poem.language_variant }, { key: 'bayanLocation', value: poem.poet_location }, { key: 'bayanVerseCount', value: String(poem.verse_count ?? verses.length) }] as const;
   return <section data-poetry-id={poem.id} data-poetry-reference={initialVerse === undefined ? '' : `${initialVerse}:${initialTo ?? initialVerse}`} dir={dir} className="relative flex h-full min-h-0 flex-col bg-canvas p-4">
-    <IslamicReaderHeader title={poem.title || poem.poet_name} t={t} panelOpen={panelOpen} onPanelToggle={() => setPanelOpen(value => !value)} picker={<><button type="button" onClick={onBack} className="rounded-lg p-2 text-sm">{t('bayanBack')}</button><select aria-label={t('navBayan')} value={poem.id} onChange={onBack} className="flex-1"><option value={poem.id}>{poem.poet_name} · {poem.title}</option></select></>} settings={<div className="flex flex-col gap-3"><label>{t('bayanFont')}<select value={font} onChange={event => setFont(event.target.value)} className="mx-3 rounded border border-subtle bg-canvas p-2">{fonts.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>      <button type="button" onClick={() => void shareRows(selectedRows.length ? selectedRows : rows)}>{t('bayanShare')}</button>
+    <IslamicReaderHeader title={poem.title || poem.poet_name} t={t} panelOpen={panelOpen} onPanelToggle={() => setPanelOpen(value => !value)} picker={<><button type="button" onClick={onBack} className="rounded-lg p-2 text-sm">{t('bayanBack')}</button><select aria-label={t('navBayan')} value={poem.id} onChange={onBack} className="flex-1"><option value={poem.id}>{poem.poet_name} · {poem.title}</option></select></>} settings={<div className="flex flex-col gap-3"><label>{t('bayanFont')}<select value={font} onChange={event => setFont(event.target.value)} className="mx-3 rounded border border-subtle bg-canvas p-2">{fonts.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label><label className="flex items-center gap-3">{t('bayanFontSize')}<input type="range" data-poetry-size-range min={POETRY_SIZE_MIN} max={POETRY_SIZE_MAX} step={2} value={size} onChange={event => changeSize(Number(event.target.value))} /></label>      <button type="button" onClick={() => void shareRows(selectedRows.length ? selectedRows : rows)}>{t('bayanShare')}</button>
       <button type="button" onClick={() => void copyPoem()}>{t('bayanCopyPoem')}</button>
       <button type="button" disabled={!selectedRows.length} onClick={() => void copySelection()}>{t('bayanCopySelection')}</button>
       <label><input type="checkbox" checked={diacritics} onChange={event => setDiacritics(event.target.checked)} /> {t('bayanDiacritics')}</label>
@@ -153,7 +160,7 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
       <PoetryNarrations key={poem.id} poem={poem} hidden={readerTab !== 'translation'} />
       {readerTab === 'related' && <PoetBiography poem={poem} onPoet={onPoet} onClose={() => setPanelOpen(false)} />}
     </IslamicReaderPanel>}
-    <div className="min-h-0 flex-1 overflow-y-auto py-5">
+    <div ref={poemScroller} className="min-h-0 flex-1 overflow-y-auto py-5">
       <div data-poetry-header className="mx-auto mb-6 max-w-3xl text-center">
         <h1 dir="auto" className="mb-1 text-3xl font-semibold leading-[1.8]">{poem.title || poem.poet_name}</h1>
         <p dir="auto" className="mb-3 text-lg text-muted"><button type="button" className="rounded px-1 text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-pale-sky-500" onClick={() => { setPanelOpen(true); setReaderTab('related'); }}>{poem.poet_name}</button>{poem.poet_era && <> · {poem.poet_era}</>}</p>
@@ -163,7 +170,7 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
         <div className="mt-3 space-y-1">{sourceButton(poem.source_url, 'bayanPoemSource')}{sourceButton(poem.poet_url, 'bayanPoetSource')}</div>
       </div>
       {description && <details data-poetry-commentary className="mx-auto mb-6 max-w-3xl rounded-xl border border-subtle bg-surface p-3"><summary className="cursor-pointer font-semibold">{t('bayanDescription')}</summary><p dir="auto" className="mt-2 whitespace-pre-wrap break-words leading-loose">{description}</p></details>}
-      <div ref={listElement} data-poetry-poem dir={poem.language === 'ar' ? 'rtl' : 'ltr'} style={{ fontFamily: `"Baglib Poetry ${font}", serif` }} className="mx-auto w-full max-w-4xl font-serif text-2xl leading-[2.4]">
+      <div ref={listElement} data-poetry-poem dir={poem.language === 'ar' ? 'rtl' : 'ltr'} style={{ fontFamily: `"Baglib Poetry ${font}", serif`, fontSize: `${size}px` }} className="mx-auto w-full max-w-4xl font-serif leading-[2.4]" data-poetry-size={size}>
         {rows.slice(offset, offset + 100).map(row => {
           if (row.kind === 'single' && !row.sadr.trim()) return <div key={row.index} aria-hidden="true" className="h-6" />;
           const selected = !!selection && row.index >= selection[0] && row.index <= selection[1];

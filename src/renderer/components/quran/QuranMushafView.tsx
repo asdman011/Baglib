@@ -1,5 +1,6 @@
 'use client';
 
+import { useCtrlWheelZoom } from '../../hooks/useCtrlWheelZoom';
 import { createPortal } from 'react-dom';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, ZoomIn, ZoomOut } from 'lucide-react';
@@ -39,6 +40,9 @@ export function svgWordLocation(element: Element | null): Location | null {
 
 export function QuranMushafView({ controlsHost, page, t, lang, dir, selectedAyah, onSelectAyah, onNavigatePage, onCopyText, cardSource, activeAudio, loading = false, onContextAyah, onExploreAyah }: QuranMushafViewProps) {
   const [zoom, setZoom] = useState(100);
+  // KEY-339: Ctrl+wheel steps the same 60-200% zoom as the buttons.
+  const mushafRoot = useRef<HTMLDivElement>(null);
+  useCtrlWheelZoom(mushafRoot, step => setZoom(value => Math.max(60, Math.min(200, value + step * 10))));
   const surface = useRef<HTMLDivElement>(null);
   const touchOpened = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,7 +134,7 @@ export function QuranMushafView({ controlsHost, page, t, lang, dir, selectedAyah
       <button type="button" onClick={() => setZoom(100)} title={t('quranResetZoom')} className="p-2 text-xs rounded-lg border border-subtle" aria-label={t('quranResetZoom')}>{number(zoom)}%</button>
       <button type="button" onClick={() => onCopyText(page.words.filter(word => word.type !== 'aya-mark').map(word => word.canonicalText || word.textHafs || '').join(' '))} aria-label={t('quranCopyPage')} title={t('quranCopyPage')} className="p-2 rounded-lg border border-subtle"><Copy className="size-4" /></button>
   </>;
-  return <div dir={dir} data-quran-mushaf data-card-script={cardSource?.script} data-card-tafsir={cardSource?.tafsir} className="flex flex-col min-h-0 h-full" style={{ containerType: 'size' }}>
+  return <div ref={mushafRoot} dir={dir} data-quran-mushaf data-card-script={cardSource?.script} data-card-tafsir={cardSource?.tafsir} className="flex flex-col min-h-0 h-full" style={{ containerType: 'size' }}>
     <style>{`
       .mushaf-svg-surface svg { width:100%; height:auto; display:block; }
       .mushaf-svg-surface path { fill:currentColor; transition:fill 120ms ease,filter 120ms ease; }

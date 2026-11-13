@@ -132,7 +132,7 @@ export function ReaderHeader({ title, author, format, dir, page, total, onPage, 
           {modes.map(([mode, label]) => <option key={mode} value={mode}>{t(label)}</option>)}
           {onReflow && <option value="reflow">{t('pdfA11yReflowReader')}</option>}
         </select>
-        {onZoom && <><IconButton size="sm" label={t('quranZoomOut')} onClick={() => onZoom(Math.max(50, zoom - 10))}><ZoomOut className="size-4" /></IconButton><span className="w-9 text-center text-[11px] tabular-nums">{number(zoom)}%</span><IconButton size="sm" label={t('quranZoomIn')} onClick={() => onZoom(Math.min(300, zoom + 10))}><ZoomIn className="size-4" /></IconButton></>}
+        {onZoom && <><IconButton size="sm" label={t('quranZoomOut')} onClick={() => onZoom(Math.max(50, zoom - 10))}><ZoomOut className="size-4" /></IconButton><span data-reader-zoom={zoom} className="w-9 text-center text-[11px] tabular-nums">{number(zoom)}%</span><IconButton size="sm" label={t('quranZoomIn')} onClick={() => onZoom(Math.min(300, zoom + 10))}><ZoomIn className="size-4" /></IconButton></>}
         {onFit && <Button size="sm" variant="secondary" onClick={onFit}>{t('fitPage')}</Button>}
       </div>
       <MarkupBarCompact.Provider value={true}>{markupBar}</MarkupBarCompact.Provider>

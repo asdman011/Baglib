@@ -1,3 +1,28 @@
+## KEY-339: Ctrl+mouse-wheel zoom in every reader - 2026-11-13, Claude Code
+
+Implemented by Claude at the user's request; the user chose Ctrl+wheel. The plain wheel keeps scrolling and turning pages.
+
+**Changes**
+- New `src/renderer/hooks/useCtrlWheelZoom.ts`:
+  - `ctrlWheelStep`: one notch is one step; trackpad pinches add up to a notch; ⌘ works too.
+  - `useCtrlWheelZoom`: a non-passive listener that blocks Chromium's page zoom.
+- `FullPageBookReader.tsx`: the reader's wheel handler checks Ctrl/⌘ first and steps the same zoom as the header buttons, in 10% steps from 50 to 300%:
+  - in the PDF workstation, it uses the workstation's zoom and keeps the point under the pointer in place;
+  - in EPUB and text, it changes the font size.
+- `QuranMushafView.tsx`: steps the 60–200% mushaf zoom.
+- `SunnahView.tsx`: steps the 20–34 px text size.
+- `PoetryReader.tsx`: a new verse size, 18–40 px (was a fixed 24 px), with a slider in reading options and Ctrl+wheel. It is saved in localStorage `baglib.poetry.size` and listed as reader view state in the settings-coverage test.
+- `ReaderHeader.tsx`: `data-reader-zoom` on the zoom readout.
+- `translations.ts`: `bayanFontSize` (ar/en).
+- `tests/reader/ctrl-wheel-zoom.test.ts`: 3 tests.
+- `scripts/ux-journeys-live/main.cjs`: J22, opt-in with `BAGLIB_JOURNEY_IDS=22`. It sends a real Ctrl+mouseWheel with sendInputEvent over the Quran, Sunnah, a poem, the real Arabic PDF and the real English EPUB.
+
+**Verification**
+- J22 passed 8/8 configurations with 0 renderer errors. In every reader, Ctrl+wheel up zoomed in and down zoomed out (Quran 100→110→90, Sunnah 24→26→22, poetry 24→26→22, PDF 100→110→90, EPUB 100→111→89), the plain wheel left the zoom unchanged, and the app's own zoom stayed at 1.
+- Unit tests 3/3; full suite 1952/1952; tsc clean; eslint 0 errors.
+
+**Limit:** the PDF pointer anchoring was not measured live.
+
 ## KEY-337: notes are written beside the text, and noted passages show a marker - 2026-11-13, Claude Code
 
 Implemented by Claude at the user's request.

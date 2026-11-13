@@ -13,6 +13,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { normalizeSunnahSearch } from '../../libs/sunnah/text';
 import { SunnahChapterView } from './SunnahChapterView';
 import { useNoteMarkers } from '../../hooks/useNoteMarkers';
+import { useCtrlWheelZoom } from '../../hooks/useCtrlWheelZoom';
 import './sunnah.css';
 import { SunnahSearch, type SunnahSearchScope, type SunnahSearchTarget } from './SunnahSearch';
 import { SunnahInsightsPanel } from './SunnahInsightsPanel';
@@ -74,6 +75,8 @@ export function SunnahView() {
   const [insights, setInsights] = useState(false);
   const [visibleCount, setVisibleCount] = useState(24);
   const viewport = useRef<HTMLDivElement>(null);
+  // KEY-339: Ctrl+wheel steps the same 20-34px text size as the reading-options slider.
+  useCtrlWheelZoom(viewport, step => setPosition(previous => ({ ...previous, size: Math.max(20, Math.min(34, previous.size + step * 2)) })));
   const more = useRef<HTMLButtonElement>(null);
   const mounted = useRef(false);
   const requestedReference = useRef<SunnahSearchTarget | null>(null);
