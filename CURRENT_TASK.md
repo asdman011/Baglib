@@ -1,3 +1,41 @@
+## KEY-345: Notes tab Export of the filtered result, and Import from Markdown, Obsidian, Word and CSV - 2026-11-13, Claude Code
+
+Implemented by Claude at the user's request.
+
+**Changes**
+- New `src/shared/note-import.ts`:
+  - `importPlainMarkdown`: any Markdown or an Obsidian vault. The title comes from the first heading or the file name. Front-matter tags/aliases and inline #tags are kept. `[[Wikilinks]]` between imported files become `[[note:<id>|…]]`; unknown links stay as written.
+  - `importNotesCsv` and `parseCsv`: BagLib's CSV columns, read RFC 4180.
+  - `importDocxXml`: Heading 1/2 starts a note; a document with no headings becomes one note.
+  - `safeFolderName`: export folder names, Arabic kept.
+- `src/main/ipc/study-notes.ts`:
+  - `study-notes:import-prepare(kind)` opens the picker. It accepts Markdown files, a folder (recursive, skipping `.obsidian` and hidden files, depth and count limits), a .docx (only `word/document.xml` is unpacked, size-capped against zip bombs) or a CSV. It applies size limits and returns a token, the count and the first titles.
+  - `study-notes:import-commit(token, attach)` saves the notes and adds the open folder's study link when given.
+  - The Markdown export takes a `folders` map and writes a folder tree; each name is sanitised and must stay inside the export folder.
+- `src/preload/index.ts`: `exportFolders`, `importPrepare`, `importCommit`.
+- New `src/renderer/components/notes/NotesTransferDialog.tsx`:
+  - **Export dialog:** "Export the N notes shown in “folder” (after filters)". Layout is either folders like the Notes tab (Markdown) or one file (Word via the existing Word options, CSV or LaTeX).
+  - **Import dialog:** four sources, then "Notes found: N" with the first titles, "attached to the open folder", and Import (N).
+  - `folderTarget` maps a surah to `quran:hafs:S:1-last`, a book to `book:<id>`, a poem to `poetry:ashaar:<id>:0:0` and a lecture to `media:<id>:0`.
+- `NotesOverviewView.tsx`:
+  - Export and Import buttons in the header, both acting on `filteredNotes` (folder plus chips plus search);
+  - a folder path per note for the tree export.
+- `translations.ts`: 12 keys in ar and en.
+- `tests/services/note-import.test.ts`: 4 tests.
+- `scripts/ux-journeys-live/main.cjs`: J25, opt-in with `BAGLIB_JOURNEY_IDS=25`. The harness answers the native pickers from the main process, so real files are written and read.
+
+**Verification**
+- J25 passed 8/8 configurations with 0 renderer errors:
+  - In Al-Baqarah, narrowed by search, the scope shows 2. The folder export writes exactly those 2 notes into the Notes folder path; the Sunnah note is not exported.
+  - The CSV export holds only those notes.
+  - An Obsidian vault (2 notes, one in a subfolder, plus `.obsidian`) imports with the count shown. The notes are attached to Al-Baqarah (`quran:hafs:2:1-286`), and the wikilink resolves to a note link. Both appear in the folder.
+  - A generated .docx with 2 headings imports as 2 notes.
+- note-import tests 4/4; full suite 1964/1964; tsc clean; eslint 0 errors.
+
+**Limits**
+- Sunnah chapter folders have no study target, so notes imported there are not attached.
+- The old "Import BagLib Markdown" button stays for BagLib's own round-trip format.
+
 ## KEY-340: select words, hadith text or verses naturally and highlight them in colours - 2026-11-13, Claude Code
 
 Implemented by Claude at the user's request.

@@ -890,6 +890,9 @@ export const API = {
     exportMarkdown: (ids?: string[]) => ipcRenderer.invoke('study-notes:export-markdown', ids) as Promise<{ folder: string; count: number } | null>,
     exportOpenFormat: (ids: string[], format: 'markdown' | 'csv' | 'latex') => ipcRenderer.invoke('study-notes:export-open-format', ids, format) as Promise<{ folder: string; count: number } | null>,
     importMarkdown: () => ipcRenderer.invoke('study-notes:import-markdown') as Promise<{ count: number } | null>,
+    exportFolders: (ids: string[], folders: Record<string, string[]>) => ipcRenderer.invoke('study-notes:export-open-format', ids, 'markdown', folders) as Promise<{ folder: string; count: number } | null>,
+    importPrepare: (kind: 'markdown' | 'folder' | 'docx' | 'csv') => ipcRenderer.invoke('study-notes:import-prepare', kind) as Promise<{ token: string; count: number; titles: string[] } | null>,
+    importCommit: (token: string, attach?: { target: string; label: string }) => ipcRenderer.invoke('study-notes:import-commit', token, attach) as Promise<{ count: number }>,
     exportWord: (ids: string[], language: string, layout?: import('../shared/word-export').WordLayout) => ipcRenderer.invoke('study-notes:export-word', ids, language, layout) as Promise<{ file: string; count: number } | null>,
     onChanged: (callback: () => void) => {
       const listener = () => callback();

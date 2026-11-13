@@ -8,6 +8,7 @@ import {
   FileText,
   FileType,
   Download,
+  Upload,
   Filter,
   LayoutGrid,
   Plus,
@@ -28,6 +29,7 @@ import { SavedCardsPanel } from '../knowledge/SavedCardsPanel';
 import { SrsReviewScreen } from '../knowledge/SrsReviewScreen';
 import { NoteEditorPane } from './NoteEditorPane';
 import { NotesFolderTree, folderName } from './NotesFolderTree';
+import { NotesExportDialog, NotesImportDialog } from './NotesTransferDialog';
 import { folderCounts, folderLabels, noteFolders, notePosition, notesInFolder, childFolders, targetFolder } from '../../../shared/notes-tree';
 import { NoteDetailsPane } from './NoteDetailsPane';
 import { KnowledgeTools } from './KnowledgeTools';
@@ -85,6 +87,7 @@ export const NotesOverviewView: React.FC = () => {
   const [folder, setFolderState] = useState<string | null>(() => { try { return localStorage.getItem(NOTES_FOLDER_KEY) || null; } catch { return null; } });
   const setFolder = (next: string | null) => { setFolderState(next); try { if (next) localStorage.setItem(NOTES_FOLDER_KEY, next); else localStorage.removeItem(NOTES_FOLDER_KEY); } catch { /* remembered for this session only */ } };
   const [showEmpty, setShowEmpty] = useState(false);
+  const [transfer, setTransfer] = useState<'export' | 'import' | null>(null);
   const [tagFilter, setTagFilter] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('');
   const [authorFilter, setAuthorFilter] = useState('');
@@ -311,6 +314,12 @@ export const NotesOverviewView: React.FC = () => {
   const allAuthors = useMemo(() => [...new Set(folderBooks.map(book => book.author).filter(Boolean))].sort(), [folderBooks]);
   const folderTitle = folder ? folderName(folder, t, lang, folderNames, books) : t('notesFolderAll');
   const crumbs = folder ? folder.split('/').map((_, index, parts) => parts.slice(0, index + 1).join('/')) : [];
+  // KEY-345: for the folder-tree export, each note's full Notes path (Quran › 2. Al-Baqarah), as display names.
+  const exportFolders = useMemo(() => Object.fromEntries(filteredNotes.map(note => {
+    const path = noteFolders(note).find(candidate => !folder || candidate === folder || candidate.startsWith(folder + '/')) ?? 'other';
+    const parts = path.split('/');
+    return [note.id, parts.map((_, index) => parts.slice(0, index + 1).join('/')).map(segment => folderName(segment, t, lang, folderNames, books))];
+  })), [filteredNotes, folder, t, lang, folderNames, books]);
 
   // Select first note automatically if none selected on desktop
   const activeNote = useMemo(() => {
@@ -551,6 +560,8 @@ export const NotesOverviewView: React.FC = () => {
                 >
                   <span className="hidden lg:inline">{t('notesExportMarkdown', { count: filteredNotes.length })}</span>
                 </Button>
+                <Button variant="secondary" size="sm" data-notes-export disabled={!filteredNotes.length} onClick={() => setTransfer('export')} icon={<Download className="size-3.5" />}>{t('notesExport')}</Button>
+                <Button variant="secondary" size="sm" data-notes-import onClick={() => setTransfer('import')} icon={<Upload className="size-3.5" />}>{t('notesImport')}</Button>
                 <Button variant="ghost" size="sm" data-notes-import-markdown disabled={formatBusy} onClick={() => void importMarkdown()} title={t('notesImportMarkdown')}>
                   {t('notesImportMarkdown')}
                 </Button>
@@ -672,6 +683,9 @@ export const NotesOverviewView: React.FC = () => {
         </form>
       )}
 
+      <NotesExportDialog open={transfer === 'export'} onClose={() => setTransfer(null)} t={t} folderTitle={folderTitle} ids={filteredNotes.map(note => note.id)} folders={exportFolders}
+        onDone={result => setExported(result)} onWord={() => { setWordNoteId(null); setWordOptions(savedWordLayout()); }} />
+      <NotesImportDialog open={transfer === 'import'} onClose={() => setTransfer(null)} t={t} folder={folder} folderTitle={folderTitle} onDone={count => { setImported(count); void refresh(); }} />
       <Modal open={openExportIds !== null} onClose={() => { if (!formatBusy) setOpenExportIds(null); }} title={t('notesOpenFormats')}>
         <div className="space-y-4 p-4 text-sm leading-relaxed" data-notes-format-options>
           <label className="flex flex-col gap-2">

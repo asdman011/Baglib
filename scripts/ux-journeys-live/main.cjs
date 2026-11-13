@@ -899,6 +899,85 @@ app.on('browser-window-created', (_, win) => {
         } else journey.notes.push('No poetry corpus in this profile; poetry not driven.');
       });
 
+      // J25 (opt-in, BAGLIB_JOURNEY_IDS=25) — KEY-345: Export writes exactly the notes the open folder shows (as folders
+      // like the Notes tab, or one CSV); Import reads an Obsidian vault and a Word file and attaches them to the open folder.
+      // The native file pickers are answered by the harness (main process), so real files are written and read.
+      if (journeysOnly.includes(25)) await journeyRun(25, 'Notes export and import', async () => {
+        const { dialog } = require('electron');
+        const { zipSync, strToU8 } = require('fflate');
+        const stamp = 'x' + config.lang + config.theme + config.width;
+        const work = path.join(profile, 'transfer-' + stamp);
+        fs.mkdirSync(path.join(work, 'out'), { recursive: true });
+        const vault = path.join(work, 'vault');
+        fs.mkdirSync(path.join(vault, '.obsidian'), { recursive: true });
+        fs.writeFileSync(path.join(vault, '.obsidian', 'app.json'), '{}');
+        fs.writeFileSync(path.join(vault, 'الصبر ' + stamp + '.md'), '---\ntags: [patience]\n---\n# الصبر ' + stamp + '\nانظر [[الشكر ' + stamp + ']]');
+        fs.mkdirSync(path.join(vault, 'sub'), { recursive: true });
+        fs.writeFileSync(path.join(vault, 'sub', 'الشكر ' + stamp + '.md'), 'الشكر نصف الإيمان');
+        const p = (text, style) => '<w:p>' + (style ? '<w:pPr><w:pStyle w:val="' + style + '"/></w:pPr>' : '') + '<w:r><w:t>' + text + '</w:t></w:r></w:p>';
+        const docx = path.join(work, 'notes.docx');
+        fs.writeFileSync(docx, zipSync({ 'word/document.xml': strToU8('<w:document><w:body>' + p('فصل ' + stamp, 'Heading1') + p('نص أول') + p('Chapter ' + stamp, 'Heading1') + p('second') + '</w:body></w:document>') }));
+        let answer = null;
+        const realOpen = dialog.showOpenDialog;
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: answer });
+        try {
+          const seed = [['[[quran:hafs:2:255|البقرة ٢٥٥]]\n\nقرآن ' + stamp, []], ['[[quran:hafs:2:286|البقرة ٢٨٦]]\n\nقرآن ثان ' + stamp, []], ['[[sunnah:Bukhari:1:1|البخاري]]\n\nسنة ' + stamp, []]];
+          for (const [content, tags] of seed) await evaluate('window.electronAPI.studyNotes.save(' + JSON.stringify({ title: content.split('\n').pop(), content, aliases: [], tags }) + ')');
+          await ui.nav('notes', '[data-notes-overview]');
+          await ui.click('start from all notes', '[data-notes-breadcrumb] button:not([data-notes-folder-up])');
+          const open = async (label, path) => ui.click(label, (config.width >= 1024 ? '[data-notes-tree-pane] ' : '[data-notes-subfolders] ') + '[data-notes-folder="' + path + '"]');
+          await open('open Quran', 'quran');
+          await open('open Al-Baqarah', 'quran/2');
+          await ui.type('narrow to this run', '[data-notes-list-pane] input[type=search]', stamp);
+          await until('document.querySelectorAll("[data-study-note]").length===2', 40);
+          // Export as folders.
+          await ui.click('open Export', '[data-notes-export]');
+          const scope = await evaluate('document.querySelector("[data-notes-export-scope]").textContent');
+          if (!/2/.test(scope)) throw new Error('scope ' + scope);
+          answer = [path.join(work, 'out')];
+          await ui.click('export as folders', '[data-notes-export-go]');
+          await until('!!document.querySelector("[data-notes-exported]")', 80);
+          const exportRoot = fs.readdirSync(path.join(work, 'out')).map(name => path.join(work, 'out', name))[0];
+          const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]);
+          const written = walk(exportRoot);
+          if (written.length !== 2 || written.some(file => !fs.readFileSync(file, 'utf8').includes(stamp))) throw new Error('exported ' + written.join(', '));
+          journey.notes.push('Folder export: ' + written.map(file => path.relative(exportRoot, file)).join(' | '));
+          // One CSV file.
+          await ui.click('open Export again', '[data-notes-export]');
+          await ui.click('choose one file', '[data-notes-export-layout="file"]');
+          await step('choose CSV', async () => { await evaluate('(()=>{const s=document.querySelector("[data-notes-export-format]");Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,"value").set.call(s,"csv");s.dispatchEvent(new Event("change",{bubbles:true}));})()'); });
+          fs.mkdirSync(path.join(work, 'csv'), { recursive: true });
+          answer = [path.join(work, 'csv')];
+          await ui.click('export the CSV', '[data-notes-export-go]');
+          await pause(800);
+          const csvFile = walk(path.join(work, 'csv')).find(file => file.endsWith('.csv'));
+          const csvText = csvFile && fs.readFileSync(csvFile, 'utf8');
+          if (!csvText || (csvText.match(new RegExp(stamp, 'g')) || []).length < 2 || csvText.includes('سنة ' + stamp)) throw new Error('csv export wrong');
+          // Import an Obsidian vault into Al-Baqarah.
+          await ui.click('open Import', '[data-notes-import]');
+          answer = [vault];
+          await ui.click('choose an Obsidian folder', '[data-notes-import-kind="folder"]');
+          await until('!!document.querySelector("[data-notes-import-found]")', 80);
+          if (!(await evaluate('document.querySelector("[data-notes-import-found]").textContent')).includes('2')) throw new Error('vault count');
+          if (!await has('[data-notes-import-attach]')) throw new Error('no attach notice');
+          await ui.click('import here', '[data-notes-import-go]');
+          await until('[...document.querySelectorAll("[data-study-note]")].filter(e=>e.textContent.includes("' + stamp + '")).length===4', 80);
+          const imported = (await evaluate('window.electronAPI.studyNotes.list()')).filter(note => note.title.includes('الصبر ' + stamp));
+          if (!imported[0]?.content.includes('quran:hafs:2:1-286') || !/\[\[note:[\w-]+\|الشكر/.test(imported[0].content)) throw new Error('vault note ' + JSON.stringify(imported[0]?.content));
+          // Import a Word document (two headings → two notes).
+          await ui.click('open Import again', '[data-notes-import]');
+          answer = [docx];
+          await ui.click('choose a Word document', '[data-notes-import-kind="docx"]');
+          await until('!!document.querySelector("[data-notes-import-found]")', 80);
+          await ui.click('import it', '[data-notes-import-go]');
+          await until('window.electronAPI.studyNotes.list().then(n=>n.filter(x=>x.title==="فصل ' + stamp + '"||x.title==="Chapter ' + stamp + '").length===2)', 80);
+          await shot('J25-imported');
+        } finally {
+          dialog.showOpenDialog = realOpen;
+          fs.rmSync(work, { recursive: true, force: true });
+        }
+      });
+
       // J20 (opt-in, BAGLIB_JOURNEY_IDS=20) — KEY-335: a real mouse drag over many PDF lines grows smoothly (no jumps to the
       // page start or end) and ends as one connected block per line, in an Arabic and an English PDF.
       if (journeysOnly.includes(20)) await journeyRun(20, 'Drag-select many lines in a PDF', async () => {
