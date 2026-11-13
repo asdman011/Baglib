@@ -800,6 +800,7 @@ export const API = {
     subtitles: (id, choose = false) => ipcRenderer.invoke('lectures:subtitles', id, choose),
     list: () => ipcRenderer.invoke('lectures:list'),
     add: () => ipcRenderer.invoke('lectures:add'),
+    addPaths: paths => ipcRenderer.invoke('lectures:add-paths', paths),
     remove: id => ipcRenderer.invoke('lectures:remove', id),
     update: (id, changes) => ipcRenderer.invoke('lectures:update', id, changes),
     progress: id => ipcRenderer.invoke('lectures:progress', id),

@@ -11,7 +11,7 @@ describe('Digital File Type Detection & Validation Service (Story 6.1 / KEY-78)'
   describe('Supported Formats & Configuration', () => {
     it('returns the canonical list of supported formats', () => {
       const formats = validator.getSupportedFormats();
-      assert.deepStrictEqual(formats, ['PDF', 'EPUB', 'MOBI', 'AZW3', 'HTML', 'TXT']);
+      assert.deepStrictEqual(formats, ['PDF', 'EPUB', 'MOBI', 'AZW3', 'HTML', 'TXT', 'mp4', 'm4v', 'mov', 'mkv', 'webm', 'mp3', 'm4a', 'ogg', 'opus', 'wav']);
     });
 
     it('identifies supported extensions and format names correctly', () => {
@@ -26,7 +26,7 @@ describe('Digital File Type Detection & Validation Service (Story 6.1 / KEY-78)'
       // Unsupported formats
       assert.strictEqual(validator.isFormatSupported('.exe'), false);
       assert.strictEqual(validator.isFormatSupported('.docx'), false);
-      assert.strictEqual(validator.isFormatSupported('.mp3'), false);
+      assert.strictEqual(validator.isFormatSupported('.wma'), false);
       assert.strictEqual(validator.isFormatSupported('.zip'), false);
     });
   });

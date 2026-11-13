@@ -9,6 +9,8 @@ import { consumeLecture, LECTURE_OPEN_EVENT, lectureTarget } from '../../utils/l
 import { studyLinks } from '../../../shared/study-notes';
 import { passageNote } from '../actions/passage-actions';
 import { clockTime, type Lecture } from '../../../shared/lectures';
+import { splitLectureDrop } from '../../utils/book-drop';
+import { resolveDroppedFilePath } from '../../utils/file-path-helper';
 import { localAssetUrl } from '../../utils/file-path-helper';
 import { useCompanionContext } from '../../utils/companion-context';
 
@@ -151,7 +153,9 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
 
 /** Local lectures and talks. Audiobooks stay in the reader, paired with their text. */
 export function LecturesView() {
-  const { t, dir } = useWorkspace();
+  const { t, dir, refreshBooks } = useWorkspace();
+  const [dropError, setDropError] = useState(false);
+  const dropping = useRef(false);
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [selected, setSelected] = useState<{ id: string; seek: number | null } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -163,15 +167,35 @@ export function LecturesView() {
     return () => window.removeEventListener(LECTURE_OPEN_EVENT, open);
   }, [api]);
   const lecture = lectures.find(item => item.id === selected?.id);
-  const add = () => { void api.add().then(added => { setLectures(current => [...current, ...added]); if (added[0]) setSelected({ id: added[0].id, seek: null }); }).catch(() => setFailed(true)); };
+  const acceptAdded = async (added: Lecture[]) => {
+    setLectures(await api.list());
+    if (added[0]) setSelected({ id: added[0].id, seek: null });
+    await refreshBooks();
+  };
+  const add = () => { void api.add().then(acceptAdded).catch(error => { if (String(error).includes('unsupported-media')) setDropError(true); else setFailed(true); }); };
+  const drop = async (event: React.DragEvent) => {
+    event.preventDefault(); event.stopPropagation();
+    if (dropping.current) return;
+    dropping.current = true;
+    setDropError(false);
+    try {
+      const paths = await Promise.all(Array.from(event.dataTransfer.files).map(resolveDroppedFilePath));
+      const split = splitLectureDrop(paths);
+      if (split.unsupported.length || split.books.length || !split.media.length) { setDropError(true); return; }
+      await acceptAdded(await api.addPaths(split.media));
+    } catch { setDropError(true); }
+    finally { dropping.current = false; }
+  };
   const remove = (id: string) => { if (window.confirm(t('lectureRemoveConfirm'))) void api.remove(id).then(() => { setLectures(current => current.filter(item => item.id !== id)); setSelected(null); }).catch(() => setFailed(true)); };
 
-  return <div dir={dir} className="flex-1 min-h-0 overflow-auto bg-canvas p-4 sm:p-6">
+  return <div dir={dir} data-lecture-drop onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={event => void drop(event)} className="flex-1 min-h-0 overflow-auto bg-canvas p-4 sm:p-6">
     <div className="mx-auto max-w-6xl space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3"><Clapperboard className="size-6 text-pale-sky-600 shrink-0 mt-1" /><div><h1 className="font-display text-xl font-bold leading-relaxed">{t('lecturesTitle')}</h1><p className="text-xs text-muted leading-relaxed">{t('lecturesIntro')}</p></div></div>
         <button type="button" className={button} onClick={add}><Plus className="size-4" />{t('lectureAdd')}</button>
       </header>
+      {dropError && <p data-lecture-drop-error role="alert" className="text-sm leading-relaxed">{t('lectureUnsupportedDrop')}</p>}
+      <p className="text-xs text-muted">{t('lectureDropHint')}</p>
       {failed && <p role="alert" className="text-sm">{t('pathwayError')}</p>}
       <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <ul className="space-y-1 min-w-0 max-h-64 lg:max-h-[65vh] overflow-y-auto overscroll-contain rounded-xl border border-subtle p-2">{lectures.length === 0 && <li className="p-3 text-sm leading-relaxed text-muted">{t('lecturesEmpty')}</li>}{lectures.map(item => <li key={item.id} className="flex items-center gap-1">

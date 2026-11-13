@@ -1,5 +1,10 @@
 export const translations = {
   ar: {
+    // KEY-342 lecture imports.
+    lectureDropAdded: "تمت إضافة {count} محاضرة",
+    lectureUnsupportedDrop: "صيغة الوسائط غير مدعومة أو الملف غير متاح. اختر MP4 أو M4V أو MOV أو MKV أو WebM أو MP3 أو M4A أو OGG أو OPUS أو WAV.",
+    lectureDropHint: "اسحب ملفات الفيديو أو الصوت إلى هنا لإضافتها إلى المكتبة والمحاضرات",
+
     // KEY-343 subtitles and transcript.
     lectureLoadSubtitles: "تحميل نص مصاحب…",
     lectureTranscriptSearch: "البحث في التفريغ النصي",
@@ -5274,6 +5279,11 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    // KEY-342 lecture imports.
+    lectureDropAdded: "Added {count} lectures",
+    lectureUnsupportedDrop: "Unsupported media format or unavailable file. Choose MP4, M4V, MOV, MKV, WebM, MP3, M4A, OGG, OPUS or WAV.",
+    lectureDropHint: "Drop video or audio files here to add them to Library and Lectures",
+
     // KEY-343 subtitles and transcript.
     lectureLoadSubtitles: "Load subtitles…",
     lectureTranscriptSearch: "Search transcript",

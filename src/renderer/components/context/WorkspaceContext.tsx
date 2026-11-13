@@ -1,6 +1,8 @@
 'use client';
 
 import { ToastProvider } from '../ui/Toast';
+import { isLectureFormat } from '../../../shared/lectures';
+import { openLecture } from '../../utils/lecture-navigation';
 import { openStudyNote } from '../../utils/study-navigation';
 import { matchesShortcut } from '../actions/shortcuts';
 import React, { createContext, useContext, useState, useEffect } from 'react';
@@ -606,6 +608,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const openBookForReading = (book: BookItem) => {
+    if (book.workType === 'lecture' && book.filePath && isLectureFormat(book.digitalFormat)) {
+      openLecture({ id: book.id, seconds: 0 });
+      setViewMode('lectures');
+      return;
+    }
     try {
       removeTempSelectionOverlay();
       clearActiveSelectionHighlight();

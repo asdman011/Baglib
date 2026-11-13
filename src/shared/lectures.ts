@@ -19,6 +19,7 @@ export interface LecturesAPI {
   subtitles(id: string, choose?: boolean): Promise<{ path: string; cues: import('./subtitles').SubtitleCue[] } | null>;
   list(): Promise<Lecture[]>;
   add(): Promise<Lecture[]>;
+  addPaths(paths: string[]): Promise<Lecture[]>;
   remove(id: string): Promise<void>;
   update(id: string, changes: { title?: string; sections?: LectureSection[] }): Promise<Lecture>;
   progress(id: string): Promise<LectureProgress | null>;
@@ -51,3 +52,5 @@ export function validProgress(value: unknown): LectureProgress {
   if (typeof progress?.position !== 'number' || !Number.isFinite(progress.position) || progress.position < 0 || !PLAYBACK_RATES.includes(progress.rate as typeof PLAYBACK_RATES[number])) throw new Error('invalid-request');
   return { position: progress.position, rate: progress.rate as number, completed: progress.completed === true };
 }
+
+export const isLectureFormat = (format: string | undefined): boolean => LECTURE_EXTENSIONS.some(extension => extension.slice(1) === format?.toLowerCase());

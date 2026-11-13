@@ -940,7 +940,10 @@ export const LibraryGridView: React.FC = () => {
       const paths: string[] = [];
       for (const file of files) paths.push(await resolveDroppedFilePath(file));
       const outcome = await routeBookDrop(paths, window.electronAPI);
-      if (outcome.kind === 'batch') {
+      await refreshBooks();
+      if (outcome.kind === 'media') {
+        setDropNotice({ text: t('lectureDropAdded', { count: outcome.count }), error: false });
+      } else if (outcome.kind === 'batch') {
         setDroppedImportPaths(outcome.paths);
         setIsImportWizardOpen(true);
       } else if (!outcome.result.success) {
@@ -951,8 +954,8 @@ export const LibraryGridView: React.FC = () => {
         await refreshBooks();
         setDropNotice({ text: t('bookAddedFromDrop', { title: outcome.result.extractedMetadata?.title || outcome.result.fileName }), error: false });
       }
-    } catch {
-      setDropNotice({ text: t('singleDropFailed'), error: true });
+    } catch (error) {
+      setDropNotice({ text: t(error instanceof Error && error.message.includes('unsupported-media') ? 'lectureUnsupportedDrop' : 'singleDropFailed'), error: true });
     } finally {
       dropImporting.current = false;
       setIsImportingBook(false);

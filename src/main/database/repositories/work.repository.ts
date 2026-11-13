@@ -176,6 +176,7 @@ export class SqliteWorkRepository implements IWorkRepository {
       courseOrEventTitle: meta.courseOrEventTitle || undefined,
       durationMinutes: meta.durationMinutes !== undefined ? Number(meta.durationMinutes) : undefined,
       recordingUrl: meta.recordingUrl || undefined,
+      recordingDate: meta.recordingDate || undefined,
 
       // Periodicals & magazines
       periodicalTitle: meta.periodicalTitle || undefined,
@@ -582,6 +583,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         courseOrEventTitle: data.courseOrEventTitle,
         durationMinutes: data.durationMinutes,
         recordingUrl: data.recordingUrl,
+        recordingDate: data.recordingDate,
         periodicalTitle: data.periodicalTitle,
         issueNumber: data.issueNumber,
         volumeNumber: data.volumeNumber !== undefined && data.volumeNumber !== null && String(data.volumeNumber).trim() !== '' ? data.volumeNumber : undefined,
@@ -796,6 +798,7 @@ export class SqliteWorkRepository implements IWorkRepository {
         courseOrEventTitle: data.courseOrEventTitle,
         durationMinutes: data.durationMinutes,
         recordingUrl: data.recordingUrl,
+        recordingDate: data.recordingDate,
         periodicalTitle: data.periodicalTitle,
         issueNumber: data.issueNumber,
         volumeNumber: data.volumeNumber !== undefined && data.volumeNumber !== null && String(data.volumeNumber).trim() !== '' ? data.volumeNumber : undefined,

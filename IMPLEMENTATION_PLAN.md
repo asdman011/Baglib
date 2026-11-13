@@ -2,6 +2,9 @@
 
 ## Recent Agent Updates
 
+- [2026-11-13T22:50:08.930292+02:00, Codex] KEY-342: Imported audio/video as canonical Work / Edition / Source records, extracted embedded metadata with filename fallback, migrated legacy lecture settings, and routed video drops in Library and Lectures. Only approved media DigitalFormat values were added; existing document lecture Works still open in the reader. Native acceptance passes; final full suites 2050/2050 twice after ten Notes mock fixes (targeted10/10); types pass, lint0errors. Exact files and evidence in CURRENT_TASK.md and docs/agent-ops/reports/KEY-342.md. Scoped publication authorized; unrelated agent work preserved.
+
+
 - [2026-11-13T22:50:08.930292+02:00, Codex] KEY-343: Added bounded SRT/VTT loading, persisted subtitle selection, captions controls and a searchable clickable transcript with active cues and note targets. Arabic and English use centralized translations and RTL/LTR layouts. Finished the parser and tests inherited from Claude Code. Native acceptance passes; final full suites 2050/2050 twice after ten Notes mock fixes (targeted10/10); types pass, lint0errors. Exact files and evidence in CURRENT_TASK.md and docs/agent-ops/reports/KEY-343.md. Scoped publication authorized; unrelated agent work preserved.
 
 

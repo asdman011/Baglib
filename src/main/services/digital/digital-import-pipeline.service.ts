@@ -1,3 +1,4 @@
+import { LECTURE_EXTENSIONS } from '../../../shared/lectures';
 import { cancelledImport, summarizeImports } from '../../../shared/import-batch';
 import { errorMessage, errorCode } from '../../../shared/errors';
 import path from 'path';
@@ -304,9 +305,10 @@ export class DigitalImportPipelineService {
         : (extracted.authors && extracted.authors.length > 0 ? extracted.authors : [defaultUnknownAuthor]);
 
       const primaryAuthor = authorList[0];
+      const mediaImport = (LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(filePath).toLowerCase());
       const contributors = authorList.map((name) => ({
         name,
-        role: 'author' as const,
+        role: mediaImport ? 'speaker' as const : 'author' as const,
       }));
 
       // Merge tags
@@ -366,8 +368,10 @@ export class DigitalImportPipelineService {
         fileHash,
         fileSize: this.formatBytes(validation.fileSizeBytes),
         coverImage: extracted.coverPath || extracted.coverDataUrl,
-        workType: 'book',
-        workTypeId: 'wt-book',
+        workType: mediaImport ? 'lecture' : 'book',
+        workTypeId: mediaImport ? 'wt-lecture' : 'wt-book',
+        speaker: mediaImport ? primaryAuthor : undefined,
+        recordingDate: extracted.recordingDate,
       };
 
       // 6. Execute atomic insertion via repository

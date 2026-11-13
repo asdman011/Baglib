@@ -1,3 +1,4 @@
+import { LECTURE_EXTENSIONS } from '../../../shared/lectures';
 import { errorMessage } from '../../../shared/errors';
 import fs from 'fs';
 import path from 'path';
@@ -17,6 +18,7 @@ const HEADER_PROBE_SIZE = 4096;
  * Supported digital formats and their standard configurations.
  */
 const SUPPORTED_EXTENSIONS_MAP: Record<string, { format: DigitalFormat; mimeType: string }> = {
+  ...Object.fromEntries(LECTURE_EXTENSIONS.map(extension => [extension, { format: extension.slice(1) as DigitalFormat, mimeType: ['.mp3', '.m4a', '.ogg', '.opus', '.wav'].includes(extension) ? 'audio/' + (extension === '.mp3' ? 'mpeg' : extension.slice(1)) : 'video/' + extension.slice(1) }])),
   '.pdf': { format: 'PDF', mimeType: 'application/pdf' },
   '.epub': { format: 'EPUB', mimeType: 'application/epub+zip' },
   '.mobi': { format: 'MOBI', mimeType: 'application/x-mobipocket-ebook' },
@@ -43,7 +45,7 @@ export class DigitalFileValidatorService {
    * Returns list of all supported canonical digital formats.
    */
   public getSupportedFormats(): DigitalFormat[] {
-    return ['PDF', 'EPUB', 'MOBI', 'AZW3', 'HTML', 'TXT'];
+    return ['PDF', 'EPUB', 'MOBI', 'AZW3', 'HTML', 'TXT', ...LECTURE_EXTENSIONS.map(extension => extension.slice(1) as DigitalFormat)];
   }
 
   /**
@@ -261,6 +263,16 @@ export class DigitalFileValidatorService {
     hint?: { isEncrypted?: boolean; title?: string; charset?: string };
   } | null {
     if (buf.length < 4) return null;
+    const extension = hintExtension ?? '';
+    if ((LECTURE_EXTENSIONS as readonly string[]).includes(extension)) {
+      const iso = ['.mp4', '.m4v', '.mov', '.m4a'].includes(extension) && buf.toString('latin1', 4, 8) === 'ftyp';
+      const ebml = ['.mkv', '.webm'].includes(extension) && buf.readUInt32BE(0) === 0x1a45dfa3;
+      const mp3 = extension === '.mp3' && (buf.toString('latin1', 0, 3) === 'ID3' || (buf[0] === 255 && (buf[1] & 0xe0) === 0xe0));
+      const ogg = ['.ogg', '.opus'].includes(extension) && buf.toString('ascii', 0, 4) === 'OggS';
+      const wav = extension === '.wav' && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WAVE';
+      if (iso || ebml || mp3 || ogg || wav) return { ...SUPPORTED_EXTENSIONS_MAP[extension], signature: 'media-container' };
+      return null;
+    }
 
     // 1. PDF Signature: %PDF-
     // PDF spec allows up to 1024 leading bytes before %PDF- header

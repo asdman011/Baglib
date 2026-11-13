@@ -31,3 +31,18 @@ it('surfaces inaccessible single drops instead of silently importing them', asyn
     importDigitalFile: async () => { throw new Error('Must not import an unreadable file'); },
   }), /unavailable/);
 });
+
+
+it('routes media-only and mixed book/media drops and reports unsupported audio', async () => {
+  const calls: string[][] = [];
+  let books = 0;
+  const api = {
+    lectures: { addPaths: async (paths: string[]) => { calls.push(paths); return []; } },
+    discoverDigitalFiles: async (paths: string[]) => ({ files: paths.map(path => ({ path })), errors: [] }),
+    importDigitalFile: async (options: { filePath: string }) => { books++; return { success: true, fileName: 'book.pdf', filePath: options.filePath, fileSizeBytes: 1 }; },
+  };
+  assert.equal((await routeBookDrop(['D:/درس.mp4', 'D:/talk.WEBM'], api)).kind, 'media');
+  assert.equal((await routeBookDrop(['D:/book.pdf', 'D:/lecture.mp3'], api)).kind, 'single');
+  assert.deepEqual(calls, [['D:/درس.mp4', 'D:/talk.WEBM'], ['D:/lecture.mp3']]); assert.equal(books, 1);
+  await assert.rejects(routeBookDrop(['D:/real.wma'], api), /unsupported-media/);
+});

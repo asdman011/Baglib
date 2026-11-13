@@ -20,6 +20,7 @@ const operational = new Set([
   'courses.coursera.v1', // Catalog snapshot.
   'pathways.templates.v1', // User-authored templates.
   'media.lecture-subtitles.v1', // Per-lecture subtitle paths, selected inside the player (KEY-343).
+  'media.lectures-works.v1', // Idempotent conversion marker from legacy lecture settings (KEY-342).
   'media.lectures.v1', // Lecture content records.
   'dashboard.scratchpad.draft.v1', // Unsaved note content.
   'islamic.continue.v1', // Last reading positions.

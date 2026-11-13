@@ -1,3 +1,44 @@
+KEY-343 publication ? 2026-11-13T22:50:55.797300+02:00 ? Codex: 4ad4c2df0e099a8e790ef6ac6dae98d8d213f98f committed and successfully pushed normally to origin/feature/library-domain; full corrected verification2050/2050.
+
+## KEY-342 verified handoff ? 2026-11-13T22:50:08.930292+02:00 ? Codex
+
+Imported audio/video as canonical Work / Edition / Source records, extracted embedded metadata with filename fallback, migrated legacy lecture settings, and routed video drops in Library and Lectures. Only approved media DigitalFormat values were added; existing document lecture Works still open in the reader.
+
+Real import/drop acceptance: 4/4 language/width configurations, zero renderer errors. Both original MP4s, Library/Lectures drop, filename metadata, mixed real Arabic/English PDFs and unsupported real WMA checks passed. Tagged/container/chapter edge fixtures remained disposable. Both original real Arabic/English MP4s were read in place and never modified. Filename fallback preserves the Arabic title/speaker; the English filename supplies the title and has no speaker. No real files cover other containers, embedded tags, chapters or three-member series; generated fixtures cover those gaps only. All live profiles were deleted and only PNG screenshots remain in .baglib-data/KEY-34x-evidence/.
+
+Verification: TypeScript passed; scoped lint zero errors (15 existing warnings). Three full-suite invocations used --test-concurrency=2: first 1989/1999 exposed ten Notes mocks missing the new series API; corrected in KEY-344, targeted 10/10 passed; second and third full suites both passed 2050/2050. Concurrent other-agent tests explain the additional 51 enumerated tests. Verification covers the corrected shared worktree. No Jira changes. Publication authorized to origin/feature/library-domain, one scoped commit per task.
+
+Exact files:
+
+- `src/main/services/lectures/media-sections.ts`
+- `src/main/services/lectures/media-metadata.ts`
+- `src/main/services/lectures/lecture-library.ts`
+- `src/main/services/digital/digital-file-validator.service.ts`
+- `src/main/services/digital/ebook-metadata-extractor.service.ts`
+- `src/main/services/digital/digital-import-pipeline.service.ts`
+- `src/main/database/repositories/work.repository.ts`
+- `src/shared/types/work.ts`
+- `src/shared/types/digital-file.ts`
+- `src/shared/lectures.ts`
+- `src/preload/index.ts`
+- `src/main/ipc/lectures.ts`
+- `src/renderer/utils/book-drop.ts`
+- `src/renderer/components/library/LibraryGridView.tsx`
+- `src/renderer/components/context/WorkspaceContext.tsx`
+- `src/renderer/components/lectures/LecturesView.tsx`
+- `src/renderer/translations.ts`
+- `tests/ui/settings-directory-coverage.test.ts`
+- `tests/services/lecture-media.test.ts`
+- `tests/services/digital-file-validator.test.ts`
+- `tests/ui/book-drop.test.ts`
+- `docs/ADR-014-lecture-works.md`
+- `docs/data-dictionary.md`
+- `scripts/wave6-live/run.mjs`
+- `scripts/wave6-live/main.cjs`
+- `scripts/wave6-live/media-checks.cjs`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
 ## KEY-343 verified handoff ? 2026-11-13T22:50:08.930292+02:00 ? Codex
 
 Added bounded SRT/VTT loading, persisted subtitle selection, captions controls and a searchable clickable transcript with active cues and note targets. Arabic and English use centralized translations and RTL/LTR layouts. Finished the parser and tests inherited from Claude Code.

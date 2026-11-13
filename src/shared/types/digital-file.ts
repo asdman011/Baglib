@@ -78,6 +78,8 @@ export interface BatchValidationSummary {
 }
 
 export interface ExtractedEbookMetadata {
+  speaker?: string;
+  recordingDate?: string;
   coverPath?: string;
   title?: string;
   authors: string[];

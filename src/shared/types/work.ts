@@ -34,7 +34,9 @@ export type DigitalFormat =
   | 'HTML'
   | 'TXT'
   | 'MD'
-  | 'DOCX';
+  | 'DOCX'
+  | 'mp4' | 'm4v' | 'mov' | 'mkv' | 'webm'
+  | 'mp3' | 'm4a' | 'ogg' | 'opus' | 'wav';
 export type BookCondition = 'جديدة' | 'ممتازة' | 'جيدة' | 'مستعملة' | 'أثرية/قديمة';
 export type BookType = 'digital' | 'physical' | 'hybrid';
 export type ReadingStatus = 'unread' | 'reading' | 'completed' | 'paused' | 'abandoned';
@@ -162,6 +164,7 @@ export interface BookItem {
   courseOrEventTitle?: string;
   durationMinutes?: number;
   recordingUrl?: string;
+  recordingDate?: string;
 
   // 4. Periodicals & Magazines
   periodicalTitle?: string;
@@ -272,6 +275,7 @@ export interface BookItemInput {
   courseOrEventTitle?: string;
   durationMinutes?: number;
   recordingUrl?: string;
+  recordingDate?: string;
   periodicalTitle?: string;
   issueNumber?: string | number;
   volumeNumber?: string | number;

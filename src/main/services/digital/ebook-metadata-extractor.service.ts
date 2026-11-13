@@ -1,3 +1,5 @@
+import { LECTURE_EXTENSIONS } from '../../../shared/lectures';
+import { readLectureMetadata } from '../lectures/media-metadata';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
@@ -31,6 +33,7 @@ export class EbookMetadataExtractorService {
    */
   public async extract(filePath: string, formatHint?: DigitalFormat): Promise<ExtractedEbookMetadata> {
     const ext = path.extname(filePath).toLowerCase();
+    if ((LECTURE_EXTENSIONS as readonly string[]).includes(ext)) return readLectureMetadata(filePath);
     const resolvedFormat: DigitalFormat = formatHint || this.detectFormatFromExtension(ext);
 
     let meta: Partial<ExtractedEbookMetadata> = {};

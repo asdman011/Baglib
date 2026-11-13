@@ -125,9 +125,9 @@ Stores filesystem and storage integrity metadata for digital files.
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `source_id` | TEXT | PRIMARY KEY, FK(`source.id`) | 1-to-1 link with digital `source` |
-| `file_path` | TEXT | NULL | Absolute filesystem path to the ebook file |
+| `file_path` | TEXT | NULL | Absolute filesystem path to a digital book or lecture media file |
 | `file_hash` | TEXT | NULL | SHA-256 (64 chars) or verified LibGen MD5 (32 chars) |
-| `file_format` | TEXT | NOT NULL | Ebook format (`PDF`, `EPUB`, `MOBI`, `AZW3`, `DJVU`, `TXT`) |
+| `file_format` | TEXT | NULL permitted | Digital format including existing book formats and approved lecture media (`mp4`, `m4v`, `mov`, `mkv`, `webm`, `mp3`, `m4a`, `ogg`, `opus`, `wav`), see ADR-014 |
 | `file_size_bytes` | INTEGER | NULL | Physical file size in bytes |
 | `storage_state` | TEXT | DEFAULT 'available' | Health status: `'available'`, `'missing'`, `'unmounted'`, `'corrupted'`, `'duplicate'` |
 | `last_verified_at`| TEXT | NULL | ISO-8601 timestamp of last storage health check |
@@ -589,3 +589,10 @@ Approved 2026-11-12. Migration 027 introduces `task_list(id TEXT PRIMARY KEY, na
 `recurrence` is JSON with kind daily/weekdays/weekly/monthly/yearly/custom, interval 1–365 with days/weeks/months for custom rules, optional weekday numbers 0–6, and anchorDay 1–31/anchorMonth 0–11 for month-end retention. `reminder_at` is local datetime, while created_at/updated_at/completed_at remain UTC ISO action timestamps. New indexes are `idx_study_task_list(list_id, sort_order)` and `idx_study_task_reminder(reminder_at) WHERE status='open' AND reminder_at IS NOT NULL`. The original due/start indexes remain.
 
 `app_settings['planner.reminder-delivery.v1']` maps task IDs to their delivered reminder_at values. This durable delivery ledger supplements existing notifications.history.v1, whose study records can carry an optional taskId. User-defined subject text and canonical reference labels remain unnormalized in storage. All new planner data stays separate from the library domain model.
+
+
+## Lecture media metadata — KEY-342
+
+Lecture imports reuse Work → Edition → Source with work_type_id `wt-lecture`. The existing `work.metadata_json` stores `speaker` and `recordingDate`, using the approved LectureSpecificMetadata contract. The contributor relation uses role `speaker`. Recording dates are distinct from edition.publication_year. Canonical titles/names retain their original script and diacritics. No table or column is added for media formats.
+
+Operational app_settings records include media.lectures.v1 for legacy lecture section annotations, media.lectures-works.v1 for the transactional one-time conversion marker, and media.lecture-subtitles.v1 for per-lecture chosen subtitle paths. All remain keyed by the original lecture/Work id. See ADR-014.

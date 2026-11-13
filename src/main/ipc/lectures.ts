@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
+import { stat } from 'node:fs/promises';
 import { getDatabase } from '../database/connection';
 import { LectureLibrary } from '../services/lectures/lecture-library';
 import { LECTURE_EXTENSIONS, validProgress, validSections } from '../../shared/lectures';
@@ -34,13 +35,23 @@ export function registerLectureIpc(): void {
     }
     return new LectureSubtitles(getDatabase()).load(lecture.id, lecture.path, selected);
   });
+  ipcMain.handle('lectures:add-paths', async (event, paths: unknown) => {
+    const service = library(event);
+    if (!Array.isArray(paths) || paths.length > 500) throw new Error('invalid-request');
+    for (const file of paths) {
+      if (typeof file !== 'string' || !path.isAbsolute(file) || !(LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(file).toLowerCase()) || !(await stat(file)).isFile()) throw new Error('unsupported-media');
+    }
+    return service.add(paths);
+  });
   ipcMain.handle('lectures:list', event => library(event).list());
   ipcMain.handle('lectures:add', async event => {
     const service = library(event);
     const options = { properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[], filters: [{ name: 'Media', extensions: LECTURE_EXTENSIONS.map(extension => extension.slice(1)) }] };
     const owner = BrowserWindow.fromWebContents(event.sender);
     const choice = await (owner ? dialog.showOpenDialog(owner, options) : dialog.showOpenDialog(options));
-    return choice.canceled ? [] : service.add(choice.filePaths);
+    if (choice.canceled) return [];
+    if (choice.filePaths.some(file => !(LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(file).toLowerCase()))) throw new Error('unsupported-media');
+    return service.add(choice.filePaths);
   });
   ipcMain.handle('lectures:remove', (event, id: unknown) => library(event).remove(lectureId(id)));
   ipcMain.handle('lectures:update', (event, id: unknown, changes: { title?: unknown; sections?: unknown }) => {

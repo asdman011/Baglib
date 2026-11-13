@@ -142,3 +142,177 @@ export async function readSections(filename: string): Promise<LectureSection[]> 
     return [];
   } finally { await file.close(); }
 }
+
+
+export interface MediaTags { title?: string; speaker?: string; recordingDate?: string }
+
+/** ID3 text frames share the same encoding rules as chapter titles. */
+export function id3Tags(head: Buffer): MediaTags {
+  const tags: MediaTags = {};
+  if (head.length < 10 || head.toString('latin1', 0, 3) !== 'ID3' || ![3, 4].includes(head[3])) return tags;
+  const end = Math.min(head.length, 10 + syncsafe(head, 6));
+  for (let at = 10; at + 10 <= end;) {
+    const id = head.toString('latin1', at, at + 4);
+    const size = head[3] === 4 ? syncsafe(head, at + 4) : head.readUInt32BE(at + 4);
+    if (!/^[A-Z0-9]{4}$/u.test(id) || size < 1 || at + 10 + size > end) break;
+    const field = ({ TIT2: 'title', TPE1: 'speaker', TDRC: 'recordingDate', TYER: 'recordingDate' } as const)[id as 'TIT2'];
+    if (field && !(id === 'TYER' && tags.recordingDate)) {
+      const bytes = head.subarray(at + 11, at + 10 + size);
+      if (![1, 2].includes(head[at + 10]) || bytes.length % 2 === 0) tags[field] = text(bytes, head[at + 10]).trim().slice(0, 1000) || undefined;
+    }
+    at += 10 + size;
+  }
+  return tags;
+}
+
+function mp4Children(buffer: Buffer): { type: string; body: Buffer }[] {
+  const items: { type: string; body: Buffer }[] = [];
+  for (let at = 0; at + 8 <= buffer.length;) {
+    let size = buffer.readUInt32BE(at);
+    const header = size === 1 ? 16 : 8;
+    if (size === 1) { if (at + 16 > buffer.length) break; size = Number(buffer.readBigUInt64BE(at + 8)); }
+    if (size === 0) size = buffer.length - at;
+    if (!Number.isSafeInteger(size) || size < header || at + size > buffer.length) break;
+    items.push({ type: buffer.toString('latin1', at + 4, at + 8), body: buffer.subarray(at + header, at + size) });
+    at += size;
+  }
+  return items;
+}
+
+/** FullBox meta has four version/flags bytes before its ilst children. */
+export function mp4Tags(moov: Buffer): MediaTags {
+  const tags: MediaTags = {};
+  const udta = mp4Children(moov).find(item => item.type === 'udta');
+  const meta = mp4Children(udta?.body ?? Buffer.alloc(0)).find(item => item.type === 'meta');
+  const ilst = mp4Children(meta?.body.subarray(4) ?? Buffer.alloc(0)).find(item => item.type === 'ilst');
+  for (const item of mp4Children(ilst?.body ?? Buffer.alloc(0))) {
+    const field = ({ '\xa9nam': 'title', '\xa9ART': 'speaker', '\xa9day': 'recordingDate' } as const)[item.type as '\xa9nam'];
+    const data = mp4Children(item.body).find(child => child.type === 'data')?.body;
+    if (field && data && data.length >= 8) {
+      const encoding = data.readUInt32BE(0) & 0xffffff;
+      tags[field] = (encoding === 2 ? text(data.subarray(8), 2) : data.toString('utf8', 8)).replace(/\0+$/u, '').trim().slice(0, 1000) || undefined;
+    }
+  }
+  return tags;
+}
+
+function ebmlChildren(buffer: Buffer): { id: number; body: Buffer }[] {
+  const items: { id: number; body: Buffer }[] = [];
+  const vint = (at: number, marker: boolean) => {
+    const first = buffer[at];
+    if (!first) return null;
+    const length = Math.clz32(first) - 23;
+    if (at + length > buffer.length || (marker && length > 4)) return null;
+    let value = marker ? first : first & (0xff >> length);
+    let unknown = !marker && value === (0xff >> length);
+    for (let i = 1; i < length; i++) { value = value * 256 + buffer[at + i]; unknown &&= buffer[at + i] === 255; }
+    return { length, value, unknown };
+  };
+  for (let at = 0; at < buffer.length;) {
+    const id = vint(at, true);
+    const size = id && vint(at + id.length, false);
+    if (!id || !size) break;
+    const start = at + id.length + size.length;
+    const end = size.unknown ? buffer.length : start + size.value;
+    if (!Number.isSafeInteger(end) || (end > buffer.length && id.value !== 0x18538067)) break;
+    items.push({ id: id.value, body: buffer.subarray(start, Math.min(end, buffer.length)) });
+    at = end;
+  }
+  return items;
+}
+
+export function matroskaTags(head: Buffer): MediaTags {
+  const tags: MediaTags = {};
+  const segment = ebmlChildren(head).find(item => item.id === 0x18538067);
+  if (!segment) return tags;
+  const children = ebmlChildren(segment.body);
+  const info = children.find(item => item.id === 0x1549a966);
+  const title = ebmlChildren(info?.body ?? Buffer.alloc(0)).find(item => item.id === 0x7ba9);
+  if (title) tags.title = title.body.toString('utf8').trim().slice(0, 1000);
+  const tagRoot = children.find(item => item.id === 0x1254c367);
+  const visit = (body: Buffer, depth: number) => {
+    if (depth > 8) return;
+    for (const item of ebmlChildren(body)) {
+      if (item.id === 0x67c8) {
+        const parts = ebmlChildren(item.body);
+        const name = parts.find(part => part.id === 0x45a3)?.body.toString('utf8').toUpperCase();
+        const value = parts.find(part => part.id === 0x4487)?.body.toString('utf8').trim().slice(0, 1000);
+        const field = ({ TITLE: 'title', ARTIST: 'speaker', DATE_RECORDED: 'recordingDate' } as const)[name as 'TITLE'];
+        if (field && value) tags[field] = value;
+      }
+      if ([0x7373, 0x67c8].includes(item.id)) visit(item.body, depth + 1);
+    }
+  };
+  visit(tagRoot?.body ?? Buffer.alloc(0), 0);
+  return tags;
+}
+
+export async function readMediaTags(filename: string): Promise<MediaTags> {
+  const file = await open(filename, 'r');
+  try {
+    const { size } = await file.stat();
+    const head = Buffer.alloc(Math.min(size, HEAD_BYTES));
+    await file.read(head, 0, head.length, 0);
+    if (head.toString('latin1', 0, 3) === 'ID3') return id3Tags(head);
+    if (head.length >= 4 && head.readUInt32BE(0) === 0x1a45dfa3) return await readMatroskaTags(file, size);
+    if (head.toString('latin1', 4, 8) !== 'ftyp') return {};
+    for (let at = 0; at + 8 <= size;) {
+      const header = Buffer.alloc(16);
+      await file.read(header, 0, 16, at);
+      let length = header.readUInt32BE(0);
+      const headerSize = length === 1 ? 16 : 8;
+      if (length === 1) length = Number(header.readBigUInt64BE(8));
+      if (length === 0) length = size - at;
+      if (!Number.isSafeInteger(length) || length < headerSize || at + length > size) return {};
+      if (header.toString('latin1', 4, 8) === 'moov') {
+        if (length > MAX_BOX_BYTES) return {};
+        const moov = Buffer.alloc(length - headerSize);
+        await file.read(moov, 0, moov.length, at + headerSize);
+        return mp4Tags(moov);
+      }
+      at += length;
+    }
+    return {};
+  } finally { await file.close(); }
+}
+
+
+/** Skip media clusters by their declared sizes, so end-of-file Tags in long videos stay bounded. */
+async function readMatroskaTags(file: Awaited<ReturnType<typeof open>>, fileSize: number): Promise<MediaTags> {
+  const headerAt = async (at: number) => {
+    const bytes = Buffer.alloc(16);
+    const { bytesRead } = await file.read(bytes, 0, 16, at);
+    const vint = (from: number, marker: boolean) => {
+      const first = bytes[from];
+      if (!first) return null;
+      const length = Math.clz32(first) - 23;
+      if (from + length > bytesRead || (marker && length > 4)) return null;
+      let value = marker ? first : first & (255 >> length);
+      let unknown = !marker && value === (255 >> length);
+      for (let index = 1; index < length; index++) { value = value * 256 + bytes[from + index]; unknown &&= bytes[from + index] === 255; }
+      return { value, length, unknown };
+    };
+    const id = vint(0, true);
+    const size = id && vint(id.length, false);
+    if (!id || !size) return null;
+    const start = at + id.length + size.length;
+    const end = size.unknown ? fileSize : start + size.value;
+    return Number.isSafeInteger(end) && end <= fileSize ? { id: id.value, start, end, unknown: size.unknown } : null;
+  };
+  let at = 0;
+  let segment = false;
+  const found: Buffer[] = [];
+  for (let count = 0; count < 100_000 && at < fileSize; count++) {
+    const item = await headerAt(at);
+    if (!item) break;
+    if (item.id === 0x18538067) { segment = true; at = item.start; continue; }
+    if (segment && [0x1549a966, 0x1254c367].includes(item.id) && item.end - at <= MAX_BOX_BYTES) {
+      const data = Buffer.alloc(item.end - at);
+      await file.read(data, 0, data.length, at);
+      found.push(data);
+    }
+    if (item.unknown || item.end <= at) break;
+    at = item.end;
+  }
+  return matroskaTags(Buffer.concat([Buffer.from([0x18, 0x53, 0x80, 0x67, 0xff]), ...found]));
+}
