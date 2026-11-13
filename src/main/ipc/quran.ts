@@ -14,6 +14,7 @@ import { electronDownloadFetch } from '../services/quran/electron-download-fetch
 import publicCatalog from '../../shared/data/qul-public-catalog.json';
 import { quranResourceDependencies } from '../../shared/quran-resource-guidance';
 import { localResourceCandidates } from '../services/quran/local-resources';
+import { qulPresetFile, qulResourceRoot, suppliedRecitationFile } from '../services/quran/qul-paths';
 import { khatmahService } from '../services/quran/khatmah-reminders';
 import { KHATMAH_JUZ_ENDS, KHATMAH_JUZ_STARTS } from '../../shared/khatmah';
 import type { KhatmahMutation } from '../../shared/types/khatmah';
@@ -21,10 +22,13 @@ import type { QuranMushafPage, QuranReaderCatalog } from '../../shared/types/qur
 
 const allowedDownloadOrigins = new Set([QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
 const allowedAudioOrigins = new Set(['https://audio-cdn.tarteel.ai', QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
+const qulLayout = () => ({ packaged: app.isPackaged, appPath: app.getAppPath(), resourcesPath: process.resourcesPath });
 const localResourcePackage = async (id: string): Promise<string | null> => {
-  if (app.isPackaged) return null;
-  const root = path.join(app.getAppPath(), 'repos', 'Quran', 'QUL Developer Resources');
-  for (const filename of localResourceCandidates(id, root)) if ((await stat(filename).catch(() => null))?.isFile()) return filename;
+  const root = qulResourceRoot(qulLayout());
+  if (!root) return null;
+  const preset = readerPresets.find(value => value.id === id);
+  const bundled = app.isPackaged && preset ? qulPresetFile(qulLayout(), preset) : null;
+  for (const filename of [...(bundled ? [bundled] : []), ...localResourceCandidates(id, root)]) if ((await stat(filename).catch(() => null))?.isFile()) return filename;
   return null;
 };
 
@@ -33,12 +37,7 @@ const getAudioFilePath = (root: string, packId: string, surah: number, ayah: num
   const padAyah = String(ayah).padStart(3, '0');
   return path.join(root, 'audio', packId, `${padSurah}_${padAyah}.mp3`);
 };
-const suppliedAudioPath = (audioUrl: string, surah: number, ayah: number): string | null => {
-  const url = new URL(audioUrl);
-  const source = url.origin === 'https://audio-cdn.tarteel.ai' ? url.pathname.match(/^\/quran\/(husary|minshawyMurattal)\/(\d{3})(\d{3})\.mp3$/) : null;
-  if (!source || Number(source[2]) !== surah || Number(source[3]) !== ayah) return null;
-  return path.join(app.getAppPath(), 'repos', 'Quran', 'QUL Developer Resources', '3-Recitations and segments data', 'audio', source[1] === 'husary' ? 'husary' : 'minshawi', source[2], `${source[2]}${source[3]}.mp3`);
-};
+const suppliedAudioPath = (audioUrl: string, surah: number, ayah: number): string | null => suppliedRecitationFile(qulResourceRoot(qulLayout()), audioUrl, surah, ayah);
 
 const cacheSingleAudioFile = async (root: string, packId: string, surah: number, ayah: number, audioUrl: string, signal = new AbortController().signal): Promise<string> => {
   if (!/^[a-f0-9-]{36}$/.test(packId)) throw new Error('invalid-resource');
@@ -161,12 +160,14 @@ export function registerQuranIpc(): void {
     let root = path.join(app.getPath('userData'), 'quran');
     try { const config = JSON.parse(await readFile(path.join(app.getPath('userData'), 'quran-location.json'), 'utf8')); if (typeof config.directory === 'string' && path.isAbsolute(config.directory)) root = config.directory; } catch {}
     service = await createService(root);
-    const supplied = path.join(app.getAppPath(), 'repos', 'Quran', 'QUL Developer Resources');
-    if (!app.isPackaged && (await stat(supplied).catch(() => null))?.isDirectory()) {
+    // First run: install the QUL packs found next to the app (development) or shipped in the installer (KEY-264).
+    const supplied = qulResourceRoot(qulLayout());
+    if (supplied && (await stat(supplied).catch(() => null))?.isDirectory()) {
       const files = new Map<string, string>();
       for (const preset of readerPresets) {
         if (preset.id === 'mushaf-layout/warsh-svg') continue;
-        const filename = path.join(supplied, preset.relative, preset.filename);
+        const filename = qulPresetFile(qulLayout(), preset);
+        if (!filename) continue;
         if ((await stat(filename).catch(() => null))?.isFile()) files.set(preset.id, filename);
       }
       service.enqueue([...files.keys()], async job => files.get(job.resourceId) || null);

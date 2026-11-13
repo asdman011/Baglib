@@ -6,6 +6,16 @@ extraResources:
   # The owners authorized bundling it; it is built locally by tools/hadith-alignment and never committed.
   - from: tools/hadith-alignment/data/output/sunnah_merged_quranlab_v1.sqlite
     to: sunnah/sunnah_merged_quranlab_v1.sqlite
+  # KEY-264: the basic Quran packs (every local QUL resource except recitation audio, about 290 MB), installed
+  # on first run from resources/quran. Audio (3.9 GB) stays an in-app download. Local only; never committed.
+  - from: repos/Quran/QUL Developer Resources
+    to: quran/QUL Developer Resources
+    filter:
+      - "**/*"
+      - "!3-Recitations and segments data/audio/**"
+  # The Mukhtasar tafsir preset sits outside the QUL folder in development; installed builds read it from quran/extra.
+  - from: .baglib-data/qul-phase1/arabic-mukhtasar-tafsir-sqlite.zip
+    to: quran/extra/arabic-mukhtasar-tafsir-sqlite.zip
   - from: assets/poetry
     to: poetry
     filter:

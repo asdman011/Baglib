@@ -2,6 +2,10 @@
 
 ## Recent Agent Updates
 
+- [2026-11-13, Claude Code] KEY-264, code part: installed builds now read the basic Quran packs from `resources/quran` and install them on first run. Recitation audio stays an in-app download. Unit tests pass. The packaged acceptance run (a clean installed profile, offline, in ar and en) has not been done, so KEY-264 stays open.
+- [2026-11-13, Claude Code] Took over dispatching from the archived fork session. Wrote the specs `docs/agent-ops/tasks/KEY-342.md`, `KEY-343.md` and `KEY-344.md` and the Codex brief `docs/agent-ops/reports/KEY-lectures.prompt.txt`, to run after KEY-336.
+- [2026-11-13, Claude Code] The user approved G6, the lecture series table for KEY-344, so it is no longer blocked. It has not been built yet. It waits for KEY-336 and KEY-342, because all three edit the lectures files. The table holds a series with a name and an ordered list of its lecture Works. The task that builds it adds the migration, the ADR and the data-dictionary entries.
+
 - [2026-11-13T17:43:55+02:00, Codex] KEY-341 Fix1 verified. Compact48px quick-add, single anchored menus, repeat buttons and plain start rows. Full1980/1980, native planner+links ar/en1280/480, tsc/lint/diff pass. Exact7files in CURRENT_TASK.md. KEY-336 next, required real-media input pending. Publication pending.
 
 - [2026-11-13T16:37:52+02:00, Codex] KEY-341 verified. Approved migration027, lists/groups, circular task rows/quick-add/details/calendar, recurrence/reminders/subjects implemented. Full1975/1975, focused52/52, tsc/lint/build/diff and native ar/en1280/480 pass. Exact30files and REA/OS-click limits in CURRENT_TASK.md/report. Scoped publication authorized and pending. Claude owns review/Jira.
@@ -19,7 +23,7 @@
   - KEY-343: subtitles and transcript;
   - KEY-344: lecture series, blocked on schema approval.
 
-  On 2026-11-12 the user approved these schema changes: media `DigitalFormat` values (KEY-342); and for KEY-341 the `task_list` table, the task fields `list_id`, `recurrence`, `reminder_at` and `subject` (optional, auto-filled). Still waiting for approval: the lecture series entity (KEY-344) and the player look (KEY-336).
+  On 2026-11-12 the user approved these schema changes: media `DigitalFormat` values (KEY-342); and for KEY-341 the `task_list` table, the task fields `list_id`, `recurrence`, `reminder_at` and `subject` (optional, auto-filled). On 2026-11-13 the user also approved the lecture series entity (G6, KEY-344) and chose both player looks, with a switch between them (KEY-336).
 
   Dispatch order:
   - Wave A: KEY-334, 335, 336, 337.

@@ -1,3 +1,32 @@
+## KEY-264 code part: installed builds ship the basic Quran packs — 2026-11-13, Claude Code
+
+**What changed:** installed BagLib builds now find the QUL packs shipped in `resources/quran`. They install them on first run, the same way development builds already install from `repos/`. Before this, `localResourcePackage` returned null in installed builds, and `suppliedAudioPath` pointed at `app.getAppPath()/repos`, which an installed build doesn't have.
+
+- `electron-builder.yml` bundles:
+  - `repos/Quran/QUL Developer Resources` as `quran/QUL Developer Resources`, without `3-Recitations and segments data/audio/**`. That is 289.0 MB measured; the 3.9 GB of audio stays an in-app download.
+  - the Mukhtasar tafsir file as `quran/extra/`.
+- New pure module `src/main/services/quran/qul-paths.ts`: `qulResourceRoot`, `qulPresetFile` and `suppliedRecitationFile`.
+- `src/main/ipc/quran.ts` uses it for the first-run install, `localResourcePackage` and supplied audio. Installed builds without the audio folder fall back to downloading, as before.
+
+**Tests:**
+- New `tests/services/qul-paths.test.ts`: 4/4.
+- All Quran and QUL test files through the project runner: 61/61.
+- tsc and eslint: clean.
+
+**Not done (the task stays open):**
+- The packaged acceptance run has not been done. It means building the installer, then on a clean profile with development paths hidden and the network off: Quran reads immediately in Arabic RTL and English LTR, and the source hashes match.
+- Not run now, because Codex has heavy live runs going and the installer build is large.
+
+**Files:**
+- `electron-builder.yml`
+- `src/main/services/quran/qul-paths.ts`
+- `src/main/ipc/quran.ts`
+- `tests/services/qul-paths.test.ts`
+- this entry
+- the IMPLEMENTATION_PLAN line
+
+**Dispatch note (same date):** the fork session that was dispatching the lecture tasks is archived, so Claude Code took over. Specs are in `docs/agent-ops/tasks/KEY-342.md`, `KEY-343.md` and `KEY-344.md`. The Codex brief `docs/agent-ops/reports/KEY-lectures.prompt.txt` runs after KEY-336, in the order KEY-343 → KEY-342 → KEY-344. KEY-344's schema is spelled out in its spec: `lecture_series` plus the ordered `lecture_series_item` membership.
+
 ## KEY-341 Fix 1 verified - 2026-11-13T17:43:55+02:00 - Codex
 
 Quick-add now has a 48px input row with circle, title and four compact list/due/reminder/repeat triggers. One anchored popover opens at a time, dismissed by Escape or an outside pointer press. Selected values appear compactly in the row. Due weekdays and reminder times occupy the trailing side. Repeat is a button menu with custom fields inside. Ctrl+Enter retains the marked indented description, and the hint stays below the row. Start-pane smart lists and management use plain rows, with icons and trailing task counts.
@@ -345,9 +374,9 @@ Three read-only explorations found the cause of each. The plan is in `C:\Users\A
 - KEY-342: media `DigitalFormat` values.
 - KEY-341: a `task_list` table (with groups) plus the task fields `list_id`, `recurrence`, `reminder_at` and `subject`. The subject is optional, empty by default, and filled automatically from typed text or a chosen material.
 
-**Still waiting on the user**
-- KEY-344: the lecture series entity.
-- KEY-336: the player look. Two sketches are to be shown before it is built.
+**Approved 2026-11-13**
+- KEY-344 (G6): the lecture series entity. It is a new table holding a series name and an ordered list of lecture Works. It is built after KEY-336 and KEY-342, because all three edit the same lectures files.
+- KEY-336: both player looks, with a switch between them (the user told the fork session).
 
 **Jira tasks created (each with a cold-start description, an existing label and a parent epic)**
 
