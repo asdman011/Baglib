@@ -1,3 +1,24 @@
+## KEY-346: Tasks polish, To Do-style rows — 2026-11-13, Claude Code
+
+This follows the KEY-341 review.
+
+**What changed:**
+- Each task is now one compact row: a circle, the title, then one small line with the due date (red when overdue), the repeat and reminder icons, the subject, a note icon when the task has a description, and its reference links.
+- "Move earlier" is an icon that appears on hover or keyboard focus. Clicking the title opens the details pane, so the "Edit task" link is gone.
+- The Hijri toggle is a pill button with `aria-pressed`.
+- The details pane keeps only the list and repeat menus, which now open downwards. The due date and reminder are no longer shown twice.
+- `PlannerScheduleFields` gained `parts` and `placement` props.
+
+**Tests:**
+- planner-live passed in ar and en at 1280 and 480 px. I inspected the screenshots: rows are slim and Arabic mirrors correctly.
+- planner-links-live passed: Quran and Sunnah links open, and all 1339 real files are unchanged.
+- The full suite passed 1984/1984, and tsc and eslint are clean.
+
+**Files:**
+- `src/renderer/components/dashboard/StudyPlannerView.tsx`
+- `src/renderer/components/dashboard/PlannerScheduleFields.tsx`
+- this entry
+
 ## KEY-264 code part: installed builds ship the basic Quran packs — 2026-11-13, Claude Code
 
 **What changed:** installed BagLib builds now find the QUL packs shipped in `resources/quran`. They install them on first run, the same way development builds already install from `repos/`. Before this, `localResourcePackage` returned null in installed builds, and `suppliedAudioPath` pointed at `app.getAppPath()/repos`, which an installed build doesn't have.
