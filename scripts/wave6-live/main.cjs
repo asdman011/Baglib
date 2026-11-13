@@ -5,7 +5,9 @@ const http=require('node:http');
 const {execFileSync}=require('node:child_process');
 const assert=require('node:assert/strict');
 const directory=process.env.BAGLIB_WAVE6_LIVE_DIR;
-const playerOnly = process.env.BAGLIB_WAVE6_PLAYER_ONLY === '1';
+const realPlayerOnly = process.env.BAGLIB_WAVE6_REAL_PLAYER_ONLY === '1';
+const captionsOnly = process.env.BAGLIB_WAVE6_CAPTIONS_ONLY === '1';
+const playerOnly = process.env.BAGLIB_WAVE6_PLAYER_ONLY === '1' || captionsOnly || realPlayerOnly;
 const verifyControls = require('./player-checks.cjs');
 const media=path.join(directory,'media');
 const realFiles = JSON.parse(fs.readFileSync(path.join(directory, 'real-files.json'), 'utf8'));
@@ -49,7 +51,7 @@ app.on('browser-window-created',(_,owner)=>{
     const results={formats:{}};
     for (const file of realFiles.pdfs) await evaluate(`window.electronAPI.addBook(${JSON.stringify({ id: file.id, title: `Wave6 ${file.lang} real PDF`, bookType: 'digital', digitalFormat: 'PDF', workType: 'book', filePath: file.filename, categories: [], tags: [], lendingHistory: [] })})`);
     // Media the app's own Chromium can encode, so no sample files are downloaded.
-    const recorded=await evaluate(`(async()=>{const out={};const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const g=canvas.getContext('2d');let frame=0;const timer=setInterval(()=>{g.fillStyle='hsl('+(frame++*12%360)+',70%,50%)';g.fillRect(0,0,320,180);g.fillStyle='#fff';g.font='40px Arial';g.fillText(String(frame),20,100);},40);
+    const recorded=realPlayerOnly || captionsOnly ? {} : await evaluate(`(async()=>{const out={};const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const g=canvas.getContext('2d');let frame=0;const timer=setInterval(()=>{g.fillStyle='hsl('+(frame++*12%360)+',70%,50%)';g.fillRect(0,0,320,180);g.fillStyle='#fff';g.font='40px Arial';g.fillText(String(frame),20,100);},40);
       for(const [name,type] of [['webm','video/webm;codecs=vp9'],['mp4','video/mp4;codecs=avc1'],['mkv','video/x-matroska;codecs=avc1']]){
         if(!MediaRecorder.isTypeSupported(type)){out[name]=null;continue;}
         const recorder=new MediaRecorder(canvas.captureStream(25),{mimeType:type});const chunks=[];recorder.ondataavailable=event=>chunks.push(event.data);
@@ -63,6 +65,19 @@ app.on('browser-window-created',(_,owner)=>{
       if(!data)continue;
       const file=path.join(media,`محاضرة.${name}`);fs.writeFileSync(file,Buffer.from(data,'base64'));files.push(file);
       if(name==='mp4'){fs.copyFileSync(file,path.join(media,'محاضرة.mov'));files.push(path.join(media,'محاضرة.mov'));}
+    }
+    const realContext = { owner, evaluate, until, shot, load, nav, fill, openQueue, media, files, realFiles, directory };
+    if (realPlayerOnly) {
+      await require('./real-media-checks.cjs').runPlayer(realContext);
+      assert.deepEqual(rendererErrors, []);
+      console.log(JSON.stringify({ realPlayer: true, configurations: 16, rendererErrors }));
+      coursera.close(); app.quit(); return;
+    }
+    if (captionsOnly) {
+      await require('./real-media-checks.cjs').runCaptions(realContext);
+      assert.deepEqual(rendererErrors, []);
+      console.log(JSON.stringify({ captions: true, configurations: 16, rendererErrors }));
+      coursera.close(); app.quit(); return;
     }
     for(const language of ['ar','en']){
       const L=labels[language];const result={language};

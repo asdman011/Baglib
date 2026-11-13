@@ -797,6 +797,7 @@ export const API = {
       ipcRenderer.invoke('pathways:apply-replan', pathwayId, schedule),
   },
   lectures: {
+    subtitles: (id, choose = false) => ipcRenderer.invoke('lectures:subtitles', id, choose),
     list: () => ipcRenderer.invoke('lectures:list'),
     add: () => ipcRenderer.invoke('lectures:add'),
     remove: id => ipcRenderer.invoke('lectures:remove', id),

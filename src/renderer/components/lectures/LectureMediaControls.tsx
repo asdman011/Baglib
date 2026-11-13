@@ -8,11 +8,12 @@ import { clockTime, PLAYBACK_RATES, type LectureSection } from '../../../shared/
 const iconButton = 'inline-flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-40';
 const initialState = { playing: false, now: 0, duration: 0, volume: 1, muted: false, rate: 1, buffered: [] as { start: number; end: number }[], fullscreen: false, captions: false, hasCaptions: false };
 
-export function LectureMediaControls({ audio, study, sections, onSave, children }: {
+export function LectureMediaControls({ audio, study, sections, onSave, subtitleControls, children }: {
   audio: boolean;
   study: boolean;
   sections: LectureSection[];
   onSave: () => void;
+  subtitleControls?: { available: boolean; enabled: boolean; toggle: () => void };
   children: ReactNode;
 }) {
   const { t, dir } = useWorkspace();
@@ -118,6 +119,7 @@ export function LectureMediaControls({ audio, study, sections, onSave, children 
     } catch { setFailed(true); }
   };
   const captions = () => {
+    if (subtitleControls?.available) { subtitleControls.toggle(); wake(); return; }
     const tracks = Array.from(media.current?.textTracks || []);
     const show = !tracks.some(track => track.mode === 'showing');
     tracks.forEach((track, index) => { track.mode = show && index === 0 ? 'showing' : 'hidden'; });
@@ -186,7 +188,7 @@ export function LectureMediaControls({ audio, study, sections, onSave, children 
           <summary className="flex h-8 cursor-pointer list-none items-center rounded-md px-2 text-xs hover:bg-white/15 [&::-webkit-details-marker]:hidden" aria-label={t('lectureSpeed')} title={t('lectureSpeed')}><bdi>{state.rate}×</bdi></summary>
           <div role="group" aria-label={t('lectureSpeed')} className="absolute bottom-full end-0 z-20 mb-1 grid max-h-48 w-24 grid-cols-2 overflow-auto rounded-lg bg-neutral-900 p-1 shadow-lg">{PLAYBACK_RATES.map(rate => <button data-lecture-speed={rate} type="button" key={rate} aria-pressed={state.rate === rate} className="rounded p-2 text-xs hover:bg-white/15 aria-pressed:bg-white/20" onClick={() => { speed(rate); if (speedMenu.current) speedMenu.current.open = false; }}><bdi>{rate}×</bdi></button>)}</div>
         </details>
-        <button data-lecture-captions type="button" className={iconButton} aria-label={t('lectureCaptions')} title={t(state.hasCaptions ? 'lectureCaptions' : 'lectureCaptionsPending')} aria-pressed={state.captions} disabled={!state.hasCaptions} onClick={captions}><Captions size={18} /></button>
+        <button data-lecture-captions type="button" className={iconButton} aria-label={t('lectureCaptions')} title={t(subtitleControls?.available || state.hasCaptions ? 'lectureCaptions' : subtitleControls ? 'lectureSubtitleEmpty' : 'lectureCaptionsPending')} aria-pressed={subtitleControls?.available ? subtitleControls.enabled : state.captions} disabled={!subtitleControls?.available && !state.hasCaptions} onClick={captions}><Captions size={18} /></button>
         {!audio && pipSupported && <button data-lecture-pip type="button" className={iconButton} aria-label={t('lecturePictureInPicture')} title={t('lecturePictureInPicture')} disabled={!state.duration} onClick={() => void pip()}><PictureInPicture2 size={18} /></button>}
         <button data-lecture-fullscreen type="button" className={iconButton} aria-label={t(state.fullscreen ? 'lectureExitFullscreen' : 'lectureFullscreen')} title={t(state.fullscreen ? 'lectureExitFullscreen' : 'lectureFullscreen')} onClick={() => void fullscreen()}>{state.fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}</button>
       </div>

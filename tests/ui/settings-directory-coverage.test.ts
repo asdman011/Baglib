@@ -19,6 +19,7 @@ const operational = new Set([
   'app_lock:pin_hash', 'app_lock:pin_salt', // Derived secrets owned by the lock editor.
   'courses.coursera.v1', // Catalog snapshot.
   'pathways.templates.v1', // User-authored templates.
+  'media.lecture-subtitles.v1', // Per-lecture subtitle paths, selected inside the player (KEY-343).
   'media.lectures.v1', // Lecture content records.
   'dashboard.scratchpad.draft.v1', // Unsaved note content.
   'islamic.continue.v1', // Last reading positions.

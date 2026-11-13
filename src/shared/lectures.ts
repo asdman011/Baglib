@@ -16,6 +16,7 @@ export interface Lecture {
 export interface LectureProgress { position: number; rate: number; completed: boolean }
 
 export interface LecturesAPI {
+  subtitles(id: string, choose?: boolean): Promise<{ path: string; cues: import('./subtitles').SubtitleCue[] } | null>;
   list(): Promise<Lecture[]>;
   add(): Promise<Lecture[]>;
   remove(id: string): Promise<void>;

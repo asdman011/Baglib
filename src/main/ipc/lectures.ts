@@ -3,6 +3,7 @@ import path from 'node:path';
 import { getDatabase } from '../database/connection';
 import { LectureLibrary } from '../services/lectures/lecture-library';
 import { LECTURE_EXTENSIONS, validProgress, validSections } from '../../shared/lectures';
+import { LectureSubtitles } from '../services/lectures/subtitles';
 
 const shots = () => path.join(app.getPath('userData'), 'lecture-shots');
 const library = (event: IpcMainInvokeEvent) => {
@@ -18,6 +19,21 @@ const lectureId = (id: unknown) => {
 };
 
 export function registerLectureIpc(): void {
+  ipcMain.handle('lectures:subtitles', async (event, id: unknown, choose: unknown) => {
+    const service = library(event);
+    const lecture = service.list().find(item => item.id === lectureId(id));
+    if (!lecture || (choose !== undefined && typeof choose !== 'boolean')) throw new Error('invalid-request');
+    let selected: string | undefined;
+    if (choose) {
+      const options = { properties: ['openFile'] as 'openFile'[], filters: [{ name: 'SRT / WebVTT', extensions: ['srt', 'vtt'] }] };
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const choice = await (owner ? dialog.showOpenDialog(owner, options) : dialog.showOpenDialog(options));
+      if (choice.canceled) return null;
+      selected = choice.filePaths[0];
+      if (!selected) throw new Error('invalid-request');
+    }
+    return new LectureSubtitles(getDatabase()).load(lecture.id, lecture.path, selected);
+  });
   ipcMain.handle('lectures:list', event => library(event).list());
   ipcMain.handle('lectures:add', async event => {
     const service = library(event);

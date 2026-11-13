@@ -12,6 +12,8 @@ import { clockTime, type Lecture } from '../../../shared/lectures';
 import { localAssetUrl } from '../../utils/file-path-helper';
 import { useCompanionContext } from '../../utils/companion-context';
 
+import { activeCueIndex, isRtlCue, type SubtitleCue } from '../../../shared/subtitles';
+import { LectureTranscript } from './LectureTranscript';
 import { LectureMediaControls } from './LectureMediaControls';
 
 const button = 'inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-sm disabled:opacity-50';
@@ -30,10 +32,31 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
     setLayout(next);
     try { localStorage.setItem('baglib.lectures.layout', next); } catch { /* Playback remains usable when storage is unavailable. */ }
   };
+  const [cues, setCues] = useState<SubtitleCue[]>([]);
+  const [captions, setCaptions] = useState(true);
+  const [transcript, setTranscript] = useState(false);
+  const [subtitleError, setSubtitleError] = useState(false);
+  const subtitleRequest = useRef(0);
   const [now, setNow] = useState(0);
   const [failed, setFailed] = useState(false);
   const [section, setSection] = useState('');
   const api = window.electronAPI.lectures;
+  useEffect(() => {
+    let alive = true;
+    const request = ++subtitleRequest.current;
+    void api.subtitles(lecture.id).then(loaded => {
+      if (alive && request === subtitleRequest.current) setCues(loaded?.cues ?? []);
+    }).catch(() => { if (alive && request === subtitleRequest.current) setSubtitleError(true); });
+    return () => { alive = false; };
+  }, [api, lecture.id]);
+  const loadSubtitles = async () => {
+    const request = ++subtitleRequest.current;
+    try {
+      const loaded = await api.subtitles(lecture.id, true);
+      if (loaded && request === subtitleRequest.current) { setCues(loaded.cues); setCaptions(true); setSubtitleError(false); }
+    } catch { if (request === subtitleRequest.current) setSubtitleError(true); }
+  };
+  const active = activeCueIndex(cues, now);
   const linked = useMemo(() => notes.flatMap(note => studyLinks(note.content).filter(link => link.target.startsWith(`media:${lecture.id}:`)).map(link => ({ note, link, seconds: Number(link.target.split(':')[2]) }))).sort((first, second) => first.seconds - second.seconds), [notes, lecture.id]);
 
   const save = useCallback(() => {
@@ -84,19 +107,23 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 dir="auto" className="font-display text-lg font-bold break-words">{lecture.title}</h2><button data-lecture-layout-switch type="button" className={button} aria-pressed={layout === 'study'} onClick={switchLayout}><Columns2 size={16} />{t(layout === 'study' ? 'lectureOverlayLayout' : 'lectureStudyLayout')}</button></div>
     <div className={layout === 'study' ? 'grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_14rem]' : 'space-y-4'}>
     <div className="min-w-0 space-y-3">
-    <LectureMediaControls audio={lecture.kind === 'audio'} study={layout === 'study'} sections={lecture.sections} onSave={save}>
+    <LectureMediaControls audio={lecture.kind === 'audio'} study={layout === 'study'} sections={lecture.sections} onSave={save} subtitleControls={{ available: cues.length > 0, enabled: captions, toggle: () => setCaptions(value => !value) }}>
     {/* The player stays left-to-right so its timeline runs the way time is shown. */}
     <video key={lecture.id} ref={media} src={localAssetUrl(lecture.path)} preload="metadata" dir="ltr" data-lecture-player
       className={lecture.kind === 'audio' ? 'hidden' : 'w-full max-h-[60vh] rounded-xl bg-black'}
       onTimeUpdate={event => setNow(event.currentTarget.currentTime)} onPause={save} onRateChange={save}
       onError={() => setFailed(true)} onLoadedMetadata={() => setFailed(false)} />
+    {captions && active >= 0 && <div data-lecture-subtitle dir={isRtlCue(cues[active].text) ? 'rtl' : 'ltr'} className={'pointer-events-none text-center whitespace-pre-wrap text-lg sm:text-xl leading-relaxed text-white ' + (lecture.kind === 'audio' ? 'relative px-3 py-4' : 'absolute inset-x-3 bottom-20')} style={{ textShadow: '0 1px 3px black, 1px 0 2px black, -1px 0 2px black' }}>{cues[active].text}</div>}
     </LectureMediaControls>
     {failed && <p role="alert" className="text-sm leading-relaxed">{t('lectureUnplayable')}</p>}
     <div className="flex flex-wrap items-center gap-2" dir={dir}>
+      <button data-load-subtitles type="button" className={button} onClick={() => void loadSubtitles()}>{t('lectureLoadSubtitles')}</button>
+      {layout === 'overlay' && <button data-toggle-transcript type="button" className={button} aria-expanded={transcript} onClick={() => setTranscript(value => !value)}>{t('lectureTranscript')}</button>}
       <button type="button" className={button} onClick={note}><NotebookPen className="size-4" />{t('lectureNoteHere')}</button>
       <button type="button" className={button} disabled={lecture.kind === 'audio'} onClick={() => void shot()}><Camera className="size-4" />{t('lectureShot')}</button>
       <bdi className="text-xs text-muted">{clockTime(now)}{current && <> · <span dir="auto">{current.title}</span></>}</bdi>
     </div>
+    {subtitleError && <p role="alert" className="text-sm leading-relaxed">{t('lectureSubtitleError')}</p>}
     </div>
     <aside data-lecture-study-tools className="min-w-0 space-y-4">
     <section className="space-y-2">
@@ -116,7 +143,7 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
         <button type="button" dir="auto" className="min-w-0 truncate text-start" onClick={() => openStudyNote({ id: item.id })}>{item.title || item.content.replace(/\[\[[^\]]+\]\]/gu, '').trim().slice(0, 80)}</button>
       </li>)}</ul>
     </section>
-    {layout === 'study' && <section data-lecture-transcript-slot className="space-y-2"><h3 className="text-sm font-bold">{t('lectureTranscript')}</h3><p className="text-xs text-muted leading-relaxed">{t('lectureTranscriptPending')}</p></section>}
+    {(layout === 'study' || transcript) && <LectureTranscript cues={cues} active={active} onSeek={go} onNote={at => passageNote(lectureTarget(lecture.id, at), label(at))} />}
     </aside>
     </div>
   </div>;

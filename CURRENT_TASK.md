@@ -1,3 +1,34 @@
+## KEY-343 verified handoff ? 2026-11-13T22:50:08.930292+02:00 ? Codex
+
+Added bounded SRT/VTT loading, persisted subtitle selection, captions controls and a searchable clickable transcript with active cues and note targets. Arabic and English use centralized translations and RTL/LTR layouts. Finished the parser and tests inherited from Claude Code.
+
+Real captions/transcript acceptance: 16/16 configurations, zero renderer errors. Generated Arabic/English SRT/VTT sidecars lived only in disposable profiles; cue search/seek/highlight, caption controls, persistence and note targets passed. Both original real Arabic/English MP4s were read in place and never modified. Filename fallback preserves the Arabic title/speaker; the English filename supplies the title and has no speaker. No real files cover other containers, embedded tags, chapters or three-member series; generated fixtures cover those gaps only. All live profiles were deleted and only PNG screenshots remain in .baglib-data/KEY-34x-evidence/.
+
+Verification: TypeScript passed; scoped lint zero errors (15 existing warnings). Three full-suite invocations used --test-concurrency=2: first 1989/1999 exposed ten Notes mocks missing the new series API; corrected in KEY-344, targeted 10/10 passed; second and third full suites both passed 2050/2050. Concurrent other-agent tests explain the additional 51 enumerated tests. Verification covers the corrected shared worktree. No Jira changes. Publication authorized to origin/feature/library-domain, one scoped commit per task.
+
+KEY-336 real-media acceptance passed on 2026-11-13: 16/16 Arabic/English ? 1280/480 ? Study/Overlay configurations, zero renderer errors, including playback/seek/volume/speed/fullscreen/PiP/auto-hide. Appended docs/agent-ops/reports/KEY-336.md; no fix commit required.
+
+Exact files:
+
+- `src/shared/subtitles.ts`
+- `src/shared/lectures.ts`
+- `src/main/services/lectures/subtitles.ts`
+- `src/main/ipc/lectures.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/lectures/LecturesView.tsx`
+- `src/renderer/components/lectures/LectureMediaControls.tsx`
+- `src/renderer/components/lectures/LectureTranscript.tsx`
+- `src/renderer/translations.ts`
+- `tests/services/subtitles.test.ts`
+- `tests/services/lecture-subtitles.test.ts`
+- `tests/ui/settings-directory-coverage.test.ts`
+- `scripts/wave6-live/run.mjs`
+- `scripts/wave6-live/main.cjs`
+- `scripts/wave6-live/real-media-checks.cjs`
+- `tests/ui/translation-keys.test.ts`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
 ## KEY-336 implemented, required real-media acceptance pending - 2026-11-13T18:02:45+02:00 - Codex
 
 KEY-341 Fix1 was committed and pushed as c672697ecad16fc4fc73c29507fc7046b7d9a676, full1980/1980. Subsequent KEY-346 planner changes belong to Claude.

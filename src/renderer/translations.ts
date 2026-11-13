@@ -1,5 +1,12 @@
 export const translations = {
   ar: {
+    // KEY-343 subtitles and transcript.
+    lectureLoadSubtitles: "تحميل نص مصاحب…",
+    lectureTranscriptSearch: "البحث في التفريغ النصي",
+    lectureTranscriptNoMatches: "لا توجد مقاطع مطابقة",
+    lectureSubtitleEmpty: "حمّل ملف SRT أو VTT لعرض التفريغ النصي",
+    lectureSubtitleError: "تعذّر تحميل النص المصاحب. اختر ملف SRT أو VTT صالحًا بحجم أقصاه ٥ ميغابايت.",
+
     // KEY-336 in-house lecture player.
     lecturePlayerControls: "مشغّل المحاضرات",
     lecturePlay: "تشغيل",
@@ -5267,6 +5274,13 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    // KEY-343 subtitles and transcript.
+    lectureLoadSubtitles: "Load subtitles…",
+    lectureTranscriptSearch: "Search transcript",
+    lectureTranscriptNoMatches: "No matching cues",
+    lectureSubtitleEmpty: "Load an SRT or VTT file to show the transcript",
+    lectureSubtitleError: "Could not load subtitles. Choose a valid SRT or VTT file up to 5 MB.",
+
     // KEY-336 in-house lecture player.
     lecturePlayerControls: "Lecture player",
     lecturePlay: "Play",

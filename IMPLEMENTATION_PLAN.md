@@ -2,6 +2,9 @@
 
 ## Recent Agent Updates
 
+- [2026-11-13T22:50:08.930292+02:00, Codex] KEY-343: Added bounded SRT/VTT loading, persisted subtitle selection, captions controls and a searchable clickable transcript with active cues and note targets. Arabic and English use centralized translations and RTL/LTR layouts. Finished the parser and tests inherited from Claude Code. Native acceptance passes; final full suites 2050/2050 twice after ten Notes mock fixes (targeted10/10); types pass, lint0errors. Exact files and evidence in CURRENT_TASK.md and docs/agent-ops/reports/KEY-343.md. Scoped publication authorized; unrelated agent work preserved.
+
+
 - [2026-11-13T18:02:45+02:00, Codex] KEY-336 implementation passes full1984/1984 and final native fixture16configurations,0renderererrors, tsc/lint/syntax/diff. Switchable in-house controls retain lecture study workflows. Real Arabic/playable English media absent from required corpus, user sample/fixture-exception question pending. Exact8files in CURRENT_TASK.md/report. Uncommitted, blocked-on-user for real-media acceptance. All owned profiles/renderer removed. KEY-341 c672697 already pushed.
 
 - [2026-11-13, Claude Code] KEY-264, code part: installed builds now read the basic Quran packs from `resources/quran` and install them on first run. Recitation audio stays an in-app download. Unit tests pass. The packaged acceptance run (a clean installed profile, offline, in ar and en) has not been done, so KEY-264 stays open.

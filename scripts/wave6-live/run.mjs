@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawn, spawnSync, execFileSync} from 'node:child_process';
 import electron from 'electron';
-const playerOnly = process.env.BAGLIB_WAVE6_PLAYER_ONLY === '1';
+const realPlayerOnly = process.env.BAGLIB_WAVE6_REAL_PLAYER_ONLY === '1';
+const captionsOnly = process.env.BAGLIB_WAVE6_CAPTIONS_ONLY === '1';
+const playerOnly = process.env.BAGLIB_WAVE6_PLAYER_ONLY === '1' || captionsOnly || realPlayerOnly;
 if (process.platform === 'win32') {
   while (execFileSync('tasklist', ['/FI','IMAGENAME eq electron.exe','/FO','CSV','/NH'], {encoding:'utf8',windowsHide:true}).toLowerCase().includes('"electron.exe"')) {
     console.log('Waiting for the other Electron run to finish.');
@@ -10,7 +12,7 @@ if (process.platform === 'win32') {
   }
 }
 const directory=fs.mkdtempSync(path.resolve('.baglib-data/wave6-live-'));
-const evidence = path.resolve('.baglib-data/KEY-336-evidence');
+const evidence = path.resolve(captionsOnly ? '.baglib-data/KEY-343-evidence' : '.baglib-data/KEY-336-evidence');
 fs.mkdirSync(evidence, {recursive:true});
 let code = 1;
 try {
@@ -21,12 +23,14 @@ const syncsafe=value=>Buffer.from([(value>>21)&0x7f,(value>>14)&0x7f,(value>>7)&
 const u32=value=>{const buffer=Buffer.alloc(4);buffer.writeUInt32BE(value>>>0);return buffer;};
 const chapter=(id,start,title)=>{const text=Buffer.concat([Buffer.from([3]),Buffer.from(title,'utf8')]);const tit2=Buffer.concat([Buffer.from('TIT2'),syncsafe(text.length),Buffer.alloc(2),text]);const body=Buffer.concat([Buffer.from(`${id}\0`),u32(start),u32(start+1000),u32(0xffffffff),u32(0xffffffff),tit2]);return Buffer.concat([Buffer.from('CHAP'),syncsafe(body.length),Buffer.alloc(2),body]);};
 const frames=Buffer.concat([chapter('c1',0,'المقدمة'),chapter('c2',2000,'الباب الأول')]);
+if (!captionsOnly && !realPlayerOnly) {
 const audioRoot=path.join(process.env.APPDATA,'baglib','quran','audio');
 const recitation=fs.readdirSync(audioRoot).map(item=>path.join(audioRoot,item,'001_002.mp3')).find(fs.existsSync);
 if(!recitation)throw new Error('A cached recitation MP3 is needed');
 let audio=fs.readFileSync(recitation);
 if(audio.toString('latin1',0,3)==='ID3')audio=audio.subarray(10+((audio[6]<<21)|(audio[7]<<14)|(audio[8]<<7)|audio[9]));
 fs.writeFileSync(path.join(media,'درس صوتي.mp3'),Buffer.concat([Buffer.from('ID3'),Buffer.from([4,0,0]),syncsafe(frames.length),frames,audio]));
+}
 // A cover rendered from known text, and an image-only verse page for the Hub.
 let pdftoppm;
 if (!playerOnly) {
@@ -58,7 +62,7 @@ if (sampled.status !== 0) throw Error(sampled.stderr || 'Real scanned PDF sampli
 }
 const supportedMedia = new Set(['.mp3','.m4a','.ogg','.opus','.wav','.mp4','.m4v','.mov','.mkv','.webm']);
 const mediaPaths = manifest.files.filter(file => ['audio','video'].includes(file.kind) && supportedMedia.has(path.extname(file.path).toLowerCase())).map(file => path.resolve('tests/real-files',file.path));
-fs.writeFileSync(path.join(directory, 'real-files.json'), JSON.stringify({ pdfs: realFiles, unsupportedAudio: wmaCopy, scanSample, mediaPaths }));
+fs.writeFileSync(path.join(directory, 'real-files.json'), JSON.stringify({ videos: manifest.files.filter(file=>file.kind==='video').map(file=>({lang:file.lang, filename:path.resolve('tests/real-files',file.path)})), pdfs: realFiles, unsupportedAudio: wmaCopy, scanSample, mediaPaths }));
 const env={...process.env,BAGLIB_REGISTER_PROTOCOL: '0',BAGLIB_DATA_DIR:directory,BAGLIB_WAVE6_LIVE_DIR:directory,BAGLIB_WAVE6_POPPLER:pdftoppm ? path.dirname(pdftoppm) : ''};delete env.ELECTRON_RUN_AS_NODE;
 code = await new Promise((resolve, reject) => {
   const child=spawn(electron,['scripts/wave6-live/main.cjs',`--user-data-dir=${directory}`,'--disable-features=CalculateNativeWinOcclusion','--autoplay-policy=no-user-gesture-required'],{env,stdio:'inherit',windowsHide:true});
