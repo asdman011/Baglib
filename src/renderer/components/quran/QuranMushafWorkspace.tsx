@@ -4,7 +4,10 @@ import { IslamicReaderPanel } from '../islamic/IslamicReaderChrome';
 import { PersonalCommentary } from '../knowledge/PersonalCommentary';
 import type { ReaderTab } from '../islamic/reader-chrome';
 import { QuranActionMenu } from '../actions/QuranActionMenu';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NoteMarker } from '../notes/NoteMarker';
+import { useNoteMarkers } from '../../hooks/useNoteMarkers';
+import { passageNote } from '../actions/passage-actions';
 import { BookOpen, Languages, Layers, Lightbulb, ListTree, Play, Type, MoreHorizontal } from 'lucide-react';
 import type { QuranAyahTheme, QuranSimilarAyah, QuranTopic } from '../../../shared/types/quran';
 import type { SunnahSearchHit } from '../../../shared/types/sunnah';
@@ -169,6 +172,18 @@ export function QuranMushafWorkspace(props: Props) {
   const [deckFrom, setDeckFrom] = useState<Reference | null>(null);
   const [themes, setThemes] = useState<QuranAyahTheme[]>([]);
   const [positions, setPositions] = useState<{ theme: QuranAyahTheme; top: number; height: number; left: number }[]>([]);
+  // KEY-337: ayahs on this page that have notes show a small marker in the page margin; it opens them beside the text.
+  const noteCounts = useNoteMarkers();
+  const notedAyahs = useMemo(() => {
+    const seen = new Map<string, Reference & { count: number }>();
+    for (const word of page.words) {
+      const key = `quran:${word.surah}:${word.ayah}`;
+      const count = noteCounts.get(key);
+      if (count && !seen.has(key)) seen.set(key, { surah: word.surah, ayah: word.ayah, count });
+    }
+    return [...seen.values()];
+  }, [page.words, noteCounts]);
+  const [notePositions, setNotePositions] = useState<{ surah: number; ayah: number; count: number; top: number; left: number }[]>([]);
   const [topicDrawer, setTopicDrawer] = useState<{ topics: QuranTopic[]; active: QuranTopic | null } | null>(null);
   const [similarDrawer, setSimilarDrawer] = useState<{ reference: Reference; items: QuranSimilarAyah[] } | null>(null);
   const openTopics = useCallback((topics: QuranTopic[], active: QuranTopic | null) => setTopicDrawer({ topics, active }), []);
@@ -235,6 +250,33 @@ export function QuranMushafWorkspace(props: Props) {
     return () => { observer.disconnect(); container.removeEventListener('scroll', position, true); };
   }, [themes, showThemes, page]);
   useEffect(() => {
+    const container = root.current;
+    if (!container || !notedAyahs.length) { setNotePositions([]); return; }
+    const position = () => {
+      const origin = container.getBoundingClientRect();
+      const surface = container.querySelector('.mushaf-svg-surface')?.getBoundingClientRect();
+      if (!surface) return;
+      setNotePositions(notedAyahs.flatMap(ayah => {
+        // Mushaf SVGs may zero-pad the numbers, so compare them as numbers (as the theme markers do).
+        const boxes = [...container.querySelectorAll<Element>('[data-surah][data-aya]')]
+          .filter(element => Number(element.getAttribute('data-surah')) === ayah.surah && Number(element.getAttribute('data-aya')) === ayah.ayah)
+          .map(element => element.getBoundingClientRect())
+          .filter(box => box.width > 0 && box.height > 0 && box.bottom > surface.top && box.top < surface.bottom);
+        if (!boxes.length) return [];
+        // The marker sits in the left margin, level with the line where the ayah starts.
+        return [{ ...ayah, top: Math.max(...boxes.map(box => box.top)) - origin.top, left: Math.max(4, surface.left - origin.left - 34) }];
+      }));
+    };
+    position();
+    const observer = new ResizeObserver(position);
+    observer.observe(container);
+    const surface = container.querySelector('.mushaf-svg-surface');
+    if (surface) observer.observe(surface);
+    container.addEventListener('scroll', position, true);
+    const late = setTimeout(position, 400);
+    return () => { observer.disconnect(); container.removeEventListener('scroll', position, true); clearTimeout(late); };
+  }, [notedAyahs, page]);
+  useEffect(() => {
     if (!menu) return;
     const previous = document.activeElement as HTMLElement | null;
     menuElement.current?.querySelector<HTMLButtonElement>('button')?.focus();
@@ -261,6 +303,9 @@ export function QuranMushafWorkspace(props: Props) {
     {props.canPlay && <div className="quran-edge absolute bottom-3 inset-x-0 z-20 flex justify-center pointer-events-none"><button type="button" title={t('quranAudioPlay')} aria-label={t('quranAudioPlay')} onClick={() => props.onStartAudio(pageStart)} data-quran-play-button className="pointer-events-auto rounded-full bg-emerald-700 p-4 text-white shadow-lg"><Play className="size-6" /></button></div>}
 </>}
     {showThemes && page.profile === 'hafs' && positions.map(({ theme, top, height, left }, index) => <aside key={`${theme.surahNumber}:${theme.ayahFrom}:${theme.ayahTo}:${index}`} data-quran-theme-marker data-surah={theme.surahNumber} data-ayah-from={theme.ayahFrom} data-ayah-to={theme.ayahTo} aria-label={`${theme.theme} · ${theme.surahNumber}:${theme.ayahFrom}–${theme.ayahTo}`} style={{ top, height, left, maxWidth: `max(0px, min(7rem, calc(100% - ${left}px - 56px)))` }} className="absolute pointer-events-none border-s-4 border-y-2 border-amber-600 rounded-s-lg ps-2 text-xs text-amber-700 dark:text-amber-300 overflow-hidden whitespace-pre-line" dir="ltr"><span dir="auto">{theme.theme}</span></aside>)}
+    {notePositions.map(({ surah, ayah, count, top, left }) => <div key={`${surah}:${ayah}`} data-quran-note-marker data-surah={surah} data-ayah={ayah} className="absolute z-10" style={{ top, left }}>
+      <NoteMarker count={count} t={t} onOpen={() => passageNote(`quran:${page.profile}:${surah}:${ayah}`, `${surah}:${ayah}`)} />
+    </div>)}
     {(props.panelOpen ?? windows.length > 0) && (() => {
       const panel = windows[0] || { id: 0, tool: 'tafsir' as Tool, reference: { ...pageStart, wholePage: true }, side: 'right' as const };
       const active: ReaderTab = panel.tool === 'tafsir' ? 'commentary' : panel.tool === 'translation' ? 'translation' : 'related';

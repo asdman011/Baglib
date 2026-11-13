@@ -13,6 +13,7 @@ import { MoreHorizontal } from 'lucide-react';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { HadithActions, formatHadith } from './HadithActions';
 import { SunnahResearchPanel } from './SunnahResearchPanel';
+import { NoteMarker } from '../notes/NoteMarker';
 
 export type SunnahTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
@@ -42,8 +43,10 @@ function NumberedTitle({ number, title, language, fallback }: { number: string; 
   return <><bdi className="sunnah-number" dir="ltr">{number}</bdi><span>{title[language] || fallback}</span></>;
 }
 
-export function SunnahChapterView({ calm = false, onStudy, onShowGrading, chapter, hadiths, showEnglish, single, t, onFocus }: {
+export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCounts, chapter, hadiths, showEnglish, single, t, onFocus }: {
   calm?: boolean;
+  /** KEY-337: notes per passage target; a hadith with notes shows a marker that opens them beside the text. */
+  noteCounts?: Map<string, number>;
   onStudy?: (tab: ReaderTab) => void;
   /** Calm mode: show this hadith's individual judgments in the side panel (KEY-334). */
   onShowGrading?: (hadithId: string, researchId: number) => void;
@@ -86,7 +89,8 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, chapte
           english={<h3><NumberedTitle number={section.number} title={section.title} language="en" fallback="" /></h3>} />}
         <article className="sunnah-hadith group relative" aria-label={t('sunnahHadithNumber', { number: hadith.number || '—' })}>
           <div className="flex items-center justify-between gap-3 mb-4 text-xs font-sans text-muted">
-            <span className="font-bold">{t('sunnahHadithNumber', { number: hadith.number || '—' })}</span>
+            <span className="inline-flex items-center gap-2"><span className="font-bold">{t('sunnahHadithNumber', { number: hadith.number || '—' })}</span>
+              {!!noteCounts?.get(target) && <NoteMarker count={noteCounts.get(target)!} t={t} onOpen={() => passageNote(target, label)} />}</span>
             {!calm && hadith.researchId !== undefined && <button type="button" className="sunnah-button" onClick={event => {
               const panel = event.currentTarget.closest('article')?.querySelector<HTMLDetailsElement>('.sunnah-research');
               if (panel) { panel.open = true; panel.scrollIntoView({ block: 'start' }); }

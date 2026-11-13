@@ -6,7 +6,8 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { openStudyNote } from '../../utils/study-navigation';
 import { consumeLecture, LECTURE_OPEN_EVENT, lectureTarget } from '../../utils/lecture-navigation';
-import { studyLinkText, studyLinks } from '../../../shared/study-notes';
+import { studyLinks } from '../../../shared/study-notes';
+import { passageNote } from '../actions/passage-actions';
 import { clockTime, PLAYBACK_RATES, type Lecture } from '../../../shared/lectures';
 import { localAssetUrl } from '../../utils/file-path-helper';
 import { useCompanionContext } from '../../utils/companion-context';
@@ -52,7 +53,7 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
     const at = media.current?.currentTime ?? 0;
     return { kind: 'lecture', target: lectureTarget(lecture.id, at), label: label(at) };
   }, [lecture.id, lecture.title]);
-  const note = () => { const at = media.current?.currentTime ?? 0; openStudyNote({ content: `${studyLinkText(lectureTarget(lecture.id, at), label(at))}\n\n` }); };
+  const note = () => { const at = media.current?.currentTime ?? 0; passageNote(lectureTarget(lecture.id, at), label(at)); };
   const shot = async () => {
     const element = media.current;
     if (!element || !element.videoWidth) return;
@@ -61,7 +62,7 @@ function Player({ lecture, seek, onChanged }: { lecture: Lecture; seek: number |
     canvas.getContext('2d')!.drawImage(element, 0, 0);
     const at = element.currentTime;
     const id = await api.saveShot(lecture.id, canvas.toDataURL('image/png'));
-    openStudyNote({ content: `${studyLinkText(lectureTarget(lecture.id, at, id), label(at), true)}\n\n` });
+    passageNote(lectureTarget(lecture.id, at, id), label(at), '', true);
   };
   const addSection = () => {
     const sections = [...lecture.sections, { title: section.trim(), start: Math.floor(media.current?.currentTime ?? 0) }];

@@ -4,9 +4,8 @@ import React, { useEffect, useRef } from 'react';
 import { Copy, CopyCheck, ExternalLink, X } from 'lucide-react';
 import type { QuranAyahDetails } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
-import { openStudyNote } from '../../utils/study-navigation';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
-import { studyLinkText } from '../../../shared/study-notes';
+import { passageNote } from '../actions/passage-actions';
 
 export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar, floating = false, commentary }: {
   details: QuranAyahDetails | null; reference: { surah: number; ayah: number }; surahName: string; error: boolean;
@@ -37,7 +36,7 @@ export function QuranAyahInspector({ details, reference, surahName, error, t, di
         <section className="space-y-3 border-t border-subtle pt-4"><h3 className="text-sm text-muted">{t('quranImlaey')}</h3>{details.imlaey ? <><p dir="rtl" lang="ar" className="font-reading text-xl leading-[2.3] break-words select-text">{details.imlaey}</p><button type="button" onClick={() => copy(details.imlaey!)} className="flex items-center gap-2 text-sm rounded-xl border border-subtle px-3 py-2"><Copy className="size-4" />{t('quranCopyImlaey')}</button></> : <p className="text-sm text-muted leading-relaxed">{t('quranImlaeyUnavailable')}</p>}</section>
       </>}
       <div className="flex flex-wrap gap-2 pt-2">
-        {details && <button type="button" onClick={() => openStudyNote({ content: studyLinkText(`quran:${details.profile}:${reference.surah}:${reference.ayah}`, `${surahName} ${reference.surah}:${reference.ayah}`) + '\n\n' })} className="rounded-xl border border-subtle px-3 py-2 text-sm">{t('studyCaptureReference')}</button>}
+        {details && <button type="button" onClick={() => passageNote(`quran:${details.profile}:${reference.surah}:${reference.ayah}`, `${surahName} ${reference.surah}:${reference.ayah}`)} className="rounded-xl border border-subtle px-3 py-2 text-sm">{t('studyCaptureReference')}</button>}
         <button data-quran-study-jump type="button" onClick={onStudy} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 text-white px-4 py-3 text-sm"><ExternalLink className="size-4 rtl:rotate-180" />{t('quranOpenInStudyReader')}</button>
         {onSimilar && <button type="button" onClick={onSimilar} className="inline-flex items-center gap-2 rounded-xl border border-subtle px-4 py-3 text-sm hover:bg-pale-sky-500/10 transition-colors"><CopyCheck className="size-4 text-emerald-600 dark:text-emerald-400" />{t('quranSimilarAyahs')}</button>}
       </div>

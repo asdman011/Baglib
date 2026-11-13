@@ -1,3 +1,54 @@
+## KEY-337: notes are written beside the text, and noted passages show a marker - 2026-11-13, Claude Code
+
+Implemented by Claude at the user's request.
+
+**Cause:** every "new note" from a passage called `openStudyNote`, and AppLayout reacted by switching to the Notes tab, so the reading position was lost.
+
+**Changes**
+- **`passageNote`** (`src/renderer/components/actions/passage-actions.ts`) now fires `baglib:note-panel` with `{target, label, text, embed}`. These callers use it:
+  - the Quran ayah menu "New note";
+  - the Sunnah context-menu fallback;
+  - `HadithActions` "Capture linked note";
+  - `QuranAyahInspector`;
+  - the lecture "Note here" and screenshot buttons.
+
+  Generic "New note" entry points (command palette, New menu) still open the Notes tab.
+- **New `src/renderer/components/notes/NoteSidePanel.tsx`**, mounted once in `ActionOverlays`. It is non-modal, on the inline-end side, and mirrors in Arabic. It shows:
+  - the quoted passage text;
+  - an editor (Ctrl+Enter saves);
+  - Save;
+  - an explicit "Open in Notes";
+  - the earlier notes and personal comments on the same passage, each with "Open note".
+
+  Esc closes it and returns focus. Saving goes through `studyNotes.save` and fires `baglib:notes-changed`.
+- **New `src/shared/note-targets.ts`:**
+  - which notes belong to a passage: links, personal comment references and poetry locations;
+  - an ayah matches across readings and inside ranges;
+  - any moment of the same lecture matches;
+  - overlapping verse ranges match;
+  - marker counts.
+- **New `useNoteMarkers` and `NoteMarker`** (bookmarks are not counted as notes). Markers appear:
+  - in the mushaf margin, level with the ayah (numeric match, because SVG numbers can be zero-padded);
+  - beside the hadith number;
+  - on poetry rows.
+
+  Clicking a marker reopens the panel.
+- **`translations.ts`:** 14 keys in ar and en, with all Arabic plural forms for the marker.
+- **Tests:** `tests/services/note-targets.test.ts` (4) and `tests/ui/note-side-panel.test.ts` (4).
+- **`scripts/ux-journeys-live/main.cjs`:** J5 now writes its note in the panel. New J21, opt-in with `BAGLIB_JOURNEY_IDS=21`, checks that the page, tab and scroll stay, that the ayah and hadith markers appear, and that a marker reopens the panel.
+- **`scripts/wave6-live/main.cjs`:** lecture notes and screenshot notes are written in the panel.
+
+**Verification**
+- J5 + J21 passed 16/16 across all 8 configurations, then 4/4 again after the last hook change, with 0 renderer errors.
+- wave6-live passed in ar and en with real media (mp3, webm, mp4, mov, mkv): the timestamp note, the screenshot note and the jump back all work.
+- Screenshots inspected: ar panel 1280, ar hadith marker, en dark 480 ayah marker.
+- Unit tests 8/8; full suite 1949/1949; tsc clean; eslint 0 errors.
+
+**Limits**
+- Poetry markers are covered by unit tests (`poetryRowCount`) but were not driven live.
+- Poetry's own "Save note" already saved in place and is unchanged.
+- Personal comments keyed by a hadith research id (`hadith:<id>`) are not linked to the hadith's study target, so they do not count for the hadith marker.
+
 ## KEY-335: PDF multi-line selection is smooth and connected - 2026-11-13, Claude Code
 
 Implemented by Claude at the user's request.

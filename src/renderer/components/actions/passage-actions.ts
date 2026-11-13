@@ -1,6 +1,4 @@
 'use client';
-import { openStudyNote } from '../../utils/study-navigation';
-import { studyLinkText } from '../../../shared/study-notes';
 import type { CardSourceKind } from '../../../shared/types/knowledge-cards';
 export async function addPassageToSrs(input: {
     text: string;
@@ -17,8 +15,11 @@ export async function addPassageToSrs(input: {
     window.dispatchEvent(new CustomEvent('baglib:context-action-done'));
     return card;
 }
-export function passageNote(target: string, label: string, text = '') {
-    openStudyNote({ content: `${studyLinkText(target, label)}\n\n${text}` });
+/** KEY-337: a note on a passage opens beside the text (NoteSidePanel), never by switching to the Notes tab. */
+export const NOTE_PANEL_EVENT = 'baglib:note-panel';
+export interface NotePanelRequest { target: string; label: string; text?: string; embed?: boolean }
+export function passageNote(target: string, label: string, text = '', embed = false) {
+    window.dispatchEvent(new CustomEvent<NotePanelRequest>(NOTE_PANEL_EVENT, { detail: { target, label, text, embed } }));
 }
 export async function linkPassageToNote(target: string, label: string) {
     window.dispatchEvent(new CustomEvent('baglib:link-passage', { detail: { target, label } }));

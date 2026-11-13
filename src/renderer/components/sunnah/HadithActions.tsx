@@ -7,8 +7,7 @@ import type { SunnahTranslate } from './SunnahChapterView';
 import { shortenArabicChain, splitSunnahPassage } from '../../libs/sunnah/text';
 import { translations, type TranslationKey } from '../../translations';
 import { collectionKeys as names } from '../../utils/sunnah-collections';
-import { openStudyNote } from '../../utils/study-navigation';
-import { studyLinkText } from '../../../shared/study-notes';
+import { passageNote } from '../actions/passage-actions';
 
 
 export function formatHadith(chapter: SunnahChapter, hadith: SunnahHadith, english: boolean, isnad: boolean, reference: boolean): string {
@@ -58,7 +57,7 @@ export function HadithActions({ chapter, hadith, showEnglish, t }: { chapter: Su
   };
   return <footer className="mt-5 border-t border-subtle pt-3 space-y-3 text-sm font-sans">
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" className="sunnah-button" onClick={() => openStudyNote({ content: studyLinkText(`sunnah:${chapter.collection}:${chapter.number}:${hadith.id}`, `${t(names[chapter.collection])} · ${hadith.number}`) + '\n\n' })}>{t('studyCaptureReference')}</button>
+      <button type="button" className="sunnah-button" onClick={() => passageNote(`sunnah:${chapter.collection}:${chapter.number}:${hadith.id}`, `${t(names[chapter.collection])} · ${hadith.number}`)}>{t('studyCaptureReference')}</button>
       <button className="sunnah-button" onClick={() => void perform(false)}><Copy size={14} />{t('sunnahCopy')}</button>
       <button className="sunnah-button" disabled={sharing} aria-busy={sharing} onClick={() => void perform(true)}><Share2 size={14} />{t('sunnahShare')}</button>
       <button className="sunnah-button" aria-label={t('sunnahExportOptions')} title={t('sunnahExportOptions')} aria-expanded={optionsOpen} onClick={() => setOptionsOpen(open => !open)}><SlidersHorizontal size={14} /></button>

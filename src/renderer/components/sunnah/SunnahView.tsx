@@ -12,6 +12,7 @@ import type { TranslationKey } from '../../translations';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { normalizeSunnahSearch } from '../../libs/sunnah/text';
 import { SunnahChapterView } from './SunnahChapterView';
+import { useNoteMarkers } from '../../hooks/useNoteMarkers';
 import './sunnah.css';
 import { SunnahSearch, type SunnahSearchScope, type SunnahSearchTarget } from './SunnahSearch';
 import { SunnahInsightsPanel } from './SunnahInsightsPanel';
@@ -69,6 +70,7 @@ export function SunnahView() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [readerTab, setReaderTab] = useState<ReaderTab>('commentary');
   const [gradingRequest, setGradingRequest] = useState({ id: -1, count: 0 });
+  const noteCounts = useNoteMarkers();
   const [insights, setInsights] = useState(false);
   const [visibleCount, setVisibleCount] = useState(24);
   const viewport = useRef<HTMLDivElement>(null);
@@ -294,7 +296,7 @@ export function SunnahView() {
       {query.trim() && (scope !== 'chapter' || catalog?.research) && <SunnahSearch query={query} scope={scope} collection={position.collection} chapter={position.chapter} t={t} onOpen={openSearchHit} />}
       {!loading && !importing && chapter && !(query.trim() && (scope !== 'chapter' || catalog?.research)) && <>
         {query.trim() && <p role="status" className="px-5 pb-4 text-sm text-muted">{t('sunnahSearchCount', { count: results.length })}</p>}
-        <SunnahChapterView calm onStudy={tab => { setReaderTab(tab); setPanelOpen(true); }} onShowGrading={(id, researchId) => {
+        <SunnahChapterView calm noteCounts={noteCounts} onStudy={tab => { setReaderTab(tab); setPanelOpen(true); }} onShowGrading={(id, researchId) => {
           // KEY-334: keep the reading mode and scroll; select the hadith and open its judgments beside the text.
           setPosition(previous => ({ ...previous, hadith: id }));
           setGradingRequest(current => ({ id: researchId, count: current.count + 1 }));

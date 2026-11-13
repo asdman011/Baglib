@@ -275,12 +275,14 @@ app.on('browser-window-created', (_, win) => {
         const notesBefore = (await evaluate('window.electronAPI.studyNotes.list()')).length;
         await ui.click('open the ayah menu again', '[data-quran-ayah-actions]');
         await ui.click('choose "New note"', '[data-menu-action="note"]');
-        await until('!!document.querySelector("[data-note-editor-pane]")', 200);
-        await ui.type('give the note a title', '[data-note-editor-title]', config.lang === 'ar' ? 'آية وحديث — study' : 'Ayah and hadith — دراسة');
-        await ui.clickText('save the note', '[data-note-editor-actions] button', tr('save'));
+        // KEY-337: the note opens beside the mushaf; the Quran stays on screen.
+        await until('!!document.querySelector("[data-note-side-panel]") && !!document.querySelector("[data-quran-workspace]")', 200);
+        await ui.type('write the note (its first line is the title)', '[data-note-panel-editor]', config.lang === 'ar' ? 'آية وحديث — study' : 'Ayah and hadith — دراسة');
+        await ui.click('save the note', '[data-note-panel-save]');
         await until('window.electronAPI.studyNotes.list().then(n=>n.length>' + notesBefore + '&&n.some(x=>x.content.includes("quran:")))');
         const ayahNote = (await evaluate('window.electronAPI.studyNotes.list()')).filter(note => note.content.includes('quran:')).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
         journey.notes.push('Ayah note saved with title: ' + ayahNote.title);
+        press('Escape');
         await ui.nav('sunnah', '.sunnah-workspace');
         await until('!!document.querySelector("[data-hadith-id]")', 200);
         await step('right-click a hadith', async () => { await evaluate('(()=>{const e=document.querySelector("[data-hadith-id]");e.scrollIntoView({block:"center"});const r=e.getBoundingClientRect();e.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:r.left+20,clientY:r.top+20}));})()'); await until('!!document.querySelector(\'[data-menu-action="link"]\')'); });
@@ -663,6 +665,59 @@ app.on('browser-window-created', (_, win) => {
         if (Math.abs(scrollAfter - scrollBefore) > 4) throw new Error('the reading position moved ' + scrollBefore + ' -> ' + scrollAfter);
         journey.notes.push('Judgments shown (' + judgments.length + '/' + expected + '): ' + judgments.join(', '));
         await shot('J19-judgments');
+      });
+
+      // J21 (opt-in, BAGLIB_JOURNEY_IDS=21) — KEY-337: a note on an ayah and on a hadith opens beside the text; the reading
+      // page, scroll and tab stay; the noted ayah and hadith then show a marker that reopens the panel.
+      if (journeysOnly.includes(21)) await journeyRun(21, 'Note beside the text, then its marker', async () => {
+        const words = { ar: 'تأمل في هذه الآية', en: 'A thought on this ayah' };
+        await ui.nav('quran', '[data-quran-workspace]');
+        await until('!!document.querySelector("[data-quran-workspace] [data-surah][data-aya]")', 200);
+        const page = await evaluate('document.querySelector("[data-reader-go-to]")?.value || document.querySelector("[data-quran-workspace] [data-surah][data-aya]").getAttribute("data-surah")');
+        await ui.click('open the ayah menu', '[data-quran-ayah-actions]');
+        await ui.click('choose "New note"', '[data-menu-action="note"]');
+        await until('!!document.querySelector("[data-note-side-panel]")', 200);
+        if (!await has('[data-quran-workspace]')) throw new Error('the Quran left the screen');
+        const target = await evaluate('document.querySelector("[data-note-side-panel]").dataset.noteTarget');
+        if (!/^quran:(hafs|warsh):\d+:\d+$/.test(target)) throw new Error('panel target ' + target);
+        if (!await has('[data-note-panel-quote]')) throw new Error('the ayah text is not quoted in the panel');
+        await ui.type('write the note', '[data-note-panel-editor]', words[config.lang]);
+        await step('save with Ctrl+Enter', async () => {
+          await evaluate('document.querySelector("[data-note-panel-editor]").focus()');
+          press('Enter', ['control']);
+          await until('window.electronAPI.studyNotes.list().then(n=>n.some(x=>x.content.includes(' + JSON.stringify(words[config.lang]) + ')))');
+        });
+        await until('document.querySelector("[data-note-panel-list]")?.children.length>0', 80);
+        await shot('J21-quran-panel');
+        press('Escape');
+        await until('!document.querySelector("[data-note-side-panel]")');
+        const [, , surah, ayah] = target.split(':');
+        try { await until('!!document.querySelector(\'[data-quran-note-marker][data-surah="' + surah + '"][data-ayah="' + ayah + '"]\')', 120); }
+        catch { throw new Error('no marker; markers on page ' + await evaluate('JSON.stringify([...document.querySelectorAll("[data-quran-note-marker]")].map(e=>e.dataset.surah+":"+e.dataset.ayah))') + ', surface ' + await has('.mushaf-svg-surface') + ', words ' + await evaluate('document.querySelectorAll(\'[data-surah="' + surah + '"][data-aya="' + ayah + '"]\').length')); }
+        const pageAfter = await evaluate('document.querySelector("[data-reader-go-to]")?.value || document.querySelector("[data-quran-workspace] [data-surah][data-aya]").getAttribute("data-surah")');
+        if (pageAfter !== page) throw new Error('the page changed ' + page + ' -> ' + pageAfter);
+        await ui.click('reopen the note from its marker', '[data-quran-note-marker] [data-note-marker]');
+        await until('document.querySelector("[data-note-side-panel]")?.dataset.noteTarget===' + JSON.stringify(target) + '&&document.querySelector("[data-note-panel-list]")?.textContent.includes(' + JSON.stringify(words[config.lang]) + ')', 80);
+        await shot('J21-quran-marker');
+        press('Escape');
+        // Sunnah: the reflection button opens the study panel's notes tab; "capture the reference" now writes beside the text.
+        await ui.nav('sunnah', '.sunnah-workspace');
+        await until('!!document.querySelector("[data-hadith-id]")', 200);
+        const scrollBefore = await evaluate('document.querySelector(".sunnah-scroll").scrollTop');
+        await step('open the reflection panel of the first hadith', async () => { await evaluate('(()=>{const a=document.querySelector("[data-hadith-id] article");const b=[...a.querySelectorAll("button")].find(x=>x.textContent.trim()===' + JSON.stringify(tr('sunnahReflection')) + ');b.click();})()'); await until('!!document.querySelector("[data-islamic-reader-panel]")'); });
+        await ui.clickText('capture the reference', '[data-islamic-reader-panel] button', tr('studyCaptureReference'));
+        await until('document.querySelector("[data-note-side-panel]")?.dataset.noteTarget?.startsWith("sunnah:")', 80);
+        const hadithTarget = await evaluate('document.querySelector("[data-note-side-panel]").dataset.noteTarget');
+        await ui.type('write the hadith note', '[data-note-panel-editor]', words[config.lang] + ' — hadith');
+        await ui.click('save it', '[data-note-panel-save]');
+        await until('window.electronAPI.studyNotes.list().then(n=>n.some(x=>x.content.includes(' + JSON.stringify(hadithTarget) + ')))');
+        press('Escape');
+        if (!await has('.sunnah-workspace')) throw new Error('Sunnah left the screen');
+        const scrollAfter = await evaluate('document.querySelector(".sunnah-scroll").scrollTop');
+        if (Math.abs(scrollAfter - scrollBefore) > 4) throw new Error('the reading position moved ' + scrollBefore + ' -> ' + scrollAfter);
+        await until('!!document.querySelector("[data-hadith-id] [data-note-marker]")', 80);
+        journey.notes.push('Quran ' + target + ' and ' + hadithTarget + ' noted beside the text; markers shown');
+        await shot('J21-hadith-marker');
       });
 
       // J20 (opt-in, BAGLIB_JOURNEY_IDS=20) — KEY-335: a real mouse drag over many PDF lines grows smoothly (no jumps to the

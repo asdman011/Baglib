@@ -102,11 +102,21 @@ app.on('browser-window-created',(_,owner)=>{
       await evaluate(`[...document.querySelectorAll('ul button')].find(b=>b.querySelector('span')?.textContent===${JSON.stringify(mp3.title)}).click()`);
       await until(`(()=>{const v=document.querySelector('[data-lecture-player]');return v&&v.readyState>=1&&v.playbackRate===1.5&&v.currentTime>=2})()`);
       result.resume={rate:1.5,position:saved.position};
-      // The note button opens Notes with a timestamped link; saving it and following it seeks back.
+      // KEY-337: the note button opens the note side panel beside the player (no jump to Notes) with a timestamped link;
+      // saving it and following it seeks back.
+      const panelNote=async(prefix,text)=>{
+        await until(`!!document.querySelector('[data-note-side-panel]')?.dataset.noteTarget?.startsWith(${JSON.stringify(prefix)})`);
+        assert.ok(await evaluate("!!document.querySelector('[data-lecture-player]')"),'the player stays on screen');
+        await evaluate(`(()=>{const e=document.querySelector('[data-note-panel-editor]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,${JSON.stringify(text)});e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+        await evaluate("document.querySelector('[data-note-panel-save]').click()");
+        await until(`window.electronAPI.studyNotes.list().then(n=>n.some(x=>x.content.includes(${JSON.stringify(prefix)})&&x.content.includes(${JSON.stringify(text)})))`);
+        const saved=(await evaluate('window.electronAPI.studyNotes.list()')).find(x=>x.content.includes(prefix)&&x.content.includes(text));
+        await evaluate("document.querySelector('[data-note-side-panel] button[aria-label]').click()");
+        return saved;
+      };
       await press(L.noteHere);
-      await until(`!!document.querySelector('[data-note-editor-pane] [data-study-note-editor] .cm-content') && document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value.includes('media:${mp3.id}:')`);
-      const draft=await evaluate("document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value");
-      const note=await evaluate(`window.electronAPI.studyNotes.save({title:'ملاحظة محاضرة ${language}',content:${JSON.stringify(draft+'فائدة')},tags:[],aliases:[]})`);
+      const note=await panelNote(`media:${mp3.id}:`,`فائدة ${language}`);
+      const draft=note.content;
       result.timestampNote=draft.trim();
       // A video frame saved to a note shows as an image.
       const video=lectures.find(item=>item.kind==='video'&&result.playable[path.extname(item.path)]?.played);
@@ -118,9 +128,8 @@ app.on('browser-window-created',(_,owner)=>{
         await shot(`lectures-${language}-1280`);
         owner.setContentSize(480,1000);await pause(500);assert.ok(await evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'));await shot(`lectures-${language}-480`);owner.setContentSize(1280,900);
         await press(L.shot);
-        await until(`!!document.querySelector('[data-note-editor-pane] [data-study-note-editor] .cm-content') && document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value.includes('![[media:${video.id}:')`);
-        const embed=await evaluate("document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value");
-        const screenshotNote = await evaluate(`window.electronAPI.studyNotes.save({title:'لقطة ${language}',content:${JSON.stringify(embed)},tags:[],aliases:[]})`);
+        const screenshotNote = await panelNote(`media:${video.id}:`,`لقطة ${language}`);
+        assert.ok(screenshotNote.content.includes(`![[media:${video.id}:`),'the frame is embedded');
         await load(language);await nav('notes');
         await until(`!!document.querySelector('[data-study-note="${screenshotNote.id}"]')`);
         await evaluate(`document.querySelector('[data-study-note="${screenshotNote.id}"]').click()`);

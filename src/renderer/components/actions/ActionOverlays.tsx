@@ -5,6 +5,7 @@ import { PersonalCommentary } from '../knowledge/PersonalCommentary';
 import { Modal } from '../ui/Modal';
 import { matchesShortcut } from './shortcuts';
 import { ShortcutList } from './ShortcutList';
+import { NoteSidePanel } from '../notes/NoteSidePanel';
 import { openStudyNote } from '../../utils/study-navigation';
 import { studyLinkText } from '../../../shared/study-notes';
 import type { StudyNote } from '../../../shared/study-notes';
@@ -59,6 +60,7 @@ export function ActionOverlays() {
       {comment && <div ref={node => { const details = node?.querySelector('details'); if (details)
         details.open = true; }}><PersonalCommentary key={comment} reference={comment}/></div>}
     </Modal>
+    <NoteSidePanel />
     <Modal open={help} onClose={() => setHelp(false)} title={t('keyboardShortcutsTitle')}>
       <p className="mb-3 text-sm leading-relaxed">{t('ctxShortcutTip')}</p>
       <ShortcutList t={t} />

@@ -7,7 +7,10 @@ import type { PoetryDetail } from '../../../shared/types/poetry';
 import { poetryDisplayText, poetryDescriptionText } from '../../../shared/poetry';
 import { ContextMenu } from '../ui/ContextMenu';
 import { shortcutForEvent, shortcutHint } from '../actions/shortcuts';
-import { addPassageToSrs } from '../actions/passage-actions';
+import { addPassageToSrs, passageNote } from '../actions/passage-actions';
+import { NoteMarker } from '../notes/NoteMarker';
+import { useNoteMarkers } from '../../hooks/useNoteMarkers';
+import { poetryRowCount } from '../../../shared/note-targets';
 import { Copy, Share2, NotebookPen, SquareCheck } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { buildPoetryRows, poetryCopyText, poetryRhymeLetter, poetryRowLineClass, type PoetryRowModel } from './poetry-layout';
@@ -20,6 +23,7 @@ import { useCompanionContext } from '../../utils/companion-context';
 
 export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: { poem: PoetryDetail; onBack: () => void; onPoet?: (id: number) => void; initialVerse?: number; initialTo?: number }) {
   const { t, dir, lang } = useWorkspace();
+  const noteCounts = useNoteMarkers();
   const verses = useMemo(() => {
     try {
       const parsed: unknown = JSON.parse(poem.verses_json);
@@ -180,6 +184,7 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
             }}
             className={`group relative rounded-xl px-9 py-1 outline-none max-sm:py-3 transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-pale-sky-500 sm:px-24 ${selected ? 'bg-primary/10 ring-1 ring-primary/50' : ''}`}>
             {number && <span aria-hidden="true" data-poetry-line-number className="pointer-events-none absolute start-2 top-1/2 -translate-y-1/2 text-xs leading-none text-muted/70 tabular-nums">{number}</span>}
+            {poetryRowCount(noteCounts, poem.id, row.sourceFrom, row.sourceTo) > 0 && <NoteMarker className="absolute start-1 top-0 z-10" count={poetryRowCount(noteCounts, poem.id, row.sourceFrom, row.sourceTo)} t={t} onOpen={() => passageNote('poetry:ashaar:' + poem.id + ':' + row.sourceFrom + ':' + row.sourceTo, [poem.poet_name, poem.title].filter(Boolean).join(' — ') + (number ? ' · ' + number : ''), poetryCopyText([row], poem))} />}
             <div data-poetry-line className={poetryRowLineClass(row.kind, centred)}>
               <span data-poetry-hemistich="sadr" aria-label={row.kind === 'hemistichs' ? t('bayanSadr') : undefined} className="block min-w-0 whitespace-pre-wrap break-words px-1 py-0.5" style={halfStyle}>{poetryDisplayText(row.sadr, diacritics)}</span>
               {row.ajuz !== null && <span data-poetry-hemistich="ajuz" aria-label={t('bayanAjuz')} className="block min-w-0 whitespace-pre-wrap break-words px-1 py-0.5" style={halfStyle}>{poetryDisplayText(row.ajuz, diacritics)}</span>}
