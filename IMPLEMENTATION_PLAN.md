@@ -2,6 +2,30 @@
 
 ## Recent Agent Updates
 
+- [2026-11-12, Claude Code] Planned the user's 10 reading, notes, media and planner requests and created Jira tasks KEY-334 to KEY-344:
+  - KEY-334: Sunnah grading button;
+  - KEY-335: PDF selection flicker;
+  - KEY-336: in-house lecture player;
+  - KEY-337: note side panel and inline markers;
+  - KEY-338: folder-style Notes tab;
+  - KEY-339: Ctrl+wheel zoom;
+  - KEY-340: Quran/Sunnah/poetry selection and colour highlights;
+  - KEY-341: Tasks on the Microsoft To Do model;
+  - KEY-342: lectures as library Works plus video drop;
+  - KEY-343: subtitles and transcript;
+  - KEY-344: lecture series, blocked on schema approval.
+
+  On 2026-11-12 the user approved these schema changes: media `DigitalFormat` values (KEY-342); and for KEY-341 the `task_list` table, the task fields `list_id`, `recurrence`, `reminder_at` and `subject` (optional, auto-filled). Still waiting for approval: the lecture series entity (KEY-344) and the player look (KEY-336).
+
+  Dispatch order:
+  - Wave A: KEY-334, 335, 336, 337.
+  - Wave B: KEY-339 after 335; KEY-340 after 337; KEY-338.
+  - Wave C: KEY-341, then 342 and 343 after 336.
+  - KEY-338 and KEY-341 must wait until Codex's KEY-309 queue releases the Notes and planner files.
+
+  No code was written.
+
+
 - [2026-11-12, Codex queue3-root] KEY-309 full UX sweep verified. Baseline/final160 each, final7supplementalQuranpanels,16review sheets inspected,0renderererrors/rawkeys/documentoverflow,profilesdeleted/1340corpusoriginalsunchanged. Library canonical bidi isolation and Arabic spacing fixed in four production files. Types/lint0warnings/focused23/build/diff/full1905 pass. Exact8files/hunks and local sweep report in CURRENT_TASK. Four larger follow-ups and missing real Arabic EPUB documented. Publication pending; Claude review/Jira.
 
 - [2026-11-12, Codex queue3-root] KEY-64 safe Advanced settings verified. Catalog JSON/BOM-CSV save-dialog export, existing FTS rebuild/progress and read-only health, no schema/dependencies. Focused10/full1905/types/build/diff/native8pass,lint0errors1existingwarning,16PNGs/fourinspected,profiledeleted/129corpusoriginalsunchanged. Exact15ownfiles/hunks in CURRENT_TASK/report. CSV nulls blank and synchronous table-level rebuild documented. Published 3682d647d7e2d8e11493723258dd024a3f0436fc normally to origin/feature/library-domain at 2026-11-12T08:03:34.276Z. Remote hash verified; lock released. Claude owns review/Jira. KEY-309 sweep next. Claude owns Jira.

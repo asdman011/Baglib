@@ -68,6 +68,7 @@ export function SunnahView() {
   const [retry, setRetry] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [readerTab, setReaderTab] = useState<ReaderTab>('commentary');
+  const [gradingRequest, setGradingRequest] = useState({ id: -1, count: 0 });
   const [insights, setInsights] = useState(false);
   const [visibleCount, setVisibleCount] = useState(24);
   const viewport = useRef<HTMLDivElement>(null);
@@ -265,7 +266,7 @@ export function SunnahView() {
         {readerTab === 'translation' && <p dir="ltr" lang="en" className="leading-loose whitespace-pre-wrap">{hadith.text.en.full || hadith.text.en.matn || t('sunnahMissingEnglish')}</p>}
         {readerTab === 'notes' && <HadithActions key={hadith.id} chapter={chapter} hadith={hadith} showEnglish={position.english} t={t} />}
         {readerTab === 'commentary' && <div dir="rtl" lang="ar" className="font-reading text-xl leading-[2.4] whitespace-pre-wrap">{hadith.comment || t('quranWordUnavailable')}</div>}
-        {readerTab === 'related' && (hadith.researchId !== undefined ? <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} matn={hadith.text.ar.matn || hadith.text.ar.full} initialOpen t={t} /> : <p>{t('quranWordUnavailable')}</p>)}
+        {readerTab === 'related' && (hadith.researchId !== undefined ? <SunnahResearchPanel key={hadith.researchId} id={hadith.researchId} matn={hadith.text.ar.matn || hadith.text.ar.full} initialOpen showGrading={gradingRequest.id === hadith.researchId ? gradingRequest.count : undefined} sourceBook={Boolean(hadith.sourceBook)} t={t} /> : <p>{t('quranWordUnavailable')}</p>)}
       </>}
     </IslamicReaderPanel>}
     <div className="sunnah-scroll flex-1 min-w-0 min-h-0 overflow-auto" ref={viewport} style={{ '--sunnah-font-size': `${position.size}px` } as React.CSSProperties}>
@@ -293,7 +294,12 @@ export function SunnahView() {
       {query.trim() && (scope !== 'chapter' || catalog?.research) && <SunnahSearch query={query} scope={scope} collection={position.collection} chapter={position.chapter} t={t} onOpen={openSearchHit} />}
       {!loading && !importing && chapter && !(query.trim() && (scope !== 'chapter' || catalog?.research)) && <>
         {query.trim() && <p role="status" className="px-5 pb-4 text-sm text-muted">{t('sunnahSearchCount', { count: results.length })}</p>}
-        <SunnahChapterView calm onStudy={tab => { setReaderTab(tab); setPanelOpen(true); }} chapter={chapter} hadiths={visibleHadiths} showEnglish={position.english} single={single} t={t} onFocus={focusHadith} />
+        <SunnahChapterView calm onStudy={tab => { setReaderTab(tab); setPanelOpen(true); }} onShowGrading={(id, researchId) => {
+          // KEY-334: keep the reading mode and scroll; select the hadith and open its judgments beside the text.
+          setPosition(previous => ({ ...previous, hadith: id }));
+          setGradingRequest(current => ({ id: researchId, count: current.count + 1 }));
+          setReaderTab('related'); setPanelOpen(true);
+        }} chapter={chapter} hadiths={visibleHadiths} showEnglish={position.english} single={single} t={t} onFocus={focusHadith} />
         {hasMore && <div className="flex justify-center p-4"><button type="button" className="sunnah-button" ref={more} onClick={() => setVisibleCount(count => count + 24)}>{t('sunnahMore')}</button></div>}
         {visibleHadiths.length === 0 && <p className="sunnah-message">{t('sunnahNoResults')}</p>}
       </>}

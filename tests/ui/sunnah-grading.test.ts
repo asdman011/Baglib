@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parseHTML } from 'linkedom';
 import { SunnahChapterView, type SunnahTranslate } from '../../src/renderer/components/sunnah/SunnahChapterView';
-import { SunnahGradingList, SunnahSourcesList } from '../../src/renderer/components/sunnah/SunnahGradingPanel';
+import { orderJudgments, SunnahGradingList, SunnahSourcesList } from '../../src/renderer/components/sunnah/SunnahGradingPanel';
 import type { SunnahChapter, SunnahGradingJudgment, SunnahHadith, SunnahMergedResearch } from '../../src/shared/types/sunnah';
 import { translations, type TranslationKey } from '../../src/renderer/translations';
 
@@ -77,4 +77,32 @@ it('labels a translation that came from another source', () => {
   const page = render(chapter('MuwattaMalik', { ...hadith, text: { ...hadith.text, en: { full: 'Variant', isnad: '', matn: '' } }, translation: { config: 'malik-en', partial: true } }), 'en');
   assert.ok(page.toString().includes(translations.en.sunnahVariantEnglishUsed));
   assert.ok(page.toString().includes(translations.en.sunnahVariantEnglishPartial));
+});
+
+// KEY-334: in the calm reader the chapter never mounts its own research panel, so the ruling line must hand off to the side panel.
+it('calm reading: the ruling line asks the side panel for the judgments of that hadith', async () => {
+  const React = await import('react');
+  const { createRoot } = await import('react-dom/client');
+  const { window } = parseHTML('<html><body><div id="root"></div></body></html>');
+  const saved = { window: globalThis.window, document: globalThis.document, HTMLElement: globalThis.HTMLElement };
+  Object.assign(globalThis, { window, document: window.document, HTMLElement: window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
+  try {
+    const calls: [string, number][] = [];
+    const root = createRoot(window.document.getElementById('root')!);
+    const row = { ...hadith, researchId: 77, gradingSummary: { count: 5, opposed: false, wordingDiffers: false, unresolved: 0 } };
+    await React.act(async () => root.render(createElement(SunnahChapterView, { calm: true, chapter: chapter('AbuDaud', row), hadiths: [row], showEnglish: false, single: false, t: translator('ar'), onFocus: () => {}, onShowGrading: (id: string, researchId: number) => calls.push([id, researchId]) })));
+    const button = window.document.querySelector<HTMLButtonElement>('[data-sunnah-grading-button]');
+    assert.ok(button, 'the ruling button is shown in calm mode');
+    assert.equal(window.document.querySelector('.sunnah-research'), null, 'calm mode keeps the chapter free of the research panel');
+    await React.act(async () => { button!.dispatchEvent(new window.Event('click', { bubbles: true })); });
+    assert.deepEqual(calls, [['AbuDaud:1:1', 77]]);
+    await React.act(async () => root.unmount());
+  } finally { Object.assign(globalThis, saved); }
+});
+
+it('puts Al-Albani first and keeps the rest in corpus order (KEY-334)', () => {
+  const list = [judgment({ id: '1', graderRaw: 'Shuaib Al Arnaut', graderAr: 'شعيب الأرنؤوط' }), judgment({ id: '2', graderRaw: 'Zubair Ali Zai', graderAr: 'زبير علي زئي' }), judgment({ id: '3', graderRaw: 'Al-Albani', graderAr: 'الألباني' }), judgment({ id: '4', graderRaw: 'Albani', graderAr: '' })];
+  assert.deepEqual(orderJudgments(list).map(item => item.id), ['3', '4', '1', '2']);
+  const page = grading(merged(list), 'en');
+  assert.equal(page.querySelector('.sunnah-judgment strong')?.textContent, 'الألباني');
 });

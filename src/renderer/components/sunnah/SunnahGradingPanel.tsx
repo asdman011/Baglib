@@ -46,12 +46,19 @@ function Judgment({ judgment, names, t }: { judgment: SunnahGradingJudgment; nam
   </li>;
 }
 
+/** Al-Albani's rulings come first (the user's choice, KEY-334); everything else keeps the corpus order. */
+const isAlbani = (judgment: SunnahMergedResearch['judgments'][number]) => judgment.graderAr.trim() === 'الألباني' || /alban[iy]/iu.test(judgment.graderRaw);
+export function orderJudgments(judgments: SunnahMergedResearch['judgments']) {
+  return [...judgments.filter(isAlbani), ...judgments.filter(judgment => !isAlbani(judgment))];
+}
+
 export function SunnahGradingList({ data, t }: { data: SunnahMergedResearch; t: SunnahTranslate }) {
   const names = new Map(data.judgments.map(item => [item.graderRaw, item.graderAr || item.graderRaw]));
+  const judgments = orderJudgments(data.judgments);
   return <div>
     <p className="sunnah-research-caption">{t('sunnahGradingNotice')}</p>
     {data.opposed ? <p className="sunnah-grading-flag is-opposed" role="note">{t('sunnahGradingOpposed')}</p> : data.wordingDiffers && <p className="sunnah-grading-flag" role="note">{t('sunnahGradingDiffers')}</p>}
-    {data.judgments.length ? <ol className="sunnah-judgments">{data.judgments.map(judgment => <Judgment key={judgment.id} judgment={judgment} names={names} t={t} />)}</ol> : <p className="sunnah-research-empty">{t('sunnahGradingEmpty')}</p>}
+    {judgments.length ? <ol className="sunnah-judgments">{judgments.map(judgment => <Judgment key={judgment.id} judgment={judgment} names={names} t={t} />)}</ol> : <p className="sunnah-research-empty">{t('sunnahGradingEmpty')}</p>}
   </div>;
 }
 

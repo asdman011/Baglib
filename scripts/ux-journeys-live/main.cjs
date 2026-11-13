@@ -644,6 +644,27 @@ app.on('browser-window-created', (_, win) => {
         } finally { server.close(); }
       });
 
+      // J19 (opt-in, BAGLIB_JOURNEY_IDS=19) — KEY-334: the ruling line under a graded hadith shows every scholar's judgment in the side panel.
+      if (journeysOnly.includes(19)) await journeyRun(19, 'Each scholar\'s judgment on a hadith', async () => {
+        await ui.nav('sunnah', '.sunnah-workspace');
+        await until('!!document.querySelector("[data-hadith-id]")', 200);
+        if (!await has('[data-sunnah-grading-button]')) await step('open Sunan Abu Dawud', async () => {
+          await evaluate('(()=>{const s=document.querySelector(".sunnah-workspace select");Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,"value").set.call(s,"AbuDaud");s.dispatchEvent(new Event("change",{bubbles:true}));})()');
+          await until('!!document.querySelector("[data-sunnah-grading-button]")', 200);
+        });
+        await evaluate('document.querySelector("[data-sunnah-grading-button]").scrollIntoView({block:"center"})'); await pause(300);
+        const scrollBefore = await evaluate('document.querySelector(".sunnah-scroll").scrollTop');
+        const expected = await evaluate('Number((document.querySelector("[data-sunnah-grading-button]").textContent.match(/\\d+/)||[0])[0])');
+        await step('click the ruling line', async () => { await evaluate('document.querySelector("[data-sunnah-grading-button]").click()'); await pause(300); });
+        await until('document.querySelectorAll("[data-islamic-reader-panel] .sunnah-judgment").length>0', 200);
+        const judgments = await evaluate('[...document.querySelectorAll("[data-islamic-reader-panel] .sunnah-judgment strong")].map(e=>e.textContent.trim())');
+        if (judgments.length < Math.min(expected, 2)) throw new Error('expected about ' + expected + ' judgments, saw ' + JSON.stringify(judgments));
+        const scrollAfter = await evaluate('document.querySelector(".sunnah-scroll").scrollTop');
+        if (Math.abs(scrollAfter - scrollBefore) > 4) throw new Error('the reading position moved ' + scrollBefore + ' -> ' + scrollAfter);
+        journey.notes.push('Judgments shown (' + judgments.length + '/' + expected + '): ' + judgments.join(', '));
+        await shot('J19-judgments');
+      });
+
       // J18 (opt-in, BAGLIB_JOURNEY_IDS=18) — KEY-50 follow-up: opt-in notifications report only items newer than the last check.
       if (journeysOnly.includes(18)) await journeyRun(18, 'Feed notifications for new items', async () => {
         const http = require('node:http');

@@ -42,9 +42,11 @@ function NumberedTitle({ number, title, language, fallback }: { number: string; 
   return <><bdi className="sunnah-number" dir="ltr">{number}</bdi><span>{title[language] || fallback}</span></>;
 }
 
-export function SunnahChapterView({ calm = false, onStudy, chapter, hadiths, showEnglish, single, t, onFocus }: {
+export function SunnahChapterView({ calm = false, onStudy, onShowGrading, chapter, hadiths, showEnglish, single, t, onFocus }: {
   calm?: boolean;
   onStudy?: (tab: ReaderTab) => void;
+  /** Calm mode: show this hadith's individual judgments in the side panel (KEY-334). */
+  onShowGrading?: (hadithId: string, researchId: number) => void;
   chapter: SunnahChapter;
   hadiths: SunnahHadith[];
   showEnglish: boolean;
@@ -99,7 +101,8 @@ export function SunnahChapterView({ calm = false, onStudy, chapter, hadiths, sho
             english={hadith.grade.en && <p><span className="text-muted">{t('sunnahGrade')}: </span>{hadith.grade.en}</p>} />}
           {hadith.sourceBook && hadith.sourceBook.kind !== 'collection' && <p className={`sunnah-grading-flag ${hadith.sourceBook.kind === 'review' ? 'is-opposed' : ''}`} role="note">{t(hadith.sourceBook.kind === 'review' ? 'sunnahReviewNotice' : 'sunnahSourceOnlyNotice')}</p>}
           {hadith.gradingSummary && <p className="sunnah-grading-line">
-            <button type="button" className="sunnah-button" onClick={event => {
+            <button type="button" className="sunnah-button" data-sunnah-grading-button onClick={event => {
+              if (calm) { if (hadith.researchId !== undefined) onShowGrading?.(hadith.id, hadith.researchId); return; }
               setGradingRequest(current => ({ id: hadith.researchId!, count: current.count + 1 }));
               event.currentTarget.closest('article')?.querySelector('.sunnah-research')?.scrollIntoView({ block: 'start' });
             }}>{t('sunnahGradingLine', { count: hadith.gradingSummary.count })}</button>

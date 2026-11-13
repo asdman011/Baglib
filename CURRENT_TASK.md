@@ -1,3 +1,76 @@
+## KEY-334: the Sunnah grading button shows each scholar's judgment — 2026-11-13, Claude Code
+
+The user asked Claude to implement the queue while Codex and Antigravity are out of quota.
+
+**Cause:** the reader always shows chapters in calm mode, which never mounts the chapter's own research panel. So the "Scholars' rulings: N" button only changed state that nothing read.
+
+**Changes**
+- `src/renderer/components/sunnah/SunnahChapterView.tsx`: new `onShowGrading` prop and a `data-sunnah-grading-button` hook. In calm mode the button hands the hadith to the side panel.
+- `src/renderer/components/sunnah/SunnahView.tsx`: selects the hadith without changing the reading mode or scroll, opens the side panel on "related", and passes `showGrading` (plus `sourceBook`) to its `SunnahResearchPanel`, which opens its grading tab.
+- `src/renderer/components/sunnah/SunnahGradingPanel.tsx`: `orderJudgments` puts Al-Albani (الألباني) first, at the user's request (2026-11-13). The other judgments keep the corpus order.
+- `tests/ui/sunnah-grading.test.ts`: two new tests. One is an interactive calm-mode click test; the other checks the Albani-first order.
+- `scripts/ux-journeys-live/main.cjs`: J19, opt-in with `BAGLIB_JOURNEY_IDS=19`.
+
+**Verification**
+- `sunnah-grading` tests 18/18; tsc clean; eslint 0 errors; `git diff --check` clean.
+- Live J19 in ar-light-1280, ar-dark-480, en-light-1280 and en-dark-480: 4/4 OK and 0 renderer errors. On Abu Dawud 1:1 it shows 5/5 judgments (الألباني, محمد محيي الدين عبد الحميد, شعيب الأرنؤوط, زبير علي زئي, and an unattributed one). The reading position is unchanged.
+- I inspected the ar 1280 screenshot.
+
+## Planning: 10 reading, notes, media and planner requests (KEY-334 to KEY-344) — 2026-11-12, Claude Code
+
+The user reported these problems:
+- lectures are not library items;
+- the video player is basic;
+- adding a note jumps to the Notes tab, and the Notes tab is unorganized;
+- adding tasks feels unnatural;
+- there is no wheel zoom;
+- there is no natural selection or highlighting in the Quran, Sunnah or poetry;
+- PDF multi-line selection flickers;
+- the Sunnah grading button does nothing;
+- dropped videos are not added.
+
+Three read-only explorations found the cause of each. The plan is in `C:\Users\Ammar's\.claude\plans\keen-giggling-dawn.md`.
+
+**User decisions (2026-11-12)**
+- Zoom is Ctrl+wheel.
+- The player is built in-house, with no dependency.
+- Lectures become library Works and stay in the Lectures list; only the user decides whether that list is retired later.
+- Tasks follow Microsoft To Do, from the user's screenshots.
+- The Notes tab becomes folder-style, single-list navigation.
+
+**Approved schema changes**
+- KEY-342: media `DigitalFormat` values.
+- KEY-341: a `task_list` table (with groups) plus the task fields `list_id`, `recurrence`, `reminder_at` and `subject`. The subject is optional, empty by default, and filled automatically from typed text or a chosen material.
+
+**Still waiting on the user**
+- KEY-344: the lecture series entity.
+- KEY-336: the player look. Two sketches are to be shown before it is built.
+
+**Jira tasks created (each with a cold-start description, an existing label and a parent epic)**
+
+| Key | Task | Parent | Type |
+|---|---|---|---|
+| KEY-334 | Sunnah grading button | KEY-228 | Bug |
+| KEY-335 | PDF selection flicker | KEY-190 | Bug |
+| KEY-336 | in-house lecture player | KEY-225 | Task |
+| KEY-337 | note side panel and inline markers | KEY-223 | Task |
+| KEY-338 | folder-style Notes tab | KEY-223 | Task |
+| KEY-339 | Ctrl+wheel zoom | KEY-294 | Task |
+| KEY-340 | selection and colour highlights | KEY-227 | Task |
+| KEY-341 | Tasks redesign, To Do model | KEY-221 | Task |
+| KEY-342 | lectures as Works plus video drop | KEY-225 | Task |
+| KEY-343 | subtitles and transcript | KEY-225 | Task |
+| KEY-344 | lecture series (blocked on schema approval) | KEY-225 | Task |
+| KEY-345 | Notes tab Export (the current filtered result, as folders or one file) and Import (BagLib/any Markdown, Obsidian, .docx, CSV, attached to the current folder); no new dependency (uses fflate and docx) | KEY-223 | Task |
+
+**Order**
+- These pairs edit the same files, so the second waits for the first:
+  - KEY-339 after KEY-335 (PdfNativeViewer);
+  - KEY-340 after KEY-337 (quran-actions);
+  - KEY-342 and KEY-343 after KEY-336 (LecturesView).
+- KEY-338 and KEY-341 also wait until Codex's active KEY-309 queue (the Notes and planner files) is published.
+- No code has been written. Board rows have been added.
+
 ## KEY-265 (code part): installed builds read the merged Sunnah database from resources — 2026-11-12, Claude Code
 
 - The new pure helper `sunnahResearchPaths` (`src/main/services/sunnah/research-paths.ts`) gives the lookup order. A copy in the user's profile wins. Installed builds then use `resources/sunnah/<db>`. Development builds keep `tools/hadith-alignment/data/output`. `ipc/sunnah.ts` uses the helper, and the database is still opened read-only.
