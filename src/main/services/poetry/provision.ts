@@ -1,17 +1,20 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import type { PoetryProvisionStatus } from '../../../shared/types/poetry';
+import { importPoetryPack } from './pack';
 
 export class PoetryProvisioner {
   private child: ChildProcess | null = null;
+  private packImport: AbortController | null = null;
   private status: PoetryProvisionStatus;
   constructor(private appPath: string, private userData: string, private parser = path.join(appPath, 'assets/poetry/parquet_rows.py')) {
     this.status = { phase: fs.existsSync(path.join(userData, 'partitions/bayan_poetry.sqlite')) ? 'ready' : 'idle', downloaded: 0, total: null, imported: 0 };
   }
   getStatus(): PoetryProvisionStatus { return { ...this.status }; }
   start(): PoetryProvisionStatus {
-    if (this.child || this.status.phase === 'ready') return this.getStatus();
+    if (this.child || this.packImport || this.status.phase === 'ready') return this.getStatus();
     const script = path.join(this.appPath, 'dist/main/poetry-provision-worker.js');
     if (!fs.existsSync(script)) { this.status.phase = 'error'; return this.getStatus(); }
     this.status = { phase: 'downloading', downloaded: 0, total: null, imported: 0 };
@@ -45,7 +48,37 @@ export class PoetryProvisioner {
     });
     return this.getStatus();
   }
+  /**
+   * KEY-266: import a local prebuilt pack. The SHA-256 in the manifest already proves the bytes match a known-good
+   * database, so verification only opens it read-only and counts poems.
+   */
+  importPack(manifestPath: string): PoetryProvisionStatus {
+    if (this.child || this.packImport || this.status.phase === 'ready') return this.getStatus();
+    const controller = new AbortController();
+    this.packImport = controller;
+    this.status = { phase: 'unpacking', downloaded: 0, total: null, imported: 0 };
+    void importPoetryPack({
+      manifestPath, userData: this.userData, signal: controller.signal,
+      progress: (written, total) => { if (this.packImport === controller) { this.status.downloaded = written; this.status.total = total; } },
+      freeBytes: async directory => { const info = await fs.promises.statfs(directory); return Number(info.bavail) * Number(info.bsize); },
+      verify: async staged => { const database = new Database(staged, { readonly: true, fileMustExist: true }); try { return Number((database.prepare('SELECT count(*) AS n FROM poems').get() as { n: number }).n); } finally { database.close(); } },
+    }).then(() => {
+      if (this.packImport !== controller) return;
+      this.status = { ...this.status, phase: 'ready', error: undefined };
+    }, (error: unknown) => {
+      if (this.packImport !== controller) return;
+      const code = error instanceof Error ? error.message : '';
+      this.status.phase = code === 'poetry-partition-exists' ? 'ready' : code === 'cancelled' ? 'idle' : 'error';
+      this.status.error = code === 'cancelled' ? 'cancelled' : code === 'poetry-pack-no-space' ? 'space' : code === 'poetry-pack-checksum-mismatch' || code === 'poetry-invalid-partition' ? 'integrity' : code === 'poetry-partition-exists' ? undefined : 'pack';
+    }).finally(() => { if (this.packImport === controller) this.packImport = null; });
+    return this.getStatus();
+  }
+  cancelImport(): PoetryProvisionStatus {
+    this.packImport?.abort();
+    return this.getStatus();
+  }
   close(): void {
+    this.packImport?.abort();
     const child = this.child; this.child = null;
     if (child?.pid) {
       if (process.platform === 'win32') execFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});

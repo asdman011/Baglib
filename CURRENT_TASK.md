@@ -1,3 +1,37 @@
+## KEY-266 local poetry pack for installed builds: done — 2026-11-14, Claude Code
+
+**What changed:** installed builds can import the Al-Bayan poetry database from a local, versioned pack, with no Python or PyArrow needed.
+- The pack format and importer are `src/main/services/poetry/pack.ts`. The importer checks disk space, gunzips while hashing, verifies the SHA-256, size and poem count, publishes exclusively, and cleans up on cancel or failure.
+- `PoetryProvisioner.importPack` and `cancelImport` drive a new `unpacking` phase.
+- New IPC `poetry:import-pack` (a picker filtered to `.pack.json`, with a translated filter name) and `poetry:import-cancel`, plus preload entries and types.
+- The Bayan tab gets an "Import a local poetry pack…" button, a progress bar with Cancel, and messages for cancelled, no space and invalid pack, in ar and en.
+- The pack builder is `scripts/poetry-pack/build.mjs`. The real pack is local only, in `.baglib-data/poetry-pack`, never committed: 254,630 poems, 1.61 GB compressed to 504 MB.
+
+**Tests:**
+- Unit tests: 4/4.
+- The development live check (`scripts/poetry-pack-live`) passes in ar and en.
+- The packaged live check (`scripts/packaged-poetry-live`, with `release/win-unpacked`, a clean offline profile and the real Windows picker driven through its own windows) passes. A cancel leaves no partial files, the retry imports in 9–10 seconds, and search returns 40 poems in Arabic (RTL) and English (LTR).
+- The full suite passes 2116/2116; tsc and eslint are clean.
+
+**Open:** whether the pack ships inside the installer is decided by KEY-267's real installer size.
+
+**Note:** an earlier attempt typed the path with SendKeys into a window found by the title "Open". That could have reached another window, so it was replaced by the process-scoped method before any passing run.
+
+**Files:**
+- `src/main/services/poetry/pack.ts`
+- `tests/services/poetry-pack.test.ts`
+- `src/main/services/poetry/provision.ts`
+- `src/main/ipc/poetry.ts`
+- `src/preload/index.ts`
+- `src/shared/types/poetry.ts`
+- `src/renderer/components/poetry/BayanView.tsx`
+- `src/renderer/translations.ts` (only the KEY-266 block)
+- `scripts/poetry-pack/build.mjs`
+- `scripts/poetry-pack-live/{main.cjs,run.mjs}`
+- `scripts/packaged-poetry-live/run.mjs`
+- `docs/features/Al-Bayan Poetry.md`
+- this entry
+
 ## KEY-265 packaged acceptance passed — 2026-11-14, Claude Code
 
 **What I tested:** the same packaged build as KEY-264 (`release/win-unpacked`, which includes `resources/sunnah/sunnah_merged_quranlab_v1.sqlite`, 1.6 GB). It ran on a clean throwaway profile, with Chromium pointed at a dead proxy and the guide skipped, in Arabic (RTL) and English (LTR).

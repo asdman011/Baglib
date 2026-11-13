@@ -9,6 +9,7 @@ import type { PoetryDetail } from '../../shared/types/poetry';
 import { poetryOriginAllowed } from '../services/poetry/access';
 import { PoetryNarrationService } from '../services/poetry/narration';
 import { POETRY_NARRATION_AUDIO_EXTENSIONS } from '../../shared/poetry-narration';
+import { translations } from '../../renderer/translations';
 
 export function registerPoetryIpc(): void {
   let provisioner: PoetryProvisioner | undefined;
@@ -38,6 +39,14 @@ export function registerPoetryIpc(): void {
   register('poetry:poets', input => getDatabase().query('poets', input));
   register('poetry:provision', () => provisioning().start());
   register('poetry:status', () => provisioning().getStatus());
+  register('poetry:import-pack', async (input, event) => {
+    const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters: [{ name: translations[input === 'ar' ? 'ar' : 'en'].bayanPackFiles, extensions: ['json'] }] };
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths[0] || !/\.pack\.json$/iu.test(result.filePaths[0])) return null;
+    return provisioning().importPack(result.filePaths[0]);
+  });
+  register('poetry:import-cancel', () => provisioning().cancelImport());
   register('poetry:save-knowledge', async input => {
     validatePoetrySave(input);
     const poem = await getDatabase().query('detail', input.poemId) as PoetryDetail | null;

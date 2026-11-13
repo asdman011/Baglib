@@ -190,3 +190,31 @@ poetry-line-actions.ts exports the single Select/Copy/Share/Note list, key bindi
 Focused 12/12, final full 1744/1744 at concurrency 2, TypeScript zero errors, scoped ESLint zero errors/warnings, diff check clean. Copied-corpus Electron run-JF8xsL passed eight ar/en/light/dark/1280/480 layout configurations, copy/selection/whole poem, share payload, keyboard and long-press assertions. Thirty PNGs retained. Inspected 02-poem-ar-light-1280.png, 02-poem-ar-dark-1280.png, 03-hover-ar-dark-1280.png, 07-stacked-ar-light-480.png in .baglib-data/KEY-313-evidence/. Corpus cleanup verified one original unchanged and removed its copy.
 
 The fixture renders the production poetry components with real copied Arabic corpus and isolated IPC, not the whole app shell. English stanza text is a generated fixture because no real English poetry corpus is installed. Share payload is verified against the existing sunnah.share IPC contract without opening the OS share panel. The displayed rhyme is a derived common closing letter, not prosodic analysis. No original corpus/document edits, schema changes, dependencies, downloads or Jira changes. Existing tests are unchanged. scripts/poetry-live/main.ts has three selector adjustments for the changed production markup.
+
+## Local prebuilt poetry pack: KEY-266, 2026-11-14, Claude Code
+
+Installed builds can now import the poetry database from a local pack instead of building it with Python and PyArrow. The pack is local only. It is not hosted, following the user's 2026-11-01 decision.
+
+**Format.** A pack is two files side by side:
+- `bayan_poetry-v1.sqlite.gz`: the database, gzip level 6.
+- `bayan_poetry-v1.pack.json`: format `baglib-poetry-pack`, version 1, the uncompressed `bytes` and `sha256`, the poem count `rows`, and `createdAt`.
+
+Build a pack with `scripts/poetry-pack/build.mjs <source.sqlite> <outDir>`, running under Electron's Node. It runs `quick_check` and refuses a source that has an unmerged `-wal` file.
+
+**Measured on the current corpus:** 254,630 poems, 1,609,805,824 bytes raw, compressed to 528,781,601 bytes (504 MB, 33%) in 63 seconds. The SHA-256 of the raw database is `0c1cc1d0…3296`.
+
+**Import** (`src/main/services/poetry/pack.ts`, `PoetryProvisioner.importPack`). The Bayan tab's "Import a local poetry pack…" opens a picker filtered to `.pack.json`. The import then:
+1. checks that free disk space covers the raw size plus 256 MiB;
+2. gunzips into a staging file in `partitions/` while hashing, reporting progress as `unpacking` (bytes written of the total);
+3. checks the size and SHA-256, then opens the database read-only to count poems;
+4. publishes with a hard link, so an existing database is never replaced.
+
+Cancel and every failure remove the staging file and its SQLite `-wal`/`-shm` side files. Errors map to localized messages: no space, invalid pack, integrity, and cancelled.
+
+**Verified:**
+- `tests/services/poetry-pack.test.ts`: 4 tests, 4 passing.
+- `scripts/poetry-pack-live` (development, picker stubbed) in ar and en.
+- `scripts/packaged-poetry-live` on `release/win-unpacked` with a clean offline profile and the real Windows picker. The picker is driven only through its own windows: UI Automation to find it, then `WM_SETTEXT` and `IDOK`.
+- Results in both: a cancel leaves nothing behind; the retry imports in 9–10 seconds; search returns 40 poems in Arabic and English.
+
+**Not decided here:** whether the pack ships inside the installer. KEY-267's real installer size decides that.

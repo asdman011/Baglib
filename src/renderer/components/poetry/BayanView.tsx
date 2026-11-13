@@ -21,7 +21,7 @@ export function BayanView() {
   const [failed, setFailed] = useState(false);
   const [provision, setProvision] = useState<PoetryProvisionStatus | null>(null);
   const [revision, setRevision] = useState(0);
-  const installing = provision?.phase === 'downloading' || provision?.phase === 'importing';
+  const installing = provision?.phase === 'downloading' || provision?.phase === 'importing' || provision?.phase === 'unpacking';
   useEffect(() => {
     let alive = true;
     void window.electronAPI?.poetry?.status().then(result => { if (alive && result.ok) setProvision(result.data); }).catch(() => {});
@@ -37,6 +37,15 @@ export function BayanView() {
       } else setFailed(true);
     } catch { setFailed(true); }
   };
+  // KEY-266: import a verified local pack instead of building the corpus with Python.
+  const importPack = async () => {
+    try {
+      const result = await window.electronAPI.poetry.importPack(lang === 'ar' ? 'ar' : 'en');
+      if (!result.ok) { setFailed(true); return; }
+      if (result.data) setProvision(result.data);
+    } catch { setFailed(true); }
+  };
+  const cancelImport = async () => { try { const result = await window.electronAPI.poetry.cancelImport(); if (result.ok) setProvision(result.data); } catch {} };
   useEffect(() => {
     if (!installing) return;
     let alive = true;
@@ -49,7 +58,8 @@ export function BayanView() {
         setProvision(result.data);
         if (result.data.phase === 'ready') { setFailed(false); setRevision(value => value + 1); }
         else if (result.data.phase === 'error') setFailed(true);
-        else if (result.data.phase === 'downloading' || result.data.phase === 'importing') timer = setTimeout(() => void poll(), 500);
+        else if (result.data.phase === 'downloading' || result.data.phase === 'importing' || result.data.phase === 'unpacking') timer = setTimeout(() => void poll(), 500);
+        else if (result.data.phase === 'idle') setFailed(true);
       } catch { if (alive) setFailed(true); }
     };
     timer = setTimeout(() => void poll(), 500);
@@ -111,11 +121,12 @@ export function BayanView() {
     return () => { alive = false; clearTimeout(timer); };
   }, [query, after, language, era, meter, theme, variant, location, poetId, revision]);
   if (poem) return <PoetryReader key={`${poem.id}:${initialVerse}:${initialTo}`} initialVerse={initialVerse} initialTo={initialTo} poem={poem} onBack={() => setPoem(null)} onPoet={id => { setPoem(null); setPoetId(id); setQuery(''); setEra(''); setMeter(''); setTheme(''); setVariant(''); setLocation(''); setAfter(0); }} />;
-  return <section dir={dir} className="flex h-full min-h-0 flex-col bg-canvas p-3 sm:p-5">
+  return <section data-bayan-view dir={dir} className="flex h-full min-h-0 flex-col bg-canvas p-3 sm:p-5">
     <h1 className="text-xl font-semibold leading-loose">{t('navBayan')}</h1>
-    {failed && <button type="button" disabled={installing} onClick={() => void install()} className="rounded border border-subtle p-3">{t('bayanInstall')}</button>}
-    {provision?.phase === 'error' && <p role="alert">{t(provision.error === 'python' ? 'bayanPythonRequired' : provision.error === 'integrity' ? 'bayanIntegrityError' : 'bayanUnavailable')}</p>}
-    {installing && <div role="status" className="rounded border border-subtle p-3"><p>{t(provision.phase === 'importing' ? 'bayanImporting' : 'bayanDownloading')}</p><output>{provision.phase === 'importing' ? provision.imported.toLocaleString(lang) : t('bayanDownloadProgress', { downloaded: (provision.downloaded / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }), total: provision.total === null ? '—' : (provision.total / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }), percent: provision.total ? Math.min(100, provision.downloaded / provision.total * 100).toLocaleString(lang, { maximumFractionDigits: 0 }) : '—' })}</output>{provision.total !== null && provision.phase === 'downloading' && <progress aria-label={t('bayanDownloading')} value={provision.downloaded} max={provision.total} className="block w-full" />}</div>}
+    {failed && <div className="flex flex-wrap gap-2"><button type="button" disabled={installing} onClick={() => void install()} className="rounded border border-subtle p-3">{t('bayanInstall')}</button><button type="button" data-bayan-import-pack disabled={installing} onClick={() => void importPack()} className="rounded border border-subtle p-3">{t('bayanImportPack')}</button></div>}
+    {provision?.phase === 'error' && <p role="alert" data-bayan-provision-error={provision.error}>{t(provision.error === 'python' ? 'bayanPythonRequired' : provision.error === 'integrity' ? 'bayanIntegrityError' : provision.error === 'space' ? 'bayanPackNoSpace' : provision.error === 'pack' ? 'bayanPackInvalid' : 'bayanUnavailable')}</p>}
+    {provision?.phase === 'idle' && provision.error === 'cancelled' && <p role="status" data-bayan-import-cancelled>{t('bayanImportCancelled')}</p>}
+    {installing && <div role="status" className="rounded border border-subtle p-3"><p>{t(provision.phase === 'importing' ? 'bayanImporting' : provision.phase === 'unpacking' ? 'bayanUnpacking' : 'bayanDownloading')}</p><output>{provision.phase === 'importing' ? provision.imported.toLocaleString(lang) : t('bayanDownloadProgress', { downloaded: (provision.downloaded / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }), total: provision.total === null ? '—' : (provision.total / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }), percent: provision.total ? Math.min(100, provision.downloaded / provision.total * 100).toLocaleString(lang, { maximumFractionDigits: 0 }) : '—' })}</output>{provision.total !== null && (provision.phase === 'downloading' || provision.phase === 'unpacking') && <progress aria-label={t(provision.phase === 'unpacking' ? 'bayanUnpacking' : 'bayanDownloading')} value={provision.downloaded} max={provision.total} className="block w-full" />}{provision.phase === 'unpacking' && <button type="button" data-bayan-import-cancel onClick={() => void cancelImport()} className="mt-2 rounded border border-subtle px-3 py-1">{t('bayanImportCancel')}</button>}</div>}
     <nav className="border-b border-subtle py-3" aria-label={t('navBayan')}><span aria-current="page">{t('bayanPoetry')}</span></nav>
     <div className="flex shrink-0 flex-wrap items-center gap-2 py-3 [&>button]:rounded-xl [&>button]:border [&>button]:border-subtle [&>button]:px-3 [&>button]:py-2 [&>button]:text-sm [&>button]:leading-relaxed [&>button:hover]:bg-surface [&>button:focus-visible]:outline-2 [&>button:focus-visible]:outline-pale-sky-500 [&>button[aria-pressed=true]]:bg-pale-sky-500/15 [&>button[aria-pressed=true]]:text-pale-sky-700 dark:[&>button[aria-pressed=true]]:text-pale-sky-300 [&>button[aria-expanded=true]]:bg-pale-sky-500/15">
       {poetId !== undefined && <button type="button" onClick={() => { setPoetId(undefined); setAfter(0); }}>{t('bayanAll')}</button>}
