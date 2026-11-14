@@ -1,6 +1,7 @@
+import { LectureSeriesRepository } from '../../database/repositories/lecture-series.repository';
 import type { Database } from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { SqliteSettingsRepository } from '../../database/repositories/settings.repository';
 import { LECTURE_EXTENSIONS, lectureKind, type Lecture, type LectureProgress, type LectureSection } from '../../../shared/lectures';
@@ -53,7 +54,21 @@ export class LectureLibrary {
   async add(files: string[]): Promise<Lecture[]> {
     this.list();
     const added: Lecture[] = [];
-    for (const file of files) {
+    const folders: string[] = [];
+    const selected: string[] = [];
+    const collect = async (input: string): Promise<void> => {
+      const info = await stat(input);
+      if (info.isDirectory()) {
+        folders.push(path.resolve(input));
+        for (const entry of await readdir(input, { withFileTypes: true })) {
+          if (!entry.isSymbolicLink() && (entry.isDirectory() || (LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(entry.name).toLowerCase()))) {
+            await collect(path.join(input, entry.name));
+          }
+        }
+      } else if (info.isFile() && (LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(input).toLowerCase())) selected.push(path.resolve(input));
+    };
+    for (const file of files) await collect(file);
+    for (const file of new Set(selected)) {
       const extension = path.extname(file).toLowerCase();
       if (!(LECTURE_EXTENSIONS as readonly string[]).includes(extension) || !(await stat(file)).isFile()) continue;
       const canonical = path.resolve(file);
@@ -70,6 +85,7 @@ export class LectureLibrary {
         added.push(lecture);
       })();
     }
+    new LectureSeriesRepository(this.db).importFiles(selected, added.map(item => ({ path: item.path, workId: item.id })), folders);
     return added;
   }
 

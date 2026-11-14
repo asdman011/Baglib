@@ -19,7 +19,7 @@ export interface LecturesAPI {
   series: import('./lecture-series').LectureSeriesAPI;
   subtitles(id: string, choose?: boolean): Promise<{ path: string; cues: import('./subtitles').SubtitleCue[] } | null>;
   list(): Promise<Lecture[]>;
-  add(): Promise<Lecture[]>;
+  add(folder?: boolean): Promise<Lecture[]>;
   addPaths(paths: string[]): Promise<Lecture[]>;
   remove(id: string): Promise<void>;
   update(id: string, changes: { title?: string; sections?: LectureSection[] }): Promise<Lecture>;

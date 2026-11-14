@@ -6,7 +6,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { openStudyNote } from '../../utils/study-navigation';
 import { consumeLecture, LECTURE_OPEN_EVENT, lectureTarget } from '../../utils/lecture-navigation';
-import { studyLinks } from '../../../shared/study-notes';
+import { studyLinks, studyLinkText, studyNoteHeading } from '../../../shared/study-notes';
 import { passageNote } from '../actions/passage-actions';
 import { clockTime, type Lecture } from '../../../shared/lectures';
 import { splitLectureDrop } from '../../utils/book-drop';
@@ -25,9 +25,9 @@ const button = 'inline-flex items-center gap-1.5 rounded-lg border border-subtle
 const control = 'rounded-lg border border-subtle bg-surface p-2 text-sm text-main min-w-0';
 const SAVE_EVERY_MS = 5000;
 
-function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay }: {
+function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay, series }: {
   lecture: Lecture; seek: number | null; onChanged: (lecture: Lecture) => void;
-  next: ReturnType<typeof nextSeriesLecture>; onNext: () => void; onProgress: () => Promise<void>; autoplay: boolean;
+  series: LectureSeries | undefined; next: ReturnType<typeof nextSeriesLecture>; onNext: () => void; onProgress: () => Promise<void>; autoplay: boolean;
 }) {
   const { t, dir } = useWorkspace();
   const { notes } = useStudyNotes();
@@ -49,6 +49,9 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay }
   const [now, setNow] = useState(0);
   const [failed, setFailed] = useState(false);
   const [section, setSection] = useState('');
+  const [draft, setDraft] = useState('');
+  const [noteStatus, setNoteStatus] = useState<'saved' | 'failed' | 'saving' | null>(null);
+  const [seriesError, setSeriesError] = useState(false);
   const api = window.electronAPI.lectures;
   useEffect(() => {
     let alive = true;
@@ -95,6 +98,21 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay }
     return { kind: 'lecture', target: lectureTarget(lecture.id, at), label: label(at) };
   }, [lecture.id, lecture.title]);
   const note = () => { const at = media.current?.currentTime ?? 0; passageNote(lectureTarget(lecture.id, at), label(at)); };
+  const saveNote = async () => {
+    if (!draft.trim() || noteStatus === 'saving') return;
+    const at = media.current?.currentTime ?? 0;
+    setNoteStatus('saving');
+    try {
+      await window.electronAPI.studyNotes.save({ title: studyNoteHeading(draft), content: studyLinkText(lectureTarget(lecture.id, at), label(at)) + '\n\n' + draft.trim(), aliases: [], tags: [] });
+      window.dispatchEvent(new CustomEvent('baglib:notes-changed'));
+      setDraft(''); setNoteStatus('saved');
+    } catch { setNoteStatus('failed'); }
+  };
+  const setAutoplay = async (enabled: boolean) => {
+    if (!series) return;
+    try { await api.series.update(series.id, { autoplayNext: enabled }); await onProgress(); setSeriesError(false); }
+    catch { setSeriesError(true); }
+  };
   const shot = async () => {
     const element = media.current;
     if (!element || !element.videoWidth) return;
@@ -114,7 +132,7 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay }
 
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 dir="auto" className="font-display text-lg font-bold break-words">{lecture.title}</h2><button data-lecture-layout-switch type="button" className={button} aria-pressed={layout === 'study'} onClick={switchLayout}><Columns2 size={16} />{t(layout === 'study' ? 'lectureOverlayLayout' : 'lectureStudyLayout')}</button></div>
-    <div className={layout === 'study' ? 'grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_14rem]' : 'space-y-4'}>
+    <div className={layout === 'study' ? 'grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]' : 'space-y-4'}>
     <div className="min-w-0 space-y-3">
     <LectureMediaControls audio={lecture.kind === 'audio'} study={layout === 'study'} sections={lecture.sections} onSave={save} subtitleControls={{ available: cues.length > 0, enabled: captions, toggle: () => setCaptions(value => !value) }}>
     {/* The player stays left-to-right so its timeline runs the way time is shown. */}
@@ -129,11 +147,13 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay }
     {failed && <p role="alert" className="text-sm leading-relaxed">{t('lectureUnplayable')}</p>}
     <div className="flex flex-wrap items-center gap-2" dir={dir}>
       <button data-load-subtitles type="button" className={button} onClick={() => void loadSubtitles()}>{t('lectureLoadSubtitles')}</button>
-      {layout === 'overlay' && <button data-toggle-transcript type="button" className={button} aria-expanded={transcript} onClick={() => setTranscript(value => !value)}>{t('lectureTranscript')}</button>}
-      <button type="button" className={button} onClick={note}><NotebookPen className="size-4" />{t('lectureNoteHere')}</button>
+      {cues.length > 0 && layout === 'overlay' && <button data-toggle-transcript type="button" className={button} aria-expanded={transcript} onClick={() => setTranscript(value => !value)}>{t('lectureTranscript')}</button>}
+      {layout === 'overlay' && <button type="button" className={button} onClick={note}><NotebookPen className="size-4" />{t('lectureNoteHere')}</button>}
       <button type="button" className={button} disabled={lecture.kind === 'audio'} onClick={() => void shot()}><Camera className="size-4" />{t('lectureShot')}</button>
       <bdi className="text-xs text-muted">{clockTime(now)}{current && <> · <span dir="auto">{current.title}</span></>}</bdi>
     </div>
+    {series && <label className="flex items-center gap-2 text-sm leading-relaxed"><input data-lecture-autoplay type="checkbox" checked={series.autoplayNext} onChange={event => void setAutoplay(event.target.checked)} />{t('lectureSeriesAutoplay')}</label>}
+    {seriesError && <p role="alert" className="text-sm">{t('lectureSeriesError')}</p>}
     {subtitleError && <p role="alert" className="text-sm leading-relaxed">{t('lectureSubtitleError')}</p>}
     </div>
     <aside data-lecture-study-tools className="min-w-0 space-y-4">
@@ -148,13 +168,18 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay }
     </section>
     <section className="space-y-2">
       <h3 className="text-sm font-bold">{t('lectureNotes')}</h3>
+      {layout === 'study' && <form data-lecture-inline-notes className="space-y-2" onSubmit={event => { event.preventDefault(); void saveNote(); }}>
+        <textarea data-lecture-note-editor dir="auto" rows={6} maxLength={20000} value={draft} disabled={noteStatus === 'saving'} aria-label={t('lectureNotes')} placeholder={t('notePanelPlaceholder')} className="w-full resize-y rounded-lg border border-subtle bg-canvas p-3 text-sm leading-loose" onChange={event => { setDraft(event.target.value); setNoteStatus(null); }} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void saveNote(); } }} />
+        <button data-lecture-note-save type="submit" className={button} disabled={!draft.trim() || noteStatus === 'saving'}>{t('notePanelSave')}</button>
+        {noteStatus && noteStatus !== 'saving' && <p role={noteStatus === 'failed' ? 'alert' : 'status'} className="text-xs leading-relaxed">{t(noteStatus === 'saved' ? 'notePanelSaved' : 'studyActionFailed')}</p>}
+      </form>}
       {linked.length === 0 && <p className="text-xs text-muted">{t('lectureNoNotes')}</p>}
       <ul className="space-y-1">{linked.map(({ note: item, link, seconds }) => <li key={`${item.id}-${link.start}`} className="flex items-center gap-2 text-sm">
         <button type="button" className="underline" onClick={() => go(seconds)}><bdi>{clockTime(seconds)}</bdi></button>
         <button type="button" dir="auto" className="min-w-0 truncate text-start" onClick={() => openStudyNote({ id: item.id })}>{item.title || item.content.replace(/\[\[[^\]]+\]\]/gu, '').trim().slice(0, 80)}</button>
       </li>)}</ul>
     </section>
-    {(layout === 'study' || transcript) && <LectureTranscript cues={cues} active={active} onSeek={go} onNote={at => passageNote(lectureTarget(lecture.id, at), label(at))} />}
+    {cues.length > 0 && (layout === 'study' || transcript) && <LectureTranscript cues={cues} active={active} onSeek={go} onNote={at => passageNote(lectureTarget(lecture.id, at), label(at))} />}
     </aside>
     </div>
   </div>;
@@ -184,7 +209,7 @@ export function LecturesView() {
     await refreshBooks();
     await refreshSeries();
   };
-  const add = () => { void api.add().then(acceptAdded).catch(error => { if (String(error).includes('unsupported-media')) setDropError(true); else setFailed(true); }); };
+  const add = (folder = false) => { void api.add(folder).then(acceptAdded).catch(error => { if (String(error).includes('unsupported-media')) setDropError(true); else setFailed(true); }); };
   const drop = async (event: React.DragEvent) => {
     event.preventDefault(); event.stopPropagation();
     if (dropping.current) return;
@@ -193,8 +218,8 @@ export function LecturesView() {
     try {
       const paths = await Promise.all(Array.from(event.dataTransfer.files).map(resolveDroppedFilePath));
       const split = splitLectureDrop(paths);
-      if (split.unsupported.length || split.books.length || !split.media.length) { setDropError(true); return; }
-      await acceptAdded(await api.addPaths(split.media));
+      if (split.unsupported.length) { setDropError(true); return; }
+      await acceptAdded(await api.addPaths(paths));
     } catch { setDropError(true); }
     finally { dropping.current = false; }
   };
@@ -204,7 +229,7 @@ export function LecturesView() {
     <div className="mx-auto max-w-6xl space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3"><Clapperboard className="size-6 text-pale-sky-600 shrink-0 mt-1" /><div><h1 className="font-display text-xl font-bold leading-relaxed">{t('lecturesTitle')}</h1><p className="text-xs text-muted leading-relaxed">{t('lecturesIntro')}</p></div></div>
-        <button type="button" className={button} onClick={add}><Plus className="size-4" />{t('lectureAdd')}</button>
+        <div className="flex flex-wrap gap-2"><button data-lecture-add-folder type="button" className={button} onClick={() => add(true)}><Plus className="size-4" />{t('importFolder')}</button><button type="button" className={button} onClick={() => add()}><Plus className="size-4" />{t('lectureAdd')}</button></div>
       </header>
       {dropError && <p data-lecture-drop-error role="alert" className="text-sm leading-relaxed">{t('lectureUnsupportedDrop')}</p>}
       <p className="text-xs text-muted">{t('lectureDropHint')}</p>
@@ -212,7 +237,7 @@ export function LecturesView() {
       <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <LectureSeriesList lectures={lectures} series={series} selected={selected?.id} onSelect={id => setSelected({ id, seek: null })} onRemove={remove} onChanged={refreshSeries} />
         <main className="min-w-0 rounded-xl border border-subtle bg-surface p-4">
-          {lecture ? <Player key={`${lecture.id}:${selected?.seek}`} lecture={lecture} seek={selected?.seek ?? null} autoplay={!!selected?.autoplay} next={nextSeriesLecture(series, lecture.id)} onNext={() => { const next = nextSeriesLecture(series, lecture.id); if (next) setSelected({ id: next.next.workId, seek: 0, autoplay: true }); }} onProgress={refreshSeries} onChanged={updated => setLectures(current => current.map(item => item.id === updated.id ? updated : item))} /> : <p className="text-sm text-muted">{t('lecturePick')}</p>}
+          {lecture ? <Player key={`${lecture.id}:${selected?.seek}`} lecture={lecture} series={series.find(group => group.items.some(item => item.workId === lecture.id))} seek={selected?.seek ?? null} autoplay={!!selected?.autoplay} next={nextSeriesLecture(series, lecture.id)} onNext={() => { const next = nextSeriesLecture(series, lecture.id); if (next) setSelected({ id: next.next.workId, seek: 0, autoplay: true }); }} onProgress={refreshSeries} onChanged={updated => setLectures(current => current.map(item => item.id === updated.id ? updated : item))} /> : <p className="text-sm text-muted">{t('lecturePick')}</p>}
         </main>
       </div>
     </div>

@@ -47,18 +47,21 @@ export function registerLectureIpc(): void {
     const service = library(event);
     if (!Array.isArray(paths) || paths.length > 500) throw new Error('invalid-request');
     for (const file of paths) {
-      if (typeof file !== 'string' || !path.isAbsolute(file) || !(LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(file).toLowerCase()) || !(await stat(file)).isFile()) throw new Error('unsupported-media');
+      if (typeof file !== 'string' || !path.isAbsolute(file)) throw new Error('unsupported-media');
+      const info = await stat(file);
+      if (!info.isDirectory() && !(info.isFile() && (LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(file).toLowerCase()))) throw new Error('unsupported-media');
     }
     return service.add(paths);
   });
   ipcMain.handle('lectures:list', event => library(event).list());
-  ipcMain.handle('lectures:add', async event => {
+  ipcMain.handle('lectures:add', async (event, folder: unknown) => {
     const service = library(event);
-    const options = { properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[], filters: [{ name: 'Media', extensions: LECTURE_EXTENSIONS.map(extension => extension.slice(1)) }] };
+    if (folder !== undefined && typeof folder !== 'boolean') throw new Error('invalid-request');
+    const options = { properties: (folder ? ['openDirectory'] : ['openFile', 'multiSelections']) as ('openFile' | 'multiSelections' | 'openDirectory')[], filters: [{ name: 'Media', extensions: LECTURE_EXTENSIONS.map(extension => extension.slice(1)) }] };
     const owner = BrowserWindow.fromWebContents(event.sender);
     const choice = await (owner ? dialog.showOpenDialog(owner, options) : dialog.showOpenDialog(options));
     if (choice.canceled) return [];
-    if (choice.filePaths.some(file => !(LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(file).toLowerCase()))) throw new Error('unsupported-media');
+    if (!folder && choice.filePaths.some(file => !(LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(file).toLowerCase()))) throw new Error('unsupported-media');
     return service.add(choice.filePaths);
   });
   ipcMain.handle('lectures:remove', (event, id: unknown) => library(event).remove(lectureId(id)));

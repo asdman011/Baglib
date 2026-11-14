@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { Database } from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { LECTURE_EXTENSIONS } from '../../../shared/lectures';
@@ -16,6 +17,28 @@ export class LectureSeriesRepository {
       LEFT JOIN audiobook_playback_progress p ON p.book_id=w.id
       WHERE w.deleted_at IS NULL AND w.work_type_id='wt-lecture' AND ${MEDIA_WORK} ORDER BY i.position,i.work_id`).all() as { seriesId: string; workId: string; title: string; completed: number }[];
     return series.map(row => ({ ...row, autoplayNext: !!row.autoplayNext, items: items.filter(item => item.seriesId === row.id).map(item => ({ workId: item.workId, title: item.title, completed: !!item.completed })) }));
+  }
+  /** Each import owns its series. Existing names are never implicitly reused. */
+  importFiles(selected: string[], imported: { path: string; workId: string }[], folders: string[] = []): void {
+    const key = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value;
+    const groups = new Map<string, string[]>();
+    for (const file of new Set(selected.map(file => path.resolve(file)))) {
+      if (!(LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(file).toLowerCase())) continue;
+      const folder = key(path.dirname(file));
+      groups.set(folder, [...(groups.get(folder) ?? []), file]);
+    }
+    const total = [...groups.values()].reduce((count, files) => count + files.length, 0);
+    const collator = new Intl.Collator('ar', { numeric: true, sensitivity: 'base' });
+    this.db.transaction(() => {
+      for (const [folder, files] of groups) {
+        if (total < 2 && !folders.some(value => key(path.resolve(value)) === folder)) continue;
+        const members = imported.filter(item => files.some(file => key(file) === key(path.resolve(item.path))))
+          .sort((a, b) => collator.compare(path.basename(a.path), path.basename(b.path)) || a.path.localeCompare(b.path));
+        if (!members.length) continue;
+        const series = this.create(path.basename(path.dirname(files[0])).slice(0, 200));
+        for (const item of members) this.assign(item.workId, series.id);
+      }
+    })();
   }
   private requireSeries(id: string): void {
     if (!this.db.prepare('SELECT id FROM lecture_series WHERE id=?').get(id)) throw new Error('invalid-request');

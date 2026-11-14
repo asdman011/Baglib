@@ -23,7 +23,7 @@ User decisions on 2026-11-02:
 
 ## KEY-255 and KEY-256: lectures
 
-- **Storage.** Lectures sit outside the Work → Edition → Source library. The list is the `app_settings` row `media.lectures.v1`. Position and speed reuse migration 013's `audiobook_playback_progress`, keyed by lecture id. Screenshots are PNG files in `<userData>/lecture-shots`.
+- **Historical storage, superseded by KEY-342 and the KEY-347 section below.** Lectures sit outside the Work → Edition → Source library. The list is the `app_settings` row `media.lectures.v1`. Position and speed reuse migration 013's `audiobook_playback_progress`, keyed by lecture id. Screenshots are PNG files in `<userData>/lecture-shots`.
 - **Sections.** These are read from MP3 ID3 CHAP frames, MP4 and M4A Nero `chpl` boxes (even when `moov` follows the media data), and Matroska `Chapters`. QuickTime chapter tracks are not read.
 - **Playback.** Electron 32's own media stack plays all of these; no codec was added.
     - Verified live: MP3 (a copy of a cached recitation file with a chapter tag put in front), WebM VP9, MP4 H.264, the same MP4 renamed to MOV, and MKV H.264.
@@ -127,3 +127,35 @@ Option 3 fits the current architecture and needs no approval beyond its UI. Opti
     - The real `.pdf` registration was unchanged.
     - The options page itself was not clicked.
 - **Tests:** `tests/services/wave6.test.ts` and `tests/services/wave7.test.ts`, plus `libgen.provider.test.ts` now reading the shared list.
+
+
+## KEY-347 lecture imports and study player, 2026-11-14
+
+Codex inspected Baglib source, migration 028, the domain data dictionary, existing series contracts, timestamp note links and local Next.js client-component guidance. This entry records local implementation and executed tests. No external application was investigated for this task.
+
+### Storage and import behavior
+
+Lecture Works follow the approved Work ? Edition ? Source model through `SqliteWorkRepository`. The historical storage description above has been superseded. `LectureLibrary.list()` migrates legacy settings entries idempotently and uses settings for sections. Series membership uses the existing `lecture_series` and `lecture_series_item` tables, with `LectureSeriesRepository` handling assignment and order. No schema, dependencies or downloads were added.
+
+- `LectureLibrary.add()` expands selected folders recursively, skips nested symbolic links, and retains direct parent folders. The Lectures view offers the centralized ar/en Import Folder action and accepts folder drops through the existing preload API. Individual supported files retain the existing import entry point.
+- `LectureSeriesRepository.importFiles()` creates a new series for each parent folder in a multi-media import or explicitly selected folder. A single individual file stays ungrouped. Parent folders with the same basename receive distinct series, and a later import creates a fresh series. Existing series can still be selected explicitly using each item's assignment control.
+- Series order uses `Intl.Collator('ar', { numeric: true, sensitivity: 'base' })` on original filenames, including Arabic-Indic digits, with a deterministic path tie-break. Canonical titles and filenames stay unchanged. Folder-derived series display names fit the existing 200-character series-name limit.
+- `DigitalImportPipelineService.importFiles()` tracks newly created Work IDs and applies the same series repository logic. Skipped duplicates and existing Works updated through duplicate-resolution operations retain their memberships. `ipc/digital.ts` carries folder provenance privately within the originating webContents discovery session, including one-item folders, and clears it when a batch starts or its owner closes.
+- Series creation and membership assignment share a database transaction. Empty imports and duplicate-only retries create no empty series. A cancelled batch groups its successfully created items using the original selection.
+
+### Player and notes
+
+- `LectureMediaControls` sets the entire control bar to `dir="ltr"` in both languages, preserving playback, skip, time, volume, speed, captions, PiP and fullscreen ordering. Labels and tooltips continue through centralized translations.
+- `LecturesView.Player` exposes an auto-next checkbox only for series members, saving the existing `autoplay_next` value. The existing five-second `LectureContinueNext` countdown uses `nextSeriesLecture()` and stops at the containing series' final item. Turning auto-next off leaves the explicit next action available.
+- Empty cues omit both the transcript panel and search input, as well as the overlay transcript opener. Loading subtitles remains available. Transcript-present rendering and Arabic-normalized search stay in the existing transcript component.
+- Study layout contains an inline note textarea under Sections, beside media at desktop width and below media on narrow screens. Save and Ctrl+Enter use the existing `studyNotes.save`, `studyLinkText` and `lectureTarget` path, producing the same integer-second `media:<workId>:<seconds>` links as KEY-256. Save failures retain the draft and show the existing localized error. Saved notes remain listed with their seekable timestamps. Overlay layout retains the existing note action.
+
+### Executed verification
+
+- Focused project-runner tests passed 39/39, including nine new grouping/player regressions and the quota-tracker compatibility suite. Coverage includes folder groups, two same-name folders, repeat imports, single files, singleton folders, Arabic/Latin natural numeric ordering, series next/end boundaries, translated controls, explicit LTR and transcript-present/absent rendering.
+- `scripts/lecture-series-live/run.mjs` passed two native language cases, ar/RTL and en/LTR, using copies of the real manifest-listed Arabic and English MP4s. Native folder-picker responses are supplied by the harness. It also exercised generic discovery/import IPC for a one-item folder, inline mixed-script note saving at second 3, actual media endings, enabled/disabled autoplay, series-end stopping and the ungrouped toggle omission.
+- Desktop 1440 and narrow 480 screenshots are retained in `.baglib-data/KEY-347-evidence/`. Arabic desktop/mobile and English desktop screenshots were visually inspected. Ten screenshots, zero renderer errors, both original SHA-256 values unchanged, and the disposable profile and owned renderer were removed. Existing user applications were never closed.
+- TypeScript and main/preload build pass. Scoped ESLint has zero errors and two pre-existing unused-variable warnings in `work.repository.ts`.
+- Final full suite at concurrency two passed 2229 tests with zero failures and two pre-existing PDF TODOs. Publication receipts are recorded in `CURRENT_TASK.md` and the local KEY-347 report.
+
+Live media coverage was Arabic/English MP4. Supported audio grouping uses generated MP3 fixtures in focused tests. The real audio corpus supplies WMA, which remains outside the existing supported lecture formats. Other codecs and formats were not freshly played in this task.

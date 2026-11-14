@@ -83,7 +83,7 @@ export class DigitalImportPipelineService {
    * 3. Computes SHA-256 content hash.
    * 4. Orchestrates atomic database transaction: creates work, author, edition, source, and file_source_detail.
    */
-  public async importFile(options: DigitalImportOptions): Promise<DigitalImportResult> {
+  public async importFile(options: DigitalImportOptions, onCreated?: (workId: string) => void): Promise<DigitalImportResult> {
     const { filePath } = options;
     const fileName = path.basename(filePath);
 
@@ -376,6 +376,7 @@ export class DigitalImportPipelineService {
 
       // 6. Execute atomic insertion via repository
       const createdBook = this.getRepository().addBook(bookInput);
+      onCreated?.(createdBook.id);
 
       return {
         success: true,
@@ -424,9 +425,11 @@ export class DigitalImportPipelineService {
   public async importFiles(
     optionsList: DigitalImportOptions[],
     onProgress?: (progress: ImportProgressEvent) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    folders: string[] = []
   ): Promise<BatchImportSummary> {
     const results: DigitalImportResult[] = [];
+    const created = new Set<string>();
     const totalFiles = optionsList.length;
     const isBatch = totalFiles > 1;
     const isConservation = this.quotaTracker.isConservationMode();
@@ -463,7 +466,7 @@ export class DigitalImportPipelineService {
           progressPercentage: Math.round((i / totalFiles) * 100),
         });
 
-        const result = await this.importFile(opt);
+        const result = await this.importFile(opt, id => created.add(id));
         results.push({ ...result, extractedMetadata: result.extractedMetadata ? { ...result.extractedMetadata, coverDataUrl: undefined } : undefined });
 
         const status = result.skipped ? 'skipped' : (result.success ? 'completed' : 'failed');
@@ -497,6 +500,11 @@ export class DigitalImportPipelineService {
       }
     }
 
+    const imported = results.filter(result =>
+      result.success && result.workId && created.has(result.workId)
+      && (LECTURE_EXTENSIONS as readonly string[]).includes(path.extname(result.filePath).toLowerCase()))
+      .map(result => ({ path: result.filePath, workId: result.workId! }));
+    if (imported.length) this.getRepository().assignImportedLectureSeries(optionsList.map(option => option.filePath), imported, folders);
     return summarizeImports(results, isBatch && isConservation);
   }
 

@@ -16,7 +16,7 @@ export function LectureMediaControls({ audio, study, sections, onSave, subtitleC
   subtitleControls?: { available: boolean; enabled: boolean; toggle: () => void };
   children: ReactNode;
 }) {
-  const { t, dir } = useWorkspace();
+  const { t } = useWorkspace();
   const container = useRef<HTMLDivElement>(null);
   const media = useRef<HTMLVideoElement | null>(null);
   const speedMenu = useRef<HTMLDetailsElement>(null);
@@ -164,7 +164,7 @@ export function LectureMediaControls({ audio, study, sections, onSave, subtitleC
     {!audio && <div className={'pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity ' + (showControls ? 'opacity-100' : 'opacity-0')}>
       <button data-lecture-center-play type="button" className="pointer-events-auto flex size-14 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80" aria-label={t(state.playing ? 'lecturePause' : 'lecturePlay')} title={t(state.playing ? 'lecturePause' : 'lecturePlay')} onClick={play}>{state.playing ? <Pause size={28} /> : <Play size={28} />}</button>
     </div>}</div>
-    <div data-lecture-control-bar dir={dir} className={'z-10 space-y-1 px-2 py-2 transition-opacity ' + (audio || study ? 'relative bg-neutral-950' : 'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent pt-8') + (showControls ? ' opacity-100' : ' pointer-events-none opacity-0')} inert={!showControls}>
+    <div data-lecture-control-bar dir="ltr" className={'z-10 space-y-1 px-2 py-2 transition-opacity ' + (audio || study ? 'relative bg-neutral-950' : 'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent pt-8') + (showControls ? ' opacity-100' : ' pointer-events-none opacity-0')} inert={!showControls}>
       <div dir="ltr" className="relative h-5" data-lecture-timeline-wrapper onPointerLeave={() => setHover(null)}>
         <div className="pointer-events-none absolute inset-x-0 top-2 h-1 rounded-full bg-white/25">
           {state.buffered.map((range, index) => <span key={index} className="absolute top-0 h-full bg-white/35" style={{ insetInlineStart: (state.duration ? range.start / state.duration * 100 : 0) + '%', width: (state.duration ? (range.end - range.start) / state.duration * 100 : 0) + '%' }} />)}

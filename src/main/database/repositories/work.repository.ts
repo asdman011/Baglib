@@ -1,3 +1,4 @@
+import { LectureSeriesRepository } from './lecture-series.repository';
 import crypto from 'node:crypto';
 import { withWorkPreservation } from '../../services/knowledge-history';
 import fs from 'fs';
@@ -30,6 +31,10 @@ type LoanRow = Omit<LendingRecord, 'isReturned'> & { isReturned: number; workId:
 
 export class SqliteWorkRepository implements IWorkRepository {
   constructor(private db: Database) {}
+
+  assignImportedLectureSeries(selected: string[], imported: { path: string; workId: string }[], folders: string[] = []): void {
+    new LectureSeriesRepository(this.db).importFiles(selected, imported, folders);
+  }
 
   getDetailSummary(workId: string): import('../../../shared/types/work').BookDetailSummary | null {
     if (!this.db.prepare('SELECT id FROM work WHERE id=? AND deleted_at IS NULL').get(workId)) return null;

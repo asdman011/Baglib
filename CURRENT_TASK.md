@@ -1,3 +1,33 @@
+## KEY-347 verified handoff - 2026-11-14T08:55:24.871024+02:00 - Codex key347-root
+
+Lecture folder picker/drop and multi-file selections now create per-parent series in the existing migration028 tables, naturally ordered by original Arabic/Latin filenames (including Arabic-Indic digits). Same-name folders and later imports create distinct series. Single-file imports remain ungrouped; explicitly selected singleton folders group correctly through direct and digital import paths. Skips/retries and existing-work duplicate resolutions retain existing membership. Existing explicit series assignment remains available. Folder display names follow the existing 200-character limit.
+
+User experience changes include fixed LTR playback-control ordering in Arabic with translated labels, a player-only series auto-next toggle backed by autoplay_next, next playback limited to that series and stopping at its end, omitted empty transcript/search/opener, and an inline timestamped study note box under Sections. Desktop notes sit beside the lecture; narrow layouts stack them below it. Save/Ctrl+Enter use the existing studyNotes.save and integer-second media links. Existing five-second next countdown is reused. No schema/entities/fields/dependencies/downloads.
+
+Verification passed. Focused39/39 including nine new grouping/player regressions and quota-tracker compatibility. Final fullsuite --test-concurrency=2 passed2229,0fail,2existingPDFTODO across346suites/2231tests (170741.4862ms). The initial full run found two book-only mock failures from unconditional series assignment, fixed by restricting it to newly created media, then the complete suite reran successfully. TypeScript noEmit/main-preload build/scoped diff pass. Scoped ESLint0errors2pre-existingworkrepositorywarnings. Native arRTL/enLTR2/2 at1440+480,exit0,0renderererrors,10screenshots,actual media-ended next/end/off cases,folder-picker and generic singleton import,inline mixed-script note saved atsecond3; original Arabic/English MP4 SHA256 values unchanged. Disposable profile deleted and owned renderer stopped; existing user app neverclosed. Supported audio grouping used generated MP3 tests because real audio is unsupported WMA. Native startup schema was initialized in the harness to avoid an eager reminder-before-migration warning. Final Arabic desktop and English narrow screenshots visually inspected, plus Arabic narrow/English desktop captures from the matching implementation.
+
+Exact17tracked files, only this entry in shared state files
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `src/main/database/repositories/lecture-series.repository.ts`
+- `src/main/database/repositories/work.repository.ts`
+- `src/main/ipc/digital.ts`
+- `src/main/ipc/lectures.ts`
+- `src/main/services/digital/digital-import-pipeline.service.ts`
+- `src/main/services/lectures/lecture-library.ts`
+- `src/preload/index.ts`
+- `src/shared/lectures.ts`
+- `src/renderer/components/lectures/LectureMediaControls.tsx`
+- `src/renderer/components/lectures/LecturesView.tsx`
+- `tests/services/lecture-folder-import.test.ts`
+- `tests/ui/lecture-player.test.ts`
+- `scripts/lecture-series-live/main.cjs`
+- `scripts/lecture-series-live/run.mjs`
+- `docs/features/feature - Lectures, OCR Benchmark and Modular Install.md`
+
+The existing lecture feature document reconciles historical storage claims and records implementation/verification. Local report docs/agent-ops/reports/KEY-347.md and board updated. Screenshots/results in .baglib-data/KEY-347-evidence. Unrelated Quran navigation, real-files README, state hunks and other agents' untracked work preserved. No task-related problem remains. Two pre-existing PDF TODOs belong to KEY-210. No Jira changes. Explicit scoped lock commit/push authorized to origin/feature/library-domain; publication follows this verified handoff.
+
 ## KEY-267 installer with poetry, install-tested - 2026-11-14 05:18 +02:00 - Claude Code
 
 The user approved "add the poetry and install".

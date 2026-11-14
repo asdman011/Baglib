@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { stat } from 'node:fs/promises';
 import { errorMessage } from '../../shared/errors';
 import { ipcMain } from 'electron';
 import { confirmedQuitCleanup } from '../services/quit-cleanup';
@@ -19,6 +21,7 @@ export function setupDigitalIPC(): void {
   const queue = new ImportQueue(() => extractor.dispose());
   confirmedQuitCleanup.registerDrain(() => queue.close());
   const batches = new Map<string, AbortController>();
+  const folderSelections = new Map<number, Set<string>>();
   ipcMain.handle('digital:cancel-import', (event, jobId: string) => {
     if (typeof jobId !== 'string') return false;
     const controller = batches.get(event.sender.id + ':' + jobId);
@@ -26,9 +29,24 @@ export function setupDigitalIPC(): void {
     return Boolean(controller);
   });
   const enqueue = <Value>(action: () => Promise<Value>): Promise<Value> => queue.enqueue(action);
-  ipcMain.handle('digital:discover-files', (_event, paths: string[]) => {
+  ipcMain.handle('digital:discover-files', async (event, paths: string[]) => {
     if (!Array.isArray(paths) || paths.some(value => typeof value !== 'string')) throw new Error('Invalid import paths');
-    return discoverImportFiles(paths);
+    const discovery = await discoverImportFiles(paths);
+    if (!folderSelections.has(event.sender.id)) {
+      folderSelections.set(event.sender.id, new Set());
+      event.sender.once('destroyed', () => folderSelections.delete(event.sender.id));
+    }
+    const folders = folderSelections.get(event.sender.id)!;
+    // A fresh direct-file discovery supersedes stale folder provenance from a dismissed wizard.
+    for (const file of discovery.files) folders.delete(path.dirname(file.path));
+    for (const input of paths) {
+      if (!(await stat(input).catch(() => null))?.isDirectory()) continue;
+      for (const file of discovery.files) {
+        const relative = path.relative(input, file.path);
+        if (relative && !relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative)) folders.add(path.dirname(file.path));
+      }
+    }
+    return discovery;
   });
 
   /**
@@ -123,6 +141,8 @@ export function setupDigitalIPC(): void {
       if (!Array.isArray(optionsList)) {
         return { totalFiles: 0, successfulImports: 0, failedImports: 0, skippedImports: 0, results: [] };
       }
+      const folders = [...(folderSelections.get(event.sender.id) ?? [])];
+      folderSelections.get(event.sender.id)?.clear();
       return await enqueue(() => pipeline.importFiles(optionsList, (progress) => {
         try {
           if (!event.sender.isDestroyed()) {
@@ -131,7 +151,7 @@ export function setupDigitalIPC(): void {
         } catch {
           // ignore if sender window closed
         }
-      }, controller.signal));
+      }, controller.signal, folders));
     } catch (err: unknown) {
       console.error('[DigitalIPC] Error batch importing digital files:', err);
       throw err;
