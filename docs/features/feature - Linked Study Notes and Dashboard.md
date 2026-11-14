@@ -143,3 +143,19 @@ Lectures use the existing `lectures.subtitles` API and join adjacent cues for co
 The production Electron harness `scripts/slash-search-live/` uses a throwaway profile, copies of the real Arabic/English text PDFs and MP4s plus the real scanned Arabic PDF, all 15 installed Quran sources, the full 1,609,805,824-byte poetry database and the full Sunnah database. A small generated subtitle sidecar supplements the real Arabic video; no claim is made that its transcript came from the audio. Both UI languages pass corpus quote/link insertion, no relationship popup, 8/20 limits, scoped corpus and local Show more, selected-material indexed passages, real PDF text-layer fallback, transcript and absent-transcript cases, scanned no-text behavior, narrow bounds, fast typing/deleting/retyping and scratchpad insertion. Original hashes are unchanged, the profile is removed and no other app was closed. No screen-reader speech or all possible malformed/very large documents were tested.
 
 Final production timings use a 1 ms main heartbeat (Windows scheduling has roughly 16 ms granularity): Quran maximum main gap 16.25 → 16.30 ms, Sunnah 8,348.16 → 16.42 ms, poetry 16.42 → 16.46 ms. These are main-loop gaps, not search wall time: corresponding after wall times are 332.00, 1,439.21 and 286.20 ms. During rapid edits the worst main gap is 18.09 ms and worst renderer gap 76.10 ms, with zero renderer errors. Focused/service tests, final suite totals and publication details are in `docs/agent-ops/reports/KEY-350.md`; raw timing JSON, logs and screenshots are local under `.baglib-data/KEY-350-evidence/`.
+
+### Redesigned link relationship picker (KEY-356)
+
+The relationship picker was redesigned to eliminate typing interruptions while retaining full access to link relationship semantics (`supports`, `refutes`, `explains`, `answers`, `example`, `contrasts`, `questions`, and `none`):
+- **Zero typing interruptions**: The picker never pops up automatically on caret movement, typing, or after inserting references via `/` or `[[`. Any open picker automatically closes upon document edits or caret movement.
+- **On-demand access paths**:
+  1. *Hover card*: Moving the mouse over a study link or relationship chip activates a 300 ms `hoverTooltip` with the relation picker.
+  2. *Chip click*: Clicking the `.cm-link-relation` chip in the editor immediately opens the relation picker popover.
+  3. *Context menu*: Right-clicking on any link or relationship chip in the editor opens the relation picker popover.
+  4. *Keyboard shortcut*: `Mod-Alt-r` (Ctrl+Alt+R on Windows/Linux, Cmd+Alt+R on macOS) cycles through relations sequentially without interrupting the typing flow. Pressing `Escape` dismisses the picker.
+- **Picker design**:
+  - Compact popover (`.cm-relation-picker-tooltip`) containing a header with localized title and keyboard shortcut hint (`Ctrl+Alt+R`), followed by 8 pill buttons (`data-relation-choice="supports"`, etc.).
+  - `aria-pressed="true"` marks the active relationship.
+  - Full Arabic RTL and English LTR support via centralized translation keys (`relationSupports`, `relationRefutes`, `relationExplains`, `relationAnswers`, `relationExample`, `relationContrasts`, `relationQuestions`, `relationNone`).
+- **Read/Preview mode integration**:
+  - `StudyNoteContent` displays the relationship chip before the link and also renders the relationship badge inside the hover preview card (`data-study-link-preview`).

@@ -1,7 +1,7 @@
 'use client';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { Annotation, Compartment, EditorSelection, EditorState, Facet, Prec, RangeSetBuilder } from '@codemirror/state';
-import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder as placeholderExtension, type DecorationSet, type ViewUpdate } from '@codemirror/view';
+import { Annotation, Compartment, EditorSelection, EditorState, Facet, Prec, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, EditorView, ViewPlugin, WidgetType, hoverTooltip, keymap, placeholder as placeholderExtension, showTooltip, type DecorationSet, type Tooltip, type ViewUpdate } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, isolateHistory } from '@codemirror/commands';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { markdown } from '@codemirror/lang-markdown';
@@ -48,7 +48,16 @@ const theme = EditorView.theme({
   '.cm-tooltip-autocomplete ul li': { padding: '0.25rem 0.5rem', lineHeight: '1.8' },
   // Emerald 500 reads on both the light and dark themes.
   '.cm-paragraph-anchor': { opacity: '0.35', fontSize: '0.75em' },
-  '.cm-link-relation': { fontSize: '0.75em', padding: '0 0.4em', marginInlineEnd: '0.3em', borderRadius: '0.4em', backgroundColor: 'rgb(16 185 129 / 0.15)', color: 'rgb(16 185 129)', fontWeight: '600' },
+  '.cm-link-relation': { fontSize: '0.75em', padding: '0 0.4em', marginInlineEnd: '0.3em', borderRadius: '0.4em', backgroundColor: 'rgb(16 185 129 / 0.15)', color: 'rgb(16 185 129)', fontWeight: '600', cursor: 'pointer', transition: 'background-color 0.15s ease' },
+  '.cm-link-relation:hover': { backgroundColor: 'rgb(16 185 129 / 0.28)' },
+  '.cm-relation-picker-tooltip': { border: '1px solid rgb(128 128 128 / 0.35)', borderRadius: '0.6rem', padding: '0.35rem 0.5rem', backgroundColor: 'var(--bg-surface)', color: 'var(--text-main)', boxShadow: '0 8px 24px rgb(0 0 0 / 0.25)', fontSize: '0.75rem', zIndex: '100', maxWidth: '28rem' },
+  '.cm-relation-picker-header': { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.35rem', paddingBottom: '0.2rem', borderBottom: '1px solid rgb(128 128 128 / 0.2)' },
+  '.cm-relation-picker-title': { fontWeight: '700', fontSize: '0.72rem', opacity: '0.75' },
+  '.cm-relation-picker-hint': { fontSize: '0.68rem', opacity: '0.5', fontFamily: 'ui-monospace, monospace' },
+  '.cm-relation-picker-options': { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.25rem' },
+  '.cm-relation-picker-btn': { border: '1px solid rgb(128 128 128 / 0.3)', borderRadius: '0.4rem', padding: '0.15rem 0.45rem', lineHeight: '1.6', cursor: 'pointer', background: 'transparent', color: 'inherit', fontSize: '0.75rem', transition: 'all 0.15s ease' },
+  '.cm-relation-picker-btn:hover': { backgroundColor: 'rgb(128 128 128 / 0.15)', borderColor: 'rgb(128 128 128 / 0.5)' },
+  '.cm-relation-picker-btn[aria-pressed="true"]': { backgroundColor: 'rgb(16 185 129 / 0.2)', borderColor: 'rgb(16 185 129)', color: 'rgb(16 185 129)', fontWeight: '600' },
   // The app's own surface and ink, so the menu reads in both the light and dark themes.
   '.cm-study-link': { color: 'rgb(16 185 129)', textDecoration: 'underline', textUnderlineOffset: '0.2em', textDecorationThickness: '1px' },
 });
@@ -83,14 +92,34 @@ const hidden = Decoration.replace({});
 /** Names for typed relationships in the interface language; a coined one shows as written. */
 const relationNames = Facet.define<Record<string, string>, Record<string, string>>({ combine: values => values[0] ?? {} });
 class RelationChip extends WidgetType {
-  constructor(readonly text: string) { super(); }
-  eq(other: RelationChip) { return other.text === this.text; }
-  toDOM() {
+  constructor(readonly text: string, readonly linkRange?: { from: number; to: number; relation?: string }) { super(); }
+  eq(other: RelationChip) { return other.text === this.text && other.linkRange?.from === this.linkRange?.from && other.linkRange?.to === this.linkRange?.to && other.linkRange?.relation === this.linkRange?.relation; }
+  toDOM(view: EditorView) {
     const chip = document.createElement('span');
     chip.className = 'cm-link-relation';
-    chip.setAttribute('data-link-relation', '');
+    chip.setAttribute('data-link-relation', this.linkRange?.relation ?? '');
+    chip.setAttribute('role', 'button');
+    chip.setAttribute('tabindex', '0');
     chip.dir = 'auto';
     chip.textContent = this.text;
+    chip.title = view.state.facet(relationNames).menuHint || '';
+    const open = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this.linkRange) {
+        view.dispatch({
+          effects: setRelationPicker.of({
+            from: this.linkRange.from,
+            to: this.linkRange.to,
+            relation: this.linkRange.relation,
+          })
+        });
+      }
+    };
+    chip.addEventListener('click', open);
+    chip.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') open(e);
+    });
     return chip;
   }
 }
@@ -110,7 +139,7 @@ function linkDecorations(view: EditorView): DecorationSet {
           const labelEnd = link.end - 2;
           if (labelEnd <= labelStart) continue;
           // A typed relationship shows as a small chip before the label.
-          builder.add(line.from + link.start, line.from + labelStart, link.relation ? Decoration.replace({ widget: new RelationChip(view.state.facet(relationNames)[link.relation] ?? link.relation) }) : hidden);
+          builder.add(line.from + link.start, line.from + labelStart, link.relation ? Decoration.replace({ widget: new RelationChip(view.state.facet(relationNames)[link.relation] ?? link.relation, { from: line.from + link.start, to: line.from + link.end, relation: link.relation }) }) : hidden);
           builder.add(line.from + labelStart, line.from + labelEnd, linkLabel);
           builder.add(line.from + labelEnd, line.from + link.end, hidden);
         }
@@ -140,8 +169,8 @@ const paragraphAnchors = ViewPlugin.fromClass(class {
   update(update: ViewUpdate) { if (update.docChanged || update.viewportChanged) this.decorations = anchorDecorations(update.view); }
 }, { decorations: plugin => plugin.decorations, provide: plugin => EditorView.atomicRanges.of(view => view.plugin(plugin)?.decorations ?? Decoration.none) });
 
-// The relationship menu (decision S4): with the cursor on a link, or just after one, a small bar above it sets,
-// changes or removes the link's relationship. Ctrl+Alt+R (Cmd+Alt+R) steps through them from the keyboard.
+// The redesigned relationship picker (KEY-356): non-intrusive, never pops up while typing.
+// Triggers on-demand only: by hover card, clicking the relation chip, right-click context menu, or Mod-Alt-R.
 interface LinkAtCursor { from: number; to: number; relation?: string }
 function linkAtCursor(state: EditorState): LinkAtCursor | null {
   const selection = state.selection.main;
@@ -151,8 +180,8 @@ function linkAtCursor(state: EditorState): LinkAtCursor | null {
   const link = studyLinks(line.text).find(entry => offset > entry.start && offset <= entry.end);
   return link ? { from: line.from + link.start, to: line.from + link.end, relation: link.relation } : null;
 }
-function setLinkRelation(view: EditorView, relation?: string): boolean {
-  const link = linkAtCursor(view.state);
+function setLinkRelation(view: EditorView, relation?: string, range?: { from: number; to: number }): boolean {
+  const link = range ?? linkAtCursor(view.state);
   if (!link) return false;
   const next = withLinkRelation(view.state.sliceDoc(link.from, link.to), relation);
   if (!next) return false;
@@ -166,6 +195,141 @@ const cycleRelation = (view: EditorView) => {
   const index = order.indexOf(link.relation as StudyRelation | undefined);
   return setLinkRelation(view, order[(index + 1) % order.length]);
 };
+
+const setRelationPicker = StateEffect.define<LinkAtCursor | null>();
+
+function renderRelationPicker(
+  view: EditorView,
+  linkFrom: number,
+  linkTo: number,
+  currentRelation?: string,
+  onClose?: () => void
+): HTMLElement {
+  const dom = document.createElement('div');
+  dom.className = 'cm-relation-picker-tooltip';
+  dom.setAttribute('data-relation-picker', '');
+  dom.dir = 'auto';
+
+  const names = view.state.facet(relationNames);
+
+  const header = document.createElement('div');
+  header.className = 'cm-relation-picker-header';
+
+  const title = document.createElement('span');
+  title.className = 'cm-relation-picker-title';
+  title.textContent = names.relation || 'Relationship';
+  header.appendChild(title);
+
+  if (names.menuHint) {
+    const hint = document.createElement('span');
+    hint.className = 'cm-relation-picker-hint';
+    hint.textContent = 'Ctrl+Alt+R';
+    hint.title = names.menuHint;
+    header.appendChild(hint);
+  }
+  dom.appendChild(header);
+
+  const options = document.createElement('div');
+  options.className = 'cm-relation-picker-options';
+
+  const choices: { id?: StudyRelation; label: string }[] = [
+    ...STUDY_RELATIONS.map(rel => ({ id: rel, label: names[rel] ?? rel })),
+    { id: undefined, label: names.none ?? 'none' },
+  ];
+
+  for (const choice of choices) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cm-relation-picker-btn';
+    btn.setAttribute('data-relation-choice', choice.id ?? 'none');
+    const isSelected = choice.id === (currentRelation || undefined);
+    btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+    btn.textContent = choice.label;
+
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+    });
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setLinkRelation(view, choice.id, { from: linkFrom, to: linkTo });
+      onClose?.();
+    });
+
+    options.appendChild(btn);
+  }
+
+  dom.appendChild(options);
+  return dom;
+}
+
+const relationPickerField = StateField.define<Tooltip | null>({
+  create: () => null,
+  update(current, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setRelationPicker)) {
+        if (!effect.value) return null;
+        const target = effect.value;
+        return {
+          pos: target.from,
+          above: true,
+          arrow: true,
+          create: (tooltipView) => ({
+            dom: renderRelationPicker(tooltipView, target.from, target.to, target.relation, () => {
+              tooltipView.dispatch({ effects: setRelationPicker.of(null) });
+            })
+          })
+        };
+      }
+    }
+    if (tr.docChanged || tr.selection) return null;
+    return current;
+  },
+  provide: f => showTooltip.from(f)
+});
+
+const relationHover = hoverTooltip((view, pos) => {
+  if (completionStatus(view.state)) return null;
+  const line = view.state.doc.lineAt(pos);
+  const offset = pos - line.from;
+  const link = studyLinks(line.text).find(entry => offset >= entry.start && offset <= entry.end);
+  if (!link) return null;
+  const names = view.state.facet(relationNames);
+  if (!names.relation) return null;
+  const linkFrom = line.from + link.start;
+  const linkTo = line.from + link.end;
+  return {
+    pos: linkFrom,
+    end: linkTo,
+    above: true,
+    arrow: true,
+    create: (tooltipView) => ({
+      dom: renderRelationPicker(tooltipView, linkFrom, linkTo, link.relation)
+    })
+  };
+}, { hoverTime: 300 });
+
+const relationContextMenu = EditorView.domEventHandlers({
+  contextmenu(event, view) {
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    if (pos == null) return false;
+    const line = view.state.doc.lineAt(pos);
+    const offset = pos - line.from;
+    const link = studyLinks(line.text).find(entry => offset >= entry.start && offset <= entry.end);
+    if (!link) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    view.dispatch({
+      effects: setRelationPicker.of({
+        from: line.from + link.start,
+        to: line.from + link.end,
+        relation: link.relation,
+      })
+    });
+    return true;
+  }
+});
 // KEY-357: the relationship menu no longer pops up at every link (KEY-356 redesigns it). Typed relations
 // (`[[supports::`), their chips and Mod-Alt-R still set one.
 const linkPreview = ViewPlugin.fromClass(class {
@@ -378,6 +542,9 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
           lineDirection,
           linkPreview,
           paragraphAnchors,
+          relationHover,
+          relationPickerField,
+          relationContextMenu,
           theme,
           // interactionDelay 0: CodeMirror otherwise ignores Enter for 75 ms after the list changes, so a press that
           // coincided with late Quran/Sunnah/poetry results fell through and inserted a new line instead of the link.
@@ -396,6 +563,13 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
             { key: 'Mod-i', run: wrap('*', '*') },
             { key: 'Mod-s', preventDefault: true, run: () => { latest.current.onSave?.(); return true; } },
             { key: 'Mod-Alt-r', preventDefault: true, run: cycleRelation },
+            { key: 'Escape', run: editor => {
+              if (editor.state.field(relationPickerField, false)) {
+                editor.dispatch({ effects: setRelationPicker.of(null) });
+                return true;
+              }
+              return false;
+            } },
             ...defaultKeymap,
             ...historyKeymap,
           ]),

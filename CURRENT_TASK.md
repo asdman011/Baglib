@@ -1,3 +1,35 @@
+## KEY-356 verified handoff - 2026-11-15T00:15:00+02:00 - Antigravity 32fc507c-c58a-4e08-abc3-6f5cc9ee608c
+
+Redesigned the notes link relationship picker to be strictly on-demand with zero typing interruptions:
+1. Eliminated automatic popup on typing, caret movement, or slash/link insertion:
+   - Replaced old intrusive tooltip with an on-demand StateField (`relationPickerField`) that only activates via explicit `setRelationPicker` StateEffect.
+   - Any typing (`tr.docChanged`) or cursor movement (`tr.selection`) immediately dismisses the picker.
+2. Implemented 4 on-demand interaction paths in `StudyNoteEditor.tsx`:
+   - Hover card: `relationHover` via `hoverTooltip` with 300 ms hover delay triggers on link or chip mouse hover without interrupting keyboard typing.
+   - Chip click: `RelationChip` widget is rendered with `role="button"`, `tabindex="0"`, cursor pointer, and click/keyboard activation opening the picker.
+   - Context menu: `relationContextMenu` handles right-click on any study link or relation chip in the editor to open the picker at the link.
+   - Keyboard cycling: `Mod-Alt-r` (Ctrl+Alt+R / Cmd+Alt+R) sequentially cycles link relations without popup interruption; `Escape` closes the picker.
+3. Modernized picker UI & accessibility:
+   - Renders `data-relation-picker` with header title and `Ctrl+Alt+R` shortcut hint.
+   - 8 choices (`supports`, `refutes`, `explains`, `answers`, `example`, `contrasts`, `questions`, and `none` to clear), with `aria-pressed="true"` for the active relation.
+   - Centralized translation support for Arabic RTL and English LTR (`translations.ts`).
+4. Read/preview mode integration in `StudyNoteContent.tsx`:
+   - Passed `relation` to `StudyLinkButton` to display `data-preview-relation` badge inside the hover preview card (`data-study-link-preview`).
+5. Live and automated tests:
+   - Updated `scripts/relations-live/main.cjs` verifying no automatic popups during typing/insertion, context menu opening, option selection, keyboard cycling, note preview chips, and graph relations across Arabic and English.
+   - Created `tests/ui/study-relation-picker.test.ts` (6/6 tests passing).
+   - Focused tests: 32/32 passing (`study-relation-picker`, `slash-search-followup`, `study-relations`, `note-links-and-slash`).
+   - TypeScript (`tsc --noEmit`) and ESLint pass with 0 errors.
+   - Live Electron check (`scripts/relations-live/run.mjs`) passed with code 0 (`passed: true`), evidence in `.baglib-data/key356-evidence/`.
+
+Exact changed files:
+- `src/renderer/components/notes/StudyNoteEditor.tsx`
+- `src/renderer/components/notes/StudyNoteContent.tsx`
+- `scripts/relations-live/main.cjs`
+- `tests/ui/study-relation-picker.test.ts`
+- `docs/features/feature - Linked Study Notes and Dashboard.md`
+- `docs/agent-ops/reports/KEY-356.md`
+
 ## KEY-365 fix 1 verified handoff - 2026-11-14T23:15:00+02:00 - Antigravity 0d5908ad-8ecc-4e41-91c0-9b3f68ad2d48
 
 Fixed line endings across research-editor vendor and patches:

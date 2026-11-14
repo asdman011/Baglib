@@ -69,8 +69,13 @@ app.on('browser-window-created', (_, owner) => {
       await type('الصبر');
       await choose('الصبر واجب');
       result.linked = await value();
-      // With the cursor just after the link, the relationship menu shows; a choice changes the written link.
-      await until("!!document.querySelector('[data-relation-menu]')");
+      // KEY-356: The relationship picker NEVER interrupts typing (no automatic popup).
+      const interrupted = await evaluate("!!document.querySelector('[data-relation-picker]')");
+      assert.equal(interrupted, false, 'picker never interrupts typing automatically');
+
+      // On-demand opening: trigger contextmenu on the link to open the relationship picker.
+      await evaluate("(()=>{const editor=document.querySelector('[data-study-note-editor] .cm-content');const rect=editor.getBoundingClientRect();editor.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:rect.left+rect.width/2,clientY:rect.top+20}));})()");
+      await until("!!document.querySelector('[data-relation-picker]')");
       result.menu = await evaluate("[...document.querySelectorAll('[data-relation-choice]')].map(b=>b.textContent + (b.getAttribute('aria-pressed')==='true' ? '*' : ''))");
       await shot(`menu-${language}`);
       await evaluate("document.querySelector('[data-relation-choice=\"refutes\"]').click()");
@@ -79,6 +84,7 @@ app.on('browser-window-created', (_, owner) => {
       // Ctrl+Alt+R steps to the next one (refutes → explains); then the menu puts supports back.
       press('R', ['control', 'alt']); await pause(400);
       result.afterShortcut = await value();
+      await evaluate("(()=>{const editor=document.querySelector('[data-study-note-editor] .cm-content');const rect=editor.getBoundingClientRect();editor.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:rect.left+rect.width/2,clientY:rect.top+20}));})()");
       await until("!!document.querySelector('[data-relation-choice=\"supports\"]')");
       await evaluate("document.querySelector('[data-relation-choice=\"supports\"]').click()");
       await pause(300);

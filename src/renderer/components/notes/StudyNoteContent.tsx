@@ -13,7 +13,7 @@ import { PARAGRAPH_ANCHOR, findParagraph, noteParagraphs, parseNoteTarget, strip
 const previewCache = new Map<string, StudyPreview | null>();
 
 /** A study link with a hover and focus card showing the linked text, so the reader need not leave the note. */
-function StudyLinkButton({ target, label, notes, onOpen }: { target: string; label: string; notes: StudyNote[]; onOpen: (target: string) => void }) {
+function StudyLinkButton({ target, label, relation, notes, onOpen }: { target: string; label: string; relation?: string; notes: StudyNote[]; onOpen: (target: string) => void }) {
   const { books, t } = useWorkspace();
   const [preview, setPreview] = useState<StudyPreview | null | 'loading' | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,7 +38,10 @@ function StudyLinkButton({ target, label, notes, onOpen }: { target: string; lab
       {preview === 'loading' ? <span className="text-xs text-muted">{t('studyPreviewLoading')}</span>
         : preview === null ? <span className="text-xs text-muted">{t('studyPreviewUnavailable')}</span>
         : <>
-          <span dir="auto" className="block text-xs font-bold leading-relaxed">{preview.title}{preview.meta ? <span className="ms-2 font-normal text-muted">· {preview.meta}</span> : null}</span>
+          <span dir="auto" className="block text-xs font-bold leading-relaxed">
+            {relation && <span data-preview-relation={relation} className="me-1.5 inline-block rounded bg-emerald-500/15 px-1.5 py-0.5 text-[0.75em] font-semibold text-emerald-700 dark:text-emerald-300">{relationLabel(t, relation)}</span>}
+            {preview.title}{preview.meta ? <span className="ms-2 font-normal text-muted">· {preview.meta}</span> : null}
+          </span>
           {preview.body && <span dir="auto" className="mt-1 block max-h-48 overflow-auto whitespace-pre-wrap text-sm leading-loose">{preview.body}</span>}
         </>}
     </span>}
@@ -104,7 +107,7 @@ function renderSegment(content: string, notes: StudyNote[], onOpen: (target: str
     const embedded = link.embed && link.target.startsWith('note:') ? embeddedText(link.target, notes) : null;
     pieces.push(<span key={`${key}-${link.start}`} className={link.embed ? 'block my-2 border-s-2 border-amber-500 ps-3' : ''}>
       {link.relation && <span data-link-relation={link.relation} dir="auto" className="me-1 rounded bg-emerald-500/15 px-1.5 text-[0.75em] font-semibold text-emerald-700 dark:text-emerald-300">{relationLabel(t, link.relation)}</span>}
-      <StudyLinkButton target={link.target} label={link.label} notes={notes} onOpen={onOpen} />
+      <StudyLinkButton target={link.target} label={link.label} relation={link.relation} notes={notes} onOpen={onOpen} />
       {link.embed && link.target.startsWith('media:') && link.target.split(':').length === 4 ? <LectureShot shot={link.target.split(':')[3]} />
         : link.embed && <span dir="auto" data-embedded-note={link.target} className="block text-sm text-muted whitespace-pre-wrap leading-loose">{embedded ?? t('studyEmbedUnavailable')}</span>}
     </span>);
