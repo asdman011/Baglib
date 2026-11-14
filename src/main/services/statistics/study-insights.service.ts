@@ -40,12 +40,31 @@ export class StudyInsightsService {
       if (!Number.isFinite(duration) || duration <= 0) continue;
       seconds += duration; pages += readPages;
       const key = JSON.stringify([row.ar, row.en]);
-      const subject = subjects.get(key) || { ar: row.ar, en: row.en, seconds: 0 };
+      const subject = subjects.get(key) || { ar: row.ar, en: row.en, seconds: 0, revisionSeconds: 0 };
       subject.seconds += duration; subjects.set(key, subject);
       const date = typeof row.started === 'number' ? new Date(row.started * 1000) : new Date(row.started);
       if (Number.isNaN(date.getTime())) continue;
       const day = days.find(item => item.date === civilDate(date));
       if (day) { day.seconds += duration; day.pages += readPages; }
+    }
+    // One row per review; use the same primary subject as reading. External corpus
+    // references are not category foreign keys and must stay Uncategorized.
+    const revisions = this.db.prepare(`
+      SELECT category.name_ar AS ar, category.name_en AS en,
+             SUM(review.duration_ms) / 1000.0 AS seconds
+      FROM srs_review_log review
+      JOIN knowledge card ON card.id=review.knowledge_id
+      JOIN card_detail detail ON detail.knowledge_id=card.id
+      LEFT JOIN work ON work.id=card.work_id
+      LEFT JOIN category ON category.id=work.primary_category_id
+      WHERE card.deleted_at IS NULL AND review.duration_ms>0
+      GROUP BY category.name_ar, category.name_en
+    `).all() as { ar: string | null; en: string | null; seconds: number }[];
+    for (const row of revisions) {
+      const key = JSON.stringify([row.ar, row.en]);
+      const subject = subjects.get(key) || { ar: row.ar, en: row.en, seconds: 0, revisionSeconds: 0 };
+      subject.revisionSeconds = row.seconds;
+      subjects.set(key, subject);
     }
     const count = (sql: string) => Number((this.db.prepare(sql).get() as { count: number }).count);
     const reflections: StudyInsights['reflections'] = [];
@@ -63,7 +82,7 @@ export class StudyInsightsService {
       sessionCount: sessions.length ? rows.length : null,
       secondsPerPage: pages ? seconds / pages : null,
       secondsPerSession: sessions.length ? seconds / rows.length : null,
-      subjects: [...subjects.values()].sort((first, second) => second.seconds - first.seconds), days,
+      subjects: [...subjects.values()].sort((first, second) => (second.seconds + second.revisionSeconds) - (first.seconds + first.revisionSeconds)), days,
       knowledge: count('SELECT COUNT(*) AS count FROM knowledge WHERE deleted_at IS NULL'),
       ideas: count("SELECT COUNT(*) AS count FROM knowledge WHERE knowledge_type='question' AND deleted_at IS NULL"),
       completedTasks: count("SELECT COUNT(*) AS count FROM study_task WHERE status='completed'"),

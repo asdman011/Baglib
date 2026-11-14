@@ -156,3 +156,67 @@ test('legacy recent reflections skip conversion markers and malformed rows and b
     ]);
   } finally { db.close(); }
 });
+
+const reviewFixture = (db: Database.Database, id: string, workId: string | null, duration: number | null) => {
+  db.prepare("INSERT OR IGNORE INTO knowledge(id,knowledge_type,work_id) VALUES (?,'card',?)").run(id, workId);
+  db.prepare("INSERT OR IGNORE INTO card_detail(knowledge_id,front,back,source_kind) VALUES (?,'Question','Answer','book')").run(id);
+  db.prepare("INSERT INTO srs_review_log(id,knowledge_id,reviewed_at,rating,duration_ms) VALUES (?,?,'2026-11-14T12:00:00Z',3,?)").run(`review-${id}-${duration}`, id, duration);
+};
+
+test('review durations use the linked work primary subject once per review including fractional seconds', () => {
+  const { db, insights } = open();
+  try {
+    db.prepare("INSERT INTO category(id,name_ar,name_en) VALUES ('revision-topic','حديث','Hadith'),('other-topic','فقه','Fiqh')").run();
+    db.prepare("INSERT INTO work(id,title,primary_category_id) VALUES ('revision-book','Book','revision-topic')").run();
+    reviewFixture(db, 'linked', 'revision-book', 3600000);
+    reviewFixture(db, 'linked', 'revision-book', 1250);
+    reviewFixture(db, 'second', 'revision-book', 1800000);
+    assert.deepEqual(insights.summary().subjects, [{ ar: 'حديث', en: 'Hadith', seconds: 0, revisionSeconds: 5401.25 }]);
+    assert.equal(insights.summary().timeSource, 'none');
+  } finally { db.close(); }
+});
+
+test('unlinked, uncategorized and detached cards share the existing Uncategorized bucket', () => {
+  const { db, insights } = open();
+  try {
+    db.prepare("INSERT INTO work(id,title) VALUES ('no-category','Book'),('deleted-book','Deleted')").run();
+    reviewFixture(db, 'unlinked', null, 1000);
+    db.prepare("UPDATE card_detail SET source_kind='quran',source_ref='quran:hafs:1:1' WHERE knowledge_id='unlinked'").run();
+    reviewFixture(db, 'no-topic', 'no-category', 2000);
+    reviewFixture(db, 'detached', 'deleted-book', 3000);
+    db.prepare("DELETE FROM work WHERE id='deleted-book'").run();
+    assert.deepEqual(insights.summary().subjects, [{ ar: null, en: null, seconds: 0, revisionSeconds: 6 }]);
+  } finally { db.close(); }
+});
+
+test('revision time never changes reading totals, page averages or daily reading goals', () => {
+  const { db, insights } = open();
+  try {
+    db.prepare("INSERT INTO work(id,title) VALUES ('both','Book')").run();
+    db.prepare("INSERT INTO reading_session(id,work_id,started_at,ended_at,pages_read) VALUES ('reading','both','2026-11-14T10:00:00','2026-11-14T11:00:00',12)").run();
+    reviewFixture(db, 'both-card', 'both', 0);
+    const before = insights.summary(new Date(2026, 10, 14, 12));
+    reviewFixture(db, 'both-card', 'both', 1800000);
+    const after = insights.summary(new Date(2026, 10, 14, 12));
+    assert.deepEqual(after, { ...before, subjects: [{ ...before.subjects[0], revisionSeconds: 1800 }] });
+    db.prepare('DELETE FROM reading_session').run();
+    db.prepare("INSERT INTO reading_book_stat(id,title) VALUES ('both','Book')").run();
+    db.prepare("INSERT INTO reading_page_stat(id_book,page,start_time,duration) VALUES ('both',1,1,60)").run();
+    assert.equal(insights.summary().seconds, 60);
+    assert.equal(insights.summary().subjects[0].revisionSeconds, 1800);
+  } finally { db.close(); }
+});
+
+test('trashed cards and missing, zero or negative review durations are excluded', () => {
+  const { db, insights } = open();
+  try {
+    reviewFixture(db, 'trash', null, 3600000);
+    db.prepare("UPDATE knowledge SET deleted_at='2026-11-14' WHERE id='trash'").run();
+    reviewFixture(db, 'missing', null, null);
+    reviewFixture(db, 'zero', null, 0);
+    reviewFixture(db, 'negative', null, -1000);
+    assert.deepEqual(insights.summary().subjects, []);
+    db.prepare("UPDATE knowledge SET deleted_at=NULL WHERE id='trash'").run();
+    assert.equal(insights.summary().subjects[0].revisionSeconds, 3600);
+  } finally { db.close(); }
+});

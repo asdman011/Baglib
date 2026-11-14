@@ -19,7 +19,7 @@ export interface StudyInsights {
   sessionCount: number | null;
   secondsPerPage: number | null;
   secondsPerSession: number | null;
-  subjects: { ar: string | null; en: string | null; seconds: number }[];
+  subjects: { ar: string | null; en: string | null; seconds: number; revisionSeconds: number }[];
   days: { date: string; seconds: number; pages: number }[];
   knowledge: number;
   ideas: number;

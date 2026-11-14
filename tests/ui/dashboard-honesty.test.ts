@@ -22,7 +22,7 @@ for (const lang of ['ar', 'en'] as const) {
       Object.defineProperty(window, 'localStorage', { configurable: true, value: localStorage });
       const title = '\u062a\u064e\u0623\u064e\u0645\u0651\u064f\u0644 Faith 2026';
       const kinds = ['study_note', 'note', 'reading_reflection', 'highlight', 'quote', 'bookmark', 'question', 'unknown'];
-      const summary: StudyInsights = { timeSource: 'none', seconds: 0, pages: 0, sessionCount: null, secondsPerPage: null, secondsPerSession: null, subjects: [], days: [], knowledge: 8, ideas: 1, completedTasks: 0, totalTasks: 0, reflections: [], edits: kinds.map((kind, index) => ({ id: `edit-${index}`, kind, title: index === 0 ? title : index === 1 ? '   ' : null, updatedAt: '2026-11-14T12:00:00Z' })), partial: false };
+      const summary: StudyInsights = { timeSource: 'none', seconds: 0, pages: 0, sessionCount: null, secondsPerPage: null, secondsPerSession: null, subjects: [{ ar: title, en: title, seconds: 3600, revisionSeconds: 1800 }, { ar: null, en: null, seconds: 0, revisionSeconds: 1 }], days: [], knowledge: 8, ideas: 1, completedTasks: 0, totalTasks: 0, reflections: [], edits: kinds.map((kind, index) => ({ id: `edit-${index}`, kind, title: index === 0 ? title : index === 1 ? '   ' : null, updatedAt: '2026-11-14T12:00:00Z' })), partial: false };
       const empty = async () => [];
       Object.defineProperty(window, 'electronAPI', { configurable: true, value: {
         getAllBooks: empty, getAllNotes: empty, categories: { getTree: empty }, tags: { getAll: empty },
@@ -43,6 +43,14 @@ for (const lang of ['ar', 'en'] as const) {
         const pages = labels.find(node => node.textContent === t.dashStatsPagesThisWeek)!;
         assert.equal(pages.previousElementSibling!.textContent, String(heatmap[0]?.pagesRead || 0));
         assert.ok(!analytics.textContent!.includes('999'));
+        const subjectTable = window.document.querySelector('[data-study-subject-hours]')!;
+        assert.deepEqual([...subjectTable.querySelectorAll('thead th')].map(el => el.textContent), [t.studySubject, t.studyReadingHours, t.studyRevisionHours]);
+        const subjectRows = [...subjectTable.querySelectorAll('tbody tr')];
+        assert.equal(subjectRows[0].querySelector('bdi')!.textContent, title);
+        assert.deepEqual([...subjectRows[0].querySelectorAll('td')].map(el => el.textContent), [Number(1).toLocaleString(lang), Number(0.5).toLocaleString(lang)]);
+        assert.equal(subjectRows[1].querySelector('bdi')!.textContent, t.studyUncategorized);
+        assert.equal(subjectRows[1].querySelectorAll('td')[1].textContent, (1 / 3600).toLocaleString(lang, { maximumFractionDigits: 4 }));
+        assert.ok(window.document.body.textContent!.includes(t.studyUntrackedActivities));
         const edits = [...window.document.querySelectorAll<HTMLElement>('[data-study-recent-edit]')];
         assert.equal(edits.length, 8);
         assert.equal(edits[0].querySelector('bdi')!.textContent, title);

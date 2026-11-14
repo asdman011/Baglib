@@ -34,9 +34,11 @@ export function StudyInsightsModule() {
     let alive = true;
     const update = () => { void window.electronAPI?.knowledgeCards?.reviewQueue?.().then(value => { if (alive) setReviews(value); }).catch(() => {}); };
     update();
+    const refreshHours = () => { void window.electronAPI.studyInsights.summary().then(value => { if (alive) setSummary(value); }).catch(() => { if (alive) setError(true); }); };
+    window.addEventListener('baglib:srs-reviewed', refreshHours);
     window.addEventListener('baglib:srs-reviewed', update);
     window.addEventListener('baglib:knowledge-card-saved', update);
-    return () => { alive = false; window.removeEventListener('baglib:srs-reviewed', update); window.removeEventListener('baglib:knowledge-card-saved', update); };
+    return () => { alive = false; window.removeEventListener('baglib:srs-reviewed', refreshHours); window.removeEventListener('baglib:srs-reviewed', update); window.removeEventListener('baglib:knowledge-card-saved', update); };
   }, []);
   useEffect(() => {
     let alive = true;
@@ -83,7 +85,14 @@ export function StudyInsightsModule() {
       <div className="grid grid-cols-2 @min-[28rem]:grid-cols-4 @min-[52rem]:grid-cols-7 gap-2">{summary.days.map(day => <div key={day.date} className={style}><time>{day.date}</time><p>{t('studyTodayProgress', { minutes: Math.floor(day.seconds / 60), pages: day.pages })}</p></div>)}</div>
       <h3 className="font-bold">{t('studySubjects')}</h3>
       {!summary.subjects.length && <p>{unavailable}</p>}
-      {summary.subjects.map((subject, index) => <p key={index} dir="auto">{(lang === 'ar' ? subject.ar : subject.en) || t('studyUncategorized')}: {(subject.seconds / 3600).toLocaleString(lang, { maximumFractionDigits: 2 })} {t('studyHours')}</p>)}
+      {!!summary.subjects.length && <div className="overflow-x-auto"><table className="w-full text-start text-sm leading-relaxed" data-study-subject-hours>
+        <thead><tr><th scope="col" className="text-start p-2">{t('studySubject')}</th><th scope="col" className="text-start p-2">{t('studyReadingHours')}</th><th scope="col" className="text-start p-2">{t('studyRevisionHours')}</th></tr></thead>
+        <tbody>{summary.subjects.map((subject, index) => <tr key={index}>
+          <th scope="row" className="text-start p-2 font-normal"><bdi>{(lang === 'ar' ? subject.ar : subject.en) || t('studyUncategorized')}</bdi></th>
+          <td className="p-2 tabular-nums">{(subject.seconds / 3600).toLocaleString(lang, { maximumFractionDigits: 4 })}</td>
+          <td className="p-2 tabular-nums">{(subject.revisionSeconds / 3600).toLocaleString(lang, { maximumFractionDigits: 4 })}</td>
+        </tr>)}</tbody>
+      </table></div>}
       <p className="text-sm text-muted">{t('studyUntrackedActivities')}</p>
       <h3 className="font-bold">{t('studyReadingOrder')}</h3>
       <p className="text-xs text-muted">{t('studyOrderHint')}</p>
