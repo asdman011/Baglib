@@ -53,12 +53,27 @@ export function poetryCopyText(rows: readonly Pick<PoetryRowModel, 'sadr' | 'aju
   return `${poetryRowsText(rows)}\n${poetryCitation(poem)}`;
 }
 
+/** Space between the two hemistichs of a row (Tailwind `gap-x-8`). */
+export const POETRY_HEMISTICH_GAP_PX = 32;
+
+/**
+ * Whether both hemistichs fit side by side, each on one line. When the widest hemistich needs more than half the row
+ * (a large text size or a narrow window), the two halves stack instead, so a hemistich never breaks inside a column.
+ * An unmeasured row (width 0) keeps the two columns.
+ */
+export function poetryHemistichsFit(rowWidth: number, widestHemistich: number, gap = POETRY_HEMISTICH_GAP_PX): boolean {
+  if (!(rowWidth > 0) || !(widestHemistich > 0)) return true;
+  return widestHemistich * 2 + gap <= rowWidth;
+}
+
 /**
  * CSS classes of a row's line block: two equal, centred columns, or one column. Arabic lines are centred;
  * English stanza lines keep the reading direction's start edge inside the centred poem block.
+ * `stacked` puts the second hemistich under the first at any width.
  */
-export function poetryRowLineClass(kind: PoetryRowKind, centred = true): string {
+export function poetryRowLineClass(kind: PoetryRowKind, centred = true, stacked = false): string {
   const align = centred ? 'text-center' : 'text-start';
+  if (kind === 'hemistichs' && stacked) return `grid grid-cols-1 gap-y-1 ${align}`;
   return kind === 'hemistichs'
     ? `grid grid-cols-2 items-start gap-x-8 ${align} max-sm:grid-cols-1 max-sm:gap-x-0 max-sm:gap-y-1`
     : `grid grid-cols-1 ${align}`;

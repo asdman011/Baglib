@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPoetryRows, poetryCopyText, poetryRhymeLetter, poetryRowLineClass, poetryRowText, poetryRowsText, POETRY_STACK_BREAKPOINT_PX } from '../../src/renderer/components/poetry/poetry-layout';
+import { buildPoetryRows, poetryCopyText, poetryHemistichsFit, poetryRhymeLetter, poetryRowLineClass, poetryRowText, poetryRowsText, POETRY_STACK_BREAKPOINT_PX } from '../../src/renderer/components/poetry/poetry-layout';
 import { isPoetryLongPress, POETRY_LINE_ACTIONS, POETRY_LONG_PRESS_MS, poetryLineActionForKey, runPoetryLineAction, type PoetryLineActionHandlers, type PoetryLineActionId } from '../../src/renderer/components/poetry/poetry-line-actions';
 
 const verses = ['أَلا هُبِّي بِصَحنِكِ فَاصبَحِينا', 'وَلا تُبقي خُمورَ الأَندَرينا', 'مُشَعشَعَةً كَأَنَّ الحُصَّ فيها', 'إِذا ما الماءُ خالَطَها سَخينا'];
@@ -47,6 +47,22 @@ test('hemistich rows use two equal columns that stack below 640px, and single ro
   assert.doesNotMatch(poetryRowLineClass('single'), /grid-cols-2/);
   assert.match(poetryRowLineClass('single'), /text-center/);
   assert.match(poetryRowLineClass('single', false), /text-start/);
+});
+
+test('hemistichs stack as soon as the widest one no longer fits in half the row', () => {
+  assert.equal(poetryHemistichsFit(900, 400), true);
+  assert.equal(poetryHemistichsFit(900, 434), true);
+  // 435 * 2 + 32 > 900: a column would break the hemistich over two lines, so the halves stack instead.
+  assert.equal(poetryHemistichsFit(900, 435), false);
+  assert.equal(poetryHemistichsFit(300, 400), false);
+  // Nothing measured yet: keep the two columns.
+  assert.equal(poetryHemistichsFit(0, 400), true);
+  assert.equal(poetryHemistichsFit(900, 0), true);
+  const stacked = poetryRowLineClass('hemistichs', true, true);
+  assert.match(stacked, /grid-cols-1/);
+  assert.doesNotMatch(stacked, /grid-cols-2/);
+  assert.match(stacked, /text-center/);
+  assert.equal(poetryRowLineClass('single', true, true), poetryRowLineClass('single'));
 });
 
 test('the rhyme letter is the commonest last letter, ignoring tashkeel', () => {

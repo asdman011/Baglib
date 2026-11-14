@@ -17,7 +17,7 @@ import { PASSAGE_HIGHLIGHT_COLORS } from '../../../shared/passage-highlights';
 import { colorKeys } from '../reader/ReaderMarkupBar';
 import { Copy, Share2, NotebookPen, SquareCheck } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { buildPoetryRows, poetryCopyText, poetryRhymeLetter, poetryRowLineClass, type PoetryRowModel } from './poetry-layout';
+import { buildPoetryRows, poetryCopyText, poetryHemistichsFit, poetryRhymeLetter, poetryRowLineClass, type PoetryRowModel } from './poetry-layout';
 import { POETRY_LINE_ACTIONS, runPoetryLineAction, type PoetryLineActionHandlers } from './poetry-line-actions';
 import { EnglishPoetryNarration } from './EnglishPoetryNarration';
 import { PoetryNarrations } from './PoetryNarrations';
@@ -156,6 +156,31 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
   const lineNumber = (row: PoetryRowModel) => numbers || (poem.language === 'en' && (row.index + 1) % 5 === 0) ? (row.index + 1).toLocaleString(lang) : null;
   const centred = poem.language === 'ar';
   const halfStyle = justify ? { textAlign: 'justify', textAlignLast: 'justify' } as const : undefined;
+  // When a hemistich no longer fits on one line in its column (bigger text, narrower window), stack the two halves
+  // for the whole poem, rather than leaving two columns of broken lines.
+  const [stacked, setStacked] = useState(false);
+  React.useLayoutEffect(() => {
+    const scroller = poemScroller.current;
+    if (!scroller || !paired) return;
+    const measure = () => {
+      const line = scroller.querySelector<HTMLElement>('[data-poetry-line]:has([data-poetry-hemistich="ajuz"])');
+      const half = line?.querySelector<HTMLElement>('[data-poetry-hemistich]');
+      const context = document.createElement('canvas').getContext?.('2d');
+      if (!line || !half || !context) return;
+      const style = getComputedStyle(half);
+      context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      let widest = 0;
+      for (const item of scroller.querySelectorAll<HTMLElement>('[data-poetry-line]:has([data-poetry-hemistich="ajuz"]) [data-poetry-hemistich]')) widest = Math.max(widest, context.measureText(item.textContent ?? '').width);
+      // The inline padding of a hemistich, plus a little slack for marks that the text measure leaves out.
+      const padding = parseFloat(style.paddingInlineStart) + parseFloat(style.paddingInlineEnd);
+      setStacked(!poetryHemistichsFit(line.clientWidth, widest * 1.03 + padding));
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    observer?.observe(scroller);
+    void document.fonts?.ready.then(measure).catch(() => {});
+    return () => observer?.disconnect();
+  }, [rows, size, font, diacritics, paired]);
   const chips = [{ key: 'bayanEra', value: poem.poet_era }, { key: 'bayanMeter', value: poem.meter }, { key: 'bayanRhyme', value: rhyme }, { key: 'bayanTheme', value: poem.theme }, { key: 'bayanLanguageType', value: poem.language_variant === '-' ? null : poem.language_variant }, { key: 'bayanLocation', value: poem.poet_location }, { key: 'bayanVerseCount', value: String(poem.verse_count ?? verses.length) }] as const;
   return <section data-poetry-id={poem.id} data-poetry-reference={initialVerse === undefined ? '' : `${initialVerse}:${initialTo ?? initialVerse}`} dir={dir} className="relative flex h-full min-h-0 flex-col bg-canvas p-4">
     <IslamicReaderHeader title={poem.title || poem.poet_name} t={t} panelOpen={panelOpen} onPanelToggle={() => setPanelOpen(value => !value)} picker={<><button type="button" onClick={onBack} className="rounded-lg p-2 text-sm">{t('bayanBack')}</button><select aria-label={t('navBayan')} value={poem.id} onChange={onBack} className="flex-1"><option value={poem.id}>{poem.poet_name} · {poem.title}</option></select></>} settings={<div className="flex flex-col gap-3"><label>{t('bayanFont')}<select value={font} onChange={event => setFont(event.target.value)} className="mx-3 rounded border border-subtle bg-canvas p-2">{fonts.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label><label className="flex items-center gap-3">{t('bayanFontSize')}<input type="range" data-poetry-size-range min={POETRY_SIZE_MIN} max={POETRY_SIZE_MAX} step={2} value={size} onChange={event => changeSize(Number(event.target.value))} /></label>      <button type="button" onClick={() => void shareRows(selectedRows.length ? selectedRows : rows)}>{t('bayanShare')}</button>
@@ -222,10 +247,10 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
               const action = POETRY_LINE_ACTIONS.find(entry => 'poetry-' + entry.id === shortcut?.id);
               if (action) { event.preventDefault(); runPoetryLineAction(action.id, row, lineHandlers); }
             }}
-            className={`group relative rounded-xl px-9 py-1 outline-none max-sm:py-3 transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-pale-sky-500 sm:px-24 ${selected ? 'bg-primary/10 ring-1 ring-primary/50' : ''}`}>
+            className={`group relative rounded-xl px-9 outline-none max-sm:py-3 ${stacked && row.kind === 'hemistichs' ? 'py-3' : 'py-1'} transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-pale-sky-500 sm:px-24 ${selected ? 'bg-primary/10 ring-1 ring-primary/50' : ''}`}>
             {number && <span aria-hidden="true" data-poetry-line-number className="pointer-events-none absolute start-2 top-1/2 -translate-y-1/2 text-xs leading-none text-muted/70 tabular-nums">{number}</span>}
             {poetryRowCount(noteCounts, poem.id, row.sourceFrom, row.sourceTo) > 0 && <NoteMarker className="absolute start-1 top-0 z-10" count={poetryRowCount(noteCounts, poem.id, row.sourceFrom, row.sourceTo)} t={t} onOpen={() => passageNote('poetry:ashaar:' + poem.id + ':' + row.sourceFrom + ':' + row.sourceTo, [poem.poet_name, poem.title].filter(Boolean).join(' — ') + (number ? ' · ' + number : ''), poetryCopyText([row], poem))} />}
-            <div data-poetry-line className={poetryRowLineClass(row.kind, centred)}>
+            <div data-poetry-line data-poetry-stacked={row.kind === 'hemistichs' && stacked ? '' : undefined} className={poetryRowLineClass(row.kind, centred, stacked)}>
               <span data-poetry-hemistich="sadr" aria-label={row.kind === 'hemistichs' ? t('bayanSadr') : undefined} className="block min-w-0 whitespace-pre-wrap break-words px-1 py-0.5" style={halfStyle}>{poetryDisplayText(row.sadr, diacritics)}</span>
               {row.ajuz !== null && <span data-poetry-hemistich="ajuz" aria-label={t('bayanAjuz')} className="block min-w-0 whitespace-pre-wrap break-words px-1 py-0.5" style={halfStyle}>{poetryDisplayText(row.ajuz, diacritics)}</span>}
             </div>
