@@ -143,7 +143,7 @@ export interface QuranAPI {
 }
 
 export type QuranReaderKind = 'script' | 'translation' | 'tafsir' | 'word-translation' | 'word-transliteration' | 'surahs' | 'mushaf-layout' | 'recitation' | 'surah-info' | 'ayah-theme' | 'ayah-topics' | 'similar-ayah' | 'word-root' | 'word-lemma' | 'word-stem' | 'mutashabihat' | 'glyph-script' | 'glyph-layout' | 'font' | 'ayah-transliteration' | 'juz' | 'hizb' | 'rub' | 'ruku' | 'manzil' | 'sajda';
-export interface QuranReaderSource { id: string; title: string; kind: QuranReaderKind; profile: 'hafs' | 'warsh'; language?: 'ar'; }
+export interface QuranReaderSource { id: string; title: string; kind: QuranReaderKind; profile: 'hafs' | 'warsh'; language?: 'ar' | 'en'; }
 export interface QuranReaderCatalog { sources: QuranReaderSource[]; presets: { id: string; title: string; kind: QuranReaderKind; installed: boolean; importOnly?: boolean }[]; }
 export interface QuranReadQuery { script: string; surah: number; from: number; translation?: string; meanings?: string; transliteration?: string; ayahTransliteration?: string; }
 export interface QuranRichNode { tag: 'text' | 'p' | 'div' | 'br' | 'b' | 'i' | 'u' | 'sup' | 'h2' | 'h3'; text?: string; children?: QuranRichNode[]; }

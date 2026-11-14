@@ -1,5 +1,18 @@
 export const translations = {
   ar: {
+    // KEY-170 installed tafsir comparison.
+    quranTafsirCompare: "مقارنة التفاسير",
+    quranTafsirSingle: "تفسير واحد",
+    quranTafsirChoose: "اختر من تفسيرين إلى أربعة تفاسير مثبتة",
+    quranTafsirFew: "يلزم تثبيت تفسيرين متوافقين على الأقل للمقارنة. تُعرض التفاسير المتاحة حاليًا.",
+    quranTafsirUnavailable: "غير متاح لهذه الآية",
+    quranTafsirPrevious: "الآية السابقة",
+    quranTafsirNext: "الآية التالية",
+    quranTafsirRange: "الآيات: {from} – {to}",
+    quranTafsirArabic: "العربية",
+    quranTafsirEnglish: "الإنجليزية",
+    quranTafsirSaveFailed: "تعذّر حفظ اختيار التفاسير. حاول مجددًا.",
+
     // KEY-244 board interactions.
     boardsUndo: "تراجع (Ctrl+Z)",
     boardsRedo: "إعادة (Ctrl+Y / Ctrl+Shift+Z)",
@@ -5341,6 +5354,19 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    // KEY-170 installed tafsir comparison.
+    quranTafsirCompare: "Compare tafsirs",
+    quranTafsirSingle: "Single tafsir",
+    quranTafsirChoose: "Choose 2–4 installed tafsirs",
+    quranTafsirFew: "Install at least two compatible tafsirs to compare. Available tafsirs are shown below.",
+    quranTafsirUnavailable: "Not available for this ayah",
+    quranTafsirPrevious: "Previous ayah",
+    quranTafsirNext: "Next ayah",
+    quranTafsirRange: "Ayahs: {from} – {to}",
+    quranTafsirArabic: "Arabic",
+    quranTafsirEnglish: "English",
+    quranTafsirSaveFailed: "Could not save the tafsir selection. Please try again.",
+
     // KEY-244 board interactions.
     boardsUndo: "Undo (Ctrl+Z)",
     boardsRedo: "Redo (Ctrl+Y / Ctrl+Shift+Z)",

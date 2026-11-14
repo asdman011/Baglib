@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T02:46:33.851147+02:00, Codex key170-root] KEY-170 verified: installed-tafsir comparison, persisted 2–4-pack picker, per-column direction/grouped ranges, previous/next reference navigation and isolated stale-safe results. Full2125/2125 once(concurrency2,342suites,170998.3634ms), focused9/9, native4/4 offline,0renderererrors;1338originals unchanged;8screens inspected;profiles/ownedrenderer removed. Final types/lint/diff pass. Exact10files/limits in CURRENT_TASK and local report. Scoped commit/push authorized and pending; Claude review/Jira next.
+
 - [2026-11-14T02:28:09.525811+02:00, Codex] KEY-244 verified. Seven shared board modules wired to localized UI, stable-height pointer canvas, group editing/history/snap/layout/curves/image export/linked-note conversion and serialized revision saves. Full 2,116/2,116 once (concurrency 2, 342 suites, 163,683.4475 ms), focused 9/9, native 4/4, 16/16 image files decoded, zero renderer errors. Types/scoped lint clean. Own profiles/renderer removed, 16 screenshots retained. Exact 10 files and limits in CURRENT_TASK/report. Scoped lock commit/push authorized and pending. Claude review/Jira next.
 
 

@@ -17,6 +17,7 @@ import type { QuranAyahTheme, QuranSimilarAyah, QuranTopic } from '../../../shar
 import type { SunnahSearchHit } from '../../../shared/types/sunnah';
 import type { TranslationKey } from '../../translations';
 import { QuranMushafView } from './QuranMushafView';
+import { QuranTafsirCompare } from './QuranTafsirCompare';
 import { QuranTranslationText } from './QuranTranslationText';
 import { QuranRichText, quranHtmlText } from './QuranRichText';
 import { QuranTopicDrawer } from './QuranTopicDrawer';
@@ -170,6 +171,7 @@ function StudyContent({ tool, reference, page, selection, metadata, t, lang, onN
 export function QuranMushafWorkspace(props: Props) {
   const { page, t, selection, metadata, studyTarget, onStudyTargetConsumed, onNavigateAyah, onPanelChange } = props;
   const [notesTab, setNotesTab] = useState(false);
+  const [compareTafsirs, setCompareTafsirs] = useState(false);
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [menu, setMenu] = useState<{ reference: Reference; x: number; y: number } | null>(null);
   const [showThemes, setShowThemes] = useState(false);
@@ -305,8 +307,11 @@ export function QuranMushafWorkspace(props: Props) {
     return () => { window.removeEventListener('keydown', close); if (previous?.isConnected) previous.focus(); };
   }, [menu]);
   const pageStart = { surah: page.surahStart, ayah: page.ayahStart };
-  return <div ref={root} className="group/quran relative h-full min-h-0" data-quran-workspace data-page-profile={page.profile}>
+  return <div ref={root} className="group/quran relative h-full min-h-0" data-quran-workspace data-page-profile={page.profile} data-tafsir-comparing={compareTafsirs && !notesTab && (!windows[0] || windows[0].tool === 'tafsir') ? '' : undefined}>
     <style>{`
+      [data-tafsir-comparing] > [data-islamic-reader-panel] { width:min(72rem,calc(100% - 2.5rem)); }
+      [data-tafsir-comparing] > [data-islamic-reader-panel] [role=tablist] { grid-template-columns:repeat(5,minmax(0,1fr)); }
+      @media(max-width:639px) { [data-tafsir-comparing] > [data-islamic-reader-panel] { width:auto; height:85%; max-height:calc(100% - 1rem); } }
       [data-immersive] .quran-edge { opacity:0; transition:opacity .18s; }
       [data-immersive] .quran-edge:hover,[data-immersive] .quran-edge:focus-within { opacity:1; }
       [data-immersive] [data-quran-mushaf]>div:nth-child(2) { opacity:0; }
@@ -335,10 +340,11 @@ export function QuranMushafWorkspace(props: Props) {
         if (tab !== 'notes') open(tab === 'commentary' ? 'tafsir' : tab === 'translation' ? 'translation' : 'explore', panel.reference, 'right');
       }}>
         {notesTab ? <PersonalCommentary key={page.profile + ':' + panel.reference.surah + ':' + panel.reference.ayah} reference={'quran:' + page.profile + ':' + panel.reference.surah + ':' + panel.reference.ayah} /> : <>
-        <p dir="ltr" className="text-xs text-muted">{panel.reference.surah}:{panel.reference.ayah}</p>
+        {!(panel.tool === 'tafsir' && compareTafsirs) && <p dir="ltr" className="text-xs text-muted">{panel.reference.surah}:{panel.reference.ayah}</p>}
         {panel.tool === 'topics' && page.profile === 'hafs' && <button type="button" onClick={() => setTopicDrawer({ topics:[], active:null })} className="text-xs underline">{t('quranTopicBrowse')}</button>}
-        <div className="flex flex-wrap gap-2 text-xs mb-3">{(['meanings','topics','themes','transliteration','similar','morphology','mutashabihat'] as Tool[]).map(tool => <button key={tool} type="button" aria-label={t(labels[tool])} className="rounded-lg border border-subtle px-2 py-1" onClick={() => open(tool,panel.reference,'right')}>{t(labels[tool])}</button>)}<button type="button" aria-label={t('quranCatTheme')} onClick={() => setShowThemes(value => !value)}>{t('quranCatTheme')}</button></div>
-        {(panel.tool === 'explore' ? ['morphology', 'meanings', 'transliteration', 'mutashabihat', 'similar'] as Tool[] : [panel.tool]).map(tool => <section key={tool}><h3 className="font-semibold text-sm">{t(labels[tool])}</h3>{['similar','mutashabihat','topics','themes'].includes(tool) && <p className="text-xs text-muted leading-relaxed">{t('quranConnectionSource',{resource:t(labels[tool])})}</p>}<StudyContent tool={tool} reference={panel.reference} page={page} selection={selection} metadata={metadata} t={t} lang={props.lang} onNavigateAyah={onNavigateAyah} onOpenTopics={openTopics} onOpenSimilar={openSimilar} /></section>)}
+        {!(panel.tool === 'tafsir' && compareTafsirs) && <div className="flex flex-wrap gap-2 text-xs mb-3">{(['meanings','topics','themes','transliteration','similar','morphology','mutashabihat'] as Tool[]).map(tool => <button key={tool} type="button" aria-label={t(labels[tool])} className="rounded-lg border border-subtle px-2 py-1" onClick={() => open(tool,panel.reference,'right')}>{t(labels[tool])}</button>)}<button type="button" aria-label={t('quranCatTheme')} onClick={() => setShowThemes(value => !value)}>{t('quranCatTheme')}</button></div>}
+        {panel.tool === 'tafsir' && <button type="button" data-tafsir-compare-toggle aria-pressed={compareTafsirs} onClick={() => setCompareTafsirs(value => !value)} className="mb-3 rounded-lg border border-subtle px-3 py-2 text-sm">{t(compareTafsirs ? 'quranTafsirSingle' : 'quranTafsirCompare')}</button>}
+        {panel.tool === 'tafsir' && compareTafsirs ? <QuranTafsirCompare script={selection.script} profile={page.profile} preferred={selection.tafsir} reference={panel.reference} surahs={props.surahs} t={t} lang={props.lang} onReference={reference => open('tafsir', reference, 'right')} /> : (panel.tool === 'explore' ? ['morphology', 'meanings', 'transliteration', 'mutashabihat', 'similar'] as Tool[] : [panel.tool]).map(tool => <section key={tool}><h3 className="font-semibold text-sm">{t(labels[tool])}</h3>{['similar','mutashabihat','topics','themes'].includes(tool) && <p className="text-xs text-muted leading-relaxed">{t('quranConnectionSource',{resource:t(labels[tool])})}</p>}<StudyContent tool={tool} reference={panel.reference} page={page} selection={selection} metadata={metadata} t={t} lang={props.lang} onNavigateAyah={onNavigateAyah} onOpenTopics={openTopics} onOpenSimilar={openSimilar} /></section>)}
         </>}
       </IslamicReaderPanel>;
     })()}

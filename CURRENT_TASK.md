@@ -1,3 +1,26 @@
+## KEY-170 verified handoff — 2026-11-14T02:46:33.851147+02:00 — Codex (key170-root)
+
+The Quran commentary tab now compares 2–4 compatible installed tafsirs, remembers the choice per profile through settings, and shows canonical titles, language and individual grouped-ayah ranges. Desktop columns stack at 480 px; comparison alone expands the study panel and compacts unrelated controls. Each source keeps its own RTL/LTR direction and inert QuranRichText rendering; localized metadata follows the UI language. Previous/next comparison controls update every column, including across surah boundaries. They move the study reference without changing the background mushaf page. Missing packs/ayahs stay isolated to their column; zero/one-pack states show the localized hint. Existing commentary IPC is reused with four-pack request bounds, 120 ms coalescing and stale-key rejection. Reader-source metadata now accepts English as well as Arabic. No schema, dependencies, downloads, main-service changes or Jira actions.
+
+Verification: full suite once at --test-concurrency=2 passed 2,125/2,125 across 342 suites, zero failures/skips, in 170,998.3634 ms. Focused9/9 includes three SQLite cyclic-pointer/hop-limit regressions and six renderer scenarios (ar/en, zero/one/multiple packs, bounds, persistence, profile filtering, mixed scripts, source direction, isolated failures, stale responses and boundary navigation). Final native4/4 offline (ar/en × 1280/480), zero renderer errors, four blocked external requests, no horizontal overflow. Types and scoped ESLint clean. Eight final screenshots retained/representative images inspected in .baglib-data/KEY-170-evidence/. All throwaway profiles and owned renderer removed; all 1,338 original corpus files unchanged on each native run.
+
+Installed real sources: tafsir/22 (Ibn Kathir, 37a53f62-0808-4e30-8392-45d3554add08) and tafsir/251 (Al-Mukhtasar, 9ee5d3d1-4a74-4e3a-a0e0-0613822b66e2). A missing 1:3 row was injected only into the disposable derived Ibn Kathir copy; both original installed packs stayed unchanged. Both real tafsirs are Arabic; English-column direction is fixture-tested because no English tafsir is installed. The existing main-process planner warning before fresh-profile migrations is recorded in the local report; migrations complete and the renderer has zero errors.
+
+Exact ten files/hunks:
+
+- `CURRENT_TASK.md` — KEY-170 entry only
+- `IMPLEMENTATION_PLAN.md` — KEY-170 entry only
+- `src/renderer/components/quran/QuranMushafWorkspace.tsx`
+- `src/renderer/components/quran/QuranTafsirCompare.tsx`
+- `src/renderer/translations.ts` — KEY-170 keys only
+- `src/shared/types/quran.ts` — reader-source language union only
+- `tests/services/quran-commentary-cycles.test.ts`
+- `tests/ui/quran-tafsir-compare.test.ts`
+- `scripts/tafsir-compare-live/run.mjs`
+- `scripts/tafsir-compare-live/main.cjs`
+
+Local report: docs/agent-ops/reports/KEY-170.md. Board checkpoint updated. Commit/push are authorized by the dispatch and pending scoped publication to origin/feature/library-domain; Claude owns review/Jira. All other agents' hunks remain excluded.
+
 ## KEY-244 verified handoff — 2026-11-14T02:28:09.525811+02:00 — Codex
 
 Connected the seven shared board modules authored by OpenCode workers and reviewed by Claude in c266dab/75d8f4a. The Boards UI now supports tagged undo/redo, modifier/marquee group selection and dragging, 1/10-pixel nudges, duplication/deletion and six RTL-aware alignments, snapping with guides and Alt bypass, directional mind-map tree layout, curved/parallel labelled arrows, whole/selection SVG and 2× PNG export, and linked selection/board-to-note creation through the existing notes API. Revision saves are serialized, conflicts reset history and discard stale queued writes, and failed saves keep the board open.
