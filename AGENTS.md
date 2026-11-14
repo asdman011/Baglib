@@ -170,6 +170,10 @@ If the requested work appears to require one of these changes, explain the propo
 
 Research or reverse-engineered findings are evidence and design input, not authorization to alter BagLib's architecture.
 
+## Research Editor Vendor Guardrails
+
+- Never edit `research-editor/vendor/` directly. Add a numbered patch in `research-editor/patches/` instead and run `npm run check:vendor`.
+
 ---
 
 # 4. Internationalization

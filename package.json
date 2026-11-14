@@ -20,7 +20,9 @@
     "test": "node scripts/test-runner.js",
     "test:tts:live": "node scripts/tts-live/run.mjs",
     "seed:poetry": "node scripts/poetry/seed.cjs",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:research-editor": "node research-editor/.yarn/releases/yarn-4.18.0.cjs --cwd research-editor build",
+    "check:vendor": "node research-editor/scripts/vendor.mjs check"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.4",

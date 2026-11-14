@@ -1,0 +1,91 @@
+diff --git a/blocksuite/affine/blocks/list/src/list-block.ts b/blocksuite/affine/blocks/list/src/list-block.ts
+index d96a2327639d3..cb937cd3a4c96 100644
+--- a/blocksuite/affine/blocks/list/src/list-block.ts
++++ b/blocksuite/affine/blocks/list/src/list-block.ts
+@@ -157,7 +157,7 @@ export class ListBlockComponent extends CaptionedBlockComponent<ListBlockModel>
+     const children = html`<div
+       class="affine-block-children-container"
+       style=${styleMap({
+-        paddingLeft: `${BLOCK_CHILDREN_CONTAINER_PADDING_LEFT}px`,
++        paddingInlineStart: `${BLOCK_CHILDREN_CONTAINER_PADDING_LEFT}px`,
+         display: collapsed ? 'none' : undefined,
+       })}
+     >
+@@ -165,7 +165,11 @@ export class ListBlockComponent extends CaptionedBlockComponent<ListBlockModel>
+     </div>`;
+ 
+     return html`
+-      <div class=${'affine-list-block-container'} style="${textAlignStyle}">
++      <div
++        class=${'affine-list-block-container'}
++        dir="auto"
++        style="${textAlignStyle}"
++      >
+         <div
+           class=${classMap({
+             'affine-list-rich-text-wrapper': true,
+diff --git a/blocksuite/affine/blocks/list/src/styles.ts b/blocksuite/affine/blocks/list/src/styles.ts
+index fcb9a689ed59a..77d02210e7a40 100644
+--- a/blocksuite/affine/blocks/list/src/styles.ts
++++ b/blocksuite/affine/blocks/list/src/styles.ts
+@@ -12,7 +12,7 @@ export const listPrefix = css`
+   .affine-list-block__numbered {
+     min-width: 22px;
+     height: 24px;
+-    margin-left: 2px;
++    margin-inline-start: 2px;
+   }
+ 
+   .affine-list-block__todo-prefix {
+diff --git a/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts b/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts
+index 590d9c6c8721c..9eeca0cfb6634 100644
+--- a/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts
++++ b/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts
+@@ -273,7 +273,7 @@ export class ParagraphBlockComponent extends CaptionedBlockComponent<ParagraphBl
+     const children = html`<div
+       class="affine-block-children-container"
+       style=${styleMap({
+-        paddingLeft: `${BLOCK_CHILDREN_CONTAINER_PADDING_LEFT}px`,
++        paddingInlineStart: `${BLOCK_CHILDREN_CONTAINER_PADDING_LEFT}px`,
+         display: collapsed ? 'none' : undefined,
+       })}
+     >
+@@ -294,6 +294,7 @@ export class ParagraphBlockComponent extends CaptionedBlockComponent<ParagraphBl
+           'affine-paragraph-block-container': true,
+           'highlight-comment': this.isCommentHighlighted,
+         })}
++        dir="auto"
+         style="${textAlignStyle}"
+         data-has-collapsed-siblings="${collapsedSiblings.length > 0}"
+       >
+diff --git a/blocksuite/affine/blocks/paragraph/src/styles.ts b/blocksuite/affine/blocks/paragraph/src/styles.ts
+index f014595a92e07..ea0e538e8944e 100644
+--- a/blocksuite/affine/blocks/paragraph/src/styles.ts
++++ b/blocksuite/affine/blocks/paragraph/src/styles.ts
+@@ -110,7 +110,7 @@ export const paragraphBlockStyles = css`
+ 
+   .quote {
+     line-height: 26px;
+-    padding-left: 17px;
++    padding-inline-start: 17px;
+     margin-top: var(--affine-paragraph-space);
+     padding-top: 10px;
+     padding-bottom: 10px;
+@@ -123,7 +123,7 @@ export const paragraphBlockStyles = css`
+     margin-top: 10px;
+     margin-bottom: 10px;
+     position: absolute;
+-    left: 0;
++    inset-inline-start: 0;
+     top: 0;
+     background: var(--affine-quote-color);
+     border-radius: 18px;
+@@ -136,7 +136,7 @@ export const paragraphBlockStyles = css`
+     overflow-x: hidden;
+     white-space: nowrap;
+     text-overflow: ellipsis;
+-    left: 0;
++    inset-inline-start: 0;
+     bottom: 0;
+     pointer-events: none;
+     color: var(--affine-black-30);

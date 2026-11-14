@@ -1,3 +1,7 @@
+## KEY-364 review fix active - 2026-11-14T21:55:30.706961+02:00 - Codex
+
+Claude requested valid initial BlockSuite DocSnapshots and synchronized meta.title. Scope limited to shared derivation, focused tests, ADR/dictionary and own state/report entries. New commit/push explicitly authorized in this review task. Model contracts inspected read-only. Migration attribution under investigation, real database opened read-only for _migrations timestamp only. Implementation/verification pending.
+
 ## KEY-364 verified handoff - 2026-11-14T21:47:08.299941+02:00 - Codex 01a1db7f-8af5-7521-aa74-72ca0dbc75cc
 
 Implemented RE-3 under the approved R3 schema and R6 decision, epic KEY-361. ADR-016, migration029, dictionary/DBML, repository/IPC/main registration/preload/shared contracts, pure snapshot derivation, renderer persistence controller and standalone manuscripts list/chapter tree are verified. Claude's untracked Research Editor Plan revision2.1 is included unchanged because ADR-016 references it. The user's task explicitly authorizes this scoped commit and normal push to origin/feature/library-domain under commit.lock.
@@ -36,7 +40,167 @@ Exact task files (23)
 - CURRENT_TASK.md
 - IMPLEMENTATION_PLAN.md
 
-Publication. Verification complete. Authorized locked commit and push pending. Other sessions' files/state entries remain preserved.
+Publication. Committed 4f1956a18c6ffba64266959210bbee58a4cc0b8f with exactly23authorized files/ownstateinsertions and Agent: Codex attribution. Normal push to origin/feature/library-domain succeeded (0073dbb..4f1956a), remote hash verified. Commit lock released. Local state/report now record this publication result, while other sessions' unfinished files/state remain uncommitted and preserved. No further KEY-364 implementation, verification or publication work is pending.
+
+## KEY-362 verified handoff - 2026-11-14T21:56:00+02:00 - Antigravity 9c90e2e3-bf09-4ccc-aee8-00554c3c4a51
+
+Implemented RE-1 (Jira KEY-362, epic KEY-361) handover from Claude Code per docs/agent-ops/tasks/KEY-362.antigravity.md:
+- Vendor guardrails and integrity verified: BlockSuite v0.27.4 pristine subset (2,899 files in `research-editor/vendor/`) with patch `0001-pr15215-per-block-direction.diff` applied. Tarball sha256 (`3637540c...`) pinned. Fixed Windows file-handle contention in `research-editor/scripts/vendor.mjs` (`rmSync` `maxRetries: 5, retryDelay: 100`). `npm run check:vendor` passes cleanly.
+- Offline lockfile prune: `research-editor/yarn.lock` pruned offline via Yarn 4 update-lockfile mode with network disabled (`YARN_ENABLE_NETWORK=0`), shrinking from ~36.5k lines to 7,400 lines (2,706 unneeded packages removed). Offline workspace focus verified in 0.84s.
+- Bundle size reduction: replaced full Shiki bundle (280+ grammars and 40+ themes totaling ~8.6 MB) with curated stub in `research-editor/app/src/stubs/shiki.js` bundling 14 common languages (JS, TS, JSX, TSX, JSON, HTML, CSS, Markdown, Python, Rust, SQL, Shell, YAML, LaTeX) and dark-plus/light-plus themes via Vite alias. Dist dropped from 17.15 MB (358 files) to **9.29 MB (9,747,512 bytes / 88 files)**, main script 6.34 MB, beating the <= 12 MB budget by 2.7 MB.
+- Root wiring: added `"build:research-editor"` and `"check:vendor"` to root `package.json` scripts without adding root dependencies.
+- Guardrails: added root `.ignore` (skipping `research-editor/vendor/`, `node_modules/`, `dist/`), root `.gitattributes` (`linguist-vendored -text` on vendor and `binary` on `.yarn/releases/**`), `eslint.config.mjs` (ignores `research-editor/**`), `tsconfig.json` (excludes `"research-editor"`), and `AGENTS.md` (rule requiring numbered patches for vendor modifications). Proved `rg`/`eslint` skip vendor and touching vendor fails `check:vendor` with exit 1.
+- Offline Electron smoke test & Arabic typing helper in `scripts/research-editor-live/`: verified custom protocol `editor://`, 0 console errors, 0 blocked network requests, page and edgeless mode in English LTR and Arabic RTL, and CDP Arabic typing (`/آية` persisted in paragraph and Yjs snapshot). Saved 5 screenshots and `result.json` in `.baglib-data/KEY-362-evidence/`.
+- Authored comprehensive `research-editor/README.md`.
+- Full verification: `npm run check:vendor` pass, `npm run build:research-editor` pass, `node scripts/research-editor-live/run.mjs` pass, `npx tsc --noEmit` pass (0 errors), `npx eslint eslint.config.mjs` pass (0 errors), `npm test -- --test-concurrency=2` pass (2,337/2,337 across 352 suites, 0 fail/0 skip/0 todo).
+
+Exact 12 task files/directories:
+- `AGENTS.md`
+- `package.json`
+- `eslint.config.mjs`
+- `tsconfig.json`
+- `.ignore`
+- `.gitattributes`
+- `research-editor/`
+- `scripts/research-editor-live/`
+- `docs/agent-ops/reports/KEY-362.md`
+- `docs/agent-ops/board.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
+## KEY-364 reviewed by Claude: changes requested (4f1956a) - 2026-11-14 21:53 +02:00 - Claude Code
+
+- **Checked:** Codex's 4f1956a (23 files, pushed) against KEY-364 acceptance and AGENTS.md. Migration 029 matches plan revision 2.1 exactly (no board column, per R6). The repository handles nesting, cycle checks, recursive trash visibility, version restore, and checkpoint de-duplication by hash. FTS is indexed with the existing `normalizeArabicText`; stored text is not normalised. All UI strings are ar/en in translations.ts and the CSS is logical. No shipped navigation changed.
+- **Claude re-ran:** focused 32/32, `npx tsc --noEmit` clean, eslint on the changed files clean. Codex reported full 2,336/2,336 and native ar/en 2/2 with screenshots.
+- **Defect (fix list 1):** `initialManuscriptSnapshot()` is not a valid BlockSuite DocSnapshot (`DocSnapshotSchema` in research-editor/vendor/blocksuite/framework/store/src/transformer/type.ts requires `type:'page'`, `meta`, and `type:'block'` on blocks). RE-2 would fail to open a new chapter. `renameManuscriptSnapshot()` must keep `meta.title` in step. Sent to Codex as fix forward: `docs/agent-ops/reports/KEY-364.fix1.prompt.txt`, resumed on thread 01a1db7f-8af5-7521-aa74-72ca0dbc75cc.
+- **Open question:** Codex reported the user's real database "already reported 029" when inspected; its scripts never ran migrations on it. Likely the user's running dev app reloaded and applied the new migration. The change is additive (empty tables). Codex was asked to name the path and the cause in the report.
+- Jira KEY-364 stays To Do/In Progress until the fix passes review.
+
+## Research editor gates approved, KEY-376 created, Wave 1 dispatch (epic KEY-361) - 2026-11-14 21:20 +02:00 - Claude Code
+
+**User decisions, given in chat on 2026-11-14:**
+1. "i approve 1-5 R decisions". Gates R1–R5 are approved as written in plan revision 2: copying BlockSuite v0.27.4 into `research-editor/vendor`, the separate `research-editor/` toolchain with its ~86 MB download, ADR-016 storage, the optional installer component, and the `docx` and `pagedjs` libraries.
+2. R6: "Keep both and link them for now with a follow up in the future before the first release to chose between keeping the board or suffice with the canvas". Option (a): RE-3 has no board migration; RE-7 links a study board to a manuscript.
+3. "add a new tab 'Editor' in the side bar in the notes section above the 'Notes Log'". This replaces the plan's separate "Research" nav entry and belongs to RE-2 (KEY-363): ar/en label via `translations.ts`, hidden when the component is not installed.
+
+**Plan doc:** `docs/features/feature - Research Editor Plan.md` is now revision 2.1: gates table marked approved/decided, R6 decision text, RE-2 and "Packaging and loading" moved to the Editor tab, revision-log line.
+
+**Jira (Claude Code, 2026-11-14):**
+- KEY-361: comment with the gate approvals and the Editor-tab requirement.
+- KEY-364 and KEY-368: comments with the R6 decision.
+- KEY-363: summary is now "Research Editor RE-2: Editor tab, iframe host and typed bridge"; scope and acceptance include the Editor tab (Notes section, directly above Notes Log, ar/en, hidden when not installed).
+- KEY-376 created (Task, parent KEY-361, label Research): "Decide before first release: keep study boards or rely on the research canvas only". Links: relates to KEY-244; blocked by KEY-368. Suggested agent: Claude Code.
+
+**Wave 1 (as finally dispatched, 2026-11-14 21:33):**
+- RE-3 (KEY-364): Codex, thread `01a1db7f-8af5-7521-aa74-72ca0dbc75cc`, brief `docs/agent-ops/tasks/KEY-364.md` (copy of `reports/KEY-364.prompt.txt`). The plan doc goes into the RE-3 commit.
+- RE-1 (KEY-362): first sent to Codex (thread `01a1db7f-8af5-77c2-...`), cancelled after it had only read files, when the user said via the parent session "work with codex in parallel" (Claude implements RE-1). Claude Code then did the first part, uncommitted, under `research-editor/`: pristine v0.27.4 subset in `vendor/` plus patch 0001; `scripts/vendor.mjs` check/rebuild (check passes, 2,899 files); Yarn 4 workspace that installs fully offline from the spike cache (no download); app mount with local fonts (subset 2,643 KB to 294 KB with BagLib's existing fontTools); first build OK, dist 18 MB (spike 27 MB).
+- The user then said: "antigravity quota reset, so offload some tasks to it also along with codex. and preserve your quota for orchestration and review. use gemini 3.8 flash medium effort". The rest of RE-1 went to Antigravity (`agy-run.ps1`, model gemini-3.8-flash-medium only), brief `docs/agent-ops/tasks/KEY-362.antigravity.md`: lockfile prune, size steps to 12 MB or less, root scripts, guardrails, smoke test, Arabic typing helper, README.
+- Poppins download (user, 2026-11-14: "why not download it?! it's less than 1mb"): Claude downloaded Poppins Light/Regular/Medium/SemiBold TTF + OFL.txt (632 KB, SIL OFL 1.1) from https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/ into the git-ignored `research-editor/.cache/fonts/poppins/`. Antigravity bundles the subset (brief addendum). Italics not downloaded; upright faces are used.
+- Claude reviews both when they report. Nothing is committed yet.
+
+## Research editor plan revision 2 and Jira update (epic KEY-361) - 2026-11-14 21:06 +02:00 - Claude Code
+
+**What happened.** The user supplied an outside review of the research editor plan. Each point was checked against the code, then folded into `docs/features/feature - Research Editor Plan.md` as revision 2. The plan's "Revision 2: review outcome" section lists what was taken in and what was changed. Checked against the code:
+- study boards already ship as JSON through `BoardStore`;
+- `poetryBayts()` already splits verses into sadr and ajuz;
+- the next migration is 029;
+- there are no `.ignore` or `.gitattributes` files yet.
+
+**Plan changes.**
+- **Storage (ADR-016):** `manuscript_document` gains `parent_id`, `plain_text` and `deleted_at`. New: a `manuscript_link` derived index, an FTS table and a `manuscript-assets/` folder. `entity_version` is written at checkpoints only, not on every autosave.
+- **New gate R6:** study boards (KEY-244) and the research canvas, decided before migration 029. Proposed: keep both and link them.
+- **R5 now also covers `pagedjs`,** for page-bottom footnotes in PDF; a spike comes first.
+- **Iframe:** shortcut forwarding, theme sync and a blob source for images.
+- **RE-1:** vendor guardrails, a size target and an Arabic typing helper.
+- **Dependencies:** RE-5 now depends on RE-3, and RE-10 on RE-3.
+
+**Jira, by Claude Code.** Descriptions of KEY-361 to KEY-373 were rewritten to match revision 2. All stay To Do, and labels and parent are unchanged.
+
+**Waiting on the user (hard gates).** R1–R6 are still unapproved. Nothing is implemented. The plan doc and these state entries are uncommitted.
+
+## Future inactive epics KEY-374 and KEY-375 - 2026-11-14 - Claude Code
+
+At the user's request, two epics were created in Jira with the Research label. **Both are inactive:** no agent may start them, dispatch them or create child tasks under them until the user explicitly activates them.
+
+- **KEY-374, Collaborative Authoring.** Comes after the community feature exists.
+- **KEY-375, Curated Textbook Writing & Layout Production.** References publishers' split between authoring and desktop publishing (InDesign, FrameMaker, QuarkXPress, LaTeX, McGraw Hill Create). Becomes active when the community of researchers and editors is introduced.
+
+## Research and book editor planned (KEY-243 research, epic KEY-361) - 2026-11-14 20:10 +02:00 - Claude Code
+
+**What happened.**
+- The user chose a separate research and book editor (Word depth, Notion ease) on AFFiNE's engine, BlockSuite. Quick notes stay on CodeMirror.
+- The user approved a spike and it passed 6/6 checks offline in BagLib's Electron:
+  1. page and edgeless views run offline;
+  2. Arabic and English direction is right with PR #15215;
+  3. an ayah block with slash search works;
+  4. a `quran:` footnote citation works;
+  5. canvas auto-arrange (Sunnah, poetry, Quran) works;
+  6. JSON save and reload work, and Markdown export works.
+- The user requires the editor to be an optional install component.
+
+**Where the details are.**
+- Research and spike evidence: `docs/features/feature - Rich Note Editor Library Research.md`, Parts 1–4.
+- Plan: `docs/features/feature - Research Editor Plan.md`.
+- Spike files, outside the repo and uncommitted: `D:\Ammar\Projects\Baglib\spike` (655 MB).
+
+**Jira, by Claude Code.**
+- Comments on KEY-243: 10394, 10400, 10402, 10403.
+- Created epic KEY-361 "Research Epic 3: Research & Book Editor" (label Research), linked to KEY-243 (relates).
+- Created tasks KEY-362 to KEY-373 (RE-1 to RE-12), each with the label Research, parent KEY-361 and a suggested agent.
+
+**Waiting on the user (hard gates).**
+- R1: copy BlockSuite v0.27.4 into BagLib.
+- R2: a separate `research-editor/` toolchain (about 86 MB download).
+- R3: ADR-016 tables `manuscript` and `manuscript_document`.
+- R4: the optional installer component.
+- R5: the `docx` library.
+
+Nothing is implemented, and no code was changed in the repo. The two docs and these state entries are uncommitted.
+
+## Jira planning - 2026-11-14 - Claude Code
+
+- Created KEY-359: rebuild the Sunnah dataset index with the isnad (gated on user approval; coordinate with KEY-358).
+- Created KEY-360: audit the accuracy and best-match ordering of slash search results across all sources.
+
+## KEY-357 complete - 2026-11-14 - Claude Code (user report after KEY-350)
+
+User report: choosing a verse inserted only the link; Sunnah used the matn only.
+
+Cause: the older "/" command menu still owned آية, اية, ayah, حديث, hadith, بيت, قصيدة, poem, poetry, verse and bayt. Those opened the old link picker (link only, plus the relationship menu) instead of the new search. The relationship menu also popped up at every link.
+
+Fix:
+- Those words are now aliases of the Quran, Sunnah and Al-Bayan scopes (src/shared/slash-command.ts) and are removed from src/shared/note-slash-commands.ts.
+- The relationship menu is removed from src/renderer/components/notes/StudyNoteEditor.tsx (KEY-356 redesigns it). Typed relations, chips and Mod-Alt-R remain.
+- Sunnah slash search also matches the isnad, after the matn matches: research-corpus.ts adds prepareIsnadSearch and isnadMatches, and sunnah-search-worker.ts warms the index at start. The shipped corpus is unchanged.
+- The hadith quote is now the whole hadith (corpus-lookup.ts).
+
+Files:
+- src/shared/slash-command.ts
+- src/shared/note-slash-commands.ts
+- src/renderer/components/notes/StudyNoteEditor.tsx
+- src/renderer/utils/corpus-lookup.ts
+- src/main/services/sunnah/research-corpus.ts
+- src/main/sunnah-search-worker.ts
+- tests/services/note-links-and-slash.test.ts
+- tests/services/sunnah-research.test.ts
+- tests/ui/slash-search-followup.test.ts
+- scripts/slash-search-live/main.cjs
+
+Verification: full suite 2305/2305; eslint clean; live ar/en 2/2 with real copies, 0 renderer errors. Pushed 0073dbb, remote verified.
+
+Jira: KEY-357 Done; KEY-358 created (matn-only or isnad-and-matn option, after a dataset review: 8,914 of 73,325 hadiths have no separate isnad).
+
+## KEY-350 reviewed and finished - 2026-11-14 - Claude Code (review of Codex 53c6907)
+
+Codex 53c6907 reviewed and passed, with one fix. Cancelling a stale slash request stopped its engine (Quran reader process, poetry and Sunnah workers), so the newest query waited for a cold reopen. Fixed in 5b9f4a1: slashLane() in src/main/services/slash-search-jobs.ts runs one search per engine at a time, answers a cancelled request at once without stopping the engine, and skips queued stale ones. The Sunnah worker now stays warm for 5 minutes instead of 1. The slash-search live harness now measures Sunnah time-to-results after fast typing, and its slot wait counts only .baglib-data runs.
+
+Files: src/main/services/slash-search-jobs.ts, src/main/ipc/{poetry,quran,sunnah}.ts, src/main/services/sunnah/search-process.ts, tests/ui/slash-search-followup.test.ts, scripts/slash-search-live/{main.cjs,run.mjs}.
+
+Verification:
+- Focused 31/31. Full suite 2304/2304. tsc and eslint clean.
+- Live with real copies, before and after the fix, ar/en 2/2 each run: Sunnah results after fast typing 2046/2212 ms before, 1374/1367 ms after. Main-loop gaps about 20 ms, 0 renderer errors.
+
+Pushed 5b9f4a1 to origin/feature/library-domain, remote verified. Jira KEY-350 is Done with a comment.
 
 ## KEY-350 verified handoff - 2026-11-14T15:23:26.424189+02:00 - Codex key350-root
 
@@ -88,6 +252,55 @@ Exact 36 tracked files (only this entry in shared state):
 - `IMPLEMENTATION_PLAN.md`
 
 User authorized the exact scoped commit and normal push to origin/feature/library-domain under commit.lock. Final review also fixed qualified Sunnah pagination and transcript paging beyond100; dedicated regressions pass. The earlier full2302 run passed before those fixes; final full2303 and native2/2 verify them. Publication pending; other sessions files/state preserved. Local report docs/agent-ops/reports/KEY-350.md and board updated.
+
+## KEY-351, KEY-352, KEY-353 complete - 2026-11-14 - Claude Code (user list; Codex on KEY-350 in parallel)
+
+- KEY-351 (poetry): a hemistich row is now either side by side with each half on one line, or stacked for the whole poem. The reader measures the widest hemistich with the poem's font after layout and on every resize, Ctrl+wheel, font or diacritics change. Stacked bayts get extra row spacing. Before, the halves stacked only below a 640 px window, and in between each half broke inside its column (the user's third screenshot).
+- KEY-352 (side note): CompanionNotePane saved its state inside a React state updater. Saving dispatches baglib:companion-position, so CompanionToggle set state during render (the reported Next.js console error). The pane now saves outside the updater and writes only the changed keys, so it no longer overwrites the edge tab's position.
+- KEY-353 (lectures): the inline notes box (Ctrl+Enter saves with the playback time) also shows in the overlay layout, under the video, followed by the linked notes and Sections.
+
+Files:
+- src/renderer/components/poetry/poetry-layout.ts
+- src/renderer/components/poetry/PoetryReader.tsx
+- src/renderer/components/notes/CompanionNotePane.tsx
+- src/renderer/components/lectures/LecturesView.tsx
+- tests/ui/poetry-layout.test.ts
+- tests/ui/companion-side-note-tab.test.ts
+- tests/ui/companion-pane-render.test.ts (new)
+- tests/ui/lecture-player.test.ts
+- scripts/poetry-stack-live/ (new)
+- scripts/lecture-series-live/main.cjs (overlay check)
+- scripts/lecture-series-live/run.mjs (the slot wait now counts only throwaway .baglib-data runs, so the user's open app no longer blocks it forever)
+
+Verification:
+- Focused tests 22/22. The new companion test fails with the old line (React "Cannot update a component") and passes with the fix.
+- tsc and eslint clean.
+- Live poetry run on a copy of the installed corpus, poem 2351 "من أرتجي وإلى ما ينتهي أربي" (the user's screenshot): ar/en at 4 widths × 3 sizes (24 layouts), plus live Ctrl+wheel and window resize. 0 rows with a hemistich broken inside a column, 0 renderer errors, originals unchanged.
+- Live lecture run with real MP4 copies, ar/en: overlay notes box under the video, note saved at 0:07, no overflow at 480 px, 0 renderer errors, originals unchanged, profile deleted.
+- Full suite: 2287/2289 pass. The 2 failures are in tests/ui/slash-search.test.ts, which Codex is changing for KEY-350 (uncommitted, in progress); none of these files touch it.
+- Commits, pushed to origin/feature/library-domain with the remote hash verified: da15ec0 (KEY-351), 5f817a4 (KEY-352), efe1190 (KEY-353).
+- Evidence: .baglib-data/KEY-351-evidence/ and .baglib-data/KEY-347-evidence/overlay-notes-*.png.
+
+Jira:
+- Created KEY-350 (Codex, slash search follow-up), KEY-351, KEY-352, KEY-353, and the follow-ups KEY-354 (OCR/auto-transcription suggestion), KEY-355 (whole-library content search) and KEY-356 (relationship picker redesign).
+- Commented on KEY-349.
+- DeepSeek was over its free limit (resets 2026-11-15T00:54Z), so the KEY-350 passage helper falls to Codex.
+
+## KEY-347 layout tweak complete - 2026-11-14 - Claude Code (user request; Codex at its usage limit)
+
+Study layout now shows the notes box first, with Sections below it (user: the sections should be below the notes). Files: src/renderer/components/lectures/LecturesView.tsx (sections moved after notes; data-lecture-notes and data-lecture-sections markers), tests/ui/lecture-player.test.ts (asserts notes before sections in ar and en). Verified: focused 9/9, full 2285/2285, tsc and eslint clean, live scripts/lecture-series-live ar/en 2/2; screenshots study-en-1440 and notes-ar-480 inspected: Notes above Sections.
+
+## KEY-347 follow-up complete - 2026-11-14 - Claude Code (Codex at its usage limit)
+
+Later imports from a folder that already has a lecture series now join that series instead of creating a new one with the same name. The match is by the linked file's folder path, never by name, so two different folders called Course stay separate. A single later file joins too. A series still in natural order is re-sorted with its new members; a manually reordered series keeps its order and new files go at the end. Files: src/main/database/repositories/lecture-series.repository.ts (seriesFiles helper, importFiles join logic), tests/services/lecture-folder-import.test.ts (the old 'later import owns a fresh series' assertion replaced; join, single-file, ungrouped and manual-order cases added). Verified: focused 13/13 (folder import, library series, lecture player), full 2285/2285 with --test-concurrency=2, tsc clean, eslint clean, live scripts/lecture-series-live ar/en 2/2, 0 renderer errors, real originals unchanged, profile deleted. No schema change.
+
+## KEY-210 lifecycle complete - 2026-11-14 - Codex key210-root, finished by Claude Code after Codex hit its usage limit
+
+Codex implemented the slice: thumbnails and the 600 ms preview are bound to their document (pdf-preview-work.ts), the raster host awaits nested-parser destroy (200 ms bound) before terminating, the raster client reports source-failed once, and the view cache gives each build its own abort signal, aborted when its last lease is released. Live check (Codex): ar/en, 18 open/close cycles, 3 real PDFs, 0 renders after close, 0 renderer errors, originals unchanged; no large Arabic PDF exists in the corpus. Codex stopped before the full suite. Claude ran it: the client now delays terminate by 300 ms, which broke 2 tests in tests/services/pdf-failover.test.ts that expected immediate termination; Claude updated them to wait for the bounded delay. Final: focused 34/34 (lifecycle, streaming-faults, raster-client, failover), full 2285/2285 with --test-concurrency=2 and no todos left, tsc clean, eslint 0 errors (5 warnings already present in PdfNativeViewer.tsx at HEAD). Files: assets/pdf-raster-worker.ts, src/main/services/pdf-editor/view-cache.ts, src/renderer/components/reader/PdfNativeViewer.tsx, src/renderer/libs/reader/{pdf-thumbnails.ts,pdf-view-document.ts,pdf-preview-work.ts}, src/shared/pdf-raster-client.ts, tests/services/{pdf-lifecycle,pdf-streaming-faults,pdf-raster-client,pdf-failover}.test.ts, scripts/pdf-lifecycle-live/*, docs/features/PDF.js.md, docs/features/feature - Document Workstation.md. State files left uncommitted (they hold other agents' notes).
+
+## KEY-210 lifecycle active - 2026-11-14T10:23:06.7379071+02:00 - Codex key210-root
+
+User requests thumbnail/document lifetime cancellation, preview timer cleanup, ordered nested parser disposal, report-once source failure and last-lease build cancellation. Scope as board row; build on KEY-48 54e568a. Explicit scoped commit/push authorization given in current request. Implementation/tests/live verification pending. Other agents' files and state preserved; no Jira actions.
 
 ## KEY-48 gaps verified handoff - 2026-11-14T10:19:48.3187118+02:00 - Codex key48-root
 
@@ -167,6 +380,8 @@ Exact14trackedfiles (only this entry in shared state):
 
 Local report docs/agent-ops/reports/KEY-349.md and board updated. Scoped final diff review and lock publication next.
 
+KEY-349 publication - 2026-11-14T09:46:44.642370+02:00 - Codex key349-root. Commit 534860272e056af751a3811a50a4bb0ac407bd58 created under commit.lock and pushed normally to origin/feature/library-domain; remote hash verified. Exact14ownedfiles/ownstateentries; parser: DeepSeek via OpenCode, reviewed by Claude. Focused39/full2253pass0fail2existingPDFTODO(concurrency2,348suites),native2ar/en0renderererrors/4realcopies/16screens/originalsunchanged/profiledeleted;types/build/lint0warnings/diffpass. Other sessions unfinished changes preserved. No Jira actions. Lock released after remote verification. No implementation or publication work pending.
+
 ## KEY-348 verified handoff - 2026-11-14T09:21:08.516585+02:00 - Codex key348-root
 
 Built on KEY-347 6f9c368. The library displays each lecture series once with canonical name, localized count and first-item cover. Opening its card/row shows ordered members through the existing safe Work opener. Search exposes individual matching Works. Existing seriesTitle/volumeNumber metadata supports lecture/podcast/video grouping using work type, NFC-trimmed title and numeric/natural ordering. Explicit lecture membership takes precedence. Pagination counts entries, and collection/navigation counts retain underlying Work totals. Display groups never become database Works or bulk-mutation IDs.
@@ -209,6 +424,8 @@ Exact23tracked files, only this entry in shared state files
 
 Local report docs/agent-ops/reports/KEY-348.md and board updated. Screenshots/results in .baglib-data/KEY-348-evidence. Current user explicitly authorized scoped commit and normal origin/feature/library-domain push under commit.lock. Publication receipt will be recorded in the local report and board.
 
+KEY-348 publication - 2026-11-14T09:22:45.170096+02:00 - Codex key348-root. Commit f9a034f1816f715038862e68352878cd8d0b0e78 created under commit.lock and pushed normally to origin/feature/library-domain. Exact remote hash verified. Exact23ownedfiles/ownedstateentries. Finalfull2241pass0fail2existingPDFTODO,focused21,native2ar/en0renderererrors,14screens,types/build/scopedlint0errors0warnings/scopeddiff pass. Originals unchanged,profiledeleted/ownedrendererstopped. Other sessions unfinished changes preserved. Lock released after remote verification. No Jira actions.
+
 ## KEY-347 verified handoff - 2026-11-14T08:55:24.871024+02:00 - Codex key347-root
 
 Lecture folder picker/drop and multi-file selections now create per-parent series in the existing migration028 tables, naturally ordered by original Arabic/Latin filenames (including Arabic-Indic digits). Same-name folders and later imports create distinct series. Single-file imports remain ungrouped; explicitly selected singleton folders group correctly through direct and digital import paths. Skips/retries and existing-work duplicate resolutions retain existing membership. Existing explicit series assignment remains available. Folder display names follow the existing 200-character limit.
@@ -237,7 +454,7 @@ Exact17tracked files, only this entry in shared state files
 - `scripts/lecture-series-live/run.mjs`
 - `docs/features/feature - Lectures, OCR Benchmark and Modular Install.md`
 
-The existing lecture feature document reconciles historical storage claims and records implementation/verification. Local report docs/agent-ops/reports/KEY-347.md and board updated. Screenshots/results in .baglib-data/KEY-347-evidence. Unrelated Quran navigation, real-files README, state hunks and other agents' untracked work preserved. No task-related problem remains. Two pre-existing PDF TODOs belong to KEY-210. No Jira changes. Explicit scoped lock commit/push authorized to origin/feature/library-domain; publication follows this verified handoff.
+The existing lecture feature document reconciles historical storage claims and records implementation/verification. Local report docs/agent-ops/reports/KEY-347.md and board updated. Screenshots/results in .baglib-data/KEY-347-evidence. Unrelated Quran navigation, real-files README, state hunks and other agents' untracked work preserved. No task-related problem remains. Two pre-existing PDF TODOs belong to KEY-210. No Jira changes. Published 6f9c3686854142a5f16745e7dab175fe4768eb05 under commit.lock and pushed normally to origin/feature/library-domain at 2026-11-14T08:57:10.667285+02:00; remote hash verified. Lock released after publication. Only own17files/ownstateentries committed; other sessions' unfinished state preserved.
 
 ## KEY-267 installer with poetry, install-tested - 2026-11-14 05:18 +02:00 - Claude Code
 
@@ -272,10 +489,37 @@ The user approved "add the poetry and install".
 - `CURRENT_TASK.md`
 - `IMPLEMENTATION_PLAN.md`
 
+**Git and Jira.** Commit a6840a5 pushed to `origin/feature/library-domain`. Jira KEY-267: comment 10387, moved to Done.
+
 **Limits.**
 - Not code-signed for distribution (local signtool step only).
 - No all-users (Program Files) install was tried.
 - The pack is local only and never committed.
+
+## KEY-237 revision time verified handoff - 2026-11-14T04:23:32.944462+02:00 - Codex key237-root
+
+Subject hours now separates reading and revision in three localized columns, using logical start alignment, bdi canonical mixed-script names and relaxed line height. Four decimal hour digits keep short reviews visible. Subject ranking uses reading plus revision time. SRS review events refresh the summary. Only research remains disclosed as unmeasured. Reading totals, averages, days and goals stay reading-only; no review is counted as reading.
+
+Verified schema path: srs_review_log -> knowledge.work_id -> work.primary_category_id -> category. Existing one-to-one card_detail join confirms card ownership, knowledge.deleted_at excludes trash. Missing Work/category or external corpus links use existing Uncategorized. Positive measured durations aggregate once with fractional seconds; no practice_attempt/srs_state join. Research pathways record status/organization; AI research durationMs is request latency, not user study time. No research study-time recorder found. No database schema/fields, dependencies or downloads added. ADR-006/data dictionary/migrations/contracts/local Next client guide inspected. Ordinary source implementation; no reverse-engineering claims.
+
+Verification: full suite once --test-concurrency=2 passed2196/2196 across342suites,0failures/skips,159228.2583ms. Focused19/19(service13,including4newroll-up regressions;renderer6ar/en). tsc noEmit,scoped ESLint all8code/tests/scripts0errors0warnings,main/preload build and scoped diff check pass. Native2/2 arRTL/enLTR1280x1000:actual card confidence/reveal/Good review increases revision hours while one-hour reading stays unchanged;0renderererrors,no table overflow,mixed-script/Arabic diacritics readable. Four final screenshots/results.json in .baglib-data/KEY-237-evidence; subject screenshots and Arabic review visually inspected. Initial harness selectors corrected before final pass. Disposable profile deleted,ownedrenderer stopped,userapp neverclosed. No real document/media files opened or changed.
+
+Exact10tracked files (own entries only in shared state):
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `src/main/services/statistics/study-insights.service.ts`
+- `src/shared/study-insights.ts`
+- `src/renderer/components/dashboard/StudyInsightsModule.tsx`
+- `src/renderer/translations.ts`
+- `tests/services/study-insights.test.ts`
+- `tests/ui/dashboard-honesty.test.ts`
+- `scripts/subject-revision-live/main.cjs`
+- `scripts/subject-revision-live/run.mjs`
+
+Local report docs/agent-ops/reports/KEY-237.md and board KEY-237 (revision time) updated. Built on KEY-238 af503bc/a7f7456. Protected Quran/board implementation and other sessions' unfinished changes preserved. No task-related problems remain. No Jira changes. Scoped commit under commit.lock and normal push to origin/feature/library-domain explicitly authorized by current user; publication next.
+
+KEY-238 publication - 2026-11-14T04:11:07.131660+02:00 - Codex key238-root. Implementation a7f7456d6086df1bf0153324cfa9d7c08175f8ba and state-only scope correction af503bc77b744eac327c3a72f925a231cecbb194 committed under commit.lock and pushed normally to origin/feature/library-domain. Remote hash verified. Combined diff from parent31cc987 contains exactly12taskfiles with only KEY-238 state entries. The first commit accidentally included a concurrent Claude review entry. The follow-up removes that entry from the committed scope and preserves it in the working copy. Full2192/2192 once(concurrency2,342suites),focused15/15,native2/2 ar/en1280,0renderererrors,types/lint0warnings/mainbuild/diff pass. Eight final screenshots inspected,profiledeleted/ownedrendererstopped. Existing KEY-168 review fix31cc987 landed during work and was included in the full verification. No Jira changes. Other sessions' unfinished changes are preserved. Lock released after remote verification.
 
 ## KEY-238 fixes verified handoff - 2026-11-14T04:09:05.266232+02:00 - Codex key238-root
 
@@ -304,9 +548,16 @@ Local report docs/agent-ops/reports/KEY-238.md and board row KEY-238 (fixes) upd
 
 Weekly lifetime fallback removed because heatmap reduction always produces a number. Recent edits LEFT JOIN existing note titles, render canonical titles in bdi with localized type/date and open note-like rows through openStudyNote. Estimated speed names the 250-words/page assumption in ar/en. Query and renderer regressions15/15, tsc/scoped eslint0warnings/mainbuild pass. Native ar/en1280 matrix2/2 with0renderererrors passes and profile/owned renderer removed. Visual inspection caught startup overlays in some screenshots. Harness now waits for startup removal and will recapture after fullsuite once concurrency2 completes. Production source unchanged since verification. Scoped commit/push remains pending.
 
+## Review: KEY-168 and KEY-171 slices — 2026-11-14 03:59, Claude Code
+
+- **eb9ac83 KEY-168 (Codex):** pass after Claude fixes in **31cc987**: `src/renderer/utils/quran-reference-label.ts`, `src/renderer/components/quran/QuranMushafWorkspace.tsx` and `tests/ui/quran-personal.test.ts`. The cross-surah separator had become a literal "?" (encoding loss) and the test asserted it; copied citations carried U+2066/U+2069 isolates; the word-selection copy had been excluded by Claude's own KEY-170 file restriction, now lifted. Full suite 2183/2183. Jira comment 10383. Reflections per translation source are held for the user.
+- **a7203d5 KEY-171 (Codex):** review pass. Jira comment 10384. The POS source is held for the user.
+
 ## KEY-238 fixes active - 2026-11-14T03:57:04.4404685+02:00 - Codex key238-root
 
 Explicitly authorized dashboard honesty fixes and scoped lock commit/push. Base a7203d5 (KEY-171), eb9ac83 (KEY-168). Weekly totals must retain zero, recent edits gain existing note titles/localized types and navigation, recent query tests, estimated WPM ar/en. Default visibility preserved. No schema/dependencies/downloads. Verification pending. Other sessions' changes preserved.
+
+KEY-171 publication - 2026-11-14T01:55:36.510192+00:00 - Codex key171-root. a7203d5aa2020967739e3c67fd9e7e9c80bf9ca5 committed under commit.lock and pushed normally to origin/feature/library-domain; remote hash verified. Exact16files/owned state hunks; finalfull2183/2183(concurrency2,342suites),focused14/14,native4/4,0renderererrors,types/lint0warnings/build/diff pass.24screenshots;1338originals unchanged/profiledeleted/ownedrenderer stopped. POS needs user source decision; metadata69 absent/no download. No Jira actions; other agents' unfinished changes preserved.
 
 ## KEY-171 verified handoff - 2026-11-14T01:53:55.746530+00:00 - Codex key171-root
 
@@ -349,6 +600,8 @@ Implementation and focused14/14/types/scoped lint/main-preload build pass. Insta
 
 Authorized validated word joins, named annotation gaps, explicit37:130 compatibility notice, bounded root/lemma occurrence jumps. No POS claim without installed schema evidence; POS source decision held for user. No schema/dependencies/downloads. Preserve navigation, tafsir comparison and KEY-244 implementation. Commit/push explicitly authorized after verification under commit lock. Implementation/verification pending.
 
+KEY-168 publication - 2026-11-14T01:31:28.305Z - Codex key168-root. eb9ac834751010d4995db021754ed25f35640648 committed under commit.lock and pushed normally to origin/feature/library-domain; remote hash verified; lock released. Exact18files/hunks,full2177/2177 once(concurrency2),focused42/42,native8/8offline,0renderererrors;types/mainbuild pass,lint0errors2existingwarnings. Report/evidence/board finalized and own profile/renderer removed. Protected selected-word workspace callback remains excluded pending optional exception. Other agents' unfinished changes preserved. No Jira actions.
+
 ## KEY-168 slice verified handoff - 2026-11-14T01:29:58.462Z - Codex key168-root
 
 Localized surah-name citations now cover action copy/plain/citation/share, canonical/imlaey inspector copy, passage copy, similar-ayah copy and page copy with same/cross-surah ranges through quranCopyText and the existing quranReferenceLabel. Default canonical content is unchanged. The explicit plain-copy action retains its existing diacritic removal. A collapsible localized bookmark list below the reader header jumps to the ayah; amber SVG borders/backgrounds and glyph underlines indicate active-profile bookmarks only. Existing general note markers and approved targets are preserved.
@@ -382,9 +635,18 @@ Exact18tracked files, with only Codex KEY-168 hunks in shared state files:
 
 Local report docs/agent-ops/reports/KEY-168.md and board row KEY-168 (slice). User authorized the specified scoped commit/push under commit.lock to origin/feature/library-domain. Publication follows this handoff.
 
+## Free-worker landings and Codex dispatch — 2026-11-14 03:12, Claude Code
+
+- **ea55a34 KEY-243:** `src/shared/markdown-table.ts` and `src/shared/text-direction.ts`, with tests (DeepSeek wrote them; Claude reviewed, made one strict-tsc fix, and checked edge cases). Full suite 2159/2159. Jira comment 10381. The editor library choice stays a user gate.
+- **b05ae68 KEY-260:** `src/shared/source-urls.ts`, `content-shield.service.ts`, `libgen-download.service.ts` and `tests/services/source-urls-mirrors.test.ts`. Mirror and download hosts now come from the source URL file, with a new optional `downloads` list (a JSON config entry, not a database field). Full suite 2169/2169. Jira comment 10382.
+- **698471f KEY-244 follow-up (Codex):** Claude review pass; Jira comment 10380.
+- **Read-only DeepSeek audits** of KEY-168, KEY-170 and KEY-171. KEY-170 is confirmed complete. The KEY-168 and KEY-171 gaps became Codex prompts (`docs/agent-ops/reports/KEY-168.prompt.txt`, `KEY-171.prompt.txt`), now running back to back. POS (KEY-171) and per-translation reflections (KEY-168) are held for the user.
+
 ## KEY-168 slice active - 2026-11-14T01:10:05.099Z - Codex key168-root
 
 Authorized scope: localized reference-aware copy/share in all reader paths, per-profile Quran position with legacy fallback, visible profile-scoped bookmarks/list via existing notes API. No schema/dependency/download changes. Preserve quran-navigation.ts, KEY-170 comparison files and KEY-244 board implementation. Reflections stay profile-scoped; per translation source separation changes the approved reference format and waits for the user. User explicitly authorized scoped commit/push under commit.lock after all verification. Initial code audit confirms all three gaps. Verification pending. Files planned: quran-actions.ts, quran-reference-label.ts, continue-reading.ts, IslamicStudiesHub.tsx, QuranReaderView.tsx, QuranAyahInspector.tsx, QuranMushafView.tsx, new QuranBookmarks.tsx/useQuranBookmarks.ts/quran-bookmarks.ts, translations.ts own keys, focused tests, new quran-personal-live harness, shared state own hunks.
+
+KEY-244 follow-up publication - 2026-11-14T03:01:19.981947+02:00 - Codex key244b-root. 698471f55e2809ba2803091692c1b9d227a5530a committed under commit.lock and pushed normally to origin/feature/library-domain; remote hash verified. Exact11files/hunks, full2132/2132 once(concurrency2),focused98/98,Unicode18/18,native4/4,downloads16/16,0renderererrors. Types/lint/mainbuild/diffpass. Report/board finalized; own profile/renderer removed,16screenshots retained. No Quran/unrelated files committed; Claude review next.
 
 ## KEY-244 follow-up verified handoff - 2026-11-14T03:00:32.953240+02:00 - Codex key244b-root
 
@@ -408,7 +670,14 @@ Exact11 tracked files/hunks (only this entry/plan update in shared state files):
 - `scripts/board-tools-live/run.mjs`
 - `scripts/board-tools-live/main.cjs`
 
-Local report: docs/agent-ops/reports/KEY-244b.md; local board row KEY-244 (follow-up). User explicitly authorized scoped commit/push to origin/feature/library-domain; pending publication under commit.lock. All unrelated agents' edits remain excluded.
+Local report: docs/agent-ops/reports/KEY-244b.md; local board row KEY-244 (follow-up). User explicitly authorized scoped commit/push to origin/feature/library-domain; published as 698471f55e2809ba2803091692c1b9d227a5530a normally to origin/feature/library-domain, remote hash verified. All unrelated agents' edits remain excluded.
+
+## Review: KEY-244 UI wiring and KEY-170 tafsir comparison — 2026-11-14 02:50, Claude Code
+
+- 01035b5 (KEY-244, Codex): reviewed-pass. Serialized saves with conflict reset; evidence screenshots checked. Jira comment 10379. KEY-244 stays open: "auto-generated maps are marked as generated" needs a new Board field (schema gate, held for the user). Follow-ups were dispatched to Codex as KEY-244b: exported arrows drawn from shared geometry instead of a regex, edge labels kept clear of cards, and the empty strip under the toolbar.
+- 4ce3c89 (KEY-170, Codex): reviewed-pass. Inert rendering, direction per column, stale results ignored, failures isolated per column; cycle tests; offline live 4/4. Jira comment 10378, moved to **Done**.
+
+KEY-170 publication — 2026-11-14T02:48:33.539511+02:00 — Codex. 4ce3c899f2c48ee530e7bf07eaf4285ebc2328a6 committed and pushed normally to origin/feature/library-domain; remote hash verified and commit lock released. Exactly10 owned files/hunks. Full2125/2125 once(concurrency2),focused9/9,native4/4offline,0renderererrors;types/lint/diff clean. Profiles/ownedrenderer removed;1338originals unchanged;8screens retained. Report/board finalized. Claude review/Jira next.
 
 ## KEY-170 verified handoff — 2026-11-14T02:46:33.851147+02:00 — Codex (key170-root)
 
@@ -431,7 +700,9 @@ Exact ten files/hunks:
 - `scripts/tafsir-compare-live/run.mjs`
 - `scripts/tafsir-compare-live/main.cjs`
 
-Local report: docs/agent-ops/reports/KEY-170.md. Board checkpoint updated. Commit/push are authorized by the dispatch and pending scoped publication to origin/feature/library-domain; Claude owns review/Jira. All other agents' hunks remain excluded.
+Local report: docs/agent-ops/reports/KEY-170.md. Board checkpoint updated. Published as 4ce3c899f2c48ee530e7bf07eaf4285ebc2328a6 to origin/feature/library-domain (normal push, remote hash verified); Claude owns review/Jira. All other agents' hunks remain excluded.
+
+KEY-244 publication — 2026-11-14T02:31:17.616061+02:00 — Codex. 01035b542c91725eed27fab5d98f9fe742c04bd1 committed and pushed normally to origin/feature/library-domain, remote hash verified and commit lock released. Exactly 10 task files and owned hunks. Full 2,116/2,116 once at concurrency 2, focused 9/9, native 4/4, image downloads 16/16, zero renderer errors. Types, scoped lint and diff checks passed. Profiles/exports and owned renderer removed, 16 screenshots retained. Report and board finalized. Claude review/Jira next.
 
 ## KEY-244 verified handoff — 2026-11-14T02:28:09.525811+02:00 — Codex
 
@@ -454,7 +725,7 @@ Exact 10 task files and hunks for this publication
 - `scripts/board-tools-live/run.mjs`
 - `scripts/board-tools-live/main.cjs`
 
-Local report is docs/agent-ops/reports/KEY-244.md. Local board row is updated. Commit/push to origin/feature/library-domain is explicitly authorized under the shared commit lock and remains pending. Claude owns review and Jira. Other agents' pending hunks are preserved.
+Local report is docs/agent-ops/reports/KEY-244.md. Local board row is updated. Publication is recorded above and verified at 01035b542c91725eed27fab5d98f9fe742c04bd1. Claude owns review and Jira. Other agents' pending hunks are preserved.
 
 ## KEY-266 local poetry pack for installed builds: done — 2026-11-14, Claude Code
 
@@ -507,6 +778,12 @@ The Quran checks passed again in the same run. The Sunnah checks were added to `
 **Files:**
 - `scripts/packaged-quran-live/run.mjs`
 - this entry
+
+## KEY-169 reviewed by Claude: pass 21b4e6a — 2026-11-13 23:55 — Claude Code
+
+Codex pushed 21b4e6a (reference jump in three search surfaces, translation search via derived FTS, source filter). Claude reviewed the diff and screenshots (ar 480 reference row, en 1280 translation hits). Jira KEY-169: comment 10374, moved to Done. Minor follow-up: the Notes link picker sends all translations, and validation caps that at 32. Codex is now on KEY-244 UI wiring.
+
+KEY-169 publication — 2026-11-13T21:52:22.682Z — Codex: 21b4e6af18ea44e0c627ace5ab2730212fe4fb4a committed and pushed normally to origin/feature/library-domain; remote hash verified and commit lock removed. Full2103/2103 once(concurrency2), focused39/39, final native4/4 with0renderererrors; types/scoped lint/main build/diff passed. All own live profiles and renderer removed,16screenshots retained,1338corpusoriginals unchanged. No Jira changes. Claude review/Jira next. Other sessions’ unfinished work remains preserved.
 
 ## KEY-169 verified handoff — 2026-11-13T21:50:35.935Z — Codex
 
@@ -568,6 +845,21 @@ Report: docs/agent-ops/reports/KEY-169.md. Current main Notes editor uses a sepa
 - `scripts/packaged-quran-live/run.mjs`
 - this entry
 
+## KEY-244 board logic pushed; overnight orchestration — 2026-11-13 23:30 — Claude Code
+
+The user is asleep and asked for continuous work without waiting for approvals (except downloads).
+- c266dab KEY-244: board-history, board-snap, board-layout plus tests (OpenCode DeepSeek/GLM/MiniMax workers, reviewed and fixed by Claude). Full suite 2050/2050. Pushed.
+- 75d8f4a KEY-244: board-edge-path, board-selection, board-note, board-svg plus tests (OpenCode DeepSeek workers; Claude fixed the SVG text layout, the Arabic label direction, unrounded group moves and a readonly type). Board tests 82/82, strict tsc and eslint clean. Pushed.
+- Jira: KEY-244 comment 10372 (progress; stays In Progress).
+- Dispatched Codex on KEY-169 (thread 01a1d6c6-3751-78f0-9ecc-b4ae841c2d37), spec docs/agent-ops/tasks/KEY-169.md. It commits the DeepSeek-written src/shared/quran-reference.ts and its test. KEY-244 UI wiring (spec docs/agent-ops/tasks/KEY-244.md) is queued for Codex next.
+- OpenCode free limit: at 23:24 the limit shared by all free models was hit. It resets about 02:54, and the blocked DeepSeek jobs (markdown-table, text-direction, KEY-168/170/171 audits) are scheduled to rerun then.
+- Held for the user: the KEY-243 editor library choice (a major dependency, per the Jira done-when).
+- Report: docs/agent-ops/reports/overnight-2026-11-13-free-workers.md
+
+## Lecture queue published - 2026-11-13T22:52:19.030789+02:00 - Codex
+
+KEY-343 4ad4c2df0e099a8e790ef6ac6dae98d8d213f98f, KEY-342 ae348d4cd5be5ec6efca384cc42f5ee513005783 and KEY-344 3ea7fdea4ee9e6caae9d472ffabafac3c85a7054 each committed and successfully pushed normally to origin/feature/library-domain in order. Final full suites2050/2050 twice; initial Notes mock failures corrected and targeted10/10 passed. Native33616/16,34316/16,3424/4,3448/8; zero renderer errors. All own live profiles deleted, real files unchanged, screenshots retained, no Jira changes. Other agents own all remaining source changes; translations.ts is released. Claude review next.
+
 KEY-342 publication - 2026-11-13T22:51:33.702952+02:00 - Codex: ae348d4cd5be5ec6efca384cc42f5ee513005783 committed and successfully pushed normally to origin/feature/library-domain; full2050/2050.
 
 ## KEY-344 verified handoff ? 2026-11-13T22:50:08.930292+02:00 ? Codex
@@ -610,6 +902,8 @@ Exact files:
 - `CURRENT_TASK.md`
 - `IMPLEMENTATION_PLAN.md`
 
+KEY-342 publication - 2026-11-13T22:51:33.702952+02:00 - Codex: ae348d4cd5be5ec6efca384cc42f5ee513005783 committed and successfully pushed normally to origin/feature/library-domain; full2050/2050.
+
 KEY-343 publication ? 2026-11-13T22:50:55.797300+02:00 ? Codex: 4ad4c2df0e099a8e790ef6ac6dae98d8d213f98f committed and successfully pushed normally to origin/feature/library-domain; full corrected verification2050/2050.
 
 ## KEY-342 verified handoff ? 2026-11-13T22:50:08.930292+02:00 ? Codex
@@ -651,6 +945,8 @@ Exact files:
 - `CURRENT_TASK.md`
 - `IMPLEMENTATION_PLAN.md`
 
+KEY-343 publication ? 2026-11-13T22:50:55.797300+02:00 ? Codex: 4ad4c2df0e099a8e790ef6ac6dae98d8d213f98f committed and successfully pushed normally to origin/feature/library-domain; full corrected verification2050/2050.
+
 ## KEY-343 verified handoff ? 2026-11-13T22:50:08.930292+02:00 ? Codex
 
 Added bounded SRT/VTT loading, persisted subtitle selection, captions controls and a searchable clickable transcript with active cues and note targets. Arabic and English use centralized translations and RTL/LTR layouts. Finished the parser and tests inherited from Claude Code.
@@ -681,6 +977,61 @@ Exact files:
 - `tests/ui/translation-keys.test.ts`
 - `CURRENT_TASK.md`
 - `IMPLEMENTATION_PLAN.md`
+
+## KEY-244 logic + KEY-169 reference parser via free workers — 2026-11-13 22:55 — Claude Code (orchestrating OpenCode free models)
+
+Implemented by OpenCode workers on free models in isolated worktrees, then reviewed and fixed by Claude:
+- KEY-244: `src/shared/board-history.ts` (undo/redo with drag coalescing, 100-step limit; DeepSeek V4.1 Flash), `src/shared/board-snap.ts` (edge/centre snapping, alignment guides, grid fallback; GLM-5.3 Flash), `src/shared/board-layout.ts` (mind-map tree auto-layout, ltr/rtl columns; MiniMax M3.1 Flash).
+- KEY-169: `src/shared/quran-reference.ts` (parses 2:255, ranges, Arabic-Indic/Persian digits, Arabic/English surah names, Hafs/Warsh counts; DeepSeek).
+- Tests: `tests/services/{board-history,board-snap,board-layout,quran-reference}.test.ts`.
+
+Claude fixes: removed an invented citation in board-history; fixed board-snap losing the x snap when y also snapped, and guides measured before the final move (regression test added). Verification: focused 56/56 (with boards.test), strict tsc and eslint clean on all 8 files, extra spot checks (all 114 surah names resolve, rtl/ltr layout geometry). Full suite not run: the heavy slot belongs to the lecture queue.
+
+Not done: no UI wiring yet (needs translation keys; translations.ts is held by Codex KEY-342/343/344). Pure logic only, no schema, dependency or user-facing strings. Uncommitted, awaiting the user.
+
+## Lecture queue native verification complete — 2026-11-13T22:35:39.652307+02:00 — Codex
+
+Real33616/16,34316/16,342real import/drop and344seed/restart8configurations pass with0renderererrors.344covers3lectures (both original MP4s plus generatedWebM),94/96percent completion, manual/automatic/cancelled next, drag/keyboard order, rename/delete preserving lectures, Library menu removal/reassignment, Notes hierarchy and restart persistence. All disposable profiles deleted, four representative344screenshots inspected. Types pass. Scoped lint0errors/15pre-existingwarnings after fixing Notes hook declaration order. Full1/3 active (exec98646), then full2/3 and3/3 and ordered scoped commits/pushes. No publication yet. Exactfiles remain inreports/snapshots, refreshed344scope.
+
+## Lecture queue resumed with free heavy slot — 2026-11-13T22:18:20.600227+02:00 — Codex
+
+User explicitly closed the app and requested final344, full once per task and ordered343→342→344 commits/pushes. No Electron running at resume. Existing report336 real acceptance and dated pass line retained. Verification/publication active.
+
+## Lecture queue blocked on user heavy slot — 2026-11-13T21:56:03.938117+02:00 — Codex
+
+Real336 acceptance passed16/16, real343 captions passed16/16,342real import/drop passed with0renderererrors. Real videos only read in place. Reports336/343/342/344 updated, including exact files, actual tests and pending cases. Latest pure-Node focused19/19 passes. Countdown lifetime/replay and Matroska handle bugs are fixed. Final344seed/restart and all three full-suite runs remain pending because user Electron29128 is open. Per user instruction it was never closed in this resumed run. Owned waiting Node11260 was stopped, with no profile created; no unattended job remains. Existing renderer server22660 is untouched. Attempted launcher7484 had exited with EADDRINUSE.
+
+After the user closes the app, check no electron.exe, run BAGLIB_WAVE6_SERIES_ONLY=1 node scripts/wave6-live/run.mjs, inspect final evidence, check types/lint after the latest Notes remap, then run npm test -- --test-concurrency=2 once per task. No full suite was run in this queue yet. Re-read state, acquire commit.lock and publish one scoped commit each343→342→344 using saved .baglib-data/KEY-34x-scope.json.zlib contents and own state hunks, git apply --cached, inspect staged names/stat, commit with Agent: Codex, show stat, normal push origin/feature/library-domain, release lock. All source and snapshots are uncommitted. No Jira changes. No commit approval is needed.
+
+## User app holds heavy slot — 2026-11-13T21:38:43.531548+02:00 — Codex
+
+User BagLib root29128 is open. It will never be closed by this task. Queue rows temporarily blocked-on-user for live/full verification, per current user instruction. Exec27073 waits for all Electron processes to exit before final344 seed/restart. Real33616/16,34316/16 and342real native passed. Countdown rerender bug fixed; subsequent native got through autoplay and found a missing aliases array in the test note input, now corrected. Focused14/14/types pass. Preparing remaining UI checks and isolated publication patches while waiting. No commits yet.
+
+## KEY-336 real-media acceptance passed — 2026-11-13T21:24:47.434612+02:00 — Codex
+
+Both original real MP4s pass16/16 ar/en ×1280/480 ×Study/Overlay configurations,0renderererrors, native playback/seek/volume/rate/fullscreen/PiP/auto-hide pass. Report336 appended and four representative screenshots inspected. Profile deleted, original files only read. No336fixcommit required.343 real captions live active, then342/344 and per-task full suites/publication.
+
+## Real lecture queue resume — 2026-11-13T21:19:07.798461+02:00 — Codex
+
+User supplied real Arabic/English MP4s in manifest2894c46. Updating343/342/344 live acceptance and rerunning336 at1280/480 in both languages. Real files remain read-only, sidecars and extra fixtures belong only to disposable profiles. Never close the user's app. Existing snapshots preserve commit boundaries. Current baseline2894c46, no queue commits yet.
+
+## Lecture queue verification active — 2026-11-13T19:18:11.486073+02:00 — Codex
+
+Normal development app was gracefully closed through its save-check handler, so verification is proceeding. Main/preload build passes.343 native8configurations passed with0renderererrors and profile deleted.342 native exposed and reproduced a Matroska async file-lifetime bug. Fixed by awaiting its parser before finally closes the handle, regression4/4 passes, rebuilt and final342 live active (exec24612). Next final343 screenshots,344 two-process restart, then full suite once per task with concurrency2. No commits or Jira changes. Exact files remain per-task reports/snapshots.
+
+## Lecture queue implementation checkpoint — 2026-11-13T18:55:03.092433+02:00 — Codex
+
+KEY-343 subtitles/transcript implementation and focused12/12 pass. KEY-342 media Works/drop implementation and focused34/34 plus wave6eight pass. KEY-344 approved series schema/order/player/Notes implementation and focused8/8 pass. TypeScript and new-code scoped lint pass. Exact per-task file lists and limitations are in docs/agent-ops/reports/KEY-343.md, KEY-342.md and KEY-344.md. All native extensions are written/syntax checked. Live/full remain pending because normal-profile Electron is open. User closure question pending, session74555 waits30s then builds/runs343 captions. No commit/push/Jira actions yet. Scope snapshots under .baglib-data/KEY-34x-scope.json.zlib preserve ordered, isolated343→342→344 publication. Existing other-agent files remain untouched.
+
+## KEY-344 active implementation — 2026-11-13T18:41:33.544060+02:00 — Codex
+
+343 focused12 and342 focused34 pluswave6eight pass. Normal-profile Electron remains open and live/full checks wait (session74555). Implementing344 third, preserving343/342 snapshots for ordered isolated commits. Approved exact series and ordered membership schema only. No commits or Jira actions yet. Exact342files in local report.
+
+## KEY-342 active implementation — 2026-11-13T18:30:50.073876+02:00 — Codex
+
+KEY-343 implementation is complete, focused12/12 and tsc/lint pass. Its live/full verification remains waiting for the normal-profile Electron app to close. Continuing the next implementation in queue order while waiting. Exact343 file contents preserved locally in .baglib-data/KEY-343-scope.json.zlib to publish343 hunks before342, with one commit each. No commits yet.342 approved scope is media DigitalFormat values only, no new entities or columns.
+
+## KEY-343 active, Codex, 2026-11-13T18:06:47.166343+02:00. Authorized queue KEY-343 then KEY-342 then KEY-344, one scoped commit/push each. Generated throwaway media explicitly authorized in dispatch. Current work subtitles IPC/settings and player/transcript, parser/test inherited from Claude. Verification pending. Preserve all other agent changes.
 
 ## KEY-336 implemented, required real-media acceptance pending - 2026-11-13T18:02:45+02:00 - Codex
 
@@ -750,6 +1101,10 @@ This follows the KEY-341 review.
 - `src/renderer/components/dashboard/PlannerScheduleFields.tsx`
 - this entry
 
+## KEY-336 active - 2026-11-13T17:45:26+02:00 - Codex
+
+KEY-341 Fix1 c672697 is pushed. Implement switchable overlay/study lecture controls in lectures player files, wave6-live and own translations. Retain progress, sections, linked notes, screenshots and companion context. Required real Arabic/playable English media clarification remains pending. No dependency/schema change or Jira action.
+
 ## KEY-264 code part: installed builds ship the basic Quran packs — 2026-11-13, Claude Code
 
 **What changed:** installed BagLib builds now find the QUL packs shipped in `resources/quran`. They install them on first run, the same way development builds already install from `repos/`. Before this, `localResourcePackage` returned null in installed builds, and `suppliedAudioPath` pointed at `app.getAppPath()/repos`, which an installed build doesn't have.
@@ -797,6 +1152,10 @@ Exact files
 
 KEY-336 remains next. Real Arabic media and playable English media are absent from tests/real-files. User clarification requested, implementation can proceed while that verification input is pending. Shared state/other agents' changes preserved. Publication pending.
 
+## KEY-341 review fixes and KEY-336 active - 2026-11-13T17:31:39+02:00 - Codex
+
+Following docs/agent-ops/reports/KEY-341-fix-and-336.prompt.txt in order. Part 1 compact quick-add/menu/sidebar fixes, then Part 2 switchable in-house lecture player. Preserve other agents' hunks. Verification pending. Two scoped commits/pushes explicitly authorized by dispatch. No Jira changes.
+
 ## KEY-341 verified — 2026-11-13T16:37:52+02:00 — Codex
 
 Implemented the approved Tasks redesign. Arabic RTL and English LTR have start-side lists/groups/search/subject filtering, central circular task rows and bottom quick-add, an end-side details editor, and stacking below lg. Enter creates a task due today, and Ctrl+Enter adds an indented description. List/due/reminder/repeat menus persist their choices. The modal calendar retains Gregorian/Hijri week/month/year views and scheduled/unscheduled filtering, with selectable day tasks. Existing start/priority/status/reference controls remain available.
@@ -840,7 +1199,7 @@ Exact task files, with task-only hunks in shared state/translations/preload
 - `tests/services/quran-wird.test.ts`
 - `tests/services/curriculum-exam.test.ts`
 
-Publication is authorized by the dispatch to origin/feature/library-domain. Scoped commit/push pending under commit.lock. Claude owns review and Jira. Other sessions’ unfinished files and historical handoff changes are preserved.
+Published `3e940b375a256b3ade338768a6e6754205d540f5` normally to `origin/feature/library-domain` at 2026-11-13T16:40:22+02:00. Remote hash verified and commit.lock released. Full1975/1975 and focused52/52 pass. Claude owns review and Jira. Other sessions’ unfinished files and historical handoff changes are preserved.
 
 ## KEY-345: Notes tab Export of the filtered result, and Import from Markdown, Obsidian, Word and CSV - 2026-11-13, Claude Code
 
@@ -1592,6 +1951,10 @@ Exact files
 - scripts/planner-links-live/main.cjs
 - CURRENT_TASK.md (this entry)
 
+## KEY-309 queue4 notes Markdown active - 2026-11-12, Codex queue4-root
+
+Dispatched five larger sweep observations in order. Item1: dependency-free basic Markdown preview, preserving study links/embeds, anchors, callouts and footnotes. Existing formatter handles some plain segments but splits formatting around study links and has no ordered-list semantics. Screenshot named notes-editor captures edit mode, so literal markers there alone do not establish a preview defect. Add explicit preview evidence and regression assertions. No schema/dependency/download changes. Verification pending. Claude owns review/Jira; scoped normal publication authorized by dispatch.
+
 ## KEY-309 full UX sweep verified - 2026-11-12, Codex queue3-root
 
 Captured all 20 dispatched page states in Arabic RTL and English LTR, light and dark, at 1280 and 480 px. Both baseline and final matrices passed 160/160. Coverage includes Dashboard, Library grid/list/Recent opened/imported, book detail, real Arabic/English PDF readers and the real English EPUB, Notes list/editor/cards/boards/empty canvas, Quran, Sunnah, Al-Bayan, planner, Statistics and Settings.
@@ -1615,7 +1978,7 @@ Exact eight task files and own shared hunks
 - CURRENT_TASK.md
 - IMPLEMENTATION_PLAN.md
 
-The report and board remain local/ignored for Claude. Claude owns review and Jira. Scoped publication is authorized to origin/feature/library-domain. Publication is the remaining step for this dispatched queue.
+The report and board remain local/ignored for Claude. Claude owns review and Jira. Published 1704c30c4d7e397ec3ec6e1ea9e793482d10a108 normally to origin/feature/library-domain at 2026-11-12T08:25:05.189Z. Remote hash verified and lock released. Both dispatched queue items are published. Claude owns review and Jira.
 
 ## KEY-64 safe Advanced settings verified - 2026-11-12, Codex queue3-root
 
@@ -1643,25 +2006,11 @@ Exact15files/own shared hunks
 
 Docs describe implemented shape and limitations. Claude owns review/Jira. Published 3682d647d7e2d8e11493723258dd024a3f0436fc normally to origin/feature/library-domain at 2026-11-12T08:03:34.276Z. Remote hash verified; lock released. Claude owns review/Jira. KEY-309 sweep follows.
 
-## KEY-309 Library inline strings moved to translations - 2026-11-12, Codex (implementation), finished by Claude Code
+## KEY-309 Library localization active - 2026-11-12, Codex queue2-root
 
-Codex moved the remaining inline `lang === 'ar' ? '...' : '...'` UI literals in the Library components into translations.ts:
-- BulkActionsToolbar, FileQueryDiagnosticsPanel, LendBookModal, LibraryGridView, OnlineLibraryHub, ProviderSettingsModal and ReturnBookModal;
-- 41 ordinary keys and 13 plural/fallback keys, with counts through Intl.PluralRules (src/renderer/utils/book-count.ts);
-- the library-ui-live detail run extended to cover them.
+Corrected-code checkpoint: all9 formatting-damaged setter calls repaired using AST-targeted edits. Types, lint0errors/1existingimagewarning, focused26, build and diff pass. Native8/8 rerun passed with200PNGs/4finalinspected,0renderererrors/onewindow/profiledeleted. Final corrected-code full suite is running.
 
-Codex hit its usage limit before committing. Claude verified the work and committed it:
-- tsc and eslint pass (0 errors, 1 existing image warning); full suite 1902/1902;
-- scripts/library-ui-live/detail-run.mjs re-run passes (exit 0).
-
-The remaining `lang === 'ar'` uses only choose a data field, a date locale or the text direction.
-
-Files:
-- src/renderer/components/library/{BulkActionsToolbar,FileQueryDiagnosticsPanel,LendBookModal,LibraryGridView,OnlineLibraryHub,ProviderSettingsModal,ReturnBookModal}.tsx
-- src/renderer/translations.ts
-- src/renderer/utils/book-count.ts
-- scripts/library-ui-live/detail-main.cjs
-- CURRENT_TASK.md
+Final queue item5. Move remaining Library inline Arabic/English UI literals into translations.ts, reuse exact existing pairs and apply Intl.PluralRules for counts. Technical property/locale/direction selectors are code values. Use KEY-309 for this final UI-polish item because the dispatch supplies no distinct issue key. Claude owns issue attribution review/Jira. Tests/live pending, scoped publication authorized.
 
 ## KEY-309 splash verified - 2026-11-12, Codex queue2-root
 
@@ -1681,7 +2030,7 @@ Exact7files/hunks
 - CURRENT_TASK.md (own splash handoff and reader page-number publication receipt)
 - IMPLEMENTATION_PLAN.md (own splash entry and reader page-number publication receipt)
 
-Publication pending under commit.lock. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue item5 pending.
+Published ba432a2779e398415874b315f1ec4df7428d188c normally to origin/feature/library-domain at 2026-11-12T03:47:50.607Z. Exact remote hash verified. Lock released. Claude owns review/Jira. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue item5 pending.
 
 ## KEY-309 reader page numbers verified - 2026-11-12, Codex queue2-root
 
@@ -1704,17 +2053,6 @@ Exact9files/hunks
 - IMPLEMENTATION_PLAN.md (own page-number entry and KEY-300 lint publication receipt)
 
 Published ee68488a6893152221a72503dbbca7ac78831e17 normally to origin/feature/library-domain at 2026-11-12T03:40:46.114Z. Exact remote hash verified. Lock released. Claude owns review/Jira. Authorized normal destination origin/feature/library-domain. Claude owns review/Jira. Queue items4-5 pending.
-
-## KEY-309 polish: tafsir editorial notes render as small notes - 2026-11-12, Claude Code
-
-Tafsir packs mark editorial notes (manuscript variants and references, for example [[في أ: "يفتتح".]]) with double brackets, and the panel showed them raw. QuranRichText now renders each one as a small muted inline note without brackets (`data-tafsir-note`); the stored text and the surrounding words are unchanged.
-
-Verification:
-- New tests/ui/quran-editorial-notes.test.ts (2/2).
-- quran-layout-live passes; the Ibn Kathir 2:1 screenshot shows the notes styled.
-- Full suite 1900/1900.
-
-Files: src/renderer/components/quran/QuranRichText.tsx, tests/ui/quran-editorial-notes.test.ts, CURRENT_TASK.md.
 
 ## KEY-300 lint verified - 2026-11-12, Codex queue2-root
 
@@ -1789,7 +2127,7 @@ Exact10 task files/hunks
 - CURRENT_TASK.md (own KEY-46 entry and KEY-47/52 publication receipt)
 - IMPLEMENTATION_PLAN.md (own KEY-46 entry and KEY-47/52 publication receipt)
 
-Local detailed report docs/agent-ops/reports/KEY-46.md. Scoped publication authorized to origin/feature/library-domain and pending. Claude owns review/Jira. Other agents' unfinished changes are outside this commit scope.
+Local detailed report docs/agent-ops/reports/KEY-46.md. Published e48391a8984ca5fa3e91590e90d4ff51ee1e9c75 normally to origin/feature/library-domain at 2026-11-12 05:04:01 Africa/Cairo. Exact remote hash verified. Commit lock released. Claude owns review/Jira. Both dispatched tasks implemented, verified and pushed. Claude owns review/Jira. Other agents' unfinished changes are outside this commit scope.
 
 ## KEY-47 + KEY-52 verified — 2026-11-12, Codex
 
@@ -1977,6 +2315,16 @@ Exact script scripts/context-menu-live/main.cjs adds mark re-mount and visible l
 
 Resume remaining seven scripts and context-menu mark layout race. Read state/history and preserve unrelated work. Sequential dev-renderer ar/en runs pending. Scoped commits/push authorized by dispatch, Jira left to Claude.
 
+## KEY-317 context-limit handoff - 2026-11-12T00:05:56.627031+02:00, Codex (key317)
+
+Thirteen of20 dispatched scripts verified and published in six scoped commits. Latest36ebaa1bd969c23f76071452dd300636935e4fd7, prior fbc4c9ba67c0bb7578db7ee4394285218111e590,7ea4c9662c8977656e724fd768fe2d6f13913f8f,b7c293037cf63b3d110138df8132d64e474c5ee1,f15ced49b3870931c77c1912302bed3ba4ebf712,ae4807357420f4451db68b7c783499c15b62222d. Each normal push to origin/feature/library-domain succeeded under commit.lock, scoped scripts/own state hunks only. Jira left to Claude.
+
+Verified context-menu, epub-markup, pdf-markup, pdf-tools, reader-study, comments, export, assistant, book-assistant, quran-wird, next-upgrade(dev), import-shutdown, wave4. Exact files for each batch are recorded in the preceding entries and full local KEY-317 report. All touched script changes are committed. Shared state includes other sessions' pending lines and local receipts, preserve them. No application feature source changed. Verification limitations retained in report, including no real Arabic EPUB, context-menu dark/480 cases not rerun, next-upgrade static-export target not rerun, wave4 optional old-database branches not run. Known missing Mushaf-layout reminder diagnostics in non-Quran profiles recorded for Claude.
+
+Remaining seven, unedited by this session. Next wave5, then wave6, poetry, prerequisites, quran-live, quran-layout, dashboard-live. Resume from source, no partial implementation on these seven. Wave5 runner requires replacement of hardcoded wave5-quran-copy with scripts/lib/corpus-copy.mjs(includeMushafLayout:true), whole-profile cleanup and no forced Electron kill. Its Pathways UI now uses Templates tab/gallery and Creator, old Template select no longer exists. Inspect PathwaysView and PathwayTemplateGallery, adapt via stable IDs, preserve assertions. Quran study panel is shared ReaderSidePanel. Wave6 requires initial app load before localStorage and current Notes editor/preview paths. Prerequisites and Quran-wird old runners used ensure-port-free to replace the dev server, Quran-wird fixed, prerequisites still needs repair. Poetry/dashboard/quran-live/quran-layout are standalone fixtures, need reconcile with dispatch's dev-renderer requirement. Quran-layout hardcodes a deleted profile. No source changes made while inspecting these seven.
+
+No Electron is running. The dev renderer started by this session is still at localhost:3000 (exec session61876). Keep one Electron at a time, never kill Electron, use disposable profiles and real files. The PDF startup quoting error earlier was recovered by dismissing its Error dialog with WM_CLOSE, enabling local debugger and calling process._linkedBinding('electron_browser_app').app.exit(1), no OS kill. All successful/failed run profiles from this session were removed by their runners, evidence under .baglib-data. Syntax and scoped diff checks passed per batch, no app-wide test suite was run for script-only edits. Board row limit-hit at context checkpoint. Task remains open.
+
 ## KEY-317 wave4 verified - 2026-11-12, Codex (key317)
 
 Wave4 PASS ar/en at1280/480. Current selected-note History, Questions and Book filters, answered-status action, note context-menu deletion, Cards tools and current deck-status readiness repaired. Original history/restore/questions/reflections/planner-actions/quotes/trash/erase/consent/backup/dictionary/commentary/deck/Anki/card-comment assertions retained. Previous failures were list-render race, stale Notes Log label casing and stale Arabic deck-success text. An attempted blanket toast change was corrected after inspecting CardDecksPanel's retained inline statuses. Default fixture run tested, optional old-database/real-copy branches remain unverified.
@@ -2013,11 +2361,17 @@ Verification passed EPUB ar/en at1280/480 plus real English textbook, retaining 
 
 Exact files scripts/epub-markup-live/main.cjs, scripts/epub-markup-live/run.mjs, scripts/pdf-markup-live/main.cjs, scripts/pdf-markup-live/run.mjs and own state entries in CURRENT_TASK.md, IMPLEMENTATION_PLAN.md. No application UI/layout change in this batch. Other scripts remain pending, pdf-tools repair active. Commit/push authorized by current dispatch, Jira left to Claude.
 
+KEY-317 context-menu publication receipt 2026-11-11, Codex. Published ae4807357420f4451db68b7c783499c15b62222d normally to origin/feature/library-domain. Lock released. EPUB repair ongoing, first run reached marks drawer and failed on stale tab expectation.
+
 ## KEY-317 context-menu live repair verified - 2026-11-11, Codex (key317)
 
 Updated first-run guide dismissal and Notes Cards/Boards tab navigation. Removed forced Electron termination and clean private profiles on every completed run. User-facing application behavior/layout stays as implemented by KEY-301..316. The harness now reaches the current Notes tabs.
 
 Verification passed ar-light-1280 and en-light-1280 against localhost:3000, with real Arabic/English text-layer PDFs and a real English EPUB. Mouse/keyboard/touch, all ten surfaces, submenu and mark reopening checks passed. Corpus/original hashes unchanged, both profiles removed. Default dark/480 cases remain unverified in this batch. Real Arabic EPUB is unavailable. Exact files scripts/context-menu-live/main.cjs, scripts/context-menu-live/run.mjs, own entries in CURRENT_TASK.md and IMPLEMENTATION_PLAN.md. Report/board updated locally. Remaining dispatched scripts pending. Commit/push authorized by current dispatch, Jira left to Claude.
+
+## KEY-317 remaining live scripts active - 2026-11-11, Codex (key317)
+
+Dispatched by Claude. Repair listed scripts sequentially against the dev renderer in ar/en, one Electron at a time. Preserve excluded files and other agents' hunks. Small-batch commit/push authorized by this dispatch. Jira left to Claude. Initial workspace reads required escalation because the sandbox denied workspace access. No implementation or live results yet.
 
 ## KEY-317 runners: inline ui-motion.css into the temporary renderer builds - 2026-11-11, Claude Code
 
@@ -2091,6 +2445,10 @@ Files:
 - scripts/note-paragraphs-live/main.cjs
 - CURRENT_TASK.md
 
+## KEY-312 remaining scope active - 2026-11-11, Codex (key312-20261111)
+
+Dispatched prayer/dhikr settings and unified main notifications. Existing recordings and KEY-239 snooze retained. No schema/dependency/download. Implementation and verification pending. Scoped commit/push authorized by this dispatch, Jira left to Claude. Preserve sibling files and shared hunks.
+
 ## KEY-317 practice-live and explain-back-live repaired - 2026-11-11, Claude Code
 
 Both scripts are updated for the current app:
@@ -2104,6 +2462,8 @@ Both pass live in ar and en with the real Arabic and English PDFs. An earlier ex
 Files: scripts/practice-live/main.cjs, scripts/explain-back-live/main.cjs, CURRENT_TASK.md.
 
 ## KEY-300 part 2 verified - 2026-11-11, Codex (key300p2)
+
+Published a3780ed2f94924c10be9a0ce51ee38dab12f9386 normally to origin/feature/library-domain at 2026-11-11T17:24:25.368Z. Exact remote hash verified. The commit contains exactly 24 task files/own shared hunks and ends Agent: Codex. Full1871/1871, focused21/21 and native8/8 pass. Claude owns review and Jira. This is a local post-push receipt.
 
 User experience
 
@@ -2333,7 +2693,7 @@ Exact task files for publication
 - tests/services/import-batch-state.test.ts
 - tests/ui/import-cancellation.test.ts
 
-Local-only report and board are updated under docs/agent-ops. Other agents' files and state hunks remain outside this commit. Commit/push receipt will be added locally after publication. No Jira change by Codex.
+Local-only report and board are updated under docs/agent-ops. Other agents' files and state hunks remain outside this commit. Published d2f3f61ee5b10673ea69101ee33cb835babbf232 normally to origin/feature/library-domain at 2026-11-11T16:28:32.830Z. Exact remote hash verified. The commit contains exactly 17 task files and own state entries and ends Agent: Codex. Full1862/1862 and native8/8 pass. Part 1 is published. Detail sheet, metadata consistency and trash plurals remain for part 2. Claude Code owns review and Jira. This is a local post-push receipt. No Jira change by Codex.
 
 ## KEY-320 paragraph links open and highlight again - 2026-11-11, Claude Code
 
@@ -2450,6 +2810,10 @@ Files: docs/features/feature - Adhan Recordings.md, CURRENT_TASK.md.
 planner-live and scrollbars-sidenote-live pass again with the nav-selector fix and the first-run-guide hook. A batch over 20 scripts kept changes only where the script passed. The others fail on deeper KEY-304 layout changes (the note editor needs a selected note, the review screen opens through `baglib:start-review`), missing disposable Quran copies, or setting localStorage before a page loads. The list is in docs/agent-ops/reports/KEY-317.md.
 
 Files: scripts/planner-live/main.cjs, scripts/scrollbars-sidenote-live/main.cjs, CURRENT_TASK.md.
+
+## KEY-298 part 2 active - 2026-11-11, Codex (key298p2)
+
+Dispatched remaining Modal/Sheet migrations, whole-app semantics/shortcut audit, and KEY-44 selection fixes 1-3. Reuse part 1 b36ce02. Sequential verification and one-window real-file native matrix required, followed by a passing full suite. Explicit task-scoped commit/push authorization. Existing unrelated changes preserved. Implementation and tests pending.
 
 ## KEY-317 part 3 - 2026-11-11, Claude Code
 
@@ -2580,6 +2944,8 @@ Exact 35 task files and own state entries for publication follow.
 - `tests/ui/a11y-foundations.test.ts`
 
 Local-only updates are docs/agent-ops/board.md and docs/agent-ops/reports/KEY-298.md. Remaining part2 includes library bulk/lending/audit/online/trash, reader dictionary/export/reflow/OCR/accessibility/focus/RSVP/TOC/study-editor, clipper/audiobook/OPDS/tools, categories/dashboard/notes/Quran overlays, the remaining native entry-point tour, registry audit beyond existing entries and whole-app landmarks/labels/live regions. Claude Code reviews and manages Jira after publication.
+
+Published b36ce022df806fde3236f0c3706b008c8b9f370b normally to origin/feature/library-domain at 2026-11-11T11:41:40.632Z. Exact remote hash verified. The commit contains exactly 35 task files and own state hunks and ends Agent: Codex. Full suite1839/1839 and native224/224 pass. Profiles, 10 preliminary evidence runs and task scratch files are removed. Part1 is published. Remaining overlays and whole-app semantics stay open for part2, with Claude Code owning review and Jira. This is a local post-push receipt.
 
 ## KEY-317 part 1 - 2026-11-11, Claude Code (overnight run)
 
@@ -2766,7 +3132,7 @@ Verification. Sequential tsc, changed-file eslint with zero errors, initial focu
 
 Limits and remaining work. This is part 1. Boards/planner/research/dashboard feedback, wider Notes/mark-list error recovery, source-subtab empty feedback and remaining per-view toast/progress/destructive-action migrations are pending. The harness injects a cover renderer that omits covers to enforce one Electron window, and creates PDF pins through the existing bridge before UI deletion/Undo. Manual file-save policy is used. External-provider behavior, live bulk trash and every mark kind require separate coverage. Existing missing-Mushaf-layout startup warnings occur in the isolated profile. No schema, dependency, download or Jira change was made. Claude owns review/Jira and KEY-301 stays open.
 
-Publication. User explicitly authorizes this scoped first-part commit/push to origin/feature/library-domain. Git publication pending. Stage only the following 25 task files, with this entry alone from CURRENT_TASK and the KEY-301 entry alone from IMPLEMENTATION_PLAN. Preserve all protected paths and sibling planning/research edits.
+Publication. User explicitly authorizes this scoped first-part commit/push to origin/feature/library-domain. Published 453be03709727a5181703fa6eb432c5f00925a7b normally to origin/feature/library-domain at 2026-11-11T02:40:27.417615+02:00. Exact remote hash verified. The commit contains the following 25 task files, with this entry alone from CURRENT_TASK and the KEY-301 entry alone from IMPLEMENTATION_PLAN. Preserve all protected paths and sibling planning/research edits.
 
 - `CURRENT_TASK.md`
 - `IMPLEMENTATION_PLAN.md`
@@ -2806,7 +3172,9 @@ Verification. Sequential tsc passed. Changed-file eslint has 0 errors and 5 pre-
 
 Verification boundaries. The harness stages real ar/en PDFs, then cancels before the unchanged import pipeline creates its separate hidden cover BrowserWindow. An earlier attempted import hit the single-window guard and was stopped/cleaned. Actual OS folder/browser opening is intercepted, and the CJS harness supplies the product package version. Device pack availability is read through existing APIs. Missing-profile-layout warnings are expected in the throwaway profile. External sync and biometrics were not exercised. Earlier text-encoding and dialog-dismissal problems were fixed before the final matrix. All six run profiles were deleted. No original book/corpus edits, generated corpus copies or scratch profiles remain.
 
-Publication. User explicitly authorized this scoped commit and normal push to origin/feature/library-domain through commit.lock. Claude owns review and Jira. No Jira mutation. Unrelated changes, protected paths, and other agents' state hunks remain excluded. IMPLEMENTATION_PLAN.md, the local board and report were updated separately.
+Publication receipt. Published `f76879afeb93080637724954bf76212da7840a0f` normally to `origin/feature/library-domain` at 2026-11-10T23:31:01.072292+00:00. Exact remote hash verified. The commit has exactly 19 task files and ends Agent: Codex. The lock is released and the index is empty. Local post-push receipt. Claude owns review and Jira.
+
+Publication authorization. User explicitly authorized this scoped commit and normal push to origin/feature/library-domain through commit.lock. Claude owns review and Jira. No Jira mutation. Unrelated changes, protected paths, and other agents' state hunks remain excluded. IMPLEMENTATION_PLAN.md, the local board and report were updated separately.
 
 Exact 19 files for the task commit
 
@@ -2829,7 +3197,6 @@ Exact 19 files for the task commit
 - `tests/ui/settings-directory-coverage.test.ts`
 - `docs/features/Usability Inspection.md`
 - `CURRENT_TASK.md`
-
 
 ## KEY-308 part 5 verified — 2026-11-11, Claude Code (at the user's request)
 
@@ -3019,6 +3386,10 @@ Antigravity (conversation faf3dd6a) built the One Research space, then hit its w
 - The display font squeezes the spaces in Arabic headings.
 - "Draft with AI" is cramped beside the subject field in the customize panel.
 
+## KEY-305 active — 2026-11-10T19:25:19.358Z, Codex
+
+Implement dispatched U11 only. Before Arabic light/dark 1280 screenshots captured and inspected in .baglib-data/KEY-305-evidence. Original packs hash-verified unchanged, temporary profile and copies removed. Preserve QuranMushafView and poetry-layout.ts. Reuse KEY-316 actions. Pending implementation, sequential checks, live matrix/restart, final full suite and scoped publication. Existing unrelated work preserved.
+
 ## KEY-316 verified — 2026-11-10T19:18:45.043Z, Codex
 
 Session 01a1c58e-3bd8-7440-badb-6d219525adc6. Continued in place and preserved reviewed KEY-313. Shared portal menus support mouse, Shift+F10/Menu key, touch, RTL placement, submenus, icons, disabled reasons and keyboard navigation. Library regular/featured/row/bulk actions share existing flows. Reader selection/mark, Quran/hadith/poetry, notes/cards/board items and nav/empty surfaces use context actions. Localized native text editing is installed in the main window. One scoped shortcut registry drives matching, help, palette and menu hints. Duplicate library-row buttons and saved-card delete moved into menus. Primary controls remain available. Existing canonical-source card edit restrictions are retained. PDF shape grouping now preserves the saved page and mark targets are keyboard focusable. No schema, dependency, download or Jira change.
@@ -3083,7 +3454,7 @@ Exact 51 task files/hunks
 - `tests/ui/context-actions.test.ts`
 - `tests/ui/context-menu.test.ts`
 
-Publication is authorized as one KEY-316 commit ending Agent: Codex, through commit.lock and a task-only git apply --cached patch, then normal push to origin/feature/library-domain. Publication pending. Excluded files and sibling state receipts remain unstaged. Claude owns review and Jira. Stop after publication.
+Published 2491a0e5f9bd7d3b3d2f346a0849d13999a1d90c normally to origin/feature/library-domain. Exact remote hash verified. Commit contains only 51 task files/hunks and ends Agent: Codex. commit.lock released. Local publication receipt, with Claude owning review and Jira. Stopped after KEY-316.
 
 ## KEY-313 verified — 2026-11-10, Codex continuing Antigravity
 
@@ -3113,7 +3484,7 @@ Exact 15 task files/hunks
 - `CURRENT_TASK.md`
 - `IMPLEMENTATION_PLAN.md`
 
-User authorizes separate attributed KEY-313 commit and normal push to origin/feature/library-domain via commit.lock. Publication pending. Then resume KEY-316 and reuse poetry-line-actions.ts. Claude owns review/Jira.
+User authorizes separate attributed KEY-313 commit and normal push to origin/feature/library-domain via commit.lock. Published f307d1d3867f4763054c6e9d818fdda4015a71e7 normally to origin/feature/library-domain at 2026-11-10T17:27:46.2947523+02:00. Remote verified. Lock released; exact15 files. Claude owns review/Jira. Resuming KEY-316. Reuse poetry-line-actions.ts. Claude owns review/Jira.
 
 ## KEY-315 — 2026-11-10, Antigravity (pushed)
 
@@ -3182,7 +3553,7 @@ Exact 18 task files/hunks
 - `IMPLEMENTATION_PLAN.md`
 - `docs/features/feature - UI UX Vision Program.md`
 
-Local-only report and board updated. User explicitly authorizes one task-only attributed commit and normal push to origin/feature/library-domain through commit.lock. Implementation and verification complete. Publication pending. Stop after pushed.
+Local-only report and board updated. User explicitly authorizes one task-only attributed commit and normal push to origin/feature/library-domain through commit.lock. Implementation and verification complete. Published `e25fa605e6fb60f086d90a61b91de3e739aab1e4` normally to `origin/feature/library-domain` at 2026-11-10T14:19:02.273435+02:00. Remote hash verified. Exactly 18 task files/hunks committed with `Agent: Codex (continuing Antigravity)`. Commit lock released and index empty. Other sessions’ work and publication receipts remain outside the commit. Local post-push receipt. Claude owns review/Jira. Stopped after KEY-314.
 
 ## KEY-304 fix round 2 verified - 2026-11-10, Codex (continuing Antigravity)
 
@@ -3210,11 +3581,11 @@ Exact 11 task files/hunks
 - `src/renderer/translations.ts`
 - `tests/ui/notes-workspace-actions.test.ts`
 
-Explicit authorization covers one task-only commit ending `Agent: Codex (continuing Antigravity)` and normal push to `origin/feature/library-domain` through `docs/agent-ops/commit.lock`. Implementation and verification complete. Publication pending, then stop.
+Explicit authorization covers one task-only commit ending `Agent: Codex (continuing Antigravity)` and normal push to `origin/feature/library-domain` through `docs/agent-ops/commit.lock`. Implementation and verification complete. Published `18603669be7618b8b657af7aa79174fa83bea46a` normally to `origin/feature/library-domain` at 2026-11-10T11:53:53.562Z. Remote hash verified. Exactly 11 task files/hunks committed. Commit lock released. Local post-push receipt. Claude owns review/Jira. Stopped after KEY-304.
 
-## KEY-311 verified; publication pending — 2026-11-10, Codex
+## KEY-311 published — 2026-11-10, Codex
 
-Session `01a1c4f4-9ddd-7a60-8fe0-169c0ab76833`. 2026-11-10T12:48:28+02:00. Reviewer authorized the three obsolete test-file updates and publishing despite unfinished KEY-304 failures. 28/28 focused+updated tests, scoped eslint0errors0warnings and git diff --check pass. Optional-module behavior assertions retained through Customize in both languages. Prior task-only tsc/main build and native8/8 with real PDFs remain valid;60 PNGs/10 distinct paths inspected. No production changes during continuation. Shared KEY-304 failures and2 notes tsc errors are excluded by explicit authorization. Exact24 own files/hunks below. Commit/push authorized to origin/feature/library-domain using commit.lock. Jira Claude. Publication pending.
+Session `01a1c4f4-9ddd-7a60-8fe0-169c0ab76833`. 2026-11-10T12:48:28+02:00. Reviewer authorized the three obsolete test-file updates and publishing despite unfinished KEY-304 failures. 28/28 focused+updated tests, scoped eslint0errors0warnings and git diff --check pass. Optional-module behavior assertions retained through Customize in both languages. Prior task-only tsc/main build and native8/8 with real PDFs remain valid;60 PNGs/10 distinct paths inspected. No production changes during continuation. Shared KEY-304 failures and2 notes tsc errors are excluded by explicit authorization. Exact24 own files/hunks below. Commit/push authorized to origin/feature/library-domain using commit.lock. Jira Claude. Published `ce766409c38fe8a00411b672105d183f2bd9f418` normally to origin/feature/library-domain at 2026-11-10T12:51:59+02:00. Remote hash verified; exactly24 own files/hunks; lock released; index empty. Local post-push receipt. Stopped after KEY-311.
 
 - `src/shared/statistics-workspace.ts`
 - `src/main/services/statistics/workspace-statistics.service.ts`
@@ -6556,3 +6927,15 @@ Found splitBoundaries never entered Apply payload; now emits per-item splitAfter
 
 - Continue U2/U5/U1/U6: investigate import lifecycle, improve Notes recovery and honest local-storage status/settings discoverability. Backend imports have no abort contract; do not remove safe-close guards or claim a background job survives view unmount. No dependencies/schema/Git/Jira changes authorized. Preserve concurrent agents' work.
 
+
+## KEY-305 verified — 2026-11-10, Antigravity (continuing Codex)
+
+Hub, shared Islamic reader header/panel/settings popover, per-profile Quran note references (no schema change), BayanView strict-mode deep-link fix. Files: src/renderer/components/islamic/*, quran/*, sunnah/SunnahView+SunnahChapterView, poetry/PoetryReader+BayanView, layout/{AppLayout,NavigationRail,nav-model}, context/WorkspaceContext, translations.ts, src/shared+main personal-commentary, tests/ui/islamic-reader.test.ts, tests/services/islamic-commentary.test.ts, scripts/islamic-ui-live/, docs/features/feature - Quran Experience.md. Tests: tsc, eslint, tsup, 10 focused, live 8/8 + restart, full 1766/1766.
+
+
+KEY-341 Fix1 2026-11-13T17:44:55+02:00 Codex published c672697ecad16fc4fc73c29507fc7046b7d9a676 normally to origin/feature/library-domain. Remote verified, lock released. Full1980/1980, native planner+links ar/en1280/480, tsc/lint/diff pass. Next KEY-336 implementation.
+
+KEY-48 publication - 2026-11-14T10:21:47.2448177+02:00 - Codex key48-root. Commit 54e568afc6bf521ab73f460097eef4ed91f3ff40 created under commit.lock with exactly24ownedfiles/ownstateinsertions, pushed normally to origin/feature/library-domain and remote hash verified. Focused54/finalfull2272pass0fail2existingPDFTODO(concurrency2,349suites),native4ar/en309files/1000existingWorks,0renderererrors/SQLitepass/12screens/originalsunchanged/copiedfolderdeleted. Final types/build/scopedlint0warnings/diff pass. Other sessions unfinished files/state preserved. No Jira actions. Lock released after remote verification. No KEY-48 implementation, verification or publication work pending.
+
+
+KEY-350 publication - 2026-11-14T15:24:12.942081+02:00 - Codex key350-root. Committed 53c6907ba12ab626ee628b83639e1a320231fc4c under commit.lock with exactly36ownedfiles and only KEY-350 state entries; normal push to origin/feature/library-domain succeeded and remote hash verified. Final focused60/full2303pass0fail0TODO(concurrency2,352suites),native2ar/en/scratchpad/5realcopies/0renderererrors,originalsunchanged/profiledeleted;types/build/lint0errors1existingwarning/diffpass. Rapid maxmain18.09ms/renderer76.10ms; full Sunnah maingap8348.16→16.42ms. Task-owned source files clean; unrelated files/shared state preserved. No Jira actions. Lock released after verification. No KEY-350 implementation/verification/publication work pending.

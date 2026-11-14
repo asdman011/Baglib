@@ -1,0 +1,68 @@
+/* BagLib research editor base styles (KEY-362). Fonts are bundled locally; see ./fonts.ts. */
+@import '@toeverything/theme/style.css';
+@import 'katex/dist/katex.min.css';
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter-Variable.woff') format('woff');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../fonts/IBMPlexMono-Regular.woff') format('woff');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../fonts/IBMPlexMono-Bold.woff') format('woff');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Noto Naskh Arabic';
+  src: url('../fonts/NotoNaskhArabic.woff') format('woff');
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'color-emoji';
+  src: local('Segoe UI Emoji'), local('Segoe UI Symbol'), local('Apple Color Emoji'), local('Noto Color Emoji');
+  unicode-range: U+1F000-1F644, U+203C-3299;
+}
+
+:root {
+  /* Arabic glyphs fall through Inter (Latin only) to the bundled Noto Naskh Arabic. */
+  --affine-font-family: 'Inter', 'Noto Naskh Arabic', Tahoma, Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
+  --affine-font-sans-family: 'Inter', 'Noto Naskh Arabic', Tahoma, Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
+  --affine-font-code-family: 'IBM Plex Mono', Consolas, Menlo, monospace, 'Noto Naskh Arabic';
+  --affine-font-mono-family: 'IBM Plex Mono', Consolas, Menlo, monospace, 'Noto Naskh Arabic';
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--affine-white-90);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#app,
+affine-editor-container {
+  display: block;
+  height: 100%;
+}
+
+doc-title {
+  margin-top: 48px;
+}
+
+.affine-page-viewport {
+  height: 100%;
+}

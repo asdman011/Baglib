@@ -30,6 +30,7 @@ const eslintConfig = defineConfig([
     "assets/**",
     "public/vendor/**",
     "libgen-calibre-store-plugin-main/**",
+    "research-editor/**",
   ]),
 ]);
 

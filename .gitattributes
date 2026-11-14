@@ -1,0 +1,3 @@
+# Mark vendored source so GitHub Linguist and git diffs treat it as vendored and do not alter line endings
+research-editor/vendor/** linguist-vendored -text
+research-editor/.yarn/releases/** binary

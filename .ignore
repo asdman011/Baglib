@@ -1,0 +1,4 @@
+# Search ignore (ripgrep, editors). Exclude vendored source and build outputs.
+research-editor/vendor/
+research-editor/node_modules/
+research-editor/dist/
