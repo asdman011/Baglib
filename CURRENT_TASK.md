@@ -1,3 +1,25 @@
+## KEY-362 review fix 1 verified - 2026-11-14T22:15:00+02:00 - Antigravity 9c90e2e3-bf09-4ccc-aee8-00554c3c4a51
+
+Addressed all 3 items requested by Claude Code review of 9430c5f:
+1. Bundled Poppins: subsetted 4 weights (Light, Regular, Medium, SemiBold) to LATIN from offline cache (`research-editor/.cache/fonts/poppins/`) using BagLib's fontTools via `research-editor/scripts/subset-fonts.py` (3,266 KB -> 342 KB; Poppins is 48 KB total, 12 KB per face) + `Poppins-OFL.txt` (SIL OFL 1.1). Added `FontFamily.Poppins` entries (normal & italic) in `research-editor/app/src/fonts.ts`.
+2. Declared hoisted dependencies: added `@shikijs/core`, `@shikijs/engine-javascript`, `@shikijs/engine-oniguruma`, `@shikijs/langs`, and `@shikijs/themes` at pinned version `3.19.0` to `research-editor/app/package.json`. Offline install verified (`YARN_ENABLE_NETWORK=0`) in 0.67s; dist rebuilt at 9.34 MB (9,797,194 bytes, 92 files; main script 6.34 MB), meeting the <= 12 MB budget.
+3. Fixed Arabic typing helper in `scripts/research-editor-live/main.cjs`: eliminated duplicate '/' by sending single '/' through `Input.dispatchKeyEvent`; tested real element `affine-slash-menu` inside `affine-slash-menu-widget`. Recorded real results in `result.json` and report: menu opens (yes), Arabic filter (no, queryState 'off' because upstream BlockSuite v0.27.4 default actions are English), Arabic text in paragraph (yes, '/آية' persisted in paragraph and Yjs snapshot; `hasArabicText: true` checks for 'آية' specifically). Smoke test passed with 0 console errors and 0 blocked requests.
+4. Verification: `npm run check:vendor` pass (2,899 files), `node scripts/research-editor-live/run.mjs` pass (0 errors, 0 blocked), `npx tsc --noEmit` pass (0 errors), `npx eslint eslint.config.mjs` pass (0 errors).
+
+Exact task files (11):
+- `research-editor/scripts/subset-fonts.py`
+- `research-editor/app/src/fonts.ts`
+- `research-editor/app/fonts/Poppins-Light.woff`
+- `research-editor/app/fonts/Poppins-Medium.woff`
+- `research-editor/app/fonts/Poppins-OFL.txt`
+- `research-editor/app/fonts/Poppins-Regular.woff`
+- `research-editor/app/fonts/Poppins-SemiBold.woff`
+- `research-editor/app/package.json`
+- `research-editor/README.md`
+- `scripts/research-editor-live/main.cjs`
+- `docs/agent-ops/reports/KEY-362.md`
+- `CURRENT_TASK.md` (own entry only)
+
 ## KEY-364 review fix verified - 2026-11-14T21:59:12.769820+02:00 - Codex
 
 Fix forward on 4f1956a, explicitly authorized by the user's review request. New documents now have type page, DocMeta id/title/createDate/tags, and typed page2/surface5/note1/paragraph1 starter blocks. Empty internal paragraph text provides an editable starting point. Rename preserves the envelope, identity, creation date, tags and children while synchronizing meta.title with the page title. Arabic/English mixed titles are covered. The user-facing behavior change is that RE-2 can consume correctly structured new chapter snapshots and retain their renamed document title.

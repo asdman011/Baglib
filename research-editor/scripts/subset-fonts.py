@@ -3,10 +3,12 @@
 Produces research-editor/app/fonts/*.woff (zlib WOFF; brotli is not installed) from:
   - @toeverything/theme fonts (OFL) in research-editor/node_modules: Inter, Kalam, IBM Plex Mono
   - BagLib's own Noto Naskh Arabic (OFL): src/renderer/public/assets/poetry-fonts/notonaskharabic.ttf
+  - Google Fonts Poppins (SIL OFL 1.1, https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/):
+    cached in research-editor/.cache/fonts/poppins/
 
 Run after `yarn workspaces focus @baglib/research-editor-app` with BagLib's existing fontTools
 (the PDF engine venv), for example:
-  .baglib-data/pdf-engine/venv/Scripts/python.exe research-editor/scripts/subset-fonts.py
+  .baglib-data/pdf-engine/venv/Scripts/python.exe -I research-editor/scripts/subset-fonts.py
 
 The outputs are committed, so a normal build needs no Python.
 """
@@ -22,6 +24,7 @@ from fontTools import subset
 EDITOR = Path(__file__).resolve().parent.parent
 REPO = EDITOR.parent
 THEME = EDITOR / "node_modules" / "@toeverything" / "theme" / "fonts"
+POPPINS = EDITOR / ".cache" / "fonts" / "poppins"
 OUT = EDITOR / "app" / "fonts"
 
 LATIN = (
@@ -46,6 +49,10 @@ FONTS = [
         ARABIC,
         REPO / "src" / "renderer" / "public" / "assets" / "poetry-fonts" / "notonaskharabic-OFL.txt",
     ),
+    (POPPINS / "Poppins-Light.ttf", "Poppins-Light.woff", LATIN, POPPINS / "OFL.txt"),
+    (POPPINS / "Poppins-Regular.ttf", "Poppins-Regular.woff", LATIN, None),
+    (POPPINS / "Poppins-Medium.ttf", "Poppins-Medium.woff", LATIN, None),
+    (POPPINS / "Poppins-SemiBold.ttf", "Poppins-SemiBold.woff", LATIN, None),
 ]
 
 

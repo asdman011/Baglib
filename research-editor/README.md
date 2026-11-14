@@ -12,11 +12,14 @@ This workspace provides an isolated toolchain (outside BagLib's root Next.js / R
 - **BagLib wrapper & extensions**: MIT License.
 
 ### Bundled Fonts & Licenses
-All fonts are subsetted using [scripts/subset-fonts.py](file:///D:/Ammar/Projects/Baglib/repo/Baglib/research-editor/scripts/subset-fonts.py) (2,643 KB &rarr; 294 KB) and stored locally under `app/fonts/`:
+All fonts are subsetted using [scripts/subset-fonts.py](file:///D:/Ammar/Projects/Baglib/repo/Baglib/research-editor/scripts/subset-fonts.py) (3,266 KB &rarr; 342 KB) and stored locally under `app/fonts/`:
 - **Inter (Variable)**: SIL Open Font License 1.1 (Rasmus Andersson).
 - **Kalam (Regular, Light, Bold)**: SIL Open Font License 1.1 (Indian Type Foundry).
 - **IBM Plex Mono (Regular, Bold)**: SIL Open Font License 1.1 (IBM Corp.).
 - **Noto Naskh Arabic**: SIL Open Font License 1.1 (Google LLC).
+- **Poppins (Light, Regular, Medium, SemiBold)**: SIL Open Font License 1.1 (Indian Type Foundry, Jonny Pinhorn, source: https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/). Total subset size: 48 KB (12 KB per face).
+
+Unbundled canvas fonts (falling back to system fonts): Satoshi, Lora, Bebas Neue, Orelega One.
 
 ---
 
@@ -89,7 +92,7 @@ Or from within `research-editor/app`:
 ```bash
 node ../.yarn/releases/yarn-4.18.0.cjs build
 ```
-Output is generated at `research-editor/dist/` (total size ~9.3 MB, 88 files; well under the 12 MB budget).
+Output is generated at `research-editor/dist/` (total size 9.34 MB / 9,797,194 bytes, 92 files; well under the 12 MB budget).
 
 ### 3. Verify Vendor Integrity
 ```bash

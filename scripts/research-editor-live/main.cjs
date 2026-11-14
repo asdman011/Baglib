@@ -155,35 +155,59 @@ app.whenReady().then(async () => {
     await wait('window.__baglibResearchEditor.mode === "page"');
     await new Promise(r => setTimeout(r, 600));
 
-    // Focus editor paragraph / contenteditable
-    const focused = await evaluate(`(() => {
-      const el = document.querySelector('[contenteditable="true"]') ||
-                 document.querySelector('rich-text') ||
-                 document.querySelector('affine-paragraph');
-      if (el) {
-        el.focus();
-        // place caret if possible
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
-        return true;
+    // Focus editor paragraph rich-text and initialize inline range
+    const setupResult = await evaluate(`(() => {
+      const editor = window.__baglibResearchEditor?.editor;
+      if (!editor) return { ok: false, error: 'no editor' };
+      const host = editor.host;
+      if (!host) return { ok: false, error: 'no host' };
+
+      // Activate UI event dispatcher on host
+      if (host.event) {
+        host.event.active = true;
       }
-      return false;
+
+      const paragraph = editor.querySelector('affine-paragraph');
+      if (!paragraph) return { ok: false, error: 'no paragraph' };
+
+      const richText = paragraph.querySelector('rich-text') || paragraph.querySelector('.inline-editor');
+      if (!richText) return { ok: false, error: 'no rich-text' };
+
+      const editable = richText.querySelector('[contenteditable="true"]') || richText;
+      editable.focus();
+
+      if (richText.inlineEditor) {
+        richText.inlineEditor.setInlineRange({ index: 0, length: 0 });
+      }
+
+      // Also ensure caret in DOM selection
+      const range = document.createRange();
+      const vText = richText.querySelector('v-text') || richText.querySelector('[data-v-text]') || editable;
+      range.selectNodeContents(vText);
+      range.collapse(true);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      return {
+        ok: true,
+        blockId: paragraph.model?.id || paragraph.blockId,
+        hasInlineEditor: !!richText.inlineEditor,
+      };
     })()`);
 
     // Attach debugger for CDP input simulation
     let cdpAttached = false;
-    let slashMenuOpened = false;
+    let menuCheck = { menuExists: false, menuVisible: false, widgetExists: false };
+    let filterCheck = { menuStillOpen: false, filteredCount: 0, queryState: 'none' };
     let typedTextResult = '';
 
     try {
       win.webContents.debugger.attach('1.3');
       cdpAttached = true;
 
-      // Try typing "/" via dispatchKeyEvent and insertText
+      // Send ONE "/" key via dispatchKeyEvent (keyDown + keyUp).
+      // Note: do NOT send a separate Input.insertText('/') because keyDown with text already inputs '/'.
       await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: '/',
@@ -191,7 +215,6 @@ app.whenReady().then(async () => {
         text: '/',
         windowsVirtualKeyCode: 191,
       });
-      await win.webContents.debugger.sendCommand('Input.insertText', { text: '/' });
       await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyUp',
         key: '/',
@@ -200,16 +223,34 @@ app.whenReady().then(async () => {
       });
       await new Promise(r => setTimeout(r, 600));
 
-      // Check if slash menu opened
-      slashMenuOpened = await evaluate('!!document.querySelector("affine-slash-menu, [data-slash-menu], .slash-menu, .affine-slash-menu")');
+      // Check if affine-slash-menu opened
+      menuCheck = await evaluate(`(() => {
+        const menu = document.querySelector('affine-slash-menu');
+        const widget = document.querySelector('affine-slash-menu-widget');
+        return {
+          menuExists: !!menu,
+          menuVisible: menu ? (menu.style.visibility !== 'hidden' && menu.offsetHeight > 0) : false,
+          widgetExists: !!widget,
+        };
+      })()`);
 
       // Type Arabic word "آية" via insertText
       await win.webContents.debugger.sendCommand('Input.insertText', { text: 'آية' });
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 600));
+
+      filterCheck = await evaluate(`(() => {
+        const menu = document.querySelector('affine-slash-menu');
+        if (!menu) return { menuStillOpen: false, filteredCount: 0, queryState: 'none' };
+        return {
+          menuStillOpen: true,
+          queryState: menu._queryState || 'unknown',
+          filteredCount: Array.isArray(menu._filteredItems) ? menu._filteredItems.length : 0,
+        };
+      })()`);
 
       typedTextResult = await evaluate(`(() => {
-        const text = document.querySelector('affine-paragraph, rich-text')?.textContent || '';
-        return text;
+        const paragraph = document.querySelector('affine-paragraph');
+        return paragraph?.textContent || '';
       })()`);
     } catch (cdpErr) {
       results.cdpError = String(cdpErr);
@@ -226,12 +267,23 @@ app.whenReady().then(async () => {
     // Also test taking a snapshot
     const snapshot = await evaluate('window.__baglibResearchEditor.snapshot()');
 
+    const menuOpens = menuCheck.menuExists ? 'yes' : 'no';
+    const arabicFilter = filterCheck.menuStillOpen && filterCheck.filteredCount > 0 ? 'yes' : 'no';
+    const arabicInParagraph = typedTextResult.includes('آية') ? 'yes' : 'no';
+
     results.arabicTyping = {
-      focused,
+      focused: setupResult.ok,
       cdpAttached,
-      slashMenuOpened,
+      menuOpens,
+      arabicFilter,
+      arabicInParagraph,
+      slashMenuOpened: menuCheck.menuExists,
+      menuDetails: {
+        menuCheck,
+        filterCheck,
+      },
       typedTextResult,
-      hasArabicText: typedTextResult.includes('آية') || typedTextResult.includes('/'),
+      hasArabicText: typedTextResult.includes('آية'),
       snapshotDocId: snapshot?.meta?.id || null,
     };
 
