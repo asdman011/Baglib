@@ -72,6 +72,9 @@ interface WorkspaceContextType extends WorkspaceState {
   toggleLanguage: () => void;
   toggleZenMode: () => void;
   toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  collapseSidebar: () => void;
+  expandSidebar: () => void;
   toggleNavPinned: () => void;
   setNavPinned: (pinned: boolean) => void;
   isNavPeekOpen: boolean;
@@ -159,7 +162,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setImportWizardOpen(open);
   };
   const [isZenMode, setIsZenMode] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   // Pin-or-Peek side navigation state (KEY-310)
   const [isNavPinned, setIsNavPinnedState] = useState<boolean>(true);
   const [isNavPeekOpen, setIsNavPeekOpen] = useState<boolean>(false);
@@ -262,8 +265,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [viewMode, setViewModeState] = useState<WorkspaceViewMode>('dashboard');
   const setViewMode = React.useCallback((mode: WorkspaceViewMode) => {
     const guard = mode === 'notes-editor' ? undefined : editorLeaveGuard();
-    if (guard) { void guard().then(allowed => { if (allowed) setViewModeState(mode); }); }
-    else setViewModeState(mode);
+    if (guard) {
+      void guard().then(allowed => {
+        if (allowed) {
+          setViewModeState(mode);
+          setIsSidebarCollapsed(true);
+        }
+      });
+    } else {
+      setViewModeState(mode);
+      setIsSidebarCollapsed(true);
+    }
   }, []);
   const [activeLibraryCategory, setActiveLibraryCategory] = useState<string>('ALL');
   
@@ -318,6 +330,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const toggleDirection = () => setDir((prev) => (prev === 'rtl' ? 'ltr' : 'rtl'));
   const toggleZenMode = () => setIsZenMode((prev) => !prev);
   const toggleSidebar = () => setIsSidebarCollapsed((prev) => !prev);
+  const setSidebarCollapsed = React.useCallback((collapsed: boolean) => setIsSidebarCollapsed(collapsed), []);
+  const collapseSidebar = React.useCallback(() => setIsSidebarCollapsed(true), []);
+  const expandSidebar = React.useCallback(() => setIsSidebarCollapsed(false), []);
   
   const toggleTheme = () => {
     setTheme((prev) => {
@@ -609,6 +624,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const safeSetViewMode = (mode: WorkspaceViewMode) => {
     setIsMobileNavOpen(false);
+    setIsSidebarCollapsed(true);
     if (viewMode === 'reader' && mode !== 'reader') {
       try {
         removeTempSelectionOverlay();
@@ -760,6 +776,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         t,
         toggleZenMode,
         toggleSidebar,
+        setSidebarCollapsed,
+        collapseSidebar,
+        expandSidebar,
         setCommandPaletteOpen: setIsCommandPaletteOpen,
         isSearchHubOpen,
         setSearchHubOpen: setIsSearchHubOpen,

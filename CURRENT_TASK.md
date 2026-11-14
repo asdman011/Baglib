@@ -1,3 +1,33 @@
+## KEY-379 verified handoff - 2026-11-15T01:21:00+02:00 - Antigravity b464e320-87fa-4b23-8f83-eada7381e364
+
+Implemented main sidebar auto-collapse when entering any workspace tab (Jira KEY-379):
+1. Shell Navigation Auto-Collapse:
+   - When the user opens any workspace tab (from the sidebar, command palette, breadcrumbs, deep links, or shortcuts), BagLib's main navigation sidebar automatically collapses to its compact rail (`isSidebarCollapsed = true`), giving the active tab maximum screen width.
+   - Wired auto-collapse into `setViewMode` and `safeSetViewMode` in `WorkspaceContext.tsx`, as well as `openBookForReading`, `closeReaderToLibrary`, and `handleItemClick` in `NavigationRail.tsx`.
+   - Re-selecting the currently active tab from the sidebar or command palette while expanded also auto-collapses it.
+   - Pinned navigation state (`isNavPinned = true`) is strictly preserved: the navigation rail stays docked in layout flow on-screen as an icon rail, never auto-hiding into peek mode.
+   - If the navigation was unpinned (`isNavPinned = false`), selecting a tab closes the peek overlay (`isNavPeekOpen = false`) while keeping the rail unpinned.
+2. Manual Expansion & Header Layout:
+   - The user can expand the sidebar by hand at any time by clicking the expand button (`toggleSidebar()`), opening it to full width (`w-56`).
+   - Manual expansion is preserved while on that tab; navigating to any tab collapses it back to its compact rail.
+   - Refined the collapsed header layout to cleanly stack and center controls (`flex-col items-center gap-1.5`) when collapsed, eliminating horizontal squeeze on narrow rails.
+3. Pure State Machine & Model:
+   - Added `NavShellState`, `INITIAL_NAV_SHELL_STATE`, `onNavigateWorkspaceTab`, `toggleSidebarCollapsed`, and `setSidebarCollapsed` pure state machine functions in `src/renderer/components/layout/nav-pin-model.ts`.
+4. Verification:
+   - 23 focused tests pass across 4 suites (8/8 `nav-shell-collapse`, 8/8 `nav-pin-peek`, 5/5 `shell-navigation`, 2/2 `translation-keys`).
+   - TypeScript (`tsc --noEmit`) and ESLint pass with 0 errors and 0 warnings.
+   - Native live check `node scripts/nav-collapse-live/run.mjs` passed with code 0 in Electron (real Arabic and English PDFs verified, throwaway profile cleaned up, originals unchanged, 9 screenshots saved in `.baglib-data/KEY-379-evidence/`).
+   - Full report written to `docs/agent-ops/reports/KEY-379.md`.
+
+Exact changed files:
+- `src/renderer/components/layout/nav-pin-model.ts`
+- `src/renderer/components/layout/NavigationRail.tsx`
+- `src/renderer/components/context/WorkspaceContext.tsx`
+- `tests/ui/nav-shell-collapse.test.ts`
+- `scripts/nav-collapse-live/main.cjs`
+- `scripts/nav-collapse-live/run.mjs`
+- `docs/agent-ops/reports/KEY-379.md`
+
 ## KEY-354 verified handoff - 2026-11-15T01:00:00+02:00 - Antigravity 72ce2e76-552f-4269-a6e4-cecca859da41
 
 Implemented notes slash search actions for materials without text (Jira KEY-354):

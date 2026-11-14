@@ -28,6 +28,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
     setViewMode,
     isSidebarCollapsed,
     toggleSidebar,
+    collapseSidebar,
     toggleNavPinned,
     setSearchHubOpen,
     setIsSupportSheetOpen,
@@ -46,14 +47,17 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
       setSearchHubOpen(true);
     } else if (item.actionType === 'boards') {
       setViewMode('notes');
+      collapseSidebar();
       window.dispatchEvent(new CustomEvent('baglib:open-boards'));
     } else if (item.actionType === 'cards') {
       setViewMode('notes');
+      collapseSidebar();
       window.dispatchEvent(new CustomEvent('baglib:open-cards'));
     } else if (item.actionType === 'support') {
       setIsSupportSheetOpen(true);
     } else if (item.viewMode) {
       setViewMode(item.viewMode);
+      collapseSidebar();
     }
 
     if (isOverlay && onCloseOverlay) {
@@ -125,20 +129,23 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
     <aside
       aria-label={t('navGlobal')}
       data-nav-rail-overlay={isOverlay ? 'true' : undefined}
+      data-sidebar-collapsed={isSidebarCollapsed ? 'true' : 'false'}
       className={`${
         isOverlay
-          ? 'flex h-full w-56 bg-surface border-e border-subtle flex-col shadow-2xl select-none z-50'
-          : `hidden md:flex h-full min-h-0 bg-surface border-e border-subtle flex-col transition-[width] duration-200 motion-reduce:transition-none z-30 shrink-0 select-none ${
+          ? 'flex h-full w-56 bg-surface border-e border-subtle flex-col shadow-2xl select-none z-50 overflow-hidden'
+          : `hidden md:flex h-full min-h-0 bg-surface border-e border-subtle flex-col transition-[width] duration-200 motion-reduce:transition-none z-30 shrink-0 select-none overflow-hidden ${
               isSidebarCollapsed ? 'w-14 sm:w-16' : 'w-14 sm:w-16 lg:w-56'
             }`
       }`}
     >
       {/* Brand & Rail Collapse / Pin Header */}
-      <div className="p-2 shrink-0 border-b border-subtle/60 flex items-center justify-between gap-2">
+      <div className={`p-2 shrink-0 border-b border-subtle/60 flex ${isSidebarCollapsed && !isOverlay ? 'flex-col items-center gap-1.5' : 'items-center justify-between gap-2'}`}>
         <button
           type="button"
+          data-nav-item="dashboard"
           onClick={() => {
             setViewMode('dashboard');
+            collapseSidebar();
             if (isOverlay && onCloseOverlay) onCloseOverlay();
           }}
           title={t('navDashboard')}
@@ -190,6 +197,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
           <>
             <button
               type="button"
+              data-testid="collapse-sidebar-btn"
               onClick={toggleSidebar}
               aria-label={isSidebarCollapsed ? t('expandMenu') : t('collapseMenu')}
               aria-expanded={!isSidebarCollapsed}
@@ -209,10 +217,11 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
             {isSidebarCollapsed && (
               <button
                 type="button"
+                data-testid="expand-sidebar-btn"
                 onClick={toggleSidebar}
                 aria-label={t('expandMenu')}
                 title={t('expandMenu')}
-                className="p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer mx-auto mt-1"
+                className="p-1.5 rounded-xl bg-canvas hover:bg-surface border border-subtle text-muted hover:text-main transition-all cursor-pointer mx-auto"
               >
                 <ChevronRight className="w-4 h-4 rtl:rotate-180" />
               </button>
@@ -245,7 +254,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
                 <div key={group.id} className="space-y-1">
                   {!isSidebarCollapsed && (
                     <h2 className="block px-3 pt-1.5 pb-0.5 text-[11px] font-bold uppercase tracking-wider text-muted font-sans">
-                      {group.id === 'islamic' ? <button type="button" data-nav-item="islamic" onClick={() => setViewMode('islamic')} className="text-start hover:text-primary-text focus-visible:outline-2 focus-visible:outline-primary">{t(group.labelKey)}</button> : t(group.labelKey)}
+                      {group.id === 'islamic' ? <button type="button" data-nav-item="islamic" onClick={() => { setViewMode('islamic'); collapseSidebar(); }} className="text-start hover:text-primary-text focus-visible:outline-2 focus-visible:outline-primary">{t(group.labelKey)}</button> : t(group.labelKey)}
                     </h2>
                   )}
                   {group.itemIds.map(renderItem)}
@@ -267,7 +276,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
         <div className="hidden lg:block shrink-0 p-3 border-t border-subtle/60 bg-canvas/40">
           <button
             type="button"
-            onClick={() => setViewMode('reader')}
+            onClick={() => { setViewMode('reader'); collapseSidebar(); }}
             title={t('navResumeBook')}
             aria-label={`${t('navResumeBook')}: ${activeBook.title}`}
             className="w-full text-start p-2.5 rounded-xl bg-surface border border-subtle hover:border-primary-text space-y-1 focus-visible:outline-2 focus-visible:outline-focus"
