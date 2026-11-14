@@ -2,7 +2,14 @@
 import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 import { useToast } from '../ui/Toast';
 
-import { shortcutForEvent } from '../actions/shortcuts';
+import { createBoardHistory, commitBoardChange, undoBoard, redoBoard, canUndoBoard, canRedoBoard } from '../../../shared/board-history';
+import { itemsInMarquee, toggleSelection, selectionBounds, moveItems, duplicateSelection, alignItems, type Marquee } from '../../../shared/board-selection';
+import { snapBoardRect, type SnapGuide } from '../../../shared/board-snap';
+import { layoutBoardTree } from '../../../shared/board-layout';
+import { boardEdgeGeometry, type EdgeShape } from '../../../shared/board-edge-path';
+import { boardToNoteMarkdown } from '../../../shared/board-note';
+import { BoardTools } from './BoardTools';
+import { boardViewBends, alignmentForDirection, boardLayoutRoot, readBoardPreference, writeBoardPreference, exportBoardImage } from './board-ui';
 import { ContextMenu } from '../ui/ContextMenu';
 import { contextActions } from '../actions/context-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -25,7 +32,6 @@ import {
 import { useWorkspace } from '../context/WorkspaceContext';
 import {
   BOARD_COLORS,
-  edgeEndpoints,
   freeSpot,
   presetBoard,
   removeBoardItems,
@@ -68,6 +74,20 @@ type View = { x: number; y: number; zoom: number };
 type Selection = { kind: 'item' | 'edge'; id: string } | null;
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict';
 
+function BoardItemContext({ item, onEdit, onRemove, ...props }: Omit<React.ComponentProps<typeof ContextMenu>, 'items'> & {
+  item: BoardItem;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const { t, books, openBookForReading } = useWorkspace();
+  return <ContextMenu {...props} items={contextActions('board', {
+    open: item.target ? () => navigateStudyReference(item.target!, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })) : undefined,
+    copy: () => navigator.clipboard.writeText(item.text || item.label || ''),
+    edit: onEdit,
+    delete: onRemove,
+  }, t)} />;
+}
+
 /** The board surface: cards, sticky notes and labelled arrows; pan by dragging the background, zoom with the wheel. */
 function BoardCanvas({
   initial,
@@ -82,6 +102,18 @@ function BoardCanvas({
 }) {
   const { t, dir, books, openBookForReading } = useWorkspace();
   const [board, setBoard] = useState(initial);
+  const history = useRef(createBoardHistory(initial));
+  const boardRef = useRef(initial);
+  const [historyState, setHistoryState] = useState(() => createBoardHistory(initial));
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [guides, setGuides] = useState<SnapGuide[]>([]);
+  const [marquee, setMarquee] = useState<Marquee | null>(null);
+  const [snapping, setSnapping] = useState<boolean>(() => readBoardPreference('snap', true));
+  const [edgeShape, setEdgeShape] = useState<EdgeShape>(() => readBoardPreference(`shape.${initial.id}`, 'straight'));
+  const [operation, setOperation] = useState(false);
+  const [operationFailed, setOperationFailed] = useState(false);
+  const saveQueue = useRef(Promise.resolve(true));
+  const saveEpoch = useRef(0);
   const revision = useRef(initial.revision);
   const [dirty, setDirty] = useState(false);
   const [save, setSave] = useState<SaveState>('idle');
@@ -90,7 +122,10 @@ function BoardCanvas({
   const [connectFrom, setConnectFrom] = useState<string | null | undefined>(undefined);
   const surface = useRef<HTMLDivElement>(null);
   const drag = useRef<{
-    mode: 'pan' | 'move' | 'resize';
+    mode: 'pan' | 'move' | 'resize' | 'marquee';
+    tag: string;
+    items: BoardItem[];
+    ids: string[];
     id?: string;
     x: number;
     y: number;
@@ -101,42 +136,79 @@ function BoardCanvas({
   const isRtl = dir === 'rtl';
   const BackIcon = isRtl ? ArrowRight : ArrowLeft;
 
+  const selectItem = (id: string, additive = false, preserve = false) => {
+    const ids = preserve && selectedIds.includes(id) ? selectedIds : toggleSelection(selectedIds, id, additive);
+    setSelectedIds(ids);
+    setSelection(ids.length ? { kind: 'item', id: ids.at(-1)! } : null);
+    return ids;
+  };
+
   const change = useCallback(
-    (update: (current: Board) => Pick<Board, 'items' | 'edges'> & Partial<Pick<Board, 'title'>>) => {
-      setBoard((current) => ({ ...current, ...update(current) }));
+    (update: (current: Board) => Pick<Board, 'items' | 'edges'> & Partial<Pick<Board, 'title'>>, tag?: string) => {
+      const next = { ...boardRef.current, ...update(boardRef.current) };
+      history.current = commitBoardChange(history.current, next, tag);
+      setHistoryState(history.current);
+      boardRef.current = next;
+      setBoard(next);
       setDirty(true);
-    },
-    []
+    }, []
   );
+
+  const travelHistory = (redo: boolean) => {
+    const previous = history.current;
+    history.current = redo ? redoBoard(previous) : undoBoard(previous);
+    setHistoryState(history.current);
+    if (previous === history.current) return;
+    const next = { ...boardRef.current, ...history.current.present };
+    boardRef.current = next;
+    setBoard(next);
+    setSelectedIds(ids => ids.filter(id => next.items.some(item => item.id === id)));
+    setDirty(true);
+  };
+
+  const persist = useCallback((snapshot: Board) => {
+    const epoch = saveEpoch.current;
+    saveQueue.current = saveQueue.current.then(async () => {
+      if (epoch !== saveEpoch.current) return false;
+      setSave('saving');
+      const { id, title, preset, items, edges } = snapshot;
+      try {
+        const saved = await window.electronAPI.boards.save({ id, title, preset, items, edges, expectedRevision: revision.current });
+        revision.current = saved.revision;
+        setSave('saved');
+        onSaved(saved);
+        return true;
+      } catch (error) {
+        if (String(error).includes('board-conflict')) {
+          saveEpoch.current++;
+          const fresh = await window.electronAPI.boards.get(id).catch(() => null);
+          if (fresh) {
+            revision.current = fresh.revision;
+            // Discard queued snapshots from this revision after an external edit.
+            boardRef.current = fresh;
+            history.current = createBoardHistory(fresh);
+            setHistoryState(history.current);
+            setBoard(fresh);
+            setSelectedIds([]);
+            setSelection(null);
+            setDirty(false);
+          }
+          setSave('conflict');
+        } else setSave('failed');
+        return false;
+      }
+    });
+    return saveQueue.current;
+  }, [onSaved]);
 
   useEffect(() => {
     if (!dirty) return;
     const timer = setTimeout(() => {
       setDirty(false);
-      setSave('saving');
-      const { id, title, preset, items, edges } = board;
-      window.electronAPI.boards
-        .save({ id, title, preset, items, edges, expectedRevision: revision.current })
-        .then(
-          (saved) => {
-            revision.current = saved.revision;
-            setSave('saved');
-            onSaved(saved);
-          },
-          async (error: unknown) => {
-            if (String(error).includes('board-conflict')) {
-              const fresh = await window.electronAPI.boards.get(id).catch(() => null);
-              if (fresh) {
-                revision.current = fresh.revision;
-                setBoard(fresh);
-              }
-              setSave('conflict');
-            } else setSave('failed');
-          }
-        );
+      void persist(board);
     }, 500);
     return () => clearTimeout(timer);
-  }, [board, dirty, onSaved]);
+  }, [board, dirty, persist]);
 
   const fit = useCallback(() => {
     const element = surface.current;
@@ -198,6 +270,7 @@ function BoardCanvas({
       const spot = exact ? { x: item.x, y: item.y } : freeSpot(current.items, { x: item.x, y: item.y }, size);
       return { items: [...current.items, { ...item, ...spot }], edges: current.edges };
     });
+    setSelectedIds([item.id]);
     setSelection({ kind: 'item', id: item.id });
     requestAnimationFrame(() =>
       (document.querySelector(`[data-board-item="${item.id}"] textarea`) as HTMLTextAreaElement | null)?.focus()
@@ -221,7 +294,7 @@ function BoardCanvas({
   const removeSelected = () => {
     if (!selection) return;
     if (selection.kind === 'item') {
-      change((current) => removeBoardItems(current, new Set([selection.id])));
+      change((current) => removeBoardItems(current, new Set(selectedIds)));
     } else {
       change((current) => ({
         items: current.items,
@@ -229,6 +302,7 @@ function BoardCanvas({
       }));
     }
     setSelection(null);
+    setSelectedIds([]);
   };
 
   const clickItem = (id: string) => {
@@ -247,6 +321,7 @@ function BoardCanvas({
       edges: [...current.edges, edge],
     }));
     // KEY-322: the new arrow is selected so its label can be typed straight away.
+    setSelectedIds([]);
     setSelection({ kind: 'edge', id: edge.id });
     setConnectFrom(undefined);
   };
@@ -266,36 +341,65 @@ function BoardCanvas({
     });
   };
 
+  const duplicate = () => {
+    const copied = duplicateSelection(boardRef.current, selectedIds, newId);
+    change(() => copied.board);
+    setSelectedIds(copied.newIds);
+    setSelection(copied.newIds.length ? { kind: 'item', id: copied.newIds[0] } : null);
+  };
+
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      const shortcut = shortcutForEvent(event, 'board');
-      const menu = (event.target as HTMLElement)?.closest?.('[role=menu]');
-      if (event.key === 'Escape') {
-        if (connectFrom !== undefined) setConnectFrom(undefined);
+      if (event.defaultPrevented || event.isComposing) return;
+      const target = event.target as HTMLElement;
+      if (target?.closest?.('input, textarea, select, [contenteditable=true], [role=menu]')) return;
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && ['z', 'y'].includes(event.key.toLowerCase())) {
+        event.preventDefault();
+        travelHistory(event.key.toLowerCase() === 'y' || event.shiftKey);
         return;
       }
-      if (!shortcut?.id.startsWith('board-') || menu || !selection) return;
+      if (event.key === 'Escape') {
+        setConnectFrom(undefined);
+        setMarquee(null);
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === 'd' && selectedIds.length) {
+        event.preventDefault();
+        duplicate();
+        return;
+      }
+      if (!selection) return;
       if (event.key === 'Delete') {
         event.preventDefault();
         removeSelected();
         return;
       }
-      const step = event.shiftKey ? 50 : 10;
-      const move = {
-        ArrowLeft: [-step, 0],
-        ArrowRight: [step, 0],
-        ArrowUp: [0, -step],
-        ArrowDown: [0, step],
-      }[event.key];
-      if (move && selection.kind === 'item') {
+      const step = event.shiftKey ? 10 : 1;
+      const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key];
+      if (move && selectedIds.length) {
         event.preventDefault();
-        const item = board.items.find((entry) => entry.id === selection.id);
-        if (item) updateItem(item.id, { x: item.x + move[0], y: item.y + move[1] });
+        change(current => ({ items: moveItems(current.items, selectedIds, move[0], move[1]), edges: current.edges }));
       }
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   });
+
+  const runOperation = async (action: () => Promise<void>) => {
+    setOperation(true);
+    setOperationFailed(false);
+    try { await action(); } catch { setOperationFailed(true); } finally { setOperation(false); }
+  };
+  const toNote = () => runOperation(async () => {
+    if (!await persist(board)) throw new Error('board-save-failed');
+    const content = boardToNoteMarkdown(board, { untitled: t('boardsUntitled'), connections: t('boardsConnections') }, selectedIds.length ? selectedIds : undefined);
+    const note = await window.electronAPI.studyNotes.save({ title: board.title || t('boardsUntitled'), content, aliases: [], tags: [] });
+    openStudyNote({ id: note.id });
+  });
+  const bends = useMemo(() => boardViewBends(board.edges), [board.edges]);
+  const geometry = (edge: BoardEdge, from: BoardItem, to: BoardItem) =>
+    boardEdgeGeometry(from, to, edgeShape, bends.get(edge.id) ?? 40);
 
   const byId = useMemo(() => new Map(board.items.map((item) => [item.id, item])), [board.items]);
   const selectedItem = selection?.kind === 'item' ? byId.get(selection.id) : undefined;
@@ -316,7 +420,7 @@ function BoardCanvas({
         <Button
           variant="secondary"
           size="sm"
-          onClick={onBack}
+          onClick={() => { void persist(board).then(saved => { if (saved) onBack(); }); }}
           icon={<BackIcon className="size-4" />}
           data-boards-back
         >
@@ -334,8 +438,7 @@ function BoardCanvas({
           placeholder={t('boardsUntitled')}
           onChange={(event) => {
             const title = event.target.value;
-            setBoard((current) => ({ ...current, title }));
-            setDirty(true);
+            change(current => ({ ...current, title }));
           }}
           className="min-w-0 flex-1 basis-36 rounded-xl border border-subtle bg-canvas px-3 py-1.5 text-sm font-bold text-main outline-none focus-visible:outline-2 focus-visible:outline-focus"
         />
@@ -436,6 +539,7 @@ function BoardCanvas({
           </IconButton>
           <IconButton
             size="sm"
+            data-board-fit
             label={t('boardsZoomReset')}
             onClick={fit}
           >
@@ -444,11 +548,43 @@ function BoardCanvas({
         </div>
       </div>
 
+      <BoardTools
+        undoAvailable={canUndoBoard(historyState)}
+        redoAvailable={canRedoBoard(historyState)}
+        snapping={snapping}
+        mindMap={board.preset === 'mind'}
+        empty={!board.items.length}
+        edgeShape={edgeShape}
+        busy={operation}
+        selectedCount={selectedIds.length}
+        onUndo={() => travelHistory(false)}
+        onRedo={() => travelHistory(true)}
+        onToggleSnap={() => {
+          setSnapping(!snapping);
+          writeBoardPreference('snap', !snapping);
+        }}
+        onLayout={() => change(current => ({
+          items: layoutBoardTree(current.items, current.edges, { rootId: boardLayoutRoot(current, selectedIds), direction: dir }),
+          edges: current.edges,
+        }))}
+        onShape={shape => {
+          setEdgeShape(shape);
+          writeBoardPreference(`shape.${board.id}`, shape);
+        }}
+        onExport={format => void runOperation(() => exportBoardImage(board, format, selectedIds.length ? selectedIds : undefined, edgeShape))}
+        onToNote={() => void toNote()}
+        onAlign={mode => change(current => ({
+          items: alignItems(current.items, selectedIds, alignmentForDirection(mode, dir)),
+          edges: current.edges,
+        }))}
+        onDuplicate={duplicate}
+      />
+      {operationFailed && <p role="alert" className="px-3 py-1 text-xs text-danger">{t('boardsOperationFailed')}</p>}
+
       {/* Selection Sub-toolbar */}
-      {(selectedItem || selectedEdge) && (
-        <div
+      <div
           data-board-selection
-          className="flex flex-wrap items-center gap-3 border-b border-subtle bg-canvas/80 px-4 py-2 text-xs"
+          className="flex h-12 shrink-0 items-center gap-3 overflow-x-auto border-b border-subtle bg-canvas/80 px-4 py-2 text-xs [&>*]:shrink-0"
         >
           {selectedItem && (
             <span className="flex items-center gap-1.5" role="group" aria-label={t('boardsColor')}>
@@ -484,7 +620,7 @@ function BoardCanvas({
             </label>
           )}
 
-          <Button
+          {(selectedItem || selectedEdge) && <Button
             variant="ghost"
             size="sm"
             data-board-delete
@@ -493,9 +629,8 @@ function BoardCanvas({
             icon={<Trash2 className="size-3.5" />}
           >
             {t('boardsDelete')}
-          </Button>
+          </Button>}
         </div>
-      )}
 
       {connectFrom !== undefined && (
         <p role="status" className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-1.5 text-xs text-amber-800 dark:text-amber-200">
@@ -510,7 +645,7 @@ function BoardCanvas({
         role="application"
         aria-label={t('boardsCanvas')}
         dir="ltr"
-        tabIndex={-1}
+        tabIndex={0}
         className={`relative min-h-0 flex-1 touch-none overflow-hidden bg-canvas ${
           connectFrom !== undefined ? 'cursor-crosshair' : 'cursor-grab'
         }`}
@@ -527,9 +662,14 @@ function BoardCanvas({
         }}
         onPointerDown={(event) => {
           if (event.target !== event.currentTarget) return;
+          surface.current?.focus();
           setSelection(null);
+          setSelectedIds([]);
+          const point = toBoard(event.clientX, event.clientY);
+          if (event.shiftKey) setMarquee({ x1: point.x, y1: point.y, x2: point.x, y2: point.y });
           drag.current = {
-            mode: 'pan',
+            mode: event.shiftKey ? 'marquee' : 'pan',
+            tag: newId(), items: board.items, ids: [],
             x: event.clientX,
             y: event.clientY,
             start: { x: view.x, y: view.y, w: 0, h: 0 },
@@ -543,21 +683,31 @@ function BoardCanvas({
           const dy = event.clientY - current.y;
           if (current.mode === 'pan') {
             setView((previous) => ({ ...previous, x: current.start.x + dx, y: current.start.y + dy }));
+          } else if (current.mode === 'marquee') {
+            const first = toBoard(current.x, current.y);
+            const last = toBoard(event.clientX, event.clientY);
+            const box = { x1: first.x, y1: first.y, x2: last.x, y2: last.y };
+            setMarquee(box);
+            const ids = itemsInMarquee(board.items, box, 'touch');
+            setSelectedIds(ids);
+            setSelection(ids.length ? { kind: 'item', id: ids[0] } : null);
           } else if (current.mode === 'move') {
-            updateItem(current.id!, {
-              x: Math.round(current.start.x + dx / view.zoom),
-              y: Math.round(current.start.y + dy / view.zoom),
-            });
+            const bounds = selectionBounds(current.items, current.ids);
+            if (!bounds) return;
+            const moving = { ...bounds, x: bounds.x + dx / view.zoom, y: bounds.y + dy / view.zoom };
+            const snapped = snapping && !event.altKey ? snapBoardRect(moving, current.items.filter(item => !current.ids.includes(item.id)), { threshold: 6 / view.zoom }) : { ...moving, guides: [] };
+            setGuides(snapped.guides);
+            change(previous => ({ items: moveItems(current.items, current.ids, snapped.x - bounds.x, snapped.y - bounds.y), edges: previous.edges }), current.tag);
           } else {
-            updateItem(current.id!, {
-              w: Math.max(60, Math.round(current.start.w + dx / view.zoom)),
-              h: Math.max(40, Math.round(current.start.h + dy / view.zoom)),
-            });
+            change(previous => ({ items: previous.items.map(item => item.id === current.id ? { ...item, w: Math.max(60, Math.round(current.start.w + dx / view.zoom)), h: Math.max(40, Math.round(current.start.h + dy / view.zoom)) } : item), edges: previous.edges }), current.tag);
           }
         }}
         onPointerUp={() => {
           drag.current = null;
+          setGuides([]);
+          setMarquee(null);
         }}
+        onLostPointerCapture={() => { drag.current = null; setGuides([]); setMarquee(null); }}
       >
         <div
           dir="ltr" className="absolute start-0 top-0"
@@ -586,7 +736,7 @@ function BoardCanvas({
               const from = byId.get(edge.from);
               const to = byId.get(edge.to);
               if (!from || !to) return null;
-              const { x1, y1, x2, y2 } = edgeEndpoints(from, to);
+              const path = geometry(edge, from, to);
               const chosen = selection?.kind === 'edge' && selection.id === edge.id;
               return (
                 <g
@@ -594,14 +744,14 @@ function BoardCanvas({
                   className="pointer-events-auto cursor-pointer text-main"
                   data-board-edge={edge.id}
                   onPointerDown={(event) => event.stopPropagation()}
-                  onClick={() => setSelection({ kind: 'edge', id: edge.id })}
+                  onClick={() => { setSelectedIds([]); setSelection({ kind: 'edge', id: edge.id }); }}
                 >
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={14} />
-                  <line
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
+                  <path d={path.d} fill="none" stroke="transparent" strokeWidth={14} />
+                  <path
+                    d={path.d}
+                    data-board-path
+                    data-end-angle={path.endAngle}
+                    fill="none"
                     stroke={chosen ? '#d97706' : 'currentColor'}
                     strokeOpacity={chosen ? 1 : 0.6}
                     strokeWidth={chosen ? 2.5 : 1.6}
@@ -616,7 +766,7 @@ function BoardCanvas({
             const from = byId.get(edge.from);
             const to = byId.get(edge.to);
             if (!from || !to || !edge.label) return null;
-            const { x1, y1, x2, y2 } = edgeEndpoints(from, to);
+            const path = geometry(edge, from, to);
             return (
               <button
                 key={edge.id}
@@ -624,25 +774,26 @@ function BoardCanvas({
                 data-board-edge-text={edge.id}
                 dir="auto"
                 onPointerDown={(event) => event.stopPropagation()}
-                onClick={() => setSelection({ kind: 'edge', id: edge.id })}
+                onClick={() => { setSelectedIds([]); setSelection({ kind: 'edge', id: edge.id }); }}
                 className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-subtle bg-surface px-2.5 py-0.5 text-xs text-main shadow-xs"
-                style={{ insetInlineStart: (x1 + x2) / 2, top: (y1 + y2) / 2 }}
+                style={{ insetInlineStart: path.labelX, top: path.labelY }}
               >
                 {edge.label}
               </button>
             );
           })}
 
+          {marquee && <div data-board-marquee className="pointer-events-none absolute border border-primary-text bg-primary/10" style={{ insetInlineStart: Math.min(marquee.x1, marquee.x2), top: Math.min(marquee.y1, marquee.y2), width: Math.abs(marquee.x2 - marquee.x1), height: Math.abs(marquee.y2 - marquee.y1) }} />}
+          <svg className="pointer-events-none absolute start-0 top-0 overflow-visible" width="1" height="1" aria-hidden="true">
+            {guides.map((guide, index) => <line key={index} data-board-guide x1={guide.axis === 'x' ? guide.position : guide.from} x2={guide.axis === 'x' ? guide.position : guide.to} y1={guide.axis === 'y' ? guide.position : guide.from} y2={guide.axis === 'y' ? guide.position : guide.to} stroke="#d97706" strokeWidth={1 / view.zoom} />)}
+          </svg>
           {board.items.map((item) => {
-            const chosen = selection?.kind === 'item' && selection.id === item.id;
+            const chosen = selectedIds.includes(item.id);
             const source = connectFrom === item.id;
             return (
-              <ContextMenu items={contextActions('board', {
-                open: item.target ? () => navigateStudyReference(item.target!,books,openBookForReading,(id,anchor)=>openStudyNote({id,anchor})) : undefined,
-                copy: () => navigator.clipboard.writeText(item.text || item.label || ''),
-                edit: () => { setSelection({kind:'item',id:item.id}); document.querySelector<HTMLTextAreaElement>('[data-board-item="'+item.id+'"] textarea')?.focus(); },
-                delete: () => change(current => removeBoardItems(current,new Set([item.id]))),
-              },t)}
+              <BoardItemContext item={item}
+                onEdit={() => { selectItem(item.id); document.querySelector<HTMLTextAreaElement>(`[data-board-item="${item.id}"] textarea`)?.focus(); }}
+                onRemove={() => change(current => removeBoardItems(current, new Set([item.id])))}
                 key={item.id}
                 data-board-item={item.id}
                 data-board-kind={item.kind}
@@ -653,7 +804,8 @@ function BoardCanvas({
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   if (connectFrom !== undefined) return;
-                  setSelection({ kind: 'item', id: item.id });
+                  if (event.shiftKey || event.ctrlKey || event.metaKey) { event.preventDefault(); surface.current?.focus(); }
+                  selectItem(item.id, event.shiftKey || event.ctrlKey || event.metaKey, !(event.shiftKey || event.ctrlKey || event.metaKey));
                 }}
                 onClick={(event) => {
                   if (connectFrom !== undefined) {
@@ -668,9 +820,11 @@ function BoardCanvas({
                   onPointerDown={(event) => {
                     if (connectFrom !== undefined) return;
                     event.stopPropagation();
-                    setSelection({ kind: 'item', id: item.id });
+                    const ids = selectItem(item.id, event.shiftKey || event.ctrlKey || event.metaKey, !(event.shiftKey || event.ctrlKey || event.metaKey));
+                    surface.current?.focus();
                     drag.current = {
                       mode: 'move',
+                      tag: newId(), items: board.items, ids,
                       id: item.id,
                       x: event.clientX,
                       y: event.clientY,
@@ -706,7 +860,7 @@ function BoardCanvas({
                   dir="auto"
                   maxLength={4000}
                   readOnly={connectFrom !== undefined}
-                  onFocus={() => setSelection({ kind: 'item', id: item.id })}
+                  onFocus={() => { if (!selectedIds.includes(item.id)) selectItem(item.id); }}
                   onChange={(event) => updateItem(item.id, { text: event.target.value })}
                   className="min-h-0 flex-1 resize-none bg-transparent px-2.5 py-1 text-sm leading-[2] outline-none"
                   style={{ fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)" }}
@@ -719,6 +873,7 @@ function BoardCanvas({
                     event.stopPropagation();
                     drag.current = {
                       mode: 'resize',
+                      tag: newId(), items: board.items, ids: [item.id],
                       id: item.id,
                       x: event.clientX,
                       y: event.clientY,
@@ -727,7 +882,7 @@ function BoardCanvas({
                     surface.current?.setPointerCapture(event.pointerId);
                   }}
                 />
-              </ContextMenu>
+              </BoardItemContext>
             );
           })}
         </div>

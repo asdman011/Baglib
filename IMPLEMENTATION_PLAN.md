@@ -2,6 +2,9 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T02:28:09.525811+02:00, Codex] KEY-244 verified. Seven shared board modules wired to localized UI, stable-height pointer canvas, group editing/history/snap/layout/curves/image export/linked-note conversion and serialized revision saves. Full 2,116/2,116 once (concurrency 2, 342 suites, 163,683.4475 ms), focused 9/9, native 4/4, 16/16 image files decoded, zero renderer errors. Types/scoped lint clean. Own profiles/renderer removed, 16 screenshots retained. Exact 10 files and limits in CURRENT_TASK/report. Scoped lock commit/push authorized and pending. Claude review/Jira next.
+
+
 - [2026-11-13T21:50:35.935Z, Codex] KEY-169 verified: reference jumps in three dispatched surfaces, installed translation FTS and persisted source filter; RTL range isolation and accurate combined counts. Full2103/2103 once(concurrency2), service31/UI6/i18n2/native4,0renderererrors,1338corpusoriginalsunchanged,profilesdeleted. Main build and final types/lint/diff check passed. Exact19files/report in CURRENT_TASK; IPC validation hunks already included by Claude in a53f807,18files remain to commit. Scoped publication authorized; no Jira changes.
 
 - [2026-11-13T22:50:08.930292+02:00, Codex] KEY-344: Implemented exactly the approved lecture_series and ordered lecture_series_item schema, series CRUD/membership/reordering, progress, manual or cancellable automatic next lecture, Library assignment and a series level in the Notes tree. Native acceptance passes; final full suites 2050/2050 twice after ten Notes mock fixes (targeted10/10); types pass, lint0errors. Exact files and evidence in CURRENT_TASK.md and docs/agent-ops/reports/KEY-344.md. Scoped publication authorized; unrelated agent work preserved.

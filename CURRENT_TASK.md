@@ -1,3 +1,26 @@
+## KEY-244 verified handoff — 2026-11-14T02:28:09.525811+02:00 — Codex
+
+Connected the seven shared board modules authored by OpenCode workers and reviewed by Claude in c266dab/75d8f4a. The Boards UI now supports tagged undo/redo, modifier/marquee group selection and dragging, 1/10-pixel nudges, duplication/deletion and six RTL-aware alignments, snapping with guides and Alt bypass, directional mind-map tree layout, curved/parallel labelled arrows, whole/selection SVG and 2× PNG export, and linked selection/board-to-note creation through the existing notes API. Revision saves are serialized, conflicts reset history and discard stale queued writes, and failed saves keep the board open.
+
+The localized toolbar is fixed-height and scrolls inside narrow workspaces. Selection keeps the canvas origin stable during pointer gestures. Existing Arabic typography and logical layout are retained. Snap preference is viewer-local and arrow shape is viewer-local per board. Image downloads use the permitted renderer fallback because existing note export APIs accept note IDs/formats. Shared history covers items/edges as designed. PNG allocations are bounded at 16 million logical pixels and a 16,000-pixel dimension before 2× rendering. The report records these choices and the pre-migration planner warning.
+
+Verification passed. Full suite once with --test-concurrency=2 passed 2,116/2,116 across 342 suites, with zero failures or skips, in 163,683.4475 ms. Focused renderer tests passed 9/9. Final native checks passed 4/4 (ar/en × 1280/480), with 16/16 whole-board and selection SVG/PNG downloads reopened and decoded, zero renderer errors and zero document overflow. Final types and scoped lint clean. Sixteen screenshots retained at .baglib-data/KEY-244-evidence/ and four final screenshots inspected. All own throwaway profiles/exports and owned renderer removed. No original document/media files were opened or modified. No shared board module or Quran file changes, schema/dependency/download gates, or Jira actions.
+
+Exact 10 task files and hunks for this publication
+
+- `CURRENT_TASK.md`, KEY-244 entry only
+- `IMPLEMENTATION_PLAN.md`, KEY-244 entry only
+- `src/renderer/components/notes/BoardsWorkspace.tsx`
+- `src/renderer/components/notes/BoardTools.tsx`
+- `src/renderer/components/notes/board-ui.ts`
+- `src/renderer/translations.ts`, KEY-244 keys only
+- `tests/ui/board-ui.test.ts`
+- `tests/ui/boards-interactions.test.ts`
+- `scripts/board-tools-live/run.mjs`
+- `scripts/board-tools-live/main.cjs`
+
+Local report is docs/agent-ops/reports/KEY-244.md. Local board row is updated. Commit/push to origin/feature/library-domain is explicitly authorized under the shared commit lock and remains pending. Claude owns review and Jira. Other agents' pending hunks are preserved.
+
 ## KEY-266 local poetry pack for installed builds: done — 2026-11-14, Claude Code
 
 **What changed:** installed builds can import the Al-Bayan poetry database from a local, versioned pack, with no Python or PyArrow needed.
