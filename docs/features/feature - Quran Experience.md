@@ -217,3 +217,7 @@ Evidence: `quran-page-keys.ts`, `QuranReaderView.tsx`, `QuranMushafWorkspace.tsx
 - Verified: the mushaf page itself is unchanged; the header (picker, Hafs/Warsh switch, one settings popover, panel toggle), one tabbed side panel and the bottom player bar are shared (`src/renderer/components/islamic/`). Live ar/en, light/dark, 1280/480 and restart checks passed on copies of the installed packs.
 - Limitation: Warsh notes written before this change did not exist, so no legacy Warsh data needs migration.
 
+
+### KEY-171 word inspector follow-up — 2026-11-14
+
+The word study panel now distinguishes a pack that is not installed from an installed pack's missing annotation (with full word location). It displays the named37:130 source compatibility notice without altering script positions. Roots and verified installed lemmas link to inline occurrence places in batches of50, each navigating to its ayah. POS remains a user source decision; no POS UI/model has been added. This is QUL-resource/Baglib integration, not a new cross-application investigation. See [QUL](QUL.md#key-171-installed-resource-re-verification--2026-11-14-codex) for actual installed-data evidence and [resource contracts](Quran%20Resource%20Contracts.md#key-171-word-coverage-contract--2026-11-14) for transient coverage fields. Arabic/RTL and English/LTR native1280/480 checks are in the local KEY-171 report.

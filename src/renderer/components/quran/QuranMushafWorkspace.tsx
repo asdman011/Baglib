@@ -1,4 +1,7 @@
 'use client';
+import { QuranWordOccurrences, QuranWordCompatibilityNotice } from './QuranWordOccurrences';
+import { quranWordCompatibility } from '../../../shared/quran-word-location';
+
 
 import { IslamicReaderPanel } from '../islamic/IslamicReaderChrome';
 import { PersonalCommentary } from '../knowledge/PersonalCommentary';
@@ -100,18 +103,18 @@ function StudyContent({ tool, reference, page, selection, metadata, t, lang, onN
         }
         let body: React.ReactNode = null;
         if (tool === 'translation' || tool === 'transliteration') {
-          if (tool === 'translation' ? !selection.translation : !selection.transliteration && !selection.ayahTransliteration) throw new Error('missing-source');
+          if (tool === 'translation' ? !selection.translation : !selection.transliteration && !selection.ayahTransliteration) { results.push(<p key={citation}>{t('quranWordPackNotInstalled')}</p>); continue; }
           const wholeAyah = tool === 'transliteration' && !wordPosition ? selection.ayahTransliteration || undefined : undefined;
           const result = await api.read({ script: selection.script, surah: location.surah, from: location.ayah, translation: tool === 'translation' ? selection.translation : undefined, transliteration: tool === 'transliteration' ? selection.transliteration || undefined : undefined, ayahTransliteration: wholeAyah });
           if (!result.ok) throw new Error(result.error);
           const ayah = result.data.ayahs.find(value => value.number === location.ayah);
-          body = tool === 'translation' && ayah?.translation ? <QuranTranslationText translation={ayah.translation} t={t} /> : <>{ayah?.transliteration && <p dir="ltr" lang="en" data-quran-ayah-transliteration><QuranRichText nodes={ayah.transliteration} /></p>}{selection.transliteration && <p dir="ltr" className={ayah?.transliteration ? 'text-xs text-muted' : undefined}>{ayah?.words.filter(word => !word.marker && (!wordPosition || word.position === wordPosition)).map(word => word.transliteration || t('quranWordUnavailable')).join(' ')}</p>}</>;
+          body = tool === 'translation' && ayah?.translation ? <QuranTranslationText translation={ayah.translation} t={t} /> : <>{ayah?.transliteration && <p dir="ltr" lang="en" data-quran-ayah-transliteration><QuranRichText nodes={ayah.transliteration} /></p>}{selection.transliteration && <p dir="ltr" className={ayah?.transliteration ? 'text-xs text-muted' : undefined}>{ayah?.words.filter(word => !word.marker && (!wordPosition || word.position === wordPosition)).map(word => <React.Fragment key={word.position}><bdi dir={word.transliteration || lang === 'en' ? 'ltr' : 'rtl'}>{word.transliteration || <>{t('quranWordNoAnnotation')} <bdi>({location.surah}:{location.ayah}:{word.position})</bdi></>}</bdi>{' '}</React.Fragment>)}</p>}</>;
         } else if (tool === 'meanings') {
-          if (!selection.meanings) throw new Error('missing-source');
+          if (!selection.meanings) { results.push(<p key={citation}>{t('quranWordPackNotInstalled')}</p>); continue; }
           const result = await api.read({ script: selection.script, surah: location.surah, from: location.ayah, meanings: selection.meanings });
           if (!result.ok) throw new Error(result.error);
           const words = result.data.ayahs.find(value => value.number === location.ayah)?.words.filter(word => !word.marker && (!wordPosition || word.position === wordPosition)) || [];
-          body = <dl data-quran-word-meanings>{words.map(word => <div key={word.position} className="flex items-baseline justify-between gap-3 border-b border-subtle py-1"><dt dir="rtl" lang="ar" className="font-reading text-xl leading-loose">{word.text}</dt><dd dir="ltr" lang="en" className="text-sm text-end">{word.meaning || t('quranWordUnavailable')}</dd></div>)}</dl>;
+          body = <dl data-quran-word-meanings>{words.map(word => <div data-quran-word-location={`${location.surah}:${location.ayah}:${word.position}`} key={word.position} className="flex flex-wrap items-baseline justify-between gap-3 border-b border-subtle py-1"><dt dir="rtl" lang="ar" className="font-reading text-xl leading-loose">{word.text}</dt><dd dir={word.meaning || lang === 'en' ? 'ltr' : 'rtl'} lang={word.meaning ? 'en' : lang} className="text-sm text-end">{word.meaning || <span data-quran-word-missing>{t('quranWordNoAnnotation')} <bdi>({location.surah}:{location.ayah}:{word.position})</bdi></span>}</dd></div>)}</dl>;
         } else if (tool === 'themes') {
           const result = await api.ayahThemes({ ...location, pack: metadata.themes });
           if (!result.ok) throw new Error(result.error);
@@ -147,7 +150,7 @@ function StudyContent({ tool, reference, page, selection, metadata, t, lang, onN
           const result = await api.morphology({ script: selection.script, ...location });
           if (!result.ok) throw new Error(result.error);
           const words = result.data.filter(word => !wordPosition || Number(word.location.split(':')[2]) === wordPosition);
-          body = words.length ? <div>{words.map(word => <section key={word.location} className="py-2 border-b border-subtle"><p dir="ltr">{word.location}</p><dl>{([['root', 'quranMorphologyRoot'], ['lemma', 'quranMorphologyLemma'], ['stem', 'quranMorphologyStem']] as const).map(([field, label]) => <div key={field}><dt className="text-xs">{t(label)}</dt><dd dir={word[field] ? 'rtl' : undefined} className={word[field] ? 'font-reading text-xl leading-loose' : 'text-xs text-muted'}>{word[field] || t('quranWordUnavailable')}</dd>{field === 'root' && word.root && <RootHadiths root={word.root} t={t} />}</div>)}</dl></section>)}</div> : <p>{t('quranWordUnavailable')}</p>;
+          body = words.length ? <div>{words.map(word => <section key={word.location} className="py-2 border-b border-subtle"><p dir="ltr">{word.location}</p><dl>{([['root', 'quranMorphologyRoot'], ['lemma', 'quranMorphologyLemma'], ['stem', 'quranMorphologyStem']] as const).map(([field, label]) => <div key={field}><dt className="text-xs">{t(label)}</dt><dd dir={word[field] ? 'rtl' : undefined} className={word[field] ? 'font-reading text-xl leading-loose' : 'text-xs text-muted'}>{word[field] || t(word.uninstalled?.includes(field) ? 'quranWordPackNotInstalled' : 'quranWordNoAnnotation')}</dd>{(field === 'root' || field === 'lemma') && word[field] && <QuranWordOccurrences key={`${word.location}:${field}:${word[field]}`} family={field} text={word[field]!} t={t} onNavigateAyah={onNavigateAyah} />}{field === 'root' && word.root && <RootHadiths root={word.root} t={t} />}</div>)}</dl></section>)}</div> : <p>{t('quranWordNoAnnotation')}</p>;
         } else if (tool === 'mutashabihat') {
           const result = await api.mutashabihat({ script: selection.script, ...location });
           if (!result.ok) throw new Error(result.error);
@@ -156,7 +159,7 @@ function StudyContent({ tool, reference, page, selection, metadata, t, lang, onN
         } else {
           body = <p>{t('quranWordUnavailable')}</p>;
         }
-        results.push(<section key={citation} className="border-b border-subtle py-3 text-sm leading-loose"><p dir="ltr" className="text-xs text-muted">{citation}</p>{reference.wordText && wordPosition && <p dir="rtl" className="font-reading text-xl">{reference.wordText}</p>}{reference.wordText && !wordPosition && ['morphology','transliteration','mutashabihat','meanings'].includes(tool) && <p className="text-xs text-muted">{t('quranAyahAlignmentFallback')}</p>}{body}</section>);
+        results.push(<section key={citation} className="border-b border-subtle py-3 text-sm leading-loose"><p dir="ltr" className="text-xs text-muted">{citation}</p>{reference.wordText && wordPosition && <p dir="rtl" className="font-reading text-xl">{reference.wordText}</p>}{reference.wordText && !wordPosition && ['morphology','transliteration','mutashabihat','meanings'].includes(tool) && <p className="text-xs text-muted">{t('quranAyahAlignmentFallback')}</p>}{['morphology', 'meanings', 'transliteration'].includes(tool) && <QuranWordCompatibilityNotice compatibility={quranWordCompatibility(page.profile, location.surah, location.ayah)} t={t} />}{body}</section>);
       }
       if (metadata.derived && ['topics', 'themes'].includes(tool)) results.push(<p key="derived" className="pt-3 text-xs text-muted">{t('quranArabicCopyNotice')}</p>);
       if (tool === 'meanings') results.push(<p key="alignment" className="pt-3 text-xs text-muted">{t('quranAlignmentNotice')}</p>);

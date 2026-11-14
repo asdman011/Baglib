@@ -2,6 +2,12 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T01:53:55.746530+00:00, Codex key171-root] KEY-171 verified: shared canonical word validation, named gaps/pack absence, localized37:130 notice and bounded root/lemma occurrence jumps. Finalfull2183/2183(concurrency2,342suites,159111.9856ms),focused14/native4/types/lint0warnings/build/diff pass;0renderererrors,24screens,1338originalsunchanged/profiledeleted/ownedrenderer stopped. Exact16files/limits in CURRENT_TASK/report. POS source decision held; metadata69 absent/no download. Scoped lock commit/push authorized and next.
+
+- [2026-11-14T01:43:11.564299+00:00, Codex key171-root] KEY-171 validation/coverage/compatibility/occurrence implementation done; focused14/types/lint/build pass; native4 ar/en1280/480 zero renderer errors passes. Final visible screenshot rerun and fullsuite pending. QUL/contracts/experience docs updated; POS source decision held, metadata69 absent/no download.
+
+- [2026-11-14T01:32:54.8593572+00:00, Codex key171-root] KEY-171 slice claimed; validation/gaps/compatibility/occurrence scope recorded in CURRENT_TASK; implementation and all checks pending.
+
 - [2026-11-14T01:29:58.462Z, Codex key168-root] KEY-168 verified authorized slice: localized shared copy citations, independent profile positions/validated exact-page hints and visible bookmarks. Full2177/2177 once(concurrency2,342suites),focused42/native8offline/0renderererrors/types/mainbuild pass;lint0errors2existingwarnings.16screens/8clipboardreceipts,1338originalsunchanged/profiledeleted/ownedrenderer stopped. Exact18files/limits in CURRENT_TASK/report. Protected selected-word workspace callback excluded under file restriction; optional exception pending. Scoped commit/push authorized and next.
 
 - [2026-11-14T01:26:02.533Z, Codex key168-root] KEY-168 implementation/focused42/types/mainbuild pass; scoped lint0errors2existingwarnings. Native8/8 offline with actual restart, exact profile pages and clipboard readback,0renderererrors;1338originals unchanged/profile deleted. Full once concurrency2 running. Selected-word workspace-only exception pending; local report/18file manifest written. Publication pending.

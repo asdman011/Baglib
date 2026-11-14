@@ -44,18 +44,32 @@ test('reader uses immutable source packs, indexed search, explicit gaps and grou
   };
   let reader: QuranReader | undefined;
   try {
-    const script = await add('quran-script/312', `CREATE TABLE words(id INTEGER,location TEXT,surah INTEGER,ayah INTEGER,word INTEGER,text TEXT); INSERT INTO words VALUES (1,'1:1:1',1,1,1,'بِسۡمِ'),(2,'1:1:2',1,1,2,'ٱللَّهِ'),(3,'1:1:3',1,1,3,'١'),(4,'1:2:1',1,2,1,'الْحَمْدُ'),(5,'1:2:2',1,2,2,'٢'),(6,'2:181:4',2,181,4,'مَا');`);
+    const script = await add('quran-script/312', `CREATE TABLE words(id INTEGER,location TEXT,surah INTEGER,ayah INTEGER,word INTEGER,text TEXT); INSERT INTO words VALUES (1,'1:1:1',1,1,1,'بِسۡمِ'),(2,'1:1:2',1,1,2,'ٱللَّهِ'),(3,'1:1:3',1,1,3,'١'),(4,'1:2:1',1,2,1,'الْحَمْدُ'),(5,'1:2:2',1,2,2,'٢'),(6,'2:181:4',2,181,4,'مَا'),(7,'37:130:1',37,130,1,'سَلَٰمٌ'),(8,'37:130:2',37,130,2,'عَلَىٰٓ'),(9,'37:130:3',37,130,3,'إِلۡ يَاسِينَ'),(10,'37:130:4',37,130,4,'١٣٠');`);
     const translation = await add('translation/193', `CREATE TABLE translation(sura INTEGER,ayah INTEGER,ayah_key TEXT,text TEXT); INSERT INTO translation VALUES(1,1,'1:1','"Meaning [[note]]"');`);
-    const meanings = await add('translation/92', `CREATE TABLE word_translation(surah_number INTEGER,ayah_number INTEGER,word_number TEXT,text TEXT); INSERT INTO word_translation VALUES(1,1,'1','In the name');`);
+    const meanings = await add('translation/92', `CREATE TABLE word_translation(surah_number INTEGER,ayah_number INTEGER,word_number TEXT,text TEXT); INSERT INTO word_translation VALUES(1,1,'1','In the name'),(1,1,'2tail','Wrong'),(1,1,'3','Marker'),(1,1,'99','Outside'),(1,1,'2','Ambiguous'),(1,1,'2','Conflicting');`);
     const tafsir = await add('tafsir/22', `CREATE TABLE tafsir(ayah_key TEXT,group_ayah_key TEXT,from_ayah TEXT,to_ayah TEXT,ayah_keys TEXT,text TEXT); INSERT INTO tafsir VALUES('1:1','1:1','1:1','1:2','1:1,1:2','<p>تفسير <b>النص</b></p>'),('1:2','1:1','','','','');`);
     const warsh = await add('quran-script/qpc-warsh-script-wbw', `CREATE TABLE words(id INTEGER,location TEXT,surah INTEGER,ayah INTEGER,word INTEGER,text TEXT); INSERT INTO words VALUES(1,'1:1:1',1,1,1,'اِ۬لْحَمْدُ');`);
-    await add('morphology/quran-word-roots', `CREATE TABLE roots(id INTEGER,arabic_trilateral TEXT); CREATE TABLE root_words(root_id INTEGER,word_location TEXT); INSERT INTO roots VALUES(1,'سمو'); INSERT INTO root_words VALUES(1,'1:1:1');`);
+    await add('morphology/quran-word-roots', `CREATE TABLE roots(id INTEGER,arabic_trilateral TEXT); CREATE TABLE root_words(root_id INTEGER,word_location TEXT); INSERT INTO roots VALUES(1,'سمو'); INSERT INTO root_words VALUES(1,'1:1:1'),(1,'1:1:1:9'),(1,'1:1:3'),(1,'1:1:99'),(1,'1:8:1');`);
     await add('morphology/75', `CREATE TABLE lemmas(id INTEGER,text TEXT); CREATE TABLE lemma_words(lemma_id INTEGER,word_location TEXT); INSERT INTO lemmas VALUES(1,'ٱسْم'); INSERT INTO lemma_words VALUES(1,'1:1:1');`);
     await add('morphology/77', `CREATE TABLE stems(id INTEGER,text TEXT); CREATE TABLE stem_words(stem_id INTEGER,word_location TEXT); INSERT INTO stems VALUES(1,'بِسْم'); INSERT INTO stem_words VALUES(1,'1:1:1');`);
     reader = new QuranReader(root, packs);
     assert.equal(reader.catalog().sources.length, 8);
-    assert.deepEqual(await reader.morphology(script.id, 1, 1), [{ location: '1:1:1', root: 'سمو', lemma: 'ٱسْم', stem: 'بِسْم' }]);
-    assert.deepEqual(await reader.morphology(script.id, 1, 2), []);
+    const absentReader = new QuranReader(root, packs.filter(pack => pack.id === script.id));
+    try { assert.deepEqual((await absentReader.morphology(script.id,1,1))[0].uninstalled, ['root','lemma','stem']); }
+    finally { absentReader.close(); }
+    const compatibility = await reader.read({ script: script.id, surah:37, from:130 });
+    assert.equal(compatibility.ayahs[0].compatibility, 'qul-37-130');
+    assert.equal(compatibility.ayahs[0].words.filter(word=>!word.marker).length,3);
+
+    assert.deepEqual(await reader.morphology(script.id, 1, 1), [{ location: '1:1:1', missing: [], uninstalled: [], rejected: ['1:1:1:9','1:1:3','1:1:99'], root: 'سمو', lemma: 'ٱسْم', stem: 'بِسْم' }, { location: '1:1:2', missing: ['root','lemma','stem'], uninstalled: [], rejected: ['1:1:1:9','1:1:3','1:1:99'] }]);
+    assert.deepEqual(await reader.morphology(script.id, 1, 2), [{ location: '1:2:1', missing: ['root','lemma','stem'], uninstalled: [], rejected: [] }]);
+    const rejectedLogs: unknown[][] = []; const warn = console.warn;
+    try {
+      console.warn = (...args: unknown[]) => { rejectedLogs.push(args); };
+      assert.deepEqual(await reader.morphology(script.id, 1, 8), []);
+      assert.ok(rejectedLogs.some(args => args.includes('1:8:1')), 'invalid ayah links are reported even without canonical result records');
+    } finally { console.warn = warn; }
+
     assert.deepEqual(await reader.frequency({ family: 'root' }), { family: 'root', total: 1, distinct: 1, rows: [{ text: 'سمو', count: 1 }] });
     assert.deepEqual((await reader.frequency({ family: 'lemma', surah: 2 })).rows, []);
     assert.deepEqual(await reader.frequencyPlaces('root', 'سمو'), [{ surah: 1, ayah: 1, count: 1 }]);
@@ -70,6 +84,8 @@ test('reader uses immutable source packs, indexed search, explicit gaps and grou
     assert.equal(passage.ayahs[0].words[2].marker, true);
     assert.equal(passage.ayahs[0].words[0].meaning, 'In the name');
     assert.equal(passage.ayahs[0].words[1].meaning, undefined);
+    assert.deepEqual(passage.ayahs[0].annotations?.meaning, { installed: true, missing: ['1:1:2'], rejected: ['1:1:2tail','1:1:3','1:1:99','1:1:2'] });
+    assert.deepEqual(passage.ayahs[0].annotations?.transliteration, { installed: false, missing: [], rejected: [] });
     assert.deepEqual(passage.ayahs[0].translation, { text: 'Meaning ', notes: ['note'], anchors: [{ offset: 8, note: 1 }] });
     assert.equal((await reader.search(script.id, 'بسم الله'))[0].ayah, 1);
     assert.equal((await reader.search(script.id, 'الحمد'))[0].ayah, 2);

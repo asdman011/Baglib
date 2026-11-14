@@ -1,3 +1,4 @@
+import { validateQuranWordLocation, quranWordCompatibility, type QuranLexicalIndex } from '../../../shared/quran-word-location';
 import { validQuranSearchQuery } from '../../../shared/quran-search';
 import Database from 'better-sqlite3';
 import { alignWarshSurah } from './warsh-overlap';
@@ -58,6 +59,7 @@ export function richText(value: string): QuranRichNode[] {
 
 export class QuranReader {
   private databases = new Map<string, Database.Database>();
+  private lexicalIndexes = new Map<string, QuranLexicalIndex>();
   private warshLayouts = new Map<string, Promise<WarshLayout>>();
   constructor(private readonly root: string, private readonly packs: QuranPack[]) {}
   catalog(): QuranReaderCatalog {
@@ -327,6 +329,20 @@ export class QuranReader {
     }
     return result;
   }
+  private async lexicalIndex(script: string): Promise<QuranLexicalIndex> {
+    const cached = this.lexicalIndexes.get(script);
+    if (cached) return cached;
+    const database = await this.database(script, 'script');
+    const index = new Map<string, Set<number>>();
+    for (const row of database.prepare('SELECT surah,ayah,word,text FROM words').all() as Word[]) {
+      if (marker(row.text)) continue;
+      const key = `${row.surah}:${row.ayah}`;
+      const positions = index.get(key) || new Set<number>();
+      positions.add(row.word); index.set(key, positions);
+    }
+    this.lexicalIndexes.set(script, index);
+    return index;
+  }
   async read(query: QuranReadQuery): Promise<QuranPassage> {
     if (!Number.isInteger(query.surah) || query.surah < 1 || query.surah > 114 || !Number.isInteger(query.from) || query.from < 1 || query.from > 300) throw new Error('invalid-resource');
     const { preset } = this.source(query.script, 'script');
@@ -346,23 +362,43 @@ export class QuranReader {
         basmala = opening.filter(word => !marker(word.text)).map(word => word.text).join(' ');
       }
     }
+    const lexical = await this.lexicalIndex(query.script);
     const references = database.prepare('SELECT DISTINCT ayah FROM words WHERE surah=? AND ayah>=? ORDER BY ayah LIMIT 21').all(query.surah, query.from) as { ayah: number }[];
     const ayahs: QuranAyah[] = [];
     for (const reference of references.slice(0, 20)) {
       const words = database.prepare('SELECT id, surah, ayah, word, text FROM words WHERE surah=? AND ayah=? ORDER BY word LIMIT 1000').all(query.surah, reference.ayah) as Word[];
-      ayahs.push({ number: reference.ayah, words: words.map(word => ({ position: word.word, text: word.text, marker: marker(word.text) })) });
+      ayahs.push({ number: reference.ayah, compatibility: quranWordCompatibility(preset.profile, query.surah, reference.ayah), words: words.map(word => ({ position: word.word, text: word.text, marker: marker(word.text) })) });
     }
     if (query.translation) {
       const translation = await this.database(query.translation, 'translation');
       for (const ayah of ayahs) { const row = translation.prepare('SELECT text FROM translation WHERE sura=? AND ayah=?').get(query.surah, ayah.number) as { text: string } | undefined; if (row) ayah.translation = inlineTranslation(row.text); }
     }
     for (const [id, kind, table, property] of [[query.meanings, 'word-translation', 'word_translation', 'meaning'], [query.transliteration, 'word-transliteration', 'word_transliteration', 'transliteration']] as const) {
-      if (!id) continue;
-      const words = await this.database(id, kind);
+      const words = id ? await this.database(id, kind) : null;
       for (const ayah of ayahs) {
-        if (kind === 'word-transliteration' && ['2:181', '8:6', '13:37', '36:52'].includes(`${query.surah}:${ayah.number}`)) continue;
-        const rows = words.prepare(`SELECT word_number, text FROM ${table} WHERE surah_number=? AND ayah_number=?`).all(query.surah, ayah.number) as { word_number: string; text: string }[];
-        for (const word of ayah.words) { const row = rows.find(value => Number(value.word_number) === word.position); if (!word.marker && row) word[property] = row.text; }
+        const coverage = { installed: Boolean(id), missing: [] as string[], rejected: [] as string[] };
+        (ayah.annotations ||= {})[property] = coverage;
+        const rows = words?.prepare(`SELECT surah_number, ayah_number, word_number, text FROM ${table} WHERE surah_number=? AND ayah_number=?`).all(query.surah, ayah.number) as { surah_number: number; ayah_number: number; word_number: string; text: string }[] | undefined;
+        const joined = new Map<string, string>();
+        const duplicates = new Set<string>();
+        // Installed transliteration/71 duplicates ba-dama and shifts subsequent entries in these
+        // two ayahs. Keep them unavailable; 13:37 and 36:52 use generic isolated gaps instead.
+        // Verified 2026-11-14: docs/features/QUL.md, KEY-171 installed-resource audit.
+        const unsafe = kind === 'word-transliteration' && ['2:181', '8:6'].includes(`${query.surah}:${ayah.number}`);
+        for (const row of rows || []) {
+          const location = `${row.surah_number}:${row.ayah_number}:${row.word_number}`;
+          if (!validateQuranWordLocation(location, lexical) || unsafe || !row.text?.trim() || duplicates.has(location)) { coverage.rejected.push(location); continue; }
+          if (joined.has(location)) { joined.delete(location); duplicates.add(location); coverage.rejected.push(location); continue; }
+          joined.set(location, row.text);
+        }
+        for (const word of ayah.words) {
+          if (word.marker) continue;
+          const location = `${query.surah}:${ayah.number}:${word.position}`;
+          if (!validateQuranWordLocation(location, lexical)) continue;
+          const text = joined.get(location);
+          if (text !== undefined) word[property] = text;
+          else if (id) coverage.missing.push(location);
+        }
       }
     }
     if (query.ayahTransliteration) {
@@ -538,18 +574,30 @@ export class QuranReader {
   }
   async morphology(script: string, surah: number, ayah: number): Promise<import('../../../shared/types/quran').QuranMorphology[]> {
     if (this.source(script, 'script').preset.profile !== 'hafs' || !Number.isInteger(surah) || surah < 1 || surah > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > 300) throw new Error('invalid-resource');
+    const lexical = await this.lexicalIndex(script);
     const values = new Map<string, import('../../../shared/types/quran').QuranMorphology>();
+    for (const position of lexical.get(`${surah}:${ayah}`) || []) {
+      const location = `${surah}:${ayah}:${position}`;
+      if (validateQuranWordLocation(location, lexical)) values.set(location, { location, missing: [], uninstalled: [], rejected: [] });
+    }
     for (const family of ['root', 'lemma', 'stem'] as const) {
       const kind = `word-${family}`;
-      const source = this.catalog().sources.find(item => item.kind === kind);
-      if (!source) continue;
+      const source = this.catalog().sources.find(item => item.kind === kind && item.profile === 'hafs');
+      if (!source) { for (const record of values.values()) record.uninstalled!.push(family); continue; }
       const database = await this.database(source.id, kind);
       const field = family === 'root' ? 'arabic_trilateral' : 'text';
-      const rows = database.prepare(`SELECT link.word_location AS location, entry.${field} AS text FROM ${family}_words link JOIN ${family}s entry ON entry.id=link.${family}_id WHERE link.word_location GLOB ? LIMIT 600`).all(`${surah}:${ayah}:*`) as { location: string; text: string }[];
+      const rows = database.prepare(`SELECT link.word_location AS location, entry.${field} AS text FROM ${family}_words link JOIN ${family}s entry ON entry.id=link.${family}_id WHERE link.word_location GLOB ?`).all(`${surah}:${ayah}:*`) as { location: string; text: string }[];
+      const duplicates = new Set<string>();
+      const rejected: string[] = [];
       for (const row of rows) {
-        const record = values.get(row.location) || { location: row.location };
+        const record = validateQuranWordLocation(row.location, lexical) && values.get(row.location);
+        if (!record || !row.text?.trim() || duplicates.has(row.location)) { console.warn('Quran morphology location rejected', family, row.location); rejected.push(row.location); continue; }
+        if (record[family] !== undefined) { delete record[family]; duplicates.add(row.location); rejected.push(row.location); continue; }
         record[family] = row.text;
-        values.set(row.location, record);
+      }
+      for (const record of values.values()) {
+        if (!record[family]) record.missing!.push(family);
+        record.rejected!.push(...rejected);
       }
     }
     return [...values.values()].sort((first, second) => Number(first.location.split(':')[2]) - Number(second.location.split(':')[2]));
@@ -568,16 +616,31 @@ export class QuranReader {
     // The pack's own total agrees with the Quranic Arabic Corpus. Its word links run wider for 14 roots: they
     // also tie names and compounds such as محمد and يومئذ to a root. The total covers the whole Quran only.
     const hasTotal = !surah && (database.pragma(`table_info(${family}s)`) as { name: string }[]).some(column => column.name === 'words_count');
-    const rows = database.prepare(`SELECT entry.${field} AS text, COUNT(*) AS count${hasTotal ? ', entry.words_count AS stated' : ''} FROM ${family}_words link JOIN ${family}s entry ON entry.id=link.${family}_id ${within} GROUP BY entry.id ORDER BY count DESC, text`).all(...(surah ? [`${surah}:*`] : [])) as { text: string; count: number; stated?: number }[];
+    const links = database.prepare(`SELECT entry.id AS id, entry.${field} AS text, link.word_location AS location${hasTotal ? ', entry.words_count AS stated' : ''} FROM ${family}_words link JOIN ${family}s entry ON entry.id=link.${family}_id ${within}`).all(...(surah ? [`${surah}:*`] : [])) as { id: number; text: string; location: string; stated?: number }[];
+    const script = this.catalog().sources.find(source => source.kind === 'script' && source.profile === 'hafs');
+    if (!script) throw new Error('missing-resource');
+    const lexical = await this.lexicalIndex(script.id);
+    const grouped = new Map<number, { text: string; count: number; stated?: number }>();
+    for (const link of links) {
+      if (!validateQuranWordLocation(link.location, lexical)) { console.warn('Quran frequency location rejected', family, link.location); continue; }
+      const row = grouped.get(link.id) || { text: link.text, count: 0, ...(hasTotal ? { stated: link.stated } : {}) };
+      row.count++; grouped.set(link.id, row);
+    }
+    const rows = [...grouped.values()].sort((a, b) => b.count - a.count || a.text.localeCompare(b.text));
     const wanted = frequencyText(query.text ?? '');
     return { family, total: rows.reduce((sum, row) => sum + row.count, 0), distinct: rows.length, rows: rows.filter(row => frequencyText(row.text).includes(wanted)).slice(0, query.limit ?? 100) };
   }
   async frequencyPlaces(family: QuranFrequencyFamily, text: string): Promise<QuranFrequencyPlace[]> {
     const { database, field } = await this.frequencySource(family);
     const rows = database.prepare(`SELECT link.word_location AS location FROM ${family}_words link JOIN ${family}s entry ON entry.id=link.${family}_id WHERE entry.${field}=?`).all(text) as { location: string }[];
+    const script = this.catalog().sources.find(source => source.kind === 'script' && source.profile === 'hafs');
+    if (!script) throw new Error('missing-resource');
+    const lexical = await this.lexicalIndex(script.id);
     const places = new Map<string, QuranFrequencyPlace>();
     for (const { location } of rows) {
-      const [surah, ayah] = location.split(':').map(Number);
+      const valid = validateQuranWordLocation(location, lexical);
+      if (!valid) { console.warn('Quran occurrence location rejected', family, location); continue; }
+      const { surah, ayah } = valid;
       const key = `${surah}:${ayah}`;
       places.set(key, { surah, ayah, count: (places.get(key)?.count ?? 0) + 1 });
     }
@@ -615,6 +678,7 @@ export class QuranReader {
     if (index < 0) throw new Error('invalid-resource');
     const fontPath = await realpath(path.join(this.root, 'packs', fonts.id, `${index}.bin`));
     if (path.dirname(fontPath) !== await realpath(path.join(this.root, 'packs', fonts.id))) throw new Error('invalid-resource');
+    const lexical = await this.lexicalIndex(canonical.id);
     const rows = layout.prepare('SELECT line_number,line_type,is_centered,first_word_id,last_word_id,surah_number FROM pages WHERE page_number=? ORDER BY line_number').all(pageNumber) as { line_number: number; line_type: string; is_centered: number; first_word_id: number; last_word_id: number; surah_number: number }[];
     if (!rows.length || rows.length > 20) throw new Error('invalid-package');
     const words: QuranMushafWord[] = [];
@@ -624,6 +688,7 @@ export class QuranReader {
       const lineWords = tokens.map(token => {
         const original = script.prepare('SELECT surah,ayah,word,text FROM words WHERE id=?').get(token.id) as Word | undefined;
         if (!original || original.surah !== token.surah || original.ayah !== token.ayah || original.word !== token.word) throw new Error('invalid-package');
+        if (!marker(original.text) && !validateQuranWordLocation(`${token.surah}:${token.ayah}:${token.word}`, lexical)) throw new Error('invalid-package');
         words.push({ id: String(token.id), surah: token.surah, ayah: token.ayah, wordIndex: token.word, type: marker(original.text) ? 'aya-mark' : 'text', line: row.line_number, textHafs: original.text });
         return { surah: token.surah, ayah: token.ayah, position: token.word, glyph: token.text, text: original.text };
       });
@@ -839,5 +904,5 @@ export class QuranReader {
       };
     });
   }
-  close(): void { for (const database of this.databases.values()) database.close(); this.databases.clear(); this.warshLayouts.clear(); }
+  close(): void { for (const database of this.databases.values()) database.close(); this.databases.clear(); this.warshLayouts.clear(); this.lexicalIndexes.clear(); }
 }

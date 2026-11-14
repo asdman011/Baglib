@@ -1,3 +1,44 @@
+## KEY-171 verified handoff - 2026-11-14T01:53:55.746530+00:00 - Codex key171-root
+
+Validated explicit canonical word locations across meaning/transliteration, morphology, frequency counts/places and glyph lexical joins. Malformed, out-of-range, marker and duplicate annotation rows never attach to another word; missing/rejected locations and absent packs are reported separately. Morphology also logs invalid links when the ayah has no canonical records. Cached indexes clear on close. No schema/entities/dependencies/downloads.
+
+User experience: the existing word study panel now names missing annotations by full location separately from packs not installed. Arabic missing-message text follows RTL inside English annotation sections. A localized Hafs37:130 compatibility notice preserves إِلۡ يَاسِينَ as one script record. Root and verified lemma links open inline occurrence places, first50 then50 more per action, and navigate to each ayah; Arabic lexical text remains RTL in English UI. Existing hadith links and mushaf layout are preserved.
+
+Re-verified real English meanings gaps2:181:4,8:6:5,13:37:9. Kept documented suppression only for unsafe shifted/duplicated transliteration2:181/8:6;13:37:9 and36:52:7 now use generic missing-location reporting. REA verified installed lemma75 and transliteration71 schemas; full evidence/hashes and trade-offs are in QUL.md. No installed POS source/schema/preset exists; POS is unsupported and needs the user's source decision. Metadata69 is absent and was never downloaded; its historical count is attributed to prior documentation, not claimed as a fresh read.
+
+Verification: final full suite2183/2183 across342suites,0failures/skips at --test-concurrency=2,159111.9856ms. First full2183/2183 passed before final text-direction/empty-ayah diagnostic refinements; final full rerun covers the exact source tree. Final focused14/14, TypeScript noEmit, scoped ESLint0errors0warnings across11code/test/scripts, main/preload build and task diff checks pass. Native installed-pack4/4 arRTL/enLTR x1280/480 passes,0renderererrors, actual root/lemma expansion/jump to2:19 and missing-message direction assertions.24screenshots plus results.json in .baglib-data/KEY-171-evidence; representative images visually inspected. All1338original corpus files unchanged; copies/profile deleted and owned renderer stopped. User app never closed.
+
+Limits: ambiguous SVG word text retains the existing whole-ayah fallback rather than inventing alignment (observed at37:130). Occurrence IPC supplies validated places; rendering is bounded in batches of50. Existing fresh-profile pre-migration planner warning is followed by all28successful migrations; renderer errors0. No task-related runtime failures remain. quran-navigation.ts, tafsir comparison and KEY-244 implementation are untouched. No Jira actions. Initial native harness mount timing failure was fixed and final screenshots recaptured.
+
+Exact16tracked files (only KEY-171 hunks in shared state):
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `docs/features/QUL.md`
+- `docs/features/Quran Resource Contracts.md`
+- `docs/features/feature - Quran Experience.md`
+- `src/main/services/quran/quran-reader.ts`
+- `src/renderer/components/quran/QuranMushafWorkspace.tsx`
+- `src/renderer/components/quran/QuranWordOccurrences.tsx`
+- `src/renderer/translations.ts`
+- `src/shared/quran-word-location.ts`
+- `src/shared/types/quran.ts`
+- `tests/services/quran-reader.test.ts`
+- `tests/services/quran-word-location.test.ts`
+- `tests/ui/quran-word-occurrences.test.ts`
+- `scripts/quran-word-live/run.mjs`
+- `scripts/quran-word-live/main.cjs`
+
+Local report docs/agent-ops/reports/KEY-171.md and board row KEY-171 (slice). Built on KEY-168 eb9ac834751010d4995db021754ed25f35640648. User explicitly authorized the scoped commit/push under commit.lock to origin/feature/library-domain; publication next. Other agents' unfinished changes are excluded and preserved.
+
+## KEY-171 checkpoint - 2026-11-14T01:45:32.597433+00:00 - Codex key171-root
+
+Implementation and focused14/14/types/scoped lint/main-preload build pass. Installed-pack native4/4 ar/en1280/480 passes with0renderererrors; all1338originals unchanged, throwaway profile/copies deleted, owned renderer stopped. Fullsuite once concurrency2 running; final direction-only visual check and compatibility screenshot scroll pending. QUL/contracts/experience docs updated with REA evidence; metadata69 absent/not downloaded; POS unsupported/user source decision. No commits/Jira yet.
+
+## KEY-171 slice active - 2026-11-14T01:32:54.8593572+00:00 - Codex key171-root
+
+Authorized validated word joins, named annotation gaps, explicit37:130 compatibility notice, bounded root/lemma occurrence jumps. No POS claim without installed schema evidence; POS source decision held for user. No schema/dependencies/downloads. Preserve navigation, tafsir comparison and KEY-244 implementation. Commit/push explicitly authorized after verification under commit lock. Implementation/verification pending.
+
 ## KEY-168 slice verified handoff - 2026-11-14T01:29:58.462Z - Codex key168-root
 
 Localized surah-name citations now cover action copy/plain/citation/share, canonical/imlaey inspector copy, passage copy, similar-ayah copy and page copy with same/cross-surah ranges through quranCopyText and the existing quranReferenceLabel. Default canonical content is unchanged. The explicit plain-copy action retains its existing diacritic removal. A collapsible localized bookmark list below the reader header jumps to the ayah; amber SVG borders/backgrounds and glyph underlines indicate active-profile bookmarks only. Existing general note markers and approved targets are preserved.

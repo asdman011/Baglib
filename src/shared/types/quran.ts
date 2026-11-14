@@ -147,14 +147,15 @@ export interface QuranReaderSource { id: string; title: string; kind: QuranReade
 export interface QuranReaderCatalog { sources: QuranReaderSource[]; presets: { id: string; title: string; kind: QuranReaderKind; installed: boolean; importOnly?: boolean }[]; }
 export interface QuranReadQuery { script: string; surah: number; from: number; translation?: string; meanings?: string; transliteration?: string; ayahTransliteration?: string; }
 export interface QuranRichNode { tag: 'text' | 'p' | 'div' | 'br' | 'b' | 'i' | 'u' | 'sup' | 'h2' | 'h3'; text?: string; children?: QuranRichNode[]; }
-export interface QuranAyah { number: number; words: { position: number; text: string; marker: boolean; meaning?: string; transliteration?: string }[]; translation?: QuranTranslation; transliteration?: QuranRichNode[]; }
+export interface QuranAnnotationCoverage { installed: boolean; missing: string[]; rejected: string[]; }
+export interface QuranAyah { number: number; compatibility?: 'qul-37-130'; annotations?: Partial<Record<'meaning' | 'transliteration', QuranAnnotationCoverage>>; words: { position: number; text: string; marker: boolean; meaning?: string; transliteration?: string }[]; translation?: QuranTranslation; transliteration?: QuranRichNode[]; }
 export interface QuranTranslation { text: string; notes: string[]; anchors?: { offset: number; note: number }[]; }
 export interface QuranPassage { profile: 'hafs' | 'warsh'; surah: number; surahs: { number: number; count: number; arabic?: string; name?: string; revelationPlace?: string; revelationOrder?: number }[]; basmala?: string; ayahs: QuranAyah[]; next: number | null; }
 export interface QuranSearchQuery { script: string; text: string; translations?: string[]; includeScript?: boolean; }
 export interface QuranSearchHit { surah: number; ayah: number; text: string; source?: { id: string; title: string; kind: 'script' | 'translation'; language?: string }; }
 export interface QuranCommentary { from: string; to: string; nodes: QuranRichNode[]; }
 export interface QuranAyahDetails { surah: number; ayah: number; profile: 'hafs' | 'warsh'; canonical: string; imlaey: string | null; }
-export interface QuranMorphology { location: string; root?: string; lemma?: string; stem?: string; }
+export interface QuranMorphology { location: string; missing?: ('root' | 'lemma' | 'stem')[]; uninstalled?: ('root' | 'lemma' | 'stem')[]; rejected?: string[]; root?: string; lemma?: string; stem?: string; }
 export type QuranFrequencyFamily = 'root' | 'lemma';
 export interface QuranFrequencyQuery { family: QuranFrequencyFamily; surah?: number; text?: string; limit?: number }
 export interface QuranFrequency { family: QuranFrequencyFamily; total: number; distinct: number; rows: { text: string; count: number; stated?: number }[] }
