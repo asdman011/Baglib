@@ -17,7 +17,7 @@ export class SunnahSearchProcess {
       worker.on('message', message => {
         const job = this.pending.get(message.id); if (!job) return;
         this.pending.delete(message.id); clearTimeout(this.timeout);
-        this.idle = setTimeout(() => this.close(), 60000);
+        this.idle = setTimeout(() => this.close(), 300000);
         if (message.ok) job.resolve(message.data); else job.reject(new Error('read-failed'));
       });
       const fail = () => { if (this.worker === worker) this.close(); };

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { registerSlashJob } from '../services/slash-search-jobs';
+import { slashLane } from '../services/slash-search-jobs';
 import { SunnahSearchProcess } from '../services/sunnah/search-process';
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'node:path';
@@ -21,6 +21,7 @@ export function registerSunnahIpc(): void {
   let service: SunnahService | undefined;
   let slashSearch: SunnahSearchProcess | undefined;
   confirmedQuitCleanup.register(() => slashSearch?.close());
+  const slashSunnah = slashLane();
   hadithReader = async (collection, chapter, id) => {
     const found = (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths.find(hadith => hadith.id === id);
     return found ? { text: found.text.ar.full || found.text.ar.matn, number: String(found.number) } : null;
@@ -58,8 +59,7 @@ export function registerSunnahIpc(): void {
       slashSearch = new SunnahSearchProcess(filename);
     }
     const searchWorker = slashSearch;
-    const release = registerSlashJob(query.requestId, () => searchWorker.close());
-    try { return await searchWorker.search(query); } finally { release(); }
+    return slashSunnah(query.requestId, () => searchWorker.search(query));
   }, 'read-failed'));
   ipcMain.handle('sunnah:statistics', () => result(() => getService().statistics(), 'read-failed'));
   ipcMain.handle('sunnah:share', (event, text: string) => result(async () => {

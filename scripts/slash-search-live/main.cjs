@@ -158,6 +158,16 @@ app.on('browser-window-created', (_, win) => {
       clearInterval(monitor); const maxRendererGap = await evaluate('clearInterval(window.__key350Timer);Math.max(...window.__key350Ticks)');
       assert.ok(maxMainGap < 250, 'rapid typing main loop <250ms: ' + maxMainGap); assert.ok(maxRendererGap < 1000, 'rapid typing renderer responds: ' + maxRendererGap);
       await shot('fast-typing-' + lang);
+      // Time to results after fast typing: each keystroke cancels the previous request, so a stopped engine would
+      // have to reopen its corpus (Sunnah about 7 s) before the newest query could run.
+      await setText('/sunnah ');
+      const typedAt = Date.now();
+      for (const letter of 'الصبر') { await win.webContents.insertText(letter); await pause(60); }
+      await ready('sunnah');
+      const sunnahAfterTyping = Date.now() - typedAt;
+      console.log('KEY-350 sunnah results after fast typing (ms):', sunnahAfterTyping);
+      (globalThis.__key350Latency ||= {})[lang] = sunnahAfterTyping;
+      assert.ok(sunnahAfterTyping < 4000, 'Sunnah results arrive soon after fast typing: ' + sunnahAfterTyping + 'ms');
       win.setContentSize(480, 760); await setText('/'); await until("!!document.querySelector('[data-slash-search]')"); await shot('narrow-' + lang);
       const bounds = await evaluate("(()=>{const r=document.querySelector('[data-slash-search]').getBoundingClientRect();return {x:r.x,right:r.right,bottom:r.bottom}})()"); assert.ok(bounds.x>=0&&bounds.right<=480&&bounds.bottom<=760); win.setContentSize(1280,1000);
       await key('Escape');

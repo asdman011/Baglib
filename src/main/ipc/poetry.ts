@@ -1,4 +1,4 @@
-import { registerSlashJob } from '../services/slash-search-jobs';
+import { slashLane } from '../services/slash-search-jobs';
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import path from 'node:path';
 import { confirmedQuitCleanup } from '../services/quit-cleanup';
@@ -19,6 +19,7 @@ export function registerPoetryIpc(): void {
   let database: PoetryQueryProcess | undefined;
   const slashDatabase = new PoetryQueryProcess(path.join(__dirname, 'poetry-worker.js'), path.join(app.getPath('userData'), 'partitions', 'bayan_poetry.sqlite'));
   confirmedQuitCleanup.register(() => slashDatabase.close());
+  const slashPoetry = slashLane();
   const getDatabase = () => {
     if (!database) {
       database = new PoetryQueryProcess(path.join(__dirname, 'poetry-worker.js'), path.join(app.getPath('userData'), 'partitions', 'bayan_poetry.sqlite'));
@@ -37,8 +38,7 @@ export function registerPoetryIpc(): void {
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('invalid-poetry-query');
     const requestId = (input as { requestId?: string }).requestId;
     if (!requestId) return getDatabase().query('search', input);
-    const release = registerSlashJob(requestId, () => slashDatabase.close());
-    try { return await slashDatabase.query('search', input); } finally { release(); }
+    return slashPoetry(requestId, () => slashDatabase.query('search', input));
   });
   register('poetry:detail', input => getDatabase().query('detail', input));
   register('poetry:facets', () => getDatabase().query('facets'));

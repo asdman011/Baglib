@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { searchSlashDatasets, slashResultInsert } from '../../src/renderer/utils/slash-search';
 import { searchCorpus } from '../../src/renderer/utils/corpus-lookup';
 import { prepareSlashMaterial, searchSlashMaterial } from '../../src/renderer/utils/slash-material';
-import { registerSlashJob, cancelSlashJobs } from '../../src/main/services/slash-search-jobs';
+import { registerSlashJob, cancelSlashJobs, slashLane } from '../../src/main/services/slash-search-jobs';
 const base = { notes: [], books: [], scope: null, query: 'learning' };
 async function api<T>(value: unknown, run: () => Promise<T>) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -86,4 +86,23 @@ describe('KEY-350 selected material', () => {
     });
     await api({ lectures: { subtitles: async () => null } }, async () => assert.equal((await prepareSlashMaterial(lecture)).available, false));
   });
+});
+
+it('a cancelled slash search is dropped without stopping the engine, and the newest runs next', async () => {
+  const lane = slashLane();
+  const started: string[] = [];
+  let finishFirst!: (value: string) => void;
+  const first = lane('lane-first', () => { started.push('first'); return new Promise<string>(resolve => { finishFirst = resolve; }); });
+  const second = lane('lane-second', async () => { started.push('second'); return 'second'; });
+  const third = lane('lane-third', async () => { started.push('third'); return 'third'; });
+  await Promise.resolve();
+  cancelSlashJobs('lane-first');
+  cancelSlashJobs('lane-second');
+  // Answered at once, even though the engine is still busy with the first search.
+  await assert.rejects(first, /cancelled/);
+  await assert.rejects(second, /cancelled/);
+  finishFirst('late');
+  assert.equal(await third, 'third');
+  // The running stale search finished in the background; the queued stale one never ran.
+  assert.deepEqual(started, ['first', 'third']);
 });

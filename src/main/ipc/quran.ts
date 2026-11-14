@@ -1,4 +1,4 @@
-import { registerSlashJob } from '../services/slash-search-jobs';
+import { slashLane } from '../services/slash-search-jobs';
 import { validQuranSearchQuery } from '../../shared/quran-search';
 import type { AssistantQuranQuery, AssistantQuranSource } from '../../shared/study-assistant';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, session, utilityProcess } from 'electron';
@@ -111,6 +111,7 @@ export function registerQuranIpc(): void {
   const reader = new QuranReaderProcess();
   const slashReader = new QuranReaderProcess();
   confirmedQuitCleanup.register(() => slashReader.close());
+  const slashQuran = slashLane();
   let service: QuranLibraryService | undefined;
   let initializing: Promise<QuranLibraryService> | undefined;
   let settingUp = false;
@@ -299,9 +300,7 @@ export function registerQuranIpc(): void {
   ipcMain.handle('quran:search-ayahs', (event, query) => result(event, async () => {
     if (!validQuranSearchQuery(query)) throw new Error('invalid-resource');
     if (!query.requestId) return readRequest({ action: 'search', query });
-    let cancelled = false;
-    const release = registerSlashJob(query.requestId, () => { cancelled = true; slashReader.close(); });
-    try { return await readRequest({ action: 'search', query }, slashReader, () => cancelled); } finally { release(); }
+    return slashQuran(query.requestId, () => readRequest({ action: 'search', query }, slashReader));
   }));
   ipcMain.handle('quran:commentary', (event, query) => result(event, async () => {
     if (!query || typeof query.script !== 'string' || typeof query.pack !== 'string') throw new Error('invalid-resource');

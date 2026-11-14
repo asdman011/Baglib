@@ -14,3 +14,21 @@ export function cancelSlashJobs(id: unknown): void {
   const entries = jobs.get(id); jobs.delete(id);
   for (const cancel of entries ?? []) cancel();
 }
+
+/**
+ * One slash search at a time per engine. A cancelled request is answered at once and dropped, but the engine is never
+ * stopped: reopening a corpus costs seconds (the Sunnah corpus about 7 s), so stopping it on each keystroke made the
+ * newest results wait for a cold start. A running stale search finishes in the background; a queued one is skipped.
+ */
+export function slashLane(): <T>(id: string, job: () => Promise<T>) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(id: string, job: () => Promise<T>) => {
+    let cancelled = false;
+    let abort!: (error: Error) => void;
+    const aborted = new Promise<never>((_, reject) => { abort = reject; });
+    const release = registerSlashJob(id, () => { cancelled = true; abort(new Error('cancelled')); });
+    const turn = tail.then(() => cancelled ? undefined as T : job());
+    tail = turn.catch(() => undefined);
+    return Promise.race([turn, aborted]).finally(release);
+  };
+}
