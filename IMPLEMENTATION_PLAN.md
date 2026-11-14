@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T09:45:16.968489+02:00, Codex key349-root] KEY-349 VERIFIED: six-dataset caret slash search, Arabicaliases/groupcaps/exactstudylinks,debounce/stalerejection/nativekeys+hover,keyboardscrolling and EnglishQuran translations. Focused39/full2253pass0fail2existingPDFTODO(concurrency2,348suites),native2ar/en0renderererrors/4realcopies/16screens/originalsunchanged/profiledeleted. Types/build/scopedlint0warnings pass. Exact14files/limits/parserDeepSeekcredit in CURRENT_TASK/report. Scoped lock publication next.
+
 - [2026-11-14T09:21:08.516585+02:00, Codex key348-root] KEY-348 VERIFIED. Single library series entries/ordered Sheet/individual search, bounded persisted Ctrl+wheel densities and embedded/midpoint covers. Focused21/21,finalfull2241pass0fail2existingPDFTODO(concurrency2,346suites),native2ar/en0renderererrors,14screens/originalsunchanged/profiledeleted. Types/build/scopedlint0errors0warnings pass. Exact23files/evidence/limits in CURRENT_TASK/report. Scoped lock commit/normal push explicitly authorized and next.
 
 - [2026-11-14T08:55:24.871024+02:00, Codex key347-root] KEY-347 VERIFIED. Per-folder natural series, fixed LTR player controls, series auto-next, hidden empty transcripts and inline timestamped study notes. Focused39/39; finalfull2229pass/0fail/2existingPDFTODO(concurrency2);native2ar/en/0renderererrors,10screens,originals unchanged/profiledeleted. Types/build/diffpass,lint0errors2existingwarnings. Exact17files/report in CURRENT_TASK. Scoped lock commit/push authorized and next.

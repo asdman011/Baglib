@@ -44,9 +44,12 @@ export async function searchCorpus(kinds: CorpusKind[], query: string, collectio
       const ayahs = await ayahTexts(surah, from, to, profile);
       return ayahs.length ? [quranOption(surah, from, Math.min(to, ayahs.at(-1)!.number), ayahs, profile)] : [];
     }
-    const script = await quranScript(profile);
+    const catalog = await window.electronAPI.quran.readerCatalog();
+    if (!catalog.ok) return [];
+    const script = catalog.data.sources.find(source => source.kind === 'script' && source.profile === profile)?.id;
     if (!script) return [];
-    const found = await window.electronAPI.quran.searchAyahs({ script, text });
+    const translations = catalog.data.sources.filter(source => source.kind === 'translation' && source.profile === profile).map(source => source.id);
+    const found = await window.electronAPI.quran.searchAyahs({ script, text, translations });
     return found.ok ? found.data.slice(0, limit).map(hit => quranOption(hit.surah, hit.ayah, hit.ayah, [{ number: hit.ayah, text: hit.text }], profile)) : [];
   })());
   if (kinds.includes('hadith')) jobs.push((async () => {

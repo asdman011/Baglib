@@ -603,7 +603,7 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
               kindLabels={kindLabels}
               relationLabels={relationLabels(t)}
               currentNoteId={note?.id}
-              slashLabels={slashLabels}
+              slashSearchLabels={{ scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures') }, loading: t('quranLoading'), empty: t('studyNoResults'), label: t('studyLinkSearch') }} slashLabels={slashLabels}
               onMakeCards={makeCards}
               autoFocus={!note}
               searchCorpus={(kinds, q) => searchCorpus(kinds, q, (id) => t(collectionKeys[id]))}

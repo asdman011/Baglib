@@ -1,3 +1,38 @@
+## KEY-349 verified handoff - 2026-11-14T09:45:16.968489+02:00 - Codex key349-root
+
+Built on f9a034f.
+
+Six-dataset slash search is implemented in the shared CodeMirror notes editor, main notes pane and dashboard scratchpad. `/` offers localized Quran, Sunnah, Al-Bayan, notes, books and lectures. Scoped queries and Arabic aliases search one dataset; free queries group at most three per source. Scoped results cap at eight (the corpus helper supplies at most six). Title matches rank before body matches with stable ties. Existing formatting/quote commands remain accessible by typed prefixes. Selection replaces only the command before the caret with the exact existing `studyLinkText`/`bookStudyTarget` link, preserving Work/Source identity.
+
+The 240ms debounce and revision invalidation stop obsolete work before dispatch and discard stale non-abortable IPC results. Caret/focus changes, Escape and unmount invalidate searches. Stable tooltip creation keeps keyboard-selected items scrolled into view. Native Up/Down wrap, Enter, mouse hover/click, Escape and deletion past slash work. Caret tooltip placement fits 1280 and480 layouts; localized plural labels, logical start alignment, bdi result labels and relaxed Arabic/Latin line height preserve mixed-script rendering. Quran numeric/Arabic-Indic jumps use the reader; text searches include installed translations in the same Hafs/Warsh profile. Inline menu uses existing default Hafs; separate picker retains explicit profile control.
+
+Existing notes/Works come from current IPC/hooks, sacred corpora from existing Quran/Sunnah/poetry search. Lecture/podcast/video Works are separated from other library types. Conservative Arabic query matching preserves taa marbuta/haa distinction and canonical stored titles. No schema/entity/persistedfield/dependency/download added. ADR004/006,data dictionary,TypeScript contracts and local Next client guide inspected; this is ordinary Baglib source implementation, with no external reverse-engineering claim.
+
+Verification: focused39/39 through npm test (16 supplied parser tests,12 search/integration regressions,11 existing notes/link tests). Fullsuite once --test-concurrency=2 passed2253,0fail,2existingPDFTODO;2255tests/348suites,168651.8661ms. TypeScript noEmit,main/preload build,scopedESLint0errors0warnings pass. Final native arRTL/enLTR2/2,exit0,0renderererrors,4realArabic/EnglishPDF/MP4copies imported,all6datasets/aliases,groupcaps,keyboardwrap/scrolling,exactpickerformatterbook/notelinks,Quran2:255/EnglishAllah,legacyheading,staleresponses,Escape/Backspace,narrowbounds pass.16finalscreenshots retained in .baglib-data/KEY-349-evidence (plus earlier failure capture). Final scrolled ar/en and narrow ar/en screenshots visually inspected. Original files match actual pre-run SHA256 values;profiledeleted/ownedrendererstopped. No other Electron/Baglib run overlapped native checks, and no user app was closed.
+
+Earlier test/harness problems were corrected: terminal encoding corrupted new test literals; seeded sample Works invalidated an assumed empty-library count; programmatic text replacement did not activate legacy completion like native input; the ArabicPDF manifest hash was already stale. Actual pre-run baseline ArabicPDF3db70de90e2d2bd986e730fc7bd5a3f032a2f70d8ba24115dd94f0b6286e6c19 differs from manifest2e1e5418f350fde299fdaea0ee59e4482032aaedd1304774d1b9e194447439d1. This task did not modify originals or the manifest. real-file-baselines.json records all four. Initial disposable profile left by the stale-hash assertion was cleaned after validating its exact path. Final review found keyboard scrolling needed stable tooltip identity; fixed and final native ar/en regression passed. No task-related implementation problem remains. Existing two PDFTODOs belong to KEY210. Runtime missing corpora produce no results for that dataset; other datasets remain usable. Running IPC has no abort contract, so stale results are discarded rather than claiming main-process interruption. Queries limited to200characters. Actual screen-reader speech was not tested.
+
+Existing linked-study feature documentation updated with source evidence, limits and behavior. Parser credit: parser: DeepSeek via OpenCode, reviewed by Claude. Protected quran-navigation and all unrelated unfinished files/statehunks preserved. No Jira actions. Current request explicitly authorizes scoped commit and normal push to origin/feature/library-domain under commit.lock. Publication pending.
+
+Exact14trackedfiles (only this entry in shared state):
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `src/shared/slash-command.ts`
+- `tests/shared/slash-command.test.ts`
+- `src/renderer/utils/slash-search.ts`
+- `src/renderer/utils/corpus-lookup.ts`
+- `src/renderer/components/notes/slash-search-extension.ts`
+- `src/renderer/components/notes/StudyNoteEditor.tsx`
+- `src/renderer/components/notes/NoteEditorPane.tsx`
+- `src/renderer/components/dashboard/QuickNoteScratchpad.tsx`
+- `tests/ui/slash-search.test.ts`
+- `scripts/slash-command-live/main.cjs`
+- `scripts/slash-command-live/run.mjs`
+- `docs/features/feature - Linked Study Notes and Dashboard.md`
+
+Local report docs/agent-ops/reports/KEY-349.md and board updated. Scoped final diff review and lock publication next.
+
 ## KEY-348 verified handoff - 2026-11-14T09:21:08.516585+02:00 - Codex key348-root
 
 Built on KEY-347 6f9c368. The library displays each lecture series once with canonical name, localized count and first-item cover. Opening its card/row shows ordered members through the existing safe Work opener. Search exposes individual matching Works. Existing seriesTitle/volumeNumber metadata supports lecture/podcast/video grouping using work type, NFC-trimmed title and numeric/natural ordering. Explicit lecture membership takes precedence. Pagination counts entries, and collection/navigation counts retain underlying Work totals. Display groups never become database Works or bulk-mutation IDs.

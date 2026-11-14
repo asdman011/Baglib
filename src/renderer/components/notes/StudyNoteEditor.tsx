@@ -13,6 +13,9 @@ import { matchSlashCommands, openSlashCommand, type SlashCommandId } from '../..
 import { cardsFromLine } from '../../../shared/note-cards';
 import { honorificExpansion } from '../../../shared/honorifics';
 import { PARAGRAPH_ANCHOR, newParagraphAnchor, paragraphLink, paragraphOptions } from '../../../shared/note-paragraphs';
+import { slashSearchExtension, type SlashSearchLabels } from './slash-search-extension';
+import type { SlashBook } from '../../utils/slash-search';
+import { parseSlashCommand, suggestScopes } from '../../../shared/slash-command';
 import type { CorpusKind, CorpusOption } from '../../utils/corpus-lookup';
 
 // After /quran, /hadith or /poem the next `[[` search is limited to that source and inserts its text.
@@ -246,7 +249,8 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   ariaLabel: string;
   placeholder: string;
   notes: StudyNote[];
-  books: { id: string; title: string }[];
+  books: SlashBook[];
+  slashSearchLabels?: SlashSearchLabels;
   kindLabels: Record<'note' | 'book' | 'quran' | 'hadith' | 'poem' | 'paragraph', string>;
   /** Names of the typed relationships (decision S4), and the word shown beside them in suggestions. */
   relationLabels?: Record<StudyRelation, string> & { relation: string; none: string; menuHint: string };
@@ -267,14 +271,14 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   /** Enter starts the new line with this text when it returns one (lecture timestamps). */
   newLinePrefix?: () => string | null;
   onSave?: () => void;
-}>(function StudyNoteEditor({ value, onChange, dir, disabled, ariaLabel, placeholder, notes, books, kindLabels, relationLabels, currentNoteId, onAnchorParagraph, searchCorpus, slashLabels, dateText, onMakeCards, autoFocus, expandHonorifics = true, newLinePrefix, onSave }, ref) {
+}>(function StudyNoteEditor({ value, onChange, dir, disabled, ariaLabel, placeholder, notes, books, kindLabels, relationLabels, currentNoteId, onAnchorParagraph, searchCorpus, slashLabels, slashSearchLabels, dateText, onMakeCards, autoFocus, expandHonorifics = true, newLinePrefix, onSave }, ref) {
   // CodeMirror needs a real DOM (MutationObserver, ranges). Simplified DOMs used by unit tests get a plain textarea.
   const supported = typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && typeof document.createRange === 'function';
   const fallback = useRef<HTMLTextAreaElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  const latest = useRef({ onChange, onSave, notes, books, kindLabels, relationLabels, slashLabels, dateText, searchCorpus, onMakeCards, currentNoteId, onAnchorParagraph, newLinePrefix });
-  latest.current = { onChange, onSave, notes, books, kindLabels, relationLabels, slashLabels, dateText, searchCorpus, onMakeCards, currentNoteId, onAnchorParagraph, newLinePrefix };
+  const latest = useRef({ onChange, onSave, notes, books, kindLabels, relationLabels, slashLabels, dateText, searchCorpus, onMakeCards, currentNoteId, onAnchorParagraph, newLinePrefix, slashSearchLabels, dir });
+  latest.current = { onChange, onSave, notes, books, kindLabels, relationLabels, slashLabels, dateText, searchCorpus, onMakeCards, currentNoteId, onAnchorParagraph, newLinePrefix, slashSearchLabels, dir };
   const emitted = useRef<string[]>([]);
   const editable = useRef(new Compartment());
   const honorifics = useRef(new Compartment());
@@ -366,7 +370,10 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
     };
     const slash = (context: CompletionContext): CompletionResult | null => {
       const line = context.state.doc.lineAt(context.pos);
-      const open = openSlashCommand(line.text.slice(0, context.pos - line.from));
+      const before = line.text.slice(0, context.pos - line.from);
+      const dataset = parseSlashCommand(before);
+      if (latest.current.slashSearchLabels && dataset && (dataset.scope || !dataset.query || suggestScopes(dataset.partialScope || dataset.query).length || !matchSlashCommands(dataset.query).length)) return null;
+      const open = openSlashCommand(before);
       if (!open) return null;
       const { slashLabels } = latest.current;
       const options: Completion[] = matchSlashCommands(open.query, slashLabels).map(command => ({
@@ -411,6 +418,7 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
       state: EditorState.create({
         doc: value,
         extensions: [
+          slashSearchExtension(() => ({ notes: latest.current.notes, books: latest.current.books, searchCorpus: latest.current.searchCorpus, labels: latest.current.slashSearchLabels ?? { scopes: { quran: latest.current.kindLabels.quran, sunnah: latest.current.kindLabels.hadith, albayan: latest.current.kindLabels.poem, notes: latest.current.kindLabels.note, books: latest.current.kindLabels.book, lectures: latest.current.kindLabels.book }, loading: '', empty: '', label: '' }, dir: latest.current.dir })),
           history(),
           markdown(),
           syntaxHighlighting(highlight),
