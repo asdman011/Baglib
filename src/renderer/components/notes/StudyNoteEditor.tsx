@@ -1,7 +1,7 @@
 'use client';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { Annotation, Compartment, EditorSelection, EditorState, Facet, Prec, RangeSetBuilder, StateField } from '@codemirror/state';
-import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, showTooltip, type Tooltip, placeholder as placeholderExtension, type DecorationSet, type ViewUpdate } from '@codemirror/view';
+import { Annotation, Compartment, EditorSelection, EditorState, Facet, Prec, RangeSetBuilder } from '@codemirror/state';
+import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder as placeholderExtension, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, isolateHistory } from '@codemirror/commands';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { markdown } from '@codemirror/lang-markdown';
@@ -13,7 +13,7 @@ import { matchSlashCommands, openSlashCommand, type SlashCommandId } from '../..
 import { cardsFromLine } from '../../../shared/note-cards';
 import { honorificExpansion } from '../../../shared/honorifics';
 import { PARAGRAPH_ANCHOR, newParagraphAnchor, paragraphLink, paragraphOptions } from '../../../shared/note-paragraphs';
-import { slashInsertion, slashSearchExtension, type SlashSearchLabels } from './slash-search-extension';
+import { slashSearchExtension, type SlashSearchLabels } from './slash-search-extension';
 import type { SlashBook } from '../../utils/slash-search';
 import { parseSlashCommand, suggestScopes } from '../../../shared/slash-command';
 import type { CorpusKind, CorpusOption } from '../../utils/corpus-lookup';
@@ -50,10 +50,6 @@ const theme = EditorView.theme({
   '.cm-paragraph-anchor': { opacity: '0.35', fontSize: '0.75em' },
   '.cm-link-relation': { fontSize: '0.75em', padding: '0 0.4em', marginInlineEnd: '0.3em', borderRadius: '0.4em', backgroundColor: 'rgb(16 185 129 / 0.15)', color: 'rgb(16 185 129)', fontWeight: '600' },
   // The app's own surface and ink, so the menu reads in both the light and dark themes.
-  '.cm-tooltip.cm-relation-tooltip': { border: '1px solid rgb(128 128 128 / 0.35)', borderRadius: '0.6rem', padding: '0.25rem', backgroundColor: 'var(--bg-surface)', color: 'var(--text-main)', boxShadow: '0 4px 14px rgb(0 0 0 / 0.25)' },
-  '.cm-relation-menu': { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.25rem', maxWidth: '28rem', fontSize: '0.75rem' },
-  '.cm-relation-menu button': { border: '1px solid rgb(128 128 128 / 0.35)', borderRadius: '0.4rem', padding: '0 0.45rem', lineHeight: '1.8', cursor: 'pointer', background: 'transparent', color: 'inherit' },
-  '.cm-relation-menu button[aria-pressed="true"]': { backgroundColor: 'rgb(16 185 129 / 0.2)', borderColor: 'rgb(16 185 129)', color: 'rgb(16 185 129)', fontWeight: '600' },
   '.cm-study-link': { color: 'rgb(16 185 129)', textDecoration: 'underline', textUnderlineOffset: '0.2em', textDecorationThickness: '1px' },
 });
 
@@ -170,54 +166,8 @@ const cycleRelation = (view: EditorView) => {
   const index = order.indexOf(link.relation as StudyRelation | undefined);
   return setLinkRelation(view, order[(index + 1) % order.length]);
 };
-function relationTooltip(state: EditorState): Tooltip | null {
-  const link = linkAtCursor(state);
-  const names = state.facet(relationNames);
-  if (!link || !names.relation) return null;
-  return {
-    pos: link.from,
-    above: true,
-    create: view => {
-      const dom = document.createElement('div');
-      dom.className = 'cm-relation-tooltip';
-      const menu = document.createElement('div');
-      menu.className = 'cm-relation-menu';
-      menu.setAttribute('role', 'toolbar');
-      menu.setAttribute('data-relation-menu', '');
-      menu.setAttribute('aria-label', names.relation);
-      menu.title = names.menuHint ?? '';
-      menu.dir = 'auto';
-      const title = document.createElement('span');
-      title.textContent = names.relation;
-      title.style.opacity = '0.7';
-      menu.append(title);
-      for (const relation of [...STUDY_RELATIONS, undefined]) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.textContent = relation ? names[relation] ?? relation : names.none ?? '-';
-        button.setAttribute('data-relation-choice', relation ?? 'none');
-        button.setAttribute('aria-pressed', String(link.relation === relation));
-        // Keep the cursor in the text: the click acts without moving focus away from the editor.
-        button.addEventListener('mousedown', event => event.preventDefault());
-        button.addEventListener('click', () => { setLinkRelation(view, relation); view.focus(); });
-        menu.append(button);
-      }
-      dom.append(menu);
-      return { dom };
-    },
-  };
-}
-const relationMenu = StateField.define<Tooltip | null>({
-  create: relationTooltip,
-  update(current, transaction) {
-    if (transaction.annotation(slashInsertion)) return null;
-    const same = !transaction.docChanged && !transaction.selection && transaction.startState.facet(relationNames) === transaction.state.facet(relationNames)
-      && Boolean(completionStatus(transaction.startState)) === Boolean(completionStatus(transaction.state));
-    return same ? current : relationTooltip(transaction.state);
-  },
-  provide: field => showTooltip.from(field),
-});
-
+// KEY-357: the relationship menu no longer pops up at every link (KEY-356 redesigns it). Typed relations
+// (`[[supports::`), their chips and Mod-Alt-R still set one.
 const linkPreview = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
   constructor(view: EditorView) { this.decorations = linkDecorations(view); }
@@ -427,7 +377,6 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
           EditorView.perLineTextDirection.of(true),
           lineDirection,
           linkPreview,
-          relationMenu,
           paragraphAnchors,
           theme,
           // interactionDelay 0: CodeMirror otherwise ignores Enter for 75 ms after the list changes, so a press that

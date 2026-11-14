@@ -65,7 +65,9 @@ export async function searchCorpus(kinds: CorpusKind[], query: string, collectio
       const label = `${collectionLabel(hit.chapter.collection)} ${hit.hadith.number}`;
       const link = studyLinkText(target, label);
       const matn = hit.hadith.text.ar.matn || hit.hadith.text.ar.full;
-      return { kind: 'hadith' as const, target, label, snippet: matn.slice(0, 120), link, quote: `${quoted(matn)}\n> ${link}` };
+      // The note gets the whole hadith, isnad and matn (KEY-357); the list still shows the matn to tell hits apart.
+      const whole = hit.hadith.text.ar.full || [hit.hadith.text.ar.isnad, hit.hadith.text.ar.matn].filter(Boolean).join(' ') || matn;
+      return { kind: 'hadith' as const, target, label, snippet: matn.slice(0, 120), link, quote: `${quoted(whole)}\n> ${link}` };
     }).filter(option => option.link);
   })());
   if (kinds.includes('poem')) jobs.push((async () => {

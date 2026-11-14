@@ -115,8 +115,34 @@ app.on('browser-window-created', (_, win) => {
       await key('Up'); await key('Down'); await key('Enter'); assert.equal(await text(), '/quran ');
       for (const [scope, query, target] of [['quran', '2:255', 'quran:hafs:2:255'], ['sunnah', '\u0627\u0644\u0644\u0647', 'sunnah:'], ['albayan', '\u0627\u0644\u0644\u0647', 'poetry:ashaar:']]) {
         await setText('/' + scope + ' ' + query); await ready(scope); await shot(scope + '-' + lang); await key('Enter');
+        await shot('inserted-' + scope + '-' + lang);
         const inserted = await text(); assert.ok(inserted.includes('[[' + target)); assert.match(inserted, /^> .+\n> \[\[/u); assert.equal(await evaluate("!!document.querySelector('[data-relation-menu]')"), false);
       }
+      // KEY-357: the older words (بيت, آية) now open the dataset search and insert the text with its link.
+      for (const [typed, scope, target] of [['/بيت أرتجي', 'albayan', 'poetry:ashaar:'], ['/آية الصابرين', 'quran', 'quran:hafs:']]) {
+        await setText(typed); await ready(scope); await key('Enter');
+        const inserted = await text();
+        console.log('KEY-357 older word insert:', JSON.stringify(inserted.slice(0, 160)));
+        assert.match(inserted, /^> .+\n> \[\[/u, typed + ' inserts text above its link'); assert.ok(inserted.includes('[[' + target));
+      }
+      // KEY-357: a narrator with words of the matn finds the hadith and inserts it whole, isnad and matn.
+      await setText('/sunnah الحميدي الأعمال بالنيات'); await ready('sunnah'); await shot('isnad-search-' + lang); await key('Enter');
+      const hadith = await text();
+      console.log('KEY-357 isnad insert:', JSON.stringify(hadith.slice(0, 220)));
+      const bare = hadith.replace(/[ً-ْٰ]/gu, '');
+      assert.ok(bare.startsWith('> حدثنا الحميدي'), 'the inserted hadith starts with its isnad');
+      assert.ok(bare.includes('بالنيات'), 'and keeps its matn');
+      assert.match(hadith, /\n> \[\[sunnah:/u);
+      // KEY-357: the caret on a link no longer opens the relationship menu.
+      await key('Up'); await key('End'); await pause(400);
+      assert.equal(await evaluate("!!document.querySelector('[data-relation-menu]')"), false, 'no relationship menu at a link');
+      await shot('isnad-inserted-' + lang);
+      // Free search for a verse's words, then a mouse click on the first Al-Bayan result.
+      await setText('/\u0623\u0631\u062a\u062c\u064a \u0648\u0625\u0644\u0649'); await ready('albayan');
+      await evaluate("document.querySelector('[data-slash-search] [data-slash-scope=\"albayan\"][role=option]').click()");
+      await pause(300); await shot('inserted-free-albayan-' + lang);
+      console.log('KEY-357 free albayan insert:', JSON.stringify(await text()));
+      assert.match(await text(), /^> .+\n> \[\[poetry:ashaar:/u, 'free-search poem click inserts the verse and its link');
       await setText('/\u0627\u0644\u0644\u0647'); await ready('quran');
       for (const scope of SLASH_SCOPES) assert.ok(await evaluate(optionCount(scope)) <= 9, 'eight hits plus an optional lazy row per free source');
       await shot('free-' + lang);

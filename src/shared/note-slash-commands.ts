@@ -11,10 +11,6 @@ export interface SlashCommand {
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { id: 'link', keywords: 'link note notes paragraph book page رابط ملاحظة ملاحظات فقرة كتاب صفحة', insert: '[[' },
-  // These three open a search and insert the text itself with its reference, not only a link.
-  { id: 'quran', keywords: 'quran ayah verse قرآن قران آية اية', insert: '[[' },
-  { id: 'hadith', keywords: 'hadith sunnah حديث سنة', insert: '[[' },
-  { id: 'poem', keywords: 'poem poetry bayt verse شعر بيت قصيدة', insert: '[[' },
   // Makes review cards from the line it is typed on; inserts nothing but a #card tag.
   { id: 'card', keywords: 'card flashcard srs cloze review بطاقة مراجعة حفظ', insert: '' },
   { id: 'heading', keywords: 'heading title عنوان', insert: '## ' },

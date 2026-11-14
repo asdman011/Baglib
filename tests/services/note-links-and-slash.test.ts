@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parseBookTarget, parseQuranTarget, studyBacklinks, studyLinks, validStudyTarget } from '../../src/shared/study-notes';
 import { studyLinkOptions } from '../../src/shared/study-link-completion';
 import { matchSlashCommands, openSlashCommand } from '../../src/shared/note-slash-commands';
+import { parseSlashCommand } from '../../src/shared/slash-command';
 import { plannerReferenceTarget } from '../../src/shared/study-planner';
 
 describe('ayah ranges and page links (D4)', () => {
@@ -52,12 +53,16 @@ describe('slash commands', () => {
 
   it('matches English and Arabic keywords, ignoring hamza forms and diacritics', () => {
     assert.deepEqual(matchSlashCommands('sal').map(command => command.id), ['salla']);
-    assert.deepEqual(matchSlashCommands('آية').map(command => command.id), ['quran']);
-    assert.ok(matchSlashCommands('اية').some(command => command.id === 'quran'));
-    assert.deepEqual(matchSlashCommands('حديث').map(command => command.id), ['hadith']);
-    assert.deepEqual(matchSlashCommands('bayt').map(command => command.id), ['poem']);
+    // KEY-357: Quran, hadith and poetry words open the dataset search (slash-command.ts), not the old link picker.
+    for (const word of ['آية', 'اية', 'حديث', 'bayt', 'بيت', 'verse']) assert.deepEqual(matchSlashCommands(word), [], word);
+    assert.deepEqual(parseSlashCommand('/آية الكرسي')?.scope, 'quran');
+    assert.deepEqual(parseSlashCommand('/اية')?.scope, 'quran');
+    assert.deepEqual(parseSlashCommand('/hadith')?.scope, 'sunnah');
+    assert.deepEqual(parseSlashCommand('/بيت أرتجي')?.scope, 'albayan');
+    assert.deepEqual(parseSlashCommand('/قصيدة')?.scope, 'albayan');
+    assert.deepEqual(parseSlashCommand('/verse')?.scope, 'albayan');
     assert.ok(matchSlashCommands('رَضي').some(command => command.id === 'radiyaHa'));
-    assert.equal(matchSlashCommands('').length, 15);
+    assert.equal(matchSlashCommands('').length, 12);
     assert.deepEqual(matchSlashCommands('zzz'), []);
   });
 });

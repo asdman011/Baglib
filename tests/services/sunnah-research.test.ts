@@ -24,6 +24,8 @@ it('opens all nine collections read-only, retains row identities and exposes ind
       if (book === 'IbnMajah') Object.assign(row, { Section_Number: 'nan', Section_Arabic: 'باب النية', Section_English: 'nan' });
       Object.assign(row, { book_key: book, Chapter_Number: index === 9 ? '' : '1.0', Chapter_Arabic: 'كتاب العلم', Chapter_English: 'Knowledge', Hadith_number: '1', Arabic_Hadith: 'إِنَّمَا الأَعْمَالُ', Arabic_Matn: 'إِنَّمَا الأَعْمَالُ', English_Hadith: 'Actions depend on intentions.', Arabic_Tafseel: 'شرح محقق محفوظ', Commentary_Book_Title: 'شرح عربي', Commentary_Author: 'المؤلف', Source_Row_Reference: 'Shamela:551:v1:p1:s1', Commentary_Shamela_URL:'https://shamela.ws/book/551', Itqan_Narrator_Chain_JSON: JSON.stringify([{pos:1,path:0,surface:'يحيى',resolved_name:'يحيى',rijal_id:'42',method:'exact'}]), Itqan_Quran_Root_Links_JSON:'["علم"]', Itqan_Linked_Ayah_Keys_JSON:'["2:1"]', Itqan_Corroborating_Hadiths_JSON: index === 0 ? '[{"book":"MuwattaMalik","hadith_number":"1","output_row_index":7}]' : '[]', Tafseel_Match_Score: '0.9', Itqan_Chain_Calibration_Score:'0.5' });
       if (index >= 4) row.Arabic_Tafseel += ' فاطمة';
+      // KEY-357: isnads are not in the matn index; slash search finds them separately.
+      if (index === 2) row.Arabic_Isnad = 'حَدَّثَنَا قُتَيْبَةُ عَنِ اللَّيْثِ';
       db.prepare(`INSERT INTO hadiths VALUES (${fields.map(() => '?').join(',')},?)`).run(index+1,...fields.map(f=>row[f]));
       db.prepare('INSERT INTO hadiths_fts(rowid,text) VALUES (?,?)').run(index+1,'انما الاعمال شرح محقق محفوظ فاطمه Actions depend on intentions');
       db.prepare('INSERT INTO quran_hadith_root_bridge VALUES (?,?)').run(index+1,'علم');
@@ -56,6 +58,14 @@ it('opens all nine collections read-only, retains row identities and exposes ind
     assert.deepEqual(filtered.map(hit => hit.hadith.researchId), [5, 6]);
     assert.deepEqual(filteredNext.map(hit => hit.hadith.researchId), [7, 8]);
     assert.equal(new Set([...first, ...next].map(hit => hit.hadith.researchId)).size, 4);
+    // KEY-357: slash search also matches the isnad, alone or with words of the matn, after the matn matches.
+    assert.deepEqual(corpus.search({ text: 'قتيبة', limit: 5, requestId: 'isnad-only' }).map(hit => hit.hadith.researchId), [3]);
+    assert.deepEqual(corpus.search({ text: 'قتيبة الليث الأعمال', limit: 5, requestId: 'isnad-matn' }).map(hit => hit.hadith.researchId), [3]);
+    assert.deepEqual(corpus.search({ text: 'قتيبة', collection: 'AbuDaud', limit: 5, requestId: 'isnad-other-book' }), []);
+    assert.deepEqual(corpus.search({ text: 'قتيبة', limit: 5, offset: 1, requestId: 'isnad-next' }), []);
+    assert.equal(corpus.search({ text: 'intentions', limit: 20, requestId: 'no-duplicates' }).length, 10);
+    // The Sunnah reader's own search is unchanged.
+    assert.deepEqual(corpus.search({ text: 'قتيبة' }), []);
     assert.throws(() => corpus!.search({ text: 'intentions', limit: 202 }));
     assert.throws(() => corpus!.search({ text: 'intentions', offset: -1 }));
     assert.equal(corpus.search({text:'" OR *'}).length,0);

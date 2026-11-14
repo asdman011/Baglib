@@ -8,9 +8,9 @@ export const SLASH_SCOPES: readonly SlashScope[] = ['quran', 'sunnah', 'albayan'
 
 /** Names and aliases that select each scope; both languages work in either interface language. */
 const SCOPE_TERMS: Record<SlashScope, readonly string[]> = {
-  quran: ['quran', 'قرآن', 'قران', 'القرآن'],
-  sunnah: ['sunnah', 'سنة', 'السنة', 'حديث'],
-  albayan: ['albayan', 'البيان', 'شعر', 'bayan'],
+  quran: ['quran', 'قرآن', 'قران', 'القرآن', 'ayah', 'آية', 'اية'],
+  sunnah: ['sunnah', 'سنة', 'السنة', 'حديث', 'hadith'],
+  albayan: ['albayan', 'البيان', 'شعر', 'bayan', 'poem', 'poetry', 'verse', 'bayt', 'بيت', 'قصيدة'],
   notes: ['notes', 'ملاحظات', 'note'],
   books: ['books', 'كتب', 'book'],
   lectures: ['lectures', 'محاضرات', 'lecture'],

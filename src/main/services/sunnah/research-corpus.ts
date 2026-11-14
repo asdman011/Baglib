@@ -7,6 +7,8 @@ import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
 const collections: Record<string, SunnahCollectionId> = { Bukhari: 'Bukhari', Muslim: 'Muslim', AbuDaud: 'AbuDaud', Tirmidhi: 'Tirmizi', Nesai: 'Nesai', IbnMajah: 'IbnMaja', MuwattaMalik: 'MuwattaMalik', MusnadAhmad: 'MusnadAhmad', SunanDarimi: 'SunanDarimi', Nawawi40: 'Nawawi40', Qudsi40: 'Qudsi40', Dehlawi40: 'Dehlawi40', HadeethEnc: 'HadeethEnc', SourceOnly: 'SourceOnly', ReviewQueue: 'ReviewQueue' };
 type Row = Record<string, string | number | null>;
 const chapterExpr = 'CAST(COALESCE(NULLIF(Chapter_Number,\'\'),\'0\') AS INTEGER)';
+/** The same folding as the corpus' matn index (`Arabic_Matn_Norm`), applied to the isnad and the query. */
+const foldForIndex = (text: string) => normalizeArabicText(text.replace(/[ؤئ]/g, 'ء')).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/gu, ' ');
 const baseColumns = 'id,book_key,Chapter_Number,Chapter_Arabic,Chapter_English,Section_Number,Section_Arabic,Section_English,Hadith_number,Arabic_Hadith,Arabic_Isnad,Arabic_Matn,English_Hadith,English_Isnad,English_Matn,Arabic_Comment,Arabic_Grade,English_Grade';
 function value(value: Row[string]): string { return value == null || /^\s*(nan|null|none)?\s*$/i.test(String(value)) ? '' : String(value); }
 /** The rijal source uses a lone hyphen for "nothing recorded". */
@@ -24,6 +26,8 @@ const variantQuery = `SELECT c.source_key,c.relation,c.full_score,c.english_simi
 /** Read-only adapter over the existing derived corpus. Never opens baglib.db. */
 export class SunnahResearchCorpus {
   private db: Database.Database;
+  /** Normalized isnads for slash search, read once per corpus instance (the index covers only the matn). */
+  private isnads?: { id: number; text: string }[];
   private hasRootWords = false;
   private merged = false;
   private hasSourceBooks = false;
@@ -185,18 +189,59 @@ export class SunnahResearchCorpus {
       return exactTerms.every(term => text.includes(term));
     };
     if (!query.requestId) return (statement.all(...params, limit, offset) as Row[]).filter(matches).map(row => this.hit(row));
-    const selected: Row[] = []; let rawOffset = 0, skipped = 0;
+    const selected: Row[] = []; let rawOffset = 0, skipped = 0, exhausted = false;
+    const matnIds = new Set<number>();
     while (selected.length < limit) {
       const candidates = statement.all(...params, limit, rawOffset) as Row[];
       for (const row of candidates) {
         if (!matches(row)) continue;
+        matnIds.add(Number(row.id));
         if (skipped++ < offset) continue;
         selected.push(row); if (selected.length === limit) break;
       }
-      if (candidates.length < limit) break;
+      if (candidates.length < limit) { exhausted = true; break; }
       rawOffset += candidates.length;
     }
+    // Slash search also finds words in the isnad, after the matn matches: a hadith matches when the isnad holds some
+    // of the words and the matn the rest (a narrator alone, or a narrator with words of the matn).
+    if (exhausted && selected.length < limit && exactTerms.length && rankJoin) {
+      const extra = this.isnadMatches(query.text!, matnIds, query.collection ? this.key(query.collection) : undefined);
+      const from = Math.max(0, offset - skipped);
+      const rows = extra.slice(from, from + limit - selected.length);
+      if (rows.length) {
+        const byId = new Map((this.db.prepare(`SELECT ${baseColumns},Arabic_Tafseel FROM hadiths WHERE id IN (${rows.map(() => '?').join(',')})`).all(...rows) as Row[]).map(row => [Number(row.id), row]));
+        for (const id of rows) { const row = byId.get(id); if (row) selected.push(row); }
+      }
+    }
     return selected.map(row => this.hit(row));
+  }
+  /** Reads and folds every isnad once (about 3 s on the full corpus); the slash search worker calls it at start. */
+  prepareIsnadSearch(): void {
+    this.isnads ??= (this.db.prepare(`SELECT id,Arabic_Isnad FROM hadiths WHERE Arabic_Isnad IS NOT NULL AND Arabic_Isnad<>'' ORDER BY id`).all() as Row[]).map(row => ({ id: Number(row.id), text: ` ${foldForIndex(value(row.Arabic_Isnad))} ` }));
+  }
+  /** Ids, in corpus order, of hadiths outside `skip` whose isnad and matn together hold every word of `text`. */
+  private isnadMatches(text: string, skip: Set<number>, bookKey?: string): number[] {
+    const fold = foldForIndex;
+    const terms = [...new Set(fold(text).trim().split(' ').filter(Boolean))].slice(0, 20);
+    if (!terms.length) return [];
+    this.prepareIsnadSearch();
+    // Words the isnad lacks must be in the matn: checked once per distinct set of missing words with the matn index.
+    const missing = new Map<string, number[]>();
+    for (const entry of this.isnads ?? []) {
+      if (skip.has(entry.id)) continue;
+      const rest = terms.filter(term => !entry.text.includes(term));
+      if (rest.length === terms.length) continue;
+      const key = rest.join(' ');
+      const ids = missing.get(key); if (ids) ids.push(entry.id); else missing.set(key, [entry.id]);
+    }
+    const found: number[] = [];
+    const inBook = bookKey ? this.db.prepare('SELECT 1 FROM hadiths WHERE id=? AND book_key=?') : undefined;
+    for (const [key, ids] of missing) {
+      let allowed: Set<number> | undefined;
+      if (key) allowed = new Set((this.db.prepare('SELECT rowid FROM hadiths_fts WHERE hadiths_fts MATCH ?').all(key.split(' ').map(term => `"${term}"`).join(' AND ')) as { rowid: number }[]).map(row => Number(row.rowid)));
+      for (const id of ids) if ((!allowed || allowed.has(id)) && (!inBook || inBook.get(id, bookKey))) found.push(id);
+    }
+    return found.sort((a, b) => a - b);
   }
   research(id: number): SunnahResearch {
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Invalid hadith identity');

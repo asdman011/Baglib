@@ -47,10 +47,21 @@ describe('KEY-350 bounded search and inserts', () => {
     let stopped = 0; registerSlashJob('cancel-test', () => stopped++); cancelSlashJobs('cancel-test'); assert.equal(stopped, 1);
     assert.throws(() => registerSlashJob('cancel-test', () => stopped++), /cancelled/); assert.equal(stopped, 2);
   });
-  it('suppresses the relationship tooltip specifically on slash insertion', () => {
+  it('never pops up the relationship menu; typed relations and the shortcut remain (KEY-357)', () => {
     const editor = readFileSync('src/renderer/components/notes/StudyNoteEditor.tsx', 'utf8');
-    assert.ok(editor.includes('if (transaction.annotation(slashInsertion)) return null;'));
-    assert.ok(editor.includes('relationMenu,')); assert.ok(editor.includes('cycleRelation'));
+    assert.ok(!editor.includes('relationMenu')); assert.ok(!editor.includes('data-relation-menu'));
+    assert.ok(editor.includes('cycleRelation')); assert.ok(editor.includes('RelationChip'));
+  });
+  it('inserts the whole hadith, isnad and matn, and still lists it by its matn (KEY-357)', async () => {
+    await api({ sunnah: { search: async () => ({ ok: true, data: [{ chapter: { collection: 'Bukhari', number: 1 }, hadith: { id: 'Bukhari:1:1', number: '1', text: { ar: { full: 'حدثنا الحميدي قال سمعت رسول الله يقول إنما الأعمال بالنيات', isnad: 'حدثنا الحميدي', matn: 'قال سمعت رسول الله يقول إنما الأعمال بالنيات' } } } }] }) } }, async () => {
+      const [hit] = await searchCorpus(['hadith'], 'الحميدي', id => id, 8, 'hafs', { requestId: 'isnad-1' });
+      assert.match(hit.quote, /^> حدثنا الحميدي قال سمعت رسول الله يقول إنما الأعمال بالنيات\n> \[\[sunnah:Bukhari:1:Bukhari:1:1\|/u);
+      assert.ok(hit.snippet.startsWith('قال سمعت'));
+    });
+    await api({ sunnah: { search: async () => ({ ok: true, data: [{ chapter: { collection: 'Bukhari', number: 2 }, hadith: { id: 'Bukhari:2:1', number: '2', text: { ar: { full: '', isnad: 'حدثنا قتيبة', matn: 'قال كذا' } } } }] }) } }, async () => {
+      const [hit] = await searchCorpus(['hadith'], 'قتيبة', id => id, 8, 'hafs', { requestId: 'isnad-2' });
+      assert.match(hit.quote, /^> حدثنا قتيبة قال كذا\n/u);
+    });
   });
 });
 describe('KEY-350 selected material', () => {
