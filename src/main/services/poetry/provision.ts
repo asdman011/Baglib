@@ -9,10 +9,21 @@ export class PoetryProvisioner {
   private child: ChildProcess | null = null;
   private packImport: AbortController | null = null;
   private status: PoetryProvisionStatus;
-  constructor(private appPath: string, private userData: string, private parser = path.join(appPath, 'assets/poetry/parquet_rows.py')) {
+  constructor(private appPath: string, private userData: string, private parser = path.join(appPath, 'assets/poetry/parquet_rows.py'), private bundledManifest: string | null = null) {
     this.status = { phase: fs.existsSync(path.join(userData, 'partitions/bayan_poetry.sqlite')) ? 'ready' : 'idle', downloaded: 0, total: null, imported: 0 };
   }
-  getStatus(): PoetryProvisionStatus { return { ...this.status }; }
+  /** The pack shipped inside the installer, when its manifest and archive are both present. */
+  private bundledPack(): string | null {
+    if (!this.bundledManifest || !fs.existsSync(this.bundledManifest)) return null;
+    try { const manifest = JSON.parse(fs.readFileSync(this.bundledManifest, 'utf8')) as { file?: unknown }; return typeof manifest.file === 'string' && fs.existsSync(path.join(path.dirname(this.bundledManifest), manifest.file)) ? this.bundledManifest : null; } catch { return null; }
+  }
+  getStatus(): PoetryProvisionStatus { return this.bundledPack() ? { ...this.status, bundled: true } : { ...this.status }; }
+  /** Installed builds: unpack the verified pack the installer shipped, with the same checks as a picked pack. */
+  importBundled(): PoetryProvisionStatus {
+    const manifest = this.bundledPack();
+    if (!manifest) { if (this.status.phase !== 'ready' && !this.child && !this.packImport) this.status = { ...this.status, phase: 'error', error: 'pack' }; return this.getStatus(); }
+    return this.importPack(manifest);
+  }
   start(): PoetryProvisionStatus {
     if (this.child || this.packImport || this.status.phase === 'ready') return this.getStatus();
     const script = path.join(this.appPath, 'dist/main/poetry-provision-worker.js');

@@ -217,4 +217,11 @@ Cancel and every failure remove the staging file and its SQLite `-wal`/`-shm` si
 - `scripts/packaged-poetry-live` on `release/win-unpacked` with a clean offline profile and the real Windows picker. The picker is driven only through its own windows: UI Automation to find it, then `WM_SETTEXT` and `IDOK`.
 - Results in both: a cancel leaves nothing behind; the retry imports in 9–10 seconds; search returns 40 poems in Arabic and English.
 
-**Not decided here:** whether the pack ships inside the installer. KEY-267's real installer size decides that.
+**Shipped in the installer (KEY-267, 2026-11-14, Claude Code).** The user approved bundling ("add the poetry and install").
+
+- **Packaging:** `electron-builder.yml` copies the local pack (`.baglib-data/poetry-pack`, both files) to `resources/poetry-pack/`.
+- **Why it isn't opened directly:** the database uses WAL mode, and an all-users install sits in read-only Program Files. So the installed app does not open the file from resources. It unpacks the pack into the user's profile with the same checks as a picked pack.
+- **Opening the Bayan tab:** `poetry:status` reports `bundled: true` when the pack's manifest and archive are both present. The Bayan tab then offers "Set up the included poetry library" (`data-bayan-import-bundled`, IPC `poetry:import-bundled`) with a short offline hint. The Python download button is hidden; the local-pack picker stays available.
+- **Installer size:** 1,735,515,980 bytes (was 1,206,752,711 without poetry), under the NSIS limit of about 2 GB. Installed size is 4.48 GB.
+- **Installed-copy check:** after a silent per-user install, `scripts/packaged-poetry-live/run.mjs --bundled --exe=<installed Baglib.exe>` passed. In Arabic (RTL) the button label shows, a cancel leaves nothing, the retry unpacks in 10 seconds, and search returns 40 poems. In English (LTR) search returns 40 poems.
+- **Tests:** `tests/services/poetry-provision.test.ts` covers the bundled path (reported only when present, refused without touching the profile when missing, byte-identical unpack, second request keeps the partition).

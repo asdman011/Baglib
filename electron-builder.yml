@@ -16,6 +16,13 @@ extraResources:
   # The Mukhtasar tafsir preset sits outside the QUL folder in development; installed builds read it from quran/extra.
   - from: .baglib-data/qul-phase1/arabic-mukhtasar-tafsir-sqlite.zip
     to: quran/extra/arabic-mukhtasar-tafsir-sqlite.zip
+  # The verified Al-Bayan poetry pack (KEY-266, about 529 MB gzip, 254,630 poems). Installed builds unpack it into
+  # the user's profile on request. Built locally by scripts/poetry-pack/build.mjs; never committed.
+  - from: .baglib-data/poetry-pack
+    to: poetry-pack
+    filter:
+      - bayan_poetry-v1.pack.json
+      - bayan_poetry-v1.sqlite.gz
   - from: assets/poetry
     to: poetry
     filter:

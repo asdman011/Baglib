@@ -39,3 +39,32 @@ test('compiled Poetry provisioner isolates cwd, parses progress/errors, prevents
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('installed builds unpack the poetry pack shipped in resources, and report it only when present', async () => {
+  const Database = (await import('better-sqlite3')).default;
+  const { buildPoetryPack } = await import('../../src/main/services/poetry/pack');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'baglib-poetry-bundled-'));
+  try {
+    const source = path.join(directory, 'source.sqlite');
+    const database = new Database(source);
+    database.exec('CREATE TABLE poems (id INTEGER PRIMARY KEY, title TEXT)');
+    for (let index = 0; index < 3; index++) database.prepare('INSERT INTO poems (title) VALUES (?)').run(`قصيدة ${index}`);
+    database.close();
+    const resources = path.join(directory, 'resources', 'poetry-pack');
+    const { manifestPath } = await buildPoetryPack({ source, outDir: resources, rows: 3 });
+    const profile = path.join(directory, 'profile');
+    fs.mkdirSync(profile);
+    // No pack shipped: not reported, and asking for it fails without touching the profile.
+    const missing = new PoetryProvisioner(directory, profile, undefined, path.join(directory, 'absent.pack.json'));
+    assert.equal(missing.getStatus().bundled, undefined);
+    assert.equal(missing.importBundled().error, 'pack');
+    assert.equal(fs.existsSync(path.join(profile, 'partitions', 'bayan_poetry.sqlite')), false);
+    const provisioner = new PoetryProvisioner(directory, profile, undefined, manifestPath);
+    assert.equal(provisioner.getStatus().bundled, true);
+    assert.equal(provisioner.importBundled().phase, 'unpacking');
+    for (let index = 0; index < 200 && provisioner.getStatus().phase === 'unpacking'; index++) await new Promise(resolve => setTimeout(resolve, 25));
+    assert.equal(provisioner.getStatus().phase, 'ready');
+    assert.ok(fs.readFileSync(path.join(profile, 'partitions', 'bayan_poetry.sqlite')).equals(fs.readFileSync(source)));
+    assert.equal(provisioner.importBundled().phase, 'ready'); // a second request keeps the installed partition
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});

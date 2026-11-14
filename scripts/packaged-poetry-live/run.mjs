@@ -1,14 +1,17 @@
 // KEY-266 packaged acceptance: an installed build (release/win-unpacked) on a clean throwaway profile, with Chromium
 // pointed at a dead proxy, imports the local poetry pack through the real Windows file picker (the path is set in
 // the dialog through UI Automation), survives a cancel and a retry, then searches poems in Arabic (RTL) and English (LTR).
-// Usage: node scripts/packaged-poetry-live/run.mjs [path to bayan_poetry-v1.pack.json]
+// With --bundled it instead uses the pack the installer shipped (no picker), and --exe=<path> runs an installed copy.
+// Usage: node scripts/packaged-poetry-live/run.mjs [--bundled] [--exe=<Baglib.exe>] [path to bayan_poetry-v1.pack.json]
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve('.');
-const exe = path.join(root, 'release', 'win-unpacked', 'Baglib.exe');
-const manifest = path.resolve(process.argv[2] || '.baglib-data/poetry-pack/bayan_poetry-v1.pack.json');
+const args = process.argv.slice(2);
+const bundled = args.includes('--bundled');
+const exe = path.resolve(args.find(arg => arg.startsWith('--exe='))?.slice(6) || path.join(root, 'release', 'win-unpacked', 'Baglib.exe'));
+const manifest = path.resolve(args.find(arg => !arg.startsWith('--')) || '.baglib-data/poetry-pack/bayan_poetry-v1.pack.json');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
@@ -58,7 +61,7 @@ async function cdp(port) {
 
 const profile = fs.mkdtempSync(path.join(root, '.baglib-data', 'KEY-266-packaged-'));
 const child = spawn(exe, [`--user-data-dir=${profile}`, '--remote-debugging-port=9440', '--proxy-server=http://127.0.0.1:9'], { stdio: 'ignore' });
-const result = { profile: path.basename(profile) };
+const result = { exe, mode: bundled ? 'bundled' : 'picker', profile: path.basename(profile) };
 const partitions = path.join(profile, 'partitions');
 const leftovers = () => fs.existsSync(partitions) ? fs.readdirSync(partitions).filter(name => name.startsWith('.poetry-pack-')) : [];
 try {
@@ -77,11 +80,16 @@ try {
     await page.until(`document.querySelectorAll('[data-bayan-view] article').length > 0`, 120, 250);
     return page.evaluate(`document.querySelectorAll('[data-bayan-view] article').length`);
   };
+  const button = bundled ? '[data-bayan-import-bundled]' : '[data-bayan-import-pack]';
+  const startImport = async () => {
+    await page.evaluate(`setTimeout(() => document.querySelector('${button}').click(), 0); true`);
+    if (!bundled) chooseInOpenDialog(child.pid);
+  };
   result.arDir = await open('ar');
-  await page.until('!!document.querySelector("[data-bayan-import-pack]")');
+  await page.until(`!!document.querySelector('${button}')`);
+  if (bundled) result.arLabel = await page.evaluate(`document.querySelector('${button}').textContent`);
   // First attempt: start, then cancel.
-  await page.evaluate(`setTimeout(() => document.querySelector('[data-bayan-import-pack]').click(), 0); true`);
-  chooseInOpenDialog(child.pid);
+  await startImport();
   await page.until(`(async () => { const r = await window.electronAPI.poetry.status(); return r.ok && r.data.phase === 'unpacking' && r.data.downloaded > 0; })()`, 200, 100);
   await page.evaluate(`document.querySelector('[data-bayan-import-cancel]').click(); true`);
   await page.until('!!document.querySelector("[data-bayan-import-cancelled]")');
@@ -89,8 +97,8 @@ try {
   result.afterCancel = { partition: fs.existsSync(path.join(partitions, 'bayan_poetry.sqlite')), leftovers: leftovers() };
   // Retry to completion.
   const started = Date.now();
-  await page.evaluate(`setTimeout(() => document.querySelector('[data-bayan-import-pack]').click(), 0); true`);
-  chooseInOpenDialog(child.pid);
+  await page.until(`!!document.querySelector('${button}')`);
+  await startImport();
   await page.until(`(async () => { const r = await window.electronAPI.poetry.status(); return r.ok && (r.data.phase === 'ready' || r.data.phase === 'error'); })()`, 600, 500);
   result.status = await page.evaluate('window.electronAPI.poetry.status().then(r => r.data)');
   result.importSeconds = Math.round((Date.now() - started) / 1000);

@@ -45,6 +45,13 @@ export function BayanView() {
       if (result.data) setProvision(result.data);
     } catch { setFailed(true); }
   };
+  const importBundled = async () => {
+    try {
+      const result = await window.electronAPI.poetry.importBundled();
+      if (!result.ok) { setFailed(true); return; }
+      setProvision(result.data);
+    } catch { setFailed(true); }
+  };
   const cancelImport = async () => { try { const result = await window.electronAPI.poetry.cancelImport(); if (result.ok) setProvision(result.data); } catch {} };
   useEffect(() => {
     if (!installing) return;
@@ -123,7 +130,8 @@ export function BayanView() {
   if (poem) return <PoetryReader key={`${poem.id}:${initialVerse}:${initialTo}`} initialVerse={initialVerse} initialTo={initialTo} poem={poem} onBack={() => setPoem(null)} onPoet={id => { setPoem(null); setPoetId(id); setQuery(''); setEra(''); setMeter(''); setTheme(''); setVariant(''); setLocation(''); setAfter(0); }} />;
   return <section data-bayan-view dir={dir} className="flex h-full min-h-0 flex-col bg-canvas p-3 sm:p-5">
     <h1 className="text-xl font-semibold leading-loose">{t('navBayan')}</h1>
-    {failed && <div className="flex flex-wrap gap-2"><button type="button" disabled={installing} onClick={() => void install()} className="rounded border border-subtle p-3">{t('bayanInstall')}</button><button type="button" data-bayan-import-pack disabled={installing} onClick={() => void importPack()} className="rounded border border-subtle p-3">{t('bayanImportPack')}</button></div>}
+    {failed && provision?.bundled && provision.phase !== 'ready' && <div className="flex flex-col items-start gap-2"><p className="leading-loose">{t('bayanBundledHint')}</p><button type="button" data-bayan-import-bundled disabled={installing} onClick={() => void importBundled()} className="rounded bg-accent p-3 text-accent-contrast">{t('bayanImportBundled')}</button></div>}
+    {failed && <div className="flex flex-wrap gap-2">{!provision?.bundled && <button type="button" disabled={installing} onClick={() => void install()} className="rounded border border-subtle p-3">{t('bayanInstall')}</button>}<button type="button" data-bayan-import-pack disabled={installing} onClick={() => void importPack()} className="rounded border border-subtle p-3">{t('bayanImportPack')}</button></div>}
     {provision?.phase === 'error' && <p role="alert" data-bayan-provision-error={provision.error}>{t(provision.error === 'python' ? 'bayanPythonRequired' : provision.error === 'integrity' ? 'bayanIntegrityError' : provision.error === 'space' ? 'bayanPackNoSpace' : provision.error === 'pack' ? 'bayanPackInvalid' : 'bayanUnavailable')}</p>}
     {provision?.phase === 'idle' && provision.error === 'cancelled' && <p role="status" data-bayan-import-cancelled>{t('bayanImportCancelled')}</p>}
     {installing && <div role="status" className="rounded border border-subtle p-3"><p>{t(provision.phase === 'importing' ? 'bayanImporting' : provision.phase === 'unpacking' ? 'bayanUnpacking' : 'bayanDownloading')}</p><output>{provision.phase === 'importing' ? provision.imported.toLocaleString(lang) : t('bayanDownloadProgress', { downloaded: (provision.downloaded / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }), total: provision.total === null ? '—' : (provision.total / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }), percent: provision.total ? Math.min(100, provision.downloaded / provision.total * 100).toLocaleString(lang, { maximumFractionDigits: 0 }) : '—' })}</output>{provision.total !== null && (provision.phase === 'downloading' || provision.phase === 'unpacking') && <progress aria-label={t(provision.phase === 'unpacking' ? 'bayanUnpacking' : 'bayanDownloading')} value={provision.downloaded} max={provision.total} className="block w-full" />}{provision.phase === 'unpacking' && <button type="button" data-bayan-import-cancel onClick={() => void cancelImport()} className="mt-2 rounded border border-subtle px-3 py-1">{t('bayanImportCancel')}</button>}</div>}

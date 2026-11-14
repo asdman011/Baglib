@@ -9,8 +9,9 @@ import path from 'node:path';
 import { readerPresets } from '../../src/shared/quran-resource-presets.ts';
 
 const root = path.resolve('.');
-const exe = path.join(root, 'release', 'win-unpacked', 'Baglib.exe');
-const resources = path.join(root, 'release', 'win-unpacked', 'resources', 'quran');
+// --exe=<Baglib.exe> runs an installed copy instead of release/win-unpacked (KEY-267).
+const exe = path.resolve(process.argv.slice(2).find(arg => arg.startsWith('--exe='))?.slice(6) || path.join(root, 'release', 'win-unpacked', 'Baglib.exe'));
+const resources = path.join(path.dirname(exe), 'resources', 'quran');
 const evidence = path.join(root, '.baglib-data', 'KEY-264-evidence');
 fs.mkdirSync(evidence, { recursive: true });
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));

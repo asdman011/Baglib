@@ -2,6 +2,7 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14 05:18 +02:00, Claude Code] KEY-267 VERIFIED: installer bundles the poetry pack (1.74 GB total). A silent per-user install, Quran/Sunnah/poetry checks on the installed copy in ar+en, and an uninstall all passed; the registry was restored byte-identical. Details in CURRENT_TASK.md.
 - [2026-11-14T04:09:05.266232+02:00, Codex key238-root] KEY-238 fixes VERIFIED. Honest weekly zero totals, named mixed-script recent edits/localized type/date/note opening, ar/en estimated250words/page WPM. Full2192/2192 once(concurrency2,342suites),focused15/native2/0renderererrors/types/lint0warnings/mainbuild/diff pass. Eight final screenshots inspected after startup-readiness correction;profiledeleted/ownedrendererstopped. Exact12files in CURRENT_TASK/localreport. Scoped lock commit/push authorized and next.
 
 - [2026-11-14T04:05:17.115609+02:00, Codex key238-root] KEY-238 fixes implemented. Focused15/types/lint0warnings/mainbuild and native2 ar/en1280 pass,0renderererrors. Fullsuite once concurrency2 running; final screenshot recapture pending after startup overlay readiness fix. Scope/details in CURRENT_TASK.

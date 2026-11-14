@@ -2414,6 +2414,8 @@ export const translations = {
     bayanImporting: "فهرسة القصائد",
     // KEY-266 local poetry pack.
     bayanImportPack: "استيراد حزمة شعر محلية…",
+    bayanImportBundled: "إعداد مدونة الشعر المرفقة بالتطبيق",
+    bayanBundledHint: "تتضمن نسخة التثبيت مدونة الشعر كاملة، ويستغرق فكّها والتحقق منها دقيقة أو دقيقتين دون اتصال بالإنترنت.",
     bayanPackFiles: "حزمة الشعر في بغلب",
     bayanUnpacking: "فك حزمة الشعر والتحقق منها",
     bayanImportCancel: "إلغاء الاستيراد",
@@ -7779,6 +7781,8 @@ export const translations = {
     bayanImporting: "Indexing poems",
     // KEY-266 local poetry pack.
     bayanImportPack: "Import a local poetry pack…",
+    bayanImportBundled: "Set up the included poetry library",
+    bayanBundledHint: "This installation includes the full poetry library. Unpacking and checking it takes a minute or two and needs no internet connection.",
     bayanPackFiles: "BagLib poetry pack",
     bayanUnpacking: "Unpacking and verifying the poetry pack",
     bayanImportCancel: "Cancel import",

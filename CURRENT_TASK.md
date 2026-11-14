@@ -1,3 +1,41 @@
+## KEY-267 installer with poetry, install-tested - 2026-11-14 05:18 +02:00 - Claude Code
+
+The user approved "add the poetry and install".
+
+**Change.** The installer now ships the verified Al-Bayan poetry pack in `resources/poetry-pack/`. The Bayan tab of an installed build offers "Set up the included poetry library", which unpacks it with the KEY-266 checks (no picker, no Python). Python download is hidden when a pack is bundled.
+
+**Installer.** `release/Baglib Setup 0.1.0.exe` is 1,735,515,980 bytes, sha256 `679947ba4fec211ea8ede05766b79eff5de49bb65227e2f02ebf615d978070a8`, so it fits under the NSIS limit of about 2 GB. It contains Quran basic packs, Sunnah and poetry.
+
+**Install test, run on this PC with the user's OK:**
+1. Silent per-user install (`/S /currentuser /D=.baglib-data\KEY-267-install`): exit 0 in 130 s. Installed size 4.48 GB, with Start menu and desktop shortcuts and an uninstall entry.
+2. `scripts/packaged-quran-live/run.mjs --exe=<installed>` passed in ar (RTL) and en (LTR). Quran installs offline in 14 s (33 resources, no digest mismatches); Sunnah search finds 17, the chapter has 7 hadiths, research opens; 0 remote requests, 0 console errors.
+3. `scripts/packaged-poetry-live/run.mjs --bundled --exe=<installed>` passed. Cancel leaves nothing; the retry unpacks 1,609,805,824 bytes in 10 s; ar search returns 40 poems and en search 40.
+4. Silent uninstall: exit 0. Folder, shortcuts and uninstall entry are gone.
+
+**Registry.** The uninstaller cleared the default values of 13 file-type keys, and running the installed app had pointed `baglib://` at the installed exe. All 14 keys were restored from the pre-install backup and verified byte-identical by export.
+
+**Tests.** `tests/services/poetry-provision.test.ts` + `poetry-pack.test.ts` 6/6, poetry/access 8/8, `tsc --noEmit` clean, ESLint on changed files clean.
+
+**Files:**
+- `electron-builder.yml`
+- `src/main/services/poetry/provision.ts`
+- `src/main/ipc/poetry.ts`
+- `src/preload/index.ts`
+- `src/shared/types/poetry.ts`
+- `src/renderer/components/poetry/BayanView.tsx`
+- `src/renderer/translations.ts` (`bayanImportBundled`, `bayanBundledHint`, ar+en)
+- `tests/services/poetry-provision.test.ts`
+- `scripts/packaged-poetry-live/run.mjs` (`--bundled`, `--exe`)
+- `scripts/packaged-quran-live/run.mjs` (`--exe`)
+- `docs/features/Al-Bayan Poetry.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
+**Limits.**
+- Not code-signed for distribution (local signtool step only).
+- No all-users (Program Files) install was tried.
+- The pack is local only and never committed.
+
 ## KEY-238 fixes verified handoff - 2026-11-14T04:09:05.266232+02:00 - Codex key238-root
 
 Reading Analytics uses weekly heatmap sums directly, including zero. The reducer always returns a number, so lifetime totals are never substituted into weekly labels. Recent edits LEFT JOIN study_note_detail.title and display its canonical value in bdi with a localized type/date beneath it. Blank/absent titles use existing localized type labels. Note-like rows use openStudyNote and open their matching editor. Reading Statistics now describes WPM as an estimate based on250words/page in ar/en. Default dashboard visibility is preserved. No schema/dependencies/downloads.

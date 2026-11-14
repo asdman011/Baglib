@@ -16,6 +16,8 @@ export interface PoetryAPI {
   /** KEY-266: pick a local `.pack.json` and import its verified database; null when the picker is cancelled. */
   importPack(language: 'ar' | 'en'): Promise<PoetryResult<PoetryProvisionStatus | null>>;
   cancelImport(): Promise<PoetryResult<PoetryProvisionStatus>>;
+  /** Installed builds: unpack the pack shipped inside the installer (no picker). */
+  importBundled(): Promise<PoetryResult<PoetryProvisionStatus>>;
   poets(query: PoetQuery): Promise<PoetryResult<{ items: PoetSummary[]; total: number; offset: number }>>;
   facets(): Promise<PoetryResult<PoetryFacets>>;
   variants(): Promise<PoetryResult<string[]>>;
@@ -38,7 +40,7 @@ export interface PoetryNarration {
 export interface PoetrySaveInput { poemId: number; from: number; to: number; type: 'note' | 'quote' | 'bookmark'; note?: string }
 export interface PoetrySavedItem { id: string; type: 'note' | 'quote' | 'bookmark'; reference: string; label: string; text: string | null; note: string | null; createdAt: string }
 /** `unpacking` is a local pack import (KEY-266): `downloaded`/`total` then count uncompressed bytes written. */
-export interface PoetryProvisionStatus { phase: 'idle' | 'downloading' | 'importing' | 'unpacking' | 'ready' | 'error'; downloaded: number; total: number | null; imported: number; error?: 'python' | 'integrity' | 'failed' | 'space' | 'pack' | 'cancelled' }
+export interface PoetryProvisionStatus { phase: 'idle' | 'downloading' | 'importing' | 'unpacking' | 'ready' | 'error'; downloaded: number; total: number | null; imported: number; /** True when the installer shipped a verified poetry pack. */ bundled?: boolean; error?: 'python' | 'integrity' | 'failed' | 'space' | 'pack' | 'cancelled' }
 export interface PoetQuery { language: 'ar' | 'en'; query?: string; era?: string; location?: string; offset?: number }
 export interface PoetSummary { id: number; name: string; era: string | null; location: string | null; poemCount: number }
 export interface PoetryFacets {

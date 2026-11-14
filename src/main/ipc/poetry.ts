@@ -13,7 +13,8 @@ import { translations } from '../../renderer/translations';
 
 export function registerPoetryIpc(): void {
   let provisioner: PoetryProvisioner | undefined;
-  const provisioning = () => provisioner ??= new PoetryProvisioner(app.getAppPath(), app.getPath('userData'), app.isPackaged ? path.join(process.resourcesPath, 'poetry/parquet_rows.py') : path.join(app.getAppPath(), 'assets/poetry/parquet_rows.py'));
+  // The installer ships a verified poetry pack in resources/poetry-pack (development builds have none).
+  const provisioning = () => provisioner ??= new PoetryProvisioner(app.getAppPath(), app.getPath('userData'), app.isPackaged ? path.join(process.resourcesPath, 'poetry/parquet_rows.py') : path.join(app.getAppPath(), 'assets/poetry/parquet_rows.py'), app.isPackaged ? path.join(process.resourcesPath, 'poetry-pack', 'bayan_poetry-v1.pack.json') : null);
   let database: PoetryQueryProcess | undefined;
   const getDatabase = () => {
     if (!database) {
@@ -47,6 +48,7 @@ export function registerPoetryIpc(): void {
     return provisioning().importPack(result.filePaths[0]);
   });
   register('poetry:import-cancel', () => provisioning().cancelImport());
+  register('poetry:import-bundled', () => provisioning().importBundled());
   register('poetry:save-knowledge', async input => {
     validatePoetrySave(input);
     const poem = await getDatabase().query('detail', input.poemId) as PoetryDetail | null;

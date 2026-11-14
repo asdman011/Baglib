@@ -106,6 +106,7 @@ export const API = {
     status: (): ReturnType<import('../shared/types/poetry').PoetryAPI['status']> => ipcRenderer.invoke('poetry:status'),
     importPack: (language: 'ar' | 'en'): ReturnType<import('../shared/types/poetry').PoetryAPI['importPack']> => ipcRenderer.invoke('poetry:import-pack', language),
     cancelImport: (): ReturnType<import('../shared/types/poetry').PoetryAPI['cancelImport']> => ipcRenderer.invoke('poetry:import-cancel'),
+    importBundled: (): ReturnType<import('../shared/types/poetry').PoetryAPI['importBundled']> => ipcRenderer.invoke('poetry:import-bundled'),
     poets: (query: import('../shared/types/poetry').PoetQuery): ReturnType<import('../shared/types/poetry').PoetryAPI['poets']> => ipcRenderer.invoke('poetry:poets', query),
     facets: (): ReturnType<import('../shared/types/poetry').PoetryAPI['facets']> => ipcRenderer.invoke('poetry:facets'),
     variants: (): ReturnType<import('../shared/types/poetry').PoetryAPI['variants']> => ipcRenderer.invoke('poetry:variants'),
