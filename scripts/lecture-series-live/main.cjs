@@ -110,6 +110,26 @@ app.on('browser-window-created', (_, win) => {
       await shot('notes-' + lang + '-480');
       assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'), false);
       win.setContentSize(1440, 1100);
+      // Overlay layout: the same notes box sits under the video and saves with the playback time.
+      await click('[data-lecture-layout-switch]');
+      await until("document.querySelector('[data-lecture-layout-switch]').getAttribute('aria-pressed')==='false'");
+      const overlay = await evaluate("(()=>{const video=document.querySelector('[data-lecture-player]').getBoundingClientRect();const box=document.querySelector('[data-lecture-inline-notes] textarea');if(!box)return null;const r=box.getBoundingClientRect();return {below:r.top>=video.bottom-1,left:r.left,right:r.right,videoLeft:video.left,videoRight:video.right}})()");
+      assert.ok(overlay && overlay.below, 'overlay: the notes box is under the video');
+      assert.ok(overlay.left >= overlay.videoLeft - 1 && overlay.right <= overlay.videoRight + 1, 'overlay: the notes box spans the video column');
+      const overlayText = 'مُلاحَظَة overlay note ' + lang;
+      await evaluate(`(()=>{const video=document.querySelector('[data-lecture-player]');video.pause();video.currentTime=7.5;const editor=document.querySelector('[data-lecture-note-editor]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(editor,${JSON.stringify(overlayText)});editor.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      await until("!document.querySelector('[data-lecture-note-save]').disabled");
+      await click('[data-lecture-note-save]');
+      await until(`window.electronAPI.studyNotes.list().then(notes=>notes.some(note=>note.content.includes(${JSON.stringify(overlayText)})&&note.content.includes('media:${group.items[0].workId}:7')))`);
+      await evaluate("document.querySelector('[data-lecture-note-editor]').scrollIntoView({block:'center'})");
+      await shot('overlay-notes-' + lang + '-1440');
+      win.setContentSize(480, 1000);
+      await evaluate("document.querySelector('[data-lecture-note-editor]').scrollIntoView({block:'center'})");
+      assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'), false);
+      await shot('overlay-notes-' + lang + '-480');
+      win.setContentSize(1440, 1100);
+      await click('[data-lecture-layout-switch]');
+      await until("document.querySelector('[data-lecture-layout-switch]').getAttribute('aria-pressed')==='true'");
       await evaluate("document.querySelector('[data-lecture-player]').scrollIntoView({block:'center'})");
       // Persist the player toggle, and verify actual media-ended playback advances only within this series.
       if (!await evaluate("document.querySelector('[data-lecture-autoplay]').checked")) await click('[data-lecture-autoplay]');

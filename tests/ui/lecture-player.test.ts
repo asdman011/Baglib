@@ -52,6 +52,14 @@ for (const lang of ['ar', 'en'] as const) {
         await act(async () => handler({ target: { checked: true } }));
         assert.deepEqual(updates, [{id:'series-one',changes:{autoplayNext:true}}]);
         assert.ok(window.document.querySelector<HTMLInputElement>('[data-lecture-autoplay]')!.checked);
+        // The overlay layout keeps the same notes box, under the video.
+        await act(async () => window.document.querySelector<HTMLButtonElement>('[data-lecture-layout-switch]')!.click());
+        assert.equal(storage.get('baglib.lectures.layout'), 'overlay');
+        const player = window.document.querySelector('[data-lecture-player]')!;
+        const box = window.document.querySelector('[data-lecture-study-tools] [data-lecture-inline-notes] textarea')!;
+        assert.ok(box);
+        const order = [...window.document.querySelectorAll('*')];
+        assert.ok(order.indexOf(box) > order.indexOf(player), 'the notes box follows the video');
       } finally {
         await act(async () => root.unmount());
         for (const [key, descriptor] of originals) { if (descriptor) Object.defineProperty(window.HTMLElement.prototype, key, descriptor); else Reflect.deleteProperty(window.HTMLElement.prototype, key); }

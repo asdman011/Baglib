@@ -6,7 +6,8 @@ import electron from 'electron';
 import { createHash } from 'node:crypto';
 import { rendererAnswers } from '../lib/renderer.mjs';
 
-const existingApps = () => execFileSync('powershell.exe', ['-NoProfile', '-Command', 'Get-Process electron,Baglib -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id; exit 0'], { encoding: 'utf8', windowsHide: true }).trim();
+// Only other throwaway live runs (a .baglib-data profile) hold the slot; the user's own open app is left alone.
+const existingApps = () => execFileSync('powershell.exe', ['-NoProfile', '-Command', "Get-CimInstance Win32_Process -Filter \"name='electron.exe' or name='Baglib.exe'\" | Where-Object { $_.CommandLine -like '*.baglib-data*' } | Select-Object -ExpandProperty ProcessId; exit 0"], { encoding: 'utf8', windowsHide: true }).trim();
 const waitForSlot = async () => {
   while (existingApps()) {
     console.log('KEY-347 waiting for existing Electron/Baglib processes');

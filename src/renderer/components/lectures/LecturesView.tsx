@@ -159,11 +159,11 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay, 
     <aside data-lecture-study-tools className="min-w-0 space-y-4">
     <section data-lecture-notes className="space-y-2">
       <h3 className="text-sm font-bold">{t('lectureNotes')}</h3>
-      {layout === 'study' && <form data-lecture-inline-notes className="space-y-2" onSubmit={event => { event.preventDefault(); void saveNote(); }}>
+      <form data-lecture-inline-notes className="space-y-2" onSubmit={event => { event.preventDefault(); void saveNote(); }}>
         <textarea data-lecture-note-editor dir="auto" rows={6} maxLength={20000} value={draft} disabled={noteStatus === 'saving'} aria-label={t('lectureNotes')} placeholder={t('notePanelPlaceholder')} className="w-full resize-y rounded-lg border border-subtle bg-canvas p-3 text-sm leading-loose" onChange={event => { setDraft(event.target.value); setNoteStatus(null); }} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void saveNote(); } }} />
         <button data-lecture-note-save type="submit" className={button} disabled={!draft.trim() || noteStatus === 'saving'}>{t('notePanelSave')}</button>
         {noteStatus && noteStatus !== 'saving' && <p role={noteStatus === 'failed' ? 'alert' : 'status'} className="text-xs leading-relaxed">{t(noteStatus === 'saved' ? 'notePanelSaved' : 'studyActionFailed')}</p>}
-      </form>}
+      </form>
       {linked.length === 0 && <p className="text-xs text-muted">{t('lectureNoNotes')}</p>}
       <ul className="space-y-1">{linked.map(({ note: item, link, seconds }) => <li key={`${item.id}-${link.start}`} className="flex items-center gap-2 text-sm">
         <button type="button" className="underline" onClick={() => go(seconds)}><bdi>{clockTime(seconds)}</bdi></button>
