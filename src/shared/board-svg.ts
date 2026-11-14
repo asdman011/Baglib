@@ -96,7 +96,7 @@ function itemText(item: BoardItem, x: number, y: number, theme: BoardSvgTheme): 
 export function boardToSvg(
   board: Pick<Board, 'items' | 'edges'>,
   theme: BoardSvgTheme = BOARD_SVG_LIGHT,
-  options: { padding?: number; selection?: Iterable<string> } = {},
+  options: { padding?: number; selection?: Iterable<string>; edgePath?: (edge: Board['edges'][number], from: BoardItem, to: BoardItem) => { d: string; labelAt: { x: number; y: number } } } = {},
 ): { svg: string; width: number; height: number } {
   const padding = Math.max(0, Math.round(options.padding ?? PADDING));
   const selection = options.selection ? new Set(options.selection) : null;
@@ -129,9 +129,12 @@ export function boardToSvg(
   for (const { edge, from, to } of edges) {
     const ends = edgeEndpoints(from, to);
     const x1 = ends.x1 + shiftX, y1 = ends.y1 + shiftY, x2 = ends.x2 + shiftX, y2 = ends.y2 + shiftY;
-    parts.push(`<line x1="${num(x1)}" y1="${num(y1)}" x2="${num(x2)}" y2="${num(y2)}" stroke="${escapeXml(theme.edge)}" stroke-width="2" marker-end="url(#board-arrow)"/>`);
+    // Callback coordinates are already in export space, just like the default endpoints.
+    const path = options.edgePath?.(edge, { ...from, x: from.x + shiftX, y: from.y + shiftY }, { ...to, x: to.x + shiftX, y: to.y + shiftY });
+    if (path) parts.push(`<path d="${escapeXml(path.d)}" fill="none" stroke="${escapeXml(theme.edge)}" stroke-width="2" marker-end="url(#board-arrow)"/>`);
+    else parts.push(`<line x1="${num(x1)}" y1="${num(y1)}" x2="${num(x2)}" y2="${num(y2)}" stroke="${escapeXml(theme.edge)}" stroke-width="2" marker-end="url(#board-arrow)"/>`);
     if (edge.label) {
-      parts.push(`<text x="${num((x1 + x2) / 2)}" y="${num((y1 + y2) / 2)}" fill="${escapeXml(theme.text)}" font-family="${escapeXml(theme.fontFamily)}" font-size="12" text-anchor="middle"${/[؀-ۿ]/u.test(edge.label) ? ' direction="rtl"' : ''}>${escapeXml(edge.label)}</text>`);
+      parts.push(`<text x="${num(path?.labelAt.x ?? (x1 + x2) / 2)}" y="${num(path?.labelAt.y ?? (y1 + y2) / 2)}" fill="${escapeXml(theme.text)}" font-family="${escapeXml(theme.fontFamily)}" font-size="12" text-anchor="middle"${path ? ' dominant-baseline="middle"' : ''}${/[؀-ۿ]/u.test(edge.label) ? ' direction="rtl"' : ''}>${escapeXml(edge.label)}</text>`);
     }
   }
 

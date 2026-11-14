@@ -150,6 +150,18 @@ app.on('browser-window-created', (_, owner) => {
       assert.notEqual(paths[0], paths[1]);
       await evaluate("document.querySelector('[data-board-fit]').click()");
       await pause(250);
+      // No empty reserved selection row. Label hit boxes clear cards and each other.
+      assert.equal(await evaluate('!!document.querySelector("[data-board-selection]")'), false);
+      const toolsBox = await box('[data-board-tools]');
+      const canvasBox = await box('[data-board-surface]');
+      assert.ok(Math.abs(canvasBox.y - toolsBox.y - toolsBox.h) < 2);
+      const clearance = await evaluate(`(()=>{
+        const labels=[...document.querySelectorAll('[data-board-edge-text]')].map(e=>e.getBoundingClientRect());
+        const cards=[...document.querySelectorAll('[data-board-item]')].map(e=>e.getBoundingClientRect());
+        const overlaps=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
+        return labels.every((label,i)=>cards.every(card=>!overlaps(label,card))&&labels.slice(0,i).every(prior=>!overlaps(label,prior)));
+      })()`);
+      assert.equal(clearance, true, 'labels clear cards and earlier labels');
       await shot(`layout-curves-${language}-${width}`);
       // Whole-board and selection SVG/2x PNG use real downloads, reopened and decoded.
       for (const scope of ['board', 'selection']) {

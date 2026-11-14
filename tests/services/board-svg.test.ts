@@ -152,3 +152,29 @@ test('an Arabic edge label is drawn right-to-left', () => {
   const { svg } = boardToSvg({ items: [item('a', 0, 0, 'A'), item('b', 300, 0, 'B')], edges: [{ id: 'e', from: 'a', to: 'b', label: 'يؤيد' }] });
   assert.match(svg, /direction="rtl">يؤيد<\/text>/u);
 });
+
+
+test('optional geometry emits an escaped path and uses its labelAt in export coordinates', () => {
+  const board = { items: [item('a', -100), item('b', 200)], edges: [edge('e', 'a', 'b', 'يُؤيد <x>&"')] };
+  let calls = 0;
+  const result = boardToSvg(board, BOARD_SVG_LIGHT, { edgePath: (arrow, from, to) => {
+    calls++;
+    assert.equal(arrow.id, 'e');
+    assert.equal(from.x, 32);
+    assert.equal(to.x, 332);
+    return { d: 'M 132 57 Q 232 10 332 57 "<&', labelAt: { x: 250, y: 17 } };
+  } });
+  assert.equal(calls, 1);
+  assert.ok(!result.svg.includes('<line '));
+  assert.ok(result.svg.includes('<path d="M 132 57 Q 232 10 332 57 &quot;&lt;&amp;" fill="none"'));
+  assert.ok(result.svg.includes('stroke-width="2" marker-end="url(#board-arrow)"'));
+  assert.ok(result.svg.includes('<text x="250" y="17"'));
+  assert.ok(result.svg.includes('يُؤيد &lt;x&gt;&amp;&quot;</text>'));
+});
+
+test('omitting edgePath preserves the exact legacy line and label bytes', () => {
+  const board = { items: [item('a'), item('b', 300)], edges: [edge('e', 'a', 'b', 'supports')] };
+  const legacy = '<line x1="132" y1="57" x2="332" y2="57" stroke="#475569" stroke-width="2" marker-end="url(#board-arrow)"/>';
+  assert.ok(boardToSvg(board).svg.includes(legacy));
+  assert.deepEqual(boardToSvg(board), boardToSvg(board, BOARD_SVG_LIGHT, { edgePath: undefined }));
+});

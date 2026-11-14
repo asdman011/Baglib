@@ -6,10 +6,10 @@ import { createBoardHistory, commitBoardChange, undoBoard, redoBoard, canUndoBoa
 import { itemsInMarquee, toggleSelection, selectionBounds, moveItems, duplicateSelection, alignItems, type Marquee } from '../../../shared/board-selection';
 import { snapBoardRect, type SnapGuide } from '../../../shared/board-snap';
 import { layoutBoardTree } from '../../../shared/board-layout';
-import { boardEdgeGeometry, type EdgeShape } from '../../../shared/board-edge-path';
+import { type EdgeShape } from '../../../shared/board-edge-path';
 import { boardToNoteMarkdown } from '../../../shared/board-note';
 import { BoardTools } from './BoardTools';
-import { boardViewBends, alignmentForDirection, boardLayoutRoot, readBoardPreference, writeBoardPreference, exportBoardImage } from './board-ui';
+import { boardViewGeometry, alignmentForDirection, boardLayoutRoot, readBoardPreference, writeBoardPreference, exportBoardImage } from './board-ui';
 import { ContextMenu } from '../ui/ContextMenu';
 import { contextActions } from '../actions/context-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -397,9 +397,7 @@ function BoardCanvas({
     const note = await window.electronAPI.studyNotes.save({ title: board.title || t('boardsUntitled'), content, aliases: [], tags: [] });
     openStudyNote({ id: note.id });
   });
-  const bends = useMemo(() => boardViewBends(board.edges), [board.edges]);
-  const geometry = (edge: BoardEdge, from: BoardItem, to: BoardItem) =>
-    boardEdgeGeometry(from, to, edgeShape, bends.get(edge.id) ?? 40);
+  const { paths, labels } = useMemo(() => boardViewGeometry(board, edgeShape), [board, edgeShape]);
 
   const byId = useMemo(() => new Map(board.items.map((item) => [item.id, item])), [board.items]);
   const selectedItem = selection?.kind === 'item' ? byId.get(selection.id) : undefined;
@@ -581,56 +579,6 @@ function BoardCanvas({
       />
       {operationFailed && <p role="alert" className="px-3 py-1 text-xs text-danger">{t('boardsOperationFailed')}</p>}
 
-      {/* Selection Sub-toolbar */}
-      <div
-          data-board-selection
-          className="flex h-12 shrink-0 items-center gap-3 overflow-x-auto border-b border-subtle bg-canvas/80 px-4 py-2 text-xs [&>*]:shrink-0"
-        >
-          {selectedItem && (
-            <span className="flex items-center gap-1.5" role="group" aria-label={t('boardsColor')}>
-              {BOARD_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  data-board-color={color}
-                  aria-label={t(colorKeys[color])}
-                  title={t(colorKeys[color])}
-                  aria-pressed={selectedItem.color === color}
-                  onClick={() => updateItem(selectedItem.id, { color })}
-                  className={`size-6 rounded-full border-2 cursor-pointer transition-transform ${swatch[color]} ${
-                    selectedItem.color === color ? 'ring-2 ring-offset-1 ring-amber-600 scale-110' : ''
-                  }`}
-                />
-              ))}
-            </span>
-          )}
-
-          {selectedEdge && (
-            <label className="flex items-center gap-2">
-              <span className="text-muted">{t('boardsArrowLabel')}</span>
-              <input
-                data-board-edge-label
-                autoFocus
-                value={selectedEdge.label}
-                maxLength={200}
-                dir="auto"
-                onChange={(event) => updateEdge(selectedEdge.id, { label: event.target.value })}
-                className="w-48 rounded-lg border border-subtle bg-surface px-2.5 py-1 text-xs outline-none focus-visible:outline-focus"
-              />
-            </label>
-          )}
-
-          {(selectedItem || selectedEdge) && <Button
-            variant="ghost"
-            size="sm"
-            data-board-delete
-            onClick={removeSelected}
-            className="text-danger hover:bg-danger/10 ms-auto"
-            icon={<Trash2 className="size-3.5" />}
-          >
-            {t('boardsDelete')}
-          </Button>}
-        </div>
 
       {connectFrom !== undefined && (
         <p role="status" className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-1.5 text-xs text-amber-800 dark:text-amber-200">
@@ -709,6 +657,56 @@ function BoardCanvas({
         }}
         onLostPointerCapture={() => { drag.current = null; setGuides([]); setMarquee(null); }}
       >
+      {/* Overlay controls keep selection from moving the canvas origin. */}
+      {(selectedItem || selectedEdge) && <div
+          data-board-selection
+          className="absolute start-0 end-0 top-0 z-20 flex h-12 items-center gap-3 overflow-x-auto border-b border-subtle bg-canvas/80 px-4 py-2 text-xs [&>*]:shrink-0"
+        >
+          {selectedItem && (
+            <span className="flex items-center gap-1.5" role="group" aria-label={t('boardsColor')}>
+              {BOARD_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  data-board-color={color}
+                  aria-label={t(colorKeys[color])}
+                  title={t(colorKeys[color])}
+                  aria-pressed={selectedItem.color === color}
+                  onClick={() => updateItem(selectedItem.id, { color })}
+                  className={`size-6 rounded-full border-2 cursor-pointer transition-transform ${swatch[color]} ${
+                    selectedItem.color === color ? 'ring-2 ring-offset-1 ring-amber-600 scale-110' : ''
+                  }`}
+                />
+              ))}
+            </span>
+          )}
+
+          {selectedEdge && (
+            <label className="flex items-center gap-2">
+              <span className="text-muted">{t('boardsArrowLabel')}</span>
+              <input
+                data-board-edge-label
+                autoFocus
+                value={selectedEdge.label}
+                maxLength={200}
+                dir="auto"
+                onChange={(event) => updateEdge(selectedEdge.id, { label: event.target.value })}
+                className="w-48 rounded-lg border border-subtle bg-surface px-2.5 py-1 text-xs outline-none focus-visible:outline-focus"
+              />
+            </label>
+          )}
+
+          {(selectedItem || selectedEdge) && <Button
+            variant="ghost"
+            size="sm"
+            data-board-delete
+            onClick={removeSelected}
+            className="text-danger hover:bg-danger/10 ms-auto"
+            icon={<Trash2 className="size-3.5" />}
+          >
+            {t('boardsDelete')}
+          </Button>}
+        </div>}
         <div
           dir="ltr" className="absolute start-0 top-0"
           style={{ transformOrigin: '0 0', transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}
@@ -736,7 +734,7 @@ function BoardCanvas({
               const from = byId.get(edge.from);
               const to = byId.get(edge.to);
               if (!from || !to) return null;
-              const path = geometry(edge, from, to);
+              const path = paths.get(edge.id)!;
               const chosen = selection?.kind === 'edge' && selection.id === edge.id;
               return (
                 <g
@@ -766,19 +764,19 @@ function BoardCanvas({
             const from = byId.get(edge.from);
             const to = byId.get(edge.to);
             if (!from || !to || !edge.label) return null;
-            const path = geometry(edge, from, to);
+            const label = labels.get(edge.id)!;
             return (
               <button
                 key={edge.id}
                 type="button"
                 data-board-edge-text={edge.id}
-                dir="auto"
+                dir="ltr"
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={() => { setSelectedIds([]); setSelection({ kind: 'edge', id: edge.id }); }}
-                className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-subtle bg-surface px-2.5 py-0.5 text-xs text-main shadow-xs"
-                style={{ insetInlineStart: path.labelX, top: path.labelY }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-subtle bg-surface text-xs leading-6 text-main shadow-xs"
+                style={{ insetInlineStart: label.centreX, top: label.centreY, width: label.w, height: label.h }}
               >
-                {edge.label}
+                <bdi dir="auto">{edge.label}</bdi>
               </button>
             );
           })}

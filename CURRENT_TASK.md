@@ -1,3 +1,27 @@
+## KEY-244 follow-up verified handoff - 2026-11-14T03:00:32.953240+02:00 - Codex key244b-root
+
+Replaced export markup rewriting with the optional boardToSvg edgePath callback (shifted export coordinates, escaped path/labels, unchanged default line bytes). Canvas/export share curve geometry and a pure bounded normal-offset label placer. Label boxes clear cards and prior labels in live ar/en layouts; mixed-script text is isolated without changing canonical content. Export padding includes displaced labels. The empty band was the unconditional 48 px selection sub-toolbar, not a guide/status area; conditional logical-positioned overlay controls now leave the canvas directly beneath the tools and keep pointer coordinates stable on selection.
+
+Verification: focused board98/98; corrected actual-Arabic/emoji fixture subset18/18; full suite once with --test-concurrency=2 passed2132/2132 across342suites,0failures/skips,161114.4243ms. TypeScript noEmit/scoped ESLint clean; main/preload build and scoped diff check pass. Native single ar/en x1280/480 matrix4/4,16/16 SVG/PNG downloads decoded,0renderererrors/documentoverflow. DOM assertions verify label-card/label-label clearance and no empty band.16screenshots retained in .baglib-data/KEY-244-evidence/followup/; all four layout screenshots inspected. Own throwaway profile and renderer removed; user's app never closed; no corpus documents/media opened or modified. Test-only Unicode fixture encoding correction verified separately; production code unchanged throughout full/native runs.
+
+Limits: six bounded steps in both normal directions cannot solve impossible packing (deterministic fallback tested). Conservative code-point width estimates are also the actual canvas button widths. Existing fresh-profile pre-migration planner study_task startup warning remains as previously recorded; migrations succeed and renderer errors remain zero. No new text/i18n keys, schema, fields, dependencies, downloads, Quran edits or Jira actions. Existing ar/en copy preserved; Claude owns review.
+
+Exact11 tracked files/hunks (only this entry/plan update in shared state files):
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `src/shared/board-svg.ts`
+- `src/shared/board-label-placement.ts`
+- `src/renderer/components/notes/board-ui.ts`
+- `src/renderer/components/notes/BoardsWorkspace.tsx`
+- `tests/services/board-svg.test.ts`
+- `tests/services/board-label-placement.test.ts`
+- `tests/ui/board-ui.test.ts`
+- `scripts/board-tools-live/run.mjs`
+- `scripts/board-tools-live/main.cjs`
+
+Local report: docs/agent-ops/reports/KEY-244b.md; local board row KEY-244 (follow-up). User explicitly authorized scoped commit/push to origin/feature/library-domain; pending publication under commit.lock. All unrelated agents' edits remain excluded.
+
 ## KEY-170 verified handoff — 2026-11-14T02:46:33.851147+02:00 — Codex (key170-root)
 
 The Quran commentary tab now compares 2–4 compatible installed tafsirs, remembers the choice per profile through settings, and shows canonical titles, language and individual grouped-ayah ranges. Desktop columns stack at 480 px; comparison alone expands the study panel and compacts unrelated controls. Each source keeps its own RTL/LTR direction and inert QuranRichText rendering; localized metadata follows the UI language. Previous/next comparison controls update every column, including across surah boundaries. They move the study reference without changing the background mushaf page. Missing packs/ayahs stay isolated to their column; zero/one-pack states show the localized hint. Existing commentary IPC is reused with four-pack request bounds, 120 ms coalescing and stale-key rejection. Reader-source metadata now accepts English as well as Arabic. No schema, dependencies, downloads, main-service changes or Jira actions.

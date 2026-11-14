@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { boardViewBends, alignmentForDirection, boardLayoutRoot, boardImageSvg, readBoardPreference, writeBoardPreference } from '../../src/renderer/components/notes/board-ui';
+import { boardViewGeometry, boardViewBends, alignmentForDirection, boardLayoutRoot, boardImageSvg, readBoardPreference, writeBoardPreference } from '../../src/renderer/components/notes/board-ui';
 import type { Board, BoardItem } from '../../src/shared/boards';
 import { translations } from '../../src/renderer/translations';
 
@@ -76,4 +76,18 @@ test('odd parallel groups keep a zero-centred bend and a single arrow curves vis
   const bends = boardViewBends(edges);
   assert.deepEqual([bends.get('ab'), bends.get('ab2'), bends.get('ab3')], [-36, 0, 36]);
   assert.equal(bends.get('bc'), 40);
+});
+
+
+test('export labels match canvas placement after translation, including negative coordinates', () => {
+  const shifted = { ...board, items: board.items.map(item => ({ ...item, x: item.x - 200, y: -70 })) };
+  for (const shape of ['straight', 'curved'] as const) {
+    const { labels } = boardViewGeometry(shifted, shape);
+    const image = boardImageSvg(shifted, undefined, shape);
+    const rect = image.svg.match(/<rect x="([^"]+)" y="([^"]+)" width="160"/u)!;
+    const label = labels.get('ab')!;
+    const x = Math.round((label.centreX + Number(rect[1]) + 200) * 1000) / 1000;
+    const y = Math.round((label.centreY + Number(rect[2]) + 70) * 1000) / 1000;
+    assert.ok(image.svg.includes(`<text x="${x}" y="${y}"`));
+  }
 });

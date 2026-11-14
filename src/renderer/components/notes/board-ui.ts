@@ -1,3 +1,4 @@
+import { placeBoardLabels } from '../../../shared/board-label-placement';
 import type { Board } from '../../../shared/boards';
 import type { AlignMode } from '../../../shared/board-selection';
 import { boardToSvg, BOARD_SVG_LIGHT } from '../../../shared/board-svg';
@@ -45,33 +46,37 @@ export function boardViewBends(edges: Board['edges']): Map<string, number> {
   return bends;
 }
 
-/** Preserve the shared SVG card/text renderer, applying the viewer's curve geometry to its arrows. */
+/** Canvas and export use the same paths and label boxes in canonical board coordinates. */
+export function boardViewGeometry(board: Pick<Board, 'items' | 'edges'>, shape: EdgeShape) {
+  const byId = new Map(board.items.map(item => [item.id, item]));
+  const bends = boardViewBends(board.edges);
+  const paths = new Map(board.edges.flatMap(edge => {
+    const from = byId.get(edge.from), to = byId.get(edge.to);
+    return from && to ? [[edge.id, boardEdgeGeometry(from, to, shape, bends.get(edge.id) ?? 40)] as const] : [];
+  }));
+  return { paths, labels: placeBoardLabels(board.items, board.edges, paths) };
+}
+
+/** The shared SVG renderer accepts geometry directly; no coupling through serialized markup. */
 export function boardImageSvg(board: Board, selection?: string[], shape: EdgeShape = 'straight') {
   const wanted = selection ? new Set(selection) : null;
   const items = board.items.filter(item => !wanted || wanted.has(item.id));
   const byId = new Map(items.map(item => [item.id, item]));
   const edges = board.edges.filter(edge => byId.has(edge.from) && byId.has(edge.to));
+  const { labels } = boardViewGeometry({ items, edges }, shape);
   const bends = boardViewBends(edges);
-  const padding = shape === 'curved' ? 32 + Math.max(40, ...Array.from(bends.values(), Math.abs)) : 32;
-  const result = boardToSvg(board, BOARD_SVG_LIGHT, { padding, selection });
-  if (shape === 'straight' || !items.length) return result;
-  const shiftX = padding - Math.min(...items.map(item => item.x));
-  const shiftY = padding - Math.min(...items.map(item => item.y));
-  let index = 0;
-  const svg = result.svg.replace(/<line [^>]+\/>(<text [^>]*>[\s\S]*?<\/text>)?/gu, (_line, label: string | undefined) => {
-    const edge = edges[index++];
-    const from = byId.get(edge.from)!;
-    const to = byId.get(edge.to)!;
-    const geometry = boardEdgeGeometry(
-      { ...from, x: from.x + shiftX, y: from.y + shiftY },
-      { ...to, x: to.x + shiftX, y: to.y + shiftY },
-      shape,
-      bends.get(edge.id) ?? 40,
-    );
-    const text = label?.replace(/x="[^"]*" y="[^"]*"/u, `x="${geometry.labelX}" y="${geometry.labelY}"`) ?? '';
-    return `<path d="${geometry.d}" fill="none" stroke="${BOARD_SVG_LIGHT.edge}" stroke-width="2" marker-end="url(#board-arrow)"/>${text}`;
-  });
-  return { ...result, svg };
+  let padding = shape === 'curved' ? 32 + Math.max(40, ...Array.from(bends.values(), Math.abs)) : 32;
+  if (items.length) {
+    const minX = Math.min(...items.map(item => item.x)), minY = Math.min(...items.map(item => item.y));
+    const maxX = Math.max(...items.map(item => item.x + item.w)), maxY = Math.max(...items.map(item => item.y + item.h));
+    for (const label of labels.values()) padding = Math.max(padding, 32 + minX - label.x, 32 + minY - label.y, 32 + label.x + label.w - maxX, 32 + label.y + label.h - maxY);
+  }
+  return boardToSvg(board, BOARD_SVG_LIGHT, { padding, selection, edgePath: (edge, from, to) => {
+    const geometry = boardEdgeGeometry(from, to, shape, bends.get(edge.id) ?? 40);
+    const original = byId.get(edge.from)!;
+    const label = labels.get(edge.id);
+    return { d: geometry.d, labelAt: label ? { x: label.centreX + from.x - original.x, y: label.centreY + from.y - original.y } : { x: geometry.labelX, y: geometry.labelY } };
+  } });
 }
 
 export async function exportBoardImage(board: Board, format: 'svg' | 'png', selection?: string[], shape: EdgeShape = 'straight'): Promise<void> {

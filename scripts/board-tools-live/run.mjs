@@ -12,7 +12,7 @@ while (existingApps()) {
   await new Promise(resolve => setTimeout(resolve, 30000));
 }
 const directory = fs.mkdtempSync(path.join(data, 'KEY-244-live-'));
-const evidence = path.join(data, 'KEY-244-evidence');
+const evidence = path.join(data, 'KEY-244-evidence', 'followup');
 fs.mkdirSync(evidence, { recursive: true });
 try {
   const env = { ...process.env, BAGLIB_DATA_DIR: directory, BAGLIB_KEY244_DIR: directory, BAGLIB_KEY244_EVIDENCE: evidence };
