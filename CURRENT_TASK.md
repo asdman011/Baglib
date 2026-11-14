@@ -1,3 +1,39 @@
+## KEY-238 fixes verified handoff - 2026-11-14T04:09:05.266232+02:00 - Codex key238-root
+
+Reading Analytics uses weekly heatmap sums directly, including zero. The reducer always returns a number, so lifetime totals are never substituted into weekly labels. Recent edits LEFT JOIN study_note_detail.title and display its canonical value in bdi with a localized type/date beneath it. Blank/absent titles use existing localized type labels. Note-like rows use openStudyNote and open their matching editor. Reading Statistics now describes WPM as an estimate based on250words/page in ar/en. Default dashboard visibility is preserved. No schema/dependencies/downloads.
+
+Verification passes. Focused15/15 (9service including3newquery regressions,6ar/enrenderer scenarios). Fullsuite once --test-concurrency=2 passed2192/2192 across342suites,0failures/skips,159140.62ms. Final TypeScript noEmit, scoped ESLint0errors0warnings, main/preload build and diff checks pass. Final native2/2 arRTL/enLTR at1280 passes with0renderererrors,positive lifetime/zero weekly values,canonical mixed-script named edits,actual matching note body after opening and estimatedWPM. Eight final screenshots/results.json in .baglib-data/KEY-238-evidence. Weekly/named-edit/speed/opened-note screenshots visually inspected. Startup overlay obscured initial captures, resolved by waiting for the language-independent data-splash-brand marker to disappear and recapturing. Throwaway profile deleted and owned renderer stopped. User app never closed. No documents/media opened or modified.
+
+Exact12tracked files, only KEY-238 entries in shared state files
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `src/main/services/statistics/study-insights.service.ts`
+- `src/renderer/components/dashboard/ReadingAnalyticsModule.tsx`
+- `src/renderer/components/dashboard/StudyInsightsModule.tsx`
+- `src/renderer/components/statistics/ReadingStatisticsModal.tsx`
+- `src/renderer/translations.ts`
+- `src/shared/study-insights.ts`
+- `tests/services/study-insights.test.ts`
+- `tests/ui/dashboard-honesty.test.ts`
+- `scripts/dashboard-honesty-live/run.mjs`
+- `scripts/dashboard-honesty-live/main.cjs`
+
+Local report docs/agent-ops/reports/KEY-238.md and board row KEY-238 (fixes) updated. Existing knowledge schema and note navigation are reused. No task-related problems remain. Other sessions' pending changes are preserved. User explicitly authorized the exact message/scoped commit under docs/agent-ops/commit.lock and normal push to origin/feature/library-domain. Publication next. No Jira actions.
+
+## KEY-238 fixes checkpoint - 2026-11-14T04:05:17.115609+02:00 - Codex key238-root
+
+Weekly lifetime fallback removed because heatmap reduction always produces a number. Recent edits LEFT JOIN existing note titles, render canonical titles in bdi with localized type/date and open note-like rows through openStudyNote. Estimated speed names the 250-words/page assumption in ar/en. Query and renderer regressions15/15, tsc/scoped eslint0warnings/mainbuild pass. Native ar/en1280 matrix2/2 with0renderererrors passes and profile/owned renderer removed. Visual inspection caught startup overlays in some screenshots. Harness now waits for startup removal and will recapture after fullsuite once concurrency2 completes. Production source unchanged since verification. Scoped commit/push remains pending.
+
+## Review: KEY-168 and KEY-171 slices — 2026-11-14 03:59, Claude Code
+
+- **eb9ac83 KEY-168 (Codex):** pass after Claude fixes in **31cc987**: `src/renderer/utils/quran-reference-label.ts`, `src/renderer/components/quran/QuranMushafWorkspace.tsx` and `tests/ui/quran-personal.test.ts`. The cross-surah separator had become a literal "?" (encoding loss) and the test asserted it; copied citations carried U+2066/U+2069 isolates; the word-selection copy had been excluded by Claude's own KEY-170 file restriction, now lifted. Full suite 2183/2183. Jira comment 10383. Reflections per translation source are held for the user.
+- **a7203d5 KEY-171 (Codex):** review pass. Jira comment 10384. The POS source is held for the user.
+
+## KEY-238 fixes active - 2026-11-14T03:57:04.4404685+02:00 - Codex key238-root
+
+Explicitly authorized dashboard honesty fixes and scoped lock commit/push. Base a7203d5 (KEY-171), eb9ac83 (KEY-168). Weekly totals must retain zero, recent edits gain existing note titles/localized types and navigation, recent query tests, estimated WPM ar/en. Default visibility preserved. No schema/dependencies/downloads. Verification pending. Other sessions' changes preserved.
+
 ## KEY-171 verified handoff - 2026-11-14T01:53:55.746530+00:00 - Codex key171-root
 
 Validated explicit canonical word locations across meaning/transliteration, morphology, frequency counts/places and glyph lexical joins. Malformed, out-of-range, marker and duplicate annotation rows never attach to another word; missing/rejected locations and absent packs are reported separately. Morphology also logs invalid links when the ayah has no canonical records. Cached indexes clear on close. No schema/entities/dependencies/downloads.

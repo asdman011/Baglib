@@ -2,6 +2,12 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T04:09:05.266232+02:00, Codex key238-root] KEY-238 fixes VERIFIED. Honest weekly zero totals, named mixed-script recent edits/localized type/date/note opening, ar/en estimated250words/page WPM. Full2192/2192 once(concurrency2,342suites),focused15/native2/0renderererrors/types/lint0warnings/mainbuild/diff pass. Eight final screenshots inspected after startup-readiness correction;profiledeleted/ownedrendererstopped. Exact12files in CURRENT_TASK/localreport. Scoped lock commit/push authorized and next.
+
+- [2026-11-14T04:05:17.115609+02:00, Codex key238-root] KEY-238 fixes implemented. Focused15/types/lint0warnings/mainbuild and native2 ar/en1280 pass,0renderererrors. Fullsuite once concurrency2 running; final screenshot recapture pending after startup overlay readiness fix. Scope/details in CURRENT_TASK.
+
+- [2026-11-14T03:57:04.4404685+02:00, Codex key238-root] KEY-238 fixes claimed. Scope in CURRENT_TASK; implementation and checks pending.
+
 - [2026-11-14T01:53:55.746530+00:00, Codex key171-root] KEY-171 verified: shared canonical word validation, named gaps/pack absence, localized37:130 notice and bounded root/lemma occurrence jumps. Finalfull2183/2183(concurrency2,342suites,159111.9856ms),focused14/native4/types/lint0warnings/build/diff pass;0renderererrors,24screens,1338originalsunchanged/profiledeleted/ownedrenderer stopped. Exact16files/limits in CURRENT_TASK/report. POS source decision held; metadata69 absent/no download. Scoped lock commit/push authorized and next.
 
 - [2026-11-14T01:43:11.564299+00:00, Codex key171-root] KEY-171 validation/coverage/compatibility/occurrence implementation done; focused14/types/lint/build pass; native4 ar/en1280/480 zero renderer errors passes. Final visible screenshot rerun and fullsuite pending. QUL/contracts/experience docs updated; POS source decision held, metadata69 absent/no download.

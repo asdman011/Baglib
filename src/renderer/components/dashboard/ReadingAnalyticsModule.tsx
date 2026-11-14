@@ -119,9 +119,9 @@ export const ReadingAnalyticsModule: React.FC<ReadingAnalyticsModuleProps> = ({
     return {
       currentStreak: streakStats?.currentStreakDays || 0,
       longestStreak: streakStats?.longestStreakDays || 0,
-      weeklySeconds: weeklySeconds || streakStats?.totalReadTimeSeconds || 0,
+      weeklySeconds,
       todaySeconds,
-      pagesThisWeek: weeklyPages || streakStats?.totalReadPages || 0,
+      pagesThisWeek: weeklyPages,
       highlightsThisWeek,
       notesThisWeek,
     };

@@ -26,7 +26,7 @@ export interface StudyInsights {
   completedTasks: number;
   totalTasks: number;
   reflections: { id: string; title: string; content: string }[];
-  edits: { id: string; kind: string; updatedAt: string }[];
+  edits: { id: string; kind: string; title: string | null; updatedAt: string }[];
   partial: boolean;
 }
 export interface WordFrequency { words: { word: string; count: number }[]; partial: boolean; indexedPages: number }

@@ -19,12 +19,11 @@ import {
   Clock,
   BookOpen,
   Zap,
-  TrendingUp,
   PieChart,
   BarChart2,
   RefreshCw,
 } from 'lucide-react';
-import { translations, TranslationKey } from '../../translations';
+import { translations } from '../../translations';
 import type {
   ReadingStreakStats,
   DailyReadingHeatmapEntry,
@@ -268,7 +267,7 @@ export const ReadingStatisticsModal: React.FC<ReadingStatisticsModalProps> = ({
                   </div>
                   <div className="p-3 bg-white dark:bg-zinc-800 rounded-lg border border-gray-100 dark:border-zinc-700/60">
                     <div className="text-xs text-gray-500 dark:text-zinc-400 mb-1">
-                      {t.statsWordsPerMinute}
+                      {t.statsWordsPerMinuteEstimated}
                     </div>
                     <div className="text-xl font-bold text-gray-900 dark:text-zinc-100">
                       {streakStats.averageWordsPerMinute} {t.statsWordsPerMinute}

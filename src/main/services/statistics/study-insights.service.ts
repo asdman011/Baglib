@@ -68,7 +68,7 @@ export class StudyInsightsService {
       ideas: count("SELECT COUNT(*) AS count FROM knowledge WHERE knowledge_type='question' AND deleted_at IS NULL"),
       completedTasks: count("SELECT COUNT(*) AS count FROM study_task WHERE status='completed'"),
       totalTasks: count('SELECT COUNT(*) AS count FROM study_task'), reflections,
-      edits: this.db.prepare('SELECT id,knowledge_type AS kind,updated_at AS updatedAt FROM knowledge WHERE updated_at IS NOT NULL AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10').all() as StudyInsights['edits'],
+      edits: this.db.prepare('SELECT k.id,k.knowledge_type AS kind,s.title,k.updated_at AS updatedAt FROM knowledge k LEFT JOIN study_note_detail s ON s.knowledge_id=k.id WHERE k.updated_at IS NOT NULL AND k.deleted_at IS NULL ORDER BY k.updated_at DESC,k.id LIMIT 10').all() as StudyInsights['edits'],
       partial: source.length > 100000,
     };
   }

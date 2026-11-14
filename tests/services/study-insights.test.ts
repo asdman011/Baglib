@@ -99,3 +99,60 @@ test('oversized indexed content is explicitly partial and bounded', async () => 
     assert.ok(result.words.length <= 50);
   } finally { db.close(); }
 });
+
+test('recent edits retain titles and untitled types, exclude trash and missing dates, and return ten latest', () => {
+  const { db, insights } = open();
+  try {
+    assert.deepEqual(insights.summary().edits, []);
+    const insert = db.prepare('INSERT INTO knowledge(id,knowledge_type,updated_at,deleted_at) VALUES (?,?,?,?)');
+    for (let index = 0; index < 12; index++) insert.run(`edit-${index}`, index === 11 ? 'study_note' : 'highlight', `2026-11-${String(index + 1).padStart(2, '0')}T12:00:00Z`, null);
+    const title = '\u062a\u0623\u0645\u0644 Faith';
+    db.prepare('INSERT INTO study_note_detail(knowledge_id,title,content) VALUES (?,?,?)').run('edit-11', title, 'body');
+    insert.run('trash', 'study_note', '2026-11-14T12:00:00Z', '2026-11-14');
+    insert.run('undated', 'quote', null, null);
+    const edits = insights.summary().edits;
+    assert.equal(edits.length, 10);
+    assert.deepEqual(edits[0], { id: 'edit-11', kind: 'study_note', title, updatedAt: '2026-11-12T12:00:00Z' });
+    assert.deepEqual(edits.slice(1).map(item => item.id), [10,9,8,7,6,5,4,3,2].map(index => `edit-${index}`));
+    assert.ok(edits.slice(1).every(item => item.kind === 'highlight' && item.title === null));
+    db.prepare("UPDATE study_note_detail SET title='   ' WHERE knowledge_id='edit-11'").run();
+    assert.equal(insights.summary().edits[0].title, '   ');
+  } finally { db.close(); }
+});
+
+test('recent reflections return ten current notes ordered by edits, preserve titles and bound excerpts', () => {
+  const { db, insights } = open();
+  try {
+    assert.deepEqual(insights.summary().reflections, []);
+    for (let index = 0; index < 12; index++) {
+      const id = `reflection-${index}`;
+      db.prepare('INSERT INTO knowledge(id,knowledge_type,updated_at) VALUES (?,?,?)').run(id, 'study_note', `2026-11-${String(index + 1).padStart(2, '0')}T12:00:00Z`);
+      db.prepare('INSERT INTO study_note_detail(knowledge_id,title,content) VALUES (?,?,?)').run(id, `Faith ${index}`, '\u062a'.repeat(350));
+    }
+    db.prepare("UPDATE knowledge SET deleted_at='2026-11-14' WHERE id='reflection-11'").run();
+    const reflections = insights.summary().reflections;
+    assert.equal(reflections.length, 10);
+    assert.deepEqual(reflections.map(note => note.id), [10,9,8,7,6,5,4,3,2,1].map(index => `reflection-${index}`));
+    assert.equal(reflections[0].title, 'Faith 10');
+    assert.equal(reflections[0].content, '\u062a'.repeat(300));
+  } finally { db.close(); }
+});
+
+test('legacy recent reflections skip conversion markers and malformed rows and bound excerpts', () => {
+  const { db, insights } = open();
+  try {
+    const insert = db.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)');
+    const legacy = (id: string, value: unknown, date: string) => insert.run(`study.note.v1:${id}`, JSON.stringify(value), date);
+    legacy('valid', { id: 'valid', title: '\u0639\u0644\u0645 Knowledge', content: 'x'.repeat(350) }, '2026-11-10');
+    legacy('untitled', { id: 'untitled', content: 'Body' }, '2026-11-11');
+    legacy('converted', { id: 'converted', content: 'Old body' }, '2026-11-12');
+    insert.run('study.note.converted:converted', 'true', '2026-11-12');
+    insert.run('study.note.v1:broken', '{invalid', '2026-11-13');
+    legacy('invalid', { id: 42, content: 'Body' }, '2026-11-13');
+    legacy('missing', { id: 'missing' }, '2026-11-13');
+    assert.deepEqual(insights.summary().reflections, [
+      { id: 'untitled', title: '', content: 'Body' },
+      { id: 'valid', title: '\u0639\u0644\u0645 Knowledge', content: 'x'.repeat(300) },
+    ]);
+  } finally { db.close(); }
+});

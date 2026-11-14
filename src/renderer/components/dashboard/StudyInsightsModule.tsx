@@ -5,7 +5,18 @@ import React, { useEffect, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { civilDate, type StudyTask } from '../../../shared/study-planner';
 import { orderStudyTasks, type StudyInsights, type StudyPreferences, type WordFrequency } from '../../../shared/study-insights';
+import type { TranslationKey } from '../../translations';
 import { openStudyNote } from '../../utils/study-navigation';
+
+const knowledgeTypeLabels: Record<string, TranslationKey> = {
+  study_note: 'historyKindNote',
+  note: 'historyKindNote',
+  reading_reflection: 'waveReflection',
+  highlight: 'historyKindHighlight',
+  quote: 'historyKindQuote',
+  bookmark: 'historyKindBookmark',
+  question: 'historyKindQuestion',
+};
 
 const style = 'rounded-lg border border-subtle bg-surface p-2 text-sm min-w-0';
 
@@ -82,7 +93,16 @@ export function StudyInsightsModule() {
       <button className={style} onClick={() => setViewMode('planner')}>{t('plannerTitle')}</button>
       <div className="grid @min-[40rem]:grid-cols-2 gap-4">
         <div><h3 className="font-bold">{t('studyReflections')}</h3>{!summary.reflections.length && <p>{unavailable}</p>}{summary.reflections.map(note => <button key={note.id} className={`${style} block text-start w-full my-2 break-words`} dir="auto" onClick={() => openStudyNote({ id: note.id })}>{note.title || note.content}</button>)}</div>
-        <div><h3 className="font-bold">{t('studyRecentEdits')}</h3><p className="text-xs text-muted">{t('studyEditsHint')}</p>{!summary.edits.length && <p>{unavailable}</p>}{summary.edits.map(item => <p key={item.id} className="text-sm break-words">{t('studyKnowledgeItem')} — {new Date(item.updatedAt).toLocaleDateString(lang)}</p>)}</div>
+        <div><h3 className="font-bold">{t('studyRecentEdits')}</h3><p className="text-xs text-muted">{t('studyEditsHint')}</p>{!summary.edits.length && <p>{unavailable}</p>}{summary.edits.map(item => {
+          const type = t(knowledgeTypeLabels[item.kind] || 'studyKnowledgeItem');
+          const content = <>
+            <bdi className="block font-semibold leading-relaxed">{item.title?.trim() ? item.title : type}</bdi>
+            <span className="block text-xs text-muted">{type} — <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleDateString(lang)}</time></span>
+          </>;
+          return ['study_note', 'note', 'reading_reflection'].includes(item.kind)
+            ? <button key={item.id} type="button" data-study-recent-edit={item.id} className={`${style} block text-start w-full my-2 break-words`} onClick={() => openStudyNote({ id: item.id })}>{content}</button>
+            : <div key={item.id} data-study-recent-edit={item.id} className={`${style} my-2 break-words`}>{content}</div>;
+        })}</div>
       </div>
       <h3 className="font-bold">{t('studyWordFrequency')}</h3>
       <div className="flex gap-2 flex-wrap"><select aria-label={t('studyWordScope')} className={`${style} max-w-full`} value={bookId} onChange={event => setBookId(event.target.value)}><option value="">{t('studyLibraryScope')}</option>{books.map(book => <option key={book.id} value={book.id}>{book.title}</option>)}</select><button disabled={busy} className={style} onClick={async () => { setBusy(true); setError(false); try { setFrequency(await window.electronAPI.studyInsights.words(bookId || undefined)); } catch { setError(true); } finally { setBusy(false); } }}>{t('studyCountWords')}</button></div>
