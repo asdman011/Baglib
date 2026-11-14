@@ -619,3 +619,54 @@ Approved by the user on 2026-11-13. See ADR-015.
 | position | INTEGER NOT NULL | Ordered membership position |
 
 The primary key is (series_id, work_id). Series deletion keeps Works. The existing playback completion flag supplies completed/total progress, with new lecture saves using 95% playback as the completion threshold. No additional duration or completion columns are introduced.
+
+
+## Manuscripts — KEY-364, ADR-016, migration 029
+
+Approved R3 on 2026-11-14, Research Editor Plan revision 2.1. R6 retains BoardStore JSON. These entities have no relationship to Work, Edition or Source. Canonical user-entered text is preserved.
+
+### manuscript
+
+| Column | Type and constraints | Meaning |
+| --- | --- | --- |
+| id | TEXT PRIMARY KEY | Manuscript identity |
+| title | TEXT NOT NULL | Canonical title as typed |
+| kind | TEXT NOT NULL CHECK IN research/book | Authored project kind |
+| settings_json | TEXT NOT NULL DEFAULT '{}' | Citation placement/style, page setup and numbering settings |
+| created_at | TEXT NOT NULL | UTC ISO creation time |
+| updated_at | TEXT NOT NULL | UTC ISO last edit time |
+| deleted_at | TEXT NULL | Recoverable manuscript trash timestamp |
+
+### manuscript_document
+
+| Column | Type and constraints | Meaning |
+| --- | --- | --- |
+| id | TEXT PRIMARY KEY | BlockSuite document id |
+| manuscript_id | TEXT NOT NULL FK manuscript(id), ON DELETE CASCADE | Owning manuscript |
+| parent_id | TEXT NULL FK manuscript_document(id), ON DELETE CASCADE | Part/chapter/section hierarchy, null at top level |
+| title | TEXT NOT NULL | Kept aligned with the snapshot page-title block |
+| position | INTEGER NOT NULL | Order among siblings, including hidden siblings |
+| snapshot | TEXT NOT NULL | Exact serialized BlockSuite DocSnapshot JSON |
+| plain_text | TEXT NOT NULL DEFAULT '' | Derived canonical text for preview/search |
+| primary_mode | TEXT NOT NULL DEFAULT 'page', CHECK IN page/edgeless | Preferred editor presentation |
+| updated_at | TEXT NOT NULL | UTC ISO last document edit time |
+| deleted_at | TEXT NULL | Recoverable document trash timestamp |
+
+### manuscript_link
+
+| Column | Type and constraints | Meaning |
+| --- | --- | --- |
+| document_id | TEXT NOT NULL FK manuscript_document(id), ON DELETE CASCADE | Referring document |
+| target_scheme | TEXT NOT NULL CHECK IN quran/sunnah/poetry/book/note | BagLib reference scheme |
+| target_id | TEXT NOT NULL | Scheme-specific reference, for example hafs:2:255 |
+| block_id | TEXT NOT NULL | Referring BlockSuite block |
+
+Composite primary key (document_id, block_id, target_scheme, target_id). Secondary index idx_manuscript_link_target(target_scheme, target_id). Links are rebuilt from snapshots transactionally and carry no new target relationships.
+
+### manuscript_document_fts and history
+
+FTS5 columns document_id UNINDEXED, title, plain_text with unicode61. The index stores normalized copies using the existing book FTS normalizeArabicText helper. Canonical table text stays exact. The helper includes ة/ه equivalence, with the same potential ambiguity as book search. Active search filters deleted manuscripts/documents and descendants of deleted documents. Physical document deletion cleans the FTS row through a trigger.
+
+ADR-008 entity_version uses entity_type manuscript_document, schema_version 1, a SHA-256 history_blob envelope containing exact snapshot/title/primary_mode, and action checkpoint or restore. Autosaves write no versions. Checkpoints skip an unchanged content hash. Restore preserves the replaced content as a checkpoint when needed and records restored_from_revision. Hierarchy and trash flags are retained across content restore.
+
+The manuscript-assets/<blobId> folder concept is approved beside the database, with its blob bridge assigned to RE-2. No asset or board schema is added here. See ADR-016 for save/lifecycle/restore contracts and implementation boundaries.

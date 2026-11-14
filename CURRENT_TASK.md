@@ -1,3 +1,43 @@
+## KEY-364 verified handoff - 2026-11-14T21:47:08.299941+02:00 - Codex 01a1db7f-8af5-7521-aa74-72ca0dbc75cc
+
+Implemented RE-3 under the approved R3 schema and R6 decision, epic KEY-361. ADR-016, migration029, dictionary/DBML, repository/IPC/main registration/preload/shared contracts, pure snapshot derivation, renderer persistence controller and standalone manuscripts list/chapter tree are verified. Claude's untracked Research Editor Plan revision2.1 is included unchanged because ADR-016 references it. The user's task explicitly authorizes this scoped commit and normal push to origin/feature/library-domain under commit.lock.
+
+User experience. The reusable ar/en list creates and renames research/book manuscripts and part/chapter/section documents. Parent selection nests documents, up/down controls reorder siblings, and recoverable manuscript/chapter trash preserves independently deleted children. Logical indentation mirrors in RTL. Original titles/diacritics and mixed scripts remain exact. RE-2 receives the typed API/controller/component for its Editor tab and iframe host. No shipped navigation was changed. Saves atomically preserve exact snapshot JSON and derive preview text, BagLib reference rows and normalized FTS. Autosave debounces1500ms with zero history rows. Explicit save/switch/close/10-minute checkpoints deduplicate content hashes, and version restore preserves the replaced checkpoint.
+
+Verification. Focused32/32 through npm test (migration/repository/derivation and fake timers). Full suite once with --test-concurrency=2 passed2336/2336,352suites,0fail/skip/TODO,331926.3882ms. One final nested-table/title regression was added after the full runner loaded that file and passed in the focused32 run. Final tsc --noEmit --incremental false, changed-file ESLint (0errors/0warnings), main/preload build and whitespace checks pass. Final native ar/en2/2 uses actual production preload/IPC and a fixture-mounted component, creating/nesting/reordering/renaming, exact save/reload, version restore, manuscript/chapter trash/restore, Arabic/English FTS, and1450/720px layouts with0renderererrors/0horizontaloverflow. Four screenshots were visually inspected. Evidence is .baglib-data/KEY-364-evidence/ and KEY-364-*.log.
+
+Migration application. The current real database already reported029 when inspected for native verification. A read-only SQLite backup of its latest pre029 migration backup was copied into a throwaway profile. Exactly migration029 applied there, every prior table's row hash stayed identical, foreign_key_check/integrity_check passed, and source backup/PDF hashes stayed unchanged. No original database was passed to runMigrations by the KEY-364 scripts. The real Arabic text-layer PDF has existing PUA/presentation-form defects. The fixture extractor uses NFKC to decode presentation glyphs before copying text into the chapter, with searches for وجل and anniversary. Canonical manuscript save/derivation performs no text normalization. Throwaway profiles were deleted after runs, and other Electron processes were waited for and left untouched.
+
+Boundaries. Work → Edition → Source is preserved. Only approved fields/relationships were added. BoardStore JSON stays intact. manuscript-assets is documented for RE-2's blob bridge. RE-2 must instantiate one persistence controller per document and await its documentSwitch/close before leaving or closing the native host. Actual BlockSuite iframe/BagLib source blocks are RE-2/RE-5 integration work. This task verifies hand-written DocSnapshot contracts and JSON persistence, without claiming an embedded-editor round trip. Existing book FTS normalization includes ة/ه ambiguity, documented in ADR/dictionary. No new dependencies, downloads, third-party reverse engineering or Jira mutation occurred.
+
+Exact task files (23)
+
+- docs/ADR-016-manuscripts.md
+- docs/data-dictionary.md
+- docs/baglib-library-domain-schema (2).dbml
+- docs/features/feature - Research Editor Plan.md
+- src/main/database/migrations/029_manuscripts.ts
+- src/main/database/migrations/index.ts
+- src/main/database/repositories/manuscript.repository.ts
+- src/main/ipc/manuscripts.ts
+- src/main/index.ts
+- src/preload/index.ts
+- src/shared/manuscripts.ts
+- src/shared/manuscript-snapshot.ts
+- src/renderer/components/research/ManuscriptList.tsx
+- src/renderer/components/research/manuscripts.css
+- src/renderer/components/research/manuscript-persistence.ts
+- src/renderer/translations.ts
+- tests/services/manuscripts.test.ts
+- tests/ui/manuscript-persistence.test.ts
+- scripts/manuscripts-live/fixture.tsx
+- scripts/manuscripts-live/main.ts
+- scripts/manuscripts-live/run.mjs
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+
+Publication. Verification complete. Authorized locked commit and push pending. Other sessions' files/state entries remain preserved.
+
 ## KEY-350 verified handoff - 2026-11-14T15:23:26.424189+02:00 - Codex key350-root
 
 KEY-350 changes the shared notes and scratchpad slash popup to 8 results/source in free search and 20 in scoped search, with keyboard/mouse lazy Show more. Corpus choices insert complete quoted text plus the existing exact reference on the next line; notes insert links. Selecting a book/lecture offers Insert link or Search inside, with the selected material shown. Indexed text/PDF text layers and subtitle cues yield whole paragraphs/sentences plus Source/page or media-time links; missing text/transcripts show centralized Arabic/English messages. Slash insertion suppresses its automatic relation tooltip while keeping relation data, graph and existing editing. Cached/yielding local scans,280ms debounce,3-character text minimum,service LIMITs and dedicated cancellable corpus workers keep typing responsive. Work -> Edition -> Source, scopes/aliases/navigation/RTL-LTR remain preserved; no schema/entity/persistedfield/dependency/download changes.

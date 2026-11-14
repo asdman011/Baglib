@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T21:47:08.299941+02:00, Codex KEY-364] VERIFIED RE-3 approved migration029/ADR-016, transactional snapshot/text/links/FTS, checkpoint-only history, trash and self-contained ar/en tree. Focused32/full2336pass0fail(concurrency2,352suites)/native2ar-en,4screens,types/mainbuild/lint0warnings pass. Real pre029 backup COPY migration preserves all prior row hashes;originals unchanged/profile deleted. Exact23files/boundaries in CURRENT_TASK and local report. Scoped lock commit/push explicitly authorized and pending.
+
 - [2026-11-14T15:23:26.424189+02:00, Codex key350-root] KEY-350 VERIFIED: isolated cancellable/limited corpus workers,8/20lazy paging,quote+link inserts,no slash relation popup,selected-material passages and centralizedar/en. Focused60/full2303pass0fail0TODO(concurrency2,352suites),native2ar/en incl scratchpad/5realcopies/unindexedPDF/scan/transcriptcases,0renderererrors/originalsunchanged/profiledeleted. MainSunnah8348.16→16.42ms;rapidmaxmain18.09/renderer76.10ms. Types/build/lint0errors1existingwarning/scopeddiff reviewed. Exact36files/evidence/limits in CURRENT_TASK/report; authorized scoped lock publication pending.
 
 

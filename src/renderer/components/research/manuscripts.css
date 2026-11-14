@@ -1,0 +1,14 @@
+.manuscript-list { color: var(--text, #20252b); background: var(--surface, #fff); padding: 1.5rem; line-height: 1.8; font-family: inherit; text-align: start; max-inline-size: 100%; }
+.manuscript-list fieldset { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+.manuscript-list ul { list-style: none; margin-block: .5rem; padding-inline-start: 1.5rem; }
+.manuscript-list > fieldset > ul, .manuscript-list .manuscript-root-tree { padding-inline-start: 0; }
+.manuscript-list .manuscript-children { border-inline-start: 1px solid var(--border, #8b939d); margin-inline-start: .5rem; }
+.manuscript-row { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-block: .5rem; min-inline-size: 0; }
+.manuscript-list input, .manuscript-list select, .manuscript-list button { font: inherit; line-height: 1.8; padding-block: .3rem; padding-inline: .65rem; border: 1px solid var(--border, #858c95); border-radius: .3rem; background: inherit; color: inherit; max-inline-size: 100%; }
+.manuscript-list input { min-inline-size: 12rem; }
+.manuscript-list button { cursor: pointer; }
+.manuscript-list button:disabled { opacity: .5; cursor: default; }
+.manuscript-list :focus-visible { outline: 2px solid var(--focus, #4989ce); outline-offset: 2px; }
+.manuscript-name { text-align: start; overflow-wrap: anywhere; flex: 1 1 10rem; }
+.manuscript-list [aria-pressed=true] { font-weight: 700; border-color: var(--focus, #4989ce); }
+.manuscript-list [role=alert] { color: var(--danger, #b42318); }

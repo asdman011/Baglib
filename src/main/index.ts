@@ -1,3 +1,4 @@
+import { registerManuscriptIpc } from './ipc/manuscripts';
 import { installEditorContextMenu } from './services/editor-context-menu';
 import { parseDeepLink, protocolRegistrationArgs } from '../shared/deep-link';
 import { errorMessage } from '../shared/errors';
@@ -406,6 +407,7 @@ registerPdfEditorIpc();
 registerPoetryIpc();
 registerKnowledgeCardIpc();
 registerKnowledgeHistoryIpc();
+registerManuscriptIpc();
 registerStudyPlannerIpc();
 registerPathwayIpc();
 setupRssIpc();

@@ -269,3 +269,48 @@ Table event_log {
   actor varchar(100) [note: 'Who performed the action, e.g. Ammar or Monzer.']
   occurred_at timestamp [note: 'When the event happened.']
 }
+
+
+// ADR-016 / KEY-364, R3 approved 2026-11-14. Separate from Work -> Edition -> Source.
+Table manuscript {
+  id text [pk]
+  title text [not null, note: 'Canonical title as typed']
+  kind text [not null, note: "CHECK kind IN ('research','book')"]
+  settings_json text [not null, default: '{}']
+  created_at text [not null]
+  updated_at text [not null]
+  deleted_at text
+}
+Table manuscript_document {
+  id text [pk, note: 'BlockSuite document id']
+  manuscript_id text [not null]
+  parent_id text
+  title text [not null, note: 'Synchronized with snapshot page title']
+  position integer [not null, note: 'Sibling order']
+  snapshot text [not null, note: 'Exact DocSnapshot JSON']
+  plain_text text [not null, default: '', note: 'Derived canonical text']
+  primary_mode text [not null, default: 'page', note: "CHECK primary_mode IN ('page','edgeless')"]
+  updated_at text [not null]
+  deleted_at text
+}
+Ref: manuscript_document.manuscript_id > manuscript.id [delete: cascade]
+Ref: manuscript_document.parent_id > manuscript_document.id [delete: cascade]
+Table manuscript_link {
+  document_id text [not null]
+  target_scheme text [not null, note: "CHECK target_scheme IN ('quran','sunnah','poetry','book','note')"]
+  target_id text [not null]
+  block_id text [not null]
+  indexes {
+    (document_id, block_id, target_scheme, target_id) [pk]
+    (target_scheme, target_id) [name: 'idx_manuscript_link_target']
+  }
+}
+Ref: manuscript_link.document_id > manuscript_document.id [delete: cascade]
+// SQLite virtual FTS5 table, represented here for the data dictionary.
+Table manuscript_document_fts {
+  document_id text [note: 'FTS UNINDEXED identifier, cleaned on physical document deletion']
+  title text [note: 'Normalized index-only copy']
+  plain_text text [note: 'Normalized index-only copy using book FTS helper; unicode61 tokenizer']
+}
+// ADR-008 entity_version/history_blob reused with entity_type manuscript_document.
+// Checkpoint-only history, no autosave versions. No board/asset table or library relationship.

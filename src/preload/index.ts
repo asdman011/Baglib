@@ -1,3 +1,4 @@
+import type { ManuscriptsAPI } from '../shared/manuscripts';
 import type { AdvancedAPI, RebuildProgress } from '../shared/catalog-export';
 import type { NotificationRecord } from '../shared/notifications';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
@@ -95,7 +96,28 @@ const sunnah: SunnahAPI = {
   chapter: (collection, number) => ipcRenderer.invoke('sunnah:chapter', collection, number),
 };
 
+const manuscripts: ManuscriptsAPI = {
+  list: (trashed) => ipcRenderer.invoke('manuscripts:list', trashed),
+  create: (title, kind) => ipcRenderer.invoke('manuscripts:create', title, kind),
+  rename: (id, title) => ipcRenderer.invoke('manuscripts:rename', id, title),
+  trash: (id) => ipcRenderer.invoke('manuscripts:trash', id),
+  restore: (id) => ipcRenderer.invoke('manuscripts:restore', id),
+  documents: (id, trashed) => ipcRenderer.invoke('manuscripts:documents', id, trashed),
+  document: (id) => ipcRenderer.invoke('manuscripts:document', id),
+  createDocument: (id, title, parentId) => ipcRenderer.invoke('manuscripts:createDocument', id, title, parentId),
+  renameDocument: (id, title) => ipcRenderer.invoke('manuscripts:renameDocument', id, title),
+  moveDocument: (id, parentId, position) => ipcRenderer.invoke('manuscripts:moveDocument', id, parentId, position),
+  trashDocument: (id) => ipcRenderer.invoke('manuscripts:trashDocument', id),
+  restoreDocument: (id) => ipcRenderer.invoke('manuscripts:restoreDocument', id),
+  save: (input) => ipcRenderer.invoke('manuscripts:save', input),
+  checkpoint: (id) => ipcRenderer.invoke('manuscripts:checkpoint', id),
+  history: (id) => ipcRenderer.invoke('manuscripts:history', id),
+  restoreVersion: (id, revision) => ipcRenderer.invoke('manuscripts:restoreVersion', id, revision),
+  search: (query, id) => ipcRenderer.invoke('manuscripts:search', query, id),
+};
+
 export const API = {
+  manuscripts,
   athan,
   quran,
   sunnah,
