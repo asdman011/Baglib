@@ -1,4 +1,6 @@
 import { errorMessage } from '../../../shared/errors';
+import { isMirrorUrl, mirrorReferer, mirrorRequestPatterns, primaryLibgenOrigin } from '../../../shared/source-urls';
+import { sourceUrls } from '../source-urls';
 /**
  * Content Shield & Ad Blocker Service for Baglib
  *
@@ -115,6 +117,7 @@ export class ContentShieldService {
   public attachToSession(targetSession: Session): void {
     if (!targetSession || this.attachedSessions.has(targetSession)) return;
     this.attachedSessions.add(targetSession);
+    const file = sourceUrls.file();
 
     // 1. Block ad & tracker network requests
     try {
@@ -143,13 +146,7 @@ export class ContentShieldService {
       targetSession.webRequest.onBeforeSendHeaders(
         {
           urls: [
-            '*://*.libgen.li/*',
-            '*://*.libgen.bz/*',
-            '*://*.libgen.is/*',
-            '*://*.libgen.rs/*',
-            '*://*.libgen.gs/*',
-            '*://*.libgen.vg/*',
-            '*://*.booksdl.lc/*',
+            ...mirrorRequestPatterns(file),
             // Al-Bayan human-narration embeds: packaged app:// and file:// pages send no Referer,
             // which YouTube rejects with player configuration error 153.
             '*://www.youtube-nocookie.com/embed/*',
@@ -167,7 +164,7 @@ export class ContentShieldService {
             return;
           }
           if (!requestHeaders['Referer'] || requestHeaders['Referer'] === 'about:blank') {
-            requestHeaders['Referer'] = 'https://libgen.li/';
+            requestHeaders['Referer'] = mirrorReferer(file, details.url);
           }
           if (!requestHeaders['User-Agent']) {
             requestHeaders['User-Agent'] =
@@ -294,13 +291,15 @@ export class ContentShieldService {
 
     // High-performance fallback direct stream
     return new Promise((resolve, reject) => {
+      const file = sourceUrls.file();
+      const primaryOrigin = primaryLibgenOrigin(file);
       const executeRequest = (currentUrl: string, redirectCount = 0) => {
         if (redirectCount > 8) {
           return reject(new Error('Too many HTTP redirects'));
         }
 
         const client = currentUrl.startsWith('https:') ? https : http;
-        let parsedOrigin = 'https://libgen.li';
+        let parsedOrigin = primaryOrigin;
         try {
           parsedOrigin = new URL(currentUrl).origin;
         } catch {}
@@ -317,8 +316,8 @@ export class ContentShieldService {
               'Accept-Encoding': 'identity',
               Connection: 'keep-alive',
               Referer:
-                currentUrl.includes('booksdl.lc') || currentUrl.includes('libgen')
-                  ? 'https://libgen.li/'
+                isMirrorUrl(file, currentUrl)
+                  ? mirrorReferer(file, currentUrl)
                   : parsedOrigin,
             },
             rejectUnauthorized: false,

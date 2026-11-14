@@ -1,4 +1,5 @@
 import { errorMessage } from '../../../shared/errors';
+import { isMirrorUrl, primaryLibgenOrigin } from '../../../shared/source-urls';
 import { sourceUrls } from '../source-urls';
 import https from 'https';
 import http from 'http';
@@ -82,7 +83,7 @@ export class LibgenDownloadService {
   }
 
   /**
-   * Step 1: Resolves direct download URL from MD5 with fast multi-mirror racing (libgen.li, libgen.bz)
+   * Step 1: Resolves direct download URL from MD5 with fast multi-mirror racing across the configured mirrors
    */
   public async resolveDownloadUrl(
     md5: string,
@@ -413,6 +414,7 @@ export class LibgenDownloadService {
     } = options;
 
     return new Promise((resolve) => {
+      const file = sourceUrls.file();
       let isResolved = false;
       const safeResolve = (resVal: { success: boolean; byteSize?: number; md5?: string; sha256?: string; mimeType?: string; serverFilename?: string; error?: string }) => {
         if (isResolved) return;
@@ -427,7 +429,7 @@ export class LibgenDownloadService {
 
         const client = currentUrl.startsWith('https:') ? https : http;
         const agent = currentUrl.startsWith('https:') ? keepAliveHttpsAgent : keepAliveHttpAgent;
-        let origin = 'https://libgen.li';
+        let origin = primaryLibgenOrigin(file);
         try {
           origin = new URL(currentUrl).origin;
         } catch {}
@@ -480,7 +482,7 @@ export class LibgenDownloadService {
               'Accept-Language': 'en-US,en;q=0.9',
               'Accept-Encoding': 'identity',
               Connection: 'keep-alive',
-              Referer: currentReferer || (currentUrl.includes('libgen') ? 'https://libgen.li/ads.php?md5=' + cleanMd5 : origin),
+              Referer: currentReferer || (isMirrorUrl(file, currentUrl) ? `${primaryLibgenOrigin(file)}/ads.php?md5=${cleanMd5}` : origin),
             },
             timeout: timeoutMs,
             rejectUnauthorized: false,
@@ -771,7 +773,7 @@ export class LibgenDownloadService {
         // Load the URL with headers
         helperWin.loadURL(url, {
           userAgent: DEFAULT_USER_AGENT,
-          httpReferrer: referer || 'https://libgen.li/',
+          httpReferrer: referer || `${primaryLibgenOrigin(sourceUrls.file())}/`,
         }).catch((err) => {
           // If loadURL fails due to download starting (which aborts frame navigation in Chromium), ignore
           if (!errorMessage(err)?.includes('ERR_ABORTED')) {
