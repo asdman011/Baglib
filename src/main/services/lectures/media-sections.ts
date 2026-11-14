@@ -144,7 +144,7 @@ export async function readSections(filename: string): Promise<LectureSection[]> 
 }
 
 
-export interface MediaTags { title?: string; speaker?: string; recordingDate?: string }
+export interface MediaTags { title?: string; speaker?: string; recordingDate?: string; coverBuffer?: Buffer; coverMimeType?: string }
 
 /** ID3 text frames share the same encoding rules as chapter titles. */
 export function id3Tags(head: Buffer): MediaTags {
@@ -155,6 +155,20 @@ export function id3Tags(head: Buffer): MediaTags {
     const id = head.toString('latin1', at, at + 4);
     const size = head[3] === 4 ? syncsafe(head, at + 4) : head.readUInt32BE(at + 4);
     if (!/^[A-Z0-9]{4}$/u.test(id) || size < 1 || at + 10 + size > end) break;
+    if (id === 'APIC' && !tags.coverBuffer) {
+      const body = head.subarray(at + 10, at + 10 + size);
+      const mimeEnd = body.indexOf(0, 1);
+      const wide = body[0] === 1 || body[0] === 2;
+      let end = mimeEnd + 2;
+      if (mimeEnd > 0) {
+        while (end < body.length && (body[end] !== 0 || (wide && body[end + 1] !== 0))) end += wide ? 2 : 1;
+        const image = body.subarray(end + (wide ? 2 : 1));
+        if (image.length && image.length <= 12 * 1024 * 1024) {
+          tags.coverBuffer = image;
+          tags.coverMimeType = body.toString('latin1', 1, mimeEnd);
+        }
+      }
+    }
     const field = ({ TIT2: 'title', TPE1: 'speaker', TDRC: 'recordingDate', TYER: 'recordingDate' } as const)[id as 'TIT2'];
     if (field && !(id === 'TYER' && tags.recordingDate)) {
       const bytes = head.subarray(at + 11, at + 10 + size);
@@ -188,6 +202,10 @@ export function mp4Tags(moov: Buffer): MediaTags {
   for (const item of mp4Children(ilst?.body ?? Buffer.alloc(0))) {
     const field = ({ '\xa9nam': 'title', '\xa9ART': 'speaker', '\xa9day': 'recordingDate' } as const)[item.type as '\xa9nam'];
     const data = mp4Children(item.body).find(child => child.type === 'data')?.body;
+    if (item.type === 'covr' && data && data.length > 8 && data.length <= 12 * 1024 * 1024) {
+      tags.coverBuffer = data.subarray(8);
+      tags.coverMimeType = (data.readUInt32BE(0) & 0xffffff) === 14 ? 'image/png' : 'image/jpeg';
+    }
     if (field && data && data.length >= 8) {
       const encoding = data.readUInt32BE(0) & 0xffffff;
       tags[field] = (encoding === 2 ? text(data.subarray(8), 2) : data.toString('utf8', 8)).replace(/\0+$/u, '').trim().slice(0, 1000) || undefined;

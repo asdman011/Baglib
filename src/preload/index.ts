@@ -816,6 +816,8 @@ export const API = {
     update: (id, changes) => ipcRenderer.invoke('lectures:update', id, changes),
     progress: id => ipcRenderer.invoke('lectures:progress', id),
     saveProgress: (id, progress) => ipcRenderer.invoke('lectures:save-progress', id, progress),
+    embeddedCover: id => ipcRenderer.invoke('lectures:embedded-cover', id),
+    saveCoverFrame: (id, png) => ipcRenderer.invoke('lectures:save-cover-frame', id, png),
     saveShot: (id, png) => ipcRenderer.invoke('lectures:save-shot', id, png),
     shotsDirectory: () => ipcRenderer.invoke('lectures:shots-directory'),
   } satisfies import('../shared/lectures').LecturesAPI,

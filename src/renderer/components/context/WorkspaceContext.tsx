@@ -1,5 +1,6 @@
 'use client';
 
+import { MediaCoverBackfill } from '../library/MediaCoverBackfill';
 import { ToastProvider } from '../ui/Toast';
 import { isLectureFormat } from '../../../shared/lectures';
 import { openLecture } from '../../utils/lecture-navigation';
@@ -773,6 +774,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }}
     >
       <ToastProvider>
+        <MediaCoverBackfill />
         {children}
         {importStarted && <React.Suspense fallback={null}><GlobalImportWizard isOpen={isImportWizardOpen} initialPaths={droppedImportPaths} requestId={importRequest} onClose={() => { setImportWizardOpen(false); setDroppedImportPaths([]); }} /></React.Suspense>}
       </ToastProvider>

@@ -159,3 +159,36 @@ Lecture Works follow the approved Work ? Edition ? Source model through `SqliteW
 - Final full suite at concurrency two passed 2229 tests with zero failures and two pre-existing PDF TODOs. Publication receipts are recorded in `CURRENT_TASK.md` and the local KEY-347 report.
 
 Live media coverage was Arabic/English MP4. Supported audio grouping uses generated MP3 fixtures in focused tests. The real audio corpus supplies WMA, which remains outside the existing supported lecture formats. Other codecs and formats were not freshly played in this task.
+
+
+## KEY-348 library series, density and media covers, 2026-11-14
+
+Codex inspected Baglib source after KEY-347 commit 6f9c368, including ADR-014, ADR-015, migration 028, the data dictionary, Work contracts, existing metadata readers, profile cover storage and local Next.js client guidance. This section records ordinary source implementation. No external application was investigated.
+
+### Library entries and ordered contents
+
+- `src/shared/library-series.ts` builds display entries before library pagination. Explicit `LectureSeriesRepository.list()` membership supplies lecture-series identity and order. Empty groups emit no entry, and active Work lookup removes trashed members. Groups show their canonical name, localized item count and the first active member's cover.
+- `seriesTitle` and `volumeNumber` already exist in Work metadata and are persisted by `SqliteWorkRepository`. Lecture, podcast and video Works with those values can group without database changes. Explicit lecture membership takes precedence. Metadata groups use work type and NFC-trimmed canonical series title, then existing numeric volume ordinals, natural title order and ID tie-breaking. Absent series metadata leaves media individually accessible. Metadata names are never Arabic-search normalized for identity.
+- `LibraryGridView` renders one series card or row and opens an ordered Sheet. Each item uses the existing safe Work opener. Search presents individual matching Works through the existing search normalization. Cover and bulk-selection operations continue to use real Work IDs. Pagination counts display entries, while the existing collection and navigation counts continue to count underlying Works.
+- `LibrarySeriesCard` uses logical start alignment, `bdi` canonical names and relaxed line height. Arabic and English item-count wording lives in centralized translations.
+
+### Ctrl+wheel sizing
+
+`src/shared/library-density.ts` reuses the existing compact/comfortable/spacious grid settings and compact/normal row settings as bounded size steps. Ctrl+wheel up increases size, and down decreases size. The library root has a non-passive native wheel listener and suppresses browser zoom for those events. Plain wheel retains scrolling, and events outside the library retain their normal handling. The existing `library_view_preferences` settings payload persists both densities. No extra persisted setting is introduced.
+
+### Media-cover fallback and lifecycle
+
+- The bounded `media-sections.ts` tag readers now recognize ID3v2.3/v2.4 APIC and MP4/M4A covr artwork. `media-metadata.ts` checks PNG/JPEG signatures and uses `EpubCoverExtractor.persistCoverBuffer` for profile `covers/` storage. Direct lecture imports save the resulting existing `coverImage` metadata, and the digital extractor already forwards the same metadata path.
+- `MediaCoverBackfill` runs a sequential background queue after Workspace book loads and import refreshes. Saved art wins, followed by embedded art. A missing video cover uses a detached muted renderer video, seeks to half its duration and draws a PNG with width capped at 640 pixels. Success, decoding errors and the 15-second timeout release the decoder. Supported audio can supply embedded art, and frame capture runs for supported video extensions.
+- `MediaCoverService` validates the active Work/source and bounded PNG payload, then persists through the existing cover helper. Its transaction patches only the existing cover metadata and rereads it before writing. Concurrent user art and other metadata edits are preserved. A missing file, unsupported decoder, invalid image or storage failure leaves the existing placeholder. The queue attempts each Work/path once per mounted session, and can retry after a later app session.
+- Series art is always taken from the first active item in its series order. A later member's cover does not substitute for a missing first-item cover.
+
+### Executed verification and coverage limits
+
+Focused regressions pass 21/21 through the project runner, covering explicit grouping/query/search/deletion, existing metadata grouping, Arabic-Indic ordinals, density bounds/settings persistence, artwork parsing, import/lazy artwork persistence, corruption fallback, midpoint capture/decoder cleanup and existing lecture import/player behavior.
+
+The native harness `scripts/library-series-live/run.mjs` uses copies of the real manifest-listed Arabic and English MP4s in a throwaway `.baglib-data/` profile. Both language cases verify two series and one standalone Work, ordered opening, individual numeric and Arabic-normalized searches, five nonempty profile covers including a previously imported Work, native Ctrl+wheel zoom suppression, actual plain-wheel scrolling, size bounds and persistence after reload. Screenshots at 1440 and 480 are retained in `.baglib-data/KEY-348-evidence/`. Native dialogs are supplied by the harness. Original hashes are checked after each run and the disposable profile and owned renderer are removed.
+
+Embedded art uses generated APIC/covr edge-case fixtures because the supplied real MP4s have no embedded art. New live codec coverage is MP4. Existing Matroska tag readers have no artwork attachment extraction, so such videos fall through to renderer decoding. ID3 compression/unsynchronization and additional artwork containers retain fallback behavior. Those limitations need no new schema or dependency and introduce no architectural gate.
+
+Final validation totals are recorded in the KEY-348 CURRENT_TASK handoff and local agent report.

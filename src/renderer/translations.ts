@@ -1,5 +1,6 @@
 export const translations = {
   ar: {
+    librarySeriesItems: "عدد عناصر السلسلة {count}",
     // KEY-170 installed tafsir comparison.
     quranTafsirCompare: "مقارنة التفاسير",
     quranTafsirSingle: "تفسير واحد",
@@ -5367,6 +5368,7 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    librarySeriesItems: "Series items {count}",
     // KEY-170 installed tafsir comparison.
     quranTafsirCompare: "Compare tafsirs",
     quranTafsirSingle: "Single tafsir",

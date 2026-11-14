@@ -5,6 +5,10 @@ import { ContextMenu } from '../ui/ContextMenu';
 import { Menu } from '../ui/Menu';
 import { getCardActions, type CardActionIcon } from './library-card-actions';
 import type { MenuItemProps } from '../ui/Menu';
+import { librarySeriesEntries, type LibrarySeriesEntry } from '../../../shared/library-series';
+import type { LectureSeries } from '../../../shared/lecture-series';
+import { wheelDensity, CARD_DENSITIES, ROW_DENSITIES } from '../../../shared/library-density';
+import { LibrarySeriesCard } from './LibrarySeriesCard';
 import { LibraryBookCard } from './LibraryBookCard';
 import {
   BookOpen,
@@ -121,6 +125,13 @@ export const LibraryGridView: React.FC = () => {
     activeLibraryCategory,
     setActiveLibraryCategory,
   } = useWorkspace();
+  const [librarySeries, setLibrarySeries] = useState<LectureSeries[]>([]);
+  const [openedSeriesId, setOpenedSeriesId] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    window.electronAPI?.lectures?.series?.list().then(groups => { if (alive) setLibrarySeries(groups); }).catch(() => {});
+    return () => { alive = false; };
+  }, [books]);
   const [seriesWork, setSeriesWork] = useState<string | null>(null);
   const [recentView, setRecentView] = useState<'all' | 'opened' | 'imported'>('all');
   const [recentActivity, setRecentActivity] = useState<RecentReadingActivity[]>([]);
@@ -202,6 +213,7 @@ export const LibraryGridView: React.FC = () => {
     isCollapsed: false,
     lastScrollTop: 0,
   });
+  const libraryViewRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const headerFocusRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -245,7 +257,7 @@ export const LibraryGridView: React.FC = () => {
   }, []);
 
   // Persist View Preferences helper (Story 9: 9.7)
-  const persistPreferences = (updates: Partial<{
+  const persistPreferences = useCallback((updates: Partial<{
     viewMode: 'grid' | 'list';
     cardDensity: CardDensity;
     listDensity: ListDensity;
@@ -259,7 +271,29 @@ export const LibraryGridView: React.FC = () => {
         console.warn('[LibraryGridView] Failed to save view preferences:', e)
       );
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const element = libraryViewRef.current;
+    if (!element) return;
+    let card = cardDensity;
+    let row = listDensity;
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      if (viewMode === 'grid') {
+        card = wheelDensity(card, CARD_DENSITIES, event.deltaY);
+        setCardDensity(card);
+        persistPreferences({ cardDensity: card });
+      } else {
+        row = wheelDensity(row, ROW_DENSITIES, event.deltaY);
+        setListDensity(row);
+        persistPreferences({ listDensity: row });
+      }
+    };
+    element.addEventListener('wheel', wheel, { passive: false });
+    return () => element.removeEventListener('wheel', wheel);
+  }, [viewMode, cardDensity, listDensity, persistPreferences]);
 
   // Reset to first page whenever any filter or search changes
   const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
@@ -565,15 +599,23 @@ export const LibraryGridView: React.FC = () => {
     setCurrentPage(1);
   };
 
+  const libraryEntries = useMemo(() => librarySeriesEntries(filteredAndSortedBooks, librarySeries, books, !!searchQuery.trim()), [filteredAndSortedBooks, librarySeries, books, searchQuery]);
+  const openedSeries = librarySeriesEntries(books, librarySeries).find(entry => entry.series?.id === openedSeriesId)?.series;
+  const openLibraryEntry = (entry: { book: BookItem; series?: LibrarySeriesEntry }) => {
+    if (entry.series) setOpenedSeriesId(entry.series.id);
+    else void handleSafeOpenBook(entry.book);
+  };
+
   // Pagination Calculations (Story 9: 9.1, 9.2)
-  const totalCount = filteredAndSortedBooks.length;
+  const totalCount = libraryEntries.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
 
-  const paginatedBooks = useMemo(() => {
+  const paginatedEntries = useMemo(() => {
     const start = (safeCurrentPage - 1) * pageSize;
-    return filteredAndSortedBooks.slice(start, start + pageSize);
-  }, [filteredAndSortedBooks, safeCurrentPage, pageSize]);
+    return libraryEntries.slice(start, start + pageSize);
+  }, [libraryEntries, safeCurrentPage, pageSize]);
+  const paginatedBooks = useMemo(() => paginatedEntries.filter(entry => !entry.series).map(entry => entry.book), [paginatedEntries]);
 
   // Batch Selection Helpers with Shift-Click Range Support (Story 9: 9.6 / KEY-44)
   const handleToggleSelectBook = (id: string, e?: React.MouseEvent) => {
@@ -669,7 +711,7 @@ export const LibraryGridView: React.FC = () => {
 
     // Floating Interactive Undo Prompt (KEY-45)
     setUndoToast({
-      id: String(Date.now()),
+      id,
       message: t('bookMovedToTrash'),
       onUndo: async () => {
         if (typeof window !== 'undefined' && window.electronAPI?.restoreBook) {
@@ -1053,7 +1095,7 @@ export const LibraryGridView: React.FC = () => {
     const index = surfaces.indexOf(surface);
     if (shortcut.id === 'library-open') {
       event.preventDefault();
-      if (paginatedBooks[index]) void handleSafeOpenBook(paginatedBooks[index]);
+      if (paginatedEntries[index]) openLibraryEntry(paginatedEntries[index]);
       return;
     }
     const firstTop = surfaces[0]?.getBoundingClientRect().top;
@@ -1067,6 +1109,10 @@ export const LibraryGridView: React.FC = () => {
 
   return (
     <div
+      ref={libraryViewRef}
+      data-library-view
+      data-card-density={cardDensity}
+      data-list-density={listDensity}
       onKeyDown={handleLibraryEscape}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -1074,7 +1120,24 @@ export const LibraryGridView: React.FC = () => {
       onDrop={handleDrop}
       className="flex-1 flex flex-col h-full bg-canvas overflow-hidden font-sans select-none relative"
     >
-      <LectureSeriesPicker workId={seriesWork} onClose={() => setSeriesWork(null)} />
+      <Sheet open={!!openedSeries} onClose={() => setOpenedSeriesId(null)} title={openedSeries?.title || t('lectureSeriesName')}>
+        {openedSeries && <ol className="space-y-2" data-library-series-items>
+          {openedSeries.items.map(book => (
+            <li key={book.id}>
+              <button
+                type="button"
+                data-series-item={book.id}
+                className="w-full flex items-center gap-3 rounded-xl border border-border p-3 text-start leading-relaxed hover:bg-primary/10"
+                onClick={() => { setOpenedSeriesId(null); void handleSafeOpenBook(book); }}
+              >
+                <div className="w-12 shrink-0"><LibraryBookCover url={book.coverImage} title={book.title} /></div>
+                <bdi>{book.title}</bdi>
+              </button>
+            </li>
+          ))}
+        </ol>}
+      </Sheet>
+      <LectureSeriesPicker workId={seriesWork} onClose={() => { setSeriesWork(null); void refreshBooks(); }} />
       {/* Drag & Drop Visual Overlay */}
       {isDragActive && (
         <div className="absolute inset-0 z-50 bg-canvas/85 backdrop-blur-md flex flex-col items-center justify-center p-8 border-2 border-dashed border-primary rounded-2xl animate-in fade-in duration-200 pointer-events-none">
@@ -1534,7 +1597,7 @@ export const LibraryGridView: React.FC = () => {
         >
           {/* Featured Card (Shown on page 1 in Grid mode when not actively searching) */}
           {/* The featured card only shows a book the active filters include (KEY-309: it showed above an empty result). */}
-          {recentView === 'all' && featuredBook && !filterState.searchQuery && currentPage === 1 && viewMode === 'grid' && featuredVisible && (
+          {recentView === 'all' && featuredBook && !filterState.searchQuery && currentPage === 1 && viewMode === 'grid' && featuredVisible && !libraryEntries.some(entry => entry.series?.items.some(item => item.id === featuredBook.id)) && (
             <ContextMenu onOpenMenu={() => bookMenu(featuredBook)}><FeaturedBookCard
               book={featuredBook}
               onOpenBook={handleSafeOpenBook}
@@ -1570,7 +1633,9 @@ export const LibraryGridView: React.FC = () => {
                     : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4'
                 }
               >
-                {paginatedBooks.map((book) => (
+                {paginatedEntries.map(({book, series}) => series ? (
+                  <LibrarySeriesCard key={series.id} series={series} onOpen={() => setOpenedSeriesId(series.id)} />
+                ) : (
                   <LibraryBookCard
                     key={book.id}
                     book={book}
@@ -1744,7 +1809,26 @@ export const LibraryGridView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-subtle/60">
-                      {paginatedBooks.map((book, idx) => {
+                      {paginatedEntries.map(({book, series}, idx) => {
+                        if (series) return (
+                          <tr
+                            key={series.id}
+                            data-library-series-row
+                            data-library-book-row
+                            tabIndex={0}
+                            aria-label={series.title}
+                            onKeyDown={event => {
+                              if (event.key === 'Enter' && event.target === event.currentTarget) {
+                                event.preventDefault();
+                                setOpenedSeriesId(series.id);
+                              }
+                            }}
+                          >
+                            <td colSpan={visibleColumns.length + 1} className={listDensity === 'compact' ? 'p-1.5' : 'p-3'}>
+                              <LibrarySeriesCard series={series} row onOpen={() => setOpenedSeriesId(series.id)} />
+                            </td>
+                          </tr>
+                        );
                         const readingStatus = book.readingStatus || 'unread';
                         const isSelected = selectedBookIds.has(book.id);
                         const cellPad = `${listDensity === 'compact' ? 'py-1.5 px-3' : 'py-3 px-4'} max-sm:px-2`;
@@ -2058,7 +2142,7 @@ export const LibraryGridView: React.FC = () => {
         }}
         onUndoToast={(toast) => {
           setUndoToast({
-            id: String(Date.now()),
+            id: toast.message,
             message: toast.message,
             onUndo: async () => {
               await toast.onUndo();

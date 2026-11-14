@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'el
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
 import { getDatabase } from '../database/connection';
+import { MediaCoverService } from '../services/lectures/media-cover';
 import { LectureLibrary } from '../services/lectures/lecture-library';
 import { LECTURE_EXTENSIONS, validProgress, validSections } from '../../shared/lectures';
 import { LectureSeriesRepository } from '../database/repositories/lecture-series.repository';
@@ -21,6 +22,16 @@ const lectureId = (id: unknown) => {
 };
 
 export function registerLectureIpc(): void {
+  ipcMain.handle('lectures:embedded-cover', (event, id: unknown) => {
+    library(event);
+    if (typeof id !== 'string' || id.length > 200) throw new Error('invalid-request');
+    return new MediaCoverService(getDatabase()).embedded(id);
+  });
+  ipcMain.handle('lectures:save-cover-frame', (event, id: unknown, png: unknown) => {
+    library(event);
+    if (typeof id !== 'string' || id.length > 200) throw new Error('invalid-request');
+    return new MediaCoverService(getDatabase()).saveFrame(id, png);
+  });
   const series = (event: IpcMainInvokeEvent) => { library(event); return new LectureSeriesRepository(getDatabase()); };
   ipcMain.handle('lectures:series-list', event => series(event).list());
   ipcMain.handle('lectures:series-create', (event, name: unknown) => series(event).create(typeof name === 'string' ? name : ''));

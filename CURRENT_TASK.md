@@ -1,3 +1,45 @@
+## KEY-348 verified handoff - 2026-11-14T09:21:08.516585+02:00 - Codex key348-root
+
+Built on KEY-347 6f9c368. The library displays each lecture series once with canonical name, localized count and first-item cover. Opening its card/row shows ordered members through the existing safe Work opener. Search exposes individual matching Works. Existing seriesTitle/volumeNumber metadata supports lecture/podcast/video grouping using work type, NFC-trimmed title and numeric/natural ordering. Explicit lecture membership takes precedence. Pagination counts entries, and collection/navigation counts retain underlying Work totals. Display groups never become database Works or bulk-mutation IDs.
+
+Ctrl+wheel uses the existing three grid densities or two row densities, bounded at both ends and persisted in library_view_preferences. Plain wheel scrolls, native Ctrl+wheel preserves browser zoom, and outside-library events retain handling. Logical alignment, bdi canonical names and relaxed line height support arRTL/enLTR.
+
+Embedded ID3 APIC and MP4/M4A covr artwork reuses bounded readers and existing profile covers storage. Direct and digital imports can persist embedded art. A sequential Workspace queue fills missing covers on import refresh and existing Work loads. Saved art wins, then embedded art, then a muted detached renderer video captures half its duration. The existing coverImage metadata receives the path. Transactional cover-only patches preserve user art and concurrent edits. Decoder cleanup covers success/failure/15s timeout. Failures keep the placeholder. Series art follows its first active member.
+
+Verification passed. Focused21/21 through npm test, including12new regressions and9existing lecture grouping/player tests. Finalfull --test-concurrency=2 passed2241/0fail/2existingPDFTODO across346suites/2243tests in158839.6519ms. Earlier full passed2240 before final Unicode/artwork-test refinements. TypeScript noEmit,main/preload build,scoped ESLint0errors0warnings and final source-hash verification pass. Native2/2 arRTL/enLTR,exit0,0renderererrors,14screenshots at1440/480 using real Arabic/English MP4 copies. Verified2series/3entries/5covers,ordered opening,individual numeric/normalizedArabic searches,nativeCtrlzoomfactor1,plainwheel scrollTop400,bounds/persistence afterreload. Original SHA256 values unchanged,profiledeleted/ownedrendererstopped. Final native run completed before the final full suite. Final screenshots visually inspected in both languages and narrow layouts.
+
+Initial focused testing found deleted-Work cover lookup behavior, fixed with active-Work validation. Visual QA found terminal encoding question marks in added Arabic literals, corrected with Unicode-safe writes and recaptured. A harness URL assertion now compares the encoded basename. Existing unused toast IDs reuse event data to satisfy the scoped React purity diagnostic.
+
+Existing lecture feature documentation records source evidence and coverage. Generated APIC/covr fixtures supplement the real MP4s, which lack embedded art. Fresh live codec coverage isMP4. Unsupported decoders/artwork containers retain placeholders with a later-session retry. Queue attempts each Work/path once per mounted session. The two existing PDFTODOs belong to KEY-210. Task implementation/verification have no pending problem. No schema/entity/persistedfield/dependency/download gate was needed. Protected quran-navigation,other sessions files/shared-state hunks preserved. No Jira actions.
+
+Exact23tracked files, only this entry in shared state files
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `docs/features/feature - Lectures, OCR Benchmark and Modular Install.md`
+- `src/main/ipc/lectures.ts`
+- `src/main/services/lectures/lecture-library.ts`
+- `src/main/services/lectures/media-metadata.ts`
+- `src/main/services/lectures/media-sections.ts`
+- `src/main/services/lectures/media-cover.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/context/WorkspaceContext.tsx`
+- `src/renderer/components/library/LibraryGridView.tsx`
+- `src/renderer/components/library/LibrarySeriesCard.tsx`
+- `src/renderer/components/library/MediaCoverBackfill.tsx`
+- `src/renderer/utils/media-cover.ts`
+- `src/renderer/translations.ts`
+- `src/shared/lectures.ts`
+- `src/shared/library-series.ts`
+- `src/shared/library-density.ts`
+- `tests/services/library-series.test.ts`
+- `tests/services/media-cover.test.ts`
+- `tests/ui/library-density.test.ts`
+- `scripts/library-series-live/main.cjs`
+- `scripts/library-series-live/run.mjs`
+
+Local report docs/agent-ops/reports/KEY-348.md and board updated. Screenshots/results in .baglib-data/KEY-348-evidence. Current user explicitly authorized scoped commit and normal origin/feature/library-domain push under commit.lock. Publication receipt will be recorded in the local report and board.
+
 ## KEY-347 verified handoff - 2026-11-14T08:55:24.871024+02:00 - Codex key347-root
 
 Lecture folder picker/drop and multi-file selections now create per-parent series in the existing migration028 tables, naturally ordered by original Arabic/Latin filenames (including Arabic-Indic digits). Same-name folders and later imports create distinct series. Single-file imports remain ungrouped; explicitly selected singleton folders group correctly through direct and digital import paths. Skips/retries and existing-work duplicate resolutions retain existing membership. Existing explicit series assignment remains available. Folder display names follow the existing 200-character limit.

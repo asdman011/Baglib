@@ -25,6 +25,8 @@ export interface LecturesAPI {
   update(id: string, changes: { title?: string; sections?: LectureSection[] }): Promise<Lecture>;
   progress(id: string): Promise<LectureProgress | null>;
   saveProgress(id: string, progress: LectureProgress): Promise<void>;
+  embeddedCover(id: string): Promise<string | null>;
+  saveCoverFrame(id: string, png: string): Promise<string | null>;
   saveShot(id: string, png: string): Promise<string>;
   shotsDirectory(): Promise<string>;
 }

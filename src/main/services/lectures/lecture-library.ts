@@ -79,7 +79,7 @@ export class LectureLibrary {
         if (this.list().some(item => samePath(item.path))) return;
         const id = randomUUID();
         new SqliteWorkRepository(this.db).addBook({ id, title: metadata.title!, author: metadata.speaker, speaker: metadata.speaker,
-          recordingDate: metadata.recordingDate, workType: 'lecture', bookType: 'digital', filePath: canonical, digitalFormat: metadata.format, language: metadata.language });
+          recordingDate: metadata.recordingDate, coverImage: metadata.coverPath, workType: 'lecture', bookType: 'digital', filePath: canonical, digitalFormat: metadata.format, language: metadata.language });
         const lecture: Lecture = { id, title: metadata.title!, path: canonical, kind: lectureKind(extension), sections, sectionSource: sections.length ? 'file' : 'none', addedAt: new Date().toISOString() };
         this.store([...(this.settings.get<Lecture[]>(LIBRARY_KEY) ?? []), lecture]);
         added.push(lecture);
