@@ -3,7 +3,8 @@ import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { searchSlashDatasets, slashResultInsert } from '../../src/renderer/utils/slash-search';
 import { searchCorpus } from '../../src/renderer/utils/corpus-lookup';
-import { prepareSlashMaterial, searchSlashMaterial } from '../../src/renderer/utils/slash-material';
+import { prepareSlashMaterial, searchSlashMaterial, runMaterialOcr, cancelMaterialOcr, getMaterialOcrState, resetMaterialOcrState } from '../../src/renderer/utils/slash-material';
+import { translations } from '../../src/renderer/translations';
 import { registerSlashJob, cancelSlashJobs, slashLane } from '../../src/main/services/slash-search-jobs';
 const base = { notes: [], books: [], scope: null, query: 'learning' };
 async function api<T>(value: unknown, run: () => Promise<T>) {
@@ -116,4 +117,123 @@ it('a cancelled slash search is dropped without stopping the engine, and the new
   assert.equal(await third, 'third');
   // The running stale search finished in the background; the queued stale one never ran.
   assert.deepEqual(started, ['first', 'third']);
+});
+
+describe('KEY-354 OCR and Auto-transcription offers', () => {
+  const scannedPdf = {
+    scope: 'books' as const,
+    target: 'book:scan-1',
+    label: 'Scanned Arabic Book',
+    snippet: '',
+    score: 0,
+    material: { id: 'scan-1', title: 'Scanned Arabic Book', filePath: 'C:/books/scanned.pdf', sourceId: 'src-1' },
+  };
+
+  it('runs background OCR with progressive updates and enables searching inside after completion', async () => {
+    resetMaterialOcrState();
+    let indexed = false;
+    let progressCallback: ((payload: unknown) => void) | undefined;
+    const progressList: unknown[] = [];
+
+    await api({
+      isBookIndexed: async () => indexed,
+      extractPdfText: async () => ({ text: '', isScannedImagePdf: true }),
+      onOcrProgress: (cb: (payload: unknown) => void) => {
+        progressCallback = cb;
+        return () => { progressCallback = undefined; };
+      },
+      ocrRecognizeDocument: async (params: { filePath: string; bookId: string; autoIndexFts?: boolean }) => {
+        assert.equal(params.bookId, 'scan-1');
+        assert.equal(params.autoIndexFts, true);
+        progressCallback?.({ bookId: 'scan-1', currentPage: 1, totalPages: 2, percentage: 50, recognizedWords: 45, status: 'running' });
+        indexed = true;
+        return {
+          bookId: 'scan-1',
+          filePath: params.filePath,
+          totalPages: 2,
+          recognizedPages: 2,
+          pages: [
+            { pageNumber: 1, text: 'نص الصفحة الأولى المستخرج بالتعرف الضوئي', words: [{ text: 'نص' }] },
+            { pageNumber: 2, text: 'محتوى الصفحة الثانية في الكتاب', words: [{ text: 'محتوى' }] },
+          ],
+          fullText: 'نص الصفحة الأولى المستخرج بالتعرف الضوئي\nمحتوى الصفحة الثانية في الكتاب',
+          durationMs: 120,
+        };
+      },
+      searchLibraryFullText: async () => [
+        { pageNumber: 1, locationCfiOrPage: '1' },
+      ],
+      getPageContent: async (_bookId: string, pageNumber: number) => ({
+        content: pageNumber === 1 ? 'نص الصفحة الأولى المستخرج بالتعرف الضوئي' : 'محتوى الصفحة الثانية',
+      }),
+    }, async () => {
+      // 1. Initially material is unindexed and image-only (available = false)
+      const initial = await prepareSlashMaterial(scannedPdf);
+      assert.equal(initial.available, false);
+      assert.equal(initial.indexed, false);
+
+      // 2. Start background OCR
+      const ocrPromise = runMaterialOcr(scannedPdf.material, state => {
+        progressList.push({ ...state });
+      });
+
+      const runningState = getMaterialOcrState('scan-1');
+      assert.ok(runningState);
+      assert.equal(runningState.status, 'running');
+
+      const finalState = await ocrPromise;
+      assert.equal(finalState.status, 'completed');
+      assert.equal(finalState.percentage, 100);
+
+      // 3. After completion, prepareSlashMaterial detects it is indexed
+      const readyMaterial = await prepareSlashMaterial(scannedPdf);
+      assert.equal(readyMaterial.available, true);
+      assert.equal(readyMaterial.indexed, true);
+
+      // 4. Searching inside now works and returns matched passages
+      const results = await searchSlashMaterial(readyMaterial, 'الضوئي', 10, 0, () => false);
+      assert.equal(results.length, 1);
+      assert.match(results[0].quote!, /نص الصفحة الأولى المستخرج بالتعرف الضوئي/u);
+      assert.equal(results[0].target, 'book:scan-1@src-1#p=1');
+    });
+  });
+
+  it('cancels background OCR and notifies listeners with cancelled status', async () => {
+    resetMaterialOcrState();
+    let cancelledInMain = false;
+    const progressList: unknown[] = [];
+
+    await api({
+      isBookIndexed: async () => false,
+      extractPdfText: async () => ({ text: '', isScannedImagePdf: true }),
+      ocrCancel: async (bookId: string) => {
+        if (bookId === 'scan-1') cancelledInMain = true;
+        return { ok: true };
+      },
+      onOcrProgress: () => () => {},
+      ocrRecognizeDocument: async () => new Promise(resolve => setTimeout(resolve, 500)),
+    }, async () => {
+      void runMaterialOcr(scannedPdf.material, state => {
+        progressList.push({ ...state });
+      });
+
+      assert.equal(getMaterialOcrState('scan-1')?.status, 'running');
+
+      await cancelMaterialOcr('scan-1');
+      assert.equal(cancelledInMain, true);
+      assert.equal(getMaterialOcrState('scan-1')?.status, 'cancelled');
+
+      const cancelledState = progressList.find(s => (s as { status: string }).status === 'cancelled');
+      assert.ok(cancelledState, 'Listener should receive cancelled state');
+    });
+  });
+
+  it('verifies translation strings for OCR and auto-transcription in Arabic and English', () => {
+    assert.equal(translations.ar.slashAutoTranscribeSoon, 'التفريغ الصوتي التلقائي قادم قريبًا.');
+    assert.equal(translations.en.slashAutoTranscribeSoon, 'Auto-transcription is coming soon.');
+    assert.ok(translations.ar.slashRunOcr.includes('OCR') || translations.ar.slashRunOcr.includes('الضوئي'));
+    assert.ok(translations.en.slashRunOcr.includes('OCR'));
+    assert.ok(translations.ar.slashOcrCancel.includes('إلغاء'));
+    assert.ok(translations.en.slashOcrCancel.includes('Cancel'));
+  });
 });

@@ -123,6 +123,6 @@ export interface OcrProgressPayload {
   totalPages: number;
   percentage: number;
   recognizedWords: number;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
   error?: string;
 }

@@ -42,6 +42,7 @@ app.on('browser-window-created', (_, win) => {
   const content = editor + ' .cm-content';
   const text = () => evaluate(`document.querySelector('${editor}').value`);
   const setText = async value => {
+    await until(`!!document.querySelector('${content}')`);
     await evaluate(`document.querySelector('${content}').focus()`);
     await key('a', ['control']);
     await win.webContents.insertText(value);
@@ -108,8 +109,11 @@ app.on('browser-window-created', (_, win) => {
       console.log('checking language ' + lang);
       await evaluate(`localStorage.setItem('baglib-lang','${lang}')`); await win.loadURL('http://localhost:3000');
       await until(`document.documentElement.lang==='${lang}'&&!!document.querySelector('[data-nav-item=notes]')`);
+      console.log('loaded language ' + lang + ', opening notes');
       await evaluate("document.querySelector('[data-nav-item=notes]').click()"); await until("!!document.querySelector('[data-notes-overview]')");
+      console.log('dispatching baglib:new-note');
       await evaluate("window.dispatchEvent(new CustomEvent('baglib:new-note'))"); await until(`!!document.querySelector('${content}')`);
+      console.log('setting text /');
       await setText('/'); await until("document.querySelectorAll('[data-slash-scope]').length===6"); await shot('scopes-' + lang);
       assert.equal(await evaluate("document.querySelector('[data-slash-search]').dir"), lang === 'ar' ? 'rtl' : 'ltr');
       await key('Up'); await key('Down'); await key('Enter'); assert.equal(await text(), '/quran ');
@@ -170,10 +174,26 @@ app.on('browser-window-created', (_, win) => {
       await chooseTitle('lectures', withTranscript.title); await action('inside'); await win.webContents.insertText('Learning'); await ready('lectures'); await shot('transcript-' + lang); await key('Enter');
       assert.ok((await text()).includes('Learning a whole sentence together.')); assert.ok((await text()).includes('[[media:' + withTranscript.id + ':12|'));
       for (const book of [withoutTranscript, books.find(book => /scan-ar/.test(book.filePath || ''))]) {
-        await chooseTitle(book === withoutTranscript ? 'lectures' : 'books', book.title);
+        const isLecture = book === withoutTranscript;
+        await chooseTitle(isLecture ? 'lectures' : 'books', book.title);
         // Duplicate PDF titles are disambiguated by selecting the scanned title below in setup.
         await action('inside'); await until("document.querySelector('[data-slash-search]')?.getAttribute('aria-busy')==='false'");
-        await until(`document.querySelector('[data-slash-search]')?.textContent.includes(${JSON.stringify(lang === 'ar' ? '\u0644\u0627 \u064a\u0648\u062c\u062f \u0646\u0635' : 'no searchable text')})`); await shot('no-text-' + (book === withoutTranscript ? 'lecture' : 'scan') + '-' + lang); await key('Escape');
+        await until(`document.querySelector('[data-slash-search]')?.textContent.includes(${JSON.stringify(lang === 'ar' ? '\u0644\u0627 \u064a\u0648\u062c\u062f \u0646\u0635' : 'no searchable text')})`);
+        if (isLecture) {
+          assert.ok(await evaluate("!!document.querySelector('[data-slash-action=\"transcribe\"]')"), 'lecture offers auto-transcribe');
+          await shot('no-text-lecture-' + lang);
+          await evaluate("document.querySelector('[data-slash-action=\"transcribe\"]').click()");
+          await until("!!document.querySelector('[data-auto-transcribe-dialog]')");
+          const dialogText = await evaluate("document.querySelector('[data-auto-transcribe-dialog]').textContent");
+          assert.ok(dialogText.includes(lang === 'ar' ? 'التفريغ الصوتي التلقائي قادم قريبًا.' : 'Auto-transcription is coming soon.'));
+          await shot('auto-transcribe-dialog-' + lang);
+          await evaluate("document.querySelector('.cm-dialog-button').click()");
+          await until("!document.querySelector('[data-auto-transcribe-dialog]')");
+        } else {
+          assert.ok(await evaluate("!!document.querySelector('[data-slash-action=\"ocr\"]')"), 'scanned book offers OCR');
+          await shot('no-text-scan-' + lang);
+          await key('Escape');
+        }
       }
       await evaluate('window.__key350Ticks=[];window.__key350Last=performance.now();window.__key350Timer=setInterval(()=>{const now=performance.now();window.__key350Ticks.push(now-window.__key350Last);window.__key350Last=now},10)');
       let mainLast = performance.now(), maxMainGap = 0; const monitor = setInterval(() => { const now = performance.now(); maxMainGap = Math.max(maxMainGap, now-mainLast); mainLast = now; }, 5);

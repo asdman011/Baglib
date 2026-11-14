@@ -120,4 +120,9 @@ export function registerOcrIpc(): void {
       }
     }
   );
+
+  ipcMain.handle('ocr:cancel', (_event, bookIdOrPath?: string) => {
+    ocrService.cancelDocument(bookIdOrPath);
+    return { ok: true };
+  });
 }

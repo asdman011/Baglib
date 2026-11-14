@@ -603,7 +603,27 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
               kindLabels={kindLabels}
               relationLabels={relationLabels(t)}
               currentNoteId={note?.id}
-              slashSearchLabels={{ scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures') }, loading: t('quranLoading'), empty: t('studyNoResults'), label: t('studyLinkSearch'), more: t('slashShowMore'), insertLink: t('slashInsertLink'), searchInside: t('slashSearchInside'), noText: t('slashNoText'), typeQuery: t('slashTypeQuery') }} slashLabels={slashLabels}
+              slashSearchLabels={{
+                scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures') },
+                loading: t('quranLoading'),
+                empty: t('studyNoResults'),
+                label: t('studyLinkSearch'),
+                more: t('slashShowMore'),
+                insertLink: t('slashInsertLink'),
+                searchInside: t('slashSearchInside'),
+                noText: t('slashNoText'),
+                typeQuery: t('slashTypeQuery'),
+                runOcr: t('slashRunOcr'),
+                ocrProgress: t('slashOcrProgress'),
+                ocrCancel: t('slashOcrCancel'),
+                ocrCancelled: t('slashOcrCancelled'),
+                ocrSuccess: t('slashOcrSuccess'),
+                ocrFailed: t('slashOcrFailed'),
+                autoTranscribe: t('slashAutoTranscribe'),
+                autoTranscribeSoon: t('slashAutoTranscribeSoon'),
+                autoTranscribeTitle: t('slashAutoTranscribeTitle'),
+                close: t('slashModalClose'),
+              }} slashLabels={slashLabels}
               onMakeCards={makeCards}
               autoFocus={!note}
               searchCorpus={(kinds, q, options) => searchCorpus(kinds, q, (id) => t(collectionKeys[id]), options?.limit, 'hafs', options)}

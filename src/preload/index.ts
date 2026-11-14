@@ -235,6 +235,7 @@ export const API = {
     ipcRenderer.invoke('ocr:recognize-page', params),
   ocrRecognizeDocument: (params: import('../shared/types/ocr').OcrRecognizeDocumentParams) =>
     ipcRenderer.invoke('ocr:recognize-document', params),
+  ocrCancel: (bookIdOrPath?: string) => ipcRenderer.invoke('ocr:cancel', bookIdOrPath),
   onOcrProgress: (callback: (payload: import('../shared/types/ocr').OcrProgressPayload) => void) => {
     const subscription = (_: unknown, value: Parameters<typeof callback>[0]) => callback(value);
     ipcRenderer.on('ocr:progress', subscription);

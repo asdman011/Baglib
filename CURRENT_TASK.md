@@ -1,3 +1,41 @@
+## KEY-354 verified handoff - 2026-11-15T01:00:00+02:00 - Antigravity 72ce2e76-552f-4269-a6e4-cecca859da41
+
+Implemented notes slash search actions for materials without text (Jira KEY-354):
+1. OCR Integration:
+   - Wired document materials without text layer to the existing OCR service.
+   - Added `runMaterialOcr`, `cancelMaterialOcr`, and `getMaterialOcrState` in `src/renderer/utils/slash-material.ts`.
+   - Multi-page document OCR runs in the background with progress reporting and cancellation support. Added `cancelDocument` in `OcrService` (`src/main/services/ocr/ocr.service.ts`), IPC handler `ocr:cancel` in `src/main/ipc/ocr.ts`, and `ocrCancel` in `src/preload/index.ts`.
+   - Added `'cancelled'` to `OcrProgressPayload.status` in `src/shared/types/ocr.ts`.
+   - When OCR completes, the document is auto-indexed into SQLite FTS5; subsequent `prepareSlashMaterial` becomes available and `searchSlashMaterial` searches and returns passages.
+2. Auto-Transcription Dialog:
+   - For audio/lecture/video materials without transcripts, slash search presents an action item "Auto-transcribe" / "تفريغ صوتي تلقائي".
+   - When chosen, renders an accessible modal dialog (`[data-auto-transcribe-dialog]`, `role="dialog"`, `aria-modal="true"`) stating "Auto-transcription is coming soon." / «التفريغ الصوتي التلقائي قادم قريبًا.».
+   - Closes on Escape, Enter, or clicking OK, refocusing the editor.
+   - No transcription code or engines added; follow-up is Jira KEY-377.
+3. Bilingual Translations:
+   - Added `slashRunOcr`, `slashOcrProgress`, `slashOcrCancel`, `slashOcrCancelled`, `slashOcrSuccess`, `slashOcrFailed`, `slashAutoTranscribe`, `slashAutoTranscribeSoon`, `slashAutoTranscribeTitle`, and `slashModalClose` in `src/renderer/translations.ts` in Arabic (RTL) and English (LTR).
+   - Wired into `NoteEditorPane.tsx`, `QuickNoteScratchpad.tsx`, and `slash-search-extension.ts`.
+4. Verification:
+   - 63 focused tests pass across 6 suites (15/15 `slash-search-followup`, 12/12 `slash-search`, 11/11 `ocr.service`, 23/23 `slash-command` + `note-links-and-slash`, 2/2 `translation-keys`).
+   - TypeScript (`tsc --noEmit`) and ESLint pass with 0 errors and 0 warnings.
+   - Live native check `node scripts/slash-search-live/run.mjs` passed with code 0 (`passed: 2`, `rendererErrors: 0`, `realCopiesImported: 5`, throwaway profile cleaned, real file hashes unchanged).
+   - Captured and verified evidence in `.baglib-data/KEY-350-evidence/` (`auto-transcribe-dialog-ar.png`, `auto-transcribe-dialog-en.png`, `no-text-scan-ar.png`, `no-text-scan-en.png`).
+   - Full report written to `docs/agent-ops/reports/KEY-354.md`.
+
+Exact changed files:
+- `src/shared/types/ocr.ts`
+- `src/main/services/ocr/ocr.service.ts`
+- `src/main/ipc/ocr.ts`
+- `src/preload/index.ts`
+- `src/renderer/translations.ts`
+- `src/renderer/utils/slash-material.ts`
+- `src/renderer/components/notes/slash-search-extension.ts`
+- `src/renderer/components/notes/NoteEditorPane.tsx`
+- `src/renderer/components/dashboard/QuickNoteScratchpad.tsx`
+- `scripts/slash-search-live/main.cjs`
+- `tests/ui/slash-search-followup.test.ts`
+- `docs/agent-ops/reports/KEY-354.md`
+
 ## KEY-360 verified handoff - 2026-11-15T00:36:00+02:00 - Antigravity 8ccee377-a54d-4fbc-8630-42ba4012522d
 
 Audited and resolved notes slash-search result accuracy and best-match ordering across Quran, Sunnah, Al-Bayan poetry, notes, books, and lectures:

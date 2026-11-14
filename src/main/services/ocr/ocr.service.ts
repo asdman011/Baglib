@@ -9,9 +9,6 @@ import {
   OcrPageResult,
   OcrDocumentResult,
   OcrLanguage,
-  OcrLine,
-  OcrWord,
-  OcrRecognizePageParams,
   OcrRecognizeDocumentParams,
   OcrProgressPayload,
   OcrEngineInfo,
@@ -757,6 +754,19 @@ try {
     };
   }
 
+  private cancelledDocuments = new Set<string>();
+
+  public cancelDocument(bookIdOrPath?: string): void {
+    if (bookIdOrPath) {
+      this.cancelledDocuments.add(bookIdOrPath);
+    }
+  }
+
+  public isDocumentCancelled(bookIdOrPath?: string): boolean {
+    if (!bookIdOrPath) return false;
+    return this.cancelledDocuments.has(bookIdOrPath);
+  }
+
   /**
    * Runs OCR across a full document or page range.
    */
@@ -771,11 +781,35 @@ try {
       throw new Error(`File not found: ${filePath}`);
     }
 
+    const cancellationKey = bookId || filePath;
+    this.cancelledDocuments.delete(cancellationKey);
+
     const pages: OcrPageResult[] = [];
     let accumulatedText = '';
     const totalPages = Math.max(1, endPage - startPage + 1);
 
     for (let current = startPage; current <= endPage; current++) {
+      if (this.isDocumentCancelled(cancellationKey)) {
+        this.cancelledDocuments.delete(cancellationKey);
+        const wordsCount = pages.reduce((sum, p) => sum + p.words.length, 0);
+        onProgress?.({
+          bookId,
+          currentPage: current - 1,
+          totalPages: endPage,
+          percentage: Math.round(((current - startPage) / totalPages) * 100),
+          recognizedWords: wordsCount,
+          status: 'cancelled',
+        });
+        return {
+          bookId,
+          filePath,
+          totalPages,
+          recognizedPages: pages.filter(p => p.words.length > 0).length,
+          pages,
+          fullText: accumulatedText.trim(),
+          durationMs: Date.now() - startTime,
+        };
+      }
       try {
         let pageResult: OcrPageResult;
         if (filePath.toLowerCase().endsWith('.pdf')) {
