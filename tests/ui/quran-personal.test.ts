@@ -32,9 +32,13 @@ for (const lang of ['ar', 'en'] as const) {
     const expected = quranReferenceLabel({ surah: 2, from: 255, to: 255 }, lang);
     assert.ok(expected.includes(lang === 'ar' ? 'البقرة' : 'Al-Baqarah'));
     assert.ok(expected.includes(new Intl.NumberFormat(lang).format(255)));
-    assert.equal(quranCopyText(canonical, reference, lang), canonical + '\n[' + expected + ']');
-    assert.equal(quranCopyText(canonical, reference, lang, { surah: 2, ayah: 257 }), canonical + '\n[' + quranReferenceLabel({ surah: 2, from: 255, to: 257 }, lang) + ']');
-    assert.equal(quranCopyText(canonical, reference, lang, { surah: 3, ayah: 2 }), canonical + '\n[' + expected + ' ? ' + quranReferenceLabel({ surah: 3, from: 2, to: 2 }, lang) + ']');
+    // Clipboard citations carry no bidi isolate controls (they paste as stray characters elsewhere).
+    const plain = (label: string) => label.replace(/[⁦-⁩]/gu, '');
+    assert.equal(quranCopyText(canonical, reference, lang), canonical + '\n[' + plain(expected) + ']');
+    assert.equal(quranCopyText(canonical, reference, lang, { surah: 2, ayah: 257 }), canonical + '\n[' + plain(quranReferenceLabel({ surah: 2, from: 255, to: 257 }, lang)) + ']');
+    const cross = quranCopyText(canonical, reference, lang, { surah: 3, ayah: 2 });
+    assert.equal(cross, canonical + '\n[' + plain(expected) + ' – ' + plain(quranReferenceLabel({ surah: 3, from: 2, to: 2 }, lang)) + ']');
+    assert.ok(!/[⁦-⁩?]/u.test(cross.split('\n').pop()!));
   });
 
   test('all Quran copy/share paths and profile bookmark UI execute localized handlers / ' + lang, async () => {

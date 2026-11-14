@@ -21,6 +21,7 @@ import type { SunnahSearchHit } from '../../../shared/types/sunnah';
 import type { TranslationKey } from '../../translations';
 import { QuranMushafView } from './QuranMushafView';
 import { QuranTafsirCompare } from './QuranTafsirCompare';
+import { quranCopyText } from '../../utils/quran-reference-label';
 import { QuranTranslationText } from './QuranTranslationText';
 import { QuranRichText, quranHtmlText } from './QuranRichText';
 import { QuranTopicDrawer } from './QuranTopicDrawer';
@@ -192,7 +193,7 @@ export function QuranMushafWorkspace(props: Props) {
     const text = page.words.filter(word => word.type !== 'aya-mark' && wordInRange({ surah: word.surah, ayah: word.ayah, word: word.wordIndex }, range)).map(word => word.canonicalText || word.textHafs || '').join(' ').trim();
     const overlapping = quranHighlights.filter(item => { const other = parseQuranHighlight(item.location); return other && other.profile === page.profile && compareWords(other.start, range.end) <= 0 && compareWords(range.start, other.end) <= 0; });
     return [
-      ...(reference.range ? [{ id: 'copy-selection', label: t('passageCopySelection'), onClick: () => navigator.clipboard.writeText(text) }] : []),
+      ...(reference.range ? [{ id: 'copy-selection', label: t('passageCopySelection'), onClick: () => navigator.clipboard.writeText(quranCopyText(text, range.start, props.lang, range.end)) }] : []),
       { id: 'highlight', label: t('passageHighlight'), children: [
         ...PASSAGE_HIGHLIGHT_COLORS.map(color => ({ id: 'highlight-' + color, label: t(colorKeys[color]), onClick: async () => { if (overlapping.length) await highlightActions.remove(overlapping.map(item => item.id)); await highlightActions.save(location, color, text); } })),
         ...(overlapping.length ? [{ id: 'highlight-remove', label: t('passageHighlightRemove'), onClick: () => highlightActions.remove(overlapping.map(item => item.id)) }] : []),
