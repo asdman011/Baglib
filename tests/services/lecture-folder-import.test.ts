@@ -46,7 +46,22 @@ test('multi-file selections group by full parent path, naturally sort Arabic/Lat
     assert.equal(series.list().length, 3, 'duplicate paths do not create an empty series');
     const extra = await Promise.all(['20.mp3', '30.mp3'].map(name => file('a/Course', name)));
     await library.add(extra);
-    assert.equal(series.list().length, 4, 'a later import owns a fresh series even with the same name');
+    assert.equal(series.list().length, 3, 'a later import from the same folder joins its series');
+    const grown = series.list().find(item => item.items.length === 6)!;
+    assert.ok(grown, 'the folder series holds the earlier four and the later two');
+    assert.deepEqual(grown.items.map(item => item.title), ['20', '30', 'درس ٢', 'درس ١٠', 'Lesson 2', 'Lesson 10'], 'the merged series is re-sorted naturally');
+    const single = await file('a/Course', '40.mp3');
+    await library.add([single]);
+    assert.equal(series.list().find(item => item.id === grown.id)?.items.length, 7, 'a single later file joins its folder series too');
+    const lone = await file('c/Other', '1.mp3');
+    await library.add([lone]);
+    assert.equal(series.list().length, 3, 'a single file from a folder with no series stays ungrouped');
+    const manual = series.list().find(item => item.id === grown.id)!.items.map(item => item.workId).reverse();
+    series.reorder(grown.id, manual);
+    await library.add([await file('a/Course', '50.mp3')]);
+    const kept = series.list().find(item => item.id === grown.id)!.items;
+    assert.deepEqual(kept.slice(0, manual.length).map(item => item.workId), manual, 'a manual order is kept');
+    assert.equal(kept.at(-1)?.title, '50', 'a new file joins the end of a manually ordered series');
   });
 });
 

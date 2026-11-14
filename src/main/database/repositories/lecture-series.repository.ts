@@ -18,7 +18,8 @@ export class LectureSeriesRepository {
       WHERE w.deleted_at IS NULL AND w.work_type_id='wt-lecture' AND ${MEDIA_WORK} ORDER BY i.position,i.work_id`).all() as { seriesId: string; workId: string; title: string; completed: number }[];
     return series.map(row => ({ ...row, autoplayNext: !!row.autoplayNext, items: items.filter(item => item.seriesId === row.id).map(item => ({ workId: item.workId, title: item.title, completed: !!item.completed })) }));
   }
-  /** Each import owns its series. Existing names are never implicitly reused. */
+  /** A folder's files share one series. Later imports join the series that already holds files from the
+   * same folder (matched by path, never by name); otherwise each import creates its own series. */
   importFiles(selected: string[], imported: { path: string; workId: string }[], folders: string[] = []): void {
     const key = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value;
     const groups = new Map<string, string[]>();
@@ -29,16 +30,38 @@ export class LectureSeriesRepository {
     }
     const total = [...groups.values()].reduce((count, files) => count + files.length, 0);
     const collator = new Intl.Collator('ar', { numeric: true, sensitivity: 'base' });
+    const byName = (a: { path: string }, b: { path: string }) => collator.compare(path.basename(a.path), path.basename(b.path)) || a.path.localeCompare(b.path);
     this.db.transaction(() => {
+      const existing = new Map<string, string>();
+      for (const row of this.seriesFiles()) {
+        const folder = key(path.dirname(path.resolve(row.path)));
+        if (!existing.has(folder)) existing.set(folder, row.seriesId);
+      }
       for (const [folder, files] of groups) {
-        if (total < 2 && !folders.some(value => key(path.resolve(value)) === folder)) continue;
-        const members = imported.filter(item => files.some(file => key(file) === key(path.resolve(item.path))))
-          .sort((a, b) => collator.compare(path.basename(a.path), path.basename(b.path)) || a.path.localeCompare(b.path));
+        const joined = existing.get(folder);
+        if (!joined && total < 2 && !folders.some(value => key(path.resolve(value)) === folder)) continue;
+        const members = imported.filter(item => files.some(file => key(file) === key(path.resolve(item.path)))).sort(byName);
         if (!members.length) continue;
-        const series = this.create(path.basename(path.dirname(files[0])).slice(0, 200));
-        for (const item of members) this.assign(item.workId, series.id);
+        if (!joined) {
+          const series = this.create(path.basename(path.dirname(files[0])).slice(0, 200));
+          for (const item of members) this.assign(item.workId, series.id);
+          continue;
+        }
+        const before = this.seriesFiles(joined);
+        // Keep a manual order: only a series still in natural order is re-sorted with its new members.
+        const natural = before.every((row, index) => index === 0 || byName(before[index - 1], row) <= 0);
+        for (const item of members) this.assign(item.workId, joined);
+        if (natural) this.reorder(joined, this.seriesFiles(joined).sort(byName).map(row => row.workId));
       }
     })();
+  }
+  /** One row per series item with its linked media file, in series order. */
+  private seriesFiles(seriesId?: string): { seriesId: string; workId: string; path: string }[] {
+    return this.db.prepare(`SELECT i.series_id AS seriesId,i.work_id AS workId,MIN(f.file_path) AS path
+      FROM lecture_series_item i JOIN lecture_series ls ON ls.id=i.series_id JOIN work w ON w.id=i.work_id
+      JOIN edition e ON e.work_id=w.id JOIN source s ON s.edition_id=e.id JOIN file_source_detail f ON f.source_id=s.id
+      WHERE w.deleted_at IS NULL AND w.work_type_id='wt-lecture' AND f.file_path IS NOT NULL AND (? IS NULL OR i.series_id=?)
+      GROUP BY i.series_id,i.work_id ORDER BY ls.created_at,ls.id,i.position,i.work_id`).all(seriesId ?? null, seriesId ?? null) as { seriesId: string; workId: string; path: string }[];
   }
   private requireSeries(id: string): void {
     if (!this.db.prepare('SELECT id FROM lecture_series WHERE id=?').get(id)) throw new Error('invalid-request');
