@@ -139,6 +139,7 @@ export const API = {
   saveDroppedFileBuffer: (name: string, buffer: Uint8Array) =>
     ipcRenderer.invoke('system:save-file-buffer', { name, buffer }),
   readPdfBase64: (filePath: string) => ipcRenderer.invoke('system:read-pdf-base64', filePath),
+  cancelSlashSearch: (requestId: string) => ipcRenderer.invoke('slash:cancel', requestId),
   extractPdfText: (filePath: string) => ipcRenderer.invoke('system:extract-pdf-text', filePath),
 
   advanced: {

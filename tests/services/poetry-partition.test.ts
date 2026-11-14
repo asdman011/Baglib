@@ -33,6 +33,18 @@ test('poetry partition isolates corpus and rebuilds joined poet/title/verse FTS 
     assert.equal('versesJson' in matches.items[0], false);
     assert.equal(searchPoetry(database, {}).items[0].match, undefined);
     assert.equal(searchPoetry(database, { query: 'المتنبي' }).items[0].match, null);
+    database.prepare('INSERT INTO poems(id,poet_id,title,title_normalized,verses_json,search_text_normalized) VALUES(2,1,?,?,?,?)').run('Learning', 'learning', JSON.stringify(['Learning with a complete verse.']), 'learning with a complete verse');
+    database.prepare('INSERT INTO poems(id,poet_id,title,title_normalized,verses_json,search_text_normalized) VALUES(3,1,?,?,?,?)').run('Another', 'another', JSON.stringify(['Learning with another verse.']), 'learning with another verse');
+    rebuildPoetrySearch(database);
+    const ranked = searchPoetry(database, { query: 'learning', requestId: 'ranked', limit: 1 });
+    assert.equal(ranked.items[0].id, 2); assert.equal(ranked.next, 1);
+    const next = searchPoetry(database, { query: 'learning', requestId: 'ranked-next', limit: 1, offset: 1 });
+    assert.equal(next.items[0].id, 3); assert.equal(next.next, null);
+    assert.throws(() => searchPoetry(database, { requestId: 'bounds', offset: -1 }));
+    database.prepare('INSERT INTO poems(id,poet_id,title,title_normalized,verses_json,search_text_normalized) VALUES(4,1,?,?,?,?)').run('مدرسة', 'مدرسه', JSON.stringify(['مَدْرَسَة']), 'مدرسه');
+    rebuildPoetrySearch(database);
+    assert.equal(searchPoetry(database, { query: 'مدرسه', requestId: 'conservative' }).items.length, 0);
+    assert.equal(searchPoetry(database, { query: 'مدرسة', requestId: 'diacritics' }).items.length, 1);
     assert.equal(fs.existsSync(path.join(directory, 'baglib.db')), false);
     assert.equal((database.prepare('SELECT verses_json FROM poems WHERE id=1').get() as { verses_json: string }).verses_json, JSON.stringify([text]));
   } finally {

@@ -1,6 +1,6 @@
 export interface PoetryQuery {
   language?: 'ar' | 'en'; query?: string; poetId?: number;
-  meter?: string; theme?: string; era?: string; variant?: string; location?: string; after?: number; limit?: number;
+  meter?: string; theme?: string; era?: string; variant?: string; location?: string; after?: number; limit?: number; requestId?: string; offset?: number;
 }
 export interface PoetrySummary {
   id: number; title: string; language: 'ar' | 'en'; layoutType: 'bayt' | 'free_verse' | 'stanza';

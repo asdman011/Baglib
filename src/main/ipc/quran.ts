@@ -1,3 +1,4 @@
+import { registerSlashJob } from '../services/slash-search-jobs';
 import { validQuranSearchQuery } from '../../shared/quran-search';
 import type { AssistantQuranQuery, AssistantQuranSource } from '../../shared/study-assistant';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, session, utilityProcess } from 'electron';
@@ -108,6 +109,8 @@ export const readAyahTexts = (surah: number, from: number, to: number, options: 
 
 export function registerQuranIpc(): void {
   const reader = new QuranReaderProcess();
+  const slashReader = new QuranReaderProcess();
+  confirmedQuitCleanup.register(() => slashReader.close());
   let service: QuranLibraryService | undefined;
   let initializing: Promise<QuranLibraryService> | undefined;
   let settingUp = false;
@@ -189,11 +192,12 @@ export function registerQuranIpc(): void {
     }
   };
   const closeWindow = (id: string) => { const window = windows.get(id); if (window && !window.isDestroyed()) window.destroy(); windows.delete(id); };
-  const readRequest = async <Value>(action: Parameters<QuranReaderProcess['request']>[2]) => {
+  const readRequest = async <Value>(action: Parameters<QuranReaderProcess['request']>[2], process = reader, cancelled = () => false) => {
     const instance = await getService();
     const latest = new Map<string, QuranPack>();
     for (const pack of instance.store.packs()) if (readerPreset(pack) || pack.resource.id === 'quran-script/qpc-warsh-script-ayah') latest.set(canonicalResourceId(pack.resource.id), pack);
-    return reader.request<Value>(instance.root, [...latest.values()], action);
+    if (cancelled()) throw new Error('cancelled');
+    return process.request<Value>(instance.root, [...latest.values()], action);
   };
   ipcMain.handle('quran:reader-catalog', event => result(event, () => readRequest({ action: 'catalog' })));
   ayahReader = (surah, from, to, { profile }) => readRequest({ action: 'assistant-ayahs', query: { surah, from, to, profile } });
@@ -294,7 +298,10 @@ export function registerQuranIpc(): void {
   }));
   ipcMain.handle('quran:search-ayahs', (event, query) => result(event, async () => {
     if (!validQuranSearchQuery(query)) throw new Error('invalid-resource');
-    return readRequest({ action: 'search', query });
+    if (!query.requestId) return readRequest({ action: 'search', query });
+    let cancelled = false;
+    const release = registerSlashJob(query.requestId, () => { cancelled = true; slashReader.close(); });
+    try { return await readRequest({ action: 'search', query }, slashReader, () => cancelled); } finally { release(); }
   }));
   ipcMain.handle('quran:commentary', (event, query) => result(event, async () => {
     if (!query || typeof query.script !== 'string' || typeof query.pack !== 'string') throw new Error('invalid-resource');

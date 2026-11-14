@@ -603,10 +603,10 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
               kindLabels={kindLabels}
               relationLabels={relationLabels(t)}
               currentNoteId={note?.id}
-              slashSearchLabels={{ scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures') }, loading: t('quranLoading'), empty: t('studyNoResults'), label: t('studyLinkSearch') }} slashLabels={slashLabels}
+              slashSearchLabels={{ scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures') }, loading: t('quranLoading'), empty: t('studyNoResults'), label: t('studyLinkSearch'), more: t('slashShowMore'), insertLink: t('slashInsertLink'), searchInside: t('slashSearchInside'), noText: t('slashNoText'), typeQuery: t('slashTypeQuery') }} slashLabels={slashLabels}
               onMakeCards={makeCards}
               autoFocus={!note}
-              searchCorpus={(kinds, q) => searchCorpus(kinds, q, (id) => t(collectionKeys[id]))}
+              searchCorpus={(kinds, q, options) => searchCorpus(kinds, q, (id) => t(collectionKeys[id]), options?.limit, 'hafs', options)}
               dateText={() => {
                 const today = new Date();
                 const hijri = calculateHijriDate(today);

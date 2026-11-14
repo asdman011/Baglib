@@ -13,7 +13,7 @@ import { matchSlashCommands, openSlashCommand, type SlashCommandId } from '../..
 import { cardsFromLine } from '../../../shared/note-cards';
 import { honorificExpansion } from '../../../shared/honorifics';
 import { PARAGRAPH_ANCHOR, newParagraphAnchor, paragraphLink, paragraphOptions } from '../../../shared/note-paragraphs';
-import { slashSearchExtension, type SlashSearchLabels } from './slash-search-extension';
+import { slashInsertion, slashSearchExtension, type SlashSearchLabels } from './slash-search-extension';
 import type { SlashBook } from '../../utils/slash-search';
 import { parseSlashCommand, suggestScopes } from '../../../shared/slash-command';
 import type { CorpusKind, CorpusOption } from '../../utils/corpus-lookup';
@@ -210,6 +210,7 @@ function relationTooltip(state: EditorState): Tooltip | null {
 const relationMenu = StateField.define<Tooltip | null>({
   create: relationTooltip,
   update(current, transaction) {
+    if (transaction.annotation(slashInsertion)) return null;
     const same = !transaction.docChanged && !transaction.selection && transaction.startState.facet(relationNames) === transaction.state.facet(relationNames)
       && Boolean(completionStatus(transaction.startState)) === Boolean(completionStatus(transaction.state));
     return same ? current : relationTooltip(transaction.state);
@@ -259,7 +260,7 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   /** Saves a new anchor at the end of a paragraph in another note (the paragraph text is not changed). */
   onAnchorParagraph?: (noteId: string, start: number, anchor: string) => Promise<void>;
   /** Searches the installed Quran, Sunnah and poetry; optional so the editor works without them. */
-  searchCorpus?: (kinds: CorpusKind[], query: string) => Promise<CorpusOption[]>;
+  searchCorpus?: import('../../utils/slash-search').SlashSearchInput['searchCorpus'];
   slashLabels: Record<SlashCommandId, string>;
   /** Today's date as text, for the `/date` command. */
   dateText: () => string;

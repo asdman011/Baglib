@@ -2,6 +2,9 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T15:23:26.424189+02:00, Codex key350-root] KEY-350 VERIFIED: isolated cancellable/limited corpus workers,8/20lazy paging,quote+link inserts,no slash relation popup,selected-material passages and centralizedar/en. Focused60/full2303pass0fail0TODO(concurrency2,352suites),native2ar/en incl scratchpad/5realcopies/unindexedPDF/scan/transcriptcases,0renderererrors/originalsunchanged/profiledeleted. MainSunnah8348.16→16.42ms;rapidmaxmain18.09/renderer76.10ms. Types/build/lint0errors1existingwarning/scopeddiff reviewed. Exact36files/evidence/limits in CURRENT_TASK/report; authorized scoped lock publication pending.
+
+
 - [2026-11-14T10:19:48.3187118+02:00, Codex key48-root] KEY-48 VERIFIED. CBZ/FB2 imports/pickerfilters/metadata/covers, batchSHA256twins, boundedMOBIEXTH201/202 covers, localizedar/en errors/matchconfidence and indexed duplicate parity. Focused54/finalfull2272pass0fail2existingPDFTODO(concurrency2,349suites),native4ar/en309files/1000existingWorks/0renderererrors/SQLitepass/12screens/originalsunchanged/copiedfolderdeleted. Maxframe267.1ms,peakmainRSS164401152B. Types/build/scopedlint0warnings/diff pass. Exact24ownedfiles/evidence/limits in CURRENT_TASK/report. Explicitly authorized scoped lock commit/push next.
 
 - [2026-11-14T09:45:16.968489+02:00, Codex key349-root] KEY-349 VERIFIED: six-dataset caret slash search, Arabicaliases/groupcaps/exactstudylinks,debounce/stalerejection/nativekeys+hover,keyboardscrolling and EnglishQuran translations. Focused39/full2253pass0fail2existingPDFTODO(concurrency2,348suites),native2ar/en0renderererrors/4realcopies/16screens/originalsunchanged/profiledeleted. Types/build/scopedlint0warnings pass. Exact14files/limits/parserDeepSeekcredit in CURRENT_TASK/report. Scoped lock publication next.

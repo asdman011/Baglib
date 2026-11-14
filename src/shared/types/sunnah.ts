@@ -104,7 +104,7 @@ export interface SunnahSearchHit {
 }
 export interface SunnahResearchQuery {
   text?: string; collection?: SunnahCollectionId; chapter?: number;
-  root?: string; narratorId?: string;
+  root?: string; narratorId?: string; limit?: number; offset?: number; requestId?: string;
 }
 
 /** Counted from the attached corpus; nothing here is a scholarly judgment. */

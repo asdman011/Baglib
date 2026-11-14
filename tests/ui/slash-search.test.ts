@@ -38,7 +38,7 @@ describe('slash dataset search', () => {
       { kind: 'hadith', target: 'sunnah:Bukhari:1:1', label: 'علم', snippet: '', link: '', quote: '' },
       { kind: 'quran', target: 'quran:hafs:2:255', label: 'علم', snippet: '', link: '', quote: '' },
     ] });
-    assert.deepEqual(found.map(item => item.scope), ['quran', 'sunnah', 'albayan', 'notes', 'notes', 'notes', 'books', 'lectures']);
+    assert.deepEqual(found.map(item => item.scope), ['quran', 'sunnah', 'albayan', ...Array(8).fill('notes'), 'books', 'lectures']);
   });
   it('ranks title matches over body-only matches with stable ordering', async () => {
     const found = await searchSlashDatasets({ ...input, scope: 'notes', query: 'علم', notes: [{ ...input.notes[0], id: 'body', title: 'Other', content: 'علم' }, input.notes[0]] });
@@ -82,7 +82,7 @@ describe('slash Quran service integration', () => {
     } } } });
     try {
       const found = await searchCorpus(['quran'], 'Allah', id => id);
-      assert.deepEqual(query, { script: 'script', text: 'Allah', translations: ['english'] });
+      assert.deepEqual(query, { script: 'script', text: 'Allah', translations: ['english'], limit: 6, offset: 0 });
       assert.equal(found[0].link, studyLinkText('quran:hafs:1:1', '1:1'));
     } finally { if (previous) Object.defineProperty(globalThis, 'window', previous); else Reflect.deleteProperty(globalThis, 'window'); }
   });

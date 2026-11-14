@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { registerSlashJob } from '../services/slash-search-jobs';
+import { SunnahSearchProcess } from '../services/sunnah/search-process';
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import { confirmedQuitCleanup } from '../services/quit-cleanup';
@@ -16,6 +19,8 @@ export const readChapterHadiths = (collection: string, chapter: number) => chapt
 
 export function registerSunnahIpc(): void {
   let service: SunnahService | undefined;
+  let slashSearch: SunnahSearchProcess | undefined;
+  confirmedQuitCleanup.register(() => slashSearch?.close());
   hadithReader = async (collection, chapter, id) => {
     const found = (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths.find(hadith => hadith.id === id);
     return found ? { text: found.text.ar.full || found.text.ar.matn, number: String(found.number) } : null;
@@ -29,7 +34,7 @@ export function registerSunnahIpc(): void {
   confirmedQuitCleanup.register(() => service?.close());
   const result = async <Value>(action: () => Promise<Value>, error: 'invalid-corpus' | 'read-failed'): Promise<SunnahResult<Value>> => {
     try { return { ok: true, data: await action() }; } catch (cause) {
-      console.error('[baglib:sunnah]', cause);
+      if (!(cause instanceof Error) || cause.message !== 'cancelled') console.error('[baglib:sunnah]', cause);
       return { ok: false, error };
     }
   };
@@ -43,7 +48,19 @@ export function registerSunnahIpc(): void {
     await shell.openExternal(url);
     return null;
   }, 'read-failed'));
-  ipcMain.handle('sunnah:search', (_event, query: SunnahResearchQuery) => result(() => getService().search(query), 'read-failed'));
+  ipcMain.handle('sunnah:search', (_event, query: SunnahResearchQuery) => result(async () => {
+    if (!query?.requestId) return getService().search(query);
+    if (!slashSearch) {
+      let selected: string | undefined;
+      try { selected = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(app.getPath('userData'), 'sunnah', 'research-source.json'), 'utf8')).filename; } catch { /* default attached corpus */ }
+      const filename = [selected, ...sunnahResearchPaths({ packaged: app.isPackaged, userData: app.getPath('userData'), appPath: app.getAppPath(), resourcesPath: process.resourcesPath })].find(file => file && existsSync(file));
+      if (!filename) throw new Error('read-failed');
+      slashSearch = new SunnahSearchProcess(filename);
+    }
+    const searchWorker = slashSearch;
+    const release = registerSlashJob(query.requestId, () => searchWorker.close());
+    try { return await searchWorker.search(query); } finally { release(); }
+  }, 'read-failed'));
   ipcMain.handle('sunnah:statistics', () => result(() => getService().statistics(), 'read-failed'));
   ipcMain.handle('sunnah:share', (event, text: string) => result(async () => {
     const window = BrowserWindow.fromWebContents(event.sender);

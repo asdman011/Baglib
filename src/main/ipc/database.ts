@@ -1,3 +1,4 @@
+import { cancelSlashJobs } from '../services/slash-search-jobs';
 import { setupAdvancedIPC } from './advanced';
 import * as ipcModule0 from '../database/repositories/knowledge.repository';
 import * as ipcModule1 from '../database/repositories/annotation.repository';
@@ -26,6 +27,7 @@ function normalizeIpcError(err: unknown, fallbackMessage: string): Error {
 }
 
 export function setupDatabaseIPC() {
+  ipcMain.handle('slash:cancel', (_event, id: unknown) => cancelSlashJobs(id));
   setupAdvancedIPC();
   /**
    * Returns basic database status info for debugging / status bar.

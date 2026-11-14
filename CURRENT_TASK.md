@@ -1,3 +1,54 @@
+## KEY-350 verified handoff - 2026-11-14T15:23:26.424189+02:00 - Codex key350-root
+
+KEY-350 changes the shared notes and scratchpad slash popup to 8 results/source in free search and 20 in scoped search, with keyboard/mouse lazy Show more. Corpus choices insert complete quoted text plus the existing exact reference on the next line; notes insert links. Selecting a book/lecture offers Insert link or Search inside, with the selected material shown. Indexed text/PDF text layers and subtitle cues yield whole paragraphs/sentences plus Source/page or media-time links; missing text/transcripts show centralized Arabic/English messages. Slash insertion suppresses its automatic relation tooltip while keeping relation data, graph and existing editing. Cached/yielding local scans,280ms debounce,3-character text minimum,service LIMITs and dedicated cancellable corpus workers keep typing responsive. Work -> Edition -> Source, scopes/aliases/navigation/RTL-LTR remain preserved; no schema/entity/persistedfield/dependency/download changes.
+
+Direct full Sunnah adapter baseline:6678.94ms synchronous initialization;410.99–621.21ms per warm201-hit search. Production main-loop1ms-heartbeat maximum gaps before→after: Quran16.25→16.30ms; Sunnah8348.16→16.42ms; poetry16.42→16.46ms. After wall times332.00/1439.21/286.20ms respectively,each20hits. Quran already delegated to utility process;poetry already delegated to worker. Sunnah cold catalog summaries and per-hit ordinal/source hydration caused the observed main freeze. Dedicated cancellation terminates stale slash workers, including in-progress SQL, and checks late registration/async initialization. Full datasets:Sunnah1629495296B,poetry1609805824B,Quran15sources. Native rapid-edit max main18.09ms/renderer76.10ms. Windows timer granularity means these gaps are upper-envelope responsiveness measurements,not precise CPU samples.
+
+Focused/service regressions 60/60; final full suite through npm test -- --test-concurrency=2: 2303/2303 across352suites,0fail/0skip/0TODO,173660.3346ms. Final TypeScript noEmit and main/preload build pass. Exact changed-file ESLint0errors/1pre-existing unused getPdfPageCoverService import warning in database.ts. Final native ar/en2/2,zero renderer errors,5real PDF/MP4 copies,full installed datasets,free/scoped/local lazy paging,corpus quotes,no relation popup,selected indexed Arabic+English PDF passages,unindexed real PDF fallback,lecture with generated subtitle sidecar/without transcript,real scanned Arabic no-text,narrow bounds,fast editing and dashboard scratchpad pass. Original hashes unchanged; throwaway profile removed; never closed a user app. Screenshot QA inspected Arabic passage,Arabic scratchpad quote and English scanned no-text; raw screenshots/logs/JSON in .baglib-data/KEY-350-evidence/.
+
+Updated existing linked-study feature documentation, marking KEY-349 behavior superseded. Known limits: cold/restarted worker searches can still take seconds to return results while UI remains responsive; a completely full final batch can expose one final Show more request that discovers exhaustion. Other unindexed document formats require their existing index; PDF has the text-layer fallback. Text-extraction failures use the no-searchable-text message. Whole very long sentences can exceed the passage helper maxLength preference. No screen-reader speech or arbitrary huge/malformed documents were tested. The real Arabic PDF has pre-existing text-layer defects; actual original hashes were compared before/after rather than assuming its old manifest hash. The generated SRT is test data next to a copied real video,not a claimed audio transcription. Helper files were absent at initial inspection and were authored by Codex; no DeepSeek passage-helper contribution is claimed. Existing parser provenance remains unchanged. No external reverse-engineering investigation or Jira mutation performed.
+
+Exact 36 tracked files (only this entry in shared state):
+
+- `src/main/ipc/database.ts`
+- `src/main/ipc/poetry.ts`
+- `src/main/ipc/quran.ts`
+- `src/main/ipc/sunnah.ts`
+- `src/main/services/quran/quran-reader.ts`
+- `src/main/services/sunnah/research-corpus.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/dashboard/QuickNoteScratchpad.tsx`
+- `src/renderer/components/notes/NoteEditorPane.tsx`
+- `src/renderer/components/notes/StudyNoteEditor.tsx`
+- `src/renderer/components/notes/slash-search-extension.ts`
+- `src/renderer/translations.ts`
+- `src/renderer/utils/corpus-lookup.ts`
+- `src/renderer/utils/slash-search.ts`
+- `src/shared/quran-search.ts`
+- `src/shared/types/poetry.ts`
+- `src/shared/types/quran.ts`
+- `src/shared/types/sunnah.ts`
+- `tsup.config.ts`
+- `src/main/services/slash-search-jobs.ts`
+- `src/main/services/sunnah/search-process.ts`
+- `src/main/sunnah-search-worker.ts`
+- `src/renderer/utils/slash-material.ts`
+- `src/shared/passage-extract.ts`
+- `tests/ui/slash-search.test.ts`
+- `tests/ui/slash-search-followup.test.ts`
+- `tests/shared/passage-extract.test.ts`
+- `scripts/slash-search-live/run.mjs`
+- `src/main/services/poetry/queries.ts`
+- `tests/services/sunnah-research.test.ts`
+- `tests/services/quran-translation-search.test.ts`
+- `tests/services/poetry-partition.test.ts`
+- `scripts/slash-search-live/main.cjs`
+- `docs/features/feature - Linked Study Notes and Dashboard.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
+User authorized the exact scoped commit and normal push to origin/feature/library-domain under commit.lock. Final review also fixed qualified Sunnah pagination and transcript paging beyond100; dedicated regressions pass. The earlier full2302 run passed before those fixes; final full2303 and native2/2 verify them. Publication pending; other sessions files/state preserved. Local report docs/agent-ops/reports/KEY-350.md and board updated.
+
 ## KEY-48 gaps verified handoff - 2026-11-14T10:19:48.3187118+02:00 - Codex key48-root
 
 Built on HEAD5348602 with KEY23763490b4 verified as an ancestor. User explicitly authorized the scoped commit and normal push under commit.lock to origin/feature/library-domain. Implementation and verification pass. Publication is next.

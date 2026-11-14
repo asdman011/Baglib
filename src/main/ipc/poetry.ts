@@ -1,3 +1,4 @@
+import { registerSlashJob } from '../services/slash-search-jobs';
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import path from 'node:path';
 import { confirmedQuitCleanup } from '../services/quit-cleanup';
@@ -16,6 +17,8 @@ export function registerPoetryIpc(): void {
   // The installer ships a verified poetry pack in resources/poetry-pack (development builds have none).
   const provisioning = () => provisioner ??= new PoetryProvisioner(app.getAppPath(), app.getPath('userData'), app.isPackaged ? path.join(process.resourcesPath, 'poetry/parquet_rows.py') : path.join(app.getAppPath(), 'assets/poetry/parquet_rows.py'), app.isPackaged ? path.join(process.resourcesPath, 'poetry-pack', 'bayan_poetry-v1.pack.json') : null);
   let database: PoetryQueryProcess | undefined;
+  const slashDatabase = new PoetryQueryProcess(path.join(__dirname, 'poetry-worker.js'), path.join(app.getPath('userData'), 'partitions', 'bayan_poetry.sqlite'));
+  confirmedQuitCleanup.register(() => slashDatabase.close());
   const getDatabase = () => {
     if (!database) {
       database = new PoetryQueryProcess(path.join(__dirname, 'poetry-worker.js'), path.join(app.getPath('userData'), 'partitions', 'bayan_poetry.sqlite'));
@@ -30,9 +33,12 @@ export function registerPoetryIpc(): void {
       return { ok: false, error: code === 'unsupported-poetry-narration' || code === 'invalid-poetry-narration' ? code : 'poetry-unavailable' };
     }
   });
-  register('poetry:search', input => {
+  register('poetry:search', async input => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('invalid-poetry-query');
-    return getDatabase().query('search', input);
+    const requestId = (input as { requestId?: string }).requestId;
+    if (!requestId) return getDatabase().query('search', input);
+    const release = registerSlashJob(requestId, () => slashDatabase.close());
+    try { return await slashDatabase.query('search', input); } finally { release(); }
   });
   register('poetry:detail', input => getDatabase().query('detail', input));
   register('poetry:facets', () => getDatabase().query('facets'));

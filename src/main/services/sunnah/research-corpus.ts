@@ -138,8 +138,11 @@ export class SunnahResearchCorpus {
   }
   search(query: SunnahResearchQuery): SunnahSearchHit[] {
     if (!query || typeof query !== 'object') throw new Error('Invalid search');
+    const limit = query.limit ?? 201, offset = query.offset ?? 0;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 201 || !Number.isSafeInteger(offset) || offset < 0 || offset > 100000) throw new Error('Invalid search bounds');
     const clauses: string[] = [], params: (string | number)[] = [];
     let exactTerms: string[] = [];
+    let rankJoin = '';
     const conservative = (text: string) => normalizeArabicText(text, { normalizeTaaMarbuta: false, normalizeWawHamza: false, normalizeYaaHamza: false }).replace(/[^\p{L}\p{N}\s]/gu, ' ');
     if (query.text !== undefined) {
       if (typeof query.text !== 'string' || query.text.length > 500) throw new Error('Invalid search text');
@@ -151,7 +154,10 @@ export class SunnahResearchCorpus {
       } else {
         exactTerms = conservative(query.text).split(/\s+/).filter(Boolean);
         const match = terms.map(term => `"${term}"`).join(' AND ');
-        if (this.merged) { clauses.push('(id IN (SELECT rowid FROM hadiths_fts WHERE hadiths_fts MATCH ?) OR id IN (SELECT rowid FROM variant_translation_fts WHERE variant_translation_fts MATCH ?))'); params.push(match, match); }
+        if (query.requestId) {
+          rankJoin = `JOIN (SELECT rowid,MIN(score) AS score FROM (SELECT rowid,rank AS score FROM hadiths_fts WHERE hadiths_fts MATCH ? ${this.merged ? 'UNION ALL SELECT rowid,rank AS score FROM variant_translation_fts WHERE variant_translation_fts MATCH ?' : ''}) GROUP BY rowid) ranked ON ranked.rowid=hadiths.id`;
+          params.push(match); if (this.merged) params.push(match);
+        } else if (this.merged) { clauses.push('(id IN (SELECT rowid FROM hadiths_fts WHERE hadiths_fts MATCH ?) OR id IN (SELECT rowid FROM variant_translation_fts WHERE variant_translation_fts MATCH ?))'); params.push(match, match); }
         else { clauses.push('id IN (SELECT rowid FROM hadiths_fts WHERE hadiths_fts MATCH ?)'); params.push(match); }
       }
     }
@@ -168,16 +174,29 @@ export class SunnahResearchCorpus {
       if (typeof query.narratorId !== 'string' || !/^\d{1,20}$/.test(query.narratorId)) throw new Error('Invalid narrator');
       clauses.push('id IN (SELECT hadith_id FROM hadith_narrators WHERE rijal_id=?)'); params.push(query.narratorId);
     }
-    if (!clauses.length) return [];
-    const candidates = this.db.prepare(`SELECT ${baseColumns},Arabic_Tafseel FROM hadiths WHERE ${clauses.join(' AND ')} ORDER BY id LIMIT 201`).all(...params) as Row[];
-    // The historical index folds ة/ه; verify against preserved text so ambiguous
-    // substitutions cannot become false positive UI results.
-    return candidates.filter(row => {
+    if (!clauses.length && !rankJoin) return [];
+    const statement = this.db.prepare(`SELECT ${baseColumns},Arabic_Tafseel FROM hadiths ${rankJoin} WHERE ${clauses.length ? clauses.join(' AND ') : '1=1'} ORDER BY ${rankJoin ? 'ranked.score,' : ''}id LIMIT ? OFFSET ?`);
+    // The historical index folds taa marbuta/haa. Page over verified matches so
+    // false positives cannot hide valid later matches or shift the next batch.
+    const matches = (row: Row) => {
       if (!exactTerms.length) return true;
       const variants = this.merged && !value(row.English_Hadith) ? this.variants(Number(row.id)).map(item => item.text) : [];
       const text = conservative([row.Arabic_Matn, row.Arabic_Tafseel, row.English_Hadith, row.Chapter_Arabic, row.Section_Arabic, ...variants].map(value).join(' '));
       return exactTerms.every(term => text.includes(term));
-    }).map(row => this.hit(row));
+    };
+    if (!query.requestId) return (statement.all(...params, limit, offset) as Row[]).filter(matches).map(row => this.hit(row));
+    const selected: Row[] = []; let rawOffset = 0, skipped = 0;
+    while (selected.length < limit) {
+      const candidates = statement.all(...params, limit, rawOffset) as Row[];
+      for (const row of candidates) {
+        if (!matches(row)) continue;
+        if (skipped++ < offset) continue;
+        selected.push(row); if (selected.length === limit) break;
+      }
+      if (candidates.length < limit) break;
+      rawOffset += candidates.length;
+    }
+    return selected.map(row => this.hit(row));
   }
   research(id: number): SunnahResearch {
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Invalid hadith identity');

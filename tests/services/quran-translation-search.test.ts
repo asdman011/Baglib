@@ -43,6 +43,12 @@ test('translation derived index searches English and Arabic, preserves originals
     assert.deepEqual(await reader.search(script.id,'mercy'),[]);
     const english = await reader.search(script.id,'mercy',{translations:[translation.id],includeScript:false});
     assert.equal(english.length,30); assert.equal(english[0].source?.id,translation.id); assert.equal(english[0].source?.title,'Saheeh International');
+    const limited = await reader.search(script.id, 'mercy', { translations: [translation.id], limit: 8 });
+    const next = await reader.search(script.id, 'mercy', { translations: [translation.id], limit: 8, offset: 8 });
+    assert.equal(limited.length, 8); assert.equal(next.length, 8);
+    assert.equal(new Set([...limited, ...next].map(hit => `${hit.surah}:${hit.ayah}`)).size, 16);
+    assert.equal(validQuranSearchQuery({ script: script.id, text: 'mercy', limit: 101 }), false);
+    assert.equal(validQuranSearchQuery({ script: script.id, text: 'mercy', offset: -1 }), false);
     assert.equal(english[0].text,'Mercy رَحْمَة ');
     const arabic = await reader.search(script.id,'رحمة',{translations:[translation.id]});
     assert.equal(arabic.filter(hit=>hit.source?.kind==='script').length,1);

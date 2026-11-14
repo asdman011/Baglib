@@ -5,7 +5,8 @@ import type { BookItem } from '../../shared/types/work';
 
 export type CorpusKind = 'quran' | 'hadith' | 'poem';
 /** A Quran, hadith or poetry result: `link` is a study link; `quote` is a Markdown block with the text and that link. */
-export interface CorpusOption { kind: CorpusKind; target: string; label: string; snippet: string; link: string; quote: string }
+export interface CorpusSearchOptions { limit?: number; offset?: number; after?: number; requestId?: string; stale?: () => boolean }
+export interface CorpusOption { cursor?: number; kind: CorpusKind; target: string; label: string; snippet: string; link: string; quote: string }
 
 const toLatinDigits = (value: string) => value.replace(/[٠-٩]/gu, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
 const quoted = (text: string) => text.split(/\r?\n/u).map(line => `> ${line}`).join('\n');
@@ -32,10 +33,13 @@ function quranOption(surah: number, from: number, to: number, ayahs: { number: n
 }
 
 /** Searches the installed Quran (by `2:255`, `2:255-257` or words), Sunnah and poetry. Missing data gives no results, not an error. */
-export async function searchCorpus(kinds: CorpusKind[], query: string, collectionLabel: (id: SunnahCollectionId) => string, limit = 6, profile: 'hafs' | 'warsh' = 'hafs'): Promise<CorpusOption[]> {
+export async function searchCorpus(kinds: CorpusKind[], query: string, collectionLabel: (id: SunnahCollectionId) => string, limit = 6, profile: 'hafs' | 'warsh' = 'hafs', options: CorpusSearchOptions = {}): Promise<CorpusOption[]> {
   const text = query.trim();
   if (text.length < 2) return [];
   const jobs: Promise<CorpusOption[]>[] = [];
+  const { offset = 0, requestId, stale = () => false } = options;
+  if (stale()) return [];
+  limit = Math.max(1, Math.min(100, options.limit ?? limit));
   if (kinds.includes('quran')) jobs.push((async () => {
     const citation = /^(\d{1,3})\s*[:：]\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?$/u.exec(toLatinDigits(text));
     if (citation) {
@@ -49,11 +53,12 @@ export async function searchCorpus(kinds: CorpusKind[], query: string, collectio
     const script = catalog.data.sources.find(source => source.kind === 'script' && source.profile === profile)?.id;
     if (!script) return [];
     const translations = catalog.data.sources.filter(source => source.kind === 'translation' && source.profile === profile).map(source => source.id);
-    const found = await window.electronAPI.quran.searchAyahs({ script, text, translations });
+    if (stale()) return [];
+    const found = await window.electronAPI.quran.searchAyahs({ script, text, translations, limit, offset, ...(requestId ? { requestId } : {}) });
     return found.ok ? found.data.slice(0, limit).map(hit => quranOption(hit.surah, hit.ayah, hit.ayah, [{ number: hit.ayah, text: hit.text }], profile)) : [];
   })());
   if (kinds.includes('hadith')) jobs.push((async () => {
-    const found = await window.electronAPI?.sunnah?.search?.({ text });
+    const found = await window.electronAPI?.sunnah?.search?.({ text, limit, offset, ...(requestId ? { requestId } : {}) });
     if (!found?.ok) return [];
     return found.data.slice(0, limit).map(hit => {
       const target = `sunnah:${hit.chapter.collection}:${hit.chapter.number}:${hit.hadith.id}`;
@@ -64,9 +69,8 @@ export async function searchCorpus(kinds: CorpusKind[], query: string, collectio
     }).filter(option => option.link);
   })());
   if (kinds.includes('poem')) jobs.push((async () => {
-    // The poetry search returns poems in storage order; fetch more and put poems whose title matches first,
-    // so the poem itself comes before poems that quote it.
-    const found = await window.electronAPI?.poetry?.search({ query: text, limit: 30 });
+    // Slash queries use service-ranked batches; keep title matches ahead within the bounded picker batch.
+    const found = await window.electronAPI?.poetry?.search({ query: text, limit, after: options.after ?? 0, ...(requestId ? { offset: options.after ?? offset } : {}), ...(requestId ? { requestId } : {}) });
     if (!found?.ok) return [];
     const ranked = [...found.data.items].sort((a, b) => Number(matchesStudyQuery(b.title, text)) - Number(matchesStudyQuery(a.title, text)) || Number((b.match?.from ?? 1) === 0) - Number((a.match?.from ?? 1) === 0));
     return ranked.slice(0, limit).map(poem => {
@@ -78,7 +82,7 @@ export async function searchCorpus(kinds: CorpusKind[], query: string, collectio
       const link = studyLinkText(target, label);
       const bayt = poem.language === 'ar' && poem.layoutType === 'bayt' && lines.length === 2;
       const body = bayt ? `${lines[0]}  ***  ${lines[1]}` : lines.join('\n');
-      return { kind: 'poem' as const, target, label, snippet: (body || poem.title).slice(0, 120), link, quote: `${body ? `${quoted(body)}\n` : ''}> ${link}` };
+      return { cursor: found.data.next ?? Math.max(...found.data.items.map(item => item.id)), kind: 'poem' as const, target, label, snippet: (body || poem.title).slice(0, 120), link, quote: `${body ? `${quoted(body)}\n` : ''}> ${link}` };
     }).filter(option => option.link);
   })());
   const settled = await Promise.allSettled(jobs);

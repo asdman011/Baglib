@@ -1,11 +1,13 @@
 import type Database from 'better-sqlite3';
+import { matchesStudyQuery } from '../../../shared/study-notes';
 import { normalizeArabicForSearch, poetrySearchExcerpt, classifyPoetryLayout } from '../../../shared/poetry';
 import type { PoetryQuery, PoetQuery, PoetrySummary, PoetryDetail } from '../../../shared/types/poetry';
 export type { PoetryQuery } from '../../../shared/types/poetry';
 
 
 export function searchPoetry(database: Database.Database, input: PoetryQuery) {
-  const limit = input.limit ?? 40, after = input.after ?? 0;
+  const limit = input.limit ?? 40, after = input.requestId ? 0 : input.after ?? 0, offset = input.offset ?? 0;
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) throw new Error('invalid-poetry-query');
   if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(after) || after < 0 || (input.language !== undefined && !['ar', 'en'].includes(input.language))) throw new Error('invalid-poetry-query');
   const conditions = ['p.id > ?'];
   const values: (number | string)[] = [after];
@@ -20,13 +22,36 @@ export function searchPoetry(database: Database.Database, input: PoetryQuery) {
   if (typeof query !== 'string' || query.length > 500) throw new Error('invalid-poetry-query');
   const tokens = normalizeArabicForSearch(query).split(/\s+/u).filter(Boolean);
   if (tokens.length > 32) throw new Error('invalid-poetry-query');
+  const ranked = !!input.requestId && tokens.length > 0;
   if (tokens.length) {
-    conditions.push('p.id IN (SELECT rowid FROM poems_fts WHERE poems_fts MATCH ?)');
+    conditions.push(ranked ? 'poems_fts MATCH ?' : 'p.id IN (SELECT rowid FROM poems_fts WHERE poems_fts MATCH ?)');
     values.push(tokens.map(token => `"${token.replace(/"/gu, '""')}"`).join(' AND '));
   }
-  const rows = database.prepare(`SELECT p.id, p.title, p.language, p.layout_type AS layoutType, p.meter, p.theme,
+  const statement = database.prepare(`SELECT p.id, p.title, p.language, p.layout_type AS layoutType, p.meter, p.theme,
     p.verse_count AS verseCount, a.id AS poetId, a.name AS poetName${tokens.length ? ', p.verses_json AS versesJson' : ''}
-    FROM poems p JOIN poets a ON a.id=p.poet_id WHERE ${conditions.join(' AND ')} ORDER BY p.id LIMIT ?`).all(...values, limit + 1) as (PoetrySummary & { versesJson?: string })[];
+    FROM poems p JOIN poets a ON a.id=p.poet_id ${ranked ? 'JOIN poems_fts ON poems_fts.rowid=p.id' : ''} WHERE ${conditions.join(' AND ')} ORDER BY ${ranked ? 'bm25(poems_fts,10,3,1),p.id' : 'p.id'} LIMIT ? OFFSET ?`);
+  type Row = PoetrySummary & { versesJson?: string };
+  let rows = statement.all(...values, limit + 1, ranked ? offset : 0) as Row[];
+  let next = rows.length > limit ? rows[limit - 1].id : null;
+  if (ranked) {
+    // Verify only bounded ranked batches. The immutable index folds taa marbuta/haa.
+    const verified: Row[] = []; let cursor = offset; next = null;
+    outer: while (rows.length) {
+      for (const [index, row] of rows.entries()) {
+        cursor++;
+        let lines: unknown = []; try { lines = JSON.parse(row.versesJson || '[]'); } catch { /* optional text */ }
+        if (!matchesStudyQuery([row.title, row.poetName, ...(Array.isArray(lines) ? lines.filter(line => typeof line === 'string') : [])].join(' '), query)) continue;
+        verified.push(row);
+        if (verified.length === limit) {
+          next = index < rows.length - 1 || rows.length === limit + 1 ? cursor : null;
+          break outer;
+        }
+      }
+      if (rows.length < limit + 1) break;
+      rows = statement.all(...values, limit + 1, cursor) as Row[];
+    }
+    rows = verified;
+  }
   const items = rows.slice(0, limit).map(({ versesJson, ...summary }) => {
     if (!versesJson) return summary;
     const parsed: unknown = JSON.parse(versesJson);
@@ -34,7 +59,7 @@ export function searchPoetry(database: Database.Database, input: PoetryQuery) {
     const layoutType = summary.layoutType === 'bayt' && verses.length % 2 === 0 ? classifyPoetryLayout(summary.language, summary.meter, verses) : summary.layoutType;
     return { ...summary, layoutType, match: poetrySearchExcerpt(verses, layoutType, query) };
   });
-  return { items, next: rows.length > limit ? rows[limit - 1].id : null };
+  return { items, next };
 }
 
 export function poetryDetail(database: Database.Database, id: number) {

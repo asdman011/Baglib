@@ -151,7 +151,7 @@ export interface QuranAnnotationCoverage { installed: boolean; missing: string[]
 export interface QuranAyah { number: number; compatibility?: 'qul-37-130'; annotations?: Partial<Record<'meaning' | 'transliteration', QuranAnnotationCoverage>>; words: { position: number; text: string; marker: boolean; meaning?: string; transliteration?: string }[]; translation?: QuranTranslation; transliteration?: QuranRichNode[]; }
 export interface QuranTranslation { text: string; notes: string[]; anchors?: { offset: number; note: number }[]; }
 export interface QuranPassage { profile: 'hafs' | 'warsh'; surah: number; surahs: { number: number; count: number; arabic?: string; name?: string; revelationPlace?: string; revelationOrder?: number }[]; basmala?: string; ayahs: QuranAyah[]; next: number | null; }
-export interface QuranSearchQuery { script: string; text: string; translations?: string[]; includeScript?: boolean; }
+export interface QuranSearchQuery { script: string; text: string; translations?: string[]; includeScript?: boolean; limit?: number; offset?: number; requestId?: string; }
 export interface QuranSearchHit { surah: number; ayah: number; text: string; source?: { id: string; title: string; kind: 'script' | 'translation'; language?: string }; }
 export interface QuranCommentary { from: string; to: string; nodes: QuranRichNode[]; }
 export interface QuranAyahDetails { surah: number; ayah: number; profile: 'hafs' | 'warsh'; canonical: string; imlaey: string | null; }

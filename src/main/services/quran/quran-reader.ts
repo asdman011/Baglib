@@ -407,7 +407,7 @@ export class QuranReader {
     }
     return { profile: preset.profile, surah: query.surah, surahs, basmala, ayahs, next: references[20]?.ayah ?? null };
   }
-  async search(script: string, text: string, options: Pick<QuranSearchQuery, 'translations' | 'includeScript'> = {}): Promise<QuranSearchHit[]> {
+  async search(script: string, text: string, options: Pick<QuranSearchQuery, 'translations' | 'includeScript' | 'limit' | 'offset'> = {}): Promise<QuranSearchHit[]> {
     if (!validQuranSearchQuery({ ...options, script, text })) throw new Error('invalid-resource');
     const active = this.source(script, 'script');
     const translations = (options.translations || []).map(id => {
@@ -421,12 +421,15 @@ export class QuranReader {
     const sources = [...(options.includeScript === false ? [] : [{ id: script, kind: 'script' as const }]), ...translations.map(id => ({ id, kind: 'translation' as const }))];
     const hits: QuranSearchHit[] = [];
     // Bound both the source count and result count, giving every selected source a turn.
-    const limit = Math.max(1, Math.floor(100 / Math.max(sources.length, 1)));
+    const limit = options.limit ?? Math.max(1, Math.floor(100 / Math.max(sources.length, 1)));
+    let skip = options.offset ?? 0;
     for (const source of sources) {
       const { pack, preset } = this.source(source.id, source.kind);
       const database = await this.database(source.id, source.kind);
-      const rows = database.prepare('SELECT surah, ayah, original AS text FROM baglib_search WHERE baglib_search MATCH ? ORDER BY rank LIMIT ?').all(match, Math.min(30, limit)) as QuranSearchHit[];
+      const rows = database.prepare('SELECT surah, ayah, original AS text FROM baglib_search WHERE baglib_search MATCH ? ORDER BY rank LIMIT ? OFFSET ?').all(match, options.limit === undefined ? Math.min(30, limit) : limit - hits.length, skip) as QuranSearchHit[];
+      if (skip) skip = Math.max(0, skip - (database.prepare('SELECT count(*) AS n FROM baglib_search WHERE baglib_search MATCH ?').get(match) as { n: number }).n);
       hits.push(...rows.map(hit => ({ ...hit, source: { ...source, title: pack.resource.title, language: preset.language } })));
+      if (options.limit !== undefined && hits.length >= limit) break;
     }
     return hits;
   }
