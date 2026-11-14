@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { parseHTML } from 'linkedom';
 import { IslamicReaderHeader, IslamicReaderPanel } from '../../src/renderer/components/islamic/IslamicReaderChrome';
 import { readerChromeState, readerProfileSelection } from '../../src/renderer/components/islamic/reader-chrome';
-import { CONTINUE_KEY, continueReading, saveContinueReading } from '../../src/renderer/components/islamic/continue-reading';
+import { CONTINUE_KEY, continueReading, saveContinueReading, quranContinueKey, loadQuranContinueReading, quranPageHint } from '../../src/renderer/components/islamic/continue-reading';
 import { translations } from '../../src/renderer/translations';
 import type { QuranReaderSource } from '../../src/shared/types/quran';
 
@@ -52,9 +52,9 @@ test('continue-reading round trips all three entries across a storage restart wi
     const entries = {quran:{target:'quran:warsh:1:3',label:'الفاتحة'},sunnah:{target:'sunnah:Bukhari:1:row-1',label:'Bukhari'},poetry:{target:'poetry:ashaar:12:2:3',label:'شِعْر Poetry'}} as const;
     for (const kind of ['quran','sunnah','poetry'] as const) await saveContinueReading(kind,entries[kind]);
     data = JSON.parse(JSON.stringify(data));
-    for (const kind of ['quran','sunnah','poetry'] as const) assert.deepEqual(continueReading(data[CONTINUE_KEY+'.'+kind],kind),entries[kind]);
+    for (const kind of ['quran','sunnah','poetry'] as const) assert.deepEqual(continueReading(data[kind === 'quran' ? quranContinueKey('warsh') : CONTINUE_KEY+'.'+kind],kind),entries[kind]);
     await saveContinueReading('quran',{target:'quran:invalid:1:1',label:'bad'});
-    assert.equal(Object.keys(data).length,3);
+    assert.equal(Object.keys(data).length,4);
   } finally { if (original) Object.defineProperty(globalThis,'window',original); else Reflect.deleteProperty(globalThis,'window'); }
 });
 for (const lang of ['ar','en'] as const) {
@@ -75,3 +75,37 @@ for (const lang of ['ar','en'] as const) {
     assert.ok(document.querySelector('[role=tabpanel]')?.textContent.includes('عِلْم'));
   });
 }
+
+for (const legacyProfile of ['hafs', 'warsh'] as const) {
+  test('Quran positions restore independently and migrate the legacy ' + legacyProfile + ' target once', async () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    let data: Record<string, unknown> = { [CONTINUE_KEY + '.quran']: { target: 'quran:' + legacyProfile + ':2:10', label: 'Legacy' } };
+    const writes: string[] = [];
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { electronAPI: { settings: {
+      get: async (key: string) => data[key], set: async (key: string, value: unknown) => { data[key] = value; writes.push(key); }
+    } }, dispatchEvent: () => true } });
+    try {
+      const other = legacyProfile === 'hafs' ? 'warsh' : 'hafs';
+      assert.equal(await loadQuranContinueReading(other), null);
+      assert.equal((await loadQuranContinueReading())?.target, 'quran:' + legacyProfile + ':2:10');
+      await loadQuranContinueReading(legacyProfile);
+      assert.deepEqual(writes, [quranContinueKey(legacyProfile)]);
+      const hafs = { target: 'quran:hafs:3:20', label: 'Hafs' };
+      const warsh = { target: 'quran:warsh:4:30', label: 'Warsh' };
+      await saveContinueReading('quran', hafs); await saveContinueReading('quran', warsh);
+      data = JSON.parse(JSON.stringify(data));
+      assert.deepEqual(await loadQuranContinueReading('hafs'), hafs);
+      assert.deepEqual(await loadQuranContinueReading('warsh'), warsh);
+      assert.deepEqual(await loadQuranContinueReading(), warsh);
+      // A misplaced profile entry must never leak into the other reading.
+      data[quranContinueKey(other)] = data[quranContinueKey(legacyProfile)];
+      assert.equal(await loadQuranContinueReading(other), null);
+    } finally { if (original) Object.defineProperty(globalThis, 'window', original); else Reflect.deleteProperty(globalThis, 'window'); }
+  });
+}
+
+test('page hints are bounded and tied to the exact target, script and layout', () => {
+  const hint = { target: 'quran:warsh:2:5', script: 'warsh', layout: 'svg', page: 3 };
+  assert.deepEqual(quranPageHint(hint, hint.target, hint.script, hint.layout), hint);
+  for (const value of [null, {}, { ...hint, target: 'quran:hafs:2:5' }, { ...hint, script: 'hafs' }, { ...hint, layout: 'other' }, { ...hint, page: 0 }, { ...hint, page: 605 }, { ...hint, page: 1.5 }]) assert.equal(quranPageHint(value, hint.target, hint.script, hint.layout), null);
+});

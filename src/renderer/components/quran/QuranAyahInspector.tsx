@@ -5,6 +5,7 @@ import { Copy, CopyCheck, ExternalLink, X } from 'lucide-react';
 import type { QuranAyahDetails } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { quranCopyText } from '../../utils/quran-reference-label';
 import { passageNote } from '../actions/passage-actions';
 
 export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar, floating = false, commentary }: {
@@ -22,7 +23,7 @@ export function QuranAyahInspector({ details, reference, surahName, error, t, di
     drawer.current?.querySelector<HTMLButtonElement>('button')?.focus();
     return () => { if (previous?.isConnected) previous.focus(); };
   }, [floating]);
-  const copy = (text: string) => onCopy(`${text}\n[${reference.surah}:${reference.ayah}]`);
+  const copy = (text: string) => onCopy(quranCopyText(text, reference, dir === 'rtl' ? 'ar' : 'en'));
   return <div dir={dir} className={floating ? 'absolute top-20 start-3 sm:start-14 z-[80] w-[min(28rem,calc(100%-1.5rem))] h-[65%] min-w-44 min-h-28 max-h-[calc(100%-6rem)] resize overflow-hidden rounded-2xl border border-subtle shadow-xl' : 'fixed inset-0 z-[80]'} data-quran-inspector-layer>
     {!floating && <button type="button" aria-label={t('quranClosePanel')} onClick={onClose} className="absolute inset-0 bg-black/20" tabIndex={-1} />}
     <aside ref={drawer} tabIndex={-1} data-ui-dialog={floating ? undefined : "sheet"} role="dialog" aria-modal={floating ? undefined : true} aria-labelledby="quran-inspector-title" className={floating ? 'h-full w-full min-h-0 flex flex-col bg-surface text-main overflow-hidden' : 'absolute inset-y-0 start-0 w-[min(28rem,100%)] min-h-0 flex flex-col bg-surface text-main border-e border-subtle shadow-2xl overflow-hidden'} onKeyDown={event => {

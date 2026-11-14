@@ -2,6 +2,12 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T01:29:58.462Z, Codex key168-root] KEY-168 verified authorized slice: localized shared copy citations, independent profile positions/validated exact-page hints and visible bookmarks. Full2177/2177 once(concurrency2,342suites),focused42/native8offline/0renderererrors/types/mainbuild pass;lint0errors2existingwarnings.16screens/8clipboardreceipts,1338originalsunchanged/profiledeleted/ownedrenderer stopped. Exact18files/limits in CURRENT_TASK/report. Protected selected-word workspace callback excluded under file restriction; optional exception pending. Scoped commit/push authorized and next.
+
+- [2026-11-14T01:26:02.533Z, Codex key168-root] KEY-168 implementation/focused42/types/mainbuild pass; scoped lint0errors2existingwarnings. Native8/8 offline with actual restart, exact profile pages and clipboard readback,0renderererrors;1338originals unchanged/profile deleted. Full once concurrency2 running. Selected-word workspace-only exception pending; local report/18file manifest written. Publication pending.
+
+- [2026-11-14T01:10:05.099Z, Codex key168-root] KEY-168 slice claimed. Re-verified numeric copy citations, singleton position and excluded bookmark markers. Shared localized formatter/settings/notes API to be reused. Implementation and verification pending; authorized scoped publication after gates.
+
 - [2026-11-14T03:00:32.953240+02:00, Codex key244b-root] KEY-244 follow-up verified: callback SVG geometry, shared midpoint/normal collision placement, conditional selection overlay removes empty48px band without moving canvas origin. Full2132/2132 once(concurrency2,342suites,161114.4243ms),focused98/98,Unicode18/18,native4/4,downloads16/16,0renderererrors. Types/lint/mainbuild/diffpass;16screens/fourlayoutinspected;ownprofile/rendererremoved. Exact11files/limits in CURRENT_TASK and local KEY-244b report. No Quran/schema/dependency/Jira changes. Scoped lock commit/push explicitly authorized and pending.
 
 

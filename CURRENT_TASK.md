@@ -1,3 +1,40 @@
+## KEY-168 slice verified handoff - 2026-11-14T01:29:58.462Z - Codex key168-root
+
+Localized surah-name citations now cover action copy/plain/citation/share, canonical/imlaey inspector copy, passage copy, similar-ayah copy and page copy with same/cross-surah ranges through quranCopyText and the existing quranReferenceLabel. Default canonical content is unchanged. The explicit plain-copy action retains its existing diacritic removal. A collapsible localized bookmark list below the reader header jumps to the ayah; amber SVG borders/backgrounds and glyph underlines indicate active-profile bookmarks only. Existing general note markers and approved targets are preserved.
+
+Positions now persist independently in the existing settings store under islamic.continue.v1.quran.hafs/warsh. A validated legacy target migrates only to its named profile. The active-profile setting supports initial selection/hub resume. A target/script/layout-validated settings-only page hint preserves exact Warsh boundary pages, falling back to reference navigation when absent or invalid. Explicit navigation wins over async restoration. Repeated same-script changes are ignored. No schema/database fields/dependencies/downloads were introduced.
+
+Verification passes: full suite once --test-concurrency=2 at2177/2177 across342suites,0failures/skips,166713.3606ms; focused42/42; native initial4/4 plus actual-Electron-restart4/4 ar/en1280/480 offline, canonical clipboard readbacks, real UI bookmark creation/list jumps, same-numbered Warsh isolation and exact Hafs2/Warsh3 page restoration,0renderererrors. Types/main-preload build pass; scoped ESLint0errors2pre-existing hook warnings.16final screenshots/8clipboard receipts in .baglib-data/KEY-168-evidence; four restart images visually inspected. All1338original corpus files unchanged, throwaway profile/copies deleted and owned renderer stopped. No user app closed.
+
+Limits: protected QuranMushafWorkspace.tsx selected-word copy remains unchanged under the KEY-170 file restriction. An optional two-edit exception was requested, with no answer received; publication covers the verified authorized paths. Personal reflections remain profile-separated. Per translation source separation would change the approved reference format, so it waits for the user. Existing pre-migration planner startup warning and adapted Warsh surface horizontal scrolling at480px are recorded in the local report. Comparison/navigation/KEY-244 implementation files remain untouched. No Jira actions.
+
+Exact18tracked files, with only Codex KEY-168 hunks in shared state files:
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `src/renderer/components/actions/quran-actions.ts`
+- `src/renderer/components/islamic/IslamicStudiesHub.tsx`
+- `src/renderer/components/islamic/continue-reading.ts`
+- `src/renderer/components/quran/QuranAyahInspector.tsx`
+- `src/renderer/components/quran/QuranMushafView.tsx`
+- `src/renderer/components/quran/QuranReaderView.tsx`
+- `src/renderer/components/quran/QuranSimilarAyahsDrawer.tsx`
+- `src/renderer/components/quran/QuranBookmarks.tsx`
+- `src/renderer/hooks/useQuranBookmarks.ts`
+- `src/renderer/utils/quran-bookmarks.ts`
+- `src/renderer/utils/quran-reference-label.ts`
+- `src/renderer/translations.ts`
+- `tests/ui/islamic-reader.test.ts`
+- `tests/ui/quran-personal.test.ts`
+- `scripts/quran-personal-live/run.mjs`
+- `scripts/quran-personal-live/main.cjs`
+
+Local report docs/agent-ops/reports/KEY-168.md and board row KEY-168 (slice). User authorized the specified scoped commit/push under commit.lock to origin/feature/library-domain. Publication follows this handoff.
+
+## KEY-168 slice active - 2026-11-14T01:10:05.099Z - Codex key168-root
+
+Authorized scope: localized reference-aware copy/share in all reader paths, per-profile Quran position with legacy fallback, visible profile-scoped bookmarks/list via existing notes API. No schema/dependency/download changes. Preserve quran-navigation.ts, KEY-170 comparison files and KEY-244 board implementation. Reflections stay profile-scoped; per translation source separation changes the approved reference format and waits for the user. User explicitly authorized scoped commit/push under commit.lock after all verification. Initial code audit confirms all three gaps. Verification pending. Files planned: quran-actions.ts, quran-reference-label.ts, continue-reading.ts, IslamicStudiesHub.tsx, QuranReaderView.tsx, QuranAyahInspector.tsx, QuranMushafView.tsx, new QuranBookmarks.tsx/useQuranBookmarks.ts/quran-bookmarks.ts, translations.ts own keys, focused tests, new quran-personal-live harness, shared state own hunks.
+
 ## KEY-244 follow-up verified handoff - 2026-11-14T03:00:32.953240+02:00 - Codex key244b-root
 
 Replaced export markup rewriting with the optional boardToSvg edgePath callback (shifted export coordinates, escaped path/labels, unchanged default line bytes). Canvas/export share curve geometry and a pure bounded normal-offset label placer. Label boxes clear cards and prior labels in live ar/en layouts; mixed-script text is isolated without changing canonical content. Export padding includes displaced labels. The empty band was the unconditional 48 px selection sub-toolbar, not a guide/status area; conditional logical-positioned overlay controls now leave the canvas directly beneath the tools and keep pointer coordinates stable on selection.

@@ -1,8 +1,12 @@
 'use client';
 
+import { parseQuranTarget } from '../../../shared/study-notes';
+import { quranCopyText, quranReferenceLabel } from '../../utils/quran-reference-label';
+import { useQuranBookmarks } from '../../hooks/useQuranBookmarks';
+import { QuranBookmarks } from './QuranBookmarks';
 import { IslamicReaderHeader } from '../islamic/IslamicReaderChrome';
 import { readerProfileSelection } from '../islamic/reader-chrome';
-import { saveContinueReading, continueReading, CONTINUE_KEY } from '../islamic/continue-reading';
+import { saveContinueReading, loadQuranContinueReading, quranContinueKey, quranPageHint } from '../islamic/continue-reading';
 import { ContextMenu } from '../ui/ContextMenu';
 import { quranActions } from '../actions/quran-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -109,7 +113,7 @@ export function QuranPassageView({
             <span dir="ltr">{new Intl.NumberFormat(lang).format(passage.surah)}:{new Intl.NumberFormat(lang).format(ayah.number)}</span>
             <div className="flex flex-wrap gap-2">
               {onPlayAyah && <button type="button" onClick={() => onPlayAyah(ayah.number)} title={isAyahPlaying ? t('quranAudioPause') : t('quranAudioPlay')} aria-label={isAyahPlaying ? t('quranAudioPause') : t('quranAudioPlay')} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors ${isAyahPlaying ? 'bg-emerald-600 text-white border-emerald-600' : 'border-subtle hover:bg-pale-sky-500/10'}`}>{isAyahPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}{t(isAyahPlaying ? 'quranAudioPause' : 'quranAudioPlay')}</button>}
-              <button type="button" onClick={() => onCopy(ayah.words.map(word => word.text).join(' ') + (ayah.translation ? `\n\n${ayah.translation.text}` : '') + `\n${passage.surah}:${ayah.number}`)} className="rounded-lg border border-subtle p-2" title={t('quranCopyAyah')} aria-label={t('quranCopyAyah')}><Copy className="size-4" /></button>
+              <button type="button" onClick={() => onCopy(quranCopyText(ayah.words.map(word => word.text).join(' ') + (ayah.translation ? `\n\n${ayah.translation.text}` : ''), { surah: passage.surah, ayah: ayah.number }, lang))} className="rounded-lg border border-subtle p-2" title={t('quranCopyAyah')} aria-label={t('quranCopyAyah')}><Copy className="size-4" /></button>
               {onViewInMushaf && <button type="button" onClick={() => onViewInMushaf(ayah.number)} title={t('quranViewInMushaf')} aria-label={t('quranViewInMushaf')} className="inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-xs"><BookOpen className="size-4" />{t('quranViewInMushaf')}</button>}
               {onOpenTopics && <button type="button" onClick={() => onOpenTopics(ayah.number)} title={t('quranTopics')} aria-label={t('quranTopics')} className="inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-xs hover:bg-pale-sky-500/10 transition-colors"><Layers className="size-4 text-emerald-600 dark:text-emerald-400" />{t('quranTopics')}</button>}
               {onOpenSimilar && <button type="button" onClick={() => onOpenSimilar(ayah.number)} title={t('quranSimilarAyahs')} aria-label={t('quranSimilarAyahs')} className="inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-xs hover:bg-pale-sky-500/10 transition-colors"><CopyCheck className="size-4 text-emerald-600 dark:text-emerald-400" />{t('quranSimilarAyahs')}</button>}
@@ -159,6 +163,10 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
   const identity = useRef('');
   const customized = useRef(new Set<string>());
   const profile = catalog.sources.find(source => source.id === selection.script)?.profile;
+  const { bookmarks, failed: bookmarksFailed } = useQuranBookmarks(profile);
+  const [positionReady, setPositionReady] = useState('');
+  const navigationVersion = useRef(0);
+  const resumeLocation = useRef<{ surah: number; ayah: number } | null>(null);
   // The companion note pane links to the selected ayah.
   useCompanionContext('quran', () => {
     if (!inspected || !profile) return null;
@@ -190,6 +198,9 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
         const result = await client.readerCatalog();
         if (!alive) return;
         if (!result.ok) throw new Error(result.error);
+        const savedPosition = await loadQuranContinueReading();
+        if (!alive) return;
+        const savedProfile = savedPosition?.target.split(':')[1];
         const next = JSON.stringify(result.data);
         if (identity.current === next) return;
         identity.current = next;
@@ -205,7 +216,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
             }
             return next;
           }
-          const script = sources.find(source => source.kind === 'script' && source.profile === 'hafs') || sources.find(source => source.kind === 'script');
+          const script = sources.find(source => source.kind === 'script' && source.profile === (savedProfile || 'hafs')) || sources.find(source => source.kind === 'script');
           const find = (kind: string) => sources.find(source => source.kind === kind && source.profile === script?.profile)?.id || '';
           return { script: script?.id || '', translation: find('translation'), tafsir: find('tafsir'), meanings: find('word-translation'), transliteration: find('word-transliteration'), ayahTransliteration: find('ayah-transliteration') };
         });
@@ -285,8 +296,10 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
       setPageNumber(result.data.pageNumber);
     } catch (cause) { setError(quranActionError(cause)); }
   }, [layout, selection.script]);
-  const jumpReference = useCallback((reference: { surah: number; ayah: number }) => { setAudioOpen(false); setAudioState(null); void jump(reference.surah, reference.ayah); }, [jump]);
+  const jumpReference = useCallback((reference: { surah: number; ayah: number }) => { navigationVersion.current++; resumeLocation.current = null; setAudioOpen(false); setAudioState(null); void jump(reference.surah, reference.ayah); }, [jump]);
   const navigatePage = useCallback((number: number) => {
+    navigationVersion.current++;
+    resumeLocation.current = null;
     setPageNumber(number); setInspected(null); setAudioOpen(false); setAudioState(null);
   }, []);
   useEffect(() => {
@@ -308,6 +321,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
     const open = () => {
       const target = consumeQuranAyah();
       if (!target) return;
+      navigationVersion.current++;
       setSelection(previous => previous.script === target.script ? previous : { ...emptySelection, script: target.script });
       restoringTarget.current = false;
       setPendingTarget(target);
@@ -339,26 +353,40 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
     }).catch(() => { if (alive) setError('quranReaderError'); });
     return () => { alive = false; };
   }, [pendingTarget, layout, selection.script]);
-  const restoredPosition = useRef(false);
   useEffect(() => {
-    if (!catalog.sources.length || restoredPosition.current) return;
-    restoredPosition.current = true;
-    if (pendingTarget) return;
+    if (!profile || !selection.script || !layout) return;
     let alive = true;
-    void window.electronAPI.settings.get(CONTINUE_KEY + '.quran').then(value => {
-      const saved = continueReading(value, 'quran');
-      if (!alive || !saved) return;
-      const [, savedProfile, surah, ayah] = saved.target.split(':');
-      const script = catalog.sources.find(source => source.kind === 'script' && source.profile === savedProfile)?.id;
-      if (script) { restoringTarget.current = true; setSelection(readerProfileSelection(catalog.sources, script)); setPendingTarget({ script, surah: +surah, ayah: +ayah }); }
-    }).catch(() => setError('quranStorageError'));
+    const version = navigationVersion.current;
+    void Promise.all([loadQuranContinueReading(profile), window.electronAPI.settings.get(quranContinueKey(profile) + '.page')]).then(async ([saved, hintValue]) => {
+      if (!alive) return;
+      if (!pendingTarget && saved && version === navigationVersion.current) {
+        const reference = parseQuranTarget(saved.target)!;
+        const hint = quranPageHint(hintValue, saved.target, selection.script, layout.id);
+        const hintedPage = hint ? await api()?.mushafPage({ pack: layout.id, page: hint.page, script: selection.script }) : null;
+        if (!alive) return;
+        if (version !== navigationVersion.current) { setPositionReady(selection.script + ':' + layout.id); return; }
+        resumeLocation.current = { surah: reference.surah, ayah: reference.from };
+        restoringTarget.current = true;
+        if (hint && hintedPage?.ok && hintedPage.data.profile === profile && hintedPage.data.words.some(word => word.surah === reference.surah && word.ayah === reference.from)) {
+          setPendingTarget({ script: selection.script, layout: layout.id, page: hint.page });
+        } else setPendingTarget({ script: selection.script, surah: reference.surah, ayah: reference.from });
+      }
+      setPositionReady(selection.script + ':' + layout.id);
+    }).catch(() => { if (alive) setError('quranStorageError'); });
     return () => { alive = false; };
-  }, [catalog, pendingTarget]);
+    // Explicit navigation wins over saved position; restore once when the script changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, selection.script, layout?.id]);
   useEffect(() => {
-    if (!page || page.profile !== profile || loadedKey !== queryKey || pendingTarget || !visible) return;
-    const location = inspected || { surah: page.surahStart, ayah: page.ayahStart };
-    void saveContinueReading('quran', { target: 'quran:' + profile + ':' + location.surah + ':' + location.ayah, label: ((lang === 'ar' ? surahs.find(surah => surah.number === location.surah)?.arabic : surahs.find(surah => surah.number === location.surah)?.name) || String(location.surah)) + ' ' + location.surah + ':' + location.ayah }).catch(() => setError('quranStorageError'));
-  }, [page, profile, loadedKey, queryKey, pendingTarget, visible, inspected, lang, surahs]);
+    if (!page || page.profile !== profile || loadedKey !== queryKey || pendingTarget || !visible || positionReady !== selection.script + ':' + layout?.id) return;
+    const resumed = resumeLocation.current;
+    const location = inspected || (resumed && page.words.some(word => word.surah === resumed.surah && word.ayah === resumed.ayah) ? resumed : { surah: page.surahStart, ayah: page.ayahStart });
+    const target = 'quran:' + profile + ':' + location.surah + ':' + location.ayah;
+    void Promise.all([
+      saveContinueReading('quran', { target, label: quranReferenceLabel({ surah: location.surah, from: location.ayah, to: location.ayah }, lang) }),
+      window.electronAPI.settings.set(quranContinueKey(profile!) + '.page', { target, script: selection.script, layout: layout?.id, page: page.pageNumber }),
+    ]).catch(() => setError('quranStorageError'));
+  }, [page, profile, loadedKey, queryKey, pendingTarget, visible, inspected, lang, positionReady, selection.script, layout?.id]);
   const pageSurah = page?.surahStart;
   useEffect(() => {
     if (!pageSurah || !showIntro) return;
@@ -375,6 +403,9 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
     void client.copyText(text).then(result => { if (result.ok) setNotice('quranCopied'); else setError('quranReaderError'); }).catch(() => setError('quranReaderError'));
   };
   const changeScript = (script: string) => {
+    if (script === selection.script) return;
+    navigationVersion.current++;
+    resumeLocation.current = null;
     setAudioOpen(false); setAudioState(null); setInspected(null); setPage(null); setPageNumber(1); setLayoutId('');
     setStudyTarget(null); setPendingTarget(null); setDetails(null); setIntro(null); setPanelOpen(false); setActiveReciterId(catalog.sources.find(source => source.kind === 'recitation' && source.profile === catalog.sources.find(source => source.id === script)?.profile)?.id || '');
     setSelection(readerProfileSelection(catalog.sources, script));
@@ -401,11 +432,12 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
               <button type="button" data-quran-fullscreen={immersive ? 'exit' : 'enter'} aria-label={t(immersive ? 'quranExitFullscreen' : 'quranEnterFullscreen')} title={t(immersive ? 'quranExitFullscreen' : 'quranEnterFullscreen')} onClick={() => { if (immersive) leaveFullscreen(); else { setImmersive(true); void root.current?.requestFullscreen?.().catch(() => {}); } }} className="p-2">{immersive ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}</button>
         <button type="button" onClick={() => startAudio({surah: page?.surahStart || 1, ayah: page?.ayahStart || 1})}>{t('quranAudioPlay')}</button>
       </div>} />
+    <QuranBookmarks bookmarks={bookmarks} failed={bookmarksFailed} lang={lang} t={t} onNavigate={reference => { setInspected(reference); jumpReference(reference); }} />
     {error && <p role="alert" className="absolute top-16 inset-x-3 mx-auto z-50 w-fit max-w-[90%] rounded-xl bg-surface border border-red-500 p-3 text-sm">{t(error)}<button type="button" aria-label={t('quranClosePanel')} onClick={() => setError(null)} className="ms-2"><X className="size-4" /></button></p>}
     {notice && <p role="status" className="sr-only">{t(notice)}</p>}
     {page && loadedKey === queryKey && layout && <QuranKhatmahDock key={targetKhatmah} script={selection.script} layout={layout.id} page={page.pageNumber} visible={visible && !loading} targetPlan={targetKhatmah} />}
     <div className="relative flex-1 min-h-0">{page && loadedKey === queryKey && layout && page.profile === profile ? <QuranMushafWorkspace
-      panelOpen={panelOpen} onPanelChange={setPanelOpen} controlsHost={controlsHost} page={page} selection={selection} metadata={metadata} surahs={surahs} t={t} lang={lang} dir={dir} immersive={immersive} loading={loading}
+      bookmarks={bookmarks} panelOpen={panelOpen} onPanelChange={setPanelOpen} controlsHost={controlsHost} page={page} selection={selection} metadata={metadata} surahs={surahs} t={t} lang={lang} dir={dir} immersive={immersive} loading={loading}
       selectedAyah={inspected} onSelectAyah={setInspected} onNavigatePage={navigatePage}
       onCopyText={copy} activeAudio={audioState} canPlay={reciters.length > 0} onStartAudio={startAudio}
       studyTarget={studyTarget} onStudyTargetConsumed={clearStudyTarget} onNavigateAyah={jumpReference}

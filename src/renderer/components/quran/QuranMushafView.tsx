@@ -1,5 +1,7 @@
 'use client';
 
+import { quranCopyText } from '../../utils/quran-reference-label';
+import type { QuranBookmark } from '../../utils/quran-bookmarks';
 import { useCtrlWheelZoom } from '../../hooks/useCtrlWheelZoom';
 import type { PassageHighlight } from '../../hooks/usePassageHighlights';
 import { compareWords, parseQuranHighlight, wordInRange, type WordRef } from '../../../shared/passage-highlights';
@@ -32,6 +34,7 @@ interface QuranMushafViewProps {
   onExploreAyah?: (reference: Location) => void;
   /** KEY-340: colour highlights to draw (whole ayahs or word ranges). */
   highlights?: PassageHighlight[];
+  bookmarks?: QuranBookmark[];
 }
 
 export function svgWordLocation(element: Element | null): Location | null {
@@ -42,7 +45,7 @@ export function svgWordLocation(element: Element | null): Location | null {
   return Number.isInteger(surah) && surah >= 1 && surah <= 114 && Number.isInteger(ayah) && ayah >= 1 && ayah <= 300 ? { surah, ayah } : null;
 }
 
-export function QuranMushafView({ controlsHost, page, t, lang, dir, selectedAyah, onSelectAyah, onNavigatePage, onCopyText, cardSource, activeAudio, loading = false, onContextAyah, onExploreAyah, highlights }: QuranMushafViewProps) {
+export function QuranMushafView({ controlsHost, page, t, lang, dir, selectedAyah, onSelectAyah, onNavigatePage, onCopyText, cardSource, activeAudio, loading = false, onContextAyah, onExploreAyah, highlights, bookmarks = [] }: QuranMushafViewProps) {
   const [zoom, setZoom] = useState(100);
   // KEY-339: Ctrl+wheel steps the same 60-200% zoom as the buttons.
   const mushafRoot = useRef<HTMLDivElement>(null);
@@ -99,12 +102,13 @@ export function QuranMushafView({ controlsHost, page, t, lang, dir, selectedAyah
       group.setAttribute('tabindex', '0');
       group.setAttribute('role', 'button');
       group.setAttribute('aria-label', `${group.getAttribute('data-canonical') || group.getAttribute('data-hafs') || group.getAttribute('data-imlaey') || ''} — ${t('quranAyahInspector')} ${location.surah}:${location.ayah}`);
+      group.toggleAttribute('data-baglib-bookmark', bookmarks.some(bookmark => bookmark.target === 'quran:' + page.profile + ':' + location.surah + ':' + location.ayah));
       group.toggleAttribute('data-baglib-selected', selectedAyah?.surah === location.surah && selectedAyah.ayah === location.ayah);
       const playing = Boolean(activeAudio?.isPlaying && activeAudio.surah === location.surah && activeAudio.ayah === location.ayah);
       group.toggleAttribute('data-baglib-playing', playing);
       group.toggleAttribute('data-baglib-audio-word', playing && Number(group.getAttribute('data-word-index-in-ayah')) === activeAudio?.activeWordIndex);
     }
-  }, [markup, selectedAyah, activeAudio, t, fontLoaded]);
+  }, [markup, bookmarks, page.profile, selectedAyah, activeAudio, t, fontLoaded]);
 
   // KEY-340: drag across words to select a range (it may cross ayahs); Shift+click extends; Esc clears.
   const [range, setRange] = useState<{ start: WordRef; end: WordRef } | null>(null);
@@ -173,10 +177,12 @@ export function QuranMushafView({ controlsHost, page, t, lang, dir, selectedAyah
       <button type="button" disabled={zoom <= 60} onClick={() => setZoom(value => Math.max(60, value - 10))} aria-label={t('quranZoomOut')} title={t('quranZoomOut')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ZoomOut className="size-4" /></button>
       <button type="button" disabled={zoom >= 200} onClick={() => setZoom(value => Math.min(200, value + 10))} aria-label={t('quranZoomIn')} title={t('quranZoomIn')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ZoomIn className="size-4" /></button>
       <button type="button" onClick={() => setZoom(100)} title={t('quranResetZoom')} className="p-2 text-xs rounded-lg border border-subtle" aria-label={t('quranResetZoom')}>{number(zoom)}%</button>
-      <button type="button" onClick={() => onCopyText(page.words.filter(word => word.type !== 'aya-mark').map(word => word.canonicalText || word.textHafs || '').join(' '))} aria-label={t('quranCopyPage')} title={t('quranCopyPage')} className="p-2 rounded-lg border border-subtle"><Copy className="size-4" /></button>
+      <button type="button" onClick={() => onCopyText(quranCopyText(page.words.filter(word => word.type !== 'aya-mark').map(word => word.canonicalText || word.textHafs || '').join(' '), { surah: page.surahStart, ayah: page.ayahStart }, lang, { surah: page.surahEnd, ayah: page.ayahEnd }))} aria-label={t('quranCopyPage')} title={t('quranCopyPage')} className="p-2 rounded-lg border border-subtle"><Copy className="size-4" /></button>
   </>;
   return <div ref={mushafRoot} dir={dir} data-quran-mushaf data-card-script={cardSource?.script} data-card-tafsir={cardSource?.tafsir} className="flex flex-col min-h-0 h-full" style={{ containerType: 'size' }}>
     <style>{`
+      .mushaf-svg-surface [data-baglib-bookmark] > [data-baglib-hitbox] { fill:rgb(245 158 11 / .2); stroke:#b45309; stroke-width:.7px; }
+      .mushaf-svg-surface span[data-baglib-bookmark] { box-shadow:inset 0 -3px #b45309; background:rgb(245 158 11 / .14); }
       .mushaf-svg-surface svg { width:100%; height:auto; display:block; }
       .mushaf-svg-surface path { fill:currentColor; transition:fill 120ms ease,filter 120ms ease; }
       .mushaf-svg-surface [data-surah][data-aya] { cursor:pointer; pointer-events:all; }

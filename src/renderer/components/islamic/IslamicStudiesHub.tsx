@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { BookMarked, BookOpenText, Feather, Search } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { CONTINUE_KEY, CONTINUE_KINDS, continueReading, type ContinueKind, type ContinueReading } from './continue-reading';
+import { CONTINUE_KEY, CONTINUE_KINDS, loadQuranContinueReading, continueReading, type ContinueKind, type ContinueReading } from './continue-reading';
 import { navigateStudyReference } from '../../utils/study-navigation';
 import { StudySourcesSearch } from '../search/StudySourcesSearch';
 import { useKhatmah } from '../quran/useKhatmah';
@@ -28,7 +28,7 @@ export function IslamicStudiesHub() {
     let alive = true;
     const load = async () => {
       try {
-        const saved = await Promise.all(CONTINUE_KINDS.map(async kind => [kind, continueReading(await window.electronAPI.settings.get(CONTINUE_KEY + '.' + kind),kind)] as const));
+        const saved = await Promise.all(CONTINUE_KINDS.map(async kind => [kind, kind === 'quran' ? await loadQuranContinueReading() : continueReading(await window.electronAPI.settings.get(CONTINUE_KEY + '.' + kind),kind)] as const));
         const config = await window.electronAPI.studyWird.getConfig();
         if (alive) { setPositions(Object.fromEntries(saved)); setWird(config); setFailed(false); }
       } catch { if (alive) setFailed(true); }

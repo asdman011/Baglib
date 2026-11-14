@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { CopyCheck, X, BookOpen, Copy } from 'lucide-react';
+import { quranCopyText } from '../../utils/quran-reference-label';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
 import type { QuranSimilarAyah } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
@@ -227,9 +228,7 @@ export function QuranSimilarAyahsDrawer({
                   <button
                     type="button"
                     onClick={() => {
-                      const copyText = verseText
-                        ? `${verseText}\n[${matchedSurahTitle} ${item.surah}:${item.ayah}]`
-                        : `[${matchedSurahTitle} ${item.surah}:${item.ayah}]`;
+                      const copyText = quranCopyText(verseText || '', { surah: item.surah, ayah: item.ayah }, lang);
                       onCopy(copyText);
                     }}
                     className="p-1.5 rounded-md text-muted hover:text-foreground hover:bg-pale-sky-500/10 transition-colors"
