@@ -157,16 +157,7 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay, 
     {subtitleError && <p role="alert" className="text-sm leading-relaxed">{t('lectureSubtitleError')}</p>}
     </div>
     <aside data-lecture-study-tools className="min-w-0 space-y-4">
-    <section className="space-y-2">
-      <h3 className="text-sm font-bold">{t('lectureSections')}</h3>
-      <p className="text-xs text-muted">{t(lecture.sectionSource === 'file' ? 'lectureSectionsFromFile' : lecture.sectionSource === 'user' ? 'lectureSectionsFromUser' : 'lectureSectionsNone')}</p>
-      <ol className="space-y-1">{lecture.sections.map((item, index) => <li key={`${item.start}-${index}`} className="flex items-center gap-2">
-        <button type="button" aria-current={current === item} className={`flex-1 min-w-0 rounded-lg border px-3 py-1.5 text-start text-sm ${current === item ? 'border-pale-sky-500' : 'border-subtle'}`} onClick={() => go(item.start)}><bdi className="text-xs text-muted">{clockTime(item.start)}</bdi> <span dir="auto">{item.title}</span></button>
-        <button type="button" className="p-1.5 rounded-lg border border-subtle" aria-label={t('pathwayRemoveItem')} title={t('pathwayRemoveItem')} onClick={() => removeSection(index)}><Trash2 className="size-3" /></button>
-      </li>)}</ol>
-      <div className="flex flex-wrap gap-2"><input className={`${control} min-w-0 flex-1 basis-40`} value={section} onChange={event => setSection(event.target.value)} maxLength={300} placeholder={t('lectureSectionTitle')} aria-label={t('lectureSectionTitle')} dir="auto" /><button type="button" className={button} disabled={!section.trim()} onClick={addSection}><Plus className="size-4" />{t('lectureAddSection')}</button></div>
-    </section>
-    <section className="space-y-2">
+    <section data-lecture-notes className="space-y-2">
       <h3 className="text-sm font-bold">{t('lectureNotes')}</h3>
       {layout === 'study' && <form data-lecture-inline-notes className="space-y-2" onSubmit={event => { event.preventDefault(); void saveNote(); }}>
         <textarea data-lecture-note-editor dir="auto" rows={6} maxLength={20000} value={draft} disabled={noteStatus === 'saving'} aria-label={t('lectureNotes')} placeholder={t('notePanelPlaceholder')} className="w-full resize-y rounded-lg border border-subtle bg-canvas p-3 text-sm leading-loose" onChange={event => { setDraft(event.target.value); setNoteStatus(null); }} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void saveNote(); } }} />
@@ -178,6 +169,15 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay, 
         <button type="button" className="underline" onClick={() => go(seconds)}><bdi>{clockTime(seconds)}</bdi></button>
         <button type="button" dir="auto" className="min-w-0 truncate text-start" onClick={() => openStudyNote({ id: item.id })}>{item.title || item.content.replace(/\[\[[^\]]+\]\]/gu, '').trim().slice(0, 80)}</button>
       </li>)}</ul>
+    </section>
+    <section data-lecture-sections className="space-y-2">
+      <h3 className="text-sm font-bold">{t('lectureSections')}</h3>
+      <p className="text-xs text-muted">{t(lecture.sectionSource === 'file' ? 'lectureSectionsFromFile' : lecture.sectionSource === 'user' ? 'lectureSectionsFromUser' : 'lectureSectionsNone')}</p>
+      <ol className="space-y-1">{lecture.sections.map((item, index) => <li key={`${item.start}-${index}`} className="flex items-center gap-2">
+        <button type="button" aria-current={current === item} className={`flex-1 min-w-0 rounded-lg border px-3 py-1.5 text-start text-sm ${current === item ? 'border-pale-sky-500' : 'border-subtle'}`} onClick={() => go(item.start)}><bdi className="text-xs text-muted">{clockTime(item.start)}</bdi> <span dir="auto">{item.title}</span></button>
+        <button type="button" className="p-1.5 rounded-lg border border-subtle" aria-label={t('pathwayRemoveItem')} title={t('pathwayRemoveItem')} onClick={() => removeSection(index)}><Trash2 className="size-3" /></button>
+      </li>)}</ol>
+      <div className="flex flex-wrap gap-2"><input className={`${control} min-w-0 flex-1 basis-40`} value={section} onChange={event => setSection(event.target.value)} maxLength={300} placeholder={t('lectureSectionTitle')} aria-label={t('lectureSectionTitle')} dir="auto" /><button type="button" className={button} disabled={!section.trim()} onClick={addSection}><Plus className="size-4" />{t('lectureAddSection')}</button></div>
     </section>
     {cues.length > 0 && (layout === 'study' || transcript) && <LectureTranscript cues={cues} active={active} onSeek={go} onNote={at => passageNote(lectureTarget(lecture.id, at), label(at))} />}
     </aside>

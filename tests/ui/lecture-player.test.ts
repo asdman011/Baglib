@@ -39,6 +39,9 @@ for (const lang of ['ar', 'en'] as const) {
         assert.equal(window.document.querySelectorAll('[data-lecture-transcript-slot]').length, Number(hasTranscript));
         assert.equal(window.document.querySelectorAll('[data-transcript-search]').length, Number(hasTranscript));
         assert.ok(window.document.querySelector('[data-lecture-study-tools] [data-lecture-inline-notes] textarea'));
+        // Study tools put the notes box first, with Sections below it.
+        const tools = [...window.document.querySelector('[data-lecture-study-tools]')!.children].map(child => child.hasAttribute('data-lecture-notes') ? 'notes' : child.hasAttribute('data-lecture-sections') ? 'sections' : null).filter(Boolean);
+        assert.deepEqual(tools, ['notes', 'sections']);
         assert.equal(window.document.querySelector('[data-note-side-panel]'), null);
         assert.ok(window.document.querySelector('[data-lecture-note-save]')!.textContent!.includes(translations[lang].notePanelSave));
         const toggle = window.document.querySelector<HTMLInputElement>('[data-lecture-autoplay]')!;
