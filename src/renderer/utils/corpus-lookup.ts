@@ -1,4 +1,5 @@
 import { matchesStudyQuery, parseBookTarget, parseQuranTarget, studyLinkText, type StudyNote } from '../../shared/study-notes';
+import { normalizeArabicForSearch } from '../../shared/poetry';
 import type { SunnahCollectionId } from '../../shared/types/sunnah';
 import { findParagraph, parseNoteTarget, stripParagraphAnchors } from '../../shared/note-paragraphs';
 import type { BookItem } from '../../shared/types/work';
@@ -74,7 +75,22 @@ export async function searchCorpus(kinds: CorpusKind[], query: string, collectio
     // Slash queries use service-ranked batches; keep title matches ahead within the bounded picker batch.
     const found = await window.electronAPI?.poetry?.search({ query: text, limit, after: options.after ?? 0, ...(requestId ? { offset: options.after ?? offset } : {}), ...(requestId ? { requestId } : {}) });
     if (!found?.ok) return [];
-    const ranked = [...found.data.items].sort((a, b) => Number(matchesStudyQuery(b.title, text)) - Number(matchesStudyQuery(a.title, text)) || Number((b.match?.from ?? 1) === 0) - Number((a.match?.from ?? 1) === 0));
+    const normQ = normalizeArabicForSearch(text).trim();
+    const poemScore = (poem: typeof found.data.items[0]) => {
+      const normTitle = normalizeArabicForSearch(poem.title);
+      const normPoet = normalizeArabicForSearch(poem.poetName || '');
+      const verseText = poem.match?.lines ? normalizeArabicForSearch(poem.match.lines.join(' ')) : '';
+      let score = 0;
+      if (verseText && normQ.length >= 3 && verseText.includes(normQ)) score += 1000;
+      if (normTitle && normQ.length >= 3 && normTitle.includes(normQ)) score += 800;
+      if (normPoet && normQ.length >= 3 && normPoet.includes(normQ)) score += 600;
+      if (verseText && matchesStudyQuery(verseText, text)) score += 400;
+      if (normTitle && matchesStudyQuery(normTitle, text)) score += 200;
+      if (normPoet && matchesStudyQuery(normPoet, text)) score += 100;
+      if (poem.match?.from === 0) score += 50;
+      return score;
+    };
+    const ranked = [...found.data.items].sort((a, b) => poemScore(b) - poemScore(a));
     return ranked.slice(0, limit).map(poem => {
       const from = poem.match?.from ?? 0;
       const lines = poem.match?.lines ?? [];

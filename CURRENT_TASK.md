@@ -1,3 +1,34 @@
+## KEY-360 verified handoff - 2026-11-15T00:36:00+02:00 - Antigravity 8ccee377-a54d-4fbc-8630-42ba4012522d
+
+Audited and resolved notes slash-search result accuracy and best-match ordering across Quran, Sunnah, Al-Bayan poetry, notes, books, and lectures:
+1. Al-Bayan Poetry:
+   - Eliminated crude title-over-verse sort in `src/renderer/utils/corpus-lookup.ts`, replacing with multi-factor scoring (exact verse phrase +1000, exact title phrase +800, exact poet phrase +600, token coverage +400/+200, opening bayt +50).
+   - Fixed `poetrySearchExcerpt` in `src/shared/poetry.ts` to reward contiguous multi-word phrases (+1000) and in-order tokens (+50) across hemistichs; removed premature exit at scattered word matches so the excerpt selects the true best-matching bayt.
+2. Sunnah:
+   - Replaced arbitrary database ID ordering (`a - b`) for isnad hits in `src/main/services/sunnah/research-corpus.ts` with isnad relevance scoring (exact chain phrase +1000, term density score).
+   - Re-ranked candidate matn hits with exact phrase priority over scattered word hits.
+3. Quran:
+   - Added symmetric prefix handling in `src/main/services/quran/quran-reader.ts` for conjunction `و` (`("${clean}" OR "و${clean}")` and `("${clean}" OR "${clean.slice(1)}")`), enabling queries like `بالوالدين` to match Quranic Uthmani `وَبِٱلۡوَٰلِدَيۡنِ`.
+   - Boosted exact phrase matches over scattered term hits in `hits` collection.
+4. Notes, Books, and Lectures:
+   - Implemented weighted multi-factor ranking in `src/renderer/utils/slash-search.ts` across exact title (1500), starts-with title (1000), exact title phrase (800), aliases (700), content/author (400), title coverage (300/200), body coverage (100), and length specificity bonus.
+   - Added prefix-aware term matching (`ال`, `و`, `ب`, `ف`, `ك`, `ل`) while strictly preserving `normalizeTaaMarbuta: false` to prevent false positive conflation of `ة` and `ه`.
+5. Audit & Benchmark Verification:
+   - Created reproducible 90-query audit test `tests/services/slash-search-audit.test.ts` across all 6 datasets (15 queries each) with top-3 / top-8 / top-20 precision metrics.
+   - 47 focused unit/ui tests pass (`tests/ui/slash-search.test.ts`, `tests/ui/slash-search-followup.test.ts`, `tests/shared/slash-command.test.ts`, `tests/services/note-links-and-slash.test.ts`).
+   - TypeScript (`tsc --noEmit`) and ESLint pass with 0 errors.
+   - Live native check (`node scripts/slash-search-live/run.mjs`) passed with code 0 (`passed: 2`, `rendererErrors: 0`, `realCopiesImported: 5`, throwaway profile cleaned, real file hashes unchanged).
+   - Full audit report written to `docs/agent-ops/reports/KEY-360.md`.
+
+Exact changed files:
+- `src/renderer/utils/slash-search.ts`
+- `src/renderer/utils/corpus-lookup.ts`
+- `src/shared/poetry.ts`
+- `src/main/services/quran/quran-reader.ts`
+- `src/main/services/sunnah/research-corpus.ts`
+- `tests/services/slash-search-audit.test.ts`
+- `docs/agent-ops/reports/KEY-360.md`
+
 ## KEY-356 verified handoff - 2026-11-15T00:15:00+02:00 - Antigravity 32fc507c-c58a-4e08-abc3-6f5cc9ee608c
 
 Redesigned the notes link relationship picker to be strictly on-demand with zero typing interruptions:

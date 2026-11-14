@@ -213,6 +213,15 @@ export class SunnahResearchCorpus {
         for (const id of rows) { const row = byId.get(id); if (row) selected.push(row); }
       }
     }
+    if (exactTerms.length > 1) {
+      const normFull = conservative(query.text!);
+      const hasExactPhrase = (row: Row) => {
+        const matn = conservative(value(row.Arabic_Matn));
+        const eng = conservative(value(row.English_Hadith));
+        return normFull.length >= 3 && (matn.includes(normFull) || eng.toLowerCase().includes(normFull.toLowerCase()));
+      };
+      selected.sort((a, b) => Number(hasExactPhrase(b)) - Number(hasExactPhrase(a)));
+    }
     return selected.map(row => this.hit(row));
   }
   /** Reads and folds every isnad once (about 3 s on the full corpus); the slash search worker calls it at start. */
@@ -225,12 +234,18 @@ export class SunnahResearchCorpus {
     const terms = [...new Set(fold(text).trim().split(' ').filter(Boolean))].slice(0, 20);
     if (!terms.length) return [];
     this.prepareIsnadSearch();
+    const foldedFull = ` ${fold(text).trim()} `;
+    const scores = new Map<number, number>();
     // Words the isnad lacks must be in the matn: checked once per distinct set of missing words with the matn index.
     const missing = new Map<string, number[]>();
     for (const entry of this.isnads ?? []) {
       if (skip.has(entry.id)) continue;
       const rest = terms.filter(term => !entry.text.includes(term));
       if (rest.length === terms.length) continue;
+      const matched = terms.length - rest.length;
+      let score = matched * 100;
+      if (foldedFull.length >= 4 && entry.text.includes(foldedFull)) score += 1000;
+      scores.set(entry.id, score);
       const key = rest.join(' ');
       const ids = missing.get(key); if (ids) ids.push(entry.id); else missing.set(key, [entry.id]);
     }
@@ -241,7 +256,7 @@ export class SunnahResearchCorpus {
       if (key) allowed = new Set((this.db.prepare('SELECT rowid FROM hadiths_fts WHERE hadiths_fts MATCH ?').all(key.split(' ').map(term => `"${term}"`).join(' AND ')) as { rowid: number }[]).map(row => Number(row.rowid)));
       for (const id of ids) if ((!allowed || allowed.has(id)) && (!inBook || inBook.get(id, bookKey))) found.push(id);
     }
-    return found.sort((a, b) => a - b);
+    return found.sort((a, b) => (scores.get(b) ?? 0) - (scores.get(a) ?? 0) || a - b);
   }
   research(id: number): SunnahResearch {
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Invalid hadith identity');

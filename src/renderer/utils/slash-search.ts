@@ -15,18 +15,25 @@ const mediaTypes = new Set(['lecture', 'podcast', 'video']);
 const normalize = (text: string) => normalizeArabicText(text, { normalizeTaaMarbuta: false });
 const cached = new WeakMap<object, { title: string; body: string }>();
 const yieldInput = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+const matchTerm = (val: string, term: string) => {
+  if (val.includes(term)) return true;
+  if (term.startsWith('ال') && term.length >= 5 && val.includes(term.slice(2))) return true;
+  if (term.length >= 4 && (term.startsWith('و') || term.startsWith('ب') || term.startsWith('ف') || term.startsWith('ل') || term.startsWith('ك')) && val.includes(term.slice(1))) return true;
+  return false;
+};
 /** Cached normalized text, bounded result buffers and yielding scans keep large local collections responsive. */
 export async function searchSlashDatasets({ scope, query, notes, books, searchCorpus, stale = () => false, limit = scope ? 20 : 8, offset = 0, after, requestId }: SlashSearchInput): Promise<SlashResult[]> {
   const text = query.trim().slice(0, 200);
   if (text && text.length < 3 && !/^\d[:\d-]+$/u.test(text)) return [];
   const terms = normalize(text).split(/\s+/u).filter(Boolean);
-  const matches = (value: string) => terms.every(term => value.includes(term));
+  const normQ = normalize(text);
+  const matches = (value: string) => terms.every(term => matchTerm(value, term));
   const scopes = scope ? [scope] : SLASH_SCOPES;
   const results: SlashResult[] = [];
   for (const dataset of scopes) {
     if (stale()) return [];
     if (dataset !== 'notes' && dataset !== 'books' && dataset !== 'lectures') continue;
-    const top: SlashResult[] = [], other: SlashResult[] = [];
+    const candidates: (SlashResult & { rankScore: number; originalIndex: number })[] = [];
     const source = dataset === 'notes' ? notes : books;
     for (let i = 0; i < source.length; i++) {
       if (i % 32 === 0) { await yieldInput(); if (stale()) return []; }
@@ -39,12 +46,27 @@ export async function searchSlashDatasets({ scope, query, notes, books, searchCo
         index = { title: normalize(item.title), body: normalize(note ? [note.content, ...note.aliases, ...note.tags].join(' ') : book!.author || '') };
         cached.set(item, index);
       }
-      const titleMatch = matches(index.title);
-      const bucket = titleMatch ? top : other;
-      if (bucket.length >= offset + limit || !titleMatch && !matches(index.title + ' ' + index.body)) continue;
-      bucket.push({ scope: dataset, target: note ? `note:${note.id}` : bookStudyTarget(book!), label: item.title || note?.content.slice(0, 70) || '', snippet: note ? note.content.slice(0, 120) : book!.author || '', score: titleMatch ? 10 : 0, ...(book ? { material: book } : {}) });
+      const titleMatch = !normQ || matches(index.title);
+      const bodyMatch = !normQ || matches(index.title + ' ' + index.body);
+      if (!titleMatch && !bodyMatch) continue;
+      let rankScore = 0;
+      if (normQ) {
+        if (index.title === normQ) rankScore += 1500;
+        else if (index.title.startsWith(normQ)) rankScore += 1000;
+        else if (normQ.length >= 3 && index.title.includes(normQ)) rankScore += 800;
+        else if (note && note.aliases.some(a => normalize(a) === normQ)) rankScore += 700;
+        else if (normQ.length >= 3 && index.body.includes(normQ)) rankScore += 400;
+        if (terms.every(t => index.title.includes(t))) rankScore += 300;
+        else if (titleMatch) rankScore += 200;
+        else rankScore += 100;
+        rankScore += Math.max(0, 50 - Math.abs(index.title.length - normQ.length));
+      }
+      candidates.push({ scope: dataset, target: note ? `note:${note.id}` : bookStudyTarget(book!), label: item.title || note?.content.slice(0, 70) || '', snippet: note ? note.content.slice(0, 120) : book!.author || '', score: titleMatch ? 10 : 0, rankScore, originalIndex: i, ...(book ? { material: book } : {}) });
     }
-    results.push(...[...top, ...other].slice(offset, offset + limit));
+    if (normQ) {
+      candidates.sort((a, b) => b.rankScore - a.rankScore || a.originalIndex - b.originalIndex);
+    }
+    results.push(...candidates.slice(offset, offset + limit));
   }
   const kinds = (Object.keys(corpusScopes) as CorpusKind[]).filter(kind => scopes.includes(corpusScopes[kind]));
   if (text && kinds.length && searchCorpus && !stale()) {

@@ -417,7 +417,16 @@ export class QuranReader {
     });
     const terms = normalizeQuranSearch(text).trim().split(/\s+/).filter(Boolean);
     if (!terms.length) return [];
-    const match = terms.map(term => '"' + term.replaceAll('"', '""') + '"').join(' AND ');
+    const match = terms.map(term => {
+      const clean = term.replaceAll('"', '""');
+      if (clean.length > 3) {
+        if (clean.startsWith('و')) {
+          return `("${clean}" OR "${clean.slice(1)}")`;
+        }
+        return `("${clean}" OR "و${clean}")`;
+      }
+      return `"${clean}"`;
+    }).join(' AND ');
     const sources = [...(options.includeScript === false ? [] : [{ id: script, kind: 'script' as const }]), ...translations.map(id => ({ id, kind: 'translation' as const }))];
     const hits: QuranSearchHit[] = [];
     // Bound both the source count and result count, giving every selected source a turn.
@@ -430,6 +439,10 @@ export class QuranReader {
       if (skip) skip = Math.max(0, skip - (database.prepare('SELECT count(*) AS n FROM baglib_search WHERE baglib_search MATCH ?').get(match) as { n: number }).n);
       hits.push(...rows.map(hit => ({ ...hit, source: { ...source, title: pack.resource.title, language: preset.language } })));
       if (options.limit !== undefined && hits.length >= limit) break;
+    }
+    const normText = normalizeQuranSearch(text).trim();
+    if (terms.length > 1 && normText.length >= 3) {
+      hits.sort((a, b) => Number(normalizeQuranSearch(b.text).includes(normText)) - Number(normalizeQuranSearch(a.text).includes(normText)));
     }
     return hits;
   }

@@ -16,15 +16,34 @@ export function poetryHighlightedParts(text: string, query: string): { text: str
 }
 
 export function poetrySearchExcerpt(verses: readonly string[], layout: PoetryLayout, query: string): { from: number; lines: string[] } | null {
-  const tokens = new Set(normalizeArabicForSearch(query).match(/[\p{L}\p{N}_]+/gu) ?? []);
-  if (!tokens.size) return null;
+  const normQuery = normalizeArabicForSearch(query).trim();
+  const tokens = normQuery.match(/[\p{L}\p{N}_]+/gu) ?? [];
+  if (!tokens.length) return null;
+  const tokenSet = new Set(tokens);
   const step = layout === 'bayt' ? 2 : 1;
-  let best = -1, bestScore = 0;
+  let best = -1, bestScore = -1;
   for (let from = 0; from < verses.length; from += step) {
-    const words = new Set(normalizeArabicForSearch(verses.slice(from, from + step).join(' ')).match(/[\p{L}\p{N}_]+/gu) ?? []);
-    const score = [...tokens].filter(token => words.has(token)).length;
-    if (score > bestScore) { best = from; bestScore = score; }
-    if (score === tokens.size) break;
+    const chunk = verses.slice(from, from + step).join(' ');
+    const normChunk = normalizeArabicForSearch(chunk);
+    const words = new Set(normChunk.match(/[\p{L}\p{N}_]+/gu) ?? []);
+    let score = [...tokenSet].filter(token => words.has(token)).length;
+    if (score === 0) continue;
+    if (normQuery.length >= 3 && normChunk.includes(normQuery)) {
+      score += 1000;
+    } else if (tokens.length > 1) {
+      let lastIdx = 0, inOrder = true;
+      for (const t of tokens) {
+        const idx = normChunk.indexOf(t, lastIdx);
+        if (idx === -1) { inOrder = false; break; }
+        lastIdx = idx + t.length;
+      }
+      if (inOrder) score += 50;
+    }
+    if (score > bestScore) {
+      best = from;
+      bestScore = score;
+      if (score >= 1000) break;
+    }
   }
   return best < 0 ? null : { from: best, lines: verses.slice(best, best + step) };
 }
