@@ -1,5 +1,6 @@
 'use client';
 
+import { editorLeaveGuard } from '../research/editor-leave';
 import { MediaCoverBackfill } from '../library/MediaCoverBackfill';
 import { ToastProvider } from '../ui/Toast';
 import { isLectureFormat } from '../../../shared/lectures';
@@ -18,7 +19,7 @@ export type LayoutDirection = 'rtl' | 'ltr';
 export type ThemeMode = 'dark' | 'light';
 export type LanguageMode = 'ar' | 'en';
 export type SplitOrientationMode = 'vertical' | 'horizontal' | 'none' | 'full_notes';
-export type WorkspaceViewMode = 'islamic' | 'statistics' | 'dashboard' | 'planner' | 'pathways' | 'lectures' | 'quran' | 'sunnah' | 'bayan' | 'library' | 'categories' | 'reader' | 'notes' | 'settings';
+export type WorkspaceViewMode = 'islamic' | 'statistics' | 'dashboard' | 'planner' | 'pathways' | 'lectures' | 'quran' | 'sunnah' | 'bayan' | 'library' | 'categories' | 'reader' | 'notes' | 'notes-editor' | 'settings';
 
 export interface PageNote {
   id: string;
@@ -30,6 +31,7 @@ export interface PageNote {
 }
 
 export interface WorkspaceState {
+  researchEditorAvailable: boolean;
   dir: LayoutDirection;
   theme: ThemeMode;
   lang: LanguageMode;
@@ -120,6 +122,12 @@ const GlobalImportWizard = React.lazy(() => import('../library/ImportWizardModal
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Initialize with canonical server defaults to guarantee 100% hydration match with SSR
+  const [researchEditorAvailable, setResearchEditorAvailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void window.electronAPI?.researchEditor?.available().then(value => { if (alive) setResearchEditorAvailable(value); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
   const [lang, setLang] = useState<LanguageMode>('ar');
   const [dir, setDir] = useState<LayoutDirection>('rtl');
   const [theme, setTheme] = useState<ThemeMode>('dark');
@@ -251,7 +259,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const toggleMobileNav = () => setIsMobileNavOpen((prev) => !prev);
   
   // Navigation & View Mode
-  const [viewMode, setViewMode] = useState<WorkspaceViewMode>('dashboard');
+  const [viewMode, setViewModeState] = useState<WorkspaceViewMode>('dashboard');
+  const setViewMode = React.useCallback((mode: WorkspaceViewMode) => {
+    const guard = mode === 'notes-editor' ? undefined : editorLeaveGuard();
+    if (guard) { void guard().then(allowed => { if (allowed) setViewModeState(mode); }); }
+    else setViewModeState(mode);
+  }, []);
   const [activeLibraryCategory, setActiveLibraryCategory] = useState<string>('ALL');
   
   // Pure Real Data (Zero Mock Items)
@@ -708,6 +721,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   return (
     <WorkspaceContext.Provider
       value={{
+        researchEditorAvailable,
         dir,
         theme,
         lang,

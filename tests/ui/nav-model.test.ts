@@ -24,7 +24,7 @@ test('Nav Model: Groups Structure & Items', () => {
 
   const notes = NAV_GROUPS.find((g) => g.id === 'notes');
   assert.ok(notes);
-  assert.deepEqual(notes.itemIds, ['notes', 'notes-boards', 'notes-cards']);
+  assert.deepEqual(notes.itemIds, ['notes-editor', 'notes', 'notes-boards', 'notes-cards']);
 
   const research = NAV_GROUPS.find((g) => g.id === 'research');
   assert.ok(research);

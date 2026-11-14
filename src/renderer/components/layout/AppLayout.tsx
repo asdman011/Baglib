@@ -27,6 +27,7 @@ import { StudyDeepLinkBridge } from '../notes/StudyDeepLinkBridge';
 import { StartupSplash } from '../StartupSplash';
 
 // Lazy-loaded secondary views to dramatically accelerate initial application boot time (<1.5s cold compilation)
+const ResearchEditorView = React.lazy(() => import('../research/ResearchEditorView').then(module => ({ default: module.ResearchEditorView })));
 const StatisticsWorkspace = React.lazy(() => import('../statistics/StatisticsWorkspace').then(module => ({ default: module.StatisticsWorkspace })));
 const LibraryGridView = React.lazy(() =>
   import('../library/LibraryGridView').then((m) => ({ default: m.LibraryGridView }))
@@ -59,6 +60,7 @@ const serverWindowMode = () => null;
 export const AppLayout: React.FC = () => {
   const {
     dir,
+    researchEditorAvailable,
     viewMode,
     setViewMode,
     t,
@@ -234,6 +236,7 @@ export const AppLayout: React.FC = () => {
             {viewMode === 'library' && <LibraryGridView />}
             {viewMode === 'categories' && <CategoriesOverviewView />}
             {viewMode === 'reader' && <FullPageBookReader />}
+            {viewMode === 'notes-editor' && researchEditorAvailable && <ResearchEditorView />}
             {viewMode === 'notes' && <NotesOverviewView />}
             {viewMode === 'settings' && <SettingsDirectory athan={athanState} />}
           </React.Suspense>

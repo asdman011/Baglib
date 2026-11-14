@@ -2,6 +2,10 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T22:45:55.277256+02:00, Codex KEY-363] VERIFIED Editor tab/iframe/parent bridge, same-origin app+HTTP serving and atomic filesystemblobsource. Focused42/full2372(352suites,concurrency2)/native4ar-en0renderererrors,types/builds/lint0warnings/vendor2899pass;56rendererJSfiles0enginemarkers. RealPDFtext/image,exactrestart,renamependingedits,appearance,undo/globalshortcut,missingtab/palette andslowclosepass;profiledeleted/distrestored. Exact30ownedfiles inCURRENT_TASK/report. ConcurrentKEY-365patchesexcluded. Scopedlockedcommit/pushexplicitlyauthorized;publicationpending.
+
+- [2026-11-14T22:09:21.513014+02:00, Codex KEY-363] ACTIVE RE-2 Editor tab/iframe/typed bridge/filesystem blob source. Jira/plan2.1/ADR/state/corpus guidance read. Scoped commit/push explicitly authorized after tests. Antigravity owned files excluded. Implementation and verification pending.
+
 - [2026-11-14T21:59:12.769820+02:00, Codex KEY-364] REVIEW FIX VERIFIED: valid DocSnapshot envelope/meta and typed starter page2/surface5/note1/paragraph1; rename synchronizes meta.title. Test-local contract checks39/39focused,types/lint0warnings pass. Exact6files/actual source evidence in CURRENT_TASK; migration PID attribution unverified, documented in local report. New scoped commit/push explicitly authorized and pending.
 
 - [2026-11-14T21:55:30.706961+02:00, Codex KEY-364] Review fix active. Initializer/rename metadata and contract regressions pending, vendor model contracts read-only. New scoped commit/push explicitly authorized.

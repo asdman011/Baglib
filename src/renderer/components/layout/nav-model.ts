@@ -62,7 +62,7 @@ export const NAV_GROUPS: NavGroupConfig[] = [
   {
     id: 'notes',
     labelKey: 'navNotesGroup',
-    itemIds: ['notes', 'notes-boards', 'notes-cards'],
+    itemIds: ['notes-editor', 'notes', 'notes-boards', 'notes-cards'],
   },
   {
     id: 'research',
@@ -94,7 +94,10 @@ export const NAV_SECTIONS: {
   },
 ];
 
+export function navItemAvailable(id: string, editorAvailable: boolean): boolean { return id !== 'notes-editor' || editorAvailable; }
+
 export const NAV_ITEMS: Record<string, NavItemConfig> = {
+  'notes-editor': { id: 'notes-editor', viewMode: 'notes-editor', labelKey: 'navEditor', icon: FileText, actionType: 'view' },
   dashboard: {
     id: 'dashboard',
     viewMode: 'dashboard',
@@ -304,6 +307,8 @@ export function resolveBreadcrumbs(
           ? { rawText: options.activeBookTitle }
           : { labelKey: 'navReader' },
       };
+    case 'notes-editor':
+      return { parent: { labelKey: 'navNotesGroup', viewMode: 'notes' }, current: { labelKey: 'navEditor' } };
     case 'notes':
       return {
         parent: { labelKey: 'navNotesGroup', viewMode: 'notes' },

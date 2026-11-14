@@ -1,3 +1,54 @@
+## KEY-363 verified handoff - 2026-11-14T22:45:55.277256+02:00 - Codex key363-root
+
+Implemented RE-2 under epic KEY-361 and Research Editor Plan2.1. User decision (2026-11-14), "add a new tab 'Editor' in the side bar in the notes section above the 'Notes Log'". Editor is first in the Notes group with ar/en labels, breadcrumbs and an availability-gated command-palette entry. The view places RE-3's manuscripts list beside a same-origin editor iframe and stacks the panes below800px. It hides the frame until appearance is applied and a chapter is selected. Theme, language, direction and root font scale update the mounted editor. Global unhandled shortcuts reach BagLib while undo/formatting stay in BlockSuite.
+
+Main serves app://-/research-editor from development dist or packaged resources/research-editor and intercepts the same path on port3000 HTTP loopback origins. Other HTTP requests bypass that handler. electron-builder copies the optional resources and its installed copier skips missing source folders. The typed parent bridge wraps the parent's preload API. Manuscript autosave uses one RE-3 controller per open chapter. Switch/reopen/rename/trash/close flush pending edits and await persistence. A responsive manuscript close guard can hold the native5second fallback until saving finishes. Filesystem blobs retain exact bytes and MIME in manuscript-assets/<blobId>/data and type beside the database, with safe IDs, atomic publication and concurrent-write checks.
+
+Final verification passed42/42focused and2372/2372full,352suites,0fail/skip/TODO, full once with --test-concurrency=2 in256696.2926ms. The full log includes native-KeyboardEvent, same-document reopen and pending-edit rename regressions. Root tsc --noEmit --incremental false, changed-file ESLint including editor files with --no-ignore, main/preload build, Next renderer build and isolated editor build pass. check:vendor passes2899files against the current shared numberedpatches0001-0007, whose later RTL patches belong to concurrentKEY-365 and are excluded from this task.
+
+Final native4/4 passes through actual production BagLib main/preload/exported UI with0renderererrors. Arabic RTL and English LTR create manuscript/chapter, type real PDF text, combineArabic/Latin, autosave, undo, rename pending edits, save exactly, restart/reimport snapshots byte-identically, paste/reload a real image, update theme/language/root font size without iframe reload, invoke Ctrl+Shift+N while the iframe is focused, and hide both sidebar/palette entries with dist temporarily renamed. Slow close remains open beyond5seconds and completes after a6.5second flush. The generated profile is deleted, dist restored and other Electron processes preserved. Eight screenshots were captured. The final Arabic, English and missing-editor views were visually inspected. Original real files were read only. The image comes from pdf/ar/scanned-image-only/تفسير الموعذتين لابن تيمية.pdf via localpdfimages, without OCR. Arabic copied fixture text usesNFKC and removes undecodablePUAglyphs. Canonical stored text is the exact supplied content.
+
+Evidence is .baglib-data/KEY-363-evidence/ and KEY-363-*.log. Renderer scan finds0Lit/Yjs/BlockSuite markers in56JSmodulefiles. REA inspect_web_page observed parent and child sharinghttp://localhost:3000, with its filtered/attach-time limits recorded inrea-page-summary.json and BlockSuite.md. The HTTP smoke serves the production export, so Next HMR and packaged installer execution remain outside its claim. RE-10 owns the installer checkbox and absent-editor preview. Work/Edition/Source schema and all dependencies retain their approved scope. No downloads, vendor edits or Jira changes were performed by KEY-363.
+
+Exact owned commit files (30)
+
+- electron-builder.yml
+- research-editor/app/src/main.ts
+- research-editor/app/src/blob-source.ts
+- research-editor/app/src/bridge.ts
+- research-editor/app/src/host-style.css
+- src/main/index.ts
+- src/main/ipc/research-editor.ts
+- src/main/services/research-editor-assets.ts
+- src/main/services/research-editor-serving.ts
+- src/preload/index.ts
+- src/renderer/components/context/WorkspaceContext.tsx
+- src/renderer/components/layout/AppLayout.tsx
+- src/renderer/components/layout/CommandPalette.tsx
+- src/renderer/components/layout/NavigationRail.tsx
+- src/renderer/components/layout/nav-model.ts
+- src/renderer/components/research/ResearchEditorView.tsx
+- src/renderer/components/research/editor-host.ts
+- src/renderer/components/research/editor-leave.ts
+- src/renderer/components/research/research-editor.css
+- src/renderer/translations.ts
+- src/shared/research-editor.ts
+- tests/ui/nav-model.test.ts
+- tests/ui/research-editor.test.ts
+- scripts/research-editor-host-live/main.cjs
+- scripts/research-editor-host-live/run.mjs
+- scripts/research-editor-host-live/initialize.ts
+- docs/features/BlockSuite.md
+- docs/features/feature - Research Editor Plan.md
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+
+The local report is docs/agent-ops/reports/KEY-363.md. Scoped commit and normal push to origin/feature/library-domain are explicitly authorized by the user's task. Publication checkpoint is pending the commit lock and remote verification. Other sessions' state insertions and files are preserved.
+
+## KEY-363 active request - 2026-11-14T22:09:21.513014+02:00 - Codex key363-root
+
+Implement RE-2 per live Jira KEY-363 and Research Editor Plan2.1. User decision (2026-11-14): "add a new tab 'Editor' in the side bar in the notes section above the 'Notes Log'". Scope main serving/IPC/assets, preload/shared bridge, nav/context/layout/translations, iframe host and editor main/new app sources, packaging, focused/live tests and docs. Keep Antigravity owned files and all unrelated work intact. Explicit task authorization covers scoped commit/push to origin/feature/library-domain after verification. No implementation or tests yet. Sandbox workspace reads require escalated execution because ordinary path access is denied.
+
 ## KEY-362 review fix 1 verified - 2026-11-14T22:15:00+02:00 - Antigravity 9c90e2e3-bf09-4ccc-aee8-00554c3c4a51
 
 Addressed all 3 items requested by Claude Code review of 9430c5f:

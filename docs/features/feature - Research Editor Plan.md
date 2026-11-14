@@ -200,3 +200,16 @@ Each point from the outside review was checked against the code before it was ta
 - **RE-5 does not wait for RE-4.** The blocks don't need the RTL fixes to be built, and waiting would make Wave 3 longer for nothing.
 - **Shortcut forwarding** listens directly on the same-origin iframe instead of relaying messages.
 - **Embedding the Quran font in DOCX** is a check in RE-8, not a promise. Support in `docx` and the font's licence both need confirming.
+
+
+## RE-2 implementation evidence, KEY-363, 2026-11-14
+
+The user decision is "add a new tab 'Editor' in the side bar in the notes section above the 'Notes Log'". The availability-gated `notes-editor` item is first in the Notes group and also appears in the command palette when available. Arabic and English labels use `translations.ts`.
+
+Main now owns `app://` serving for the renderer and optional editor. Editor requests resolve to `research-editor/dist` during development and `resources/research-editor` in packaged mode. On the development renderer's HTTP origin, Electron intercepts the `/research-editor/` path and fetches its local files. Remaining HTTP traffic bypasses the custom handler. This preserves same-origin access without a static asset copy or a Next server route. `electron-builder.yml` copies the optional dist directory into resources. Installed file-matcher code skips an absent source with a warning.
+
+The same-origin parent object is `window.parent.__baglibResearchEditorBridge`, backed by the parent's `electronAPI`. The iframe has no preload or IPC channel. Shared types live in `src/shared/research-editor.ts`. The host includes RE-3's manuscripts tree, one persistence controller per open chapter, serialized switches, pending-edit-safe rename, guarded trash and native close. Appearance is written before mount and on changes. Only unhandled global shortcuts leave the iframe. Images use the sole bridge-backed BlockSuite BlobSource and immutable `manuscript-assets/<blobId>/{data,type}` directories beside the database.
+
+The native matrix covers the real BagLib UI in Arabic and English, app and development HTTP origins, exact snapshot restart/reimport, a pasted image extracted from the real Arabic scanned PDF, empty IndexedDB, undo, a global shortcut, theme/language/font-scale changes, optional-component absence and a close held beyond five seconds. Full and focused test counts and final publication evidence are in the KEY-363 handoff and local agent report. The renderer bundle scan covers 56 JavaScript module files and finds no Lit/Yjs/BlockSuite markers. REA independently observed the same-origin HTTP frames. Details and inspected source paths are in [BlockSuite findings](BlockSuite.md).
+
+RE-10 remains responsible for the installer checkbox and absent-editor manuscript preview. The HTTP-origin smoke serves the production export, and no Next HMR or packaged installer execution is claimed by RE-2. Canonical manuscript content retains the original text supplied to the editor. The Arabic live sample decodes presentation forms with NFKC and omits undecodable Private Use Area glyphs from the copied fixture text. The original corpus files are read only.

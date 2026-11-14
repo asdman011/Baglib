@@ -2,6 +2,11 @@ appId: com.Baglib.app
 productName: Baglib
 npmRebuild: false
 extraResources:
+  # Optional editor component. Missing dist is permitted by electron-builder.
+  - from: research-editor/dist
+    to: research-editor
+    filter:
+      - "**/*"
   # KEY-265: the merged Sunnah research database (about 1.56 GB raw), opened read-only from resources/sunnah.
   # The owners authorized bundling it; it is built locally by tools/hadith-alignment and never committed.
   - from: tools/hadith-alignment/data/output/sunnah_merged_quranlab_v1.sqlite

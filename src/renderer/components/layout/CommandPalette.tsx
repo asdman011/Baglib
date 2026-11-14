@@ -37,6 +37,7 @@ interface CommandItem {
 
 export const CommandPalette: React.FC = () => {
   const {
+    researchEditorAvailable,
     toggleNavPinned,
     isCommandPaletteOpen,
     setCommandPaletteOpen,
@@ -69,6 +70,8 @@ export const CommandPalette: React.FC = () => {
       { id: 'bayan', titleKey: 'navBayan', groupKey: 'navIslamicGroup', icon: Feather },
       { id: 'settings', titleKey: 'navSettings', groupKey: 'breadcrumbSystem', icon: Settings },
     ];
+
+    if (researchEditorAvailable) workspaces.push({ id: 'notes-editor', titleKey: 'navEditor', groupKey: 'navNotesGroup', icon: FileText });
 
     const items: CommandItem[] = [];
     if(!scope) {
@@ -142,7 +145,7 @@ export const CommandPalette: React.FC = () => {
     }
 
     return items.slice(0, 20);
-  }, [books, notes, scope, keyword, t, openBookForReading, setSearchHubOpen, setViewMode, toggleNavPinned]);
+  }, [researchEditorAvailable, books, notes, scope, keyword, t, openBookForReading, setSearchHubOpen, setViewMode, toggleNavPinned]);
 
   if (!isCommandPaletteOpen) return null;
 

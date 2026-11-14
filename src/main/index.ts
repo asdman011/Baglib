@@ -1,13 +1,14 @@
+import { editorDirectory, registerResearchEditorIpc } from './ipc/research-editor';
+import { researchEditorFile } from './services/research-editor-serving';
 import { registerManuscriptIpc } from './ipc/manuscripts';
 import { installEditorContextMenu } from './services/editor-context-menu';
 import { parseDeepLink, protocolRegistrationArgs } from '../shared/deep-link';
 import { errorMessage } from '../shared/errors';
 import { confirmedQuitCleanup } from './services/quit-cleanup';
-import { app, BrowserWindow, protocol, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, protocol, dialog, ipcMain, net } from "electron";
 import { translations } from '../renderer/translations';
 import { registerKnowledgeHistoryIpc } from './ipc/knowledge-history';
 import path from "path";
-import serve from "electron-serve";
 import fs from "fs";
 import { setupSystemIPC } from "./ipc/system";
 import { setupDatabaseIPC } from "./ipc/database";
@@ -71,12 +72,12 @@ process.on('uncaughtException', (error: Error) => {
 });
 
 const isDev = !app.isPackaged;
-const loadApp = serve({ directory: path.join(__dirname, "../../out") });
+const rendererDirectory = path.join(__dirname, '../../out');
+const loadApp = (window: BrowserWindow) => window.loadURL('app://-/');
 
 // Register privileged custom schemes before app.whenReady()
 // Grants standard, secure, fetch, streaming, CORS, and CSP privileges to reader assets.
-// Each registration replaces the last one in renderer processes, and electron-serve registers `app`
-// in a microtask, so this one runs after it and repeats that scheme with the same privileges.
+// The renderer and optional editor share this standard origin.
 queueMicrotask(() => protocol.registerSchemesAsPrivileged([
   {
     scheme: 'app',
@@ -266,20 +267,35 @@ async function createWindow() {
   mainWindow.webContents.on('did-start-loading', () => { studyNavigationReady = false; });
   mainWindow.webContents.on('did-finish-load', flushStudyTargets);
 
-  // ADR-012: before the window closes, the renderer may ask to write pending changes into an open file.
-  // Without an answer within 5 seconds (a stuck page) the window closes anyway, so it can never trap the user.
+  // ADR-012 retains the stuck-renderer fallback. A responding manuscript guard can hold it
+  // while its asynchronous save finishes, then explicitly approve or cancel the close.
   {
     const owner = mainWindow;
     let allowed = false;
+    let waiting = false;
     owner.on('close', event => {
       if (allowed || owner.webContents.isDestroyed() || owner.webContents.isCrashed()) return;
       event.preventDefault();
-      const fallback = setTimeout(() => { allowed = true; if (!owner.isDestroyed()) owner.close(); }, 5000);
-      ipcMain.once('app:close-answer', (answer, close: boolean) => {
-        if (answer.sender !== owner.webContents) return;
+      if (waiting) return;
+      waiting = true;
+      const cleanup = () => {
         clearTimeout(fallback);
+        waiting = false;
+        ipcMain.removeListener('app:close-answer', answer);
+        ipcMain.removeListener('app:close-hold', hold);
+        owner.removeListener('closed', cleanup);
+      };
+      const fromOwner = (message: Electron.IpcMainEvent) => message.sender === owner.webContents && message.senderFrame === owner.webContents.mainFrame;
+      const answer = (message: Electron.IpcMainEvent, close: boolean) => {
+        if (!fromOwner(message)) return;
+        cleanup();
         if (close) { allowed = true; if (!owner.isDestroyed()) owner.close(); }
-      });
+      };
+      const hold = (message: Electron.IpcMainEvent) => { if (fromOwner(message)) clearTimeout(fallback); };
+      const fallback = setTimeout(() => { cleanup(); allowed = true; if (!owner.isDestroyed()) owner.close(); }, 5000);
+      ipcMain.on('app:close-answer', answer);
+      ipcMain.on('app:close-hold', hold);
+      owner.once('closed', cleanup);
       owner.webContents.send('app:close-requested');
     });
   }
@@ -408,6 +424,7 @@ registerPoetryIpc();
 registerKnowledgeCardIpc();
 registerKnowledgeHistoryIpc();
 registerManuscriptIpc();
+registerResearchEditorIpc();
 registerStudyPlannerIpc();
 registerPathwayIpc();
 setupRssIpc();
@@ -417,6 +434,21 @@ registerCoverPhotoIpc();
 registerSourceUrlIpc();
 
 app.whenReady().then(async () => {
+  const staticResponse = async (request: Request) => {
+    try {
+      const file = await researchEditorFile(request.url, editorDirectory(), rendererDirectory);
+      return file ? net.fetch(file) : new Response(null, { status: 404 });
+    } catch { return new Response(null, { status: 404 }); }
+  };
+  protocol.handle('app', staticResponse);
+  if (isDev) {
+    // Intercept only our editor path. All Next requests bypass this custom HTTP handler.
+    protocol.handle('http', request => {
+      const url = new URL(request.url);
+      if (['http://localhost:3000', 'http://127.0.0.1:3000'].includes(url.origin) && (url.pathname === '/research-editor' || url.pathname.startsWith('/research-editor/'))) return staticResponse(request);
+      return net.fetch(request, { bypassCustomProtocolHandlers: true });
+    });
+  }
   // Initialize Content Shield for ad & redirect protection
   ContentShieldService.getInstance().initialize();
 

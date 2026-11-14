@@ -1,3 +1,4 @@
+import type { ResearchEditorAPI } from '../shared/research-editor';
 import type { ManuscriptsAPI } from '../shared/manuscripts';
 import type { AdvancedAPI, RebuildProgress } from '../shared/catalog-export';
 import type { NotificationRecord } from '../shared/notifications';
@@ -117,6 +118,15 @@ const manuscripts: ManuscriptsAPI = {
 };
 
 export const API = {
+  researchEditor: {
+    available: () => ipcRenderer.invoke('researchEditor.available'),
+    blobs: {
+      get: id => ipcRenderer.invoke('researchEditor.blob.get', id),
+      set: (id, value) => ipcRenderer.invoke('researchEditor.blob.set', id, value),
+      delete: id => ipcRenderer.invoke('researchEditor.blob.delete', id),
+      list: () => ipcRenderer.invoke('researchEditor.blob.list'),
+    },
+  } satisfies ResearchEditorAPI,
   manuscripts,
   athan,
   quran,
@@ -946,6 +956,8 @@ export const API = {
     run: (workA: string, workB: string, options?: { ignoreDiacritics?: boolean }) => ipcRenderer.invoke('pdf-compare:run', workA, workB, options) as Promise<{ ok: true; data: import('../shared/text-compare').CompareResult & { limited: boolean } } | { ok: false; error: string }>,
   },
   appClose: {
+    /** An active manuscript save must finish before the native window closes. */
+    hold: () => ipcRenderer.send('app:close-hold'),
     /** The window asks before closing; answer with answer(true) to close or answer(false) to stay. */
     onRequested: (listener: () => void) => { const wrapped = () => listener(); ipcRenderer.on('app:close-requested', wrapped); return () => { ipcRenderer.removeListener('app:close-requested', wrapped); }; },
     answer: (close: boolean) => ipcRenderer.send('app:close-answer', close),

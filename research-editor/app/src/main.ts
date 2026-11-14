@@ -1,9 +1,12 @@
 // BagLib research editor entry (KEY-362).
 //
 // Mounts AFFiNE's BlockSuite editor (page and edgeless views of one document) fully offline.
-// Storage, the BagLib bridge, theme/language sync and BagLib blocks come later (RE-2, RE-3, RE-5);
-// for now documents live in memory and a small test API is exposed for the smoke test.
+// The same-origin host supplies persistence, appearance and filesystem-backed blobs (KEY-363).
+import { bridge } from './bridge';
+import { BaglibBlobSource } from './blob-source';
 import './style.css';
+import './host-style.css';
+import type { ManuscriptDocument } from '../../../src/shared/manuscripts';
 
 import type { DocMode } from '@blocksuite/affine/model';
 import { AffineSchemas } from '@blocksuite/affine/schemas';
@@ -49,13 +52,14 @@ function applyLanguageFromQuery() {
   }
 }
 
+const blobs = bridge ? new BaglibBlobSource(bridge.blobs) : undefined;
+
 function createWorkspace() {
   const workspace = new TestWorkspace({
     id: 'baglib-research',
     idGenerator: nanoid,
-    // In memory only: no BroadcastChannel, IndexedDB or cloud sources. RE-2 adds a bridge-backed
-    // blob source that writes to manuscript-assets/.
-    blobSources: { main: new MemoryBlobSource() },
+    // Standalone smoke tests use memory. Hosted documents use the parent filesystem bridge.
+    blobSources: { main: blobs ?? new MemoryBlobSource() },
   });
   workspace.storeExtensions = storeManager.get('store');
   workspace.start();
@@ -109,11 +113,11 @@ function docModeProvider(editor: TestAffineEditorContainer): DocModeProvider {
 }
 
 async function mount() {
-  applyLanguageFromQuery();
+  if (!bridge) applyLanguageFromQuery();
   const app = document.getElementById('app');
   if (!app) throw new Error('#app not found');
 
-  const workspace = createWorkspace();
+  let workspace = createWorkspace();
   const store = createEmptyDoc(workspace, 'doc:home');
   store.get(FeatureFlagService).setFlag('enable_advanced_block_visibility', true);
 
@@ -137,8 +141,73 @@ async function mount() {
   const schema = new Schema();
   schema.register(AffineSchemas);
 
-  // Test-only surface for the offline smoke test and the typing helper. RE-2 replaces this with
-  // the typed bridge to BagLib.
+  const transformer = () => new Transformer({
+    schema,
+    blobCRUD: workspace.blobSync,
+    docCRUD: {
+      create: (id: string) => workspace.createDoc(id).getStore({ id }),
+      get: (id: string) => workspace.getDoc(id)?.getStore({ id }) ?? null,
+      delete: (id: string) => workspace.removeDoc(id),
+    },
+  });
+  let current: ManuscriptDocument | undefined;
+  let loading = false;
+  let scheduled: Promise<void> = Promise.resolve();
+  const changed = () => {
+    if (loading || !current || !bridge) return;
+    const id = current.id;
+    scheduled = scheduled.catch(() => undefined).then(() => {
+      if (loading || current?.id !== id) return;
+      const snapshot = transformer().docToSnapshot(editor.doc);
+      if (!snapshot) throw new Error('snapshot-export-failed');
+      bridge.change(id, JSON.stringify(snapshot), editor.mode);
+    });
+    void scheduled.catch(bridge.error);
+  };
+  let observedDoc = store.spaceDoc;
+  observedDoc.on('update', changed);
+  const session = {
+    async load(value: ManuscriptDocument) {
+      loading = true;
+      const previous = workspace;
+      observedDoc.off('update', changed);
+      const next = createWorkspace();
+      workspace = next;
+      try {
+        const snapshot = JSON.parse(value.snapshot);
+        const loaded = await transformer().snapshotToDoc(snapshot);
+        if (!loaded) throw new Error('snapshot-import-failed');
+        workspace.meta.setDocMeta(value.id, snapshot.meta);
+        loaded.get(FeatureFlagService).setFlag('enable_advanced_block_visibility', true);
+        loaded.resetHistory();
+        editor.doc = loaded;
+        editor.switchEditor(value.primary_mode);
+        await editor.updateComplete;
+        current = value;
+        previous.forceStop(); previous.dispose();
+        scheduled = Promise.resolve();
+        observedDoc = loaded.spaceDoc;
+        observedDoc.on('update', changed);
+      } catch (error) {
+        next.forceStop(); next.dispose(); workspace = previous; observedDoc.on('update', changed);
+        throw error;
+      } finally { loading = false; }
+    },
+    setReadonly(value: boolean) { editor.doc.readonly = value; },
+    async flush() { await blobs?.flush(); await scheduled; },
+    dispose() { observedDoc.off('update', changed); workspace.forceStop(); workspace.dispose(); editor.remove(); },
+  };
+  if (bridge) {
+    window.addEventListener('keydown', event => {
+      if ((event.ctrlKey || event.metaKey) && (event.code === 'KeyS' || event.key.toLowerCase() === 's')) {
+        event.preventDefault();
+        void bridge.explicitSave().catch(bridge.error);
+      }
+    }, true);
+    await bridge.connect(session);
+  }
+
+  // Retained for the isolated offline smoke test and native verification.
   (window as unknown as { __baglibResearchEditor: unknown }).__baglibResearchEditor = {
     ready: true,
     editor,
@@ -168,5 +237,6 @@ async function mount() {
 
 mount().catch(error => {
   console.error(error);
+  bridge?.error(error);
   document.documentElement.dataset.researchEditorReady = 'error';
 });

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
-import { NAV_GROUPS, NAV_ITEMS, NAV_SECTIONS } from './nav-model';
+import { NAV_GROUPS, NAV_ITEMS, NAV_SECTIONS, navItemAvailable } from './nav-model';
 import { NewObjectMenu } from './NewObjectMenu';
 
 export interface NavigationRailProps {
@@ -23,6 +23,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
   onCloseOverlay,
 }) => {
   const {
+    researchEditorAvailable,
     viewMode,
     setViewMode,
     isSidebarCollapsed,
@@ -83,7 +84,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
   const renderItem = (itemId: string) => {
     const item = NAV_ITEMS[itemId];
-    if (!item) return null;
+    if (!item || !navItemAvailable(itemId, researchEditorAvailable)) return null;
     const Icon = item.icon;
     const isActive = isItemActive(itemId);
     const count = getItemCount(itemId);
