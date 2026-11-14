@@ -25,11 +25,6 @@ Local report docs/agent-ops/reports/KEY-238.md and board row KEY-238 (fixes) upd
 
 Weekly lifetime fallback removed because heatmap reduction always produces a number. Recent edits LEFT JOIN existing note titles, render canonical titles in bdi with localized type/date and open note-like rows through openStudyNote. Estimated speed names the 250-words/page assumption in ar/en. Query and renderer regressions15/15, tsc/scoped eslint0warnings/mainbuild pass. Native ar/en1280 matrix2/2 with0renderererrors passes and profile/owned renderer removed. Visual inspection caught startup overlays in some screenshots. Harness now waits for startup removal and will recapture after fullsuite once concurrency2 completes. Production source unchanged since verification. Scoped commit/push remains pending.
 
-## Review: KEY-168 and KEY-171 slices — 2026-11-14 03:59, Claude Code
-
-- **eb9ac83 KEY-168 (Codex):** pass after Claude fixes in **31cc987**: `src/renderer/utils/quran-reference-label.ts`, `src/renderer/components/quran/QuranMushafWorkspace.tsx` and `tests/ui/quran-personal.test.ts`. The cross-surah separator had become a literal "?" (encoding loss) and the test asserted it; copied citations carried U+2066/U+2069 isolates; the word-selection copy had been excluded by Claude's own KEY-170 file restriction, now lifted. Full suite 2183/2183. Jira comment 10383. Reflections per translation source are held for the user.
-- **a7203d5 KEY-171 (Codex):** review pass. Jira comment 10384. The POS source is held for the user.
-
 ## KEY-238 fixes active - 2026-11-14T03:57:04.4404685+02:00 - Codex key238-root
 
 Explicitly authorized dashboard honesty fixes and scoped lock commit/push. Base a7203d5 (KEY-171), eb9ac83 (KEY-168). Weekly totals must retain zero, recent edits gain existing note titles/localized types and navigation, recent query tests, estimated WPM ar/en. Default visibility preserved. No schema/dependencies/downloads. Verification pending. Other sessions' changes preserved.
