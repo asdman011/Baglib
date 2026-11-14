@@ -49,6 +49,8 @@ export class BackgroundMetadataService extends EbookMetadataExtractorService {
 
   private formatFromPath(filePath: string): DigitalFormat {
     const extension = path.extname(filePath).toLowerCase();
+    if (extension === '.fb2') return 'FB2';
+    if (extension === '.cbz') return 'CBZ';
     if (['.htm', '.html', '.xhtml'].includes(extension)) return 'HTML';
     if (['.azw', '.azw3'].includes(extension)) return 'AZW3';
     if (['.mobi', '.prc'].includes(extension)) return 'MOBI';

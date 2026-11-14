@@ -9,9 +9,9 @@ import { translations } from '../../renderer/translations';
 /** Native dialogs follow the interface language the page reports; anything else falls back to English. */
 export const dialogWords = (language: unknown) => translations[language === 'ar' ? 'ar' : 'en'];
 export const bookFileFilters = (words: ReturnType<typeof dialogWords>) => [
-  { name: words.dialogFilterAllBooks, extensions: ['pdf', 'epub', 'mobi', 'azw3', 'txt', 'html', 'djvu', 'docx'] },
+  { name: words.dialogFilterAllBooks, extensions: ['pdf', 'epub', 'mobi', 'azw3', 'fb2', 'cbz', 'txt', 'html', 'djvu', 'docx'] },
   { name: words.dialogFilterPdf, extensions: ['pdf'] },
-  { name: words.dialogFilterEbooks, extensions: ['epub', 'mobi', 'azw3'] },
+  { name: words.dialogFilterEbooks, extensions: ['epub', 'mobi', 'azw3', 'fb2', 'cbz'] },
   { name: words.dialogFilterText, extensions: ['txt', 'html', 'docx'] },
   { name: words.dialogFilterAll, extensions: ['*'] },
 ];

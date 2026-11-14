@@ -61,18 +61,18 @@ export function setupDigitalIPC(): void {
           extension: '',
           fileSizeBytes: 0,
           errorCode: 'FILE_NOT_FOUND',
-          error: 'المسار المحدد غير صالح / Invalid file path provided',
+          error: 'FILE_NOT_FOUND',
         };
       }
       return await validator.validateFile(filePath);
-    } catch (err: unknown) {
+    } catch {
       return {
         isValid: false,
         fileName: '',
         extension: '',
         fileSizeBytes: 0,
         errorCode: 'READ_ERROR',
-        error: errorMessage(err) || 'خطأ غير متوقع أثناء فحص الملف / Unexpected error validating file',
+        error: 'READ_ERROR',
       };
     }
   });
@@ -110,8 +110,8 @@ export function setupDigitalIPC(): void {
           filePath: '',
           fileName: '',
           fileSizeBytes: 0,
-          errorCode: 'INVALID_INPUT',
-          error: 'خيارات الاستيراد غير صالحة / Invalid import options provided',
+          errorCode: 'IMPORT_ERROR',
+          error: 'IMPORT_ERROR',
         };
       }
       return await enqueue(() => pipeline.importFile(options));
@@ -122,8 +122,8 @@ export function setupDigitalIPC(): void {
         filePath: options?.filePath || '',
         fileName: '',
         fileSizeBytes: 0,
-        errorCode: 'UNEXPECTED_ERROR',
-        error: errorMessage(err) || 'خطأ غير متوقع أثناء استيراد الملف / Unexpected error importing file',
+        errorCode: 'IMPORT_ERROR',
+        error: 'IMPORT_ERROR',
       };
     }
   });

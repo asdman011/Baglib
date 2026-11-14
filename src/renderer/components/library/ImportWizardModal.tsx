@@ -1,5 +1,7 @@
 'use client';
 
+import { importErrorKey, importDuplicateReasonKey } from '../../utils/import-errors';
+
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '../ui/Button';
@@ -111,7 +113,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
   const scanActive = useRef(false);
   const importActive = useRef(false);
-  const [reviewFailures, setReviewFailures] = useState<{ fileName: string }[]>([]);
+  const [reviewFailures, setReviewFailures] = useState<{ fileName: string; errorCode?: string; error?: string }[]>([]);
   const [duplicateResults, setDuplicateResults] = useState<DuplicateDetectionResult[]>([]);
   const [fileActions, setFileActions] = useState<Record<string, DuplicateResolutionAction>>({});
 
@@ -542,7 +544,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                   multiple
                   ref={fileInputRef}
                   onChange={handleFallbackInputChange}
-                  accept=".pdf,.epub,.mobi,.prc,.azw3,.azw,.txt,.html,.htm,.xhtml"
+                  accept=".fb2,.cbz,.pdf,.epub,.mobi,.prc,.azw3,.azw,.txt,.html,.htm,.xhtml"
                   className="hidden"
                 />
 
@@ -695,7 +697,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
             <div className="space-y-6">
               {reviewFailures.length > 0 && <div role="alert" className="p-4 rounded-xl border border-red-500/30 text-red-500 space-y-2">
                 <p>{t('importReviewFailures', { count: reviewFailures.length })}</p>
-                {reviewFailures.slice(0, visibleCount).map((file, index) => <p key={index} className="text-sm break-words" dir="auto">{file.fileName}</p>)}
+                {reviewFailures.slice(0, visibleCount).map((file, index) => <p key={index} className="text-sm break-words" dir="auto"><bdi>{file.fileName}</bdi> — {t(importErrorKey(file.errorCode || file.error))}</p>)}
               </div>}
               {isScanningDuplicates ? (
                 <div className="p-12 text-center flex flex-col items-center justify-center space-y-4" role="status">
@@ -717,7 +719,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                   <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
                     <p className="text-xs font-semibold text-main">
-                      {t('duplicatesDetectedDesc', { count: conflictedResults.length })}
+                      {t('importDuplicatesReviewDesc')}
                     </p>
                   </div>
 
@@ -757,11 +759,11 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                               </span>
 
                               <span className="text-[11px] font-mono text-muted">
-                                {Math.round(dup.confidence * 100)}% Match
+                                {t('importMatchPercent', { percent: Math.round(dup.confidence * 100) })}
                               </span>
                             </div>
 
-                            <span className="text-xs text-muted font-medium">{dup.reason}</span>
+                            <span className="text-xs text-muted font-medium">{t(importDuplicateReasonKey(dup))}</span>
                           </div>
 
                           {/* Side-by-Side Comparison */}
@@ -769,11 +771,11 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                             {/* Existing Book Card */}
                             <div className="p-3.5 rounded-2xl bg-surface border border-subtle space-y-2">
                               <span className="text-[11px] font-bold text-pale-sky-500 block">
-                                {t('existingBookDetails')}
+                                {t(dup.batchDuplicateOf ? 'importBatchFile' : 'existingBookDetails')}
                               </span>
                               <div className="space-y-1">
                                 <h5 className="font-bold text-main line-clamp-1">
-                                  {dup.existingWork?.title || t('unknownImportTitle')}
+                                  {dup.batchDuplicateOf?.fileName || dup.existingWork?.title || t('unknownImportTitle')}
                                 </h5>
                                 <p className="text-[11px] text-muted">
                                   {dup.existingWork?.author || t('noAuthor')}
@@ -784,7 +786,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                                   </p>
                                 )}
                                 <p className="text-[10px] text-muted/70 truncate font-mono">
-                                  {dup.existingWork?.filePath || t('noLinkedImportFile')}
+                                  {dup.batchDuplicateOf?.filePath || dup.existingWork?.filePath || t('noLinkedImportFile')}
                                 </p>
                               </div>
                             </div>
@@ -843,6 +845,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                                 </div>
                               </label>
 
+                              {!dup.batchDuplicateOf && <>
                               {/* Add as New Edition Action */}
                               <label
                                 className={`p-2.5 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-all ${
@@ -935,6 +938,7 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                                   </span>
                                 </div>
                               </label>
+                              </>}
                             </div>
                           </div>
                         </div>
@@ -1052,12 +1056,12 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                         )}
                         <div className="min-w-0">
                           <span className="font-bold text-main truncate block">{res.fileName}</span>
-                          <span className="text-[10px] text-muted font-mono truncate block">
+                          <span className="text-[11px] text-muted leading-relaxed truncate block">
                             {res.extractedMetadata?.title
                               ? `${res.extractedMetadata.title} • ${
                                   res.extractedMetadata.author || ''
                                 }`
-                              : res.errorCode === 'METADATA_ERROR' ? t('importMetadataFailed') : res.error || res.duplicateReason || res.filePath}
+                              : !res.success ? t(importErrorKey(res.errorCode || res.error)) : res.duplicateMatchType ? t(importDuplicateReasonKey({ matchType: res.duplicateMatchType })) : res.filePath}
                           </span>
                         </div>
                       </div>

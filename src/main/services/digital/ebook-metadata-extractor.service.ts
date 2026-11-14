@@ -1,3 +1,4 @@
+import { readFb2Metadata, readCbzMetadata, readMobiMetadata } from './import-metadata';
 import { LECTURE_EXTENSIONS } from '../../../shared/lectures';
 import { readLectureMetadata } from '../lectures/media-metadata';
 import fs from 'fs';
@@ -40,6 +41,12 @@ export class EbookMetadataExtractorService {
 
     try {
       switch (resolvedFormat) {
+        case 'FB2':
+          meta = await readFb2Metadata(filePath);
+          break;
+        case 'CBZ':
+          meta = await readCbzMetadata(filePath);
+          break;
         case 'PDF':
           meta = await this.extractFromPdf(filePath);
           break;
@@ -70,6 +77,8 @@ export class EbookMetadataExtractorService {
    */
   private detectFormatFromExtension(ext: string): DigitalFormat {
     switch (ext) {
+      case '.fb2': return 'FB2';
+      case '.cbz': return 'CBZ';
       case '.epub':
         return 'EPUB';
       case '.mobi':
@@ -162,7 +171,7 @@ export class EbookMetadataExtractorService {
             }
           }
         }
-      } catch (err) {
+      } catch {
         // Continue to XMP inspection
       }
     }
@@ -248,7 +257,7 @@ export class EbookMetadataExtractorService {
           edition = dcEdition;
         }
       }
-    } catch (err) {
+    } catch {
       // Continue to cover extraction
     }
 
@@ -532,7 +541,7 @@ export class EbookMetadataExtractorService {
               identifiers,
               format: 'EPUB',
             });
-          } catch (err) {
+          } catch {
             resolve({ format: 'EPUB' });
           } finally {
             try {
@@ -551,87 +560,7 @@ export class EbookMetadataExtractorService {
     filePath: string,
     format: 'MOBI' | 'AZW3'
   ): Promise<Partial<ExtractedEbookMetadata>> {
-    const buf = await fs.promises.readFile(filePath);
-    if (buf.length < 68) return { format };
-
-    // Palm title at bytes 0..31
-    const palmTitle = buf.slice(0, 32).toString('latin1').replace(/\0.*$/g, '').trim();
-    let title: string | undefined = palmTitle || undefined;
-    const authors: string[] = [];
-    let publisher: string | undefined;
-    let description: string | undefined;
-    let isbn: string | undefined;
-    let publicationYear: number | undefined;
-
-    // Record 0 offset is at byte 78 (uint32 BE)
-    try {
-      if (buf.length > 82) {
-        const rec0Offset = buf.readUInt32BE(78);
-        if (rec0Offset < buf.length - 16) {
-          const rec0 = buf.slice(rec0Offset);
-          // Check MOBI identifier at offset 16 of record 0
-          if (rec0.length >= 20 && rec0.slice(16, 20).toString('latin1') === 'MOBI') {
-            const headerLength = rec0.readUInt32BE(20);
-            const exthFlags = rec0.readUInt32BE(128);
-
-            // Check if EXTH header exists
-            if (exthFlags & 0x40 && rec0.length > 16 + headerLength + 12) {
-              const exthOffset = 16 + headerLength;
-              if (rec0.slice(exthOffset, exthOffset + 4).toString('latin1') === 'EXTH') {
-                const exthCount = rec0.readUInt32BE(exthOffset + 8);
-                let currentPos = exthOffset + 12;
-
-                for (let i = 0; i < exthCount && currentPos + 8 <= rec0.length; i++) {
-                  const tagType = rec0.readUInt32BE(currentPos);
-                  const tagLength = rec0.readUInt32BE(currentPos + 4);
-                  if (tagLength < 8 || currentPos + tagLength > rec0.length) break;
-
-                  const data = rec0.slice(currentPos + 8, currentPos + tagLength).toString('utf8').trim();
-
-                  switch (tagType) {
-                    case 100: // Author
-                      if (data) authors.push(data);
-                      break;
-                    case 101: // Publisher
-                      if (data) publisher = data;
-                      break;
-                    case 103: // Description
-                      if (data) description = data;
-                      break;
-                    case 104: // ISBN
-                      if (data && isValidIsbn(data.replace(/[-\s]/g, ''))) {
-                        isbn = data.replace(/[-\s]/g, '');
-                      }
-                      break;
-                    case 106: // Publication Date
-                      const yMatch = data.match(/(18\d{2}|19\d{2}|20\d{2})/);
-                      if (yMatch) publicationYear = parseInt(yMatch[1], 10);
-                      break;
-                    case 503: // Updated Title
-                      if (data) title = data;
-                      break;
-                  }
-
-                  currentPos += tagLength;
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Return whatever was read from Palm header
-    }
-
-    return {
-      title,
-      authors,
-      publisher,
-      description,
-      isbn,
-      publicationYear,
-      format,
-    };
+    return readMobiMetadata(filePath, format);
   }
 
   /**
@@ -764,7 +693,7 @@ export class EbookMetadataExtractorService {
     });
 
     const finalTitle = reconciled.title || parsedFilename.cleanedFilename || path.basename(filePath, path.extname(filePath));
-    const finalAuthors = reconciled.authors;
+    const finalAuthors = (format === 'FB2' || format === 'CBZ') && meta.authors?.length ? meta.authors : reconciled.authors;
 
     // Supplementary bibliographic attributes
     const finalPublisher = reconciled.publisher;

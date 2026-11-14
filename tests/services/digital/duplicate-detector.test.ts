@@ -63,7 +63,7 @@ describe('Duplicate Detection & Import Resolution (Story 6.4, 6.5 / KEY-81, KEY-
     assert.strictEqual(result.matchType, 'exact_file');
     assert.strictEqual(result.confidence, 1.0);
     assert.strictEqual(result.existingWork?.id, existing.id);
-    assert.ok(result.reason.includes('SHA-256'));
+    assert.equal(result.reason, 'exact_file');
   });
 
   it('identifies matching edition duplicate via ISBN with 0.95 confidence', async () => {
@@ -87,7 +87,7 @@ describe('Duplicate Detection & Import Resolution (Story 6.4, 6.5 / KEY-81, KEY-
     assert.strictEqual(result.matchType, 'same_edition');
     assert.strictEqual(result.confidence, 0.95);
     assert.strictEqual(result.existingWork?.id, existing.id);
-    assert.ok(result.reason.includes('ISBN') || result.reason.includes('الردمك'));
+    assert.equal(result.reason, 'same_edition');
   });
 
   it('identifies potential duplicate work via high title and author similarity', async () => {

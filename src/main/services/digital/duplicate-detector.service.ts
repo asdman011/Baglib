@@ -16,7 +16,6 @@ import { EbookMetadataExtractorService } from './ebook-metadata-extractor.servic
 import { calculateStringSimilarity, calculateTokenOverlap, normalizeSearchString } from '../../../shared/utils/text-normalizer';
 import type {
   DuplicateDetectionResult,
-  DuplicateMatchType,
   DigitalFormat,
 } from '../../../shared/types/digital-file';
 import type { BookItem } from '../../../shared/types/work';
@@ -36,6 +35,49 @@ export interface DuplicateCheckCandidate {
     format?: DigitalFormat;
     publicationYear?: number;
   };
+}
+
+type LibraryCandidate = Pick<BookItem, 'id' | 'title' | 'author'>;
+
+/** A conservative shortlist. Original order preserves the first matching Work. */
+export class DuplicateCandidateIndex {
+  private readonly postings = new Map<string, Set<number>>();
+  readonly entries: { work: LibraryCandidate; title: string; strippedTitle: string }[];
+
+  constructor(works: LibraryCandidate[]) {
+    this.entries = works.map(work => {
+      const title = normalizeSearchString(work.title);
+      return { work, title, strippedTitle: title.replace(/(?:^|\s+)ال([^\s]{3,})/gu, '$1').trim() };
+    });
+    this.entries.forEach((entry, index) => {
+      for (const key of this.keys(entry.title, entry.strippedTitle)) {
+        let posting = this.postings.get(key);
+        if (!posting) {
+          posting = new Set();
+          this.postings.set(key, posting);
+        }
+        posting.add(index);
+      }
+    });
+  }
+
+  private keys(title: string, stripped: string): Set<string> {
+    const keys = new Set(title.split(' ').filter(Boolean).map(token => 't:' + token));
+    for (const value of [title, stripped]) {
+      for (let index = 0; index + 1 < value.length; index++) keys.add('b:' + value.slice(index, index + 2));
+    }
+    return keys;
+  }
+
+  select(title: string, stripped: string) {
+    // Accepted edit similarity >= .85 shares a bigram for length >=3.
+    // Token overlap and short exact matches share a token. Substrings >=4 share bigrams.
+    const selected = new Set<number>();
+    for (const key of this.keys(title, stripped)) {
+      for (const index of this.postings.get(key) || []) selected.add(index);
+    }
+    return [...selected].sort((a, b) => a - b).map(index => this.entries[index]);
+  }
 }
 
 export class DuplicateDetectorService {
@@ -61,7 +103,7 @@ export class DuplicateDetectorService {
   /**
    * Inspects a candidate file on disk or metadata payload for duplicates in the library.
    */
-  public async checkDuplicate(input: string | DuplicateCheckCandidate, candidates?: Pick<BookItem, 'id' | 'title' | 'author'>[], exactOnly = false): Promise<DuplicateDetectionResult> {
+  public async checkDuplicate(input: string | DuplicateCheckCandidate, candidates?: LibraryCandidate[] | DuplicateCandidateIndex, exactOnly = false): Promise<DuplicateDetectionResult> {
     const candidate: DuplicateCheckCandidate = typeof input === 'string' ? { filePath: input } : input;
     const filePath = candidate.filePath;
     const fileName = candidate.fileName || (filePath ? path.basename(filePath) : 'Unknown');
@@ -80,7 +122,7 @@ export class DuplicateDetectorService {
         }
       } catch (err) {
         console.warn(`[DuplicateDetector] Failed reading ${filePath}:`, err);
-        return { filePath, fileName, fileSizeBytes, matchType: 'none', confidence: 0, reason: '', error: String(err) };
+        return { filePath, fileName, fileSizeBytes, matchType: 'none', confidence: 0, reason: '', error: 'READ_ERROR' };
       }
     }
 
@@ -95,7 +137,7 @@ export class DuplicateDetectorService {
           fileSizeBytes,
           matchType: 'exact_file',
           confidence: 1.0,
-          reason: 'الملف موجود بالفعل في المكتبة بمحتوى مطابق تماماً (SHA-256) / Identical file content already exists in library',
+          reason: 'exact_file',
           existingWork: matchByHash,
           candidateMetadata: {
             title: candidate.title || matchByHash.title,
@@ -120,8 +162,8 @@ export class DuplicateDetectorService {
         title = title || extracted.title;
         author = author || (extracted.authors && extracted.authors[0]);
         isbn = isbn || extracted.isbn;
-      } catch (error) {
-        return { filePath, fileName, fileHash, fileSizeBytes, matchType: 'none', confidence: 0, reason: '', error: String(error) };
+      } catch {
+        return { filePath, fileName, fileHash, fileSizeBytes, matchType: 'none', confidence: 0, reason: '', error: 'METADATA_ERROR' };
       }
     }
 
@@ -138,7 +180,7 @@ export class DuplicateDetectorService {
             fileSizeBytes,
             matchType: 'same_edition',
             confidence: 0.95,
-            reason: `رقم الردمك (${isbn}) مطابق لطبعة موجودة بالفعل في المكتبة / ISBN matches an existing edition in library`,
+            reason: 'same_edition',
             existingWork: matchByIsbn,
             candidateMetadata: {
               title: title || matchByIsbn.title,
@@ -152,16 +194,17 @@ export class DuplicateDetectorService {
 
     // Tier 3: Title & Author Linguistic Similarity
     if (title && title.trim().length >= 3) {
-      const allWorks = candidates || (this.workRepository.getDuplicateCandidates?.() ?? this.workRepository.getAllWorks());
+      const source = candidates || (this.workRepository.getDuplicateCandidates?.() ?? this.workRepository.getAllWorks());
       const normCandidateTitle = normalizeSearchString(title);
       const stripCandidateTitle = normCandidateTitle.replace(/(?:^|\s+)ال([^\s]{3,})/gu, '$1').trim();
 
+      const allWorks = source instanceof DuplicateCandidateIndex ? source.select(normCandidateTitle, stripCandidateTitle) : source.map(work => ({
+        work, title: normalizeSearchString(work.title), strippedTitle: normalizeSearchString(work.title).replace(/(?:^|\s+)ال([^\s]{3,})/gu, '$1').trim(),
+      }));
       for (let index = 0; index < allWorks.length; index++) {
         if (index % 100 === 0) await new Promise<void>(resolve => setImmediate(resolve));
-        const work = allWorks[index];
-        const normWorkTitle = normalizeSearchString(work.title);
+        const { work, title: normWorkTitle, strippedTitle: stripWorkTitle } = allWorks[index];
         if (!normWorkTitle) continue;
-        const stripWorkTitle = normWorkTitle.replace(/(?:^|\s+)ال([^\s]{3,})/gu, '$1').trim();
 
         const titleSim = calculateStringSimilarity(normCandidateTitle, normWorkTitle);
         const stripSim = calculateStringSimilarity(stripCandidateTitle, stripWorkTitle);
@@ -208,8 +251,7 @@ export class DuplicateDetectorService {
             fileSizeBytes,
             matchType: 'potential_duplicate',
             confidence: parseFloat(confidence.toFixed(2)),
-            reason:
-              'العنوان واسم المؤلف متطابقان أو شديدا الشبه مع كتاب مسجل بالفعل / Title and author closely match an existing work in library',
+            reason: 'potential_duplicate',
             existingWork: this.workRepository.getById(work.id) || work as BookItem,
             candidateMetadata: {
               title,
@@ -229,7 +271,7 @@ export class DuplicateDetectorService {
       fileSizeBytes,
       matchType: 'none',
       confidence: 0.0,
-      reason: 'لا يوجد تكرار / No duplicate detected',
+      reason: 'none',
       candidateMetadata: {
         title,
         author,
@@ -245,10 +287,22 @@ export class DuplicateDetectorService {
     inputs: Array<string | DuplicateCheckCandidate>
   ): Promise<DuplicateDetectionResult[]> {
     const results: DuplicateDetectionResult[] = [];
-    const candidates = this.workRepository.getDuplicateCandidates?.() ?? this.workRepository.getAllWorks();
+    const candidates = new DuplicateCandidateIndex(this.workRepository.getDuplicateCandidates?.() ?? this.workRepository.getAllWorks());
+    const hashes = new Map<string, DuplicateDetectionResult>();
     for (const input of inputs) {
       await new Promise<void>(resolve => setImmediate(resolve));
       const res = await this.checkDuplicate(input, candidates);
+      if (res.fileHash && !res.error) {
+        const twin = hashes.get(res.fileHash);
+        if (twin && res.matchType !== 'exact_file') {
+          res.matchType = 'exact_file';
+          res.confidence = 1;
+          res.reason = 'batch_duplicate';
+          res.existingWork = undefined;
+          res.batchDuplicateOf = { filePath: twin.filePath, fileName: twin.fileName };
+        }
+        if (!twin) hashes.set(res.fileHash, res);
+      }
       const existing = res.existingWork;
       results.push({ ...res, existingWork: existing ? {
         id: existing.id, title: existing.title, author: existing.author,

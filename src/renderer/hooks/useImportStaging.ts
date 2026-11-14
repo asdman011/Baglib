@@ -7,6 +7,8 @@ export interface StagedImportFile { id: string; name: string; path: string; size
 
 function formatForName(name: string): DigitalFormat {
   const extension = name.split('.').pop()?.toLowerCase();
+  if (extension === 'fb2') return 'FB2';
+  if (extension === 'cbz') return 'CBZ';
   if (['azw', 'azw3'].includes(extension || '')) return 'AZW3';
   if (['prc', 'mobi'].includes(extension || '')) return 'MOBI';
   if (['htm', 'html', 'xhtml'].includes(extension || '')) return 'HTML';

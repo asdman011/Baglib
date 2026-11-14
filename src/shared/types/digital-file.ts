@@ -51,7 +51,7 @@ export interface DigitalFileValidationResult {
   signatureDetected?: string;
 
   /**
-   * Human-readable error message (bilingual Arabic & English) when isValid is false.
+   * Stable error code (localized by the renderer) when isValid is false.
    */
   error?: string;
 
@@ -216,6 +216,8 @@ export type DuplicateMatchType = 'exact_file' | 'same_edition' | 'potential_dupl
 export type DuplicateResolutionAction = 'skip' | 'add_new_edition' | 'replace' | 'import_anyway';
 
 export interface DuplicateDetectionResult {
+  /** Transient review reference to an earlier file, never a database Work ID. */
+  batchDuplicateOf?: { filePath: string; fileName: string };
   error?: string;
   filePath: string;
   fileName: string;

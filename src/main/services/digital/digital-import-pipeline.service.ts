@@ -1,6 +1,6 @@
 import { LECTURE_EXTENSIONS } from '../../../shared/lectures';
 import { cancelledImport, summarizeImports } from '../../../shared/import-batch';
-import { errorMessage, errorCode } from '../../../shared/errors';
+import { errorCode } from '../../../shared/errors';
 import path from 'path';
 import { hashImportFile } from './import-files';
 import { app } from 'electron';
@@ -96,7 +96,7 @@ export class DigitalImportPipelineService {
         fileName,
         fileSizeBytes: validation.fileSizeBytes,
         errorCode: validation.errorCode,
-        error: validation.error || `فشل التحقق من صحة الملف: ${fileName} / File validation failed: ${fileName}`,
+        error: validation.errorCode || 'IMPORT_ERROR',
       };
     }
 
@@ -412,7 +412,7 @@ export class DigitalImportPipelineService {
         fileSizeBytes: validation.fileSizeBytes,
         format: validation.format,
         errorCode: errorCode(err) === 'METADATA_ERROR' ? 'METADATA_ERROR' : 'DB_ERROR',
-        error: errorCode(err) === 'METADATA_ERROR' ? String(errorMessage(err)) : `خطأ أثناء تسجيل الكتاب في قاعدة البيانات: ${errorMessage(err) || err} / Database error registering digital book: ${errorMessage(err) || err}`,
+        error: errorCode(err) === 'METADATA_ERROR' ? 'METADATA_ERROR' : 'DB_ERROR',
       };
     }
   }
@@ -478,14 +478,14 @@ export class DigitalImportPipelineService {
           progressPercentage: Math.round(((i + 1) / totalFiles) * 100),
           error: result.error,
         });
-      } catch (err: unknown) {
+      } catch {
         const errResult: DigitalImportResult = {
           success: false,
           filePath: opt.filePath,
           fileName,
           fileSizeBytes: 0,
           errorCode: 'IMPORT_ERROR',
-          error: errorMessage(err) || 'خطأ غير متوقع أثناء الاستيراد / Unexpected error during import',
+          error: 'IMPORT_ERROR',
         };
         results.push(errResult);
 

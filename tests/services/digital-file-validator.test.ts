@@ -11,7 +11,7 @@ describe('Digital File Type Detection & Validation Service (Story 6.1 / KEY-78)'
   describe('Supported Formats & Configuration', () => {
     it('returns the canonical list of supported formats', () => {
       const formats = validator.getSupportedFormats();
-      assert.deepStrictEqual(formats, ['PDF', 'EPUB', 'MOBI', 'AZW3', 'HTML', 'TXT', 'mp4', 'm4v', 'mov', 'mkv', 'webm', 'mp3', 'm4a', 'ogg', 'opus', 'wav']);
+      assert.deepStrictEqual(formats, ['CBZ', 'FB2', 'PDF', 'EPUB', 'MOBI', 'AZW3', 'HTML', 'TXT', 'mp4', 'm4v', 'mov', 'mkv', 'webm', 'mp3', 'm4a', 'ogg', 'opus', 'wav']);
     });
 
     it('identifies supported extensions and format names correctly', () => {
@@ -119,7 +119,7 @@ describe('Digital File Type Detection & Validation Service (Story 6.1 / KEY-78)'
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.errorCode, 'EMPTY_FILE');
       assert.strictEqual(result.fileSizeBytes, 0);
-      assert.strictEqual(result.error?.includes('0 بايت'), true);
+      assert.strictEqual(result.error, result.errorCode);
     });
 
     it('rejects unsupported extensions (e.g. .exe, .zip, .docx)', () => {
@@ -128,7 +128,7 @@ describe('Digital File Type Detection & Validation Service (Story 6.1 / KEY-78)'
 
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.errorCode, 'UNSUPPORTED_FORMAT');
-      assert.strictEqual(result.error?.includes('غير مدعومة'), true);
+      assert.strictEqual(result.error, result.errorCode);
     });
 
     it('detects signature mismatch when extension does not match file contents', () => {
@@ -138,7 +138,7 @@ describe('Digital File Type Detection & Validation Service (Story 6.1 / KEY-78)'
 
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.errorCode, 'SIGNATURE_MISMATCH');
-      assert.strictEqual(result.error?.includes('لا يطابق'), true);
+      assert.strictEqual(result.error, result.errorCode);
     });
 
     it('detects corrupted headers for supported format extensions', () => {
@@ -148,7 +148,7 @@ describe('Digital File Type Detection & Validation Service (Story 6.1 / KEY-78)'
 
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.errorCode, 'CORRUPTED_FILE');
-      assert.strictEqual(result.error?.includes('تالفة'), true);
+      assert.strictEqual(result.error, result.errorCode);
     });
   });
 
@@ -173,7 +173,7 @@ describe('Digital File Type Detection & Validation Service (Story 6.1 / KEY-78)'
       const result = await validator.validateFile('D:/Ammar/NonExistentFile123.pdf');
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.errorCode, 'FILE_NOT_FOUND');
-      assert.strictEqual(result.error?.includes('غير موجود'), true);
+      assert.strictEqual(result.error, result.errorCode);
     });
 
     it('fails with EMPTY_FILE when reading a 0-byte file from disk', async () => {

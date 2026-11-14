@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T10:19:48.3187118+02:00, Codex key48-root] KEY-48 VERIFIED. CBZ/FB2 imports/pickerfilters/metadata/covers, batchSHA256twins, boundedMOBIEXTH201/202 covers, localizedar/en errors/matchconfidence and indexed duplicate parity. Focused54/finalfull2272pass0fail2existingPDFTODO(concurrency2,349suites),native4ar/en309files/1000existingWorks/0renderererrors/SQLitepass/12screens/originalsunchanged/copiedfolderdeleted. Maxframe267.1ms,peakmainRSS164401152B. Types/build/scopedlint0warnings/diff pass. Exact24ownedfiles/evidence/limits in CURRENT_TASK/report. Explicitly authorized scoped lock commit/push next.
+
 - [2026-11-14T09:45:16.968489+02:00, Codex key349-root] KEY-349 VERIFIED: six-dataset caret slash search, Arabicaliases/groupcaps/exactstudylinks,debounce/stalerejection/nativekeys+hover,keyboardscrolling and EnglishQuran translations. Focused39/full2253pass0fail2existingPDFTODO(concurrency2,348suites),native2ar/en0renderererrors/4realcopies/16screens/originalsunchanged/profiledeleted. Types/build/scopedlint0warnings pass. Exact14files/limits/parserDeepSeekcredit in CURRENT_TASK/report. Scoped lock publication next.
 
 - [2026-11-14T09:21:08.516585+02:00, Codex key348-root] KEY-348 VERIFIED. Single library series entries/ordered Sheet/individual search, bounded persisted Ctrl+wheel densities and embedded/midpoint covers. Focused21/21,finalfull2241pass0fail2existingPDFTODO(concurrency2,346suites),native2ar/en0renderererrors,14screens/originalsunchanged/profiledeleted. Types/build/scopedlint0errors0warnings pass. Exact23files/evidence/limits in CURRENT_TASK/report. Scoped lock commit/normal push explicitly authorized and next.

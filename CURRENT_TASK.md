@@ -1,3 +1,46 @@
+## KEY-48 gaps verified handoff - 2026-11-14T10:19:48.3187118+02:00 - Codex key48-root
+
+Built on HEAD5348602 with KEY23763490b4 verified as an ancestor. User explicitly authorized the scoped commit and normal push under commit.lock to origin/feature/library-domain. Implementation and verification pass. Publication is next.
+
+Folder discovery, native/fallback picker filters and staging/background format resolvers support CBZ/FB2. FictionBook title/all original authors/language/referenced binary cover and ComicInfo metadata/first natural image use existing linkedom/yauzl. The new bounded reader handles MOBI/AZW3 EXTH201/202 resource-relative covers, zero offsets and thumbnail fallback. A transient batch SHA256 map shows twins against the earlier filename/path, with Skip review. It adds no persisted field or fake Work ID. The existing complete-validation/no-conflict/no-failure review bypass and one-file wizard bypass remain. Stable errors/reasons translate in centralized ar/en, including per-file failures and match confidence. Review wording covers batch/library matches. Arabic errors use larger relaxed text and filenames use bdi isolation during review. Existing logical layout/mirrored navigation remain.
+
+The batch method already loaded candidates once. The new token/bigram Map index precomputes normalized titles, shortlists conservatively and retains original library order, similarity/author rules and existing Arabic normalization behavior. Hash/ISBN repository lookups retain their behavior. Tests prove indexed/full-scan parity and first-match ordering.
+
+Final focused54/54 (19new plus35existing), finalfull2272pass0fail2existingPDFTODO across349suites/2274tests in164107.2286ms, concurrency2 through npm test. Earlier full2271 passed before the picker regression, and the final run covers final source. Final TypeScript noEmit/main-preload build/scopedESLint0errors0warnings/diffreview pass. Native4/4 arRTL/enLTR full/cancel with production wizard/preload/digital+lectureIPC/SQLite/workers and fixture support handlers. Each discovers309supportedfiles against1000existingWorks. Full307imports/1twinSkip/1localizedCorruptFailure in20.53s ar/22.19s en. Halfway cancel152imports/1skip/1failure/155unprocessed. SQLite integrity/foreignkeys/sourcecounts pass,0renderererrors. PeakmainRSS164401152B, maxrendererframe267.1ms, maxmainloopgap109.98ms. Twelve final1280/480screenshots recaptured, Arabicerror and Englishnarrow visually inspected after the final wording/typography fixes. Originals actualpre-runSHA256 unchanged, copied corpus/all profiles deleted, exclusive native checks never closed a user app. Evidence .baglib-data/KEY-48-evidence.
+
+The manifest has no Arabic EPUB/audio or real MOBI/FB2/CBZ, so available real format/language pairs were copied and generated fixtures supplement them. Real supported inputs include the42MBEnglishEPUB plusArabic/EnglishPDF/MP4. EnglishWMA andEXE are omitted. MOBI offsets/bounds use generated containers, with no real/hybrid compatibility claim. The fixture mounts production wizard/WorkspaceProvider and supplies library/category/settings handlers. This verifies the wizard and direct routing helper, with no new certification of every desktop menu/native drop event or300largePDFs. Similar-title libraries can still produce large fuzzy shortlists. FB2file32MiB/binary16MiB, ComicInfo1MiB/image16MiB/100000entries and MOBIrec0=2MiB/art16MiB bounds retain metadata/placeholders on optional artwork failure.
+
+REA analyzed installed foliate-js1.0.1 mobi.js with parent ev_05a4dc3043f5d427b0493b79a3152605d579ffef5d953a153d8fbc3c5f35748d. Static source verifies resourceStart108 and unsignedEXTH201/202. Package-wide runtime behavior remains untested. New foliate-js tool doc and existing import/cover comparisons record evidence and correct an old MOBI cover claim. CBR routes to ZIP-only fflate with no genuineRAR decoder, so it remains outside newly enabled formats. DJVU lacks approvedformat/reader. No schema/entity/persistedfield/dependency/download changes. Work → Edition → Source preserved after inspecting source/schema/data dictionary/ADR004/contracts/localNextguide. Protected quran-navigation and other sessions files/statehunks preserved. No Jira actions. Existing two PDF TODOs belong to KEY-210. No task-related implementation/verification problem remains.
+
+Exact24trackedfiles, only this entry in shared state
+
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+- `docs/features/foliate-js.md`
+- `docs/features/feature - Cover Retrieval.md`
+- `docs/features/feature - Digital Library Import and Deduplication.md`
+- `scripts/import-gaps-live/fixture.tsx`
+- `scripts/import-gaps-live/main.ts`
+- `scripts/import-gaps-live/run.mjs`
+- `src/main/ipc/digital.ts`
+- `src/main/services/digital/background-metadata.service.ts`
+- `src/main/services/digital/digital-file-validator.service.ts`
+- `src/main/services/digital/digital-import-pipeline.service.ts`
+- `src/main/services/digital/duplicate-detector.service.ts`
+- `src/main/services/digital/ebook-metadata-extractor.service.ts`
+- `src/main/services/digital/import-metadata.ts`
+- `src/renderer/components/library/ImportWizardModal.tsx`
+- `src/renderer/hooks/useImportStaging.ts`
+- `src/renderer/translations.ts`
+- `src/renderer/utils/import-errors.ts`
+- `src/shared/types/digital-file.ts`
+- `tests/services/digital-file-validator.test.ts`
+- `tests/services/digital/duplicate-detector.test.ts`
+- `tests/services/import-gaps.test.ts`
+- `src/main/ipc/system.ts`
+
+Local report docs/agent-ops/reports/KEY-48.md and board updated. Publication receipt follows after normal push.
+
 ## KEY-349 verified handoff - 2026-11-14T09:45:16.968489+02:00 - Codex key349-root
 
 Built on f9a034f.

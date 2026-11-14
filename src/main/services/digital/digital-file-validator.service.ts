@@ -1,5 +1,4 @@
 import { LECTURE_EXTENSIONS } from '../../../shared/lectures';
-import { errorMessage } from '../../../shared/errors';
 import fs from 'fs';
 import path from 'path';
 import type { DigitalFormat } from '../../../shared/types/work';
@@ -19,6 +18,8 @@ const HEADER_PROBE_SIZE = 4096;
  */
 const SUPPORTED_EXTENSIONS_MAP: Record<string, { format: DigitalFormat; mimeType: string }> = {
   ...Object.fromEntries(LECTURE_EXTENSIONS.map(extension => [extension, { format: extension.slice(1) as DigitalFormat, mimeType: ['.mp3', '.m4a', '.ogg', '.opus', '.wav'].includes(extension) ? 'audio/' + (extension === '.mp3' ? 'mpeg' : extension.slice(1)) : 'video/' + extension.slice(1) }])),
+  '.cbz': { format: 'CBZ', mimeType: 'application/vnd.comicbook+zip' },
+  '.fb2': { format: 'FB2', mimeType: 'application/x-fictionbook+xml' },
   '.pdf': { format: 'PDF', mimeType: 'application/pdf' },
   '.epub': { format: 'EPUB', mimeType: 'application/epub+zip' },
   '.mobi': { format: 'MOBI', mimeType: 'application/x-mobipocket-ebook' },
@@ -45,7 +46,7 @@ export class DigitalFileValidatorService {
    * Returns list of all supported canonical digital formats.
    */
   public getSupportedFormats(): DigitalFormat[] {
-    return ['PDF', 'EPUB', 'MOBI', 'AZW3', 'HTML', 'TXT', ...LECTURE_EXTENSIONS.map(extension => extension.slice(1) as DigitalFormat)];
+    return ['CBZ', 'FB2', 'PDF', 'EPUB', 'MOBI', 'AZW3', 'HTML', 'TXT', ...LECTURE_EXTENSIONS.map(extension => extension.slice(1) as DigitalFormat)];
   }
 
   /**
@@ -70,14 +71,13 @@ export class DigitalFileValidatorService {
     let stats: fs.Stats;
     try {
       stats = await fs.promises.stat(filePath);
-    } catch (err: unknown) {
+    } catch {
       return this.buildFailureResult({
         fileName,
         extension,
         filePath,
         fileSizeBytes: 0,
         errorCode: 'FILE_NOT_FOUND',
-        error: `الملف غير موجود أو لا يمكن الوصول إليه: ${fileName} / File not found or inaccessible: ${fileName}`,
       });
     }
 
@@ -89,7 +89,6 @@ export class DigitalFileValidatorService {
         filePath,
         fileSizeBytes: stats.size,
         errorCode: 'UNSUPPORTED_FORMAT',
-        error: `المسار المحدد ليس ملفاً صالحاً: ${fileName} / The specified path is not a regular file: ${fileName}`,
       });
     }
 
@@ -101,7 +100,6 @@ export class DigitalFileValidatorService {
         filePath,
         fileSizeBytes: 0,
         errorCode: 'EMPTY_FILE',
-        error: `الملف فارغ (0 بايت): ${fileName} / File is empty (0 bytes): ${fileName}`,
       });
     }
 
@@ -113,14 +111,13 @@ export class DigitalFileValidatorService {
       const readLength = Math.min(stats.size, HEADER_PROBE_SIZE);
       headerBuffer = Buffer.alloc(readLength);
       await fileHandle.read(headerBuffer, 0, readLength, 0);
-    } catch (err: unknown) {
+    } catch {
       return this.buildFailureResult({
         fileName,
         extension,
         filePath,
         fileSizeBytes: stats.size,
         errorCode: 'READ_ERROR',
-        error: `فشل قراءة الملف: ${errorMessage(err) || fileName} / Failed to read file bytes: ${errorMessage(err) || fileName}`,
       });
     } finally {
       if (fileHandle) {
@@ -152,7 +149,6 @@ export class DigitalFileValidatorService {
         filePath,
         fileSizeBytes: 0,
         errorCode: 'EMPTY_FILE',
-        error: `الملف فارغ (0 بايت) / File is empty (0 bytes)`,
       });
     }
 
@@ -171,7 +167,6 @@ export class DigitalFileValidatorService {
           filePath,
           fileSizeBytes: size,
           errorCode: 'CORRUPTED_FILE',
-          error: `ترويسة الملف تالفة أو غير صالحة لصيغة ${expected.format}: ${fileName} / Corrupted or invalid header for format ${expected.format}: ${fileName}`,
         });
       }
 
@@ -189,7 +184,6 @@ export class DigitalFileValidatorService {
           fileSizeBytes: size,
           errorCode: 'SIGNATURE_MISMATCH',
           signatureDetected: detected.signature,
-          error: `امتداد الملف (${extension}) لا يطابق الصيغة المكتشفة في المحتوى (${detected.format}) / Extension (${extension}) does not match content signature (${detected.format})`,
         });
       }
 
@@ -229,7 +223,6 @@ export class DigitalFileValidatorService {
       filePath,
       fileSizeBytes: size,
       errorCode: 'UNSUPPORTED_FORMAT',
-      error: `صيغة الملف غير مدعومة (${extension || 'بدون امتداد'}): ${fileName} / Unsupported file format (${extension || 'no extension'}): ${fileName}`,
     });
   }
 
@@ -291,6 +284,7 @@ export class DigitalFileValidatorService {
     // 2. EPUB Signature: PK\x03\x04 with mimetype application/epub+zip
     // ZIP local file header signature: 0x50 0x4B 0x03 0x04
     if (buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04) {
+      if (hintExtension === '.cbz') return { ...SUPPORTED_EXTENSIONS_MAP['.cbz'], signature: 'PK/ZIP (CBZ container)' };
       const probeStr = buf.toString('latin1', 0, Math.min(buf.length, 256));
       const hasEpubMime = probeStr.includes('application/epub+zip');
       const hasMimetypeEntry = probeStr.includes('mimetype');
@@ -339,6 +333,12 @@ export class DigitalFileValidatorService {
           signature: `PalmDOC (${type}/${creator})`,
         };
       }
+    }
+
+    // FictionBook must be the document root, with optional XML prolog/comments.
+    const xmlPrefix = buf.toString('utf8').replace(/^\uFEFF/, '').replace(/^\s*(?:<\?xml[\s\S]*?\?>\s*)?(?:<!--[\s\S]*?-->\s*)*/, '');
+    if (/^<(?:[\w.-]+:)?FictionBook(?:\s|>)/.test(xmlPrefix)) {
+      return { ...SUPPORTED_EXTENSIONS_MAP['.fb2'], signature: 'XML/FictionBook' };
     }
 
     // 4. HTML / XHTML
@@ -429,7 +429,6 @@ export class DigitalFileValidatorService {
     filePath?: string;
     fileSizeBytes: number;
     errorCode: DigitalFileErrorCode;
-    error: string;
     signatureDetected?: string;
   }): DigitalFileValidationResult {
     return {
@@ -439,7 +438,7 @@ export class DigitalFileValidatorService {
       filePath: params.filePath,
       fileSizeBytes: params.fileSizeBytes,
       errorCode: params.errorCode,
-      error: params.error,
+      error: params.errorCode,
       signatureDetected: params.signatureDetected,
     };
   }
