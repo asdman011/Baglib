@@ -415,7 +415,9 @@ export function CompanionNotePane({ onClose, overlay = false }: { onClose: () =>
     const timer = setInterval(() => setContext(companionContext(viewMode)), 1000);
     return () => clearInterval(timer);
   }, [context?.kind, viewMode]);
-  const update = (next: Partial<Saved>) => setState(previous => writeCompanionSavedState({ ...previous, ...next }));
+  // Saving is done here, outside the state updater: it notifies the toggle, which must not happen while React renders.
+  // Only the changed keys are written, so the toggle's own saved position is never overwritten by this pane's copy.
+  const update = (next: Partial<Saved>) => setState(writeCompanionSavedState(next));
   const note = state.noteId ? notes.find(item => item.id === state.noteId) : undefined;
   // Read the place at the moment of use, from the view on screen: a lecture's time moves on while the pane stays open.
   const here = () => companionContext(viewMode);

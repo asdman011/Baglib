@@ -347,3 +347,21 @@ for (const language of ['ar', 'en'] as const) {
     }
   });
 }
+
+test('the companion pane saves outside React state updaters and keeps the toggle position', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../../src/renderer/components/notes/CompanionNotePane.tsx', import.meta.url), 'utf8');
+  // Saving dispatches an event the toggle listens to; inside an updater that runs while React renders.
+  assert.doesNotMatch(source, /setState\(\s*\w+\s*=>\s*writeCompanionSavedState/u);
+  const storage = new Map<string, string>();
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, writable: true, value: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => { storage.set(key, String(value)); } } });
+  try {
+    writeCompanionSavedState({ topPercent: 30, edge: 'start' });
+    const saved = writeCompanionSavedState({ noteId: 'note-1', stamp: false });
+    assert.deepEqual({ noteId: saved.noteId, stamp: saved.stamp, topPercent: saved.topPercent, edge: saved.edge }, { noteId: 'note-1', stamp: false, topPercent: 30, edge: 'start' });
+    assert.equal(readCompanionSavedState().noteId, 'note-1');
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous); else Reflect.deleteProperty(globalThis, 'localStorage');
+  }
+});
