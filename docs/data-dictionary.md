@@ -646,7 +646,7 @@ Approved R3 on 2026-11-14, Research Editor Plan revision 2.1. R6 retains BoardSt
 | parent_id | TEXT NULL FK manuscript_document(id), ON DELETE CASCADE | Part/chapter/section hierarchy, null at top level |
 | title | TEXT NOT NULL | Kept aligned with the snapshot page-title block |
 | position | INTEGER NOT NULL | Order among siblings, including hidden siblings |
-| snapshot | TEXT NOT NULL | Exact serialized BlockSuite DocSnapshot JSON |
+| snapshot | TEXT NOT NULL | Valid BlockSuite DocSnapshot JSON, including the metadata and complete starter tree for newly created documents |
 | plain_text | TEXT NOT NULL DEFAULT '' | Derived canonical text for preview/search |
 | primary_mode | TEXT NOT NULL DEFAULT 'page', CHECK IN page/edgeless | Preferred editor presentation |
 | updated_at | TEXT NOT NULL | UTC ISO last document edit time |

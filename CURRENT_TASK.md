@@ -1,6 +1,23 @@
-## KEY-364 review fix active - 2026-11-14T21:55:30.706961+02:00 - Codex
+## KEY-364 review fix verified - 2026-11-14T21:59:12.769820+02:00 - Codex
 
-Claude requested valid initial BlockSuite DocSnapshots and synchronized meta.title. Scope limited to shared derivation, focused tests, ADR/dictionary and own state/report entries. New commit/push explicitly authorized in this review task. Model contracts inspected read-only. Migration attribution under investigation, real database opened read-only for _migrations timestamp only. Implementation/verification pending.
+Fix forward on 4f1956a, explicitly authorized by the user's review request. New documents now have type page, DocMeta id/title/createDate/tags, and typed page2/surface5/note1/paragraph1 starter blocks. Empty internal paragraph text provides an editable starting point. Rename preserves the envelope, identity, creation date, tags and children while synchronizing meta.title with the page title. Arabic/English mixed titles are covered. The user-facing behavior change is that RE-2 can consume correctly structured new chapter snapshots and retain their renamed document title.
+
+Verified read-only source contracts in research-editor/vendor/blocksuite/framework/store/src/transformer/type.ts, affine/model/src/blocks/root/root-block-model.ts, note/note-model.ts, paragraph/paragraph-model.ts, and affine/blocks/surface/src/surface-model.ts. The transformer validates the envelope and creates blocks via doc.addBlock, which applies model defaults. This is a source-contract check under the REA skill's source-repository workflow. No vendor files were edited. Test-local validation imports no vendor implementation.
+
+Focused npm tests passed39/39 (30 manuscript contract/repository tests plus9 persistence tests),0fail/skip/TODO. Final tsc --noEmit --incremental false and ESLint on both changed TypeScript files passed with0errors/0warnings. Evidence .baglib-data/KEY-364-fix1-focused.log, KEY-364-fix1-tsc.log, KEY-364-fix1-eslint.log. The review requested focused verification, so this follow-up has no new full-suite or editor-runtime validation claim.
+
+Exact committed scope (6 files)
+
+- src/shared/manuscript-snapshot.ts
+- tests/services/manuscripts.test.ts
+- docs/ADR-016-manuscripts.md
+- docs/data-dictionary.md
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+
+Local report docs/agent-ops/reports/KEY-364.md contains the migration attribution investigation. Inspected real path C:/Users/Ammar's/AppData/Roaming/baglib/data/baglib.db read-only. _migrations records029 at2026-11-14 19:21:56UTC (21:21:56+02). Test source creation21:27:10 and live script creation21:32:55 postdate it, and the live runner applies migrations only to its throwaway backup. BagLib main startup is the likely process role, but the actual PID/launch command cannot be established from retained process/audit records. This attribution uncertainty is documented explicitly.
+
+Publication. Verification passed. New scoped locked commit and normal push to origin/feature/library-domain authorized and pending. Concurrent RE-1 and other sessions are preserved.
 
 ## KEY-364 verified handoff - 2026-11-14T21:47:08.299941+02:00 - Codex 01a1db7f-8af5-7521-aa74-72ca0dbc75cc
 

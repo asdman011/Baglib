@@ -86,7 +86,24 @@ export function deriveManuscriptSnapshot(snapshot: string): { plainText: string;
   return { plainText: paragraphs.join('\n'), title, links: [...links.values()] };
 }
 export function initialManuscriptSnapshot(id: string, title: string): string {
-  return JSON.stringify({ id, blocks: { id: `${id}-page`, flavour: 'affine:page', props: { title: { '$blocksuite:internal:text$': true, delta: [{ insert: title }] } }, children: [] } });
+  return JSON.stringify({
+    type: 'page',
+    meta: { id, title, createDate: Date.now(), tags: [] },
+    blocks: {
+      type: 'block', id: `${id}-page`, flavour: 'affine:page', version: 2,
+      props: { title: { '$blocksuite:internal:text$': true, delta: [{ insert: title }] } },
+      children: [
+        { type: 'block', id: `${id}-surface`, flavour: 'affine:surface', version: 5, props: { elements: {} }, children: [] },
+        {
+          type: 'block', id: `${id}-note`, flavour: 'affine:note', version: 1, props: {},
+          children: [{
+            type: 'block', id: `${id}-paragraph`, flavour: 'affine:paragraph', version: 1,
+            props: { type: 'text', text: { '$blocksuite:internal:text$': true, delta: [] } }, children: [],
+          }],
+        },
+      ],
+    },
+  });
 }
 export function renameManuscriptSnapshot(snapshot: string, title: string): string {
   const root = parseManuscriptSnapshot(snapshot);
@@ -100,5 +117,6 @@ export function renameManuscriptSnapshot(snapshot: string, title: string): strin
     if (Array.isArray(block.children)) block.children.forEach(rename);
   };
   rename(root.blocks);
+  if (object(root.meta)) root.meta.title = title;
   return JSON.stringify(root);
 }

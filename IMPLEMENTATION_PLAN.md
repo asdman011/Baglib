@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-14T21:59:12.769820+02:00, Codex KEY-364] REVIEW FIX VERIFIED: valid DocSnapshot envelope/meta and typed starter page2/surface5/note1/paragraph1; rename synchronizes meta.title. Test-local contract checks39/39focused,types/lint0warnings pass. Exact6files/actual source evidence in CURRENT_TASK; migration PID attribution unverified, documented in local report. New scoped commit/push explicitly authorized and pending.
+
 - [2026-11-14T21:55:30.706961+02:00, Codex KEY-364] Review fix active. Initializer/rename metadata and contract regressions pending, vendor model contracts read-only. New scoped commit/push explicitly authorized.
 
 - [2026-11-14T21:47:08.299941+02:00, Codex KEY-364] VERIFIED RE-3 approved migration029/ADR-016, transactional snapshot/text/links/FTS, checkpoint-only history, trash and self-contained ar/en tree. Focused32/full2336pass0fail(concurrency2,352suites)/native2ar-en,4screens,types/mainbuild/lint0warnings pass. Real pre029 backup COPY migration preserves all prior row hashes;originals unchanged/profile deleted. Exact23files/boundaries in CURRENT_TASK and local report. Published 4f1956a18c6ffba64266959210bbee58a4cc0b8f normally to origin/feature/library-domain under commit.lock;remoteverified;lockreleased.

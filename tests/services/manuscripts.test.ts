@@ -6,11 +6,41 @@ import { runMigrations } from '../../src/main/database/migrator';
 import { ManuscriptRepository } from '../../src/main/database/repositories/manuscript.repository';
 import { deriveManuscriptSnapshot, initialManuscriptSnapshot, renameManuscriptSnapshot } from '../../src/shared/manuscript-snapshot';
 
-const snapshot = (content: string, url = 'quran:hafs:2:255') => JSON.stringify({ id: 'doc', blocks: {
-  id: 'page', flavour: 'affine:page', props: { title: { '$blocksuite:internal:text$': true, delta: [{ insert: 'فَصل — Chapter' }] } }, children: [
-    { id: 'para', flavour: 'affine:paragraph', props: { text: { '$blocksuite:internal:text$': true, delta: [{ insert: content, attributes: { footnote: { type: 'url', url } } }] } }, children: [] },
-  ],
-} }, null, 2);
+// Test-local copy of the required DocSnapshot/BlockSnapshot contract in
+// research-editor/vendor/blocksuite/framework/store/src/transformer/type.ts.
+function validateSnapshot(snapshot: string) {
+  const root = JSON.parse(snapshot);
+  const record = (value: unknown) => assert.ok(value && typeof value === 'object' && !Array.isArray(value));
+  record(root);
+  assert.equal(root.type, 'page');
+  record(root.meta);
+  assert.equal(typeof root.meta.id, 'string');
+  assert.equal(typeof root.meta.title, 'string');
+  assert.equal(typeof root.meta.createDate, 'number');
+  assert.ok(Number.isFinite(root.meta.createDate));
+  assert.ok(Array.isArray(root.meta.tags));
+  root.meta.tags.forEach((tag: unknown) => assert.equal(typeof tag, 'string'));
+  const block = (value: Record<string, unknown>) => {
+    record(value);
+    assert.equal(value.type, 'block');
+    assert.equal(typeof value.id, 'string');
+    assert.equal(typeof value.flavour, 'string');
+    assert.ok(value.version === undefined || typeof value.version === 'number');
+    record(value.props);
+    assert.ok(Array.isArray(value.children));
+    (value.children as Record<string, unknown>[]).forEach(block);
+  };
+  block(root.blocks);
+  return root;
+}
+const snapshot = (content: string, url = 'quran:hafs:2:255') => {
+  const root = JSON.parse(initialManuscriptSnapshot('doc', 'فَصل — Chapter'));
+  root.meta.createDate = 1794682800000;
+  const paragraph = root.blocks.children[1].children[0];
+  paragraph.id = 'para';
+  paragraph.props.text.delta = [{ insert: content, attributes: { footnote: { type: 'url', url } } }];
+  return JSON.stringify(root, null, 2);
+};
 function fixture() {
   const db = new Database(':memory:'); db.pragma('foreign_keys=ON'); runMigrations(db, migrations);
   const repo = new ManuscriptRepository(db);
@@ -53,7 +83,10 @@ test('snapshot round trip is byte exact and stored Arabic remains unchanged', ()
   const { db, repo, document } = fixture();
   try {
     const source = snapshot('المَخطوطُ يَحتوي عَلى عِلمٍ — English research');
+    validateSnapshot(source);
     const saved = repo.save({ id: document.id, snapshot: source });
+    validateSnapshot(saved.snapshot);
+    validateSnapshot(repo.document(document.id).snapshot);
     assert.equal(saved.snapshot, source); assert.equal(repo.document(document.id).snapshot, source);
     assert.equal(saved.title, 'فَصل — Chapter');
     assert.equal(saved.plain_text, 'فَصل — Chapter\nالمَخطوطُ يَحتوي عَلى عِلمٍ — English research');
@@ -229,4 +262,61 @@ test('table cell delta text is indexed and nested page title rename stays aligne
   const derived = deriveManuscriptSnapshot(input);
   assert.equal(derived.plainText, 'Title\nCell text');
   assert.equal(deriveManuscriptSnapshot(renameManuscriptSnapshot(input, 'Renamed')).title, 'Renamed');
+});
+
+for (const title of ['بَحث — Research', 'Research — بَحث']) {
+  test(`initial snapshot has the complete editor contract for ${title}`, () => {
+    const before = Date.now();
+    const root = validateSnapshot(initialManuscriptSnapshot('chapter-id', title));
+    assert.deepEqual(root.meta, { id: 'chapter-id', title, createDate: root.meta.createDate, tags: [] });
+    assert.ok(root.meta.createDate >= before && root.meta.createDate <= Date.now());
+    assert.equal(root.blocks.flavour, 'affine:page'); assert.equal(root.blocks.version, 2);
+    assert.deepEqual(root.blocks.props.title, { '$blocksuite:internal:text$': true, delta: [{ insert: title }] });
+    const [surface, note] = root.blocks.children;
+    assert.equal(root.blocks.children.length, 2);
+    assert.equal(surface.flavour, 'affine:surface'); assert.equal(surface.version, 5);
+    assert.deepEqual(surface.props, { elements: {} }); assert.deepEqual(surface.children, []);
+    assert.equal(note.flavour, 'affine:note'); assert.equal(note.version, 1);
+    assert.equal(note.children.length, 1);
+    const paragraph = note.children[0];
+    assert.equal(paragraph.flavour, 'affine:paragraph'); assert.equal(paragraph.version, 1);
+    assert.deepEqual(paragraph.props, { type: 'text', text: { '$blocksuite:internal:text$': true, delta: [] } });
+    assert.deepEqual(paragraph.children, []);
+    assert.equal(new Set([root.blocks.id, surface.id, note.id, paragraph.id]).size, 4);
+  });
+  test(`rename preserves valid metadata, block tree and document identity for ${title}`, () => {
+    const initial = validateSnapshot(initialManuscriptSnapshot('chapter-id', 'Original'));
+    initial.meta.tags = ['research'];
+    const renamed = validateSnapshot(renameManuscriptSnapshot(JSON.stringify(initial), title));
+    assert.deepEqual(renamed.meta, { ...initial.meta, title });
+    assert.equal(renamed.type, initial.type);
+    assert.equal(renamed.blocks.id, initial.blocks.id);
+    assert.deepEqual(renamed.blocks.children, initial.blocks.children);
+    assert.equal(deriveManuscriptSnapshot(JSON.stringify(renamed)).title, title);
+  });
+  test(`created and renamed snapshots survive exact repository round trips for ${title}`, () => {
+    const { db, repo, document } = fixture();
+    try {
+      validateSnapshot(document.snapshot);
+      const source = initialManuscriptSnapshot(document.id, title);
+      validateSnapshot(source);
+      assert.equal(repo.save({ id: document.id, snapshot: source }).snapshot, source);
+      assert.equal(repo.document(document.id).snapshot, source);
+      repo.renameDocument(document.id, title + ' 2');
+      const renamed = repo.document(document.id);
+      assert.equal(validateSnapshot(renamed.snapshot).meta.title, title + ' 2');
+      assert.equal(repo.save({ id: document.id, snapshot: renamed.snapshot }).snapshot, renamed.snapshot);
+    } finally { db.close(); }
+  });
+}
+test('snapshot contract validator rejects missing document and nested block discriminators', () => {
+  const initial = initialManuscriptSnapshot('id', 'Title');
+  for (const key of ['type', 'meta']) {
+    const root = JSON.parse(initial); delete root[key];
+    assert.throws(() => validateSnapshot(JSON.stringify(root)));
+  }
+  for (const key of ['type', 'id', 'flavour', 'props', 'children']) {
+    const root = JSON.parse(initial); delete root.blocks.children[1].children[0][key];
+    assert.throws(() => validateSnapshot(JSON.stringify(root)));
+  }
 });
