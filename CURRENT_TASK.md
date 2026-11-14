@@ -1,3 +1,23 @@
+## KEY-365 fix 1 verified handoff - 2026-11-14T23:15:00+02:00 - Antigravity 0d5908ad-8ecc-4e41-91c0-9b3f68ad2d48
+
+Fixed line endings across research-editor vendor and patches:
+1. Replaced CRLF line endings with LF (`\n`) across all files in `research-editor/vendor/` and `research-editor/patches/`.
+2. Updated `research-editor/scripts/vendor.mjs`:
+   - `buildPristinePlusPatches`: added `-c core.autocrlf=false` to `git apply` and enforced LF endings on all written files.
+   - `diffTrees`: stopped normalizing CRLF; performs byte-for-byte comparison.
+   - `check`: strictly fails if any CRLF (`\r`) is detected in `vendor/` or `patches/`.
+3. Rebuilt vendor via `node research-editor/scripts/vendor.mjs rebuild`.
+4. Verified:
+   - `npm run check:vendor`: Passes cleanly.
+   - `git diff -w HEAD -- research-editor/vendor`: Empty (only line-ending reversals).
+   - `git diff -w --stat 9430c5f -- research-editor/vendor`: Exactly 21 files changed, 262 insertions(+), 22 deletions(-).
+   - `npm run build:research-editor`: Built in 27.11s.
+   - `node scripts/research-editor-live/run.mjs rtl`: Exits 0, 0 console errors, 0 blocked requests.
+
+Exact changed files for fix 1:
+- `research-editor/scripts/vendor.mjs`
+- `research-editor/vendor/**` (23 files restored to LF)
+
 ## KEY-365 verified handoff - 2026-11-14T23:05:00+02:00 - Antigravity 0d5908ad-8ecc-4e41-91c0-9b3f68ad2d48
 
 Implemented RE-4 (RTL completion for research editor, epic KEY-361):

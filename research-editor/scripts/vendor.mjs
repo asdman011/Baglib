@@ -24,6 +24,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -109,12 +110,33 @@ export async function buildPristinePlusPatches(dest) {
     run(tarExe(), ['-xzf', tarball, '-C', extractRoot, ...SUBSET.map(p => `${TOP}/${p}`)]);
     for (const p of SUBSET) cpSync(join(extractRoot, TOP, p), join(dest, p), { recursive: true });
   } finally {
-    rmSync(extractRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    safeClean(extractRoot);
   }
   for (const patch of listPatches()) {
     // dest is outside any git work tree, so `git apply` treats paths relative to cwd.
-    run('git', ['apply', '-p1', '--whitespace=nowarn', join(patchesDir, patch)], { cwd: dest });
+    // Explicitly disable core.autocrlf so patched files are written with LF on Windows.
+    run('git', ['-c', 'core.autocrlf=false', 'apply', '-p1', '--whitespace=nowarn', join(patchesDir, patch)], {
+      cwd: dest,
+    });
   }
+  // Enforce LF endings across all text files.
+  for (const [, full] of walk(dest)) {
+    if (isBinaryFile(full)) continue;
+    const buf = readFileSync(full);
+    if (buf.includes(0x0d)) {
+      writeFileSync(full, Buffer.from(buf.toString('latin1').replace(/\r\n/g, '\n'), 'latin1'));
+    }
+  }
+}
+
+function isBinaryFile(path) {
+  if (path.endsWith('.png')) return true;
+  const buf = readFileSync(path);
+  const len = Math.min(buf.length, 8000);
+  for (let i = 0; i < len; i++) {
+    if (buf[i] === 0) return true;
+  }
+  return false;
 }
 
 function walk(root) {
@@ -133,9 +155,12 @@ function walk(root) {
   return out;
 }
 
-function normalized(path) {
-  // Compare text with LF endings so a CRLF checkout (core.autocrlf) is not reported as a change.
-  return readFileSync(path).toString('latin1').replace(/\r\n/g, '\n');
+function safeClean(path) {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  } catch (err) {
+    console.warn(`vendor: warning: failed to clean temp directory ${path}: ${err.message}`);
+  }
 }
 
 export function diffTrees(expectedRoot, actualRoot) {
@@ -143,8 +168,15 @@ export function diffTrees(expectedRoot, actualRoot) {
   const actual = walk(actualRoot);
   const problems = [];
   for (const [rel, full] of expected) {
-    if (!actual.has(rel)) problems.push(`missing  ${rel}`);
-    else if (normalized(full) !== normalized(actual.get(rel))) problems.push(`changed  ${rel}`);
+    if (!actual.has(rel)) {
+      problems.push(`missing  ${rel}`);
+    } else {
+      const expBuf = readFileSync(full);
+      const actBuf = readFileSync(actual.get(rel));
+      if (Buffer.compare(expBuf, actBuf) !== 0) {
+        problems.push(`changed  ${rel}`);
+      }
+    }
   }
   for (const rel of actual.keys()) if (!expected.has(rel)) problems.push(`extra    ${rel}`);
   return { problems, fileCount: expected.size };
@@ -153,6 +185,25 @@ export function diffTrees(expectedRoot, actualRoot) {
 async function main() {
   const cmd = process.argv[2];
   if (cmd === 'check') {
+    const crProblems = [];
+    for (const [rel, full] of walk(vendorDir)) {
+      if (isBinaryFile(full)) continue;
+      if (readFileSync(full).includes(0x0d)) {
+        crProblems.push(`CRLF in vendor/${rel}`);
+      }
+    }
+    for (const [rel, full] of walk(patchesDir)) {
+      if (isBinaryFile(full)) continue;
+      if (readFileSync(full).includes(0x0d)) {
+        crProblems.push(`CRLF in patches/${rel}`);
+      }
+    }
+    if (crProblems.length) {
+      console.error(crProblems.slice(0, 50).join('\n'));
+      if (crProblems.length > 50) console.error(`... and ${crProblems.length - 50} more`);
+      fail(`CRLF line endings detected in ${crProblems.length} file(s). All vendor and patch files must use LF.`);
+    }
+
     const tmp = mkdtempSync(join(tmpdir(), 'baglib-vendor-check-'));
     try {
       await buildPristinePlusPatches(tmp);
@@ -167,17 +218,17 @@ async function main() {
       }
       console.log(`vendor: OK. ${fileCount} files match BlockSuite ${TAG} + patches ${listPatches().join(', ')}.`);
     } finally {
-      rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      safeClean(tmp);
     }
   } else if (cmd === 'rebuild') {
     const tmp = mkdtempSync(join(tmpdir(), 'baglib-vendor-rebuild-'));
     try {
       await buildPristinePlusPatches(tmp);
-      rmSync(vendorDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      safeClean(vendorDir);
       cpSync(tmp, vendorDir, { recursive: true });
       console.log(`vendor: rebuilt from ${TAG} + ${listPatches().join(', ')}.`);
     } finally {
-      rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      safeClean(tmp);
     }
   } else {
     fail('usage: vendor.mjs check | rebuild', 64);
