@@ -3,6 +3,7 @@ import { open, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { companionSubtitleNames, MAX_SUBTITLE_BYTES, parseSubtitles, type SubtitleCue } from '../../../shared/subtitles';
 import { SqliteSettingsRepository } from '../../database/repositories/settings.repository';
+import { ContentFtsRepository } from '../../database/repositories/content-fts.repository';
 
 const SUBTITLE_KEY = 'media.lecture-subtitles.v1';
 export interface LoadedSubtitles { path: string; cues: SubtitleCue[] }
@@ -32,24 +33,40 @@ export async function readSubtitles(file: string): Promise<LoadedSubtitles> {
 
 export class LectureSubtitles {
   private settings: SqliteSettingsRepository;
-  constructor(db: Database) { this.settings = new SqliteSettingsRepository(db); }
+  private db: Database;
+  constructor(db: Database) {
+    this.db = db;
+    this.settings = new SqliteSettingsRepository(db);
+  }
 
   async load(id: string, mediaPath: string, selected?: string): Promise<LoadedSubtitles | null> {
+    let result: LoadedSubtitles | null = null;
     if (selected !== undefined) {
       const loaded = await readSubtitles(selected);
       const choices = this.settings.get<Record<string, string>>(SUBTITLE_KEY) ?? {};
       this.settings.set(SUBTITLE_KEY, { ...choices, [id]: selected });
-      return loaded;
+      result = loaded;
+    } else {
+      const saved = this.settings.get<Record<string, string>>(SUBTITLE_KEY)?.[id];
+      if (saved) {
+        try { result = await readSubtitles(saved); } catch { /* A moved sidecar can be rediscovered beside the media. */ }
+      }
+      if (!result) {
+        const directory = path.dirname(mediaPath);
+        const siblings = await readdir(directory).catch(() => []);
+        for (const name of companionSubtitleNames(path.basename(mediaPath), siblings)) {
+          try { result = await readSubtitles(path.join(directory, name)); break; } catch { /* Try the next readable companion. */ }
+        }
+      }
     }
-    const saved = this.settings.get<Record<string, string>>(SUBTITLE_KEY)?.[id];
-    if (saved) {
-      try { return await readSubtitles(saved); } catch { /* A moved sidecar can be rediscovered beside the media. */ }
+    if (result && result.cues && result.cues.length > 0) {
+      try {
+        const repo = new ContentFtsRepository(this.db);
+        repo.indexLectureTranscript(id, result.cues);
+      } catch (err) {
+        console.warn('[LectureSubtitles] Failed to index transcript in FTS:', err);
+      }
     }
-    const directory = path.dirname(mediaPath);
-    const siblings = await readdir(directory).catch(() => []);
-    for (const name of companionSubtitleNames(path.basename(mediaPath), siblings)) {
-      try { return await readSubtitles(path.join(directory, name)); } catch { /* Try the next readable companion. */ }
-    }
-    return null;
+    return result;
   }
 }

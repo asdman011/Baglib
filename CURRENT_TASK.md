@@ -1,3 +1,37 @@
+## KEY-355 verified handoff - 2026-11-15T01:45:00+02:00 - Antigravity 3ea36387-50ac-4db3-8f43-8ecfa0c823be
+
+Implemented notes slash search across whole library contents, resource-friendly (Jira KEY-355):
+1. Full-Text Content Search Expansion:
+   - Extended `LibraryFtsQuery` and `LibraryFtsResult` with `scope: 'books' | 'lectures'`, `workType`, `content` snippet passage, and `requestId` correlation.
+   - Updated `ContentFtsRepository.searchLibrary` to join `works` table, enabling work-type filtering and passage retrieval.
+2. Zero-Schema Lecture Transcript Indexing:
+   - Added `indexLectureTranscript(lectureId, cues)` with intelligent sentence-boundary chunking into existing `book_content_fts` FTS5 table (`book_id` = lecture UUID, `page_number` = start seconds, `location_cfi_or_page` = timestamp `mm:ss`).
+   - Injected database into `src/main/services/lectures/subtitles.ts` to automatically index transcripts when subtitles are loaded.
+3. Responsive Off-Thread Queries & Sequential Cancellation:
+   - Added `slashLane` in `src/main/ipc/database.ts` ensuring obsolete queries are discarded when newer typing input arrives without UI freezes or SQLite locks.
+4. Whole-Sentence Quotes & Precise Links:
+   - Formats inserted quotes with sentence passages and appends `[[book:<id>#p=<page>|Title, p. <page>]]` or `[[media:<lectureId>:<seconds>|Title at mm:ss]]` study links directly into the notes editor.
+   - Preserves unindexed status without parsing files on demand while typing.
+5. Verification:
+   - 49 focused tests pass across 4 suites (5/5 `slash-search-library-measure`, 18/18 `slash-search-followup`, 12/12 `slash-search`, 10/10 `content-fts.repository`, 4/4 `slash-search-audit` 90 queries).
+   - Benchmark: 10,000 pages across 200 works indexed in 650.5 ms (15,373 pages/sec); queries execute in 1.8-4.1 ms; rapid keystrokes take ~1.4 ms/keystroke.
+   - TypeScript (`tsc --noEmit`) and ESLint pass with 0 errors and 0 warnings.
+   - Native live check `node scripts/slash-search-live/run.mjs` passed with code 0 in Electron (Arabic RTL & English LTR verified, 0 renderer errors, throwaway profile cleaned up, originals unchanged, 5 real copies imported).
+   - Full report written to `docs/agent-ops/reports/KEY-355.md`.
+
+Exact changed files:
+- `src/shared/types/full-text-search.ts`
+- `src/main/database/repositories/content-fts.repository.ts`
+- `src/main/services/lectures/subtitles.ts`
+- `src/main/ipc/database.ts`
+- `src/preload/index.ts`
+- `src/renderer/utils/slash-material.ts`
+- `src/renderer/utils/slash-search.ts`
+- `src/renderer/components/notes/slash-search-extension.ts`
+- `tests/services/slash-search-library-measure.test.ts`
+- `tests/ui/slash-search-followup.test.ts`
+- `docs/agent-ops/reports/KEY-355.md`
+
 ## KEY-379 verified handoff - 2026-11-15T01:21:00+02:00 - Antigravity b464e320-87fa-4b23-8f83-eada7381e364
 
 Implemented main sidebar auto-collapse when entering any workspace tab (Jira KEY-379):

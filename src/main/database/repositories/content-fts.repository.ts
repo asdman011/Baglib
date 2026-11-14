@@ -1,4 +1,4 @@
-interface ContentSearchRow { content: string; book_id: string; book_title: string; book_author?: string; page_number: number; location_cfi_or_page?: string; chapter_title?: string; rank: number; }
+interface ContentSearchRow { content: string; book_id: string; book_title: string; work_type_id?: string; book_author?: string; page_number: number; location_cfi_or_page?: string; chapter_title?: string; rank: number; }
 /**
  * Baglib — SQLite FTS5 Book Content Repository (KEY-140)
  *
@@ -56,6 +56,45 @@ export class ContentFtsRepository {
     });
 
     transaction(pages);
+  }
+
+  /**
+   * Indexes subtitle cues of a lecture into the FTS5 virtual table.
+   * Runs inside a transaction and replaces any existing indexed content for this lecture.
+   * Groups subtitle cues into sentence/paragraph passages so searches and quotes
+   * return complete sentences with exact start timestamps.
+   */
+  public indexLectureTranscript(lectureId: string, cues: import('../../../shared/subtitles').SubtitleCue[]): void {
+    if (!lectureId || !cues || cues.length === 0) return;
+    const valid = cues.filter(c => c.text && c.text.trim());
+    if (!valid.length) return;
+
+    const pages: IndexedBookPage[] = [];
+    let currentText: string[] = [];
+    let startSeconds = valid[0].start;
+    let cueIdx = 1;
+
+    for (let i = 0; i < valid.length; i++) {
+      const cue = valid[i];
+      if (currentText.length === 0) startSeconds = cue.start;
+      currentText.push(cue.text.trim());
+
+      const combined = currentText.join(' ');
+      const isSentenceEnd = /[.!?\u061f\u06d4]\s*$/u.test(cue.text) || currentText.length >= 6 || combined.length >= 180 || i === valid.length - 1;
+
+      if (isSentenceEnd) {
+        const seconds = Math.floor(startSeconds);
+        pages.push({
+          pageNumber: seconds,
+          locationCfiOrPage: `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`,
+          chapterTitle: `Cue ${cueIdx++}`,
+          content: combined,
+        });
+        currentText = [];
+      }
+    }
+
+    this.indexBook(lectureId, pages);
   }
 
   /**
@@ -230,6 +269,7 @@ export class ContentFtsRepository {
         f.chapter_title,
         f.content,
         w.title AS book_title,
+        w.work_type_id AS work_type_id,
         (
           SELECT a.name
           FROM work_author wa
@@ -248,6 +288,12 @@ export class ContentFtsRepository {
     if (options.bookId) {
       sql += ` AND f.book_id = ?`;
       params.push(options.bookId);
+    }
+
+    if (options.scope === 'books' || options.workType === 'book') {
+      sql += ` AND (w.work_type_id IS NULL OR w.work_type_id != 'wt-lecture')`;
+    } else if (options.scope === 'lectures' || options.workType === 'lecture') {
+      sql += ` AND w.work_type_id = 'wt-lecture'`;
     }
 
     sql += ` ORDER BY rank LIMIT ? OFFSET ?`;
@@ -287,13 +333,16 @@ export class ContentFtsRepository {
         snippet = clean.substring(0, 120) + (clean.length > 120 ? '...' : '');
       }
 
+      const isLecture = r.work_type_id === 'wt-lecture';
       return {
         bookId: r.book_id,
-        bookTitle: r.book_title || 'Untitled Book',
+        bookTitle: r.book_title || (isLecture ? 'Untitled Lecture' : 'Untitled Book'),
         bookAuthor: r.book_author || undefined,
-        pageNumber: Number(r.page_number) || 1,
+        workType: isLecture ? 'lecture' : 'book',
+        pageNumber: Number(r.page_number) || 0,
         locationCfiOrPage: r.location_cfi_or_page || String(r.page_number),
         chapterTitle: r.chapter_title || undefined,
+        content: r.content,
         snippet,
         rank: r.rank ?? 0,
       };

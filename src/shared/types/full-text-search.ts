@@ -51,17 +51,22 @@ export interface IndexedBookPage {
 export interface LibraryFtsQuery {
   query: string;
   bookId?: string;
+  scope?: 'books' | 'lectures';
+  workType?: 'book' | 'lecture';
   limit?: number;
   offset?: number;
+  requestId?: string;
 }
 
 export interface LibraryFtsResult {
   bookId: string;
   bookTitle?: string;
   bookAuthor?: string;
+  workType?: 'book' | 'lecture';
   pageNumber: number;
   locationCfiOrPage: string;
   chapterTitle?: string;
+  content?: string;
   snippet: string;
   rank: number;
 }

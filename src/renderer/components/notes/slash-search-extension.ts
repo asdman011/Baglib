@@ -225,7 +225,7 @@ export function slashSearchExtension(config: () => Config): Extension {
       view.dispatch({ effects: change.of(null) });
       return true;
     }
-    if (item.result?.material && !item.action) {
+    if (item.result?.material && !item.action && !item.result.quote) {
       view.dispatch({ effects: change.of({ ...current, material: item.result, selected: 0, items: [{ ...item, action: 'link' }, { ...item, action: 'inside' }] }) }); return true;
     }
     const result = item.result;

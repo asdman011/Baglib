@@ -1,6 +1,10 @@
 import { SLASH_SCOPES, type SlashScope } from '../../shared/slash-command';
-import { bookStudyTarget, studyLinkText, type StudyNote } from '../../shared/study-notes';
+import { bookCfiTarget, bookStudyTarget, studyLinkText, type StudyNote } from '../../shared/study-notes';
 import { normalizeArabicText } from '../../shared/utils/text-normalizer';
+import { extractPassages } from '../../shared/passage-extract';
+import { lectureTarget } from './lecture-navigation';
+import { quotePassage } from './slash-material';
+import type { LibraryFtsResult } from '../../shared/types/full-text-search';
 import type { CorpusKind, CorpusOption, CorpusSearchOptions } from './corpus-lookup';
 
 export interface SlashResult { scope: SlashScope; target: string; label: string; snippet: string; score: number; quote?: string; cursor?: number; material?: SlashBook }
@@ -8,6 +12,7 @@ export interface SlashBook { id: string; title: string; author?: string; sourceI
 export interface SlashSearchInput {
   scope: SlashScope | null; query: string; notes: StudyNote[]; books: SlashBook[];
   searchCorpus?: (kinds: CorpusKind[], query: string, options?: CorpusSearchOptions) => Promise<CorpusOption[]>;
+  searchLibraryContent?: (query: string, options?: { bookId?: string; scope?: SlashScope; limit?: number; offset?: number; requestId?: string; stale?: () => boolean }) => Promise<LibraryFtsResult[]>;
   stale?: () => boolean; limit?: number; offset?: number; after?: number; requestId?: string;
 }
 const corpusScopes = { quran: 'quran', hadith: 'sunnah', poem: 'albayan' } as const;
@@ -22,7 +27,7 @@ const matchTerm = (val: string, term: string) => {
   return false;
 };
 /** Cached normalized text, bounded result buffers and yielding scans keep large local collections responsive. */
-export async function searchSlashDatasets({ scope, query, notes, books, searchCorpus, stale = () => false, limit = scope ? 20 : 8, offset = 0, after, requestId }: SlashSearchInput): Promise<SlashResult[]> {
+export async function searchSlashDatasets({ scope, query, notes, books, searchCorpus, searchLibraryContent, stale = () => false, limit = scope ? 20 : 8, offset = 0, after, requestId }: SlashSearchInput): Promise<SlashResult[]> {
   const text = query.trim().slice(0, 200);
   if (text && text.length < 3 && !/^\d[:\d-]+$/u.test(text)) return [];
   const terms = normalize(text).split(/\s+/u).filter(Boolean);
@@ -66,7 +71,73 @@ export async function searchSlashDatasets({ scope, query, notes, books, searchCo
     if (normQ) {
       candidates.sort((a, b) => b.rankScore - a.rankScore || a.originalIndex - b.originalIndex);
     }
-    results.push(...candidates.slice(offset, offset + limit));
+    if (dataset === 'notes') {
+      results.push(...candidates.slice(offset, offset + limit));
+      continue;
+    }
+    // Library content search across whole library, grouped by material
+    const contentHits: (SlashResult & { rankScore: number; originalIndex: number })[] = [];
+    if (normQ.length >= 3) {
+      const searchFn = searchLibraryContent || (
+        typeof window !== 'undefined' && window.electronAPI?.searchLibraryFullText
+          ? (q: string, opts: unknown) => window.electronAPI.searchLibraryFullText(q, opts) as Promise<LibraryFtsResult[]>
+          : undefined
+      );
+      if (searchFn) {
+        try {
+          const rawHits = await searchFn(text, { scope: dataset, limit, offset, requestId, stale });
+          if (stale()) return [];
+          for (let i = 0; i < (rawHits || []).length; i++) {
+            const hit = rawHits[i];
+            const hitBook = books.find(b => b.id === hit.bookId) || { id: hit.bookId, title: hit.bookTitle || 'Material', author: hit.bookAuthor, workType: hit.workType };
+            if (hitBook && (mediaTypes.has(hitBook.workType || '') ? 'lectures' : 'books') !== dataset) continue;
+            const passages = extractPassages(hit.content || hit.snippet, text, { limit: 1 });
+            const passageText = passages[0]?.text || hit.snippet;
+            const isLecture = dataset === 'lectures' || hit.workType === 'lecture' || ['lecture', 'video', 'podcast'].includes(hitBook.workType || '');
+            const target = isLecture
+              ? lectureTarget(hit.bookId, hit.pageNumber)
+              : (hit.locationCfiOrPage.startsWith('epubcfi(') ? bookCfiTarget(hitBook, hit.locationCfiOrPage) : bookStudyTarget(hitBook, hit.pageNumber));
+            const suffix = isLecture ? hit.locationCfiOrPage : String(hit.pageNumber);
+            const label = hitBook.title + ' · ' + suffix;
+            const quote = quotePassage(passageText, target, label);
+            contentHits.push({
+              scope: dataset,
+              target,
+              label,
+              snippet: passageText.slice(0, 160),
+              score: 0,
+              rankScore: 500 - (hit.rank || 0),
+              quote,
+              material: hitBook,
+              originalIndex: 1000 + i,
+            });
+          }
+        } catch { /* cancelled */ }
+      }
+    }
+    const materialOrder: string[] = [];
+    const materialGroups = new Map<string, (SlashResult & { rankScore: number; originalIndex: number })[]>();
+    for (const cand of candidates.slice(offset, offset + limit)) {
+      const mid = cand.material?.id || cand.target;
+      if (!materialGroups.has(mid)) {
+        materialGroups.set(mid, []);
+        materialOrder.push(mid);
+      }
+      materialGroups.get(mid)!.push(cand);
+    }
+    for (const hit of contentHits) {
+      const mid = hit.material?.id || hit.target;
+      if (!materialGroups.has(mid)) {
+        materialGroups.set(mid, []);
+        materialOrder.push(mid);
+      }
+      materialGroups.get(mid)!.push(hit);
+    }
+    const grouped: (SlashResult & { rankScore: number; originalIndex: number })[] = [];
+    for (const mid of materialOrder) {
+      grouped.push(...materialGroups.get(mid)!);
+    }
+    results.push(...grouped.slice(0, limit));
   }
   const kinds = (Object.keys(corpusScopes) as CorpusKind[]).filter(kind => scopes.includes(corpusScopes[kind]));
   if (text && kinds.length && searchCorpus && !stale()) {

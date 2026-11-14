@@ -1,4 +1,4 @@
-import { cancelSlashJobs } from '../services/slash-search-jobs';
+import { cancelSlashJobs, slashLane } from '../services/slash-search-jobs';
 import { setupAdvancedIPC } from './advanced';
 import * as ipcModule0 from '../database/repositories/knowledge.repository';
 import * as ipcModule1 from '../database/repositories/annotation.repository';
@@ -16,7 +16,6 @@ import { ipcMain } from 'electron';
 import { getDatabase, getDatabasePath } from '../database/connection';
 import { WorkRepository } from '../database/repositories/work.repository';
 import { coverResolverService } from '../services/metadata/cover-resolver.service';
-import { getPdfPageCoverService } from '../services/metadata/pdf-page-cover.service';
 
 function normalizeIpcError(err: unknown, fallbackMessage: string): Error {
   if (err instanceof Error) return err;
@@ -644,14 +643,32 @@ export function setupDatabaseIPC() {
     }
   });
 
-  ipcMain.handle('search:library-full-text', (_, query: string, options?: import('../../shared/types/full-text-search').LibraryFtsQuery) => {
+  const slashFts = slashLane();
+
+  ipcMain.handle('search:library-full-text', async (_, query: string, options?: import('../../shared/types/full-text-search').LibraryFtsQuery) => {
     try {
       const db = getDatabase();
       const repo = new (ipcModule3.ContentFtsRepository)(db);
+      if (options?.requestId) {
+        return await slashFts(options.requestId, async () => repo.searchLibrary(query, options));
+      }
       return repo.searchLibrary(query, options);
     } catch (err) {
+      if ((err as Error)?.message === 'cancelled') return [];
       console.error('[baglib/db-ipc] Full-text search error:', err);
       return [];
+    }
+  });
+
+  ipcMain.handle('search:index-lecture-transcript', (_, lectureId: string, cues: import('../../shared/subtitles').SubtitleCue[]) => {
+    try {
+      const db = getDatabase();
+      const repo = new (ipcModule3.ContentFtsRepository)(db);
+      repo.indexLectureTranscript(lectureId, cues);
+      return true;
+    } catch (err) {
+      console.error('[baglib/db-ipc] Failed to index lecture transcript:', err);
+      return false;
     }
   });
 

@@ -237,3 +237,139 @@ describe('KEY-354 OCR and Auto-transcription offers', () => {
     assert.ok(translations.en.slashOcrCancel.includes('Cancel'));
   });
 });
+
+describe('KEY-355 Library-wide Notes Slash Search', () => {
+  it('free search after "/" includes library content passages across books and lectures, grouped by material', async () => {
+    const lectureId = '11111111-1111-1111-1111-111111111111';
+    const books = [
+      { id: 'b1', title: 'صحيح البخاري', author: 'الإمام البخاري', workType: 'book' },
+      { id: lectureId, title: 'شرح كتاب التوحيد', author: 'الشيخ', workType: 'lecture' },
+    ];
+    const mockFtsResults = [
+      {
+        bookId: 'b1',
+        bookTitle: 'صحيح البخاري',
+        pageNumber: 15,
+        locationCfiOrPage: '15',
+        workType: 'book' as const,
+        content: 'إنما الأعمال بالنيات وإنما لكل امرئ ما نوى. فمن كانت هجرته إلى الله ورسوله فهجرته إلى الله ورسوله.',
+        snippet: 'إنما الأعمال بالنيات',
+        rank: -5.2,
+      },
+      {
+        bookId: lectureId,
+        bookTitle: 'شرح كتاب التوحيد',
+        pageNumber: 120,
+        locationCfiOrPage: '02:00',
+        workType: 'lecture' as const,
+        content: 'التوحيد أساس الدين وأصل الأعمال وقبولها عند الله.',
+        snippet: 'التوحيد أساس الدين',
+        rank: -4.8,
+      },
+    ];
+
+    await api({
+      searchLibraryFullText: async (_q: string, opts: { scope?: string }) => {
+        if (opts?.scope === 'books') return [mockFtsResults[0]];
+        if (opts?.scope === 'lectures') return [mockFtsResults[1]];
+        return mockFtsResults;
+      },
+    }, async () => {
+      const results = await searchSlashDatasets({
+        scope: null,
+        query: 'الأعمال',
+        notes: [],
+        books,
+        limit: 8,
+      });
+
+      assert.ok(results.length >= 2);
+      const bookHit = results.find(r => r.scope === 'books' && r.quote);
+      const lectureHit = results.find(r => r.scope === 'lectures' && r.quote);
+
+      assert.ok(bookHit, 'Books content hit returned in free search');
+      assert.ok(lectureHit, 'Lectures content hit returned in free search');
+
+      assert.match(bookHit!.quote!, /^> إنما الأعمال بالنيات.+\n> \[\[book:b1#p=15\|صحيح البخاري · 15\]\]/u);
+      assert.match(lectureHit!.quote!, /^> التوحيد أساس الدين.+\n> \[\[media:11111111-1111-1111-1111-111111111111:120\|شرح كتاب التوحيد · 02:00\]\]/u);
+
+      assert.equal(slashResultInsert(bookHit!), bookHit!.quote);
+      assert.equal(slashResultInsert(lectureHit!), lectureHit!.quote);
+    });
+  });
+
+  it('scoped /books search returns up to 20 hits and pages with offset', async () => {
+    const books = [{ id: 'b-multi', title: 'موسوعة الفقه', workType: 'book' }];
+    const hitsPage1 = Array.from({ length: 20 }, (_, i) => ({
+      bookId: 'b-multi',
+      bookTitle: 'موسوعة الفقه',
+      pageNumber: i + 1,
+      locationCfiOrPage: String(i + 1),
+      workType: 'book' as const,
+      content: `مسألة فقهية مفصلة في الطهارة رقم ${i + 1}.`,
+      snippet: `مسألة فقهية مفصلة ${i + 1}`,
+      rank: -10 + i * 0.1,
+    }));
+    const hitsPage2 = Array.from({ length: 15 }, (_, i) => ({
+      bookId: 'b-multi',
+      bookTitle: 'موسوعة الفقه',
+      pageNumber: i + 21,
+      locationCfiOrPage: String(i + 21),
+      workType: 'book' as const,
+      content: `مسألة فقهية مفصلة في الصلاة رقم ${i + 21}.`,
+      snippet: `مسألة فقهية مفصلة ${i + 21}`,
+      rank: -5 + i * 0.1,
+    }));
+
+    await api({
+      searchLibraryFullText: async (_q: string, opts: { limit: number; offset: number }) => {
+        return opts.offset === 20 ? hitsPage2 : hitsPage1;
+      },
+    }, async () => {
+      const p1 = await searchSlashDatasets({
+        scope: 'books',
+        query: 'فقهية',
+        notes: [],
+        books,
+        limit: 20,
+        offset: 0,
+      });
+      assert.equal(p1.length, 20);
+      assert.equal(p1[0].target, 'book:b-multi#p=1');
+
+      const p2 = await searchSlashDatasets({
+        scope: 'books',
+        query: 'فقهية',
+        notes: [],
+        books,
+        limit: 20,
+        offset: 20,
+      });
+      assert.equal(p2.length, 15);
+      assert.equal(p2[0].target, 'book:b-multi#p=21');
+    });
+  });
+
+  it('keeps typing responsive without on-demand file parsing when a material is unindexed', async () => {
+    let extractPdfCalled = false;
+    let readSubtitlesCalled = false;
+
+    await api({
+      searchLibraryFullText: async () => [],
+      extractPdfText: async () => { extractPdfCalled = true; return { text: '' }; },
+      lectures: { subtitles: async () => { readSubtitlesCalled = true; return null; } },
+    }, async () => {
+      const results = await searchSlashDatasets({
+        scope: null,
+        query: 'بحث سريع',
+        notes: [],
+        books: [{ id: 'b-raw', title: 'ملف غير مفهرس', filePath: 'unindexed.pdf', workType: 'book' }],
+        limit: 8,
+      });
+      // Free slash search must never open or parse files while user types!
+      assert.equal(extractPdfCalled, false, 'Must not extract PDF during typing');
+      assert.equal(readSubtitlesCalled, false, 'Must not read subtitles during typing');
+      assert.deepEqual(results, []);
+    });
+  });
+});

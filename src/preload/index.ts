@@ -209,6 +209,7 @@ export const API = {
 
   // Full-Text Search Engine (KEY-140)
   indexBookContent: (bookId: string, pages: unknown[]) => ipcRenderer.invoke('search:index-book-content', bookId, pages),
+  indexLectureTranscript: (lectureId: string, cues: unknown[]) => ipcRenderer.invoke('search:index-lecture-transcript', lectureId, cues),
   reindexPageContent: (bookId: string, page: unknown) => ipcRenderer.invoke('search:reindex-page-content', bookId, page),
   getPageContent: (bookId: string, pageNumber: number) => ipcRenderer.invoke('search:get-page-content', bookId, pageNumber),
   deleteBookContentIndex: (bookId: string) => ipcRenderer.invoke('search:delete-book-content', bookId),

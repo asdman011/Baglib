@@ -144,7 +144,14 @@ export async function prepareSlashMaterial(result: SlashResult): Promise<SlashMa
   const material: SlashMaterial = { result, indexed: false, pages: [], cues: [], available: false };
   if (result.scope === 'lectures') {
     const loaded = await window.electronAPI.lectures.subtitles(book.id);
-    material.cues = loaded?.cues ?? []; material.available = material.cues.some(cue => cue.text.trim());
+    material.cues = loaded?.cues ?? [];
+    material.available = material.cues.some(cue => cue.text.trim());
+    if (material.available && typeof window.electronAPI?.indexLectureTranscript === 'function') {
+      void window.electronAPI.indexLectureTranscript(book.id, material.cues).catch(() => {});
+      if (typeof window.electronAPI?.isBookIndexed === 'function') {
+        material.indexed = await window.electronAPI.isBookIndexed(book.id).catch(() => false);
+      }
+    }
   } else {
     material.indexed = await window.electronAPI.isBookIndexed(book.id);
     if (!material.indexed && book.filePath && /\.pdf$/iu.test(book.filePath)) {
@@ -159,7 +166,8 @@ export async function prepareSlashMaterial(result: SlashResult): Promise<SlashMa
   }
   return material;
 }
-const quote = (text: string, target: string, label: string) => text.split(/\r?\n/u).map(line => `> ${line}`).join('\n') + '\n> ' + studyLinkText(target, label);
+export const quotePassage = (text: string, target: string, label: string) => text.split(/\r?\n/u).map(line => `> ${line}`).join('\n') + '\n> ' + studyLinkText(target, label);
+const quote = quotePassage;
 /** Search only the explicitly selected material. Exact source text is fetched separately from FTS snippets. */
 export async function searchSlashMaterial(material: SlashMaterial, query: string, limit: number, offset: number, stale: () => boolean): Promise<SlashResult[]> {
   if (!material.available || query.trim().length < 3 || stale()) return [];
@@ -169,14 +177,21 @@ export async function searchSlashMaterial(material: SlashMaterial, query: string
     const label = book.title + ' · ' + suffix;
     found.push({ scope: material.result.scope, target, label, snippet: text.slice(0, 160), score: 0, quote: quote(text, target, label) });
   };
-  if (material.indexed) {
+  if (material.indexed && typeof window !== 'undefined' && typeof window.electronAPI?.searchLibraryFullText === 'function') {
     const hits = await window.electronAPI.searchLibraryFullText(query, { bookId: book.id, limit, offset }) as LibraryFtsResult[];
     for (const hit of hits) {
       if (stale()) return [];
-      const page = await window.electronAPI.getPageContent(book.id, hit.pageNumber) as IndexedBookPage | null;
-      if (!page || stale()) continue;
-      const passage = extractPassages(page.content, query, { limit: 1 })[0];
-      if (passage) append(passage.text, hit.locationCfiOrPage.startsWith('epubcfi(') ? bookCfiTarget(book, hit.locationCfiOrPage) : bookStudyTarget(book, hit.pageNumber), String(hit.pageNumber));
+      const content = hit.content || (await window.electronAPI.getPageContent(book.id, hit.pageNumber) as IndexedBookPage | null)?.content;
+      if (!content || stale()) continue;
+      const passage = extractPassages(content, query, { limit: 1 })[0];
+      if (passage) {
+        const isLecture = material.result.scope === 'lectures';
+        const target = isLecture
+          ? lectureTarget(book.id, hit.pageNumber)
+          : (hit.locationCfiOrPage.startsWith('epubcfi(') ? bookCfiTarget(book, hit.locationCfiOrPage) : bookStudyTarget(book, hit.pageNumber));
+        const suffix = isLecture ? hit.locationCfiOrPage : String(hit.pageNumber);
+        append(passage.text, target, suffix);
+      }
     }
     return found;
   }
