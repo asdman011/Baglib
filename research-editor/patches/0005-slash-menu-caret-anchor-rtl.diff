@@ -1,0 +1,72 @@
+diff --git a/blocksuite/affine/shared/src/utils/popper-position.ts b/blocksuite/affine/shared/src/utils/popper-position.ts
+index 4e6e803..fd75814 100644
+--- a/blocksuite/affine/shared/src/utils/popper-position.ts
++++ b/blocksuite/affine/shared/src/utils/popper-position.ts
+@@ -102,16 +102,36 @@ export function getPopperPosition(
+   )
+     return null;
+ 
++  const popperRect = popper?.getBoundingClientRect();
++  const popperWidth = popperRect?.width ?? 0;
++  let isRtl = false;
++  try {
++    const rawRef = reference as unknown;
++    if (rawRef && typeof rawRef === 'object') {
++      const node =
++        'commonAncestorContainer' in rawRef
++          ? (rawRef as Range).commonAncestorContainer
++          : rawRef instanceof Node
++            ? rawRef
++            : null;
++      const el = node instanceof Element ? node : node?.parentElement;
++      const dirEl = el?.closest('[dir]');
++      if (dirEl) {
++        const computedDir = window.getComputedStyle(dirEl).direction;
++        isRtl = computedDir === 'rtl' || dirEl.getAttribute('dir') === 'rtl';
++      } else if (typeof document !== 'undefined' && document.documentElement) {
++        isRtl = document.documentElement.dir === 'rtl';
++      }
++    }
++  } catch {}
++
+   const positioningPoint = {
+-    x: referenceRect.x,
++    x: isRtl ? referenceRect.right - popperWidth : referenceRect.x,
+     y: referenceRect.y + (placement === 'bottom' ? referenceRect.height : 0),
+   };
+ 
+   // TODO maybe use the editor container as the boundary rect to avoid the format bar being covered by other elements
+   const boundaryRect = document.body.getBoundingClientRect();
+-  // Note: the popperRect.height maybe incorrect
+-  // because we are calculated its correct height
+-  const popperRect = popper?.getBoundingClientRect();
+ 
+   const safeCoordinate = calcSafeCoordinate({
+     positioningPoint,
+
+diff --git a/blocksuite/affine/widgets/slash-menu/src/styles.ts b/blocksuite/affine/widgets/slash-menu/src/styles.ts
+index fab27ae..1143ac7 100644
+--- a/blocksuite/affine/widgets/slash-menu/src/styles.ts
++++ b/blocksuite/affine/widgets/slash-menu/src/styles.ts
+@@ -32,6 +32,12 @@ export const styles = css`
+     /* transition: max-height 0.2s ease-in-out; */
+   }
+ 
++  :dir(rtl) .slash-menu,
++  [dir='rtl'] .slash-menu {
++    direction: rtl;
++    text-align: start;
++  }
++
+   ${scrollbarStyle('.slash-menu')}
+ 
+   .slash-menu-group-name {
+@@ -41,7 +47,7 @@ export const styles = css`
+     font-size: var(--affine-font-xs);
+     font-weight: 500;
+     line-height: var(--affine-line-height);
+-    text-align: left;
++    text-align: start;
+     color: var(
+       --light-textColor-textSecondaryColor,
+       var(--textColor-textSecondaryColor, #8e8d91)

@@ -64,6 +64,14 @@ export class ParagraphHeadingIcon extends SignalWatcher(
     .with-drag-handle .heading-icon {
       opacity: 1;
     }
+
+    :dir(rtl) affine-paragraph-heading-icon .heading-icon,
+    [dir='rtl'] affine-paragraph-heading-icon .heading-icon,
+    .affine-paragraph-block-container[dir='rtl'] affine-paragraph-heading-icon .heading-icon {
+      left: auto;
+      right: 0;
+      transform: translateX(80px);
+    }
   `;
 
   override render() {

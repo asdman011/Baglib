@@ -1,0 +1,82 @@
+diff --git a/blocksuite/affine/components/src/toggle-button/toggle-button.ts b/blocksuite/affine/components/src/toggle-button/toggle-button.ts
+index 196ce3c..c45a1e6 100644
+--- a/blocksuite/affine/components/src/toggle-button/toggle-button.ts
++++ b/blocksuite/affine/components/src/toggle-button/toggle-button.ts
+@@ -30,6 +30,23 @@ export class ToggleButton extends WithDisposable(ShadowlessElement) {
+       background: var(--affine-hover-color);
+     }
+ 
++    :dir(rtl) .toggle-icon,
++    [dir='rtl'] .toggle-icon,
++    [dir='rtl'] blocksuite-toggle-button .toggle-icon,
++    .affine-paragraph-block-container[dir='rtl'] .toggle-icon,
++    .affine-list-block-container[dir='rtl'] .toggle-icon {
++      left: auto;
++      right: 0;
++      transform: translateX(100%);
++    }
++
++    :dir(rtl) .toggle-icon svg,
++    [dir='rtl'] .toggle-icon svg,
++    .affine-paragraph-block-container[dir='rtl'] .toggle-icon svg,
++    .affine-list-block-container[dir='rtl'] .toggle-icon svg {
++      transform: scaleX(-1);
++    }
++
+     .toggle-icon[data-collapsed='true'] {
+       opacity: 1;
+     }
+
+diff --git a/blocksuite/affine/blocks/paragraph/src/heading-icon.ts b/blocksuite/affine/blocks/paragraph/src/heading-icon.ts
+index 62145c2..744b88c 100644
+--- a/blocksuite/affine/blocks/paragraph/src/heading-icon.ts
++++ b/blocksuite/affine/blocks/paragraph/src/heading-icon.ts
+@@ -64,6 +64,14 @@ export class ParagraphHeadingIcon extends SignalWatcher(
+     .with-drag-handle .heading-icon {
+       opacity: 1;
+     }
++
++    :dir(rtl) affine-paragraph-heading-icon .heading-icon,
++    [dir='rtl'] affine-paragraph-heading-icon .heading-icon,
++    .affine-paragraph-block-container[dir='rtl'] affine-paragraph-heading-icon .heading-icon {
++      left: auto;
++      right: 0;
++      transform: translateX(80px);
++    }
+   `;
+ 
+   override render() {
+
+diff --git a/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts b/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts
+index 462bfb6..87ffd26 100644
+--- a/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts
++++ b/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts
+@@ -288,6 +288,14 @@ export class ParagraphBlockComponent extends CaptionedBlockComponent<ParagraphBl
+           .heading-icon {
+           transform: translateX(-48px);
+         }
++        .affine-paragraph-block-container[dir='rtl'][data-has-collapsed-siblings='false']
++          affine-paragraph-heading-icon
++          .heading-icon,
++        .affine-paragraph-block-container:dir(rtl)[data-has-collapsed-siblings='false']
++          affine-paragraph-heading-icon
++          .heading-icon {
++          transform: translateX(48px);
++        }
+       </style>
+       <div
+         class=${classMap({
+
+diff --git a/blocksuite/affine/rich-text/src/rich-text.ts b/blocksuite/affine/rich-text/src/rich-text.ts
+index 4a5a288..95a6afb 100644
+--- a/blocksuite/affine/rich-text/src/rich-text.ts
++++ b/blocksuite/affine/rich-text/src/rich-text.ts
+@@ -300,6 +300,8 @@ export class RichText extends WithDisposable(ShadowlessElement) {
+                   rangeRect.width -
+                   (containerRect.left + containerRect.width) +
+                   2;
++              } else if (rangeRect.left < containerRect.left) {
++                scrollLeft -= containerRect.left - rangeRect.left + 2;
+               }
+               this.scrollLeft = scrollLeft;
+             }

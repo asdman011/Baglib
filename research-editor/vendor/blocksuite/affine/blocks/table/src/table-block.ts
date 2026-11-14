@@ -193,11 +193,13 @@ export class TableBlockComponent extends CaptionedBlockComponent<TableBlockModel
     const startRect = startCell.getBoundingClientRect();
     const endRect = endCell.getBoundingClientRect();
     const scale = this.getScale();
+    const left = Math.min(startRect.left, endRect.left);
+    const right = Math.max(startRect.right, endRect.right);
 
     return {
       top: (startRect.top - rootRect.top) / scale,
-      left: (startRect.left - rootRect.left) / scale,
-      width: (endRect.right - startRect.left) / scale,
+      left: (left - rootRect.left) / scale,
+      width: (right - left) / scale,
       height: (endRect.bottom - startRect.top) / scale,
     };
   };
@@ -210,6 +212,7 @@ export class TableBlockComponent extends CaptionedBlockComponent<TableBlockModel
       <div
         contenteditable="false"
         class=${tableContainer}
+        dir="auto"
         style=${styleMap({
           marginLeft: `-${virtualPadding + 10}px`,
           marginRight: `-${virtualPadding}px`,
@@ -233,7 +236,7 @@ export class TableBlockComponent extends CaptionedBlockComponent<TableBlockModel
             width: 'max-content',
           })}
         >
-          <table class=${tableWrapper} ${ref(this.table$)}>
+          <table class=${tableWrapper} dir="auto" ${ref(this.table$)}>
             <tbody class=${table}>
               ${repeat(
                 rows,

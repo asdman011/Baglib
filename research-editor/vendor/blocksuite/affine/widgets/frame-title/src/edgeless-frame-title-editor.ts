@@ -149,10 +149,18 @@ export class EdgelessFrameTitleEditor extends WithDisposable(
       text: 'var(--affine-text-primary-color)',
     };
 
+    const isRtl =
+      this.closest('[dir="rtl"]') !== null ||
+      document.documentElement.dir === 'rtl';
+    const frameWidth = bound.w * viewport.zoom;
+    const editorLeft = isRtl
+      ? (isInner ? x + frameWidth - 4 : x + frameWidth)
+      : (isInner ? x + 4 : x);
     const inlineEditorStyle = styleMap({
       fontSize: frameTitleStyleVars.fontSize + 'px',
       position: 'absolute',
-      left: (isInner ? x + 4 : x) + 'px',
+      left: editorLeft + 'px',
+      transform: isRtl ? 'translateX(-100%)' : undefined,
       top: (isInner ? y + 4 : y - (frameTitleStyleVars.height + 8 / 2)) + 'px',
       minWidth: '8px',
       height: frameTitleStyleVars.height + 'px',

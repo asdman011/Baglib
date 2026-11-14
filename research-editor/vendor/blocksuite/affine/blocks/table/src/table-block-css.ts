@@ -6,7 +6,8 @@ const hiddenSelectionBackground = '#fff';
 
 export const tableContainer = css({
   display: 'block',
-  padding: '10px 0 18px 10px',
+  padding: '10px 0 18px 0',
+  paddingInlineStart: '10px',
   overflowX: 'auto',
   overflowY: 'visible',
   userSelect: 'none',
@@ -52,6 +53,8 @@ export const tableWrapper = css({
   overflow: 'visible',
   display: 'flex',
   flexDirection: 'row',
+  direction: 'inherit',
+  textAlign: 'start',
   gap: '8px',
   position: 'relative',
   width: 'max-content',

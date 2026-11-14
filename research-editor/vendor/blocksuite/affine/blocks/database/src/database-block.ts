@@ -514,7 +514,7 @@ export class DatabaseBlockComponent extends CaptionedBlockComponent<DatabaseBloc
     )}`;
 
     return html`
-      <div contenteditable="false" class="${databaseContentStyles}">
+      <div contenteditable="false" class="${databaseContentStyles}" dir="auto">
         ${this.dataViewRootLogic.value.render()} ${widgets}
       </div>
     `;

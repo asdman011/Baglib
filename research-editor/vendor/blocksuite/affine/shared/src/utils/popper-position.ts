@@ -102,16 +102,36 @@ export function getPopperPosition(
   )
     return null;
 
+  const popperRect = popper?.getBoundingClientRect();
+  const popperWidth = popperRect?.width ?? 0;
+  let isRtl = false;
+  try {
+    const rawRef = reference as unknown;
+    if (rawRef && typeof rawRef === 'object') {
+      const node =
+        'commonAncestorContainer' in rawRef
+          ? (rawRef as Range).commonAncestorContainer
+          : rawRef instanceof Node
+            ? rawRef
+            : null;
+      const el = node instanceof Element ? node : node?.parentElement;
+      const dirEl = el?.closest('[dir]');
+      if (dirEl) {
+        const computedDir = window.getComputedStyle(dirEl).direction;
+        isRtl = computedDir === 'rtl' || dirEl.getAttribute('dir') === 'rtl';
+      } else if (typeof document !== 'undefined' && document.documentElement) {
+        isRtl = document.documentElement.dir === 'rtl';
+      }
+    }
+  } catch {}
+
   const positioningPoint = {
-    x: referenceRect.x,
+    x: isRtl ? referenceRect.right - popperWidth : referenceRect.x,
     y: referenceRect.y + (placement === 'bottom' ? referenceRect.height : 0),
   };
 
   // TODO maybe use the editor container as the boundary rect to avoid the format bar being covered by other elements
   const boundaryRect = document.body.getBoundingClientRect();
-  // Note: the popperRect.height maybe incorrect
-  // because we are calculated its correct height
-  const popperRect = popper?.getBoundingClientRect();
 
   const safeCoordinate = calcSafeCoordinate({
     positioningPoint,

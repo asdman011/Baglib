@@ -1,4 +1,4 @@
-// Runner for research-editor smoke test (KEY-362).
+// Runner for research-editor smoke test (KEY-362) and RTL live verification (KEY-365).
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -7,8 +7,14 @@ import electron from 'electron';
 
 const repoRoot = path.resolve('.');
 const dataDir = path.join(repoRoot, '.baglib-data');
-const profileDir = fs.mkdtempSync(path.join(dataDir, 'KEY-362-live-'));
-const evidenceDir = path.join(dataDir, 'KEY-362-evidence');
+
+const scriptArg = process.argv[2] || 'main.cjs';
+const scriptFile = scriptArg.endsWith('.cjs') ? scriptArg : `${scriptArg}.cjs`;
+const scriptRelative = path.join('scripts/research-editor-live', path.basename(scriptFile));
+
+const isRtl = scriptFile.includes('rtl');
+const profileDir = fs.mkdtempSync(path.join(dataDir, isRtl ? 'KEY-365-live-' : 'KEY-362-live-'));
+const evidenceDir = path.join(dataDir, isRtl ? 'KEY-365-evidence' : 'KEY-362-evidence');
 
 fs.mkdirSync(evidenceDir, { recursive: true });
 
@@ -38,23 +44,25 @@ const env = {
   ...process.env,
   BAGLIB_KEY362_PROFILE: profileDir,
   BAGLIB_KEY362_EVIDENCE: evidenceDir,
+  BAGLIB_KEY365_PROFILE: profileDir,
+  BAGLIB_KEY365_EVIDENCE: evidenceDir,
 };
 delete env.ELECTRON_RUN_AS_NODE;
 
-console.log('Starting research-editor offline smoke test...');
+console.log(`Starting research-editor live test (${scriptRelative})...`);
 
 let exitCode = 1;
 try {
   exitCode = await new Promise(resolve => {
     const child = spawn(
       electron,
-      ['scripts/research-editor-live/main.cjs'],
+      [scriptRelative],
       { env, stdio: 'inherit', windowsHide: true }
     );
     const timeout = setTimeout(() => {
-      console.error('Smoke test timed out after 60s, terminating...');
+      console.error('Live test timed out after 90s, terminating...');
       child.kill();
-    }, 60000);
+    }, 90000);
     child.once('exit', code => {
       clearTimeout(timeout);
       resolve(code ?? 1);
@@ -67,5 +75,5 @@ try {
   } catch {}
 }
 
-console.log(`Smoke test exited with code: ${exitCode}`);
+console.log(`Live test exited with code: ${exitCode}`);
 process.exit(exitCode);

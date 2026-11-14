@@ -38,7 +38,13 @@ research-editor/
 │   ├── package.json      # @baglib/research-editor-app dependencies
 │   └── vite.config.ts    # Standalone Vite config (alias stubs, wasm, vanillaExtract)
 ├── patches/              # Numbered diffs applied on top of pristine BlockSuite
-│   └── 0001-pr15215-per-block-direction.diff
+│   ├── 0001-pr15215-per-block-direction.diff   # Upstream PR #15215 base RTL dir="auto"
+│   ├── 0002-direction-override.diff           # Saved block model textDirection prop + shortcuts
+│   ├── 0003-html-export-dir.diff              # HTML export writes dir="rtl|ltr|auto"
+│   ├── 0004-frame-title-rtl.diff              # Edgeless frame titles positioned on right in RTL
+│   ├── 0005-slash-menu-caret-anchor-rtl.diff  # Slash menu popper anchored to caret in RTL
+│   ├── 0006-collapse-icon-and-autoscroll.diff # Heading collapse icon :dir(rtl) & bidirectional autoscroll
+│   └── 0007-tables-and-database-rtl.diff      # Mirrored table & database columns in RTL
 ├── scripts/              # Maintenance scripts
 │   ├── vendor.mjs        # check & rebuild commands for vendor guardrail
 │   └── subset-fonts.py   # FontTools font subsetting pipeline
@@ -109,3 +115,20 @@ Runs an offline Electron smoke test verifying:
 - Correct page and edgeless mode rendering in English (LTR) and Arabic (RTL).
 - Arabic text typing via CDP input simulation.
 - Generates evidence screenshots and `result.json` in `.baglib-data/KEY-362-evidence/`.
+
+### 5. RTL Live Verification (KEY-365)
+```bash
+node scripts/research-editor-live/run.mjs rtl
+```
+Runs an offline Electron RTL verification scenario testing:
+- **Block direction override**: Block models (`paragraph`, `list`) declare property `textDirection: 'auto' | 'ltr' | 'rtl'` (default `'auto'`), persisting to snapshot JSON and surviving reloads.
+- **Direction override shortcuts**:
+  - Word-style shortcuts: `Ctrl+RightShift` sets `rtl`, `Ctrl+LeftShift` sets `ltr`.
+  - BlockSuite keymaps: `Mod-Shift-r` (`rtl`), `Mod-Shift-l` (`ltr`), `Mod-Shift-a` (`auto`).
+- **HTML export `dir` attributes**: Block adapters write `dir="rtl"`, `dir="ltr"`, or `dir="auto"` on paragraphs (`<p>`, `<h1>`..`<h6>`, `<blockquote>`), list items (`<li>`), and tables (`<table>`).
+- **Edgeless frame titles**: Positioned on the right (`right: 0; left: auto; transformOrigin: top right / bottom right`) with `titleX` adjusted for RTL.
+- **Slash menu caret anchoring**: Anchored to caret position on the right side in RTL paragraphs.
+- **Heading collapse icon**: Styled for `:dir(rtl)` / `[dir="rtl"]` with mirrored chevron icon (`scaleX(-1)`).
+- **Inline footnote citations**: Quran (`quran:hafs:2:255`) and Sunnah (`sunnah:bukhari:1`) citations with bidirectional caret navigation and selection.
+- **Table and database blocks**: Column order mirrored in RTL with bidirectional coordinate calculations (`Math.min`/`Math.max`).
+- Generates 9 screenshots, exported HTML (`export.html`), and `result.json` in `.baglib-data/KEY-365-evidence/`.

@@ -75,6 +75,13 @@ export function bindKeymap(
     if (direct && direct(ctx)) {
       return true;
     }
+    if (name === 'Shift' && (event.ctrlKey || event.metaKey)) {
+      const isRight = event.code === 'ShiftRight' || event.location === 2;
+      const handler = map[isRight ? 'Ctrl-ShiftRight' : 'Ctrl-ShiftLeft'];
+      if (handler && handler(ctx)) {
+        return true;
+      }
+    }
     if (name.length !== 1 || name === ' ') {
       return false;
     }

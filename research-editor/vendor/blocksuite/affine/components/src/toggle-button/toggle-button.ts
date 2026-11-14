@@ -30,6 +30,23 @@ export class ToggleButton extends WithDisposable(ShadowlessElement) {
       background: var(--affine-hover-color);
     }
 
+    :dir(rtl) .toggle-icon,
+    [dir='rtl'] .toggle-icon,
+    [dir='rtl'] blocksuite-toggle-button .toggle-icon,
+    .affine-paragraph-block-container[dir='rtl'] .toggle-icon,
+    .affine-list-block-container[dir='rtl'] .toggle-icon {
+      left: auto;
+      right: 0;
+      transform: translateX(100%);
+    }
+
+    :dir(rtl) .toggle-icon svg,
+    [dir='rtl'] .toggle-icon svg,
+    .affine-paragraph-block-container[dir='rtl'] .toggle-icon svg,
+    .affine-list-block-container[dir='rtl'] .toggle-icon svg {
+      transform: scaleX(-1);
+    }
+
     .toggle-icon[data-collapsed='true'] {
       opacity: 1;
     }

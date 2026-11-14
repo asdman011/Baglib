@@ -1,0 +1,111 @@
+diff --git a/blocksuite/affine/blocks/paragraph/src/adapters/html.ts b/blocksuite/affine/blocks/paragraph/src/adapters/html.ts
+index 58a3273..d94f965 100644
+--- a/blocksuite/affine/blocks/paragraph/src/adapters/html.ts
++++ b/blocksuite/affine/blocks/paragraph/src/adapters/html.ts
+@@ -334,6 +334,10 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+       const text = (o.node.props.text ?? { delta: [] }) as {
+         delta: DeltaInsert[];
+       };
++      const dir =
++        o.node.props.textDirection && o.node.props.textDirection !== 'auto'
++          ? (o.node.props.textDirection as string)
++          : 'auto';
+       const { walkerContext, deltaConverter } = context;
+       switch (o.node.props.type) {
+         case 'text': {
+@@ -344,6 +348,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+                 tagName: 'div',
+                 properties: {
+                   className: ['affine-paragraph-block-container'],
++                  dir,
+                 },
+                 children: [],
+               },
+@@ -353,7 +358,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+               {
+                 type: 'element',
+                 tagName: 'p',
+-                properties: {},
++                properties: { dir },
+                 children: deltaConverter.deltaToAST(text.delta),
+               },
+               'children'
+@@ -386,6 +391,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+                 tagName: 'div',
+                 properties: {
+                   className: ['affine-paragraph-block-container'],
++                  dir,
+                 },
+                 children: [],
+               },
+@@ -395,7 +401,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+               {
+                 type: 'element',
+                 tagName: o.node.props.type,
+-                properties: {},
++                properties: { dir },
+                 children: deltaConverter.deltaToAST(text.delta),
+               },
+               'children'
+@@ -423,6 +429,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+                 tagName: 'div',
+                 properties: {
+                   className: ['affine-paragraph-block-container'],
++                  dir,
+                 },
+                 children: [],
+               },
+@@ -434,6 +441,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+                 tagName: 'blockquote',
+                 properties: {
+                   className: ['quote'],
++                  dir,
+                 },
+                 children: [],
+               },
+@@ -443,7 +451,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+               {
+                 type: 'element',
+                 tagName: 'p',
+-                properties: {},
++                properties: { dir },
+                 children: deltaConverter.deltaToAST(text.delta),
+               },
+               'children'
+
+diff --git a/blocksuite/affine/blocks/list/src/adapters/html.ts b/blocksuite/affine/blocks/list/src/adapters/html.ts
+index fbe7217..5dd8d31 100644
+--- a/blocksuite/affine/blocks/list/src/adapters/html.ts
++++ b/blocksuite/affine/blocks/list/src/adapters/html.ts
+@@ -91,6 +91,10 @@ export const listBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+       const text = (o.node.props.text ?? { delta: [] }) as {
+         delta: DeltaInsert[];
+       };
++      const dir =
++        o.node.props.textDirection && o.node.props.textDirection !== 'auto'
++          ? (o.node.props.textDirection as string)
++          : 'auto';
+       const { deltaConverter, walkerContext } = context;
+       const currentTNode = walkerContext.currentNode();
+       const liChildren = deltaConverter.deltaToAST(text.delta);
+@@ -157,6 +161,7 @@ export const listBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+           tagName: 'li',
+           properties: {
+             className: ['affine-list-block-container'],
++            dir,
+           },
+           children: liChildren,
+         },
+
+diff --git a/blocksuite/affine/blocks/table/src/adapters/html.ts b/blocksuite/affine/blocks/table/src/adapters/html.ts
+index 3d28af2..1531c2e 100644
+--- a/blocksuite/affine/blocks/table/src/adapters/html.ts
++++ b/blocksuite/affine/blocks/table/src/adapters/html.ts
+@@ -113,6 +113,7 @@ export const tableBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
+           tagName: 'table',
+           properties: {
+             border: true,
++            dir: 'auto',
+             style: 'border-collapse: collapse;border-spacing: 0;',
+           },
+           children: [tableBodyAst],

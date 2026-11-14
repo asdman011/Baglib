@@ -32,6 +32,12 @@ export const styles = css`
     /* transition: max-height 0.2s ease-in-out; */
   }
 
+  :dir(rtl) .slash-menu,
+  [dir='rtl'] .slash-menu {
+    direction: rtl;
+    text-align: start;
+  }
+
   ${scrollbarStyle('.slash-menu')}
 
   .slash-menu-group-name {
@@ -41,7 +47,7 @@ export const styles = css`
     font-size: var(--affine-font-xs);
     font-weight: 500;
     line-height: var(--affine-line-height);
-    text-align: left;
+    text-align: start;
     color: var(
       --light-textColor-textSecondaryColor,
       var(--textColor-textSecondaryColor, #8e8d91)

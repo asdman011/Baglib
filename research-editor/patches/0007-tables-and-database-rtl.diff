@@ -1,0 +1,112 @@
+diff --git a/blocksuite/affine/blocks/table/src/table-block.ts b/blocksuite/affine/blocks/table/src/table-block.ts
+index f6c1619..6ef47e7 100644
+--- a/blocksuite/affine/blocks/table/src/table-block.ts
++++ b/blocksuite/affine/blocks/table/src/table-block.ts
+@@ -193,11 +193,13 @@ export class TableBlockComponent extends CaptionedBlockComponent<TableBlockModel
+     const startRect = startCell.getBoundingClientRect();
+     const endRect = endCell.getBoundingClientRect();
+     const scale = this.getScale();
++    const left = Math.min(startRect.left, endRect.left);
++    const right = Math.max(startRect.right, endRect.right);
+ 
+     return {
+       top: (startRect.top - rootRect.top) / scale,
+-      left: (startRect.left - rootRect.left) / scale,
+-      width: (endRect.right - startRect.left) / scale,
++      left: (left - rootRect.left) / scale,
++      width: (right - left) / scale,
+       height: (endRect.bottom - startRect.top) / scale,
+     };
+   };
+@@ -210,6 +212,7 @@ export class TableBlockComponent extends CaptionedBlockComponent<TableBlockModel
+       <div
+         contenteditable="false"
+         class=${tableContainer}
++        dir="auto"
+         style=${styleMap({
+           marginLeft: `-${virtualPadding + 10}px`,
+           marginRight: `-${virtualPadding}px`,
+@@ -233,7 +236,7 @@ export class TableBlockComponent extends CaptionedBlockComponent<TableBlockModel
+             width: 'max-content',
+           })}
+         >
+-          <table class=${tableWrapper} ${ref(this.table$)}>
++          <table class=${tableWrapper} dir="auto" ${ref(this.table$)}>
+             <tbody class=${table}>
+               ${repeat(
+                 rows,
+
+diff --git a/blocksuite/affine/blocks/table/src/table-block-css.ts b/blocksuite/affine/blocks/table/src/table-block-css.ts
+index 959c268..7cfcd44 100644
+--- a/blocksuite/affine/blocks/table/src/table-block-css.ts
++++ b/blocksuite/affine/blocks/table/src/table-block-css.ts
+@@ -6,7 +6,8 @@ const hiddenSelectionBackground = '#fff';
+ 
+ export const tableContainer = css({
+   display: 'block',
+-  padding: '10px 0 18px 10px',
++  padding: '10px 0 18px 0',
++  paddingInlineStart: '10px',
+   overflowX: 'auto',
+   overflowY: 'visible',
+   userSelect: 'none',
+@@ -52,6 +53,8 @@ export const tableWrapper = css({
+   overflow: 'visible',
+   display: 'flex',
+   flexDirection: 'row',
++  direction: 'inherit',
++  textAlign: 'start',
+   gap: '8px',
+   position: 'relative',
+   width: 'max-content',
+
+diff --git a/blocksuite/affine/data-view/src/view-presets/table/pc/table-view-style.ts b/blocksuite/affine/data-view/src/view-presets/table/pc/table-view-style.ts
+index e05d035..6c17d1e 100644
+--- a/blocksuite/affine/data-view/src/view-presets/table/pc/table-view-style.ts
++++ b/blocksuite/affine/data-view/src/view-presets/table/pc/table-view-style.ts
+@@ -74,6 +74,15 @@ export const addGroupStyle = css({
+   lineHeight: '20px',
+   position: 'sticky',
+   left: `${LEFT_TOOL_BAR_WIDTH}px`,
++  insetInlineStart: `${LEFT_TOOL_BAR_WIDTH}px`,
++  ':dir(rtl)': {
++    right: `${LEFT_TOOL_BAR_WIDTH}px`,
++    left: 'auto',
++  },
++  '[dir="rtl"] &': {
++    right: `${LEFT_TOOL_BAR_WIDTH}px`,
++    left: 'auto',
++  },
+   borderRadius: '8px',
+   cursor: 'pointer',
+ 
+@@ -114,6 +123,15 @@ const leftToolBarStyle = css({
+   position: 'sticky',
+   zIndex: 1,
+   left: 0,
++  insetInlineStart: 0,
++  ':dir(rtl)': {
++    right: 0,
++    left: 'auto',
++  },
++  '[dir="rtl"] &': {
++    right: 0,
++    left: 'auto',
++  },
+   width: `${LEFT_TOOL_BAR_WIDTH}px`,
+   flexShrink: 0,
+ });
+
+diff --git a/blocksuite/affine/blocks/database/src/database-block.ts b/blocksuite/affine/blocks/database/src/database-block.ts
+index fa2afa9..0c23697 100644
+--- a/blocksuite/affine/blocks/database/src/database-block.ts
++++ b/blocksuite/affine/blocks/database/src/database-block.ts
+@@ -514,7 +514,7 @@ export class DatabaseBlockComponent extends CaptionedBlockComponent<DatabaseBloc
+     )}`;
+ 
+     return html`
+-      <div contenteditable="false" class="${databaseContentStyles}">
++      <div contenteditable="false" class="${databaseContentStyles}" dir="auto">
+         ${this.dataViewRootLogic.value.render()} ${widgets}
+       </div>
+     `;

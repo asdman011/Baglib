@@ -97,11 +97,14 @@ export class AffineFrameTitle extends SignalWatcher(
     const width = this._cachedWidth / zoom;
     const height = this._cachedHeight / zoom;
 
+    const isRtl = this.closest('[dir="rtl"]') !== null || document.documentElement.dir === 'rtl';
     const { nestedFrameOffset } = frameTitleStyleVars;
     if (width && height) {
-      this.model.externalXYWH = `[${
-        elementBound.x + (_nestedFrame ? nestedFrameOffset / zoom : 0)
-      },${
+      const titleX = isRtl
+        ? elementBound.x + elementBound.w - width - (_nestedFrame ? nestedFrameOffset / zoom : 0)
+        : elementBound.x + (_nestedFrame ? nestedFrameOffset / zoom : 0);
+      this.model.externalXYWH = `[${titleX},${
+  
         elementBound.y +
         (_nestedFrame
           ? nestedFrameOffset / zoom
@@ -135,21 +138,36 @@ export class AffineFrameTitle extends SignalWatcher(
       ? bound.w * zoom - nestedFrameOffset / zoom
       : bound.w * zoom;
     const hidden = height / zoom >= bound.h;
-    const transformOperation = [
-      `translate(0%, ${nestedFrame ? 0 : -100}%)`,
-      `translate(${nestedFrame ? nestedFrameOffset : 0}px, ${
-        nestedFrame ? nestedFrameOffset : -nestedFrameOffset
-      }px)`,
-    ];
+    const isRtl = this.closest('[dir="rtl"]') !== null || document.documentElement.dir === 'rtl';
+    const transformOperation = isRtl
+      ? [
+          `translate(0%, ${nestedFrame ? 0 : -100}%)`,
+          `translate(${nestedFrame ? -nestedFrameOffset : 0}px, ${
+            nestedFrame ? nestedFrameOffset : -nestedFrameOffset
+          }px)`,
+        ]
+      : [
+          `translate(0%, ${nestedFrame ? 0 : -100}%)`,
+          `translate(${nestedFrame ? nestedFrameOffset : 0}px, ${
+            nestedFrame ? nestedFrameOffset : -nestedFrameOffset
+          }px)`,
+        ];
 
     this.style.display = '';
     this.style.setProperty('--bg-color', this.colors.background);
-    this.style.left = '0px';
+    this.style.left = isRtl ? 'auto' : '0px';
+    this.style.right = isRtl ? '0px' : 'auto';
     this.style.top = '0px';
     this.style.display = hidden ? 'none' : 'flex';
     this.style.transform = transformOperation.join(' ');
     this.style.maxWidth = `${maxWidth}px`;
-    this.style.transformOrigin = nestedFrame ? 'top left' : 'bottom left';
+    this.style.transformOrigin = isRtl
+      ? nestedFrame
+        ? 'top right'
+        : 'bottom right'
+      : nestedFrame
+        ? 'top left'
+        : 'bottom left';
     this.style.color = this.colors.text;
   }
 

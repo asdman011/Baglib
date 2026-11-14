@@ -91,6 +91,10 @@ export const listBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
       const text = (o.node.props.text ?? { delta: [] }) as {
         delta: DeltaInsert[];
       };
+      const dir =
+        o.node.props.textDirection && o.node.props.textDirection !== 'auto'
+          ? (o.node.props.textDirection as string)
+          : 'auto';
       const { deltaConverter, walkerContext } = context;
       const currentTNode = walkerContext.currentNode();
       const liChildren = deltaConverter.deltaToAST(text.delta);
@@ -157,6 +161,7 @@ export const listBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
           tagName: 'li',
           properties: {
             className: ['affine-list-block-container'],
+            dir,
           },
           children: liChildren,
         },

@@ -21,6 +21,7 @@ export type ParagraphType =
 export type ParagraphProps = {
   type: ParagraphType;
   textAlign?: TextAlign;
+  textDirection?: 'auto' | 'ltr' | 'rtl';
   text: Text;
   collapsed: boolean;
   comments?: Record<string, boolean>;
@@ -32,6 +33,7 @@ export const ParagraphBlockSchema = defineBlockSchema({
     type: 'text',
     text: internal.Text(),
     textAlign: undefined,
+    textDirection: 'auto',
     collapsed: false,
     comments: undefined,
     'meta:createdAt': undefined,

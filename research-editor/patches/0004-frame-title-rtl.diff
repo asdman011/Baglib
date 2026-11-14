@@ -1,0 +1,92 @@
+diff --git a/blocksuite/affine/widgets/frame-title/src/frame-title.ts b/blocksuite/affine/widgets/frame-title/src/frame-title.ts
+index 32fd6eb..41da826 100644
+--- a/blocksuite/affine/widgets/frame-title/src/frame-title.ts
++++ b/blocksuite/affine/widgets/frame-title/src/frame-title.ts
+@@ -97,11 +97,14 @@ export class AffineFrameTitle extends SignalWatcher(
+     const width = this._cachedWidth / zoom;
+     const height = this._cachedHeight / zoom;
+ 
++    const isRtl = this.closest('[dir="rtl"]') !== null || document.documentElement.dir === 'rtl';
+     const { nestedFrameOffset } = frameTitleStyleVars;
+     if (width && height) {
+-      this.model.externalXYWH = `[${
+-        elementBound.x + (_nestedFrame ? nestedFrameOffset / zoom : 0)
+-      },${
++      const titleX = isRtl
++        ? elementBound.x + elementBound.w - width - (_nestedFrame ? nestedFrameOffset / zoom : 0)
++        : elementBound.x + (_nestedFrame ? nestedFrameOffset / zoom : 0);
++      this.model.externalXYWH = `[${titleX},${
++  
+         elementBound.y +
+         (_nestedFrame
+           ? nestedFrameOffset / zoom
+@@ -135,21 +138,36 @@ export class AffineFrameTitle extends SignalWatcher(
+       ? bound.w * zoom - nestedFrameOffset / zoom
+       : bound.w * zoom;
+     const hidden = height / zoom >= bound.h;
+-    const transformOperation = [
+-      `translate(0%, ${nestedFrame ? 0 : -100}%)`,
+-      `translate(${nestedFrame ? nestedFrameOffset : 0}px, ${
+-        nestedFrame ? nestedFrameOffset : -nestedFrameOffset
+-      }px)`,
+-    ];
++    const isRtl = this.closest('[dir="rtl"]') !== null || document.documentElement.dir === 'rtl';
++    const transformOperation = isRtl
++      ? [
++          `translate(0%, ${nestedFrame ? 0 : -100}%)`,
++          `translate(${nestedFrame ? -nestedFrameOffset : 0}px, ${
++            nestedFrame ? nestedFrameOffset : -nestedFrameOffset
++          }px)`,
++        ]
++      : [
++          `translate(0%, ${nestedFrame ? 0 : -100}%)`,
++          `translate(${nestedFrame ? nestedFrameOffset : 0}px, ${
++            nestedFrame ? nestedFrameOffset : -nestedFrameOffset
++          }px)`,
++        ];
+ 
+     this.style.display = '';
+     this.style.setProperty('--bg-color', this.colors.background);
+-    this.style.left = '0px';
++    this.style.left = isRtl ? 'auto' : '0px';
++    this.style.right = isRtl ? '0px' : 'auto';
+     this.style.top = '0px';
+     this.style.display = hidden ? 'none' : 'flex';
+     this.style.transform = transformOperation.join(' ');
+     this.style.maxWidth = `${maxWidth}px`;
+-    this.style.transformOrigin = nestedFrame ? 'top left' : 'bottom left';
++    this.style.transformOrigin = isRtl
++      ? nestedFrame
++        ? 'top right'
++        : 'bottom right'
++      : nestedFrame
++        ? 'top left'
++        : 'bottom left';
+     this.style.color = this.colors.text;
+   }
+ 
+
+diff --git a/blocksuite/affine/widgets/frame-title/src/edgeless-frame-title-editor.ts b/blocksuite/affine/widgets/frame-title/src/edgeless-frame-title-editor.ts
+index 2d0250c..247b8cf 100644
+--- a/blocksuite/affine/widgets/frame-title/src/edgeless-frame-title-editor.ts
++++ b/blocksuite/affine/widgets/frame-title/src/edgeless-frame-title-editor.ts
+@@ -149,10 +149,18 @@ export class EdgelessFrameTitleEditor extends WithDisposable(
+       text: 'var(--affine-text-primary-color)',
+     };
+ 
++    const isRtl =
++      this.closest('[dir="rtl"]') !== null ||
++      document.documentElement.dir === 'rtl';
++    const frameWidth = bound.w * viewport.zoom;
++    const editorLeft = isRtl
++      ? (isInner ? x + frameWidth - 4 : x + frameWidth)
++      : (isInner ? x + 4 : x);
+     const inlineEditorStyle = styleMap({
+       fontSize: frameTitleStyleVars.fontSize + 'px',
+       position: 'absolute',
+-      left: (isInner ? x + 4 : x) + 'px',
++      left: editorLeft + 'px',
++      transform: isRtl ? 'translateX(-100%)' : undefined,
+       top: (isInner ? y + 4 : y - (frameTitleStyleVars.height + 8 / 2)) + 'px',
+       minWidth: '8px',
+       height: frameTitleStyleVars.height + 'px',

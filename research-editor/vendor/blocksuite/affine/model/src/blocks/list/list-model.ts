@@ -15,6 +15,7 @@ export type ListProps = {
   type: ListType;
   text: Text;
   textAlign?: TextAlign;
+  textDirection?: 'auto' | 'ltr' | 'rtl';
   checked: boolean;
   collapsed: boolean;
   order: number | null;
@@ -28,6 +29,7 @@ export const ListBlockSchema = defineBlockSchema({
       type: 'bulleted',
       text: internal.Text(),
       textAlign: undefined,
+      textDirection: 'auto',
       checked: false,
       collapsed: false,
 

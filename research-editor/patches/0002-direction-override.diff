@@ -1,0 +1,216 @@
+diff --git a/blocksuite/affine/model/src/blocks/paragraph/paragraph-model.ts b/blocksuite/affine/model/src/blocks/paragraph/paragraph-model.ts
+index e00af27..debda01 100644
+--- a/blocksuite/affine/model/src/blocks/paragraph/paragraph-model.ts
++++ b/blocksuite/affine/model/src/blocks/paragraph/paragraph-model.ts
+@@ -21,6 +21,7 @@ export type ParagraphType =
+ export type ParagraphProps = {
+   type: ParagraphType;
+   textAlign?: TextAlign;
++  textDirection?: 'auto' | 'ltr' | 'rtl';
+   text: Text;
+   collapsed: boolean;
+   comments?: Record<string, boolean>;
+@@ -32,6 +33,7 @@ export const ParagraphBlockSchema = defineBlockSchema({
+     type: 'text',
+     text: internal.Text(),
+     textAlign: undefined,
++    textDirection: 'auto',
+     collapsed: false,
+     comments: undefined,
+     'meta:createdAt': undefined,
+
+diff --git a/blocksuite/affine/model/src/blocks/list/list-model.ts b/blocksuite/affine/model/src/blocks/list/list-model.ts
+index c057ee6..902ba8e 100644
+--- a/blocksuite/affine/model/src/blocks/list/list-model.ts
++++ b/blocksuite/affine/model/src/blocks/list/list-model.ts
+@@ -15,6 +15,7 @@ export type ListProps = {
+   type: ListType;
+   text: Text;
+   textAlign?: TextAlign;
++  textDirection?: 'auto' | 'ltr' | 'rtl';
+   checked: boolean;
+   collapsed: boolean;
+   order: number | null;
+@@ -28,6 +29,7 @@ export const ListBlockSchema = defineBlockSchema({
+       type: 'bulleted',
+       text: internal.Text(),
+       textAlign: undefined,
++      textDirection: 'auto',
+       checked: false,
+       collapsed: false,
+ 
+
+diff --git a/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts b/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts
+index ac3ed80..462bfb6 100644
+--- a/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts
++++ b/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts
+@@ -294,7 +294,9 @@ export class ParagraphBlockComponent extends CaptionedBlockComponent<ParagraphBl
+           'affine-paragraph-block-container': true,
+           'highlight-comment': this.isCommentHighlighted,
+         })}
+-        dir="auto"
++        dir=${this.model.props.textDirection$?.value && this.model.props.textDirection$.value !== 'auto'
++          ? this.model.props.textDirection$.value
++          : 'auto'}
+         style="${textAlignStyle}"
+         data-has-collapsed-siblings="${collapsedSiblings.length > 0}"
+       >
+
+diff --git a/blocksuite/affine/blocks/list/src/list-block.ts b/blocksuite/affine/blocks/list/src/list-block.ts
+index ad49c98..37fd910 100644
+--- a/blocksuite/affine/blocks/list/src/list-block.ts
++++ b/blocksuite/affine/blocks/list/src/list-block.ts
+@@ -167,7 +167,9 @@ export class ListBlockComponent extends CaptionedBlockComponent<ListBlockModel>
+     return html`
+       <div
+         class=${'affine-list-block-container'}
+-        dir="auto"
++        dir=${this.model.props.textDirection$?.value && this.model.props.textDirection$.value !== 'auto'
++          ? this.model.props.textDirection$.value
++          : 'auto'}
+         style="${textAlignStyle}"
+       >
+         <div
+
+diff --git a/blocksuite/framework/std/src/event/keymap.ts b/blocksuite/framework/std/src/event/keymap.ts
+index ebacbde..04e1761 100644
+--- a/blocksuite/framework/std/src/event/keymap.ts
++++ b/blocksuite/framework/std/src/event/keymap.ts
+@@ -75,6 +75,13 @@ export function bindKeymap(
+     if (direct && direct(ctx)) {
+       return true;
+     }
++    if (name === 'Shift' && (event.ctrlKey || event.metaKey)) {
++      const isRight = event.code === 'ShiftRight' || event.location === 2;
++      const handler = map[isRight ? 'Ctrl-ShiftRight' : 'Ctrl-ShiftLeft'];
++      if (handler && handler(ctx)) {
++        return true;
++      }
++    }
+     if (name.length !== 1 || name === ' ') {
+       return false;
+     }
+
+diff --git a/blocksuite/affine/blocks/paragraph/src/paragraph-keymap.ts b/blocksuite/affine/blocks/paragraph/src/paragraph-keymap.ts
+index bccbdc1..b5042bc 100644
+--- a/blocksuite/affine/blocks/paragraph/src/paragraph-keymap.ts
++++ b/blocksuite/affine/blocks/paragraph/src/paragraph-keymap.ts
+@@ -220,6 +220,56 @@ export const ParagraphKeymapExtension = KeymapExtension(
+         ctx.get('keyboardState').raw.preventDefault();
+         return true;
+       },
++      'Ctrl-ShiftRight': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model || !matchModels(model, [ParagraphBlockModel])) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'rtl' });
++        return true;
++      },
++      'Ctrl-ShiftLeft': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model || !matchModels(model, [ParagraphBlockModel])) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'ltr' });
++        return true;
++      },
++      'Mod-Shift-r': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model || !matchModels(model, [ParagraphBlockModel])) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'rtl' });
++        return true;
++      },
++      'Mod-Shift-l': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model || !matchModels(model, [ParagraphBlockModel])) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'ltr' });
++        return true;
++      },
++      'Mod-Shift-a': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model || !matchModels(model, [ParagraphBlockModel])) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'auto' });
++        return true;
++      },
+     };
+   },
+   {
+
+diff --git a/blocksuite/affine/blocks/list/src/list-keymap.ts b/blocksuite/affine/blocks/list/src/list-keymap.ts
+index aff8909..4720b85 100644
+--- a/blocksuite/affine/blocks/list/src/list-keymap.ts
++++ b/blocksuite/affine/blocks/list/src/list-keymap.ts
+@@ -124,6 +124,56 @@ export const ListKeymapExtension = KeymapExtension(
+         ctx.get('keyboardState').raw.preventDefault();
+         return true;
+       },
++      'Ctrl-ShiftRight': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'rtl' });
++        return true;
++      },
++      'Ctrl-ShiftLeft': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'ltr' });
++        return true;
++      },
++      'Mod-Shift-r': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'rtl' });
++        return true;
++      },
++      'Mod-Shift-l': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'ltr' });
++        return true;
++      },
++      'Mod-Shift-a': ctx => {
++        const text = std.selection.find(TextSelection);
++        if (!text) return false;
++        const model = std.store.getBlock(text.from.blockId)?.model;
++        if (!model) return false;
++        ctx.get('keyboardState').raw.preventDefault();
++        std.store.captureSync();
++        std.store.updateBlock(model, { textDirection: 'auto' });
++        return true;
++      },
+     };
+   },
+   {

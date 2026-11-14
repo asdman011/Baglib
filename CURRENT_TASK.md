@@ -1,3 +1,55 @@
+## KEY-365 verified handoff - 2026-11-14T23:05:00+02:00 - Antigravity 0d5908ad-8ecc-4e41-91c0-9b3f68ad2d48
+
+Implemented RE-4 (RTL completion for research editor, epic KEY-361):
+1. Saved per-block direction override: added model property `textDirection: 'auto' | 'ltr' | 'rtl'` (default `'auto'`) to `paragraph-model.ts` and `list-model.ts`. Binds Word-style `Ctrl+RightShift` (`rtl`) and `Ctrl+LeftShift` (`ltr`), plus `Mod-Shift-r`, `Mod-Shift-l`, `Mod-Shift-a`. Renders `dir=${textDirection || 'auto'}` in `ParagraphBlockComponent` and `ListBlockComponent`. Persists in Yjs reactive model and survives save/reload and snapshot export (`Transformer.docToSnapshot`).
+2. HTML export writes `dir` attribute: patched `paragraph/adapters/html.ts`, `list/adapters/html.ts`, and `table/adapters/html.ts` to write `dir="rtl"`, `dir="ltr"`, or `dir="auto"` on paragraphs (`<p>`, `<h1>`..`<h6>`, `<blockquote>`), list items (`<li>`), and tables (`<table>`).
+3. Edgeless frame titles positioned on the right in RTL: patched `AffineFrameTitle` in `frame-title.ts` and `edgeless-frame-title-editor.ts` to compute `titleX` on the right side of `elementBound` and apply `right: 0; left: auto; transformOrigin: top right / bottom right`.
+4. Slash menu popper anchored to caret in RTL: patched `calcSafeCoordinate` in `popper-position.ts` (`positioningPoint.x = referenceRect.right - popperWidth`) and RTL styles in `slash-menu/src/styles.ts`.
+5. Heading collapse icon & horizontal autoscroll: styled heading toggle button with `:dir(rtl)` / `[dir="rtl"]` (`right: 0; left: auto; transform: translateX(48px)`), mirrored chevron (`scaleX(-1)`), and bidirectional autoscroll in `rich-text.ts`.
+6. Inline footnote citations in mixed text: verified Quran (`quran:hafs:2:255`) and Sunnah (`sunnah:bukhari:1`) footnote citations with bidirectional caret navigation and selection.
+7. Mirrored table and database blocks: added `dir="auto"`, bidirectional `Math.min`/`Math.max` column coordinate calculations in `table-block.ts`, and RTL sticky headers in `table-view-style.ts`.
+8. Arabic typing automated via CDP in `scripts/research-editor-live/rtl.cjs`; manual physical keyboard IME check noted for user.
+
+Verification:
+- `npm run check:vendor`: Passes (2,899 files match BlockSuite v0.27.4 + patches 0001–0007).
+- `npm run build:research-editor`: Built in 31.19s, dist size 9.36 MB (9,815,494 bytes, 92 files; well below 12 MB budget).
+- `node scripts/research-editor-live/run.mjs rtl`: Exits 0, 0 console errors, 0 blocked requests, 9 screenshots + export.html + result.json in `.baglib-data/KEY-365-evidence/`.
+- `node scripts/research-editor-live/run.mjs main`: Exits 0, 0 console errors, 0 blocked requests.
+- Real files: Arabic text copied from `tests/real-files/pdf/ar/text-layer/` and English text from `tests/real-files/epub/en/`. Real files were read-only and uncommitted.
+
+Exact owned files (31):
+- `research-editor/patches/0002-direction-override.diff`
+- `research-editor/patches/0003-html-export-dir.diff`
+- `research-editor/patches/0004-frame-title-rtl.diff`
+- `research-editor/patches/0005-slash-menu-caret-anchor-rtl.diff`
+- `research-editor/patches/0006-collapse-icon-and-autoscroll.diff`
+- `research-editor/patches/0007-tables-and-database-rtl.diff`
+- `research-editor/vendor/blocksuite/affine/blocks/database/src/database-block.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/list/src/adapters/html.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/list/src/list-block.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/list/src/list-keymap.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/paragraph/src/adapters/html.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/paragraph/src/heading-icon.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/paragraph/src/paragraph-block.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/paragraph/src/paragraph-keymap.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/table/src/adapters/html.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/table/src/table-block-css.ts`
+- `research-editor/vendor/blocksuite/affine/blocks/table/src/table-block.ts`
+- `research-editor/vendor/blocksuite/affine/components/src/toggle-button/toggle-button.ts`
+- `research-editor/vendor/blocksuite/affine/data-view/src/view-presets/table/pc/table-view-style.ts`
+- `research-editor/vendor/blocksuite/affine/model/src/blocks/list/list-model.ts`
+- `research-editor/vendor/blocksuite/affine/model/src/blocks/paragraph/paragraph-model.ts`
+- `research-editor/vendor/blocksuite/affine/rich-text/src/rich-text.ts`
+- `research-editor/vendor/blocksuite/affine/shared/src/utils/popper-position.ts`
+- `research-editor/vendor/blocksuite/affine/widgets/frame-title/src/edgeless-frame-title-editor.ts`
+- `research-editor/vendor/blocksuite/affine/widgets/frame-title/src/frame-title.ts`
+- `research-editor/vendor/blocksuite/affine/widgets/slash-menu/src/styles.ts`
+- `research-editor/vendor/blocksuite/framework/std/src/event/keymap.ts`
+- `research-editor/README.md`
+- `scripts/research-editor-live/rtl.cjs`
+- `scripts/research-editor-live/run.mjs`
+- `docs/agent-ops/reports/KEY-365.md`
+
 ## KEY-363 verified handoff - 2026-11-14T22:45:55.277256+02:00 - Codex key363-root
 
 Implemented RE-2 under epic KEY-361 and Research Editor Plan2.1. User decision (2026-11-14), "add a new tab 'Editor' in the side bar in the notes section above the 'Notes Log'". Editor is first in the Notes group with ar/en labels, breadcrumbs and an availability-gated command-palette entry. The view places RE-3's manuscripts list beside a same-origin editor iframe and stacks the panes below800px. It hides the frame until appearance is applied and a chapter is selected. Theme, language, direction and root font scale update the mounted editor. Global unhandled shortcuts reach BagLib while undo/formatting stay in BlockSuite.

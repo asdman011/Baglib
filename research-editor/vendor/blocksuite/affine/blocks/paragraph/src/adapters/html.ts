@@ -334,6 +334,10 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
       const text = (o.node.props.text ?? { delta: [] }) as {
         delta: DeltaInsert[];
       };
+      const dir =
+        o.node.props.textDirection && o.node.props.textDirection !== 'auto'
+          ? (o.node.props.textDirection as string)
+          : 'auto';
       const { walkerContext, deltaConverter } = context;
       switch (o.node.props.type) {
         case 'text': {
@@ -344,6 +348,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
                 tagName: 'div',
                 properties: {
                   className: ['affine-paragraph-block-container'],
+                  dir,
                 },
                 children: [],
               },
@@ -353,7 +358,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
               {
                 type: 'element',
                 tagName: 'p',
-                properties: {},
+                properties: { dir },
                 children: deltaConverter.deltaToAST(text.delta),
               },
               'children'
@@ -386,6 +391,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
                 tagName: 'div',
                 properties: {
                   className: ['affine-paragraph-block-container'],
+                  dir,
                 },
                 children: [],
               },
@@ -395,7 +401,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
               {
                 type: 'element',
                 tagName: o.node.props.type,
-                properties: {},
+                properties: { dir },
                 children: deltaConverter.deltaToAST(text.delta),
               },
               'children'
@@ -423,6 +429,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
                 tagName: 'div',
                 properties: {
                   className: ['affine-paragraph-block-container'],
+                  dir,
                 },
                 children: [],
               },
@@ -434,6 +441,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
                 tagName: 'blockquote',
                 properties: {
                   className: ['quote'],
+                  dir,
                 },
                 children: [],
               },
@@ -443,7 +451,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
               {
                 type: 'element',
                 tagName: 'p',
-                properties: {},
+                properties: { dir },
                 children: deltaConverter.deltaToAST(text.delta),
               },
               'children'

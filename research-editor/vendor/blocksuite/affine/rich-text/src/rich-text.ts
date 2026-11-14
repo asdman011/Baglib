@@ -300,6 +300,8 @@ export class RichText extends WithDisposable(ShadowlessElement) {
                   rangeRect.width -
                   (containerRect.left + containerRect.width) +
                   2;
+              } else if (rangeRect.left < containerRect.left) {
+                scrollLeft -= containerRect.left - rangeRect.left + 2;
               }
               this.scrollLeft = scrollLeft;
             }

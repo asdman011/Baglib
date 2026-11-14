@@ -124,6 +124,56 @@ export const ListKeymapExtension = KeymapExtension(
         ctx.get('keyboardState').raw.preventDefault();
         return true;
       },
+      'Ctrl-ShiftRight': ctx => {
+        const text = std.selection.find(TextSelection);
+        if (!text) return false;
+        const model = std.store.getBlock(text.from.blockId)?.model;
+        if (!model) return false;
+        ctx.get('keyboardState').raw.preventDefault();
+        std.store.captureSync();
+        std.store.updateBlock(model, { textDirection: 'rtl' });
+        return true;
+      },
+      'Ctrl-ShiftLeft': ctx => {
+        const text = std.selection.find(TextSelection);
+        if (!text) return false;
+        const model = std.store.getBlock(text.from.blockId)?.model;
+        if (!model) return false;
+        ctx.get('keyboardState').raw.preventDefault();
+        std.store.captureSync();
+        std.store.updateBlock(model, { textDirection: 'ltr' });
+        return true;
+      },
+      'Mod-Shift-r': ctx => {
+        const text = std.selection.find(TextSelection);
+        if (!text) return false;
+        const model = std.store.getBlock(text.from.blockId)?.model;
+        if (!model) return false;
+        ctx.get('keyboardState').raw.preventDefault();
+        std.store.captureSync();
+        std.store.updateBlock(model, { textDirection: 'rtl' });
+        return true;
+      },
+      'Mod-Shift-l': ctx => {
+        const text = std.selection.find(TextSelection);
+        if (!text) return false;
+        const model = std.store.getBlock(text.from.blockId)?.model;
+        if (!model) return false;
+        ctx.get('keyboardState').raw.preventDefault();
+        std.store.captureSync();
+        std.store.updateBlock(model, { textDirection: 'ltr' });
+        return true;
+      },
+      'Mod-Shift-a': ctx => {
+        const text = std.selection.find(TextSelection);
+        if (!text) return false;
+        const model = std.store.getBlock(text.from.blockId)?.model;
+        if (!model) return false;
+        ctx.get('keyboardState').raw.preventDefault();
+        std.store.captureSync();
+        std.store.updateBlock(model, { textDirection: 'auto' });
+        return true;
+      },
     };
   },
   {

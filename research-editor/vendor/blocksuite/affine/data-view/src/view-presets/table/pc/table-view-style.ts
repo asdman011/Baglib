@@ -74,6 +74,15 @@ export const addGroupStyle = css({
   lineHeight: '20px',
   position: 'sticky',
   left: `${LEFT_TOOL_BAR_WIDTH}px`,
+  insetInlineStart: `${LEFT_TOOL_BAR_WIDTH}px`,
+  ':dir(rtl)': {
+    right: `${LEFT_TOOL_BAR_WIDTH}px`,
+    left: 'auto',
+  },
+  '[dir="rtl"] &': {
+    right: `${LEFT_TOOL_BAR_WIDTH}px`,
+    left: 'auto',
+  },
   borderRadius: '8px',
   cursor: 'pointer',
 
@@ -114,6 +123,15 @@ const leftToolBarStyle = css({
   position: 'sticky',
   zIndex: 1,
   left: 0,
+  insetInlineStart: 0,
+  ':dir(rtl)': {
+    right: 0,
+    left: 'auto',
+  },
+  '[dir="rtl"] &': {
+    right: 0,
+    left: 'auto',
+  },
   width: `${LEFT_TOOL_BAR_WIDTH}px`,
   flexShrink: 0,
 });

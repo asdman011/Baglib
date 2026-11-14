@@ -167,7 +167,9 @@ export class ListBlockComponent extends CaptionedBlockComponent<ListBlockModel> 
     return html`
       <div
         class=${'affine-list-block-container'}
-        dir="auto"
+        dir=${this.model.props.textDirection$?.value && this.model.props.textDirection$.value !== 'auto'
+          ? this.model.props.textDirection$.value
+          : 'auto'}
         style="${textAlignStyle}"
       >
         <div
