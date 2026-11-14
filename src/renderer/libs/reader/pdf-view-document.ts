@@ -87,6 +87,7 @@ class LocalPdfRangeTransport extends pdfjsLib.PDFDataRangeTransport {
 
 async function openRendererDocument(url: string, signal: AbortController, onSourceFailed: () => void): Promise<{ task: ReturnType<typeof pdfjsLib.getDocument>; document: pdfjsLib.PDFDocumentProxy }> {
   const [, byteSource] = await Promise.all([ensurePdfWorker(), localScheme(url) ? openPdfByteSource(url, signal.signal) : Promise.resolve(undefined)]);
+  if (signal.signal.aborted) throw new Error('cancelled');
   let rejectRange: ((error: unknown) => void) | undefined;
   let opened = false;
   const rangeFailure = new Promise<never>((_, reject) => { rejectRange = reject; });
@@ -105,14 +106,19 @@ async function openRendererDocument(url: string, signal: AbortController, onSour
     cMapPacked: true,
     standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
   });
+  let destruction: Promise<void> | undefined;
+  const destroy = () => destruction ||= task.destroy();
+  const cancel = () => { rejectRange?.(new Error('cancelled')); void destroy().catch(() => undefined); };
+  signal.signal.addEventListener('abort', cancel, { once: true });
+  if (signal.signal.aborted) cancel();
   try {
     const document = await Promise.race([task.promise, rangeFailure]);
     opened = true;
     return { task, document };
   } catch (error) {
-    await task.destroy().catch(() => undefined);
+    await destroy().catch(() => undefined);
     throw error;
-  }
+  } finally { signal.signal.removeEventListener('abort', cancel); }
 }
 
 function plainPageInfo(page: pdfjsLib.PDFPageProxy): PdfPageInfo {
@@ -135,9 +141,13 @@ export class PdfViewDocument {
     if (firstPage) this.pages.set(1, Promise.resolve(firstPage));
   }
 
+  /** Aborted synchronously when this document closes; children share its lifetime. */
+  get signal(): AbortSignal { return this.controller.signal; }
+
   get usesRasterHost(): boolean { return Boolean(this.client?.ready); }
 
   static async open(url: string, signal: AbortSignal, onSourceFailed: () => void): Promise<PdfViewDocument> {
+    if (signal.aborted) throw new Error('cancelled');
     if (rasterSupported() && localScheme(url)) {
       const assets = assetsUrl();
       const client = new PdfRasterClient(takeHost(), url, assets.href, { timeoutMs: 20000, renderTimeoutMs: 60000, onSourceFailed });
@@ -149,17 +159,23 @@ export class PdfViewDocument {
       if (ready) return new PdfViewDocument(url, ready.pages, client, onSourceFailed, ready.firstPage);
     }
     const created = new PdfViewDocument(url, 0, null, onSourceFailed);
-    const { document } = await created.rendererDocument();
-    if (signal.aborted) { await created.destroy(); throw new Error('cancelled'); }
-    return Object.assign(created, { numPages: document.numPages });
+    const abort = () => { void created.destroy(); };
+    signal.addEventListener('abort', abort, { once: true });
+    try {
+      const { document } = await created.rendererDocument();
+      if (signal.aborted) { await created.destroy(); throw new Error('cancelled'); }
+      return Object.assign(created, { numPages: document.numPages });
+    } finally { signal.removeEventListener('abort', abort); }
   }
 
   private rendererDocument(): ReturnType<typeof openRendererDocument> {
+    if (this.destroyed) return Promise.reject(new Error('cancelled'));
     this.fallback ||= openRendererDocument(this.url, this.controller, this.onSourceFailed);
     return this.fallback;
   }
 
   pageInfo(page: number): Promise<PdfPageInfo> {
+    if (this.destroyed) return Promise.reject(new Error('cancelled'));
     let info = this.pages.get(page);
     if (!info) {
       info = this.client?.ready ? this.client.call<PdfPageInfo>('page-info', page) : this.rendererDocument().then(async ({ document }) => plainPageInfo(await document.getPage(page)));
@@ -170,35 +186,42 @@ export class PdfViewDocument {
   }
 
   async render(page: number, scale: number, dpr: number, signal: AbortSignal): Promise<ImageBitmap | null> {
+    if (this.destroyed || signal.aborted) return null;
     const bitmap = this.client?.ready ? await this.client.render(page, scale, dpr, signal) : null;
-    if (bitmap || signal.aborted || this.destroyed) return bitmap;
+    if (signal.aborted || this.destroyed) { bitmap?.close(); return null; }
+    if (bitmap) return bitmap;
     const { document } = await this.rendererDocument();
-    if (signal.aborted) return null;
+    if (signal.aborted || this.destroyed) return null;
     const viewport = (await document.getPage(page)).getViewport({ scale });
     const canvas = new OffscreenCanvas(Math.max(1, Math.floor(viewport.width * dpr)), Math.max(1, Math.floor(viewport.height * dpr)));
     const context = canvas.getContext('2d');
     if (!context) throw new Error('engine-failed');
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     const pdfPage = await document.getPage(page);
-    const task = pdfPage.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport, ...await renderWithoutOwned(document, pdfPage) });
+    const annotations = await renderWithoutOwned(document, pdfPage);
+    if (signal.aborted || this.destroyed) return null;
+    const task = pdfPage.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport, ...annotations });
     const cancel = () => task.cancel();
     signal.addEventListener('abort', cancel, { once: true });
+    this.signal.addEventListener('abort', cancel, { once: true });
     try {
       await task.promise;
-      return signal.aborted ? null : canvas.transferToImageBitmap();
+      return signal.aborted || this.destroyed ? null : canvas.transferToImageBitmap();
     } catch (error) {
       if ((error as Error).name === 'RenderingCancelledException') return null;
       throw error;
-    } finally { signal.removeEventListener('abort', cancel); }
+    } finally { signal.removeEventListener('abort', cancel); this.signal.removeEventListener('abort', cancel); }
   }
 
   async textContent(page: number): Promise<TextContent> {
+    if (this.destroyed) throw new Error('cancelled');
     if (this.client?.ready) return this.client.call<TextContent>('text', page);
     const { document } = await this.rendererDocument();
     return (await document.getPage(page)).getTextContent();
   }
 
   async outline(): Promise<PdfOutlineEntry[]> {
+    if (this.destroyed) throw new Error('cancelled');
     if (this.client?.ready) return this.client.call<PdfOutlineEntry[]>('outline');
     const { document } = await this.rendererDocument();
     const convert = async (items: Awaited<ReturnType<typeof document.getOutline>> | null): Promise<PdfOutlineEntry[]> => Promise.all((items ?? []).map(async item => {
@@ -215,8 +238,9 @@ export class PdfViewDocument {
   async destroy(): Promise<void> {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.client?.dispose();
     this.controller.abort();
+    this.client?.dispose();
+    this.pages.clear();
     const fallback = this.fallback;
     if (fallback) await fallback.then(({ task }) => task.destroy()).catch(() => undefined);
   }

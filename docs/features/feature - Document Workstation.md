@@ -1,3 +1,7 @@
+## 2026-11-14 ? KEY-210 viewing-work cancellation
+
+Baglib's existing PDF.js viewer now binds thumbnails and deferred previews to their document, cancels abandoned derivative builds per last lease, reports source failure once, and orders raster-host nested-parser destruction with bounded shutdown. This refines the previously selected PDF.js viewing approach; pikepdf continues to prepare disposable derivatives and canonical originals remain unchanged. Source evidence, lifecycle tests, native real-file coverage and limitations are recorded in [PDF.js](PDF.js.md#2026-11-14--key-210-document-and-independent-parser-lifetimes). No new cross-application comparison or external investigation is claimed by this maintenance slice.
+
 # Document workstation: engine comparison and Baglib boundaries
 
 ## Page organizer persistent drafts, UI recovery button & Arabic replace certification — 2026-11-09, Antigravity

@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PdfRasterClient } from '../../src/shared/pdf-raster-client';
@@ -47,10 +48,12 @@ test('raster client timeouts and shutdown settle every waiting request', async (
   const item = fixture(10);
   item.emit({ type: 'ready' });
   assert.equal(await item.client.render(1, 1, 1, new AbortController().signal), null);
+  await sleep(350);
   assert.equal(item.terminated(), true);
   const pending = item.client.render(2, 1, 1, new AbortController().signal);
   item.client.dispose();
   assert.equal(await pending, null);
+  await sleep(350);
   assert.equal(item.terminated(), true);
   assert.equal(item.client.ready, false);
   assert.equal(await item.client.render(3, 1, 1, new AbortController().signal), null);
@@ -62,6 +65,7 @@ test('raster client worker crashes immediately release pending draws for local f
   const pending = item.client.render(1, 1, 1, new AbortController().signal);
   item.emit({ type: 'error', error: 'worker-failed' });
   assert.equal(await pending, null);
+  await sleep(350);
   assert.equal(item.terminated(), true);
   assert.equal(item.client.ready, false);
 });

@@ -53,9 +53,9 @@ export class PdfRasterClient {
         this.settleCall(message.id, call => call.resolve(message.value));
       } else if (message.type === 'call-error') {
         this.settleCall(message.id, call => call.reject(new Error('engine-failed')));
-      } else if (message.type === 'source-failed') {
-        settings.onSourceFailed?.();
+      } else if (message.type === 'source-failed' && !this.closed) {
         this.dispose();
+        settings.onSourceFailed?.();
       }
     };
     port.onerror = port.onmessageerror = () => this.dispose();
@@ -112,6 +112,7 @@ export class PdfRasterClient {
     for (const call of this.calls.values()) call.reject(new Error('engine-failed'));
     this.calls.clear();
     try { this.port.postMessage({ type: 'dispose' }); } catch { }
-    this.port.terminate();
+    // Let the host await its nested parser destruction; retain a bounded fallback for a hung host.
+    setTimeout(() => this.port.terminate(), 300);
   }
 }

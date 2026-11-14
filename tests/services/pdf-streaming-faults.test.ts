@@ -64,8 +64,21 @@ function rasterFixture(options: PdfRasterOptions = {}) {
   return { client, emit, sent, log, terminations: () => terminations };
 }
 
-// BUG: the second 'source-failed' message calls onSourceFailed again; that branch lacks the `!this.closed` guard (pdf-raster-client.ts).
-test.todo('raster client reports a late source failure once and settles pending calls once');
+test('raster client reports a late source failure once and settles pending calls once', async () => {
+  let failures = 0, settlements = 0;
+  const item = rasterFixture({ onSourceFailed: () => { failures++; item.emit({ type: 'source-failed' }); } });
+  item.emit({ type: 'ready', pages: 2 });
+  const call = item.client.call('text', 1).catch(error => { settlements++; return error.message; });
+  const render = item.client.render(1, 1, 1, new AbortController().signal);
+  item.emit({ type: 'source-failed' });
+  item.emit({ type: 'source-failed' });
+  assert.equal(await call, 'engine-failed');
+  assert.equal(await render, null);
+  assert.equal(failures, 1);
+  assert.equal(settlements, 1);
+  await sleep(350);
+  assert.equal(item.terminations(), 1);
+});
 
 test('raster client posts dispose before terminating and settles waiting work once', async () => {
   const pendingReady = rasterFixture();
@@ -73,6 +86,8 @@ test('raster client posts dispose before terminating and settles waiting work on
   const ready = pendingReady.client.whenReady.then(value => { readySettlements.push(value?.pages ?? null); return value; });
   pendingReady.client.dispose();
   assert.equal(await ready, null);
+  assert.deepEqual(pendingReady.log, ['post:init', 'post:dispose']);
+  await sleep(350);
   assert.deepEqual(pendingReady.log, ['post:init', 'post:dispose', 'terminate']);
   assert.deepEqual(readySettlements, [null]);
   pendingReady.client.dispose();
@@ -92,6 +107,8 @@ test('raster client posts dispose before terminating and settles waiting work on
   assert.equal(renderSettlements, 1);
   assert.deepEqual(await readyInfo, { pages: 4, firstPage: { width: 1, height: 1, rotation: 0, rawDims: {} } });
   assert.deepEqual(seenReady, [4]);
+  assert.deepEqual(rendering.log, ['post:init', 'post:render', 'post:dispose']);
+  await sleep(350);
   assert.deepEqual(rendering.log, ['post:init', 'post:render', 'post:dispose', 'terminate']);
   let lateClosed = false;
   rendering.emit({ type: 'bitmap', id: renderId, bitmap: { close: () => { lateClosed = true; } } });
@@ -143,8 +160,53 @@ test('view cache keeps a recently reused entry and evicts the least recently use
   cache.release(3, leaseB.id);
 });
 
-// BUG: release() neither aborts the cache-wide optimizer signal nor discards the running build; only dispose() aborts it (view-cache.ts).
-test.todo('view cache stops a running build when its only lease is released');
+test('view cache stops a running build when its only lease is released', async context => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'baglib-view-release-'));
+  const source = path.join(root, 'source.pdf');
+  await writeFile(source, '%PDF-1.7\noriginal');
+  let started!: () => void, finish!: () => void, signal!: AbortSignal;
+  let builds = 0;
+  const running = new Promise<void>(resolve => { started = resolve; });
+  const cache = new PdfViewCache(path.join(root, 'cache'), async (_source, output, _cap, buildSignal) => {
+    if (++builds > 1) { await writeFile(output, '%PDF-1.7\nretry'); return; }
+    signal = buildSignal; started();
+    // Deliberately ignore cancellation to verify that obsolete output is discarded too.
+    await new Promise<void>(resolve => { finish = resolve; });
+    await writeFile(output, '%PDF-1.7\nderivative');
+  }, { largeBytes: 1 });
+  context.after(async () => { finish?.(); await cache.dispose(); await rm(root, { recursive: true, force: true }); });
+  const lease = await cache.acquire(1, source);
+  await running;
+  cache.release(99, lease.id);
+  assert.equal(signal.aborted, false, 'a different owner cannot cancel the build');
+  cache.release(1, lease.id);
+  assert.equal(signal.aborted, true);
+  finish(); await cache.settled();
+  assert.deepEqual(await readdir(path.join(root, 'cache')), []);
+  assert.deepEqual(await readdir(path.join(root, 'cache-work')), []);
+  const reopened = await cache.acquire(2, source);
+  assert.equal(reopened.pending, true, 'cancellation does not poison later acquisition');
+});
+
+test('view cache retains a build for remaining leases and cancels it on cache shutdown', async context => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'baglib-view-shared-'));
+  const source = path.join(root, 'source.pdf');
+  await writeFile(source, '%PDF-1.7\noriginal');
+  let started!: () => void, signal!: AbortSignal;
+  const running = new Promise<void>(resolve => { started = resolve; });
+  const cache = new PdfViewCache(path.join(root, 'cache'), async (_source, _output, _cap, buildSignal) => {
+    signal = buildSignal; started();
+    await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+  }, { largeBytes: 1 });
+  context.after(async () => { await cache.dispose(); await rm(root, { recursive: true, force: true }); });
+  const first = await cache.acquire(1, source), second = await cache.acquire(2, source);
+  await running;
+  cache.release(1, first.id);
+  assert.equal(signal.aborted, false);
+  assert.ok(second.id);
+  await cache.dispose();
+  assert.equal(signal.aborted, true);
+});
 
 test('view cache reports a source changed on disk while a lease is held and stops serving the derivative', async context => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'baglib-view-watch-'));

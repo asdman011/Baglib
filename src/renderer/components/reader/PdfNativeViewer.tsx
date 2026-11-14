@@ -20,6 +20,7 @@ import { idlePdfTextStream } from '../../../shared/pdf-text-stream';
 import { attachTextLayerSelection, mergeNormalizedRects, selectionBlocks } from '../../libs/reader/pdf-text-selection';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { usePdfViewSource } from '../../hooks/usePdfViewSource';
+import { waitForPdfPreview } from '../../libs/reader/pdf-preview-work';
 import { PdfViewDocument, type PdfOutlineEntry } from '../../libs/reader/pdf-view-document';
 
 const pageBitmapCaches = new WeakMap<PdfViewDocument, PdfBitmapCache<ImageBitmap>>();
@@ -586,6 +587,8 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
   const [pdfDoc, setPdfDoc] = useState<PdfViewDocument | null>(null);
   const paintBarrier = useRef<{ document: PdfViewDocument; finish: () => void } | null>(null);
   const previewStored = useRef<PdfViewDocument | null>(null);
+  const previewWork = useRef<AbortController | null>(null);
+  useEffect(() => () => { previewWork.current?.abort(); previewWork.current = null; }, [fileUrl, viewingUrl]);
   const hasInstantPreview = useRef(false);
   useEffect(() => { hasInstantPreview.current = Boolean(instantPreview); }, [instantPreview]);
   const onPagePainted = useCallback((doc: PdfViewDocument, page: number) => {
@@ -593,14 +596,18 @@ const PdfNativeViewerComponent: React.FC<PdfNativeViewerProps> = ({
     if (previewStored.current === doc) return;
     previewStored.current = doc;
     if (hasInstantPreview.current) return;
+    previewWork.current?.abort();
+    const work = new AbortController();
+    previewWork.current = work;
     void (async () => {
-      await new Promise(resolve => setTimeout(resolve, 600));
+      if (!await waitForPdfPreview(work.signal, doc.signal)) return;
       const dpr = window.devicePixelRatio || 1;
       const bitmap = bitmapCache(doc).preview(`${page}@`);
       if (!bitmap || !dpr) return;
       const info = await doc.pageInfo(page);
+      if (work.signal.aborted || doc.signal.aborted) return;
       const preview = await encodePreview(bitmap, info.width, info.height, doc.numPages);
-      if (preview) savePreview(page, preview);
+      if (preview && !work.signal.aborted && !doc.signal.aborted) savePreview(page, preview);
     })().catch(() => undefined);
   }, [savePreview]);
   const [isLoadingDoc, setIsLoadingDoc] = useState(true);

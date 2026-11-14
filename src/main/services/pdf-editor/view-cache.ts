@@ -13,6 +13,7 @@ export type PdfViewOptimizer = (source: string, output: string, maxBytes: number
 export class PdfViewCache {
   private leases = new Map<string, Lease>();
   private pending = new Set<string>();
+  private builds = new Map<string, AbortController>();
   private failed = new Set<string>();
   private queue = Promise.resolve();
   private lock = Promise.resolve();
@@ -102,17 +103,22 @@ export class PdfViewCache {
   private enqueue(source: Fingerprint, key: string): void {
     if (this.pending.has(key) || this.failed.has(key) || this.closed) return;
     this.pending.add(key);
+    const build = new AbortController();
+    const abort = () => build.abort();
+    this.controller.signal.addEventListener('abort', abort, { once: true });
+    this.builds.set(key, build);
+    const cancelled = () => this.closed || build.signal.aborted || ![...this.leases.values()].some(lease => lease.key === key);
     this.queue = this.queue.then(async () => {
       const output = path.join(this.workRoot, `${key}-${process.pid}-${randomUUID()}.pdf`);
       try {
-        if (this.closed) return;
+        if (cancelled()) return;
         if (this.options.optimizeDelayMs) {
-          await sleep(this.options.optimizeDelayMs, undefined, { signal: this.controller.signal });
+          await sleep(this.options.optimizeDelayMs, undefined, { signal: build.signal });
           if (![...this.leases.values()].some(lease => lease.key === key)) return;
         }
         if (this.key(await this.fingerprint(source.path)) !== key) return;
-        await this.optimizer(source.path, output, this.cap, this.controller.signal);
-        if (this.closed || this.key(await this.fingerprint(source.path)) !== key) return;
+        await this.optimizer(source.path, output, this.cap, build.signal);
+        if (cancelled() || this.key(await this.fingerprint(source.path)) !== key || cancelled()) return;
         const info = await lstat(output);
         if (!info.isFile() || info.isSymbolicLink() || info.size > this.cap) throw new Error('invalid-output');
         const file = await open(output, 'r');
@@ -123,22 +129,30 @@ export class PdfViewCache {
         } finally { await file.close(); }
         const metadata = JSON.stringify({ version: 2, key, source, bytes: info.size });
         await this.exclusive(async () => {
-          if (this.closed || this.key(await this.fingerprint(source.path)) !== key) return;
+          if (cancelled() || this.key(await this.fingerprint(source.path)) !== key || cancelled()) return;
           if (await this.valid(key, source)) return;
           if (!await this.prune(info.size + Buffer.byteLength(metadata) * 2, key)) return;
+          if (cancelled()) return;
           await writeFile(this.filename(key, 'json.tmp'), metadata, { mode: 0o600 });
+          if (cancelled()) return;
           await rename(output, this.filename(key, 'pdf'));
+          if (cancelled()) { await unlink(this.filename(key, 'pdf')).catch(() => undefined); return; }
           await rename(this.filename(key, 'json.tmp'), this.filename(key, 'json'));
+          if (cancelled()) {
+            await unlink(this.filename(key, 'json')).catch(() => undefined);
+            await unlink(this.filename(key, 'pdf')).catch(() => undefined);
+          }
         });
         for (const [id, lease] of this.leases) if (lease.key === key) this.options.onChanged?.(lease.owner, id);
       } catch (error) {
-        if (!this.closed) {
+        if (!cancelled()) {
           this.failed.add(key);
           if (this.failed.size > 128) this.failed.delete(this.failed.values().next().value!);
           console.warn('[pdf-view-cache] Optimization unavailable; retaining original:', (error as Error).message);
         }
       } finally {
-        this.pending.delete(key);
+        this.controller.signal.removeEventListener('abort', abort);
+        if (this.builds.get(key) === build) { this.builds.delete(key); this.pending.delete(key); }
         await unlink(output).catch(() => undefined);
         await unlink(this.filename(key, 'json.tmp')).catch(() => undefined);
       }
@@ -168,7 +182,9 @@ export class PdfViewCache {
         } catch { }
       }
       if (cached && (firstAcquire || !lease.cached || lease.key !== key)) await utimes(this.filename(key, 'pdf'), new Date(), new Date());
+      const previousKey = lease.key;
       lease.key = key; lease.cached = cached;
+      if (previousKey !== key) this.abortUnleased(previousKey);
       if (!cached && eligible) this.enqueue(source, key);
       const preview = previewPage ? await this.readPreview(key, previewPage) : null;
       return { id: id!, key, url: `${readerAssetUrl(cached ? this.filename(key, 'pdf') : source.path)}?view=${key}`, cached, pending: this.pending.has(key), ...(preview ? { preview } : {}) };
@@ -215,11 +231,18 @@ export class PdfViewCache {
       await unlink(this.filename(lease.key, 'pdf')).catch(() => undefined);
     });
   }
+  private abortUnleased(key: string): void {
+    if ([...this.leases.values()].some(lease => lease.key === key)) return;
+    this.builds.get(key)?.abort();
+    this.builds.delete(key);
+    this.pending.delete(key);
+  }
   release(owner: number, id: string): void {
     const lease = this.leases.get(id);
     if (!lease || lease.owner !== owner) return;
     lease.watcher?.close();
     this.leases.delete(id);
+    this.abortUnleased(lease.key);
   }
   closeOwner(owner: number): void { for (const [id, lease] of this.leases) if (lease.owner === owner) this.release(owner, id); }
   async settled(): Promise<void> { await this.queue; }

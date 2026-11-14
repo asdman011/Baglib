@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
@@ -51,7 +52,7 @@ test('another owner cannot evict a derivative it does not lease', async context 
   assert.equal((await cache.acquire(1, source, first.id)).cached, true);
 });
 
-test('late range failure in the host reports once and ends the client', () => {
+test('late range failure in the host reports once and ends the client', async () => {
   let failures = 0;
   const item = rasterFixture(() => { failures++; });
   item.emit({ type: 'ready', pages: 3, firstPage: { width: 1, height: 1, rotation: 0, rawDims: {} } });
@@ -59,6 +60,8 @@ test('late range failure in the host reports once and ends the client', () => {
   item.emit({ type: 'source-failed', error: 'late read' });
   assert.equal(failures, 1);
   assert.equal(item.client.ready, false);
+  // The client gives the host a bounded moment to destroy its nested parser before terminating it.
+  await sleep(350);
   assert.equal(item.terminated(), true);
 });
 
@@ -80,6 +83,7 @@ test('a host that never becomes ready settles to null so the renderer path can o
   const item = rasterFixture(() => undefined);
   item.emit({ type: 'error', error: 'worker boot failed' });
   assert.equal(await item.client.whenReady, null);
+  await sleep(350);
   assert.equal(item.terminated(), true);
 });
 

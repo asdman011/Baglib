@@ -8,11 +8,12 @@ let documentReady: Promise<pdfjs.PDFDocumentProxy> | undefined;
 let controller: AbortController | undefined;
 let renderTask: pdfjs.RenderTask | undefined;
 let activeId: number | undefined;
-let cancelled = new Set<number>();
+const cancelled = new Set<number>();
 const pending = new Set<number>();
 let canvas: OffscreenCanvas | undefined;
 let queue = Promise.resolve();
 let coreWorker: Worker | undefined;
+let disposed = false;
 
 class WorkerFilters {
   addFilter() { throw new Error('unsupported-worker-filter'); }
@@ -52,6 +53,7 @@ async function initialize(url: string, assets: string): Promise<pdfjs.PDFDocumen
   const failure = new Promise<never>((_, reject) => { rejectRange = reject; });
   void failure.catch(() => undefined);
   const source = await openPdfByteSource(url, controller.signal);
+  if (disposed) throw new Error('cancelled');
   const range = new WorkerRange(source, controller.signal, error => {
     rejectRange(error);
     scope.postMessage({ type: 'source-failed', error: String(error) });
@@ -88,6 +90,7 @@ async function call(document: pdfjs.PDFDocumentProxy, method: string, page: numb
 
 scope.onmessage = event => {
   const message = event.data;
+  if (disposed) return;
   if (message.type === 'warm') {
     warmCore(message.assets);
   } else if (message.type === 'init') {
@@ -107,11 +110,11 @@ scope.onmessage = event => {
     pending.add(message.id);
     queue = queue.then(async () => {
       try {
-        if (!documentReady || cancelled.has(message.id)) return;
+        if (disposed || !documentReady || cancelled.has(message.id)) return;
         activeId = message.id;
         const document = await documentReady;
         const page = await document.getPage(message.page);
-        if (cancelled.has(message.id)) return;
+        if (disposed || cancelled.has(message.id)) return;
         const viewport = page.getViewport({ scale: message.scale });
         const width = Math.floor(viewport.width * message.dpr), height = Math.floor(viewport.height * message.dpr);
         if (width < 1 || height < 1 || width * height > 32 * 1024 * 1024) throw new Error('raster-size-limit');
@@ -121,13 +124,15 @@ scope.onmessage = event => {
         const context = canvas.getContext('2d');
         if (!context) throw new Error('unsupported-worker-canvas');
         context.setTransform(message.dpr, 0, 0, message.dpr, 0, 0);
-        renderTask = page.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport, ...await renderWithoutOwned(document, page) });
+        const annotations = await renderWithoutOwned(document, page);
+        if (disposed || cancelled.has(message.id)) return;
+        renderTask = page.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport, ...annotations });
         await renderTask.promise;
-        if (cancelled.has(message.id)) return;
+        if (disposed || cancelled.has(message.id)) return;
         const bitmap = canvas.transferToImageBitmap();
         scope.postMessage({ type: 'bitmap', id: message.id, bitmap }, [bitmap]);
       } catch (error) {
-        if (!cancelled.has(message.id)) scope.postMessage({ type: 'error', id: message.id, error: String(error) });
+        if (!disposed && !cancelled.has(message.id)) scope.postMessage({ type: 'error', id: message.id, error: String(error) });
       } finally {
         cancelled.delete(message.id);
         pending.delete(message.id);
@@ -136,10 +141,22 @@ scope.onmessage = event => {
       }
     });
   } else if (message.type === 'dispose') {
+    disposed = true;
     controller?.abort();
     renderTask?.cancel();
-    void documentTask?.destroy();
-    coreWorker?.terminate();
-    if (canvas) { canvas.width = 0; canvas.height = 0; }
+    void (async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          documentTask?.destroy(),
+          new Promise<void>(resolve => { timer = setTimeout(resolve, 200); }),
+        ]);
+      } catch { /* A failed parser still needs its owned worker terminated. */ }
+      finally {
+        clearTimeout(timer);
+        coreWorker?.terminate();
+        if (canvas) { canvas.width = 0; canvas.height = 0; }
+      }
+    })();
   }
 };
