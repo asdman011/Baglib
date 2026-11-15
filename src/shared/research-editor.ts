@@ -26,6 +26,9 @@ export interface ResearchEditorSession {
   arrangeSources?(options?: { lang?: 'ar' | 'en' }): Promise<{ arranged: boolean; counts: Record<string, number>; frameIds?: string[] }>;
   undoArrange?(): Promise<boolean>;
   insertKanban?(title?: string, options?: { lang?: 'ar' | 'en' }): Promise<string>;
+  fitToScreen?(): void;
+  exportSources?(): Promise<{ markdown: string; html: string }>;
+  scrollToBlock?(blockId: string): void;
   dispose(): void;
 }
 /** Parent-owned bridge. The iframe has no preload or IPC endpoint. */

@@ -43,7 +43,7 @@ export function createResearchEditorHost(api: ManuscriptsAPI, blobs: ResearchEdi
     },
     arrangeSources(options?: { lang?: 'ar' | 'en' }) {
       return serialize(async () => {
-        if (!session?.arrangeSources) return { arranged: false, counts: {} as any, frameIds: [] };
+        if (!session?.arrangeSources) return { arranged: false, counts: {}, frameIds: [] };
         const res = await session.arrangeSources({ lang: appearance.lang, ...options });
         if (document && res.arranged) {
           controller?.change(document.snapshot, 'edgeless');
@@ -65,6 +65,22 @@ export function createResearchEditorHost(api: ManuscriptsAPI, blobs: ResearchEdi
       return serialize(async () => {
         if (!session?.insertKanban) return '';
         return session.insertKanban(title);
+      });
+    },
+    fitToScreen() {
+      return serialize(async () => {
+        session?.fitToScreen?.();
+      });
+    },
+    exportSources() {
+      return serialize(async () => {
+        if (!session?.exportSources) return { markdown: '', html: '' };
+        return session.exportSources();
+      });
+    },
+    scrollToBlock(blockId: string) {
+      return serialize(async () => {
+        session?.scrollToBlock?.(blockId);
       });
     },
     renameDocument(id: string, title: string) {

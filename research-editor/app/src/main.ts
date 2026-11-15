@@ -223,6 +223,25 @@ async function mount() {
       const lang = options?.lang ?? bridge?.appearance?.()?.lang ?? ((document.documentElement.lang === 'ar' || document.documentElement.dir === 'rtl') ? 'ar' : 'en');
       return insertResearchKanban(editor.doc, undefined, { ...options, lang, title });
     },
+    fitToScreen() {
+      fitEdgelessScreen(editor);
+    },
+    async exportSources() {
+      const job = transformer();
+      const original = job.docToSnapshot(editor.doc);
+      const snapshot = original && prepareApparatusExport(original);
+      if (!snapshot) throw new Error('snapshot-export-failed');
+      return {
+        markdown: (await new MarkdownAdapter(job, editor.doc.provider).fromDocSnapshot({ snapshot })).file,
+        html: (await new HtmlAdapter(job, editor.doc.provider).fromDocSnapshot({ snapshot })).file,
+      };
+    },
+    scrollToBlock(blockId: string) {
+      try {
+        const el = editor.querySelector(`[data-block-id="${blockId}"]`) || editor.querySelector(`[id="${blockId}"]`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch {}
+    },
     async flush() { await flushApparatusSettings(); await blobs?.flush(); await scheduled; },
     dispose() { stopApparatusAppearance?.(); observedDoc.off('update', changed); workspace.forceStop(); workspace.dispose(); editor.remove(); },
   };

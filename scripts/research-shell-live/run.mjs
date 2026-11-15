@@ -1,0 +1,78 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { spawn, execFileSync } from 'node:child_process';
+import { build } from 'esbuild';
+import electron from 'electron';
+
+const root = fs.realpathSync('.baglib-data');
+const evidence = path.join(root, 'KEY-378-evidence');
+fs.mkdirSync(evidence, { recursive: true });
+
+for (const name of ['failure.txt', 'failure.png', 'result.json']) {
+  fs.rmSync(path.join(evidence, name), { force: true });
+}
+
+const profile = fs.mkdtempSync(path.join(root, 'k378-'));
+const existing = () => execFileSync(
+  'powershell.exe',
+  ['-NoProfile', '-Command', 'Get-Process electron,Baglib -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id; exit 0'],
+  { encoding: 'utf8', windowsHide: true }
+).trim();
+
+try {
+  await build({
+    entryPoints: ['scripts/research-shell-live/initialize.ts'],
+    outfile: path.join(profile, 'initialize.cjs'),
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    packages: 'external',
+  });
+
+  fs.mkdirSync(path.join(profile, 'partitions'), { recursive: true });
+  const installed = path.join(process.env.APPDATA, 'baglib', 'partitions', 'bayan_poetry.sqlite');
+  if (fs.existsSync(installed)) {
+    fs.copyFileSync(installed, path.join(profile, 'partitions', 'bayan_poetry.sqlite'));
+  }
+
+  while (existing()) {
+    console.log('KEY-378 waiting for other Electron processes to finish...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+
+  const env = {
+    ...process.env,
+    BAGLIB_KEY378_PROFILE: profile,
+    BAGLIB_KEY378_EVIDENCE: evidence,
+    BAGLIB_REGISTER_PROTOCOL: '0',
+    BAGLIB_DEV_URL: 'app://-/',
+  };
+  delete env.ELECTRON_RUN_AS_NODE;
+
+  console.log('Starting KEY-378 live scenario in Electron...');
+  const code = await new Promise((resolve, reject) => {
+    const child = spawn(
+      electron,
+      ['scripts/research-shell-live/main.cjs', '--user-data-dir=' + profile],
+      { env, stdio: 'inherit', windowsHide: true }
+    );
+    const timer = setTimeout(() => {
+      console.error('KEY-378 live scenario timeout (300s)');
+      child.kill();
+    }, 300000);
+    child.once('error', reject);
+    child.once('exit', exitCode => {
+      clearTimeout(timer);
+      resolve(exitCode);
+    });
+  });
+
+  assert.equal(code, 0, 'Live scenario failed with exit code ' + code);
+} finally {
+  const target = fs.realpathSync(profile);
+  assert.equal(path.dirname(target), root);
+  assert.ok(path.basename(target).startsWith('k378-'));
+  fs.rmSync(target, { recursive: true, force: true });
+  console.log('KEY-378 throwaway profile deleted cleanly.');
+}

@@ -1,3 +1,64 @@
+## KEY-378 verified handoff - 2026-11-15T08:54:00+02:00 - Agent: Antigravity
+
+RE-13 AFFiNE-style editor shell customised for BagLib implemented and verified, epic KEY-361.
+User decision: *"yes their layout and we then customize it for our own use, and integrating the ai of our byok so keep the bottom right ai button."*
+
+What changed:
+1. Native React + Tailwind + Lucide implementation of AFFiNE editor shell:
+   - `ResearchSidebar.tsx`: Collapsible tree of manuscripts/chapters, quick search, "All Docs", "Favourites" with quick star toggling, "Organize / Folders" with nested chapter hierarchy, and footer actions for scholarly templates, import, and trash.
+   - `ResearchTopBar.tsx`: Mode segmented switch (Page vs. Edgeless), inline editable title, favourite star, info button, 9-action dropdown menu (rename, default to edgeless, favourite toggle, view info, view TOC, view history checkpoints, duplicate, export Markdown/HTML, move to trash), presentation mode toggle, and right-panel toggle.
+   - `ResearchEdgelessBar.tsx`: Edgeless bottom-left floating zoom panel (`fitToScreen`, `-`, `%`, `+`) and bottom-center floating pill toolbar with 13 tools (select, frame, connector, link, note, pen, eraser, shapes, mind map, kanban tasks, arrange sources, undo arrange, link study board).
+   - `ResearchOutlineRail.tsx`: Right-edge rail of heading ticks (H1 wide, H2 medium, H3 narrow) with hover/click popover card displaying the document outline.
+   - `ResearchAiButton.tsx`: Bottom-right floating sparkles circular button wired to BYOK AI drawer with scholarly query shortcuts.
+   - `ResearchInfoDrawer.tsx`: Slide-out document stats drawer (words, characters, paragraphs, headings).
+   - `ResearchHistoryModal.tsx`: Checkpoints restore modal.
+   - `ResearchTemplateModal.tsx`: 4 scholarly templates modal.
+   - `src/shared/manuscript-headings.ts`: Snapshot heading extraction and document statistics calculation.
+   - `src/shared/manuscript-templates.ts`: Bilingual templates structure.
+   - `src/shared/research-editor.ts` & `src/renderer/components/research/editor-host.ts`: Exposed `fitToScreen()`, `exportSources()`, `scrollToBlock()`.
+   - `research-editor/app/src/main.ts`: BlockSuite session bridge methods.
+   - `src/renderer/translations.ts`: 62 bilingual keys mirrored in Arabic (RTL) and English (LTR).
+   - `src/renderer/components/research/research-editor.css`: CSS logical properties.
+
+Verification performed:
+- Unit & regression tests: `tests/ui/research-shell.test.ts` (6/6 pass); `tests/ui/a11y-foundations.test.ts`, `tests/ui/motion-set.test.ts`, `tests/ui/settings-directory-coverage.test.ts` (23/23 pass).
+- TypeScript: `npx tsc --noEmit` clean (0 errors).
+- Build: `npm run build:renderer` clean (0 errors).
+- Live Electron scenario: `node scripts/research-shell-live/run.mjs` against real Arabic and English PDFs in throwaway profile: 9 screenshots in `.baglib-data/KEY-378-evidence/`, 0 errors, result verified.
+- Codex KEY-370 and RE-6/RE-7 work preserved cleanly without conflict.
+
+Files changed by KEY-378:
+- `docs/features/feature - Research Editor Plan.md`
+- `research-editor/app/src/main.ts`
+- `src/renderer/components/research/ResearchAiButton.tsx`
+- `src/renderer/components/research/ResearchEdgelessBar.tsx`
+- `src/renderer/components/research/ResearchEditorView.tsx`
+- `src/renderer/components/research/ResearchHistoryModal.tsx`
+- `src/renderer/components/research/ResearchInfoDrawer.tsx`
+- `src/renderer/components/research/ResearchOutlineRail.tsx`
+- `src/renderer/components/research/ResearchSidebar.tsx`
+- `src/renderer/components/research/ResearchTemplateModal.tsx`
+- `src/renderer/components/research/ResearchTopBar.tsx`
+- `src/renderer/components/research/editor-host.ts`
+- `src/renderer/components/research/research-editor.css`
+- `src/renderer/translations.ts`
+- `src/shared/manuscript-headings.ts`
+- `src/shared/manuscript-templates.ts`
+- `src/shared/research-editor.ts`
+- `tests/ui/research-shell.test.ts`
+- `scripts/research-shell-live/initialize.ts`
+- `scripts/research-shell-live/main.cjs`
+- `scripts/research-shell-live/run.mjs`
+- `scripts/research-shell-live/scenario.cjs`
+- `docs/agent-ops/reports/KEY-378.md`
+- `docs/agent-ops/board.md`
+- `CURRENT_TASK.md`
+- `IMPLEMENTATION_PLAN.md`
+
+## KEY-370 active - 2026-11-15T08:06:55.717303+02:00 - Agent: Codex
+
+RE-9 reader-to-manuscript requested explicitly; standing scoped commit/push authorization confirmed. Read KEY-370 live acceptance, plan2.1, state/board/status and overnight rules. Own new transfer/picker/drop modules and tests/live harness; own integration hunks only in reader actions, research editor bridge/host/main/view, translations, plan and state files. Preserve all pre-existing RE-7 and unrelated edits. No new dependencies/schema/downloads. Implementation and verification pending.
+
 ## KEY-367 pushed - 2026-11-15T08:04:15.101352+02:00 - Agent: Codex
 
 Normal push to origin/feature/library-domain succeeded; remote branch hash verified as 73b792dfa2558dbf5287ac3e7d168c63d7fb6839. Implementation commit 3055842e42515e1b1d779c8b0d7fbd6c89203eca contains exactly29KEY-367paths/ownhunks. Final commit 73b792dfa2558dbf5287ac3e7d168c63d7fb6839 is the two-state-file forward checkpoint with the exact requested BOM-free subject ending Agent: Codex. Both were created under docs/agent-ops/commit.lock after explicit user approval; no history rewrite or force push. Isolated staged RE-6 tests104/104 and tsc passed; combined working-tree focused111/full2457(360suites,concurrency2)/native2ar-en passed, with builds/lint/vendor verification already recorded. No Jira mutation.

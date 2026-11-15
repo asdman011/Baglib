@@ -241,3 +241,49 @@ The existing `settings_json` stores citation style, Quran placement, footnote nu
 Per-page numbering remains conditional on RE-8's paginated PDF exporter, as specified by the original RE-6 scope. The editor saves that preference but displays chapter numbering with an explicit explanation. RE-6 does not claim paginated page-bottom footnotes. Bibliography/contents generation is scoped to the current document/chapter, not an aggregation across all manuscript documents.
 
 Verification, dist size and unresolved limitations are recorded in the KEY-367 handoff/report. Evidence and exact inspected contracts are in the [BlockSuite RE-6 investigation](BlockSuite.md).
+
+## RE-13 implementation evidence, KEY-378, 2026-11-15 (Agent: Antigravity)
+
+The user decision is: *"yes their layout and we then customize it for our own use, and integrating the ai of our byok so keep the bottom right ai button."*
+
+### Licence Inspection
+Inspected AFFiNE community source at `D:/Ammar/Projects/Baglib/spike/affine-src/AFFiNE-0.27.4/LICENSE` and `LICENSE-MIT`. All frontend packages and BlockSuite are MIT-licensed with no restrictive AGPL/commercial constraints. The shell is built natively inside BagLib's renderer using React 19, Tailwind CSS, Lucide icons, and CSS logical properties, avoiding monolithic web package dependencies while preserving AFFiNE's layout.
+
+### Shell Architecture & Components
+1. **Collapsible Sidebar (`ResearchSidebar.tsx`):**
+   - Replaces the raw two-column `ManuscriptList` inside the Editor tab.
+   - Header with workspace title and "New Manuscript" inline form button.
+   - Live search input filtering manuscripts and documents.
+   - Navigation tree: "All Docs", expandable "Favourites" with star toggles, "Organize / Folders" with nested chapter hierarchy, and action buttons for rename, trash, add chapter, and reorder.
+   - Footer actions: "Templates" picker trigger, "Import" trigger, and "Trash" toggle with restore actions.
+2. **Top Bar (`ResearchTopBar.tsx`):**
+   - Sidebar toggle icon button.
+   - Segmented mode switch pill (Page view `<FileText>` vs. Edgeless view `<Frame>`).
+   - Inline editable document title with save on Enter/blur and Escape cancel.
+   - Favourite star button with instant local persistence.
+   - Document Info button.
+   - Options "..." dropdown menu with 9 actions: Rename, Default to Edgeless toggle, Favourite toggle, View Info, View Table of Contents, View History Checkpoints, Duplicate, Export (Markdown / HTML via BlockSuite adapters), and Move to Trash.
+   - Presentation mode toggle and right-panel toggle buttons.
+3. **Floating Edgeless Bottom Controls (`ResearchEdgelessBar.tsx`):**
+   - Visible only when `primary_mode === 'edgeless'`.
+   - Bottom-left floating zoom panel (`|↔|` fit to screen, `-`, `%` zoom indicator, `+`).
+   - Bottom-center floating pill toolbar with active tool selection: Select, Frame, Connector, Link, Note, Pen, Eraser, Shapes, Mind Map, Kanban Tasks, Arrange Sources, Undo Arrange, and Link Study Board.
+4. **Table of Contents Rail & Outline Popover (`ResearchOutlineRail.tsx`):**
+   - Right-edge vertical rail with proportional heading tick marks (H1: wide, H2: medium, H3+: narrow) matching AFFiNE design.
+   - Hover and click interaction opening a floating Outline popover card with document title and nested heading tree.
+   - Clicking any heading scrolls the editor viewport directly to the block.
+5. **Floating AI Sparkles Button & Drawer (`ResearchAiButton.tsx`):**
+   - Bottom-right floating circular button with gradient background and Sparkles icon.
+   - Clicking opens the RE-12 BYOK Research Assistant drawer.
+   - Quick scholarly prompt chips: summarize chapter, extract citations, outline ideas, academic proofreading.
+   - Grounded context referencing the active manuscript title.
+6. **Auxiliary Modals & Drawers:**
+   - `ResearchInfoDrawer.tsx`: slide-out drawer displaying word count, character count, paragraph count, and heading count computed via `src/shared/manuscript-headings.ts`.
+   - `ResearchHistoryModal.tsx`: modal listing version checkpoints with one-click restore via `api.restoreVersion()`.
+   - `ResearchTemplateModal.tsx`: modal offering 4 scholarly templates (`MANUSCRIPT_TEMPLATES`: Academic Research Paper, Book Chapter, Thematic Study, Critical Edition) with bilingual structure.
+
+### Internationalization & Verification
+- 62 centralized translation keys added to both `ar` and `en` dictionaries in `src/renderer/translations.ts`.
+- CSS logical properties (`margin-inline-start`, `padding-inline-end`, `inset-inline-start`, `inset-inline-end`, `border-inline-start`) ensure mirrored layout in Arabic (RTL) and English (LTR).
+- Automated unit test suite `tests/ui/research-shell.test.ts` (6/6 pass) verifies heading extraction, stats calculation, template definitions, translation parity, and host bridge APIs.
+- Live scenario `scripts/research-shell-live/` run in Electron with real Arabic and English PDFs in a throwaway profile: 9 evidence screenshots captured under `.baglib-data/KEY-378-evidence/`, 0 errors, `result.json` verified.
