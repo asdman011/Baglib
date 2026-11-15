@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-15T08:02:41.498817+02:00, Agent: Codex KEY-367] Scoped implementation committed 3055842e42515e1b1d779c8b0d7fbd6c89203eca (29files/ownhunks), RE-7 preserved. State-only forward commit uses exact requested BOM-free subject, correcting Windows message-file encoding without rewriting history. Both authorized commits await normal push; tests unchanged/pass.
+
 - [2026-11-15T08:01:14.477126+02:00, Agent: Codex KEY-367] PUBLICATION READY: explicitly approved; exactly29paths staged using own cached patches, no RE-7 implementation hunks. Isolated staged RE-6 snapshot104focused/tscpass; combined111focused/full2457/native2ar-en pass. Working-tree RE-7 contributions preserved; commitlock held; normal origin/feature/library-domain publication next.
 
 - [2026-11-15T07:54:33.0277997+02:00, Agent: Codex KEY-367] User explicitly authorized scoped commit/push now to origin/feature/library-domain; prior approval-pending notes superseded. Commit lock acquired; only KEY-367 patches will enter index; RE-7 canvas/board hunks preserved. Isolated staged-snapshot verification next, then exact requested commit/publication/signal.
