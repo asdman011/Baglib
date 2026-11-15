@@ -68,7 +68,7 @@ export function GlobalAssistant() {
   const errorText = (code: string, detail?: string) => {
     const keys: Record<string, TranslationKey> = {
       'not-configured': 'researchAiNotConfigured', 'needs-selection': 'researchAiNeedsSelection', 'ai-disabled': 'assistantErrorDisabled', busy: 'assistantErrorBusy',
-      'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth', 'no-sources': 'assistantCardsNeedSources', 'invalid-output': 'assistantErrorUnchecked',
+      'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth', 'provider-too-large': 'aiErrorTooLarge', 'no-sources': 'assistantCardsNeedSources', 'invalid-output': 'assistantErrorUnchecked',
     };
     const base = keys[code] ? t(keys[code]) : t('researchAiProviderError').replace('{message}', detail || code);
     return detail && keys[code] && code.startsWith('provider') ? `${base}\n${t('aiErrorDetail').replace('{detail}', detail)}` : base;
@@ -113,7 +113,7 @@ export function GlobalAssistant() {
         sources, chapterId: chapter?.chapterId, selection, action, lang: lang === 'ar' ? 'ar' : 'en', allowRemote,
       });
       if (result.ok) push({ id: id(), role: 'assistant', text: result.text, citations: result.citations, sourceCount: result.sourceCount });
-      else push({ id: id(), role: 'error', text: errorText(result.error, result.detail), settings: ['not-configured', 'provider-quota', 'provider-busy', 'provider-auth', 'ai-disabled'].includes(result.error) });
+      else push({ id: id(), role: 'error', text: errorText(result.error, result.detail), settings: ['not-configured', 'provider-quota', 'provider-busy', 'provider-auth', 'provider-too-large', 'ai-disabled'].includes(result.error) });
     } catch (error) {
       push({ id: id(), role: 'error', text: errorText('engine-failed', error instanceof Error ? error.message : String(error)) });
     } finally {
@@ -138,12 +138,12 @@ export function GlobalAssistant() {
 
   return <>
     <button type="button" onClick={() => setOpen(!open)} data-assistant-fab data-research-ai-fab aria-expanded={open} aria-label={t('researchAiButton')} title={t('researchAiButton')}
-      className="fixed bottom-12 end-5 z-[60] flex size-12 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-blue-500 to-violet-500 text-white shadow-lg shadow-blue-500/30 transition-transform hover:scale-105 active:scale-95">
+      className="fixed bottom-12 end-5 z-[45] flex size-12 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-blue-500 to-violet-500 text-white shadow-lg shadow-blue-500/30 transition-transform hover:scale-105 active:scale-95">
       {open ? <X className="size-5" /> : <Sparkles className="size-5" />}
     </button>
 
     {open && <aside role="dialog" aria-label={t('researchAiTitle')} data-assistant-panel data-research-ai-panel dir={dir}
-      className="fixed bottom-28 end-5 z-[60] flex h-[min(74vh,660px)] w-[min(27rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl">
+      className="fixed bottom-28 end-5 z-[45] flex h-[min(74vh,660px)] w-[min(27rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-subtle bg-surface text-main shadow-2xl">
       <header className="flex items-center gap-2.5 border-b border-subtle px-4 py-3">
         <span className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-500 text-white"><Sparkles className="size-4" /></span>
         <div className="min-w-0">
@@ -233,7 +233,7 @@ export function GlobalAssistant() {
       {/* Composer */}
       <div className="border-t border-subtle bg-surface p-2.5">
         {consentFor && <div data-assistant-consent role="alertdialog" className="mb-2 rounded-xl border border-amber-500/50 bg-amber-500/10 p-2 text-[11px] leading-relaxed">
-          <p dir="auto">{t('assistantConsentAsk', { provider: t(consent.providerLabel) })}</p>
+          <p dir="auto">{t('assistantConsentAsk', { provider: (consent.customName ?? t(consent.providerLabel)) })}</p>
           <div className="mt-1.5 flex gap-1.5">
             <button type="button" data-assistant-consent-allow onClick={() => void allowAndSend()} className="rounded-full bg-primary px-3 py-1 font-semibold text-white">{t('assistantConsentAllow')}</button>
             <button type="button" data-assistant-consent-cancel onClick={() => setConsentFor(null)} className="rounded-full border border-subtle px-3 py-1">{t('assistantConsentCancel')}</button>
@@ -253,7 +253,7 @@ export function GlobalAssistant() {
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-muted">
           {consent.ready && <span data-assistant-provider className="inline-flex min-w-0 items-center gap-1">
             <span className={`size-1.5 shrink-0 rounded-full ${consent.local || consent.allowed ? 'bg-emerald-500' : 'bg-amber-500'}`} aria-hidden="true" />
-            <span className="truncate" dir="auto">{consent.local ? t('assistantRunsLocally') : t(consent.allowed ? 'assistantSendingTo' : 'assistantAsksFirst', { provider: t(consent.providerLabel) })}</span>
+            <span className="truncate" dir="auto">{consent.local ? t('assistantRunsLocally') : t(consent.allowed ? 'assistantSendingTo' : 'assistantAsksFirst', { provider: (consent.customName ?? t(consent.providerLabel)) })}</span>
             {!consent.local && consent.allowed && <button type="button" onClick={() => void consent.revoke()} className="underline-offset-2 hover:text-main hover:underline">{t('assistantConsentRevoke')}</button>}
           </span>}
           {explainable.length === 1 && <button type="button" onClick={() => setExplain(explainable[0])} className="hover:text-main hover:underline">{t('explainBackTitle')}</button>}

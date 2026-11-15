@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { AISettings, AIProviderId, TranslationProviderId } from '../../../shared/types/ai';
 import { TranslationKey } from '../../translations';
+import { CustomProviderFields } from './CustomProviderFields';
 
 interface AISettingsModalProps {
   isOpen: boolean;
@@ -151,12 +152,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             <label className="block font-semibold mb-2 text-zinc-900 dark:text-zinc-100">
               {t('aiProviderLabel')}
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
               {[
                 { id: 'ollama', label: t('aiProviderOllama'), icon: Server },
                 { id: 'openai', label: t('aiProviderOpenAI'), icon: Cpu },
                 { id: 'gemini', label: t('aiProviderGemini'), icon: Sparkles },
                 { id: 'claude', label: t('aiProviderClaude'), icon: Key },
+                // KEY-385: any OpenAI-compatible service (Groq, OpenRouter, Mistral, a local LM Studio…).
+                { id: 'custom', label: t('aiProviderCustom'), icon: Globe },
               ].map((p) => {
                 const Icon = p.icon;
                 const isSelected = settings.provider === p.id;
@@ -250,6 +253,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 </div>
               </>
             )}
+
+            {settings.provider === 'custom' && <CustomProviderFields settings={settings} setSettings={setSettings} t={t} />}
 
             {settings.provider === 'gemini' && (
               <>

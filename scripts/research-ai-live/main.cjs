@@ -10,6 +10,12 @@ const mockServer = http.createServer((req, res) => {
   let body = '';
   req.on('data', chunk => { body += chunk; });
   req.on('end', () => {
+    // KEY-385: the model list an OpenAI-compatible service offers ("Load models" in settings).
+    if (req.method === 'GET' && req.url.endsWith('/models')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ data: [{ id: 'mock-chat' }, { id: 'whisper-large-v3' }, { id: 'mock-reasoning' }] }));
+      return;
+    }
     const json = JSON.parse(body || '{}');
     mock.requests.push({ url: req.url, authorization: req.headers.authorization, body: json });
     const system = json.messages?.[0]?.content ?? '';

@@ -4,6 +4,7 @@
  * Context is the current chapter plus the sources it cites (manuscript_link), nothing else.
  */
 import { parseManuscriptSnapshot } from './manuscript-snapshot';
+import { isLocalAddress, normaliseBaseUrl } from './ai-providers';
 
 export type ResearchAiAction = 'ask' | 'summarize' | 'rewrite' | 'translate' | 'outline' | 'review';
 export const RESEARCH_AI_ACTIONS: readonly ResearchAiAction[] = ['ask', 'summarize', 'rewrite', 'translate', 'outline', 'review'];
@@ -171,13 +172,14 @@ export function answerForInsert(text: string, citations: ResearchAiCitation[]): 
 }
 
 /** Whether the saved settings can call a provider at all (Ollama needs no key). */
-export function providerReady(settings: { enabled?: boolean; provider?: string; apiKey?: string; geminiApiKey?: string; claudeApiKey?: string; baseUrl?: string }): boolean {
+export function providerReady(settings: { enabled?: boolean; provider?: string; apiKey?: string; geminiApiKey?: string; claudeApiKey?: string; baseUrl?: string; customBaseUrl?: string; customApiKey?: string }): boolean {
   if (settings.enabled === false) return false;
   switch (settings.provider ?? 'ollama') {
     case 'ollama': return true;
     case 'gemini': return Boolean(settings.geminiApiKey || settings.apiKey);
     case 'claude': return Boolean(settings.claudeApiKey || settings.apiKey);
-    case 'custom': return Boolean(settings.baseUrl || settings.apiKey);
+    // KEY-385: an address is required; a key too, unless the server runs on this computer.
+    case 'custom': return Boolean(normaliseBaseUrl(settings.customBaseUrl)) && (Boolean(settings.customApiKey) || isLocalAddress(settings.customBaseUrl));
     default: return Boolean(settings.apiKey);
   }
 }

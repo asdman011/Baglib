@@ -4,9 +4,13 @@
  * OpenAI-compatible services), so switching provider or address asks again. The main process still refuses a
  * remote call unless the request carries `allowRemote`.
  */
-export interface ConsentSettings { provider?: string; ollamaEndpoint?: string; baseUrl?: string; remoteConsent?: string }
+import { isLocalAddress, normaliseBaseUrl } from './ai-providers';
 
+export interface ConsentSettings { provider?: string; ollamaEndpoint?: string; baseUrl?: string; customBaseUrl?: string; remoteConsent?: string }
+
+/** A local Ollama, or (KEY-385) an OpenAI-compatible server on this computer such as LM Studio. */
 export function isLocalAi(settings: ConsentSettings): boolean {
+  if (settings.provider === 'custom') return isLocalAddress(settings.customBaseUrl);
   try {
     const url = new URL(settings.ollamaEndpoint || 'http://127.0.0.1:11434');
     return settings.provider === 'ollama' && ['http:', 'https:'].includes(url.protocol) && ['127.0.0.1', '[::1]'].includes(url.hostname) && !url.username && !url.password;
@@ -17,7 +21,8 @@ export function isLocalAi(settings: ConsentSettings): boolean {
 export function remoteConsentKey(settings: ConsentSettings): string | null {
   if (isLocalAi(settings)) return null;
   const provider = settings.provider || 'ollama';
-  const address = provider === 'openai' || provider === 'custom' ? (settings.baseUrl || '').trim().replace(/\/+$/, '')
+  const address = provider === 'custom' ? normaliseBaseUrl(settings.customBaseUrl)
+    : provider === 'openai' ? (settings.baseUrl || '').trim().replace(/\/+$/, '')
     : provider === 'ollama' ? (settings.ollamaEndpoint || '').trim() : '';
   return address ? `${provider}|${address}` : provider;
 }

@@ -35,7 +35,7 @@ module.exports = {
 
     // 2. Point BYOK at the local mock (OpenAI-compatible) and summarise: the answer carries citations.
     assert.ok(mock.port > 0, 'mock provider listening');
-    await evaluate(`window.electronAPI.ai.saveSettings({ provider: 'custom', baseUrl: 'http://127.0.0.1:${mock.port}/v1', apiKey: 'live-run-test-key', model: 'mock' })`);
+    await evaluate(`window.electronAPI.ai.saveSettings({ provider: 'custom', customBaseUrl: 'http://127.0.0.1:${mock.port}/v1', customApiKey: 'live-run-test-key', customModel: 'mock' })`);
     await click('[data-research-ai-action=summarize]');
     await until(`!!document.querySelector('[data-assistant-consent]') || document.querySelectorAll('[data-research-ai-message=assistant]').length === 1`);
     if (await evaluate("!!document.querySelector('[data-assistant-consent]')")) await click('[data-assistant-consent-allow]');
@@ -113,7 +113,21 @@ module.exports = {
     assert.ok((await evaluate(`document.querySelector('[data-research-ai-panel]').textContent`)).includes(labels.en.researchAiTitle));
     await pause(300);
     await shot('en-4-ask-question');
-    records.push({ step: 'en-ask', providerCalls: mock.requests.length, allCallsToChosenProvider: mock.requests.every(r => r.url === '/v1/chat/completions') });
+    records.push({ step: 'en-ask', providerCalls: mock.requests.length, allCallsToChosenProvider: mock.requests.filter(r => r.url !== '/v1/models').every(r => r.url === '/v1/chat/completions') });
+
+    // 7. KEY-385: AI settings offer "Other provider (OpenAI-compatible)" with its own fields and "Load models".
+    await evaluate(`document.querySelector('[data-research-ai-panel] [aria-label=${JSON.stringify(labels.en.researchAiOpenSettings)}]').click()`);
+    await until(`[...document.querySelectorAll('button')].some(b => b.textContent.includes(${JSON.stringify(labels.en.aiProviderCustom)}))`);
+    await evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent.includes(${JSON.stringify(labels.en.aiProviderCustom)})).click()`);
+    await until('!!document.querySelector("[data-ai-custom-provider]")');
+    assert.ok((await evaluate('document.querySelector("[data-ai-custom-url]").value')).includes('127.0.0.1'), 'the saved custom address is shown');
+    await click('[data-ai-load-models]');
+    await until('document.querySelector("[data-ai-models-status]")?.dataset.aiModelsStatus === "ok"');
+    const options = await evaluate('[...document.querySelectorAll("[data-ai-model-option]")].map(b => b.dataset.aiModelOption)');
+    assert.deepEqual(options, ['mock-chat', 'mock-reasoning'], 'speech models are filtered out');
+    await pause(300);
+    await shot('en-5-settings-other-provider');
+    records.push({ step: 'en-settings-other-provider', models: options });
     return records;
   },
 };

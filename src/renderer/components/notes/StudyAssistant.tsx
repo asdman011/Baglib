@@ -23,7 +23,7 @@ const errorKeys: Record<string, TranslationKey> = {
   'warsh-not-installed': 'assistantWarshMissing', 'invalid-resource': 'assistantInvalidResource', 'ambiguous-alignment': 'assistantAlignmentFailed',
   'missing-source': 'assistantMissingBookSource', 'missing-page': 'assistantMissingBookPage', 'no-text-layer': 'assistantNoTextLayer',
   busy: 'assistantErrorBusy', 'no-sources': 'assistantErrorNoSources', 'invalid-request': 'assistantErrorRequest',
-  'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth',
+  'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth', 'provider-too-large': 'aiErrorTooLarge',
 };
 
 /** One exchange in the conversation: what was asked, and the checked answer or the reason it failed. */
@@ -276,7 +276,7 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
           {/* Composer */}
           <div className="border-t border-subtle bg-surface p-3">
             {consentFor && <div data-assistant-consent role="alertdialog" aria-live="assertive" className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed">
-              <span dir="auto" className="min-w-0 flex-1">{t('assistantConsentAsk', { provider: t(consent.providerLabel) })}</span>
+              <span dir="auto" className="min-w-0 flex-1">{t('assistantConsentAsk', { provider: (consent.customName ?? t(consent.providerLabel)) })}</span>
               <button type="button" data-assistant-consent-allow onClick={() => void allowAndSend()} className="rounded-full bg-primary px-3 py-1 font-semibold text-white">{t('assistantConsentAllow')}</button>
               <button type="button" data-assistant-consent-cancel onClick={() => setConsentFor(null)} className="rounded-full border border-subtle px-3 py-1">{t('assistantConsentCancel')}</button>
             </div>}
@@ -301,7 +301,7 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
                 <button type="button" data-assistant-explain-back disabled={busy||!explainTarget} onClick={()=>setExplainBack(true)} title={t('explainBackChoose')} className="rounded-full border border-subtle px-3 py-1 text-xs hover:border-primary/40 disabled:opacity-40">{t('explainBackTitle')}</button>
                 {consent.ready && <span data-assistant-provider className="inline-flex min-w-0 items-center gap-1.5 text-[11px] leading-snug text-muted">
                   <span className={`size-1.5 shrink-0 rounded-full ${consent.local || consent.allowed ? 'bg-emerald-500' : 'bg-amber-500'}`} aria-hidden="true" />
-                  <span dir="auto" className="truncate">{consent.local ? t('assistantRunsLocally') : t(consent.allowed ? 'assistantSendingTo' : 'assistantAsksFirst', { provider: t(consent.providerLabel) })}</span>
+                  <span dir="auto" className="truncate">{consent.local ? t('assistantRunsLocally') : t(consent.allowed ? 'assistantSendingTo' : 'assistantAsksFirst', { provider: (consent.customName ?? t(consent.providerLabel)) })}</span>
                   {!consent.local && consent.allowed && <button type="button" data-assistant-consent-revoke onClick={() => void consent.revoke()} className="shrink-0 underline-offset-2 hover:text-main hover:underline">{t('assistantConsentRevoke')}</button>}
                 </span>}
                 <button type="button" data-assistant-ask disabled={!canAsk} onClick={() => void send('qa')} aria-label={busy ? t('assistantWorking') : t('assistantAsk')} title={busy ? t('assistantWorking') : t('assistantAsk')} className="ms-auto inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-opacity disabled:opacity-40">

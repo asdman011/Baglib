@@ -543,6 +543,9 @@ export const API = {
       ipcRenderer.invoke('ai:save-settings', settings),
     testConnection: (customSettings?: unknown) =>
       ipcRenderer.invoke('ai:test-connection', customSettings),
+    /** KEY-385: chat models offered by an OpenAI-compatible service (uses the draft settings being edited). */
+    listModels: (draft?: unknown) =>
+      ipcRenderer.invoke('ai:list-models', draft) as Promise<{ ok: true; models: string[] } | { ok: false; message: string }>,
     executeTool: (payload: unknown) =>
       ipcRenderer.invoke('ai:execute-tool', payload),
     translate: (options: unknown) =>

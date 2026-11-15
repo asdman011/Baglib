@@ -51,6 +51,12 @@ export function registerAIIpc(): void {
     }
   });
 
+  // KEY-385: the chat models an OpenAI-compatible service offers, for the settings model list.
+  ipcMain.handle('ai:list-models', async (_, draft?: AISettings) => {
+    const settings = { ...getAIService().getSettings(), ...(draft && typeof draft === 'object' ? draft : {}) } as AISettings;
+    return AIProviderService.getInstance().listModels(settings);
+  });
+
   // Test provider connection
   ipcMain.handle('ai:test-connection', async (_, customSettings?: AISettings) => {
     try {

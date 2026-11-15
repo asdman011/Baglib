@@ -6,11 +6,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { hasRemoteConsent, remoteConsentKey } from '../../../shared/ai-consent';
 import { providerReady } from '../../../shared/research-ai';
+import { customProviderName } from '../../../shared/ai-providers';
 import type { AISettings } from '../../../shared/types/ai';
 import type { TranslationKey } from '../../translations';
 
 const providerKeys: Record<string, TranslationKey> = {
-  ollama: 'aiProviderOllama', openai: 'aiProviderOpenAI', custom: 'aiProviderOpenAI', gemini: 'aiProviderGemini', claude: 'aiProviderClaude',
+  ollama: 'aiProviderOllama', openai: 'aiProviderOpenAI', custom: 'aiProviderCustom', gemini: 'aiProviderGemini', claude: 'aiProviderClaude',
 };
 
 export function useRemoteConsent() {
@@ -41,6 +42,8 @@ export function useRemoteConsent() {
     local,
     allowed,
     providerLabel: (providerKeys[settings?.provider ?? 'ollama'] ?? 'aiProviderOpenAI') as TranslationKey,
+    /** KEY-385: the service's own name (Groq, LM Studio…) for the custom provider. */
+    customName: settings?.provider === 'custom' ? customProviderName(settings) : undefined,
     allow: () => (key ? save(key) : Promise.resolve()),
     revoke: () => save(undefined),
   };

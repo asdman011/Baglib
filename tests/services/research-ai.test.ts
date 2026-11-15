@@ -202,9 +202,9 @@ test('remote consent is asked once per provider and address; a local Ollama need
   assert.equal(remoteConsentKey({ provider: 'ollama' }), null);
   assert.equal(remoteConsentKey({ provider: 'ollama', ollamaEndpoint: 'http://192.168.1.5:11434' }), 'ollama|http://192.168.1.5:11434');
   assert.equal(remoteConsentKey({ provider: 'gemini' }), 'gemini');
-  assert.equal(remoteConsentKey({ provider: 'custom', baseUrl: 'https://llm.example/v1/' }), 'custom|https://llm.example/v1');
+  assert.equal(remoteConsentKey({ provider: 'custom', customBaseUrl: 'https://llm.example/v1/' }), 'custom|https://llm.example/v1');
   assert.equal(hasRemoteConsent({ provider: 'gemini' }), false);
   assert.equal(hasRemoteConsent({ provider: 'gemini', remoteConsent: 'gemini' }), true);
   assert.equal(hasRemoteConsent({ provider: 'claude', remoteConsent: 'gemini' }), false, 'a new provider asks again');
-  assert.equal(hasRemoteConsent({ provider: 'custom', baseUrl: 'https://other.example', remoteConsent: 'custom|https://llm.example/v1' }), false, 'a new address asks again');
+  assert.equal(hasRemoteConsent({ provider: 'custom', customBaseUrl: 'https://other.example', remoteConsent: 'custom|https://llm.example/v1' }), false, 'a new address asks again');
 });

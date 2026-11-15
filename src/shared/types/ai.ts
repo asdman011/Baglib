@@ -11,6 +11,11 @@ export interface AISettings {
   apiKey?: string;
   baseUrl?: string;
   model?: string;
+  /** KEY-385: any OpenAI-compatible service (Groq, OpenRouter, a local LM Studio…), kept apart from the OpenAI fields. */
+  customPreset?: string;
+  customBaseUrl?: string;
+  customApiKey?: string;
+  customModel?: string;
   temperature?: number;
   antiSpoilerCeiling: boolean;
   /** KEY-383: the provider the user allowed sending source text to, as remoteConsentKey() names it. */

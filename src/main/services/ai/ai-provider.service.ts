@@ -1,4 +1,5 @@
 import { errorMessage } from '../../../shared/errors';
+import { chatModelIds, customProviderSettings, normaliseBaseUrl } from '../../../shared/ai-providers';
 /**
  * Baglib — Unified BYOK (Bring Your Own Key / Local LLM) Provider Service (KEY-143)
  *
@@ -68,8 +69,9 @@ export class AIProviderService {
           return await this.healthCheckGemini(settings);
         case 'claude':
           return await this.healthCheckClaude(settings);
-        case 'openai':
         case 'custom':
+          return await this.healthCheckOpenAI(customProviderSettings(settings));
+        case 'openai':
         default:
           return await this.healthCheckOpenAI(settings);
       }
@@ -97,10 +99,33 @@ export class AIProviderService {
         return await this.callGemini(request, settings);
       case 'claude':
         return await this.callClaude(request, settings);
-      case 'openai':
       case 'custom':
+        return await this.callOpenAI(request, customProviderSettings(settings));
+      case 'openai':
       default:
         return await this.callOpenAI(request, settings);
+    }
+  }
+
+  /**
+   * KEY-385: the chat models an OpenAI-compatible service offers (GET {base}/models), for the settings model list.
+   */
+  public async listModels(settings: AISettings): Promise<{ ok: true; models: string[] } | { ok: false; message: string }> {
+    const effective = settings.provider === 'custom' ? customProviderSettings(settings) : settings;
+    const baseUrl = normaliseBaseUrl(effective.baseUrl || 'https://api.openai.com/v1');
+    if (!baseUrl) return { ok: false, message: 'invalid address' };
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(`${baseUrl}/models`, { signal: controller.signal, headers: { Accept: 'application/json', ...(effective.apiKey ? { Authorization: `Bearer ${effective.apiKey}` } : {}) } });
+      if (!res.ok) return { ok: false, message: `HTTP ${res.status}` };
+      const data = await res.json() as { data?: { id?: string }[]; models?: { id?: string; name?: string }[] };
+      const ids = (data.data ?? data.models ?? []).map(item => ('id' in item && item.id) || ('name' in item && item.name) || '').filter((id): id is string => Boolean(id));
+      return { ok: true, models: chatModelIds(ids).slice(0, 300) };
+    } catch (err: unknown) {
+      return { ok: false, message: (err as Error).name === 'AbortError' ? 'timeout' : errorMessage(err).slice(0, 160) };
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
