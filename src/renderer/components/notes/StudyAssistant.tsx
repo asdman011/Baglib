@@ -13,6 +13,7 @@ import type { TranslationKey } from '../../translations';
 import type { ReaderStudySource } from '../../../shared/reader-study-selection';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { Modal } from '../ui/Modal';
+import { useRemoteConsent } from '../ai/useRemoteConsent';
 
 const taskKeys: Record<AssistantTask, TranslationKey> = {
   qa: 'assistantTaskQa', guide: 'assistantTaskGuide', questions: 'assistantTaskQuestions', terms: 'assistantTaskTerms', organise: 'assistantTaskOrganise', cards: 'assistantTaskCards',
@@ -40,9 +41,11 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
   const [filter, setFilter] = useState('');
   const [book, setBook] = useState('');
   const [from, setFrom] = useState(1), [to, setTo] = useState(5);
-  const [task, setTask] = useState<AssistantTask>('qa');
   const [question, setQuestion] = useState(readerSource ? t('readerStudyExplainPrompt') : '');
-  const [allowRemote, setAllowRemote] = useState(false);
+  // KEY-383: no mode step and no consent tick each time. Typing and Enter asks a question; the other study modes
+  // are one-click suggestions; sending to a remote provider is allowed once and remembered for that provider.
+  const consent = useRemoteConsent();
+  const [consentFor, setConsentFor] = useState<AssistantTask | null>(null);
   const [busy, setBusy] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [cards, setCards] = useState<Record<string, 'added' | 'skipped'>>({});
@@ -69,12 +72,28 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
   const toggle = (id: string) => setPicked(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const hasSources = Boolean(readerSource) || picked.size > 0 || Boolean(book) || passages.length > 0;
   const sourceCount = (readerSource ? 1 : 0) + picked.size + (book ? 1 : 0) + passages.length;
-  const canAsk = !busy && hasSources && (task !== 'qa' || Boolean(question.trim()));
-  const latestError = [...turns].reverse().find(turn => turn.answer || turn.error)?.error;
+  const canAsk = !busy && hasSources && Boolean(question.trim());
+  const canSuggest = !busy && hasSources;
 
-  const ask = async () => {
-    if (!canAsk) return;
-    const id = Date.now();
+  /** Ask in a mode: a question by default; remote providers are asked about once, then remembered. */
+  const send = async (task: AssistantTask) => {
+    if (busy || !hasSources || (task === 'qa' && !question.trim())) return;
+    const status = await consent.check().catch(() => ({ local: false, allowed: false }));
+    if (!status.local && !status.allowed) { setConsentFor(task); return; }
+    setConsentFor(null);
+    void ask(task, status.allowed);
+  };
+  const allowAndSend = async () => {
+    const task = consentFor;
+    if (!task) return;
+    await consent.allow();
+    setConsentFor(null);
+    void ask(task, true);
+  };
+
+  const turnId = useRef(0);
+  const ask = async (task: AssistantTask, allowRemote: boolean) => {
+    const id = ++turnId.current;
     const asked = question.trim();
     setTurns(current => [...current, { id, task, question: asked }]);
     setBusy(true);
@@ -93,7 +112,7 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
       await window.electronAPI.knowledgeCards.save({ front: card.front, back: card.back, sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId });
       window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
       setCards(current => ({ ...current, [key]: 'added' }));
-    } catch { setTurns(current => [...current, { id: Date.now(), task: 'cards', question: '', error: { code: 'engine-failed' } }]); }
+    } catch { setTurns(current => [...current, { id: ++turnId.current, task: 'cards', question: '', error: { code: 'engine-failed' } }]); }
   };
   const [explainBack,setExplainBack]=useState(false);
   const explainTarget=readerSource?.target ?? (book ? bookStudyTarget({id:book,sourceId:pdfBooks.find(entry=>entry.id===book)?.sourceId},from) : passages.length===1?passages[0].target:undefined);
@@ -196,14 +215,14 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
               <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Bot size={24} aria-hidden="true" /></span>
               <p className="max-w-md text-sm leading-relaxed text-muted">{t('assistantEmpty')}</p>
               <div className="flex max-w-lg flex-wrap justify-center gap-2">
-                {ASSISTANT_TASKS.map(name => <button key={name} type="button" onClick={() => { setTask(name); composer.current?.focus(); }} className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${task === name ? 'border-primary bg-primary/10 text-primary-text' : 'border-subtle hover:border-primary/50'}`}>{t(taskKeys[name])}</button>)}
+                {ASSISTANT_TASKS.filter(name => name !== 'qa').map(name => <button key={name} type="button" data-assistant-task-option={name} disabled={!canSuggest} onClick={() => void send(name)} className="rounded-full border border-subtle px-3 py-1.5 text-xs transition-colors hover:border-primary/50 hover:text-primary-text disabled:opacity-40">{t(taskKeys[name])}</button>)}
               </div>
             </div>}
 
             {turns.map((turn, index) => <div key={turn.id} className="space-y-3" data-assistant-turn data-assistant-latest={index === turns.length - 1 ? '' : undefined} data-assistant-pending={!turn.answer && !turn.error ? '' : undefined}>
               <div className="flex justify-end">
                 <div className="max-w-[85%] rounded-2xl rounded-ee-md bg-primary px-4 py-2.5 text-sm text-white shadow-sm">
-                  <span className="mb-0.5 block text-[10px] font-semibold opacity-80">{t(taskKeys[turn.task])}</span>
+                  {turn.task !== 'qa' && <span className="mb-0.5 block text-[10px] font-semibold opacity-80">{t(taskKeys[turn.task])}</span>}
                   {turn.question && <p dir="auto" className="whitespace-pre-wrap leading-relaxed">{turn.question}</p>}
                 </div>
               </div>
@@ -256,7 +275,15 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
 
           {/* Composer */}
           <div className="border-t border-subtle bg-surface p-3">
-            <div className={`rounded-2xl border bg-canvas p-2 shadow-sm transition-colors focus-within:border-primary ${latestError?.code === 'permission-denied' && !allowRemote ? 'border-amber-500' : 'border-subtle'}`}>
+            {consentFor && <div data-assistant-consent role="alertdialog" aria-live="assertive" className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed">
+              <span dir="auto" className="min-w-0 flex-1">{t('assistantConsentAsk', { provider: t(consent.providerLabel) })}</span>
+              <button type="button" data-assistant-consent-allow onClick={() => void allowAndSend()} className="rounded-full bg-primary px-3 py-1 font-semibold text-white">{t('assistantConsentAllow')}</button>
+              <button type="button" data-assistant-consent-cancel onClick={() => setConsentFor(null)} className="rounded-full border border-subtle px-3 py-1">{t('assistantConsentCancel')}</button>
+            </div>}
+            <div className="rounded-2xl border border-subtle bg-canvas p-2 shadow-sm transition-colors focus-within:border-primary">
+              {turns.length > 0 && <div role="group" aria-label={t('assistantTask')} title={t('assistantFocus')} className="flex flex-wrap gap-1.5 px-1 pb-1.5">
+                {ASSISTANT_TASKS.filter(name => name !== 'qa').map(name => <button key={name} type="button" data-assistant-task-option={name} disabled={!canSuggest} onClick={() => void send(name)} className="rounded-full border border-subtle bg-surface px-2.5 py-0.5 text-[11px] transition-colors hover:border-primary/50 hover:text-primary-text disabled:opacity-40">{t(taskKeys[name])}</button>)}
+              </div>}
               <textarea
                 ref={composer}
                 data-assistant-question
@@ -265,21 +292,19 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
                 value={question}
                 maxLength={2000}
                 onChange={event => setQuestion(event.target.value)}
-                onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void ask(); } }}
-                placeholder={hasSources ? t(task === 'qa' ? 'assistantQuestion' : 'assistantFocus') : t('assistantIntro')}
-                aria-label={t(task === 'qa' ? 'assistantQuestion' : 'assistantFocus')}
+                onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send('qa'); } }}
+                placeholder={hasSources ? t('assistantComposerPlaceholder') : t('assistantIntro')}
+                aria-label={t('assistantQuestion')}
                 className="max-h-40 min-h-12 w-full resize-y bg-transparent px-2 py-1 text-sm leading-relaxed placeholder:text-muted focus:outline-none"
               />
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <select data-assistant-task value={task} onChange={event => setTask(event.target.value as AssistantTask)} aria-label={t('assistantTask')} title={t('assistantTask')} className="rounded-full border border-subtle bg-surface px-3 py-1 text-xs focus:border-primary focus:outline-none">
-                  {ASSISTANT_TASKS.map(name => <option key={name} value={name}>{t(taskKeys[name])}</option>)}
-                </select>
                 <button type="button" data-assistant-explain-back disabled={busy||!explainTarget} onClick={()=>setExplainBack(true)} title={t('explainBackChoose')} className="rounded-full border border-subtle px-3 py-1 text-xs hover:border-primary/40 disabled:opacity-40">{t('explainBackTitle')}</button>
-                <label className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 text-[11px] leading-snug text-muted">
-                  <input type="checkbox" data-assistant-remote checked={allowRemote} onChange={event => setAllowRemote(event.target.checked)} className="accent-[var(--color-primary)]" />
-                  <span>{t('assistantAllowRemote')}</span>
-                </label>
-                <button type="button" data-assistant-ask disabled={!canAsk} onClick={() => void ask()} aria-label={busy ? t('assistantWorking') : t('assistantAsk')} title={busy ? t('assistantWorking') : t('assistantAsk')} className="ms-auto inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-opacity disabled:opacity-40">
+                {consent.ready && <span data-assistant-provider className="inline-flex min-w-0 items-center gap-1.5 text-[11px] leading-snug text-muted">
+                  <span className={`size-1.5 shrink-0 rounded-full ${consent.local || consent.allowed ? 'bg-emerald-500' : 'bg-amber-500'}`} aria-hidden="true" />
+                  <span dir="auto" className="truncate">{consent.local ? t('assistantRunsLocally') : t(consent.allowed ? 'assistantSendingTo' : 'assistantAsksFirst', { provider: t(consent.providerLabel) })}</span>
+                  {!consent.local && consent.allowed && <button type="button" data-assistant-consent-revoke onClick={() => void consent.revoke()} className="shrink-0 underline-offset-2 hover:text-main hover:underline">{t('assistantConsentRevoke')}</button>}
+                </span>}
+                <button type="button" data-assistant-ask disabled={!canAsk} onClick={() => void send('qa')} aria-label={busy ? t('assistantWorking') : t('assistantAsk')} title={busy ? t('assistantWorking') : t('assistantAsk')} className="ms-auto inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-opacity disabled:opacity-40">
                   {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} className="rtl:-scale-x-100" />}{busy ? t('assistantWorking') : t('assistantAsk')}
                 </button>
               </div>

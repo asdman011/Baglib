@@ -12,6 +12,7 @@ import { readAyahTexts, readQuranSources } from './quran';
 import { readHadithText } from './sunnah';
 import { bookStudyTarget, parseQuranTarget } from '../../shared/study-notes';
 import { providerErrorCode, providerErrorDetail } from '../../shared/ai-errors';
+import { isLocalAi } from '../../shared/ai-consent';
 import { assistantResponseSchema, assistantSystemPrompt, budgetSources, validateAssistantAnswer, validateAssistantRequest, type AssistantAnswer, type AssistantSource } from '../../shared/study-assistant';
 
 import { translations } from '../../renderer/translations';
@@ -35,10 +36,7 @@ const authorize = (event: IpcMainInvokeEvent) => {
 
 /** A local Ollama on this computer needs no transfer consent; any other provider or address does. */
 export function isLocalProvider(settings: { provider?: string; ollamaEndpoint?: string }): boolean {
-  try {
-    const url = new URL(settings.ollamaEndpoint || 'http://127.0.0.1:11434');
-    return settings.provider === 'ollama' && ['http:', 'https:'].includes(url.protocol) && ['127.0.0.1', '[::1]'].includes(url.hostname) && !url.username && !url.password;
-  } catch { return false; }
+  return isLocalAi(settings);
 }
 
 export function registerStudyAssistantIpc(): void {

@@ -195,3 +195,16 @@ test('study assistant keeps verified citations, drops unverifiable ones, and acc
   assert.equal(cards.cards.length, 1);
   assert.deepEqual((assistantResponseSchema('cards') as { required: string[] }).required, ['answer', 'abstained', 'citations', 'cards']);
 });
+
+test('remote consent is asked once per provider and address; a local Ollama needs none', async () => {
+  const { hasRemoteConsent, isLocalAi, remoteConsentKey } = await import('../../src/shared/ai-consent');
+  assert.equal(isLocalAi({ provider: 'ollama', ollamaEndpoint: 'http://127.0.0.1:11434' }), true);
+  assert.equal(remoteConsentKey({ provider: 'ollama' }), null);
+  assert.equal(remoteConsentKey({ provider: 'ollama', ollamaEndpoint: 'http://192.168.1.5:11434' }), 'ollama|http://192.168.1.5:11434');
+  assert.equal(remoteConsentKey({ provider: 'gemini' }), 'gemini');
+  assert.equal(remoteConsentKey({ provider: 'custom', baseUrl: 'https://llm.example/v1/' }), 'custom|https://llm.example/v1');
+  assert.equal(hasRemoteConsent({ provider: 'gemini' }), false);
+  assert.equal(hasRemoteConsent({ provider: 'gemini', remoteConsent: 'gemini' }), true);
+  assert.equal(hasRemoteConsent({ provider: 'claude', remoteConsent: 'gemini' }), false, 'a new provider asks again');
+  assert.equal(hasRemoteConsent({ provider: 'custom', baseUrl: 'https://other.example', remoteConsent: 'custom|https://llm.example/v1' }), false, 'a new address asks again');
+});

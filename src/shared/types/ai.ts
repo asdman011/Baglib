@@ -13,6 +13,8 @@ export interface AISettings {
   model?: string;
   temperature?: number;
   antiSpoilerCeiling: boolean;
+  /** KEY-383: the provider the user allowed sending source text to, as remoteConsentKey() names it. */
+  remoteConsent?: string;
 
   // Ollama local setup
   ollamaEndpoint?: string;

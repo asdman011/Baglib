@@ -50,6 +50,7 @@ app.on('browser-window-created', (_, owner) => {
     await until("!!document.querySelector('[data-study-assistant]')");
     await evaluate("document.querySelector('[data-assistant-note=\"evidence\"]').click()");
   };
+  const askTask = async task => { const turns = await evaluate("document.querySelectorAll('[data-assistant-turn]').length"); await until("!!document.querySelector('[data-assistant-task-option=" + task + "]:not([disabled])')"); await evaluate("document.querySelector('[data-assistant-task-option=" + task + "]').click()"); await until("document.querySelectorAll('[data-assistant-turn]').length > " + turns + " && !document.querySelector('[data-assistant-latest][data-assistant-pending]')"); };
   const ask = async () => { const turns = await evaluate("document.querySelectorAll('[data-assistant-turn]').length"); await evaluate("document.querySelector('[data-assistant-ask]').click()"); await until("document.querySelectorAll('[data-assistant-turn]').length > " + turns + " && !document.querySelector('[data-assistant-latest][data-assistant-pending]')"); };
   (async () => {
     owner.show(); owner.focus(); owner.webContents.focus();
@@ -68,12 +69,15 @@ app.on('browser-window-created', (_, owner) => {
       const sentBefore = requests.length;
       await ask();
       result.disabled = await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-error]')?.dataset.assistantError");
-      // 2. A remote provider without the consent tick: refused before any transfer.
-      await evaluate("window.electronAPI.ai.saveSettings({enabled:true,provider:'openai'})");
-      await ask();
-      result.remote = await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-error]')?.dataset.assistantError");
+      // 2. A remote provider with no remembered consent (KEY-383): asked once, inline; "Not now" sends nothing.
+      await evaluate("window.electronAPI.ai.saveSettings({enabled:true,provider:'openai',remoteConsent:undefined})");
+      await evaluate("document.querySelector('[data-assistant-ask]').click()");
+      await until("!!document.querySelector('[data-assistant-consent]')");
+      result.remote = 'consent-asked';
+      result.consentRemembered = (await evaluate("window.electronAPI.ai.getSettings()")).remoteConsent ?? null;
       result.sentWhileRefused = requests.length - sentBefore;
       await shot(`refused-${language}`);
+      await evaluate("document.querySelector('[data-assistant-consent-cancel]').click()");
       // 3. A local Ollama: the answer, its quote from the note, and save as an editable note.
       await evaluate(`window.electronAPI.ai.saveSettings({enabled:true,provider:'ollama',ollamaEndpoint:'http://127.0.0.1:${port}',ollamaModel:'fake'})`);
       await ask();
@@ -88,9 +92,8 @@ app.on('browser-window-created', (_, owner) => {
       result.noteDraft = await evaluate("document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value");
       // 4. Draft cards: each waits for approval; one approved, one skipped.
       await openAssistant();
-      await setValue('[data-assistant-task]', 'cards', 'HTMLSelectElement');
       const cardsBefore = (await evaluate("window.electronAPI.knowledgeCards.list({})")).items?.length ?? (await evaluate("window.electronAPI.knowledgeCards.list({})")).length;
-      await ask();
+      await askTask('cards');
       result.cardCount = await evaluate("document.querySelectorAll('[data-assistant-latest] [data-assistant-card]').length");
       await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-card=\"0\"] [data-assistant-card-add]').click()");
       await until("!!document.querySelector('[data-assistant-latest] [data-assistant-card=\"0\"] [data-assistant-card-state=\"added\"]')");
@@ -102,7 +105,6 @@ app.on('browser-window-created', (_, owner) => {
       // 5. An ayah and a hadith as sources, found from the panel; the text sent is read from the installed data.
       await openAssistant();
       await evaluate("document.querySelector('[data-assistant-note=\"evidence\"]').click()"); // untick the note: passages only
-      await setValue('[data-assistant-task]', 'qa', 'HTMLSelectElement');
       await setValue('[data-assistant-question]', language === 'ar' ? 'ما الصبر؟' : 'What is patience?');
       await setValue('[data-assistant-passage-search]', '2:153', 'HTMLInputElement');
       await until("!!document.querySelector('[data-assistant-passage-option=\"quran:hafs:2:153\"]')", 200);
@@ -171,7 +173,7 @@ app.on('browser-window-created', (_, owner) => {
       owner.setContentSize(1280, 900);
       results[language] = result; console.log(JSON.stringify({ language, result }));
       assert.equal(result.disabled, 'ai-disabled');
-      assert.equal(result.remote, 'permission-denied');
+      assert.equal(result.remote, 'consent-asked'); assert.equal(result.consentRemembered, null);
       assert.equal(result.sentWhileRefused, 0, 'nothing is sent while refused');
       assert.ok(result.answer.length > 5);
       assert.deepEqual(result.citations, ['note:evidence']);

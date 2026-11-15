@@ -4,6 +4,7 @@ import {useWorkspace} from '../context/WorkspaceContext';
 import {VERDICTS, verdictKey, type ExplainCheck, type VerdictStatus} from '../../../shared/explain-back';
 import type {TranslationKey} from '../../translations';
 import { Modal } from '../ui/Modal';
+import { useRemoteConsent } from '../ai/useRemoteConsent';
 const errors:Record<string,TranslationKey>={
  'no-text-layer':'assistantNoTextLayer','passage-too-short':'explainBackShort','passage-too-long':'explainBackLong',
  'missing-source':'assistantMissingBookSource','missing-page':'assistantMissingBookPage','permission-denied':'assistantErrorRemote',
@@ -12,12 +13,14 @@ const errors:Record<string,TranslationKey>={
 };
 export function ExplainBack({target,label,initialCheck,onClose,onOpen}:{target:string;label:string;initialCheck?:ExplainCheck;onClose:()=>void;onOpen:(target:string)=>void}){
  const {t,lang,dir}=useWorkspace();
- const [summary,setSummary]=useState(initialCheck?.summary??''),[allowRemote,setAllowRemote]=useState(false),[busy,setBusy]=useState(false);
+ const [summary,setSummary]=useState(initialCheck?.summary??''),[allowRemoteChoice,setAllowRemote]=useState<boolean|null>(null),[busy,setBusy]=useState(false);
+ const consent=useRemoteConsent();
+ const allowRemote=(allowRemoteChoice??consent.allowed)||consent.local;
  const [check,setCheck]=useState<ExplainCheck|null>(initialCheck??null),[error,setError]=useState<string|null>(null),[saved,setSaved]=useState(false);
  const [decisions,setDecisions]=useState<(VerdictStatus|null)[]>(initialCheck?.verdicts.map(()=>null)??[]);
  const locked=useRef(false);
  async function run(){if(locked.current)return;locked.current=true;setBusy(true);setError(null);
-  try{const r=await window.electronAPI.studyAssistant.explainBack({target,summary,allowRemote,language:lang==='ar'?'ar':'en'});
+  try{const r=await window.electronAPI.studyAssistant.explainBack({target,summary,allowRemote:allowRemote||consent.local,language:lang==='ar'?'ar':'en'});
    if(r.ok){setCheck(r.data);setDecisions(r.data.verdicts.map(()=>null));window.dispatchEvent(new CustomEvent('baglib:practice-recorded'));}else setError(r.error);
   }catch{setError('engine-failed');}finally{locked.current=false;setBusy(false);}
  }
@@ -33,7 +36,7 @@ export function ExplainBack({target,label,initialCheck,onClose,onOpen}:{target:s
    <div className="min-h-0 space-y-4 overflow-y-auto p-4 text-sm leading-loose">
     <p>{t('explainBackIntro')}</p><button type="button" data-explain-source={target} onClick={()=>onOpen(target)} className="max-w-full break-all text-start underline" dir="auto">{label}</button>
     <label className="block">{t('explainBackSummary')}<textarea data-explain-summary dir="auto" value={summary} disabled={busy||Boolean(check)} maxLength={6000} rows={4} onChange={e=>setSummary(e.target.value)} className={field}/></label>
-    {!check&&<><label className="flex items-start gap-2"><input type="checkbox" checked={allowRemote} onChange={e=>setAllowRemote(e.target.checked)} disabled={busy} className="mt-2"/>{t('assistantAllowRemote')}</label>
+    {!check&&<>{!consent.local&&<label className="flex items-start gap-2"><input type="checkbox" checked={allowRemote} onChange={e=>{setAllowRemote(e.target.checked);void (e.target.checked?consent.allow():consent.revoke());}} disabled={busy} className="mt-2"/>{t('assistantAllowRemote')}</label>}
     <button type="button" data-explain-check disabled={busy||!summary.trim()} onClick={()=>void run()} className="rounded-lg bg-amber-600 px-4 py-2 text-white disabled:opacity-40">{t(busy?'assistantWorking':'explainBackCheck')}</button></>}
     {error&&<p role="alert" data-explain-error={error} className="rounded-lg bg-red-500/10 p-2">{t(errors[error]??'assistantErrorEngine')}</p>}
     {check&&<section className="space-y-3" aria-live="polite"><p className="rounded-lg bg-amber-500/10 p-2 font-semibold">{t('explainBackJudgment')}</p>
