@@ -18,6 +18,24 @@ export interface ChatCompletionRequest {
   userPrompt: string;
   temperature?: number;
   preventRedirect?: boolean;
+  /** The caller parses the answer as JSON (Gemini then uses JSON mode). */
+  json?: boolean;
+  /** A JSON schema the provider should enforce when it can (Gemini responseSchema). */
+  schema?: Record<string, unknown>;
+}
+
+/** Fast Gemini models used when the chosen one is overloaded, rate limited, retired or too slow (free tier). */
+export const GEMINI_FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-3.1-flash-lite'];
+class GeminiRetryableError extends Error {}
+const GEMINI_COOLDOWN_MS = 5 * 60_000;
+const geminiCooldown = new Map<string, number>();
+/** Gemini 1.0/1.5 models are retired; settings saved with an old default move to the current lite alias. */
+export function geminiModelName(saved?: string): string {
+  const model = (saved || '').trim().replace(/^models\//, '');
+  return !model || /^gemini-1\.[05]/.test(model) ? 'gemini-flash-lite-latest' : model;
+}
+function geminiErrorMessage(body: string): string {
+  try { return String((JSON.parse(body) as { error?: { message?: string } }).error?.message ?? '').slice(0, 200); } catch { return body.slice(0, 200); }
 }
 
 export interface HealthCheckResult {
@@ -323,56 +341,75 @@ export class AIProviderService {
     settings: AISettings
   ): Promise<string> {
     const apiKey = settings.geminiApiKey || settings.apiKey || '';
-    // Gemini 1.0/1.5 models are retired; settings saved with the old default move to the current alias.
-    const saved = settings.geminiModel || 'gemini-flash-latest';
-    const model = /^gemini-1\.[05]/.test(saved) ? 'gemini-flash-latest' : saved;
-    const temp = request.temperature ?? settings.temperature ?? 0.7;
+    if (!apiKey) throw new Error('Google Gemini API key is missing.');
+    // The chosen model first; when it is overloaded, rate limited, retired or too slow, the fast lite models.
+    const chosen = geminiModelName(settings.geminiModel);
+    // A model that just failed (overloaded, out of quota, too slow) is skipped for a few minutes, so every request
+    // does not wait for it again before falling back.
+    const cooling = (geminiCooldown.get(chosen) ?? 0) > Date.now();
+    const models = [...(cooling ? [] : [chosen]), ...GEMINI_FALLBACK_MODELS.filter(model => model !== chosen)];
+    const failures: string[] = [];
+    for (const [index, model] of models.entries()) {
+      try {
+        return await this.geminiOnce(model, request, settings, apiKey, index === 0 && !cooling ? 50_000 : 30_000);
+      } catch (err: unknown) {
+        failures.push(`${model}: ${errorMessage(err)}`);
+        if (!(err instanceof GeminiRetryableError)) break;
+        geminiCooldown.set(model, Date.now() + GEMINI_COOLDOWN_MS);
+      }
+    }
+    throw new Error(`Gemini request failed: ${failures.join(' | ')}`);
+  }
 
+  private async geminiOnce(
+    model: string,
+    request: ChatCompletionRequest,
+    settings: AISettings,
+    apiKey: string,
+    timeoutMs: number
+  ): Promise<string> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000);
-
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
           method: 'POST',
+          redirect: request.preventRedirect ? 'error' : 'follow',
+          // KEY-373: the key goes in the x-goog-api-key header, never in the URL (URLs end up in logs).
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
           signal: controller.signal,
           body: JSON.stringify({
-            systemInstruction: {
-              parts: [{ text: request.systemPrompt }],
-            },
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text: request.userPrompt }],
-              },
-            ],
+            systemInstruction: { parts: [{ text: request.systemPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: request.userPrompt }] }],
             generationConfig: {
-              temperature: temp,
+              temperature: request.temperature ?? settings.temperature ?? 0.7,
+              ...(request.json || request.schema ? { responseMimeType: 'application/json' } : {}),
+              ...(request.schema ? { responseSchema: request.schema } : {}),
             },
           }),
         }
       );
-      clearTimeout(timeout);
-
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(`Gemini API error (${res.status}): ${text || res.statusText}`);
+        const message = geminiErrorMessage(text) || res.statusText || 'error';
+        const error = `HTTP ${res.status}: ${message}`;
+        throw [404, 429, 500, 503].includes(res.status) ? new GeminiRetryableError(error) : new Error(error);
       }
-
       const data = await res.json() as {
-        candidates?: Array<{
-          content?: {
-            parts?: Array<{ text?: string }>;
-          };
-        }>;
+        candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string; thought?: boolean }> } }>;
+        promptFeedback?: { blockReason?: string };
       };
-
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (data.promptFeedback?.blockReason) throw new Error(`blocked: ${data.promptFeedback.blockReason}`);
+      // Thinking models may return thought parts; only the answer parts count.
+      const text = (data.candidates?.[0]?.content?.parts ?? []).filter(part => !part.thought).map(part => part.text ?? '').join('');
+      if (!text.trim()) throw new GeminiRetryableError(`empty answer (${data.candidates?.[0]?.finishReason ?? 'no candidate'})`);
+      return text;
     } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') throw new GeminiRetryableError(`no answer within ${Math.round(timeoutMs / 1000)} s`);
+      throw err;
+    } finally {
       clearTimeout(timeout);
-      throw new Error(`Gemini request failed: ${errorMessage(err)}`);
     }
   }
 

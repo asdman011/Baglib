@@ -11,11 +11,19 @@ import { bookPdfFile } from '../services/book-files';
 import { readAyahTexts, readQuranSources } from './quran';
 import { readHadithText } from './sunnah';
 import { bookStudyTarget, parseQuranTarget } from '../../shared/study-notes';
-import { assistantSystemPrompt, budgetSources, validateAssistantAnswer, validateAssistantRequest, type AssistantAnswer, type AssistantSource } from '../../shared/study-assistant';
+import { providerErrorCode, providerErrorDetail } from '../../shared/ai-errors';
+import { assistantResponseSchema, assistantSystemPrompt, budgetSources, validateAssistantAnswer, validateAssistantRequest, type AssistantAnswer, type AssistantSource } from '../../shared/study-assistant';
 
 import { translations } from '../../renderer/translations';
 
-type Result<T> = { ok: true; data: T } | { ok: false; error: string; target?: string };
+type Result<T> = { ok: true; data: T } | { ok: false; error: string; target?: string; detail?: string };
+/** A known code stays as it is; a provider failure becomes provider-quota / -busy / -auth / -error with a short detail. */
+const failure = (error: unknown, known: string[]) => {
+  const message = (error as Error)?.message ?? String(error);
+  if (known.includes(message)) return { error: message };
+  if (/Gemini|OpenAI|Claude|Ollama|HTTP \d{3}|fetch failed|aborted|no answer within|API key/i.test(message)) return { error: providerErrorCode(message), detail: providerErrorDetail(message) };
+  return { error: 'engine-failed', detail: providerErrorDetail(message) };
+};
 const KNOWN = ['invalid-request', 'permission-denied', 'invalid-output', 'busy', 'no-sources', 'ai-disabled', 'warsh-not-installed', 'invalid-resource', 'ambiguous-alignment', 'missing-source', 'missing-page', 'no-text-layer'];
 
 const authorize = (event: IpcMainInvokeEvent) => {
@@ -51,7 +59,7 @@ export function registerStudyAssistantIpc(): void {
     const settings=AIResearchService.getInstance().getSettings();
     if(!settings.enabled)throw new Error('ai-disabled');
     if(!isLocalProvider(settings)&&!request.allowRemote)throw new Error('permission-denied');
-    return AIProviderService.getInstance().generateChatCompletion({temperature:0,preventRedirect:!request.allowRemote,systemPrompt:explainPrompt(request.language),userPrompt:JSON.stringify({claims,sources:[source]})},settings);
+    return AIProviderService.getInstance().generateChatCompletion({temperature:0,json:true,preventRedirect:!request.allowRemote,systemPrompt:explainPrompt(request.language),userPrompt:JSON.stringify({claims,sources:[source]})},settings);
   });
   ipcMain.handle('study-assistant:explain-back',async(event,input:unknown)=>{
     let owned=false;
@@ -62,7 +70,7 @@ export function registerStudyAssistantIpc(): void {
       if(!isLocalProvider(settings)&&!request.allowRemote)throw new Error('permission-denied');
       if(running)throw new Error('busy');running=true;owned=true;
       return {ok:true,data:await service().check(request)};
-    } catch(error){const code=(error as Error).message;return {ok:false,error:[...KNOWN,'passage-too-short','passage-too-long'].includes(code)?code:'engine-failed',...(error instanceof AssistantBookError?{target:error.target}:{})};}
+    } catch(error){return {ok:false,...failure(error,[...KNOWN,'passage-too-short','passage-too-long']),...(error instanceof AssistantBookError?{target:error.target}:{})};}
     finally {if(owned)running=false;}
   });
   ipcMain.handle('study-assistant:resume-explain-back',(event,id:unknown)=>{
@@ -120,14 +128,14 @@ export function registerStudyAssistantIpc(): void {
         const output = await AIProviderService.getInstance().generateChatCompletion({
           temperature: 0,
           preventRedirect: !request.allowRemote,
+          schema: assistantResponseSchema(request.task),
           systemPrompt: assistantSystemPrompt(request.task, request.language),
           userPrompt: JSON.stringify({ question: request.question, sources: fitted.sources.map(({ id, label, text }) => ({ id, label, text })) }),
         }, settings);
         return { ok: true, data: validateAssistantAnswer(output, fitted.sources, request.task, fitted.limited) };
       } finally { running = false; }
     } catch (error) {
-      const code = (error as Error).message;
-      return { ok: false, error: KNOWN.includes(code) ? code : 'engine-failed', ...(error instanceof AssistantBookError ? { target: error.target } : {}) };
+      return { ok: false, ...failure(error, KNOWN), ...(error instanceof AssistantBookError ? { target: error.target } : {}) };
     }
   });
 }

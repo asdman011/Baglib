@@ -4,6 +4,7 @@
  */
 import type Database from 'better-sqlite3';
 import { errorMessage } from '../../../shared/errors';
+import { providerErrorCode, providerErrorDetail } from '../../../shared/ai-errors';
 import { deriveManuscriptSnapshot } from '../../../shared/manuscript-snapshot';
 import {
   buildResearchAiPrompt, collectChapterSources, parseAnswerCitations, providerReady, validateResearchAiRequest,
@@ -44,6 +45,7 @@ export async function runResearchEditorAi(input: unknown, deps: ResearchEditorAi
     if (!parsed.text) return { ok: false, error: 'provider-error', message: 'empty-answer' };
     return { ok: true, text: parsed.text, citations: parsed.citations, sourceCount: sources.length, provider: deps.settings.provider || 'ollama' };
   } catch (error) {
-    return { ok: false, error: 'provider-error', message: errorMessage(error).slice(0, 300) };
+    const message = errorMessage(error);
+    return { ok: false, error: providerErrorCode(message), message: providerErrorDetail(message) };
   }
 }

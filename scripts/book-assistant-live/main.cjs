@@ -40,7 +40,7 @@ app.on('browser-window-created',(_,win)=>{
   await until('!!document.querySelector("[data-reader-study=explain]")');await click('[data-reader-study=explain]');
   await until('!!document.querySelector("[data-assistant-reader-source]")');
  };
- const ask=async()=>{await click('[data-assistant-ask]');await until('!document.querySelector("[data-assistant-ask]").disabled');await until('!!document.querySelector("[data-assistant-answer],[data-assistant-error],[data-assistant-abstained]")');};
+ const ask=async()=>{const turns=await evaluate("document.querySelectorAll('[data-assistant-turn]').length");await click('[data-assistant-ask]');await until("document.querySelectorAll('[data-assistant-turn]').length>"+turns+"&&!document.querySelector('[data-assistant-latest][data-assistant-pending]')");await until('!document.querySelector("[data-assistant-ask]").disabled');await until('!!document.querySelector("[data-assistant-latest] [data-assistant-answer],[data-assistant-latest] [data-assistant-error],[data-assistant-latest] [data-assistant-abstained]")');};
  (async()=>{
   win.setContentSize(1280,900);win.show();win.focus();win.webContents.focus();
   const port=await new Promise(resolve=>fake.listen(0,'127.0.0.1',()=>resolve(fake.address().port)));
@@ -57,12 +57,12 @@ app.on('browser-window-created',(_,win)=>{
    for(const file of files.filter(f=>f.format==='PDF'&&!f.id.startsWith('scan'))){
     const book=books.find(b=>b.id===file.id),target=`book:${book.id}@${book.sourceId}#p=${file.page}`;
     await selectionExplain(book,file.page);await ask();
-    assert.equal(await evaluate('document.querySelector("[data-assistant-error]")?.dataset.assistantError'),undefined);
-    assert.equal(await evaluate('document.querySelector("[data-assistant-citation]")?.dataset.assistantCitation'),target);
+    assert.equal(await evaluate('document.querySelector("[data-assistant-latest] [data-assistant-error]")?.dataset.assistantError'),undefined);
+    assert.equal(await evaluate('document.querySelector("[data-assistant-latest] [data-assistant-citation]")?.dataset.assistantCitation'),target);
     assert.ok(requests.at(-1).sources[0].text.length>100);
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
-    await evaluate("document.querySelector('[data-assistant-citation]').scrollIntoView({block:'center'})");await shot(`${file.id}-citation-${width}`);
-    await click('[data-assistant-citation]');await until('!document.querySelector("[data-study-assistant]")');
+    await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-citation]').scrollIntoView({block:'center'})");await shot(`${file.id}-citation-${width}`);
+    await click('[data-assistant-latest] [data-assistant-citation]');await until('!document.querySelector("[data-study-assistant]")');
     await until(`document.querySelector('[data-reader-source]')?.dataset.readerSource===${JSON.stringify(book.sourceId)}&&document.querySelector('[data-reader-page]')?.dataset.readerPage==='${file.page}'`);
     results.push({width,file:file.id,target,reopened:true,mainTextLength:requests.at(-1).sources[0].text.length});
     await closeReader();
@@ -78,9 +78,9 @@ app.on('browser-window-created',(_,win)=>{
    // Both page controls are the last child of their own label; explicitly set the second.
    await evaluate("(()=>{const e=document.querySelectorAll('[data-study-assistant] input[type=number]')[1];Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'2');e.dispatchEvent(new Event('input',{bubbles:true}));})()");
    await setValue('[data-assistant-question]','Explain');const sent=requests.length;await ask();
-   assert.equal(await evaluate('document.querySelector("[data-assistant-error]")?.dataset.assistantError'),'no-text-layer');assert.equal(requests.length,sent);
-   await evaluate("document.querySelector('[data-assistant-ocr]').scrollIntoView({block:'center'})");await shot(`scan-no-text-${width}`);
-   await click('[data-assistant-ocr]');await until(`document.querySelector('[data-reader-source]')?.dataset.readerSource===${JSON.stringify(scan.sourceId)}&&document.querySelector('[data-reader-page]')?.dataset.readerPage==='2'`);
+   assert.equal(await evaluate('document.querySelector("[data-assistant-latest] [data-assistant-error]")?.dataset.assistantError'),'no-text-layer');assert.equal(requests.length,sent);
+   await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-ocr]').scrollIntoView({block:'center'})");await shot(`scan-no-text-${width}`);
+   await click('[data-assistant-latest] [data-assistant-ocr]');await until(`document.querySelector('[data-reader-source]')?.dataset.readerSource===${JSON.stringify(scan.sourceId)}&&document.querySelector('[data-reader-page]')?.dataset.readerPage==='2'`);
    assert.equal(requests.length,sent);await closeReader();results.push({width,file:'scan-ar',error:'no-text-layer',ocrNavigation:true,providerCalls:0});
   }
   const book=books.find(b=>b.id==='pdf-ar'),target=`book:${book.id}@${book.sourceId}#p=2`;
@@ -93,8 +93,8 @@ app.on('browser-window-created',(_,win)=>{
   const gap=await invoke(request(target,'__gap__'));assert.ok(gap.ok&&gap.data.abstained);
   // Render the gap message using the real assistant and local provider.
   win.setContentSize(480,900);await selectionExplain(book,2);await setValue('[data-assistant-question]','__gap__');await ask();
-  assert.equal(await evaluate('document.querySelector("[data-assistant-abstained]").textContent'),lang==='ar'?'غير مشمول بالمادة المختارة.':'Not covered by the selected material.');
-  await evaluate("document.querySelector('[data-assistant-abstained]').scrollIntoView({block:'center'})");await shot('gap-480');await closeAssistant();await closeReader();
+  assert.equal(await evaluate('document.querySelector("[data-assistant-latest] [data-assistant-abstained]").textContent'),lang==='ar'?'غير مشمول بالمادة المختارة.':'Not covered by the selected material.');
+  await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-abstained]').scrollIntoView({block:'center'})");await shot('gap-480');await closeAssistant();await closeReader();
   // EPUB Explain still runs on file-derived CFI text (native selection, no synthetic source text).
   const epub=books.find(b=>b.id==='epub-en');
   app.emit('open-url',{preventDefault(){}},`baglib:book:${epub.id}@${epub.sourceId}`);await until('!!document.querySelector("[data-study-epub-page]")');
@@ -104,7 +104,7 @@ app.on('browser-window-created',(_,win)=>{
   }
   await evaluate("(()=>{const root=[...document.querySelectorAll('[data-study-epub-page] p')].find(e=>e.textContent.trim().length>40);const range=document.createRange();range.selectNodeContents(root);window.getSelection().removeAllRanges();window.getSelection().addRange(range);root.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));})()");
   await until('!!document.querySelector("[data-reader-study=explain]")');await click('[data-reader-study=explain]');await until('!!document.querySelector("[data-study-assistant]")');await ask();
-  assert.ok(await evaluate('!!document.querySelector("[data-assistant-citation][data-assistant-citation*=cfi]")'));
+  assert.ok(await evaluate('!!document.querySelector("[data-assistant-latest] [data-assistant-citation][data-assistant-citation*=cfi]")'));
   fs.writeFileSync(path.join(evidence,`${lang}-checks.json`),JSON.stringify({passed:true,results,forgeryRefused:true,missingRefused:true,gap:true,epub:true,requests},null,2));
   fake.close();app.quit();
  })().catch(async error=>{console.error(error);fs.writeFileSync(path.join(evidence,`${lang}-failure.txt`),String(error.stack));await shot('failure').catch(()=>{});fake.close();app.exit(1);});

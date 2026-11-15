@@ -33,7 +33,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   antiSpoilerCeiling: true,
   ollamaEndpoint: 'http://127.0.0.1:11434',
   ollamaModel: 'llama3.2',
-  geminiModel: 'gemini-flash-latest',
+  geminiModel: 'gemini-flash-lite-latest',
   claudeModel: 'claude-3-5-sonnet-20241022',
   translationProvider: 'llm',
   targetLanguage: 'ar',

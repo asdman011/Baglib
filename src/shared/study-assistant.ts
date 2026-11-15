@@ -120,6 +120,7 @@ export function assistantSystemPrompt(task: AssistantTask, language: 'ar' | 'en'
     'Return JSON only: {"answer":string,"abstained":boolean,"citations":[{"source":"S1","quote":string}]' + (task === 'cards' ? ',"cards":[{"front":string,"back":string,"source":"S1","quote":string}]' : '') + '}.',
     'Each quote must be copied exactly from that source (a substring, not a paraphrase), at most 300 characters. Every factual point needs a citation.',
     'Quranic text and hadith must be quoted exactly as given, never reworded. If the sources do not support an answer, set abstained to true.',
+    'The "answer" field is plain text for a reader (short paragraphs or "- " lists), never JSON or code.',
     'For missing or partially covered topics, explicitly say ' + (language === 'ar' ? '«غير مشمول بالمادة المختارة»' : '"not covered by the selected material"') + '. Do not fill gaps from prior knowledge.',
   ].join('\n');
 }
@@ -132,10 +133,24 @@ export const quoteFound = (quote: string, text: string) => squash(quote).length 
 const bookComparison = (text: string) => squash(Array.from(text, ch => KNOWN_PUA_CHAR_MAP[ch.codePointAt(0)!] ?? ch).join('').normalize('NFC'));
 export const bookQuoteFound = (quote: string, text: string) => bookComparison(quote).length >= 3 && bookComparison(text).includes(bookComparison(quote));
 
-/** Checks the model's JSON: known sources, exact quotes, sizes. Anything unverifiable is refused, never shown. */
+/** The JSON shape, for providers that can enforce it (Gemini responseSchema). */
+export function assistantResponseSchema(task: AssistantTask): Record<string, unknown> {
+  const citation = { type: 'OBJECT', properties: { source: { type: 'STRING' }, quote: { type: 'STRING' } }, required: ['source', 'quote'] };
+  const properties: Record<string, unknown> = { answer: { type: 'STRING' }, abstained: { type: 'BOOLEAN' }, citations: { type: 'ARRAY', items: citation } };
+  if (task === 'cards') properties.cards = { type: 'ARRAY', items: { type: 'OBJECT', properties: { front: { type: 'STRING' }, back: { type: 'STRING' }, source: { type: 'STRING' }, quote: { type: 'STRING' } }, required: ['front', 'back', 'source', 'quote'] } };
+  return { type: 'OBJECT', properties, required: task === 'cards' ? ['answer', 'abstained', 'citations', 'cards'] : ['answer', 'abstained', 'citations'] };
+}
+
+/**
+ * Checks the model's JSON: known sources, exact quotes, sizes. A citation or card whose quote is not in its source is
+ * dropped, never shown; an answer left with no verified citation is refused.
+ */
 export function validateAssistantAnswer(output: string, sources: AssistantSource[], task: AssistantTask, limited = false): AssistantAnswer {
   let raw: Record<string, unknown>;
-  try { raw = JSON.parse(output.trim().replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, '')) as Record<string, unknown>; } catch { throw new Error('invalid-output'); }
+  try {
+    const parsed = JSON.parse(output.trim().replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, '')) as unknown;
+    raw = (Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed) as Record<string, unknown>;
+  } catch { throw new Error('invalid-output'); }
   if (!raw || typeof raw.answer !== 'string' || raw.answer.length > 20_000 || typeof raw.abstained !== 'boolean' || !Array.isArray(raw.citations) || raw.citations.length > 40) throw new Error('invalid-output');
   const byId = new Map(sources.map(source => [source.id, source]));
   const cite = (entry: unknown) => {
@@ -144,14 +159,16 @@ export function validateAssistantAnswer(output: string, sources: AssistantSource
     if (!source || typeof value.quote !== 'string' || value.quote.length > 600 || !(source.target.startsWith('book:') ? bookQuoteFound(value.quote, source.text) : quoteFound(value.quote, source.text))) throw new Error('invalid-output');
     return { source: source.id, target: source.target, label: source.label, quote: squash(value.quote) };
   };
-  const citations = raw.citations.map(cite);
+  const verified = (entry: unknown) => { try { return cite(entry); } catch { return null; } };
+  const citations = raw.citations.map(verified).filter((entry): entry is AssistantCitation => entry !== null);
   let cards: AssistantCard[] = [];
   if (task === 'cards') {
     if (!Array.isArray(raw.cards) || raw.cards.length > 30) throw new Error('invalid-output');
-    cards = raw.cards.map(entry => {
+    cards = raw.cards.flatMap((entry): AssistantCard[] => {
       const value = (entry ?? {}) as Record<string, unknown>;
-      if (typeof value.front !== 'string' || !value.front.trim() || value.front.length > 1000 || typeof value.back !== 'string' || value.back.length > 2000) throw new Error('invalid-output');
-      return { front: value.front.trim(), back: value.back.trim(), ...cite(value) };
+      if (typeof value.front !== 'string' || !value.front.trim() || value.front.length > 1000 || typeof value.back !== 'string' || value.back.length > 2000) return [];
+      const citation = verified(value);
+      return citation ? [{ front: value.front.trim(), back: value.back.trim(), ...citation }] : [];
     });
   }
   if (!raw.abstained && !raw.answer.trim() && !cards.length) throw new Error('invalid-output');

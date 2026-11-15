@@ -50,7 +50,7 @@ app.on('browser-window-created', (_, owner) => {
     await until("!!document.querySelector('[data-study-assistant]')");
     await evaluate("document.querySelector('[data-assistant-note=\"evidence\"]').click()");
   };
-  const ask = async () => { await evaluate("document.querySelector('[data-assistant-ask]').click()"); await until("!!document.querySelector('[data-assistant-error], [data-assistant-answer], [data-assistant-cards]')"); };
+  const ask = async () => { const turns = await evaluate("document.querySelectorAll('[data-assistant-turn]').length"); await evaluate("document.querySelector('[data-assistant-ask]').click()"); await until("document.querySelectorAll('[data-assistant-turn]').length > " + turns + " && !document.querySelector('[data-assistant-latest][data-assistant-pending]')"); };
   (async () => {
     owner.show(); owner.focus(); owner.webContents.focus();
     const results = {};
@@ -67,22 +67,22 @@ app.on('browser-window-created', (_, owner) => {
       await setValue('[data-assistant-question]', language === 'ar' ? 'ما الصبر؟' : 'What is patience?');
       const sentBefore = requests.length;
       await ask();
-      result.disabled = await evaluate("document.querySelector('[data-assistant-error]')?.dataset.assistantError");
+      result.disabled = await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-error]')?.dataset.assistantError");
       // 2. A remote provider without the consent tick: refused before any transfer.
       await evaluate("window.electronAPI.ai.saveSettings({enabled:true,provider:'openai'})");
       await ask();
-      result.remote = await evaluate("document.querySelector('[data-assistant-error]')?.dataset.assistantError");
+      result.remote = await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-error]')?.dataset.assistantError");
       result.sentWhileRefused = requests.length - sentBefore;
       await shot(`refused-${language}`);
       // 3. A local Ollama: the answer, its quote from the note, and save as an editable note.
       await evaluate(`window.electronAPI.ai.saveSettings({enabled:true,provider:'ollama',ollamaEndpoint:'http://127.0.0.1:${port}',ollamaModel:'fake'})`);
       await ask();
-      result.answer = await evaluate("document.querySelector('[data-assistant-answer]')?.textContent");
-      result.citations = await evaluate("[...document.querySelectorAll('[data-assistant-citation]')].map(e=>e.dataset.assistantCitation)");
+      result.answer = await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-answer]')?.textContent");
+      result.citations = await evaluate("[...document.querySelectorAll('[data-assistant-latest] [data-assistant-citation]')].map(e=>e.dataset.assistantCitation)");
       result.promptLanguage = requests.at(-1).system.includes(language === 'ar' ? 'Arabic' : 'English');
       result.sourcesSent = requests.at(-1).user.sources.map(source => source.id + ':' + source.label);
       await shot(`answer-${language}`);
-      await evaluate("document.querySelector('[data-assistant-save]').click()");
+      await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-save]').click()");
       await until("!!document.querySelector('[data-note-editor-pane] [data-study-note-editor] .cm-content')");
       await pause(500);
       result.noteDraft = await evaluate("document.querySelector('[data-note-editor-pane] [data-study-note-editor]').value");
@@ -91,10 +91,10 @@ app.on('browser-window-created', (_, owner) => {
       await setValue('[data-assistant-task]', 'cards', 'HTMLSelectElement');
       const cardsBefore = (await evaluate("window.electronAPI.knowledgeCards.list({})")).items?.length ?? (await evaluate("window.electronAPI.knowledgeCards.list({})")).length;
       await ask();
-      result.cardCount = await evaluate("document.querySelectorAll('[data-assistant-card]').length");
-      await evaluate("document.querySelector('[data-assistant-card=\"0\"] [data-assistant-card-add]').click()");
-      await until("!!document.querySelector('[data-assistant-card=\"0\"] [data-assistant-card-state=\"added\"]')");
-      await evaluate("document.querySelector('[data-assistant-card=\"1\"] [data-assistant-card-skip]').click()");
+      result.cardCount = await evaluate("document.querySelectorAll('[data-assistant-latest] [data-assistant-card]').length");
+      await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-card=\"0\"] [data-assistant-card-add]').click()");
+      await until("!!document.querySelector('[data-assistant-latest] [data-assistant-card=\"0\"] [data-assistant-card-state=\"added\"]')");
+      await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-card=\"1\"] [data-assistant-card-skip]').click()");
       const cardsAfter = await evaluate("window.electronAPI.knowledgeCards.list({})");
       result.cardsAdded = (cardsAfter.items?.length ?? cardsAfter.length) - cardsBefore;
       await shot(`cards-${language}`);
@@ -120,7 +120,7 @@ app.on('browser-window-created', (_, owner) => {
       result.passageSources = sent.map(source => source.id + ':' + source.label);
       result.ayahText = sent[0]?.text ?? '';
       result.hadithText = (sent[1]?.text ?? '').slice(0, 600);
-      result.passageCitations = await evaluate("[...document.querySelectorAll('[data-assistant-citation]')].map(e=>e.dataset.assistantCitation)");
+      result.passageCitations = await evaluate("[...document.querySelectorAll('[data-assistant-latest] [data-assistant-citation]')].map(e=>e.dataset.assistantCitation)");
       // A forged request with text from the page is not accepted: only a target and a label are read.
       const forged = await evaluate("window.electronAPI.studyAssistant.ask({task:'qa',question:'x',language:'en',allowRemote:false,notes:[],books:[],passages:[{target:'quran:hafs:2:153',label:'x',text:'forged'}]})");
       result.forgedSentText = requests.at(-1).user.sources[0].text.includes('forged');
@@ -138,12 +138,12 @@ app.on('browser-window-created', (_, owner) => {
       await setValue('[data-assistant-extra="tafsir"]', 'tafsir/22', 'HTMLSelectElement');
       await setValue('[data-assistant-extra="translation"]', 'translation/193', 'HTMLSelectElement');
       await ask();
-      assert.equal(await evaluate("document.querySelector('[data-assistant-error]')?.dataset.assistantError || null"), null);
+      assert.equal(await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-error]')?.dataset.assistantError || null"), null);
       const warshSources = requests.at(-1).user.sources;
       assert.equal(warshSources.length, 5, 'Warsh + two tafsirs + two translations');
       assert.deepEqual(warshSources.slice(1).map(source => /4:(44|45)/u.exec(source.label)?.[0]), ['4:44', '4:44', '4:45', '4:45']);
       assert.ok(warshSources.slice(1).every(source => source.label.includes(language === 'ar' ? 'بترقيم حفص' : 'Hafs numbering')));
-      result.warsh = { sources: warshSources, citations: await evaluate("[...document.querySelectorAll('[data-assistant-citation]')].map(e=>e.dataset.assistantCitation)") };
+      result.warsh = { sources: warshSources, citations: await evaluate("[...document.querySelectorAll('[data-assistant-latest] [data-assistant-citation]')].map(e=>e.dataset.assistantCitation)") };
       assert.deepEqual(result.warsh.citations, ['quran:hafs:4:44', 'quran:hafs:4:44', 'quran:hafs:4:45', 'quran:hafs:4:45']);
       for (const width of [1280, 480]) {
         owner.setContentSize(width, 900); await pause(500);
@@ -151,7 +151,7 @@ app.on('browser-window-created', (_, owner) => {
         assert.equal(fit, true, 'all controls fit at '+width);
         await shot(`key276-${language}-${width}`);
         if (width === 480) {
-          await evaluate("document.querySelector('[data-assistant-citation]').scrollIntoView({block:'start'})");
+          await evaluate("document.querySelector('[data-assistant-latest] [data-assistant-citation]').scrollIntoView({block:'start'})");
           await shot(`key276-${language}-${width}-sources`);
           await evaluate("document.querySelector('[data-assistant-profile]').scrollIntoView({block:'center'})");
         }
@@ -160,12 +160,12 @@ app.on('browser-window-created', (_, owner) => {
       await setValue('[data-assistant-extra="tafsir"]', 'tafsir/251', 'HTMLSelectElement');
       await setValue('[data-assistant-extra="translation"]', 'translation/92', 'HTMLSelectElement');
       await ask();
-      await until("!!document.querySelector('[data-assistant-answer]')");
+      await until("!!document.querySelector('[data-assistant-latest] [data-assistant-answer]')");
       result.otherInstalledSources = requests.at(-1).user.sources.map(source => source.label);
       assert.equal(result.otherInstalledSources.length, 5);
       await setValue('[data-assistant-question]', '__KEY276_FABRICATE__');
       await ask();
-      await until("document.querySelector('[data-assistant-error]')?.dataset.assistantError==='invalid-output'");
+      await until("document.querySelector('[data-assistant-latest] [data-assistant-error]')?.dataset.assistantError==='invalid-output'");
       result.fabricatedRefused = true;
       await evaluate("document.querySelector('[data-study-assistant] header button').click()");
       owner.setContentSize(1280, 900);

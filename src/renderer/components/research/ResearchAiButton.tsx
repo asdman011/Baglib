@@ -65,6 +65,9 @@ export function ResearchAiButton({ language, documentId, flush, selectedText, in
         push({ role: 'error', text: t('researchAiNotConfigured'), settings: true });
       } else if (result.error === 'needs-selection') {
         push({ role: 'error', text: t('researchAiNeedsSelection') });
+      } else if (result.error === 'provider-quota' || result.error === 'provider-busy' || result.error === 'provider-auth') {
+        const key = result.error === 'provider-quota' ? 'aiErrorQuota' : result.error === 'provider-busy' ? 'aiErrorBusy' : 'aiErrorAuth';
+        push({ role: 'error', text: t(key) + (result.message ? '\n' + t('aiErrorDetail').replace('{detail}', result.message) : ''), settings: true });
       } else {
         push({ role: 'error', text: t('researchAiProviderError').replace('{message}', result.message ?? result.error) });
       }

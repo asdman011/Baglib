@@ -20,7 +20,7 @@ export interface ResearchAiRequest {
 }
 export interface ResearchAiSource { n: number; ref: string; label: string; text: string }
 export interface ResearchAiCitation { n: number; ref: string; label: string }
-export type ResearchAiError = 'not-configured' | 'needs-selection' | 'needs-question' | 'provider-error' | 'invalid-request';
+export type ResearchAiError = 'not-configured' | 'needs-selection' | 'needs-question' | 'invalid-request' | import('./ai-errors').ProviderErrorCode;
 export type ResearchAiResponse =
   | { ok: true; text: string; citations: ResearchAiCitation[]; sourceCount: number; provider: string }
   | { ok: false; error: ResearchAiError; message?: string };

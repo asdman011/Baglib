@@ -40,7 +40,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     antiSpoilerCeiling: true,
     ollamaEndpoint: 'http://127.0.0.1:11434',
     ollamaModel: 'llama3.2',
-    geminiModel: 'gemini-flash-latest',
+    geminiModel: 'gemini-flash-lite-latest',
     claudeModel: 'claude-3-5-sonnet-20241022',
     translationProvider: 'llm',
     targetLanguage: 'ar',
@@ -271,11 +271,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={settings.geminiModel || 'gemini-flash-latest'}
+                    value={settings.geminiModel || 'gemini-flash-lite-latest'}
                     onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })}
-                    placeholder="gemini-flash-latest, gemini-pro-latest"
+                    placeholder="gemini-flash-lite-latest" list="baglib-gemini-models"
                     className="w-full px-3 py-2 text-sm bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                   />
+                  <datalist id="baglib-gemini-models">
+                    {['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-pro-latest', 'gemini-3.1-flash-lite'].map(model => <option key={model} value={model} />)}
+                  </datalist>
                 </div>
               </>
             )}
