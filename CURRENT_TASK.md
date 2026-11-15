@@ -1,3 +1,34 @@
+## KEY-359 verified handoff - 2026-11-15T06:12:00+02:00 - Antigravity b396ee7e-0c3c-4635-ac58-c8a0b110d070
+
+Sunnah dataset: rebuild search index with isnad included (Jira KEY-359):
+1. SQLite FTS5 Isnad Indexing:
+   - Added `Arabic_Isnad_Norm` to `hadiths_fts` virtual table schema in `tools/hadith-alignment/src/master_exporter.py` and `src/quranlab_build.py`.
+   - Created `tools/hadith-alignment/rebuild_sunnah_fts.py` CLI utility and rebuilt both repository copy and unpacked release copy in place (verified backup saved to `_archive_datasets/sunnah-backups/`).
+   - File size before: 1,629,495,296 bytes (1,553.98 MB); after: 1,641,353,216 bytes (1,565.32 MB), delta +11.31 MB (+0.7%).
+2. Zero-Warmup Instant Worker:
+   - Removed in-memory isnad folding scan (`prepareIsnadSearch()`, `this.isnads`, and `isnadMatches()`) from `src/main/services/sunnah/research-corpus.ts` and `src/main/sunnah-search-worker.ts`.
+   - Warmup time dropped from ~3,000 ms to 0 ms; JS worker heap footprint reduced from ~15-20 MB to 0.53 MB.
+3. Strict Matn-First Ranking:
+   - `rankJoin` assigns penalty 0.0 to matn matches and 1000.0 to isnad matches, guaranteeing matn matches precede isnad matches in SQL and in JS.
+   - Reader search without `requestId` scopes queries to matn/commentary/chapters and excludes isnad-only hits.
+4. Verification:
+   - 29 focused tests across 5 suites pass (`sunnah-isnad-index`, `sunnah-research`, `slash-search-audit`, `slash-search-followup`).
+   - 62 Python pipeline tests in `test_quranlab.py` pass.
+   - Test queries verified: "الحميدي الأعمال بالنيات" (10.69 ms, Bukhari 1:1), "قتيبة الليث بلالا" (66.32 ms, Bukhari 25:84 / 1596).
+   - TypeScript (`tsc --noEmit`) and ESLint pass with 0 errors and 0 warnings.
+   - Native live check `node scripts/slash-search-live/run.mjs` passed with code 0 in Electron (Arabic RTL & English LTR, 0 renderer errors, throwaway profile cleaned up, originals unchanged).
+   - Full report written to `docs/agent-ops/reports/KEY-359.md`.
+
+Exact changed files:
+- `tools/hadith-alignment/rebuild_sunnah_fts.py`
+- `tools/hadith-alignment/src/master_exporter.py`
+- `tools/hadith-alignment/src/quranlab_build.py`
+- `src/main/services/sunnah/research-corpus.ts`
+- `src/main/sunnah-search-worker.ts`
+- `tests/services/sunnah-isnad-index.test.ts`
+- `tests/services/sunnah-research.test.ts`
+- `docs/agent-ops/reports/KEY-359.md`
+
 ## KEY-355 verified handoff - 2026-11-15T01:45:00+02:00 - Antigravity 3ea36387-50ac-4db3-8f43-8ecfa0c823be
 
 Implemented notes slash search across whole library contents, resource-friendly (Jira KEY-355):

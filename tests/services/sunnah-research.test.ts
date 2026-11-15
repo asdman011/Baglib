@@ -16,7 +16,7 @@ it('opens all nine collections read-only, retains row identities and exposes ind
   try {
     const db = new Database(filename);
     const fields = ['book_key','Chapter_Number','Chapter_Arabic','Chapter_English','Section_Number','Section_Arabic','Section_English','Hadith_number','Arabic_Hadith','Arabic_Isnad','Arabic_Matn','English_Hadith','English_Isnad','English_Matn','Arabic_Comment','Arabic_Grade','English_Grade','Arabic_Tafseel','Commentary_Book_Title','Commentary_Author','Source_Row_Reference','Shamela_Volume','Shamela_Page','Commentary_Shamela_URL','Tafseel_Match_Method','Tafseel_Match_Score','Itqan_Narrator_Chain_JSON','Itqan_Quran_Root_Links_JSON','Itqan_Linked_Ayah_Keys_JSON','Itqan_Chain_Calibration_Score','Itqan_Weakest_Narrator_Grade','Itqan_Corroborating_Hadiths_JSON'];
-    db.exec(`CREATE TABLE hadiths(id INTEGER PRIMARY KEY,${fields.map(f => `${f} TEXT`).join(',')}); CREATE TABLE hadith_narrators(hadith_id INTEGER,rijal_id TEXT); CREATE TABLE quran_hadith_root_bridge(hadith_id INTEGER,root_ar TEXT); CREATE VIRTUAL TABLE hadiths_fts USING fts5(text);`);
+    db.exec(`CREATE TABLE hadiths(id INTEGER PRIMARY KEY,${fields.map(f => `${f} TEXT`).join(',')}); CREATE TABLE hadith_narrators(hadith_id INTEGER,rijal_id TEXT); CREATE TABLE quran_hadith_root_bridge(hadith_id INTEGER,root_ar TEXT); CREATE VIRTUAL TABLE hadiths_fts USING fts5(Chapter_Arabic,Section_Arabic,Arabic_Matn_Norm,Arabic_Isnad_Norm,Arabic_Tafseel_Norm,English_Hadith);`);
     const books = ['Bukhari','Bukhari','Muslim','AbuDaud','Tirmidhi','Nesai','IbnMajah','MuwattaMalik','MusnadAhmad','SunanDarimi'];
     for (const [index, book] of books.entries()) {
       const row = Object.fromEntries(fields.map(field => [field, '']));
@@ -24,10 +24,18 @@ it('opens all nine collections read-only, retains row identities and exposes ind
       if (book === 'IbnMajah') Object.assign(row, { Section_Number: 'nan', Section_Arabic: 'باب النية', Section_English: 'nan' });
       Object.assign(row, { book_key: book, Chapter_Number: index === 9 ? '' : '1.0', Chapter_Arabic: 'كتاب العلم', Chapter_English: 'Knowledge', Hadith_number: '1', Arabic_Hadith: 'إِنَّمَا الأَعْمَالُ', Arabic_Matn: 'إِنَّمَا الأَعْمَالُ', English_Hadith: 'Actions depend on intentions.', Arabic_Tafseel: 'شرح محقق محفوظ', Commentary_Book_Title: 'شرح عربي', Commentary_Author: 'المؤلف', Source_Row_Reference: 'Shamela:551:v1:p1:s1', Commentary_Shamela_URL:'https://shamela.ws/book/551', Itqan_Narrator_Chain_JSON: JSON.stringify([{pos:1,path:0,surface:'يحيى',resolved_name:'يحيى',rijal_id:'42',method:'exact'}]), Itqan_Quran_Root_Links_JSON:'["علم"]', Itqan_Linked_Ayah_Keys_JSON:'["2:1"]', Itqan_Corroborating_Hadiths_JSON: index === 0 ? '[{"book":"MuwattaMalik","hadith_number":"1","output_row_index":7}]' : '[]', Tafseel_Match_Score: '0.9', Itqan_Chain_Calibration_Score:'0.5' });
       if (index >= 4) row.Arabic_Tafseel += ' فاطمة';
-      // KEY-357: isnads are not in the matn index; slash search finds them separately.
+      // KEY-359: isnads are indexed in hadiths_fts (Arabic_Isnad_Norm); slash search matches them via index.
       if (index === 2) row.Arabic_Isnad = 'حَدَّثَنَا قُتَيْبَةُ عَنِ اللَّيْثِ';
       db.prepare(`INSERT INTO hadiths VALUES (${fields.map(() => '?').join(',')},?)`).run(index+1,...fields.map(f=>row[f]));
-      db.prepare('INSERT INTO hadiths_fts(rowid,text) VALUES (?,?)').run(index+1,'انما الاعمال شرح محقق محفوظ فاطمه Actions depend on intentions');
+      db.prepare('INSERT INTO hadiths_fts(rowid,Chapter_Arabic,Section_Arabic,Arabic_Matn_Norm,Arabic_Isnad_Norm,Arabic_Tafseel_Norm,English_Hadith) VALUES (?,?,?,?,?,?,?)').run(
+        index + 1,
+        'كتاب العلم',
+        '',
+        'انما الاعمال',
+        index === 2 ? 'حدثنا قتيبه عن الليث' : '',
+        index >= 4 ? 'شرح محقق محفوظ فاطمه' : 'شرح محقق محفوظ',
+        'Actions depend on intentions'
+      );
       db.prepare('INSERT INTO quran_hadith_root_bridge VALUES (?,?)').run(index+1,'علم');
       db.prepare('INSERT INTO hadith_narrators VALUES (?,?)').run(index+1,'42');
     }

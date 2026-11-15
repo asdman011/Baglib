@@ -31,7 +31,7 @@ def open_master_database(path):
     db.execute('CREATE INDEX idx_hadith_narrators_rijal ON hadith_narrators(rijal_id)')
     db.execute('CREATE TABLE quran_hadith_root_bridge(root_ar TEXT NOT NULL,hadith_id INTEGER NOT NULL REFERENCES hadiths(id),matched_words_json TEXT,wensinck_ref TEXT,PRIMARY KEY(root_ar,hadith_id))')
     db.execute('CREATE INDEX idx_bridge_hadith ON quran_hadith_root_bridge(hadith_id)')
-    db.execute("CREATE VIRTUAL TABLE hadiths_fts USING fts5(book_key UNINDEXED,Hadith_number UNINDEXED,Chapter_Arabic,Section_Arabic,Arabic_Matn_Norm,Arabic_Tafseel_Norm,English_Hadith,tokenize='unicode61')")
+    db.execute("CREATE VIRTUAL TABLE hadiths_fts USING fts5(book_key UNINDEXED,Hadith_number UNINDEXED,Chapter_Arabic,Section_Arabic,Arabic_Matn_Norm,Arabic_Isnad_Norm,Arabic_Tafseel_Norm,English_Hadith,tokenize='unicode61')")
     return db
 
 
@@ -71,5 +71,5 @@ def write_master_book(root, db, book, rows, provenance):
             db.execute('INSERT INTO hadith_narrators VALUES (?,?,?,?,?,?)', [identity, node['pos'], node['surface'], node['resolved_name'], node.get('rijal_id'), node['method']])
         for root_ar, words in entry['root_words'].items():
             db.execute('INSERT INTO quran_hadith_root_bridge VALUES (?,?,?,?)', [root_ar, identity, json.dumps(words, ensure_ascii=False), f'Wensinck:{SYMBOLS[book]}:root:{root_ar}'])
-        db.execute('INSERT INTO hadiths_fts(rowid,book_key,Hadith_number,Chapter_Arabic,Section_Arabic,Arabic_Matn_Norm,Arabic_Tafseel_Norm,English_Hadith) VALUES (?,?,?,?,?,?,?,?)', [identity, book, row['Hadith_number'], normalize_arabic(row['Chapter_Arabic']), normalize_arabic(row['Section_Arabic']), normalize_arabic(row['Arabic_Matn']), normalize_arabic(row['Arabic_Tafseel']), row['English_Hadith']])
+        db.execute('INSERT INTO hadiths_fts(rowid,book_key,Hadith_number,Chapter_Arabic,Section_Arabic,Arabic_Matn_Norm,Arabic_Isnad_Norm,Arabic_Tafseel_Norm,English_Hadith) VALUES (?,?,?,?,?,?,?,?,?)', [identity, book, row['Hadith_number'], normalize_arabic(row['Chapter_Arabic']), normalize_arabic(row['Section_Arabic']), normalize_arabic(row['Arabic_Matn']), normalize_arabic(row['Arabic_Isnad']), normalize_arabic(row['Arabic_Tafseel']), row['English_Hadith']])
     db.commit()
