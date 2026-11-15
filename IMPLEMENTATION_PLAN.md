@@ -2,6 +2,16 @@
 
 ## Recent Agent Updates
 
+- [2026-11-15T08:01:14.477126+02:00, Agent: Codex KEY-367] PUBLICATION READY: explicitly approved; exactly29paths staged using own cached patches, no RE-7 implementation hunks. Isolated staged RE-6 snapshot104focused/tscpass; combined111focused/full2457/native2ar-en pass. Working-tree RE-7 contributions preserved; commitlock held; normal origin/feature/library-domain publication next.
+
+- [2026-11-15T07:54:33.0277997+02:00, Agent: Codex KEY-367] User explicitly authorized scoped commit/push now to origin/feature/library-domain; prior approval-pending notes superseded. Commit lock acquired; only KEY-367 patches will enter index; RE-7 canvas/board hunks preserved. Isolated staged-snapshot verification next, then exact requested commit/publication/signal.
+
+- [2026-11-15T07:50:55.4652912+02:00, Agent: Codex KEY-367] VERIFIED RE-6 citations/popups/readableexports/livebibliography+TOC/headingnumbers/persistedsettings. Focused111/full2457(360suites,concurrency2)/native2ar-en8citations14screens0errors;types/lint0warnings/builds/vendor2899pass;dist9846050B/92files/9.389925MiB. Initial2fullfailures fixed with strict/partialsettings preservation and editor-source audit coverage. REA/docs/29pathmanifest/KEY-368 attribution in CURRENT_TASK/report;profilesdeleted/noOCR/nooriginalwrites. Uncommitted/unpushed, explicit session Git approval pending;noJiramutation;native slotreleased.
+
+- [2026-11-15T07:46:48.3413848+02:00, Agent: Codex KEY-367] RE-6 implemented; prior native2ar/en/8citations/14screens/0errors and builds/vendor2899/type/lint pass. Initial full2453/2455 exposed settings compatibility and source-audit gaps, fixed with111focusedpass. Final native/full revalidation active; shared KEY-368 hunks preserved; no Git/Jira mutations.
+
+- [2026-11-15T06:58:30.9204302+02:00, Agent: Codex KEY-367] ACTIVE RE-6 on pushed RE-5; scope/approval boundaries in CURRENT_TASK. Investigation, implementation and verification pending.
+
 - [2026-11-15T04:50:00.440Z, Codex KEY-366] VERIFIED RE-5 four source blocks/exporters, typed real-IPC bounded/cancellable search, native Arabic filtering and caret continuation, exact links/reload/reader navigation. Focused106/full2435(360suites,concurrency2)/native2ar-en8inserts0errors36screens pass;types/lint/builds/vendor2899pass;dist9822074B/92files. Three shared-branch verification repairs and exact20ownedfiles in CURRENT_TASK/report. No schema/dependency/vendor/download changes. Scoped lock publication pending.
 
 

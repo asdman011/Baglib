@@ -229,3 +229,15 @@ Each source has Markdown and HTML adapters. RE-3 already derives links from thes
 The live scenario is `scripts/research-editor-blocks-live/`, separate from RE-4’s protected harness. It uses production BagLib IPC, locally supplied QUL/Sunnah corpora, a copy of the real installed poetry database, and Arabic/English real text-layer PDFs. It checks native slash typing and Arabic filtering, all four source types, multi-verse alignment, insertion between existing text, continued typing, exact save/reload, Markdown/HTML exports, link rows/removal/undo and all four reader locations. Profiles are disposable; originals are not edited or OCRed. Evidence stays outside Git under `.baglib-data/KEY-366-evidence/`.
 
 Investigation details, uncertainties and the source references are in [BlockSuite findings](BlockSuite.md). Final verification counts, dist measurement and publication status are recorded in the KEY-366 handoff and local agent report.
+
+### RE-6 implementation notes (KEY-367, 2026-11-15, Agent: Codex)
+
+Citation slash commands reuse RE-5 search for Quran ranges, hadith, poetry and library quotes, inserting the existing URL footnote inline at the caret. Source previews show a source-specific icon, full stored text and reader-opening control. Footnotes, bibliography entries and heading numbers are derived from document order and update after edits; Quran can switch between inline references and numbered notes. The chapter-end notes panel remains separate from the editable canonical text.
+
+The bibliography and table of contents are generated document blocks. Bibliographies deduplicate canonical scheme URLs and provide Arabic scholarly, Chicago and APA templates using available source metadata; missing metadata is not invented. Contents links use stable block IDs, including matching HTML/Markdown export anchors from numbered vendor patch 0008. Heading numbering is optional and does not rewrite saved titles or paragraph text.
+
+The existing `settings_json` stores citation style, Quran placement, footnote numbering and heading-numbering preferences, preserving unrelated options. Saving settings is awaited during document close/switch. Arabic and English labels share a centralized dictionary exposed through `translations.ts`; CSS uses logical layout properties and the bundled fonts.
+
+Per-page numbering remains conditional on RE-8's paginated PDF exporter, as specified by the original RE-6 scope. The editor saves that preference but displays chapter numbering with an explicit explanation. RE-6 does not claim paginated page-bottom footnotes. Bibliography/contents generation is scoped to the current document/chapter, not an aggregation across all manuscript documents.
+
+Verification, dist size and unresolved limitations are recorded in the KEY-367 handoff/report. Evidence and exact inspected contracts are in the [BlockSuite RE-6 investigation](BlockSuite.md).

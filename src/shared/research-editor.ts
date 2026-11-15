@@ -26,6 +26,10 @@ export interface ResearchEditorSession {
 }
 /** Parent-owned bridge. The iframe has no preload or IPC endpoint. */
 export interface ResearchEditorBridge {
+  settings?: {
+    load(manuscriptId: string): Promise<import('./research-editor-apparatus').ResearchSettings>;
+    save(manuscriptId: string, settings: import('./research-editor-apparatus').ResearchSettings): Promise<void>;
+  };
   sources?: ResearchSourceSearch;
   appearance(): ResearchEditorAppearance;
   subscribeAppearance(listener: (appearance: ResearchEditorAppearance) => void): () => void;

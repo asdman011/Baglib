@@ -231,7 +231,8 @@ export class AffineFootnoteNode extends WithDisposable(ShadowlessElement) {
 
       return {
         template: this._FootNotePopup(footnote, abortController),
-        container: this.std.host,
+        // Keep source previews outside the editor's clipping/scroll container.
+        container: document.body,
         computePosition: {
           referenceElement: this,
           placement: 'top',

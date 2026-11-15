@@ -98,6 +98,7 @@ const sunnah: SunnahAPI = {
 };
 
 const manuscripts: ManuscriptsAPI = {
+  updateSettings: (id, settings) => ipcRenderer.invoke('manuscripts:updateSettings', id, settings),
   list: (trashed) => ipcRenderer.invoke('manuscripts:list', trashed),
   create: (title, kind) => ipcRenderer.invoke('manuscripts:create', title, kind),
   rename: (id, title) => ipcRenderer.invoke('manuscripts:rename', id, title),

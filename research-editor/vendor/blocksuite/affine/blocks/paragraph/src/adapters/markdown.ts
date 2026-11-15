@@ -259,6 +259,12 @@ export const paragraphBlockMarkdownAdapterMatcher: BlockMarkdownAdapterMatcher =
           case 'h5':
           case 'h6': {
             walkerContext
+              .openNode({
+                type: 'html',
+                value: '<a id="baglib-heading-' + encodeURIComponent(o.node.id) + '"></a>',
+              })
+              .closeNode();
+            walkerContext
               .openNode(
                 {
                   type: 'heading',

@@ -1,5 +1,6 @@
 'use client';
 import { createResearchSourceSearch } from './source-search';
+import { researchSettings } from '../../../shared/research-editor-apparatus';
 import { navigateStudyReference } from '../../utils/study-navigation';
 import { translations } from '../../translations';
 import { collectionKeys } from '../../utils/sunnah-collections';
@@ -51,6 +52,14 @@ export function ResearchEditorView() {
   useLayoutEffect(() => {
     window.__baglibResearchEditorBridge = {
       ...host.bridge,
+      settings: {
+        async load(id) {
+          const manuscript = (await window.electronAPI.manuscripts.list()).find(m => m.id === id);
+          if (!manuscript) throw new Error('invalid-request');
+          return researchSettings(JSON.parse(manuscript.settings_json));
+        },
+        save: (id, settings) => window.electronAPI.manuscripts.updateSettings(id, settings),
+      },
       sources: createResearchSourceSearch(window.electronAPI, () => current.current.books, async url => {
         await host.bridge.explicitSave();
         await navigateStudyReference(url, current.current.books, book => current.current.openBookForReading(book), () => {});

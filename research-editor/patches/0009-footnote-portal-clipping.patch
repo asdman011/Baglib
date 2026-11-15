@@ -1,0 +1,12 @@
+diff --git a/blocksuite/affine/inlines/footnote/src/footnote-node/footnote-node.ts b/blocksuite/affine/inlines/footnote/src/footnote-node/footnote-node.ts
+--- a/blocksuite/affine/inlines/footnote/src/footnote-node/footnote-node.ts
++++ b/blocksuite/affine/inlines/footnote/src/footnote-node/footnote-node.ts
+@@ -290,6 +290,7 @@
+       return {
+         template: this._FootNotePopup(footnote, abortController),
+-        container: this.std.host,
++        // Keep source previews outside the editor's clipping/scroll container.
++        container: document.body,
+         computePosition: {
+           referenceElement: this,
+           placement: 'top',

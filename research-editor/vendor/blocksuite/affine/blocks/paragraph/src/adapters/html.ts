@@ -401,7 +401,7 @@ export const paragraphBlockHtmlAdapterMatcher: BlockHtmlAdapterMatcher = {
               {
                 type: 'element',
                 tagName: o.node.props.type,
-                properties: { dir },
+                properties: { dir, id: 'baglib-heading-' + encodeURIComponent(o.node.id) },
                 children: deltaConverter.deltaToAST(text.delta),
               },
               'children'

@@ -10,6 +10,7 @@ function repository(event: IpcMainInvokeEvent): ManuscriptRepository {
   return new ManuscriptRepository(getDatabase());
 }
 export function registerManuscriptIpc(): void {
+  ipcMain.handle('manuscripts:updateSettings', (event, id, settings) => repository(event).updateSettings(id, settings));
   ipcMain.handle('manuscripts:list', (event, trashed) => repository(event).list(trashed === true));
   ipcMain.handle('manuscripts:create', (event, title, kind) => repository(event).create(title, kind));
   ipcMain.handle('manuscripts:rename', (event, id, title) => repository(event).rename(id, title));

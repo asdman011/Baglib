@@ -1,5 +1,6 @@
 import { MarkdownAdapter, HtmlAdapter } from '@blocksuite/affine/shared/adapters';
 import { sourceSchemas, sourceStoreExtensions, sourceViewExtensions } from './blocks';
+import { apparatusSchemas, apparatusStoreExtensions, apparatusViewExtensions, loadApparatus, standaloneApparatus, refreshApparatus, prepareApparatusExport, flushApparatusSettings } from './apparatus';
 // BagLib research editor entry (KEY-362).
 //
 // Mounts AFFiNE's BlockSuite editor (page and edgeless views of one document) fully offline.
@@ -63,7 +64,7 @@ function createWorkspace() {
     // Standalone smoke tests use memory. Hosted documents use the parent filesystem bridge.
     blobSources: { main: blobs ?? new MemoryBlobSource() },
   });
-  workspace.storeExtensions = [...storeManager.get('store'), ...sourceStoreExtensions()];
+  workspace.storeExtensions = [...storeManager.get('store'), ...sourceStoreExtensions(), ...apparatusStoreExtensions()];
   workspace.start();
   workspace.meta.initialize();
   return workspace;
@@ -129,6 +130,7 @@ async function mount() {
 
   const common: ExtensionType[] = [
     ...sourceViewExtensions(),
+    ...apparatusViewExtensions(),
     FontConfigExtension(BaglibCanvasTextFonts),
     EditorSettingExtension({ setting$: editorSettings() }),
     ParseDocUrlExtension({ parseDocUrl: () => undefined }),
@@ -138,11 +140,13 @@ async function mount() {
   editor.pageSpecs = [...viewManager.get('page'), ...common];
   editor.edgelessSpecs = [...viewManager.get('edgeless'), ...common];
 
-  app.append(editor);
+  app.append(document.createElement('baglib-scholarly-toolbar'), editor, document.createElement('baglib-footnote-list'));
   await editor.updateComplete;
+  standaloneApparatus(store);
+  const stopApparatusAppearance = bridge?.subscribeAppearance(refreshApparatus);
 
   const schema = new Schema();
-  schema.register([...AffineSchemas, ...sourceSchemas]);
+  schema.register([...AffineSchemas, ...sourceSchemas, ...apparatusSchemas]);
 
   const transformer = () => new Transformer({
     schema,
@@ -157,6 +161,7 @@ async function mount() {
   let loading = false;
   let scheduled: Promise<void> = Promise.resolve();
   const changed = () => {
+    refreshApparatus();
     if (loading || !current || !bridge) return;
     const id = current.id;
     scheduled = scheduled.catch(() => undefined).then(() => {
@@ -183,9 +188,11 @@ async function mount() {
         workspace.meta.setDocMeta(value.id, snapshot.meta);
         loaded.get(FeatureFlagService).setFlag('enable_advanced_block_visibility', true);
         loaded.resetHistory();
+        await loadApparatus(loaded, value.manuscript_id);
         editor.doc = loaded;
         editor.switchEditor(value.primary_mode);
         await editor.updateComplete;
+        refreshApparatus();
         current = value;
         previous.forceStop(); previous.dispose();
         scheduled = Promise.resolve();
@@ -197,8 +204,8 @@ async function mount() {
       } finally { loading = false; }
     },
     setReadonly(value: boolean) { editor.doc.readonly = value; },
-    async flush() { await blobs?.flush(); await scheduled; },
-    dispose() { observedDoc.off('update', changed); workspace.forceStop(); workspace.dispose(); editor.remove(); },
+    async flush() { await flushApparatusSettings(); await blobs?.flush(); await scheduled; },
+    dispose() { stopApparatusAppearance?.(); observedDoc.off('update', changed); workspace.forceStop(); workspace.dispose(); editor.remove(); },
   };
   if (bridge) {
     window.addEventListener('keydown', event => {
@@ -215,7 +222,8 @@ async function mount() {
     ready: true,
     async exportSources() {
       const job = transformer();
-      const snapshot = job.docToSnapshot(editor.doc);
+      const original = job.docToSnapshot(editor.doc);
+      const snapshot = original && prepareApparatusExport(original);
       if (!snapshot) throw new Error('snapshot-export-failed');
       return { markdown: (await new MarkdownAdapter(job, editor.doc.provider).fromDocSnapshot({ snapshot })).file, html: (await new HtmlAdapter(job, editor.doc.provider).fromDocSnapshot({ snapshot })).file };
     },

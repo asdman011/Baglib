@@ -13,6 +13,7 @@ export interface ManuscriptLink { block_id: string; target_scheme: ManuscriptSch
 export interface ManuscriptSave { id: string; snapshot: string; primary_mode?: ManuscriptMode }
 export interface ManuscriptVersion { revision: number; snapshot_hash: string; action: string; created_at: string; restored_from_revision: number | null }
 export interface ManuscriptsAPI {
+  updateSettings(id: string, settings: import('./research-editor-apparatus').ResearchSettings): Promise<void>;
   list(trashed?: boolean): Promise<Manuscript[]>;
   create(title: string, kind: ManuscriptKind): Promise<Manuscript>;
   rename(id: string, title: string): Promise<void>;

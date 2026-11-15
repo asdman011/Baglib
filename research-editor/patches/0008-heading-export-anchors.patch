@@ -1,0 +1,28 @@
+diff --git a/blocksuite/affine/blocks/paragraph/src/adapters/html.ts b/blocksuite/affine/blocks/paragraph/src/adapters/html.ts
+--- a/blocksuite/affine/blocks/paragraph/src/adapters/html.ts
++++ b/blocksuite/affine/blocks/paragraph/src/adapters/html.ts
+@@ -401,7 +401,7 @@
+               {
+                 type: 'element',
+                 tagName: o.node.props.type,
+-                properties: { dir },
++                properties: { dir, id: 'baglib-heading-' + encodeURIComponent(o.node.id) },
+                 children: deltaConverter.deltaToAST(text.delta),
+               },
+               'children'
+diff --git a/blocksuite/affine/blocks/paragraph/src/adapters/markdown.ts b/blocksuite/affine/blocks/paragraph/src/adapters/markdown.ts
+--- a/blocksuite/affine/blocks/paragraph/src/adapters/markdown.ts
++++ b/blocksuite/affine/blocks/paragraph/src/adapters/markdown.ts
+@@ -258,6 +258,12 @@
+           case 'h4':
+           case 'h5':
+           case 'h6': {
++            walkerContext
++              .openNode({
++                type: 'html',
++                value: '<a id="baglib-heading-' + encodeURIComponent(o.node.id) + '"></a>',
++              })
++              .closeNode();
+             walkerContext
+               .openNode(
+                 {

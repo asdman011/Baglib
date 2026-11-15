@@ -4,7 +4,6 @@ import { CaptionedBlockComponent } from '@blocksuite/affine/components/caption';
 import { BlockModel, BlockSchemaExtension, defineBlockSchema, type ExtensionType, Text } from '@blocksuite/affine/store';
 import { BlockViewExtension } from '@blocksuite/affine/std';
 import { SlashMenuConfigExtension } from '@blocksuite/affine/widgets/slash-menu';
-import { FootNoteNodeConfigExtension } from '@blocksuite/affine/inlines/footnote';
 import { BlockMarkdownAdapterExtension, BlockHtmlAdapterExtension, type BlockMarkdownAdapterMatcher, type BlockHtmlAdapterMatcher } from '@blocksuite/affine/shared/adapters';
 import { css, html, LitElement } from 'lit';
 import { unsafeStatic } from 'lit/static-html.js';
@@ -58,7 +57,7 @@ class SourceBlock extends CaptionedBlockComponent<SourceModel> {
     </figure>`;
   }
 }
-class SourceSearch extends LitElement {
+export class SourceSearch extends LitElement {
   static override properties = { results: { state: true }, status: { state: true }, selected: { state: true } };
   static override styles = css`
     :host { position:fixed; inset-block-start:18%; inset-inline:0; margin-inline:auto; width:min(620px,92vw); z-index:10000; color:var(--affine-text-primary-color); }
@@ -152,9 +151,5 @@ export function sourceViewExtensions(): ExtensionType[] {
         document.body.append(panel);
       },
     })) }),
-    FootNoteNodeConfigExtension({ onPopupClick: footnote => {
-      const url = footnote.reference.url ?? '';
-      if (/^(quran|sunnah|poetry|book):/u.test(url)) void bridge?.sources?.open(url).catch(bridge.error);
-    } }),
   ];
 }

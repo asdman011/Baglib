@@ -49,6 +49,33 @@ function fixture() {
   return { db, repo, manuscript, document };
 }
 
+test('RE-6 settings persist in the approved JSON field and preserve unrelated settings', () => {
+  const { db, repo, manuscript, document } = fixture();
+  try {
+    db.prepare('UPDATE manuscript SET settings_json=? WHERE id=?').run(JSON.stringify({ pageSize: 'A4' }), manuscript.id);
+    const before = repo.document(document.id).snapshot;
+    const settings = { citationStyle: 'apa' as const, quranPlacement: 'inline' as const, footnoteNumbering: 'page' as const, headingNumbering: true };
+    repo.updateSettings(manuscript.id, settings);
+    assert.deepEqual(JSON.parse(repo.list()[0].settings_json), { pageSize: 'A4', ...settings });
+    assert.equal(repo.document(document.id).snapshot, before);
+    assert.throws(() => repo.updateSettings(manuscript.id, { ...settings, citationStyle: 'unknown' }), /invalid-request/);
+    assert.throws(() => repo.updateSettings('missing', settings), /invalid-request/);
+    repo.trash(manuscript.id);
+    assert.throws(() => repo.updateSettings(manuscript.id, settings), /invalid-request/);
+  } finally { db.close(); }
+});
+
+test('partial scholarly settings preserve existing preferences', () => {
+  const { db, repo, manuscript } = fixture();
+  try {
+    const full = { citationStyle: 'apa' as const, quranPlacement: 'inline' as const, footnoteNumbering: 'page' as const, headingNumbering: true };
+    repo.updateSettings(manuscript.id, full);
+    repo.updateSettings(manuscript.id, { quranPlacement: 'footnote' });
+    assert.deepEqual(JSON.parse(repo.list()[0].settings_json), { ...full, quranPlacement: 'footnote' });
+    assert.throws(() => repo.updateSettings(manuscript.id, {}), /invalid-request/);
+  } finally { db.close(); }
+});
+
 test('migration029 has exactly the approved fields, indexes and CHECKs', () => {
   const { db } = fixture();
   try {

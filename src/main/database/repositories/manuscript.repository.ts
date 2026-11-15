@@ -4,11 +4,21 @@ import type { Manuscript, ManuscriptDocument, ManuscriptKind, ManuscriptSave, Ma
 import { manuscriptText } from '../../../shared/manuscripts';
 import { deriveManuscriptSnapshot, initialManuscriptSnapshot, renameManuscriptSnapshot } from '../../../shared/manuscript-snapshot';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
+import { validateResearchSettingsPatch } from '../../../shared/research-editor-apparatus';
 
 const now = () => new Date().toISOString();
 interface VersionContent { snapshot: string; title: string; primary_mode: ManuscriptDocument['primary_mode'] }
 export class ManuscriptRepository {
   constructor(private db: Database) {}
+  updateSettings(id: string, value: unknown): void {
+    const settings = validateResearchSettingsPatch(value);
+    this.db.transaction(() => {
+      const manuscript = this.manuscript(id);
+      const existing = JSON.parse(manuscript.settings_json) as Record<string, unknown>;
+      this.db.prepare('UPDATE manuscript SET settings_json=?,updated_at=? WHERE id=?')
+        .run(JSON.stringify({ ...existing, ...settings }), now(), id);
+    })();
+  }
   list(trashed = false): Manuscript[] {
     return this.db.prepare(`SELECT * FROM manuscript WHERE deleted_at IS ${trashed ? 'NOT NULL' : 'NULL'} ORDER BY updated_at DESC,id`).all() as Manuscript[];
   }

@@ -1,3 +1,62 @@
+## KEY-367 scoped publication ready - 2026-11-15T08:01:14.477126+02:00 - Agent: Codex
+
+User approval covers this KEY-367 commit and normal push to origin/feature/library-domain. The commit lock is held. Index contains exactly29 task paths, generated with explicit cached patches; RE-7 canvas/session/UI/labels/board-link fields, Partial API signature and board-specific merge/integration test hunks remain unchanged and unstaged in the working tree. Isolated index snapshot passed104/104focused and tsc; combined working-tree verification remains111focused/2457full/native2ar-en, allpass. The isolated translation audit initially lacked the rest of the indexed tests, and tsc initially lacked the root repository contract; those existing files were materialized and both checks then passed. Exact staged-only manifest/patches and logs are in .baglib-data/KEY-367-stage and KEY-367-index-*.log. No task code or other agent work was reverted. Next: requested commit with Agent: Codex attribution, normal push, verify remote hash, record publication and signal; no Jira mutation requested.
+
+## KEY-367 publication authorized - 2026-11-15T07:54:33.0277997+02:00 - Agent: Codex
+
+The user explicitly approved commit and normal push of KEY-367 to origin/feature/library-domain in this turn, reaffirming standing authorization. This supersedes prior approval-pending notes. Commit under docs/agent-ops/commit.lock with only own hunks; shared KEY-368 hunks remain unstaged and unchanged in the working tree. Exact29paths and ownership are in the verified handoff/report. Before commit: focused111/full2457/native2ar-en pass, types/lint/builds/vendor pass, dist9846050B. Additional verification of the isolated staged RE-6 snapshot is pending to ensure no RE-7 dependency is committed. No Jira change requested or performed.
+## KEY-367 verified handoff - 2026-11-15T07:50:55.4652912+02:00 - Agent: Codex
+
+RE-6 implementation and verification complete on RE-5 9bb5230, epic KEY-361, plan2.1. Publication pending explicit session commit/push approval; no staging, commit, push or Jira mutation has occurred.
+
+User experience: native ar/en citation slash commands for Quran ranges, hadith, poetry and real library quotes insert existing URL footnotes at the caret. Citations renumber after edits; Quran switches inline/footnote. Source previews show icons/full stored text and a visible reader-opening button. A scrollable chapter-end notes panel, live bibliography/contents blocks, optional heading numbering and saved scholarly settings were added. Inter/Noto typography and logical layout support Arabic RTL, English LTR and mixed text. Readable Markdown/HTML export works on a clone and preserves canonical snapshots/undo. Settings use existing settings_json and await close/switch; partial updates preserve unrelated preferences.
+
+Final verification: focused111/111; full2457/2457,360suites,concurrency2,182022.989ms,0fail/skip/TODO; native2/2ar-en,8citations,14screens,0renderererrors. Native covers citation/contents/bibliography slash commands,3styles,placement,exactreload,settingspersistence,delete/undo/autoupdates,4backlinkschemes,exportanchors,unmodifiedcanonicalexports,visiblepopup andall4actualreaders. Types, scopedlint0warnings(includingeditor --no-ignore),main/renderer/editorbuilds andvendor2899pass. Dist9846050bytes/92files/9.389925MiB (includes concurrent RE-7 code). Profilesdeleted; realAr/EnPDFs notmodified orOCRed. Initialfull2453/2455 exposed validator/source-audit problems, repaired and initiallogretained. Vendor0008headinganchors+0009bodypopupportal rebuilt using vendor.mjs; no vendor hand edits. Exact checked vendor-temp cleanup resolved its Windows EPERM warning.
+
+Documentation: docs/features/BlockSuite.md RE-6 investigation with REA evidence/partial-analysis limits; Research Editor Plan RE-6 implementation notes; local docs/agent-ops/reports/KEY-367.md with exact ownership/evidence. No schema/migration/dependency/download introduced. Per-page numbering remains a saved preference conditional on RE-8 pagination, explicitly explained in the UI; chapter numbering currently renders. Bibliography/TOC are current-document scope, templates use available metadata without invented authors/dates; readable Markdown import belongs to RE-8. Physical IME not claimed.
+
+Collaborative boundary: preserve Antigravity KEY-368 canvas/session/UI/translation hunks in main.ts, ResearchEditorView.tsx, research-editor.ts and translations.ts. Antigravity also added linkedBoardId typing/normalization/validation/null-unlink in the shared apparatus/repository/API files during verification. Codex preserved that work and repaired strict-vs-partial validation/default-reset compatibility; these shared additions and regression tests require careful scope separation before staging. Do not stage entire shared files/state files indiscriminately. All unrelated files including manuscript-preview.css, quran-navigation.ts, real-file README, canvas files and other task changes remain intact.
+
+Exact 29 owned paths (shared-hunk qualifications in local report):
+
+- research-editor/app/src/apparatus.ts
+- research-editor/app/src/blocks/index.ts
+- research-editor/app/src/host-style.css
+- research-editor/app/src/main.ts
+- research-editor/patches/0008-heading-export-anchors.patch
+- research-editor/patches/0009-footnote-portal-clipping.patch
+- research-editor/vendor/blocksuite/affine/blocks/paragraph/src/adapters/html.ts
+- research-editor/vendor/blocksuite/affine/blocks/paragraph/src/adapters/markdown.ts
+- research-editor/vendor/blocksuite/affine/inlines/footnote/src/footnote-node/footnote-node.ts
+- src/shared/research-editor-apparatus.ts
+- src/shared/research-editor-i18n.ts
+- src/shared/research-editor.ts
+- src/shared/manuscripts.ts
+- src/main/database/repositories/manuscript.repository.ts
+- src/main/ipc/manuscripts.ts
+- src/preload/index.ts
+- src/renderer/components/research/ResearchEditorView.tsx
+- src/renderer/translations.ts
+- tests/ui/research-editor-apparatus.test.ts
+- tests/services/manuscripts.test.ts
+- scripts/research-editor-apparatus-live/initialize.ts
+- scripts/research-editor-apparatus-live/main.cjs
+- scripts/research-editor-apparatus-live/run.mjs
+- scripts/research-editor-apparatus-live/scenario.cjs
+- docs/features/BlockSuite.md
+- docs/features/feature - Research Editor Plan.md
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+- tests/ui/translation-keys.test.ts
+
+Git: feature/library-domain; index empty at final review. Next approval: explicit user approval for KEY-367 commit and push, per the session instruction requiring a pause for each Git action unless both are approved together. Intended normal destination origin/feature/library-domain. Do not mark Jira Done until scoped commit and successful push. Native/testing slot released for KEY-368.
+## KEY-367 verification checkpoint - 2026-11-15T07:46:48.3413848+02:00 - Agent: Codex
+
+RE-6 implementation and first native ar/en2/2 pass (8citations/14screens/0renderererrors), editor/main/renderer builds, vendor2899 and types/lint pass. Initial full2453/2455 found strict validation changed by concurrent KEY-368 settings edits and translation audit missing isolated app sources. Codex preserved Antigravity board-link field/null-unlink, split strict/partial validators to avoid resetting scholarly settings, added preservation regression, expanded audit to app/src and removed unused label. Focused111/111 including RE-7 now passes; final builds/native/full concurrency2 active. New typography uses bundled Inter/Noto throughout iframe, with six-level logical TOC indentation. Exact28initialfiles in local report plus tests/ui/translation-keys.test.ts (29); shared apparatus module now has explicit RE-7 attribution. No staging/commit/push/Jira mutation; direct session Git approval gate remains. Do not claim final completion before final pipeline results.
+## KEY-367 active - 2026-11-15T06:58:30.9204302+02:00 - Agent: Codex
+
+Requested RE-6 on RE-5 9bb5230: scheme footnotes/popup/readable exports, generated bibliography/TOC, heading numbering, persisted manuscript settings; ar/en verification, vendor patches only, editor build/dist measurement. Own research-editor/app/src scholarly modules + integration, new numbered patches if required, src/shared/research-editor*.ts, host/research integration, existing manuscript settings API paths if required, translations, focused tests/new live harness, BlockSuite/plan docs and own state hunks. Existing unrelated files including manuscript-preview.css preserved. No commit/push approval inferred from standing instructions: current direct user gate requires explicit approval. Jira read only; implementation/testing pending.
+
 ## KEY-366 verified handoff - 2026-11-15T04:50:00.440Z - Codex 01a1dbd5-1bbd-78b2-aa5a-8028d28aa1fd
 
 Implemented RE-5 under epic KEY-361 and plan2.1. Four public-extension source blocks and Markdown/HTML adapters, ar/en input-aware slash menu and translated search, bounded8 real IPC results, cancellation/stale rejection, caret splitting/continuation, canonical source props and existing-reader navigation. RE-3 already derives the exact links; no snapshot-derivation/schema/dependency/vendor change or download was needed. Nested slash actions remain available as searchable leaves with inherited aliases.

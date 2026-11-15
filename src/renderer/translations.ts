@@ -1,5 +1,7 @@
+import { researchEditorTranslations } from '../shared/research-editor-i18n';
 export const translations = {
   ar: {
+    ...researchEditorTranslations.ar,
     manuscriptsTitle: "المخطوطات",
     manuscriptNew: "عنوان مخطوط جديد",
     manuscriptCreate: "إنشاء مخطوط",
@@ -5432,6 +5434,7 @@ export const translations = {
     boardsEmptyCanvasDesc: "أضف بطاقات أو أوراقًا لاصقة أو روابط، ثم صلها بالأسهم لتنظيم أفكارك.",
   },
   en: {
+    ...researchEditorTranslations.en,
     manuscriptsTitle: "Manuscripts",
     manuscriptNew: "New manuscript title",
     manuscriptCreate: "Create manuscript",

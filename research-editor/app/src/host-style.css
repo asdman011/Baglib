@@ -1,3 +1,13 @@
 html[data-theme='dark'] body{background:var(--affine-background-primary-color,#141414);color:var(--affine-text-primary-color,#eee)}
 html[data-theme='light'] body{background:var(--affine-background-primary-color,#fff);color:var(--affine-text-primary-color,#141414)}
+body{font-family:var(--affine-font-family);line-height:1.8}
 affine-editor-container{font-size:calc(16px * var(--baglib-font-scale,1));line-height:1.8}
+baglib-citation button { font: inherit; color: inherit; background: transparent; border: 0; padding-inline: 3px; line-height: 1.8; cursor: pointer; }
+baglib-citation sup { font-size: .75em; vertical-align: super; }
+#app { display:flex; flex-direction:column; height:100%; }
+#app > affine-editor-container { flex:1; min-height:0; height:auto; }
+#app > baglib-scholarly-toolbar { flex:none; }
+#app > baglib-footnote-list { flex:none; max-height:22vh; overflow:auto; }
+.affine-paragraph-rich-text-wrapper[data-heading-number]:not([data-heading-number=""]) { display:flex; align-items:flex-start; gap:.4em; }
+.affine-paragraph-rich-text-wrapper[data-heading-number]:not([data-heading-number=""])::before { content:attr(data-heading-number); flex:none; font:inherit; unicode-bidi:isolate; }
+.affine-paragraph-rich-text-wrapper[data-heading-number]:not([data-heading-number=""]) > rich-text { flex:1; min-width:0; width:0; }

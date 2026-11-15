@@ -21,7 +21,7 @@ test('Arabic and English define the same keys', () => {
 
 // Tests count as references: some suites pin keys no screen shows yet. See docs/features/Dataset UI coverage audit.md.
 test('every translation key is referenced', () => {
-  const code = [...sources(path.resolve('src')), ...sources(path.resolve('tests'))].map(file => fs.readFileSync(file, 'utf8')).join('\n');
+  const code = [...sources(path.resolve('src')), ...sources(path.resolve('research-editor/app/src')), ...sources(path.resolve('tests'))].map(file => fs.readFileSync(file, 'utf8')).join('\n');
   const quoted = new Set([...code.matchAll(/['"`]([A-Za-z_][A-Za-z0-9_]*)(?=['"`])/g)].map(match => match[1]));
   const accessed = new Set([...code.matchAll(/\.([A-Za-z_][A-Za-z0-9_]*)/g)].map(match => match[1]));
   const unused = Object.keys(translations.en).filter(key => !quoted.has(key) && !accessed.has(key) && !dynamicPrefixes.some(prefix => key.startsWith(prefix)) && !retiredKeys.has(key));
