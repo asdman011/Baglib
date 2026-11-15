@@ -458,7 +458,7 @@
 
 .research-sidebar-tree-row.active {
   background-color: var(--color-primary-subtle, rgba(47, 158, 110, 0.15));
-  color: var(--color-primary, #2f9e6e);
+  color: var(--color-primary-text, var(--color-text-main, #fff));
   font-weight: 500;
 }
 
