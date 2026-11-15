@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { BrowserWindow } from 'electron';
 import type { Database } from 'better-sqlite3';
 import {
@@ -22,7 +24,6 @@ import {
 import { ManuscriptRepository } from '../database/repositories/manuscript.repository';
 import type { ResearchEditorAssets } from '../../shared/research-editor';
 import {
-  type ManuscriptExportFormat,
   type ManuscriptExportOptions,
   type ManuscriptExportResult,
   exportMimeType,
@@ -34,8 +35,7 @@ import {
   deriveApparatus,
   readableCitation,
   researchSettings,
-  type ApparatusBlock,
-  type CitationEntry
+  type ApparatusBlock
 } from '../../shared/research-editor-apparatus';
 
 const ARABIC_REGEX = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/u;
@@ -50,16 +50,17 @@ interface ParsedSnapshotBlock {
   children: ParsedSnapshotBlock[];
 }
 
-interface DocFootnote {
-  id: number;
-  label: string;
-  text: string;
-  url: string;
-}
-
 function isArabicText(text: string): boolean {
   const match = /\p{L}/u.exec(text);
   return match ? ARABIC_REGEX.test(match[0]) : true;
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escapeCssString(str: string): string {
+  return str.replace(/["\\]/g, '\\$&').replace(/\n/g, ' ');
 }
 
 /** Extract dimensions from PNG/JPEG buffer for docx ImageRun. */
@@ -620,9 +621,488 @@ export class ManuscriptExportService {
   }
 
   // ---------------------------------------------------------------------------
-  // PDF EXPORT
+  // PDF EXPORT (Paged.js Page-Bottom Footnotes with Chapter-End Fallback)
   // ---------------------------------------------------------------------------
-  async generatePdf(manuscript: Manuscript, docs: ManuscriptDocument[], options: ManuscriptExportOptions): Promise<string> {
+  getPagedJsPath(): string | null {
+    const candidates = [
+      path.join(process.cwd(), 'node_modules/pagedjs/dist/paged.polyfill.js'),
+      path.join(__dirname, '../../node_modules/pagedjs/dist/paged.polyfill.js'),
+      path.join(__dirname, '../node_modules/pagedjs/dist/paged.polyfill.js')
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) return c;
+    }
+    return null;
+  }
+
+  async generatePagedHtml(
+    manuscript: Manuscript,
+    docs: ManuscriptDocument[],
+    options: ManuscriptExportOptions,
+    footnoteNumbering: 'chapter' | 'page'
+  ): Promise<string> {
+    const isAr = docs.some(d => isArabicText(d.title || d.plain_text));
+    const dir = isAr ? 'rtl' : 'ltr';
+    const lang = isAr ? 'ar' : 'en';
+
+    const pageSize = options.pageSize === 'Letter' ? 'Letter' : 'A4';
+    const marginCss = options.margins === 'narrow' ? '10mm'
+      : options.margins === 'wide' ? '30mm 25mm'
+      : '20mm 15mm';
+
+    const sectionsHtml: string[] = [];
+
+    for (let docIndex = 0; docIndex < docs.length; docIndex++) {
+      const doc = docs[docIndex];
+      const { blocks, title, apparatus } = extractNoteBlocks(doc.snapshot);
+      const docTitle = doc.title || title || `Chapter ${docIndex + 1}`;
+
+      const citationTextMap = new Map<string, string>();
+      apparatus.citations.forEach(c => {
+        if (c.number !== null) {
+          citationTextMap.set(c.key, readableCitation(c.note));
+        }
+      });
+
+      const bodyHtmlParts: string[] = [];
+      for (const block of blocks) {
+        const part = await this.blockToPagedHtml(block, citationTextMap, dir);
+        if (part) bodyHtmlParts.push(part);
+      }
+
+      sectionsHtml.push(`
+        <article class="manuscript-chapter" id="chapter-${docIndex + 1}">
+          <header class="chapter-header">
+            <h2>${escapeHtml(docTitle)}</h2>
+          </header>
+          <div class="chapter-body">
+            ${bodyHtmlParts.join('\n')}
+          </div>
+        </article>
+      `);
+    }
+
+    const pagedJsPath = this.getPagedJsPath();
+    const scriptTag = pagedJsPath ? `<script src="file:///${pagedJsPath.replace(/\\/g, '/')}"></script>` : '';
+
+    return `<!DOCTYPE html>
+<html lang="${lang}" dir="${dir}">
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(manuscript.title)}</title>
+  <style>
+    :root {
+      --font-body: 'Traditional Arabic', 'Amiri', 'Noto Naskh Arabic', 'Calibri', system-ui, -apple-system, sans-serif;
+      --font-quran: 'Amiri', 'Traditional Arabic', serif;
+      --font-latin: 'Calibri', 'Segoe UI', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    @page {
+      size: ${pageSize};
+      margin: ${marginCss};
+      ${footnoteNumbering === 'page' ? 'counter-reset: footnote footnote-marker;' : ''}
+      @top-center {
+        content: "${escapeCssString(manuscript.title)}";
+        font-family: var(--font-body);
+        font-size: 8.5pt;
+        color: #9ca3af;
+      }
+      @bottom-center {
+        content: counter(page) " / " counter(pages);
+        font-family: var(--font-body);
+        font-size: 8.5pt;
+        color: #9ca3af;
+      }
+    }
+    body {
+      font-family: var(--font-body);
+      font-size: 11pt;
+      line-height: 1.8;
+      color: #1f2937;
+      background-color: #ffffff;
+      margin: 0;
+      padding: 0;
+      text-rendering: optimizeLegibility;
+      direction: ${dir};
+    }
+    .manuscript-title-page {
+      text-align: center;
+      padding-block: 2.5rem 2rem;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .manuscript-title {
+      font-size: 24pt;
+      font-weight: 700;
+      margin: 0 0 0.5rem 0;
+      color: #111827;
+    }
+    .manuscript-meta {
+      font-size: 10pt;
+      color: #6b7280;
+      margin: 0;
+    }
+    .manuscript-chapter:not(:first-child) {
+      break-before: page;
+      page-break-before: always;
+    }
+    .chapter-header h2 {
+      font-size: 16pt;
+      font-weight: 700;
+      margin: 1.5rem 0 1rem 0;
+      color: #111827;
+      border-bottom: 1px solid #f3f4f6;
+      padding-bottom: 0.5rem;
+    }
+    .chapter-body p {
+      margin: 0 0 1rem 0;
+      text-align: justify;
+    }
+    .chapter-body h3 { font-size: 13pt; font-weight: 600; margin: 1.5rem 0 0.75rem 0; color: #1f2937; }
+    .chapter-body h4 { font-size: 11.5pt; font-weight: 600; margin: 1.25rem 0 0.5rem 0; color: #374151; }
+    .chapter-body h5 { font-size: 10.5pt; font-weight: 600; margin: 1rem 0 0.5rem 0; color: #4b5563; }
+    .chapter-body blockquote {
+      margin: 1.25rem 0;
+      padding: 0.75rem 1.25rem;
+      border-inline-start: 4px solid #d1d5db;
+      background: #f9fafb;
+      color: #374151;
+      border-radius: 0 4px 4px 0;
+    }
+    .chapter-body ul, .chapter-body ol {
+      margin: 0 0 1rem 0;
+      padding-inline-start: 1.75rem;
+    }
+    .chapter-body li { margin-bottom: 0.35rem; }
+
+    /* BagLib Block Types */
+    .baglib-ayah, .baglib-hadith, .baglib-verse, .baglib-book-quote, .baglib-image {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .baglib-ayah {
+      border-inline-start: 4px solid #10b981;
+      background: #ecfdf5;
+      padding: 1rem 1.25rem;
+      margin: 1.25rem 0;
+      border-radius: 6px;
+    }
+    .baglib-ayah p {
+      font-family: var(--font-quran);
+      font-size: 13pt;
+      line-height: 2;
+      color: #065f46;
+      margin: 0 0 0.5rem 0;
+      text-align: center;
+    }
+    .baglib-hadith {
+      border-inline-start: 4px solid #0284c7;
+      background: #f0f9ff;
+      padding: 1rem 1.25rem;
+      margin: 1.25rem 0;
+      border-radius: 6px;
+    }
+    .baglib-hadith p {
+      font-size: 11pt;
+      line-height: 1.85;
+      color: #075985;
+      margin: 0 0 0.5rem 0;
+    }
+    .baglib-poetry-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.25rem 0;
+      table-layout: fixed;
+    }
+    .baglib-poetry-table td {
+      padding: 0.4rem 0.75rem;
+      vertical-align: middle;
+      font-size: 11pt;
+      width: 50%;
+    }
+    .sadr { text-align: start; }
+    .ajuz { text-align: end; }
+    .source-link {
+      display: inline-block;
+      font-size: 8.5pt;
+      color: #6b7280;
+      text-decoration: none;
+      margin-top: 0.35rem;
+    }
+    .baglib-book-quote {
+      border-inline-start: 4px solid #f59e0b;
+      background: #fffbeb;
+      padding: 0.9rem 1.25rem;
+      margin: 1.25rem 0;
+      border-radius: 6px;
+    }
+    .baglib-book-quote p {
+      font-style: italic;
+      color: #92400e;
+      margin: 0 0 0.35rem 0;
+    }
+    .baglib-image {
+      margin: 1.5rem 0;
+      text-align: center;
+    }
+    .baglib-image img {
+      max-width: 85%;
+      height: auto;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+    .baglib-image figcaption {
+      font-size: 8.5pt;
+      color: #6b7280;
+      margin-top: 0.5rem;
+    }
+
+    /* Paged.js Footnotes */
+    .footnote {
+      float: footnote;
+      font-size: 9pt;
+      line-height: 1.5;
+      color: #374151;
+      text-align: start;
+      direction: ${dir};
+    }
+    .pagedjs_footnote_area {
+      border-top: 1px solid #e5e7eb;
+      padding-top: 8px;
+      margin-top: 12px;
+    }
+    .pagedjs_footnote_inner_content {
+      font-size: 9pt;
+      line-height: 1.5;
+      direction: ${dir};
+      text-align: start;
+    }
+    [data-footnote-call]::after {
+      font-size: 70%;
+      vertical-align: super;
+      line-height: normal;
+      color: #2563eb;
+      font-weight: 600;
+      margin-inline-start: 1px;
+    }
+    [data-footnote-marker] {
+      direction: ${dir};
+      text-align: start;
+      margin-bottom: 4px;
+    }
+    [data-footnote-marker]::marker {
+      font-weight: 600;
+      color: #4b5563;
+    }
+  </style>
+  <script>
+    window.PagedConfig = {
+      auto: true,
+      after: (flow) => {
+        window.__pagedjs_rendered = true;
+        window.__pagedjs_pages_count = flow.total;
+      }
+    };
+    window.addEventListener('error', (e) => {
+      window.__pagedjs_error = e.message || 'Script error';
+    });
+  </script>
+  ${scriptTag}
+</head>
+<body>
+  <div class="manuscript-title-page">
+    <h1 class="manuscript-title">${escapeHtml(manuscript.title)}</h1>
+    <p class="manuscript-meta">
+      ${manuscript.kind === 'book' ? (isAr ? 'كتاب / بحث مخطوط' : 'Book / Manuscript') : (isAr ? 'مقالة بحثية' : 'Article / Essay')}
+      · ${new Date(manuscript.updated_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US')}
+    </p>
+  </div>
+  ${sectionsHtml.join('\n')}
+</body>
+</html>`;
+  }
+
+  private async blockToPagedHtml(
+    block: ParsedSnapshotBlock,
+    citationTextMap: Map<string, string>,
+    dir: string
+  ): Promise<string> {
+    const flavour = block.flavour;
+    const props = block.props || {};
+
+    if (flavour === 'affine:paragraph') {
+      const type = String(props.type || 'text');
+      const deltas = (props.text as { delta?: { insert: string; attributes?: { bold?: boolean; italic?: boolean; footnote?: { label: string } } }[] })?.delta || [];
+      let innerHtml = '';
+      let offset = 0;
+
+      for (const d of deltas) {
+        let piece = d.insert || '';
+        piece = escapeHtml(piece);
+        if (d.attributes?.bold) piece = `<strong>${piece}</strong>`;
+        if (d.attributes?.italic) piece = `<em>${piece}</em>`;
+        if (d.attributes?.footnote) {
+          const key = block.id + ':' + offset;
+          const note = d.attributes.footnote as unknown as { reference?: { type: string; url?: string; title?: string }; label?: string };
+          const fnText = citationTextMap.get(key)
+            || (note?.reference ? readableCitation(note as Parameters<typeof readableCitation>[0]) : '')
+            || note?.label
+            || '';
+          if (fnText) {
+            piece += `<span class="footnote">${escapeHtml(fnText)}</span>`;
+          }
+        }
+        innerHtml += piece;
+        offset += d.insert?.length || 0;
+      }
+
+      if (!innerHtml.trim()) return '';
+      if (type === 'h1') return `<h3>${innerHtml}</h3>`;
+      if (type === 'h2') return `<h4>${innerHtml}</h4>`;
+      if (type === 'h3') return `<h5>${innerHtml}</h5>`;
+      if (type === 'quote') return `<blockquote><p>${innerHtml}</p></blockquote>`;
+      return `<p>${innerHtml}</p>`;
+    }
+
+    if (flavour === 'affine:list') {
+      const type = String(props.type || 'bulleted');
+      const text = (props.text as { delta?: { insert: string }[] })?.delta?.map(d => escapeHtml(d.insert || '')).join('') || '';
+      return type === 'numbered' ? `<ol><li>${text}</li></ol>` : `<ul><li>${text}</li></ul>`;
+    }
+
+    if (flavour === 'baglib:ayah') {
+      const text = String(props.text || '');
+      const label = String(props.label || 'القرآن الكريم');
+      const url = String(props.url || '');
+      return `
+        <blockquote class="baglib-ayah">
+          <p>﴿ ${escapeHtml(text)} ﴾</p>
+          <a class="source-link" href="${escapeHtml(url)}">${escapeHtml(label)}</a>
+        </blockquote>
+      `;
+    }
+
+    if (flavour === 'baglib:hadith') {
+      const text = String(props.text || '');
+      const label = String(props.label || 'الحديث الشريف');
+      const url = String(props.url || '');
+      const grade = props.grade ? ` · ${props.grade}` : '';
+      return `
+        <blockquote class="baglib-hadith">
+          <p>${escapeHtml(text)}</p>
+          <a class="source-link" href="${escapeHtml(url)}">${escapeHtml(label)}${escapeHtml(grade)}</a>
+        </blockquote>
+      `;
+    }
+
+    if (flavour === 'baglib:verse') {
+      const verses = (props.verses as { sadr: string; ajuz: string }[]) || [];
+      const label = String(props.label || '');
+      const url = String(props.url || '');
+      const rows = verses
+        .map(v => `<tr><td class="sadr">${escapeHtml(v.sadr)}</td><td class="ajuz">${escapeHtml(v.ajuz)}</td></tr>`)
+        .join('\n');
+      return `
+        <div class="baglib-verse">
+          <table class="baglib-poetry-table" dir="${dir}">
+            <tbody>${rows}</tbody>
+          </table>
+          ${label ? `<a class="source-link" href="${escapeHtml(url)}">${escapeHtml(label)}</a>` : ''}
+        </div>
+      `;
+    }
+
+    if (flavour === 'baglib:book-quote') {
+      const text = String(props.text || '');
+      const label = String(props.label || '');
+      const url = String(props.url || '');
+      return `
+        <blockquote class="baglib-book-quote">
+          <p>${escapeHtml(text)}</p>
+          ${label ? `<a class="source-link" href="${escapeHtml(url)}">${escapeHtml(label)}</a>` : ''}
+        </blockquote>
+      `;
+    }
+
+    if (flavour === 'affine:image') {
+      const caption = props.caption ? String(props.caption) : '';
+      const sourceId = String(props.sourceId || props.blobId || '');
+      let src = `app://-/research-blob/${sourceId}`;
+      if (sourceId) {
+        try {
+          const blob = await this.assets.get(sourceId);
+          if (blob) {
+            const b64 = Buffer.from(blob.bytes).toString('base64');
+            src = `data:${blob.type || 'image/png'};base64,${b64}`;
+          }
+        } catch {}
+      }
+      return `
+        <figure class="baglib-image">
+          <img src="${src}" alt="${escapeHtml(caption || 'Manuscript Asset')}" />
+          ${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}
+        </figure>
+      `;
+    }
+
+    return '';
+  }
+
+  private async renderPdfWithPagedJs(html: string, pageSize: 'A4' | 'Letter'): Promise<Buffer> {
+    const tempDir = path.join(process.cwd(), '.baglib-data');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    const tempHtmlFile = path.join(tempDir, `temp-paged-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.html`);
+
+    fs.writeFileSync(tempHtmlFile, html, 'utf8');
+
+    const win = new BrowserWindow({
+      show: false,
+      width: 1024,
+      height: 768,
+      webPreferences: {
+        offscreen: true,
+        allowRunningInsecureContent: true
+      }
+    });
+
+    try {
+      await win.loadFile(tempHtmlFile);
+
+      let rendered = false;
+      for (let i = 0; i < 60; i++) {
+        const error = await win.webContents.executeJavaScript('window.__pagedjs_error').catch(() => null);
+        if (error) {
+          throw new Error(`Paged.js script error: ${error}`);
+        }
+        rendered = await win.webContents.executeJavaScript('window.__pagedjs_rendered === true').catch(() => false);
+        if (rendered) break;
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      if (!rendered) {
+        throw new Error('Paged.js layout timed out');
+      }
+
+      const pdfBuffer = await win.webContents.printToPDF({
+        pageSize,
+        printBackground: true,
+        margins: { marginType: 'none' }
+      });
+
+      return Buffer.from(pdfBuffer);
+    } finally {
+      win.destroy();
+      try {
+        fs.unlinkSync(tempHtmlFile);
+      } catch {}
+    }
+  }
+
+  private async renderFallbackPdf(
+    manuscript: Manuscript,
+    docs: ManuscriptDocument[],
+    options: ManuscriptExportOptions
+  ): Promise<string> {
     const html = await this.generateHtml(manuscript, docs);
     const win = new BrowserWindow({
       show: false,
@@ -635,8 +1115,6 @@ export class ManuscriptExportService {
 
     try {
       await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-
-      // Allow DOM and fonts to settle
       await new Promise(resolve => setTimeout(resolve, 300));
 
       const pageSize = options.pageSize === 'Letter' ? 'Letter' : 'A4';
@@ -660,6 +1138,27 @@ export class ManuscriptExportService {
     } finally {
       win.destroy();
     }
+  }
+
+  async generatePdf(manuscript: Manuscript, docs: ManuscriptDocument[], options: ManuscriptExportOptions): Promise<string> {
+    const settings = researchSettings(manuscript.settings_json ? JSON.parse(manuscript.settings_json) : {});
+    const footnoteNumbering = options.footnoteNumbering || settings.footnoteNumbering || 'chapter';
+    const pageSize = options.pageSize === 'Letter' ? 'Letter' : 'A4';
+
+    // 1. Try Paged.js page-bottom footnotes
+    const pagedJsPath = this.getPagedJsPath();
+    if (pagedJsPath) {
+      try {
+        const pagedHtml = await this.generatePagedHtml(manuscript, docs, options, footnoteNumbering);
+        const pagedPdfBuffer = await this.renderPdfWithPagedJs(pagedHtml, pageSize);
+        return pagedPdfBuffer.toString('base64');
+      } catch (err) {
+        console.warn('Paged.js PDF export failed, falling back to chapter-end footnotes:', err);
+      }
+    }
+
+    // 2. Fallback: Chapter-end footnotes using Chromium printToPDF
+    return this.renderFallbackPdf(manuscript, docs, options);
   }
 
   // ---------------------------------------------------------------------------

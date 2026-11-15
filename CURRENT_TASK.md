@@ -1,3 +1,44 @@
+## KEY-369b verified handoff - 2026-11-15T09:52:00+02:00 - Agent: Antigravity
+
+Research Editor follow-up RE-8: PDF page-bottom footnotes with Paged.js (Gate R5 approved).
+Standing commit and push authorization confirmed per task instructions.
+
+What changed:
+1. Dependency:
+   - Added pinned "pagedjs": "0.4.3" to root package.json (MIT license).
+   - Download size: 2.23 MB (compressed across 17 packages, under 5 MB threshold). Installed size: 5.64 MB (pagedjs), 10.59 MB (total node_modules).
+2. Paged.js Footnote Layout (src/main/services/manuscript-export.service.ts):
+   - Implemented page-bottom footnotes using Paged.js float: footnote and CSS @page margin boxes.
+   - Added footnoteNumbering option ('chapter' | 'page') resetting counter per page via @page { counter-reset: footnote footnote-marker; }.
+   - Maintained running page numbers (counter(page) / counter(pages)) and top headers.
+   - Off-screen Electron BrowserWindow rendering via temporary HTML file awaiting window.__pagedjs_rendered.
+   - Preserved chapter-end fallback (renderFallbackPdf) if Paged.js fails.
+3. UI & Options (src/shared/manuscript-export.ts, src/renderer/components/research/ResearchExportModal.tsx, src/renderer/translations.ts):
+   - Added footnoteNumbering to ManuscriptExportOptions.
+   - Added bilingual strings for footnote numbering options with parity.
+   - Wired footnote numbering dropdown into PDF export modal.
+4. Gate Documentation (docs/agent-ops/waiting-for-user.md):
+   - Marked Gate R5 approved and completed.
+5. Verification & Tests:
+   - Unit tests: npm test tests/services/manuscript-export.test.ts (9/9 pass).
+   - Combined related tests: 47/47 pass.
+   - Static checks: npx tsc --noEmit (0 errors), eslint clean.
+   - Builds: npm run build:main and build:renderer clean.
+   - Live Electron check: node scripts/research-export-live/run.mjs (exit code 0; generated continuous and per-page PDFs in .baglib-data/KEY-369-evidence/).
+
+Own files:
+- package.json
+- package-lock.json
+- src/shared/manuscript-export.ts
+- src/renderer/translations.ts
+- src/renderer/components/research/ResearchExportModal.tsx
+- src/main/services/manuscript-export.service.ts
+- tests/services/manuscript-export.test.ts
+- scripts/research-export-live/run.mjs
+- scripts/research-export-live/scenario.cjs
+- docs/agent-ops/waiting-for-user.md
+- docs/agent-ops/reports/KEY-369b.md
+
 ## KEY-369 verified handoff - 2026-11-15T09:22:00+02:00 - Agent: Antigravity
 
 Research Editor RE-8: Export (Markdown, HTML, PDF, DOCX) and import quick note / markdown, epic KEY-361.

@@ -165,7 +165,7 @@ function fixture() {
 
   repo.save({ id: document.id, snapshot: JSON.stringify(base) });
 
-  return { db, repo, assets, exportService, importService, manuscript, document };
+  return { db, repo, assets, exportService, importService, manuscript, document: repo.document(document.id) };
 }
 
 test('Markdown export includes BagLib blocks, RTL content, and readable footnotes', async () => {
@@ -359,4 +359,58 @@ test('ManuscriptImportService imports Quick Note into manuscript as new chapter'
   assert.ok(imported.id);
   assert.equal(imported.title, 'فوائد في التفسير');
   assert.ok(imported.snapshot.includes('البيان والإعجاز في القرآن الكريم'));
+});
+
+test('generatePagedHtml generates Paged.js media layout with page-bottom footnotes and continuous numbering', async () => {
+  const { exportService, manuscript, document } = fixture();
+
+  const pagedHtml = await exportService.generatePagedHtml(
+    manuscript,
+    [document],
+    { manuscriptId: manuscript.id, format: 'pdf', pageSize: 'A4', margins: 'normal' },
+    'chapter'
+  );
+
+  assert.ok(pagedHtml.includes('<!DOCTYPE html>'));
+  assert.ok(pagedHtml.includes('dir="rtl"'));
+  // Paged.js script and config
+  assert.ok(pagedHtml.includes('paged.polyfill.js'));
+  assert.ok(pagedHtml.includes('window.PagedConfig'));
+  // Footnote float
+  assert.ok(pagedHtml.includes('.footnote {'));
+  assert.ok(pagedHtml.includes('float: footnote;'));
+  // Inline footnote span
+  assert.ok(pagedHtml.includes('<span class="footnote">'));
+  assert.ok(pagedHtml.includes('quran:hafs:2:255'));
+  // Margin boxes for header and footer
+  assert.ok(pagedHtml.includes('@top-center'));
+  assert.ok(pagedHtml.includes('@bottom-center'));
+  assert.ok(pagedHtml.includes('counter(page) " / " counter(pages)'));
+  // Chapter numbering: no counter-reset on page
+  assert.ok(!pagedHtml.includes('counter-reset: footnote footnote-marker;'));
+  // Avoid break inside blocks
+  assert.ok(pagedHtml.includes('break-inside: avoid;'));
+});
+
+test('generatePagedHtml with per-page footnote numbering injects counter-reset on page', async () => {
+  const { exportService, manuscript, document } = fixture();
+
+  const pagedHtml = await exportService.generatePagedHtml(
+    manuscript,
+    [document],
+    { manuscriptId: manuscript.id, format: 'pdf', pageSize: 'A4', margins: 'normal' },
+    'page'
+  );
+
+  // Per-page numbering: counter-reset injected into @page
+  assert.ok(pagedHtml.includes('counter-reset: footnote footnote-marker;'));
+  assert.ok(pagedHtml.includes('.footnote {'));
+  assert.ok(pagedHtml.includes('float: footnote;'));
+});
+
+test('getPagedJsPath resolves valid paged.polyfill.js from installed dependency', () => {
+  const { exportService } = fixture();
+  const resolved = exportService.getPagedJsPath();
+  assert.ok(resolved, 'paged.polyfill.js resolved');
+  assert.ok(resolved.endsWith('paged.polyfill.js'));
 });

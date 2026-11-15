@@ -26,6 +26,15 @@ export function ResearchExportModal({
   const [scope, setScope] = useState<'current' | 'all'>('current');
   const [pageSize, setPageSize] = useState<'A4' | 'Letter'>('A4');
   const [margins, setMargins] = useState<'normal' | 'narrow' | 'wide'>('normal');
+  const initialFootnoteNumbering = (() => {
+    try {
+      const s = manuscript.settings_json ? JSON.parse(manuscript.settings_json) : {};
+      return s.footnoteNumbering === 'page' ? 'page' : 'chapter';
+    } catch {
+      return 'chapter';
+    }
+  })();
+  const [footnoteNumbering, setFootnoteNumbering] = useState<'chapter' | 'page'>(initialFootnoteNumbering);
   const [isExporting, setIsExporting] = useState(false);
   const [resultMessage, setResultMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -44,6 +53,7 @@ export function ResearchExportModal({
         format,
         pageSize,
         margins,
+        footnoteNumbering: format === 'pdf' ? footnoteNumbering : undefined,
         saveDialog: true
       });
 
@@ -196,6 +206,20 @@ export function ResearchExportModal({
                   </select>
                 </div>
               </div>
+
+              {format === 'pdf' && (
+                <div>
+                  <label className="block text-xs text-text-muted mb-1.5">{t.researchExportFootnoteNumbering}</label>
+                  <select
+                    value={footnoteNumbering}
+                    onChange={e => setFootnoteNumbering(e.target.value as 'chapter' | 'page')}
+                    className="w-full text-sm bg-bg-panel border border-border rounded-md px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-brand"
+                  >
+                    <option value="chapter">{t.researchExportFootnoteNumberingChapter}</option>
+                    <option value="page">{t.researchExportFootnoteNumberingPage}</option>
+                  </select>
+                </div>
+              )}
             </div>
           )}
 

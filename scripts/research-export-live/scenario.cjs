@@ -56,18 +56,33 @@ module.exports = {
     assert.ok(htmlResult.content.includes('class="chapter-footnotes"'), 'HTML has footnotes section');
     fs.writeFileSync(path.join(evidence, 'manuscript-export.html'), htmlResult.content, 'utf8');
 
-    // C. PDF Export
+    // C. PDF Export (Paged.js Page-Bottom Footnotes, Continuous Numbering)
     const pdfResult = await evaluate(`window.electronAPI.manuscripts.export({
       manuscriptId: ${JSON.stringify(manuscript.id)},
       format: 'pdf',
       pageSize: 'A4',
-      margins: 'normal'
+      margins: 'normal',
+      footnoteNumbering: 'chapter'
     })`);
     assert.ok(pdfResult.base64, 'pdf base64 returned');
     const pdfBuf = Buffer.from(pdfResult.base64, 'base64');
     assert.ok(pdfBuf.length > 5000, 'pdf buffer has content');
     assert.equal(pdfBuf.subarray(0, 5).toString('ascii'), '%PDF-', 'valid PDF header');
     fs.writeFileSync(path.join(evidence, 'manuscript-export.pdf'), pdfBuf);
+
+    // C2. PDF Export (Paged.js Page-Bottom Footnotes, Per-Page Numbering)
+    const pdfPageResult = await evaluate(`window.electronAPI.manuscripts.export({
+      manuscriptId: ${JSON.stringify(manuscript.id)},
+      format: 'pdf',
+      pageSize: 'A4',
+      margins: 'normal',
+      footnoteNumbering: 'page'
+    })`);
+    assert.ok(pdfPageResult.base64, 'pdf with page footnote numbering returned');
+    const pdfPageBuf = Buffer.from(pdfPageResult.base64, 'base64');
+    assert.ok(pdfPageBuf.length > 5000, 'pdf page buffer has content');
+    assert.equal(pdfPageBuf.subarray(0, 5).toString('ascii'), '%PDF-', 'valid PDF header');
+    fs.writeFileSync(path.join(evidence, 'manuscript-export-page-numbering.pdf'), pdfPageBuf);
 
     // D. DOCX Export
     const docxResult = await evaluate(`window.electronAPI.manuscripts.export({

@@ -6,6 +6,7 @@ export interface ManuscriptExportOptions {
   format: ManuscriptExportFormat;
   pageSize?: 'A4' | 'Letter';
   margins?: 'normal' | 'narrow' | 'wide';
+  footnoteNumbering?: 'chapter' | 'page';
 }
 
 export interface ManuscriptExportResult {

@@ -16,7 +16,7 @@ for (const name of ['failure.txt', 'failure.png', 'result.json']) {
 const profile = fs.mkdtempSync(path.join(root, 'k369-'));
 const existing = () => execFileSync(
   'powershell.exe',
-  ['-NoProfile', '-Command', 'Get-Process electron,Baglib -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id; exit 0'],
+  ['-NoProfile', '-Command', "Get-CimInstance Win32_Process -Filter \"name='electron.exe' or name='Baglib.exe'\" | Where-Object { $_.CommandLine -like '*.baglib-data*' } | Select-Object -ExpandProperty ProcessId; exit 0"],
   { encoding: 'utf8', windowsHide: true }
 ).trim();
 
