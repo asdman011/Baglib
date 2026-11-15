@@ -68,7 +68,7 @@ export function GlobalAssistant() {
   const errorText = (code: string, detail?: string) => {
     const keys: Record<string, TranslationKey> = {
       'not-configured': 'researchAiNotConfigured', 'needs-selection': 'researchAiNeedsSelection', 'ai-disabled': 'assistantErrorDisabled', busy: 'assistantErrorBusy',
-      'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth', 'provider-too-large': 'aiErrorTooLarge', 'no-sources': 'assistantCardsNeedSources', 'invalid-output': 'assistantErrorUnchecked',
+      'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth', 'provider-too-large': 'aiErrorTooLarge', 'provider-model': 'aiErrorModel', 'provider-terms': 'aiErrorTerms', 'no-sources': 'assistantCardsNeedSources', 'invalid-output': 'assistantErrorUnchecked',
     };
     const base = keys[code] ? t(keys[code]) : t('researchAiProviderError').replace('{message}', detail || code);
     return detail && keys[code] && code.startsWith('provider') ? `${base}\n${t('aiErrorDetail').replace('{detail}', detail)}` : base;
@@ -113,7 +113,7 @@ export function GlobalAssistant() {
         sources, chapterId: chapter?.chapterId, selection, action, lang: lang === 'ar' ? 'ar' : 'en', allowRemote,
       });
       if (result.ok) push({ id: id(), role: 'assistant', text: result.text, citations: result.citations, sourceCount: result.sourceCount });
-      else push({ id: id(), role: 'error', text: errorText(result.error, result.detail), settings: ['not-configured', 'provider-quota', 'provider-busy', 'provider-auth', 'provider-too-large', 'ai-disabled'].includes(result.error) });
+      else push({ id: id(), role: 'error', text: errorText(result.error, result.detail), settings: ['not-configured', 'provider-quota', 'provider-busy', 'provider-auth', 'provider-too-large', 'provider-model', 'provider-terms', 'ai-disabled'].includes(result.error) });
     } catch (error) {
       push({ id: id(), role: 'error', text: errorText('engine-failed', error instanceof Error ? error.message : String(error)) });
     } finally {

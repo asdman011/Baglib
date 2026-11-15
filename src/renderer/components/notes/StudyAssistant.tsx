@@ -23,7 +23,7 @@ const errorKeys: Record<string, TranslationKey> = {
   'warsh-not-installed': 'assistantWarshMissing', 'invalid-resource': 'assistantInvalidResource', 'ambiguous-alignment': 'assistantAlignmentFailed',
   'missing-source': 'assistantMissingBookSource', 'missing-page': 'assistantMissingBookPage', 'no-text-layer': 'assistantNoTextLayer',
   busy: 'assistantErrorBusy', 'no-sources': 'assistantErrorNoSources', 'invalid-request': 'assistantErrorRequest',
-  'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth', 'provider-too-large': 'aiErrorTooLarge',
+  'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth', 'provider-too-large': 'aiErrorTooLarge', 'provider-model': 'aiErrorModel', 'provider-terms': 'aiErrorTerms',
 };
 
 /** One exchange in the conversation: what was asked, and the checked answer or the reason it failed. */

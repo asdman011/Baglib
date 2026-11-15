@@ -2,10 +2,13 @@
  * Why a provider call failed, in words the user can act on (KEY-373 follow-up): out of quota, overloaded or too
  * slow, a bad key, or anything else. The raw provider message is kept short as a detail.
  */
-export type ProviderErrorCode = 'provider-quota' | 'provider-busy' | 'provider-auth' | 'provider-too-large' | 'provider-error';
-export const PROVIDER_ERROR_CODES: readonly ProviderErrorCode[] = ['provider-quota', 'provider-busy', 'provider-auth', 'provider-too-large', 'provider-error'];
+export type ProviderErrorCode = 'provider-quota' | 'provider-busy' | 'provider-auth' | 'provider-too-large' | 'provider-model' | 'provider-terms' | 'provider-error';
+export const PROVIDER_ERROR_CODES: readonly ProviderErrorCode[] = ['provider-quota', 'provider-busy', 'provider-auth', 'provider-too-large', 'provider-model', 'provider-terms', 'provider-error'];
 
 export function providerErrorCode(message: string): ProviderErrorCode {
+  // KEY-385: a model that cannot chat (classifier, speech, transcription) or that the service does not offer.
+  if (/text classification|does not support chat|not a chat model|model_not_found|model .{0,80} does not exist|unknown model|invalid model/i.test(message)) return 'provider-model';
+  if (/terms acceptance|model_terms_required|accept the terms/i.test(message)) return 'provider-terms';
   // OpenAI-compatible services report "(429)"; Gemini "HTTP 429". 413 = more tokens than the model's per-minute limit.
   if (/HTTP 413|\(413\)|request too large|request entity too large/i.test(message)) return 'provider-too-large';
   if (/HTTP 429|\(429\)|quota|RESOURCE_EXHAUSTED|rate limit/i.test(message)) return 'provider-quota';

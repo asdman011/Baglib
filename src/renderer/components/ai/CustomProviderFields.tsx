@@ -6,7 +6,7 @@
  */
 import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { PROVIDER_PRESETS, isLocalAddress } from '../../../shared/ai-providers';
+import { PROVIDER_PRESETS, chatModelIds, isLocalAddress } from '../../../shared/ai-providers';
 import type { AISettings } from '../../../shared/types/ai';
 import type { TranslationKey } from '../../translations';
 
@@ -22,6 +22,8 @@ export function CustomProviderFields({ settings, setSettings, t }: {
   const [status, setStatus] = useState<{ kind: 'idle' | 'loading' | 'ok' | 'error'; text?: string }>({ kind: 'idle' });
   const preset = settings.customPreset ?? '';
   const local = isLocalAddress(settings.customBaseUrl);
+  const model = (settings.customModel || '').trim();
+  const notChat = Boolean(model) && chatModelIds([model]).length === 0;
 
   const choosePreset = (id: string) => {
     const found = PROVIDER_PRESETS.find(item => item.id === id);
@@ -68,6 +70,7 @@ export function CustomProviderFields({ settings, setSettings, t }: {
         </button>
       </div>
       <datalist id="baglib-custom-models">{models.map(model => <option key={model} value={model} />)}</datalist>
+      {notChat && <p data-ai-model-not-chat role="alert" className="mt-1 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">{t('aiModelNotChat')}</p>}
       {status.text && <p data-ai-models-status={status.kind} className={`mt-1 text-[11px] ${status.kind === 'error' ? 'text-red-600 dark:text-red-400' : 'text-zinc-500'}`}>{status.text}</p>}
       {models.length > 0 && <div className="mt-2 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
         {models.map(model => <button key={model} type="button" data-ai-model-option={model} onClick={() => setSettings({ ...settings, customModel: model })}

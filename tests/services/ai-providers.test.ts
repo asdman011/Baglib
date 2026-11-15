@@ -46,3 +46,11 @@ test('OpenAI-style errors map to actionable codes, including a request over the 
   assert.equal(providerErrorCode('OpenAI API error (503): Service Unavailable'), 'provider-busy');
   assert.equal(providerErrorDetail('Invalid key gsk_QkzewR9PNXK1OcsrqllqW provided'), 'Invalid key … provided');
 });
+
+test('a model that cannot chat, or needs terms accepted, gets its own clear error', () => {
+  assert.equal(providerErrorCode('OpenAI API error (400): {"error":{"message":"failed to template request: failed to render text output: messages must contains a single user message for text classification models"}}'), 'provider-model');
+  assert.equal(providerErrorCode('OpenAI API error (400): {"error":{"message":"The model `whisper-large-v3` does not support chat completions"}}'), 'provider-model');
+  assert.equal(providerErrorCode('OpenAI API error (404): {"error":{"code":"model_not_found"}}'), 'provider-model');
+  assert.equal(providerErrorCode('OpenAI API error (400): {"error":{"message":"The model `canopylabs/orpheus-arabic-saudi` requires terms acceptance.","code":"model_terms_required"}}'), 'provider-terms');
+  assert.deepEqual(chatModelIds(['meta-llama/llama-prompt-guard-2-86m', 'canopylabs/orpheus-arabic-saudi']), [], 'the settings warning uses the same filter');
+});

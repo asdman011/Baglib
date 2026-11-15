@@ -128,6 +128,15 @@ module.exports = {
     await pause(300);
     await shot('en-5-settings-other-provider');
     records.push({ step: 'en-settings-other-provider', models: options });
+
+    // 8. Typing a model that cannot chat (a safety classifier) shows a warning under the model field.
+    assert.equal(await evaluate('!!document.querySelector("[data-ai-model-not-chat]")'), false);
+    await evaluate(`(() => { const el = document.querySelector('[data-ai-custom-model]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, 'meta-llama/llama-prompt-guard-2-86m'); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await until('!!document.querySelector("[data-ai-model-not-chat]")');
+    assert.ok((await evaluate('document.querySelector("[data-ai-model-not-chat]").textContent')).includes(labels.en.aiModelNotChat.slice(0, 30)));
+    await pause(200);
+    await shot('en-6-settings-not-a-chat-model');
+    records.push({ step: 'en-settings-not-chat-warning' });
     return records;
   },
 };
