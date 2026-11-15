@@ -31,6 +31,8 @@ export interface ManuscriptsAPI {
   history(id: string): Promise<ManuscriptVersion[]>;
   restoreVersion(id: string, revision: number): Promise<ManuscriptDocument>;
   search(query: string, manuscriptId?: string): Promise<ManuscriptDocument[]>;
+  backlinks(target: string): Promise<import('./manuscript-notes').ManuscriptBacklinkRow[]>;
+  links(manuscriptId: string): Promise<import('./manuscript-notes').ManuscriptBacklinkRow[]>;
   export(options: import('./manuscript-export').ManuscriptExportOptions & { saveDialog?: boolean }): Promise<import('./manuscript-export').ManuscriptExportResult & { savedPath?: string }>;
   importNote(input: import('./manuscript-export').ManuscriptImportQuickNoteInput): Promise<ManuscriptDocument>;
   importMarkdown(input: import('./manuscript-export').ManuscriptImportMarkdownInput): Promise<ManuscriptDocument>;

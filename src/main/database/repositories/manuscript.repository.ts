@@ -5,6 +5,7 @@ import { manuscriptText } from '../../../shared/manuscripts';
 import { deriveManuscriptSnapshot, initialManuscriptSnapshot, renameManuscriptSnapshot } from '../../../shared/manuscript-snapshot';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
 import { validateResearchSettingsPatch } from '../../../shared/research-editor-apparatus';
+import type { ManuscriptBacklinkRow } from '../../../shared/manuscript-notes';
 
 const now = () => new Date().toISOString();
 interface VersionContent { snapshot: string; title: string; primary_mode: ManuscriptDocument['primary_mode'] }
@@ -199,5 +200,29 @@ export class ManuscriptRepository {
       UNION ALL SELECT d.id FROM manuscript_document d JOIN visible p ON p.id=d.parent_id WHERE d.deleted_at IS NULL
     ) SELECT d.* FROM manuscript_document_fts f JOIN manuscript_document d ON d.id=f.document_id JOIN visible v ON v.id=d.id
       WHERE manuscript_document_fts MATCH ? AND (? IS NULL OR d.manuscript_id=?) ORDER BY rank LIMIT 100`).all(match, manuscriptId ?? null, manuscriptId ?? null) as ManuscriptDocument[];
+  }
+  /** KEY-372: manuscripts that link to a target (for example "note:<id>"), read from manuscript_link only. */
+  backlinks(target: string): ManuscriptBacklinkRow[] {
+    const match = typeof target === 'string' ? /^(quran|sunnah|poetry|book|note):(.+)$/u.exec(target) : null;
+    if (!match || target.length > 500) throw new Error('invalid-request');
+    return this.db.prepare(`WITH RECURSIVE visible(id) AS (
+      SELECT d.id FROM manuscript_document d JOIN manuscript m ON m.id=d.manuscript_id
+      WHERE d.parent_id IS NULL AND d.deleted_at IS NULL AND m.deleted_at IS NULL
+      UNION ALL SELECT d.id FROM manuscript_document d JOIN visible p ON p.id=d.parent_id WHERE d.deleted_at IS NULL
+    ) SELECT m.id AS manuscript_id, m.title AS manuscript_title, d.id AS document_id, d.title AS document_title,
+      l.block_id, l.target_scheme, l.target_id FROM manuscript_link l JOIN manuscript_document d ON d.id=l.document_id JOIN visible v ON v.id=d.id
+      JOIN manuscript m ON m.id=d.manuscript_id WHERE l.target_scheme=? AND (l.target_id=? OR l.target_id LIKE ? ESCAPE '!')
+      ORDER BY m.title, d.position, l.block_id`).all(match[1], match[2], match[2].replace(/[!%_]/g, c => '!' + c) + '#%') as ManuscriptBacklinkRow[];
+  }
+  /** KEY-372: every link a manuscript's visible chapters make, read from manuscript_link only. */
+  links(manuscriptId: string): ManuscriptBacklinkRow[] {
+    this.manuscript(manuscriptId);
+    return this.db.prepare(`WITH RECURSIVE visible(id) AS (
+      SELECT d.id FROM manuscript_document d JOIN manuscript m ON m.id=d.manuscript_id
+      WHERE d.parent_id IS NULL AND d.deleted_at IS NULL AND m.deleted_at IS NULL
+      UNION ALL SELECT d.id FROM manuscript_document d JOIN visible p ON p.id=d.parent_id WHERE d.deleted_at IS NULL
+    ) SELECT m.id AS manuscript_id, m.title AS manuscript_title, d.id AS document_id, d.title AS document_title,
+      l.block_id, l.target_scheme, l.target_id FROM manuscript_link l JOIN manuscript_document d ON d.id=l.document_id JOIN visible v ON v.id=d.id
+      JOIN manuscript m ON m.id=d.manuscript_id WHERE d.manuscript_id=? ORDER BY d.position, l.block_id`).all(manuscriptId) as ManuscriptBacklinkRow[];
   }
 }

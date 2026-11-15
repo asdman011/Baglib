@@ -33,12 +33,20 @@ export interface ResearchEditorSession {
   dispose(): void;
 }
 /** Parent-owned bridge. The iframe has no preload or IPC endpoint. */
+export interface ResearchNoteSummary { id: string; title: string; content: string }
 export interface ResearchEditorBridge {
   settings?: {
     load(manuscriptId: string): Promise<import('./research-editor-apparatus').ResearchSettings>;
     save(manuscriptId: string, settings: import('./research-editor-apparatus').ResearchSettings): Promise<void>;
   };
   sources?: ResearchSourceSearch;
+  /** KEY-372: quick notes for live embeds; the note text is read, never copied into the manuscript. */
+  notes?: {
+    list(): Promise<ResearchNoteSummary[]>;
+    get(id: string): Promise<ResearchNoteSummary | null>;
+    open(id: string): Promise<void>;
+    subscribe(listener: () => void): () => void;
+  };
   appearance(): ResearchEditorAppearance;
   subscribeAppearance(listener: (appearance: ResearchEditorAppearance) => void): () => void;
   connect(session: ResearchEditorSession): Promise<void>;

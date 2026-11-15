@@ -4,6 +4,7 @@ import React from 'react';
 import type { Manuscript, ManuscriptDocument } from '../../../shared/manuscripts';
 import { calculateDocumentStats } from '../../../shared/manuscript-headings';
 import { translations } from '../../translations';
+import { ManuscriptEmbeddedNotes } from './ManuscriptEmbeddedNotes';
 import { Info, X, Calendar, Layers } from 'lucide-react';
 
 interface Props {
@@ -103,6 +104,7 @@ export function ResearchInfoDrawer({ language, isOpen, onClose, document, manusc
             )}
           </div>
         </div>
+        {manuscript && <ManuscriptEmbeddedNotes manuscriptId={manuscript.id} title={t.researchEmbeddedNotes} empty={t.researchNoEmbeddedNotes} />}
       </aside>
     </div>
   );

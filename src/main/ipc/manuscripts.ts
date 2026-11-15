@@ -29,5 +29,7 @@ export function registerManuscriptIpc(): void {
   ipcMain.handle('manuscripts:history', (event, id) => repository(event).history(id));
   ipcMain.handle('manuscripts:restoreVersion', (event, id, revision) => repository(event).restoreVersion(id, revision));
   ipcMain.handle('manuscripts:search', (event, query, id) => repository(event).search(query, id));
+  ipcMain.handle('manuscripts:backlinks', (event, target) => repository(event).backlinks(target));
+  ipcMain.handle('manuscripts:links', (event, id) => repository(event).links(id));
   registerManuscriptExportIpc();
 }

@@ -6,6 +6,7 @@ import { Titlebar } from './Titlebar';
 import { GlobalContextMenu } from '../actions/GlobalContextMenu';
 import { ActionOverlays } from '../actions/ActionOverlays';
 import { SendToManuscriptDialog } from '../research/SendToManuscriptDialog';
+import { MANUSCRIPT_OPEN_EVENT } from '../../../shared/manuscript-transfer';
 import { CommandPalette } from './CommandPalette';
 import { KnowledgeCardLayer } from '../knowledge/KnowledgeCardLayer';
 import { StudyRhythmLayer } from '../dashboard/StudyRhythm';
@@ -127,6 +128,8 @@ export const AppLayout: React.FC = () => {
     const handleNoteOpen = () => setViewMode('notes');
     const handleSunnahOpen = () => setViewMode('sunnah');
     const handlePoetryOpen = () => setViewMode('bayan');
+    const handleManuscriptOpen = () => setViewMode('notes-editor');
+    window.addEventListener(MANUSCRIPT_OPEN_EVENT, handleManuscriptOpen);
 
     window.addEventListener('dragover', handleWindowDragOver);
     window.addEventListener('drop', handleWindowDrop);
@@ -142,6 +145,7 @@ export const AppLayout: React.FC = () => {
       window.removeEventListener(QURAN_OPEN_EVENT, handleQuranOpen as EventListener);
       window.removeEventListener(STUDY_NOTE_OPEN, handleNoteOpen);
       window.removeEventListener('baglib:sunnah-open', handleSunnahOpen);
+      window.removeEventListener(MANUSCRIPT_OPEN_EVENT, handleManuscriptOpen);
       window.removeEventListener(LECTURE_OPEN_EVENT, handleLectureOpen);
       window.removeEventListener('baglib:poetry-open', handlePoetryOpen);
     };

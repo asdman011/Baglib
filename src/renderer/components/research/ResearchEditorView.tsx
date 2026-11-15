@@ -6,7 +6,7 @@ import { extractDocumentHeadings } from '../../../shared/manuscript-headings';
 import type { ManuscriptTemplate } from '../../../shared/manuscript-templates';
 import { createResearchSourceSearch } from './source-search';
 import { researchSettings } from '../../../shared/research-editor-apparatus';
-import { navigateStudyReference } from '../../utils/study-navigation';
+import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { translations } from '../../translations';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -27,7 +27,7 @@ import { ResearchImportModal } from './ResearchImportModal';
 import type { BoardSummary } from '../../../shared/boards';
 import { X, Plus } from 'lucide-react';
 import './research-editor.css';
-import { setOpenManuscriptDocument } from '../../../shared/manuscript-transfer';
+import { MANUSCRIPT_OPEN_EVENT, consumeOpenManuscriptDocument, setOpenManuscriptDocument } from '../../../shared/manuscript-transfer';
 
 declare global {
   interface Window {
@@ -153,6 +153,24 @@ export function ResearchEditorView() {
         },
         save: (id, settings) => window.electronAPI.manuscripts.updateSettings(id, settings),
       },
+      // KEY-372: live note embeds read the note from Notes; nothing is copied into the manuscript.
+      notes: {
+        async list() {
+          return (await window.electronAPI.studyNotes.list()).map(note => ({ id: note.id, title: note.title, content: note.content }));
+        },
+        async get(id) {
+          const note = (await window.electronAPI.studyNotes.list()).find(item => item.id === id);
+          return note ? { id: note.id, title: note.title, content: note.content } : null;
+        },
+        async open(id) {
+          await host.bridge.explicitSave();
+          openStudyNote({ id });
+        },
+        subscribe(listener) {
+          window.addEventListener('baglib:notes-changed', listener);
+          return () => window.removeEventListener('baglib:notes-changed', listener);
+        },
+      },
       sources: createResearchSourceSearch(
         window.electronAPI,
         () => current.current.books,
@@ -162,7 +180,7 @@ export function ResearchEditorView() {
             url,
             current.current.books,
             book => current.current.openBookForReading(book),
-            () => {}
+            (id, anchor) => openStudyNote({ id, anchor })
           );
         },
         id => {
@@ -233,6 +251,19 @@ export function ResearchEditorView() {
     await host.open(value);
     setOpened(true);
   };
+
+  // KEY-372: a chapter requested from elsewhere (a note's "Used in manuscripts") opens once the editor is ready.
+  useEffect(() => {
+    if (!ready) return;
+    const run = () => {
+      const id = consumeOpenManuscriptDocument();
+      if (!id) return;
+      void window.electronAPI.manuscripts.document(id).then(handleOpenDocument).catch(() => setError(true));
+    };
+    run();
+    window.addEventListener(MANUSCRIPT_OPEN_EVENT, run);
+    return () => window.removeEventListener(MANUSCRIPT_OPEN_EVENT, run);
+  }, [ready]);
 
   const handleModeChange = async (newMode: ManuscriptMode) => {
     setDocMode(newMode);

@@ -124,8 +124,8 @@ export function renameManuscriptSnapshot(snapshot: string, title: string): strin
 
 export function insertBlockIntoManuscriptSnapshot(
   snapshot: string,
-  kind: ResearchSourceKind,
-  props: ResearchSourceProps,
+  kind: ResearchSourceKind | 'note-embed',
+  props: ResearchSourceProps | import('./manuscript-notes').NoteEmbedProps,
   position: 'start' | 'end' | number = 'end'
 ): { snapshot: string; blockId: string } {
   const root = parseManuscriptSnapshot(snapshot);

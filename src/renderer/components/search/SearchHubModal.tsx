@@ -31,6 +31,7 @@ import type { LibraryFtsResult } from '../../../shared/types/full-text-search';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { SearchResultCard } from './SearchResultCard';
 import { StudySourcesSearch } from './StudySourcesSearch';
+import { ManuscriptSearchHits } from './ManuscriptSearchHits';
 
 export const SearchHubModal: React.FC = () => {
   const {
@@ -586,6 +587,7 @@ export const SearchHubModal: React.FC = () => {
 
         {/* 4. Results List Zone */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5 relative z-10">
+          {scope !== 'sources' && scope !== 'online' && <ManuscriptSearchHits query={query} title={t('searchManuscripts')} onOpen={() => setSearchHubOpen(false)} />}
           {scope === 'sources' ? (
             <StudySourcesSearch query={query} onLeave={() => setSearchHubOpen(false)} />
           ) : scope === 'fulltext' ? (

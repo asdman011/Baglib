@@ -11,6 +11,7 @@ import {
 import { useWorkspace } from '../context/WorkspaceContext';
 import { IconButton } from '../ui/Button';
 import { NoteHistory } from './NoteHistory';
+import { NoteManuscriptLinks } from './NoteManuscriptLinks';
 import { KnowledgeTools } from './KnowledgeTools';
 import { studyBacklinks, studyLinks, studyNoteExcerpt, type StudyNote } from '../../../shared/study-notes';
 
@@ -143,6 +144,8 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
                 </ul>
               )}
             </section>
+
+            <NoteManuscriptLinks note={note} />
 
             {/* Outgoing References */}
             <section className="space-y-2.5 border-t border-subtle/80 pt-4">

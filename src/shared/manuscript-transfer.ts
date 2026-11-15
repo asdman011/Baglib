@@ -1,13 +1,20 @@
 import { emptySourceProps, type ResearchSourceKind, type ResearchSourceProps } from './research-editor-sources';
 import { bookCfiTarget, bookStudyTarget } from './study-notes';
+import { noteEmbedProps as noteEmbedPropsFor } from './manuscript-notes';
 
 export const SEND_TO_MANUSCRIPT_EVENT = 'baglib:send-to-manuscript';
 export const LAST_MANUSCRIPT_STORAGE_KEY = 'baglib:last-manuscript-id';
 export const LAST_CHAPTER_STORAGE_KEY = 'baglib:last-chapter-id';
 
 export interface SendToManuscriptPayload {
-  kind: ResearchSourceKind;
-  props: ResearchSourceProps;
+  kind: ResearchSourceKind | 'note-embed';
+  props: ResearchSourceProps | (import('./manuscript-notes').NoteEmbedProps & { label?: string });
+}
+
+/** KEY-372: embed a quick note live (the block keeps only the reference). */
+export function createNoteEmbedPayload(note: { id: string; title?: string; content?: string }): SendToManuscriptPayload {
+  const props = noteEmbedPropsFor(note);
+  return { kind: 'note-embed', props: { ...props, label: props.title } };
 }
 
 export function requestSendToManuscript(payload: SendToManuscriptPayload): void {
@@ -155,14 +162,25 @@ export const SOURCE_DRAG_TYPE = 'application/x-baglib-source';
 export function writeSourceDrag(dataTransfer: Pick<DataTransfer, 'setData'> | null, payload: SendToManuscriptPayload): void {
   if (!dataTransfer) return;
   dataTransfer.setData(SOURCE_DRAG_TYPE, JSON.stringify(payload));
-  dataTransfer.setData('text/plain', [payload.props.text, payload.props.label].filter(Boolean).join('\n'));
+  dataTransfer.setData('text/plain', ['text' in payload.props ? payload.props.text : payload.props.title, payload.props.label].filter(Boolean).join('\n'));
 }
 export function readSourceDrag(dataTransfer: Pick<DataTransfer, 'getData'> | null): SendToManuscriptPayload | null {
   try {
     const raw = dataTransfer?.getData(SOURCE_DRAG_TYPE);
     if (!raw) return null;
     const value = JSON.parse(raw) as SendToManuscriptPayload;
-    const kinds = ['ayah', 'hadith', 'verse', 'book-quote'];
+    const kinds = ['ayah', 'hadith', 'verse', 'book-quote', 'note-embed'];
     return value && kinds.includes(value.kind) && value.props && typeof value.props.url === 'string' ? value : null;
   } catch { return null; }
+}
+
+/** KEY-372: open a manuscript chapter in the Editor tab from elsewhere (for example a note's "Used in manuscripts"). */
+export const MANUSCRIPT_OPEN_EVENT = 'baglib:manuscript-open';
+let pendingManuscriptDocument: string | null = null;
+export function requestOpenManuscriptDocument(documentId: string): void {
+  pendingManuscriptDocument = documentId;
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(MANUSCRIPT_OPEN_EVENT));
+}
+export function consumeOpenManuscriptDocument(): string | null {
+  const value = pendingManuscriptDocument; pendingManuscriptDocument = null; return value;
 }

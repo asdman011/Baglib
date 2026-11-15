@@ -1,5 +1,6 @@
 import { MarkdownAdapter, HtmlAdapter } from '@blocksuite/affine/shared/adapters';
 import { sourceSchemas, sourceStoreExtensions, sourceViewExtensions } from './blocks';
+import { noteEmbedSchema, noteEmbedStoreExtensions, noteEmbedViewExtensions } from './blocks/note-embed';
 import { canvasExtensions, arrangeSourcesOnCanvas, undoArrangeSources, insertResearchKanban, fitEdgelessScreen } from './canvas';
 import { apparatusSchemas, apparatusStoreExtensions, apparatusViewExtensions, loadApparatus, standaloneApparatus, refreshApparatus, prepareApparatusExport, flushApparatusSettings } from './apparatus';
 // BagLib research editor entry (KEY-362).
@@ -66,7 +67,7 @@ function createWorkspace() {
     // Standalone smoke tests use memory. Hosted documents use the parent filesystem bridge.
     blobSources: { main: blobs ?? new MemoryBlobSource() },
   });
-  workspace.storeExtensions = [...storeManager.get('store'), ...sourceStoreExtensions(), ...apparatusStoreExtensions()];
+  workspace.storeExtensions = [...storeManager.get('store'), ...sourceStoreExtensions(), ...noteEmbedStoreExtensions(), ...apparatusStoreExtensions()];
   workspace.start();
   workspace.meta.initialize();
   return workspace;
@@ -132,6 +133,7 @@ async function mount() {
 
   const common: ExtensionType[] = [
     ...sourceViewExtensions(),
+    ...noteEmbedViewExtensions(),
     ...canvasExtensions(),
     ...apparatusViewExtensions(),
     FontConfigExtension(BaglibCanvasTextFonts),
@@ -149,7 +151,7 @@ async function mount() {
   const stopApparatusAppearance = bridge?.subscribeAppearance(refreshApparatus);
 
   const schema = new Schema();
-  schema.register([...AffineSchemas, ...sourceSchemas, ...apparatusSchemas]);
+  schema.register([...AffineSchemas, ...sourceSchemas, noteEmbedSchema, ...apparatusSchemas]);
 
   const transformer = () => new Transformer({
     schema,
