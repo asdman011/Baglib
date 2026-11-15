@@ -18,6 +18,8 @@ import { usePassageHighlightActions, usePassageHighlights } from '../../hooks/us
 import { PASSAGE_HIGHLIGHT_COLORS } from '../../../shared/passage-highlights';
 import { findTextRange, paintTextHighlights } from '../../libs/reader/text-highlights';
 import { colorKeys } from '../reader/ReaderMarkupBar';
+import { createHadithPayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
+import { getSunnahIsnadScope } from '../../utils/corpus-lookup';
 
 export type SunnahTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
@@ -108,6 +110,7 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCo
           const details = root?.querySelector<HTMLDetailsElement>('details'); if(details){ details.open=true; details.scrollIntoView({block:'nearest'}); }
         } : undefined,
         link: () => linkPassageToNote(target,label),
+        manuscript: () => requestSendToManuscript(createHadithPayload({ collection: chapter.collection, collectionLabel: collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection, chapterNumber: chapter.number, hadithId: hadith.id, hadithNumber: hadith.number || '', text: formatHadith(chapter, hadith, false, getSunnahIsnadScope() !== 'matn_only', false) })),
       },t);
       const mine = highlights.filter(item => item.location === target);
       items.unshift(

@@ -5,6 +5,7 @@ import React from 'react';
 import { Titlebar } from './Titlebar';
 import { GlobalContextMenu } from '../actions/GlobalContextMenu';
 import { ActionOverlays } from '../actions/ActionOverlays';
+import { SendToManuscriptDialog } from '../research/SendToManuscriptDialog';
 import { CommandPalette } from './CommandPalette';
 import { KnowledgeCardLayer } from '../knowledge/KnowledgeCardLayer';
 import { StudyRhythmLayer } from '../dashboard/StudyRhythm';
@@ -258,6 +259,7 @@ export const AppLayout: React.FC = () => {
       <CommandPalette />
       <GlobalContextMenu />
       <ActionOverlays />
+      <SendToManuscriptDialog />
       <KnowledgeCardLayer />
 
       {/* Global Book Discovery & Search Hub (Story 11) */}

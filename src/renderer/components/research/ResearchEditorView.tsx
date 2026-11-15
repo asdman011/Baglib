@@ -27,6 +27,7 @@ import { ResearchImportModal } from './ResearchImportModal';
 import type { BoardSummary } from '../../../shared/boards';
 import { X, Plus } from 'lucide-react';
 import './research-editor.css';
+import { setOpenManuscriptDocument } from '../../../shared/manuscript-transfer';
 
 declare global {
   interface Window {
@@ -61,6 +62,7 @@ export function ResearchEditorView() {
   const [error, setError] = useState(false);
   const [opened, setOpened] = useState(false);
   const [activeDoc, setActiveDoc] = useState<ManuscriptDocument | undefined>(undefined);
+  useEffect(() => { setOpenManuscriptDocument(activeDoc?.id); return () => setOpenManuscriptDocument(null); }, [activeDoc?.id]);
   const [activeManuscript, setActiveManuscript] = useState<Manuscript | undefined>(undefined);
   const [docMode, setDocMode] = useState<ManuscriptMode>('page');
   const [ready, setReady] = useState(false);

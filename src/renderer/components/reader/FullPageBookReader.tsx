@@ -174,6 +174,7 @@ import { saveReaderKnowledge } from '../../libs/reader/save-reader-knowledge';
 import { registerCloseGuard } from '../../utils/close-guard';
 import { ExportPdfDialog, SaveCloseDialog } from './FileSaveUi';
 import { Modal } from '../ui/Modal';
+import { createBookQuotePayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
 
 const PDF_TEXT_DELAY_MS = 2500;
 
@@ -3195,6 +3196,7 @@ const SourceBookReader: React.FC = () => {
     copy: () => navigator.clipboard.writeText(selectedText+'\n['+(activeBook?.title || '')+' · '+t('page')+' '+readingPage+']'),
     search: () => { window.dispatchEvent(new CustomEvent('baglib:search-selection',{detail:selectedText})); },
     dictionary: () => { closeAllPanelsExcept();setDictionaryLookupWord(selectedText);setIsDictionaryModalOpen(true); },
+    manuscript: activeBook ? () => requestSendToManuscript(createBookQuotePayload({ book: { id: activeBook.id, title: activeBook.title }, text: selectedText, page: Number(readingPage) || undefined })) : undefined,
   };
   const renderSelectionPopover = () => {
     if (!activeBook || !selectedText || isInstantHighlightMode) return null;

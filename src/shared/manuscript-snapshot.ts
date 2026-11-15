@@ -1,4 +1,5 @@
 import type { ManuscriptLink, ManuscriptScheme } from './manuscripts';
+import type { ResearchSourceKind, ResearchSourceProps } from './research-editor-sources';
 type JsonObject = Record<string, unknown>;
 const object = (value: unknown): value is JsonObject => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const schemes = new Set(['quran', 'sunnah', 'poetry', 'book', 'note']);
@@ -120,3 +121,58 @@ export function renameManuscriptSnapshot(snapshot: string, title: string): strin
   if (object(root.meta)) root.meta.title = title;
   return JSON.stringify(root);
 }
+
+export function insertBlockIntoManuscriptSnapshot(
+  snapshot: string,
+  kind: ResearchSourceKind,
+  props: ResearchSourceProps,
+  position: 'start' | 'end' | number = 'end'
+): { snapshot: string; blockId: string } {
+  const root = parseManuscriptSnapshot(snapshot);
+  const blockId = 'baglib-' + Math.random().toString(36).slice(2, 10);
+  const newBlock: JsonObject = {
+    type: 'block',
+    id: blockId,
+    flavour: 'baglib:' + kind,
+    version: 1,
+    props: JSON.parse(JSON.stringify(props)) as JsonObject,
+    children: [],
+  };
+
+  let noteBlock: JsonObject | null = null;
+  const findNote = (block: unknown) => {
+    if (!object(block)) return;
+    if (typeof block.flavour === 'string' && block.flavour === 'affine:note') {
+      noteBlock = block;
+      return;
+    }
+    if (Array.isArray(block.children)) {
+      for (const child of block.children) {
+        findNote(child);
+        if (noteBlock) return;
+      }
+    }
+  };
+  findNote(root.blocks);
+
+  if (!noteBlock) {
+    throw new Error('missing-note-block');
+  }
+
+  if (!Array.isArray((noteBlock as JsonObject).children)) {
+    (noteBlock as JsonObject).children = [];
+  }
+  const children = (noteBlock as JsonObject).children as unknown[];
+
+  if (position === 'start') {
+    children.unshift(newBlock);
+  } else if (position === 'end') {
+    children.push(newBlock);
+  } else if (typeof position === 'number') {
+    const idx = Math.max(0, Math.min(position, children.length));
+    children.splice(idx, 0, newBlock);
+  }
+
+  return { snapshot: JSON.stringify(root), blockId };
+}
+

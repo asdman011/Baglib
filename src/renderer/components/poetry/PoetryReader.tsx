@@ -8,6 +8,7 @@ import { poetryDisplayText, poetryDescriptionText } from '../../../shared/poetry
 import { ContextMenu } from '../ui/ContextMenu';
 import { shortcutForEvent, shortcutHint } from '../actions/shortcuts';
 import { addPassageToSrs, passageNote } from '../actions/passage-actions';
+import { createPoetryVersePayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
 import { NoteMarker } from '../notes/NoteMarker';
 import { useNoteMarkers } from '../../hooks/useNoteMarkers';
 import { useCtrlWheelZoom } from '../../hooks/useCtrlWheelZoom';
@@ -223,6 +224,7 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
             { id: 'copy-line', label: t('ctxCopyText'), onClick: () => copyRow({ sadr: row.sadr, ajuz: null }) },
             highlightItems(row),
             { id: 'srs', label: t('ctxAddSrs'), onClick: () => addPassageToSrs({ text: poetryCopyText([row], poem), sourceKind: 'poetry', sourceRef: 'poetry:ashaar:' + poem.id + ':' + row.sourceFrom + ':' + row.sourceTo, sourceLabel: [poem.poet_name, poem.title].filter(Boolean).join(' — '), language: poem.language }) },
+            { id: 'manuscript', label: t('ctxSendToManuscript'), onClick: () => { const picked = selected && selection ? rows.slice(selection[0], selection[1] + 1) : [row]; const bayts = picked.filter(item => item.sadr.trim() || item.ajuz?.trim()); requestSendToManuscript(createPoetryVersePayload({ poemId: poem.id, from: bayts[0]?.sourceFrom ?? row.sourceFrom, to: bayts[bayts.length - 1]?.sourceTo ?? row.sourceTo, poetName: poem.poet_name || '', poemTitle: poem.title || '', verses: bayts.map(item => ({ sadr: item.sadr, ajuz: item.ajuz || '' })) })); } },
           ]} key={row.index} data-poetry-row data-poetry-row-index={row.index} data-poetry-kind={row.kind} data-actions-open={actionsRow === row.index} data-card-kind="poetry" data-card-ref={`poetry:${poem.id}:${row.index}`} data-card-label={[poem.poet_name, poem.title].filter(Boolean).join(' · ')} data-poetry-source-index={row.sourceFrom} data-poetry-mark={rowMark(row)} aria-selected={selected}
             onPointerDown={event => {
               if (event.pointerType === 'touch' || event.pointerType === 'pen' || event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
