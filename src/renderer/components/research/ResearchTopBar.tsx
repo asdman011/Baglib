@@ -14,6 +14,7 @@ import {
   Pencil,
   Copy,
   Download,
+  Upload,
   Trash2,
   Presentation,
   PanelRight,
@@ -40,6 +41,10 @@ interface Props {
   onTrash: () => Promise<void>;
   onExportMarkdown?: () => Promise<void>;
   onExportHtml?: () => Promise<void>;
+  onExportPdf?: () => Promise<void>;
+  onExportDocx?: () => Promise<void>;
+  onOpenExportModal?: () => void;
+  onOpenImportModal?: () => void;
   onTogglePresentation: () => void;
   isPresentation: boolean;
   onToggleRightPanel: () => void;
@@ -65,6 +70,10 @@ export function ResearchTopBar({
   onTrash,
   onExportMarkdown,
   onExportHtml,
+  onExportPdf,
+  onExportDocx,
+  onOpenExportModal,
+  onOpenImportModal,
   onTogglePresentation,
   isPresentation,
   onToggleRightPanel,
@@ -329,18 +338,48 @@ export function ResearchTopBar({
                 {t.researchExport}
               </span>
 
-              {onExportMarkdown && (
+              {onOpenExportModal && (
                 <button
                   type="button"
                   onClick={() => {
                     setIsMenuOpen(false);
-                    void onExportMarkdown();
+                    onOpenExportModal();
+                  }}
+                  className="research-top-menu-item font-medium text-brand"
+                  role="menuitem"
+                >
+                  <Download className="w-4 h-4 text-brand" />
+                  <span>{t.researchExportModalTitle}</span>
+                </button>
+              )}
+
+              {onExportPdf && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    void onExportPdf();
                   }}
                   className="research-top-menu-item"
                   role="menuitem"
                 >
-                  <Download className="w-4 h-4" />
-                  <span>{t.researchExportMarkdown}</span>
+                  <Download className="w-4 h-4 text-red-500" />
+                  <span>{t.researchExportPdf}</span>
+                </button>
+              )}
+
+              {onExportDocx && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    void onExportDocx();
+                  }}
+                  className="research-top-menu-item"
+                  role="menuitem"
+                >
+                  <Download className="w-4 h-4 text-blue-500" />
+                  <span>{t.researchExportDocx}</span>
                 </button>
               )}
 
@@ -354,9 +393,42 @@ export function ResearchTopBar({
                   className="research-top-menu-item"
                   role="menuitem"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-4 h-4 text-emerald-500" />
                   <span>{t.researchExportHtml}</span>
                 </button>
+              )}
+
+              {onExportMarkdown && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    void onExportMarkdown();
+                  }}
+                  className="research-top-menu-item"
+                  role="menuitem"
+                >
+                  <Download className="w-4 h-4 text-amber-500" />
+                  <span>{t.researchExportMarkdown}</span>
+                </button>
+              )}
+
+              {onOpenImportModal && (
+                <>
+                  <div className="research-menu-divider" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onOpenImportModal();
+                    }}
+                    className="research-top-menu-item"
+                    role="menuitem"
+                  >
+                    <Upload className="w-4 h-4 text-brand" />
+                    <span>{t.researchImportModalTitle}</span>
+                  </button>
+                </>
               )}
 
               <div className="research-menu-divider" />

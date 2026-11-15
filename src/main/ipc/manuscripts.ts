@@ -1,6 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { getDatabase } from '../database/connection';
 import { ManuscriptRepository } from '../database/repositories/manuscript.repository';
+import { registerManuscriptExportIpc } from './manuscript-export';
 
 function repository(event: IpcMainInvokeEvent): ManuscriptRepository {
   const frame = event.senderFrame;
@@ -28,4 +29,5 @@ export function registerManuscriptIpc(): void {
   ipcMain.handle('manuscripts:history', (event, id) => repository(event).history(id));
   ipcMain.handle('manuscripts:restoreVersion', (event, id, revision) => repository(event).restoreVersion(id, revision));
   ipcMain.handle('manuscripts:search', (event, query, id) => repository(event).search(query, id));
+  registerManuscriptExportIpc();
 }

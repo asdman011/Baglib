@@ -31,6 +31,10 @@ export interface ManuscriptsAPI {
   history(id: string): Promise<ManuscriptVersion[]>;
   restoreVersion(id: string, revision: number): Promise<ManuscriptDocument>;
   search(query: string, manuscriptId?: string): Promise<ManuscriptDocument[]>;
+  export(options: import('./manuscript-export').ManuscriptExportOptions & { saveDialog?: boolean }): Promise<import('./manuscript-export').ManuscriptExportResult & { savedPath?: string }>;
+  importNote(input: import('./manuscript-export').ManuscriptImportQuickNoteInput): Promise<ManuscriptDocument>;
+  importMarkdown(input: import('./manuscript-export').ManuscriptImportMarkdownInput): Promise<ManuscriptDocument>;
+  quickNotesList(): Promise<import('./manuscript-export').QuickNoteItem[]>;
 }
 export function manuscriptText(value: unknown, max = 1000): string {
   if (typeof value !== 'string' || !value.trim() || value.length > max || value.includes('\0')) throw new Error('invalid-request');

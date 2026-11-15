@@ -2,6 +2,24 @@
 
 ## Recent Agent Updates
 
+- [2026-11-15T09:22:00+02:00, Agent: Antigravity KEY-369] VERIFIED RE-8 (Research Editor RE-8: export Markdown, HTML, PDF, DOCX and import quick notes / Markdown, epic KEY-361).
+  Standing commit and push authorization confirmed per task instructions.
+  Gate R5 status: docx (9.15.2) installed and verified in root project. pagedjs is not installed; recorded Gate R5 in waiting-for-user.md (~1.5 MB, MIT licence) and implemented chapter-end footnotes fallback for PDF via Chromium webContents.printToPDF with page styling, margins, headers/footers, and page numbers.
+  Implemented:
+  1. Export Engine (manuscript-export.service.ts & src/shared/manuscript-export.ts):
+     - Markdown: metadata, headings, BagLib blocks (ayah, hadith, poetry sadr *** ajuz), images, footnotes [^1]: Title — url.
+     - HTML: standalone HTML5 document with embedded CSS logical properties, dir/lang detection, borderless two-column poetry tables, calligraphy brackets, base64 data URIs for images, and chapter-end footnotes.
+     - DOCX: native Word OpenXML via docx library with borderless two-column poetry tables, Amiri Quran font for ayah runs, ImageRun for assets, and native Word footnotes via FootnoteReferenceRun.
+     - PDF: Chromium off-screen BrowserWindow with webContents.printToPDF(), @page page setup (A4/Letter, custom margins), headers/footers, and page numbers.
+  2. Import Engine (manuscript-import.service.ts):
+     - Quick notes: imports from knowledge / study_note_detail with source citations and converts to BlockSuite chapter.
+     - Markdown: robust markdown AST parser converting ATX headings, bullet/numbered lists, blockquotes, poetry ***, and footnotes into a BlockSuite DocSnapshot chapter document.
+  3. Preload & IPC APIs: export, importNote, importMarkdown, and quickNotesList on window.electronAPI.manuscripts.
+  4. UI Modals & Wiring: ResearchExportModal.tsx and ResearchImportModal.tsx, wired into ResearchTopBar.tsx, ResearchSidebar.tsx, and ResearchEditorView.tsx.
+  5. Bilingual translations: 17 Arabic and 17 English keys in src/renderer/translations.ts.
+  6. Verification: 6/6 unit tests pass in tests/services/manuscript-export.test.ts, 6/6 shell tests pass in tests/ui/research-shell.test.ts, 32/32 manuscript repo tests pass, TypeScript clean, Next.js build clean, and live Electron scenario scripts/research-export-live/run.mjs passed (exit code 0; all 4 formats exported and validated on disk in .baglib-data/KEY-369-evidence/; 8 screenshots captured across ar & en). Report in docs/agent-ops/reports/KEY-369.md.
+
+
 - [2026-11-15T08:54:00+02:00, Agent: Antigravity KEY-378] VERIFIED RE-13 (Research Editor RE-13: AFFiNE-style editor shell, customised for BagLib).
   Implemented full native React + Tailwind + Lucide layout replicating AFFiNE editor UI (verified MIT licensed frontend & BlockSuite community source):
   1. Collapsible Research Sidebar (`ResearchSidebar.tsx`): replaces raw list with tree of manuscripts & documents, quick search, "All Docs", "Favourites" with star toggles, "Organize / Folders" with nested chapter hierarchy, and footer actions for scholarly templates, import, and trash.

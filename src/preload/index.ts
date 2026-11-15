@@ -116,6 +116,10 @@ const manuscripts: ManuscriptsAPI = {
   history: (id) => ipcRenderer.invoke('manuscripts:history', id),
   restoreVersion: (id, revision) => ipcRenderer.invoke('manuscripts:restoreVersion', id, revision),
   search: (query, id) => ipcRenderer.invoke('manuscripts:search', query, id),
+  export: (options) => ipcRenderer.invoke('manuscripts:export', options),
+  importNote: (input) => ipcRenderer.invoke('manuscripts:importNote', input),
+  importMarkdown: (input) => ipcRenderer.invoke('manuscripts:importMarkdown', input),
+  quickNotesList: () => ipcRenderer.invoke('manuscripts:quickNotesList'),
 };
 
 export const API = {

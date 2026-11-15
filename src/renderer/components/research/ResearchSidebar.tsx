@@ -34,6 +34,7 @@ interface Props {
   favourites: string[];
   onToggleFavourite: (id: string) => void;
   onOpenTemplates: () => void;
+  onOpenImport?: () => void;
 }
 
 export function ResearchSidebar({
@@ -47,6 +48,7 @@ export function ResearchSidebar({
   favourites,
   onToggleFavourite,
   onOpenTemplates,
+  onOpenImport,
 }: Props) {
   const t = translations[language];
   const [manuscripts, setManuscripts] = useState<Manuscript[]>([]);
@@ -574,6 +576,7 @@ export function ResearchSidebar({
         {/* Import */}
         <button
           type="button"
+          onClick={onOpenImport}
           className="research-sidebar-item"
           title={t.researchImport}
         >

@@ -1,3 +1,57 @@
+## KEY-369 verified handoff - 2026-11-15T09:22:00+02:00 - Agent: Antigravity
+
+Research Editor RE-8: Export (Markdown, HTML, PDF, DOCX) and import quick note / markdown, epic KEY-361.
+Standing commit and push authorization confirmed per task instructions.
+Gate R5 check: docx (9.15.2) already present in root package.json and installed. pagedjs is not installed; recorded Gate R5 in waiting-for-user.md (~1.5 MB, MIT licence) and implementing chapter-end footnotes fallback for PDF via Chromium webContents.printToPDF with page styling, margins, headers/footers, and page numbers.
+
+What changed:
+1. Export Engine (src/main/services/manuscript-export.service.ts & src/shared/manuscript-export.ts):
+   - Markdown: exports title, chapter structure, standard headings, BagLib blocks (ayah > ﴿...﴾, hadith > «...», poetry sadr *** ajuz), images ![alt](url), and standard footnotes [^1]: Title — url.
+   - HTML: standalone HTML5 document with CSS logical properties, dir/lang detection, two-column borderless poetry tables, calligraphy brackets, base64 data URIs for embedded images from manuscript-assets/, and chapter-end footnotes.
+   - DOCX: native Word OpenXML document via docx library with borderless two-column poetry tables, Amiri Quran font for ayah runs, ImageRun for assets, and native Word footnotes via FootnoteReferenceRun.
+   - PDF: Chromium off-screen BrowserWindow with webContents.printToPDF(), @page page setup (A4/Letter, custom margins), headers/footers, and page numbers.
+2. Import Engine (src/main/services/manuscript-import.service.ts):
+   - Quick Notes: imports notes from knowledge / study_note_detail with source citations and converts to a BlockSuite chapter.
+   - Markdown: robust markdown AST parser converting ATX headings, bullet/numbered lists, blockquotes, poetry ***, and footnotes into a BlockSuite DocSnapshot chapter document.
+3. IPC & Preload APIs (src/main/ipc/manuscript-export.ts, src/main/ipc/manuscripts.ts, src/preload/index.ts, src/shared/manuscripts.ts):
+   - Added export, importNote, importMarkdown, and quickNotesList on window.electronAPI.manuscripts.
+4. UI Modals & Wiring (src/renderer/components/research/*):
+   - ResearchExportModal.tsx: export modal with format selection, scope (current chapter vs all chapters), page size and margin controls.
+   - ResearchImportModal.tsx: import modal with Quick Notes search & selection tab, and Markdown file/text import tab.
+   - ResearchTopBar.tsx & ResearchSidebar.tsx: wired export and import openers in top dropdown menu and sidebar footer.
+5. Translations (src/renderer/translations.ts):
+   - Added 17 Arabic and 17 English keys for all export and import features with full translation parity.
+6. Verification & Evidence:
+   - Unit tests: npm test tests/services/manuscript-export.test.ts (6/6 pass).
+   - Shell UI tests: npm test tests/ui/research-shell.test.ts (6/6 pass).
+   - Manuscript repo tests: npm test tests/services/manuscripts.test.ts (32/32 pass).
+   - Full live Electron run: node scripts/research-export-live/run.mjs (exit code 0; all 4 formats exported and validated on disk in .baglib-data/KEY-369-evidence/; 8 screenshots captured across ar & en).
+   - Clean builds: npm run build:main and npm run build:renderer succeeded with 0 errors.
+
+Own files:
+- src/shared/manuscript-export.ts
+- src/main/services/manuscript-export.service.ts
+- src/main/services/manuscript-import.service.ts
+- src/main/ipc/manuscript-export.ts
+- src/main/ipc/manuscripts.ts
+- src/preload/index.ts
+- src/shared/manuscripts.ts
+- src/renderer/translations.ts
+- src/renderer/components/research/ResearchExportModal.tsx
+- src/renderer/components/research/ResearchImportModal.tsx
+- src/renderer/components/research/ResearchTopBar.tsx
+- src/renderer/components/research/ResearchSidebar.tsx
+- src/renderer/components/research/ResearchEditorView.tsx
+- tests/services/manuscript-export.test.ts
+- scripts/research-export-live/initialize.ts
+- scripts/research-export-live/main.cjs
+- scripts/research-export-live/run.mjs
+- scripts/research-export-live/scenario.cjs
+- docs/agent-ops/waiting-for-user.md
+- docs/agent-ops/reports/KEY-369.md
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+
 ## KEY-378 verified handoff - 2026-11-15T08:54:00+02:00 - Agent: Antigravity
 
 RE-13 AFFiNE-style editor shell customised for BagLib implemented and verified, epic KEY-361.
@@ -7566,3 +7620,6 @@ KEY-48 publication - 2026-11-14T10:21:47.2448177+02:00 - Codex key48-root. Commi
 
 
 KEY-350 publication - 2026-11-14T15:24:12.942081+02:00 - Codex key350-root. Committed 53c6907ba12ab626ee628b83639e1a320231fc4c under commit.lock with exactly36ownedfiles and only KEY-350 state entries; normal push to origin/feature/library-domain succeeded and remote hash verified. Final focused60/full2303pass0fail0TODO(concurrency2,352suites),native2ar/en/scratchpad/5realcopies/0renderererrors,originalsunchanged/profiledeleted;types/build/lint0errors1existingwarning/diffpass. Rapid maxmain18.09ms/renderer76.10ms; full Sunnah maingap8348.16→16.42ms. Task-owned source files clean; unrelated files/shared state preserved. No Jira actions. Lock released after verification. No KEY-350 implementation/verification/publication work pending.
+- 2026-11-15 Claude Code bundle review: KEY-366 (9bb5230), KEY-367 (3055842, 73b792d), KEY-368 (984b422), KEY-379 (0ad0816), KEY-355 (faa84b7), KEY-358 (d7d7acf) pass: full suite 2457/2457, check:vendor OK (0001-0009), no schema/dependency changes; Done in Jira. KEY-359 (19912a9) back to In Review: its Jira gate (user approval before rebuilding the shipped dataset) was missing from my overnight brief; Antigravity rebuilt hadiths_fts in tools/hadith-alignment/data/output and release/win-unpacked copies (backup in _archive_datasets/sunnah-backups/). Code falls back on old corpora without the isnad column, but isnad search is unavailable there (KEY-357 in-memory path removed). Needs the user decision.
+- 2026-11-15 Claude Code: user decision on KEY-359: "Keep the rebuild". KEY-359 Done in Jira (19912a9). Older corpora need the rebuilt dataset via the update path for isnad search.
+- 2026-11-15 Claude Code: user approved Paged.js ("Yes, add Paged.js"; pagedjs, MIT, ~1.5 MB) for RE-8 page-bottom PDF footnotes. Queued as KEY-369b for Antigravity after the RE-8 commit.

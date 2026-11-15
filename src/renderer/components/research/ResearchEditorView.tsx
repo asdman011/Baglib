@@ -22,6 +22,8 @@ import { ResearchAiButton } from './ResearchAiButton';
 import { ResearchInfoDrawer } from './ResearchInfoDrawer';
 import { ResearchHistoryModal } from './ResearchHistoryModal';
 import { ResearchTemplateModal } from './ResearchTemplateModal';
+import { ResearchExportModal } from './ResearchExportModal';
+import { ResearchImportModal } from './ResearchImportModal';
 import type { BoardSummary } from '../../../shared/boards';
 import { X, Plus } from 'lucide-react';
 import './research-editor.css';
@@ -71,6 +73,8 @@ export function ResearchEditorView() {
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [favourites, setFavourites] = useState<string[]>(() => loadFavourites());
@@ -302,6 +306,30 @@ export function ResearchEditorView() {
     } catch {}
   };
 
+  const handleExportPdf = async () => {
+    if (!activeManuscript) return;
+    try {
+      await window.electronAPI.manuscripts.export({
+        manuscriptId: activeManuscript.id,
+        documentId: activeDoc?.id,
+        format: 'pdf',
+        saveDialog: true,
+      });
+    } catch {}
+  };
+
+  const handleExportDocx = async () => {
+    if (!activeManuscript) return;
+    try {
+      await window.electronAPI.manuscripts.export({
+        manuscriptId: activeManuscript.id,
+        documentId: activeDoc?.id,
+        format: 'docx',
+        saveDialog: true,
+      });
+    } catch {}
+  };
+
   const handleSelectTemplate = async (template: ManuscriptTemplate) => {
     try {
       const m = await window.electronAPI.manuscripts.create(template.defaultTitle[lang], template.defaultKind);
@@ -355,6 +383,7 @@ export function ResearchEditorView() {
         favourites={favourites}
         onToggleFavourite={toggleFavourite}
         onOpenTemplates={() => setIsTemplatesOpen(true)}
+        onOpenImport={() => setIsImportModalOpen(true)}
       />
 
       {/* Editor Document Area */}
@@ -379,6 +408,10 @@ export function ResearchEditorView() {
             onTrash={handleTrashActiveDoc}
             onExportMarkdown={handleExportMarkdown}
             onExportHtml={handleExportHtml}
+            onExportPdf={handleExportPdf}
+            onExportDocx={handleExportDocx}
+            onOpenExportModal={() => setIsExportModalOpen(true)}
+            onOpenImportModal={() => setIsImportModalOpen(true)}
             onTogglePresentation={() => setIsPresentation(!isPresentation)}
             isPresentation={isPresentation}
             onToggleRightPanel={() => {
@@ -469,6 +502,28 @@ export function ResearchEditorView() {
         onClose={() => setIsTemplatesOpen(false)}
         onSelectTemplate={handleSelectTemplate}
       />
+
+      {activeManuscript && (
+        <ResearchExportModal
+          language={lang}
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          manuscript={activeManuscript}
+          currentDocument={activeDoc}
+        />
+      )}
+
+      {activeManuscript && (
+        <ResearchImportModal
+          language={lang}
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          manuscript={activeManuscript}
+          onImportSuccess={doc => {
+            void handleOpenDocument(doc);
+          }}
+        />
+      )}
 
       {/* Study Board Picker Modal */}
       {isBoardPickerOpen && (
