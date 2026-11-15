@@ -4,6 +4,7 @@ export interface ResearchSettings {
   quranPlacement: 'inline' | 'footnote';
   footnoteNumbering: 'chapter' | 'page';
   headingNumbering: boolean;
+  linkedBoardId?: string | null;
 }
 export const defaultResearchSettings: ResearchSettings = { citationStyle: 'arabic', quranPlacement: 'footnote', footnoteNumbering: 'chapter', headingNumbering: false };
 export function researchSettings(value: unknown): ResearchSettings {
@@ -13,6 +14,7 @@ export function researchSettings(value: unknown): ResearchSettings {
     quranPlacement: v.quranPlacement === 'inline' ? 'inline' : 'footnote',
     footnoteNumbering: v.footnoteNumbering === 'page' ? 'page' : 'chapter',
     headingNumbering: v.headingNumbering === true,
+    ...(typeof v.linkedBoardId === 'string' ? { linkedBoardId: v.linkedBoardId } : v.linkedBoardId === null ? { linkedBoardId: null } : {}),
   };
 }
 /** Validate a partial update without filling defaults over existing preferences. */
@@ -23,8 +25,9 @@ export function validateResearchSettingsPatch(value: unknown): Partial<ResearchS
   if (v.quranPlacement !== undefined && !['inline', 'footnote'].includes(v.quranPlacement as string)) throw new Error('invalid-request');
   if (v.footnoteNumbering !== undefined && !['chapter', 'page'].includes(v.footnoteNumbering as string)) throw new Error('invalid-request');
   if (v.headingNumbering !== undefined && typeof v.headingNumbering !== 'boolean') throw new Error('invalid-request');
+  if (v.linkedBoardId !== undefined && v.linkedBoardId !== null && (typeof v.linkedBoardId !== 'string' || !/^[A-Za-z0-9-]{1,64}$/.test(v.linkedBoardId))) throw new Error('invalid-request');
   const result: Partial<ResearchSettings> = {};
-  for (const key of ['citationStyle', 'quranPlacement', 'footnoteNumbering', 'headingNumbering'] as const) {
+  for (const key of ['citationStyle', 'quranPlacement', 'footnoteNumbering', 'headingNumbering', 'linkedBoardId'] as const) {
     if (v[key] !== undefined) Object.assign(result, { [key]: v[key] });
   }
   if (!Object.keys(result).length) throw new Error('invalid-request');

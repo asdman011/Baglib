@@ -1,4 +1,6 @@
 'use client';
+import { ResearchCanvasBar } from './ResearchCanvasBar';
+import type { Manuscript, ManuscriptDocument, ManuscriptMode } from '../../../shared/manuscripts';
 import { createResearchSourceSearch } from './source-search';
 import { researchSettings } from '../../../shared/research-editor-apparatus';
 import { navigateStudyReference } from '../../utils/study-navigation';
@@ -21,6 +23,9 @@ export function ResearchEditorView() {
   useLayoutEffect(() => { current.current = { books, lang, openBookForReading }; }, [books, lang, openBookForReading]);
   const [error, setError] = useState(false);
   const [opened, setOpened] = useState(false);
+  const [activeDoc, setActiveDoc] = useState<ManuscriptDocument | undefined>(undefined);
+  const [activeManuscript, setActiveManuscript] = useState<Manuscript | undefined>(undefined);
+  const [docMode, setDocMode] = useState<ManuscriptMode>('page');
   const [ready, setReady] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
   const [host] = useState(() => createResearchEditorHost(window.electronAPI.manuscripts, window.electronAPI.researchEditor.blobs, { lang, dir, theme, fontScale: 1 }, () => setError(true)));
@@ -94,11 +99,51 @@ export function ResearchEditorView() {
     return () => child.removeEventListener('keydown', forward);
   }, [ready]);
   return <section className="research-editor-view" dir={dir} aria-label={t('navEditor')}>
-    <aside className="research-editor-manuscripts"><ManuscriptList language={lang} api={listApi} onOpenDocument={async value => { setError(false); await host.open(value); setOpened(true); }} /></aside>
+    <aside className="research-editor-manuscripts"><ManuscriptList language={lang} api={listApi} onOpenDocument={async value => {
+      setError(false);
+      setActiveDoc(value);
+      setDocMode(value.primary_mode || 'page');
+      try {
+        const list = await window.electronAPI.manuscripts.list();
+        setActiveManuscript(list.find(m => m.id === value.manuscript_id));
+      } catch {}
+      await host.open(value);
+      setOpened(true);
+    }} /></aside>
     <div className="research-editor-document">
       {error && <p role="alert">{t('manuscriptError')}</p>}
       {!ready && <p role="status">{t('manuscriptLoading')}</p>}
       {ready && !opened && <p>{t('editorSelectChapter')}</p>}
+      {ready && opened && activeDoc && (
+        <ResearchCanvasBar
+          document={activeDoc}
+          manuscript={activeManuscript}
+          mode={docMode}
+          onModeChange={async newMode => {
+            setDocMode(newMode);
+            await host.setMode(newMode);
+          }}
+          onArrangeSources={async (opts) => {
+            const res = await host.arrangeSources(opts);
+            if (res.arranged) setDocMode('edgeless');
+            return res;
+          }}
+          onUndoArrange={async () => {
+            const res = await host.undoArrange();
+            if (res) setDocMode('page');
+            return res;
+          }}
+          onInsertKanban={async () => {
+            return host.insertKanban();
+          }}
+          onManuscriptUpdate={async () => {
+            if (activeDoc) {
+              const list = await window.electronAPI.manuscripts.list();
+              setActiveManuscript(list.find(m => m.id === activeDoc.manuscript_id));
+            }
+          }}
+        />
+      )}
       <iframe ref={frame} title={t('navEditor')} src="/research-editor/index.html" className={ready && opened ? 'research-editor-frame ready' : 'research-editor-frame'} />
     </div>
   </section>;

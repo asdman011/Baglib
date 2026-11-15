@@ -15,6 +15,7 @@ import { contextActions } from '../actions/context-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  BookOpen,
   ArrowRight,
   ArrowUpRight,
   Brain,
@@ -100,7 +101,7 @@ function BoardCanvas({
   onBack: () => void;
   onSaved: (board: Board) => void;
 }) {
-  const { t, dir, books, openBookForReading } = useWorkspace();
+  const { t, dir, books, openBookForReading, setViewMode } = useWorkspace();
   const [board, setBoard] = useState(initial);
   const history = useRef(createBoardHistory(initial));
   const boardRef = useRef(initial);
@@ -110,6 +111,26 @@ function BoardCanvas({
   const [marquee, setMarquee] = useState<Marquee | null>(null);
   const [snapping, setSnapping] = useState<boolean>(() => readBoardPreference('snap', true));
   const [edgeShape, setEdgeShape] = useState<EdgeShape>(() => readBoardPreference(`shape.${initial.id}`, 'straight'));
+  const [linkedManuscript, setLinkedManuscript] = useState<{ id: string; title: string } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!window.electronAPI.manuscripts) return;
+    void window.electronAPI.manuscripts.list().then(list => {
+      if (!active) return;
+      for (const m of list) {
+        try {
+          const s = JSON.parse(m.settings_json || '{}') as { linkedBoardId?: string };
+          if (s.linkedBoardId === initial.id) {
+            setLinkedManuscript({ id: m.id, title: m.title });
+            return;
+          }
+        } catch {}
+      }
+      setLinkedManuscript(null);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [initial.id]);
   const [operation, setOperation] = useState(false);
   const [operationFailed, setOperationFailed] = useState(false);
   const saveQueue = useRef(Promise.resolve(true));
@@ -510,6 +531,19 @@ function BoardCanvas({
           }}
           className="w-36 sm:w-44 rounded-xl border border-subtle bg-canvas px-2.5 py-1.5 text-xs text-text outline-none focus-visible:outline-focus"
         />
+
+        {linkedManuscript && (
+          <button
+            type="button"
+            data-action="open-linked-manuscript"
+            onClick={() => setViewMode('notes-editor')}
+            className="linked-manuscript-indicator inline-flex items-center gap-1.5 rounded-xl border border-subtle bg-canvas px-2.5 py-1 text-xs text-primary font-medium hover:bg-canvas-hover"
+            title={t('boardOpenLinkedManuscript')}
+          >
+            <BookOpen className="size-3.5" aria-hidden="true" />
+            <span className="truncate max-w-40">{t('boardLinkedManuscript')}: {linkedManuscript.title}</span>
+          </button>
+        )}
 
         {/* Zoom Controls built from U2 primitives */}
         <div className="ms-auto flex items-center gap-1 bg-canvas p-1 rounded-xl border border-subtle">
@@ -929,6 +963,15 @@ export function BoardsWorkspace({
 
   useEffect(() => {
     void load();
+    try {
+      const activeId = sessionStorage.getItem('baglib:active-board-id');
+      if (activeId) {
+        sessionStorage.removeItem('baglib:active-board-id');
+        void window.electronAPI.boards.get(activeId).then((found) => {
+          if (found) setOpen(found);
+        });
+      }
+    } catch {}
     return window.electronAPI.boards.onChanged(() => {
       void load();
     });

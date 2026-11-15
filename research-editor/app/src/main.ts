@@ -1,5 +1,6 @@
 import { MarkdownAdapter, HtmlAdapter } from '@blocksuite/affine/shared/adapters';
 import { sourceSchemas, sourceStoreExtensions, sourceViewExtensions } from './blocks';
+import { canvasExtensions, arrangeSourcesOnCanvas, undoArrangeSources, insertResearchKanban, fitEdgelessScreen } from './canvas';
 import { apparatusSchemas, apparatusStoreExtensions, apparatusViewExtensions, loadApparatus, standaloneApparatus, refreshApparatus, prepareApparatusExport, flushApparatusSettings } from './apparatus';
 // BagLib research editor entry (KEY-362).
 //
@@ -130,6 +131,7 @@ async function mount() {
 
   const common: ExtensionType[] = [
     ...sourceViewExtensions(),
+    ...canvasExtensions(),
     ...apparatusViewExtensions(),
     FontConfigExtension(BaglibCanvasTextFonts),
     EditorSettingExtension({ setting$: editorSettings() }),
@@ -204,6 +206,23 @@ async function mount() {
       } finally { loading = false; }
     },
     setReadonly(value: boolean) { editor.doc.readonly = value; },
+    setMode(mode: DocMode) {
+      editor.switchEditor(mode);
+      return editor.updateComplete;
+    },
+    async arrangeSources(options?: { lang?: 'ar' | 'en' }) {
+      const lang = options?.lang ?? bridge?.appearance?.()?.lang ?? ((document.documentElement.lang === 'ar' || document.documentElement.dir === 'rtl') ? 'ar' : 'en');
+      return arrangeSourcesOnCanvas(editor.doc, editor, { ...options, lang });
+    },
+    async undoArrange() {
+      return undoArrangeSources(editor.doc, editor);
+    },
+    async insertKanban(titleOrOptions?: string | { title?: string; lang?: 'ar' | 'en' }, maybeOptions?: { lang?: 'ar' | 'en' }) {
+      const options = typeof titleOrOptions === 'object' ? titleOrOptions : maybeOptions;
+      const title = typeof titleOrOptions === 'string' ? titleOrOptions : options?.title;
+      const lang = options?.lang ?? bridge?.appearance?.()?.lang ?? ((document.documentElement.lang === 'ar' || document.documentElement.dir === 'rtl') ? 'ar' : 'en');
+      return insertResearchKanban(editor.doc, undefined, { ...options, lang, title });
+    },
     async flush() { await flushApparatusSettings(); await blobs?.flush(); await scheduled; },
     dispose() { stopApparatusAppearance?.(); observedDoc.off('update', changed); workspace.forceStop(); workspace.dispose(); editor.remove(); },
   };
@@ -229,6 +248,22 @@ async function mount() {
     },
     editor,
     workspace,
+    arrangeSources(options?: { lang?: 'ar' | 'en' }) {
+      const lang = options?.lang ?? bridge?.appearance?.()?.lang ?? ((document.documentElement.lang === 'ar' || document.documentElement.dir === 'rtl') ? 'ar' : 'en');
+      return arrangeSourcesOnCanvas(editor.doc, editor, { ...options, lang });
+    },
+    undoArrange() {
+      return undoArrangeSources(editor.doc, editor);
+    },
+    insertKanban(titleOrOptions?: string | { title?: string; lang?: 'ar' | 'en' }, maybeOptions?: { lang?: 'ar' | 'en' }) {
+      const options = typeof titleOrOptions === 'object' ? titleOrOptions : maybeOptions;
+      const title = typeof titleOrOptions === 'string' ? titleOrOptions : options?.title;
+      const lang = options?.lang ?? bridge?.appearance?.()?.lang ?? ((document.documentElement.lang === 'ar' || document.documentElement.dir === 'rtl') ? 'ar' : 'en');
+      return insertResearchKanban(editor.doc, undefined, { ...options, lang, title });
+    },
+    fitToScreen() {
+      fitEdgelessScreen(editor);
+    },
     get mode() {
       return editor.mode;
     },

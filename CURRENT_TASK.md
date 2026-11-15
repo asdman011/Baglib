@@ -1,3 +1,58 @@
+## KEY-367 pushed - 2026-11-15T08:04:15.101352+02:00 - Agent: Codex
+
+Normal push to origin/feature/library-domain succeeded; remote branch hash verified as 73b792dfa2558dbf5287ac3e7d168c63d7fb6839. Implementation commit 3055842e42515e1b1d779c8b0d7fbd6c89203eca contains exactly29KEY-367paths/ownhunks. Final commit 73b792dfa2558dbf5287ac3e7d168c63d7fb6839 is the two-state-file forward checkpoint with the exact requested BOM-free subject ending Agent: Codex. Both were created under docs/agent-ops/commit.lock after explicit user approval; no history rewrite or force push. Isolated staged RE-6 tests104/104 and tsc passed; combined working-tree focused111/full2457(360suites,concurrency2)/native2ar-en passed, with builds/lint/vendor verification already recorded. No Jira mutation.
+
+Antigravity KEY-368 canvas/session/UI/translation, linkedBoardId, Partial API and board merge/integration assertions remain unstaged and unchanged. State files contain other agents' preserved work plus this publication record; do not stage those files wholesale. The new shared module and regression tests were staged as RE-6-only versions, so the remaining working-tree differences intentionally contain RE-7 compatibility coverage. Publication signal: docs/agent-ops/signals/KEY-367.pushed. Index empty; commit lock released after this record and signal. No KEY-367 implementation or publication work remains.
+
+## KEY-368 verified handoff - 2026-11-15T08:06:00+02:00 - Agent: Antigravity
+
+RE-7 implementation and verification complete on top of RE-6 (commit 73b792d), epic KEY-361, plan 2.1.
+Canvas research board, source-type auto-arranging, kanban database blocks, and bidirectional study-board linking implemented and fully verified.
+
+User experience & architecture:
+- Research canvas toolbar (`ResearchCanvasBar.tsx`): Doc / Edgeless canvas toggle, fit-to-screen (`fitEdgelessScreen`), "Arrange sources" (`/arrange`), "Undo arrange" (`/undo-arrange`), "Tasks kanban" (`/kanban`), and Study Board link modal.
+- Source auto-arranging (`arrangeSourcesOnCanvas`): Categorizes source blocks strictly by flavour (`baglib:ayah`, `baglib:hadith`, `baglib:verse`, `baglib:book-quote`) into 4 titled frames («القرآن الكريم», «السنة النبوية», «الشعر العربي», «المقتطفات والمراجع» / "Noble Quran", "Prophetic Sunnah", "Arabic Poetry", "Book Quotes") arranged side-by-side with padding and title bars. No text guessing.
+- Undo arrange (`undoArrangeSources`): Safely restores blocks back to a single page note in document sequence and deletes arrangement frames.
+- Kanban database blocks (`insertResearchKanban`): Inserts `affine:database` with kanban view and bilingual default columns/tasks («أفكار وملاحظات», «قيد البحث والتحقيق», «تم التوثيق» / "Ideas & Notes", "In Progress", "Verified").
+- Study board linking (R6 decision): Persists `linkedBoardId` in `manuscript.settings_json` via `updateSettings(manuscript.id, { linkedBoardId })`. In `BoardsWorkspace`, displays linked manuscript indicator badge with one-click jump to the editor. In `ResearchCanvasBar`, supports picking existing boards, creating new linked boards, and unlinking.
+- All 17 UI labels centralized in `translations.ts` in Arabic RTL and English LTR.
+
+Verification performed:
+- Unit & contract tests: 7/7 focused tests in `tests/ui/research-canvas.test.ts` pass; 2/2 in `tests/ui/translation-keys.test.ts` pass; 52/52 in combined suite pass.
+- Regression tests: 50/50 tests pass (`research-editor.test.ts`, `research-editor-sources.test.ts`, `boards-interactions.test.ts`, `manuscripts.test.ts`).
+- Static checks: TypeScript `tsc --noEmit` clean (0 errors); ESLint clean (0 errors, 0 warnings).
+- Dist size & vendor checks: `check:vendor` passes (2899 files match BlockSuite v0.27.4 + patches 0001-0009); `build:research-editor` built in 19.53s, dist size 9,846,174 bytes (~9.39 MB, within 12 MB budget). `build:renderer` and `build:main` successful.
+- Native Electron live scenario (`scripts/research-canvas-live/run.mjs`): Passed cleanly (code 0, 0 renderer errors). 6 screenshots recorded under `.baglib-data/KEY-368-evidence/`:
+  - `01-canvas-page-ar.png`: Arabic document mode with Quran, Hadith, poetry, and book quote source blocks.
+  - `02-arrange-sources-ar.png`: Canvas mode with 4 titled frames arranged side-by-side.
+  - `03-tasks-kanban-ar.png`: Research tasks kanban block inserted on canvas.
+  - `04-undo-arrange-ar.png`: Restored sequential document mode after undo arrange.
+  - `05-linked-study-board-ar.png`: BoardsWorkspace displaying linked manuscript badge with jump button.
+  - `06-canvas-board-en.png`: English LTR canvas view.
+
+Exact 20 owned files:
+- research-editor/app/src/canvas/arrange.ts
+- research-editor/app/src/canvas/kanban.ts
+- research-editor/app/src/canvas/kanban-constants.ts
+- research-editor/app/src/canvas/index.ts
+- research-editor/app/src/main.ts
+- src/shared/research-editor.ts
+- src/shared/research-editor-apparatus.ts
+- src/shared/manuscripts.ts
+- src/main/database/repositories/manuscript.repository.ts
+- src/renderer/components/research/editor-host.ts
+- src/renderer/components/research/ResearchCanvasBar.tsx
+- src/renderer/components/research/ResearchEditorView.tsx
+- src/renderer/components/research/research-editor.css
+- src/renderer/components/notes/BoardsWorkspace.tsx
+- src/renderer/components/notes/NotesOverviewView.tsx
+- src/renderer/translations.ts
+- tests/ui/research-canvas.test.ts
+- tests/services/manuscripts.test.ts
+- tests/ui/research-editor-apparatus.test.ts
+- scripts/research-canvas-live/
+- docs/agent-ops/reports/KEY-368.md
+
 ## KEY-367 publication checkpoint - 2026-11-15T08:02:41.498817+02:00 - Agent: Codex
 
 Scoped implementation commit 3055842e42515e1b1d779c8b0d7fbd6c89203eca created under commit.lock with exactly29taskfiles/ownstatehunks. Indexsnapshot104focused/tscpass; combined111focused/2457full/native2ar-en previouslypassed. All KEY-368 hunks and working files preserved. PowerShell's UTF-8 message-file writer included a BOM before the subject. This state-only forward commit uses a BOM-free file with the exact requested subject and Agent: Codex ending; no amend/history rewrite is used. Both commits are authorized for normal push to origin/feature/library-domain; push is pending. No Jira mutation.
@@ -9,6 +64,7 @@ User approval covers this KEY-367 commit and normal push to origin/feature/libra
 ## KEY-367 publication authorized - 2026-11-15T07:54:33.0277997+02:00 - Agent: Codex
 
 The user explicitly approved commit and normal push of KEY-367 to origin/feature/library-domain in this turn, reaffirming standing authorization. This supersedes prior approval-pending notes. Commit under docs/agent-ops/commit.lock with only own hunks; shared KEY-368 hunks remain unstaged and unchanged in the working tree. Exact29paths and ownership are in the verified handoff/report. Before commit: focused111/full2457/native2ar-en pass, types/lint/builds/vendor pass, dist9846050B. Additional verification of the isolated staged RE-6 snapshot is pending to ensure no RE-7 dependency is committed. No Jira change requested or performed.
+
 ## KEY-367 verified handoff - 2026-11-15T07:50:55.4652912+02:00 - Agent: Codex
 
 RE-6 implementation and verification complete on RE-5 9bb5230, epic KEY-361, plan2.1. Publication pending explicit session commit/push approval; no staging, commit, push or Jira mutation has occurred.
@@ -54,9 +110,23 @@ Exact 29 owned paths (shared-hunk qualifications in local report):
 - tests/ui/translation-keys.test.ts
 
 Git: feature/library-domain; index empty at final review. Next approval: explicit user approval for KEY-367 commit and push, per the session instruction requiring a pause for each Git action unless both are approved together. Intended normal destination origin/feature/library-domain. Do not mark Jira Done until scoped commit and successful push. Native/testing slot released for KEY-368.
+
 ## KEY-367 verification checkpoint - 2026-11-15T07:46:48.3413848+02:00 - Agent: Codex
 
 RE-6 implementation and first native ar/en2/2 pass (8citations/14screens/0renderererrors), editor/main/renderer builds, vendor2899 and types/lint pass. Initial full2453/2455 found strict validation changed by concurrent KEY-368 settings edits and translation audit missing isolated app sources. Codex preserved Antigravity board-link field/null-unlink, split strict/partial validators to avoid resetting scholarly settings, added preservation regression, expanded audit to app/src and removed unused label. Focused111/111 including RE-7 now passes; final builds/native/full concurrency2 active. New typography uses bundled Inter/Noto throughout iframe, with six-level logical TOC indentation. Exact28initialfiles in local report plus tests/ui/translation-keys.test.ts (29); shared apparatus module now has explicit RE-7 attribution. No staging/commit/push/Jira mutation; direct session Git approval gate remains. Do not claim final completion before final pipeline results.
+
+## KEY-368 active - 2026-11-15T07:05:00+02:00 - Agent: Antigravity
+
+Task: Jira KEY-368 (Research Editor RE-7: Canvas research board, auto-arrange by source type, kanban from database blocks, frames; epic KEY-361).
+Scope and acceptance:
+- Edgeless/Canvas mode toggle in editor and fit-to-screen.
+- "Arrange sources": classify blocks by block flavour (`baglib:ayah`, `baglib:hadith`, `baglib:verse`, `baglib:book-quote`) into titled frames on the canvas (Quran, Sunnah, Poetry, Books / القرآن, السنة, الشعر, الكتب) in ar and en, with RTL/LTR layout positioning.
+- "Undo arrange": restores blocks to the single main note in linear sequence and cleans up canvas frames.
+- Kanban from database blocks: insert or view research tasks kanban.
+- R6 decision applied: keep study boards and the canvas both, and link a study board to a manuscript.
+- Real-file live verification in ar & en under `.baglib-data/KEY-368-evidence/`.
+- Isolated files under `research-editor/app/src/canvas/` to prevent overlap with Codex's RE-6.
+
 ## KEY-367 active - 2026-11-15T06:58:30.9204302+02:00 - Agent: Codex
 
 Requested RE-6 on RE-5 9bb5230: scheme footnotes/popup/readable exports, generated bibliography/TOC, heading numbering, persisted manuscript settings; ar/en verification, vendor patches only, editor build/dist measurement. Own research-editor/app/src scholarly modules + integration, new numbered patches if required, src/shared/research-editor*.ts, host/research integration, existing manuscript settings API paths if required, translations, focused tests/new live harness, BlockSuite/plan docs and own state hunks. Existing unrelated files including manuscript-preview.css preserved. No commit/push approval inferred from standing instructions: current direct user gate requires explicit approval. Jira read only; implementation/testing pending.
@@ -94,7 +164,7 @@ Exact owned commit files (20)
 - CURRENT_TASK.md
 - IMPLEMENTATION_PLAN.md
 
-Explicit task/resume authorization covers the scoped commit and normal push to origin/feature/library-domain under commit.lock. Implementation/verification complete; publication pending. Other sessions and their state edits are preserved.
+Publication verified 2026-11-15T04:55:13.498Z. Published 9bb5230db1ce6106579e53f41f4f12d571c7ccb4 normally to origin/feature/library-domain; remote branch hash verified. Commit contains exactly20ownedfiles and only own state insertion hunks, under docs/agent-ops/commit.lock. Final106focused/2435full/2native pass; other sessions preserved. Claude review pending.
 
 ## KEY-358 verified handoff - 2026-11-15T06:33:00+02:00 - Antigravity a173d82c-bb11-4484-bec2-475221ef41fd
 

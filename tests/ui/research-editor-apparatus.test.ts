@@ -19,7 +19,8 @@ test('all four schemes number in document order and renumber after deletion/reor
 });
 test('partial settings validation never supplies replacement defaults', () => {
   assert.deepEqual(validateResearchSettingsPatch({ quranPlacement: 'inline' }), { quranPlacement: 'inline' });
-  for (const value of [{}, { unknown: true }, { headingNumbering: 'true' }, { citationStyle: ['apa'] }]) assert.throws(() => validateResearchSettingsPatch(value), /invalid-request/);
+  assert.deepEqual(validateResearchSettingsPatch({ linkedBoardId: null }), { linkedBoardId: null });
+  for (const value of [{}, { unknown: true }, { headingNumbering: 'true' }, { citationStyle: ['apa'] }, { linkedBoardId: '../unsafe' }]) assert.throws(() => validateResearchSettingsPatch(value), /invalid-request/);
 });
 test('Quran inline placement excludes only Quran from the ordinal sequence', () => {
   const tree = root(paragraph('p', 'text', [note('quran'), note('book'), note('sunnah')]));

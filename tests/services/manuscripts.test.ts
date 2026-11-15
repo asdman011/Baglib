@@ -65,12 +65,16 @@ test('RE-6 settings persist in the approved JSON field and preserve unrelated se
   } finally { db.close(); }
 });
 
-test('partial scholarly settings preserve existing preferences', () => {
+test('partial settings and concurrent board linking preserve scholarly preferences', () => {
   const { db, repo, manuscript } = fixture();
   try {
     const full = { citationStyle: 'apa' as const, quranPlacement: 'inline' as const, footnoteNumbering: 'page' as const, headingNumbering: true };
     repo.updateSettings(manuscript.id, full);
+    repo.updateSettings(manuscript.id, { linkedBoardId: 'board-compatibility' });
+    assert.deepEqual(JSON.parse(repo.list()[0].settings_json), { ...full, linkedBoardId: 'board-compatibility' });
     repo.updateSettings(manuscript.id, { quranPlacement: 'footnote' });
+    assert.deepEqual(JSON.parse(repo.list()[0].settings_json), { ...full, quranPlacement: 'footnote', linkedBoardId: 'board-compatibility' });
+    repo.updateSettings(manuscript.id, { linkedBoardId: null });
     assert.deepEqual(JSON.parse(repo.list()[0].settings_json), { ...full, quranPlacement: 'footnote' });
     assert.throws(() => repo.updateSettings(manuscript.id, {}), /invalid-request/);
   } finally { db.close(); }

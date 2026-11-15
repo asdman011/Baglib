@@ -1,0 +1,214 @@
+import type { BlockModel, Store } from '@blocksuite/affine/store';
+import { Text } from '@blocksuite/affine/store';
+import type { TestAffineEditorContainer } from '@blocksuite/integration-test';
+import { GfxControllerIdentifier } from '@blocksuite/affine/std/gfx';
+
+export type SourceType = 'quran' | 'sunnah' | 'poetry' | 'books';
+
+export interface AutoArrangeOptions {
+  lang?: 'ar' | 'en';
+  colWidth?: number;
+  colGap?: number;
+}
+
+export interface AutoArrangeResult {
+  arranged: boolean;
+  counts: Record<SourceType, number>;
+  frameIds: string[];
+}
+
+export const SOURCE_FRAME_TITLES = {
+  ar: {
+    quran: 'القرآن الكريم',
+    sunnah: 'السنة النبوية',
+    poetry: 'الشعر العربي',
+    books: 'المقتطفات والمراجع',
+  },
+  en: {
+    quran: 'Noble Quran',
+    sunnah: 'Prophetic Sunnah',
+    poetry: 'Arabic Poetry',
+    books: 'Book Quotes',
+  },
+} as const;
+
+export function classifyBlock(block: BlockModel): SourceType | null {
+  if (block.flavour === 'baglib:ayah') return 'quran';
+  if (block.flavour === 'baglib:hadith') return 'sunnah';
+  if (block.flavour === 'baglib:verse') return 'poetry';
+  if (block.flavour === 'baglib:book-quote') return 'books';
+  return null;
+}
+
+export function arrangeSourcesOnCanvas(
+  doc: Store,
+  editor: TestAffineEditorContainer,
+  options: AutoArrangeOptions = {}
+): AutoArrangeResult {
+  const lang = options.lang ?? 'ar';
+  const colWidth = options.colWidth ?? 480;
+  const colGap = options.colGap ?? 60;
+  const titles = SOURCE_FRAME_TITLES[lang];
+
+  // Group all existing source blocks across all notes
+  const groups: Record<SourceType, BlockModel[]> = {
+    quran: [],
+    sunnah: [],
+    poetry: [],
+    books: [],
+  };
+
+  const notes = doc.getModelsByFlavour('affine:note');
+  for (const note of notes) {
+    for (const child of [...note.children]) {
+      const kind = classifyBlock(child);
+      if (kind) {
+        groups[kind].push(child);
+      }
+    }
+  }
+
+  const counts: Record<SourceType, number> = {
+    quran: groups.quran.length,
+    sunnah: groups.sunnah.length,
+    poetry: groups.poetry.length,
+    books: groups.books.length,
+  };
+
+  const total = counts.quran + counts.sunnah + counts.poetry + counts.books;
+  if (total === 0) {
+    return { arranged: false, counts, frameIds: [] };
+  }
+
+  doc.captureSync();
+
+  const root = doc.root;
+  if (!root) throw new Error('doc-root-not-found');
+
+  let surface = doc.getModelsByFlavour('affine:surface')[0];
+  if (!surface) {
+    const surfaceId = doc.addBlock('affine:surface', {}, root.id);
+    surface = doc.getModelById(surfaceId)!;
+  }
+
+  const order: SourceType[] = ['quran', 'sunnah', 'poetry', 'books'];
+  const activeKinds = order.filter(kind => groups[kind].length > 0);
+  const frameIds: string[] = [];
+
+  activeKinds.forEach((kind, index) => {
+    const blocks = groups[kind];
+    const x = index * (colWidth + colGap);
+    const y = 80;
+    const noteHeight = Math.max(220, 90 + blocks.length * 140);
+    const frameHeight = noteHeight + 110;
+
+    // Create a new canvas note
+    const noteId = doc.addBlock(
+      'affine:note',
+      { xywh: `[${x},${y},${colWidth},${noteHeight}]` },
+      root.id
+    );
+    const targetNote = doc.getModelById(noteId);
+    if (!targetNote) return;
+
+    // Move source blocks into this note
+    for (const block of blocks) {
+      doc.moveBlocks([block], targetNote);
+    }
+
+    // Create a titled frame on the surface containing this note
+    const frameId = doc.addBlock(
+      'affine:frame',
+      {
+        title: new Text(titles[kind]),
+        xywh: `[${x - 20},0,${colWidth + 40},${frameHeight}]`,
+        childElementIds: { [noteId]: true },
+      },
+      surface.id
+    );
+    frameIds.push(frameId);
+  });
+
+  // Clean up any notes that became empty
+  for (const note of notes) {
+    if (note.children.length === 0) {
+      doc.deleteBlock(note);
+    }
+  }
+
+  doc.captureSync();
+
+  // Switch to edgeless mode
+  editor.switchEditor('edgeless');
+
+  // Trigger fit to screen
+  fitEdgelessScreen(editor);
+
+  return { arranged: true, counts, frameIds };
+}
+
+export function undoArrangeSources(
+  doc: Store,
+  editor: TestAffineEditorContainer
+): boolean {
+  doc.captureSync();
+
+  const notes = doc.getModelsByFlavour('affine:note');
+  const frames = doc.getModelsByFlavour('affine:frame');
+
+  if (notes.length <= 1 && frames.length === 0) {
+    // Already in single note format, switch back to page
+    editor.switchEditor('page');
+    return false;
+  }
+
+  const root = doc.root;
+  if (!root) throw new Error('doc-root-not-found');
+
+  // Identify or create the main destination note
+  let mainNote = notes[0];
+  if (!mainNote) {
+    const noteId = doc.addBlock('affine:note', {}, root.id);
+    mainNote = doc.getModelById(noteId)!;
+  }
+
+  // Move all children from other notes into the main note
+  for (const otherNote of notes) {
+    if (otherNote.id === mainNote.id) continue;
+    for (const child of [...otherNote.children]) {
+      doc.moveBlocks([child], mainNote);
+    }
+    doc.deleteBlock(otherNote);
+  }
+
+  // Delete all arrangement frames from surface
+  for (const frame of frames) {
+    doc.deleteBlock(frame);
+  }
+
+  doc.captureSync();
+
+  // Switch back to page mode
+  editor.switchEditor('page');
+  return true;
+}
+
+export function fitEdgelessScreen(editor: TestAffineEditorContainer): void {
+  try {
+    const host = editor.querySelector('editor-host') as {
+      std?: {
+        getOptional?: (id: unknown) => unknown;
+        get?: (id: unknown) => unknown;
+      };
+    } | null;
+    if (host?.std) {
+      const gfx =
+        host.std.getOptional?.(GfxControllerIdentifier) ??
+        host.std.get?.(GfxControllerIdentifier) ??
+        (host.std as unknown as Record<string, unknown>).gfx;
+      if (gfx && typeof (gfx as { fitToScreen?: () => void }).fitToScreen === 'function') {
+        (gfx as { fitToScreen: () => void }).fitToScreen();
+      }
+    }
+  } catch {}
+}

@@ -15,8 +15,10 @@ export class ManuscriptRepository {
     this.db.transaction(() => {
       const manuscript = this.manuscript(id);
       const existing = JSON.parse(manuscript.settings_json) as Record<string, unknown>;
+      const merged = { ...existing, ...settings };
+      if (settings.linkedBoardId === null) delete merged.linkedBoardId;
       this.db.prepare('UPDATE manuscript SET settings_json=?,updated_at=? WHERE id=?')
-        .run(JSON.stringify({ ...existing, ...settings }), now(), id);
+        .run(JSON.stringify(merged), now(), id);
     })();
   }
   list(trashed = false): Manuscript[] {

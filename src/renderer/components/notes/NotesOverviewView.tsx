@@ -174,6 +174,9 @@ export const NotesOverviewView: React.FC = () => {
 
   // Handle cross-workspace events from navigation rail and elsewhere
   useEffect(() => {
+    try {
+      if (sessionStorage.getItem('baglib:active-board-id')) setActiveTab('boards');
+    } catch {}
     const handleOpenBoards = () => setActiveTab('boards');
     const handleOpenCards = () => setActiveTab('cards');
     const handleStartReview = () => setActiveTab('review');

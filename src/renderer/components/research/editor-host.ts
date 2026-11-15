@@ -32,6 +32,41 @@ export function createResearchEditorHost(api: ManuscriptsAPI, blobs: ResearchEdi
   return {
     bridge,
     activeDocument: () => document,
+    setMode(mode: import('../../../shared/manuscripts').ManuscriptMode) {
+      return serialize(async () => {
+        if (!session?.setMode) return;
+        await session.setMode(mode);
+        if (document) {
+          controller?.change(document.snapshot, mode);
+        }
+      });
+    },
+    arrangeSources(options?: { lang?: 'ar' | 'en' }) {
+      return serialize(async () => {
+        if (!session?.arrangeSources) return { arranged: false, counts: {} as any, frameIds: [] };
+        const res = await session.arrangeSources({ lang: appearance.lang, ...options });
+        if (document && res.arranged) {
+          controller?.change(document.snapshot, 'edgeless');
+        }
+        return res;
+      });
+    },
+    undoArrange() {
+      return serialize(async () => {
+        if (!session?.undoArrange) return false;
+        const res = await session.undoArrange();
+        if (document && res) {
+          controller?.change(document.snapshot, 'page');
+        }
+        return res;
+      });
+    },
+    insertKanban(title?: string) {
+      return serialize(async () => {
+        if (!session?.insertKanban) return '';
+        return session.insertKanban(title);
+      });
+    },
     renameDocument(id: string, title: string) {
       return serialize(async () => {
         if (document?.id !== id) { await api.renameDocument(id, title); return; }

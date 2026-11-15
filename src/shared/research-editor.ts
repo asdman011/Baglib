@@ -22,6 +22,10 @@ export interface ResearchEditorSession {
   load(document: ManuscriptDocument): Promise<void>;
   flush(): Promise<void>;
   setReadonly?(value: boolean): void;
+  setMode?(mode: ManuscriptMode): Promise<void>;
+  arrangeSources?(options?: { lang?: 'ar' | 'en' }): Promise<{ arranged: boolean; counts: Record<string, number>; frameIds?: string[] }>;
+  undoArrange?(): Promise<boolean>;
+  insertKanban?(title?: string, options?: { lang?: 'ar' | 'en' }): Promise<string>;
   dispose(): void;
 }
 /** Parent-owned bridge. The iframe has no preload or IPC endpoint. */
