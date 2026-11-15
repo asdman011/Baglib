@@ -35,3 +35,35 @@ REA `list_browser_targets` and `inspect_web_page` observed Chrome 128 / Electron
 RE-10 owns the installer checkbox, packaged installer verification and the absent-editor manuscript preview. The development-origin smoke uses the production Next export served on localhost, so Next development HMR has no separate verification claim. The bundle scan establishes engine isolation, without a quantified before/after startup-time benchmark. RE-4 and later editor tasks own additional BlockSuite behavior and source blocks. Work, Edition and Source schema and contracts retain their approved roles.
 
 Related references are [Research Editor Plan](feature%20-%20Research%20Editor%20Plan.md) and [ADR-016](../ADR-016-manuscripts.md).
+
+## KEY-366 source-block investigation, 2026-11-14–15 (Codex)
+
+### Evidence and boundaries
+
+REA `analyze_javascript_application` inspected the two supplied spike files `ayah-block.ts` and `sample-ayahs.ts` under `D:/Ammar/Projects/Baglib/spike/affine-src/AFFiNE-0.27.4/blocksuite/playground/apps/baglib/baglib/`. Retained evidence: `ev_a73a213aeb8caafb7339adeb63c8607cc76e8693bc16f6da9c6234dffd63857e`; artifact SHA-256 `2f44f5f75f3d8eba5181ecb0176421a22207900968b6e5c46410982727ce7d90`. Both files parsed (10,357 text bytes); source analysis was static, with 230 unresolved semantic relationships. It establishes syntax and extension patterns, not execution or runtime equivalence.
+
+Verified spike patterns: `defineBlockSchema` + `BlockSchemaExtension`, `CaptionedBlockComponent` + `BlockViewExtension`, configured slash commands, a separate insertion search field, and a Markdown adapter. The spike searches a sample array; it does **not** establish a real BagLib IPC integration. No Maktabook source or runtime was inspected in this task; “Maktabook-style” describes the requested authoring flow.
+
+### Public contracts inspected in the vendored v0.27.4 source
+
+- `framework/store/src/model/block/zod.ts` exposes schema/model metadata, with content blocks parented by `affine:note`.
+- `affine/shared/src/adapters/{markdown,html}/block-adapter.ts` registers flavour matchers; `markdown.ts` and `html.ts` walk serialized snapshots. Export ASTs use text nodes for canonical content and link nodes for references; HTML poetry uses ordered table rows and two cells per bayt.
+- `affine/widgets/slash-menu/src/{widget,slash-menu-popover,extensions}.ts`: the widget recognizes input of the slash, but the popover refreshes its query through a keydown/composition observer. Native CDP `Input.insertText` updated Arabic paragraph text while the original menu remained in query state `off` during the live investigation. This corrects the earlier assumption that English-only default aliases alone explained the RE-1 observation.
+- `framework/std/src/extension/widget-view-map.ts` and `identifier.ts` expose widget registration/override. KEY-366 uses this public extension boundary for an input-aware menu; vendor files and patches remain unchanged by this task.
+- `affine/rich-text` exports `getInlineEditorByModel`; its public range and text APIs preserve the author’s prefix/suffix when inserting a source at the caret.
+- `framework/store/src/reactive/text/text.ts` exposes `Text.split` with formatting-preserving deltas.
+- Cross-frame result objects need a deep copy in the iframe before BlockSuite stores arrays of poetry halves. The first native insertion attempt exposed a Yjs “Unexpected content type in insert operation” for foreign-realm arrays. The insertion boundary now copies the JSON-compatible props into the editor realm.
+
+### BagLib application and trade-offs
+
+`research-editor/app/src/blocks/` adds four content flavours (`baglib:ayah`, `baglib:hadith`, `baglib:verse`, `baglib:book-quote`) and Markdown/HTML adapters. Props contain canonical source text, provenance and a single canonical scheme URL. Ordered poetry pairs come from `poetryBayts()`; free verse keeps a separate row per original line. Quran ranges preserve their complete range target and read successive IPC pages. Searches return at most eight results; Quran ranges are limited to fifty ayahs per insertion.
+
+The host’s `source-search.ts` calls existing Quran/Sunnah/poetry/library IPCs through the typed parent bridge. Request IDs reuse `cancelSlashSearch`; per-request stale checks also reject late noncancellable reads. Library FTS requests use `scope:'books'`; quotes come from canonical page content, not highlighted snippets. Explicitly selected unindexed PDFs can use their existing text layer; no OCR or original-file mutation is introduced. PDF extraction already running in the existing IPC cannot be preempted by this bridge, but its stale results are discarded.
+
+The local Hafs font preset is QPC V4 Tajweed (`quran-resource-presets.ts`), consumed by BagLib’s page-glyph renderer. The research-editor assets contain no standalone Unicode Quran font; these canonical word-string cards use the editor’s already bundled Noto Naskh Arabic face with generous line height. No font download or dependency was added.
+
+RE-3’s `deriveManuscriptSnapshot` already recognizes the blocks’ `url` and `verses` props. Focused repository tests verify four link rows on save and removal of the matching row after deleting a block; no storage-schema or derivation-code change is needed. Reader opening awaits the manuscript save, then uses the existing `navigateStudyReference` path.
+
+See [Research Editor Plan](feature%20-%20Research%20Editor%20Plan.md), the KEY-366 handoff and local report for final verification results. Final native verification passed in both languages (eight insertions, zero renderer errors), including exact reload/export/link deletion and all four reader locations. The disposable profile was deleted. Evidence is retained under `.baglib-data/KEY-366-evidence/`.
+
+The real Arabic PDF in this matrix has the intentionally defective PUA text layer described by tests/real-files/README.md. Its exact extracted bytes remain in the quote and can appear as missing glyphs; no substitute canonical text or OCR was introduced. Final focused106/full2435/native2 passed, with full-suite compatibility repairs documented in the KEY-366 handoff.

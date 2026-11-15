@@ -1,3 +1,5 @@
+import { MarkdownAdapter, HtmlAdapter } from '@blocksuite/affine/shared/adapters';
+import { sourceSchemas, sourceStoreExtensions, sourceViewExtensions } from './blocks';
 // BagLib research editor entry (KEY-362).
 //
 // Mounts AFFiNE's BlockSuite editor (page and edgeless views of one document) fully offline.
@@ -61,7 +63,7 @@ function createWorkspace() {
     // Standalone smoke tests use memory. Hosted documents use the parent filesystem bridge.
     blobSources: { main: blobs ?? new MemoryBlobSource() },
   });
-  workspace.storeExtensions = storeManager.get('store');
+  workspace.storeExtensions = [...storeManager.get('store'), ...sourceStoreExtensions()];
   workspace.start();
   workspace.meta.initialize();
   return workspace;
@@ -126,6 +128,7 @@ async function mount() {
   editor.doc = store;
 
   const common: ExtensionType[] = [
+    ...sourceViewExtensions(),
     FontConfigExtension(BaglibCanvasTextFonts),
     EditorSettingExtension({ setting$: editorSettings() }),
     ParseDocUrlExtension({ parseDocUrl: () => undefined }),
@@ -139,7 +142,7 @@ async function mount() {
   await editor.updateComplete;
 
   const schema = new Schema();
-  schema.register(AffineSchemas);
+  schema.register([...AffineSchemas, ...sourceSchemas]);
 
   const transformer = () => new Transformer({
     schema,
@@ -210,6 +213,12 @@ async function mount() {
   // Retained for the isolated offline smoke test and native verification.
   (window as unknown as { __baglibResearchEditor: unknown }).__baglibResearchEditor = {
     ready: true,
+    async exportSources() {
+      const job = transformer();
+      const snapshot = job.docToSnapshot(editor.doc);
+      if (!snapshot) throw new Error('snapshot-export-failed');
+      return { markdown: (await new MarkdownAdapter(job, editor.doc.provider).fromDocSnapshot({ snapshot })).file, html: (await new HtmlAdapter(job, editor.doc.provider).fromDocSnapshot({ snapshot })).file };
+    },
     editor,
     workspace,
     get mode() {

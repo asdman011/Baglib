@@ -1,4 +1,8 @@
 'use client';
+import { createResearchSourceSearch } from './source-search';
+import { navigateStudyReference } from '../../utils/study-navigation';
+import { translations } from '../../translations';
+import { collectionKeys } from '../../utils/sunnah-collections';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { ManuscriptList } from './ManuscriptList';
@@ -11,7 +15,9 @@ import './research-editor.css';
 declare global { interface Window { __baglibResearchEditorBridge?: ResearchEditorBridge } }
 
 export function ResearchEditorView() {
-  const { lang, dir, theme, t } = useWorkspace();
+  const { lang, dir, theme, t, books, openBookForReading } = useWorkspace();
+  const current = useRef({ books, lang, openBookForReading });
+  useLayoutEffect(() => { current.current = { books, lang, openBookForReading }; }, [books, lang, openBookForReading]);
   const [error, setError] = useState(false);
   const [opened, setOpened] = useState(false);
   const [ready, setReady] = useState(false);
@@ -45,6 +51,13 @@ export function ResearchEditorView() {
   useLayoutEffect(() => {
     window.__baglibResearchEditorBridge = {
       ...host.bridge,
+      sources: createResearchSourceSearch(window.electronAPI, () => current.current.books, async url => {
+        await host.bridge.explicitSave();
+        await navigateStudyReference(url, current.current.books, book => current.current.openBookForReading(book), () => {});
+      }, id => {
+        const key = collectionKeys[id as keyof typeof collectionKeys];
+        return key ? translations[current.current.lang][key] : id;
+      }),
       async connect(session) { await host.bridge.connect(session); setReady(true); },
     };
     const leave = async () => {

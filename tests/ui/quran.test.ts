@@ -89,7 +89,7 @@ for (const lang of ['ar', 'en'] as const) {
       }
       assert.equal(window.document.querySelector(`#workspace-navigation button[aria-label="${translations[lang].navSettings}"]`), null);
       assert.ok(window.document.querySelector(`aside button[aria-label="${translations[lang].navSettings}"]`));
-      const navigation = [...window.document.querySelectorAll('aside button')].map(node => node.textContent?.trim());
+      const navigation = [...window.document.querySelectorAll('aside button')].map(node => node.getAttribute('aria-label') || node.textContent?.trim());
       assert.ok(navigation.indexOf(translations[lang].navQuran) < navigation.indexOf(translations[lang].navSunnah));
       assert.equal(window.document.querySelectorAll('select option').length, 15);
       assert.equal(refreshes, 0);
@@ -104,6 +104,7 @@ for (const lang of ['ar', 'en'] as const) {
       await act(async () => workspace.openBookForReading({ id: 'layout-book', title: 'العِلْم — Study', author: 'باحث', categories: [], tags: [], lendingHistory: [], bookType: 'digital' }));
       await act(async () => workspace.setReadingPage(17));
       await act(async () => workspace.setViewMode('notes'));
+      if (workspace.isSidebarCollapsed) await act(async () => workspace.toggleSidebar());
       const resume = window.document.querySelector(`aside button[title="${translations[lang].navResumeBook}"]`);
       assert.ok(resume);
       await act(async () => (resume as HTMLElement).click());

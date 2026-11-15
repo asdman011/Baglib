@@ -25,9 +25,9 @@ export function formatHadith(
       return passage.full || [passage.isnad, passage.matn].filter(Boolean).join(' ');
     }
     const split = splitSunnahPassage(passage);
-    const hasCleanSplit = (Boolean(passage.isnad) && Boolean(passage.matn) && passage.matn !== passage.full) || split.segmented;
-    if (hasCleanSplit) {
-      return (split.matn || passage.matn).trim();
+    const explicitSplit = Boolean(passage.isnad) && Boolean(passage.matn) && passage.matn !== passage.full;
+    if (explicitSplit || split.segmented) {
+      return (explicitSplit ? passage.matn : split.matn).trim();
     }
     const notice = (unsplitNotice && unsplitNotice[language]) || (language === 'ar' ? 'تنبيه: الإسناد والمتن غير مفصولين في المصدر، أُدرج النص كاملاً' : 'Note: Isnad and matn are unsegmented in source, full text included');
     const whole = (passage.full || passage.matn).trim();

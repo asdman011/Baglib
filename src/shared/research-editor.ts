@@ -1,3 +1,4 @@
+import type { ResearchSourceSearch } from './research-editor-sources';
 import type { ManuscriptDocument, ManuscriptMode } from './manuscripts';
 
 export interface ResearchEditorAppearance {
@@ -25,6 +26,7 @@ export interface ResearchEditorSession {
 }
 /** Parent-owned bridge. The iframe has no preload or IPC endpoint. */
 export interface ResearchEditorBridge {
+  sources?: ResearchSourceSearch;
   appearance(): ResearchEditorAppearance;
   subscribeAppearance(listener: (appearance: ResearchEditorAppearance) => void): () => void;
   connect(session: ResearchEditorSession): Promise<void>;

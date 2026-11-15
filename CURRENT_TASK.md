@@ -1,3 +1,38 @@
+## KEY-366 verified handoff - 2026-11-15T04:50:00.440Z - Codex 01a1dbd5-1bbd-78b2-aa5a-8028d28aa1fd
+
+Implemented RE-5 under epic KEY-361 and plan2.1. Four public-extension source blocks and Markdown/HTML adapters, ar/en input-aware slash menu and translated search, bounded8 real IPC results, cancellation/stale rejection, caret splitting/continuation, canonical source props and existing-reader navigation. RE-3 already derives the exact links; no snapshot-derivation/schema/dependency/vendor change or download was needed. Nested slash actions remain available as searchable leaves with inherited aliases.
+
+User experience: writers search Quran words/references/ranges, full graded hadiths, ordered poetry passages and library quotes while typing. Picking a source inserts a linked RTL card, preserves text on both sides of the caret and resumes writing after it. Export preserves source URLs and poetry halves. Existing text-layer PDF content stays canonical; the supplied broken Arabic PUA layer still shows missing glyphs rather than invented/OCR text.
+
+Final focused106/106, full2435/2435(360suites,concurrency2,186046.4293ms),native2/2ar-en with8source inserts/0renderererrors/36screens pass. Initial full2431/2435 exposed four shared KEY-379/358 regressions; Codex claimed/fixed accessible nav/resume test assumptions, existing isnad settings registration and explicit matn export precedence. These three narrow repairs are separately attributed in the report. Types, scopedlint including editor --no-ignore, renderer/editor builds and vendor2899 pass. Dist9822074bytes/92files/9.3671MiB. Native exact reload/export/link deletion/undo, middle-paragraph continuation and all reader locations verified; throwawayprofiledeleted/originalsunchanged/noOCR. Windows long-path cleanup warning from vendor check was resolved by removing its exact verified temporary directory.
+
+REA spike evidence and verified source contracts are in docs/features/BlockSuite.md and the editor plan. Report: docs/agent-ops/reports/KEY-366.md. Evidence: .baglib-data/KEY-366-evidence and KEY-366-*.log. Physical IME and interruption of an already-running old PDF extraction IPC are outside the verified claim; stale results are rejected. No task implementation gate remains. No Jira mutation; Claude review follows publication.
+
+Exact owned commit files (20)
+
+- research-editor/app/src/main.ts
+- research-editor/app/src/blocks/dictionary.ts
+- research-editor/app/src/blocks/exporters.ts
+- research-editor/app/src/blocks/index.ts
+- research-editor/app/src/blocks/slash-widget.ts
+- src/shared/research-editor.ts
+- src/shared/research-editor-sources.ts
+- src/renderer/components/research/ResearchEditorView.tsx
+- src/renderer/components/research/source-search.ts
+- src/renderer/components/layout/settings-directory-model.ts
+- src/renderer/components/sunnah/HadithActions.tsx
+- tests/ui/research-editor-sources.test.ts
+- tests/ui/quran.test.ts
+- scripts/research-editor-blocks-live/initialize.ts
+- scripts/research-editor-blocks-live/main.cjs
+- scripts/research-editor-blocks-live/run.mjs
+- docs/features/BlockSuite.md
+- docs/features/feature - Research Editor Plan.md
+- CURRENT_TASK.md
+- IMPLEMENTATION_PLAN.md
+
+Explicit task/resume authorization covers the scoped commit and normal push to origin/feature/library-domain under commit.lock. Implementation/verification complete; publication pending. Other sessions and their state edits are preserved.
+
 ## KEY-358 verified handoff - 2026-11-15T06:33:00+02:00 - Antigravity a173d82c-bb11-4484-bec2-475221ef41fd
 
 Sunnah: let the user choose matn only or isnad and matn for search and insertion, with dataset review (Jira KEY-358):
