@@ -13,6 +13,7 @@ import { readHadithText } from './sunnah';
 import { bookStudyTarget, parseQuranTarget } from '../../shared/study-notes';
 import { providerErrorCode, providerErrorDetail } from '../../shared/ai-errors';
 import { isLocalAi } from '../../shared/ai-consent';
+import { runAssistantChat } from '../services/ai/assistant-chat';
 import { assistantResponseSchema, assistantSystemPrompt, budgetSources, validateAssistantAnswer, validateAssistantRequest, type AssistantAnswer, type AssistantSource } from '../../shared/study-assistant';
 
 import { translations } from '../../renderer/translations';
@@ -135,5 +136,36 @@ export function registerStudyAssistantIpc(): void {
     } catch (error) {
       return { ok: false, ...failure(error, KNOWN), ...(error instanceof AssistantBookError ? { target: error.target } : {}) };
     }
+  });
+
+  // KEY-384: the app-wide assistant chat. Each attached source is read here from BagLib's own data.
+  let chatting = false;
+  ipcMain.handle('assistant:chat', async (event, input: unknown) => {
+    try { authorize(event); } catch { return { ok: false, error: 'invalid-request' }; }
+    if (chatting) return { ok: false, error: 'busy' };
+    chatting = true;
+    try {
+      const db = getDatabase();
+      return await runAssistantChat(input, {
+        db,
+        settings: AIResearchService.getInstance().getSettings(),
+        complete: (prompt, settings) => AIProviderService.getInstance().generateChatCompletion(prompt, settings),
+        resolve: async (target, label) => {
+          if (target.startsWith('note:')) {
+            const note = new StudyNotesService(settingsRepository, db).list(target.slice(5).split('#')[0])[0];
+            return note ? [{ label: note.title || label, text: note.content }] : [];
+          }
+          if (target.startsWith('book:')) return (await readAssistantBookSources(target)).map(source => ({ label: source.label || label, text: source.text }));
+          const quran = parseQuranTarget(target);
+          if (quran) {
+            const ayahs = await readAyahTexts(quran.surah, quran.from, quran.to, { profile: quran.profile });
+            return ayahs.length ? [{ label, text: ayahs.map(ayah => `${ayah.text} (${ayah.number})`).join('\n') }] : [];
+          }
+          const sunnah = /^sunnah:([^:]+):(\d+):(.+)$/u.exec(target);
+          const hadith = sunnah ? await readHadithText(sunnah[1], +sunnah[2], sunnah[3]).catch(() => null) : null;
+          return hadith?.text ? [{ label, text: hadith.text }] : [];
+        },
+      });
+    } finally { chatting = false; }
   });
 }

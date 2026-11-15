@@ -47,6 +47,8 @@ app.on('browser-window-created', (_, owner) => {
   const setValue = (selector, value, kind = 'HTMLTextAreaElement') => evaluate(`(()=>{const e=document.querySelector('${selector}');const set=Object.getOwnPropertyDescriptor(${kind}.prototype,'value').set;set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('${kind === 'HTMLSelectElement' ? 'change' : 'input'}',{bubbles:true}));})()`);
   const openAssistant = async () => {
     await evaluate("document.querySelector('[data-notes-assistant]').click()");
+    await until("!!document.querySelector('[data-assistant-study-tools]')");
+    await evaluate("document.querySelector('[data-assistant-study-tools]').click()");
     await until("!!document.querySelector('[data-study-assistant]')");
     await evaluate("document.querySelector('[data-assistant-note=\"evidence\"]').click()");
   };
@@ -115,7 +117,7 @@ app.on('browser-window-created', (_, owner) => {
       await evaluate("document.querySelector('[data-assistant-passage-option^=\"sunnah:\"]').click()");
       result.chips = await evaluate("[...document.querySelectorAll('[data-assistant-passage]')].map(e=>e.dataset.assistantPassage)");
       // The search, its results and the chips stay inside the sources column.
-      result.passagesFit = await evaluate("(()=>{const f=document.querySelector('[data-assistant-passages]').getBoundingClientRect();const c=document.querySelector('[data-assistant-passages]').closest('section').getBoundingClientRect();return f.left>=c.left-1&&f.right<=c.right+1;})()");
+      result.passagesFit = await evaluate("(()=>{const f=document.querySelector('[data-assistant-passages]').getBoundingClientRect();const c=document.querySelector('[data-assistant-passages]').closest('aside, section').getBoundingClientRect();return f.left>=c.left-1&&f.right<=c.right+1;})()");
       await shot(`passages-${language}`);
       await ask();
       const sent = requests.at(-1).user.sources;

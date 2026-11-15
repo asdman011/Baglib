@@ -70,7 +70,7 @@ app.on('browser-window-created',(_,win)=>{
    // Scan through the visible book-page picker: typed failure, no provider call, then explicit page navigation.
    const scan=books.find(b=>b.id==='scan-ar');
    await click('[data-nav-item="notes"]');
-   await until('!!document.querySelector("[data-notes-assistant]")');await click('[data-notes-assistant]');await until('!!document.querySelector("[data-study-assistant]")');
+   await until('!!document.querySelector("[data-notes-assistant]")');await click('[data-notes-assistant]');await until('!!document.querySelector("[data-assistant-study-tools]")');await click('[data-assistant-study-tools]');await until('!!document.querySelector("[data-study-assistant]")');
    await setValue('[data-assistant-book]',scan.id,'HTMLSelectElement');
    await until('document.querySelectorAll("[data-study-assistant] input[type=number]").length===2');
    await setValue('[data-study-assistant] input[type=number]',2,'HTMLInputElement');

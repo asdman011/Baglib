@@ -18,26 +18,31 @@ export interface ResearchEditorAiDeps {
   complete(request: { systemPrompt: string; userPrompt: string; temperature?: number }, settings: AISettings): Promise<string>;
 }
 
+/** The open chapter's text and the sources it cites (manuscript_link), or null when it is missing or trashed. */
+export function loadChapterContext(db: Database.Database, documentId: string): { title: string; text: string; sources: ReturnType<typeof collectChapterSources> } | null {
+  const doc = db.prepare(`SELECT d.id, d.title, d.snapshot FROM manuscript_document d JOIN manuscript m ON m.id=d.manuscript_id
+    WHERE d.id=? AND d.deleted_at IS NULL AND m.deleted_at IS NULL`).get(documentId) as { id: string; title: string; snapshot: string } | undefined;
+  if (!doc) return null;
+  const links = db.prepare('SELECT block_id, target_scheme, target_id FROM manuscript_link WHERE document_id=?').all(doc.id) as ChapterLink[];
+  const noteStatement = db.prepare(`SELECT s.title, s.content FROM knowledge k JOIN study_note_detail s ON s.knowledge_id=k.id
+    WHERE k.id=? AND k.deleted_at IS NULL`);
+  const note = (id: string) => noteStatement.get(id) as NoteText | undefined;
+  try {
+    const derived = deriveManuscriptSnapshot(doc.snapshot);
+    return { title: derived.title || doc.title, text: derived.plainText, sources: collectChapterSources(doc.snapshot, links, note) };
+  } catch {
+    return null;
+  }
+}
+
 export async function runResearchEditorAi(input: unknown, deps: ResearchEditorAiDeps): Promise<ResearchAiResponse> {
   const request = validateResearchAiRequest(input);
   if (typeof request === 'string') return { ok: false, error: request };
   if (!providerReady(deps.settings)) return { ok: false, error: 'not-configured' };
-  const doc = deps.db.prepare(`SELECT d.id, d.title, d.snapshot FROM manuscript_document d JOIN manuscript m ON m.id=d.manuscript_id
-    WHERE d.id=? AND d.deleted_at IS NULL AND m.deleted_at IS NULL`).get(request.documentId) as { id: string; title: string; snapshot: string } | undefined;
-  if (!doc) return { ok: false, error: 'invalid-request' };
-  const links = deps.db.prepare('SELECT block_id, target_scheme, target_id FROM manuscript_link WHERE document_id=?').all(doc.id) as ChapterLink[];
-  const noteStatement = deps.db.prepare(`SELECT s.title, s.content FROM knowledge k JOIN study_note_detail s ON s.knowledge_id=k.id
-    WHERE k.id=? AND k.deleted_at IS NULL`);
-  const note = (id: string) => noteStatement.get(id) as NoteText | undefined;
-  let derived: ReturnType<typeof deriveManuscriptSnapshot>;
-  let sources: ReturnType<typeof collectChapterSources>;
-  try {
-    derived = deriveManuscriptSnapshot(doc.snapshot);
-    sources = collectChapterSources(doc.snapshot, links, note);
-  } catch {
-    return { ok: false, error: 'invalid-request' };
-  }
-  const prompt = buildResearchAiPrompt({ request, chapterTitle: derived.title || doc.title, chapterText: derived.plainText, sources });
+  const chapter = loadChapterContext(deps.db, request.documentId);
+  if (!chapter) return { ok: false, error: 'invalid-request' };
+  const { sources } = chapter;
+  const prompt = buildResearchAiPrompt({ request, chapterTitle: chapter.title, chapterText: chapter.text, sources });
   const temperature = request.action === 'translate' || request.action === 'rewrite' ? 0.3 : deps.settings.temperature ?? 0.5;
   try {
     const answer = await deps.complete({ ...prompt, temperature }, deps.settings);

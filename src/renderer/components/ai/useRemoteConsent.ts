@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { hasRemoteConsent, remoteConsentKey } from '../../../shared/ai-consent';
+import { providerReady } from '../../../shared/research-ai';
 import type { AISettings } from '../../../shared/types/ai';
 import type { TranslationKey } from '../../translations';
 
@@ -32,7 +33,7 @@ export function useRemoteConsent() {
   const check = useCallback(async () => {
     const fresh = await window.electronAPI.ai.getSettings() as AISettings | null;
     setSettings(fresh);
-    return { local: fresh !== null && remoteConsentKey(fresh) === null, allowed: fresh !== null && hasRemoteConsent(fresh) };
+    return { local: fresh !== null && remoteConsentKey(fresh) === null, allowed: fresh !== null && hasRemoteConsent(fresh), ready: fresh !== null && fresh.enabled !== false && providerReady(fresh) };
   }, []);
   return {
     check,

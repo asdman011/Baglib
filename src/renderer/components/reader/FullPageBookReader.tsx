@@ -94,7 +94,7 @@ import {
   isEpubLocation,
 } from '../../../shared/epub-marks';
 import { QuestionCardEditor } from '../knowledge/QuestionCardEditor';
-import { StudyAssistant } from '../notes/StudyAssistant';
+import { useAssistant } from '../ai/AssistantContext';
 import { readerSelectionCard, type ReaderStudySource } from '../../../shared/reader-study-selection';
 import type { SaveCardInput } from '../../../shared/types/knowledge-cards';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
@@ -207,7 +207,7 @@ const SourceBookReader: React.FC = () => {
   const isDocumentPanelOpen = panels.activePanel === 'document';
   const setIsDocumentPanelOpen = panels.setters.document;
   const [selectedText, setSelectedText] = useState('');
-  const [studySource, setStudySource] = useState<ReaderStudySource | null>(null);
+  const { openWith: openAssistant } = useAssistant();
   const [studyDraft, setStudyDraft] = useState<SaveCardInput | null>(null);
   const reviewSaving = useRef(false);
   const [reviewBusy, setReviewBusy] = useState(false);
@@ -3122,7 +3122,8 @@ const SourceBookReader: React.FC = () => {
     try {
       const input = selectionCard();
       if (action === 'explain') {
-        setStudySource({ target: input.sourceRef!, label: input.sourceLabel!, text: input.front });
+        // KEY-384: the app-wide assistant, with this page attached and the prompt ready.
+        openAssistant({ sources: [{ target: input.sourceRef!, label: input.sourceLabel! }], prompt: t('readerStudyExplainPrompt') });
         return;
       }
       if (action === 'practice') {
@@ -4731,7 +4732,6 @@ const SourceBookReader: React.FC = () => {
 
       {/* Floating Selection Action Pill */}
       {renderSelectionPopover()}
-      {studySource && <StudyAssistant readerSource={studySource} notes={[]} initialNotes={[]} onClose={() => setStudySource(null)} />}
       {studyDraft && <div className="fixed inset-0 z-[90] bg-black/40 p-3 flex items-center justify-center" onClick={() => setStudyDraft(null)}>
         <Modal asChild open={true} onClose={() => setStudyDraft(null)} label={t('readerStudyPractice')}><section role="dialog" aria-modal="true" aria-label={t('readerStudyPractice')} dir={workspaceDir} data-reader-study-editor className="w-full max-w-xl max-h-full overflow-y-auto rounded-xl bg-surface text-main p-4" onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setStudyDraft(null); } }}>
           <button autoFocus type="button" className="mb-3 rounded-lg border border-subtle p-2" onClick={() => setStudyDraft(null)}>{t('close')}</button>

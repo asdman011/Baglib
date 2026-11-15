@@ -18,7 +18,7 @@ import { ResearchSidebar } from './ResearchSidebar';
 import { ResearchTopBar } from './ResearchTopBar';
 import { ResearchEdgelessBar } from './ResearchEdgelessBar';
 import { ResearchOutlineRail } from './ResearchOutlineRail';
-import { ResearchAiButton } from './ResearchAiButton';
+import { useAssistant } from '../ai/AssistantContext';
 import { ResearchInfoDrawer } from './ResearchInfoDrawer';
 import { ResearchHistoryModal } from './ResearchHistoryModal';
 import { ResearchTemplateModal } from './ResearchTemplateModal';
@@ -101,6 +101,14 @@ export function ResearchEditorView() {
     )
   );
   useEffect(() => { setOpenManuscriptDocument(activeDoc?.id, (kind, props) => host.insertSource(kind, props)); return () => setOpenManuscriptDocument(null); }, [activeDoc?.id, host]);
+  // KEY-384: the app-wide assistant sees the open chapter, its selection, and can insert answers into it.
+  const { registerPage } = useAssistant();
+  const chapterId = ready && opened ? activeDoc?.id : undefined;
+  const chapterTitle = activeDoc?.title ?? '';
+  useEffect(() => {
+    if (!chapterId) return;
+    return registerPage({ label: chapterTitle, chapterId, selectedText: () => host.selectedText(), insert: text => host.insertParagraphs(text), flush: () => host.bridge.explicitSave() });
+  }, [chapterId, chapterTitle, host, registerPage]);
 
   const listApi = useMemo(
     () => ({
@@ -494,20 +502,7 @@ export function ResearchEditorView() {
           />
         )}
 
-        {/* 5. AI Floating Button & Drawer (Bottom Right) */}
-        {ready && opened && (
-          <ResearchAiButton
-            language={lang}
-            documentId={activeDoc?.id}
-            flush={() => host.bridge.explicitSave()}
-            selectedText={() => host.selectedText()}
-            insertParagraphs={text => host.insertParagraphs(text)}
-            openSource={url => void (async () => {
-              await host.bridge.explicitSave();
-              await navigateStudyReference(url, current.current.books, book => current.current.openBookForReading(book), (id, anchor) => openStudyNote({ id, anchor }));
-            })()}
-          />
-        )}
+        {/* 5. The AI assistant is app-wide (KEY-384); this view gives it the open chapter (see registerPage above). */}
 
         {/* BlockSuite Offline Editor Frame */}
         <iframe

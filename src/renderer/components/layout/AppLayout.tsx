@@ -6,6 +6,8 @@ import { Titlebar } from './Titlebar';
 import { GlobalContextMenu } from '../actions/GlobalContextMenu';
 import { ActionOverlays } from '../actions/ActionOverlays';
 import { SendToManuscriptDialog } from '../research/SendToManuscriptDialog';
+import { AssistantProvider } from '../ai/AssistantContext';
+import { GlobalAssistant } from '../ai/GlobalAssistant';
 import { MANUSCRIPT_OPEN_EVENT } from '../../../shared/manuscript-transfer';
 import { CommandPalette } from './CommandPalette';
 import { KnowledgeCardLayer } from '../knowledge/KnowledgeCardLayer';
@@ -59,7 +61,10 @@ const subscribeWindowMode = () => () => {};
 const readWindowMode = () => new URLSearchParams(window.location.search).get('widget') === 'companion';
 const serverWindowMode = () => null;
 
-export const AppLayout: React.FC = () => {
+/** KEY-384: the assistant's state sits above every view, so its conversation survives tab changes. */
+export const AppLayout: React.FC = () => <AssistantProvider><AppLayoutContent /></AssistantProvider>;
+
+const AppLayoutContent: React.FC = () => {
   const {
     dir,
     researchEditorAvailable,
@@ -264,6 +269,7 @@ export const AppLayout: React.FC = () => {
       <GlobalContextMenu />
       <ActionOverlays />
       <SendToManuscriptDialog />
+      <GlobalAssistant />
       <KnowledgeCardLayer />
 
       {/* Global Book Discovery & Search Hub (Story 11) */}

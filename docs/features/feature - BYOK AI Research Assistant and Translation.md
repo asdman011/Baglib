@@ -118,3 +118,12 @@ Verified in code and a live run:
 - Gemini: the key is now sent in the `x-goog-api-key` header, not the URL query. The default model is `gemini-flash-latest`, and saved retired `gemini-1.0`/`1.5` models map to it.
 
 Not verified: a call to the real Gemini API. The live run (`scripts/research-ai-live`) uses a local OpenAI-compatible mock provider, so no real key is used or sent.
+
+## 7. App-wide AI assistant (KEY-384, 2026-11-15)
+
+Verified in code, unit tests, a real Gemini key probe and live runs:
+
+- One floating assistant button on every tab (mounted in AppLayout under `AssistantProvider`), so the conversation and attached sources survive tab changes. It replaces the editor-only panel and is the main entry from the notes log and the book reader's "Explain".
+- Natural multi-turn chat (`assistant:chat` IPC, `src/shared/assistant-chat.ts`, `src/main/services/ai/assistant-chat.ts`). Sources the user attaches (notes, ayahs, hadith, book pages) are read in the main process from BagLib's data; in the editor the open chapter and the sources it cites are the page context. Relevant sources are cited as [n]; questions the sources do not cover are still answered from general knowledge, labelled as such. This replaces the strict "not covered by the selected material" refusals of the study assistant.
+- Quran and hadith wording is written only when it appears in the given material; otherwise the assistant gives the meaning and the reference and suggests "Add source" (checked with the real key: no verse or hadith quoted from memory in 8 tries).
+- Quick actions follow the page: chapter actions in the editor; summarise, explain, study guide, practice questions, key terms and flashcards elsewhere. Flashcards still use the checked study-assistant pipeline with approval; the full study dialog (tafsir, Warsh, page ranges, Explain back) is under "Study tools".

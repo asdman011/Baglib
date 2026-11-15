@@ -13,7 +13,7 @@ const mockServer = http.createServer((req, res) => {
     const json = JSON.parse(body || '{}');
     mock.requests.push({ url: req.url, authorization: req.headers.authorization, body: json });
     const system = json.messages?.[0]?.content ?? '';
-    const content = system.includes('Answer in Arabic')
+    const content = system.includes('Reply in Arabic')
       ? 'التوحيد أصل الدين، وآية الكرسي من أعظم أدلته [1].\nوالتشبيه البليغ ما حذفت فيه الأداة ووجه الشبه [٢]. وهذا لا مصدر له [9].'
       : 'The chapter argues that tawhid is the foundation of faith [1], and uses the rhetoric note for its imagery [2].';
     res.writeHead(200, { 'Content-Type': 'application/json' });

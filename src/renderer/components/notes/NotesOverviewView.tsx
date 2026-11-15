@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
-import { StudyAssistant } from './StudyAssistant';
+import { useAssistant } from '../ai/AssistantContext';
 import { BoardsWorkspace } from './BoardsWorkspace';
 import { SavedCardsPanel } from '../knowledge/SavedCardsPanel';
 import { SrsReviewScreen } from '../knowledge/SrsReviewScreen';
@@ -124,7 +124,7 @@ export const NotesOverviewView: React.FC = () => {
   const [focusParagraph, setFocusParagraph] = useState<{ id: string; anchor: string; at: number } | null>(null);
 
   // Modals & Exports
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const { openWith: openAssistant } = useAssistant();
   const [exported, setExported] = useState<{ folder: string; count: number } | null>(null);
   const [wordExported, setWordExported] = useState<{ file: string; count: number } | null>(null);
   const [wordOptions, setWordOptions] = useState<WordLayout | null>(null);
@@ -591,7 +591,7 @@ export const NotesOverviewView: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   data-notes-assistant
-                  onClick={() => setAssistantOpen(true)}
+                  onClick={() => openAssistant({ sources: (filteredNotes.length <= 10 && filteredNotes.length < notes.length ? filteredNotes : []).map(note => ({ target: `note:${note.id}`, label: note.title || note.content.slice(0, 60) })) })}
                   icon={<Sparkles className="size-3.5 text-amber-500" />}
                  aria-label={t('assistantOpen')}>
                   <span className="hidden sm:inline">{t('assistantOpen')}</span>
@@ -627,17 +627,6 @@ export const NotesOverviewView: React.FC = () => {
       )}
 
       {/* Global Modals / Panels */}
-      {assistantOpen && (
-        <StudyAssistant
-          notes={notes}
-          initialNotes={
-            filteredNotes.length <= 10 && filteredNotes.length < notes.length
-              ? filteredNotes.map((n) => n.id)
-              : []
-          }
-          onClose={() => setAssistantOpen(false)}
-        />
-      )}
 
       {/* Word Layout Options form */}
       {wordOptions && (
@@ -1020,7 +1009,7 @@ export const NotesOverviewView: React.FC = () => {
                 }}
                 onDelete={handleRemoveNote}
                 onMemorize={handleMemorizeNote}
-                onOpenAssistant={() => setAssistantOpen(true)}
+                onOpenAssistant={() => openAssistant(activeNote ? { sources: [{ target: `note:${activeNote.id}`, label: activeNote.title || activeNote.content.slice(0, 60) }] } : undefined)}
                 onExportMarkdown={() => void exportMarkdown(activeNote ? [activeNote.id] : [])}
                 onExportWord={() => {
                   if (activeNote) setWordNoteId(activeNote.id);
