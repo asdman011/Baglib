@@ -40,7 +40,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     antiSpoilerCeiling: true,
     ollamaEndpoint: 'http://127.0.0.1:11434',
     ollamaModel: 'llama3.2',
-    geminiModel: 'gemini-1.5-flash',
+    geminiModel: 'gemini-flash-latest',
     claudeModel: 'claude-3-5-sonnet-20241022',
     translationProvider: 'llm',
     targetLanguage: 'ar',
@@ -271,9 +271,9 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={settings.geminiModel || 'gemini-1.5-flash'}
+                    value={settings.geminiModel || 'gemini-flash-latest'}
                     onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })}
-                    placeholder="gemini-1.5-flash, gemini-1.5-pro, etc."
+                    placeholder="gemini-flash-latest, gemini-pro-latest"
                     className="w-full px-3 py-2 text-sm bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                   />
                 </div>

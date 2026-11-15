@@ -105,3 +105,16 @@ When the user executes a structured summary or research query with `saveAsNote: 
 - [x] One-click save of structured summaries to book annotations.
 - [x] Bilingual (RTL/LTR) settings modal and slide-out research assistant drawer.
 - [x] All 558 unit and integration tests passing (`npm test`).
+
+## 6. Research editor AI panel (KEY-373, RE-12, 2026-11-15)
+
+Verified in code and a live run:
+
+- The research editor's bottom-right AI button opens a panel with Summarise, Rewrite the selection, Translate, Outline, Review, and free questions. The selection actions use the text selected in the chapter, else the whole chapter.
+- Context is only the open chapter plus the sources it cites. The sources are the BagLib blocks that have a `manuscript_link` row for that chapter: ayah, hadith, verse and book quote text from the block, and an embedded note's current text read from the notes table (never copied into the manuscript). Pure logic: `src/shared/research-ai.ts`; main process: `src/main/services/ai/research-editor-ai.ts`, IPC `ai:research-editor`.
+- The prompt numbers the sources; the answer's `[n]` markers become clickable citations that open the BagLib source. Markers that point to no listed source are dropped, and Arabic-Indic digits are normalised.
+- "Insert into chapter" appends the answer as paragraphs, with each citation written as the source label in parentheses.
+- Only the provider chosen in the BYOK settings is called. With no key, the panel says so and opens AI settings.
+- Gemini: the key is now sent in the `x-goog-api-key` header, not the URL query. The default model is `gemini-flash-latest`, and saved retired `gemini-1.0`/`1.5` models map to it.
+
+Not verified: a call to the real Gemini API. The live run (`scripts/research-ai-live`) uses a local OpenAI-compatible mock provider, so no real key is used or sent.

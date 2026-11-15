@@ -226,6 +226,17 @@ async function mount() {
       if (!note) throw new Error('missing-note-block');
       return editor.doc.addBlock('baglib:' + kind, JSON.parse(JSON.stringify(props)), note);
     },
+    selectedText() {
+      // KEY-373: rich text lives in the light DOM, so the document selection is the editor selection.
+      return (document.getSelection()?.toString() ?? '').trim();
+    },
+    async insertParagraphs(text: string) {
+      const note = editor.doc.root?.children.find(child => child.flavour === 'affine:note');
+      if (!note) throw new Error('missing-note-block');
+      const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean);
+      for (const line of lines) editor.doc.addBlock('affine:paragraph', { text: new Text(line) }, note);
+      return lines.length;
+    },
     async insertKanban(titleOrOptions?: string | { title?: string; lang?: 'ar' | 'en' }, maybeOptions?: { lang?: 'ar' | 'en' }) {
       const options = typeof titleOrOptions === 'object' ? titleOrOptions : maybeOptions;
       const title = typeof titleOrOptions === 'string' ? titleOrOptions : options?.title;

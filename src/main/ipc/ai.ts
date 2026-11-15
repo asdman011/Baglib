@@ -8,6 +8,8 @@ import { getDatabase } from '../database/connection';
 import { AIResearchService } from '../services/ai/ai-research.service';
 import { TranslationService, TranslateOptions } from '../services/ai/translation.service';
 import type { AISettings, AIResearchQueryPayload } from '../../shared/types/ai';
+import { AIProviderService } from '../services/ai/ai-provider.service';
+import { runResearchEditorAi } from '../services/ai/research-editor-ai';
 
 let aiServiceInstance: AIResearchService | null = null;
 let translationServiceInstance: TranslationService | null = null;
@@ -78,6 +80,16 @@ export function registerAIIpc(): void {
         durationMs: 0,
       };
     }
+  });
+
+  // KEY-373 (RE-12): grounded research AI for the manuscript editor (chapter + cited sources only).
+  ipcMain.handle('ai:research-editor', async (_, request: unknown) => {
+    const provider = AIProviderService.getInstance();
+    return runResearchEditorAi(request, {
+      db: getDatabase(),
+      settings: getAIService().getSettings(),
+      complete: (prompt, settings) => provider.generateChatCompletion(prompt, settings),
+    });
   });
 
   // Dedicated or LLM translation

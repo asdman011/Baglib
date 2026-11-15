@@ -547,6 +547,8 @@ export const API = {
       ipcRenderer.invoke('ai:execute-tool', payload),
     translate: (options: unknown) =>
       ipcRenderer.invoke('ai:translate', options),
+    researchEditor: (request: import('../shared/research-ai').ResearchAiRequest): Promise<import('../shared/research-ai').ResearchAiResponse> =>
+      ipcRenderer.invoke('ai:research-editor', request),
   },
 
   // Text-to-Speech (TTS), Audiobook Playback & SMIL Overlays (KEY-145)

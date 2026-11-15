@@ -498,7 +498,14 @@ export function ResearchEditorView() {
         {ready && opened && (
           <ResearchAiButton
             language={lang}
-            documentTitle={activeDoc?.title}
+            documentId={activeDoc?.id}
+            flush={() => host.bridge.explicitSave()}
+            selectedText={() => host.selectedText()}
+            insertParagraphs={text => host.insertParagraphs(text)}
+            openSource={url => void (async () => {
+              await host.bridge.explicitSave();
+              await navigateStudyReference(url, current.current.books, book => current.current.openBookForReading(book), (id, anchor) => openStudyNote({ id, anchor }));
+            })()}
           />
         )}
 

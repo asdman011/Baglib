@@ -27,6 +27,9 @@ export interface ResearchEditorSession {
   undoArrange?(): Promise<boolean>;
   insertKanban?(title?: string, options?: { lang?: 'ar' | 'en' }): Promise<string>;
   insertSource?(kind: string, props: Record<string, unknown>): Promise<string>;
+  /** KEY-373: the text selected in the editor, and appending plain paragraphs (research AI answers). */
+  selectedText?(): string;
+  insertParagraphs?(text: string): Promise<number>;
   fitToScreen?(): void;
   exportSources?(): Promise<{ markdown: string; html: string }>;
   scrollToBlock?(blockId: string): void;

@@ -289,10 +289,11 @@ export class AIProviderService {
 
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+        // KEY-373: the key goes in the x-goog-api-key header, never in the URL (URLs end up in logs).
+        'https://generativelanguage.googleapis.com/v1beta/models',
         {
           signal: controller.signal,
-          headers: { Accept: 'application/json' },
+          headers: { Accept: 'application/json', 'x-goog-api-key': apiKey },
         }
       );
       clearTimeout(timeout);
@@ -322,7 +323,9 @@ export class AIProviderService {
     settings: AISettings
   ): Promise<string> {
     const apiKey = settings.geminiApiKey || settings.apiKey || '';
-    const model = settings.geminiModel || 'gemini-1.5-flash';
+    // Gemini 1.0/1.5 models are retired; settings saved with the old default move to the current alias.
+    const saved = settings.geminiModel || 'gemini-flash-latest';
+    const model = /^gemini-1\.[05]/.test(saved) ? 'gemini-flash-latest' : saved;
     const temp = request.temperature ?? settings.temperature ?? 0.7;
 
     const controller = new AbortController();
@@ -330,10 +333,10 @@ export class AIProviderService {
 
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
           signal: controller.signal,
           body: JSON.stringify({
             systemInstruction: {
