@@ -61,6 +61,12 @@ export function createResearchEditorHost(api: ManuscriptsAPI, blobs: ResearchEdi
         return res;
       });
     },
+    insertSource(kind: string, props: Record<string, unknown>) {
+      return serialize(async () => {
+        if (!session?.insertSource) throw new Error('insert-unavailable');
+        return session.insertSource(kind, props);
+      });
+    },
     insertKanban(title?: string) {
       return serialize(async () => {
         if (!session?.insertKanban) return '';

@@ -3196,7 +3196,7 @@ const SourceBookReader: React.FC = () => {
     copy: () => navigator.clipboard.writeText(selectedText+'\n['+(activeBook?.title || '')+' · '+t('page')+' '+readingPage+']'),
     search: () => { window.dispatchEvent(new CustomEvent('baglib:search-selection',{detail:selectedText})); },
     dictionary: () => { closeAllPanelsExcept();setDictionaryLookupWord(selectedText);setIsDictionaryModalOpen(true); },
-    manuscript: activeBook ? () => requestSendToManuscript(createBookQuotePayload({ book: { id: activeBook.id, title: activeBook.title }, text: selectedText, page: Number(readingPage) || undefined })) : undefined,
+    manuscript: activeBook ? () => { const page = pendingSelection?.pageNumber ?? pdfSelectionInfo?.pageNumber ?? readingPage; const epub = isReflowable && activeRange ? selectionStudyLocation(paginatedPages, activeRange, readingPage) : null; requestSendToManuscript(createBookQuotePayload({ book: { id: activeBook.id, title: activeBook.title }, text: selectedText, page: epub ? undefined : Number(page) || undefined, cfi: epub?.cfi, chapter: epub?.chapter })); } : undefined,
   };
   const renderSelectionPopover = () => {
     if (!activeBook || !selectedText || isInstantHighlightMode) return null;

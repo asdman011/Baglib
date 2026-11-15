@@ -11,6 +11,10 @@ import {
   sendPayloadToDocument,
   setOpenManuscriptDocument,
   isManuscriptDocumentOpen,
+  openDocumentInserterFor,
+  writeSourceDrag,
+  readSourceDrag,
+  SOURCE_DRAG_TYPE,
 } from '../../src/shared/manuscript-transfer';
 import { ManuscriptRepository } from '../../src/main/database/repositories/manuscript.repository';
 import { migrations } from '../../src/main/database/migrations';
@@ -189,4 +193,29 @@ test('the chapter open in the editor is reported so the picker can refuse it', (
   assert.equal(isManuscriptDocumentOpen('doc-other'), false);
   setOpenManuscriptDocument(null);
   assert.equal(isManuscriptDocumentOpen('doc-open'), false);
+});
+
+test('the open chapter routes sends through the live editor inserter', async () => {
+  const calls: string[] = [];
+  setOpenManuscriptDocument('doc-open', async kind => { calls.push(kind); return 'b1'; });
+  const live = openDocumentInserterFor('doc-open');
+  assert.ok(live);
+  assert.equal(openDocumentInserterFor('doc-other'), null);
+  await live!('ayah', {});
+  assert.deepEqual(calls, ['ayah']);
+  setOpenManuscriptDocument(null);
+  assert.equal(openDocumentInserterFor('doc-open'), null);
+});
+
+test('source drag data round-trips and rejects foreign payloads', () => {
+  const store = new Map<string, string>();
+  const transfer = { setData: (type: string, value: string) => { store.set(type, value); }, getData: (type: string) => store.get(type) ?? '' };
+  const payload = createHadithPayload({ collection: 'bukhari', collectionLabel: 'صحيح البخاري', chapterNumber: 1, hadithId: 'h1', hadithNumber: '1', text: 'إنما الأعمال بالنيات' });
+  writeSourceDrag(transfer, payload);
+  assert.ok(store.get('text/plain')?.includes('إنما الأعمال بالنيات'));
+  assert.deepEqual(readSourceDrag(transfer), payload);
+  store.set(SOURCE_DRAG_TYPE, JSON.stringify({ kind: 'script', props: { url: 'x' } }));
+  assert.equal(readSourceDrag(transfer), null);
+  store.set(SOURCE_DRAG_TYPE, '{bad');
+  assert.equal(readSourceDrag(transfer), null);
 });

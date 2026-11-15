@@ -161,6 +161,8 @@ export function ResearchImportModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label={t.close}
+            title={t.close}
             disabled={isImporting}
             className="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
           >

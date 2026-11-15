@@ -11,6 +11,7 @@ import { BaglibBlobSource } from './blob-source';
 import './style.css';
 import './host-style.css';
 import type { ManuscriptDocument } from '../../../src/shared/manuscripts';
+import { SOURCE_DRAG_TYPE, readSourceDrag } from '../../../src/shared/manuscript-transfer';
 
 import type { DocMode } from '@blocksuite/affine/model';
 import { AffineSchemas } from '@blocksuite/affine/schemas';
@@ -217,6 +218,12 @@ async function mount() {
     async undoArrange() {
       return undoArrangeSources(editor.doc, editor);
     },
+    async insertSource(kind: string, props: Record<string, unknown>) {
+      // KEY-370: "Send to manuscript" into the chapter open here, so the next autosave keeps it.
+      const note = editor.doc.root?.children.find(child => child.flavour === 'affine:note');
+      if (!note) throw new Error('missing-note-block');
+      return editor.doc.addBlock('baglib:' + kind, JSON.parse(JSON.stringify(props)), note);
+    },
     async insertKanban(titleOrOptions?: string | { title?: string; lang?: 'ar' | 'en' }, maybeOptions?: { lang?: 'ar' | 'en' }) {
       const options = typeof titleOrOptions === 'object' ? titleOrOptions : maybeOptions;
       const title = typeof titleOrOptions === 'string' ? titleOrOptions : options?.title;
@@ -251,6 +258,15 @@ async function mount() {
         event.preventDefault();
         void bridge.explicitSave().catch(bridge.error);
       }
+    }, true);
+    // KEY-370: a passage dragged from a BagLib reader becomes a source block in this chapter.
+    document.addEventListener('dragover', event => { if (event.dataTransfer?.types.includes(SOURCE_DRAG_TYPE)) event.preventDefault(); });
+    document.addEventListener('drop', event => {
+      const payload = readSourceDrag(event.dataTransfer);
+      if (!payload) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void session.insertSource(payload.kind, payload.props as unknown as Record<string, unknown>);
     }, true);
     await bridge.connect(session);
   }

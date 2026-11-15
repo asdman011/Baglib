@@ -62,7 +62,6 @@ export function ResearchEditorView() {
   const [error, setError] = useState(false);
   const [opened, setOpened] = useState(false);
   const [activeDoc, setActiveDoc] = useState<ManuscriptDocument | undefined>(undefined);
-  useEffect(() => { setOpenManuscriptDocument(activeDoc?.id); return () => setOpenManuscriptDocument(null); }, [activeDoc?.id]);
   const [activeManuscript, setActiveManuscript] = useState<Manuscript | undefined>(undefined);
   const [docMode, setDocMode] = useState<ManuscriptMode>('page');
   const [ready, setReady] = useState(false);
@@ -101,6 +100,7 @@ export function ResearchEditorView() {
       () => setError(true)
     )
   );
+  useEffect(() => { setOpenManuscriptDocument(activeDoc?.id, (kind, props) => host.insertSource(kind, props)); return () => setOpenManuscriptDocument(null); }, [activeDoc?.id, host]);
 
   const listApi = useMemo(
     () => ({

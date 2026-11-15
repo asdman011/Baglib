@@ -138,5 +138,31 @@ export async function sendPayloadToDocument(api: ManuscriptTransferApi, document
 
 /** KEY-370: the chapter open in the research editor. Writing to it behind the editor's back would be overwritten by its autosave. */
 let openManuscriptDocumentId: string | null = null;
-export function setOpenManuscriptDocument(id: string | null | undefined): void { openManuscriptDocumentId = id || null; }
+export type OpenDocumentInserter = (kind: string, props: Record<string, unknown>) => Promise<string>;
+let openDocumentInserter: OpenDocumentInserter | null = null;
+export function setOpenManuscriptDocument(id: string | null | undefined, inserter?: OpenDocumentInserter | null): void {
+  openManuscriptDocumentId = id || null;
+  openDocumentInserter = id ? inserter ?? null : null;
+}
+/** KEY-370: insert into the chapter open in the editor through the editor itself; null when no live editor can take it. */
+export function openDocumentInserterFor(id: string): OpenDocumentInserter | null {
+  return isManuscriptDocumentOpen(id) ? openDocumentInserter : null;
+}
 export function isManuscriptDocumentOpen(id: string): boolean { return !!id && openManuscriptDocumentId === id; }
+
+/** KEY-370: drag-and-drop of a reader passage into the research editor carries the same payload. */
+export const SOURCE_DRAG_TYPE = 'application/x-baglib-source';
+export function writeSourceDrag(dataTransfer: Pick<DataTransfer, 'setData'> | null, payload: SendToManuscriptPayload): void {
+  if (!dataTransfer) return;
+  dataTransfer.setData(SOURCE_DRAG_TYPE, JSON.stringify(payload));
+  dataTransfer.setData('text/plain', [payload.props.text, payload.props.label].filter(Boolean).join('\n'));
+}
+export function readSourceDrag(dataTransfer: Pick<DataTransfer, 'getData'> | null): SendToManuscriptPayload | null {
+  try {
+    const raw = dataTransfer?.getData(SOURCE_DRAG_TYPE);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as SendToManuscriptPayload;
+    const kinds = ['ayah', 'hadith', 'verse', 'book-quote'];
+    return value && kinds.includes(value.kind) && value.props && typeof value.props.url === 'string' ? value : null;
+  } catch { return null; }
+}

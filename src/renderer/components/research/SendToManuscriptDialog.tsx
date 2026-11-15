@@ -6,7 +6,7 @@ import { Modal } from '../ui/Modal';
 import type { Manuscript, ManuscriptDocument } from '../../../shared/manuscripts';
 import {
   LAST_CHAPTER_STORAGE_KEY, LAST_MANUSCRIPT_STORAGE_KEY, MANUSCRIPT_DOCUMENT_CHANGED_EVENT, SEND_TO_MANUSCRIPT_EVENT,
-  isManuscriptDocumentOpen, pickDefaultId, sendPayloadToDocument, type SendToManuscriptPayload,
+  isManuscriptDocumentOpen, openDocumentInserterFor, pickDefaultId, sendPayloadToDocument, type SendToManuscriptPayload,
 } from '../../../shared/manuscript-transfer';
 
 function readStored(key: string): string | null {
@@ -58,10 +58,12 @@ export function SendToManuscriptDialog() {
 
   const send = async () => {
     if (!payload || !chapterId) return;
-    if (isManuscriptDocumentOpen(chapterId)) { setStatus('manuscriptSendOpen'); return; }
     setBusy(true);
     try {
-      await sendPayloadToDocument(window.electronAPI.manuscripts, chapterId, payload);
+      const live = openDocumentInserterFor(chapterId);
+      if (live) await live(payload.kind, payload.props as unknown as Record<string, unknown>);
+      else if (isManuscriptDocumentOpen(chapterId)) { setStatus('manuscriptSendOpen'); return; }
+      else await sendPayloadToDocument(window.electronAPI.manuscripts, chapterId, payload);
       writeStored(LAST_MANUSCRIPT_STORAGE_KEY, manuscriptId);
       writeStored(LAST_CHAPTER_STORAGE_KEY, chapterId);
       window.dispatchEvent(new CustomEvent(MANUSCRIPT_DOCUMENT_CHANGED_EVENT, { detail: { id: chapterId } }));
