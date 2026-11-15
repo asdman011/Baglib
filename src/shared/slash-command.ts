@@ -20,7 +20,7 @@ const SCOPE_TERMS: Record<SlashScope, readonly string[]> = {
 const fold = (value: string) => normalizeArabicText(value, { normalizeTaaMarbuta: false }).toLowerCase();
 
 /** The active `/` token before the caret, or `null` when the caret is not in one. */
-export function parseSlashCommand(textBeforeCaret: string): null | { start: number; scope: SlashScope | null; query: string; partialScope: string } {
+export function parseSlashCommand(textBeforeCaret: string): null | { start: number; scope: SlashScope | null; query: string; partialScope: string; modifier?: 'matn_only' | 'all' } {
   let start = -1;
   for (let index = textBeforeCaret.length - 1; index >= 0; index--) {
     const char = textBeforeCaret[index];
@@ -37,10 +37,18 @@ export function parseSlashCommand(textBeforeCaret: string): null | { start: numb
   const firstWord = space === -1 ? after : after.slice(0, space);
   const rest = space === -1 ? '' : after.slice(space + 1);
 
-  const foldedWord = fold(firstWord);
+  const colonIndex = firstWord.indexOf(':');
+  const scopeToken = colonIndex === -1 ? firstWord : firstWord.slice(0, colonIndex);
+  const modifierToken = colonIndex === -1 ? '' : firstWord.slice(colonIndex + 1);
+  const foldedWord = fold(scopeToken);
   for (const scope of SLASH_SCOPES) {
     if (SCOPE_TERMS[scope].some(term => fold(term) === foldedWord)) {
-      return { start, scope, query: rest.trimStart(), partialScope: '' };
+      const modifier = (modifierToken === 'matn' || modifierToken === 'متن')
+        ? 'matn_only' as const
+        : (modifierToken === 'isnad' || modifierToken === 'اسناد' || modifierToken === 'سند')
+          ? 'all' as const
+          : undefined;
+      return { start, scope, query: rest.trimStart(), partialScope: '', ...(modifier ? { modifier } : {}) };
     }
   }
 

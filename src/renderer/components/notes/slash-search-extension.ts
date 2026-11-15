@@ -5,6 +5,7 @@ import { SLASH_SCOPES, moveSelection, parseSlashCommand, suggestScopes, type Sla
 import { matchSlashCommands } from '../../../shared/note-slash-commands';
 import { searchSlashDatasets, slashResultInsert, slashResultLink, type SlashResult, type SlashSearchInput } from '../../utils/slash-search';
 import { cancelMaterialOcr, getMaterialOcrState, prepareSlashMaterial, runMaterialOcr, searchSlashMaterial, type SlashMaterial } from '../../utils/slash-material';
+import { getSunnahIsnadScope, setSunnahIsnadScope } from '../../utils/corpus-lookup';
 
 export const slashInsertion = Annotation.define<boolean>();
 type MenuItem = { scope: SlashScope; result?: SlashResult; action?: 'more' | 'link' | 'inside' | 'ocr' | 'ocr-cancel' | 'transcribe'; offset?: number; after?: number };
@@ -29,6 +30,10 @@ export interface SlashSearchLabels {
   autoTranscribeSoon?: string;
   autoTranscribeTitle?: string;
   close?: string;
+  sunnahScopeMatnOnly?: string;
+  sunnahScopeIsnadAndMatn?: string;
+  sunnahScopeToggleLabel?: string;
+  sunnahUnsplitNotice?: string;
 }
 interface Config extends Omit<SlashSearchInput, 'scope' | 'query' | 'stale'> { labels: SlashSearchLabels; dir: 'rtl' | 'ltr' }
 
@@ -107,6 +112,38 @@ export function slashSearchExtension(config: () => Config): Extension {
       dom.setAttribute('role', 'listbox'); dom.setAttribute('aria-label', labels.label); dom.setAttribute('aria-busy', String(current.busy)); dom.replaceChildren();
       if (current.material) {
         const title = document.createElement('bdi'); title.className = 'cm-slash-heading'; title.textContent = current.material.label; dom.append(title);
+      }
+      const activeScope = view.plugin(plugin)?.scope;
+      const hasSunnah = activeScope === 'sunnah' || current.items.some(item => item.scope === 'sunnah');
+      if (hasSunnah) {
+        const toggleBar = document.createElement('div');
+        toggleBar.className = 'cm-slash-sunnah-scope-bar';
+        toggleBar.setAttribute('role', 'group');
+        toggleBar.setAttribute('aria-label', labels.sunnahScopeToggleLabel || 'Hadith Scope');
+        const currentScope = getSunnahIsnadScope();
+
+        const matnBtn = document.createElement('button');
+        matnBtn.type = 'button';
+        matnBtn.className = `cm-slash-scope-btn${currentScope === 'matn_only' ? ' active' : ''}`;
+        matnBtn.textContent = labels.sunnahScopeMatnOnly || 'المتن فقط';
+        matnBtn.addEventListener('mousedown', e => e.preventDefault());
+        matnBtn.addEventListener('click', () => {
+          setSunnahIsnadScope('matn_only');
+          view.plugin(plugin)?.refresh();
+        });
+
+        const allBtn = document.createElement('button');
+        allBtn.type = 'button';
+        allBtn.className = `cm-slash-scope-btn${currentScope === 'all' ? ' active' : ''}`;
+        allBtn.textContent = labels.sunnahScopeIsnadAndMatn || 'الإسناد والمتن';
+        allBtn.addEventListener('mousedown', e => e.preventDefault());
+        allBtn.addEventListener('click', () => {
+          setSunnahIsnadScope('all');
+          view.plugin(plugin)?.refresh();
+        });
+
+        toggleBar.append(matnBtn, allBtn);
+        dom.append(toggleBar);
       }
       if (current.noText && current.material?.material) {
         const status = document.createElement('div');
@@ -235,7 +272,7 @@ export function slashSearchExtension(config: () => Config): Extension {
     view.dispatch({ changes: { from: current.from, to: current.to, insert }, selection: { anchor: current.from + insert.length }, userEvent: 'input.complete', annotations: slashInsertion.of(true) }); view.focus(); return true;
   };
   const plugin = ViewPlugin.fromClass(class {
-    timer?: ReturnType<typeof setTimeout>; revision = 0; requestId?: string; query = '';
+    timer?: ReturnType<typeof setTimeout>; revision = 0; requestId?: string; query = ''; scope: SlashScope | null = null;
     material?: { result: SlashResult; ready: Promise<SlashMaterial> };
     constructor(readonly view: EditorView) { this.refresh(); }
     update(update: ViewUpdate) { if (update.docChanged || update.selectionSet || update.focusChanged) this.refresh(); }
@@ -257,8 +294,8 @@ export function slashSearchExtension(config: () => Config): Extension {
       const before = line.text.slice(0, selection.head - line.from);
       const open = selection.empty && view.hasFocus ? parseSlashCommand(before) : null;
       const legacy = !this.material && open && !open.scope && open.query && !suggestScopes(open.partialScope || open.query).length && matchSlashCommands(open.query).length;
-      if (!open || legacy || open.query.length > 200) { this.material = undefined; view.dispatch({ effects: change.of(null) }); return; }
-      closeCompletion(view); this.query = open.query;
+      if (!open || legacy || open.query.length > 200) { this.material = undefined; this.scope = null; view.dispatch({ effects: change.of(null) }); return; }
+      closeCompletion(view); this.query = open.query; this.scope = open.scope;
       const scopeItems: MenuItem[] = !this.material && !open.scope ? suggestScopes(open.partialScope || (open.query ? '\0' : '')).map(scope => ({ scope })) : [];
       const initial: Menu = { from: line.from + open.start, to: selection.head, items: scopeItems, selected: 0, busy: !!open.query || !!open.scope || !!this.material, material: this.material?.result };
       view.dispatch({ effects: change.of(initial) }); if (!initial.busy) return;
@@ -269,7 +306,8 @@ export function slashSearchExtension(config: () => Config): Extension {
       const limit = open.scope || this.material ? 20 : 8;
       const selected = this.material ? await this.material.ready : undefined;
       if (stale()) return;
-      const results = selected ? await searchSlashMaterial(selected, open.query, limit, 0, stale) : await searchSlashDatasets({ ...config(), scope: open.scope, query: open.query, limit, requestId: this.requestId, stale });
+      const effectiveIsnadScope = open.modifier ?? getSunnahIsnadScope();
+      const results = selected ? await searchSlashMaterial(selected, open.query, limit, 0, stale) : await searchSlashDatasets({ ...config(), scope: open.scope, query: open.query, limit, requestId: this.requestId, isnadScope: effectiveIsnadScope, unsplitNotice: config().labels.sunnahUnsplitNotice, stale });
       if (stale()) return;
       let materialActionItems: MenuItem[] = [];
       if (selected && !selected.available && selected.result.material) {
@@ -288,7 +326,7 @@ export function slashSearchExtension(config: () => Config): Extension {
       this.view.dispatch({ effects: change.of({ ...current, busy: true }) });
       const limit = this.material || parseSlashCommand(this.view.state.doc.lineAt(current.to).text.slice(0, current.to - this.view.state.doc.lineAt(current.to).from))?.scope ? 20 : 8;
       const selected = this.material ? await this.material.ready : undefined;
-      const rows = selected ? await searchSlashMaterial(selected, this.query, limit, item.offset || 0, stale) : await searchSlashDatasets({ ...config(), scope: item.scope, query: this.query, offset: item.offset, after: item.after, limit, requestId: this.requestId, stale });
+      const rows = selected ? await searchSlashMaterial(selected, this.query, limit, item.offset || 0, stale) : await searchSlashDatasets({ ...config(), scope: item.scope, query: this.query, offset: item.offset, after: item.after, limit, requestId: this.requestId, isnadScope: getSunnahIsnadScope(), unsplitNotice: config().labels.sunnahUnsplitNotice, stale });
       if (stale()) return;
       const items = current.items.flatMap(entry => entry === item ? this.items(rows, limit, item.offset) : [entry]);
       this.view.dispatch({ effects: change.of({ ...current, items, selected: Math.min(current.selected, items.length - 1), busy: false }) });
@@ -302,6 +340,9 @@ export function slashSearchExtension(config: () => Config): Extension {
     { key: 'Escape', run: view => { if (!view.state.field(menu)) return false; const active = view.plugin(plugin); active?.cancel(); if (active) active.material = undefined; view.dispatch({ effects: change.of(null) }); return true; } },
   ])), EditorView.theme({
     '.cm-tooltip.cm-slash-search': { background: 'var(--bg-surface)', color: 'var(--text-main)', border: '1px solid rgb(128 128 128 / .35)', borderRadius: '.6rem', boxShadow: '0 4px 16px rgb(0 0 0 / .2)', padding: '.25rem', width: 'min(26rem, calc(100vw - 2rem))', maxHeight: '24rem', overflowY: 'auto', textAlign: 'start', lineHeight: '1.9', fontFamily: 'inherit' },
+    '.cm-slash-sunnah-scope-bar': { display: 'flex', gap: '.35rem', padding: '.3rem .6rem', borderBottom: '1px solid rgb(128 128 128 / .2)', marginBottom: '.25rem' },
+    '.cm-slash-scope-btn': { padding: '.15rem .5rem', fontSize: '.75rem', borderRadius: '.25rem', border: '1px solid rgb(128 128 128 / .3)', background: 'transparent', color: 'inherit', cursor: 'pointer', transition: 'all 0.15s ease' },
+    '.cm-slash-scope-btn.active': { background: 'var(--color-primary, #059669)', color: '#ffffff', borderColor: 'var(--color-primary, #059669)', fontWeight: '600' },
     '.cm-slash-option': { padding: '.3rem .6rem', borderRadius: '.35rem', cursor: 'pointer', overflowWrap: 'anywhere' },
     '.cm-slash-option[aria-selected="true"]': { background: 'rgb(16 185 129 / .18)' },
     '.cm-slash-heading': { display: 'block', fontSize: '.75rem', opacity: '.75', padding: '.3rem .6rem', fontWeight: '600' },

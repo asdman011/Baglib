@@ -14,6 +14,8 @@ export interface SlashSearchInput {
   searchCorpus?: (kinds: CorpusKind[], query: string, options?: CorpusSearchOptions) => Promise<CorpusOption[]>;
   searchLibraryContent?: (query: string, options?: { bookId?: string; scope?: SlashScope; limit?: number; offset?: number; requestId?: string; stale?: () => boolean }) => Promise<LibraryFtsResult[]>;
   stale?: () => boolean; limit?: number; offset?: number; after?: number; requestId?: string;
+  isnadScope?: 'all' | 'matn_only';
+  unsplitNotice?: string;
 }
 const corpusScopes = { quran: 'quran', hadith: 'sunnah', poem: 'albayan' } as const;
 const mediaTypes = new Set(['lecture', 'podcast', 'video']);
@@ -27,7 +29,7 @@ const matchTerm = (val: string, term: string) => {
   return false;
 };
 /** Cached normalized text, bounded result buffers and yielding scans keep large local collections responsive. */
-export async function searchSlashDatasets({ scope, query, notes, books, searchCorpus, searchLibraryContent, stale = () => false, limit = scope ? 20 : 8, offset = 0, after, requestId }: SlashSearchInput): Promise<SlashResult[]> {
+export async function searchSlashDatasets({ scope, query, notes, books, searchCorpus, searchLibraryContent, stale = () => false, limit = scope ? 20 : 8, offset = 0, after, requestId, isnadScope, unsplitNotice }: SlashSearchInput): Promise<SlashResult[]> {
   const text = query.trim().slice(0, 200);
   if (text && text.length < 3 && !/^\d[:\d-]+$/u.test(text)) return [];
   const terms = normalize(text).split(/\s+/u).filter(Boolean);
@@ -141,7 +143,7 @@ export async function searchSlashDatasets({ scope, query, notes, books, searchCo
   }
   const kinds = (Object.keys(corpusScopes) as CorpusKind[]).filter(kind => scopes.includes(corpusScopes[kind]));
   if (text && kinds.length && searchCorpus && !stale()) {
-    const found = await searchCorpus(kinds, text, { limit, offset, after, requestId, stale }).catch(() => []);
+    const found = await searchCorpus(kinds, text, { limit, offset, after, requestId, isnadScope, unsplitNotice, stale }).catch(() => []);
     if (stale()) return [];
     for (const item of found) results.push({ scope: corpusScopes[item.kind], target: item.target, label: item.label, snippet: item.snippet, score: 0, quote: item.quote, cursor: item.cursor });
   }

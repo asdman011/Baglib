@@ -1,12 +1,38 @@
 import { matchesStudyQuery, parseBookTarget, parseQuranTarget, studyLinkText, type StudyNote } from '../../shared/study-notes';
 import { normalizeArabicForSearch } from '../../shared/poetry';
-import type { SunnahCollectionId } from '../../shared/types/sunnah';
+import type { SunnahCollectionId, SunnahIsnadScope } from '../../shared/types/sunnah';
 import { findParagraph, parseNoteTarget, stripParagraphAnchors } from '../../shared/note-paragraphs';
+import { splitSunnahPassage } from '../libs/sunnah/text';
 import type { BookItem } from '../../shared/types/work';
+
+export type { SunnahIsnadScope };
+export const SUNNAH_ISNAD_STORAGE_KEY = 'baglib:sunnah:isnad-scope';
+
+export function getSunnahIsnadScope(): SunnahIsnadScope {
+  if (typeof localStorage === 'undefined') return 'all';
+  try {
+    const saved = localStorage.getItem(SUNNAH_ISNAD_STORAGE_KEY);
+    return saved === 'matn_only' ? 'matn_only' : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+export function setSunnahIsnadScope(scope: SunnahIsnadScope): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(SUNNAH_ISNAD_STORAGE_KEY, scope);
+  } catch { /* ignore */ }
+}
 
 export type CorpusKind = 'quran' | 'hadith' | 'poem';
 /** A Quran, hadith or poetry result: `link` is a study link; `quote` is a Markdown block with the text and that link. */
-export interface CorpusSearchOptions { limit?: number; offset?: number; after?: number; requestId?: string; stale?: () => boolean }
+export interface CorpusSearchOptions {
+  limit?: number; offset?: number; after?: number; requestId?: string;
+  isnadScope?: SunnahIsnadScope;
+  unsplitNotice?: string;
+  stale?: () => boolean;
+}
 export interface CorpusOption { cursor?: number; kind: CorpusKind; target: string; label: string; snippet: string; link: string; quote: string }
 
 const toLatinDigits = (value: string) => value.replace(/[٠-٩]/gu, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
@@ -59,16 +85,31 @@ export async function searchCorpus(kinds: CorpusKind[], query: string, collectio
     return found.ok ? found.data.slice(0, limit).map(hit => quranOption(hit.surah, hit.ayah, hit.ayah, [{ number: hit.ayah, text: hit.text }], profile)) : [];
   })());
   if (kinds.includes('hadith')) jobs.push((async () => {
-    const found = await window.electronAPI?.sunnah?.search?.({ text, limit, offset, ...(requestId ? { requestId } : {}) });
+    const isnadScope = options.isnadScope ?? getSunnahIsnadScope();
+    const found = await window.electronAPI?.sunnah?.search?.({ text, limit, offset, isnadScope, ...(requestId ? { requestId } : {}) });
     if (!found?.ok) return [];
     return found.data.slice(0, limit).map(hit => {
       const target = `sunnah:${hit.chapter.collection}:${hit.chapter.number}:${hit.hadith.id}`;
       const label = `${collectionLabel(hit.chapter.collection)} ${hit.hadith.number}`;
       const link = studyLinkText(target, label);
-      const matn = hit.hadith.text.ar.matn || hit.hadith.text.ar.full;
-      // The note gets the whole hadith, isnad and matn (KEY-357); the list still shows the matn to tell hits apart.
-      const whole = hit.hadith.text.ar.full || [hit.hadith.text.ar.isnad, hit.hadith.text.ar.matn].filter(Boolean).join(' ') || matn;
-      return { kind: 'hadith' as const, target, label, snippet: matn.slice(0, 120), link, quote: `${quoted(whole)}\n> ${link}` };
+      const textAr = hit.hadith.text.ar;
+      const matn = textAr.matn || textAr.full;
+      let quoteText: string;
+      if (isnadScope === 'matn_only') {
+        const split = splitSunnahPassage(textAr);
+        const hasCleanSplit = (Boolean(textAr.isnad) && Boolean(textAr.matn) && textAr.matn !== textAr.full) || split.segmented;
+        if (hasCleanSplit) {
+          quoteText = (split.matn || textAr.matn).trim();
+        } else {
+          const notice = options.unsplitNotice || 'نص الحديث كاملاً — الإسناد والمتن غير مفصولين في المصدر';
+          const whole = textAr.full || textAr.matn;
+          quoteText = `[${notice}]\n${whole.trim()}`;
+        }
+      } else {
+        const whole = textAr.full || [textAr.isnad, textAr.matn].filter(Boolean).join(' ') || matn;
+        quoteText = whole.trim();
+      }
+      return { kind: 'hadith' as const, target, label, snippet: matn.slice(0, 120), link, quote: `${quoted(quoteText)}\n> ${link}` };
     }).filter(option => option.link);
   })());
   if (kinds.includes('poem')) jobs.push((async () => {

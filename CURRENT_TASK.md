@@ -1,3 +1,43 @@
+## KEY-358 verified handoff - 2026-11-15T06:33:00+02:00 - Antigravity a173d82c-bb11-4484-bec2-475221ef41fd
+
+Sunnah: let the user choose matn only or isnad and matn for search and insertion, with dataset review (Jira KEY-358):
+1. Dataset Review of Merged Isnad/Matn across 73,325 Hadiths:
+   - Evaluated all 73,325 hadiths in `sunnah_merged_quranlab_v1.sqlite`: 64,411 (87.8%) have separated isnad, 8,914 (12.2%) have merged/no separate isnad.
+   - Identified collections with 100% unsegmented rows (HadeethEnc: 3,574, ReviewQueue: 1,711, SourceOnly: 307, 40-hadith collections: 122). Musnad Ahmad has 2,047 merged rows and ~2,000 hadiths with number prefixes in matn (e.g., `4010 - حدثنا...`).
+   - Benchmark boundary regex heuristics against 13,949 Bukhari & Muslim ground-truth hadiths: failure rate of 55.46% (41.77% marker not found, 13.40% companion preface truncated, 0.29% split inside isnad chain).
+   - Documented full statistics in `tools/hadith-alignment/review_isnad_matn_stats.json` and `docs/agent-ops/reports/KEY-358.md`.
+2. Matn Only vs Isnad & Matn Scope for Search, Slash Insertion & Reader:
+   - Added `SunnahIsnadScope = 'all' | 'matn_only'` and `isnadScope?: SunnahIsnadScope` to shared types.
+   - Restricts SQLite FTS5 search to matn columns `{Chapter_Arabic Section_Arabic Arabic_Matn_Norm English_Hadith}` when `isnadScope === 'matn_only'`, excluding isnad and tafseel.
+   - Stored user preference in `localStorage` under `baglib:sunnah:isnad-scope` (`getSunnahIsnadScope()` / `setSunnahIsnadScope()`) with zero database schema changes and zero downloads.
+   - Added interactive scope toggle pills in slash search dropdown (`.cm-slash-sunnah-scope-bar`) and `/hadith:matn` / `/hadith:isnad` command modifiers.
+   - Integrated reader copy & export in `HadithActions.tsx` with synced `includeIsnad` setting.
+3. Honest Fallback for Unsegmented Hadiths:
+   - Rows where isnad and matn are unsegmented in source insert the full text accompanied by an explicit disclaimer banner:
+     - Arabic: `[نص الحديث كاملاً — الإسناد والمتن غير مفصولين في المصدر]` (slash insertion) / `[تنبيه: الإسناد والمتن غير مفصولين في المصدر، أُدرج النص كاملاً]` (reader)
+     - English: `[Full text — isnad and matn are not separated in source]` (slash insertion) / `[Note: Isnad and matn are unsegmented in source, full text included]` (reader)
+4. Verification:
+   - 61 unit and integration tests passed across 6 test suites (`sunnah-isnad-matn-scope`, `sunnah-isnad-index`, `sunnah-research`, `slash-command`, `slash-search`, `slash-search-followup`).
+   - TypeScript (`tsc --noEmit`) and ESLint passed with 0 errors and 0 warnings.
+   - Native live check `node scripts/slash-search-live/run.mjs` passed with code 0 in Electron (Arabic RTL & English LTR verified, both disclaimer banners verified in live note insertions, 0 renderer errors, temporary profile deleted).
+
+Exact changed files:
+- `tools/hadith-alignment/review_isnad_matn.py`
+- `tools/hadith-alignment/review_isnad_matn_stats.json`
+- `src/shared/types/sunnah.ts`
+- `src/shared/slash-command.ts`
+- `src/main/services/sunnah/research-corpus.ts`
+- `src/renderer/translations.ts`
+- `src/renderer/utils/corpus-lookup.ts`
+- `src/renderer/utils/slash-search.ts`
+- `src/renderer/components/notes/slash-search-extension.ts`
+- `src/renderer/components/notes/NoteEditorPane.tsx`
+- `src/renderer/components/dashboard/QuickNoteScratchpad.tsx`
+- `src/renderer/components/sunnah/HadithActions.tsx`
+- `scripts/slash-search-live/main.cjs`
+- `tests/services/sunnah-isnad-matn-scope.test.ts`
+- `docs/agent-ops/reports/KEY-358.md`
+
 ## KEY-359 verified handoff - 2026-11-15T06:12:00+02:00 - Antigravity b396ee7e-0c3c-4635-ac58-c8a0b110d070
 
 Sunnah dataset: rebuild search index with isnad included (Jira KEY-359):

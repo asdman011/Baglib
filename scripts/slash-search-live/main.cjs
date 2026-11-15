@@ -141,6 +141,19 @@ app.on('browser-window-created', (_, win) => {
       await key('Up'); await key('End'); await pause(400);
       assert.equal(await evaluate("!!document.querySelector('[data-relation-menu]')"), false, 'no relationship menu at a link');
       await shot('isnad-inserted-' + lang);
+
+      // KEY-358: user chooses matn only via /hadith:matn modifier
+      await setText('/hadith:matn الأعمال بالنيات'); await ready('sunnah');
+      assert.ok(await evaluate("!!document.querySelector('.cm-slash-sunnah-scope-bar')"), 'hadith scope toggle bar is visible');
+      await shot('matn-only-search-' + lang); await key('Enter');
+      const matnOnlyText = await text();
+      console.log('KEY-358 matn only insert:', JSON.stringify(matnOnlyText.slice(0, 220)));
+      const bareMatn = matnOnlyText.replace(/[ً-ْٰ]/gu, '');
+      assert.ok(!bareMatn.includes('الحميدي'), 'matn only insert excludes isnad for clean split');
+      assert.ok(bareMatn.includes('الأعمال') && (bareMatn.includes('بالنيات') || bareMatn.includes('بالنية')), 'matn only insert includes matn');
+      assert.match(matnOnlyText, /\n> \[\[sunnah:/u);
+      await shot('matn-only-inserted-' + lang);
+
       // Free search for a verse's words, then a mouse click on the first Al-Bayan result.
       await setText('/\u0623\u0631\u062a\u062c\u064a \u0648\u0625\u0644\u0649'); await ready('albayan');
       await evaluate("document.querySelector('[data-slash-search] [data-slash-scope=\"albayan\"][role=option]').click()");

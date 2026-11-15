@@ -8,13 +8,30 @@ import { shortenArabicChain, splitSunnahPassage } from '../../libs/sunnah/text';
 import { translations, type TranslationKey } from '../../translations';
 import { collectionKeys as names } from '../../utils/sunnah-collections';
 import { passageNote } from '../actions/passage-actions';
+import { getSunnahIsnadScope, setSunnahIsnadScope } from '../../utils/corpus-lookup';
 
-
-export function formatHadith(chapter: SunnahChapter, hadith: SunnahHadith, english: boolean, isnad: boolean, reference: boolean): string {
+export function formatHadith(
+  chapter: SunnahChapter,
+  hadith: SunnahHadith,
+  english: boolean,
+  isnad: boolean,
+  reference: boolean,
+  unsplitNotice?: { ar?: string; en?: string }
+): string {
   const parts = (english ? ['ar', 'en'] as const : ['ar'] as const).map(language => {
     const passage = hadith.text[language];
     if (language === 'ar' && isnad && !reference) return shortenArabicChain(passage);
-    return isnad ? passage.full || [passage.isnad, passage.matn].filter(Boolean).join(' ') : passage.matn || splitSunnahPassage(passage).matn;
+    if (isnad) {
+      return passage.full || [passage.isnad, passage.matn].filter(Boolean).join(' ');
+    }
+    const split = splitSunnahPassage(passage);
+    const hasCleanSplit = (Boolean(passage.isnad) && Boolean(passage.matn) && passage.matn !== passage.full) || split.segmented;
+    if (hasCleanSplit) {
+      return (split.matn || passage.matn).trim();
+    }
+    const notice = (unsplitNotice && unsplitNotice[language]) || (language === 'ar' ? 'تنبيه: الإسناد والمتن غير مفصولين في المصدر، أُدرج النص كاملاً' : 'Note: Isnad and matn are unsegmented in source, full text included');
+    const whole = (passage.full || passage.matn).trim();
+    return `[${notice}]\n${whole}`;
   }).filter(Boolean);
   if (reference) {
     for (const language of english ? ['ar', 'en'] as const : ['ar'] as const) {
@@ -26,7 +43,9 @@ export function formatHadith(chapter: SunnahChapter, hadith: SunnahHadith, engli
 
 export function HadithActions({ chapter, hadith, showEnglish, t }: { chapter: SunnahChapter; hadith: SunnahHadith; showEnglish: boolean; t: SunnahTranslate }) {
   const [englishOverride, setEnglishOverride] = useState<boolean | null>(null);
-  const [includeIsnad, setIncludeIsnad] = useState(true);
+  const [includeIsnad, setIncludeIsnad] = useState(() => {
+    return getSunnahIsnadScope() !== 'matn_only';
+  });
   const [reference, setReference] = useState(true);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -39,7 +58,10 @@ export function HadithActions({ chapter, hadith, showEnglish, t }: { chapter: Su
   const [status, setStatus] = useState<TranslationKey | null>(null);
   const [noteStatus, setNoteStatus] = useState<TranslationKey | null>(initial.available ? null : 'sunnahSaveFailed');
   const english = englishOverride ?? showEnglish;
-  const output = formatHadith(chapter, hadith, english, includeIsnad, reference);
+  const output = formatHadith(chapter, hadith, english, includeIsnad, reference, {
+    ar: t('sunnahReaderUnsplitNotice'),
+    en: translations.en.sunnahReaderUnsplitNotice,
+  });
   const perform = async (share: boolean) => {
     setStatus(null);
     if (share) setSharing(true);
@@ -65,9 +87,18 @@ export function HadithActions({ chapter, hadith, showEnglish, t }: { chapter: Su
     </div>
     {optionsOpen && <div className="flex flex-wrap gap-4 py-3">
         <label><input type="checkbox" checked={english} onChange={event => setEnglishOverride(event.target.checked)} /> {t('sunnahEnglish')}</label>
-        <label><input type="checkbox" checked={includeIsnad} onChange={event => setIncludeIsnad(event.target.checked)} /> {t('sunnahIncludeIsnad')}</label>
+        <label><input type="checkbox" checked={includeIsnad} onChange={event => {
+          const checked = event.target.checked;
+          setIncludeIsnad(checked);
+          setSunnahIsnadScope(checked ? 'all' : 'matn_only');
+        }} /> {t('sunnahIncludeIsnad')}</label>
         <label><input type="checkbox" checked={reference} onChange={event => setReference(event.target.checked)} /> {t('sunnahIncludeReference')}</label>
-        <button className="sunnah-button" onClick={() => { setEnglishOverride(null); setIncludeIsnad(true); setReference(true); }}>{t('sunnahResetOptions')}</button>
+        <button className="sunnah-button" onClick={() => {
+          setEnglishOverride(null);
+          setIncludeIsnad(true);
+          setReference(true);
+          setSunnahIsnadScope('all');
+        }}>{t('sunnahResetOptions')}</button>
       </div>}
     <div>
       <label className="block mt-3"><span>{t('sunnahReflection')}</span><textarea rows={2} dir="auto" value={note} className="block w-full resize-y p-3 mt-2 rounded-lg border border-subtle bg-canvas leading-loose" onChange={event => {

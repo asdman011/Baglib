@@ -148,6 +148,7 @@ export class SunnahResearchCorpus {
     const clauses: string[] = [], params: (string | number)[] = [];
     let exactTerms: string[] = [];
     let rankJoin = '';
+    const isMatnOnly = query.isnadScope === 'matn_only';
     const conservative = (text: string) => normalizeArabicText(text, { normalizeTaaMarbuta: false, normalizeWawHamza: false, normalizeYaaHamza: false }).replace(/[^\p{L}\p{N}\s]/gu, ' ');
     if (query.text !== undefined) {
       if (typeof query.text !== 'string' || query.text.length > 500) throw new Error('Invalid search text');
@@ -159,8 +160,10 @@ export class SunnahResearchCorpus {
       } else {
         exactTerms = conservative(query.text).split(/\s+/).filter(Boolean);
         const match = terms.map(term => `"${term}"`).join(' AND ');
-        const matnScope = '{Chapter_Arabic Section_Arabic Arabic_Matn_Norm Arabic_Tafseel_Norm English_Hadith}';
-        if (query.requestId) {
+        const matnScope = isMatnOnly
+          ? '{Chapter_Arabic Section_Arabic Arabic_Matn_Norm English_Hadith}'
+          : '{Chapter_Arabic Section_Arabic Arabic_Matn_Norm Arabic_Tafseel_Norm English_Hadith}';
+        if (query.requestId && !isMatnOnly) {
           if (this.hasIsnadFts) {
             rankJoin = `JOIN (SELECT rowid,MIN(score) AS score FROM (SELECT rowid,((rowid NOT IN (SELECT rowid FROM hadiths_fts WHERE hadiths_fts MATCH ?)) * 1000.0 + rank) AS score FROM hadiths_fts WHERE hadiths_fts MATCH ? ${this.merged ? 'UNION ALL SELECT rowid,rank AS score FROM variant_translation_fts WHERE variant_translation_fts MATCH ?' : ''}) GROUP BY rowid) ranked ON ranked.rowid=hadiths.id`;
             params.push(`${matnScope}: ${match}`, match); if (this.merged) params.push(match);
@@ -168,7 +171,7 @@ export class SunnahResearchCorpus {
             rankJoin = `JOIN (SELECT rowid,MIN(score) AS score FROM (SELECT rowid,rank AS score FROM hadiths_fts WHERE hadiths_fts MATCH ? ${this.merged ? 'UNION ALL SELECT rowid,rank AS score FROM variant_translation_fts WHERE variant_translation_fts MATCH ?' : ''}) GROUP BY rowid) ranked ON ranked.rowid=hadiths.id`;
             params.push(match); if (this.merged) params.push(match);
           }
-        } else if (this.hasIsnadFts) {
+        } else if (this.hasIsnadFts || isMatnOnly) {
           clauses.push('id IN (SELECT rowid FROM hadiths_fts WHERE hadiths_fts MATCH ?)');
           params.push(`${matnScope}: ${match}`);
         } else if (this.merged) {
@@ -200,8 +203,8 @@ export class SunnahResearchCorpus {
     const matches = (row: Row) => {
       if (!exactTerms.length) return true;
       const variants = this.merged && !value(row.English_Hadith) ? this.variants(Number(row.id)).map(item => item.text) : [];
-      const includeIsnad = Boolean(query.requestId && this.hasIsnadFts);
-      const text = conservative([row.Arabic_Matn, ...(includeIsnad ? [row.Arabic_Isnad] : []), row.Arabic_Tafseel, row.English_Hadith, row.Chapter_Arabic, row.Section_Arabic, ...variants].map(value).join(' '));
+      const includeIsnad = !isMatnOnly && Boolean(query.requestId && this.hasIsnadFts);
+      const text = conservative([row.Arabic_Matn, ...(includeIsnad ? [row.Arabic_Isnad] : []), ...(!isMatnOnly ? [row.Arabic_Tafseel] : []), row.English_Hadith, row.Chapter_Arabic, row.Section_Arabic, ...variants].map(value).join(' '));
       return exactTerms.every(term => text.includes(term));
     };
     if (!query.requestId) return (statement.all(...params, limit, offset) as Row[]).filter(matches).map(row => this.hit(row));

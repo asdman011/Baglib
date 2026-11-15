@@ -623,10 +623,14 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
                 autoTranscribeSoon: t('slashAutoTranscribeSoon'),
                 autoTranscribeTitle: t('slashAutoTranscribeTitle'),
                 close: t('slashModalClose'),
+                sunnahScopeMatnOnly: t('sunnahScopeMatnOnly'),
+                sunnahScopeIsnadAndMatn: t('sunnahScopeIsnadAndMatn'),
+                sunnahScopeToggleLabel: t('sunnahScopeToggleLabel'),
+                sunnahUnsplitNotice: t('sunnahUnsplitNotice'),
               }} slashLabels={slashLabels}
               onMakeCards={makeCards}
               autoFocus={!note}
-              searchCorpus={(kinds, q, options) => searchCorpus(kinds, q, (id) => t(collectionKeys[id]), options?.limit, 'hafs', options)}
+              searchCorpus={(kinds, q, options) => searchCorpus(kinds, q, (id) => t(collectionKeys[id]), options?.limit, 'hafs', { ...options, unsplitNotice: t('sunnahUnsplitNotice') })}
               dateText={() => {
                 const today = new Date();
                 const hijri = calculateHijriDate(today);

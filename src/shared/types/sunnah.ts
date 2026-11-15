@@ -102,9 +102,12 @@ export interface SunnahSearchHit {
   hadith: SunnahHadith;
   similarity?: number;
 }
+export type SunnahIsnadScope = 'all' | 'matn_only';
+
 export interface SunnahResearchQuery {
   text?: string; collection?: SunnahCollectionId; chapter?: number;
   root?: string; narratorId?: string; limit?: number; offset?: number; requestId?: string;
+  isnadScope?: SunnahIsnadScope;
 }
 
 /** Counted from the attached corpus; nothing here is a scholarly judgment. */
