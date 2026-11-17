@@ -5,6 +5,7 @@ import { installEditorContextMenu } from './services/editor-context-menu';
 import { parseDeepLink, protocolRegistrationArgs } from '../shared/deep-link';
 import { errorMessage } from '../shared/errors';
 import { confirmedQuitCleanup } from './services/quit-cleanup';
+import { installLiveHarnessWindowMode } from './live-harness-window';
 import { app, BrowserWindow, protocol, dialog, ipcMain, net } from "electron";
 import { translations } from '../renderer/translations';
 import { registerKnowledgeHistoryIpc } from './ipc/knowledge-history';
@@ -72,6 +73,8 @@ process.on('uncaughtException', (error: Error) => {
 });
 
 const isDev = !app.isPackaged;
+// Live test harnesses run minimised and never take focus (BAGLIB_LIVE_VISIBLE=1 to watch).
+if (isDev) installLiveHarnessWindowMode(app);
 const rendererDirectory = path.join(__dirname, '../../out');
 const loadApp = (window: BrowserWindow) => window.loadURL('app://-/');
 

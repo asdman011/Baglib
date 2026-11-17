@@ -1,3 +1,10 @@
+## KEY-408 Live harnesses run off-screen - 2026-11-17 - Agent: Claude Code
+
+- User request: live test runs must not cover the screen. In dev builds, when the app is started from a `scripts/<name>/main.cjs` harness, `src/main/live-harness-window.ts` (installed from `src/main/index.ts`) shows every window inactive and off-screen, with focus/maximize/moveTop disabled and background throttling and occlusion detection off. Clicking the taskbar button brings the window on screen. `BAGLIB_LIVE_VISIBLE=1` shows a normal window. Minimising was tried first and rejected: on Windows `capturePage` fails on a minimised window ("Current display surface not available for capture").
+- Files: src/main/live-harness-window.ts (new), src/main/index.ts, tests/services/live-harness-window.test.ts (new), scripts/revision-polish-live/main.cjs (asserts off-screen and unfocused), AGENTS.md (live-test rule).
+- Verification: tsc 0; eslint 0; full suite 2547/2547; revision-polish-live ar/en x light/dark pass with the window off-screen and unfocused and real screenshot content; scheduler-live passes unchanged.
+- Jira: KEY-408 created under KEY-4 (label Library).
+
 ## KEY-407 follow-up: review-card question-kind label - 2026-11-17 - Agent: Claude Code
 
 - The review screen showed the raw question kind ("recall") in every language. It now uses the existing `practiceKind*` translations through `kindKey` (Arabic: استدعاء). In RTL the label drops the monospace font and letter-spacing, which were pulling the Arabic letters apart.

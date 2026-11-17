@@ -101,6 +101,13 @@ app.on('browser-window-created', (_, owner) => {
     await loadApp();
     await until('!!window.electronAPI?.cardNotes && !!document.querySelector("footer")');
     await pause(800);
+    // Live runs stay in the background unless BAGLIB_LIVE_VISIBLE=1.
+    results.windowOnScreen = require('electron').screen.getAllDisplays().some(d => { const b = owner.getBounds(); const r = d.bounds; return b.x < r.x + r.width && b.x + b.width > r.x && b.y < r.y + r.height && b.y + b.height > r.y; });
+    results.windowFocused = owner.isFocused();
+    if (process.env.BAGLIB_LIVE_VISIBLE !== '1') {
+      assert.ok(!results.windowOnScreen, 'live window stays off-screen');
+      assert.ok(!results.windowFocused, 'live window does not take focus');
+    }
     results.appIsDark = await evaluate(`document.documentElement.classList.contains('dark')`);
     assert.equal(results.appIsDark, theme === 'dark', 'app theme applied');
 
