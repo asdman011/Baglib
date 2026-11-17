@@ -118,3 +118,22 @@ test('safe card renderer: rejects messages from foreign windows or unknown messa
   }, frameId);
   assert.equal(largeResize?.height, 1600);
 });
+
+test('safe card renderer (KEY-407): frame follows the app theme, not the OS colour scheme', () => {
+  const render = (theme: 'light' | 'dark') =>
+    renderToString(React.createElement(SafeCardRenderer, { html: '<div>x</div>', side: 'front', theme }));
+  const dark = render('dark');
+  const light = render('light');
+  assert.ok(dark.includes('class=&quot;theme-dark&quot;') || dark.includes('class="theme-dark"'));
+  assert.ok(light.includes('class=&quot;theme-light&quot;') || light.includes('class="theme-light"'));
+  assert.ok(dark.includes('data-card-theme="dark"'));
+  assert.ok(!dark.includes('prefers-color-scheme'), 'the OS media query must not drive the card colours');
+  assert.ok(dark.includes(':root.theme-dark'));
+});
+
+test('stock note types (KEY-407): built-in CSS has no hard-coded white background or black text', async () => {
+  const src = (await import('node:fs')).readFileSync('src/main/database/migrations/030_card_notes.ts', 'utf8');
+  assert.ok(!src.includes('background-color: white'));
+  assert.ok(!/color: black;/u.test(src));
+  assert.ok(src.includes('color: var(--fg, black); background-color: transparent;'));
+});

@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Copy, Trash2, Edit2, AlertTriangle, Layers, Check } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { CardNoteType } from '../../../shared/types/card-notes';
+import { noteTypeLabel } from './note-type-labels';
 
 export interface NoteTypeManagerModalProps {
   isOpen: boolean;
@@ -17,6 +18,10 @@ export const NoteTypeManagerModal: React.FC<NoteTypeManagerModalProps> = ({
   onSelectType,
 }) => {
   const { t, dir } = useWorkspace();
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  });
   const [types, setTypes] = useState<CardNoteType[]>([]);
   const [editingType, setEditingType] = useState<CardNoteType | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +34,7 @@ export const NoteTypeManagerModal: React.FC<NoteTypeManagerModalProps> = ({
       setTypes(list);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg || 'Failed to load note types');
+      setError(msg || tRef.current('noteTypesLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -47,7 +52,7 @@ export const NoteTypeManagerModal: React.FC<NoteTypeManagerModalProps> = ({
         .catch((err: unknown) => {
           if (!active) return;
           const msg = err instanceof Error ? err.message : String(err);
-          setError(msg || 'Failed to load note types');
+          setError(msg || tRef.current('noteTypesLoadFailed'));
           setLoading(false);
         });
     }
@@ -58,7 +63,7 @@ export const NoteTypeManagerModal: React.FC<NoteTypeManagerModalProps> = ({
 
   const handleCopy = async (nt: CardNoteType) => {
     try {
-      const copyName = `${nt.name} (Copy)`;
+      const copyName = t('noteTypeCopySuffix', { name: nt.name });
       await window.electronAPI.cardNotes.saveType({
         name: copyName,
         kind: nt.kind,
@@ -80,7 +85,7 @@ export const NoteTypeManagerModal: React.FC<NoteTypeManagerModalProps> = ({
       await loadTypes();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg || 'Failed to copy note type');
+      setError(msg || t('noteTypeCopyFailed'));
     }
   };
 
@@ -94,7 +99,7 @@ export const NoteTypeManagerModal: React.FC<NoteTypeManagerModalProps> = ({
       await loadTypes();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg || 'Failed to delete note type');
+      setError(msg || t('noteTypeDeleteFailed'));
     }
   };
 
@@ -122,7 +127,7 @@ export const NoteTypeManagerModal: React.FC<NoteTypeManagerModalProps> = ({
       await loadTypes();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg || 'Failed to save note type');
+      setError(msg || t('noteTypeSaveFailed'));
     }
   };
 
@@ -172,7 +177,7 @@ export const NoteTypeManagerModal: React.FC<NoteTypeManagerModalProps> = ({
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-main text-sm">{nt.name}</span>
+                    <span className="font-semibold text-main text-sm">{noteTypeLabel(nt, t)}</span>
                     {nt.stockKind && (
                       <span className="text-[10px] bg-muted/15 text-muted px-2 py-0.5 rounded-full font-medium">
                         {t('builtinNoteType')}
@@ -252,7 +257,7 @@ export const NoteTypeManagerModal: React.FC<NoteTypeManagerModalProps> = ({
       {editingType && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
           <div dir={dir} className="w-full max-w-xl bg-surface rounded-2xl border border-subtle p-6 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
-            <h3 className="text-base font-bold text-main">{t('editNote')} - {editingType.name}</h3>
+            <h3 className="text-base font-bold text-main">{t('editNote')} - {noteTypeLabel(editingType, t)}</h3>
 
             <div>
               <label className="block text-xs font-semibold text-muted mb-1">{t('noteTypeName')}</label>

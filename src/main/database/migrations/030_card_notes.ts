@@ -7,7 +7,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Basic',
     kind: 'normal',
     stock_kind: 'basic',
-    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: black; background-color: white; line-height: 1.6; }',
+    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: var(--fg, black); background-color: transparent; line-height: 1.6; }',
     sort_field_ord: 0,
     fields: [
       { ord: 0, name: 'Front', rtl: 0, source_text: 0 },
@@ -27,7 +27,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Basic (and reversed card)',
     kind: 'normal',
     stock_kind: 'basic_reversed',
-    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: black; background-color: white; line-height: 1.6; }',
+    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: var(--fg, black); background-color: transparent; line-height: 1.6; }',
     sort_field_ord: 0,
     fields: [
       { ord: 0, name: 'Front', rtl: 0, source_text: 0 },
@@ -53,7 +53,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Basic (optional reversed card)',
     kind: 'normal',
     stock_kind: 'basic_optional_reversed',
-    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: black; background-color: white; line-height: 1.6; }',
+    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: var(--fg, black); background-color: transparent; line-height: 1.6; }',
     sort_field_ord: 0,
     fields: [
       { ord: 0, name: 'Front', rtl: 0, source_text: 0 },
@@ -80,7 +80,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Cloze',
     kind: 'cloze',
     stock_kind: 'cloze',
-    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: black; background-color: white; line-height: 1.6; }\n.cloze { font-weight: bold; color: blue; }',
+    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: var(--fg, black); background-color: transparent; line-height: 1.6; }\n.cloze { font-weight: bold; color: var(--cloze, blue); }',
     sort_field_ord: 0,
     fields: [
       { ord: 0, name: 'Text', rtl: 0, source_text: 0 },
@@ -100,7 +100,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Progressive context cloze',
     kind: 'context_cloze',
     stock_kind: 'progressive_context_cloze',
-    css: '.card { font-family: "Traditional Arabic", "Scheherazade New", Amiri, serif; font-size: 24px; text-align: center; color: black; background-color: white; line-height: 2.0; }\n.context-blurred { filter: blur(4px); opacity: 0.6; user-select: none; }\n.cloze { font-weight: bold; color: #1d4ed8; }',
+    css: '.card { font-family: "Traditional Arabic", "Scheherazade New", Amiri, serif; font-size: 24px; text-align: center; color: var(--fg, black); background-color: transparent; line-height: 2.0; }\n.context-blurred { filter: blur(4px); opacity: 0.6; user-select: none; }\n.cloze { font-weight: bold; color: var(--cloze, #1d4ed8); }',
     sort_field_ord: 1,
     fields: [
       { ord: 0, name: 'Context Before', rtl: 1, source_text: 0 },
@@ -122,7 +122,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Basic (type in the answer)',
     kind: 'normal',
     stock_kind: 'basic_typing',
-    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: black; background-color: white; line-height: 1.6; }',
+    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: center; color: var(--fg, black); background-color: transparent; line-height: 1.6; }',
     sort_field_ord: 0,
     fields: [
       { ord: 0, name: 'Front', rtl: 0, source_text: 0 },
@@ -142,7 +142,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Multiple choice',
     kind: 'choice',
     stock_kind: 'multiple_choice',
-    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: start; color: black; background-color: white; line-height: 1.6; }',
+    css: '.card { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 20px; text-align: start; color: var(--fg, black); background-color: transparent; line-height: 1.6; }',
     sort_field_ord: 0,
     fields: [
       { ord: 0, name: 'Front', rtl: 0, source_text: 0 },
@@ -162,7 +162,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Quran',
     kind: 'normal',
     stock_kind: 'quran',
-    css: '.card { font-family: "Traditional Arabic", "Scheherazade New", Amiri, serif; font-size: 24px; text-align: center; color: black; background-color: white; line-height: 2.2; }',
+    css: '.card { font-family: "Traditional Arabic", "Scheherazade New", Amiri, serif; font-size: 24px; text-align: center; color: var(--fg, black); background-color: transparent; line-height: 2.2; }',
     sort_field_ord: 0,
     fields: [
       { ord: 0, name: 'Ayah', rtl: 1, source_text: 1 },
@@ -184,7 +184,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Hadith',
     kind: 'normal',
     stock_kind: 'hadith',
-    css: '.card { font-family: "Traditional Arabic", "Scheherazade New", Amiri, serif; font-size: 22px; text-align: start; color: black; background-color: white; line-height: 2.0; }',
+    css: '.card { font-family: "Traditional Arabic", "Scheherazade New", Amiri, serif; font-size: 22px; text-align: start; color: var(--fg, black); background-color: transparent; line-height: 2.0; }',
     sort_field_ord: 0,
     fields: [
       { ord: 0, name: 'Bab', rtl: 1, source_text: 0 },
@@ -205,7 +205,7 @@ export const STOCK_NOTE_TYPES = [
     name: 'Poetry',
     kind: 'normal',
     stock_kind: 'poetry',
-    css: '.card { font-family: "Traditional Arabic", "Scheherazade New", Amiri, serif; font-size: 22px; text-align: center; color: black; background-color: white; line-height: 2.0; }',
+    css: '.card { font-family: "Traditional Arabic", "Scheherazade New", Amiri, serif; font-size: 22px; text-align: center; color: var(--fg, black); background-color: transparent; line-height: 2.0; }',
     sort_field_ord: 0,
     fields: [
       { ord: 0, name: 'Poet', rtl: 1, source_text: 0 },

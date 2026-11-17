@@ -1125,7 +1125,10 @@ export class SrsService {
       const next = scheduler.next(card, now, validated.rating).card;
 
       // Determine entry_kind, interval, last_interval, factor
-      const entryKind: SrsEntryKind = isFiltered
+      // Only preview mode (a filtered deck that does not reschedule) logs `filtered`; a rescheduling
+      // filtered deck logs the normal learn/review/relearn kinds, as Anki does, so it counts toward
+      // the daily limits (KEY-407).
+      const entryKind: SrsEntryKind = isFiltered && !targetDeck!.filterReschedule
         ? 'filtered'
         : row.state === 'new' || row.state === 'learning'
         ? 'learn'
@@ -1261,13 +1264,13 @@ export class SrsService {
       ) {
         const siblings = this.db
           .prepare(
-            `SELECT s.knowledge_id, s.state
+            `SELECT s.knowledge_id, s.state, s.due_at
              FROM card_detail c
              JOIN srs_state s ON s.knowledge_id = c.knowledge_id
              JOIN knowledge k ON k.id = c.knowledge_id
              WHERE c.note_id = ? AND c.knowledge_id <> ? AND s.state <> 'suspended'${this.activeKnowledge()}`
           )
-          .all(row.noteId, validated.id) as Array<{ knowledge_id: string; state: SrsCardState }>;
+          .all(row.noteId, validated.id) as Array<{ knowledge_id: string; state: SrsCardState; due_at: string }>;
 
         const buryUntilIso = dayEnd.toISOString();
         const buryStmt = this.db.prepare(
@@ -1278,7 +1281,11 @@ export class SrsService {
           const shouldBury =
             (sib.state === 'new' && preset.buryNew) ||
             (sib.state === 'review' && preset.buryReviews) ||
-            ((sib.state === 'learning' || sib.state === 'relearning') && preset.buryInterday);
+            // Anki never buries intraday learning siblings; `bury_interday` covers only learning
+            // cards whose next step falls on a later day (KEY-407).
+            ((sib.state === 'learning' || sib.state === 'relearning') &&
+              preset.buryInterday &&
+              sib.due_at >= buryUntilIso);
           if (shouldBury) {
             buryStmt.run(buryUntilIso, sib.knowledge_id);
           }

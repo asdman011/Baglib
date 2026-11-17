@@ -1,6 +1,25 @@
 'use client';
 
-import React, { useEffect, useId, useMemo, useRef } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+
+export type CardFrameTheme = 'light' | 'dark';
+
+function readAppTheme(): CardFrameTheme {
+  if (typeof document === 'undefined') return 'dark';
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+}
+
+/** Follows the app theme (the `dark` class on the app root), not the operating-system setting. */
+export function useAppTheme(): CardFrameTheme {
+  const [theme, setTheme] = useState<CardFrameTheme>(readAppTheme);
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver(() => setTheme(readAppTheme()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return theme;
+}
 
 export interface SafeCardRendererProps {
   html: string;
@@ -11,6 +30,8 @@ export interface SafeCardRendererProps {
   onTypedAnswerChange?: (val: string) => void;
   onPlayTts?: (text: string, lang: string) => void;
   className?: string;
+  /** Overrides the app theme, for tests and previews. */
+  theme?: CardFrameTheme;
 }
 
 export function filterCardFrameMessage(
@@ -49,7 +70,10 @@ export const SafeCardRenderer: React.FC<SafeCardRendererProps> = ({
   onTypedAnswerChange,
   onPlayTts,
   className = '',
+  theme: themeOverride,
 }) => {
+  const appTheme = useAppTheme();
+  const theme = themeOverride ?? appTheme;
   const frameRef = useRef<HTMLIFrameElement>(null);
   const frameId = useId();
 
@@ -58,28 +82,27 @@ export const SafeCardRenderer: React.FC<SafeCardRendererProps> = ({
     const escapedTyped = typedAnswer.replace(/["\\]/gu, '\\$&');
 
     return `<!DOCTYPE html>
-<html lang="${rtl ? 'ar' : 'en'}" dir="${rtl ? 'rtl' : 'ltr'}">
+<html lang="${rtl ? 'ar' : 'en'}" dir="${rtl ? 'rtl' : 'ltr'}" class="theme-${theme}">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     :root {
-      color-scheme: light dark;
+      color-scheme: light;
       --bg: #ffffff;
       --fg: #0f172a;
       --muted: #64748b;
       --border: #e2e8f0;
       --cloze: #2563eb;
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0f172a;
-        --fg: #f8fafc;
-        --muted: #94a3b8;
-        --border: #334155;
-        --cloze: #60a5fa;
-      }
+    :root.theme-dark {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --border: #334155;
+      --cloze: #60a5fa;
     }
     html, body {
       margin: 0;
@@ -228,7 +251,7 @@ export const SafeCardRenderer: React.FC<SafeCardRendererProps> = ({
   </script>
 </body>
 </html>`;
-  }, [html, css, rtl, typedAnswer, frameId]);
+  }, [html, css, rtl, typedAnswer, frameId, theme]);
 
   // Listen to messages from sandboxed frame
   useEffect(() => {
@@ -259,7 +282,8 @@ export const SafeCardRenderer: React.FC<SafeCardRendererProps> = ({
         srcDoc={srcDoc}
         title="Card Content"
         className="w-full border-0 transition-[height] duration-150"
-        style={{ minHeight: '140px', width: '100%', display: 'block' }}
+        data-card-theme={theme}
+        style={{ minHeight: '140px', width: '100%', display: 'block', colorScheme: theme, background: 'transparent' }}
       />
     </div>
   );

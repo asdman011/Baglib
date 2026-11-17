@@ -561,7 +561,7 @@ Append-only review history.
 
 ### 5.4 Approved revision model (ADR-017, migrations 030 and 031): approved on 2026-11-17
 
-Migration 030 (KEY-390) built the note-model foundation (`card_note_type`, `card_note_field`, `card_note_template`, `card_note`, and the note-link columns in `card_detail`). Migration 031 (KEY-389) built the deck hierarchy, presets, `srs_state` extensions, and `srs_review_log` rebuild. Full column definitions are in `docs/ADR-017-revision-data-model.md`.
+Migration 030 (KEY-390) built the note-model foundation (`card_note_type`, `card_note_field`, `card_note_template`, `card_note`, and the note-link columns in `card_detail`). Migration 031 (KEY-389) built the deck hierarchy, presets, `srs_state` extensions, and `srs_review_log` rebuild. Full column definitions are in `docs/ADR-017-revision-data-model.md`. Migration 032 (KEY-407) changes data only, not schema: it rewrites the built-in (`stock-*`) note types' hard-coded `color: black; background-color: white` CSS to theme variables with Anki-safe fallbacks (`var(--fg, black)`, transparent background, `var(--cloze, …)`). Migration 031 keeps decks that share a name separate, suffixing later ones with " (2)", " (3)"…
 
 **Tables built in migration 030 (KEY-390):**
 

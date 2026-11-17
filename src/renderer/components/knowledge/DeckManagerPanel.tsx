@@ -440,7 +440,7 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
             data-deck-create-name
             value={newDeckName}
             onChange={e => setNewDeckName(e.target.value)}
-            placeholder="Parent::Child"
+            placeholder={t('deckNamePlaceholder')}
             className="rounded-lg border border-subtle bg-canvas px-3 py-1.5 text-sm text-main"
           />
         </label>

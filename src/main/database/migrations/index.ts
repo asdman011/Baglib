@@ -41,6 +41,7 @@ import migration028 from './028_lecture_series';
 import migration029 from './029_manuscripts';
 import migration030 from './030_card_notes';
 import migration031 from './031_decks_and_scheduler';
+import migration032 from './032_stock_card_theme';
 
 
 /** All migrations in chronological order. */
@@ -76,6 +77,7 @@ export const migrations: Migration[] = [
   migration029,
   migration030,
   migration031,
+  migration032,
 ];
 
 

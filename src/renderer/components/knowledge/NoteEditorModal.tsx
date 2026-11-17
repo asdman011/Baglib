@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Lock, RotateCcw, Split, Check, Layers, AlertTriangle } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { SafeCardRenderer } from './SafeCardRenderer';
+import { noteFieldLabel, noteTypeLabel } from './note-type-labels';
 import { generateCards } from '../../../shared/revision/template-engine';
 import type { CardNote, CardNoteType, SaveNoteInput } from '../../../shared/types/card-notes';
 
@@ -25,6 +26,10 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
   onSaved,
 }) => {
   const { t, dir } = useWorkspace();
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  });
   const [noteTypes, setNoteTypes] = useState<CardNoteType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -74,7 +79,7 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
       } catch (err: unknown) {
         if (active) {
           const msg = err instanceof Error ? err.message : String(err);
-          setError(msg || 'Failed to load note editor');
+          setError(msg || tRef.current('noteEditorLoadFailed'));
         }
       }
     };
@@ -152,7 +157,7 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
       onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg === 'source-text-protected' ? t('sourceTextProtected') : msg || 'Failed to save note');
+      setError(msg === 'source-text-protected' ? t('sourceTextProtected') : msg || t('noteSaveFailed'));
     } finally {
       setSaving(false);
     }
@@ -210,7 +215,7 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
               >
                 {noteTypes.map(nt => (
                   <option key={nt.id} value={nt.id}>
-                    {nt.name} {nt.stockKind ? `(${t('builtinNoteType')})` : ''}
+                    {noteTypeLabel(nt, t)} {nt.stockKind ? `(${t('builtinNoteType')})` : ''}
                   </option>
                 ))}
               </select>
@@ -231,7 +236,7 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
                   <div key={f.name} className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-medium text-main flex items-center gap-1.5">
-                        <span>{f.name}</span>
+                        <span>{selectedType ? noteFieldLabel(selectedType, f.name, t) : f.name}</span>
                         {f.sourceText && (
                           <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono">
                             {t('sourceTextProtected')}
@@ -327,7 +332,7 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
                         : 'border-subtle bg-surface text-muted hover:text-main'
                     }`}
                   >
-                    Card {idx + 1}
+                    {t('noteCardTab', { n: idx + 1 })}
                   </button>
                 ))}
               </div>
@@ -344,7 +349,7 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
                   className="w-full"
                 />
               ) : (
-                <p className="text-xs text-muted italic">Front side is empty (no card generated)</p>
+                <p className="text-xs text-muted italic">{t('noteEditorFrontEmpty')}</p>
               )}
             </div>
           </div>

@@ -184,17 +184,16 @@ const migration: Migration = {
       SELECT id FROM deck WHERE parent_id IS NULL AND name = ?
     `);
 
+    // Every old deck stays its own deck. Two decks with the same name (or one named like the
+    // built-in Memorization deck) are never merged: later ones get " (2)", " (3)"... (KEY-407).
     const deckIdMap = new Map<string, string>();
     for (const oldDeck of oldDecks) {
       const baseName = (oldDeck.name || 'Deck').trim() || 'Deck';
-      const existing = findTopDeckByName.get(baseName) as { id: string } | undefined;
-      if (existing) {
-        deckIdMap.set(oldDeck.id, existing.id);
-      } else {
-        const targetId = oldDeck.id === MEMORIZATION_DECK_ID ? `${oldDeck.id}-migrated` : oldDeck.id;
-        insertDeck.run(targetId, baseName, oldDeck.description ?? null, now, now);
-        deckIdMap.set(oldDeck.id, targetId);
-      }
+      let name = baseName;
+      for (let n = 2; findTopDeckByName.get(name); n += 1) name = `${baseName} (${n})`;
+      const targetId = oldDeck.id === MEMORIZATION_DECK_ID ? `${oldDeck.id}-migrated` : oldDeck.id;
+      insertDeck.run(targetId, name, oldDeck.description ?? null, now, now);
+      deckIdMap.set(oldDeck.id, targetId);
     }
 
     // Move knowledge_collection links for those decks into deck_card

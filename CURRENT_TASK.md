@@ -1,3 +1,27 @@
+## KEY-407 Revision polish - 2026-11-17 - Agent: Claude Code
+
+**Request.** The user told Claude to stop dispatching to other agents and implement tasks itself, starting with KEY-407 (theme-aware card frame, localised built-in note type and field names, plus the four KEY-389 review follow-ups).
+
+**What changed:**
+- Card frame follows the app theme: `SafeCardRenderer` reads the app's `dark` class (`useAppTheme`, optional `theme` prop), sets `theme-light`/`theme-dark` on the frame's `<html>`, and matches the frame's `color-scheme`. The OS `prefers-color-scheme` query no longer drives card colours.
+- Built-in note type CSS: `030_card_notes.ts` seeds `color: var(--fg, black); background-color: transparent` (and `var(--cloze, …)`). The new data migration `032_stock_card_theme.ts` rewrites the same declarations in existing profiles, for `stock-*` types only. Custom or imported CSS is untouched.
+- Localised labels: `note-type-labels.ts` shows translated labels for built-in note types (when not renamed) and their fields. Stored names stay English for Anki matching. Used in `NoteEditorModal` and `NoteTypeManagerModal`. Hard-coded English strings in both modals and the "Parent::Child" placeholder in `DeckManagerPanel` now go through `translations.ts` (37 keys in ar and en).
+- Migration 031: decks that share a name (including one named "Memorization") are no longer merged; later ones get " (2)", " (3)".
+- `srs.ts`: a rescheduling filtered deck logs learn/review/relearn, so its answers count toward the daily limits; only preview mode logs `filtered`. `bury_interday` buries only learning siblings whose next step is on a later day, never intraday ones.
+
+**Files:** src/main/database/migrations/030_card_notes.ts, 031_decks_and_scheduler.ts, 032_stock_card_theme.ts (new), index.ts; src/main/services/srs.ts; src/renderer/components/knowledge/SafeCardRenderer.tsx, note-type-labels.ts (new), NoteEditorModal.tsx, NoteTypeManagerModal.tsx, DeckManagerPanel.tsx; src/renderer/translations.ts; tests/services/revision-polish-407.test.ts (new); tests/ui/safe-card-renderer.test.ts; scripts/revision-polish-live/run.mjs and main.cjs (new); docs/data-dictionary.md.
+
+**Verification (real output):**
+- `npx tsc --noEmit`: exit 0. eslint on every changed file: exit 0.
+- Focused tests: 61/61. Full suite `npm test -- --test-concurrency=2`: 2543/2543 pass, 0 fail.
+- New live harness `scripts/revision-polish-live` (throwaway profiles, through the UI): ar and en, each in dark and light, all pass with no renderer errors. In dark mode the near-white share inside the card frame is 0–0.6% (it was a white strip before). Screenshots and results are in `.baglib-data/key407-evidence/`. The first attempt hit a renderer-load race (ERR_FAILED), so the harness now retries the load.
+- `scheduler-live`: passes in ar and en. `note-types-live`: passes in ar and en on the second run; the first run timed out in en while opening the cards tab (flaky, and not reproduced).
+
+**Limits:**
+- Profiles that already ran migration 031 keep any merged decks; the fix applies to fresh migrations, because the app hasn't shipped.
+- The question-kind label ("RECALL") on the review card is still English in Arabic (it was already like that, outside this task).
+- The planner logs "no such table: study_task" on fresh profiles (also pre-existing).
+
 ## KEY-389 review - 2026-11-17 22:58 - Agent: Claude Code
 
 - Reviewed 56f2d6e (Antigravity, argon). Re-ran: `tsc --noEmit` exit 0; eslint on all changed files exit 0; focused tests 98/98; `scheduler-parity` under TZ=America/Los_Angeles 9/9. Full suite (2536/2536) and live harnesses are as reported by the agent, not re-run by Claude.
