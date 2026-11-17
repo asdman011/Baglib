@@ -1,3 +1,65 @@
+## KEY-393 Live source-to-deck sync - 2026-11-18 - Agent: Claude Code
+
+**Request.** Revision Task 2: decks stay linked to their BagLib source. Edits update cards without resetting FSRS, new items join the deck, and deletions orphan safely (ADR-017 3.2, 3.4 `deck_subscription`, 3.8, 3.11; the Jira design updates of 2026-11-17).
+
+**What changed:**
+- **`src/main/services/deck-sync.ts` (new), the sync engine**, on the existing `deck_subscription` table (no schema change):
+  - Subscribe, list, unsubscribe, set policy (silent or toast).
+  - **Adapters:** `book_highlights` and `book_comments`, from `annotations`, with text HTML-escaped. Each item becomes one note with `source_ref` `book-highlight|book-comment:<work>/<annotation>`, `source_snapshot_json` (the generated fields) and `source_hash`.
+  - **New items** create a note and cards in the deck. If an original already exists for another deck, the same card is linked, so there's one schedule.
+  - **Edits** update shared originals in place through `CardNoteRepository.saveNote`, so `srs_state` and the review log are untouched and version history records the edit.
+  - **User-edited fields are never overwritten.** The note gets `source_changed_at` and keeps the old snapshot for comparison. Deck-only copies are only flagged.
+  - **Deletions** set `orphaned_at` and suspend the cards; history is kept. If the item comes back, the card is restored to its pre-suspend state, taken from the last review-log entry.
+  - **Resolving:** `pending()`, `resolveChange` (update or keep) and `resolveOrphan` (delete to the trash, or keep and detach).
+  - **Batches** of 100, each in its own transaction, with a yield between batches. Sync is idempotent, so quitting mid-sync is safe.
+- **`deck-sync-scheduler.ts` (new):**
+  - debounced background runs, one at a time;
+  - highlight save and delete hooks in `ipc/database.ts`;
+  - a sync of every subscription 15 s after startup;
+  - a `deck-sync:changed` broadcast;
+  - a quiet in-app notification for new cards when the policy is `toast`, through `notificationService`.
+- **IPC** `deck-sync:*` in `ipc/knowledge-cards.ts`, authorised and validated, with unknown keys rejected. Preload `deckSync`.
+- **UI:**
+  - `DeckSubscriptionsModal` (new), the "Live sources" button on each normal deck: follow a book's highlights or comments, choose the policy, sync now, stop following.
+  - `SyncReviewModal` (new): "The source changed" shows your version, the old source and the new source, with Update or Keep mine. "Orphaned cards" offers Keep or Delete.
+  - A banner in `DeckManagerPanel` when sync needs a decision.
+  - 39 ar/en strings.
+- **Follow-up fixed along the way (from KEY-390):** the saved-cards list printed note cards' stored HTML (`<hr id=answer>`...) as text. It now shows readable text via `cardTextForList`, and it refreshes after a sync.
+
+**Files:**
+- src/main/services/deck-sync.ts, deck-sync-scheduler.ts (new)
+- src/main/ipc/knowledge-cards.ts, src/main/ipc/database.ts, src/main/index.ts, src/preload/index.ts
+- src/renderer/components/knowledge/DeckSubscriptionsModal.tsx, SyncReviewModal.tsx (new), DeckManagerPanel.tsx, SavedCardsPanel.tsx, SafeCardRenderer.tsx; src/renderer/translations.ts
+- tests/services/deck-sync.test.ts (new), tests/ui/safe-card-renderer.test.ts
+- scripts/deck-sync-live/run.mjs, main.cjs (new)
+- docs/data-dictionary.md
+
+**Verification:**
+- tsc 0; eslint 0 on every changed file.
+- Full suite 2571/2571 (the deck manager's refresh tweak came after; tsc, eslint and the live runs passed after it).
+- deck-sync tests (7) cover:
+  - add;
+  - edit, with FSRS state and the review log identical and version history recorded;
+  - delete, which orphans and suspends;
+  - restore, back to the reviewed state;
+  - a user edit kept and flagged, then resolved;
+  - a copy flagged while the original updates, and one card shared by two decks;
+  - orphan delete and keep;
+  - comments, validation, and batching (230 items, 2 yields).
+- `scripts/deck-sync-live` passes in ar and en, with a real text-layer PDF per language, through the UI and off-screen:
+  - follow the book's highlights;
+  - add a highlight the way the reader does, and the card appears (New = 1) with the in-app notification;
+  - study it;
+  - edit it, and the card updates;
+  - delete it, then the banner, the orphan review, Keep.
+
+  Evidence is in `.baglib-data/key393-evidence/`.
+- Regression harnesses: image-occlusion-live, note-types-live, scheduler-live and srs-live pass.
+
+**Limits:**
+- Only book highlights and comments are supported today. The other source kinds (Sunnah, poetry, lists, lexicon) are follow-up KEY-409, which needs pickers and adapters.
+- Highlights are added in the live run through the same IPC call the reader makes, not by selecting text in the reader.
+
 ## KEY-391 Image occlusion cards - 2026-11-18 - Agent: Claude Code
 
 **Request.** Revision Task 1D: image occlusion cards compatible with Anki, both modes, card media storage in backups, ar/en UI and keyboard access. User decision on card media (2026-11-17): a `card-media/` folder next to the database, files named by content hash, carried in backups, no table (ADR-017 3.12).

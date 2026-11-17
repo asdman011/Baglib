@@ -953,6 +953,21 @@ export const API = {
     getDecks: (noteId: string) => ipcRenderer.invoke('card-notes:get-decks', noteId),
     linkDeck: (noteId: string, deckId: string) => ipcRenderer.invoke('card-notes:link-deck', noteId, deckId),
   } satisfies import('../shared/types/card-notes').CardNotesAPI,
+  deckSync: {
+    list: (deckId?: string): Promise<import('../main/services/deck-sync').DeckSubscription[]> => ipcRenderer.invoke('deck-sync:list', deckId),
+    subscribe: (input: { deckId: string; sourceKind: 'book_highlights' | 'book_comments'; sourceRef: string; newItems: 'silent' | 'toast' }): Promise<{ subscription: import('../main/services/deck-sync').DeckSubscription; result: import('../main/services/deck-sync').SyncResult }> => ipcRenderer.invoke('deck-sync:subscribe', input),
+    unsubscribe: (id: string): Promise<boolean> => ipcRenderer.invoke('deck-sync:unsubscribe', id),
+    setPolicy: (id: string, newItems: 'silent' | 'toast'): Promise<import('../main/services/deck-sync').DeckSubscription> => ipcRenderer.invoke('deck-sync:set-policy', id, newItems),
+    syncNow: (id: string): Promise<import('../main/services/deck-sync').SyncResult> => ipcRenderer.invoke('deck-sync:sync-now', id),
+    pending: (): Promise<ReturnType<import('../main/services/deck-sync').DeckSyncService['pending']>> => ipcRenderer.invoke('deck-sync:pending'),
+    resolveChange: (noteId: string, choice: 'update' | 'keep'): Promise<boolean> => ipcRenderer.invoke('deck-sync:resolve-change', noteId, choice),
+    resolveOrphan: (noteId: string, choice: 'delete' | 'keep'): Promise<boolean> => ipcRenderer.invoke('deck-sync:resolve-orphan', noteId, choice),
+    onChanged: (listener: (result: import('../main/services/deck-sync').SyncResult) => void) => {
+      const handler = (_: unknown, result: import('../main/services/deck-sync').SyncResult) => listener(result);
+      ipcRenderer.on('deck-sync:changed', handler);
+      return () => { ipcRenderer.removeListener('deck-sync:changed', handler); };
+    },
+  },
   cardMedia: {
     pickImage: (): Promise<{ name: string; dataUrl: string } | null> => ipcRenderer.invoke('card-media:pick-image'),
     saveBytes: (bytes: Uint8Array): Promise<{ name: string; dataUrl: string }> => ipcRenderer.invoke('card-media:save-bytes', bytes),

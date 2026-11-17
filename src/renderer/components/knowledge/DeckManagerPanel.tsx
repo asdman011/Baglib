@@ -12,12 +12,16 @@ import {
   Download,
   Eye,
   FolderInput,
+  Link2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { Button } from '../ui/Button';
 import { DeckOptionsModal } from './DeckOptionsModal';
 import { FilteredDeckModal } from './FilteredDeckModal';
+import { DeckSubscriptionsModal } from './DeckSubscriptionsModal';
+import { SyncReviewModal } from './SyncReviewModal';
 import type { DeckTreeNode } from '../../../shared/srs';
 
 export interface DeckManagerPanelProps {
@@ -35,6 +39,9 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
   const [moveTargetParentId, setMoveTargetParentId] = useState<string>('');
   const [optionsDeck, setOptionsDeck] = useState<DeckTreeNode | null>(null);
   const [filteredModalOpen, setFilteredModalOpen] = useState(false);
+  const [subscriptionsDeck, setSubscriptionsDeck] = useState<DeckTreeNode | null>(null);
+  const [syncReviewOpen, setSyncReviewOpen] = useState(false);
+  const [pendingSync, setPendingSync] = useState({ changed: 0, orphaned: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +50,8 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
       const nodes = await window.electronAPI.knowledgeCards.deckTree();
       setTree(nodes);
       setError(null);
+      const pending = await window.electronAPI.deckSync?.pending();
+      if (pending) setPendingSync({ changed: pending.changed.length, orphaned: pending.orphaned.length });
     } catch (err) {
       setError((err as Error)?.message || t('knowledgeCardFailed'));
     }
@@ -53,7 +62,10 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
     queueMicrotask(onChanged);
     window.addEventListener(KNOWLEDGE_CARD_SAVED, onChanged);
     window.addEventListener('baglib:srs-reviewed', onChanged);
+    // A sync changed cards: refresh this panel and tell the card lists (KEY-393).
+    const offSync = window.electronAPI.deckSync?.onChanged(() => window.dispatchEvent(new CustomEvent(KNOWLEDGE_CARD_SAVED)));
     return () => {
+      offSync?.();
       window.removeEventListener(KNOWLEDGE_CARD_SAVED, onChanged);
       window.removeEventListener('baglib:srs-reviewed', onChanged);
     };
@@ -294,6 +306,19 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
                 type="button"
                 variant="ghost"
                 size="sm"
+                data-deck-subscriptions={node.id}
+                onClick={() => setSubscriptionsDeck(node)}
+                title={t('deckSyncOpen')}
+                aria-label={t('deckSyncOpen')}
+                icon={<Link2 className="size-3.5" />}
+              />
+            )}
+
+            {node.kind === 'normal' && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
                 data-deck-export={node.id}
                 onClick={() => void window.electronAPI.knowledgeCards.exportDeck(node.id)}
                 title={t('cardDeckExport')}
@@ -400,6 +425,17 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
           <FolderTree className="size-4 text-primary-text" />
           <h4 className="font-display font-bold text-sm text-main">{t('deckManagerTitle')}</h4>
         </div>
+        {pendingSync.changed + pendingSync.orphaned > 0 && (
+          <button
+            type="button"
+            data-sync-review-banner
+            onClick={() => setSyncReviewOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-300"
+          >
+            <AlertTriangle className="size-3.5" />
+            {t('syncReviewBanner', { changed: pendingSync.changed, orphaned: pendingSync.orphaned })}
+          </button>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -480,6 +516,9 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
           {tree.map(node => renderNode(node, 0))}
         </ul>
       )}
+
+      <DeckSubscriptionsModal deck={subscriptionsDeck} onClose={() => setSubscriptionsDeck(null)} onChanged={() => void refresh()} />
+      <SyncReviewModal open={syncReviewOpen} onClose={() => setSyncReviewOpen(false)} onChanged={() => void refresh()} />
 
       <DeckOptionsModal
         open={optionsDeck !== null}

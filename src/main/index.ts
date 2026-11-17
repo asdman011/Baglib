@@ -42,6 +42,7 @@ import { registerPdfCompareIpc } from "./ipc/pdf-compare";
 import { registerPdfEditorIpc, shutdownPdfViewCaches } from "./ipc/pdf-editor";
 import { registerPoetryIpc } from './ipc/poetry';
 import { registerKnowledgeCardIpc } from './ipc/knowledge-cards';
+import { deckSyncScheduler } from './services/deck-sync-scheduler';
 import { registerStudyPlannerIpc } from './ipc/study-planner';
 import { registerPathwayIpc } from './ipc/pathways';
 import { setupRssIpc } from './ipc/rss';
@@ -463,6 +464,7 @@ app.whenReady().then(async () => {
     if (shutdownStarted) return;
     startKhatmahReminders();
     startAthanScheduler();
+    deckSyncScheduler.start();
     console.log("[baglib] Database initialized successfully.");
   } catch (e) {
     console.error("[baglib] Database initialization failed:", e);

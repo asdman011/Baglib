@@ -18,6 +18,34 @@ export function isTemplateHtml(value: string | null | undefined): boolean {
   return !!value && /<(?:div|span|img|canvas|br|hr|script|style|p|details)\b/iu.test(value);
 }
 
+/**
+ * Readable text for a card's stored front or back, for lists and copying. Template HTML is reduced
+ * to text; on the back, the repeated front (everything before `<hr id=answer>`) is dropped.
+ * Plain-text cards are returned unchanged.
+ */
+export function cardTextForList(value: string | null | undefined, side: 'front' | 'back'): string {
+  if (!value) return '';
+  if (!isTemplateHtml(value)) return value;
+  let html = value;
+  if (side === 'back') {
+    const answer = html.search(/<hr\s+id=["']?answer["']?\s*\/?>/iu);
+    if (answer >= 0) html = html.slice(answer).replace(/^<hr[^>]*>/iu, '');
+  }
+  return html
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/giu, '')
+    .replace(/<div[^>]*display:\s*none[^>]*>[\s\S]*?<\/div>\s*<\/div>|<div[^>]*display:\s*none[^>]*>[\s\S]*?<\/div>/giu, '')
+    .replace(/<br\s*\/?>/giu, '\n')
+    .replace(/<\/(p|div|li|h\d)>/giu, '\n')
+    .replace(/<[^>]*>/gu, '')
+    .replace(/&nbsp;/gu, ' ')
+    .replace(/&lt;/gu, '<')
+    .replace(/&gt;/gu, '>')
+    .replace(/&quot;/gu, '"')
+    .replace(/&amp;/gu, '&')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim();
+}
+
 export function cardMediaNames(html: string): string[] {
   return [...new Set([...html.matchAll(CARD_MEDIA_SRC)].map(m => m[3].toLowerCase()))];
 }

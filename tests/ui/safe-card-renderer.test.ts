@@ -171,3 +171,14 @@ test('review answer line (KEY-391): hidden only when the stored back is template
   assert.equal(isTemplateHtml('<div style="display: none"><div class="cloze-highlight"></div></div>'), true);
   assert.equal(isTemplateHtml('Front<hr id=answer>Back'), true);
 });
+
+test('saved cards list (KEY-393 follow-up): template HTML shows as readable text, plain cards unchanged', async () => {
+  const { cardTextForList } = await import('../../src/renderer/components/knowledge/SafeCardRenderer');
+  assert.equal(cardTextForList('آية الكرسي', 'back'), 'آية الكرسي');
+  assert.equal(cardTextForList('Every reader keeps a note', 'front'), 'Every reader keeps a note');
+  assert.equal(cardTextForList('Front text\n\n<hr id=answer>\n\nBack text', 'back'), 'Back text');
+  assert.equal(cardTextForList('a &amp; b<br>c', 'front'), 'a & b\nc');
+  const io = '<div style="display: none"><div class="cloze" data-ordinal="1"></div></div><div id="image-occlusion-container"><img src="x.png"><canvas></canvas></div><script>anki.imageOcclusion.setup();</script>';
+  assert.ok(!cardTextForList(io, 'front').includes('<'), 'no markup leaks');
+  assert.ok(!cardTextForList(io, 'front').includes('anki.'), 'no script text leaks');
+});

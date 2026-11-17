@@ -10,6 +10,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { CARD_HOVER_SETTING, cardHoverEnabled, KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import type { KnowledgeCard, PreservedKnowledge } from '../../../shared/types/knowledge-cards';
 import type { CardNote } from '../../../shared/types/card-notes';
+import { cardTextForList } from './SafeCardRenderer';
 import { QuestionCardEditor } from './QuestionCardEditor';
 import { NoteEditorModal } from './NoteEditorModal';
 import { NoteTypeManagerModal } from './NoteTypeManagerModal';
@@ -257,7 +258,7 @@ export function SavedCardsPanel({
           {cards.map((card) => (
             <ContextMenu as="li" items={contextActions('card', {
               edit: card.noteId ? () => void handleEditNote(card.noteId!) : ['quran', 'hadith', 'poetry'].includes(card.sourceKind) ? undefined : () => setEditing(card.id), review: () => setPracticing(card.id),
-              copy: () => navigator.clipboard.writeText(card.front + '\n\n' + card.back),
+              copy: () => navigator.clipboard.writeText(cardTextForList(card.front, 'front') + '\n\n' + cardTextForList(card.back, 'back')),
               srs: () => act(() => window.electronAPI.knowledgeCards.setMemorizing(card.id,true)),
               delete: () => { if(window.confirm(t('markDeleteConfirm')))return act(() => removeWithUndo(card.id, () => window.electronAPI.knowledgeCards.remove(card.id), refresh)); },
             },t)}
@@ -272,7 +273,7 @@ export function SavedCardsPanel({
                     className="font-reading text-base sm:text-lg leading-[2.2] font-medium text-main break-words"
                     style={{ fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)" }}
                   >
-                    {card.front}
+                    {cardTextForList(card.front, 'front')}
                   </p>
 
                   {card.sourceRef && (
@@ -329,7 +330,7 @@ export function SavedCardsPanel({
                     className="font-reading text-sm sm:text-base leading-[2.2] text-muted whitespace-pre-line line-clamp-4 break-words"
                     style={{ fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)" }}
                   >
-                    {card.back}
+                    {cardTextForList(card.back, 'back')}
                   </p>
                 </div>
               )}

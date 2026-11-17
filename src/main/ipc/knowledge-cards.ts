@@ -19,6 +19,8 @@ import { validateReview, type SaveDeckInput, type SaveFilteredDeckInput } from '
 import { CardNoteRepository } from '../database/repositories/card-note.repository';
 import { DeckRepository } from '../database/repositories/deck.repository';
 import { CardMediaStore, MAX_CARD_MEDIA_BYTES } from '../services/card-media';
+import { DeckSyncService } from '../services/deck-sync';
+import { deckSyncScheduler } from '../services/deck-sync-scheduler';
 import {
   validateSafeId,
   validateSaveNoteInput,
@@ -206,6 +208,50 @@ export function registerKnowledgeCardIpc(): void {
     if (!view || view.length === 0 || view.length > MAX_CARD_MEDIA_BYTES) throw new Error('invalid-request');
     return store.save(view);
   });
+  // Live source-to-deck sync (KEY-393).
+  const syncService = (event: IpcMainInvokeEvent) => {
+    authorize(event);
+    return new DeckSyncService(getDatabase());
+  };
+  const policy = (value: unknown) => (value === 'silent' ? 'silent' : 'toast') as 'silent' | 'toast';
+  ipcMain.handle('deck-sync:list', (event, deckId: unknown) =>
+    syncService(event).list(deckId === undefined || deckId === null ? undefined : validateSafeId(deckId, 'deckId'))
+  );
+  ipcMain.handle('deck-sync:subscribe', async (event, input: unknown) => {
+    const service = syncService(event);
+    const i = (input ?? {}) as Record<string, unknown>;
+    const extra = Object.keys(i).filter(k => !['deckId', 'sourceKind', 'sourceRef', 'newItems'].includes(k));
+    if (extra.length || typeof i.sourceKind !== 'string') throw new Error('invalid-request');
+    const sub = service.subscribe({
+      deckId: validateSafeId(i.deckId, 'deckId'),
+      sourceKind: i.sourceKind,
+      sourceRef: validateSafeId(i.sourceRef, 'sourceRef'),
+      newItems: policy(i.newItems),
+    });
+    const result = await deckSyncScheduler.runNow(sub.id);
+    return { subscription: service.get(sub.id), result };
+  });
+  ipcMain.handle('deck-sync:unsubscribe', (event, id: unknown) => syncService(event).unsubscribe(validateSafeId(id, 'id')));
+  ipcMain.handle('deck-sync:set-policy', (event, id: unknown, newItems: unknown) => {
+    if (newItems !== 'silent' && newItems !== 'toast') throw new Error('invalid-request');
+    return syncService(event).setPolicy(validateSafeId(id, 'id'), newItems);
+  });
+  ipcMain.handle('deck-sync:sync-now', (event, id: unknown) => {
+    authorize(event);
+    return deckSyncScheduler.runNow(validateSafeId(id, 'id'));
+  });
+  ipcMain.handle('deck-sync:pending', event => syncService(event).pending());
+  ipcMain.handle('deck-sync:resolve-change', (event, noteId: unknown, choice: unknown) => {
+    if (choice !== 'update' && choice !== 'keep') throw new Error('invalid-request');
+    syncService(event).resolveChange(validateSafeId(noteId, 'noteId'), choice);
+    return true;
+  });
+  ipcMain.handle('deck-sync:resolve-orphan', (event, noteId: unknown, choice: unknown) => {
+    if (choice !== 'delete' && choice !== 'keep') throw new Error('invalid-request');
+    syncService(event).resolveOrphan(validateSafeId(noteId, 'noteId'), choice);
+    return true;
+  });
+
   ipcMain.handle('card-media:read', (event, name: unknown) => {
     const store = mediaStore(event);
     return typeof name === 'string' ? store.read(name) : null;

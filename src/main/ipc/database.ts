@@ -1,3 +1,4 @@
+import { deckSyncScheduler } from '../services/deck-sync-scheduler';
 import { cancelSlashJobs, slashLane } from '../services/slash-search-jobs';
 import { setupAdvancedIPC } from './advanced';
 import * as ipcModule0 from '../database/repositories/knowledge.repository';
@@ -374,7 +375,10 @@ export function setupDatabaseIPC() {
     try {
       const db = getDatabase();
       const repo = new (ipcModule1.AnnotationRepository)(db);
-      return repo.save(payload);
+      const saved = repo.save(payload);
+      // Decks that follow this book's highlights or comments (KEY-393).
+      deckSyncScheduler.requestForWork(saved?.bookId ?? payload?.bookId);
+      return saved;
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to save annotation:', err);
       throw err;
@@ -385,7 +389,10 @@ export function setupDatabaseIPC() {
     try {
       const db = getDatabase();
       const repo = new (ipcModule1.AnnotationRepository)(db);
-      return repo.delete(annotationId);
+      const owner = db.prepare('SELECT book_id FROM annotations WHERE id = ?').get(annotationId) as { book_id: string | null } | undefined;
+      const deleted = repo.delete(annotationId);
+      deckSyncScheduler.requestForWork(owner?.book_id);
+      return deleted;
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to delete annotation:', err);
       throw err;
