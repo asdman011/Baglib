@@ -1,12 +1,49 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MISTAKE_CATEGORIES,mistakeKey,type MistakeCategory } from '../../../shared/practice';
 import { PracticeAnswer } from './PracticeAnswer';
+import { SafeCardRenderer } from './SafeCardRenderer';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
+import { renderTemplate } from '../../../shared/revision/template-engine';
+import { poetryBayts } from '../../../shared/poetry';
+import type { CardNote, CardNoteType } from '../../../shared/types/card-notes';
 import type { ReviewQueue, ReviewRating } from '../../../shared/srs';
+
+const playCardTts = async (text: string, ttsLang: string) => {
+  const pocketLang = ttsLang.startsWith('en') ? 'english'
+    : ttsLang.startsWith('fr') ? 'french'
+    : ttsLang.startsWith('de') ? 'german'
+    : ttsLang.startsWith('es') ? 'spanish'
+    : ttsLang.startsWith('it') ? 'italian'
+    : ttsLang.startsWith('pt') ? 'portuguese'
+    : ttsLang.startsWith('nl') ? 'dutch'
+    : undefined;
+
+  if (pocketLang) {
+    try {
+      const ttsApi = window.electronAPI?.audio?.tts;
+      if (ttsApi) {
+        const status = await ttsApi.getStatus().catch(() => null);
+        if (status?.isLoaded) {
+          await ttsApi.synthesize({ text, voiceId: status.currentVoice || 'default', language: pocketLang });
+          return;
+        }
+      }
+    } catch {}
+  }
+
+  try {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (ttsLang) u.lang = ttsLang;
+      window.speechSynthesis.speak(u);
+    }
+  } catch {}
+};
 
 export function SrsReviewPanel() {
   const { t, dir, lang, books, openBookForReading } = useWorkspace();
@@ -17,6 +54,9 @@ export function SrsReviewPanel() {
   const [revealed, setRevealed] = useState(false);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<CardNote | null>(null);
+  const [noteType, setNoteType] = useState<CardNoteType | null>(null);
+  const [typedAnswers, setTypedAnswers] = useState<Record<string, string>>({});
   const locked = useRef(false);
   const started = useRef(0);
   const generation = useRef(0);
@@ -43,6 +83,88 @@ export function SrsReviewPanel() {
     return () => clearTimeout(timer);
   }, [queue, refresh]);
   const card = queue?.cards[0];
+  const typedAnswer = (card ? typedAnswers[card.id] : undefined) ?? '';
+
+  useEffect(() => {
+    let active = true;
+    if (!card?.noteId) return;
+
+    window.electronAPI.cardNotes.getNote(card.noteId)
+      .then(async (fetchedNote) => {
+        if (!active) return;
+        setNote(fetchedNote);
+        if (fetchedNote) {
+          const fetchedType = await window.electronAPI.cardNotes.getType(fetchedNote.noteTypeId);
+          if (!active) return;
+          setNoteType(fetchedType);
+        }
+      })
+      .catch(() => {});
+
+    return () => { active = false; };
+  }, [card?.noteId]);
+
+  const renderedContent = useMemo(() => {
+    if (!card) return { front: '', back: '', css: '' };
+
+    const currentNote = note && note.id === card.noteId ? note : null;
+    const currentNoteType = currentNote && noteType && noteType.id === currentNote.noteTypeId ? noteType : null;
+
+    if (currentNote && currentNoteType) {
+      try {
+        const cardOrd = card.ord ?? 0;
+        let template = currentNoteType.templates[cardOrd];
+        let clozeNum = cardOrd + 1;
+
+        if (currentNoteType.kind === 'cloze') {
+          template = currentNoteType.templates[0] || { ord: 0, name: 'Cloze', front: '{{cloze:Text}}', back: '{{cloze:Text}}<br>{{Back Extra}}' };
+        } else if (currentNoteType.kind === 'context_cloze') {
+          template = currentNoteType.templates[0] || {
+            ord: 0,
+            name: 'Context Card',
+            front: '<div class="context-before">{{Context Before}}</div>\n<div class="cloze-target">{{cloze:Target}}</div>\n<div class="context-after context-blurred">{{Context After}}</div>',
+            back: '{{FrontSide}}\n\n<hr id=answer>\n\n<div class="notes">{{Notes}}</div>',
+          };
+        }
+
+        if (template) {
+          let fields = { ...currentNote.fields };
+          if (currentNoteType.kind === 'context_cloze') {
+            const textToSplit = fields['Target'] || fields['Poem'] || fields['Text'] || Object.values(fields)[0] || '';
+            const verses = textToSplit.split(/\r?\n/u).map((s) => s.trim()).filter(Boolean);
+            const bayts = poetryBayts(verses);
+            if (bayts.length > 0 && cardOrd < bayts.length) {
+              const i = cardOrd;
+              const prevBayt = i > 0 ? (bayts[i - 1].ajuz ? `${bayts[i - 1].sadr} ... ${bayts[i - 1].ajuz}` : bayts[i - 1].sadr) : '';
+              const currBayt = bayts[i];
+              const targetText = currBayt.ajuz ? `${currBayt.sadr} {{c1::${currBayt.ajuz}}}` : `{{c1::${currBayt.sadr}}}`;
+              const nextBayt = i + 1 < bayts.length ? (bayts[i + 1].ajuz ? `${bayts[i + 1].sadr} ... ${bayts[i + 1].ajuz}` : bayts[i + 1].sadr) : '';
+              fields = {
+                ...fields,
+                'Context Before': prevBayt,
+                'Target': targetText,
+                'Context After': nextBayt,
+              };
+              clozeNum = 1;
+            }
+          }
+
+          const frontHtml = renderTemplate(template.front, { fields, cardOrd, clozeNum }, 'front');
+          const backHtml = renderTemplate(template.back, { fields, cardOrd, clozeNum, frontRendered: frontHtml, typedAnswer }, 'back');
+          return { front: frontHtml, back: backHtml, css: currentNoteType.css };
+        }
+      } catch (err) {
+        console.warn('Failed to render note template:', err);
+      }
+    }
+
+    return {
+      front: card.front,
+      back: card.back || card.front,
+      css: '',
+    };
+  }, [card, note, noteType, typedAnswer]);
+
   const grade = useCallback(async (rating: ReviewRating) => {
     if (!card || locked.current || !revealed) return;
     locked.current = true; setBusy(true); generation.current++;
@@ -63,7 +185,18 @@ export function SrsReviewPanel() {
     {failed && <p role="alert" className="text-sm text-red-600">{t('srsFailed')}</p>}
     {!queue && !failed && <p role="status">{t('srsLoading')}</p>}
     {card ? <article key={card.id} className="space-y-3" data-srs-card={card.id}>
-      <p dir="auto" className="font-reading text-lg leading-loose whitespace-pre-wrap break-words">{card.front}</p>
+      <SafeCardRenderer
+        html={revealed ? renderedContent.back : renderedContent.front}
+        css={renderedContent.css}
+        side={revealed ? 'back' : 'front'}
+        rtl={dir === 'rtl'}
+        className="w-full"
+        onTypedAnswerChange={(val) => {
+          if (card) setTypedAnswers((prev) => ({ ...prev, [card.id]: val }));
+        }}
+        onPlayTts={playCardTts}
+      />
+      <p dir="auto" className="font-reading text-lg leading-loose whitespace-pre-wrap break-words sr-only">{card.front}</p>
       {card.sourceRef && (
         <button
           type="button"

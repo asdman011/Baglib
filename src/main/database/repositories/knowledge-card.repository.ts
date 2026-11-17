@@ -10,6 +10,7 @@ import { validateCardInput } from '../../../shared/types/knowledge-cards';
 import { headRevision, withKnowledgeHistory, trashKnowledge } from '../../services/knowledge-history';
 import type { Database } from 'better-sqlite3';
 import type { CardSourceKind, KnowledgeCard, PreservedKnowledge, SaveCardInput } from '../../../shared/types/knowledge-cards';
+import { SqliteSettingsRepository } from './settings.repository';
 
 const PAGE_SIZE = 50;
 
@@ -27,24 +28,38 @@ interface CardRow {
   workId: string | null;
   srsState: string | null;
   createdAt: string;
+  noteId?: string | null;
+  ord?: number | null;
 }
 
-const CARD_SELECT = `
-  SELECT k.id, c.question_kind AS questionKind,c.payload_json AS payloadJson,
-    (SELECT COALESCE(MAX(revision),0) FROM entity_version WHERE entity_type='knowledge' AND entity_id=k.id) AS cardRevision, c.front, c.back, c.source_kind AS sourceKind, c.source_ref AS sourceRef,
-    c.source_label AS sourceLabel, c.language, k.work_id AS workId, s.state AS srsState, k.created_at AS createdAt
+const getCardSelect = (db: Database): string => {
+  let hasNoteCols = false;
+  try {
+    hasNoteCols = Boolean(db.prepare("SELECT 1 FROM pragma_table_info('card_detail') WHERE name='note_id'").get());
+  } catch {}
+  const noteCols = hasNoteCols ? 'c.note_id AS noteId, c.ord AS ord' : 'NULL AS noteId, NULL AS ord';
+  return `
+  SELECT k.id, c.question_kind AS questionKind, c.payload_json AS payloadJson,
+    (SELECT COALESCE(MAX(revision),0) FROM entity_version WHERE entity_type='knowledge' AND entity_id=k.id) AS cardRevision,
+    c.front, c.back, c.source_kind AS sourceKind, c.source_ref AS sourceRef,
+    c.source_label AS sourceLabel, c.language, k.work_id AS workId, s.state AS srsState, k.created_at AS createdAt,
+    ${noteCols}
   FROM knowledge k
   JOIN card_detail c ON c.knowledge_id = k.id
   LEFT JOIN srs_state s ON s.knowledge_id = k.id`;
+};
 
 const toCard = ({ srsState, payloadJson, ...row }: CardRow): KnowledgeCard => ({ ...row, payload: payloadJson ? JSON.parse(payloadJson) : null, memorizing: srsState !== null && srsState !== 'suspended' });
 
 export class KnowledgeCardRepository {
-  constructor(private db: Database) {}
+  private settings: SqliteSettingsRepository;
+  constructor(private db: Database) {
+    this.settings = new SqliteSettingsRepository(db);
+  }
 
   list({ search = '', offset = 0 }: { search?: string; offset?: number } = {}): KnowledgeCard[] {
     const term = `%${search.trim().replace(/[\\%_]/gu, '\\$&')}%`;
-    const rows = this.db.prepare(`${CARD_SELECT}
+    const rows = this.db.prepare(`${getCardSelect(this.db)}
       WHERE k.deleted_at IS NULL AND (c.front LIKE @term ESCAPE '\\' OR c.back LIKE @term ESCAPE '\\' OR c.source_label LIKE @term ESCAPE '\\')
       ORDER BY k.created_at DESC LIMIT ${PAGE_SIZE} OFFSET @offset`).all({ term, offset: Math.max(0, Math.trunc(offset)) }) as CardRow[];
     return rows.map(toCard);
@@ -54,35 +69,72 @@ export class KnowledgeCardRepository {
   save(input: SaveCardInput): KnowledgeCard {
     input=validateCardInput(input);
     return this.db.transaction(() => {
-      const existing = this.db.prepare(`${CARD_SELECT}
+      const existing = this.db.prepare(`${getCardSelect(this.db)}
         WHERE k.deleted_at IS NULL AND c.source_kind = ? AND c.source_ref IS ? AND c.front = ? AND c.question_kind=? AND c.payload_json IS ?`).get(input.sourceKind, input.sourceRef ?? null, input.front,input.questionKind??'recall',input.payload?JSON.stringify(input.payload):null) as CardRow | undefined;
       if (existing) return toCard(existing);
       const id = randomUUID();
       const now = new Date().toISOString();
       const workExists = input.workId && this.db.prepare('SELECT 1 FROM work WHERE id = ?').get(input.workId);
+
+      // Check if card_note table exists (migration 030)
+      const hasCardNote = Boolean(this.db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_note'`).get());
+      let noteId: string | null = null;
+      if (hasCardNote) {
+        noteId = randomUUID();
+        const noteTypeId = input.questionKind === 'choice' ? 'stock-multiple-choice' : 'stock-basic';
+        const fields = JSON.stringify({ Front: input.front, Back: input.back });
+        const isSourceText = ['quran', 'hadith', 'poetry'].includes(input.sourceKind);
+        const snapshot = isSourceText ? fields : null;
+        this.db.prepare(`INSERT INTO card_note (id, note_type_id, fields_json, guid, source_ref, source_snapshot_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(noteId, noteTypeId, fields, id, input.sourceRef ?? null, snapshot, now, now);
+      }
+
       withKnowledgeHistory(this.db,[id],'create',()=>{
       this.db.prepare(`INSERT INTO knowledge (id, work_id, knowledge_type, created_at, updated_at) VALUES (?, ?, 'card', ?, ?)`)
         .run(id, workExists ? input.workId : null, now, now);
-      this.db.prepare(`INSERT INTO card_detail (knowledge_id, front, back, source_kind, source_ref, source_label, language, question_kind, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, input.front, input.back, input.sourceKind, input.sourceRef ?? null, input.sourceLabel ?? null, input.language ?? null, input.questionKind ?? 'recall', input.payload ? JSON.stringify(input.payload) : null);
+      if (hasCardNote) {
+        this.db.prepare(`INSERT INTO card_detail (knowledge_id, front, back, source_kind, source_ref, source_label, language, question_kind, payload_json, note_id, ord) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(id, input.front, input.back, input.sourceKind, input.sourceRef ?? null, input.sourceLabel ?? null, input.language ?? null, input.questionKind ?? 'recall', input.payload ? JSON.stringify(input.payload) : null, noteId, noteId ? 0 : null);
+      } else {
+        this.db.prepare(`INSERT INTO card_detail (knowledge_id, front, back, source_kind, source_ref, source_label, language, question_kind, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(id, input.front, input.back, input.sourceKind, input.sourceRef ?? null, input.sourceLabel ?? null, input.language ?? null, input.questionKind ?? 'recall', input.payload ? JSON.stringify(input.payload) : null);
+      }
       });
-      return toCard(this.db.prepare(`${CARD_SELECT} WHERE k.id = ?`).get(id) as CardRow);
+      return toCard(this.db.prepare(`${getCardSelect(this.db)} WHERE k.id = ?`).get(id) as CardRow);
     })();
   }
 
   update(id: string, input: SaveCardInput, expectedRevision: number): KnowledgeCard {
     input=validateCardInput(input);
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision<0) throw new Error('invalid-request');
+    const protectSourceText = this.settings.get<boolean>('revision.protectSourceText', false) ?? false;
     withKnowledgeHistory(this.db,[id],'edit',()=>{
-      const row=this.db.prepare(`${CARD_SELECT} WHERE k.id=? AND k.deleted_at IS NULL`).get(id) as CardRow|undefined;
+      const row=this.db.prepare(`${getCardSelect(this.db)} WHERE k.id=? AND k.deleted_at IS NULL`).get(id) as CardRow|undefined;
       if(!row || headRevision(this.db,id)!==expectedRevision) throw new Error('history-conflict');
-      if(['quran','hadith','poetry'].includes(row.sourceKind)) throw new Error('invalid-request');
+      if(protectSourceText && ['quran','hadith','poetry'].includes(row.sourceKind)) throw new Error('invalid-request');
       this.db.prepare('UPDATE card_detail SET front=?,back=?,question_kind=?,payload_json=? WHERE knowledge_id=?').run(input.front,input.back,input.questionKind??'recall',input.payload?JSON.stringify(input.payload):null,id);
+
+      // If card has a note attached, update note fields
+      if (row.noteId) {
+        const hasCardNote = Boolean(this.db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_note'`).get());
+        if (hasCardNote) {
+          const noteRow = this.db.prepare('SELECT fields_json FROM card_note WHERE id=?').get(row.noteId) as { fields_json: string } | undefined;
+          if (noteRow) {
+            try {
+              const f = JSON.parse(noteRow.fields_json);
+              f.Front = input.front;
+              f.Back = input.back;
+              this.db.prepare('UPDATE card_note SET fields_json=?, updated_at=? WHERE id=?').run(JSON.stringify(f), new Date().toISOString(), row.noteId);
+            } catch {}
+          }
+        }
+      }
+
       return id;
     },{id,revision:expectedRevision});
     return this.get(id);
   }
-  private get(id:string):KnowledgeCard { return toCard(this.db.prepare(`${CARD_SELECT} WHERE k.id=?`).get(id) as CardRow); }
+  private get(id:string):KnowledgeCard { return toCard(this.db.prepare(`${getCardSelect(this.db)} WHERE k.id=?`).get(id) as CardRow); }
 
   /** Notes and highlights whose book was deleted. Cards stay in the card list. */
   listPreserved(): PreservedKnowledge[] {

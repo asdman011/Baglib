@@ -1,7 +1,7 @@
 'use client';
 
 import { shortcutForEvent } from '../actions/shortcuts';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, ArrowLeft, ArrowRight, Sparkles, RotateCw, ExternalLink } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button } from '../ui/Button';
@@ -9,6 +9,10 @@ import { EmptyState } from '../ui/EmptyState';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { MISTAKE_CATEGORIES, mistakeKey, type MistakeCategory } from '../../../shared/practice';
 import { PracticeAnswer } from './PracticeAnswer';
+import { SafeCardRenderer } from './SafeCardRenderer';
+import { renderTemplate } from '../../../shared/revision/template-engine';
+import { poetryBayts } from '../../../shared/poetry';
+import type { CardNote, CardNoteType } from '../../../shared/types/card-notes';
 import type { ReviewQueue, ReviewRating } from '../../../shared/srs';
 
 export interface SrsReviewScreenProps {
@@ -27,6 +31,39 @@ export function formatInterval(minutes: number | undefined, lang: string): strin
   return new Intl.NumberFormat(lang === 'ar' ? 'ar-EG' : 'en-US', { style: 'unit', unit, unitDisplay: 'short' }).format(value);
 }
 
+const playCardTts = async (text: string, ttsLang: string) => {
+  const pocketLang = ttsLang.startsWith('en') ? 'english'
+    : ttsLang.startsWith('fr') ? 'french'
+    : ttsLang.startsWith('de') ? 'german'
+    : ttsLang.startsWith('es') ? 'spanish'
+    : ttsLang.startsWith('it') ? 'italian'
+    : ttsLang.startsWith('pt') ? 'portuguese'
+    : ttsLang.startsWith('nl') ? 'dutch'
+    : undefined;
+
+  if (pocketLang) {
+    try {
+      const ttsApi = window.electronAPI?.audio?.tts;
+      if (ttsApi) {
+        const status = await ttsApi.getStatus().catch(() => null);
+        if (status?.isLoaded) {
+          await ttsApi.synthesize({ text, voiceId: status.currentVoice || 'default', language: pocketLang });
+          return;
+        }
+      }
+    } catch {}
+  }
+
+  try {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (ttsLang) u.lang = ttsLang;
+      window.speechSynthesis.speak(u);
+    }
+  } catch {}
+};
+
 export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNavigateSource }) => {
   const { t, dir, lang, books, openBookForReading } = useWorkspace();
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
@@ -36,6 +73,9 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
   const [revealed, setRevealed] = useState(false);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<CardNote | null>(null);
+  const [noteType, setNoteType] = useState<CardNoteType | null>(null);
+  const [typedAnswers, setTypedAnswers] = useState<Record<string, string>>({});
 
   const locked = useRef(false);
   const started = useRef(0);
@@ -81,8 +121,89 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
   }, [queue, refresh]);
 
   const card = queue?.cards[0];
+  const typedAnswer = (card ? typedAnswers[card.id] : undefined) ?? '';
   const needsConfidence = !!card && (card.questionKind ?? 'recall') === 'recall' && !practiceDone;
   const canReveal = !needsConfidence || confidence > 0;
+
+  useEffect(() => {
+    let active = true;
+    if (!card?.noteId) return;
+
+    window.electronAPI.cardNotes.getNote(card.noteId)
+      .then(async (fetchedNote) => {
+        if (!active) return;
+        setNote(fetchedNote);
+        if (fetchedNote) {
+          const fetchedType = await window.electronAPI.cardNotes.getType(fetchedNote.noteTypeId);
+          if (!active) return;
+          setNoteType(fetchedType);
+        }
+      })
+      .catch(() => {});
+
+    return () => { active = false; };
+  }, [card?.noteId]);
+
+  const renderedContent = useMemo(() => {
+    if (!card) return { front: '', back: '', css: '' };
+
+    const currentNote = note && note.id === card.noteId ? note : null;
+    const currentNoteType = currentNote && noteType && noteType.id === currentNote.noteTypeId ? noteType : null;
+
+    if (currentNote && currentNoteType) {
+      try {
+        const cardOrd = card.ord ?? 0;
+        let template = currentNoteType.templates[cardOrd];
+        let clozeNum = cardOrd + 1;
+
+        if (currentNoteType.kind === 'cloze') {
+          template = currentNoteType.templates[0] || { ord: 0, name: 'Cloze', front: '{{cloze:Text}}', back: '{{cloze:Text}}<br>{{Back Extra}}' };
+        } else if (currentNoteType.kind === 'context_cloze') {
+          template = currentNoteType.templates[0] || {
+            ord: 0,
+            name: 'Context Card',
+            front: '<div class="context-before">{{Context Before}}</div>\n<div class="cloze-target">{{cloze:Target}}</div>\n<div class="context-after context-blurred">{{Context After}}</div>',
+            back: '{{FrontSide}}\n\n<hr id=answer>\n\n<div class="notes">{{Notes}}</div>',
+          };
+        }
+
+        if (template) {
+          let fields = { ...currentNote.fields };
+          if (currentNoteType.kind === 'context_cloze') {
+            const textToSplit = fields['Target'] || fields['Poem'] || fields['Text'] || Object.values(fields)[0] || '';
+            const verses = textToSplit.split(/\r?\n/u).map((s) => s.trim()).filter(Boolean);
+            const bayts = poetryBayts(verses);
+            if (bayts.length > 0 && cardOrd < bayts.length) {
+              const i = cardOrd;
+              const prevBayt = i > 0 ? (bayts[i - 1].ajuz ? `${bayts[i - 1].sadr} ... ${bayts[i - 1].ajuz}` : bayts[i - 1].sadr) : '';
+              const currBayt = bayts[i];
+              const targetText = currBayt.ajuz ? `${currBayt.sadr} {{c1::${currBayt.ajuz}}}` : `{{c1::${currBayt.sadr}}}`;
+              const nextBayt = i + 1 < bayts.length ? (bayts[i + 1].ajuz ? `${bayts[i + 1].sadr} ... ${bayts[i + 1].ajuz}` : bayts[i + 1].sadr) : '';
+              fields = {
+                ...fields,
+                'Context Before': prevBayt,
+                'Target': targetText,
+                'Context After': nextBayt,
+              };
+              clozeNum = 1;
+            }
+          }
+
+          const frontHtml = renderTemplate(template.front, { fields, cardOrd, clozeNum }, 'front');
+          const backHtml = renderTemplate(template.back, { fields, cardOrd, clozeNum, frontRendered: frontHtml, typedAnswer }, 'back');
+          return { front: frontHtml, back: backHtml, css: currentNoteType.css };
+        }
+      } catch (err) {
+        console.warn('Failed to render note template:', err);
+      }
+    }
+
+    return {
+      front: card.front,
+      back: card.back || card.front,
+      css: '',
+    };
+  }, [card, note, noteType, typedAnswer]);
 
   const grade = useCallback(
     async (rating: ReviewRating) => {
@@ -301,9 +422,22 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
                   )}
                 </div>
 
+                <div className="w-full my-2">
+                  <SafeCardRenderer
+                    html={revealed ? renderedContent.back : renderedContent.front}
+                    css={renderedContent.css}
+                    side={revealed ? 'back' : 'front'}
+                    rtl={dir === 'rtl'}
+                    onTypedAnswerChange={(val) => {
+                      if (card) setTypedAnswers((prev) => ({ ...prev, [card.id]: val }));
+                    }}
+                    onPlayTts={playCardTts}
+                  />
+                </div>
+
                 <p
                   dir="auto"
-                  className="font-reading text-xl sm:text-2xl leading-[2.2] font-medium text-main text-center whitespace-pre-wrap break-words py-2"
+                  className="font-reading text-xl sm:text-2xl leading-[2.2] font-medium text-main text-center whitespace-pre-wrap break-words py-2 sr-only"
                   style={{ fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)" }}
                 >
                   {card.front}

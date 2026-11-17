@@ -32,6 +32,8 @@ export interface KnowledgeCard {
   workId: string | null;
   memorizing: boolean;
   createdAt: string;
+  noteId?: string | null;
+  ord?: number | null;
 }
 
 /** A note or highlight kept after its book was deleted. */

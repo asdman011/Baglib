@@ -559,36 +559,38 @@ Append-only review history.
 | `duration_ms` | INTEGER | NULL | Time spent |
 | `state_before` | TEXT | NULL | State before this review |
 
-### 5.4 Approved revision model (ADR-017, migration 030): approved on 2026-11-17, **not yet built**
+### 5.4 Approved revision model (ADR-017, migrations 030 and 031): approved on 2026-11-17
 
-Sections 5.1–5.3 describe the database as it is built today. Migration 030 (KEY-389, 390, 392, 393) will apply the changes below. Full column definitions are in `docs/ADR-017-revision-data-model.md`. Once migration 030 lands, rewrite 5.1–5.3 and remove this note.
+Migration 030 (KEY-390) built the note-model foundation (`card_note_type`, `card_note_field`, `card_note_template`, `card_note`, and the note-link columns in `card_detail`). Migration 031 (KEY-389) and subsequent revision tasks build the deck and SRS scheduler tables. Full column definitions are in `docs/ADR-017-revision-data-model.md`.
 
-**New tables:**
+**Tables built in migration 030 (KEY-390):**
 
-| Table | Purpose |
-|---|---|
-| `card_note_type` | A kind of card: `normal`, `cloze`, `image_occlusion`, `context_cloze` or `choice`; CSS, sort field, Anki id, `anki_extra` |
-| `card_note_field` | The ordered fields of a note type: name, RTL, font, `source_text` flag, Anki id. PK `(note_type_id, ord)` |
-| `card_note_template` | The ordered card templates of a note type: name, front, back, Anki id. PK `(note_type_id, ord)` |
-| `card_note` | A note: field values, unique `guid`, `copied_from_note_id`, `source_ref`, `source_snapshot_json` (the original source text), `source_hash`, `source_changed_at`, `orphaned_at`, Anki id |
-| `deck` | A deck tree (`parent_id`), `kind` normal or filtered, `preset_id`, filtered-search columns, Anki id. Replaces `collection` rows of type `deck`. |
-| `deck_card` | Normal-deck membership. A card may be in several decks. PK `(deck_id, knowledge_id)`, with `position` |
-| `deck_subscription` | A deck that follows a source (book highlights, bab, poem, list and so on) for live sync |
-| `srs_preset` | Deck options as real columns: steps, daily limits, desired retention, maximum interval, bury flags, leech settings, FSRS parameters |
-| `anki_orphan_revlog` | An archive of imported Anki history for cards that no longer exist; used only for re-export |
+| Table | Status | Purpose |
+|---|---|---|
+| `card_note_type` | **Built** | A kind of card: `normal`, `cloze`, `image_occlusion`, `context_cloze` or `choice`; CSS, sort field, stock_kind, Anki id, `anki_extra` |
+| `card_note_field` | **Built** | The ordered fields of a note type: name, RTL, font, size_px, `source_text` flag, Anki id. PK `(note_type_id, ord)` |
+| `card_note_template` | **Built** | The ordered card templates of a note type: name, front, back, Anki id. PK `(note_type_id, ord)` |
+| `card_note` | **Built** | A note: field values (`fields_json`), unique `guid`, `copied_from_note_id`, `source_ref`, `source_snapshot_json` (the original source text), `source_hash`, `source_changed_at`, `orphaned_at`, Anki id, `anki_extra` |
+
+**Tables pending in migration 031 / KEY-389 / KEY-392:**
+
+| Table | Status | Purpose |
+|---|---|---|
+| `deck` | Pending (KEY-389) | A deck tree (`parent_id`), `kind` normal or filtered, `preset_id`, filtered-search columns, Anki id. Replaces `collection` rows of type `deck`. |
+| `deck_card` | Pending (KEY-389) | Normal-deck membership. A card may be in several decks. PK `(deck_id, knowledge_id)`, with `position` |
+| `deck_subscription` | Pending (KEY-389) | A deck that follows a source (book highlights, bab, poem, list and so on) for live sync |
+| `srs_preset` | Pending (KEY-389) | Deck options as real columns: steps, daily limits, desired retention, maximum interval, bury flags, leech settings, FSRS parameters |
+| `anki_orphan_revlog` | Pending (KEY-389) | An archive of imported Anki history for cards that no longer exist; used only for re-export |
 
 **Changed tables:**
-- `card_detail` gains `note_id`, `ord` (unique per note), `anki_id` and `anki_extra`. `front` and `back` become a rendered cache of the note.
-- `srs_state` gains `learning_step`, `buried_until`, `new_position` and `desired_retention`. Every card in a deck gets a row, starting as `new`.
-- `srs_review_log` is rebuilt:
-  - `rating` 0–4, where 0 is allowed only for `reset` and `rescheduled`;
-  - new columns `entry_kind`, `interval`, `last_interval`, `factor` and `anki_id` (unique).
-  - Statistics count only learn, review, relearn and filtered entries with a rating of 1 or more.
-- `collection` rows of type `deck`, and their `knowledge_collection` links, move to `deck` and `deck_card`.
+- `card_detail` (**Built in migration 030**): gains `note_id`, `ord` (unique per note), `anki_id` and `anki_extra`. `front` and `back` are the rendered cache of the note.
+- `srs_state` (Pending KEY-389): gains `learning_step`, `buried_until`, `new_position` and `desired_retention`. Every card in a deck gets a row, starting as `new`.
+- `srs_review_log` (Pending KEY-392): rebuilt with rating 0–4, `entry_kind`, `interval`, `last_interval`, `factor` and `anki_id`.
+- `collection` rows of type `deck`, and their `knowledge_collection` links, move to `deck` and `deck_card` in migration 031.
 
-**Settings, not schema:**
+**Settings:**
 - `srs.rolloverHour`: 4 AM by default, or midnight.
-- `revision.protectSourceText`: off by default.
+- `revision.protectSourceText` (**Built**): off by default. Guards source-text fields from modification when active.
 
 ## Pathways — ADR-009 / migration 022
 

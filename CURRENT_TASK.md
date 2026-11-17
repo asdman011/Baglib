@@ -1,3 +1,125 @@
+## KEY-390 Fix List 1: Note Types, Card Generation & UI Integration - 2026-11-17T21:26:00+02:00 - Agent: Antigravity
+
+**Request.** Addressed all items from Claude Code Review (Fix List 1 / KEY-390):
+1. Fixed ESLint errors: removed dynamic `require()` and typed inputs without `any` in `src/main/ipc/knowledge-cards.ts` and `tests/services/card-notes.test.ts`.
+2. Input validation for all `card-notes:*` IPC handlers enforcing ADR-017 limits (<=64 fields, <=32 templates, <=20,000 chars per field, rejected unexpected keys), with unit tests.
+3. Mounted `NoteEditorModal` and `NoteTypeManagerModal` in `SavedCardsPanel.tsx` with visible buttons for "New note", "Note types", and per-card "Edit note".
+4. Review screen note model: `SrsReviewScreen` and `SrsReviewPanel` render cards with note type templates and CSS via `template-engine`, wire `onTypedAnswerChange` showing character-level diff on reveal, and dispatch TTS through BagLib's PocketTTS IPC before falling back to `speechSynthesis`.
+5. Hardened iframe messages in `SafeCardRenderer`: verified source window, whitelisted types, clamped heights between 60px and 1600px, capped text at 2,000 chars, with foreign window rejection tests.
+6. Backfilled Quran, Hadith, and Poetry cards to seeded stock note types with text in `source_text` fields and `source_snapshot_json` populated; hardened repository queries against pre-migration schemas.
+7. Updated `scripts/note-types-live/main.cjs` to drive the modals through the UI in ar and en; all live harnesses (`srs-live`, `quran-deck-live`, `hadith-deck-live`) and full `npm test` pass.
+
+**Verification:**
+- Full test suite: 2,527 passed, 0 failed across 360 suites (`npm test`).
+- Targeted tests: 16 passed, 0 failed (`card-notes.test.ts`, `safe-card-renderer.test.ts`, `a11y-foundations.test.ts`, `translation-keys.test.ts`, `practice.test.ts`).
+- Live Electron harnesses:
+  - `note-types-live`: PASS in ar (RTL) and en (LTR), driving Note types and Note editor modals via UI with verified populated fields.
+  - `srs-live`: PASS (code 0).
+  - `quran-deck-live`: PASS (code 0).
+  - `hadith-deck-live`: PASS (code 0).
+- `npx tsc --noEmit`: 0 errors.
+- `npx eslint`: 0 errors.
+
+**Exact files changed:**
+- `src/main/database/migrations/030_card_notes.ts`
+- `src/main/database/migrations/index.ts`
+- `src/main/database/repositories/card-note.repository.ts`
+- `src/main/database/repositories/knowledge-card.repository.ts`
+- `src/main/ipc/knowledge-cards.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/knowledge/NoteEditorModal.tsx`
+- `src/renderer/components/knowledge/NoteTypeManagerModal.tsx`
+- `src/renderer/components/knowledge/SafeCardRenderer.tsx`
+- `src/renderer/components/knowledge/SavedCardsPanel.tsx`
+- `src/renderer/components/knowledge/SrsReviewPanel.tsx`
+- `src/renderer/components/knowledge/SrsReviewScreen.tsx`
+- `src/renderer/translations.ts`
+- `src/shared/revision/template-engine.ts`
+- `src/shared/types/card-notes.ts`
+- `src/shared/types/knowledge-cards.ts`
+- `scripts/note-types-live/main.cjs`
+- `scripts/note-types-live/run.mjs`
+- `tests/services/card-notes.test.ts`
+- `tests/ui/safe-card-renderer.test.ts`
+- `docs/data-dictionary.md`
+- `docs/agent-ops/reports/KEY-390.md`
+- `CURRENT_TASK.md`
+
+## KEY-390 Note Types and Card Generation - 2026-11-17T20:50:00+02:00 - Agent: Antigravity
+
+**Request.** Implement Revision Task 1C (KEY-390) according to `docs/ADR-017-revision-data-model.md` (sections 3.1, 3.2, 3.3, 3.8, 3.9, 3.11):
+- Migration 030 creating note tables, altering `card_detail`, seeding 10 built-in stock note types with `source_text` flags, and backfilling existing cards.
+- Template engine supporting Anki syntax, conditionals, modifiers (`text:`, `hint:`, `cloze:` with stack parser, `type:` and `type:nc:` with diacritics normalization, `tts`), progressive context cloze using `poetryBayts()`, and edit-only-adds behavior.
+- Repositories, IPC handlers, and preload bridge (`cardNotes`).
+- UI: `SafeCardRenderer` with sandboxed iframe (`sandbox="allow-scripts"` strictly without `allow-same-origin`) and strict CSP; `NoteEditorModal` with live preview, "Edited by you" badge, Compare and Restore; `NoteTypeManagerModal`.
+- Source text protection check via `revision.protectSourceText` setting and shared card fork-on-edit (`forkNoteForDeck`).
+- Live Electron harness `scripts/note-types-live/` verifying all 9 scenarios in both Arabic (`ar`, RTL) and English (`en`, LTR).
+
+**What was done:**
+1. **Migration 030 (`src/main/database/migrations/030_card_notes.ts`):**
+   - Tables: `card_note_type`, `card_note_field`, `card_note_template`, `card_note`.
+   - `card_detail` altered with `note_id`, `ord` (unique per note), `anki_id`, `anki_extra`.
+   - Seeded 10 stock note types: Basic, Basic reversed, Optional reversed, Cloze, Progressive context cloze, Basic typing, Multiple choice, Quran, Hadith, Poetry.
+   - `source_text: 1` set on Quran `Ayah`, Hadith `Hadith`, and Poetry `Poem`.
+   - Backfilled existing cards into synthetic Basic notes. Reversible `down` migration verified.
+2. **Template Engine (`src/shared/revision/template-engine.ts`):**
+   - Implemented Anki syntax: fields, `{{FrontSide}}`, conditionals `{{#F}}` and inverted `{{^F}}`.
+   - `{{text:F}}`, `{{hint:F}}`, stack-based nested cloze parser (`{{c1::text::hint}}`, multi-card `{{c1,2::...}}`), `{{type:F}}` and `{{type:nc:F}}` with character diff and unicode diacritics stripping (`removeCombiningMarks`), `{{tts lang:F}}`.
+   - Progressive context cloze generating multi-line poetry cards using `poetryBayts()`.
+   - Edit-only-adds: cards becoming empty receive `empty: true` and are never auto-deleted.
+3. **Database & IPC (`card-note.repository.ts`, `knowledge-card.repository.ts`, `knowledge-cards.ts`, `preload/index.ts`):**
+   - `CardNoteRepository`: note types CRUD, notes CRUD, card cache sync, `forkNoteForDeck` preserving `srs_state`, `restoreSourceText`, `linkNoteToDeck`, `getDecksForNote`.
+   - `KnowledgeCardRepository.update`: guards source text fields when `revision.protectSourceText` is true.
+   - Exposed `window.electronAPI.cardNotes` with full preload bridge.
+4. **Renderer UI & Sandboxed Rendering:**
+   - `SafeCardRenderer.tsx`: sandboxed iframe (`sandbox="allow-scripts"` strictly without `allow-same-origin`), strict CSP, interactive typed answer listener, TTS dispatch, resize reporting, Arabic 2.2 line-height.
+   - `NoteEditorModal.tsx`: type picker, fields editor, live preview, "Edited by you" badge, compare original vs edited, restore button, lock indicator, shared card edit prompt.
+   - `NoteTypeManagerModal.tsx`: manage, copy built-in/custom types, edit fields/templates, delete custom types.
+   - Integrated `SafeCardRenderer` in `SrsReviewScreen.tsx` and `SrsReviewPanel.tsx`.
+   - Centralized i18n in `src/renderer/translations.ts` in Arabic and English.
+5. **Exact files changed:**
+   - `src/shared/types/card-notes.ts` (new)
+   - `src/shared/types/knowledge-cards.ts`
+   - `src/shared/revision/template-engine.ts` (new)
+   - `src/main/database/migrations/030_card_notes.ts` (new)
+   - `src/main/database/migrations/index.ts`
+   - `src/main/database/repositories/card-note.repository.ts` (new)
+   - `src/main/database/repositories/knowledge-card.repository.ts`
+   - `src/main/ipc/knowledge-cards.ts`
+   - `src/preload/index.ts`
+   - `src/renderer/components/knowledge/SafeCardRenderer.tsx` (new)
+   - `src/renderer/components/knowledge/NoteEditorModal.tsx` (new)
+   - `src/renderer/components/knowledge/NoteTypeManagerModal.tsx` (new)
+   - `src/renderer/components/knowledge/SrsReviewScreen.tsx`
+   - `src/renderer/components/knowledge/SrsReviewPanel.tsx`
+   - `src/renderer/translations.ts`
+   - `tests/services/card-notes.test.ts` (new)
+   - `tests/ui/safe-card-renderer.test.ts` (new)
+   - `scripts/note-types-live/run.mjs` (new)
+   - `scripts/note-types-live/main.cjs` (new)
+   - `docs/data-dictionary.md`
+   - `docs/agent-ops/reports/KEY-390.md` (new)
+   - `docs/agent-ops/board.md`
+   - `CURRENT_TASK.md`
+
+**Verification:**
+- `npx tsc --noEmit`: 0 errors.
+- `npx eslint`: clean on all touched files.
+- `node scripts/test-runner.js`: 23/23 tests pass across `card-notes.test.ts`, `safe-card-renderer.test.ts`, `card-decks.test.ts`, `srs-review-confidence.test.ts`, and `srs-review-keyboard.test.ts` (1.06s).
+- Live Electron harness `node scripts/note-types-live/run.mjs`: all 9 scenarios pass in both Arabic (RTL) and English (LTR). Verified sandboxed iframe blocks `window.parent` and `electronAPI` with `SecurityError`. Evidence saved to `.baglib-data/key390-evidence/`.
+
+## KEY-234/235 review - 2026-11-17 - Agent: Claude Code
+
+**Review pass on ab90ee3.**
+- Both Anki exports were regenerated through `CardDeckService.exportText` from real data in a throwaway profile:
+  - Arabic: 3 ayahs and 3 hadith;
+  - English: 4 real quotes.
+- GUIDs are knowledge ids, and the backs were byte-compared with the source.
+- The machine-specific benchmark script was deleted.
+- KEY-234 and KEY-235 have result comments and stay In Review.
+
+**Accepted by the user** ("Accept both", 2026-11-17). KEY-234 and KEY-235 moved to **Done** with comments.
+
 ## KEY-234/235 Anki Export Fix 1 - 2026-11-17T19:54:00+02:00 - Agent: Antigravity
 
 **Request.** Fix requested by Claude Code review on KEY-234/KEY-235 acceptance bundle: regenerate the Anki export files using BagLib's real code paths (`CardDeckService.generateFromDrafts`, `CardDeckService.generate`, and `CardDeckService.exportText`) in a throwaway profile using `setupThrowawayCorpus` without reading `%APPDATA%` or using made-up content.

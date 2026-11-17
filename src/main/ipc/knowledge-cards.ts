@@ -15,6 +15,12 @@ import { PracticeService } from '../services/practice';
 import type { PracticeInput, JudgeAttemptInput, AttemptQuery } from '../../shared/practice';
 import { SrsService } from '../services/srs';
 import { validateReview } from '../../shared/srs';
+import { CardNoteRepository } from '../database/repositories/card-note.repository';
+import {
+  validateSafeId,
+  validateSaveNoteInput,
+  validateSaveNoteTypeInput,
+} from '../../shared/types/card-notes';
 
 const repository = () => new KnowledgeCardRepository(getDatabase());
 const authorize = (event: IpcMainInvokeEvent) => {
@@ -86,4 +92,53 @@ export function registerKnowledgeCardIpc(): void {
   ipcMain.handle('knowledge-cards:preserved', () => repository().listPreserved());
   ipcMain.handle('knowledge-cards:remove', (_, id: unknown) => repository().remove(cardId(id)));
   ipcMain.handle('knowledge-cards:set-memorizing', (_, id: unknown, memorizing: unknown) => repository().setMemorizing(cardId(id), memorizing === true));
+
+  // Card Notes & Note Types (ADR-017 / KEY-390)
+  const noteRepository = (event: IpcMainInvokeEvent) => {
+    authorize(event);
+    return new CardNoteRepository(getDatabase());
+  };
+
+  ipcMain.handle('card-notes:list-types', event => noteRepository(event).listNoteTypes());
+  ipcMain.handle('card-notes:get-type', (event, id: unknown) =>
+    noteRepository(event).getNoteType(validateSafeId(id, 'id'))
+  );
+  ipcMain.handle('card-notes:save-type', (event, input: unknown) =>
+    noteRepository(event).saveNoteType(validateSaveNoteTypeInput(input))
+  );
+  ipcMain.handle('card-notes:delete-type', (event, id: unknown) =>
+    noteRepository(event).deleteNoteType(validateSafeId(id, 'id'))
+  );
+  ipcMain.handle('card-notes:list-notes', (event, query: unknown) => {
+    const q = (query ?? {}) as Record<string, unknown>;
+    const sanitized = {
+      deckId: q.deckId !== undefined && q.deckId !== null ? validateSafeId(q.deckId, 'deckId') : undefined,
+      noteTypeId: q.noteTypeId !== undefined && q.noteTypeId !== null ? validateSafeId(q.noteTypeId, 'noteTypeId') : undefined,
+      search: typeof q.search === 'string' ? q.search.slice(0, 200) : undefined,
+      offset: typeof q.offset === 'number' && q.offset >= 0 ? q.offset : 0,
+      limit: typeof q.limit === 'number' && q.limit > 0 && q.limit <= 500 ? q.limit : 50,
+    };
+    return noteRepository(event).listNotes(sanitized);
+  });
+  ipcMain.handle('card-notes:get-note', (event, id: unknown) =>
+    noteRepository(event).getNote(validateSafeId(id, 'id'))
+  );
+  ipcMain.handle('card-notes:save-note', (event, input: unknown) =>
+    noteRepository(event).saveNote(validateSaveNoteInput(input))
+  );
+  ipcMain.handle('card-notes:fork-note', (event, noteId: unknown, deckId: unknown) =>
+    noteRepository(event).forkNoteForDeck(validateSafeId(noteId, 'noteId'), validateSafeId(deckId, 'deckId'))
+  );
+  ipcMain.handle('card-notes:restore-source-text', (event, noteId: unknown) =>
+    noteRepository(event).restoreSourceText(validateSafeId(noteId, 'noteId'))
+  );
+  ipcMain.handle('card-notes:get-cards', (event, noteId: unknown) =>
+    noteRepository(event).getCardsForNote(validateSafeId(noteId, 'noteId'))
+  );
+  ipcMain.handle('card-notes:get-decks', (event, noteId: unknown) =>
+    noteRepository(event).getDecksForNote(validateSafeId(noteId, 'noteId'))
+  );
+  ipcMain.handle('card-notes:link-deck', (event, noteId: unknown, deckId: unknown) =>
+    noteRepository(event).linkNoteToDeck(validateSafeId(noteId, 'noteId'), validateSafeId(deckId, 'deckId'))
+  );
 }

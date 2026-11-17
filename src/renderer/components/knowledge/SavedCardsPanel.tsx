@@ -9,7 +9,10 @@ import { navigateStudyReference, openStudyNote } from '../../utils/study-navigat
 import { useWorkspace } from '../context/WorkspaceContext';
 import { CARD_HOVER_SETTING, cardHoverEnabled, KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import type { KnowledgeCard, PreservedKnowledge } from '../../../shared/types/knowledge-cards';
+import type { CardNote } from '../../../shared/types/card-notes';
 import { QuestionCardEditor } from './QuestionCardEditor';
+import { NoteEditorModal } from './NoteEditorModal';
+import { NoteTypeManagerModal } from './NoteTypeManagerModal';
 import { PracticeAnswer } from './PracticeAnswer';
 import { PracticeHistoryPanel } from './PracticeHistoryPanel';
 import { NoteHistory } from '../notes/NoteHistory';
@@ -26,6 +29,9 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
   const [editing, setEditing] = useState<string | null>(null);
   const [practicing, setPracticing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [noteEditorOpen, setNoteEditorOpen] = useState(false);
+  const [activeNote, setActiveNote] = useState<CardNote | null>(null);
+  const [noteTypeManagerOpen, setNoteTypeManagerOpen] = useState(false);
   const [cards, setCards] = useState<KnowledgeCard[]>([]);
   const [preserved, setPreserved] = useState<PreservedKnowledge[]>([]);
   const [search, setSearch] = useState('');
@@ -80,6 +86,23 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
     try {
       localStorage.setItem(CARD_HOVER_SETTING, enabled ? 'on' : 'off');
     } catch {}
+  };
+
+  const handleNewNote = () => {
+    setActiveNote(null);
+    setNoteEditorOpen(true);
+  };
+
+  const handleEditNote = async (noteId: string) => {
+    try {
+      const n = await window.electronAPI.cardNotes.getNote(noteId);
+      if (n) {
+        setActiveNote(n);
+        setNoteEditorOpen(true);
+      }
+    } catch (err) {
+      console.warn('Failed to load note:', err);
+    }
   };
 
   const act = async (action: () => Promise<unknown>) => {
@@ -139,6 +162,26 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
             icon={<Plus className="size-3.5" />}
           >
             {t('practiceNewQuestion')}
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleNewNote}
+            icon={<Plus className="size-3.5" />}
+            data-new-note-btn
+          >
+            {t('newNote')}
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setNoteTypeManagerOpen(true)}
+            icon={<Layers className="size-3.5" />}
+            data-note-types-btn
+          >
+            {t('noteTypeManagerTitle')}
           </Button>
 
           <label className="flex items-center gap-2 text-xs text-muted ms-2 select-none">
@@ -202,7 +245,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
           {/* eslint-disable-next-line react-hooks/refs -- contextActions stores event callbacks without invoking them during render. */}
           {cards.map((card) => (
             <ContextMenu as="li" items={contextActions('card', {
-              edit: ['quran', 'hadith', 'poetry'].includes(card.sourceKind) ? undefined : () => setEditing(card.id), review: () => setPracticing(card.id),
+              edit: card.noteId ? () => void handleEditNote(card.noteId!) : ['quran', 'hadith', 'poetry'].includes(card.sourceKind) ? undefined : () => setEditing(card.id), review: () => setPracticing(card.id),
               copy: () => navigator.clipboard.writeText(card.front + '\n\n' + card.back),
               srs: () => act(() => window.electronAPI.knowledgeCards.setMemorizing(card.id,true)),
               delete: () => { if(window.confirm(t('markDeleteConfirm')))return act(() => removeWithUndo(card.id, () => window.electronAPI.knowledgeCards.remove(card.id), refresh)); },
@@ -288,7 +331,17 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
                 >
                   {t('practiceStart')}
                 </Button>
-                {!['quran', 'hadith', 'poetry'].includes(card.sourceKind) && (
+                {card.noteId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void handleEditNote(card.noteId!)}
+                    data-edit-note-btn={card.id}
+                  >
+                    {t('editNote')}
+                  </Button>
+                )}
+                {!card.noteId && !['quran', 'hadith', 'poetry'].includes(card.sourceKind) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -352,6 +405,25 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
           </ul>
         </details>
       )}
+
+      <NoteEditorModal
+        isOpen={noteEditorOpen}
+        note={activeNote}
+        onClose={() => {
+          setNoteEditorOpen(false);
+          setActiveNote(null);
+        }}
+        onSaved={() => {
+          setNoteEditorOpen(false);
+          setActiveNote(null);
+          void refresh();
+        }}
+      />
+
+      <NoteTypeManagerModal
+        isOpen={noteTypeManagerOpen}
+        onClose={() => setNoteTypeManagerOpen(false)}
+      />
     </section>
   );
 }
