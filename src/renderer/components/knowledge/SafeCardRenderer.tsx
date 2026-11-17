@@ -1,8 +1,70 @@
 'use client';
 
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  DEFAULT_IMAGE_OCCLUSION_FRAME_STRINGS,
+  imageOcclusionFrameScript,
+  type ImageOcclusionFrameStrings,
+} from '../../../shared/revision/image-occlusion-frame';
 
 export type CardFrameTheme = 'light' | 'dark';
+
+/** `<img src="<sha1>.png">` references to card media (KEY-391). */
+const CARD_MEDIA_SRC = /(<img\b[^>]*?\bsrc\s*=\s*)(["'])([a-f0-9]{40}\.(?:png|jpg|gif|webp|bmp))\2/giu;
+const mediaCache = new Map<string, string>();
+
+/** True when a card's stored back is HTML rendered from a note template (shown in the frame, not as text). */
+export function isTemplateHtml(value: string | null | undefined): boolean {
+  return !!value && /<(?:div|span|img|canvas|br|hr|script|style|p|details)\b/iu.test(value);
+}
+
+export function cardMediaNames(html: string): string[] {
+  return [...new Set([...html.matchAll(CARD_MEDIA_SRC)].map(m => m[3].toLowerCase()))];
+}
+
+/** Swaps card-media names for data: URLs; the frame's CSP allows no other image source. */
+export function substituteCardMedia(html: string, dataUrls: ReadonlyMap<string, string>): string {
+  return html.replace(CARD_MEDIA_SRC, (full, head: string, quote: string, name: string) => {
+    const url = dataUrls.get(name.toLowerCase());
+    return url ? `${head}${quote}${url}${quote}` : full;
+  });
+}
+
+/** The card HTML with its media inlined; null while the images are still loading. */
+export function useResolvedCardMedia(html: string): string | null {
+  const names = useMemo(() => cardMediaNames(html), [html]);
+  const [version, setVersion] = useState(0);
+  const missing = names.filter(name => !mediaCache.has(name));
+  useEffect(() => {
+    if (!missing.length) return;
+    const api = typeof window !== 'undefined' ? window.electronAPI?.cardMedia : undefined;
+    let active = true;
+    void Promise.all(
+      missing.map(async name => {
+        try {
+          const stored = api ? await api.read(name) : null;
+          mediaCache.set(name, stored?.dataUrl ?? '');
+        } catch {
+          mediaCache.set(name, '');
+        }
+      })
+    ).then(() => {
+      if (active) setVersion(v => v + 1);
+    });
+    return () => {
+      active = false;
+    };
+    // `missing` is derived from `names`; re-run only when the referenced media change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [names.join('|')]);
+  return useMemo(() => {
+    if (!names.length) return html;
+    if (names.some(name => !mediaCache.has(name))) return null;
+    return substituteCardMedia(html, mediaCache);
+    // `version` re-evaluates after the cache fills.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [html, names, version]);
+}
 
 function readAppTheme(): CardFrameTheme {
   if (typeof document === 'undefined') return 'dark';
@@ -32,6 +94,8 @@ export interface SafeCardRendererProps {
   className?: string;
   /** Overrides the app theme, for tests and previews. */
   theme?: CardFrameTheme;
+  /** Localised labels for image-occlusion cards (KEY-391). */
+  ioStrings?: ImageOcclusionFrameStrings;
 }
 
 export function filterCardFrameMessage(
@@ -71,14 +135,18 @@ export const SafeCardRenderer: React.FC<SafeCardRendererProps> = ({
   onPlayTts,
   className = '',
   theme: themeOverride,
+  ioStrings = DEFAULT_IMAGE_OCCLUSION_FRAME_STRINGS,
 }) => {
   const appTheme = useAppTheme();
   const theme = themeOverride ?? appTheme;
   const frameRef = useRef<HTMLIFrameElement>(null);
   const frameId = useId();
+  const resolvedHtml = useResolvedCardMedia(html);
+  const ioScript = useMemo(() => imageOcclusionFrameScript(ioStrings), [ioStrings]);
 
   // Build the sandboxed HTML document
   const srcDoc = useMemo(() => {
+    if (resolvedHtml === null) return '';
     const escapedTyped = typedAnswer.replace(/["\\]/gu, '\\$&');
 
     return `<!DOCTYPE html>
@@ -87,6 +155,7 @@ export const SafeCardRenderer: React.FC<SafeCardRendererProps> = ({
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>${ioScript}</script>
   <style>
     :root {
       color-scheme: light;
@@ -214,12 +283,17 @@ export const SafeCardRenderer: React.FC<SafeCardRendererProps> = ({
       font-size: 1rem;
       margin: 0 4px;
     }
+    /* Image occlusion layout (Anki review.scss), applied to every card like Anki does. */
+    #image-occlusion-container { position: relative; margin: 0 auto; max-height: calc(95vh - 40px); }
+    #image-occlusion-container img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; max-width: unset; max-height: unset; }
+    #image-occlusion-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    #toggle { margin-top: 12px; padding: 6px 14px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--fg); cursor: pointer; font: inherit; font-size: 0.9em; }
     ${css}
   </style>
 </head>
 <body>
   <div class="card" id="card-content">
-    ${html}
+    ${resolvedHtml}
   </div>
   <script>
     // Wire up type-in input
@@ -251,7 +325,7 @@ export const SafeCardRenderer: React.FC<SafeCardRendererProps> = ({
   </script>
 </body>
 </html>`;
-  }, [html, css, rtl, typedAnswer, frameId, theme]);
+  }, [resolvedHtml, css, rtl, typedAnswer, frameId, theme, ioScript]);
 
   // Listen to messages from sandboxed frame
   useEffect(() => {

@@ -953,6 +953,11 @@ export const API = {
     getDecks: (noteId: string) => ipcRenderer.invoke('card-notes:get-decks', noteId),
     linkDeck: (noteId: string, deckId: string) => ipcRenderer.invoke('card-notes:link-deck', noteId, deckId),
   } satisfies import('../shared/types/card-notes').CardNotesAPI,
+  cardMedia: {
+    pickImage: (): Promise<{ name: string; dataUrl: string } | null> => ipcRenderer.invoke('card-media:pick-image'),
+    saveBytes: (bytes: Uint8Array): Promise<{ name: string; dataUrl: string }> => ipcRenderer.invoke('card-media:save-bytes', bytes),
+    read: (name: string): Promise<{ name: string; dataUrl: string } | null> => ipcRenderer.invoke('card-media:read', name),
+  },
   knowledgeHistory: {
     versions: (id:string,before?:number)=>ipcRenderer.invoke('knowledge-history:request','versions',{id,before}),
     snapshot: (id,revision)=>ipcRenderer.invoke('knowledge-history:request','snapshot',{id,revision}),

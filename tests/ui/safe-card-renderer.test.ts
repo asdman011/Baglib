@@ -137,3 +137,37 @@ test('stock note types (KEY-407): built-in CSS has no hard-coded white backgroun
   assert.ok(!/color: black;/u.test(src));
   assert.ok(src.includes('color: var(--fg, black); background-color: transparent;'));
 });
+
+test('safe card renderer (KEY-391): card media names are swapped for data URLs, nothing else is touched', async () => {
+  const { cardMediaNames, substituteCardMedia } = await import('../../src/renderer/components/knowledge/SafeCardRenderer');
+  const name = `${'b'.repeat(40)}.png`;
+  const html = `<img src="${name}"><img src='https://example.com/x.png'><img src="../secret.png">`;
+  assert.deepEqual(cardMediaNames(html), [name]);
+  const out = substituteCardMedia(html, new Map([[name, 'data:image/png;base64,AAAA']]));
+  assert.ok(out.includes('<img src="data:image/png;base64,AAAA">'));
+  assert.ok(out.includes("https://example.com/x.png"), 'remote URLs are left alone (the frame CSP blocks them)');
+  assert.ok(out.includes('../secret.png'));
+});
+
+test('safe card renderer (KEY-391): frame carries the image occlusion drawer with localised strings', () => {
+  const html = renderToString(
+    React.createElement(SafeCardRenderer, {
+      html: '<div id="image-occlusion-container"><canvas id="image-occlusion-canvas"></canvas></div>',
+      side: 'front',
+      theme: 'dark',
+      ioStrings: { toggleMasks: 'إظهار الأقنعة', noImage: 'لا صورة' },
+    })
+  );
+  assert.ok(html.includes('anki.imageOcclusion') || html.includes('window.anki'), 'drawer script is inlined');
+  assert.ok(html.includes('إظهار الأقنعة'));
+  assert.ok(html.includes('#image-occlusion-canvas { position: absolute;'));
+});
+
+test('review answer line (KEY-391): hidden only when the stored back is template HTML', async () => {
+  const { isTemplateHtml } = await import('../../src/renderer/components/knowledge/SafeCardRenderer');
+  assert.equal(isTemplateHtml('آية الكرسي'), false);
+  assert.equal(isTemplateHtml('a < b and c > d'), false);
+  assert.equal(isTemplateHtml(''), false);
+  assert.equal(isTemplateHtml('<div style="display: none"><div class="cloze-highlight"></div></div>'), true);
+  assert.equal(isTemplateHtml('Front<hr id=answer>Back'), true);
+});

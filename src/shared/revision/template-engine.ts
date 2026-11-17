@@ -13,6 +13,7 @@
  */
 
 import { poetryBayts } from '../poetry';
+import { IMAGE_OCCLUSION_PREFIX, renderImageOcclusion } from './image-occlusion';
 import type { CardNoteType, GeneratedCard } from '../types/card-notes';
 
 export interface RenderContext {
@@ -74,11 +75,14 @@ function findTopLevelClozes(text: string): ClozeSpan[] {
   while ((match = startRegex.exec(text)) !== null) {
     const startIndex = match.index;
     const prefixLen = match[0].length;
-    const clozeNums = match[1].split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isSafeInteger(n) && n > 0);
+    // Ordinal 0 is kept: image occlusion uses it for always-shown text labels (KEY-391).
+    const clozeNums = match[1].split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isSafeInteger(n) && n >= 0);
 
     let depth = 1;
     let curr = startIndex + prefixLen;
     let hintSepIndex = -1;
+    // Anki never reads a hint inside an image-occlusion cloze; its text may contain an escaped `::`.
+    const noHint = text.startsWith(IMAGE_OCCLUSION_PREFIX, curr);
 
     while (curr < text.length && depth > 0) {
       if (text.startsWith('{{', curr)) {
@@ -90,7 +94,7 @@ function findTopLevelClozes(text: string): ClozeSpan[] {
           break;
         }
         curr += 2;
-      } else if (depth === 1 && text.startsWith('::', curr) && hintSepIndex === -1) {
+      } else if (!noHint && depth === 1 && text.startsWith('::', curr) && hintSepIndex === -1) {
         hintSepIndex = curr;
         curr += 2;
       } else {
@@ -145,6 +149,13 @@ export function processClozes(
     for (const c of clozes) {
       result += input.slice(lastPos, c.start);
       const isMatch = c.clozeNums.includes(targetClozeNum);
+
+      // Image occlusion: Anki renders a hidden shape <div> that the review script draws (KEY-391).
+      if (c.body.startsWith(IMAGE_OCCLUSION_PREFIX)) {
+        result += renderImageOcclusion(c.body.slice(IMAGE_OCCLUSION_PREFIX.length), side === 'front', isMatch, c.clozeNums);
+        lastPos = c.end;
+        continue;
+      }
 
       if (isMatch) {
         // Collect text without inner cloze markers
@@ -386,7 +397,7 @@ export function generateCards(
 ): GeneratedCard[] {
   const cards: GeneratedCard[] = [];
 
-  if (noteType.kind === 'cloze') {
+  if (noteType.kind === 'cloze' || noteType.kind === 'image_occlusion') {
     let allText = '';
     for (const val of Object.values(fields)) {
       allText += val + ' ';

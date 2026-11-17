@@ -27,6 +27,7 @@ import { settingsRepository } from '../../database/repositories/settings.reposit
 import { runMigrations } from '../../database/migrator';
 import { migrations } from '../../database/migrations';
 import { StudyNotesService } from '../study-notes';
+import { CardMediaStore, CARD_MEDIA_DIR } from '../card-media';
 import type {
   LibrarySnapshotMetadata,
   LibrarySnapshotStats,
@@ -166,12 +167,27 @@ export class LibrarySnapshotService {
         'manifest.json': fflate.strToU8(JSON.stringify(manifest, null, 2)),
       };
 
-      const zipped = fflate.zipSync(zipEntries, { level: 6 });
+      // Card images (KEY-391) travel with the database under card-media/. They are already
+      // compressed formats, so they are stored without deflate.
+      const media = new CardMediaStore();
+      for (const name of media.list()) {
+        const bytes = media.readBytes(name);
+        if (bytes) zipEntries[`${CARD_MEDIA_DIR}/${name}`] = bytes;
+      }
+      const zipInput = (entries: Record<string, Uint8Array>): fflate.Zippable =>
+        Object.fromEntries(
+          Object.entries(entries).map(([name, bytes]) => [
+            name,
+            name.startsWith(`${CARD_MEDIA_DIR}/`) ? ([bytes, { level: 0 }] as [Uint8Array, fflate.ZipOptions]) : bytes,
+          ])
+        );
+
+      const zipped = fflate.zipSync(zipInput(zipEntries), { level: 6 });
       manifest.sizeBytes = zipped.length;
 
       // Update manifest inside zip with final size
       zipEntries['manifest.json'] = fflate.strToU8(JSON.stringify(manifest, null, 2));
-      const finalZip = fflate.zipSync(zipEntries, { level: 6 });
+      const finalZip = fflate.zipSync(zipInput(zipEntries), { level: 6 });
 
       const destinationPath = path.join(this.getSnapshotsDirectory(), fileName);
       fs.writeFileSync(destinationPath, Buffer.from(finalZip));
@@ -306,6 +322,13 @@ export class LibrarySnapshotService {
       if (reopenedDb.prepare(`SELECT 1 FROM sqlite_master WHERE name = '_migrations'`).get()) {
         runMigrations(reopenedDb, migrations);
         new StudyNotesService(settingsRepository, reopenedDb).convertLegacy();
+      }
+
+      // Card images from the snapshot (KEY-391). Names are content hashes, so a file already
+      // present is identical; nothing is overwritten or deleted.
+      const mediaStore = new CardMediaStore();
+      for (const [entry, bytes] of Object.entries(unzipped)) {
+        if (entry.startsWith(`${CARD_MEDIA_DIR}/`)) mediaStore.restore(entry.slice(CARD_MEDIA_DIR.length + 1), bytes);
       }
 
       // Clean up rollback backups on success

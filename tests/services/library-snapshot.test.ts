@@ -13,6 +13,7 @@ import { LibrarySnapshotService } from '../../src/main/services/sync/library-sna
 import { getDatabase, closeDatabase } from '../../src/main/database/connection';
 import { runMigrations } from '../../src/main/database/migrator';
 import { migrations } from '../../src/main/database/migrations';
+import { CardMediaStore } from '../../src/main/services/card-media';
 
 describe('Library Snapshot & Atomic Rollback Service (KEY-147)', () => {
   let tempSnapshotsDir: string;
@@ -97,6 +98,25 @@ describe('Library Snapshot & Atomic Rollback Service (KEY-147)', () => {
       const manifestInside = JSON.parse(fflate.strFromU8(unzipped['manifest.json']));
       assert.strictEqual(manifestInside.id, metadata.id);
       assert.strictEqual(manifestInside.checksum, metadata.checksum);
+    });
+
+    it('carries card images (card-media/) and restores them, verified by content hash (KEY-391)', async () => {
+      const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5]);
+      const store = new CardMediaStore();
+      const { name } = store.save(png);
+      assert.match(name, /^[a-f0-9]{40}\.png$/u);
+      const res = await service.createSnapshot('With card media');
+      assert.strictEqual(res.success, true);
+      const unzipped = fflate.unzipSync(new Uint8Array(fs.readFileSync(path.join(tempSnapshotsDir, res.data!.fileName))));
+      assert.deepEqual(unzipped[`card-media/${name}`], png);
+
+      fs.rmSync(path.join(store.dir, name));
+      assert.equal(store.read(name), null);
+      const restored = await service.restoreSnapshot(res.data!.fileName);
+      assert.strictEqual(restored.success, true, restored.message);
+      assert.deepEqual(store.readBytes(name), png, 'the image comes back from the backup');
+      // A tampered entry (bytes that don't match the name's hash) is ignored.
+      assert.equal(store.restore(name.replace(/^./u, c => (c === 'a' ? 'b' : 'a')), png), false);
     });
 
     it('lists created snapshots sorted by timestamp descending', async () => {

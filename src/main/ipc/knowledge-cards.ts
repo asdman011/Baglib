@@ -1,5 +1,6 @@
 import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { getDatabase } from '../database/connection';
 import { KnowledgeCardRepository } from '../database/repositories/knowledge-card.repository';
 import { validateAyahDeckInput, validateCardInput, validateDeckInput } from '../../shared/types/knowledge-cards';
@@ -17,6 +18,7 @@ import { SrsService } from '../services/srs';
 import { validateReview, type SaveDeckInput, type SaveFilteredDeckInput } from '../../shared/srs';
 import { CardNoteRepository } from '../database/repositories/card-note.repository';
 import { DeckRepository } from '../database/repositories/deck.repository';
+import { CardMediaStore, MAX_CARD_MEDIA_BYTES } from '../services/card-media';
 import {
   validateSafeId,
   validateSaveNoteInput,
@@ -101,12 +103,25 @@ export function registerKnowledgeCardIpc(): void {
     return service.generateFromDrafts(request.name, drafts, request.memorize);
   });
   ipcMain.handle('knowledge-cards:export-deck', async (event, id: unknown) => {
-    const { name, text } = deckService(event).exportText(cardId(id));
+    const { name, text, imageOcclusion } = deckService(event).exportText(cardId(id));
     const options = { defaultPath: `${name.replace(/[\\/:*?"<>|]/gu, ' ').trim() || 'deck'}.txt`, filters: [{ name: 'Anki', extensions: ['txt'] }] };
     const owner = BrowserWindow.fromWebContents(event.sender);
     const choice = await (owner ? dialog.showSaveDialog(owner, options) : dialog.showSaveDialog(options));
     if (choice.canceled || !choice.filePath) return false;
     await writeFile(choice.filePath, text, 'utf8');
+    if (imageOcclusion) {
+      // KEY-391: Anki's text import takes one note type per file and carries no media, so image
+      // occlusion notes get their own file and their images a folder to copy into collection.media.
+      const base = choice.filePath.replace(/\.txt$/iu, '');
+      await writeFile(`${base} - Image Occlusion.txt`, imageOcclusion.text, 'utf8');
+      const mediaDir = `${base} - media`;
+      await mkdir(mediaDir, { recursive: true });
+      const store = new CardMediaStore();
+      for (const mediaName of imageOcclusion.media) {
+        const bytes = store.readBytes(mediaName);
+        if (bytes) await writeFile(path.join(mediaDir, mediaName), bytes);
+      }
+    }
     return true;
   });
   ipcMain.handle('knowledge-cards:list', (_, query?: { search?: unknown; offset?: unknown }) => repository().list({
@@ -166,4 +181,33 @@ export function registerKnowledgeCardIpc(): void {
   ipcMain.handle('card-notes:link-deck', (event, noteId: unknown, deckId: unknown) =>
     noteRepository(event).linkNoteToDeck(validateSafeId(noteId, 'noteId'), validateSafeId(deckId, 'deckId'))
   );
+
+  // Card media (KEY-391): images live in card-media/, named by content hash. The renderer never
+  // passes a file path: it either asks main to show the open dialog, or sends the bytes it got
+  // from a drop or paste, which main checks by their magic bytes.
+  const mediaStore = (event: IpcMainInvokeEvent) => {
+    authorize(event);
+    return new CardMediaStore();
+  };
+  ipcMain.handle('card-media:pick-image', async event => {
+    const store = mediaStore(event);
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
+    };
+    const picked = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+    if (picked.canceled || !picked.filePaths[0]) return null;
+    return store.importFile(picked.filePaths[0]);
+  });
+  ipcMain.handle('card-media:save-bytes', (event, bytes: unknown) => {
+    const store = mediaStore(event);
+    const view = bytes instanceof Uint8Array ? bytes : bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : null;
+    if (!view || view.length === 0 || view.length > MAX_CARD_MEDIA_BYTES) throw new Error('invalid-request');
+    return store.save(view);
+  });
+  ipcMain.handle('card-media:read', (event, name: unknown) => {
+    const store = mediaStore(event);
+    return typeof name === 'string' ? store.read(name) : null;
+  });
 }

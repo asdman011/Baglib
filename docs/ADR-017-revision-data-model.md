@@ -300,6 +300,14 @@ Rejected alternatives:
 - **This changes today's behaviour:** `KnowledgeCardRepository.update` currently refuses edits to Quran, hadith and poetry cards. That refusal will apply only while protection is on.
 - **Future follow-up (KEY-406).** Later, the user decides whether to keep both modes or only one. Some built-in content may need to be locked.
 
+### 3.12 Card media (the user's decision, 2026-11-17, KEY-391)
+- **Where images live.** Card images (image occlusion, and later imported Anki media) are files in a `card-media/` folder next to `baglib.db`, one file per image. **There is no database table.**
+- **Names.** Each file is named by the SHA-1 of its bytes plus its real type (`<sha1>.png|jpg|gif|webp|bmp`), so the same image is stored once. The type comes from the file's first bytes, never from its name. Notes reference a file the way Anki does: `<img src="<sha1>.png">` in a field.
+- **Rendering.** The card frame's CSP allows only `data:` images, so the renderer swaps each card-media name for a `data:` URL from main. The renderer never passes a file path to main: it asks main to open the file dialog, or sends dropped or pasted bytes, which main checks.
+- **Backups.** Snapshots carry `card-media/<name>` entries. Restore writes back only entries whose bytes match their hash, after the database passes its integrity check, and never deletes or overwrites files.
+- **Anki.** This mirrors `collection.media`, so `.apkg` import and export (KEY-392) map one to one. Until then, the text export writes image occlusion notes to their own file plus a media folder to copy into Anki's `collection.media`.
+- **Stock Image Occlusion note type** (migration 033): Anki's fields (Occlusion, Image, Header, Back Extra, Comments) and templates, with shapes stored as Anki's `{{cN::image-occlusion:…}}` cloze text.
+
 ## 4. Consequences
 - **KEY-389:**
   - **New / Learning / Due** queues, with limits;

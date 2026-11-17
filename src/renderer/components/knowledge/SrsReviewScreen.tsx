@@ -9,7 +9,7 @@ import { EmptyState } from '../ui/EmptyState';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { MISTAKE_CATEGORIES, kindKey, mistakeKey, type MistakeCategory } from '../../../shared/practice';
 import { PracticeAnswer } from './PracticeAnswer';
-import { SafeCardRenderer } from './SafeCardRenderer';
+import { SafeCardRenderer, isTemplateHtml } from './SafeCardRenderer';
 import { renderTemplate } from '../../../shared/revision/template-engine';
 import { poetryBayts } from '../../../shared/poetry';
 import type { CardNote, CardNoteType } from '../../../shared/types/card-notes';
@@ -73,6 +73,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
   onNavigateSource,
 }) => {
   const { t, dir, lang, books, openBookForReading } = useWorkspace();
+  const ioStrings = useMemo(() => ({ toggleMasks: t('ioToggleMasks'), noImage: t('ioNoImage') }), [t]);
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
   const [mistake, setMistake] = useState<MistakeCategory | undefined>();
   const [confidence, setConfidence] = useState(0);
@@ -333,6 +334,11 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
         } else if (shortcut?.id === 'review-grade-4') {
           event.preventDefault();
           void grade(4);
+        } else if (!event.ctrlKey && !event.metaKey && !event.altKey && (event.key === 'm' || event.key === 'M')) {
+          // Image occlusion: M toggles the masks on the answer side, as in Anki (KEY-391).
+          document
+            .querySelectorAll<HTMLIFrameElement>('[data-srs-review-screen] iframe[data-card-frame]')
+            .forEach(frame => frame.contentWindow?.postMessage({ type: 'baglib-io-toggle' }, '*'));
         }
       }
     };
@@ -646,6 +652,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
                       if (card) setTypedAnswers((prev) => ({ ...prev, [card.id]: val }));
                     }}
                     onPlayTts={playCardTts}
+                    ioStrings={ioStrings}
                   />
                 </div>
 
@@ -718,7 +725,8 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
               {/* Revealed Answer Content */}
               {revealed && (
                 <div className="mt-6 border-t border-subtle pt-6 space-y-4 animate-in fade-in duration-200">
-                  {(card.questionKind ?? 'recall') === 'recall' && (
+                  {/* Cards rendered from a note template show their answer inside the card frame; their stored back is HTML. */}
+                  {(card.questionKind ?? 'recall') === 'recall' && !isTemplateHtml(card.back) && (
                     <p
                       dir="auto"
                       data-srs-answer

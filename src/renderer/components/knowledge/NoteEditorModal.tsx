@@ -5,6 +5,7 @@ import { X, Lock, RotateCcw, Split, Check, Layers, AlertTriangle } from 'lucide-
 import { useWorkspace } from '../context/WorkspaceContext';
 import { SafeCardRenderer } from './SafeCardRenderer';
 import { noteFieldLabel, noteTypeLabel } from './note-type-labels';
+import { ImageOcclusionEditor } from './ImageOcclusionEditor';
 import { generateCards } from '../../../shared/revision/template-engine';
 import type { CardNote, CardNoteType, SaveNoteInput } from '../../../shared/types/card-notes';
 
@@ -119,6 +120,13 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
 
   const currentPreviewCard = generatedPreviews.find(c => c.ord === previewOrd) || generatedPreviews[0];
 
+  // Image occlusion (KEY-391): the drawing editor owns the Occlusion and Image fields.
+  const isImageOcclusion = selectedType?.kind === 'image_occlusion';
+  const ioStrings = useMemo(() => ({ toggleMasks: t('ioToggleMasks'), noImage: t('ioNoImage') }), [t]);
+  const handleOcclusionChange = React.useCallback((next: { Occlusion: string; Image: string }) => {
+    setFields(prev => (prev.Occlusion === next.Occlusion && prev.Image === next.Image ? prev : { ...prev, ...next }));
+  }, []);
+
   // Save handler
   const handleSaveClick = async () => {
     if (saving) return;
@@ -169,7 +177,8 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
       <div
         dir={dir}
-        className="flex flex-col w-full max-w-4xl max-h-[90vh] bg-surface rounded-2xl border border-subtle shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        data-io={isImageOcclusion ? '1' : undefined}
+        className={`flex flex-col w-full ${isImageOcclusion ? 'max-w-6xl' : 'max-w-4xl'} max-h-[90vh] bg-surface rounded-2xl border border-subtle shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200`}
       >
         {/* Header */}
         <header className="flex items-center justify-between px-6 py-4 border-b border-subtle bg-surface">
@@ -227,7 +236,17 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
                 {t('noteFields')}
               </h3>
 
+              {isImageOcclusion && (
+                <ImageOcclusionEditor
+                  key={`${note?.id ?? 'new'}-${selectedTypeId}`}
+                  occlusion={fields.Occlusion ?? ''}
+                  image={fields.Image ?? ''}
+                  onChange={handleOcclusionChange}
+                />
+              )}
+
               {selectedType?.fields.map(f => {
+                if (isImageOcclusion && (f.name === 'Occlusion' || f.name === 'Image')) return null;
                 const isLocked = f.sourceText && protectSourceText;
                 const originalSnapshot = note?.sourceSnapshot?.[f.name];
                 const isEdited = Boolean(originalSnapshot && fields[f.name] !== originalSnapshot);
@@ -347,6 +366,7 @@ export const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
                   side={previewTab}
                   rtl={selectedType?.fields[0]?.rtl}
                   className="w-full"
+                  ioStrings={ioStrings}
                 />
               ) : (
                 <p className="text-xs text-muted italic">{t('noteEditorFrontEmpty')}</p>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MISTAKE_CATEGORIES,mistakeKey,type MistakeCategory } from '../../../shared/practice';
 import { PracticeAnswer } from './PracticeAnswer';
-import { SafeCardRenderer } from './SafeCardRenderer';
+import { SafeCardRenderer, isTemplateHtml } from './SafeCardRenderer';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
@@ -47,6 +47,7 @@ const playCardTts = async (text: string, ttsLang: string) => {
 
 export function SrsReviewPanel({ deckId }: { deckId?: string | null } = {}) {
   const { t, dir, lang, books, openBookForReading } = useWorkspace();
+  const ioStrings = useMemo(() => ({ toggleMasks: t('ioToggleMasks'), noImage: t('ioNoImage') }), [t]);
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
   const [mistake,setMistake]=useState<MistakeCategory|undefined>();
   const [confidence,setConfidence]=useState(0);
@@ -195,6 +196,7 @@ export function SrsReviewPanel({ deckId }: { deckId?: string | null } = {}) {
           if (card) setTypedAnswers((prev) => ({ ...prev, [card.id]: val }));
         }}
         onPlayTts={playCardTts}
+        ioStrings={ioStrings}
       />
       <p dir="auto" className="font-reading text-lg leading-loose whitespace-pre-wrap break-words sr-only">{card.front}</p>
       {card.sourceRef && (
@@ -211,7 +213,7 @@ export function SrsReviewPanel({ deckId }: { deckId?: string | null } = {}) {
       {(card.questionKind??'recall')!=='recall'&&<PracticeAnswer key={`${card.id}-${card.cardRevision}`} card={card} onRecorded={()=>{setPracticeDone(true);setRevealed(true);}}/>}
       {(card.questionKind??'recall')==='recall'&&!revealed&&<fieldset><legend className="leading-loose">{t('practiceConfidence')}</legend><div className="flex flex-wrap gap-2">{[1,2,3,4].map(n=><label className="rounded border border-subtle p-2" key={n}><input type="radio" name="srs-confidence" value={n} checked={confidence===n} onChange={()=>setConfidence(n)}/> {n}</label>)}</div></fieldset>}
       {revealed ? <>
-        {(card.questionKind??'recall')==='recall'&&<p dir="auto" data-srs-answer className="border-t border-subtle pt-3 leading-loose whitespace-pre-wrap break-words">{card.back || t('srsRecall')}</p>}
+        {(card.questionKind??'recall')==='recall'&&!isTemplateHtml(card.back)&&<p dir="auto" data-srs-answer className="border-t border-subtle pt-3 leading-loose whitespace-pre-wrap break-words">{card.back || t('srsRecall')}</p>}
         {(card.questionKind??'recall')==='recall'&&<label className="block">{t('practiceMistake')}<select aria-label={t('practiceMistake')} value={mistake??''} onChange={e=>setMistake(e.target.value as MistakeCategory||undefined)} className="w-full min-w-0 bg-canvas rounded border border-subtle p-2"><option value="">{t('practiceSkipMistake')}</option>{MISTAKE_CATEGORIES.map(m=><option key={m} value={m}>{t(mistakeKey(m))}</option>)}</select></label>}
         <p className="text-sm">{t('practiceSrsSeparate')}</p>
         {(card.questionKind??'recall')==='recall'&&<p>{t('practiceCheckedSelf')}</p>}

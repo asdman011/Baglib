@@ -3,6 +3,7 @@ import { KnowledgeCardRepository } from '../database/repositories/knowledge-card
 import { DeckRepository } from '../database/repositories/deck.repository';
 import { MEMORIZATION_DECK_ID } from '../database/migrations/031_decks_and_scheduler';
 import type { CardDeck, DeckInput, DeckResult, SaveCardInput } from '../../shared/types/knowledge-cards';
+import { mediaNameFromImageField } from '../../shared/revision/image-occlusion';
 
 const MAX_CARD_TEXT = 20_000;
 const firstLine = (text: string) => text.trim().split('\n')[0].slice(0, 300);
@@ -34,6 +35,33 @@ interface ExportRow {
 /** Anki quotes a field that holds a tab, a newline or a quote, and doubles any quote inside it. */
 const ankiField = (value: string) =>
   /[\t\r\n"]/u.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+
+export interface ImageOcclusionExportNote {
+  guid: string;
+  fields: Record<string, string>;
+}
+
+/**
+ * Image occlusion notes in Anki's text-import format (KEY-391): Anki's own "Image Occlusion" note
+ * type, with its fields in Anki's order and HTML kept, so the masks Anki draws are the ones BagLib
+ * draws. Anki's text import doesn't carry media, so the images are written next to the file.
+ */
+export function ankiImageOcclusionText(name: string, notes: ImageOcclusionExportNote[]): string {
+  const header = [
+    '#separator:Tab',
+    '#html:true',
+    '#notetype:Image Occlusion',
+    `#deck:${name.replace(/\s+/gu, ' ').trim()}`,
+    '#guid column:1',
+    '#tags column:7',
+  ];
+  const lines = notes.map(note =>
+    [note.guid, note.fields.Occlusion ?? '', note.fields.Image ?? '', note.fields.Header ?? '', note.fields['Back Extra'] ?? '', note.fields.Comments ?? '', 'baglib image-occlusion']
+      .map(ankiField)
+      .join('\t')
+  );
+  return `${[...header, ...lines].join('\n')}\n`;
+}
 
 /** Text goes into the file unchanged, so diacritics stay exact. The id keeps re-imports from duplicating. */
 export function ankiText(name: string, rows: ExportRow[]): string {
@@ -217,21 +245,46 @@ export class CardDeckService {
     })();
   }
 
-  exportText(deckId: string): { name: string; text: string } {
+  exportText(deckId: string): {
+    name: string;
+    text: string;
+    imageOcclusion: { text: string; media: string[] } | null;
+  } {
     const deck = this.deckRepo.getDeck(deckId);
     if (!deck || deck.kind !== 'normal') throw new Error('invalid-request');
 
     const rows = this.db
       .prepare(
-        `SELECT k.id, c.front, c.back, c.source_kind AS sourceKind, c.source_label AS sourceLabel
+        `SELECT k.id, c.front, c.back, c.source_kind AS sourceKind, c.source_label AS sourceLabel,
+                n.guid AS noteGuid, n.fields_json AS noteFields, t.kind AS noteKind
          FROM deck_card j
          JOIN knowledge k ON k.id = j.knowledge_id
          JOIN card_detail c ON c.knowledge_id = k.id
+         LEFT JOIN card_note n ON n.id = c.note_id
+         LEFT JOIN card_note_type t ON t.id = n.note_type_id
          WHERE j.deck_id = ? AND k.deleted_at IS NULL
          ORDER BY j.position ASC, k.created_at ASC, k.id ASC`
       )
-      .all(deckId) as ExportRow[];
+      .all(deckId) as Array<ExportRow & { noteGuid: string | null; noteFields: string | null; noteKind: string | null }>;
 
-    return { name: deck.fullName, text: ankiText(deck.fullName, rows) };
+    // Image occlusion notes go to their own file, once per note (one note makes several cards).
+    const occlusion = new Map<string, ImageOcclusionExportNote>();
+    const basic: ExportRow[] = [];
+    for (const row of rows) {
+      if (row.noteKind === 'image_occlusion' && row.noteGuid && row.noteFields) {
+        if (!occlusion.has(row.noteGuid)) {
+          occlusion.set(row.noteGuid, { guid: row.noteGuid, fields: JSON.parse(row.noteFields) as Record<string, string> });
+        }
+      } else {
+        basic.push({ id: row.id, front: row.front, back: row.back, sourceKind: row.sourceKind, sourceLabel: row.sourceLabel });
+      }
+    }
+    const notes = [...occlusion.values()];
+    const media = [...new Set(notes.map(n => mediaNameFromImageField(n.fields.Image ?? '')).filter((m): m is string => !!m))];
+    return {
+      name: deck.fullName,
+      text: ankiText(deck.fullName, basic),
+      imageOcclusion: notes.length ? { text: ankiImageOcclusionText(deck.fullName, notes), media } : null,
+    };
   }
 }
