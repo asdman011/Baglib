@@ -1,3 +1,9 @@
+## KEY-407 follow-up: review-card question-kind label - 2026-11-17 - Agent: Claude Code
+
+- The review screen showed the raw question kind ("recall") in every language. It now uses the existing `practiceKind*` translations through `kindKey` (Arabic: استدعاء). In RTL the label drops the monospace font and letter-spacing, which were pulling the Arabic letters apart.
+- Files: src/renderer/components/knowledge/SrsReviewScreen.tsx, tests/ui/srs-review-kind-label.test.ts (new), scripts/revision-polish-live/main.cjs (now asserts the label).
+- Verification: tsc exit 0; eslint exit 0; focused UI tests pass; `scripts/revision-polish-live` passes in ar and en, light and dark (label "استدعاء" / "Recall", no renderer errors). Screenshot: .baglib-data/key407-evidence/03-review-card-ar-dark.png.
+
 ## KEY-407 Revision polish - 2026-11-17 - Agent: Claude Code
 
 **Request.** The user told Claude to stop dispatching to other agents and implement tasks itself, starting with KEY-407 (theme-aware card frame, localised built-in note type and field names, plus the four KEY-389 review follow-ups).

@@ -7,7 +7,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
-import { MISTAKE_CATEGORIES, mistakeKey, type MistakeCategory } from '../../../shared/practice';
+import { MISTAKE_CATEGORIES, kindKey, mistakeKey, type MistakeCategory } from '../../../shared/practice';
 import { PracticeAnswer } from './PracticeAnswer';
 import { SafeCardRenderer } from './SafeCardRenderer';
 import { renderTemplate } from '../../../shared/revision/template-engine';
@@ -626,8 +626,8 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
               {/* Question / Front */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between text-xs text-muted">
-                  <span className="uppercase tracking-wider font-mono text-[10px] text-muted">
-                    {card.questionKind ?? 'recall'}
+                  <span data-srs-question-kind className={`text-muted ${dir === 'rtl' ? 'text-xs' : 'uppercase tracking-wider font-mono text-[10px]'}`}>
+                    {t(kindKey(card.questionKind ?? 'recall'))}
                   </span>
                   {card.sourceLabel && (
                     <span dir="auto" className="truncate max-w-[240px]">

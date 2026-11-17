@@ -178,6 +178,8 @@ app.on('browser-window-created', (_, owner) => {
     assert.equal(results.reviewFrameTheme, theme);
     results.reviewFrameWhiteShare = await frameWhiteShare('[data-srs-review-screen] iframe[data-card-frame]');
     if (theme === 'dark') assert.ok(results.reviewFrameWhiteShare < 0.05, `no white strip on review card (${results.reviewFrameWhiteShare})`);
+    results.reviewKindLabel = await evaluate(`document.querySelector('[data-srs-question-kind]')?.textContent?.trim() ?? ''`);
+    assert.equal(results.reviewKindLabel, language === 'ar' ? 'استدعاء' : 'Recall', 'question kind label is localised');
     await shot('03-review-card');
 
     results.rendererErrors = errors.filter(line => !/Download the React DevTools|favicon/u.test(line));
