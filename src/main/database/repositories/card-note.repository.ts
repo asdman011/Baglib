@@ -252,11 +252,13 @@ export class CardNoteRepository {
   }
 
   listNotes({
+    deckId,
     noteTypeId,
     search,
     offset = 0,
     limit = 50,
   }: {
+    deckId?: string;
     noteTypeId?: string;
     search?: string;
     offset?: number;
@@ -264,6 +266,14 @@ export class CardNoteRepository {
   } = {}): CardNote[] {
     let sql = `SELECT * FROM card_note WHERE 1=1`;
     const params: unknown[] = [];
+    if (deckId) {
+      sql += ` AND EXISTS (
+        SELECT 1 FROM card_detail c
+        JOIN deck_card dc ON dc.knowledge_id = c.knowledge_id
+        WHERE c.note_id = card_note.id AND dc.deck_id = ?
+      )`;
+      params.push(deckId);
+    }
     if (noteTypeId) {
       sql += ` AND note_type_id = ?`;
       params.push(noteTypeId);
@@ -450,22 +460,43 @@ export class CardNoteRepository {
 
           // Link to deck if provided
           if (input.deckId) {
-            this.db
-              .prepare(`INSERT OR IGNORE INTO collection (id, name, collection_type) VALUES (?, ?, 'deck')`)
-              .run(input.deckId, input.deckId);
-            this.db
-              .prepare(`INSERT OR IGNORE INTO knowledge_collection (knowledge_id, collection_id) VALUES (?, ?)`)
-              .run(cardId, input.deckId);
+            this.ensureDeckAndLinkCard(input.deckId, cardId, now);
+          } else {
+            // If note's existing cards are already in decks, link the new sibling card to those decks too
+            const existingDecks = existingCardRows.length > 0 ? this.getDecksForNote(noteId!) : [];
+            for (const dId of existingDecks) {
+              this.ensureDeckAndLinkCard(dId, cardId, now);
+            }
           }
           updatedCardIds.push(cardId);
         }
       }
 
+      // If input.deckId was provided, also ensure existing cards of this note are linked to input.deckId
+      if (input.deckId) {
+        for (const cardId of updatedCardIds) {
+          this.ensureDeckAndLinkCard(input.deckId, cardId, now);
+        }
+      }
+
       // Add tags if provided
       if (input.tags && input.tags.length > 0) {
-        for (const cardId of updatedCardIds) {
-          for (const tag of input.tags) {
-            this.db.prepare(`INSERT OR IGNORE INTO knowledge_tag (knowledge_id, tag) VALUES (?, ?)`).run(cardId, tag);
+        const insertTag = this.db.prepare(
+          `INSERT OR IGNORE INTO tag (id, name, origin) VALUES (?, ?, 'manual')`
+        );
+        const selectTag = this.db.prepare(`SELECT id FROM tag WHERE name = ?`);
+        const linkTag = this.db.prepare(
+          `INSERT OR IGNORE INTO knowledge_tag (knowledge_id, tag_id) VALUES (?, ?)`
+        );
+        for (const rawTag of input.tags) {
+          const cleanTag = rawTag.trim();
+          if (!cleanTag) continue;
+          insertTag.run(randomUUID(), cleanTag);
+          const tagRow = selectTag.get(cleanTag) as { id: string } | undefined;
+          if (tagRow) {
+            for (const cardId of updatedCardIds) {
+              linkTag.run(cardId, tagRow.id);
+            }
           }
         }
       }
@@ -586,32 +617,64 @@ export class CardNoteRepository {
           reps: number;
           lapses: number;
           last_review: string | null;
+          learning_step?: number;
+          buried_until?: string | null;
+          new_position?: number | null;
+          desired_retention?: number | null;
         } | undefined;
         if (srsRow) {
-          this.db
-            .prepare(
-              `INSERT INTO srs_state (knowledge_id, state, due_at, stability, difficulty, reps, lapses, last_review)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-            )
-            .run(
-              newCardId,
-              srsRow.state,
-              srsRow.due_at,
-              srsRow.stability,
-              srsRow.difficulty,
-              srsRow.reps,
-              srsRow.lapses,
-              srsRow.last_review
-            );
+          const hasExtendedCols = Boolean(
+            this.db.prepare("SELECT 1 FROM pragma_table_info('srs_state') WHERE name='learning_step'").get()
+          );
+          if (hasExtendedCols) {
+            this.db
+              .prepare(
+                `INSERT INTO srs_state (
+                  knowledge_id, state, due_at, stability, difficulty, reps, lapses, last_review,
+                  learning_step, buried_until, new_position, desired_retention
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              )
+              .run(
+                newCardId,
+                srsRow.state,
+                srsRow.due_at,
+                srsRow.stability,
+                srsRow.difficulty,
+                srsRow.reps,
+                srsRow.lapses,
+                srsRow.last_review,
+                srsRow.learning_step ?? 0,
+                srsRow.buried_until ?? null,
+                srsRow.new_position ?? null,
+                srsRow.desired_retention ?? null
+              );
+          } else {
+            this.db
+              .prepare(
+                `INSERT INTO srs_state (knowledge_id, state, due_at, stability, difficulty, reps, lapses, last_review)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+              )
+              .run(
+                newCardId,
+                srsRow.state,
+                srsRow.due_at,
+                srsRow.stability,
+                srsRow.difficulty,
+                srsRow.reps,
+                srsRow.lapses,
+                srsRow.last_review
+              );
+          }
         }
 
         // Move the deck link from original card to new card
+        const oldLink = this.db
+          .prepare(`SELECT position, added_at FROM deck_card WHERE knowledge_id = ? AND deck_id = ?`)
+          .get(origCard.id, deckId) as { position: number; added_at: string } | undefined;
         this.db
-          .prepare(`DELETE FROM knowledge_collection WHERE knowledge_id = ? AND collection_id = ?`)
+          .prepare(`DELETE FROM deck_card WHERE knowledge_id = ? AND deck_id = ?`)
           .run(origCard.id, deckId);
-        this.db
-          .prepare(`INSERT OR IGNORE INTO knowledge_collection (knowledge_id, collection_id) VALUES (?, ?)`)
-          .run(newCardId, deckId);
+        this.ensureDeckAndLinkCard(deckId, newCardId, oldLink?.added_at ?? now, oldLink?.position);
       }
 
       return {
@@ -619,6 +682,51 @@ export class CardNoteRepository {
         newCards: this.getCardsForNote(newNoteId),
       };
     })();
+  }
+
+  private ensureDeckAndLinkCard(deckId: string, cardId: string, now: string, explicitPos?: number): void {
+    const existingById = this.db.prepare(`SELECT id FROM deck WHERE id = ?`).get(deckId) as { id: string } | undefined;
+    if (!existingById) {
+      const existingByName = this.db
+        .prepare(`SELECT id FROM deck WHERE parent_id IS NULL AND name = ?`)
+        .get(deckId) as { id: string } | undefined;
+      if (!existingByName) {
+        this.db
+          .prepare(
+            `INSERT OR IGNORE INTO deck (id, name, parent_id, kind, preset_id, created_at, updated_at)
+             VALUES (?, ?, NULL, 'normal', NULL, ?, ?)`
+          )
+          .run(deckId, deckId, now, now);
+      }
+    }
+    const maxPos = (
+      this.db.prepare(`SELECT COALESCE(MAX(position), 0) AS maxPos FROM deck_card WHERE deck_id = ?`).get(deckId) as {
+        maxPos: number;
+      }
+    ).maxPos;
+    const pos = explicitPos ?? maxPos + 1;
+    this.db
+      .prepare(`INSERT OR IGNORE INTO deck_card (deck_id, knowledge_id, position, added_at) VALUES (?, ?, ?, ?)`)
+      .run(deckId, cardId, pos, now);
+
+    const hasSrs = this.db.prepare(`SELECT 1 FROM srs_state WHERE knowledge_id = ?`).get(cardId);
+    if (!hasSrs) {
+      const hasNewPos = Boolean(
+        this.db.prepare("SELECT 1 FROM pragma_table_info('srs_state') WHERE name='new_position'").get()
+      );
+      if (hasNewPos) {
+        this.db
+          .prepare(
+            `INSERT OR IGNORE INTO srs_state (knowledge_id, state, due_at, learning_step, new_position)
+             VALUES (?, 'new', ?, 0, ?)`
+          )
+          .run(cardId, now, pos);
+      } else {
+        this.db
+          .prepare(`INSERT OR IGNORE INTO srs_state (knowledge_id, state, due_at) VALUES (?, 'new', ?)`)
+          .run(cardId, now);
+      }
+    }
   }
 
   /**
@@ -651,29 +759,24 @@ export class CardNoteRepository {
   getDecksForNote(noteId: string): string[] {
     const rows = this.db
       .prepare(
-        `SELECT DISTINCT collection_id
-         FROM knowledge_collection j
+        `SELECT DISTINCT j.deck_id
+         FROM deck_card j
          JOIN card_detail c ON c.knowledge_id = j.knowledge_id
          WHERE c.note_id = ?`
       )
-      .all(noteId) as Array<{ collection_id: string }>;
-    return rows.map(r => r.collection_id);
+      .all(noteId) as Array<{ deck_id: string }>;
+    return rows.map(r => r.deck_id);
   }
 
   /**
-   * Links all cards of a note to an additional deck collection.
+   * Links all cards of a note to an additional deck.
    */
   linkNoteToDeck(noteId: string, deckId: string): void {
     const cards = this.getCardsForNote(noteId);
-    this.db
-      .prepare(`INSERT OR IGNORE INTO collection (id, name, collection_type) VALUES (?, ?, 'deck')`)
-      .run(deckId, deckId);
-    const insert = this.db.prepare(
-      `INSERT OR IGNORE INTO knowledge_collection (knowledge_id, collection_id) VALUES (?, ?)`
-    );
+    const now = new Date().toISOString();
     this.db.transaction(() => {
       for (const card of cards) {
-        insert.run(card.id, deckId);
+        this.ensureDeckAndLinkCard(deckId, card.id, now);
       }
     })();
   }

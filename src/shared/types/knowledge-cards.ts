@@ -106,8 +106,27 @@ export interface KnowledgeCardsAPI {
   generateHadithDeck(input: import('../hadith-deck').HadithDeckInput): Promise<DeckResult>;
   /** Resolves false when the save dialog is cancelled. */
   exportDeck(id: string): Promise<boolean>;
-  reviewQueue(): Promise<import('../srs').ReviewQueue>;
+  reviewQueue(deckId?: string | null): Promise<import('../srs').ReviewQueue>;
   gradeReview(input: import('../srs').GradeReviewInput): Promise<import('../srs').ReviewQueue>;
+  deckTree(): Promise<import('../srs').DeckTreeNode[]>;
+  createDeck(input: import('../srs').SaveDeckInput): Promise<import('../srs').DeckItem>;
+  createFilteredDeck(input: import('../srs').SaveFilteredDeckInput): Promise<import('../srs').DeckItem>;
+  renameDeck(id: string, name: string): Promise<import('../srs').DeckItem>;
+  moveDeck(id: string, parentId: string | null): Promise<import('../srs').DeckItem>;
+  deleteDeck(id: string, confirmWithCards?: boolean): Promise<boolean>;
+  assignPreset(deckId: string, presetId: string | null): Promise<import('../srs').DeckItem>;
+  listPresets(): Promise<import('../srs').SrsPreset[]>;
+  savePreset(input: import('../srs').SaveSrsPresetInput): Promise<import('../srs').SrsPreset>;
+  copyPreset(id: string, newName?: string): Promise<import('../srs').SrsPreset>;
+  deletePreset(id: string): Promise<boolean>;
+  buryCard(cardId: string, deckId?: string | null): Promise<import('../srs').ReviewQueue>;
+  buryNoteSiblings(cardId: string, deckId?: string | null): Promise<import('../srs').ReviewQueue>;
+  unbury(deckId?: string | null, cardId?: string | null): Promise<import('../srs').ReviewQueue>;
+  suspendCard(cardId: string, suspended: boolean, deckId?: string | null): Promise<import('../srs').ReviewQueue>;
+  forgetCard(cardId: string, deckId?: string | null): Promise<import('../srs').ReviewQueue>;
+  setDueDate(cardId: string, days: number, deckId?: string | null): Promise<import('../srs').ReviewQueue>;
+  getRolloverHour(): Promise<0 | 4>;
+  setRolloverHour(hour: 0 | 4): Promise<0 | 4>;
   list(query?: { search?: string; offset?: number }): Promise<KnowledgeCard[]>;
   save(input: SaveCardInput): Promise<KnowledgeCard>;
   listPreserved(): Promise<PreservedKnowledge[]>;

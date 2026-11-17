@@ -3,6 +3,10 @@ import type { StatisticsSnapshot } from '../../../shared/statistics-workspace';
 
 /** Read-only projections of existing tables. Dates match the reading tracker civil-day convention. */
 export function workspaceStatistics(db: Database): StatisticsSnapshot {
+  const hasEntryKind = Boolean(db.prepare("SELECT 1 FROM pragma_table_info('srs_review_log') WHERE name='entry_kind'").get());
+  const reviewWhere = hasEntryKind
+    ? "WHERE entry_kind IN ('learn','review','relearn','filtered') AND rating >= 1"
+    : "WHERE rating >= 1";
   return db.transaction(() => ({
     reading: db.prepare(`SELECT date(start_time,'unixepoch','localtime') AS date,
       SUM(duration) AS seconds, COUNT(DISTINCT id_book || ':' || page) AS pages,
@@ -12,7 +16,7 @@ export function workspaceStatistics(db: Database): StatisticsSnapshot {
       SUM(knowledge_type='card') AS cards FROM knowledge WHERE deleted_at IS NULL
       GROUP BY date ORDER BY date`).all() as StatisticsSnapshot['knowledge'],
     reviews: db.prepare(`SELECT date(reviewed_at,'localtime') AS date, COUNT(*) AS total,
-      SUM(rating>1) AS retained FROM srs_review_log GROUP BY date ORDER BY date`).all() as StatisticsSnapshot['reviews'],
+      SUM(rating>1) AS retained FROM srs_review_log ${reviewWhere} GROUP BY date ORDER BY date`).all() as StatisticsSnapshot['reviews'],
     due: db.prepare(`SELECT date(s.due_at,'localtime') AS dueAt, COUNT(*) AS count FROM srs_state s
       JOIN knowledge k ON k.id=s.knowledge_id WHERE s.state<>'suspended' AND k.deleted_at IS NULL
       GROUP BY dueAt ORDER BY dueAt`).all() as StatisticsSnapshot['due'],

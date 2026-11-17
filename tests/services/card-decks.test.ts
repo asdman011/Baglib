@@ -25,7 +25,7 @@ test('a deck takes only the chosen sources and keeps sacred text exact', () => {
     notes.addNote({ id: 'note', bookId: 'book', pageNumber: 3, content: 'ملاحظة' });
     const { deck, added, skipped } = decks.generate({ name: 'حفظ', sources: ['quran'], memorize: false });
     assert.deepEqual([deck.cards, added, skipped], [1, 1, 0]);
-    assert.equal((db.prepare('SELECT front FROM card_detail c JOIN knowledge_collection j ON j.knowledge_id=c.knowledge_id').get() as { front: string }).front, AYAH);
+    assert.equal((db.prepare('SELECT front FROM card_detail c JOIN deck_card j ON j.knowledge_id=c.knowledge_id').get() as { front: string }).front, AYAH);
     assert.equal(new SrsService(db).queue().due, 0);
   } finally { db.close(); }
 });

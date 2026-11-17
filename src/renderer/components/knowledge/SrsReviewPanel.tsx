@@ -45,7 +45,7 @@ const playCardTts = async (text: string, ttsLang: string) => {
   } catch {}
 };
 
-export function SrsReviewPanel() {
+export function SrsReviewPanel({ deckId }: { deckId?: string | null } = {}) {
   const { t, dir, lang, books, openBookForReading } = useWorkspace();
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
   const [mistake,setMistake]=useState<MistakeCategory|undefined>();
@@ -64,11 +64,11 @@ export function SrsReviewPanel() {
     if (locked.current) return;
     const request = ++generation.current;
     try {
-      const value = await window.electronAPI.knowledgeCards.reviewQueue();
+      const value = await window.electronAPI.knowledgeCards.reviewQueue(deckId ?? undefined);
       if (request !== generation.current) return;
       setQueue(value); setRevealed(false);setConfidence(0);setMistake(undefined);setPracticeDone(false); setFailed(false); started.current = Date.now();
     } catch { if (request === generation.current) setFailed(true); }
-  }, []);
+  }, [deckId]);
   useEffect(() => {
     const pending = generation;
     const update = () => void refresh();
@@ -173,15 +173,15 @@ export function SrsReviewPanel() {
         await window.electronAPI.knowledgeCards.recordAttempt({knowledgeId:card.id,cardRevision:card.cardRevision,answerText:'',confidence,checkMethod:'self',mistakeCategory:rating<=2?mistake:undefined,result:rating===1?'incorrect':rating===2?'partial':'correct',durationMs:Math.min(86_400_000,Math.max(0,Date.now()-started.current))});
         setPracticeDone(true); window.dispatchEvent(new CustomEvent('baglib:practice-recorded'));
       }
-      const value = await window.electronAPI.knowledgeCards.gradeReview({ id: card.id, revision: card.revision, rating, durationMs: Math.min(86_400_000, Math.max(0, Date.now() - started.current)) });
+      const value = await window.electronAPI.knowledgeCards.gradeReview({ id: card.id, revision: card.revision, rating, durationMs: Math.min(86_400_000, Math.max(0, Date.now() - started.current)), ...(deckId ? { deckId } : {}) });
       setQueue(value); setRevealed(false);setConfidence(0);setMistake(undefined);setPracticeDone(false); setFailed(false); started.current = Date.now();
       window.dispatchEvent(new CustomEvent('baglib:srs-reviewed'));
     } catch { setFailed(true); }
     finally { locked.current = false; setBusy(false); }
-  }, [card, revealed,confidence,practiceDone,mistake]);
+  }, [card, revealed,confidence,practiceDone,mistake, deckId]);
   return <section dir={dir} data-srs-review className="rounded-2xl border border-subtle bg-surface p-4 space-y-3 min-w-0">
     <header className="flex flex-wrap justify-between gap-2"><h3 className="font-bold">{t('srsTitle')}</h3><button type="button" disabled={busy} onClick={() => void refresh()} className="text-sm underline">{t('srsRefresh')}</button></header>
-    {queue && <p className="text-sm text-muted" aria-live="polite">{t('srsCounts', { due: queue.due, reviewed: queue.reviewedToday })}</p>}
+    {queue && <p className="text-sm text-muted" aria-live="polite">{t('srsCounts', { due: queue.due, reviewed: queue.reviewedToday })} · {t('deckCountsBadge', { newCount: queue.newCount ?? 0, learningCount: queue.learningCount ?? 0, dueCount: queue.dueCount ?? queue.due })}</p>}
     {failed && <p role="alert" className="text-sm text-red-600">{t('srsFailed')}</p>}
     {!queue && !failed && <p role="status">{t('srsLoading')}</p>}
     {card ? <article key={card.id} className="space-y-3" data-srs-card={card.id}>

@@ -382,6 +382,23 @@ export class StudyPrerequisitesService {
             )
             .get(...cardIds) as { totalLapses: number | null } | undefined;
           lapsesCount = Number(srsRows?.totalLapses || 0);
+
+          if (this.hasTable('srs_review_log')) {
+            const hasEntryKind = Boolean(
+              this.db.prepare("SELECT 1 FROM pragma_table_info('srs_review_log') WHERE name='entry_kind'").get()
+            );
+            const entryKindFilter = hasEntryKind
+              ? "AND entry_kind IN ('learn','review','relearn','filtered') AND rating >= 1"
+              : 'AND rating >= 1';
+            const logFailRow = this.db
+              .prepare(
+                `SELECT COUNT(CASE WHEN rating = 1 THEN 1 END) as againCount
+                 FROM srs_review_log
+                 WHERE knowledge_id IN (${placeholders}) ${entryKindFilter}`
+              )
+              .get(...cardIds) as { againCount: number | null } | undefined;
+            lapsesCount = Math.max(lapsesCount, Number(logFailRow?.againCount || 0));
+          }
         }
 
         if (hasPractice) {

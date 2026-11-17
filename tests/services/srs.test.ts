@@ -112,7 +112,7 @@ test('review queue is bounded while the due count covers every scheduled card', 
       const card = cards.save({ front: `Card ${index}`, back: '', sourceKind: 'term' });
       cards.setMemorizing(card.id, true);
     }
-    db.prepare('UPDATE srs_state SET due_at=?').run('2026-11-02T11:00:00.000Z');
+    db.prepare("UPDATE srs_state SET state='review', due_at=?").run('2026-11-02T11:00:00.000Z');
     assert.equal(service.queue().cards.length, 50);
     assert.equal(service.queue().due, 56);
   } finally { db.close(); }

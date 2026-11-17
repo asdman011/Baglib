@@ -376,22 +376,16 @@ test('source text restore: restoreSourceText restores original fields from sourc
 });
 
 test('shared cards: forkNoteForDeck copies note and cards, sets copied_from_note_id, preserves srs_state, and moves deck link', () => {
-  const { db, notes, cards } = setup();
+  const { notes } = setup();
 
-  // Create two decks
-  db.prepare(`INSERT INTO collection (id, name, collection_type) VALUES ('deck-a', 'Deck A', 'deck')`).run();
-  db.prepare(`INSERT INTO collection (id, name, collection_type) VALUES ('deck-b', 'Deck B', 'deck')`).run();
-
-  // Save note linked to deck-a and deck-b
+  // Save note linked to deck-a and link to deck-b as well
   const { note, cards: [card1] } = notes.saveNote({
     noteTypeId: 'stock-basic',
     fields: { Front: 'Shared Front', Back: 'Shared Back' },
     deckId: 'deck-a',
   });
 
-  // Link card1 to deck-b as well
-  db.prepare(`INSERT INTO knowledge_collection (knowledge_id, collection_id) VALUES (?, ?)`).run(card1.id, 'deck-b');
-  cards.setMemorizing(card1.id, true);
+  notes.linkNoteToDeck(note.id, 'deck-b');
 
   // Verify it is in both decks
   const decksBefore = notes.getDecksForNote(note.id);

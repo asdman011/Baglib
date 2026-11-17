@@ -2,7 +2,7 @@
 
 import { shortcutForEvent } from '../actions/shortcuts';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, ArrowLeft, ArrowRight, Sparkles, RotateCw, ExternalLink } from 'lucide-react';
+import { CheckCircle, ArrowLeft, ArrowRight, Sparkles, RotateCw, ExternalLink, MoreHorizontal, AlertTriangle } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
@@ -16,7 +16,9 @@ import type { CardNote, CardNoteType } from '../../../shared/types/card-notes';
 import type { ReviewQueue, ReviewRating } from '../../../shared/srs';
 
 export interface SrsReviewScreenProps {
+  deckId?: string | null;
   onClose: () => void;
+  onCompareSimilar?: (term: string) => void;
   onNavigateSource?: (target: string) => void;
 }
 
@@ -64,7 +66,12 @@ const playCardTts = async (text: string, ttsLang: string) => {
   } catch {}
 };
 
-export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNavigateSource }) => {
+export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
+  deckId,
+  onClose,
+  onCompareSimilar,
+  onNavigateSource,
+}) => {
   const { t, dir, lang, books, openBookForReading } = useWorkspace();
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
   const [mistake, setMistake] = useState<MistakeCategory | undefined>();
@@ -76,6 +83,8 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
   const [note, setNote] = useState<CardNote | null>(null);
   const [noteType, setNoteType] = useState<CardNoteType | null>(null);
   const [typedAnswers, setTypedAnswers] = useState<Record<string, string>>({});
+  const [dueDaysInput, setDueDaysInput] = useState<number>(3);
+  const [showDueInput, setShowDueInput] = useState<boolean>(false);
 
   const locked = useRef(false);
   const started = useRef(0);
@@ -85,7 +94,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
     if (locked.current) return;
     const request = ++generation.current;
     try {
-      const value = await window.electronAPI.knowledgeCards.reviewQueue();
+      const value = await window.electronAPI.knowledgeCards.reviewQueue(deckId ?? undefined);
       if (request !== generation.current) return;
       setQueue(value);
       setRevealed(false);
@@ -93,11 +102,12 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
       setMistake(undefined);
       setPracticeDone(false);
       setFailed(false);
+      setShowDueInput(false);
       started.current = Date.now();
     } catch {
       if (request === generation.current) setFailed(true);
     }
-  }, []);
+  }, [deckId]);
 
   useEffect(() => {
     const pending = generation;
@@ -233,6 +243,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
           revision: card.revision,
           rating,
           durationMs: Math.min(86_400_000, Math.max(0, Date.now() - started.current)),
+          ...(deckId ? { deckId } : {}),
         });
         setQueue(value);
         setRevealed(false);
@@ -240,6 +251,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
         setMistake(undefined);
         setPracticeDone(false);
         setFailed(false);
+        setShowDueInput(false);
         started.current = Date.now();
         window.dispatchEvent(new CustomEvent('baglib:srs-reviewed'));
       } catch {
@@ -249,8 +261,32 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
         setBusy(false);
       }
     },
-    [card, revealed, confidence, practiceDone, mistake]
+    [card, revealed, confidence, practiceDone, mistake, deckId]
   );
+
+  const runCardAction = async (fn: () => Promise<ReviewQueue>) => {
+    if (locked.current) return;
+    locked.current = true;
+    setBusy(true);
+    generation.current++;
+    try {
+      const value = await fn();
+      setQueue(value);
+      setRevealed(false);
+      setConfidence(0);
+      setMistake(undefined);
+      setPracticeDone(false);
+      setFailed(false);
+      setShowDueInput(false);
+      started.current = Date.now();
+      window.dispatchEvent(new CustomEvent('baglib:srs-reviewed'));
+    } catch {
+      setFailed(true);
+    } finally {
+      locked.current = false;
+      setBusy(false);
+    }
+  };
 
   // Global keyboard shortcuts: Space to reveal, 1-4 to rate, Esc to close
   useEffect(() => {
@@ -345,18 +381,169 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
           <div className="h-4 w-px bg-subtle" />
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-amber-500" />
-            <h2 className="font-display font-bold text-sm text-main">{t('srsTitle')}</h2>
+            <h2 className="font-display font-bold text-sm text-main">
+              {t('srsTitle')}
+              {queue?.deckName && (
+                <span data-srs-deck-name className="ms-2 text-xs font-normal text-muted">
+                  ({queue.deckId === 'memorization' ? t('deckMemorizationBuiltIn') : queue.deckName})
+                </span>
+              )}
+            </h2>
           </div>
         </div>
 
         {queue && (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* New / Learning / Due Counts */}
+            <span
+              data-srs-queue-counts
+              className="text-xs px-2.5 py-1 rounded-full bg-canvas border border-subtle tabular-nums"
+              title={t('deckCountsBadge', {
+                newCount: queue.newCount ?? 0,
+                learningCount: queue.learningCount ?? 0,
+                dueCount: queue.dueCount ?? queue.due,
+              })}
+            >
+              <span data-srs-new-count className="text-blue-600 dark:text-blue-400 font-semibold">
+                {queue.newCount ?? 0}
+              </span>
+              {' / '}
+              <span data-srs-learning-count className="text-amber-600 dark:text-amber-400 font-semibold">
+                {queue.learningCount ?? 0}
+              </span>
+              {' / '}
+              <span data-srs-due-count className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                {queue.dueCount ?? queue.due}
+              </span>
+            </span>
+
+            {(queue.buriedCount ?? 0) > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                data-srs-unbury
+                onClick={() => void runCardAction(() => window.electronAPI.knowledgeCards.unbury(deckId ?? undefined))}
+              >
+                {t('deckUnburyBtn', { count: queue.buriedCount ?? 0 })}
+              </Button>
+            )}
+
             <span
               className="text-xs text-muted tabular-nums"
               title={t('srsProgressCounter', { current: Math.min(totalToday, queue.reviewedToday + (card ? 1 : 0)), total: totalToday })}
             >
               {t('srsCounts', { due: queue.due, reviewed: queue.reviewedToday })}
             </span>
+
+            {/* Card Actions Menu (Bury, Suspend, Forget, Set Due Date) */}
+            {card && (
+              <details data-srs-card-menu className="relative">
+                <summary
+                  data-srs-card-menu-trigger
+                  aria-label={t('srsCardActionsMenu')}
+                  title={t('srsCardActionsMenu')}
+                  className="list-none cursor-pointer rounded-lg border border-subtle bg-canvas p-1.5 text-muted hover:text-main hover:bg-surface"
+                >
+                  <MoreHorizontal className="size-4" />
+                </summary>
+                <div className="absolute end-0 mt-1 w-56 rounded-xl border border-subtle bg-surface p-1.5 shadow-lg z-30 space-y-1 text-xs">
+                  <button
+                    type="button"
+                    data-srs-bury-card
+                    disabled={busy}
+                    onClick={e => {
+                      const d = e.currentTarget.closest('details');
+                      if (d) d.open = false;
+                      void runCardAction(() => window.electronAPI.knowledgeCards.buryCard(card.id, deckId ?? undefined));
+                    }}
+                    className="w-full rounded-lg px-2.5 py-1.5 text-start hover:bg-canvas cursor-pointer"
+                  >
+                    {t('srsBuryCard')}
+                  </button>
+                  {card.noteId && (
+                    <button
+                      type="button"
+                      data-srs-bury-siblings
+                      disabled={busy}
+                      onClick={e => {
+                        const d = e.currentTarget.closest('details');
+                        if (d) d.open = false;
+                        void runCardAction(() => window.electronAPI.knowledgeCards.buryNoteSiblings(card.id, deckId ?? undefined));
+                      }}
+                      className="w-full rounded-lg px-2.5 py-1.5 text-start hover:bg-canvas cursor-pointer"
+                    >
+                      {t('srsBurySiblings')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    data-srs-suspend-card
+                    disabled={busy}
+                    onClick={e => {
+                      const d = e.currentTarget.closest('details');
+                      if (d) d.open = false;
+                      void runCardAction(() => window.electronAPI.knowledgeCards.suspendCard(card.id, true, deckId ?? undefined));
+                    }}
+                    className="w-full rounded-lg px-2.5 py-1.5 text-start hover:bg-canvas cursor-pointer"
+                  >
+                    {t('srsSuspendCard')}
+                  </button>
+                  <button
+                    type="button"
+                    data-srs-forget-card
+                    disabled={busy}
+                    onClick={e => {
+                      const d = e.currentTarget.closest('details');
+                      if (d) d.open = false;
+                      void runCardAction(() => window.electronAPI.knowledgeCards.forgetCard(card.id, deckId ?? undefined));
+                    }}
+                    className="w-full rounded-lg px-2.5 py-1.5 text-start hover:bg-canvas cursor-pointer"
+                  >
+                    {t('srsForgetCard')}
+                  </button>
+                  <button
+                    type="button"
+                    data-srs-set-due-date
+                    disabled={busy}
+                    onClick={() => setShowDueInput(!showDueInput)}
+                    className="w-full rounded-lg px-2.5 py-1.5 text-start hover:bg-canvas cursor-pointer"
+                  >
+                    {t('srsSetDueDate')}
+                  </button>
+                  {showDueInput && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 border-t border-subtle pt-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={36500}
+                        data-srs-set-due-days
+                        aria-label={t('srsSetDueDaysPrompt')}
+                        value={dueDaysInput}
+                        onChange={e => setDueDaysInput(Number(e.target.value))}
+                        className="w-20 rounded border border-subtle bg-canvas px-2 py-1 text-xs text-main"
+                      />
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        data-srs-set-due-apply
+                        onClick={e => {
+                          const d = e.currentTarget.closest('details');
+                          if (d) d.open = false;
+                          void runCardAction(() =>
+                            window.electronAPI.knowledgeCards.setDueDate(card.id, dueDaysInput, deckId ?? undefined)
+                          );
+                        }}
+                      >
+                        {t('save')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
+
             <Button
               variant="ghost"
               size="sm"
@@ -392,6 +579,33 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({ onClose, onNav
             className="mb-4 p-3 rounded-xl bg-danger/10 border border-danger/30 text-danger text-sm max-w-lg w-full text-center"
           >
             {t('srsFailed')}
+          </div>
+        )}
+
+        {queue?.leechAlert && (
+          <div
+            role="status"
+            data-srs-leech-alert
+            className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-200 max-w-2xl w-full"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="size-4 shrink-0" />
+              <span>{t('srsLeechNotice', { lapses: queue.leechAlert.lapses })}</span>
+            </div>
+            <button
+              type="button"
+              data-srs-compare-similar
+              onClick={() => {
+                if (onCompareSimilar) {
+                  onCompareSimilar(queue.leechAlert!.front.slice(0, 40));
+                } else {
+                  onClose();
+                }
+              }}
+              className="font-semibold underline hover:no-underline cursor-pointer"
+            >
+              {t('srsCompareSimilar')}
+            </button>
           </div>
         )}
 

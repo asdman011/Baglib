@@ -17,13 +17,20 @@ import { PracticeAnswer } from './PracticeAnswer';
 import { PracticeHistoryPanel } from './PracticeHistoryPanel';
 import { NoteHistory } from '../notes/NoteHistory';
 import { CardDecksPanel } from './CardDecksPanel';
+import { DeckManagerPanel } from './DeckManagerPanel';
 import { DictionariesPanel } from './DictionariesPanel';
 import { PersonalCommentary } from './PersonalCommentary';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
 import { EmptyState } from '../ui/EmptyState';
 
-export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void }) {
+export function SavedCardsPanel({
+  onStartReview,
+  initialSearch = '',
+}: {
+  onStartReview?: (deckId?: string | null) => void;
+  initialSearch?: string;
+}) {
   const { t, dir, books, openBookForReading } = useWorkspace();
   const removeWithUndo = useUndoFeedback();
   const [editing, setEditing] = useState<string | null>(null);
@@ -34,7 +41,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
   const [noteTypeManagerOpen, setNoteTypeManagerOpen] = useState(false);
   const [cards, setCards] = useState<KnowledgeCard[]>([]);
   const [preserved, setPreserved] = useState<PreservedKnowledge[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [hover, setHover] = useState(true);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,6 +70,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
   }, [search]);
 
   useEffect(() => {
+    const pending = requestSequence;
     const load = () => void refresh();
     load();
     const handleNewCard = () => setCreating(true);
@@ -70,7 +78,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
     window.addEventListener(KNOWLEDGE_CARD_SAVED, load);
     window.addEventListener('baglib:srs-reviewed', load);
     return () => {
-      requestSequence.current++;
+      pending.current++;
       window.removeEventListener('baglib:new-card', handleNewCard);
       window.removeEventListener(KNOWLEDGE_CARD_SAVED, load);
       window.removeEventListener('baglib:srs-reviewed', load);
@@ -147,7 +155,7 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
             <Button
               variant={dueCount > 0 ? 'primary' : 'secondary'}
               size="sm"
-              onClick={onStartReview}
+              onClick={() => onStartReview(null)}
               icon={<Sparkles className="size-3.5" />}
               data-start-review-button
             >
@@ -207,6 +215,9 @@ export function SavedCardsPanel({ onStartReview }: { onStartReview?: () => void 
           className="min-w-0 flex-1 bg-transparent text-sm outline-none text-main placeholder:text-muted"
         />
       </label>
+
+      {/* Deck Manager Hierarchy */}
+      <DeckManagerPanel onStudyDeck={deckId => onStartReview?.(deckId)} />
 
       {/* Error state */}
       {failed && (

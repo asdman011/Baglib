@@ -49,6 +49,10 @@ export class StudyInsightsService {
     }
     // One row per review; use the same primary subject as reading. External corpus
     // references are not category foreign keys and must stay Uncategorized.
+    const hasEntryKind = Boolean(this.db.prepare("SELECT 1 FROM pragma_table_info('srs_review_log') WHERE name='entry_kind'").get());
+    const entryKindClause = hasEntryKind
+      ? " AND review.entry_kind IN ('learn','review','relearn','filtered') AND review.rating >= 1"
+      : " AND review.rating >= 1";
     const revisions = this.db.prepare(`
       SELECT category.name_ar AS ar, category.name_en AS en,
              SUM(review.duration_ms) / 1000.0 AS seconds
@@ -57,7 +61,7 @@ export class StudyInsightsService {
       JOIN card_detail detail ON detail.knowledge_id=card.id
       LEFT JOIN work ON work.id=card.work_id
       LEFT JOIN category ON category.id=work.primary_category_id
-      WHERE card.deleted_at IS NULL AND review.duration_ms>0
+      WHERE card.deleted_at IS NULL AND review.duration_ms>0${entryKindClause}
       GROUP BY category.name_ar, category.name_en
     `).all() as { ar: string | null; en: string | null; seconds: number }[];
     for (const row of revisions) {
@@ -159,10 +163,14 @@ export class StudyInsightsService {
 
     // 2. SRS reviews from srs_review_log
     try {
+      const hasEntryKind = Boolean(this.db.prepare("SELECT 1 FROM pragma_table_info('srs_review_log') WHERE name='entry_kind'").get());
+      const entryKindClause = hasEntryKind
+        ? " AND entry_kind IN ('learn','review','relearn','filtered') AND rating >= 1"
+        : " AND rating >= 1";
       const srsRows = this.db.prepare(`
         SELECT date(reviewed_at) AS day, COUNT(*) AS count
         FROM srs_review_log
-        WHERE reviewed_at >= datetime('now', '-' || ? || ' days')
+        WHERE reviewed_at >= datetime('now', '-' || ? || ' days')${entryKindClause}
         GROUP BY day
       `).all(daysCount) as { day: string; count: number }[];
       for (const r of srsRows) {

@@ -14,8 +14,9 @@ import { CardDeckService } from '../services/card-decks';
 import { PracticeService } from '../services/practice';
 import type { PracticeInput, JudgeAttemptInput, AttemptQuery } from '../../shared/practice';
 import { SrsService } from '../services/srs';
-import { validateReview } from '../../shared/srs';
+import { validateReview, type SaveDeckInput, type SaveFilteredDeckInput } from '../../shared/srs';
 import { CardNoteRepository } from '../database/repositories/card-note.repository';
+import { DeckRepository } from '../database/repositories/deck.repository';
 import {
   validateSafeId,
   validateSaveNoteInput,
@@ -31,9 +32,14 @@ const authorize = (event: IpcMainInvokeEvent) => {
 };
 const reviewService = (event: IpcMainInvokeEvent) => { authorize(event); return new SrsService(getDatabase()); };
 const deckService = (event: IpcMainInvokeEvent) => { authorize(event); return new CardDeckService(getDatabase()); };
+const deckRepo = (event: IpcMainInvokeEvent) => { authorize(event); return new DeckRepository(getDatabase()); };
 const cardId = (id: unknown): string => {
   if (typeof id !== 'string' || !id) throw new Error('invalid-request');
   return id;
+};
+const optionalDeckId = (id: unknown): string | undefined => {
+  if (id === undefined || id === null || id === '') return undefined;
+  return cardId(id);
 };
 
 export function registerKnowledgeCardIpc(): void {
@@ -42,8 +48,27 @@ export function registerKnowledgeCardIpc(): void {
   ipcMain.handle('knowledge-cards:attempts', (event,query:AttemptQuery)=>{authorize(event);return new PracticeService(getDatabase()).list(query);});
   ipcMain.handle('knowledge-cards:clear-practice', (event,confirmed:boolean)=>{authorize(event);return new PracticeService(getDatabase()).clear(confirmed);});
   ipcMain.handle('knowledge-cards:update', (event,id:unknown,input:unknown,revision:number)=>{authorize(event);return repository().update(cardId(id),validateCardInput(input),revision);});
-  ipcMain.handle('knowledge-cards:review-queue', event => reviewService(event).queue());
+  ipcMain.handle('knowledge-cards:review-queue', (event, deckId?: unknown) => reviewService(event).queue(optionalDeckId(deckId)));
   ipcMain.handle('knowledge-cards:grade-review', (event, input: unknown) => reviewService(event).grade(validateReview(input)));
+  ipcMain.handle('knowledge-cards:deck-tree', event => reviewService(event).deckTree());
+  ipcMain.handle('knowledge-cards:create-deck', (event, input: unknown) => deckRepo(event).createDeck((input ?? {}) as SaveDeckInput));
+  ipcMain.handle('knowledge-cards:create-filtered-deck', (event, input: unknown) => deckRepo(event).createFilteredDeck((input ?? {}) as SaveFilteredDeckInput));
+  ipcMain.handle('knowledge-cards:rename-deck', (event, id: unknown, name: unknown) => deckRepo(event).renameDeck(cardId(id), typeof name === 'string' ? name : ''));
+  ipcMain.handle('knowledge-cards:move-deck', (event, id: unknown, parentId: unknown) => deckRepo(event).moveDeck(cardId(id), parentId === null || parentId === undefined || parentId === '' ? null : cardId(parentId)));
+  ipcMain.handle('knowledge-cards:delete-deck', (event, id: unknown, confirmWithCards?: unknown) => deckRepo(event).deleteDeck(cardId(id), confirmWithCards === true));
+  ipcMain.handle('knowledge-cards:assign-preset', (event, deckId: unknown, presetId: unknown) => deckRepo(event).assignPreset(cardId(deckId), presetId === null || presetId === undefined || presetId === '' ? null : cardId(presetId)));
+  ipcMain.handle('knowledge-cards:list-presets', event => deckRepo(event).listPresets());
+  ipcMain.handle('knowledge-cards:save-preset', (event, input: unknown) => deckRepo(event).savePreset(input));
+  ipcMain.handle('knowledge-cards:copy-preset', (event, id: unknown, newName?: unknown) => deckRepo(event).copyPreset(cardId(id), typeof newName === 'string' ? newName : undefined));
+  ipcMain.handle('knowledge-cards:delete-preset', (event, id: unknown) => deckRepo(event).deletePreset(cardId(id)));
+  ipcMain.handle('knowledge-cards:bury-card', (event, id: unknown, deckId?: unknown) => reviewService(event).buryCard(cardId(id), optionalDeckId(deckId)));
+  ipcMain.handle('knowledge-cards:bury-siblings', (event, id: unknown, deckId?: unknown) => reviewService(event).buryNoteSiblings(cardId(id), optionalDeckId(deckId)));
+  ipcMain.handle('knowledge-cards:unbury', (event, deckId?: unknown, id?: unknown) => reviewService(event).unbury(optionalDeckId(deckId), optionalDeckId(id)));
+  ipcMain.handle('knowledge-cards:suspend-card', (event, id: unknown, suspended: unknown, deckId?: unknown) => reviewService(event).suspendCard(cardId(id), suspended === true, optionalDeckId(deckId)));
+  ipcMain.handle('knowledge-cards:forget-card', (event, id: unknown, deckId?: unknown) => reviewService(event).forgetCard(cardId(id), optionalDeckId(deckId)));
+  ipcMain.handle('knowledge-cards:set-due-date', (event, id: unknown, days: unknown, deckId?: unknown) => reviewService(event).setDueDate(cardId(id), Number(days), optionalDeckId(deckId)));
+  ipcMain.handle('knowledge-cards:get-rollover-hour', event => reviewService(event).getRolloverHour());
+  ipcMain.handle('knowledge-cards:set-rollover-hour', (event, hour: unknown) => reviewService(event).setRolloverHour(hour === 0 || hour === '0' ? 0 : 4));
   ipcMain.handle('knowledge-cards:decks', event => deckService(event).list());
   ipcMain.handle('knowledge-cards:generate-deck', (event, input: unknown) => deckService(event).generate(validateDeckInput(input)));
   // KEY-318: sacred text is copied from the installed pack, never reworded; a partial read is refused.

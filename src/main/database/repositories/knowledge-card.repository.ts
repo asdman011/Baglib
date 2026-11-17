@@ -165,23 +165,46 @@ export class KnowledgeCardRepository {
   /** Taking a card out keeps its progress, so adding it back continues from there. */
   setMemorizing(id: string, memorizing: boolean): boolean {
     if (!this.db.prepare('SELECT 1 FROM card_detail c JOIN knowledge k ON k.id=c.knowledge_id WHERE c.knowledge_id = ? AND k.deleted_at IS NULL').get(id)) return false;
-    if (!memorizing) {
-      this.db.prepare(`UPDATE srs_state SET state = 'suspended' WHERE knowledge_id = ?`).run(id);
+    const hasDeckTable = Boolean(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='deck'").get());
+    const now = new Date().toISOString();
+
+    return this.db.transaction(() => {
+      if (!memorizing) {
+        if (hasDeckTable) {
+          this.db.prepare(`DELETE FROM deck_card WHERE deck_id = 'memorization' AND knowledge_id = ?`).run(id);
+        }
+        this.db.prepare(`UPDATE srs_state SET state = 'suspended' WHERE knowledge_id = ?`).run(id);
+        return true;
+      }
+
+      let nextPos = 1;
+      if (hasDeckTable) {
+        this.db.prepare(`INSERT OR IGNORE INTO srs_preset (id, name, created_at, updated_at) VALUES ('default', 'Default', ?, ?)`).run(now, now);
+        this.db.prepare(`INSERT OR IGNORE INTO deck (id, name, parent_id, kind, preset_id, created_at, updated_at) VALUES ('memorization', 'Memorization', NULL, 'normal', 'default', ?, ?)`).run(now, now);
+        const maxPos = (this.db.prepare(`SELECT COALESCE(MAX(position), 0) AS maxPos FROM deck_card WHERE deck_id = 'memorization'`).get() as { maxPos: number }).maxPos;
+        nextPos = maxPos + 1;
+        this.db.prepare(`INSERT OR IGNORE INTO deck_card (deck_id, knowledge_id, position, added_at) VALUES ('memorization', ?, ?, ?)`).run(id, nextPos, now);
+      }
+
+      let resumeState = 'review';
+      const previous = this.db.prepare('SELECT state_before FROM srs_review_log WHERE knowledge_id=? ORDER BY reviewed_at DESC,rowid DESC LIMIT 1').get(id) as { state_before: string | null } | undefined;
+      if (previous?.state_before) {
+        try {
+          const state = JSON.parse(previous.state_before).after?.state;
+          if (state === 1) resumeState = 'learning';
+          if (state === 3) resumeState = 'relearning';
+        } catch {}
+      }
+      const resumed = this.db.prepare(`UPDATE srs_state SET state = CASE WHEN reps = 0 THEN 'new' ELSE ? END WHERE knowledge_id = ? AND state = 'suspended'`).run(resumeState, id);
+      if (resumed.changes === 0) {
+        const hasNewPos = Boolean(this.db.prepare("SELECT 1 FROM pragma_table_info('srs_state') WHERE name='new_position'").get());
+        if (hasNewPos) {
+          this.db.prepare(`INSERT OR IGNORE INTO srs_state (knowledge_id, state, due_at, learning_step, new_position) VALUES (?, 'new', ?, 0, ?)`).run(id, now, nextPos);
+        } else {
+          this.db.prepare(`INSERT OR IGNORE INTO srs_state (knowledge_id, state, due_at) VALUES (?, 'new', ?)`).run(id, now);
+        }
+      }
       return true;
-    }
-    let resumeState = 'review';
-    const previous = this.db.prepare('SELECT state_before FROM srs_review_log WHERE knowledge_id=? ORDER BY reviewed_at DESC,rowid DESC LIMIT 1').get(id) as { state_before: string | null } | undefined;
-    if (previous?.state_before) {
-      try {
-        const state = JSON.parse(previous.state_before).after?.state;
-        if (state === 1) resumeState = 'learning';
-        if (state === 3) resumeState = 'relearning';
-      } catch {}
-    }
-    const resumed = this.db.prepare(`UPDATE srs_state SET state = CASE WHEN reps = 0 THEN 'new' ELSE ? END WHERE knowledge_id = ? AND state = 'suspended'`).run(resumeState, id);
-    if (resumed.changes === 0) {
-      this.db.prepare(`INSERT OR IGNORE INTO srs_state (knowledge_id, state, due_at) VALUES (?, 'new', ?)`).run(id, new Date().toISOString());
-    }
-    return true;
+    })();
   }
 }

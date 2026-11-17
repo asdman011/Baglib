@@ -4,7 +4,7 @@ import { authoredQuestions } from '../../shared/question-capture';
 
 type Row = Record<string, unknown>;
 const detailTables = ['note_detail','highlight_detail','quote_detail','bookmark_detail','question_detail','card_detail','study_note_detail','reading_reflection_detail'];
-interface Snapshot { knowledge: Row | null; details: Record<string, Row | null>; annotation: Row | null; tags: Row[]; collections: Row[]; comments: Row[]; workTitle: string | null; legacy:string|null }
+interface Snapshot { knowledge: Row | null; details: Record<string, Row | null>; annotation: Row | null; tags: Row[]; collections: Row[]; decks?: Row[]; comments: Row[]; workTitle: string | null; legacy:string|null }
 export const NON_USER_HISTORY_ACTIONS = ['undo', 'redo', 'baseline', 'capture', 'conversion', 'book-detached'];
 export interface MaterialHistoryState { redo: string[]; discarded: string[] }
 export function parseMaterialHistory(raw: string | null | undefined): MaterialHistoryState {
@@ -47,6 +47,7 @@ function snapshot(db: Database, id: string): Snapshot {
     annotation: annotation || null,
     tags: db.prepare('SELECT t.* FROM tag t JOIN knowledge_tag j ON j.tag_id=t.id WHERE j.knowledge_id=? ORDER BY t.id').all(id) as Row[],
     collections: db.prepare('SELECT c.* FROM collection c JOIN knowledge_collection j ON j.collection_id=c.id WHERE j.knowledge_id=? ORDER BY c.id').all(id) as Row[],
+    decks: db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='deck_card'").get() ? db.prepare('SELECT d.id, d.name, j.position, j.added_at FROM deck d JOIN deck_card j ON j.deck_id=d.id WHERE j.knowledge_id=? ORDER BY d.id').all(id) as Row[] : [],
     comments: db.prepare('SELECT * FROM comment WHERE knowledge_id=? ORDER BY id').all(id) as Row[],
     workTitle: workId ? (db.prepare('SELECT title FROM work WHERE id=?').get(workId) as { title: string } | undefined)?.title || null : (knowledge?.former_work_title || annotation?.former_work_title) as string || null,
   };
@@ -117,6 +118,9 @@ export function trashKnowledge(db: Database,id: string, actor?: 'reader'): boole
     if (!row) return false;
     db.prepare('UPDATE knowledge SET deleted_at=?,updated_at=? WHERE id=?').run(new Date().toISOString(),new Date().toISOString(),id);
     db.prepare('DELETE FROM annotations WHERE id=?').run(id);
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='deck_card'").get()) {
+      db.prepare('DELETE FROM deck_card WHERE knowledge_id=?').run(id);
+    }
     return true;
   }, undefined, actor);
 }
@@ -185,6 +189,15 @@ export class KnowledgeHistoryService {
       for (const [table,join,column,items] of [['tag','knowledge_tag','tag_id',value.tags],['collection','knowledge_collection','collection_id',value.collections]] as const) {
         this.db.prepare(`DELETE FROM ${join} WHERE knowledge_id=?`).run(id);
         for (const item of items) if (this.db.prepare(`SELECT 1 FROM ${table} WHERE id=?`).get(item.id)) this.db.prepare(`INSERT INTO ${join}(knowledge_id,${column}) VALUES(?,?)`).run(id,item.id);
+      }
+      if (value.decks && this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='deck_card'").get()) {
+        this.db.prepare('DELETE FROM deck_card WHERE knowledge_id=?').run(id);
+        const now = new Date().toISOString();
+        for (const item of value.decks) {
+          if (this.db.prepare('SELECT 1 FROM deck WHERE id=?').get(item.id)) {
+            this.db.prepare('INSERT OR IGNORE INTO deck_card(deck_id,knowledge_id,position,added_at) VALUES(?,?,?,?)').run(item.id, id, typeof item.position === 'number' ? item.position : 0, typeof item.added_at === 'string' ? item.added_at : now);
+          }
+        }
       }
       this.db.prepare('DELETE FROM comment WHERE knowledge_id=?').run(id);
       const comments = [...value.comments];

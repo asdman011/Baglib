@@ -1,3 +1,71 @@
+## KEY-389 Revision Task 1B: Scheduler Parity with Anki - 2026-11-17T22:53:00+02:00 - Agent: Antigravity
+
+**Request.** Implement Revision Task 1B (`KEY-389`, Epic `KEY-387`) according to `docs/ADR-017-revision-data-model.md` (sections 3.4, 3.5, 3.6, 3.7, 3.8, and 3.9 steps 1, 3, 5, 6):
+- Migration 031 (`src/main/database/migrations/031_decks_and_scheduler.ts`): `deck`, `deck_card`, `deck_subscription`, `srs_preset` (with built-in undeletable `'default'` preset); `srs_state` columns (`learning_step`, `buried_until`, `new_position`, `desired_retention`, `idx_srs_state_buried`); `srs_review_log` rebuild (`rating` 0–4 with triggers restricting `rating = 0` to `entry_kind IN ('reset','rescheduled')`, `entry_kind`, `interval`, `last_interval`, `factor`, `anki_id`); moving `collection_type = 'deck'` rows and `knowledge_collection` links into `deck` and `deck_card` keeping shared cards shared; backfilling `srs_state` in state `'new'` for deck cards without one; reversible `down` migration saving rating-0 rows into `srs_review_log_rating0_backup`.
+- Stage 1 (Decks & Presets): `DeckRepository`, `CardDeckService` rewritten onto `deck` and `deck_card` with `Parent::Child` Anki TSV export, `setMemorizing` using the built-in undeletable `'memorization'` deck, and `card-note.repository.ts` / `knowledge-history.ts` updated onto `deck` and `deck_card`.
+- Stage 2 (Scheduler & Statistics): `SrsService` with `srs.rolloverHour` (`4` AM default or `0` midnight), per-preset cached `ts-fsrs` instances with learning/relearning steps, `New` / `Learning` / `Due` queues with daily limits and parent deck capping children, sibling burying of the same `note_id` only, leech tagging (`leech` tag) and optional suspension, filtered decks (`is:due`, `is:new`, `is:learn`, `is:review`, `is:suspended`, `is:buried`, `is:lapsed`, `prop:r<N`, `prop:d>N`, `deck:"name"`, `tag:x`, `source:...`), preview mode when `filter_reschedule = 0`, Forget (`reset`, rating 0) and Set due date (`rescheduled`, rating 0), and the statistics rule (`entry_kind IN ('learn','review','relearn','filtered') AND rating >= 1`) across all 4 statistics services.
+- Stage 3 (UI & i18n): `DeckManagerPanel.tsx`, `DeckOptionsModal.tsx`, `FilteredDeckModal.tsx`, `SrsReviewScreen.tsx` & `SrsReviewPanel.tsx` updates (New/Learning/Due counts, Bury/Bury siblings/Suspend/Forget/Set due date menu, leech alert banner), Settings day-start option in `SettingsDirectory.tsx` and `settings-directory-model.ts`, and 64 bilingual `ar`/`en` keys in `src/renderer/translations.ts`.
+
+**Verification:**
+- Full test suite: 2,536 passed, 0 failed across 360 suites (`npm test -- --test-concurrency=2`).
+- Focused unit & UI tests: 114 passed, 0 failed (`scheduler-parity.test.ts`, `card-notes.test.ts`, `card-decks.test.ts`, `srs.test.ts`, `srs-gaps.test.ts`, `study-insights.test.ts`, `workspace-statistics.test.ts`, `study-progress.test.ts`, `study-prerequisites.test.ts`, `translation-keys.test.ts`, `settings-directory-coverage.test.ts`, `srs-review-confidence.test.ts`, `srs-review-keyboard.test.ts`, `feedback-states.test.ts`).
+- Timezone verification: 29/29 passed in `TZ=Africa/Cairo` and 29/29 passed in `TZ=America/Los_Angeles`.
+- `npx tsc --noEmit`: 0 errors.
+- `npx eslint`: 0 errors, 0 warnings across all 33 touched code/test/script files.
+- Live Electron harnesses:
+  - `scripts/scheduler-live/run.mjs`: PASS (code 0) in `ar` (RTL) and `en` (LTR); 18 screenshots and `results-ar.json`, `results-en.json`, `result.json` saved in `.baglib-data/key389-evidence/`.
+  - `scripts/srs-live/run.mjs`: PASS (code 0, initial and restart).
+  - `scripts/quran-deck-live/run.mjs`: PASS (code 0, 1,339 corpus files verified unchanged).
+  - `scripts/hadith-deck-live/run.mjs`: PASS (code 0, corpus verified unchanged).
+  - `scripts/wave4-live/run.mjs`: PASS (code 0).
+  - `scripts/note-types-live/run.mjs`: PASS (code 0 in `ar` and `en`).
+
+**Exact files changed:**
+- `src/main/database/migrations/031_decks_and_scheduler.ts` (new)
+- `src/main/database/migrations/index.ts`
+- `src/shared/srs.ts`
+- `src/shared/types/knowledge-cards.ts`
+- `src/main/database/repositories/deck.repository.ts` (new)
+- `src/main/services/card-decks.ts`
+- `src/main/database/repositories/knowledge-card.repository.ts`
+- `src/main/database/repositories/card-note.repository.ts`
+- `src/main/services/knowledge-history.ts`
+- `src/main/services/srs.ts`
+- `src/main/services/statistics/study-insights.service.ts`
+- `src/main/services/statistics/workspace-statistics.service.ts`
+- `src/main/services/statistics/study-progress.service.ts`
+- `src/main/services/study-prerequisites.service.ts`
+- `src/main/ipc/knowledge-cards.ts`
+- `src/preload/index.ts`
+- `src/renderer/components/knowledge/DeckManagerPanel.tsx` (new)
+- `src/renderer/components/knowledge/DeckOptionsModal.tsx` (new)
+- `src/renderer/components/knowledge/FilteredDeckModal.tsx` (new)
+- `src/renderer/components/knowledge/SavedCardsPanel.tsx`
+- `src/renderer/components/knowledge/SrsReviewScreen.tsx`
+- `src/renderer/components/knowledge/SrsReviewPanel.tsx`
+- `src/renderer/components/notes/NotesOverviewView.tsx`
+- `src/renderer/components/layout/SettingsDirectory.tsx`
+- `src/renderer/components/layout/settings-directory-model.ts`
+- `src/renderer/translations.ts`
+- `tests/services/scheduler-parity.test.ts` (new)
+- `tests/services/card-decks.test.ts`
+- `tests/services/card-notes.test.ts`
+- `tests/services/srs.test.ts`
+- `tests/services/srs-gaps.test.ts`
+- `scripts/scheduler-live/run.mjs` (new)
+- `scripts/scheduler-live/main.cjs` (new)
+- `docs/data-dictionary.md`
+- `docs/agent-ops/reports/KEY-389.md` (new)
+- `CURRENT_TASK.md`
+
+## KEY-390 review - 2026-11-17 - Agent: Claude Code
+
+**Review pass on fc2b8b1** (after fix list 1 sent the first pass back with 7 items, all now fixed).
+- Re-verified: 46/46 focused tests, tsc 0, eslint 0 errors.
+- KEY-390 moved to **Done** with a comment.
+- Created polish follow-up **KEY-407** (label Notes-Taking, parent KEY-387): the dark-mode white strip in the card frame, and localised built-in note-type and field labels.
+- From now on, Antigravity runs gemini-4-argon-medium (user, 2026-11-17).
+
 ## KEY-390 Fix List 1: Note Types, Card Generation & UI Integration - 2026-11-17T21:26:00+02:00 - Agent: Antigravity
 
 **Request.** Addressed all items from Claude Code Review (Fix List 1 / KEY-390):

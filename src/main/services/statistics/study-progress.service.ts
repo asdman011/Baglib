@@ -370,12 +370,27 @@ export class StudyProgressService {
     };
   }
 
+  private hasRealSrsReviewClause(): string {
+    try {
+      const hasLog = Boolean(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='srs_review_log'").get());
+      if (!hasLog) return 's.knowledge_id IS NOT NULL AND s.reps > 0';
+      const hasEntryKind = Boolean(this.db.prepare("SELECT 1 FROM pragma_table_info('srs_review_log') WHERE name='entry_kind'").get());
+      const filter = hasEntryKind
+        ? "r.entry_kind IN ('learn','review','relearn','filtered') AND r.rating >= 1"
+        : 'r.rating >= 1';
+      return `((s.knowledge_id IS NOT NULL AND s.reps > 0) OR EXISTS (SELECT 1 FROM srs_review_log r WHERE r.knowledge_id = k.id AND ${filter}))`;
+    } catch {
+      return 's.knowledge_id IS NOT NULL';
+    }
+  }
+
   private getCardsForBook(bookId: string): CardRow[] {
     try {
+      const srsClause = this.hasRealSrsReviewClause();
       return this.db
         .prepare(
           `SELECT k.id, k.work_id, cd.source_ref, cd.source_label,
-                  CASE WHEN s.knowledge_id IS NOT NULL THEN 1 ELSE 0 END AS has_srs
+                  CASE WHEN ${srsClause} THEN 1 ELSE 0 END AS has_srs
            FROM knowledge k
            LEFT JOIN card_detail cd ON cd.knowledge_id = k.id
            LEFT JOIN srs_state s ON s.knowledge_id = k.id
@@ -392,9 +407,10 @@ export class StudyProgressService {
   private getCardsForPathway(pathwayId: string, bookIds: string[]): CardRow[] {
     try {
       const placeholders = bookIds.map(() => '?').join(',');
+      const srsClause = this.hasRealSrsReviewClause();
       const sql = `
         SELECT k.id, k.work_id, cd.source_ref, cd.source_label,
-               CASE WHEN s.knowledge_id IS NOT NULL THEN 1 ELSE 0 END AS has_srs
+               CASE WHEN ${srsClause} THEN 1 ELSE 0 END AS has_srs
         FROM knowledge k
         LEFT JOIN card_detail cd ON cd.knowledge_id = k.id
         LEFT JOIN srs_state s ON s.knowledge_id = k.id

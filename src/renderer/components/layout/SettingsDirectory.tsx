@@ -39,6 +39,90 @@ function PreferenceToggle({ settingKey, fallback }: { settingKey: string; fallba
   }} />{t('settingsEnabled')}</label>{failed && <p role="alert">{t('studyActionFailed')}</p>}</div>;
 }
 
+function SrsRolloverPreference() {
+  const { t } = useWorkspace();
+  const [hour, setHour] = useState<0 | 4>(4);
+  const [busy, setBusy] = useState(true);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void window.electronAPI.knowledgeCards
+      .getRolloverHour()
+      .then(
+        saved => {
+          if (alive) {
+            setHour(saved === 0 ? 0 : 4);
+            setBusy(false);
+          }
+        },
+        () => {
+          if (alive) setFailed(true);
+        }
+      );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const applyRollover = async (next: 0 | 4) => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await window.electronAPI.knowledgeCards.setRolloverHour(next);
+      setHour(next);
+      window.dispatchEvent(new CustomEvent('baglib:srs-reviewed'));
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-3" data-srs-rollover-settings>
+      <p className="text-xs leading-loose text-muted">{t('settingSrsRolloverDescription')}</p>
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-semibold">{t('settingSrsRollover')}</span>
+        <select
+          data-settings-srs-rollover
+          value={hour}
+          disabled={busy}
+          onChange={event => void applyRollover(Number(event.target.value) === 0 ? 0 : 4)}
+          className="rounded-lg border border-subtle bg-canvas p-2 text-sm text-main"
+        >
+          <option value={4}>{t('srsRollover4Am')}</option>
+          <option value={0}>{t('srsRolloverMidnight')}</option>
+        </select>
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          data-rollover-option={4}
+          aria-pressed={hour === 4}
+          disabled={busy}
+          onClick={() => void applyRollover(4)}
+          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+            hour === 4 ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+          }`}
+        >
+          {t('srsRollover4Am')}
+        </button>
+        <button
+          type="button"
+          data-rollover-option={0}
+          aria-pressed={hour === 0}
+          disabled={busy}
+          onClick={() => void applyRollover(0)}
+          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+            hour === 0 ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+          }`}
+        >
+          {t('srsRolloverMidnight')}
+        </button>
+      </div>
+      {failed && <p role="alert">{t('studyActionFailed')}</p>}
+    </div>
+  );
+}
+
 export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAthan> }) {
   const { t, lang, dir, theme, toggleTheme, toggleLanguage, toggleNavPinned, setViewMode, setIsSupportSheetOpen, activeBook, books } = useWorkspace();
   const [query, setQuery] = useState('');
@@ -104,8 +188,9 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
       {panel === 'lock' && <Lock {...modalProps} lang={lang} />}
       {panel === 'plugins' && <Plugins {...modalProps} lang={lang} />}
       {panel === 'wird' && <Wird {...modalProps} />}
-      {['advanced', 'saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'rss', 'prayer', 'searchProviders'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
+      {['advanced', 'saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'rss', 'prayer', 'searchProviders', 'srsRollover'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
         {panel === 'searchProviders' && <SearchProviderSettings />}
+        {panel === 'srsRollover' && <SrsRolloverPreference />}
         {panel === 'advanced' && <AdvancedSettings />}
         {panel === 'saving' && <SaveSettings />}
         {panel === 'rhythm' && <StudyRhythmSettings />}

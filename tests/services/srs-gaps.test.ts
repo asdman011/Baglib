@@ -54,13 +54,22 @@ test('SRS day rollover: reviewing card updates reviewedToday, crossing midnight 
     assert.equal(fixture.service.queue().reviewedToday, 1, 'Still 1 on same day before midnight');
     assert.equal(fixture.service.queue().due, 0);
 
-    // Advance clock past local midnight to 00:30 next morning
-    const localNextDay = new Date(2026, 10, 3, 0, 30, 0); // 2026-11-03 00:30 local
-    fixture.setNow(localNextDay);
+    // Advance clock past local midnight to 00:30 next morning:
+    // Default rollover is 4 AM (ADR-017), so at 00:30 it is still the same SRS day
+    const localAfterMidnight = new Date(2026, 10, 3, 0, 30, 0); // 2026-11-03 00:30 local
+    fixture.setNow(localAfterMidnight);
+    assert.equal(fixture.service.queue().reviewedToday, 1, 'Before 4 AM default rollover, reviewedToday is still 1');
 
-    const queueAfterMidnight = fixture.service.queue();
-    assert.equal(queueAfterMidnight.reviewedToday, 0, 'reviewedToday must roll over to 0 past local midnight');
-    assert.equal(queueAfterMidnight.due, 0, 'Card graded Easy is scheduled in future');
+    // Advance past 4 AM default rollover to 04:05: reviewedToday resets to 0
+    fixture.setNow(new Date(2026, 10, 3, 4, 5, 0));
+    const queueAfterRollover = fixture.service.queue();
+    assert.equal(queueAfterRollover.reviewedToday, 0, 'reviewedToday must roll over to 0 past 4 AM rollover');
+    assert.equal(queueAfterRollover.due, 0, 'Card graded Easy is scheduled in future');
+
+    // When rolloverHour is set to midnight (0), 00:30 is already the next SRS day
+    fixture.service.setRolloverHour(0);
+    fixture.setNow(localAfterMidnight);
+    assert.equal(fixture.service.queue().reviewedToday, 0, 'With midnight rollover, 00:30 resets reviewedToday to 0');
   } finally {
     fixture.db.close();
   }
@@ -84,8 +93,8 @@ test('SRS day rollover with learning step: card due before midnight stays due af
     assert.equal(fixture.service.queue().due, 1);
     assert.equal(fixture.service.queue().reviewedToday, 1);
 
-    // Past midnight (01:00 AM next day): reviewedToday resets to 0, card is still due
-    fixture.setNow(new Date(2026, 10, 3, 1, 0, 0));
+    // Past 4 AM rollover (04:30 AM next day): reviewedToday resets to 0, card is still due
+    fixture.setNow(new Date(2026, 10, 3, 4, 30, 0));
     assert.equal(fixture.service.queue().reviewedToday, 0, 'reviewedToday resets on day rollover');
     assert.equal(fixture.service.queue().due, 1, 'Card due from yesterday remains due');
   } finally {

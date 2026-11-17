@@ -120,6 +120,8 @@ export const NotesOverviewView: React.FC = () => {
   const [editorDraft, setEditorDraft] = useState<{ content?: string; key: number } | null>(null);
 
   const [dueCardsCount, setDueCardsCount] = useState<number>(0);
+  const [reviewDeckId, setReviewDeckId] = useState<string | null>(null);
+  const [cardsInitialSearch, setCardsInitialSearch] = useState<string>('');
   const [boardsCount, setBoardsCount] = useState<number>(0);
   const [openComments, setOpenComments] = useState<Record<string, number>>({});
   const [actionError, setActionError] = useState(false);
@@ -181,7 +183,11 @@ export const NotesOverviewView: React.FC = () => {
   useEffect(() => {
     const handleOpenBoards = () => setActiveTab('boards');
     const handleOpenCards = () => setActiveTab('cards');
-    const handleStartReview = () => setActiveTab('review');
+    const handleStartReview = (e: Event) => {
+      const custom = e as CustomEvent<{ deckId?: string | null }>;
+      setReviewDeckId(custom.detail?.deckId ?? null);
+      setActiveTab('review');
+    };
     const handleNewNote = () => {
       setActiveTab('notes');
       setSelectedId(null);
@@ -1051,14 +1057,30 @@ export const NotesOverviewView: React.FC = () => {
       {/* TAB 2: SAVED KNOWLEDGE CARDS */}
       {activeTab === 'cards' && (
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <SavedCardsPanel onStartReview={() => setActiveTab('review')} />
+          <SavedCardsPanel
+            key={cardsInitialSearch}
+            initialSearch={cardsInitialSearch}
+            onStartReview={(deckId) => {
+              setReviewDeckId(deckId ?? null);
+              setActiveTab('review');
+            }}
+          />
         </div>
       )}
 
       {/* TAB 3: DEDICATED REVIEW SCREEN */}
       {activeTab === 'review' && (
         <SrsReviewScreen
-          onClose={() => setActiveTab('cards')}
+          deckId={reviewDeckId}
+          onClose={() => {
+            setReviewDeckId(null);
+            setActiveTab('cards');
+          }}
+          onCompareSimilar={(term) => {
+            setReviewDeckId(null);
+            setCardsInitialSearch(term);
+            setActiveTab('cards');
+          }}
           onNavigateSource={openTarget}
         />
       )}
