@@ -78,7 +78,12 @@ export const NotesOverviewView: React.FC = () => {
   const { notes, refresh, error, failedSources, loading } = useStudyNotes();
   const removeWithUndo = useUndoFeedback();
 
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('notes');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(() => {
+    try {
+      if (sessionStorage.getItem('baglib:active-board-id')) return 'boards';
+    } catch {}
+    return 'notes';
+  });
   const [mobileScreen, setMobileScreen] = useState<'list' | 'editor'>('list');
   const [isPanelOpen, setIsPanelOpen] = useState(true);
 
@@ -174,9 +179,6 @@ export const NotesOverviewView: React.FC = () => {
 
   // Handle cross-workspace events from navigation rail and elsewhere
   useEffect(() => {
-    try {
-      if (sessionStorage.getItem('baglib:active-board-id')) setActiveTab('boards');
-    } catch {}
     const handleOpenBoards = () => setActiveTab('boards');
     const handleOpenCards = () => setActiveTab('cards');
     const handleStartReview = () => setActiveTab('review');
@@ -549,7 +551,7 @@ export const NotesOverviewView: React.FC = () => {
           </div>
 
           {/* Quick Actions in Workspace Header */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {activeTab === 'notes' && (
               <>
                 <Button
