@@ -1,3 +1,91 @@
+## Revision system investigation - 2026-11-17 - Agent: Claude Code
+
+**Request.** The user asked for an investigation only: Anki 26.09.4 source, the installed Anki, the Anki manual, the user's Anki decks, BagLib's SRS code and KEY-386. That leads to an architecture report with the TBD-1 to TBD-4 findings and a proposed Revision epic of ten tasks. The rules: no production code, no delegation to other agents, and no Jira creation until the user approves.
+
+**Done.** Wrote `docs/features/feature - Revision System Investigation.md`.
+- The user's Anki profile was only copied and opened read-only. The Anki source and the benchmark scripts stay in the session scratchpad, uncommitted.
+
+**Key findings:**
+- Jira already has an SRS epic, KEY-220.
+- `rijal_narrators` and `hadith_narrators` already exist in the Sunnah corpus.
+- Modern `.apkg` import needs zstd: a `fzstd` dependency gate.
+- Imported templates can contain `<script>` and must be sandboxed.
+- Tier-1 grading misses synonyms, which are auto-rejected and never reach the AI tier.
+- Shipped Quran memorization features (KEY-175, 286, 318, 319) overlap the new hifz guardrail.
+
+**Jira (2026-11-17, after the user said "Yes, create them").**
+- Created the epic **KEY-387** "Revision Epic" (label Notes-Taking). It is a new epic, linked "relates" to KEY-220 rather than re-scoping KEY-220. The tasks are:
+  - **1A–1E:** KEY-388 (ADR-017, the gate), 389 (scheduler parity), 390 (note types), 391 (image occlusion), 392 (`.apkg`);
+  - **Tasks 2–10:** KEY-393 to 401;
+  - **Research TBD-1/2/3:** KEY-402, 403, 404 (label Research).
+- Labels: Sunnah on 396, Library on 397, Reader on 398, Quran on 400, Research on 402–404, Notes-Taking on the rest.
+- Links: KEY-388 blocks 389, 390 and 392; KEY-386 blocks 399; KEY-401 relates to KEY-233.
+- TBD-4 is recorded in the epic description.
+
+**KEY-388 (2026-11-17).**
+- Drafted `docs/ADR-017-revision-data-model.md` (status Proposed). Moved KEY-388 to In Review and added a summary comment.
+- The ADR recommends option B:
+  - 3 new tables: `card_note_type`, `card_note`, `srs_preset`;
+  - 12 new columns;
+  - an `srs_review_log` rebuild, because the user's Anki data has 30,342 rating-0 manual rows that the current CHECK rejects;
+  - migration 030, which backfills existing cards as one-card notes.
+- Not committed, and no code written.
+
+**User decisions (2026-11-17), recorded in Jira and the documents:**
+- **Answer grading is shelved.** KEY-394 and KEY-402 were renamed "[ON HOLD - needs user approval]" and commented; do not start them without approval.
+  - KEY-390 type-in follows Anki: a diff, and the learner grades.
+  - KEY-398 no longer depends on KEY-394.
+- **Quran.** The shipped KEY-175, 286, 318 and 319 stay as they are.
+  - Wird and muraja'a are a future follow-up, **KEY-405** (To Do, label Quran, parent KEY-387, relates to KEY-286). Its placement (the to-do list, revision, or both) is undecided.
+  - Epic KEY-387 has a comment recording both decisions and the updated order.
+- Added investigation doc section 8 and ADR-017 section 5a.
+
+**ADR-017 decisions so far (2026-11-17):**
+- (2) Day boundary: **4 AM by default, with a Settings option for midnight**. Approved.
+- (4) Replaced by the user's rule: a card in several decks stays **shared until edited**; editing it in one deck makes a separate copy for that deck. Still open: whether the copy keeps the original's review history.
+- Still open: (1) Option B, (3) notes as a plain table, (5) keeping imported rating-0 rows. I explained these to the user in plain terms.
+
+**ADR-017 revision 2 (2026-11-17).** The user approved:
+- (1) Option B;
+- (3) notes in their own table;
+- (5) rating-0 entries treated as Anki's "reset to new" markers (checked in the data: 30,013 come from one bulk reset on 2024-07-12);
+- restructuring allowed, because the app hasn't shipped.
+
+The user delegated the shared-card rule; Claude chose shared until edited, with a "this deck only" or "everywhere" prompt, schedules copied on fork, and live sync flagging copies. The ADR was rewritten:
+- dedicated `deck`, `deck_card` and `deck_subscription` tables replace `collection` decks;
+- field and template tables;
+- `srs_preset` with real columns;
+- every card in a deck gets a state, starting as new;
+- `anki_orphan_revlog`.
+
+Jira comments were added on KEY-388, 389 and 393.
+
+**User clarification (2026-11-17).** Sharing is decided by the note (the same note type and fields), not by the ayah. Different cards about the same ayah are separate, may appear on the same day, and are not buried against each other; only the identical card never repeats in a day. Recorded in ADR-017 section 3.8 and in a KEY-388 comment.
+
+**User decision (2026-11-17): source text is editable.** Quran, hadith and poetry text in cards is editable by default; `revision.protectSourceText` (off by default) makes it read-only.
+- ADR-017 adds the `source_text` field flag (renamed from "sacred"), `card_note.source_snapshot_json` with "edited by you", Compare and Restore, and section 3.11.
+- Live sync never overwrites user-edited fields.
+- Follow-up **KEY-406** created: remind the user later to keep one or both modes. A memory reminder is saved.
+- KEY-390 and KEY-393 have comments.
+
+**ADR-017 approved (2026-11-17, "Approve ADR-017").**
+- Status is Accepted, approved but not yet built.
+- `docs/data-dictionary.md` gains section 5.4, which summarises the approved model and notes that migration 030 is not built yet.
+- KEY-389, 390, 392 and 393 are unblocked. KEY-406 stays open as a future decision.
+- Committed with the investigation doc and this file. After approval: update the data dictionary and unblock KEY-389, 390 and 392. The KEY-234/235/356 acceptance bundle planned earlier was **not** dispatched. No Jira changes, no commits.
+
+## Jira update - 2026-11-15 - Agent: Claude Code
+
+The user confirmed the assistant work ("qwen works now, mark them all done"). Moved to Done with confirming comments:
+- KEY-383: commit 7fb995e
+- KEY-384: commits 5e11a3a + 88f42b6
+- KEY-385: commits fced5fd + a076cf6
+KEY-373 and KEY-382 were already Done. No code changes in this entry.
+
+Also created KEY-386 (To Do, label Research, parent KEY-224): personal lists. It covers a built-in "Starred" list plus custom named lists that mix books, ayahs, hadith and poems. The open question is where the lists live: one hub, per section, or both. New list tables need schema approval before building.
+
+2026-11-16: KEY-386 description updated. The user agreed that lists double as filters, like tags: filter by "in list X" in each section, list chips on items, any/all filtering across several lists, and book tags left unchanged. Tags were considered instead and rejected; the reasons are recorded in the issue.
+
 ## KEY-369b verified handoff - 2026-11-15T09:52:00+02:00 - Agent: Antigravity
 
 Research Editor follow-up RE-8: PDF page-bottom footnotes with Paged.js (Gate R5 approved).
@@ -7683,3 +7771,4 @@ KEY-350 publication - 2026-11-14T15:24:12.942081+02:00 - Codex key350-root. Comm
 - [2026-11-15, Claude Code, user: "what about groq free models. test them ... add a way to include any api from any provider"] KEY-385 (task, epic KEY-223). Groq tested with the user's free key (env only, never stored): qwen/qwen3.8-27b best (0.4-0.7 s, correct Arabic, labels general knowledge, keeps the Quran/hadith rule, exact quotes verified); gpt-oss-120b good; gpt-oss-20b got a definition wrong; allam-2-7b quoted a hadith from memory and failed the exact-quote check; free limits 30 RPM / 1K RPD / 8K TPM. Added a fifth provider "Other provider (OpenAI-compatible)": presets Groq (default qwen/qwen3.8-27b), OpenRouter, Mistral, DeepSeek, Together AI, Cerebras, Hugging Face, LM Studio (local) or any address; own customBaseUrl/customApiKey/customModel settings (AI settings JSON, no schema change; the OpenAI key is never overwritten); "Load models" via new ai:list-models (chat models only); a local address needs no key and no consent; consent names the service; 413 request-too-large and OpenAI-style (429)/(401)/(5xx) errors mapped; gsk_ keys masked. Assistant button/panel moved to z-45 so dialogs cover it. Files: src/shared/ai-providers.ts, src/shared/types/ai.ts, src/shared/ai-consent.ts, src/shared/research-ai.ts, src/shared/ai-errors.ts, src/main/services/ai/ai-provider.service.ts, src/main/ipc/ai.ts, src/preload/index.ts, src/renderer/components/ai/{CustomProviderFields,AISettingsModal,GlobalAssistant}.tsx, src/renderer/components/ai/useRemoteConsent.ts, src/renderer/components/notes/StudyAssistant.tsx, src/renderer/translations.ts, tests/services/ai-providers.test.ts, tests/services/research-ai.test.ts, scripts/research-ai-live/{main,scenario}.cjs. Verified: ai-providers 4/4, full suite 2506/2506, tsc clean, eslint 0 errors in changed files; real Groq key through the custom provider: Load models returned the 4 chat models, connection check passed, app-wide chat answered in 0.4 s with a citation, a ~23K-character source went through; live run scripts/research-ai-live passes including the new settings step (custom provider fields, Load models filters speech models). Not checked: Arabic settings screen visually.
 - 2026-11-15 Claude Code: KEY-385 created (task, Notes-Taking, epic KEY-223), pushed as fced5fd, In Review in Jira with a comment.
 - [2026-11-15, Claude Code, user reported a raw 400 error with meta-llama/llama-prompt-guard-2-86m and canopylabs/orpheus-arabic-saudi] KEY-385 follow-up: those are not chat models (a safety classifier; a text-to-speech model that Groq also gates behind terms). Reproduced with the user's key: "text classification models", "model_terms_required", and whisper "does not support chat completions". Now: new error codes provider-model / provider-terms with clear ar/en messages (assistant panel and study dialog), and a warning under the model field in settings when the typed model is not a chat model (same filter as Load models). Files: src/shared/ai-errors.ts, src/renderer/components/ai/{CustomProviderFields,GlobalAssistant}.tsx, src/renderer/components/notes/StudyAssistant.tsx, src/renderer/translations.ts, tests/services/ai-providers.test.ts, scripts/research-ai-live/scenario.cjs. Verified: full suite 2507/2507, tsc clean, eslint 0 errors in changed files, live run scripts/research-ai-live passes with the new warning step (screenshot en-6-settings-not-a-chat-model).
+- 2026-11-15 Claude Code: KEY-385 follow-up pushed as a076cf6; Jira comment added (stays In Review).

@@ -559,6 +559,37 @@ Append-only review history.
 | `duration_ms` | INTEGER | NULL | Time spent |
 | `state_before` | TEXT | NULL | State before this review |
 
+### 5.4 Approved revision model (ADR-017, migration 030): approved on 2026-11-17, **not yet built**
+
+Sections 5.1–5.3 describe the database as it is built today. Migration 030 (KEY-389, 390, 392, 393) will apply the changes below. Full column definitions are in `docs/ADR-017-revision-data-model.md`. Once migration 030 lands, rewrite 5.1–5.3 and remove this note.
+
+**New tables:**
+
+| Table | Purpose |
+|---|---|
+| `card_note_type` | A kind of card: `normal`, `cloze`, `image_occlusion`, `context_cloze` or `choice`; CSS, sort field, Anki id, `anki_extra` |
+| `card_note_field` | The ordered fields of a note type: name, RTL, font, `source_text` flag, Anki id. PK `(note_type_id, ord)` |
+| `card_note_template` | The ordered card templates of a note type: name, front, back, Anki id. PK `(note_type_id, ord)` |
+| `card_note` | A note: field values, unique `guid`, `copied_from_note_id`, `source_ref`, `source_snapshot_json` (the original source text), `source_hash`, `source_changed_at`, `orphaned_at`, Anki id |
+| `deck` | A deck tree (`parent_id`), `kind` normal or filtered, `preset_id`, filtered-search columns, Anki id. Replaces `collection` rows of type `deck`. |
+| `deck_card` | Normal-deck membership. A card may be in several decks. PK `(deck_id, knowledge_id)`, with `position` |
+| `deck_subscription` | A deck that follows a source (book highlights, bab, poem, list and so on) for live sync |
+| `srs_preset` | Deck options as real columns: steps, daily limits, desired retention, maximum interval, bury flags, leech settings, FSRS parameters |
+| `anki_orphan_revlog` | An archive of imported Anki history for cards that no longer exist; used only for re-export |
+
+**Changed tables:**
+- `card_detail` gains `note_id`, `ord` (unique per note), `anki_id` and `anki_extra`. `front` and `back` become a rendered cache of the note.
+- `srs_state` gains `learning_step`, `buried_until`, `new_position` and `desired_retention`. Every card in a deck gets a row, starting as `new`.
+- `srs_review_log` is rebuilt:
+  - `rating` 0–4, where 0 is allowed only for `reset` and `rescheduled`;
+  - new columns `entry_kind`, `interval`, `last_interval`, `factor` and `anki_id` (unique).
+  - Statistics count only learn, review, relearn and filtered entries with a rating of 1 or more.
+- `collection` rows of type `deck`, and their `knowledge_collection` links, move to `deck` and `deck_card`.
+
+**Settings, not schema:**
+- `srs.rolloverHour`: 4 AM by default, or midnight.
+- `revision.protectSourceText`: off by default.
+
 ## Pathways — ADR-009 / migration 022
 
 A pathway is a `collection` row whose `collection_type` is `research` or `curriculum`. `pathway_item` holds its ordered contents, approved by the user on 2026-11-02. Its ten columns are `id`, `collection_id`, `section`, `kind`, `reference`, `title`, `url`, `pinned`, `sort_order` and `created_at`, with one index on `(collection_id, sort_order)`. `kind` is `resource`, `link` or `step`. A step points at `study_task` through `reference` as `task:<id>`, so the planner owns its status. Personal templates are an `app_settings` row, `pathways.templates.v1`.
