@@ -1,3 +1,19 @@
+## KEY-234/235 Anki Export Fix 1 - 2026-11-17T19:54:00+02:00 - Agent: Antigravity
+
+**Request.** Fix requested by Claude Code review on KEY-234/KEY-235 acceptance bundle: regenerate the Anki export files using BagLib's real code paths (`CardDeckService.generateFromDrafts`, `CardDeckService.generate`, and `CardDeckService.exportText`) in a throwaway profile using `setupThrowawayCorpus` without reading `%APPDATA%` or using made-up content.
+
+**What was done:**
+- Replaced `baglib-arabic-quran-hadith-deck.txt` using `CardDeckService.generateFromDrafts`:
+  - Al-Baqarah 255–257 (Ayat al-Kursi) read directly from throwaway Hafs pack (`0.sqlite`, `words` table).
+  - Bukhari Chapter 1 (Hadiths 1–3) read via `SunnahResearchCorpus.chapter('Bukhari', 1)` and converted with `hadithRangeDrafts`.
+  - Byte-compared 100% identical between source packs, `card_detail.back`, and exported TSV.
+- Replaced `baglib-english-study-notes-deck.txt` using `CardDeckService.generate` (`sources: ['highlights']`):
+  - Highlights created from verbatim quotes extracted directly from Chapter 1 of `Why Would Feminists Trust the Police?` by Leah Cowan (`tests/real-files/epub/en/...`). Zero made-up content.
+  - Byte-compared 100% identical with source text and `card_detail.back`.
+- Removed `benchmark-results.json` from `.baglib-data/key235-anki/` so only the two deck files remain.
+- Deleted machine-specific benchmark script `scripts/srs-acceptance-benchmark.mjs`.
+- Updated section 4 of `docs/agent-ops/reports/KEY-234-235.md`.
+
 ## KEY-234 & KEY-235 Acceptance Bundle - 2026-11-17T19:40:00+02:00 - Agent: Antigravity
 
 **Claude Code review (2026-11-17).**
