@@ -955,7 +955,7 @@ export const API = {
   } satisfies import('../shared/types/card-notes').CardNotesAPI,
   deckSync: {
     list: (deckId?: string): Promise<import('../main/services/deck-sync').DeckSubscription[]> => ipcRenderer.invoke('deck-sync:list', deckId),
-    subscribe: (input: { deckId: string; sourceKind: 'book_highlights' | 'book_comments'; sourceRef: string; newItems: 'silent' | 'toast' }): Promise<{ subscription: import('../main/services/deck-sync').DeckSubscription; result: import('../main/services/deck-sync').SyncResult }> => ipcRenderer.invoke('deck-sync:subscribe', input),
+    subscribe: (input: { deckId: string; sourceKind: 'book_highlights' | 'book_comments' | 'sunnah_book' | 'sunnah_bab' | 'hadith_collection' | 'poem' | 'poet'; sourceRef: string; newItems: 'silent' | 'toast' }): Promise<{ subscription: import('../main/services/deck-sync').DeckSubscription; result: import('../main/services/deck-sync').SyncResult }> => ipcRenderer.invoke('deck-sync:subscribe', input),
     unsubscribe: (id: string): Promise<boolean> => ipcRenderer.invoke('deck-sync:unsubscribe', id),
     setPolicy: (id: string, newItems: 'silent' | 'toast'): Promise<import('../main/services/deck-sync').DeckSubscription> => ipcRenderer.invoke('deck-sync:set-policy', id, newItems),
     syncNow: (id: string): Promise<import('../main/services/deck-sync').SyncResult> => ipcRenderer.invoke('deck-sync:sync-now', id),

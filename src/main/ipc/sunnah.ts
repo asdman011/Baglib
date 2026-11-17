@@ -17,6 +17,14 @@ let chapterReader: ((collection: string, chapter: number) => Promise<{ id: strin
 /** KEY-319: every hadith of one chapter with its exact Arabic matn (or full text), for memorization decks. */
 export const readChapterHadiths = (collection: string, chapter: number) => chapterReader ? chapterReader(collection, chapter) : Promise.resolve([]);
 
+type SyncHadith = { id: string; number: string; sectionNumber: string; sectionTitle: string; text: string };
+let syncChapterReader: ((collection: string, chapter: number) => Promise<{ title: string; hadiths: SyncHadith[] } | null>) | null = null;
+let syncChapterNumbers: ((collection: string) => Promise<number[]>) | null = null;
+/** KEY-409: one chapter with each hadith's bab and exact Arabic matn (or full text), for live deck sync. */
+export const readSunnahChapterForSync = (collection: string, chapter: number) => syncChapterReader ? syncChapterReader(collection, chapter) : Promise.resolve(null);
+/** KEY-409: the chapter numbers of one collection, for following a whole collection. */
+export const readSunnahChapterNumbers = (collection: string) => syncChapterNumbers ? syncChapterNumbers(collection) : Promise.resolve([]);
+
 export function registerSunnahIpc(): void {
   let service: SunnahService | undefined;
   let slashSearch: SunnahSearchProcess | undefined;
@@ -26,6 +34,21 @@ export function registerSunnahIpc(): void {
     const found = (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths.find(hadith => hadith.id === id);
     return found ? { text: found.text.ar.full || found.text.ar.matn, number: String(found.number) } : null;
   };
+  syncChapterReader = async (collection, chapter) => {
+    const found = await getService().chapter(collection as SunnahCollectionId, chapter).catch(() => null);
+    if (!found) return null;
+    return {
+      title: found.title.ar,
+      hadiths: found.hadiths.map(hadith => ({
+        id: hadith.id,
+        number: String(hadith.number),
+        sectionNumber: String(hadith.section?.number ?? ''),
+        sectionTitle: hadith.section?.title?.ar ?? '',
+        text: hadith.text.ar.matn || hadith.text.ar.full,
+      })),
+    };
+  };
+  syncChapterNumbers = async collection => ((await getService().catalog())?.collections.find(c => c.id === collection)?.chapters ?? []).map(c => c.number);
   chapterReader = async (collection, chapter) => (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths
     .map(hadith => ({ id: hadith.id, number: String(hadith.number), text: hadith.text.ar.matn || hadith.text.ar.full }));
   const getService = () => service ??= new SunnahService(path.join(app.getPath('userData'), 'sunnah'), app.isPackaged ? [] : [

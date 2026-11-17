@@ -1,3 +1,62 @@
+## KEY-409 Live sync for Sunnah and poetry sources - 2026-11-18 - Agent: Claude Code
+
+**Request.** Extend KEY-393's live sync to the remaining `deck_subscription` source kinds.
+
+**Built:** `sunnah_book` (a kitab), `sunnah_bab`, `hadith_collection`, `poem` and `poet`.
+
+**Not built, and why:**
+- `diwan`: the poetry corpus has no diwan entity; following a poet covers it.
+- `list`: KEY-386 (lists) isn't built.
+- `lexicon`: there is no lexicon corpus yet.
+
+All three are refused with `unsupported-source`.
+
+**What changed:**
+- **`deck-sync.ts`:**
+  - **Async adapters** with injectable `SourceReaders`. Items carry named fields, and each source kind has a fixed note type.
+  - **Hadith:** `stock-hadith`, with the matn copied verbatim (only `& < >` escaped). Bab = "<collection> <number><br><bab title>".
+  - **Poems:** `stock-context-cloze`, with the verses in Target, so a poem gets one card per bayt. Notes = "poet — title".
+  - **Item refs:**
+    - hadith: `sunnah-hadith:<collection>:<kitab>:<id>`, kept apart from KEY-319 range decks so those are never rewritten;
+    - poem: `poem:<id>`.
+  - **Subscription labels** are stored in `template_options` (`{label}`).
+  - **No wrong orphans:** a subscription never orphans an item another subscription of the same deck still covers (a bab and its book).
+  - **Async API:** `subscribe`, `pending` and `resolveChange` are now async.
+- **Source-text protection:**
+  - `SaveNoteInput.fromSourceSync` is main-process only; the renderer validator rejects unknown keys.
+  - It lets sync write the source's own corrected text while protection is on. User edits are still refused, and a test checks both.
+- **`deck-sync-readers.ts` (new):** the real readers, built from new exports in `ipc/sunnah.ts` (a chapter with babs, the chapter numbers) and `ipc/poetry.ts` (a poem, a poet's poem ids).
+- **UI:**
+  - `DeckSourcePicker.tsx` (new): Sunnah collection, then kitab, then bab; poem search; poet search.
+  - `DeckSubscriptionsModal` lists every kind.
+  - 14 new ar/en strings.
+
+**Files:**
+- src/main/services/deck-sync.ts, deck-sync-readers.ts (new), deck-sync-scheduler.ts
+- src/main/ipc/sunnah.ts, src/main/ipc/poetry.ts, src/main/ipc/knowledge-cards.ts
+- src/main/database/repositories/card-note.repository.ts; src/shared/types/card-notes.ts; src/preload/index.ts
+- src/renderer/components/knowledge/DeckSourcePicker.tsx (new), DeckSubscriptionsModal.tsx; src/renderer/translations.ts
+- tests/services/deck-sync-corpus.test.ts (new), tests/services/deck-sync.test.ts
+- scripts/deck-sync-live/run.mjs, main.cjs
+- docs/data-dictionary.md
+
+**Verification:**
+- tsc 0; eslint 0 on every changed file.
+- Full suite 2577/2577.
+- Corpus tests (6) cover:
+  - **Sunnah book:** the text is verbatim; a corrected text updates even with protection on, while user edits stay blocked; FSRS is kept.
+  - **Bab:** covers only its babs, and the book subscription prevents wrong orphans.
+  - **Collection:** a new chapter joins.
+  - **Poem:** one card per bayt; a new bayt adds a card and the old cards keep their schedule.
+  - **Poet:** a removed poem is orphaned.
+  - **Pending:** shows the new source.
+- `scripts/deck-sync-live` now also follows a real Bukhari bab and a real poem through the pickers in ar and en. It uses throwaway copies: the Sunnah corpus is linked, and the 1.6 GB poetry partition is copied read-only, with originals verified unchanged. Result: bab 1 hadith, poem 93 bayt cards.
+- Regression harnesses: note-types-live, scheduler-live and hadith-deck-live pass. hadith-deck-live needs a running renderer; the first attempt failed only because none was up.
+
+**Limits:**
+- The poem search isn't ranked, so the first result for a query isn't always the best known poem; the user picks from the list.
+- Each sync that adds cards posts its own notification, so several syncs show several toasts.
+
 ## KEY-393 Live source-to-deck sync - 2026-11-18 - Agent: Claude Code
 
 **Request.** Revision Task 2: decks stay linked to their BagLib source. Edits update cards without resetting FSRS, new items join the deck, and deletions orphan safely (ADR-017 3.2, 3.4 `deck_subscription`, 3.8, 3.11; the Jira design updates of 2026-11-17).

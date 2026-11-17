@@ -1,8 +1,9 @@
 /**
- * Baglib — live source-to-deck sync (KEY-393; ADR-017 3.4 `deck_subscription`, 3.8, 3.11).
+ * Baglib — live source-to-deck sync (KEY-393, KEY-409; ADR-017 3.4 `deck_subscription`, 3.8, 3.11).
  *
- * A deck subscribes to a source (today: a book's highlights or its comments). Every source item
- * becomes one note whose `source_ref` names the item. On each sync:
+ * A deck subscribes to a source: a book's highlights or comments, a Sunnah book (kitab), bab or
+ * whole collection, a poem, or every poem of a poet. Every source item becomes one note whose
+ * `source_ref` names the item. On each sync:
  * - **New item:** a note and its cards are created in the deck (or, if an original note for the
  *   item already exists for another deck, the same card is linked here: one card, one schedule).
  * - **Edited item:** shared originals update in place; `srs_state` and the review log are never
@@ -11,7 +12,11 @@
  *   user chooses. Deck-only copies (`copied_from_note_id`) are never overwritten; they are flagged.
  * - **Deleted item:** the note is marked `orphaned_at` and its cards are suspended; history is
  *   kept. "Orphaned cards" lets the user delete or keep them. If the item comes back, the cards
- *   are restored to their previous state.
+ *   are restored to their previous state. An item another subscription of the same deck still
+ *   covers is never orphaned.
+ *
+ * Hadith and poetry text is copied verbatim from the corpus (ADR-006): only `&`, `<` and `>` are
+ * escaped so the text displays as written.
  *
  * `source_snapshot_json` holds the fields exactly as last generated from the source, so an edit is
  * "the current field differs from the snapshot". `source_hash` is the hash of those fields.
@@ -25,7 +30,7 @@ import type { Database } from 'better-sqlite3';
 import { CardNoteRepository } from '../database/repositories/card-note.repository';
 import { trashKnowledge } from './knowledge-history';
 
-export const SUPPORTED_SUBSCRIPTION_KINDS = ['book_highlights', 'book_comments'] as const;
+export const SUPPORTED_SUBSCRIPTION_KINDS = ['book_highlights', 'book_comments', 'sunnah_book', 'sunnah_bab', 'hadith_collection', 'poem', 'poet'] as const;
 export type SupportedSubscriptionKind = (typeof SUPPORTED_SUBSCRIPTION_KINDS)[number];
 export type NewItemsPolicy = 'silent' | 'toast';
 
@@ -42,8 +47,10 @@ export interface DeckSubscription {
 
 export interface SourceItem {
   ref: string;
-  /** Values for the note type's fields, in field order (first field, second field, ...). */
-  values: string[];
+  /** Values for the note type's fields, in field order (book sources, any normal note type). */
+  values?: string[];
+  /** Values by field name (sources with a fixed note type). */
+  fields?: Record<string, string>;
 }
 
 export interface SyncResult {
@@ -58,10 +65,29 @@ export interface SyncResult {
   unchanged: number;
 }
 
+/** How the corpora are read; main wires these to the Sunnah and poetry services, tests to fixtures. */
+export interface SourceReaders {
+  collectionName(collection: string): string;
+  sunnahChapter(collection: string, chapter: number): Promise<{ title: string; hadiths: Array<{ id: string; number: string; sectionNumber: string; sectionTitle: string; text: string }> } | null>;
+  sunnahChapterNumbers(collection: string): Promise<number[]>;
+  poem(id: number): Promise<{ id: number; title: string; poetName: string; verses: string[] } | null>;
+  poetPoemIds(poetId: number): Promise<number[]>;
+}
+
+const NO_READERS: SourceReaders = {
+  collectionName: c => c,
+  sunnahChapter: async () => null,
+  sunnahChapterNumbers: async () => [],
+  poem: async () => null,
+  poetPoemIds: async () => [],
+};
+
 const BATCH = 100;
 
 const escapeHtml = (text: string) =>
   text.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;').replace(/\r?\n/gu, '<br>');
+/** Escapes markup but keeps line breaks as newlines (the context-cloze type splits on them). */
+const escapeLines = (text: string) => text.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;');
 
 interface AnnotationRow {
   id: string;
@@ -69,11 +95,61 @@ interface AnnotationRow {
   note_content: string | null;
 }
 
+interface Adapter {
+  /** A fixed note type, or null when the subscription's own note type is used (book sources). */
+  noteTypeId: string | null;
+  /** Checks the source reference's shape. */
+  validRef(ref: string): boolean;
+  /** Item refs of this source start with this, used to find the deck's notes for it. */
+  namespace(ref: string): string;
+  list(db: Database, ref: string, readers: SourceReaders): Promise<SourceItem[]>;
+}
+
+const parseSunnah = (ref: string) => {
+  const [collection, chapter, section] = ref.split(':');
+  return { collection, chapter: Number(chapter), section };
+};
+
+async function hadithItems(readers: SourceReaders, collection: string, chapter: number, section?: string): Promise<SourceItem[]> {
+  const found = await readers.sunnahChapter(collection, chapter);
+  if (!found) return [];
+  const name = readers.collectionName(collection);
+  return found.hadiths
+    .filter(h => h.text.trim() && (section === undefined || h.sectionNumber === section))
+    .map(h => ({
+      ref: `sunnah-hadith:${collection}:${chapter}:${h.id}`,
+      fields: {
+        Bab: `${escapeHtml(name)} ${escapeHtml(h.number)}${h.sectionTitle ? `<br>${escapeHtml(h.sectionTitle)}` : ''}`,
+        Hadith: escapeHtml(h.text),
+        Sharh: '',
+      },
+    }));
+}
+
+async function poemItem(readers: SourceReaders, id: number): Promise<SourceItem | null> {
+  const poem = await readers.poem(id);
+  if (!poem || !poem.verses.some(v => v.trim())) return null;
+  return {
+    ref: `poem:${id}`,
+    fields: {
+      'Context Before': '',
+      Target: poem.verses.map(v => escapeLines(v.trim())).filter(Boolean).join('\n'),
+      'Context After': '',
+      Notes: `${escapeHtml(poem.poetName)} — ${escapeHtml(poem.title)}`,
+    },
+  };
+}
+
+const SUNNAH_ID = /^[A-Za-z0-9]{1,40}$/u;
+const NUMBER = /^[1-9]\d{0,11}$/u;
+
 /** Source adapters: how a subscription's items are read. */
-const ADAPTERS: Record<SupportedSubscriptionKind, { namespace: (ref: string) => string; list: (db: Database, ref: string) => SourceItem[] }> = {
+const ADAPTERS: Record<SupportedSubscriptionKind, Adapter> = {
   book_highlights: {
+    noteTypeId: null,
+    validRef: ref => /^[A-Za-z0-9_-]{1,128}$/u.test(ref),
     namespace: ref => `book-highlight:${ref}/`,
-    list: (db, ref) => {
+    list: async (db, ref) => {
       const title = workTitle(db, ref);
       const rows = db
         .prepare(
@@ -90,8 +166,10 @@ const ADAPTERS: Record<SupportedSubscriptionKind, { namespace: (ref: string) => 
     },
   },
   book_comments: {
+    noteTypeId: null,
+    validRef: ref => /^[A-Za-z0-9_-]{1,128}$/u.test(ref),
     namespace: ref => `book-comment:${ref}/`,
-    list: (db, ref) => {
+    list: async (db, ref) => {
       const title = workTitle(db, ref);
       const rows = db
         .prepare(
@@ -108,7 +186,73 @@ const ADAPTERS: Record<SupportedSubscriptionKind, { namespace: (ref: string) => 
       });
     },
   },
+  sunnah_book: {
+    noteTypeId: 'stock-hadith',
+    validRef: ref => {
+      const p = ref.split(':');
+      return p.length === 2 && SUNNAH_ID.test(p[0]) && NUMBER.test(p[1]);
+    },
+    namespace: ref => `sunnah-hadith:${ref}:`,
+    list: async (_db, ref, readers) => {
+      const { collection, chapter } = parseSunnah(ref);
+      return hadithItems(readers, collection, chapter);
+    },
+  },
+  sunnah_bab: {
+    noteTypeId: 'stock-hadith',
+    validRef: ref => {
+      const p = ref.split(':');
+      return p.length === 3 && SUNNAH_ID.test(p[0]) && NUMBER.test(p[1]) && /^[A-Za-z0-9_-]{1,40}$/u.test(p[2]);
+    },
+    namespace: ref => `sunnah-hadith:${ref.split(':').slice(0, 2).join(':')}:`,
+    list: async (_db, ref, readers) => {
+      const { collection, chapter, section } = parseSunnah(ref);
+      return hadithItems(readers, collection, chapter, section);
+    },
+  },
+  hadith_collection: {
+    noteTypeId: 'stock-hadith',
+    validRef: ref => SUNNAH_ID.test(ref),
+    namespace: ref => `sunnah-hadith:${ref}:`,
+    list: async (_db, ref, readers) => {
+      const items: SourceItem[] = [];
+      for (const chapter of await readers.sunnahChapterNumbers(ref)) items.push(...(await hadithItems(readers, ref, chapter)));
+      return items;
+    },
+  },
+  poem: {
+    noteTypeId: 'stock-context-cloze',
+    validRef: ref => NUMBER.test(ref),
+    namespace: ref => `poem:${ref}`,
+    list: async (_db, ref, readers) => {
+      const item = await poemItem(readers, Number(ref));
+      return item ? [item] : [];
+    },
+  },
+  poet: {
+    noteTypeId: 'stock-context-cloze',
+    validRef: ref => NUMBER.test(ref),
+    namespace: () => 'poem:',
+    list: async (_db, ref, readers) => {
+      const items: SourceItem[] = [];
+      for (const id of await readers.poetPoemIds(Number(ref))) {
+        const item = await poemItem(readers, id);
+        if (item) items.push(item);
+      }
+      return items;
+    },
+  },
 };
+
+function labelOf(templateOptions: string | null): string | null {
+  if (!templateOptions) return null;
+  try {
+    const parsed = JSON.parse(templateOptions) as { label?: unknown };
+    return typeof parsed.label === 'string' ? parsed.label : null;
+  } catch {
+    return null;
+  }
+}
 
 function workTitle(db: Database, workId: string): string {
   const row = db.prepare(`SELECT title FROM work WHERE id = ?`).get(workId) as { title: string } | undefined;
@@ -124,6 +268,18 @@ export function hashFields(fields: Record<string, string>): string {
     .sort()
     .map(key => [key, fields[key]]);
   return crypto.createHash('sha1').update(JSON.stringify(ordered)).digest('hex');
+}
+
+/** Which adapter produced an item ref, and the source to re-read it from. */
+function sourceOfItemRef(ref: string): { kind: SupportedSubscriptionKind; sourceRef: string } | null {
+  if (ref.startsWith('book-highlight:')) return { kind: 'book_highlights', sourceRef: ref.slice(15, ref.lastIndexOf('/')) };
+  if (ref.startsWith('book-comment:')) return { kind: 'book_comments', sourceRef: ref.slice(13, ref.lastIndexOf('/')) };
+  if (ref.startsWith('sunnah-hadith:')) {
+    const [collection, chapter] = ref.slice(14).split(':');
+    return { kind: 'sunnah_book', sourceRef: `${collection}:${chapter}` };
+  }
+  if (ref.startsWith('poem:')) return { kind: 'poem', sourceRef: ref.slice(5) };
+  return null;
 }
 
 interface NoteRow {
@@ -144,7 +300,7 @@ const STATE_NAMES = ['new', 'learning', 'review', 'relearning'] as const;
 export class DeckSyncService {
   private notes: CardNoteRepository;
 
-  constructor(private db: Database, private clock: () => Date = () => new Date()) {
+  constructor(private db: Database, private clock: () => Date = () => new Date(), private readers: SourceReaders = NO_READERS) {
     this.notes = new CardNoteRepository(db);
   }
 
@@ -153,7 +309,7 @@ export class DeckSyncService {
   list(deckId?: string): DeckSubscription[] {
     const rows = this.db
       .prepare(
-        `SELECT id, deck_id, source_kind, source_ref, note_type_id, new_items, last_synced_at
+        `SELECT id, deck_id, source_kind, source_ref, note_type_id, new_items, last_synced_at, template_options
          FROM deck_subscription ${deckId ? 'WHERE deck_id = ?' : ''} ORDER BY rowid`
       )
       .all(...(deckId ? [deckId] : [])) as Array<{
@@ -164,6 +320,7 @@ export class DeckSyncService {
       note_type_id: string;
       new_items: NewItemsPolicy;
       last_synced_at: string | null;
+      template_options: string | null;
     }>;
     return rows.map(r => ({
       id: r.id,
@@ -173,7 +330,7 @@ export class DeckSyncService {
       noteTypeId: r.note_type_id,
       newItems: r.new_items,
       lastSyncedAt: r.last_synced_at,
-      label: workTitle(this.db, r.source_ref),
+      label: labelOf(r.template_options) ?? workTitle(this.db, r.source_ref),
     }));
   }
 
@@ -181,14 +338,18 @@ export class DeckSyncService {
     return this.list().find(s => s.id === id) ?? null;
   }
 
-  subscribe(input: { deckId: string; sourceKind: string; sourceRef: string; noteTypeId?: string; newItems?: NewItemsPolicy }): DeckSubscription {
+  async subscribe(input: { deckId: string; sourceKind: string; sourceRef: string; noteTypeId?: string; newItems?: NewItemsPolicy }): Promise<DeckSubscription> {
     if (!isSupportedKind(input.sourceKind)) throw new Error('unsupported-source');
+    const adapter = ADAPTERS[input.sourceKind];
+    if (typeof input.sourceRef !== 'string' || !adapter.validRef(input.sourceRef)) throw new Error('invalid-request');
     const deck = this.db.prepare(`SELECT kind FROM deck WHERE id = ?`).get(input.deckId) as { kind: string } | undefined;
     if (!deck || deck.kind !== 'normal') throw new Error('invalid-request');
-    if (!this.db.prepare(`SELECT 1 FROM work WHERE id = ?`).get(input.sourceRef)) throw new Error('source-not-found');
-    const noteTypeId = input.noteTypeId ?? 'stock-basic';
+    const noteTypeId = adapter.noteTypeId ?? input.noteTypeId ?? 'stock-basic';
     const type = this.notes.getNoteType(noteTypeId);
-    if (!type || type.fields.length < 2 || type.kind !== 'normal') throw new Error('invalid-note-type');
+    if (!type) throw new Error('invalid-note-type');
+    if (!adapter.noteTypeId && (type.fields.length < 2 || type.kind !== 'normal')) throw new Error('invalid-note-type');
+    const label = await this.describeSource(input.sourceKind, input.sourceRef);
+    if (label === null) throw new Error('source-not-found');
     const existing = this.db
       .prepare(`SELECT id FROM deck_subscription WHERE deck_id = ? AND source_kind = ? AND source_ref = ?`)
       .get(input.deckId, input.sourceKind, input.sourceRef) as { id: string } | undefined;
@@ -196,11 +357,37 @@ export class DeckSyncService {
     const id = randomUUID();
     this.db
       .prepare(
-        `INSERT INTO deck_subscription (id, deck_id, source_kind, source_ref, note_type_id, new_items, last_synced_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL)`
+        `INSERT INTO deck_subscription (id, deck_id, source_kind, source_ref, note_type_id, template_options, new_items, last_synced_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
       )
-      .run(id, input.deckId, input.sourceKind, input.sourceRef, noteTypeId, input.newItems === 'silent' ? 'silent' : 'toast');
+      .run(id, input.deckId, input.sourceKind, input.sourceRef, noteTypeId, JSON.stringify({ label }), input.newItems === 'silent' ? 'silent' : 'toast');
     return this.get(id)!;
+  }
+
+  /** A readable name for the source, or null when it does not exist. */
+  private async describeSource(kind: SupportedSubscriptionKind, ref: string): Promise<string | null> {
+    if (kind === 'book_highlights' || kind === 'book_comments') {
+      return this.db.prepare(`SELECT 1 FROM work WHERE id = ?`).get(ref) ? workTitle(this.db, ref) : null;
+    }
+    if (kind === 'poem') {
+      const poem = await this.readers.poem(Number(ref));
+      return poem ? `${poem.title} — ${poem.poetName}` : null;
+    }
+    if (kind === 'poet') {
+      const [first] = await this.readers.poetPoemIds(Number(ref));
+      const poem = first ? await this.readers.poem(first) : null;
+      return poem ? poem.poetName : null;
+    }
+    if (kind === 'hadith_collection') {
+      return (await this.readers.sunnahChapterNumbers(ref)).length ? this.readers.collectionName(ref) : null;
+    }
+    const { collection, chapter, section } = parseSunnah(ref);
+    const found = await this.readers.sunnahChapter(collection, chapter);
+    if (!found) return null;
+    const name = `${this.readers.collectionName(collection)} — ${found.title}`;
+    if (kind === 'sunnah_book') return name;
+    const bab = found.hadiths.find(h => h.sectionNumber === section);
+    return bab ? `${name} — ${bab.sectionTitle || section}` : null;
   }
 
   /** Stops following the source. The deck's cards stay as they are. */
@@ -218,7 +405,7 @@ export class DeckSyncService {
 
   /** Subscriptions that follow a given book (for the annotation hooks). */
   forWork(workId: string): DeckSubscription[] {
-    return this.list().filter(s => isSupportedKind(s.sourceKind) && s.sourceRef === workId);
+    return this.list().filter(s => (s.sourceKind === 'book_highlights' || s.sourceKind === 'book_comments') && s.sourceRef === workId);
   }
 
   // ---------- sync ----------
@@ -231,7 +418,7 @@ export class DeckSyncService {
     const type = this.notes.getNoteType(sub.noteTypeId);
     if (!type) throw new Error('invalid-note-type');
     const fieldNames = type.fields.map(f => f.name);
-    const items = adapter.list(this.db, sub.sourceRef);
+    const items = await adapter.list(this.db, sub.sourceRef, this.readers);
     const result: SyncResult = { subscriptionId: sub.id, deckId: sub.deckId, added: 0, linked: 0, updated: 0, flagged: 0, orphaned: 0, restored: 0, unchanged: 0 };
 
     for (let i = 0; i < items.length; i += BATCH) {
@@ -255,7 +442,18 @@ export class DeckSyncService {
          WHERE substr(n.source_ref, 1, ?) = ?`
       )
       .all(sub.deckId, namespace.length, namespace) as Array<{ id: string; source_ref: string; orphaned_at: string | null }>;
-    const gone = deckNotes.filter(n => !present.has(n.source_ref) && !n.orphaned_at);
+    let gone = deckNotes.filter(n => !present.has(n.source_ref) && !n.orphaned_at);
+    if (gone.length) {
+      // Never orphan an item another subscription of this deck still covers (a bab and its book).
+      const others = this.list(sub.deckId).filter(o => o.id !== sub.id && isSupportedKind(o.sourceKind));
+      if (others.length) {
+        const claimed = new Set<string>();
+        for (const other of others) {
+          for (const item of await ADAPTERS[other.sourceKind as SupportedSubscriptionKind].list(this.db, other.sourceRef, this.readers)) claimed.add(item.ref);
+        }
+        gone = gone.filter(n => !claimed.has(n.source_ref));
+      }
+    }
     for (let i = 0; i < gone.length; i += BATCH) {
       this.db.transaction(() => {
         for (const note of gone.slice(i, i + BATCH)) {
@@ -269,16 +467,16 @@ export class DeckSyncService {
     return result;
   }
 
-  private fieldsFor(fieldNames: string[], values: string[]): Record<string, string> {
+  private fieldsFor(fieldNames: string[], item: SourceItem): Record<string, string> {
     const fields: Record<string, string> = {};
     fieldNames.forEach((name, index) => {
-      fields[name] = values[index] ?? '';
+      fields[name] = (item.fields ? item.fields[name] : item.values?.[index]) ?? '';
     });
     return fields;
   }
 
   private applyItem(sub: DeckSubscription, fieldNames: string[], item: SourceItem, result: SyncResult): void {
-    const generated = this.fieldsFor(fieldNames, item.values);
+    const generated = this.fieldsFor(fieldNames, item);
     const hash = hashFields(generated);
     const notes = this.db
       .prepare(
@@ -291,7 +489,7 @@ export class DeckSyncService {
 
     if (!original) {
       // Not in any deck yet, or every earlier note was deleted: make a new note in this deck.
-      this.notes.saveNote({ noteTypeId: sub.noteTypeId, fields: generated, sourceRef: item.ref, deckId: sub.deckId, sourceSnapshot: generated, sourceHash: hash });
+      this.notes.saveNote({ noteTypeId: sub.noteTypeId, fields: generated, sourceRef: item.ref, deckId: sub.deckId, sourceSnapshot: generated, sourceHash: hash, fromSourceSync: true });
       result.added += 1;
       return;
     }
@@ -330,7 +528,7 @@ export class DeckSyncService {
         else if ((current[name] ?? '') !== generated[name]) keptEdit = true;
       }
       const changed = fieldNames.some(name => (next[name] ?? '') !== (current[name] ?? ''));
-      if (changed) this.notes.saveNote({ id: note.id, noteTypeId: note.note_type_id, fields: next });
+      if (changed) this.notes.saveNote({ id: note.id, noteTypeId: note.note_type_id, fields: next, fromSourceSync: true });
       if (keptEdit) {
         // Keep the old snapshot and hash so the user can compare; the next sync re-flags until resolved.
         this.db.prepare(`UPDATE card_note SET source_changed_at = COALESCE(source_changed_at, ?) WHERE id = ?`).run(this.clock().toISOString(), note.id);
@@ -402,10 +600,10 @@ export class DeckSyncService {
 
   // ---------- review of sync results ----------
 
-  pending(): {
+  async pending(): Promise<{
     orphaned: Array<{ noteId: string; front: string; sourceRef: string; orphanedAt: string }>;
     changed: Array<{ noteId: string; isCopy: boolean; fields: string[]; current: Record<string, string>; oldSource: Record<string, string>; newSource: Record<string, string> | null }>;
-  } {
+  }> {
     const orphanRows = this.db
       .prepare(`SELECT id, fields_json, note_type_id, source_ref, orphaned_at FROM card_note WHERE orphaned_at IS NOT NULL ORDER BY orphaned_at DESC`)
       .all() as Array<{ id: string; fields_json: string; note_type_id: string; source_ref: string; orphaned_at: string }>;
@@ -422,45 +620,40 @@ export class DeckSyncService {
          WHERE source_changed_at IS NOT NULL AND orphaned_at IS NULL ORDER BY source_changed_at DESC`
       )
       .all() as Array<{ id: string; note_type_id: string; fields_json: string; copied_from_note_id: string | null; source_ref: string; source_snapshot_json: string | null }>;
-    const changed = changedRows
-      .filter(r => this.hasLiveCards(r.id))
-      .map(r => {
-        const fieldNames = this.notes.getNoteType(r.note_type_id)?.fields.map(f => f.name) ?? [];
-        return {
-          noteId: r.id,
-          isCopy: !!r.copied_from_note_id,
-          fields: fieldNames,
-          current: JSON.parse(r.fields_json) as Record<string, string>,
-          oldSource: r.source_snapshot_json ? (JSON.parse(r.source_snapshot_json) as Record<string, string>) : {},
-          newSource: this.currentSource(r.source_ref, fieldNames),
-        };
+    const changed = [];
+    for (const r of changedRows.filter(row => this.hasLiveCards(row.id))) {
+      const fieldNames = this.notes.getNoteType(r.note_type_id)?.fields.map(f => f.name) ?? [];
+      changed.push({
+        noteId: r.id,
+        isCopy: !!r.copied_from_note_id,
+        fields: fieldNames,
+        current: JSON.parse(r.fields_json) as Record<string, string>,
+        oldSource: r.source_snapshot_json ? (JSON.parse(r.source_snapshot_json) as Record<string, string>) : {},
+        newSource: await this.currentSource(r.source_ref, fieldNames),
       });
+    }
     return { orphaned, changed };
   }
 
   /** The item's fields as the source has them now, or null when it's gone. */
-  private currentSource(sourceRef: string, fieldNames: string[]): Record<string, string> | null {
-    for (const kind of SUPPORTED_SUBSCRIPTION_KINDS) {
-      const prefix = kind === 'book_highlights' ? 'book-highlight:' : 'book-comment:';
-      if (!sourceRef.startsWith(prefix)) continue;
-      const workId = sourceRef.slice(prefix.length, sourceRef.lastIndexOf('/'));
-      const item = ADAPTERS[kind].list(this.db, workId).find(i => i.ref === sourceRef);
-      return item ? this.fieldsFor(fieldNames, item.values) : null;
-    }
-    return null;
+  private async currentSource(sourceRef: string, fieldNames: string[]): Promise<Record<string, string> | null> {
+    const origin = sourceOfItemRef(sourceRef);
+    if (!origin) return null;
+    const item = (await ADAPTERS[origin.kind].list(this.db, origin.sourceRef, this.readers)).find(i => i.ref === sourceRef);
+    return item ? this.fieldsFor(fieldNames, item) : null;
   }
 
   /** "Update": take the new source for every field. "Keep": keep the user's text, stop asking. */
-  resolveChange(noteId: string, choice: 'update' | 'keep'): void {
+  async resolveChange(noteId: string, choice: 'update' | 'keep'): Promise<void> {
     const row = this.db.prepare(`SELECT note_type_id, fields_json, source_ref FROM card_note WHERE id = ?`).get(noteId) as
       | { note_type_id: string; fields_json: string; source_ref: string }
       | undefined;
     if (!row) throw new Error('invalid-request');
     const fieldNames = this.notes.getNoteType(row.note_type_id)?.fields.map(f => f.name) ?? [];
-    const source = this.currentSource(row.source_ref, fieldNames);
+    const source = await this.currentSource(row.source_ref, fieldNames);
     this.db.transaction(() => {
       if (source) {
-        if (choice === 'update') this.notes.saveNote({ id: noteId, noteTypeId: row.note_type_id, fields: { ...(JSON.parse(row.fields_json) as Record<string, string>), ...source } });
+        if (choice === 'update') this.notes.saveNote({ id: noteId, noteTypeId: row.note_type_id, fields: { ...(JSON.parse(row.fields_json) as Record<string, string>), ...source }, fromSourceSync: true });
         this.db.prepare(`UPDATE card_note SET source_snapshot_json = ?, source_hash = ?, source_changed_at = NULL WHERE id = ?`).run(JSON.stringify(source), hashFields(source), noteId);
       } else {
         this.db.prepare(`UPDATE card_note SET source_changed_at = NULL WHERE id = ?`).run(noteId);

@@ -19,7 +19,7 @@ import { validateReview, type SaveDeckInput, type SaveFilteredDeckInput } from '
 import { CardNoteRepository } from '../database/repositories/card-note.repository';
 import { DeckRepository } from '../database/repositories/deck.repository';
 import { CardMediaStore, MAX_CARD_MEDIA_BYTES } from '../services/card-media';
-import { DeckSyncService } from '../services/deck-sync';
+import { createDeckSyncService } from '../services/deck-sync-readers';
 import { deckSyncScheduler } from '../services/deck-sync-scheduler';
 import {
   validateSafeId,
@@ -211,7 +211,7 @@ export function registerKnowledgeCardIpc(): void {
   // Live source-to-deck sync (KEY-393).
   const syncService = (event: IpcMainInvokeEvent) => {
     authorize(event);
-    return new DeckSyncService(getDatabase());
+    return createDeckSyncService(getDatabase());
   };
   const policy = (value: unknown) => (value === 'silent' ? 'silent' : 'toast') as 'silent' | 'toast';
   ipcMain.handle('deck-sync:list', (event, deckId: unknown) =>
@@ -222,7 +222,7 @@ export function registerKnowledgeCardIpc(): void {
     const i = (input ?? {}) as Record<string, unknown>;
     const extra = Object.keys(i).filter(k => !['deckId', 'sourceKind', 'sourceRef', 'newItems'].includes(k));
     if (extra.length || typeof i.sourceKind !== 'string') throw new Error('invalid-request');
-    const sub = service.subscribe({
+    const sub = await service.subscribe({
       deckId: validateSafeId(i.deckId, 'deckId'),
       sourceKind: i.sourceKind,
       sourceRef: validateSafeId(i.sourceRef, 'sourceRef'),
@@ -241,9 +241,9 @@ export function registerKnowledgeCardIpc(): void {
     return deckSyncScheduler.runNow(validateSafeId(id, 'id'));
   });
   ipcMain.handle('deck-sync:pending', event => syncService(event).pending());
-  ipcMain.handle('deck-sync:resolve-change', (event, noteId: unknown, choice: unknown) => {
+  ipcMain.handle('deck-sync:resolve-change', async (event, noteId: unknown, choice: unknown) => {
     if (choice !== 'update' && choice !== 'keep') throw new Error('invalid-request');
-    syncService(event).resolveChange(validateSafeId(noteId, 'noteId'), choice);
+    await syncService(event).resolveChange(validateSafeId(noteId, 'noteId'), choice);
     return true;
   });
   ipcMain.handle('deck-sync:resolve-orphan', (event, noteId: unknown, choice: unknown) => {

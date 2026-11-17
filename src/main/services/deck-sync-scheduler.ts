@@ -9,7 +9,8 @@
 
 import { BrowserWindow } from 'electron';
 import { getDatabase } from '../database/connection';
-import { DeckSyncService, type SyncResult } from './deck-sync';
+import type { SyncResult } from './deck-sync';
+import { createDeckSyncService } from './deck-sync-readers';
 import { notificationLanguage, notificationService } from '../ipc/notifications';
 import { translations } from '../../renderer/translations';
 
@@ -37,7 +38,7 @@ class DeckSyncScheduler {
   start(): void {
     setTimeout(() => {
       try {
-        for (const sub of new DeckSyncService(getDatabase()).list()) this.pendingSubs.add(sub.id);
+        for (const sub of createDeckSyncService(getDatabase()).list()) this.pendingSubs.add(sub.id);
         this.schedule(0);
       } catch (error) {
         console.warn('[baglib:deck-sync] startup sync skipped', error);
@@ -55,7 +56,7 @@ class DeckSyncScheduler {
     });
     this.chain = this.chain.then(async () => {
       try {
-        const r = await new DeckSyncService(getDatabase()).sync(id);
+        const r = await createDeckSyncService(getDatabase()).sync(id);
         this.report(r);
         resolveResult(r);
       } catch (error) {
@@ -74,7 +75,7 @@ class DeckSyncScheduler {
   }
 
   private async flush(): Promise<void> {
-    const service = new DeckSyncService(getDatabase());
+    const service = createDeckSyncService(getDatabase());
     const ids = new Set(this.pendingSubs);
     for (const workId of this.pendingWorks) for (const sub of service.forWork(workId)) ids.add(sub.id);
     this.pendingSubs.clear();
@@ -93,7 +94,7 @@ class DeckSyncScheduler {
       if (!win.isDestroyed()) win.webContents.send('deck-sync:changed', result);
     }
     if (result.added + result.linked === 0) return;
-    const service = new DeckSyncService(getDatabase());
+    const service = createDeckSyncService(getDatabase());
     const sub = service.get(result.subscriptionId);
     if (!sub || sub.newItems !== 'toast') return;
     const deck = getDatabase().prepare(`SELECT name FROM deck WHERE id = ?`).get(result.deckId) as { name: string } | undefined;

@@ -147,6 +147,52 @@ app.on('browser-window-created', (_, owner) => {
     await evaluate(`document.querySelector('[data-close-sync-review]').click()`);
     await until(`!document.querySelector('[data-sync-review-banner]')`);
 
+    // KEY-409: follow a real Sunnah bab and a real poem through the pickers (throwaway corpus copies).
+    if (process.env.BAGLIB_SYNC_CORPUS === '1') {
+      const corpusDeck = await evaluate(`window.electronAPI.knowledgeCards.createDeck({ name: ${JSON.stringify(language === 'ar' ? 'سنة وشعر' : 'Sunnah and poetry')} })`);
+      await evaluate(`window.dispatchEvent(new Event('baglib:knowledge-card-saved'))`);
+      await until(`!!document.querySelector('[data-deck-subscriptions=${JSON.stringify(corpusDeck.id)}]')`);
+      await evaluate(`document.querySelector('[data-deck-subscriptions=${JSON.stringify(corpusDeck.id)}]').click()`);
+      await until(`!!document.querySelector('[data-deck-subscribe-form]')`);
+
+      // Sunnah bab: collection, then kitab, then bab.
+      await setSelect('[data-deck-sync-kind]', 'sunnah_bab');
+      await until(`document.querySelectorAll('[data-deck-sync-collection] option').length > 1`, 300);
+      results.sunnahCollection = await evaluate(`document.querySelector('[data-deck-sync-collection] option[value="Bukhari"]') ? 'Bukhari' : document.querySelectorAll('[data-deck-sync-collection] option')[1].value`);
+      await setSelect('[data-deck-sync-collection]', results.sunnahCollection);
+      await until(`document.querySelectorAll('[data-deck-sync-chapter] option').length > 1`);
+      await setSelect('[data-deck-sync-chapter]', await evaluate(`document.querySelectorAll('[data-deck-sync-chapter] option')[1].value`));
+      await until(`document.querySelectorAll('[data-deck-sync-bab] option').length > 1`, 300);
+      await setSelect('[data-deck-sync-bab]', await evaluate(`document.querySelectorAll('[data-deck-sync-bab] option')[1].value`));
+      await until(`!document.querySelector('[data-deck-subscribe-btn]').disabled`);
+      await evaluate(`document.querySelector('[data-deck-subscribe-btn]').click()`);
+      await until(`document.querySelectorAll('[data-deck-subscription]').length === 1`, 300);
+      results.babMessage = await evaluate(`document.querySelector('[data-deck-sync-message]')?.textContent ?? ''`);
+      const babNotes = await evaluate(`window.electronAPI.cardNotes.listNotes({ deckId: ${JSON.stringify(corpusDeck.id)} })`);
+      assert.ok(babNotes.length >= 1, 'the bab brought its hadiths');
+      assert.ok(babNotes.every(n => n.noteTypeId === 'stock-hadith' && n.fields.Hadith.trim().length > 0), 'Hadith notes carry the matn');
+      results.babHadiths = babNotes.length;
+      await shot('05-sunnah-bab');
+
+      // Poem: search, pick, follow.
+      await setSelect('[data-deck-sync-kind]', 'poem');
+      await until(`!!document.querySelector('[data-deck-sync-poetry-query]')`);
+      await evaluate(`(()=>{const i=document.querySelector('[data-deck-sync-poetry-query]');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,${JSON.stringify('قفا نبك')});i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      await until(`document.querySelectorAll('[data-deck-sync-poetry-pick] option').length > 0`, 300);
+      await setSelect('[data-deck-sync-poetry-pick]', await evaluate(`document.querySelectorAll('[data-deck-sync-poetry-pick] option')[0].value`));
+      await until(`!document.querySelector('[data-deck-subscribe-btn]').disabled`);
+      await evaluate(`document.querySelector('[data-deck-subscribe-btn]').click()`);
+      await until(`document.querySelectorAll('[data-deck-subscription]').length === 2`, 300);
+      const poemNotes = (await evaluate(`window.electronAPI.cardNotes.listNotes({ deckId: ${JSON.stringify(corpusDeck.id)} })`)).filter(n => n.noteTypeId === 'stock-context-cloze');
+      assert.equal(poemNotes.length, 1, 'the poem became one note');
+      const poemCards = await evaluate(`window.electronAPI.cardNotes.getCards(${JSON.stringify(poemNotes[0].id)})`);
+      assert.ok(poemCards.length >= 1, 'one card per bayt');
+      results.poemCards = poemCards.length;
+      results.subscriptionLabels = await evaluate(`[...document.querySelectorAll('[data-deck-subscription] p.font-semibold')].map(p=>p.textContent)`);
+      await shot('06-poem-and-bab-followed');
+      await evaluate(`document.querySelector('[data-close-deck-subscriptions]').click()`);
+    }
+
     results.rendererErrors = errors.filter(line => !/Download the React DevTools|favicon/u.test(line));
     fs.writeFileSync(path.join(evidence, `results-${language}.json`), JSON.stringify(results, null, 2));
     console.log(`[sync-live-${language}] passed`, JSON.stringify(results));

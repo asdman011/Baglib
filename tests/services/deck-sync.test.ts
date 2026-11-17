@@ -59,7 +59,7 @@ test('new highlights join the subscribed deck as new cards', async () => {
   try {
     f.annotate('a1', 'إن الاجتماع الإنساني ضروري');
     const deck = f.decks.createDeck({ name: 'خلدونيات' });
-    const sub = f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
+    const sub = await f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
     let r = await f.sync.sync(sub.id, noYield);
     assert.equal(r.added, 1);
     f.annotate('a2', 'الظلم مؤذن بخراب العمران', 'فصل مهم');
@@ -83,7 +83,7 @@ test('an edited highlight updates the card in place; FSRS state and review histo
   try {
     f.annotate('a1', 'نص قديم');
     const deck = f.decks.createDeck({ name: 'D' });
-    const sub = f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
+    const sub = await f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
     await f.sync.sync(sub.id, noYield);
     const [cardId] = f.cardsOf(f.noteFor('a1').id!);
     const card = f.srs.queue(deck.id).cards[0];
@@ -112,7 +112,7 @@ test('a deleted highlight orphans and suspends its card; restoring it brings the
     f.annotate('a1', 'يبقى');
     f.annotate('a2', 'يحذف');
     const deck = f.decks.createDeck({ name: 'D' });
-    const sub = f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
+    const sub = await f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
     await f.sync.sync(sub.id, noYield);
     const cardId = f.cardsOf(f.noteFor('a2').id!)[0];
     const q = f.srs.queue(deck.id);
@@ -125,7 +125,7 @@ test('a deleted highlight orphans and suspends its card; restoring it brings the
     assert.equal(r.orphaned, 1);
     assert.ok(f.noteFor('a2').orphaned_at);
     assert.equal((f.db.prepare(`SELECT state FROM srs_state WHERE knowledge_id = ?`).get(cardId) as { state: string }).state, 'suspended');
-    assert.equal(f.sync.pending().orphaned.length, 1);
+    assert.equal((await f.sync.pending()).orphaned.length, 1);
     assert.ok((f.db.prepare(`SELECT COUNT(*) AS n FROM srs_review_log WHERE knowledge_id = ?`).get(cardId) as { n: number }).n >= 1, 'history kept');
 
     // Undo the deletion (same annotation id comes back).
@@ -135,7 +135,7 @@ test('a deleted highlight orphans and suspends its card; restoring it brings the
     assert.equal(f.noteFor('a2').orphaned_at, null);
     const back = f.db.prepare(`SELECT state, stability, difficulty, due_at FROM srs_state WHERE knowledge_id = ?`).get(cardId);
     assert.deepEqual(back, reviewed, 'the card returns to its reviewed state with its schedule');
-    assert.equal(f.sync.pending().orphaned.length, 0);
+    assert.equal((await f.sync.pending()).orphaned.length, 0);
   } finally {
     f.db.close();
   }
@@ -146,7 +146,7 @@ test('a field the user edited is never overwritten; the note is flagged and can 
   try {
     f.annotate('a1', 'الأصل');
     const deck = f.decks.createDeck({ name: 'D' });
-    const sub = f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
+    const sub = await f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
     await f.sync.sync(sub.id, noYield);
     const note = f.noteFor('a1');
     const repo = new CardNoteRepository(f.db);
@@ -157,7 +157,7 @@ test('a field the user edited is never overwritten; the note is flagged and can 
     const r = await f.sync.sync(sub.id, noYield);
     assert.equal(r.flagged, 1);
     assert.equal(JSON.parse(f.noteFor('a1').fields_json!).Front, 'الأصل [تعليقي]', "the user's version stays");
-    const pending = f.sync.pending().changed;
+    const pending = (await f.sync.pending()).changed;
     assert.equal(pending.length, 1);
     assert.equal(pending[0].oldSource.Front, 'الأصل');
     assert.equal(pending[0].newSource!.Front, 'الأصل المصحح');
@@ -168,10 +168,10 @@ test('a field the user edited is never overwritten; the note is flagged and can 
     assert.equal(JSON.parse(f.noteFor('a1').fields_json!).Front, 'الأصل [تعليقي]');
     assert.equal(again.updated, 0);
 
-    f.sync.resolveChange(note.id!, 'update');
+    await f.sync.resolveChange(note.id!, 'update');
     assert.equal(JSON.parse(f.noteFor('a1').fields_json!).Front, 'الأصل المصحح');
     assert.equal(f.noteFor('a1').source_changed_at, null);
-    assert.equal(f.sync.pending().changed.length, 0);
+    assert.equal((await f.sync.pending()).changed.length, 0);
   } finally {
     f.db.close();
   }
@@ -183,8 +183,8 @@ test('deck-only copies are never overwritten; shared originals update; one card 
     f.annotate('a1', 'مشترك');
     const d1 = f.decks.createDeck({ name: 'D1' });
     const d2 = f.decks.createDeck({ name: 'D2' });
-    const s1 = f.sync.subscribe({ deckId: d1.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
-    const s2 = f.sync.subscribe({ deckId: d2.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
+    const s1 = await f.sync.subscribe({ deckId: d1.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
+    const s2 = await f.sync.subscribe({ deckId: d2.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
     await f.sync.sync(s1.id, noYield);
     const r2 = await f.sync.sync(s2.id, noYield);
     assert.equal(r2.linked, 1, 'the second deck gets the same card, not a duplicate');
@@ -202,7 +202,7 @@ test('deck-only copies are never overwritten; shared originals update; one card 
     assert.equal(JSON.parse(copy.fields_json).Front, 'مشترك', 'the copy keeps its text');
     assert.ok(copy.source_changed_at, 'the copy is flagged');
     assert.ok(r.flagged >= 0);
-    assert.ok(f.sync.pending().changed.some(c => c.noteId === newNote.id && c.isCopy));
+    assert.ok((await f.sync.pending()).changed.some(c => c.noteId === newNote.id && c.isCopy));
   } finally {
     f.db.close();
   }
@@ -214,7 +214,7 @@ test('orphan resolution: delete moves cards to the trash, keep detaches and unsu
     f.annotate('a1', 'أ');
     f.annotate('a2', 'ب');
     const deck = f.decks.createDeck({ name: 'D' });
-    const sub = f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
+    const sub = await f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
     await f.sync.sync(sub.id, noYield);
     const n1 = f.noteFor('a1').id!;
     const n2 = f.noteFor('a2').id!;
@@ -227,7 +227,7 @@ test('orphan resolution: delete moves cards to the trash, keep detaches and unsu
     f.sync.resolveOrphan(n2, 'keep');
     const kept = f.db.prepare(`SELECT state FROM srs_state WHERE knowledge_id = ?`).get(f.cardsOf(n2)[0]) as { state: string };
     assert.equal(kept.state, 'new');
-    assert.equal(f.sync.pending().orphaned.length, 0);
+    assert.equal((await f.sync.pending()).orphaned.length, 0);
     // A later sync doesn't touch the detached card.
     const r = await f.sync.sync(sub.id, noYield);
     assert.equal(r.orphaned, 0);
@@ -241,16 +241,16 @@ test('comments subscription, validation, and batching yields between batches', a
   try {
     for (let i = 0; i < 230; i++) f.annotate(`h${i}`, `مقطع ${i}`, i % 2 ? `تعليق ${i}` : null);
     const deck = f.decks.createDeck({ name: 'D' });
-    assert.throws(() => f.sync.subscribe({ deckId: deck.id, sourceKind: 'sunnah_bab', sourceRef: 'x' }), /unsupported-source/u);
-    assert.throws(() => f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'missing' }), /source-not-found/u);
-    const sub = f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
+    await assert.rejects(f.sync.subscribe({ deckId: deck.id, sourceKind: 'lexicon', sourceRef: 'x' }), /unsupported-source/u);
+    await assert.rejects(f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'missing' }), /source-not-found/u);
+    const sub = await f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
     let yields = 0;
     const r = await f.sync.sync(sub.id, async () => {
       yields += 1;
     });
     assert.equal(r.added, 230);
     assert.equal(yields, 2, '230 items in batches of 100');
-    const comments = f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_comments', sourceRef: 'w1' });
+    const comments = await f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_comments', sourceRef: 'w1' });
     const rc = await f.sync.sync(comments.id, noYield);
     assert.equal(rc.added, 115, 'only annotations with a comment');
     assert.equal(f.sync.list(deck.id).length, 2);

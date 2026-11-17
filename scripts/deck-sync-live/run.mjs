@@ -4,10 +4,13 @@ import assert from 'node:assert/strict';
 import { spawn, execSync } from 'node:child_process';
 import electron from 'electron';
 import { rendererAnswers } from '../lib/renderer.mjs';
+import { setupThrowawayCorpus } from '../lib/corpus-copy.mjs';
 
 // KEY-393 live check runner. Throwaway profiles under .baglib-data/, Next renderer on :3000, the
 // real built main (run `npm run build:main` first). Each language imports a real text-layer PDF
-// from tests/real-files (not copied into storage). Evidence goes to .baglib-data/key393-evidence/.
+// from tests/real-files (not copied into storage). KEY-409: the Sunnah corpus is linked and the
+// poetry partition copied read-only into each throwaway profile (originals verified unchanged).
+// Evidence goes to .baglib-data/key393-evidence/.
 
 const manifest = JSON.parse(fs.readFileSync('tests/real-files/manifest.json', 'utf8'));
 const pdfFor = lang => {
@@ -39,11 +42,17 @@ for (let i = 0; i < 90 && !ready; i++) {
 assert.ok(ready, 'Next.js dev server did not start');
 
 const profiles = [];
+const corpora = [];
 try {
   for (const lang of ['ar', 'en']) {
     const profile = path.join(directory, `profile-${lang}`);
     fs.mkdirSync(profile, { recursive: true });
     profiles.push(profile);
+    const corpus = setupThrowawayCorpus({ targetDir: profile, copyQuran: false, copyPoetry: true, linkSunnah: true });
+    corpora.push(corpus);
+    const corpusReady = corpus.poetry.available && corpus.sunnah.available;
+    console.log(`[sync-live] corpus for ${lang}: poetry=${corpus.poetry.available} sunnah=${corpus.sunnah.available}`);
+    assert.ok(corpusReady, 'KEY-409 needs the installed poetry partition and Sunnah corpus to copy from');
     const env = {
       ...process.env,
       BAGLIB_DATA_DIR: profile,
@@ -51,6 +60,7 @@ try {
       BAGLIB_SYNC_EVIDENCE: evidence,
       BAGLIB_SYNC_LANG: lang,
       BAGLIB_SYNC_REAL_PDF: path.resolve('tests/real-files', pdfFor(lang).path),
+      BAGLIB_SYNC_CORPUS: corpusReady ? '1' : '0',
       BAGLIB_REGISTER_PROTOCOL: '0',
     };
     delete env.ELECTRON_RUN_AS_NODE;
@@ -77,6 +87,10 @@ try {
   try {
     if (nextProcess) execSync('node scripts/ensure-port-free.js', { stdio: 'ignore' });
   } catch {}
+  for (const corpus of corpora) {
+    const report = corpus.cleanup();
+    assert.equal(report.originalsUnchanged, true, 'original corpus files must stay unchanged');
+  }
   for (const profile of profiles) {
     assert.equal(path.dirname(path.resolve(profile)), path.resolve(directory));
     fs.rmSync(profile, { recursive: true, force: true });

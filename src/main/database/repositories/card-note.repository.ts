@@ -337,7 +337,8 @@ export class CardNoteRepository {
         existingNote = this.getNote(noteId);
       }
 
-      if (existingNote && protectSourceText) {
+      // Live sync writes the source's own text (KEY-409); only user edits are blocked.
+      if (existingNote && protectSourceText && !input.fromSourceSync) {
         // Ensure source_text fields have not been modified
         for (const f of noteType.fields) {
           if (f.sourceText) {

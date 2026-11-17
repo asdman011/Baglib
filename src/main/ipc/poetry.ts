@@ -12,6 +12,31 @@ import { PoetryNarrationService } from '../services/poetry/narration';
 import { POETRY_NARRATION_AUDIO_EXTENSIONS } from '../../shared/poetry-narration';
 import { translations } from '../../renderer/translations';
 
+let poetryQuery: ((operation: 'detail' | 'search', input: unknown) => Promise<unknown>) | null = null;
+/** KEY-409: one poem's title, poet and verses, for live deck sync. */
+export async function readPoemForSync(id: number): Promise<{ id: number; title: string; poetName: string; verses: string[] } | null> {
+  if (!poetryQuery) return null;
+  const poem = (await poetryQuery('detail', id)) as PoetryDetail | null;
+  if (!poem) return null;
+  const verses: unknown = JSON.parse(poem.verses_json);
+  return { id: poem.id, title: poem.title, poetName: poem.poet_name, verses: Array.isArray(verses) ? verses.filter((v): v is string => typeof v === 'string') : [] };
+}
+/** KEY-409: the ids of every poem by one poet (Arabic and English), for live deck sync. */
+export async function readPoetPoemIds(poetId: number): Promise<number[]> {
+  if (!poetryQuery) return [];
+  const ids: number[] = [];
+  for (const language of ['ar', 'en'] as const) {
+    let after = 0;
+    for (let guard = 0; guard < 500; guard++) {
+      const page = (await poetryQuery('search', { poetId, language, limit: 100, after })) as { items: Array<{ id: number }>; next: number | null };
+      ids.push(...page.items.map(item => item.id));
+      if (!page.next) break;
+      after = page.next;
+    }
+  }
+  return ids;
+}
+
 export function registerPoetryIpc(): void {
   let provisioner: PoetryProvisioner | undefined;
   // The installer ships a verified poetry pack in resources/poetry-pack (development builds have none).
@@ -26,6 +51,7 @@ export function registerPoetryIpc(): void {
     }
     return database;
   };
+  poetryQuery = (operation, input) => getDatabase().query(operation, input);
   const register = (channel: string, action: (input: unknown, event: Electron.IpcMainInvokeEvent) => unknown) => ipcMain.handle(channel, async (event, input: unknown) => {
     if (!poetryOriginAllowed(event.sender.getURL(), event.senderFrame === event.sender.mainFrame)) return { ok: false, error: 'permission-denied' };
     try { return { ok: true, data: await action(input, event) }; }

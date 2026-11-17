@@ -80,6 +80,8 @@ export interface SaveNoteInput {
   sourceHash?: string | null;
   tags?: string[];
   deckId?: string;
+  /** Main process only: a live-sync write of the source's own text (never accepted from the renderer). */
+  fromSourceSync?: boolean;
 }
 
 export interface GeneratedCard {

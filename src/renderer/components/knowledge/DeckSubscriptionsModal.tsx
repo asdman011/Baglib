@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Baglib — a deck's live sources (KEY-393): follow a book's highlights or comments, choose how new
- * cards are announced, sync now, or stop following.
+ * Baglib — a deck's live sources (KEY-393, KEY-409): follow a book's highlights or comments, a Sunnah
+ * book, bab or collection, a poem or a poet; choose how new cards are announced, sync now, or stop.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -10,8 +10,10 @@ import { Link2, RefreshCw, Trash2, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button } from '../ui/Button';
 import type { DeckTreeNode } from '../../../shared/srs';
+import { DeckSourcePicker, type DeckSourceKind } from './DeckSourcePicker';
 
-type Kind = 'book_highlights' | 'book_comments';
+type Kind = DeckSourceKind;
+const KINDS: Kind[] = ['book_highlights', 'book_comments', 'sunnah_book', 'sunnah_bab', 'hadith_collection', 'poem', 'poet'];
 type Policy = 'silent' | 'toast';
 interface Subscription {
   id: string;
@@ -23,10 +25,10 @@ interface Subscription {
 }
 
 export function DeckSubscriptionsModal({ deck, onClose, onChanged }: { deck: DeckTreeNode | null; onClose: () => void; onChanged: () => void }) {
-  const { t, dir, books } = useWorkspace();
+  const { t, dir } = useWorkspace();
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [kind, setKind] = useState<Kind>('book_highlights');
-  const [bookId, setBookId] = useState('');
+  const [sourceRef, setSourceRef] = useState('');
   const [policy, setPolicy] = useState<Policy>('toast');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -66,7 +68,16 @@ export function DeckSubscriptionsModal({ deck, onClose, onChanged }: { deck: Dec
   const summary = (r: { added: number; linked: number; updated: number; flagged: number; orphaned: number; restored: number }) =>
     t('deckSyncSummary', { added: r.added + r.linked, updated: r.updated, flagged: r.flagged, orphaned: r.orphaned, restored: r.restored });
 
-  const kindLabel = (k: string) => (k === 'book_comments' ? t('deckSyncKindComments') : t('deckSyncKindHighlights'));
+  const kindLabel = (k: string) =>
+    ({
+      book_highlights: t('deckSyncKindHighlights'),
+      book_comments: t('deckSyncKindComments'),
+      sunnah_book: t('deckSyncKindSunnahBook'),
+      sunnah_bab: t('deckSyncKindSunnahBab'),
+      hadith_collection: t('deckSyncKindCollection'),
+      poem: t('deckSyncKindPoem'),
+      poet: t('deckSyncKindPoet'),
+    })[k] ?? k;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="deck-sync-title">
@@ -140,34 +151,33 @@ export function DeckSubscriptionsModal({ deck, onClose, onChanged }: { deck: Dec
           className="space-y-3 rounded-xl border border-dashed border-subtle p-3"
           onSubmit={e => {
             e.preventDefault();
-            if (!bookId) return;
+            if (!sourceRef) return;
             void run(async () => {
-              const { result } = await window.electronAPI.deckSync.subscribe({ deckId: deck.id, sourceKind: kind, sourceRef: bookId, newItems: policy });
+              const { result } = await window.electronAPI.deckSync.subscribe({ deckId: deck.id, sourceKind: kind, sourceRef, newItems: policy });
               setMessage(summary(result));
             });
           }}
         >
           <p className="text-sm font-semibold text-main">{t('deckSyncAdd')}</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="space-y-1 text-xs text-muted">
-              <span>{t('deckSyncKind')}</span>
-              <select value={kind} data-deck-sync-kind onChange={e => setKind(e.target.value as Kind)} className="w-full rounded-lg border border-subtle bg-canvas px-2 py-1.5 text-sm text-main">
-                <option value="book_highlights">{t('deckSyncKindHighlights')}</option>
-                <option value="book_comments">{t('deckSyncKindComments')}</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-muted">
-              <span>{t('deckSyncBook')}</span>
-              <select value={bookId} data-deck-sync-book onChange={e => setBookId(e.target.value)} required className="w-full rounded-lg border border-subtle bg-canvas px-2 py-1.5 text-sm text-main">
-                <option value="">{t('deckSyncChooseBook')}</option>
-                {books.map(book => (
-                  <option key={book.id} value={book.id} dir="auto">
-                    {book.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="block space-y-1 text-xs text-muted">
+            <span>{t('deckSyncKind')}</span>
+            <select
+              value={kind}
+              data-deck-sync-kind
+              onChange={e => {
+                setKind(e.target.value as Kind);
+                setSourceRef('');
+              }}
+              className="w-full rounded-lg border border-subtle bg-canvas px-2 py-1.5 text-sm text-main"
+            >
+              {KINDS.map(k => (
+                <option key={k} value={k}>
+                  {kindLabel(k)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <DeckSourcePicker key={kind} kind={kind} onChange={setSourceRef} />
           <fieldset className="space-y-1">
             <legend className="text-xs text-muted">{t('deckSyncPolicy')}</legend>
             <label className="flex items-center gap-2 text-sm text-main">
@@ -179,7 +189,7 @@ export function DeckSubscriptionsModal({ deck, onClose, onChanged }: { deck: Dec
               {t('deckSyncPolicySilent')}
             </label>
           </fieldset>
-          <Button type="submit" size="sm" disabled={busy || !bookId} data-deck-subscribe-btn icon={<Link2 className="size-3.5" />}>
+          <Button type="submit" size="sm" disabled={busy || !sourceRef} data-deck-subscribe-btn icon={<Link2 className="size-3.5" />}>
             {t('deckSyncSubscribe')}
           </Button>
         </form>
