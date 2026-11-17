@@ -1,3 +1,9 @@
+## KEY-389 review - 2026-11-17 22:58 - Agent: Claude Code
+
+- Reviewed 56f2d6e (Antigravity, argon). Re-ran: `tsc --noEmit` exit 0; eslint on all changed files exit 0; focused tests 98/98; `scheduler-parity` under TZ=America/Los_Angeles 9/9. Full suite (2536/2536) and live harnesses are as reported by the agent, not re-run by Claude.
+- Migration 031 checked against ADR-017 3.4-3.6: bury defaults off, rating-0 trigger, shared cards kept shared, memorized cards moved to the built-in Memorization deck, down migration backs up rating-0 rows.
+- Verdict: pass. Jira KEY-389 moved to Done (comment 10467). Minor follow-ups (same-name deck merge in migration, filtered-reschedule log kind, bury_interday scope, untranslated Parent::Child placeholder) added to KEY-407 (comment 10468). The agent report wrongly says bury defaults on; the code is correct.
+
 ## KEY-389 Revision Task 1B: Scheduler Parity with Anki - 2026-11-17T22:53:00+02:00 - Agent: Antigravity
 
 **Request.** Implement Revision Task 1B (`KEY-389`, Epic `KEY-387`) according to `docs/ADR-017-revision-data-model.md` (sections 3.4, 3.5, 3.6, 3.7, 3.8, and 3.9 steps 1, 3, 5, 6):
