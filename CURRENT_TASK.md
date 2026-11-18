@@ -1,3 +1,41 @@
+## KEY-401 Biography (tarajim) decks and Wikipedia quick-cards - 2026-11-18 - Agent: Claude Code
+
+**Request.** Decks for people (name, era and death date, main works, field), and a quick-card from a Wikipedia lookup inside BagLib (front = title, back = summary, link and language edition), in Arabic and English. Hadith narrators stay with KEY-396. Kept apart from KEY-233 (external biography and dictionary sources): this task uses the library's own author records and the existing Wikipedia service.
+
+**What changed:**
+- **Migration 036 (data only):** `stock-person` "Person", with fields Name, Era, Works, Field, Bio, Source; empty fields are hidden.
+- **`services/person-decks.ts` (new):**
+  - `authorDeck` makes one note per library author, either all authors or the authors of one category's books, up to 500. The fields are:
+    - Era, from the birth and death years;
+    - Works, the author's books in the library;
+    - Field, from those books' categories;
+    - Bio, the library's text, escaped;
+    - Source.
+  - Labels follow the UI language. Making the deck again updates the notes in place and keeps the schedule. The unknown-author placeholder is skipped.
+  - `wikipediaCard` fetches the summary again in main, so the text is Wikipedia's own and never the renderer's. It uses the plain title, not the display HTML.
+    - Source = the edition plus a readable link; only an https link on `<lang>.wikipedia.org` is accepted.
+    - Doing it again updates the same note.
+- **`ipc/person-decks.ts` (new):** wired in `main/index.ts` and the preload (`personDecks.*`).
+- **UI:**
+  - `PersonDeckDialog.tsx` (new), opened by a "Biography deck" button in the deck manager.
+  - A "Make a revision card" button in the Wikipedia section of the knowledge-card popover and of the reader's dictionary modal.
+  - All strings in ar and en, with labels for the new type's fields.
+
+**Verified (2026-11-18):**
+- Full suite: 2595/2595 pass. tsc and eslint are clean.
+- New `tests/services/person-decks.test.ts` (3 tests):
+  - fields, escaping, a deck made again keeping the schedule, and the placeholder skipped;
+  - category scope and English labels;
+  - the Wikipedia card's title, summary, link and edition, updating, and refusing a link off Wikipedia.
+- `person-decks-live` passed in ar and en with a real Arabic and a real English PDF:
+  - the biography deck came from the deck manager, with the real book's author card listing its work, plus the seeded sample authors;
+  - real Wikipedia lookups ("ابن خلدون" on ar.wikipedia.org, "Ibn Khaldun" on en.wikipedia.org) through the popover produced cards with the title as written, the summary, the article link and the named edition;
+  - no renderer errors.
+
+**Follow-up seen (not fixed, outside this task):** importing the Arabic PDF titled "…للشيخ عبدالله عزام" also links an author parsed as "العبدالله عزام". The importer's title parsing keeps a stray "ال" when it strips "للشيخ".
+
+**Files:** scripts/person-decks-live/run.mjs, scripts/person-decks-live/main.cjs, src/main/database/migrations/036_person_note_type.ts, src/main/database/migrations/index.ts, src/main/index.ts, src/main/ipc/person-decks.ts, src/main/services/person-decks.ts, src/preload/index.ts, src/renderer/components/knowledge/DeckManagerPanel.tsx, src/renderer/components/knowledge/KnowledgeCardPopover.tsx, src/renderer/components/knowledge/PersonDeckDialog.tsx, src/renderer/components/knowledge/note-type-labels.ts, src/renderer/components/reader/DictionaryLookupModal.tsx, src/renderer/translations.ts, tests/services/person-decks.test.ts, docs/data-dictionary.md, CURRENT_TASK.md.
+
 ## KEY-398 Book decks, AI questions from highlights and comments, "time to revise" - 2026-11-18 - Agent: Claude Code
 
 **Request.** Book or category to deck; AI Q&A and multiple-choice questions from the user's highlights and comments, unpublished until accepted (ADR-013); a "Time to revise!" prompt when a book is finished.
@@ -52,6 +90,8 @@
   - the deck-manager dialog reused the same deck;
   - "Don't ask again" stopped the prompt;
   - no renderer errors.
+
+**Git/Jira:** commit 7b0a9a37 pushed to origin/feature/library-domain; KEY-398 commented and moved to Done (2026-11-18).
 
 **Limitations:**
 - Rejected suggestions are not remembered (nothing is stored before acceptance), so they can be suggested again next time.

@@ -39,6 +39,20 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
   const [activeWord, setActiveWord] = useState<string>(word);
   const [result, setResult] = useState<AggregateDictionaryLookupResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  // KEY-401: make a revision card from the Wikipedia summary.
+  const [wikiCard, setWikiCard] = useState<{ busy: boolean; message: string | null; failed: boolean }>({ busy: false, message: null, failed: false });
+  const makeWikipediaCard = async (title: string, lang: string) => {
+    setWikiCard({ busy: true, message: null, failed: false });
+    const uiLang = typeof document !== 'undefined' && document.documentElement.lang === 'ar' ? 'ar' : 'en';
+    try {
+      const r = await window.electronAPI.personDecks.wikipediaCard({ title, lang, language: uiLang });
+      if (!r.ok) throw new Error(r.error);
+      setWikiCard({ busy: false, message: t(r.data.created ? 'wikipediaCardCreated' : 'wikipediaCardExists', { title: r.data.title }), failed: false });
+      window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
+    } catch {
+      setWikiCard({ busy: false, message: t('wikipediaCardFailed'), failed: true });
+    }
+  };
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const [previousLookupWord, setPreviousLookupWord] = useState<readonly unknown[] | null>(null);
@@ -307,7 +321,17 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                       {result.wikipedia.extract}
                     </p>
 
-                    <div className="pt-2 flex justify-end relative z-10">
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2 relative z-10">
+                      <button
+                        type="button"
+                        data-wikipedia-make-card
+                        disabled={wikiCard.busy}
+                        onClick={() => void makeWikipediaCard(result.wikipedia!.title, result.wikipedia!.lang)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 text-xs font-semibold text-main hover:bg-canvas disabled:opacity-50 cursor-pointer"
+                      >
+                        <Layers className="w-3 h-3" />
+                        <span>{t('wikipediaMakeCard')}</span>
+                      </button>
                       <a
                         href={result.wikipedia.articleUrl}
                         target="_blank"
@@ -318,6 +342,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
+                    {wikiCard.message && <p role={wikiCard.failed ? 'alert' : 'status'} data-wikipedia-card-message className={`text-xs relative z-10 ${wikiCard.failed ? 'text-danger' : 'text-main'}`}>{wikiCard.message}</p>}
                   </div>
                 </div>
               )}

@@ -1,6 +1,7 @@
 'use client';
 
 import { requestBookRevision } from './BookRevisionHost';
+import { PersonDeckDialog } from './PersonDeckDialog';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   FolderTree,
@@ -17,6 +18,7 @@ import {
   AlertTriangle,
   Users,
   BookOpenCheck,
+  UserRound,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
@@ -46,6 +48,7 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
   const [subscriptionsDeck, setSubscriptionsDeck] = useState<DeckTreeNode | null>(null);
   const [syncReviewOpen, setSyncReviewOpen] = useState(false);
   const [narratorDialogOpen, setNarratorDialogOpen] = useState(false);
+  const [personDialogOpen, setPersonDialogOpen] = useState(false);
   const [pendingSync, setPendingSync] = useState({ changed: 0, orphaned: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -456,6 +459,9 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
           <Button type="button" variant="secondary" size="sm" data-open-book-deck-btn onClick={() => requestBookRevision({ mode: 'deck' })} icon={<BookOpenCheck className="size-3.5" />}>
             {t('bookDeckOpen')}
           </Button>
+          <Button type="button" variant="secondary" size="sm" data-open-person-deck-btn onClick={() => setPersonDialogOpen(true)} icon={<UserRound className="size-3.5" />}>
+            {t('personDeckOpen')}
+          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -537,6 +543,7 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
 
       <DeckSubscriptionsModal deck={subscriptionsDeck} onClose={() => setSubscriptionsDeck(null)} onChanged={() => void refresh()} />
       <SyncReviewModal open={syncReviewOpen} onClose={() => setSyncReviewOpen(false)} onChanged={() => void refresh()} />
+      {personDialogOpen && <PersonDeckDialog onClose={() => setPersonDialogOpen(false)} />}
       {narratorDialogOpen && <SunnahDeckDialog open source={null} initialMode="narrator" onClose={() => setNarratorDialogOpen(false)} />}
 
       <DeckOptionsModal

@@ -953,6 +953,11 @@ export const API = {
     getDecks: (noteId: string) => ipcRenderer.invoke('card-notes:get-decks', noteId),
     linkDeck: (noteId: string, deckId: string) => ipcRenderer.invoke('card-notes:link-deck', noteId, deckId),
   } satisfies import('../shared/types/card-notes').CardNotesAPI,
+  // KEY-401: biography decks from library authors and Wikipedia quick-cards.
+  personDecks: {
+    authorDeck: (input: { deckName: string; categoryId?: string | null; language: 'ar' | 'en' }): Promise<{ ok: true; data: { deckId: string; people: number; added: number; updated: number; linked: number } } | { ok: false; error: string }> => ipcRenderer.invoke('person-decks:author-deck', input),
+    wikipediaCard: (input: { title: string; lang: string; language: 'ar' | 'en'; deckId?: string | null }): Promise<{ ok: true; data: { deckId: string; noteId: string; created: boolean; title: string } } | { ok: false; error: string }> => ipcRenderer.invoke('person-decks:wikipedia-card', input),
+  },
   // KEY-398: book revision — book/category decks, AI questions (accepted before saving), "time to revise".
   bookRevision: {
     bookDeck: (workId: string): Promise<{ ok: true; data: { deckId: string; added: number; created: boolean } } | { ok: false; error: string; detail?: string }> => ipcRenderer.invoke('book-revision:book-deck', workId),

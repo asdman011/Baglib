@@ -25,6 +25,7 @@ const STOCK_TYPES: Record<string, { name: string; key: TranslationKey }> = {
   'stock-hadith-variants': { name: 'Hadith (variants)', key: 'stockTypeHadithVariants' },
   'stock-narrator': { name: 'Narrator', key: 'stockTypeNarrator' },
   'stock-poem-whole': { name: 'Poem (whole)', key: 'stockTypePoemWhole' },
+  'stock-person': { name: 'Person', key: 'stockTypePerson' },
 };
 
 const STOCK_FIELDS: Record<string, TranslationKey> = {
@@ -66,6 +67,11 @@ const STOCK_FIELDS: Record<string, TranslationKey> = {
   Title: 'stockFieldTitle',
   'Whole verse': 'stockFieldWholeVerse',
   Chunk: 'stockFieldChunk',
+  Era: 'stockFieldEra',
+  Works: 'stockFieldWorks',
+  Field: 'stockFieldField',
+  Bio: 'stockFieldBio',
+  Source: 'stockFieldSource',
 };
 
 export function isBuiltInNoteType(noteType: { id: string }): boolean {

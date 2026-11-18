@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BookmarkPlus, Check, Globe, Loader2, Repeat2, X } from 'lucide-react';
+import { BookmarkPlus, Check, Globe, Layers, Loader2, Repeat2, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { cardPosition, cardScience, KNOWLEDGE_CARD_SAVED, type CardRequest } from '../../libs/knowledge-card-context';
 import type { AggregateDictionaryLookupResult, WikipediaSummaryCard } from '../../../shared/types/dictionary';
@@ -58,6 +58,15 @@ export function KnowledgeCardPopover({ request, onClose, onPointerEnter, onPoint
   const [wikipedia, setWikipedia] = useState<WikipediaSummaryCard | null | 'loading' | 'empty'>(null);
   const [saved, setSaved] = useState<KnowledgeCard | null>(null);
   const [failed, setFailed] = useState(false);
+  // KEY-401: a revision card from the Wikipedia summary (fetched again in the main process).
+  const [wikiCard, setWikiCard] = useState<{ busy: boolean; message: string | null; failed: boolean }>({ busy: false, message: null, failed: false });
+  const makeWikipediaCard = async (summary: WikipediaSummaryCard) => {
+    setWikiCard({ busy: true, message: null, failed: false });
+    const r = await window.electronAPI.personDecks.wikipediaCard({ title: summary.title, lang: summary.lang, language: lang === 'ar' ? 'ar' : 'en' }).catch(() => null);
+    if (!r || !r.ok) { setWikiCard({ busy: false, message: t('wikipediaCardFailed'), failed: true }); return; }
+    setWikiCard({ busy: false, message: t(r.data.created ? 'wikipediaCardCreated' : 'wikipediaCardExists', { title: r.data.title }), failed: false });
+    window.dispatchEvent(new CustomEvent(KNOWLEDGE_CARD_SAVED));
+  };
   const [position, setPosition] = useState(() => cardPosition(x, y, CARD_WIDTH, 240, window.innerWidth, window.innerHeight));
 
   useEffect(() => {
@@ -125,6 +134,8 @@ export function KnowledgeCardPopover({ request, onClose, onPointerEnter, onPoint
         <h4 dir="auto" className="text-xs font-bold text-muted">{wikipedia.title}</h4>
         <p dir={wikipedia.dir} className="mt-1 leading-relaxed break-words">{clip(wikipedia.extract)}</p>
         <p className="mt-1 text-xs text-muted">{t('knowledgeCardWikipediaSource')}</p>
+        <button type="button" data-wikipedia-make-card disabled={wikiCard.busy} onClick={() => void makeWikipediaCard(wikipedia)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted hover:bg-canvas disabled:opacity-50"><Layers className="size-3.5" />{t('wikipediaMakeCard')}</button>
+        {wikiCard.message && <p role={wikiCard.failed ? 'alert' : 'status'} data-wikipedia-card-message className="text-xs">{wikiCard.message}</p>}
       </section>}
       {isEmpty && <p className="text-muted">{t('knowledgeCardEmpty')}</p>}
       {failed && <p role="alert" className="text-red-600 dark:text-red-400">{t('knowledgeCardFailed')}</p>}
