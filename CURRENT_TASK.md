@@ -1,3 +1,25 @@
+## KEY-396 Sunnah revision decks and narrator decks - 2026-11-18 - Agent: Claude Code
+
+**Request.** Revision decks straight from the Sunnah reader, with a choice of hadith cards, plus narrator (rijal) decks. The user decided narrator card fields are chosen per deck in the dialog (defaults pre-ticked).
+
+**What changed:**
+- **Migration 034 (data only):** built-in note types `stock-hadith-variants` (Bab, Hadith, Isnad, Matn, Sharh + flags Full card, Matn card, Isnad card; three templates) and `stock-narrator` (Name, Kunya, Nasab, Laqab, Tabaqah, Death, Grade, Teachers, Students; empty fields hidden on the back).
+- **`deck-sync.ts`:** Sunnah sources now use `stock-hadith-variants`. A subscription stores the chosen cards in `template_options` `{label, cards}`; the isnad card is only made when the corpus has a separate isnad. Siblings of one hadith are one note, so answering one buries the others for the day.
+- **`narrator-decks.ts` (new):** `NarratorDeckService.generate` builds a narrator deck from a kitab, a bab, or the user's mastered hadith (review state, stability >= 21 days). One note per narrator (`source_ref` `narrator:<id>`), updated in place on regeneration so its schedule is kept; at most 500 per deck. Grade uses the grade text only, never the internal tier code.
+- **Corpus/IPC:** `research-corpus.ts` `narratorIdsForHadiths` (by frequency), `sunnah.service.ts`, `ipc/sunnah.ts` readers (`researchId`, isnad, matn), `deck-sync-readers.ts`, `ipc/knowledge-cards.ts` (`cards` on subscribe, new `knowledge-cards:generate-narrator-deck`), preload.
+- **UI:** `SunnahDeckDialog.tsx` (new; Hadith tab with card checkboxes, Narrator tab with source and field checkboxes), right-click on the kitab heading and on hadiths in `SunnahChapterView.tsx`, "Narrator deck" button in `DeckManagerPanel.tsx`. The dialog mounts only when open. All strings in `translations.ts` / `note-type-labels.ts` (ar + en).
+- **Docs:** `docs/data-dictionary.md` (migration 034, `{label, cards}`, narrator refs).
+
+**Tests:** `tests/services/sunnah-decks.test.ts` (new, 5), `tests/services/deck-sync-corpus.test.ts` updated; `scripts/sunnah-decks-live/` (new) and `scripts/deck-sync-live/main.cjs` updated.
+
+**Verified (2026-11-18):** full suite 2582/2582 pass; tsc clean; `sunnah-decks-live` passed in ar and en (Bukhari Kitab Bad' al-Wahy: 7 hadiths x 3 cards, 8 narrators, no renderer errors, empty grade instead of the tier code); `deck-sync-live` passed in ar and en.
+
+**Known limitation:** the Arabic count messages use one plural form ("7 حديثًا"), so 3-10 read slightly off.
+
+**Not built:** choosing hadith cards from the deck manager's "Live sources" window (it defaults to the full card).
+
+**Files:** scripts/deck-sync-live/main.cjs, scripts/sunnah-decks-live/run.mjs, scripts/sunnah-decks-live/main.cjs, src/main/database/migrations/034_sunnah_deck_note_types.ts, src/main/database/migrations/index.ts, src/main/database/repositories/card-note.repository.ts, src/main/ipc/knowledge-cards.ts, src/main/ipc/sunnah.ts, src/main/services/deck-sync-readers.ts, src/main/services/deck-sync.ts, src/main/services/narrator-decks.ts, src/main/services/sunnah/research-corpus.ts, src/main/services/sunnah/sunnah.service.ts, src/preload/index.ts, src/renderer/components/knowledge/DeckManagerPanel.tsx, src/renderer/components/knowledge/SunnahDeckDialog.tsx, src/renderer/components/knowledge/note-type-labels.ts, src/renderer/components/sunnah/SunnahChapterView.tsx, src/renderer/translations.ts, tests/services/deck-sync-corpus.test.ts, tests/services/sunnah-decks.test.ts, docs/data-dictionary.md, CURRENT_TASK.md.
+
 ## KEY-409 Live sync for Sunnah and poetry sources - 2026-11-18 - Agent: Claude Code
 
 **Request.** Extend KEY-393's live sync to the remaining `deck_subscription` source kinds.

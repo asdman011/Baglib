@@ -17,11 +17,17 @@ let chapterReader: ((collection: string, chapter: number) => Promise<{ id: strin
 /** KEY-319: every hadith of one chapter with its exact Arabic matn (or full text), for memorization decks. */
 export const readChapterHadiths = (collection: string, chapter: number) => chapterReader ? chapterReader(collection, chapter) : Promise.resolve([]);
 
-type SyncHadith = { id: string; number: string; sectionNumber: string; sectionTitle: string; text: string };
+type SyncHadith = { id: string; researchId?: number; number: string; sectionNumber: string; sectionTitle: string; text: string; isnad: string; matn: string; full: string };
 let syncChapterReader: ((collection: string, chapter: number) => Promise<{ title: string; hadiths: SyncHadith[] } | null>) | null = null;
 let syncChapterNumbers: ((collection: string) => Promise<number[]>) | null = null;
 /** KEY-409: one chapter with each hadith's bab and exact Arabic matn (or full text), for live deck sync. */
 export const readSunnahChapterForSync = (collection: string, chapter: number) => syncChapterReader ? syncChapterReader(collection, chapter) : Promise.resolve(null);
+let syncNarrators: ((hadithIds: number[]) => Promise<string[]>) | null = null;
+let syncNarrator: ((id: string) => Promise<import('../../shared/types/sunnah').SunnahNarrator | null>) | null = null;
+/** KEY-396: narrator ids for hadith research ids; empty without the research corpus. */
+export const readNarratorIdsForHadiths = (hadithIds: number[]) => syncNarrators ? syncNarrators(hadithIds) : Promise.resolve([]);
+/** KEY-396: one narrator's profile, or null. */
+export const readNarrator = (id: string) => syncNarrator ? syncNarrator(id) : Promise.resolve(null);
 /** KEY-409: the chapter numbers of one collection, for following a whole collection. */
 export const readSunnahChapterNumbers = (collection: string) => syncChapterNumbers ? syncChapterNumbers(collection) : Promise.resolve([]);
 
@@ -41,13 +47,19 @@ export function registerSunnahIpc(): void {
       title: found.title.ar,
       hadiths: found.hadiths.map(hadith => ({
         id: hadith.id,
+        researchId: hadith.researchId,
         number: String(hadith.number),
         sectionNumber: String(hadith.section?.number ?? ''),
         sectionTitle: hadith.section?.title?.ar ?? '',
         text: hadith.text.ar.matn || hadith.text.ar.full,
+        isnad: hadith.text.ar.isnad,
+        matn: hadith.text.ar.matn || hadith.text.ar.full,
+        full: hadith.text.ar.full || [hadith.text.ar.isnad, hadith.text.ar.matn].filter(Boolean).join(' '),
       })),
     };
   };
+  syncNarrators = async hadithIds => getService().narratorIdsForHadiths(hadithIds).catch(() => []);
+  syncNarrator = async id => getService().narrator(id).catch(() => null);
   syncChapterNumbers = async collection => ((await getService().catalog())?.collections.find(c => c.id === collection)?.chapters ?? []).map(c => c.number);
   chapterReader = async (collection, chapter) => (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths
     .map(hadith => ({ id: hadith.id, number: String(hadith.number), text: hadith.text.ar.matn || hadith.text.ar.full }));

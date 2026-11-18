@@ -19,7 +19,8 @@ import { validateReview, type SaveDeckInput, type SaveFilteredDeckInput } from '
 import { CardNoteRepository } from '../database/repositories/card-note.repository';
 import { DeckRepository } from '../database/repositories/deck.repository';
 import { CardMediaStore, MAX_CARD_MEDIA_BYTES } from '../services/card-media';
-import { createDeckSyncService } from '../services/deck-sync-readers';
+import { corpusReaders, createDeckSyncService } from '../services/deck-sync-readers';
+import { NarratorDeckService, validateNarratorDeckInput } from '../services/narrator-decks';
 import { deckSyncScheduler } from '../services/deck-sync-scheduler';
 import {
   validateSafeId,
@@ -220,13 +221,14 @@ export function registerKnowledgeCardIpc(): void {
   ipcMain.handle('deck-sync:subscribe', async (event, input: unknown) => {
     const service = syncService(event);
     const i = (input ?? {}) as Record<string, unknown>;
-    const extra = Object.keys(i).filter(k => !['deckId', 'sourceKind', 'sourceRef', 'newItems'].includes(k));
+    const extra = Object.keys(i).filter(k => !['deckId', 'sourceKind', 'sourceRef', 'newItems', 'cards'].includes(k));
     if (extra.length || typeof i.sourceKind !== 'string') throw new Error('invalid-request');
     const sub = await service.subscribe({
       deckId: validateSafeId(i.deckId, 'deckId'),
       sourceKind: i.sourceKind,
       sourceRef: validateSafeId(i.sourceRef, 'sourceRef'),
       newItems: policy(i.newItems),
+      cards: i.cards,
     });
     const result = await deckSyncScheduler.runNow(sub.id);
     return { subscription: service.get(sub.id), result };
@@ -241,6 +243,11 @@ export function registerKnowledgeCardIpc(): void {
     return deckSyncScheduler.runNow(validateSafeId(id, 'id'));
   });
   ipcMain.handle('deck-sync:pending', event => syncService(event).pending());
+  // KEY-396: a narrator (rijal) deck from mastered hadiths or a Sunnah book/bab, with the user's chosen fields.
+  ipcMain.handle('knowledge-cards:generate-narrator-deck', (event, input: unknown) => {
+    authorize(event);
+    return new NarratorDeckService(getDatabase(), corpusReaders).generate(validateNarratorDeckInput(input));
+  });
   ipcMain.handle('deck-sync:resolve-change', async (event, noteId: unknown, choice: unknown) => {
     if (choice !== 'update' && choice !== 'keep') throw new Error('invalid-request');
     await syncService(event).resolveChange(validateSafeId(noteId, 'noteId'), choice);

@@ -52,7 +52,7 @@ test('Sunnah book: hadith text copied verbatim into the Hadith type; a corrected
   try {
     const deck = f.decks.createDeck({ name: 'البخاري' });
     const sub = await f.sync.subscribe({ deckId: deck.id, sourceKind: 'sunnah_book', sourceRef: 'Bukhari:1' });
-    assert.equal(sub.noteTypeId, 'stock-hadith');
+    assert.equal(sub.noteTypeId, 'stock-hadith-variants', 'KEY-396: hadith sources use the variants type');
     assert.equal(sub.label, 'صحيح البخاري — كتاب بدء الوحي');
     const r = await f.sync.sync(sub.id, noYield);
     assert.equal(r.added, 3);
@@ -76,7 +76,7 @@ test('Sunnah book: hadith text copied verbatim into the Hadith type; a corrected
     const { CardNoteRepository } = await import('../../src/main/database/repositories/card-note.repository');
     const current = note(f.db, 'sunnah-hadith:Bukhari:1:b1')!;
     assert.throws(
-      () => new CardNoteRepository(f.db).saveNote({ id: current.id!, noteTypeId: 'stock-hadith', fields: { ...JSON.parse(current.fields_json!), Hadith: 'تحريف' } }),
+      () => new CardNoteRepository(f.db).saveNote({ id: current.id!, noteTypeId: 'stock-hadith-variants', fields: { ...JSON.parse(current.fields_json!), Hadith: 'تحريف' } }),
       /source-text-protected/u
     );
   } finally {
@@ -177,7 +177,7 @@ test('pending shows the new source for a hadith the user edited', async () => {
     const n = note(f.db, 'sunnah-hadith:Bukhari:2:b8')!;
     const { CardNoteRepository } = await import('../../src/main/database/repositories/card-note.repository');
     const fields = JSON.parse(n.fields_json!);
-    new CardNoteRepository(f.db).saveNote({ id: n.id!, noteTypeId: 'stock-hadith', fields: { ...fields, Hadith: `${fields.Hadith} [تعليق]` } });
+    new CardNoteRepository(f.db).saveNote({ id: n.id!, noteTypeId: 'stock-hadith-variants', fields: { ...fields, Hadith: `${fields.Hadith} [تعليق]` } });
     f.chapters['Bukhari:2'].hadiths[0].text = 'بني الإسلام على خمس شهادة أن لا إله إلا الله';
     assert.equal((await f.sync.sync(sub.id, noYield)).flagged, 1);
     const pending = (await f.sync.pending()).changed[0];

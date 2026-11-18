@@ -43,6 +43,17 @@ export interface DeckSubscription {
   newItems: NewItemsPolicy;
   lastSyncedAt: string | null;
   label: string;
+  /** Hadith sources: which cards each hadith gets (KEY-396). */
+  cards?: HadithCard[];
+}
+
+/** The three hadith card templates of the "Hadith (variants)" type. */
+export type HadithCard = 'full' | 'matn' | 'isnad';
+export const HADITH_CARDS: readonly HadithCard[] = ['full', 'matn', 'isnad'];
+
+interface ListOptions {
+  noteTypeId: string;
+  cards: HadithCard[];
 }
 
 export interface SourceItem {
@@ -68,7 +79,7 @@ export interface SyncResult {
 /** How the corpora are read; main wires these to the Sunnah and poetry services, tests to fixtures. */
 export interface SourceReaders {
   collectionName(collection: string): string;
-  sunnahChapter(collection: string, chapter: number): Promise<{ title: string; hadiths: Array<{ id: string; number: string; sectionNumber: string; sectionTitle: string; text: string }> } | null>;
+  sunnahChapter(collection: string, chapter: number): Promise<{ title: string; hadiths: Array<{ id: string; researchId?: number; number: string; sectionNumber: string; sectionTitle: string; text: string; isnad?: string; matn?: string; full?: string }> } | null>;
   sunnahChapterNumbers(collection: string): Promise<number[]>;
   poem(id: number): Promise<{ id: number; title: string; poetName: string; verses: string[] } | null>;
   poetPoemIds(poetId: number): Promise<number[]>;
@@ -102,7 +113,7 @@ interface Adapter {
   validRef(ref: string): boolean;
   /** Item refs of this source start with this, used to find the deck's notes for it. */
   namespace(ref: string): string;
-  list(db: Database, ref: string, readers: SourceReaders): Promise<SourceItem[]>;
+  list(db: Database, ref: string, readers: SourceReaders, options: ListOptions): Promise<SourceItem[]>;
 }
 
 const parseSunnah = (ref: string) => {
@@ -110,20 +121,34 @@ const parseSunnah = (ref: string) => {
   return { collection, chapter: Number(chapter), section };
 };
 
-async function hadithItems(readers: SourceReaders, collection: string, chapter: number, section?: string): Promise<SourceItem[]> {
+async function hadithItems(readers: SourceReaders, collection: string, chapter: number, section: string | undefined, options: ListOptions): Promise<SourceItem[]> {
   const found = await readers.sunnahChapter(collection, chapter);
   if (!found) return [];
   const name = readers.collectionName(collection);
+  const variants = options.noteTypeId === 'stock-hadith-variants';
   return found.hadiths
     .filter(h => h.text.trim() && (section === undefined || h.sectionNumber === section))
-    .map(h => ({
-      ref: `sunnah-hadith:${collection}:${chapter}:${h.id}`,
-      fields: {
-        Bab: `${escapeHtml(name)} ${escapeHtml(h.number)}${h.sectionTitle ? `<br>${escapeHtml(h.sectionTitle)}` : ''}`,
-        Hadith: escapeHtml(h.text),
-        Sharh: '',
-      },
-    }));
+    .map((h): SourceItem => {
+      const bab = `${escapeHtml(name)} ${escapeHtml(h.number)}${h.sectionTitle ? `<br>${escapeHtml(h.sectionTitle)}` : ''}`;
+      if (!variants) return { ref: `sunnah-hadith:${collection}:${chapter}:${h.id}`, fields: { Bab: bab, Hadith: escapeHtml(h.text), Sharh: '' } };
+      // KEY-396: "Hadith (variants)": the full text (isnad + matn), the isnad and the matn, verbatim.
+      const isnad = (h.isnad ?? '').trim();
+      const want = (card: HadithCard) => (options.cards.includes(card) ? 'y' : '');
+      return {
+        ref: `sunnah-hadith:${collection}:${chapter}:${h.id}`,
+        fields: {
+          Bab: bab,
+          Hadith: escapeHtml((h.full ?? h.text).trim()),
+          Isnad: escapeHtml(isnad),
+          Matn: escapeHtml((h.matn ?? h.text).trim()),
+          Sharh: '',
+          'Full card': want('full'),
+          'Matn card': want('matn'),
+          // A hadith with no separate isnad can't make an isnad card.
+          'Isnad card': isnad ? want('isnad') : '',
+        },
+      };
+    });
 }
 
 async function poemItem(readers: SourceReaders, id: number): Promise<SourceItem | null> {
@@ -187,36 +212,36 @@ const ADAPTERS: Record<SupportedSubscriptionKind, Adapter> = {
     },
   },
   sunnah_book: {
-    noteTypeId: 'stock-hadith',
+    noteTypeId: 'stock-hadith-variants',
     validRef: ref => {
       const p = ref.split(':');
       return p.length === 2 && SUNNAH_ID.test(p[0]) && NUMBER.test(p[1]);
     },
     namespace: ref => `sunnah-hadith:${ref}:`,
-    list: async (_db, ref, readers) => {
+    list: async (_db, ref, readers, options) => {
       const { collection, chapter } = parseSunnah(ref);
-      return hadithItems(readers, collection, chapter);
+      return hadithItems(readers, collection, chapter, undefined, options);
     },
   },
   sunnah_bab: {
-    noteTypeId: 'stock-hadith',
+    noteTypeId: 'stock-hadith-variants',
     validRef: ref => {
       const p = ref.split(':');
       return p.length === 3 && SUNNAH_ID.test(p[0]) && NUMBER.test(p[1]) && /^[A-Za-z0-9_-]{1,40}$/u.test(p[2]);
     },
     namespace: ref => `sunnah-hadith:${ref.split(':').slice(0, 2).join(':')}:`,
-    list: async (_db, ref, readers) => {
+    list: async (_db, ref, readers, options) => {
       const { collection, chapter, section } = parseSunnah(ref);
-      return hadithItems(readers, collection, chapter, section);
+      return hadithItems(readers, collection, chapter, section, options);
     },
   },
   hadith_collection: {
-    noteTypeId: 'stock-hadith',
+    noteTypeId: 'stock-hadith-variants',
     validRef: ref => SUNNAH_ID.test(ref),
     namespace: ref => `sunnah-hadith:${ref}:`,
-    list: async (_db, ref, readers) => {
+    list: async (_db, ref, readers, options) => {
       const items: SourceItem[] = [];
-      for (const chapter of await readers.sunnahChapterNumbers(ref)) items.push(...(await hadithItems(readers, ref, chapter)));
+      for (const chapter of await readers.sunnahChapterNumbers(ref)) items.push(...(await hadithItems(readers, ref, chapter, undefined, options)));
       return items;
     },
   },
@@ -252,6 +277,24 @@ function labelOf(templateOptions: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+function cardsOf(templateOptions: string | null): HadithCard[] {
+  try {
+    const parsed = JSON.parse(templateOptions ?? '{}') as { cards?: unknown };
+    const cards = Array.isArray(parsed.cards) ? parsed.cards.filter((c): c is HadithCard => (HADITH_CARDS as readonly string[]).includes(c as string)) : [];
+    return cards.length ? cards : ['full'];
+  } catch {
+    return ['full'];
+  }
+}
+
+export function validateHadithCards(value: unknown): HadithCard[] {
+  if (value === undefined) return ['full'];
+  if (!Array.isArray(value) || value.length < 1 || value.length > 3) throw new Error('invalid-request');
+  const cards = [...new Set(value)];
+  if (!cards.every(c => (HADITH_CARDS as readonly string[]).includes(c as string))) throw new Error('invalid-request');
+  return cards as HadithCard[];
 }
 
 function workTitle(db: Database, workId: string): string {
@@ -331,6 +374,7 @@ export class DeckSyncService {
       newItems: r.new_items,
       lastSyncedAt: r.last_synced_at,
       label: labelOf(r.template_options) ?? workTitle(this.db, r.source_ref),
+      cards: cardsOf(r.template_options),
     }));
   }
 
@@ -338,7 +382,7 @@ export class DeckSyncService {
     return this.list().find(s => s.id === id) ?? null;
   }
 
-  async subscribe(input: { deckId: string; sourceKind: string; sourceRef: string; noteTypeId?: string; newItems?: NewItemsPolicy }): Promise<DeckSubscription> {
+  async subscribe(input: { deckId: string; sourceKind: string; sourceRef: string; noteTypeId?: string; newItems?: NewItemsPolicy; cards?: unknown }): Promise<DeckSubscription> {
     if (!isSupportedKind(input.sourceKind)) throw new Error('unsupported-source');
     const adapter = ADAPTERS[input.sourceKind];
     if (typeof input.sourceRef !== 'string' || !adapter.validRef(input.sourceRef)) throw new Error('invalid-request');
@@ -350,6 +394,7 @@ export class DeckSyncService {
     if (!adapter.noteTypeId && (type.fields.length < 2 || type.kind !== 'normal')) throw new Error('invalid-note-type');
     const label = await this.describeSource(input.sourceKind, input.sourceRef);
     if (label === null) throw new Error('source-not-found');
+    const cards = validateHadithCards(input.cards);
     const existing = this.db
       .prepare(`SELECT id FROM deck_subscription WHERE deck_id = ? AND source_kind = ? AND source_ref = ?`)
       .get(input.deckId, input.sourceKind, input.sourceRef) as { id: string } | undefined;
@@ -360,7 +405,7 @@ export class DeckSyncService {
         `INSERT INTO deck_subscription (id, deck_id, source_kind, source_ref, note_type_id, template_options, new_items, last_synced_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
       )
-      .run(id, input.deckId, input.sourceKind, input.sourceRef, noteTypeId, JSON.stringify({ label }), input.newItems === 'silent' ? 'silent' : 'toast');
+      .run(id, input.deckId, input.sourceKind, input.sourceRef, noteTypeId, JSON.stringify({ label, cards }), input.newItems === 'silent' ? 'silent' : 'toast');
     return this.get(id)!;
   }
 
@@ -418,7 +463,7 @@ export class DeckSyncService {
     const type = this.notes.getNoteType(sub.noteTypeId);
     if (!type) throw new Error('invalid-note-type');
     const fieldNames = type.fields.map(f => f.name);
-    const items = await adapter.list(this.db, sub.sourceRef, this.readers);
+    const items = await adapter.list(this.db, sub.sourceRef, this.readers, { noteTypeId: sub.noteTypeId, cards: sub.cards ?? ['full'] });
     const result: SyncResult = { subscriptionId: sub.id, deckId: sub.deckId, added: 0, linked: 0, updated: 0, flagged: 0, orphaned: 0, restored: 0, unchanged: 0 };
 
     for (let i = 0; i < items.length; i += BATCH) {
@@ -449,7 +494,7 @@ export class DeckSyncService {
       if (others.length) {
         const claimed = new Set<string>();
         for (const other of others) {
-          for (const item of await ADAPTERS[other.sourceKind as SupportedSubscriptionKind].list(this.db, other.sourceRef, this.readers)) claimed.add(item.ref);
+          for (const item of await ADAPTERS[other.sourceKind as SupportedSubscriptionKind].list(this.db, other.sourceRef, this.readers, { noteTypeId: other.noteTypeId, cards: other.cards ?? ['full'] })) claimed.add(item.ref);
         }
         gone = gone.filter(n => !claimed.has(n.source_ref));
       }
@@ -629,17 +674,18 @@ export class DeckSyncService {
         fields: fieldNames,
         current: JSON.parse(r.fields_json) as Record<string, string>,
         oldSource: r.source_snapshot_json ? (JSON.parse(r.source_snapshot_json) as Record<string, string>) : {},
-        newSource: await this.currentSource(r.source_ref, fieldNames),
+        newSource: await this.currentSource(r.source_ref, fieldNames, r.note_type_id, JSON.parse(r.fields_json) as Record<string, string>),
       });
     }
     return { orphaned, changed };
   }
 
   /** The item's fields as the source has them now, or null when it's gone. */
-  private async currentSource(sourceRef: string, fieldNames: string[]): Promise<Record<string, string> | null> {
+  private async currentSource(sourceRef: string, fieldNames: string[], noteTypeId: string, current: Record<string, string> = {}): Promise<Record<string, string> | null> {
     const origin = sourceOfItemRef(sourceRef);
     if (!origin) return null;
-    const item = (await ADAPTERS[origin.kind].list(this.db, origin.sourceRef, this.readers)).find(i => i.ref === sourceRef);
+    const cards = HADITH_CARDS.filter(card => (current[card === 'full' ? 'Full card' : card === 'matn' ? 'Matn card' : 'Isnad card'] ?? '').trim());
+    const item = (await ADAPTERS[origin.kind].list(this.db, origin.sourceRef, this.readers, { noteTypeId, cards: cards.length ? cards : ['full'] })).find(i => i.ref === sourceRef);
     return item ? this.fieldsFor(fieldNames, item) : null;
   }
 
@@ -650,7 +696,7 @@ export class DeckSyncService {
       | undefined;
     if (!row) throw new Error('invalid-request');
     const fieldNames = this.notes.getNoteType(row.note_type_id)?.fields.map(f => f.name) ?? [];
-    const source = await this.currentSource(row.source_ref, fieldNames);
+    const source = await this.currentSource(row.source_ref, fieldNames, row.note_type_id, JSON.parse(row.fields_json) as Record<string, string>);
     this.db.transaction(() => {
       if (source) {
         if (choice === 'update') this.notes.saveNote({ id: noteId, noteTypeId: row.note_type_id, fields: { ...(JSON.parse(row.fields_json) as Record<string, string>), ...source }, fromSourceSync: true });

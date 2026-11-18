@@ -955,13 +955,14 @@ export const API = {
   } satisfies import('../shared/types/card-notes').CardNotesAPI,
   deckSync: {
     list: (deckId?: string): Promise<import('../main/services/deck-sync').DeckSubscription[]> => ipcRenderer.invoke('deck-sync:list', deckId),
-    subscribe: (input: { deckId: string; sourceKind: 'book_highlights' | 'book_comments' | 'sunnah_book' | 'sunnah_bab' | 'hadith_collection' | 'poem' | 'poet'; sourceRef: string; newItems: 'silent' | 'toast' }): Promise<{ subscription: import('../main/services/deck-sync').DeckSubscription; result: import('../main/services/deck-sync').SyncResult }> => ipcRenderer.invoke('deck-sync:subscribe', input),
+    subscribe: (input: { deckId: string; sourceKind: 'book_highlights' | 'book_comments' | 'sunnah_book' | 'sunnah_bab' | 'hadith_collection' | 'poem' | 'poet'; sourceRef: string; newItems: 'silent' | 'toast'; cards?: Array<'full' | 'matn' | 'isnad'> }): Promise<{ subscription: import('../main/services/deck-sync').DeckSubscription; result: import('../main/services/deck-sync').SyncResult }> => ipcRenderer.invoke('deck-sync:subscribe', input),
     unsubscribe: (id: string): Promise<boolean> => ipcRenderer.invoke('deck-sync:unsubscribe', id),
     setPolicy: (id: string, newItems: 'silent' | 'toast'): Promise<import('../main/services/deck-sync').DeckSubscription> => ipcRenderer.invoke('deck-sync:set-policy', id, newItems),
     syncNow: (id: string): Promise<import('../main/services/deck-sync').SyncResult> => ipcRenderer.invoke('deck-sync:sync-now', id),
     pending: (): Promise<ReturnType<import('../main/services/deck-sync').DeckSyncService['pending']>> => ipcRenderer.invoke('deck-sync:pending'),
     resolveChange: (noteId: string, choice: 'update' | 'keep'): Promise<boolean> => ipcRenderer.invoke('deck-sync:resolve-change', noteId, choice),
     resolveOrphan: (noteId: string, choice: 'delete' | 'keep'): Promise<boolean> => ipcRenderer.invoke('deck-sync:resolve-orphan', noteId, choice),
+    generateNarratorDeck: (input: { deckName: string; source: { kind: 'mastered' } | { kind: 'sunnah_book' | 'sunnah_bab'; ref: string }; fields: Array<'kunya' | 'nasab' | 'laqab' | 'tabaqah' | 'death' | 'grade' | 'teachers' | 'students'> }): Promise<{ deckId: string; added: number; updated: number; linked: number; narrators: number }> => ipcRenderer.invoke('knowledge-cards:generate-narrator-deck', input),
     onChanged: (listener: (result: import('../main/services/deck-sync').SyncResult) => void) => {
       const handler = (_: unknown, result: import('../main/services/deck-sync').SyncResult) => listener(result);
       ipcRenderer.on('deck-sync:changed', handler);

@@ -277,6 +277,17 @@ export class SunnahResearchCorpus {
     });
     return { judgments, wordingDiffers: Boolean(summary?.wording_differs), opposed: Boolean(summary?.opposed), variants, explanations, fieldSources, missingFields: provenance.missing ?? [], datasets: JSON.parse(value(row.source_datasets_json) || '[]') as string[] };
   }
+  /** KEY-396: the narrators in the chains of these hadiths (research ids), most frequent first. */
+  narratorIdsForHadiths(hadithIds: number[]): string[] {
+    const counts = new Map<string, number>();
+    const ids = hadithIds.filter(id => Number.isSafeInteger(id) && id > 0);
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      const rows = this.db.prepare(`SELECT rijal_id AS id, COUNT(*) AS n FROM hadith_narrators WHERE rijal_id IS NOT NULL AND hadith_id IN (${chunk.map(() => '?').join(',')}) GROUP BY rijal_id`).all(...chunk) as { id: string | number; n: number }[];
+      for (const row of rows) counts.set(String(row.id), (counts.get(String(row.id)) ?? 0) + row.n);
+    }
+    return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([id]) => id);
+  }
   narrator(id: string): SunnahNarrator {
     if (typeof id !== 'string' || !/^\d{1,20}$/.test(id)) throw new Error('Invalid narrator');
     const row = this.db.prepare('SELECT * FROM rijal_narrators WHERE rijal_id=?').get(id) as Row | undefined;

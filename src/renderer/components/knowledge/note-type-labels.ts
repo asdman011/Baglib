@@ -22,6 +22,8 @@ const STOCK_TYPES: Record<string, { name: string; key: TranslationKey }> = {
   'stock-hadith': { name: 'Hadith', key: 'stockTypeHadith' },
   'stock-poetry': { name: 'Poetry', key: 'stockTypePoetry' },
   'stock-image-occlusion': { name: 'Image Occlusion', key: 'stockTypeImageOcclusion' },
+  'stock-hadith-variants': { name: 'Hadith (variants)', key: 'stockTypeHadithVariants' },
+  'stock-narrator': { name: 'Narrator', key: 'stockTypeNarrator' },
 };
 
 const STOCK_FIELDS: Record<string, TranslationKey> = {
@@ -46,6 +48,20 @@ const STOCK_FIELDS: Record<string, TranslationKey> = {
   Image: 'stockFieldImage',
   Header: 'stockFieldHeader',
   Comments: 'stockFieldComments',
+  Isnad: 'stockFieldIsnad',
+  Matn: 'stockFieldMatn',
+  'Full card': 'stockFieldFullCard',
+  'Matn card': 'stockFieldMatnCard',
+  'Isnad card': 'stockFieldIsnadCard',
+  Name: 'stockFieldName',
+  Kunya: 'stockFieldKunya',
+  Nasab: 'stockFieldNasab',
+  Laqab: 'stockFieldLaqab',
+  Tabaqah: 'stockFieldTabaqah',
+  Death: 'stockFieldDeath',
+  Grade: 'stockFieldGrade',
+  Teachers: 'stockFieldTeachers',
+  Students: 'stockFieldStudents',
 };
 
 export function isBuiltInNoteType(noteType: { id: string }): boolean {

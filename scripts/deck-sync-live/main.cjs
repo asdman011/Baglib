@@ -170,7 +170,7 @@ app.on('browser-window-created', (_, owner) => {
       results.babMessage = await evaluate(`document.querySelector('[data-deck-sync-message]')?.textContent ?? ''`);
       const babNotes = await evaluate(`window.electronAPI.cardNotes.listNotes({ deckId: ${JSON.stringify(corpusDeck.id)} })`);
       assert.ok(babNotes.length >= 1, 'the bab brought its hadiths');
-      assert.ok(babNotes.every(n => n.noteTypeId === 'stock-hadith' && n.fields.Hadith.trim().length > 0), 'Hadith notes carry the matn');
+      assert.ok(babNotes.every(n => n.noteTypeId === 'stock-hadith-variants' && n.fields.Hadith.trim().length > 0), 'Hadith notes carry the matn');
       results.babHadiths = babNotes.length;
       await shot('05-sunnah-bab');
 

@@ -14,6 +14,7 @@ import {
   FolderInput,
   Link2,
   AlertTriangle,
+  Users,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
@@ -22,6 +23,7 @@ import { DeckOptionsModal } from './DeckOptionsModal';
 import { FilteredDeckModal } from './FilteredDeckModal';
 import { DeckSubscriptionsModal } from './DeckSubscriptionsModal';
 import { SyncReviewModal } from './SyncReviewModal';
+import { SunnahDeckDialog } from './SunnahDeckDialog';
 import type { DeckTreeNode } from '../../../shared/srs';
 
 export interface DeckManagerPanelProps {
@@ -41,6 +43,7 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
   const [filteredModalOpen, setFilteredModalOpen] = useState(false);
   const [subscriptionsDeck, setSubscriptionsDeck] = useState<DeckTreeNode | null>(null);
   const [syncReviewOpen, setSyncReviewOpen] = useState(false);
+  const [narratorDialogOpen, setNarratorDialogOpen] = useState(false);
   const [pendingSync, setPendingSync] = useState({ changed: 0, orphaned: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -442,6 +445,16 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
             type="button"
             variant="secondary"
             size="sm"
+            data-open-narrator-deck-btn
+            onClick={() => setNarratorDialogOpen(true)}
+            icon={<Users className="size-3.5" />}
+          >
+            {t('narratorDeckOpen')}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
             data-open-filtered-deck-btn
             onClick={() => setFilteredModalOpen(true)}
             icon={<Filter className="size-3.5" />}
@@ -519,6 +532,7 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
 
       <DeckSubscriptionsModal deck={subscriptionsDeck} onClose={() => setSubscriptionsDeck(null)} onChanged={() => void refresh()} />
       <SyncReviewModal open={syncReviewOpen} onClose={() => setSyncReviewOpen(false)} onChanged={() => void refresh()} />
+      {narratorDialogOpen && <SunnahDeckDialog open source={null} initialMode="narrator" onClose={() => setNarratorDialogOpen(false)} />}
 
       <DeckOptionsModal
         open={optionsDeck !== null}

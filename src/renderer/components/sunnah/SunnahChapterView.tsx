@@ -20,6 +20,7 @@ import { findTextRange, paintTextHighlights } from '../../libs/reader/text-highl
 import { colorKeys } from '../reader/ReaderMarkupBar';
 import { createHadithPayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
 import { getSunnahIsnadScope } from '../../utils/corpus-lookup';
+import { SunnahDeckDialog, type SunnahDeckSource } from '../knowledge/SunnahDeckDialog';
 
 export type SunnahTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
@@ -64,6 +65,20 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCo
   onFocus: (id: string) => void;
 }) {
   const [gradingRequest, setGradingRequest] = useState({ id: 0, count: 0 });
+  // KEY-396: "Add as revision deck" for this kitab, its babs, its collection, or their narrators.
+  const [deckSource, setDeckSource] = useState<SunnahDeckSource | null>(null);
+  const [deckMode, setDeckMode] = useState<'hadith' | 'narrator'>('hadith');
+  const collectionName = collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection;
+  const bookSource = (): SunnahDeckSource => ({ kind: 'sunnah_book', ref: `${chapter.collection}:${chapter.number}`, label: `${collectionName} — ${chapter.title.ar || chapter.title.en}` });
+  const openDeck = (source: SunnahDeckSource, mode: 'hadith' | 'narrator' = 'hadith') => {
+    setDeckMode(mode);
+    setDeckSource(source);
+  };
+  const deckItems = () => [
+    { id: 'deck-book', label: t('sunnahAddBookDeck'), onClick: () => openDeck(bookSource()) },
+    { id: 'deck-collection', label: t('sunnahAddCollectionDeck'), onClick: () => openDeck({ kind: 'hadith_collection', ref: chapter.collection, label: collectionName }) },
+    { id: 'deck-narrators', label: t('sunnahAddNarratorDeck'), onClick: () => openDeck(bookSource(), 'narrator') },
+  ];
   // KEY-340: highlights on hadith text: the selected words (or the whole matn when nothing is selected).
   const highlights = usePassageHighlights('sunnah:');
   const highlightActions = usePassageHighlightActions();
@@ -87,9 +102,12 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCo
     return hadith?.dataset.hadithId === id ? selection.toString().trim() : '';
   };
   return <div ref={chapterRoot} className="sunnah-chapter select-text" data-testid="sunnah-chapter">
+    <ContextMenu items={deckItems()} data-sunnah-chapter-heading>
     <ParallelRow showEnglish={showEnglish} className="sunnah-chapter-heading"
       arabic={<h2><NumberedTitle number={String(chapter.number)} title={chapter.title} language="ar" fallback={t('sunnahUntitledChapter')} /></h2>}
       english={<h2><NumberedTitle number={String(chapter.number)} title={chapter.title} language="en" fallback={t('sunnahMissingEnglish')} /></h2>} />
+    </ContextMenu>
+    {deckSource && <SunnahDeckDialog open source={deckSource} initialMode={deckMode} onClose={() => setDeckSource(null)} />}
     {hadiths.map((hadith, index) => {
       const previous = hadiths[index - 1]?.section;
       const section = hadith.section;
@@ -113,6 +131,13 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCo
         manuscript: () => requestSendToManuscript(createHadithPayload({ collection: chapter.collection, collectionLabel: collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection, chapterNumber: chapter.number, hadithId: hadith.id, hadithNumber: hadith.number || '', text: formatHadith(chapter, hadith, false, getSunnahIsnadScope() !== 'matn_only', false) })),
       },t);
       const mine = highlights.filter(item => item.location === target);
+      const babSource: SunnahDeckSource | null = section.number
+        ? { kind: 'sunnah_bab', ref: `${chapter.collection}:${chapter.number}:${section.number}`, label: `${bookSource().label} — ${section.title.ar || section.title.en || section.number}` }
+        : null;
+      items.push(
+        { id: 'deck-bab', label: t('sunnahAddBabDeck'), disabled: !babSource, onClick: () => babSource && openDeck(babSource) },
+        ...deckItems(),
+      );
       items.unshift(
         { id: 'copy-selection', label: t('passageCopySelection'), onClick: () => navigator.clipboard.writeText(selectionIn(hadith.id) || hadith.text.ar.matn || hadith.text.ar.full) },
         { id: 'highlight', label: t('passageHighlight'), children: [

@@ -443,7 +443,7 @@ export class CardNoteRepository {
             // Infer sourceKind from noteType or input
             const sourceKind = noteType.stockKind === 'quran'
               ? 'quran'
-              : noteType.stockKind === 'hadith'
+              : noteType.stockKind === 'hadith' || noteType.stockKind === 'hadith_variants'
               ? 'hadith'
               : noteType.stockKind === 'poetry'
               ? 'poetry'

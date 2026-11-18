@@ -42,6 +42,13 @@ export class SunnahService {
     return this.researchCorpus.narrator(id);
   }
 
+  /** KEY-396: narrator ids for hadith research ids (needs the research corpus). */
+  async narratorIdsForHadiths(hadithIds: number[]) {
+    await this.catalog();
+    if (!this.researchCorpus) throw new Error('Research corpus unavailable');
+    return this.researchCorpus.narratorIdsForHadiths(hadithIds);
+  }
+
   async statistics() {
     await this.catalog();
     if (!this.researchCorpus) throw new Error('Research corpus unavailable');
